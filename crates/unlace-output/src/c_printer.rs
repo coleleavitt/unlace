@@ -109,10 +109,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
+use unlace_ir::reg_alias::aliases;
 use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode, TargetSet};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
-use unlace_loader::DwarfInfo;
+use unlace_loader::{DwarfInfo, FunctionDebugInfo};
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
 
 use crate::expr_ast::CExpr;
@@ -388,6 +389,12 @@ pub fn print_c_with_rtti(
 /// the global address→name map and is consulted for *any* address mentioned
 /// in this function (own name, callees, tail-call targets, …).
 #[derive(Default, Debug, Clone)]
+pub struct SsaStatementSlots {
+    pub output: Option<SsaVarnode>,
+    pub inputs: BTreeMap<usize, SsaVarnode>,
+}
+
+#[derive(Default, Debug, Clone)]
 pub struct PrinterAnnotations {
     /// Prose to render immediately above the function header block.
     pub function_comment: Option<String>,
@@ -400,6 +407,27 @@ pub struct PrinterAnnotations {
     /// When a switch case constant matches a key the printer emits the
     /// original string as a trailing comment (`case 0x...: /* "name" */`).
     pub string_hash_table: BTreeMap<u64, String>,
+    /// Read-only scalar data indexed by `(virtual_address, byte_width)`.
+    ///
+    /// The CLI populates this from non-writable data sections so a load from
+    /// `.rodata` like `mov rax, [rip+0x...]` can render as a literal constant
+    /// instead of as a mutable `qword_XXXX` pseudo-global.
+    pub readonly_scalars: BTreeMap<(u64, u8), u64>,
+    /// Exact SSA inputs/outputs for visible HIR statements, keyed by
+    /// `(instruction_address, opcode)`.
+    ///
+    /// The C printer normally reconstructs SSA versions while walking HIR,
+    /// but prologue/canary suppression can hide IR definitions that still
+    /// affect later raw temporary versions. The CLI fills this from the final
+    /// SSA var_map so address and static-load recovery can use the true
+    /// versions instead of guessing from raw lifter temporaries.
+    pub ssa_statement_slots: BTreeMap<(u64, IrOp), Vec<SsaStatementSlots>>,
+    /// Return SSA aliases recovered from final SSA phis that the HIR no
+    /// longer carries as statements, such as stack-protector failure joins.
+    ///
+    /// Keyed by the `HirNode::Return(Some(_))` value and mapped to the
+    /// normal-path value that should be printed/read for standalone C.
+    pub return_value_aliases: BTreeMap<SsaVarnode, SsaVarnode>,
     /// PDB constant-pool reverse index (`value → names`) from
     /// [`unlace_loader::PdbTypes::constants_by_value`].
     pub pdb_constants_by_value: BTreeMap<i64, Vec<String>>,
@@ -632,6 +660,9 @@ pub fn print_c_with_annotations(
         ctx.line_comments = ann.line_comments.clone();
         ctx.custom_names = ann.custom_names.clone();
         ctx.string_hash_table = ann.string_hash_table.clone();
+        ctx.readonly_scalars = ann.readonly_scalars.clone();
+        ctx.ssa_statement_slots = ann.ssa_statement_slots.clone();
+        ctx.return_value_aliases = ann.return_value_aliases.clone();
         ctx.pdb_constants_by_value = ann.pdb_constants_by_value.clone();
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
@@ -648,7 +679,6 @@ pub fn print_c_with_annotations(
     if let Some(cfg) = config {
         ctx.config = cfg;
     }
-    ctx.parent_returns_void = matches!(func.return_type, PrimitiveType::Unknown);
     ctx.frame_size = header.map(|h| h.stack_frame);
     ctx.objc_dispatch_calls = func.objc_dispatch_calls.clone();
     ctx.byref_boxes = func.byref_boxes.clone();
@@ -656,6 +686,7 @@ pub fn print_c_with_annotations(
     ctx.vtable_call_targets = func.vtable_call_targets.clone();
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
+    ctx.parent_returns_void = function_body_returns_void(func, dwarf_func);
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
     compute_suppressed_stack_offsets(func, &mut ctx);
     // t232: register recovered stack-frame slots as named locals
@@ -665,17 +696,20 @@ pub fn print_c_with_annotations(
     compute_stack_frame_names(func, &mut ctx);
     compute_loop_counter_names(&func.body, 0, &mut ctx);
     collect_varnodes(&func.body, &mut ctx);
+    promote_stack_address_call_arrays(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
     propagate_dead_chains(&mut ctx);
     compute_byref_bases(&mut ctx);
     compute_heuristic_names(&func.body, &mut ctx);
+    dedupe_var_names(&mut ctx);
     compute_hoist_plan(&mut ctx);
     detect_mmio_addrs(&mut ctx);
     let merged_return_stmts = merged_assign_return_stmt_indices(&func.body, &ctx);
-    let merged_return_svs: BTreeSet<SsaVarnode> = merged_return_stmts
+    let mut merged_return_svs: BTreeSet<SsaVarnode> = merged_return_stmts
         .iter()
         .filter_map(|stmt_idx| ctx.stmt_outputs.get(stmt_idx).copied().flatten())
         .collect();
+    merged_return_svs.extend(merged_call_return_svs(&func.body, &ctx));
     let post_dowhile_return_svs = post_dowhile_recovered_return_svs(&func.body, &ctx);
 
     let mut out = String::with_capacity(1024);
@@ -860,7 +894,7 @@ pub fn print_c_with_annotations(
     // params/return when the late calling-convention pass has run.
     // DWARF still wins above it (DWARF carries source-level truth that
     // the inference can only approximate).
-    let return_type_str = dwarf_func
+    let mut return_type_str = dwarf_func
         .and_then(|df| df.return_type.as_deref())
         .map(dwarf_type_to_c)
         .or_else(|| {
@@ -869,6 +903,9 @@ pub fn print_c_with_annotations(
                 .map(|sig| c_sig_return_type_for_type(&sig.return_type))
         })
         .unwrap_or_else(|| c_sig_return_type(&func.return_type).to_string());
+    if emit_name == "main" && return_type_str == "void" {
+        return_type_str = "int".to_string();
+    }
 
     let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
     let noreturn_mod = if func.noreturn { " __noreturn" } else { "" };
@@ -1094,13 +1131,14 @@ pub fn print_c_with_annotations(
 
     // t232: emit named stack-frame locals first, then suppress duplicates
     // in the generic var-name loop below.
-    let stack_frame_names: BTreeSet<String> = emit_stack_frame_decls(func, &mut out);
+    let stack_frame_names: BTreeSet<String> = emit_stack_frame_decls(func, &ctx, &mut out);
 
-    let mut declared_names: BTreeSet<&str> = BTreeSet::new();
+    let param_names = function_param_names(func, dwarf_func);
+    let mut declared_names: BTreeSet<String> = param_names;
     // Seed `declared_names` with stack-frame slot names so the generic
     // loop below does not re-emit them.
     for n in &stack_frame_names {
-        declared_names.insert(n.as_str());
+        declared_names.insert(n.clone());
     }
     let hoisted_decl_names: BTreeSet<&str> = ctx
         .hoist_decl_plan
@@ -1125,7 +1163,7 @@ pub fn print_c_with_annotations(
         if hoisted_decl_names.contains(name.as_str()) {
             continue;
         }
-        if !declared_names.insert(name.as_str()) {
+        if !declared_names.insert(name.clone()) {
             continue;
         }
         let ty = ctx
@@ -1175,19 +1213,64 @@ pub fn print_c_with_annotations(
     }
     if referenced_names.contains("cond") && !declared_names.contains("cond") {
         let _ = writeln!(out, "    _BOOL cond;");
+        declared_names.insert("cond".to_string());
     }
+    ctx.top_declared_names = declared_names.clone();
 
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
 
     out.push_str("}\n");
-    let output = declare_missing_control_v_decls(prune_unused_plain_local_decls(
-        prune_dead_plain_assignments(out),
+    let output = declare_missing_temp_v_decls(declare_missing_control_v_decls(
+        prune_unused_plain_local_decls(prune_dead_plain_assignments(out)),
     ));
     if annotations.is_some_and(|a| a.recover_triangular_sum_loop) {
         recover_triangular_sum_loop(output)
     } else {
         output
     }
+}
+
+fn function_param_names(
+    func: &HirFunction,
+    dwarf_func: Option<&FunctionDebugInfo>,
+) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    if let Some(df) = dwarf_func {
+        for param in &df.params {
+            if let Some(name) = param.name.as_deref().filter(|name| is_c_identifier(name)) {
+                names.insert(name.to_string());
+            }
+        }
+    }
+    if let Some(sig) = func.finalized_signature.as_ref() {
+        for (name, _) in &sig.params {
+            if is_c_identifier(name) {
+                names.insert(name.clone());
+            }
+        }
+    }
+    for (name, _) in &func.params {
+        if is_c_identifier(name) {
+            names.insert(name.clone());
+        }
+    }
+    names.insert("this".to_string());
+    names
+}
+
+fn function_body_returns_void(func: &HirFunction, dwarf_func: Option<&FunctionDebugInfo>) -> bool {
+    if func.name == "main" {
+        return false;
+    }
+    if let Some(df) = dwarf_func
+        && let Some(ret) = df.return_type.as_deref()
+    {
+        return dwarf_type_to_c(ret) == "void";
+    }
+    if let Some(sig) = func.finalized_signature.as_ref() {
+        return c_sig_return_type_for_type(&sig.return_type) == "void";
+    }
+    matches!(func.return_type, PrimitiveType::Unknown)
 }
 
 // ---------------------------------------------------------------------------
@@ -1745,6 +1828,13 @@ struct PrintCtx {
     /// Pre-computed input SsaVarnodes per statement (keyed by walk-order index).
     /// One entry per non-const input, in order.
     stmt_inputs: BTreeMap<u32, Vec<SsaVarnode>>,
+    /// Exact input-slot SSA map per statement.
+    ///
+    /// `stmt_inputs` is useful for aggregate use counts, but it is ambiguous
+    /// when one raw lifter temporary appears in multiple slots or when the
+    /// same raw `Unique` base is reused across nearby instructions. Address
+    /// recovery needs the slot number to recover the intended SSA version.
+    stmt_input_slots: BTreeMap<u32, BTreeMap<usize, SsaVarnode>>,
     /// Next statement index (incremented during collection).
     next_stmt: u32,
     /// Current statement index during emission.
@@ -1797,6 +1887,10 @@ struct PrintCtx {
     symbols: BTreeMap<u64, String>,
     /// Recovered string literals: virtual address → string content.
     string_table: BTreeMap<u64, String>,
+    readonly_scalars: BTreeMap<(u64, u8), u64>,
+    ssa_statement_slots: BTreeMap<(u64, IrOp), Vec<SsaStatementSlots>>,
+    ssa_statement_slot_uses: BTreeMap<(u64, IrOp), usize>,
+    return_value_aliases: BTreeMap<SsaVarnode, SsaVarnode>,
     /// Base varnodes whose address is taken and passed to a CALL ("BYREF").
     byref_bases: BTreeSet<Varnode>,
     /// Override map: when present, [`PrintCtx::name_of`] returns the override
@@ -1908,6 +2002,21 @@ struct PrintCtx {
     /// Stack-frame offsets that should not be rendered as source locals or raw
     /// memory stores, such as saved-register slots and ABI-owned stack areas.
     suppressed_stack_offsets: BTreeSet<i64>,
+    /// User-visible stack slots keyed by their recovered start offset. Used to
+    /// render accesses inside wide buffers as `buf_N + delta` instead of
+    /// falling through to raw pointer arithmetic.
+    stack_frame_slots: BTreeMap<i64, StackSlotName>,
+    /// Names already declared at function scope. Hoisted declarations consult
+    /// this set so block-local declarations do not collide with an existing
+    /// function-scope temporary that prints with the same name.
+    top_declared_names: BTreeSet<String>,
+    /// Stack ranges promoted to synthetic byte arrays because their address
+    /// escapes to a call with a visible element count. This preserves
+    /// original frame contiguity in standalone C.
+    promoted_stack_buffers: BTreeMap<i64, u64>,
+    /// Scalar stack slots synthesized from resolved accesses when the
+    /// stack-frame recovery pass did not materialize a local.
+    synthetic_stack_scalars: BTreeMap<i64, u8>,
     /// C++ vtable call targets keyed by instruction VA.
     ///
     /// When a `Callind` at `insn.addr` is in this map as
@@ -1921,6 +2030,13 @@ struct PrintCtx {
     /// [`flirt_call_comment`] to emit `/* flirt: <name>@<conf> */` at
     /// Call sites whose target was recognised by signature matching.
     flirt_call_annotations: BTreeMap<u64, (String, f32)>,
+}
+
+#[derive(Clone, Debug)]
+struct StackSlotName {
+    name: String,
+    size: u64,
+    is_buffer: bool,
 }
 
 fn render_go_defer_summary(
@@ -1994,6 +2110,7 @@ impl PrintCtx {
             ssa_current: BTreeMap::new(),
             stmt_outputs: BTreeMap::new(),
             stmt_inputs: BTreeMap::new(),
+            stmt_input_slots: BTreeMap::new(),
             next_stmt: 0,
             emit_stmt: 0,
             stmt_insns: BTreeMap::new(),
@@ -2014,6 +2131,10 @@ impl PrintCtx {
             panic_sites,
             symbols,
             string_table,
+            readonly_scalars: BTreeMap::new(),
+            ssa_statement_slots: BTreeMap::new(),
+            ssa_statement_slot_uses: BTreeMap::new(),
+            return_value_aliases: BTreeMap::new(),
             byref_bases: BTreeSet::new(),
             name_overrides: BTreeMap::new(),
             dwarf_local_types: BTreeMap::new(),
@@ -2041,6 +2162,10 @@ impl PrintCtx {
             byref_union_types: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
             suppressed_stack_offsets: BTreeSet::new(),
+            stack_frame_slots: BTreeMap::new(),
+            top_declared_names: BTreeSet::new(),
+            promoted_stack_buffers: BTreeMap::new(),
+            synthetic_stack_scalars: BTreeMap::new(),
             vtable_call_targets: BTreeMap::new(),
             flirt_call_annotations: BTreeMap::new(),
         }
@@ -2080,6 +2205,16 @@ impl PrintCtx {
         };
         self.var_names.insert(*sv, name.clone());
         name
+    }
+
+    fn fresh_ssa_name_of(&mut self, sv: &SsaVarnode) -> String {
+        if let Some(n) = self.var_names.get(sv) {
+            return n.clone();
+        }
+        let fresh = format!("v{}", self.next_var);
+        self.next_var += 1;
+        self.var_names.insert(*sv, fresh.clone());
+        fresh
     }
 
     /// Return the current SSA version for a base varnode (0 if never defined).
@@ -2651,11 +2786,12 @@ struct StaticAddr {
 
 fn try_global_var_name(
     addr_vn: &Varnode,
+    addr_raw_idx: Option<usize>,
     stmt_idx: u32,
     access_size: u8,
     ctx: &PrintCtx,
 ) -> Option<String> {
-    let static_addr = try_static_addr_for_addr(addr_vn, stmt_idx, ctx)?;
+    let static_addr = try_static_addr_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx)?;
     if !is_global_addr_candidate(static_addr) {
         return None;
     }
@@ -2673,6 +2809,37 @@ fn try_global_var_name(
     Some(format!("{}_{:X}", prefix, addr))
 }
 
+fn try_readonly_scalar_load(
+    addr_vn: &Varnode,
+    addr_raw_idx: Option<usize>,
+    stmt_idx: u32,
+    access_size: u8,
+    ctx: &PrintCtx,
+) -> Option<String> {
+    let static_addr = try_static_addr_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx)?;
+    if !static_addr.from_instruction_pointer {
+        return None;
+    }
+    let value = ctx.readonly_scalars.get(&(static_addr.addr, access_size))?;
+    Some(format_constant_ctx(
+        *value,
+        access_size,
+        ConstContext::Unsigned,
+    ))
+}
+
+fn try_readonly_scalar_value_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<String> {
+    let def_stmt = defining_stmt_for_sv(sv, ctx)?;
+    let def = ctx.stmt_insns.get(&def_stmt)?;
+    if def.op != IrOp::Load {
+        return None;
+    }
+    let load_size = def.output.map_or(8, |o| o.size);
+    let addr_idx = if def.inputs.len() >= 2 { 1 } else { 0 };
+    let addr = def.inputs.get(addr_idx)?;
+    try_readonly_scalar_load(addr, Some(addr_idx), def_stmt, load_size, ctx)
+}
+
 fn is_global_addr_candidate(static_addr: StaticAddr) -> bool {
     let threshold = if static_addr.from_instruction_pointer {
         IP_REL_GLOBAL_ADDR_THRESHOLD
@@ -2684,14 +2851,16 @@ fn is_global_addr_candidate(static_addr: StaticAddr) -> bool {
 
 fn try_static_addr_for_addr(
     addr_vn: &Varnode,
+    addr_raw_idx: Option<usize>,
     stmt_idx: u32,
     ctx: &PrintCtx,
 ) -> Option<StaticAddr> {
-    resolve_static_addr_for_addr(addr_vn, stmt_idx, ctx, 0)
+    resolve_static_addr_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0)
 }
 
 fn resolve_static_addr_for_addr(
     vn: &Varnode,
+    raw_idx: Option<usize>,
     stmt_idx: u32,
     ctx: &PrintCtx,
     depth: u8,
@@ -2710,19 +2879,20 @@ fn resolve_static_addr_for_addr(
         return None;
     }
 
-    let sv = input_or_latest_sv_for_operand(vn, stmt_idx, ctx)?;
+    let sv = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx)?;
     let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
     let def = ctx.stmt_insns.get(&def_stmt)?;
 
     match def.op {
         IrOp::Copy if !def.inputs.is_empty() => {
-            resolve_static_addr_for_addr(&def.inputs[0], def_stmt, ctx, depth + 1)
+            resolve_static_addr_for_addr(&def.inputs[0], Some(0), def_stmt, ctx, depth + 1)
         }
         IrOp::IntAdd if def.inputs.len() >= 2 => {
             resolve_static_addr_add(&def.inputs[0], &def.inputs[1], def_stmt, ctx, depth + 1)
         }
         IrOp::IntSub if def.inputs.len() >= 2 => {
-            let lhs = resolve_static_addr_for_addr(&def.inputs[0], def_stmt, ctx, depth + 1)?;
+            let lhs =
+                resolve_static_addr_for_addr(&def.inputs[0], Some(0), def_stmt, ctx, depth + 1)?;
             let rhs = &def.inputs[1];
             if rhs.space == SpaceId::Const {
                 Some(StaticAddr {
@@ -2761,14 +2931,14 @@ fn resolve_static_addr_add(
     }
 
     if b.space == SpaceId::Const {
-        let base = resolve_static_addr_for_addr(a, stmt_idx, ctx, depth)?;
+        let base = resolve_static_addr_for_addr(a, Some(0), stmt_idx, ctx, depth)?;
         return Some(StaticAddr {
             addr: base.addr.wrapping_add(b.offset),
             from_instruction_pointer: base.from_instruction_pointer,
         });
     }
     if a.space == SpaceId::Const {
-        let base = resolve_static_addr_for_addr(b, stmt_idx, ctx, depth)?;
+        let base = resolve_static_addr_for_addr(b, Some(1), stmt_idx, ctx, depth)?;
         return Some(StaticAddr {
             addr: base.addr.wrapping_add(a.offset),
             from_instruction_pointer: base.from_instruction_pointer,
@@ -2887,7 +3057,7 @@ fn try_emit_byref_union_param(
 /// stack-canary range to avoid stomping on `__readfsqword(0x28u)`. Skipped
 /// when the address is in the string table — string inlining must win.
 fn try_emit_memory_annotation(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> Option<String> {
-    let addr = try_static_addr_for_addr(addr_vn, stmt_idx, ctx)?.addr;
+    let addr = try_static_addr_for_addr(addr_vn, None, stmt_idx, ctx)?.addr;
     if addr < 0x1000 {
         return None;
     }
@@ -2908,28 +3078,57 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
     ctx.stmt_scope_paths
         .insert(idx, ctx.current_scope_path.clone());
 
+    let annotated_slots = take_annotated_slots_for_insn(insn, ctx);
     let mut input_svs = Vec::new();
-    for input in &insn.inputs {
-        if input.space == SpaceId::Const {
-            continue;
+    let mut input_slots = BTreeMap::new();
+    if let Some(slots) = annotated_slots.as_ref() {
+        for (&raw_idx, &sv) in &slots.inputs {
+            ctx.name_of(&sv);
+            input_svs.push(sv);
+            input_slots.insert(raw_idx, sv);
         }
-        let ver = ctx.current_version(input);
-        let sv = SsaVarnode {
-            base: *input,
-            version: ver,
-        };
-        ctx.name_of(&sv);
-        input_svs.push(sv);
+    } else {
+        for (raw_idx, input) in insn.inputs.iter().enumerate() {
+            if input.space == SpaceId::Const {
+                continue;
+            }
+            let ver = ctx.current_version(input);
+            let sv = SsaVarnode {
+                base: *input,
+                version: ver,
+            };
+            ctx.name_of(&sv);
+            input_svs.push(sv);
+            input_slots.insert(raw_idx, sv);
+        }
     }
     ctx.stmt_inputs.insert(idx, input_svs);
+    ctx.stmt_input_slots.insert(idx, input_slots);
 
-    let output_sv = if let Some(output) = insn.output {
+    let output_sv = if let Some(slots) = annotated_slots.as_ref() {
+        if let Some(sv) = slots.output {
+            ctx.ssa_current.insert(sv.base, sv.version);
+            ctx.ssa_next_version.insert(
+                sv.base,
+                ctx.ssa_next_version
+                    .get(&sv.base)
+                    .copied()
+                    .unwrap_or(0)
+                    .max(sv.version + 1),
+            );
+            name_output_sv_for_insn(insn, &sv, ctx);
+            infer_type_from_insn(insn, &sv, ctx);
+            Some(sv)
+        } else {
+            None
+        }
+    } else if let Some(output) = insn.output {
         let ver = ctx.next_version(&output);
         let sv = SsaVarnode {
             base: output,
             version: ver,
         };
-        ctx.name_of(&sv);
+        name_output_sv_for_insn(insn, &sv, ctx);
         infer_type_from_insn(insn, &sv, ctx);
         Some(sv)
     } else {
@@ -2940,47 +3139,35 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
     idx
 }
 
+fn take_annotated_slots_for_insn(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<SsaStatementSlots> {
+    let key = (insn.addr, insn.op);
+    let used = ctx.ssa_statement_slot_uses.entry(key).or_insert(0);
+    let slots = ctx
+        .ssa_statement_slots
+        .get(&key)
+        .and_then(|candidates| candidates.get(*used))
+        .cloned();
+    if slots.is_some() {
+        *used += 1;
+    }
+    slots
+}
+
+fn name_output_sv_for_insn(insn: &IrInsn, sv: &SsaVarnode, ctx: &mut PrintCtx) {
+    if matches!(insn.op, IrOp::Call | IrOp::Callind) && sv.base.space == SpaceId::Register {
+        ctx.fresh_ssa_name_of(sv);
+    } else {
+        ctx.name_of(sv);
+    }
+}
+
 fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
     for node in nodes {
         match node {
             HirNode::Block(children) => collect_varnodes(children, ctx),
 
             HirNode::Statement(insn) => {
-                let idx = ctx.next_stmt;
-                ctx.next_stmt += 1;
-                ctx.stmt_depths.insert(idx, ctx.collect_depth);
-                ctx.stmt_scope_paths
-                    .insert(idx, ctx.current_scope_path.clone());
-
-                let mut input_svs = Vec::new();
-                for input in &insn.inputs {
-                    if input.space == SpaceId::Const {
-                        continue;
-                    }
-                    let ver = ctx.current_version(input);
-                    let sv = SsaVarnode {
-                        base: *input,
-                        version: ver,
-                    };
-                    ctx.name_of(&sv);
-                    input_svs.push(sv);
-                }
-                ctx.stmt_inputs.insert(idx, input_svs);
-
-                let output_sv = if let Some(output) = insn.output {
-                    let ver = ctx.next_version(&output);
-                    let sv = SsaVarnode {
-                        base: output,
-                        version: ver,
-                    };
-                    ctx.name_of(&sv);
-                    infer_type_from_insn(insn, &sv, ctx);
-                    Some(sv)
-                } else {
-                    None
-                };
-                ctx.stmt_outputs.insert(idx, output_sv);
-                ctx.stmt_insns.insert(idx, insn.clone());
+                collect_insn_as_stmt(insn, ctx);
             }
 
             HirNode::If {
@@ -3093,9 +3280,10 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
             HirNode::Return(Some(sv)) => {
                 if !ctx.parent_returns_void && sv.base.space != SpaceId::Const {
-                    ctx.name_of(sv);
-                    ctx.cond_uses.push(*sv);
-                    ctx.cond_use_stmts.push((*sv, ctx.next_stmt));
+                    let ret_sv = ctx.return_value_aliases.get(sv).copied().unwrap_or(*sv);
+                    ctx.name_of(&ret_sv);
+                    ctx.cond_uses.push(ret_sv);
+                    ctx.cond_use_stmts.push((ret_sv, ctx.next_stmt));
                 }
             }
 
@@ -3111,71 +3299,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
 
-                let then_idx = ctx.next_stmt;
-                ctx.next_stmt += 1;
-                ctx.stmt_depths.insert(then_idx, ctx.collect_depth);
-                ctx.stmt_scope_paths
-                    .insert(then_idx, ctx.current_scope_path.clone());
-                let mut then_inputs = Vec::new();
-                for input in &then_insn.inputs {
-                    if input.space == SpaceId::Const {
-                        continue;
-                    }
-                    let ver = ctx.current_version(input);
-                    let sv = SsaVarnode {
-                        base: *input,
-                        version: ver,
-                    };
-                    ctx.name_of(&sv);
-                    then_inputs.push(sv);
-                }
-                ctx.stmt_inputs.insert(then_idx, then_inputs);
-                let then_out_sv = if let Some(output) = then_insn.output {
-                    let ver = ctx.next_version(&output);
-                    let sv = SsaVarnode {
-                        base: output,
-                        version: ver,
-                    };
-                    ctx.name_of(&sv);
-                    infer_type_from_insn(then_insn, &sv, ctx);
-                    Some(sv)
-                } else {
-                    None
-                };
-                ctx.stmt_outputs.insert(then_idx, then_out_sv);
-
-                let else_idx = ctx.next_stmt;
-                ctx.next_stmt += 1;
-                ctx.stmt_depths.insert(else_idx, ctx.collect_depth);
-                ctx.stmt_scope_paths
-                    .insert(else_idx, ctx.current_scope_path.clone());
-                let mut else_inputs = Vec::new();
-                for input in &else_insn.inputs {
-                    if input.space == SpaceId::Const {
-                        continue;
-                    }
-                    let ver = ctx.current_version(input);
-                    let sv = SsaVarnode {
-                        base: *input,
-                        version: ver,
-                    };
-                    ctx.name_of(&sv);
-                    else_inputs.push(sv);
-                }
-                ctx.stmt_inputs.insert(else_idx, else_inputs);
-                let else_out_sv = if let Some(output) = else_insn.output {
-                    let ver = ctx.next_version(&output);
-                    let sv = SsaVarnode {
-                        base: output,
-                        version: ver,
-                    };
-                    ctx.name_of(&sv);
-                    infer_type_from_insn(else_insn, &sv, ctx);
-                    Some(sv)
-                } else {
-                    None
-                };
-                ctx.stmt_outputs.insert(else_idx, else_out_sv);
+                collect_insn_as_stmt(then_insn, ctx);
+                collect_insn_as_stmt(else_insn, ctx);
             }
 
             HirNode::GuardedTernary {
@@ -3192,38 +3317,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 // structurer's fold pass); we still allocate stmt slots
                 // so name resolution / type inference stay consistent.
                 for insn in [then_insn, else_insn] {
-                    let idx = ctx.next_stmt;
-                    ctx.next_stmt += 1;
-                    ctx.stmt_depths.insert(idx, ctx.collect_depth);
-                    ctx.stmt_scope_paths
-                        .insert(idx, ctx.current_scope_path.clone());
-                    let mut inputs = Vec::new();
-                    for input in &insn.inputs {
-                        if input.space == SpaceId::Const {
-                            continue;
-                        }
-                        let ver = ctx.current_version(input);
-                        let sv = SsaVarnode {
-                            base: *input,
-                            version: ver,
-                        };
-                        ctx.name_of(&sv);
-                        inputs.push(sv);
-                    }
-                    ctx.stmt_inputs.insert(idx, inputs);
-                    let out_sv = if let Some(output) = insn.output {
-                        let ver = ctx.next_version(&output);
-                        let sv = SsaVarnode {
-                            base: output,
-                            version: ver,
-                        };
-                        ctx.name_of(&sv);
-                        infer_type_from_insn(insn, &sv, ctx);
-                        Some(sv)
-                    } else {
-                        None
-                    };
-                    ctx.stmt_outputs.insert(idx, out_sv);
+                    collect_insn_as_stmt(insn, ctx);
                 }
             }
 
@@ -3243,7 +3337,11 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     .insert(idx, ctx.current_scope_path.clone());
 
                 let mut input_svs = Vec::new();
-                for input in [cmp_lhs, cmp_rhs, true_val, false_val] {
+                let mut input_slots = BTreeMap::new();
+                for (raw_idx, input) in [cmp_lhs, cmp_rhs, true_val, false_val]
+                    .into_iter()
+                    .enumerate()
+                {
                     if input.space == SpaceId::Const {
                         continue;
                     }
@@ -3254,8 +3352,10 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     };
                     ctx.name_of(&sv);
                     input_svs.push(sv);
+                    input_slots.insert(raw_idx, sv);
                 }
                 ctx.stmt_inputs.insert(idx, input_svs);
+                ctx.stmt_input_slots.insert(idx, input_slots);
 
                 let ver = ctx.next_version(output);
                 let out_sv = SsaVarnode {
@@ -3430,6 +3530,10 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             continue;
         }
 
+        if insn.op == IrOp::Copy && copy_reads_call_output(stmt_idx, ctx) {
+            continue;
+        }
+
         if use_counts.get(&output_sv).copied().unwrap_or(0) != 1 {
             continue;
         }
@@ -3449,6 +3553,27 @@ fn compute_foldable(ctx: &mut PrintCtx) {
     }
 
     ctx.sv_use_counts = use_counts;
+}
+
+fn copy_reads_call_output(stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    let Some(insn) = ctx.stmt_insns.get(&stmt_idx) else {
+        return false;
+    };
+    if insn.op != IrOp::Copy {
+        return false;
+    }
+    let Some(input_sv) = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .and_then(|inputs| inputs.first())
+    else {
+        return false;
+    };
+    ctx.stmt_outputs
+        .iter()
+        .find_map(|(def_stmt, output)| (*output == Some(*input_sv)).then_some(def_stmt))
+        .and_then(|def_stmt| ctx.stmt_insns.get(def_stmt))
+        .is_some_and(|def_insn| matches!(def_insn.op, IrOp::Call | IrOp::Callind))
 }
 
 /// 2-level dead-variable chain propagation (Batch 3 / Wave 4).
@@ -3556,8 +3681,7 @@ fn is_dead_suppressible_store(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> b
     if is_redundant_inverted_control_compare(insn, stmt_idx, &out_sv, ctx) {
         return true;
     }
-    ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) == 0
-        && is_suppressible_storage(&out_sv.base, ctx)
+    is_suppressible_storage(&out_sv.base, ctx)
 }
 
 fn should_suppress_var_decl(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
@@ -4071,11 +4195,20 @@ fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
             continue;
         }
         let abs = local.offset.unsigned_abs();
-        let name = if local.size > 8 {
+        let is_buffer = local.size > 8;
+        let name = if is_buffer {
             format!("buf_{}", abs)
         } else {
             format!("v_{}", abs)
         };
+        ctx.stack_frame_slots.insert(
+            local.offset,
+            StackSlotName {
+                name: name.clone(),
+                size: local.size,
+                is_buffer,
+            },
+        );
         // Register the override under every plausible access width so a
         // partial (1/2/4) read of a wider slot still picks up the name.
         // The base varnode stored in `name_overrides` is keyed by full
@@ -4109,31 +4242,241 @@ fn compute_suppressed_stack_offsets(func: &HirFunction, ctx: &mut PrintCtx) {
     }
 }
 
+fn promote_stack_address_call_arrays(nodes: &[HirNode], ctx: &mut PrintCtx) {
+    fn walk(nodes: &[HirNode], ctx: &mut PrintCtx) {
+        for node in nodes {
+            match node {
+                HirNode::Block(children)
+                | HirNode::TryFinally {
+                    try_body: children, ..
+                } => walk(children, ctx),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    walk(then_body, ctx);
+                    if let Some(else_body) = else_body {
+                        walk(else_body, ctx);
+                    }
+                }
+                HirNode::While { body, .. }
+                | HirNode::DoWhile { body, .. }
+                | HirNode::For { body, .. }
+                | HirNode::GuardedIf {
+                    then_body: body, ..
+                } => walk(body, ctx),
+                HirNode::Switch { cases, default, .. } => {
+                    for (_, body, _) in cases {
+                        walk(body, ctx);
+                    }
+                    if let Some(default) = default {
+                        walk(default, ctx);
+                    }
+                }
+                HirNode::TryCatch {
+                    try_body,
+                    catch_arms,
+                } => {
+                    walk(try_body, ctx);
+                    for (_, body) in catch_arms {
+                        walk(body, ctx);
+                    }
+                }
+                HirNode::Statement(insn) if matches!(insn.op, IrOp::Call | IrOp::Callind) => {
+                    let Some(stmt_idx) = stmt_idx_for_insn(insn, ctx) else {
+                        continue;
+                    };
+                    for arg_idx in 1..insn.inputs.len() {
+                        let ptr = &insn.inputs[arg_idx];
+                        if ptr.space == SpaceId::Const {
+                            continue;
+                        }
+                        let Some(offset) =
+                            resolve_stack_offset_for_addr(ptr, Some(arg_idx), stmt_idx, ctx, 0)
+                        else {
+                            continue;
+                        };
+                        if let Some(count) = insn.inputs.get(arg_idx + 1)
+                            && count.space == SpaceId::Const
+                            && count.offset > 1
+                            && count.offset <= 1024
+                        {
+                            let byte_len = count.offset.saturating_mul(4);
+                            promote_stack_buffer(offset, byte_len, ctx);
+                        } else if stack_slot_for_offset(offset, ptr.size.max(1), ctx).is_none() {
+                            synthesize_stack_scalar(offset, ptr.size.max(1), ctx);
+                        }
+                    }
+                }
+                HirNode::Statement(insn) if insn.op == IrOp::Store && insn.inputs.len() >= 3 => {
+                    let Some(stmt_idx) = stmt_idx_for_insn(insn, ctx) else {
+                        continue;
+                    };
+                    let Some(offset) =
+                        resolve_stack_offset_for_addr(&insn.inputs[1], Some(1), stmt_idx, ctx, 0)
+                    else {
+                        continue;
+                    };
+                    let size = insn.inputs[2].size.max(1);
+                    if stack_slot_for_offset(offset, size, ctx).is_none() {
+                        synthesize_stack_scalar(offset, size, ctx);
+                    }
+                }
+                HirNode::Commented { inner, .. } => walk(std::slice::from_ref(inner), ctx),
+                _ => {}
+            }
+        }
+    }
+
+    walk(nodes, ctx);
+}
+
+fn stmt_idx_for_insn(insn: &IrInsn, ctx: &PrintCtx) -> Option<u32> {
+    ctx.stmt_insns
+        .iter()
+        .find_map(|(&idx, stmt)| (stmt.addr == insn.addr && stmt.op == insn.op).then_some(idx))
+}
+
+fn promote_stack_buffer(offset: i64, byte_len: u64, ctx: &mut PrintCtx) {
+    if byte_len == 0 {
+        return;
+    }
+    let abs = offset.unsigned_abs();
+    let name = format!("buf_{}", abs);
+    let size = byte_len.max(
+        ctx.stack_frame_slots
+            .get(&offset)
+            .map(|slot| slot.size)
+            .unwrap_or(0),
+    );
+    ctx.promoted_stack_buffers.insert(offset, size);
+    ctx.stack_frame_slots.insert(
+        offset,
+        StackSlotName {
+            name: name.clone(),
+            size,
+            is_buffer: true,
+        },
+    );
+    let stk = Varnode::stack(offset as u64, size.min(255) as u8);
+    ctx.name_overrides.insert(stk, name);
+}
+
+fn synthesize_stack_scalar(offset: i64, size: u8, ctx: &mut PrintCtx) {
+    if size == 0 {
+        return;
+    }
+    let name = format!("v_{}", offset.unsigned_abs());
+    ctx.synthetic_stack_scalars
+        .entry(offset)
+        .and_modify(|old| *old = (*old).max(size))
+        .or_insert(size);
+    ctx.stack_frame_slots
+        .entry(offset)
+        .or_insert(StackSlotName {
+            name: name.clone(),
+            size: u64::from(size),
+            is_buffer: false,
+        });
+    for width in [size, 8, 4, 2, 1] {
+        if width == 0 {
+            continue;
+        }
+        let stk = Varnode::stack(offset as u64, width);
+        ctx.name_overrides
+            .entry(stk)
+            .or_insert_with(|| name.clone());
+    }
+}
+
 fn try_stack_frame_access_name(
     addr_vn: &Varnode,
+    addr_raw_idx: Option<usize>,
     stmt_idx: u32,
     access_size: u8,
     ctx: &PrintCtx,
 ) -> Option<String> {
-    let offset = resolve_stack_offset_for_addr(addr_vn, stmt_idx, ctx, 0)?;
-    stack_name_for_offset(offset, access_size, ctx)
+    let offset = resolve_stack_offset_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0)?;
+    let slot = stack_slot_for_offset(offset, access_size, ctx)?;
+    if slot.is_buffer || slot.delta != 0 {
+        let cast = ida_ptr_type(access_size);
+        let cast_prim = cast.trim_end_matches(" *");
+        let addr = stack_slot_address_expr(&slot);
+        Some(format!("*({cast_prim} *){addr}"))
+    } else {
+        Some(slot.name)
+    }
 }
 
-fn stack_name_for_offset(offset: i64, access_size: u8, ctx: &PrintCtx) -> Option<String> {
+#[derive(Clone, Debug)]
+struct StackSlotRef {
+    name: String,
+    delta: i64,
+    is_buffer: bool,
+}
+
+fn stack_slot_for_offset(offset: i64, access_size: u8, ctx: &PrintCtx) -> Option<StackSlotRef> {
+    let width = i64::from(access_size.max(1));
+    let mut scalar_match: Option<StackSlotRef> = None;
+    for (&start, slot) in ctx.stack_frame_slots.range(..=offset).rev() {
+        let end = start.checked_add(slot.size as i64)?;
+        let access_end = offset.checked_add(width)?;
+        if offset >= start && access_end <= end {
+            let delta = offset - start;
+            if slot.is_buffer {
+                return Some(StackSlotRef {
+                    name: slot.name.clone(),
+                    delta,
+                    is_buffer: true,
+                });
+            }
+            if delta == 0 && scalar_match.is_none() {
+                scalar_match = Some(StackSlotRef {
+                    name: slot.name.clone(),
+                    delta,
+                    is_buffer: false,
+                });
+            }
+        }
+        if start
+            .checked_add(slot.size as i64)
+            .is_some_and(|end| end <= offset)
+        {
+            break;
+        }
+    }
+    if scalar_match.is_some() {
+        return scalar_match;
+    }
+
     for size in [access_size, 8, 4, 2, 1] {
         if size == 0 {
             continue;
         }
         let stk = Varnode::stack(offset as u64, size);
         if let Some(name) = ctx.name_overrides.get(&stk) {
-            return Some(name.clone());
+            return Some(StackSlotRef {
+                name: name.clone(),
+                delta: 0,
+                is_buffer: name.starts_with("buf_"),
+            });
         }
     }
     None
 }
 
+fn stack_slot_address_expr(slot: &StackSlotRef) -> String {
+    if slot.delta == 0 {
+        slot.name.clone()
+    } else {
+        format!("({} + {})", slot.name, slot.delta)
+    }
+}
+
 fn resolve_stack_offset_for_addr(
     vn: &Varnode,
+    raw_idx: Option<usize>,
     stmt_idx: u32,
     ctx: &PrintCtx,
     depth: u8,
@@ -4152,19 +4495,20 @@ fn resolve_stack_offset_for_addr(
         return None;
     }
 
-    let sv = input_or_latest_sv_for_operand(vn, stmt_idx, ctx)?;
+    let sv = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx)?;
     let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
     let def = ctx.stmt_insns.get(&def_stmt)?;
 
     match def.op {
         IrOp::Copy if !def.inputs.is_empty() => {
-            resolve_stack_offset_for_addr(&def.inputs[0], def_stmt, ctx, depth + 1)
+            resolve_stack_offset_for_addr(&def.inputs[0], Some(0), def_stmt, ctx, depth + 1)
         }
         IrOp::IntAdd if def.inputs.len() >= 2 => {
             resolve_stack_offset_add(&def.inputs[0], &def.inputs[1], def_stmt, ctx, depth + 1)
         }
         IrOp::IntSub if def.inputs.len() >= 2 => {
-            let base = resolve_stack_offset_for_addr(&def.inputs[0], def_stmt, ctx, depth + 1)?;
+            let base =
+                resolve_stack_offset_for_addr(&def.inputs[0], Some(0), def_stmt, ctx, depth + 1)?;
             let rhs = &def.inputs[1];
             if rhs.space == SpaceId::Const {
                 Some(base.wrapping_sub(rhs.offset as i64))
@@ -4178,9 +4522,19 @@ fn resolve_stack_offset_for_addr(
 
 fn input_or_latest_sv_for_operand(
     vn: &Varnode,
+    raw_idx: Option<usize>,
     stmt_idx: u32,
     ctx: &PrintCtx,
 ) -> Option<SsaVarnode> {
+    if let Some(raw_idx) = raw_idx
+        && let Some(sv) = ctx
+            .stmt_input_slots
+            .get(&stmt_idx)
+            .and_then(|inputs| inputs.get(&raw_idx).copied())
+        && sv.base == *vn
+    {
+        return Some(sv);
+    }
     if let Some(sv) = ctx
         .stmt_inputs
         .get(&stmt_idx)
@@ -4211,11 +4565,11 @@ fn resolve_stack_offset_add(
     depth: u8,
 ) -> Option<i64> {
     if b.space == SpaceId::Const {
-        let base = resolve_stack_offset_for_addr(a, stmt_idx, ctx, depth)?;
+        let base = resolve_stack_offset_for_addr(a, Some(0), stmt_idx, ctx, depth)?;
         return Some(base.wrapping_add(b.offset as i64));
     }
     if a.space == SpaceId::Const {
-        let base = resolve_stack_offset_for_addr(b, stmt_idx, ctx, depth)?;
+        let base = resolve_stack_offset_for_addr(b, Some(1), stmt_idx, ctx, depth)?;
         return Some(base.wrapping_add(a.offset as i64));
     }
     None
@@ -4250,8 +4604,13 @@ fn is_zero_address_literal(rendered: &str) -> bool {
     matches!(rendered, "0" | "0LL" | "nullptr")
 }
 
-fn is_suppressed_stack_access(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
-    resolve_stack_offset_for_addr(addr_vn, stmt_idx, ctx, 0)
+fn is_suppressed_stack_access(
+    addr_vn: &Varnode,
+    addr_raw_idx: Option<usize>,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> bool {
+    resolve_stack_offset_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0)
         .is_some_and(|offset| ctx.suppressed_stack_offsets.contains(&offset))
 }
 
@@ -4264,10 +4623,31 @@ fn is_suppressed_stack_access(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) 
 /// Locals are emitted in ascending offset order (BTreeMap iteration).
 fn emit_stack_frame_decls(
     func: &HirFunction,
+    ctx: &PrintCtx,
     out: &mut String,
 ) -> std::collections::BTreeSet<String> {
     use unlace_ir::ssa::FrameSlotKind;
     let mut emitted = std::collections::BTreeSet::new();
+    for (&offset, &size) in &ctx.promoted_stack_buffers {
+        let name = format!("buf_{}", offset.unsigned_abs());
+        let _ = writeln!(out, "    char {}[{}];", name, size);
+        emitted.insert(name);
+    }
+    for (&offset, &size) in &ctx.synthetic_stack_scalars {
+        let name = format!("v_{}", offset.unsigned_abs());
+        if emitted.contains(&name) {
+            continue;
+        }
+        let ty = match size {
+            1 => "char",
+            2 => "__int16",
+            4 => "int",
+            8 => "__int64",
+            _ => "int",
+        };
+        let _ = writeln!(out, "    {} {};", ty, name);
+        emitted.insert(name);
+    }
     let frame = match func.stack_frame.as_ref() {
         Some(f) => f,
         None => return emitted,
@@ -4287,6 +4667,9 @@ fn emit_stack_frame_decls(
         };
         if local.size > 8 {
             let name = format!("buf_{}", abs);
+            if emitted.contains(&name) {
+                continue;
+            }
             let _ = writeln!(out, "    char {}[{}]{};", name, local.size, byref_marker);
             emitted.insert(name);
         } else {
@@ -4298,6 +4681,9 @@ fn emit_stack_frame_decls(
                 _ => "int",
             };
             let name = format!("v_{}", abs);
+            if emitted.contains(&name) {
+                continue;
+            }
             let _ = writeln!(out, "    {} {}{};", ty, name, byref_marker);
             emitted.insert(name);
         }
@@ -4508,6 +4894,40 @@ fn compute_heuristic_names(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 }
             };
             apply_override(ctx, &base, name);
+        }
+    }
+}
+
+fn dedupe_var_names(ctx: &mut PrintCtx) {
+    let mut used: BTreeMap<String, (Varnode, PrimitiveType)> = BTreeMap::new();
+    let mut allocated: BTreeSet<String> = ctx.var_names.values().cloned().collect();
+    let entries: Vec<(SsaVarnode, String)> = ctx
+        .var_names
+        .iter()
+        .map(|(sv, name)| (*sv, name.clone()))
+        .collect();
+
+    for (sv, name) in entries {
+        let ty = ctx
+            .var_types
+            .get(&sv)
+            .copied()
+            .unwrap_or(PrimitiveType::Unknown);
+        if let Some((owner_base, owner_ty)) = used.get(&name).copied() {
+            if owner_base == sv.base && owner_ty == ty {
+                continue;
+            }
+            let mut suffix = 1u32;
+            let unique = loop {
+                let candidate = format!("{name}_{suffix}");
+                suffix += 1;
+                if allocated.insert(candidate.clone()) {
+                    break candidate;
+                }
+            };
+            ctx.var_names.insert(sv, unique);
+        } else {
+            used.insert(name, (sv.base, ty));
         }
     }
 }
@@ -4871,7 +5291,7 @@ fn is_default_v_name(name: &str) -> bool {
     let Some(rest) = name.strip_prefix('v') else {
         return false;
     };
-    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+    is_v_number_suffix(rest)
 }
 
 /// IDA-style signature type rendering for a [`unlace_ir::types::Type`].
@@ -5041,6 +5461,14 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             last_dowhile_stmt_range = None;
             continue;
         }
+        if let Some(merged) = try_merge_call_return(&nodes[i..], ctx) {
+            ctx.emit_stmt += merged.stmt_count;
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "return {};", merged.expr);
+            i += merged.node_count;
+            last_dowhile_stmt_range = None;
+            continue;
+        }
         if let Some(first) = inline_node_text(&nodes[i], ctx) {
             let mut parts = Vec::new();
             let first_is_terminal = node_is_terminal_for_emission(&nodes[i]);
@@ -5054,6 +5482,13 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     ctx.emit_stmt += 1;
                     parts.push(format!("return {};", merged));
                     i += 2;
+                    group_has_terminal = true;
+                    break;
+                }
+                if let Some(merged) = try_merge_call_return(&nodes[i..], ctx) {
+                    ctx.emit_stmt += merged.stmt_count;
+                    parts.push(format!("return {};", merged.expr));
+                    i += merged.node_count;
                     group_has_terminal = true;
                     break;
                 }
@@ -5120,9 +5555,9 @@ fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
                 Some(format!("return {};", resolve_sv_expr(sv, ctx)))
             }
         }
-        HirNode::Return(None) => Some("return;".to_string()),
+        HirNode::Return(None) => Some(nonvoid_or_void_return_text(ctx)),
         HirNode::Goto(label) => Some(format!("goto {};", label)),
-        HirNode::TailCall { target } => Some(format_tail_call_text(*target, ctx)),
+        HirNode::TailCall { target, args } => Some(format_tail_call_text(*target, args, ctx)),
         HirNode::Continue => Some("continue;".to_string()),
         HirNode::Break => Some("break;".to_string()),
         HirNode::Ternary {
@@ -5255,6 +5690,121 @@ fn collect_merged_assign_return_stmt_indices(
             } => {
                 collect_merged_assign_return_stmt_indices(then_body, ctx, next_stmt, out);
                 collect_merged_assign_return_stmt_indices(else_body, ctx, next_stmt, out);
+            }
+            HirNode::Return(_)
+            | HirNode::Goto(_)
+            | HirNode::Label(_)
+            | HirNode::TailCall { .. }
+            | HirNode::Continue
+            | HirNode::Break
+            | HirNode::ObjcBlock { .. }
+            | HirNode::Asm { .. } => {}
+        }
+    }
+}
+
+fn merged_call_return_svs(nodes: &[HirNode], ctx: &PrintCtx) -> BTreeSet<SsaVarnode> {
+    if ctx.parent_returns_void {
+        return BTreeSet::new();
+    }
+    let mut out = BTreeSet::new();
+    let mut next_stmt = 0;
+    collect_merged_call_return_svs(nodes, ctx, &mut next_stmt, &mut out);
+    out
+}
+
+fn collect_merged_call_return_svs(
+    nodes: &[HirNode],
+    ctx: &PrintCtx,
+    next_stmt: &mut u32,
+    out: &mut BTreeSet<SsaVarnode>,
+) {
+    for (node_idx, node) in nodes.iter().enumerate() {
+        match node {
+            HirNode::Block(children) => {
+                collect_merged_call_return_svs(children, ctx, next_stmt, out);
+            }
+            HirNode::Statement(_) => {
+                if let Some(plan) = plan_call_return_merge(&nodes[node_idx..], *next_stmt, ctx) {
+                    out.insert(plan.ret_sv);
+                }
+                *next_stmt += 1;
+            }
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_merged_call_return_svs(then_body, ctx, next_stmt, out);
+                if let Some(else_body) = else_body {
+                    collect_merged_call_return_svs(else_body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                collect_merged_call_return_svs(body, ctx, next_stmt, out);
+            }
+            HirNode::For { init, body, .. } => {
+                if init.is_some() {
+                    *next_stmt += 1;
+                }
+                collect_merged_call_return_svs(body, ctx, next_stmt, out);
+                *next_stmt += 1;
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    collect_merged_call_return_svs(body, ctx, next_stmt, out);
+                }
+                if let Some(default) = default {
+                    collect_merged_call_return_svs(default, ctx, next_stmt, out);
+                }
+            }
+            HirNode::Ternary { .. } | HirNode::GuardedTernary { .. } => {
+                *next_stmt += 2;
+            }
+            HirNode::CselTernary { .. } => {
+                *next_stmt += 1;
+            }
+            HirNode::IfCmp {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_merged_call_return_svs(then_body, ctx, next_stmt, out);
+                if let Some(else_body) = else_body {
+                    collect_merged_call_return_svs(else_body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                collect_merged_call_return_svs(try_body, ctx, next_stmt, out);
+                for (_, body) in catch_arms {
+                    collect_merged_call_return_svs(body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_merged_call_return_svs(try_body, ctx, next_stmt, out);
+                collect_merged_call_return_svs(finally_body, ctx, next_stmt, out);
+            }
+            HirNode::Commented { inner, .. } => {
+                collect_merged_call_return_svs(
+                    std::slice::from_ref(inner.as_ref()),
+                    ctx,
+                    next_stmt,
+                    out,
+                );
+            }
+            HirNode::GuardedIf {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_merged_call_return_svs(then_body, ctx, next_stmt, out);
+                collect_merged_call_return_svs(else_body, ctx, next_stmt, out);
             }
             HirNode::Return(_)
             | HirNode::Goto(_)
@@ -5411,6 +5961,129 @@ fn try_merge_assign_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<Stri
     Some(emit_expr(insn, stmt_idx, ctx))
 }
 
+struct CallReturnMergePlan {
+    node_count: usize,
+    stmt_count: u32,
+    ret_sv: SsaVarnode,
+}
+
+struct CallReturnMergeEmission {
+    expr: String,
+    node_count: usize,
+    stmt_count: u32,
+}
+
+fn try_merge_call_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<CallReturnMergeEmission> {
+    let plan = plan_call_return_merge(nodes, ctx.emit_stmt, ctx)?;
+    let insn = call_insn_for_merge(&nodes[0])?;
+    Some(CallReturnMergeEmission {
+        expr: emit_expr(insn, ctx.emit_stmt, ctx),
+        node_count: plan.node_count,
+        stmt_count: plan.stmt_count,
+    })
+}
+
+fn plan_call_return_merge(
+    nodes: &[HirNode],
+    first_stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> Option<CallReturnMergePlan> {
+    if ctx.parent_returns_void || nodes.len() < 2 {
+        return None;
+    }
+    let insn = call_insn_for_merge(&nodes[0])?;
+    if insn.output.is_some() {
+        return None;
+    }
+
+    let mut node_count = 1usize;
+    let mut stmt_count = 1u32;
+    let mut next_stmt_idx = first_stmt_idx + 1;
+    for node in &nodes[1..] {
+        match node {
+            HirNode::Statement(insn)
+                if statement_is_transparent_for_call_return(insn, next_stmt_idx, ctx) =>
+            {
+                node_count += 1;
+                stmt_count += 1;
+                next_stmt_idx += 1;
+            }
+            node if let Some(ret_sv) = return_register_sv_from_node(node) => {
+                node_count += 1;
+                return Some(CallReturnMergePlan {
+                    node_count,
+                    stmt_count,
+                    ret_sv,
+                });
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
+fn call_insn_for_merge(node: &HirNode) -> Option<&IrInsn> {
+    match node {
+        HirNode::Statement(insn) if matches!(insn.op, IrOp::Call | IrOp::Callind) => Some(insn),
+        HirNode::Commented { inner, .. } => call_insn_for_merge(inner),
+        _ => None,
+    }
+}
+
+fn return_register_sv_from_node(node: &HirNode) -> Option<SsaVarnode> {
+    match node {
+        HirNode::Return(Some(ret_sv)) if is_return_register(&ret_sv.base) => Some(*ret_sv),
+        HirNode::Block(children) if children.len() == 1 => {
+            return_register_sv_from_node(&children[0])
+        }
+        HirNode::Commented { inner, .. } => return_register_sv_from_node(inner),
+        _ => None,
+    }
+}
+
+fn statement_is_transparent_for_call_return(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if is_csel_callother(insn) || matches!(insn.op, IrOp::Call | IrOp::Callind) {
+        return false;
+    }
+    if ctx.foldable_stmts.contains(&stmt_idx)
+        || is_dead_zero_init(insn, stmt_idx, ctx)
+        || is_dead_suppressible_store(insn, stmt_idx, ctx)
+        || is_dead_suppressed_stack_load(insn, stmt_idx, ctx)
+    {
+        return true;
+    }
+    if ctx.source_map.contains_key(&insn.addr) {
+        return false;
+    }
+    if let Some(Some(sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() {
+        return is_control_only_condition_assignment(stmt_idx, &sv, insn, ctx);
+    }
+    false
+}
+
+fn is_dead_suppressed_stack_load(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if insn.op != IrOp::Load || insn.inputs.len() < 2 {
+        return false;
+    }
+    let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
+        return false;
+    };
+    ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) == 0
+        && is_suppressible_storage(&out_sv.base, ctx)
+}
+
+fn is_return_register(vn: &Varnode) -> bool {
+    vn.space == SpaceId::Register && vn.offset == 0
+}
+
+fn nonvoid_or_void_return_text(ctx: &PrintCtx) -> String {
+    if ctx.parent_returns_void {
+        "return;".to_string()
+    } else {
+        "return 0;".to_string()
+    }
+}
+
 fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) -> bool {
     if nodes.len() < 2 {
         return false;
@@ -5482,6 +6155,15 @@ fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) 
 }
 
 fn resolve_sv_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
+    resolve_sv_expr_inner(sv, ctx, true)
+}
+
+fn resolve_sv_expr_inner(sv: &SsaVarnode, ctx: &mut PrintCtx, allow_covering: bool) -> String {
+    if let Some(alias) = ctx.return_value_aliases.get(sv).copied()
+        && alias != *sv
+    {
+        return resolve_sv_expr_inner(&alias, ctx, false);
+    }
     if sv.base.space == SpaceId::Const {
         if let Some(s) = ctx.string_table.get(&sv.base.offset) {
             return format!("\"{}\"", escape_c_string(s));
@@ -5491,9 +6173,43 @@ fn resolve_sv_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(sv)
         && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
     {
+        if def_insn.op == IrOp::Multiequal {
+            for (input_idx, input) in def_insn.inputs.iter().enumerate() {
+                if let Some(input_sv) = ctx
+                    .stmt_inputs
+                    .get(&def_stmt)
+                    .and_then(|inputs| inputs.get(input_idx))
+                    .copied()
+                {
+                    return resolve_sv_expr_inner(&input_sv, ctx, allow_covering);
+                }
+                if input.space != SpaceId::Const {
+                    return emit_operand_resolved(input, input_idx, def_stmt, ctx);
+                }
+            }
+        }
         return emit_expr(&def_insn, def_stmt, ctx);
     }
+    if allow_covering && let Some(covering_sv) = latest_covering_register_output(sv, ctx) {
+        return ctx.name_of(&covering_sv);
+    }
     ctx.name_of(sv)
+}
+
+fn latest_covering_register_output(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<SsaVarnode> {
+    if sv.base.space != SpaceId::Register {
+        return None;
+    }
+    ctx.stmt_outputs
+        .iter()
+        .rev()
+        .filter_map(|(_, output)| output.as_ref().copied())
+        .find(|candidate| {
+            candidate.base.space == SpaceId::Register
+                && candidate.base.offset == sv.base.offset
+                && candidate.base.size > sv.base.size
+                && candidate.version == sv.version
+        })
 }
 
 fn resolve_post_dowhile_return_expr(
@@ -5715,47 +6431,7 @@ fn is_control_only_condition_use(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
 }
 
 fn is_control_only_condition_use_or_base(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
-    if is_control_only_condition_use(sv, ctx) {
-        return true;
-    }
-    if !ctx
-        .control_cond_uses
-        .iter()
-        .any(|cond| cond.base == sv.base)
-    {
-        return false;
-    }
-    has_inlineable_condition_def_for_base(&sv.base, ctx)
-        && same_base_non_control_use_count(&sv.base, ctx) == 0
-}
-
-fn has_inlineable_condition_def_for_base(base: &Varnode, ctx: &PrintCtx) -> bool {
-    ctx.stmt_outputs.iter().any(|(&stmt_idx, output)| {
-        let Some(output_sv) = output else {
-            return false;
-        };
-        if output_sv.base != *base {
-            return false;
-        }
-        ctx.stmt_insns
-            .get(&stmt_idx)
-            .is_some_and(|insn| insn.op.type_family() == Some('b'))
-    })
-}
-
-fn same_base_non_control_use_count(base: &Varnode, ctx: &PrintCtx) -> usize {
-    let total_uses = ctx
-        .sv_use_counts
-        .iter()
-        .filter(|(sv, _)| sv.base == *base)
-        .map(|(_, count)| *count)
-        .sum::<usize>();
-    let control_uses = ctx
-        .control_cond_uses
-        .iter()
-        .filter(|cond| cond.base == *base)
-        .count();
-    total_uses.saturating_sub(control_uses)
+    is_control_only_condition_use(sv, ctx)
 }
 
 fn is_control_only_condition_assignment(
@@ -5773,12 +6449,38 @@ fn is_control_only_condition_assignment(
     if inlineable_condition_def_stmt(sv, ctx) == Some(stmt_idx) {
         return is_control_only_condition_use(sv, ctx);
     }
-    defining_stmt_for_sv(sv, ctx) == Some(stmt_idx)
+    false
+}
+
+fn body_is_stack_chk_fail_only(body: &[HirNode], ctx: &PrintCtx) -> bool {
+    let mut meaningful = body.iter();
+    let Some(node) = meaningful.next() else {
+        return false;
+    };
+    meaningful.next().is_none() && node_is_stack_chk_fail_call(node, ctx)
+}
+
+fn node_is_stack_chk_fail_call(node: &HirNode, ctx: &PrintCtx) -> bool {
+    match node {
+        HirNode::Statement(insn) => insn_calls_symbol(insn, "__stack_chk_fail", ctx),
+        HirNode::Block(children) => body_is_stack_chk_fail_only(children, ctx),
+        HirNode::Commented { inner, .. } => node_is_stack_chk_fail_call(inner, ctx),
+        _ => false,
+    }
+}
+
+fn insn_calls_symbol(insn: &IrInsn, name: &str, ctx: &PrintCtx) -> bool {
+    if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
+        return false;
+    }
+    let Some(target) = insn.inputs.first() else {
+        return false;
+    };
+    target.space == SpaceId::Const
         && ctx
-            .control_cond_uses
-            .iter()
-            .any(|cond| cond.base == sv.base)
-        && same_base_non_control_use_count(&sv.base, ctx) == 0
+            .symbols
+            .get(&target.offset)
+            .is_some_and(|sym| sym == name || sym.ends_with(name))
 }
 
 fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
@@ -5792,6 +6494,20 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             then_body,
             else_body,
         } => {
+            if body_is_stack_chk_fail_only(then_body, ctx) {
+                if let Some(eb) = else_body {
+                    emit_nodes(eb, depth, ctx, out);
+                }
+                return;
+            }
+            if else_body
+                .as_deref()
+                .is_some_and(|eb| body_is_stack_chk_fail_only(eb, ctx))
+            {
+                emit_nodes(then_body, depth, ctx, out);
+                return;
+            }
+
             let cond_expr = resolve_control_cond_expr(cond, ctx);
             if then_body.is_empty()
                 && let Some(eb) = else_body
@@ -6016,7 +6732,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
         HirNode::Return(None) => {
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "return;");
+            let _ = writeln!(out, "{}", nonvoid_or_void_return_text(ctx));
         }
 
         HirNode::Goto(label) => {
@@ -6060,9 +6776,9 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             );
         }
 
-        HirNode::TailCall { target } => {
+        HirNode::TailCall { target, args } => {
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "{}", format_tail_call_text(*target, ctx));
+            let _ = writeln!(out, "{}", format_tail_call_text(*target, args, ctx));
         }
 
         HirNode::Continue => {
@@ -6529,9 +7245,35 @@ fn emit_call_args(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
         .iter()
         .enumerate()
         .skip(1)
-        .map(|(i, vn)| emit_operand_resolved(vn, i, stmt_idx, ctx))
+        .map(|(i, vn)| emit_call_arg(vn, i, stmt_idx, ctx))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn emit_call_arg(vn: &Varnode, raw_idx: usize, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    if let Some(arg) = try_stack_address_call_arg(vn, raw_idx, stmt_idx, ctx) {
+        return arg;
+    }
+    emit_operand_resolved(vn, raw_idx, stmt_idx, ctx)
+}
+
+fn try_stack_address_call_arg(
+    vn: &Varnode,
+    raw_idx: usize,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> Option<String> {
+    if vn.space == SpaceId::Const {
+        return None;
+    }
+    let offset = resolve_stack_offset_for_addr(vn, Some(raw_idx), stmt_idx, ctx, 0)?;
+    let slot = stack_slot_for_offset(offset, vn.size.max(1), ctx)?;
+    let addr = stack_slot_address_expr(&slot);
+    if slot.is_buffer {
+        Some(addr)
+    } else {
+        Some(format!("&{addr}"))
+    }
 }
 
 fn emit_direct_call_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
@@ -6606,13 +7348,36 @@ fn tail_call_target_name(target: u64, ctx: &PrintCtx) -> String {
 /// The callee is resolved against the symbol table (with demangling) so the
 /// emitted form matches the rest of the pretty-printer's call sites instead
 /// of the previous `((unsigned long long (*)(void))0x…)()` cast.
-fn format_tail_call_text(target: u64, ctx: &PrintCtx) -> String {
+fn format_tail_call_text(
+    target: u64,
+    args: &[unlace_struct::hir::HirCallArg],
+    ctx: &mut PrintCtx,
+) -> String {
     let name = tail_call_target_name(target, ctx);
+    let args = args
+        .iter()
+        .map(|arg| format_tail_call_arg(arg, ctx))
+        .collect::<Vec<_>>()
+        .join(", ");
     if ctx.parent_returns_void {
-        format!("{}();", name)
+        format!("{}({});", name, args)
     } else {
-        format!("return {}();", name)
+        format!("return {}({});", name, args)
     }
+}
+
+fn format_tail_call_arg(arg: &unlace_struct::hir::HirCallArg, ctx: &mut PrintCtx) -> String {
+    if let Some(sv) = arg.ssa {
+        return ctx.name_of(&sv);
+    }
+    emit_operand_with_prec(
+        &arg.operand,
+        0,
+        u32::MAX,
+        ConstContext::Signed,
+        ParentCtx::top(),
+        ctx,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -7164,8 +7929,24 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     }
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
+        if is_x86_frame_base(&sv.base) {
+            return Some(String::new());
+        }
         if is_control_only_condition_assignment(idx, &sv, insn, ctx) {
             return Some(String::new());
+        }
+        if matches!(insn.op, IrOp::Call | IrOp::Callind)
+            && ctx.sv_use_counts.get(&sv).copied().unwrap_or(0) == 0
+            && !has_later_alias_use(&sv.base, idx, ctx)
+        {
+            let call = if insn.op == IrOp::Callind {
+                emit_callind_cast(insn, idx, ctx)
+            } else if let Some(bracket) = objc_bracket_call(insn, ctx) {
+                bracket
+            } else {
+                emit_direct_call_expr(insn, idx, ctx)
+            };
+            return Some(format!("{};", call));
         }
         let lhs = ctx.name_of(&sv);
         if let Some(short) = try_emit_increment_form(insn, &lhs) {
@@ -7174,26 +7955,30 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             Some(format!("{};", short))
         } else if insn.op == IrOp::Call {
             if let Some(bracket) = objc_bracket_call(insn, ctx) {
-                Some(format!("{} = {};", lhs, bracket))
+                Some(format_inline_assignment(idx, &sv, &lhs, bracket, ctx))
             } else {
-                Some(format!(
-                    "{} = {};",
-                    lhs,
-                    emit_direct_call_expr(insn, idx, ctx)
-                ))
+                let rhs = emit_direct_call_expr(insn, idx, ctx);
+                Some(format_inline_assignment(idx, &sv, &lhs, rhs, ctx))
             }
         } else {
-            Some(format!("{} = {};", lhs, emit_expr(insn, idx, ctx)))
+            let rhs = emit_expr(insn, idx, ctx);
+            Some(format_inline_assignment(idx, &sv, &lhs, rhs, ctx))
         }
     } else {
         match insn.op {
             IrOp::Store if insn.inputs.len() >= 3 => {
-                if is_suppressed_stack_access(&insn.inputs[1], idx, ctx) {
+                if is_suppressed_stack_access(&insn.inputs[1], Some(1), idx, ctx) {
                     return Some(String::new());
                 }
                 let store_size = insn.inputs[2].size;
                 let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-                if let Some(global) = try_global_var_name(&insn.inputs[1], idx, store_size, ctx) {
+                if let Some(local) =
+                    try_stack_frame_access_name(&insn.inputs[1], Some(1), idx, store_size, ctx)
+                {
+                    Some(format!("{} = {};", local, val))
+                } else if let Some(global) =
+                    try_global_var_name(&insn.inputs[1], Some(1), idx, store_size, ctx)
+                {
                     Some(format!("{} = {};", global, val))
                 } else if let Some(field_expr) =
                     try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
@@ -7215,10 +8000,6 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                     // Batch 11 slice 2: route subscript stores through CExpr.
                     let lhs = CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index));
                     Some(format!("{} = {};", lhs, val))
-                } else if let Some(local) =
-                    try_stack_frame_access_name(&insn.inputs[1], idx, store_size, ctx)
-                {
-                    Some(format!("{} = {};", local, val))
                 } else {
                     let addr = emit_memory_address_operand(&insn.inputs[1], 1, idx, ctx);
                     // Batch 11 slice 2: route `*(T*)(addr) = val` stores
@@ -7309,6 +8090,30 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     }
 }
 
+fn has_later_alias_use(base: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    ctx.stmt_inputs
+        .range((stmt_idx + 1)..)
+        .any(|(_, inputs)| inputs.iter().any(|sv| aliases(sv.base, *base)))
+        || ctx
+            .cond_use_stmts
+            .iter()
+            .any(|(sv, use_stmt)| *use_stmt > stmt_idx && aliases(sv.base, *base))
+}
+
+fn format_inline_assignment(
+    idx: u32,
+    sv: &SsaVarnode,
+    lhs: &str,
+    rhs: String,
+    ctx: &PrintCtx,
+) -> String {
+    if let Some((decl_prefix, decl_trailer)) = hoisted_decl_for_stmt(idx, sv, ctx) {
+        format!("{decl_prefix}{lhs} = {rhs}{decl_trailer}")
+    } else {
+        format!("{lhs} = {rhs};")
+    }
+}
+
 /// If statement `idx` is the hoist-decl anchor for the variable written by
 /// `sv`, return `(prefix, terminator)` where:
 ///   * `prefix` is `"<type> "` to prepend to the assignment LHS, and
@@ -7317,6 +8122,13 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
 fn hoisted_decl_for_stmt(idx: u32, sv: &SsaVarnode, ctx: &PrintCtx) -> Option<(String, String)> {
     let plan = ctx.hoist_decl_plan.get(&sv.base)?;
     if plan.stmt_idx != idx || !plan.fold_into_assignment {
+        return None;
+    }
+    if ctx
+        .var_names
+        .get(sv)
+        .is_some_and(|name| ctx.top_declared_names.contains(name))
+    {
         return None;
     }
     let ty = ctx
@@ -7392,6 +8204,9 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
     indent(depth, ctx.config.tab_width, out);
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
+        if is_x86_frame_base(&sv.base) {
+            return;
+        }
         let lhs = ctx.name_of(&sv);
 
         if matches!(insn.op, IrOp::Call | IrOp::Callind)
@@ -7429,12 +8244,17 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         match insn.op {
             IrOp::Store => {
                 if insn.inputs.len() >= 3 {
-                    if is_suppressed_stack_access(&insn.inputs[1], idx, ctx) {
+                    if is_suppressed_stack_access(&insn.inputs[1], Some(1), idx, ctx) {
                         return;
                     }
                     let store_size = insn.inputs[2].size;
                     let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-                    if let Some(global) = try_global_var_name(&insn.inputs[1], idx, store_size, ctx)
+                    if let Some(local) =
+                        try_stack_frame_access_name(&insn.inputs[1], Some(1), idx, store_size, ctx)
+                    {
+                        let _ = writeln!(out, "{} = {};", local, val);
+                    } else if let Some(global) =
+                        try_global_var_name(&insn.inputs[1], Some(1), idx, store_size, ctx)
                     {
                         let _ = writeln!(out, "{} = {};", global, val);
                     } else if let Some(field_expr) =
@@ -7459,10 +8279,6 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                         // Batch 11 slice 2: route subscript stores through CExpr.
                         let lhs = CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index));
                         let _ = writeln!(out, "{} = {};", lhs, val);
-                    } else if let Some(local) =
-                        try_stack_frame_access_name(&insn.inputs[1], idx, store_size, ctx)
-                    {
-                        let _ = writeln!(out, "{} = {};", local, val);
                     } else {
                         let addr = emit_memory_address_operand(&insn.inputs[1], 1, idx, ctx);
                         let cast = ida_ptr_type(store_size);
@@ -8279,9 +9095,31 @@ fn emit_expr_with_prec(
                 if let Some(canary) = try_macos_canary_load(&insn.inputs[addr_idx], ctx) {
                     return canary;
                 }
-                if let Some(global) =
-                    try_global_var_name(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
-                {
+                if let Some(value) = try_readonly_scalar_load(
+                    &insn.inputs[addr_idx],
+                    Some(addr_idx),
+                    stmt_idx,
+                    load_size,
+                    ctx,
+                ) {
+                    return value;
+                }
+                if let Some(local) = try_stack_frame_access_name(
+                    &insn.inputs[addr_idx],
+                    Some(addr_idx),
+                    stmt_idx,
+                    load_size,
+                    ctx,
+                ) {
+                    return local;
+                }
+                if let Some(global) = try_global_var_name(
+                    &insn.inputs[addr_idx],
+                    Some(addr_idx),
+                    stmt_idx,
+                    load_size,
+                    ctx,
+                ) {
                     return global;
                 }
                 if let Some(resolved) = try_resolve_field_from_addr(
@@ -8313,11 +9151,6 @@ fn emit_expr_with_prec(
                 {
                     // Batch 11 slice 2: route subscript loads through CExpr.
                     return CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index)).to_string();
-                }
-                if let Some(local) =
-                    try_stack_frame_access_name(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
-                {
-                    return local;
                 }
                 let is_mmio = insn.inputs[addr_idx].space == SpaceId::Const
                     && ctx.mmio_addrs.contains(&insn.inputs[addr_idx].offset);
@@ -9546,7 +10379,7 @@ fn const_context_for_binop_pair(
 
 fn emit_operand_with_prec(
     vn: &unlace_ir::Varnode,
-    _raw_idx: usize,
+    raw_idx: usize,
     stmt_idx: u32,
     const_ctx: ConstContext,
     parent: ParentCtx,
@@ -9559,16 +10392,15 @@ fn emit_operand_with_prec(
         return format_constant_ctx(vn.offset, vn.size, const_ctx);
     }
 
-    let resolved_sv = if let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx).cloned() {
-        inputs.iter().find(|sv| sv.base == *vn).copied()
-    } else {
-        None
-    };
+    let sv =
+        input_or_latest_sv_for_operand(vn, Some(raw_idx), stmt_idx, ctx).unwrap_or(SsaVarnode {
+            base: *vn,
+            version: 0,
+        });
 
-    let sv = resolved_sv.unwrap_or(SsaVarnode {
-        base: *vn,
-        version: 0,
-    });
+    if let Some(value) = try_readonly_scalar_value_for_sv(&sv, ctx) {
+        return value;
+    }
 
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv)
         && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
@@ -10528,25 +11360,40 @@ fn indent(depth: usize, tab_width: usize, out: &mut String) {
 
 fn prune_unused_plain_local_decls(output: String) -> String {
     let lines: Vec<&str> = output.lines().collect();
-    let Some(body_start) = lines
-        .iter()
-        .position(|line| line.contains('(') && line.trim_end().ends_with('{'))
-    else {
-        return output;
-    };
-
     let mut remove = BTreeSet::new();
-    for (idx, line) in lines.iter().enumerate().skip(body_start + 1) {
-        let Some(name) = parse_plain_local_decl_name(line) else {
+    let mut idx = 0usize;
+    while idx < lines.len() {
+        if !(lines[idx].contains('(') && lines[idx].trim_end().ends_with('{')) {
+            idx += 1;
             continue;
-        };
-        let used_later = lines
-            .iter()
-            .enumerate()
-            .skip(idx + 1)
-            .any(|(_, later)| contains_identifier(later, name));
-        if !used_later {
-            remove.insert(idx);
+        }
+
+        let body_start = idx + 1;
+        let mut depth = brace_delta(lines[idx]);
+        idx += 1;
+        while idx < lines.len() && depth > 0 {
+            depth += brace_delta(lines[idx]);
+            idx += 1;
+        }
+        let body_end = idx.saturating_sub(1);
+
+        for line_idx in body_start..body_end {
+            let Some(name) = parse_plain_local_decl_name(lines[line_idx]) else {
+                continue;
+            };
+            let mut used_later = false;
+            for later in &lines[(line_idx + 1)..body_end] {
+                if parse_shadowing_local_decl_name(later) == Some(name) {
+                    break;
+                }
+                if contains_identifier(later, name) {
+                    used_later = true;
+                    break;
+                }
+            }
+            if !used_later {
+                remove.insert(line_idx);
+            }
         }
     }
 
@@ -10563,6 +11410,14 @@ fn prune_unused_plain_local_decls(output: String) -> String {
         pruned.push('\n');
     }
     pruned
+}
+
+fn brace_delta(line: &str) -> i32 {
+    line.chars().fold(0, |depth, ch| match ch {
+        '{' => depth + 1,
+        '}' => depth - 1,
+        _ => depth,
+    })
 }
 
 fn declare_missing_control_v_decls(output: String) -> String {
@@ -10605,12 +11460,69 @@ fn declare_missing_control_v_decls(output: String) -> String {
             continue;
         }
 
-        if let Some(name) = parse_plain_local_decl_name(line) {
+        if let Some(name) = parse_shadowing_local_decl_name(line) {
             declared.insert(name.to_string());
         }
         if is_control_line(line) {
             collect_v_number_names(line, &mut pending_decls);
         }
+        body_lines.push(line);
+    }
+
+    if in_function {
+        for body_line in &body_lines {
+            out.push_str(body_line);
+            out.push('\n');
+        }
+    }
+
+    out
+}
+
+fn declare_missing_temp_v_decls(output: String) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let mut out = String::with_capacity(output.len());
+    let mut in_function = false;
+    let mut pending_decls: BTreeSet<String> = BTreeSet::new();
+    let mut declared: BTreeSet<String> = BTreeSet::new();
+    let mut body_lines: Vec<&str> = Vec::new();
+
+    for line in lines {
+        if !in_function {
+            if line.contains('(') && line.trim_end().ends_with('{') {
+                in_function = true;
+                pending_decls.clear();
+                declared.clear();
+                body_lines.clear();
+                out.push_str(line);
+                out.push('\n');
+            } else {
+                out.push_str(line);
+                out.push('\n');
+            }
+            continue;
+        }
+
+        if line == "}" {
+            for name in &pending_decls {
+                if !declared.contains(name) {
+                    let _ = writeln!(out, "    __int64 {}; // temp", name);
+                }
+            }
+            for body_line in &body_lines {
+                out.push_str(body_line);
+                out.push('\n');
+            }
+            out.push_str(line);
+            out.push('\n');
+            in_function = false;
+            continue;
+        }
+
+        if let Some(name) = parse_shadowing_local_decl_name(line) {
+            declared.insert(name.to_string());
+        }
+        collect_v_number_names(line, &mut pending_decls);
         body_lines.push(line);
     }
 
@@ -10765,21 +11677,40 @@ fn is_control_line(line: &str) -> bool {
 }
 
 fn collect_v_number_names(line: &str, names: &mut BTreeSet<String>) {
+    if contains_identifier(line, "result") {
+        names.insert("result".to_string());
+    }
     let bytes = line.as_bytes();
     let mut idx = 0;
     while idx < bytes.len() {
-        if bytes[idx] != b'v' {
+        let starts_temp = bytes[idx] == b'v';
+        let starts_cond = bytes[idx..].starts_with(b"cond_");
+        if !starts_temp && !starts_cond {
             idx += 1;
             continue;
         }
         let start = idx;
-        idx += 1;
+        if starts_cond {
+            idx += "cond_".len();
+        } else {
+            idx += 1;
+        }
         let digits_start = idx;
         while idx < bytes.len() && bytes[idx].is_ascii_digit() {
             idx += 1;
         }
         if idx == digits_start {
             continue;
+        }
+        if starts_temp && bytes.get(idx) == Some(&b'_') {
+            let suffix_start = idx + 1;
+            let mut suffix_end = suffix_start;
+            while suffix_end < bytes.len() && bytes[suffix_end].is_ascii_digit() {
+                suffix_end += 1;
+            }
+            if suffix_end > suffix_start {
+                idx = suffix_end;
+            }
         }
         let before_ok = start == 0 || !is_ident_byte(bytes[start - 1]);
         let after_ok = idx == bytes.len() || !is_ident_byte(bytes[idx]);
@@ -10864,7 +11795,7 @@ fn parse_plain_assignment_lhs(segment: &str) -> Option<&str> {
     if lhs.contains(char::is_whitespace)
         || !is_c_identifier(lhs)
         || !is_prunable_synthetic_local(lhs)
-        || rhs.contains('(')
+        || (rhs.contains('(') && !is_side_effect_free_temp_initializer(rhs))
     {
         return None;
     }
@@ -10872,6 +11803,14 @@ fn parse_plain_assignment_lhs(segment: &str) -> Option<&str> {
 }
 
 fn parse_plain_local_decl_name(line: &str) -> Option<&str> {
+    parse_local_decl_name_inner(line, true)
+}
+
+fn parse_shadowing_local_decl_name(line: &str) -> Option<&str> {
+    parse_local_decl_name_inner(line, false)
+}
+
+fn parse_local_decl_name_inner(line: &str, require_prunable_init: bool) -> Option<&str> {
     let rest = line.strip_prefix("    ")?;
     if rest.contains("BYREF") || rest.contains("[rsp") || rest.contains("[rbp") {
         return None;
@@ -10882,7 +11821,9 @@ fn parse_plain_local_decl_name(line: &str) -> Option<&str> {
     let semi = rest.find(';')?;
     let stmt = rest[..semi].trim();
     let decl = if let Some((decl, init)) = stmt.split_once(" = ") {
-        if !rest.contains("// temp") || !is_side_effect_free_temp_initializer(init) {
+        if require_prunable_init
+            && (!rest.contains("// temp") || !is_side_effect_free_temp_initializer(init))
+        {
             return None;
         }
         decl.trim()
@@ -10938,6 +11879,7 @@ fn is_plain_local_decl_type_start(first: &str) -> bool {
             | "_OWORD"
             | "__int16"
             | "__int64"
+            | "__int128"
     )
 }
 
@@ -10979,11 +11921,28 @@ fn is_known_pure_macro_call(name: &str) -> bool {
 }
 
 fn is_prunable_synthetic_local(name: &str) -> bool {
-    name == "cond" || is_v_number_name(name)
+    matches!(name, "cond" | "result") || is_v_number_name(name) || is_cond_number_name(name)
 }
 
 fn is_v_number_name(name: &str) -> bool {
     let Some(rest) = name.strip_prefix('v') else {
+        return false;
+    };
+    is_v_number_suffix(rest)
+}
+
+fn is_v_number_suffix(rest: &str) -> bool {
+    let Some((head, tail)) = rest.split_once('_') else {
+        return !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit());
+    };
+    !head.is_empty()
+        && head.bytes().all(|b| b.is_ascii_digit())
+        && !tail.is_empty()
+        && tail.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn is_cond_number_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("cond_") else {
         return false;
     };
     !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
@@ -11413,6 +12372,23 @@ mod tests {
         assert!(pruned.contains("v3 = v1 + v2;"), "{pruned}");
         assert!(pruned.contains("while (v1 != v2);"), "{pruned}");
         assert!(pruned.contains("return v3;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_declare_missing_control_v_decls_recognizes_later_typed_decl() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    __int64 v34 = v2 + 4LL; // rdi\n",
+            "    if (v2 == v34) {\n",
+            "    }\n",
+            "}\n",
+        )
+        .to_string();
+
+        let declared = super::declare_missing_control_v_decls(output);
+
+        assert_eq!(declared.matches("v34").count(), 2, "{declared}");
+        assert!(!declared.contains("int v34; // temp"), "{declared}");
     }
 
     #[test]
@@ -15621,6 +16597,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_unused_call_output_prints_bare_call() {
+        let r0 = reg(0, 4);
+        let target_addr = con(0x401030, 8);
+
+        let call_insn = IrInsn::with_output(IrOp::Call, r0, smallvec![target_addr], 0x1000);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "puts".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("puts();"),
+            "unused CALL return register should emit a bare call: {output}",
+        );
+        assert!(
+            !output.contains("result = puts()") && !output.contains("v1 = puts()"),
+            "unused CALL return register should not force an assignment: {output}",
+        );
+    }
+
     // -------------------------------------------------------------------
     // t173: forwarded-export resolution comment on Call rendering
     // -------------------------------------------------------------------
@@ -19462,6 +20462,62 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_return_register_after_outputless_call_merges_call() {
+        let rax = reg(0, 4);
+        let target = con(0x401000, 8);
+
+        let call = IrInsn::without_output(IrOp::Call, smallvec![target], 0x1000);
+        let body = vec![
+            HirNode::Statement(call),
+            HirNode::Return(Some(SsaVarnode {
+                base: rax,
+                version: 0,
+            })),
+        ];
+
+        let func = make_func("ret_outputless_call", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401000u64, "compute".to_string());
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("return compute();"),
+            "outputless call followed by RETURN RAX should merge into `return compute();`: {output}",
+        );
+        assert!(
+            !output.contains("compute(); return"),
+            "should not emit a separate call then return: {output}",
+        );
+    }
+
+    #[test]
+    fn test_return_low_subregister_uses_latest_covering_output() {
+        let r8d = reg(64, 4);
+        let r8b = reg(64, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                r8d,
+                smallvec![con(7, 4)],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r8b,
+                version: 0,
+            })),
+        ];
+
+        let func = make_func("ret_subreg", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("return v") && !output.contains("return result;"),
+            "low-byte return should reuse the latest covering register value: {output}",
+        );
+    }
+
     // ---------------------------------------------------------------------
     // TailCall emission (`return callee();` / `callee();`) — IDA convention.
     // ---------------------------------------------------------------------
@@ -19471,7 +20527,10 @@ mod tests {
     /// table is consulted (no `func_<addr>` or cast-to-fn-ptr fallback).
     #[test]
     fn test_tail_call_named_target_non_void() {
-        let body = vec![HirNode::TailCall { target: 0x401000 }];
+        let body = vec![HirNode::TailCall {
+            target: 0x401000,
+            args: Vec::new(),
+        }];
         let func = make_func("caller", body); // make_func returns Int(4)
         let mut symbols = BTreeMap::new();
         symbols.insert(0x401000u64, "helper".to_string());
@@ -19491,11 +20550,34 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_tail_call_renders_recovered_args() {
+        let body = vec![HirNode::TailCall {
+            target: 0x401000,
+            args: vec![unlace_struct::hir::HirCallArg {
+                operand: con(0xffff_ffff, 4),
+                ssa: None,
+            }],
+        }];
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401000u64, "safe_call".to_string());
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("return safe_call(-1);"),
+            "tail call should render recovered branch arguments: {output}",
+        );
+    }
+
     /// Tail call to an unknown address falls back to the IDA-style
     /// `sub_<hex>` placeholder name.
     #[test]
     fn test_tail_call_unknown_target_falls_back_to_sub() {
-        let body = vec![HirNode::TailCall { target: 0xdeadbeef }];
+        let body = vec![HirNode::TailCall {
+            target: 0xdeadbeef,
+            args: Vec::new(),
+        }];
         let func = make_func("caller", body);
         let output = super::print_c_full(&func, None, None, None, None);
 
@@ -19512,7 +20594,10 @@ mod tests {
     #[test]
     fn test_tail_call_void_parent_omits_return() {
         let body = vec![
-            HirNode::TailCall { target: 0x401000 },
+            HirNode::TailCall {
+                target: 0x401000,
+                args: Vec::new(),
+            },
             HirNode::Return(None),
         ];
         let mut func = make_func("caller_void", body);
@@ -19541,7 +20626,10 @@ mod tests {
     /// how regular call sites are rendered elsewhere in the printer.
     #[test]
     fn test_tail_call_demangles_cpp_symbol() {
-        let body = vec![HirNode::TailCall { target: 0x401000 }];
+        let body = vec![HirNode::TailCall {
+            target: 0x401000,
+            args: Vec::new(),
+        }];
         let func = make_func("caller", body);
         let mut symbols = BTreeMap::new();
         // `_ZN3foo3barEv` → demangled `foo::bar`, short name `foo::bar`,

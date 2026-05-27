@@ -14,6 +14,10 @@ of full IDA/Hex-Rays parity.
 | `RUSTC_WRAPPER= bash scripts/score_parity.sh` | pass | `Aggregate Parity: 100.0%` on the current narrow fixture metric. |
 | `git diff --check` | pass | No whitespace errors in the current diff. |
 
+2026-05-26 supersession note: this row is historical. The script now reports
+`Stylistic Fixture Parity`, and current status lives in `docs/status.md` under
+"Quality axes".
+
 Focused output check:
 
 ```c

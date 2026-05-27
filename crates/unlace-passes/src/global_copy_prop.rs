@@ -40,6 +40,7 @@
 
 use std::collections::BTreeMap;
 
+use unlace_ir::reg_alias::aliases;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
@@ -117,7 +118,7 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                 // Step 1: rewrite inputs that have a known dominating
                 // equivalent. Skip constants and self-equivalences.
                 for (input_idx, raw) in insn.inputs.iter().enumerate() {
-                    if is_call_argument_input(insn, input_idx) {
+                    if is_propagation_barrier_input(insn, input_idx, *raw) {
                         continue;
                     }
                     if raw.space == SpaceId::Const {
@@ -146,7 +147,13 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                     }
                 }
 
-                // Step 2: record a new COPY equivalence. Resolve the source
+                // Step 2: a write invalidates any active equivalence whose
+                // destination or source aliases the written storage.
+                if let Some(out) = insn.output {
+                    kill_for_def(&mut equiv, out, &mut local_log);
+                }
+
+                // Step 3: record a new COPY equivalence. Resolve the source
                 // through any existing equivalence so chains collapse to their
                 // ultimate origin in one pass.
                 if insn.op == IrOp::Copy
@@ -154,6 +161,9 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                     && out.space != SpaceId::Const
                     && out != raw_src
                 {
+                    if is_x86_64_frame_register(out) || is_x86_64_frame_register(raw_src) {
+                        continue;
+                    }
                     let Some(output_sv) = output_ssa(func, bid, insn_idx) else {
                         continue;
                     };
@@ -197,8 +207,49 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
     rewrites
 }
 
-fn is_call_argument_input(insn: &unlace_ir::IrInsn, input_idx: usize) -> bool {
-    matches!(insn.op, IrOp::Call | IrOp::Callind) && input_idx > 0
+fn kill_for_def(
+    equiv: &mut BTreeMap<SsaVarnode, CopySource>,
+    def: Varnode,
+    local_log: &mut Vec<EquivMutation>,
+) {
+    if def.space == SpaceId::Const {
+        return;
+    }
+    let killed: Vec<SsaVarnode> = equiv
+        .iter()
+        .filter_map(|(key, source)| {
+            (aliases(key.base, def)
+                || aliases(source.raw, def)
+                || source.ssa.is_some_and(|ssa| aliases(ssa.base, def)))
+            .then_some(*key)
+        })
+        .collect();
+    for key in killed {
+        if let Some(previous) = equiv.remove(&key) {
+            local_log.push(EquivMutation::Removed { key, previous });
+        }
+    }
+}
+
+fn is_propagation_barrier_input(insn: &unlace_ir::IrInsn, input_idx: usize, raw: Varnode) -> bool {
+    (matches!(insn.op, IrOp::Call | IrOp::Callind) && input_idx > 0)
+        || (matches!(insn.op, IrOp::Load | IrOp::Store) && input_idx == 1)
+        || (insn.op == IrOp::Copy && input_idx == 0 && insn.output == Some(raw))
+        || (insn.op == IrOp::Copy
+            && input_idx == 0
+            && insn.output.is_some_and(is_x86_64_call_arg_register))
+        || (insn.op == IrOp::Copy
+            && input_idx == 0
+            && insn.output.is_some_and(is_x86_64_frame_register))
+        || (matches!(insn.op, IrOp::IntAdd | IrOp::IntSub) && is_x86_64_frame_register(raw))
+}
+
+fn is_x86_64_call_arg_register(vn: Varnode) -> bool {
+    vn.space == SpaceId::Register && matches!(vn.offset, 56 | 48 | 16 | 8 | 64 | 72)
+}
+
+fn is_x86_64_frame_register(vn: Varnode) -> bool {
+    vn.space == SpaceId::Register && matches!(vn.offset, 32 | 40)
 }
 
 /// One mutation applied to `equiv` while visiting a block.  Stored so the
@@ -210,6 +261,11 @@ enum EquivMutation {
     Inserted {
         key: SsaVarnode,
         previous: Option<CopySource>,
+    },
+    /// `equiv.remove(key)` — restore by re-inserting `previous`.
+    Removed {
+        key: SsaVarnode,
+        previous: CopySource,
     },
 }
 
@@ -223,6 +279,9 @@ fn apply_mutation_reverse(equiv: &mut BTreeMap<SsaVarnode, CopySource>, m: Equiv
                 equiv.remove(&key);
             }
         },
+        EquivMutation::Removed { key, previous } => {
+            equiv.insert(key, previous);
+        }
     }
 }
 
@@ -404,6 +463,48 @@ mod tests {
         let call = &ssa.function.blocks[&BlockId(1)].insns[0];
         assert_eq!(call.inputs[0], target);
         assert_eq!(call.inputs[1], rdi);
+    }
+
+    #[test]
+    fn test_global_copy_prop_kills_equiv_when_call_redefines_source_register() {
+        let rax = Varnode::reg(0, 8);
+        let rcx = Varnode::reg(8, 8);
+        let rbx = Varnode::reg(24, 8);
+        let call_a = Varnode::constant(0x401000, 8);
+        let call_b = Varnode::constant(0x402000, 8);
+
+        let mut func = Function::new("call_return_boundary", BlockId(0), 0x2000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Call,
+            rax,
+            smallvec![call_a],
+            0x2000,
+        ));
+        bb.insns
+            .push(IrInsn::with_output(IrOp::Copy, rbx, smallvec![rax], 0x2005));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Call,
+            rax,
+            smallvec![call_b],
+            0x200a,
+        ));
+        bb.insns
+            .push(IrInsn::with_output(IrOp::Copy, rcx, smallvec![rbx], 0x200f));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![rcx], 0x2014));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        let _changed = GlobalCopyPropPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+
+        let block = &ssa.function.blocks[&BlockId(0)];
+        assert_eq!(
+            block.insns[3].inputs[0], rbx,
+            "copy after the second call must preserve the saved RBX value"
+        );
     }
 
     /// Sibling blocks: BB1 defines a COPY but does not dominate BB2, so

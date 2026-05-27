@@ -59,6 +59,13 @@ impl ObjcBlockCapture {
     }
 }
 
+/// A call argument recovered for a structured tail call.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HirCallArg {
+    pub operand: Varnode,
+    pub ssa: Option<SsaVarnode>,
+}
+
 /// A single case in a switch statement.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SwitchCase {
@@ -170,6 +177,7 @@ pub enum HirNode {
 
     TailCall {
         target: u64,
+        args: Vec<HirCallArg>,
     },
 
     /// A `break` statement inside a loop body.

@@ -8,6 +8,8 @@ mod dump_pipeline;
 mod fuzz;
 mod lifter_coverage;
 mod sbom;
+mod semantic_report;
+mod type_recovery_report;
 mod validate_corpus;
 
 fn main() {
@@ -33,6 +35,20 @@ fn main() {
             let root = workspace_root();
             validate_corpus::run(&root);
         }
+        Some("semantic-report") => {
+            let root = workspace_root();
+            let code = semantic_report::run(&root);
+            if code != 0 {
+                process::exit(code);
+            }
+        }
+        Some("type-recovery-report") => {
+            let root = workspace_root();
+            let code = type_recovery_report::run(&root);
+            if code != 0 {
+                process::exit(code);
+            }
+        }
         Some("dump-pipeline") => {
             dump_pipeline::run();
         }
@@ -55,7 +71,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus, lifter-coverage, validate-corpus-toml, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus, lifter-coverage, validate-corpus-toml, semantic-report, type-recovery-report, dump-pipeline, sbom, fuzz"
             );
             process::exit(1);
         }

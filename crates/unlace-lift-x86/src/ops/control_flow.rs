@@ -265,17 +265,25 @@ fn jcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Varn
 }
 
 pub fn lift_call(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let return_value = Varnode::new(SpaceId::Register, RAX, 8);
+    let return_value_low = Varnode::new(SpaceId::Register, RAX, 4);
     match insn.op0_kind() {
         iced_x86::OpKind::NearBranch16
         | iced_x86::OpKind::NearBranch32
         | iced_x86::OpKind::NearBranch64 => {
             let t = Varnode::constant(insn.near_branch_target(), 8);
-            ctx.emit(IrInsn::without_output(IrOp::Call, smallvec![t], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Call,
+                return_value,
+                smallvec![t],
+                ctx.addr,
+            ));
         }
         _ => match ctx.operand_read(insn, 0) {
             Some(t) => {
-                ctx.emit(IrInsn::without_output(
+                ctx.emit(IrInsn::with_output(
                     IrOp::Callind,
+                    return_value,
                     smallvec![t],
                     ctx.addr,
                 ));
@@ -283,6 +291,12 @@ pub fn lift_call(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             None => ctx.emit_unimplemented(),
         },
     };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Subpiece,
+        return_value_low,
+        smallvec![return_value, Varnode::constant(0, 1)],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_ret(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {

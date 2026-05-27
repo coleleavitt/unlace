@@ -21,6 +21,8 @@ near-term implementation target.
    flow quality.
 7. `BATCH22_HANDOFF.md` through `BATCH26_HANDOFF.md` - architecture, loader,
    ecosystem, performance, and product truth.
+8. `BATCH27_HANDOFF.md` - quality-axis split: stylistic score, semantic
+   correctness, and type/variable recovery metrics.
 
 ## Batch Index
 
@@ -53,6 +55,7 @@ near-term implementation target.
 | 24 | `BATCH24_HANDOFF.md` | Open |
 | 25 | `BATCH25_HANDOFF.md` | Fuzz harness regression tests landed; parallel decompile already present |
 | 26 | `BATCH26_HANDOFF.md` | `docs/status.md`, `docs/roadmap.md`, `docs/research-ideas.md`, `docs/historical-sessions.md` |
+| 27 | `BATCH27_HANDOFF.md` | Quality-axis report, semantic PASS/XFAIL report, first DWARF/source type score, and fidelity counters wired; semantic XFAIL/type breadth still open |
 
 ## Forward-Looking Plan
 

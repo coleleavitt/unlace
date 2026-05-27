@@ -28,9 +28,10 @@ impl Pass for CfgRepairPass {
 
         for block in func.function.blocks.values_mut() {
             let before = block.successors.clone();
-            block.successors.retain(|succ| known_blocks.contains(succ));
-            block.successors.sort();
-            block.successors.dedup();
+            let mut seen = BTreeSet::new();
+            block
+                .successors
+                .retain(|succ| known_blocks.contains(succ) && seen.insert(*succ));
             changed |= block.successors != before;
         }
 
@@ -73,5 +74,35 @@ mod tests {
             &[BlockId(1)]
         );
         assert!(ssa.cfg.node_index(BlockId(1)).is_some());
+    }
+
+    #[test]
+    fn preserves_conditional_successor_order() {
+        let mut function = Function::new("cfg_repair_order", BlockId(0), 0x2000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Cbranch, smallvec![], 0x2000));
+        b0.successors = smallvec![BlockId(2), BlockId(1), BlockId(2), BlockId(99)];
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x2004));
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x2008));
+        function.insert_block(b0);
+        function.insert_block(b1);
+        function.insert_block(b2);
+
+        let mut ssa = build_ssa(function);
+        let changed = CfgRepairPass.run(&mut ssa).expect("repair should succeed");
+
+        assert!(changed);
+        assert_eq!(
+            ssa.function.blocks[&BlockId(0)].successors.as_slice(),
+            &[BlockId(2), BlockId(1)]
+        );
+        let edges = ssa.cfg.edges_from(BlockId(0));
+        assert!(edges.contains(&(BlockId(2), unlace_ir::cfg::EdgeKind::ConditionalTrue)));
+        assert!(edges.contains(&(BlockId(1), unlace_ir::cfg::EdgeKind::ConditionalFalse)));
     }
 }

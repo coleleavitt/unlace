@@ -300,10 +300,6 @@ pub fn inspect(path: impl AsRef<Path>) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use parking_lot::RwLock;
-
     use super::*;
     use crate::{Bookmark, Comment, Rename, SessionInner};
 

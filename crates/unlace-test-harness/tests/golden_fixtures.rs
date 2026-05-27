@@ -26,16 +26,18 @@
 //!
 //! The suite also reports per-fixture metrics (line count, `if`/`for`/`while`/
 //! `return`/`goto` counts, variable-declaration count) so reviewers can track
-//! output quality over time. Metrics are printed to stderr; pipe through
-//! `--nocapture` to see them.
+//! output quality over time. It also reports coarse decompiler-fidelity
+//! taxonomy counters for known output artifacts. Metrics are printed to stderr;
+//! pipe through `--nocapture` to see them.
 //!
-//! # Quality scoring
+//! # Stylistic scoring
 //!
 //! Each fixture is also scored against an IDA/Hex-Rays reference profile (see
 //! `tests/golden/reference_metrics.toml`). The score is a weighted blend of
 //! per-feature recovery ratios capped at 1.0, with penalties for `goto`s and
 //! excess variables. Scores are printed in the format
-//! `[score] <value> <fixture>` so the aggregate-parity script can sum them.
+//! `[score] <value> <fixture>` so the stylistic-parity script can sum them.
+//! This does not measure semantic equivalence or type/variable recovery.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -120,6 +122,82 @@ struct Metrics {
     variable_count: usize,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct FidelityCounters {
+    control_flow_artifacts: usize,
+    expression_artifacts: usize,
+    type_artifacts: usize,
+    declaration_artifacts: usize,
+    naming_artifacts: usize,
+    memory_stack_artifacts: usize,
+    unknown_helper_artifacts: usize,
+}
+
+impl FidelityCounters {
+    fn collect(source: &str, metrics: &Metrics) -> Self {
+        FidelityCounters {
+            control_flow_artifacts: metrics.goto_count
+                + count_substring(source, "while (cond)")
+                + count_substring(source, "if (cond)")
+                + count_substring(source, "while (1)"),
+            expression_artifacts: count_substring(source, "return result;")
+                + count_substring(source, "cond =")
+                + count_substring(source, "unsupported expression"),
+            type_artifacts: count_substring(source, "Unknown")
+                + count_substring(source, "undefined")
+                + count_substring(source, "void *"),
+            declaration_artifacts: count_substring(source, "<missing declaration>")
+                + count_substring(source, "undeclared")
+                + count_substring(source, "duplicate declaration"),
+            naming_artifacts: count_numbered_identifiers(source, b'v')
+                + count_numbered_identifiers(source, b'a'),
+            memory_stack_artifacts: count_substring(source, "rsp")
+                + count_substring(source, "rbp")
+                + count_substring(source, "*(_QWORD *)(0LL)")
+                + count_substring(source, "*(_DWORD *)(0LL)")
+                + count_substring(source, "*(_WORD *)(0LL)")
+                + count_substring(source, "*(_BYTE *)(0LL)"),
+            unknown_helper_artifacts: count_substring(source, "Unimplemented")
+                + count_substring(source, "CALLOTHER")
+                + count_substring(source, "__unimplemented"),
+        }
+    }
+
+    fn add(&mut self, other: FidelityCounters) {
+        self.control_flow_artifacts += other.control_flow_artifacts;
+        self.expression_artifacts += other.expression_artifacts;
+        self.type_artifacts += other.type_artifacts;
+        self.declaration_artifacts += other.declaration_artifacts;
+        self.naming_artifacts += other.naming_artifacts;
+        self.memory_stack_artifacts += other.memory_stack_artifacts;
+        self.unknown_helper_artifacts += other.unknown_helper_artifacts;
+    }
+
+    fn total(&self) -> usize {
+        self.control_flow_artifacts
+            + self.expression_artifacts
+            + self.type_artifacts
+            + self.declaration_artifacts
+            + self.naming_artifacts
+            + self.memory_stack_artifacts
+            + self.unknown_helper_artifacts
+    }
+
+    fn report(&self, label: &str) {
+        eprintln!(
+            "[fidelity] {label}: cf={} expr={} type={} decl={} names={} memstack={} unknown={} total={}",
+            self.control_flow_artifacts,
+            self.expression_artifacts,
+            self.type_artifacts,
+            self.declaration_artifacts,
+            self.naming_artifacts,
+            self.memory_stack_artifacts,
+            self.unknown_helper_artifacts,
+            self.total(),
+        );
+    }
+}
+
 impl Metrics {
     fn collect(source: &str) -> Self {
         let mut m = Metrics::default();
@@ -149,10 +227,10 @@ impl Metrics {
                 function_body_depth = Some(brace_depth);
             }
             brace_depth = brace_depth.saturating_sub(closes);
-            if let Some(depth) = function_body_depth {
-                if brace_depth < depth {
-                    function_body_depth = None;
-                }
+            if let Some(depth) = function_body_depth
+                && brace_depth < depth
+            {
+                function_body_depth = None;
             }
         }
 
@@ -172,7 +250,7 @@ impl Metrics {
         );
     }
 
-    /// Quality score against an IDA/Hex-Rays reference profile, in `[0, 100]`.
+    /// Stylistic score against an IDA/Hex-Rays reference profile, in `[0, 100]`.
     ///
     /// Each control-flow feature contributes `min(actual / reference, 1.0)`
     /// (cap prevents over-recovery from inflating the score). Weights:
@@ -209,6 +287,36 @@ impl Metrics {
         let raw = (weighted - goto_penalty - var_penalty) / total_weight * 100.0;
         raw.clamp(0.0, 100.0)
     }
+}
+
+fn count_substring(source: &str, needle: &str) -> usize {
+    source.matches(needle).count()
+}
+
+fn count_numbered_identifiers(source: &str, prefix: u8) -> usize {
+    let bytes = source.as_bytes();
+    let mut count = 0;
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        let before_ok = i == 0 || !is_ident_byte(bytes[i - 1]);
+        if before_ok && bytes[i] == prefix && bytes[i + 1].is_ascii_digit() {
+            let mut end = i + 2;
+            while end < bytes.len() && bytes[end].is_ascii_digit() {
+                end += 1;
+            }
+            if end == bytes.len() || !is_ident_byte(bytes[end]) {
+                count += 1;
+                i = end;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    count
+}
+
+fn is_ident_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 fn is_variable_decl_line(line: &str) -> bool {
@@ -424,6 +532,7 @@ fn run_golden(name: &str) {
     let actual = decompile(name);
     let metrics = Metrics::collect(&actual);
     metrics.report(name);
+    FidelityCounters::collect(&actual, &metrics).report(name);
     if let Some(reference) = reference_metrics(name) {
         let score = metrics.score(&reference);
         eprintln!("[score] {score:.1} {name}");
@@ -555,6 +664,7 @@ fn golden_fixtures_metrics_summary() {
         "switch_table",
     ];
     let mut total = Metrics::default();
+    let mut fidelity_total = FidelityCounters::default();
 
     eprintln!();
     eprintln!("=== fixture metrics summary ===");
@@ -567,7 +677,9 @@ fn golden_fixtures_metrics_summary() {
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
         let m = Metrics::collect(&source);
+        let fidelity = FidelityCounters::collect(&source, &m);
         m.report(name);
+        fidelity.report(name);
         if let Some(reference) = reference_metrics(name) {
             eprintln!("[score] {:.1} {name}", m.score(&reference));
         }
@@ -578,8 +690,10 @@ fn golden_fixtures_metrics_summary() {
         total.return_count += m.return_count;
         total.goto_count += m.goto_count;
         total.variable_count += m.variable_count;
+        fidelity_total.add(fidelity);
     }
     total.report("TOTAL");
+    fidelity_total.report("TOTAL");
 }
 
 #[test]
@@ -649,6 +763,27 @@ end:
     assert_eq!(m.while_count, 1);
     assert_eq!(m.goto_count, 1);
     assert_eq!(m.return_count, 1);
+}
+
+#[test]
+fn fidelity_counters_collect_known_artifacts() {
+    let src = "\
+void f() {
+    _DWORD v1;
+    if (cond) { goto end; }
+    *(_QWORD *)(0LL) = v1;
+    return result;
+end:
+    Unimplemented();
+}
+";
+    let m = Metrics::collect(src);
+    let f = FidelityCounters::collect(src, &m);
+    assert!(f.control_flow_artifacts >= 2);
+    assert_eq!(f.expression_artifacts, 1);
+    assert_eq!(f.memory_stack_artifacts, 1);
+    assert_eq!(f.unknown_helper_artifacts, 1);
+    assert!(f.naming_artifacts >= 1);
 }
 
 #[test]

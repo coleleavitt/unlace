@@ -7,8 +7,8 @@
 
 use std::collections::BTreeSet;
 
-use unlace_ir::IrOp;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::{IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
@@ -92,7 +92,12 @@ impl Pass for DeadCodeElimPass {
                 let output_sv = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output));
 
                 let is_dead = match output_sv {
-                    Some(sv) => !used.contains(sv),
+                    Some(sv) => {
+                        !used.contains(sv)
+                            && !used
+                                .iter()
+                                .any(|used_sv| register_output_covers_use(sv, used_sv))
+                    }
                     None => true,
                 };
 
@@ -107,12 +112,42 @@ impl Pass for DeadCodeElimPass {
                 continue;
             }
 
+            let block_hints: std::collections::BTreeMap<usize, i64> = func
+                .stack_offset_hints
+                .iter()
+                .filter_map(|(&(hint_bid, hint_idx), &offset)| {
+                    (hint_bid == bid).then_some((hint_idx, offset))
+                })
+                .collect();
+            let stale_hint_keys: Vec<_> = block_hints
+                .keys()
+                .map(|&hint_idx| (bid, hint_idx))
+                .collect();
+            for key in stale_hint_keys {
+                func.stack_offset_hints.remove(&key);
+            }
+
+            let block_frame_setup: BTreeSet<usize> = func
+                .frame_setup_insns
+                .iter()
+                .filter_map(|&(setup_bid, setup_idx)| (setup_bid == bid).then_some(setup_idx))
+                .collect();
+            for setup_idx in &block_frame_setup {
+                func.frame_setup_insns.remove(&(bid, *setup_idx));
+            }
+
             let old_insns = std::mem::take(&mut block.insns);
             block.insns = Vec::with_capacity(keep.len());
 
             // Compact kept instructions and re-key their var_map entries.
             for (new_idx, &old_idx) in keep.iter().enumerate() {
                 block.insns.push(old_insns[old_idx].clone());
+                if let Some(&offset) = block_hints.get(&old_idx) {
+                    func.stack_offset_hints.insert((bid, new_idx), offset);
+                }
+                if block_frame_setup.contains(&old_idx) {
+                    func.frame_setup_insns.insert((bid, new_idx));
+                }
 
                 let input_count = block
                     .insns
@@ -146,6 +181,17 @@ impl Pass for DeadCodeElimPass {
 
         Ok(changed)
     }
+}
+
+fn register_output_covers_use(output: &SsaVarnode, used: &SsaVarnode) -> bool {
+    if output.base.space != SpaceId::Register || used.base.space != SpaceId::Register {
+        return false;
+    }
+    let out_start = output.base.offset;
+    let out_end = out_start.saturating_add(output.base.size as u64);
+    let use_start = used.base.offset;
+    let use_end = use_start.saturating_add(used.base.size as u64);
+    out_start <= use_start && use_end <= out_end
 }
 
 #[cfg(test)]
@@ -345,6 +391,57 @@ mod tests {
     }
 
     #[test]
+    fn test_dce_compacts_stack_offset_hints() {
+        let dead = sv(0, 0);
+        let addr = sv(8, 0);
+        let val = sv(16, 0);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            dead.base,
+            smallvec![Varnode::constant(1, 8)],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![Varnode::constant(1, 8), addr.base, val.base],
+            0x1004,
+        ));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), dead);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), addr);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(2)), val);
+
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
+        ssa.stack_offset_hints.insert((BlockId(0), 1), -0x20);
+        ssa.frame_setup_insns.insert((BlockId(0), 1));
+
+        let pass = DeadCodeElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(changed, "dead copy should be removed");
+        assert_eq!(
+            ssa.stack_offset_hints.get(&(BlockId(0), 0)).copied(),
+            Some(-0x20),
+            "hint should move with the surviving STORE"
+        );
+        assert!(
+            !ssa.stack_offset_hints.contains_key(&(BlockId(0), 1)),
+            "old hint key should be removed after compaction"
+        );
+        assert!(
+            ssa.frame_setup_insns.contains(&(BlockId(0), 0)),
+            "frame setup marker should move with the surviving STORE"
+        );
+        assert!(
+            !ssa.frame_setup_insns.contains(&(BlockId(0), 1)),
+            "old frame setup marker should be removed after compaction"
+        );
+    }
+
+    #[test]
     fn test_dce_preserve_call() {
         let v1 = sv(0, 0);
         let v3 = sv(16, 0);
@@ -427,6 +524,47 @@ mod tests {
 
         let changed3 = pass.run(&mut ssa).expect("pass should succeed");
         assert!(!changed3, "pass 3 should be a no-op (fixed point)");
+    }
+
+    #[test]
+    fn test_dce_preserves_register_definition_used_by_subregister_return() {
+        let r8d = SsaVarnode {
+            base: Varnode::new(SpaceId::Register, 64, 4),
+            version: 1,
+        };
+        let r8b = SsaVarnode {
+            base: Varnode::new(SpaceId::Register, 64, 1),
+            version: 0,
+        };
+        let rax = sv(0, 0);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r8d.base,
+            smallvec![rax.base, r8d.base],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![r8b.base],
+            0x1004,
+        ));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), r8d);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(0)), r8b);
+
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
+
+        let changed = DeadCodeElimPass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(
+            !changed,
+            "a live low-byte return must keep the covering dword definition"
+        );
+        assert_eq!(ssa.function.blocks[&BlockId(0)].insns[0].op, IrOp::IntAdd);
     }
 
     #[test]

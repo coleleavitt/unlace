@@ -114,7 +114,7 @@ fn collect_input_rewrites(
         let mut active: BTreeMap<SsaVarnode, CopySource> = BTreeMap::new();
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             for (input_idx, &raw) in insn.inputs.iter().enumerate() {
-                if is_call_argument_input(insn, input_idx) {
+                if is_propagation_barrier_input(insn, input_idx, raw) {
                     continue;
                 }
                 if raw.space == SpaceId::Const {
@@ -163,8 +163,25 @@ fn collect_input_rewrites(
     rewrites
 }
 
-fn is_call_argument_input(insn: &unlace_ir::IrInsn, input_idx: usize) -> bool {
-    matches!(insn.op, IrOp::Call | IrOp::Callind) && input_idx > 0
+fn is_propagation_barrier_input(insn: &unlace_ir::IrInsn, input_idx: usize, raw: Varnode) -> bool {
+    (matches!(insn.op, IrOp::Call | IrOp::Callind) && input_idx > 0)
+        || (matches!(insn.op, IrOp::Load | IrOp::Store) && input_idx == 1)
+        || (insn.op == IrOp::Copy && input_idx == 0 && insn.output == Some(raw))
+        || (insn.op == IrOp::Copy
+            && input_idx == 0
+            && insn.output.is_some_and(is_x86_64_call_arg_register))
+        || (insn.op == IrOp::Copy
+            && input_idx == 0
+            && insn.output.is_some_and(is_x86_64_frame_register))
+        || (matches!(insn.op, IrOp::IntAdd | IrOp::IntSub) && is_x86_64_frame_register(raw))
+}
+
+fn is_x86_64_call_arg_register(vn: Varnode) -> bool {
+    vn.space == SpaceId::Register && matches!(vn.offset, 56 | 48 | 16 | 8 | 64 | 72)
+}
+
+fn is_x86_64_frame_register(vn: Varnode) -> bool {
+    vn.space == SpaceId::Register && matches!(vn.offset, 32 | 40)
 }
 
 fn resolve_active_source(
@@ -213,6 +230,12 @@ fn record_copy_equiv(
         return;
     };
     if output.space == SpaceId::Const {
+        return;
+    }
+    if output == source_raw {
+        return;
+    }
+    if is_x86_64_frame_register(output) || is_x86_64_frame_register(source_raw) {
         return;
     }
     let Some(output_ssa) = output_ssa(func, bid, insn_idx) else {
@@ -392,6 +415,55 @@ mod tests {
     }
 
     #[test]
+    fn test_copy_prop_preserves_ssa_only_renames() {
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+
+        let seed = IrInsn::with_output(
+            IrOp::IntAdd,
+            u0,
+            smallvec![Varnode::reg(32, 8), Varnode::constant(8, 8)],
+            0x1000,
+        );
+        let rename = IrInsn::with_output(IrOp::Copy, u0, smallvec![u0], 0x1004);
+        let use_insn = IrInsn::with_output(
+            IrOp::IntAdd,
+            u1,
+            smallvec![u0, Varnode::constant(1, 8)],
+            0x1008,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![seed, rename, use_insn]);
+        let before_input = ssa
+            .var_map
+            .get(&(BlockId(0), 1, VarnodeSlot::Input(0)))
+            .copied();
+        let before_use = ssa
+            .var_map
+            .get(&(BlockId(0), 2, VarnodeSlot::Input(0)))
+            .copied();
+        let changed = CopyPropagationPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(
+            !changed,
+            "raw-identical COPYs are SSA version edges, not value simplifications"
+        );
+        assert_eq!(
+            ssa.var_map
+                .get(&(BlockId(0), 1, VarnodeSlot::Input(0)))
+                .copied(),
+            before_input
+        );
+        assert_eq!(
+            ssa.var_map
+                .get(&(BlockId(0), 2, VarnodeSlot::Input(0)))
+                .copied(),
+            before_use
+        );
+    }
+
+    #[test]
     fn test_copy_prop_keeps_register_redefinitions_scoped() {
         let rsp = Varnode::reg(32, 8);
         let u0 = Varnode::unique(0, 8);
@@ -430,7 +502,10 @@ mod tests {
         let changed = CopyPropagationPass
             .run(&mut ssa)
             .expect("pass should succeed");
-        assert!(changed);
+        assert!(
+            !changed,
+            "frame-register copies are stack-recovery boundaries"
+        );
 
         let block = ssa.function.blocks.values().next().expect("has block");
         assert_eq!(
@@ -438,24 +513,23 @@ mod tests {
             "later rsp copies must not rewrite earlier rsp inputs"
         );
         assert_eq!(
-            block.insns[2].inputs[0], u0,
-            "the use dominated by `rsp = copy u0` may still be propagated"
+            block.insns[2].inputs[0], rsp,
+            "uses of RSP after frame-register writes must preserve the raw frame register"
         );
         assert_eq!(
-            block.insns[4].inputs[0],
-            Varnode::constant(0, 8),
-            "the use after `rsp = copy 0` should see only that later version"
+            block.insns[4].inputs[0], rsp,
+            "uses of RSP after frame-register writes must preserve the raw frame register"
         );
 
         let adjusted_input_ssa = ssa
             .var_map
             .get(&(BlockId(0), 2, VarnodeSlot::Input(0)))
             .expect("rewritten input keeps source SSA metadata");
-        assert_eq!(adjusted_input_ssa.base, u0);
+        assert_eq!(adjusted_input_ssa.base, rsp);
         assert!(
-            !ssa.var_map
+            ssa.var_map
                 .contains_key(&(BlockId(0), 4, VarnodeSlot::Input(0))),
-            "constant rewrites must clear stale SSA metadata"
+            "unrewritten frame-register uses keep their SSA metadata"
         );
     }
 

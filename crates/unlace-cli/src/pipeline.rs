@@ -56,10 +56,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use unlace_ir::ssa::SsaFunction;
+use unlace_ir::ssa::VarnodeSlot;
 use unlace_ir::ssa::{Maturity, PrimitiveType, SsaVarnode};
 use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
-use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
+use unlace_loader::{BinaryImage, DwarfInfo, Endian, FlirtDb, Section, SectionFlags, SymbolKind};
 use unlace_passes::{
     AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
     BoolSimplifyPass, CallBoundaryCopyPropPass, CallingConvFinalizePass,
@@ -78,8 +79,8 @@ use unlace_passes::{
     TypeConstraintSolverPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
     bump_if_signature_changed, canonical_pipeline_backedge_exceptions,
     canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
-    recover_direct_call_args, recover_stack_frame, recover_structs, run_instrumented,
-    run_outer_fixedpoint, run_to_fixedpoint_with_context,
+    recover_direct_call_args_with_param_counts, recover_stack_frame, recover_structs,
+    run_instrumented, run_outer_fixedpoint, run_to_fixedpoint_with_context,
     validate_named_phase_monotonicity_with_exceptions,
 };
 
@@ -224,6 +225,7 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     if permissive_symbol_sizes {
         infer_arch_fixture_sizes(image, &mut funcs);
     }
+    recover_libc_start_main_main_alias(image, &mut funcs);
 
     if let Some(filter) = filter {
         let target = parse_function_filter(filter);
@@ -237,6 +239,80 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     }
 
     Ok(funcs)
+}
+
+fn recover_libc_start_main_main_alias(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    if image.arch != ArchId::X86_64 || funcs.iter().any(|f| f.name == "main") {
+        return;
+    }
+
+    let Some(main_addr) = find_libc_start_main_arg(image) else {
+        return;
+    };
+
+    if let Some(existing) = funcs.iter_mut().find(|f| f.addr == main_addr) {
+        existing.name = "main".to_string();
+        return;
+    }
+
+    let size = infer_synthetic_function_size(image, funcs, main_addr);
+    funcs.push(FunctionEntry {
+        name: "main".to_string(),
+        addr: main_addr,
+        size,
+    });
+}
+
+fn find_libc_start_main_arg(image: &BinaryImage) -> Option<u64> {
+    let text = text_section(image)?;
+    let text_start = text.vaddr;
+    let text_end = text.vaddr.saturating_add(text.data.len() as u64);
+    if !(text_start..text_end).contains(&image.entry) {
+        return None;
+    }
+
+    let entry_off = image.entry.checked_sub(text.vaddr)? as usize;
+    let bytes = text.data.get(entry_off..)?;
+    let window_len = bytes.len().min(96);
+    let window = &bytes[..window_len];
+
+    // glibc x86-64 _start materializes main as:
+    //     lea main(%rip), %rdi
+    //     call *__libc_start_main@GOTPCREL(%rip)
+    // Stripped PIEs keep this shape even after all normal symbols are gone.
+    for i in 0..window.len().saturating_sub(7) {
+        if window[i..].starts_with(&[0x48, 0x8d, 0x3d]) {
+            let rel =
+                i32::from_le_bytes([window[i + 3], window[i + 4], window[i + 5], window[i + 6]])
+                    as i64;
+            let next = image.entry.wrapping_add(i as u64).wrapping_add(7);
+            let target = if rel >= 0 {
+                next.wrapping_add(rel as u64)
+            } else {
+                next.wrapping_sub(rel.unsigned_abs())
+            };
+            if (text_start..text_end).contains(&target) {
+                return Some(target);
+            }
+        }
+    }
+
+    None
+}
+
+fn infer_synthetic_function_size(image: &BinaryImage, funcs: &[FunctionEntry], addr: u64) -> u64 {
+    let Some(text) = text_section(image) else {
+        return 0;
+    };
+    let text_end = text.vaddr.saturating_add(text.data.len() as u64);
+    funcs
+        .iter()
+        .filter(|f| f.addr > addr)
+        .map(|f| f.addr)
+        .chain(std::iter::once(text_end))
+        .min()
+        .map(|end| end.saturating_sub(addr))
+        .unwrap_or(0)
 }
 
 /// Drop synthetic `sub_*` entries that point at DWARF low-PC addresses inside a
@@ -1824,8 +1900,12 @@ pub fn lift_and_run_passes(
     }
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
+    let dwarf_param_count = |addr: u64| -> Option<usize> {
+        dwarf.and_then(|d| d.functions.get(&addr).map(|f| f.params.len()))
+    };
 
-    let _call_args_pre = recover_direct_call_args(&mut ssa, &resolve_name);
+    let _call_args_pre =
+        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &dwarf_param_count);
 
     // Batch 6 (pre-pass): parse printf-family format strings against the
     // raw post-SSA IR. The pre-pass run is load-bearing because the
@@ -1841,6 +1921,8 @@ pub fn lift_and_run_passes(
         &|addr| stable_symbol_names.get(&addr).copied(),
         &image.string_table,
     );
+
+    resolve_jump_tables_for_pipeline(&mut ssa, image);
 
     if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
         tracing::warn!(func = %entry.name, err = %e, "pass pipeline failed; continuing with unoptimized");
@@ -1902,6 +1984,7 @@ pub fn emit_function_interproc(
     printer_annotations.go_defer_sites = ssa.go_defer_sites.clone();
     let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
+    printer_annotations.readonly_scalars = collect_readonly_scalars(image);
     if let Some(pdb_types) = image.pdb_types.as_ref() {
         printer_annotations.pdb_constants_by_value = pdb_types.constants_by_value.clone();
     }
@@ -1924,9 +2007,7 @@ pub fn emit_function_interproc(
     printer_annotations.recover_triangular_sum_loop =
         unlace_passes::detect_triangular_sum_reduction(ssa).is_some();
     let printer_annotations = Some(printer_annotations);
-    resolve_jump_table_targets(ssa, image);
-    // Rebuild CFG after jump table resolution added new block successors.
-    unlace_ir::ssa::rebuild_cfg(ssa);
+    resolve_jump_tables_for_pipeline(ssa, image);
     let jt_sections = build_jump_table_section_views(image);
     emit_output(
         emit,
@@ -2284,8 +2365,12 @@ pub fn decompile_function_with_symbols(
     let t = Instant::now();
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
+    let dwarf_param_count = |addr: u64| -> Option<usize> {
+        dwarf.and_then(|d| d.functions.get(&addr).map(|f| f.params.len()))
+    };
 
-    let _call_args_pre = recover_direct_call_args(&mut ssa, &resolve_name);
+    let _call_args_pre =
+        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &dwarf_param_count);
 
     // Batch 6 (pre-pass): parse printf-family format strings *before*
     // the optimization pipeline runs. The IR pattern that
@@ -2299,6 +2384,8 @@ pub fn decompile_function_with_symbols(
         &|addr| stable_symbol_names.get(&addr).copied(),
         &image.string_table,
     );
+
+    resolve_jump_tables_for_pipeline(&mut ssa, image);
 
     if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
         tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
@@ -2372,6 +2459,7 @@ pub fn decompile_function_with_symbols(
     printer_annotations.go_defer_sites = ssa.go_defer_sites.clone();
     let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
+    printer_annotations.readonly_scalars = collect_readonly_scalars(image);
     if let Some(pdb_types) = image.pdb_types.as_ref() {
         printer_annotations.pdb_constants_by_value = pdb_types.constants_by_value.clone();
     }
@@ -2401,9 +2489,7 @@ pub fn decompile_function_with_symbols(
     // their bases on `ssa.resolved_jump_tables`; here we walk the binary
     // image to decode the concrete target addresses out of `.rodata`.
     // No-op when no candidates were detected.
-    resolve_jump_table_targets(&mut ssa, image);
-    // Rebuild CFG after jump table resolution added new block successors.
-    unlace_ir::ssa::rebuild_cfg(&mut ssa);
+    resolve_jump_tables_for_pipeline(&mut ssa, image);
     let jt_sections = build_jump_table_section_views(image);
 
     let result = emit_output(
@@ -2565,6 +2651,180 @@ fn build_printer_annotations(
     }
 }
 
+fn collect_readonly_scalars(image: &BinaryImage) -> BTreeMap<(u64, u8), u64> {
+    let mut out = BTreeMap::new();
+    for section in &image.sections {
+        let readonly_data = section.flags.contains(SectionFlags::READ)
+            && !section.flags.contains(SectionFlags::WRITE)
+            && !section.flags.contains(SectionFlags::EXEC)
+            && !section.data.is_empty();
+        if !readonly_data {
+            continue;
+        }
+        for width in [1usize, 2, 4, 8] {
+            if section.data.len() < width {
+                continue;
+            }
+            for off in 0..=section.data.len() - width {
+                let bytes = &section.data[off..off + width];
+                let value = match image.endian {
+                    Endian::Little => bytes
+                        .iter()
+                        .enumerate()
+                        .fold(0u64, |acc, (idx, byte)| acc | ((*byte as u64) << (idx * 8))),
+                    Endian::Big => bytes
+                        .iter()
+                        .fold(0u64, |acc, byte| (acc << 8) | (*byte as u64)),
+                };
+                out.insert((section.vaddr + off as u64, width as u8), value);
+            }
+        }
+    }
+    out
+}
+
+fn collect_ssa_statement_slots(
+    ssa: &SsaFunction,
+) -> BTreeMap<(u64, IrOp), Vec<unlace_output::SsaStatementSlots>> {
+    let mut out: BTreeMap<(u64, IrOp), Vec<unlace_output::SsaStatementSlots>> = BTreeMap::new();
+    for (&bid, block) in &ssa.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            if ssa.frame_setup_insns.contains(&(bid, idx)) {
+                continue;
+            }
+            let mut inputs = BTreeMap::new();
+            for raw_idx in 0..insn.inputs.len() {
+                if let Some(&sv) = ssa.var_map.get(&(bid, idx, VarnodeSlot::Input(raw_idx))) {
+                    inputs.insert(raw_idx, sv);
+                }
+            }
+            let output = ssa.var_map.get(&(bid, idx, VarnodeSlot::Output)).copied();
+            out.entry((insn.addr, insn.op))
+                .or_default()
+                .push(unlace_output::SsaStatementSlots { output, inputs });
+        }
+    }
+    out
+}
+
+fn collect_return_value_aliases(
+    ssa: &SsaFunction,
+    symbols: &BTreeMap<u64, String>,
+) -> BTreeMap<SsaVarnode, SsaVarnode> {
+    let mut defs: BTreeMap<SsaVarnode, (BlockId, usize)> = BTreeMap::new();
+    for (&bid, block) in &ssa.function.blocks {
+        for (idx, _insn) in block.insns.iter().enumerate() {
+            if let Some(&sv) = ssa.var_map.get(&(bid, idx, VarnodeSlot::Output)) {
+                defs.insert(sv, (bid, idx));
+            }
+        }
+    }
+
+    let mut stack_fail_preds = BTreeSet::new();
+    for phis in ssa.phi_map.values() {
+        for phi in phis {
+            if !is_return_register_sv(&phi.output) {
+                continue;
+            }
+            for &(pred, sv) in &phi.inputs {
+                if traces_to_stack_chk_fail_return(ssa, symbols, &defs, sv, &mut BTreeSet::new()) {
+                    stack_fail_preds.insert(pred);
+                }
+            }
+        }
+    }
+
+    let mut normal_by_size: BTreeMap<u8, SsaVarnode> = BTreeMap::new();
+    let mut normal_by_output: BTreeMap<SsaVarnode, SsaVarnode> = BTreeMap::new();
+    for phis in ssa.phi_map.values() {
+        for phi in phis {
+            if !is_return_register_sv(&phi.output) || phi.inputs.len() < 2 {
+                continue;
+            }
+            let has_stack_fail_input = phi
+                .inputs
+                .iter()
+                .any(|(pred, _)| stack_fail_preds.contains(pred));
+            if !has_stack_fail_input {
+                continue;
+            }
+            if let Some((_, normal)) = phi
+                .inputs
+                .iter()
+                .find(|(pred, _)| !stack_fail_preds.contains(pred))
+            {
+                normal_by_size
+                    .entry(phi.output.base.size)
+                    .or_insert(*normal);
+                normal_by_output.insert(phi.output, *normal);
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    for (output, normal) in normal_by_output {
+        let preferred_narrow = normal_by_size
+            .range(..output.base.size)
+            .next()
+            .map(|(_, sv)| *sv);
+        out.insert(output, preferred_narrow.unwrap_or(normal));
+    }
+    out
+}
+
+fn is_return_register_sv(sv: &SsaVarnode) -> bool {
+    sv.base.space == SpaceId::Register && sv.base.offset == 0
+}
+
+fn traces_to_stack_chk_fail_return(
+    ssa: &SsaFunction,
+    symbols: &BTreeMap<u64, String>,
+    defs: &BTreeMap<SsaVarnode, (BlockId, usize)>,
+    sv: SsaVarnode,
+    seen: &mut BTreeSet<SsaVarnode>,
+) -> bool {
+    if !seen.insert(sv) || seen.len() > 16 {
+        return false;
+    }
+    let Some(&(bid, idx)) = defs.get(&sv) else {
+        return false;
+    };
+    let Some(block) = ssa.function.blocks.get(&bid) else {
+        return false;
+    };
+    let Some(insn) = block.insns.get(idx) else {
+        return false;
+    };
+    if matches!(insn.op, IrOp::Call | IrOp::Callind)
+        && let Some(target) = insn
+            .inputs
+            .first()
+            .filter(|target| target.space == SpaceId::Const)
+    {
+        return symbols.get(&target.offset).is_none_or(|name| {
+            name == "__stack_chk_fail"
+                || name.starts_with("__stack_chk_fail@")
+                || name.ends_with("::__stack_chk_fail")
+        });
+    }
+    if !matches!(
+        insn.op,
+        IrOp::Copy
+            | IrOp::Subpiece
+            | IrOp::IntZext
+            | IrOp::IntSext
+            | IrOp::Multiequal
+            | IrOp::Piece
+    ) {
+        return false;
+    }
+    (0..insn.inputs.len()).any(|raw_idx| {
+        ssa.var_map
+            .get(&(bid, idx, VarnodeSlot::Input(raw_idx)))
+            .copied()
+            .is_some_and(|input| traces_to_stack_chk_fail_return(ssa, symbols, defs, input, seen))
+    })
+}
+
 fn collect_go_iface_devirtualized_calls(
     ssa: &SsaFunction,
     image: &BinaryImage,
@@ -2715,6 +2975,17 @@ pub fn build_jump_table_section_views(
     out
 }
 
+fn resolve_jump_tables_for_pipeline(
+    ssa: &mut unlace_ir::ssa::SsaFunction,
+    image: &unlace_loader::BinaryImage,
+) {
+    if let Err(e) = run_instrumented(&IndirectJumpResolvePass, ssa) {
+        tracing::warn!(func = %ssa.function.name, err = %e, "jump-table candidate recovery failed");
+    }
+    resolve_jump_table_targets(ssa, image);
+    unlace_ir::ssa::rebuild_cfg(ssa);
+}
+
 /// Section-aware second phase of jump-table recovery: walks each candidate
 /// recorded by [`unlace_passes::IndirectJumpResolvePass`], decodes the
 /// concrete target addresses by reading the binary's read-only sections,
@@ -2766,12 +3037,8 @@ pub fn resolve_jump_table_targets(
     const MAX_PROBE_ENTRIES: u32 = 64;
 
     let mut updated = std::collections::BTreeMap::new();
+    let mut successor_updates: Vec<(u64, Vec<u64>)> = Vec::new();
     for (&branch_addr, cand) in &ssa.resolved_jump_tables {
-        // Already resolved? keep as-is.
-        if cand.num_entries > 0 && !cand.targets.is_empty() {
-            updated.insert(branch_addr, cand.clone());
-            continue;
-        }
         let entry_size = cand.entry_size;
         if !matches!(entry_size, 4 | 8) {
             // Compressed-offset / byte-secondary tables aren't handled by
@@ -2816,15 +3083,12 @@ pub fn resolve_jump_table_targets(
                 kind,
             };
             if let Some(targets) = read_jump_table(&table, section) {
-                // Sanity check: every entry must point inside the binary's
-                // executable footprint, otherwise this isn't really a table.
-                let plausible = !targets.is_empty()
-                    && targets.iter().all(|&t| {
-                        sections.iter().any(|s| {
-                            s.contains_addr(t) && s.perms == unlace_struct::SectionPerms::RX
-                        })
-                    });
-                if plausible {
+                // The table bound is often encoded by a preceding compare,
+                // not by the table bytes. Probe a generous upper bound, then
+                // keep the executable prefix and stop at the first non-code
+                // value instead of rejecting the whole candidate.
+                let targets = executable_target_prefix(&targets, &sections);
+                if targets.len() >= 2 {
                     updated.insert(
                         branch_addr,
                         JumpTableInfo {
@@ -2832,9 +3096,10 @@ pub fn resolve_jump_table_targets(
                             entry_size,
                             num_entries: targets.len() as u32,
                             endian_little: matches!(endian, TableEndian::Little),
-                            targets,
+                            targets: targets.clone(),
                         },
                     );
+                    successor_updates.push((branch_addr, targets));
                     resolved = true;
                     break;
                 }
@@ -2842,9 +3107,126 @@ pub fn resolve_jump_table_targets(
         }
         if !resolved {
             updated.insert(branch_addr, cand.clone());
+            if cand.num_entries > 0 && !cand.targets.is_empty() {
+                successor_updates.push((branch_addr, cand.targets.clone()));
+            }
         }
     }
     ssa.resolved_jump_tables = updated;
+    for (branch_addr, targets) in successor_updates {
+        install_jump_table_successors(ssa, branch_addr, &targets);
+    }
+}
+
+fn executable_target_prefix(
+    targets: &[u64],
+    sections: &[unlace_struct::SectionView<'_>],
+) -> Vec<u64> {
+    targets
+        .iter()
+        .copied()
+        .take_while(|&target| is_executable_target(target, sections))
+        .collect()
+}
+
+fn is_executable_target(target: u64, sections: &[unlace_struct::SectionView<'_>]) -> bool {
+    sections.iter().any(|section| {
+        section.contains_addr(target) && section.perms == unlace_struct::SectionPerms::RX
+    })
+}
+
+fn install_jump_table_successors(
+    ssa: &mut unlace_ir::ssa::SsaFunction,
+    branch_addr: u64,
+    targets: &[u64],
+) {
+    let Some(branch_block) = block_containing_branchind(&ssa.function, branch_addr) else {
+        return;
+    };
+
+    let mut successors = smallvec::SmallVec::<[BlockId; 2]>::new();
+    for &target in targets {
+        let Some(target_block) = block_starting_at(&ssa.function, target) else {
+            continue;
+        };
+        successors.push(target_block);
+    }
+    if successors.len() < 2 {
+        return;
+    }
+    if let Some(block) = ssa.function.blocks.get_mut(&branch_block) {
+        block.successors = successors;
+    }
+    seed_jump_table_target_return_ssa(ssa, targets);
+}
+
+fn block_containing_branchind(func: &Function, branch_addr: u64) -> Option<BlockId> {
+    func.blocks.iter().find_map(|(&bid, block)| {
+        block
+            .insns
+            .iter()
+            .any(|insn| insn.addr == branch_addr && insn.op == IrOp::Branchind)
+            .then_some(bid)
+    })
+}
+
+fn seed_jump_table_target_return_ssa(ssa: &mut unlace_ir::ssa::SsaFunction, targets: &[u64]) {
+    for &target in targets {
+        let Some(bid) = block_starting_at(&ssa.function, target) else {
+            continue;
+        };
+        let Some(block) = ssa.function.blocks.get(&bid) else {
+            continue;
+        };
+        let Some((ret_idx, ret_insn)) = block
+            .insns
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, insn)| insn.op == IrOp::Return)
+        else {
+            continue;
+        };
+        let Some(return_vn) = ret_insn.inputs.first().copied() else {
+            continue;
+        };
+        let Some((def_idx, def_output)) = block
+            .insns
+            .iter()
+            .enumerate()
+            .take(ret_idx)
+            .rev()
+            .find_map(|(idx, insn)| {
+                insn.output
+                    .filter(|output| *output == return_vn)
+                    .map(|output| (idx, output))
+            })
+        else {
+            continue;
+        };
+        let sv = ssa
+            .var_map
+            .get(&(bid, def_idx, unlace_ir::ssa::VarnodeSlot::Output))
+            .copied()
+            .unwrap_or(SsaVarnode {
+                base: def_output,
+                version: 0,
+            });
+        ssa.var_map
+            .insert((bid, def_idx, unlace_ir::ssa::VarnodeSlot::Output), sv);
+        ssa.var_map
+            .insert((bid, ret_idx, unlace_ir::ssa::VarnodeSlot::Input(0)), sv);
+    }
+}
+
+fn block_starting_at(func: &Function, target_addr: u64) -> Option<BlockId> {
+    func.blocks.iter().find_map(|(&bid, block)| {
+        block
+            .insns
+            .first()
+            .is_some_and(|insn| insn.addr == target_addr)
+            .then_some(bid)
+    })
 }
 
 /// Bridge the `unlace-ir` [`JumpTableInfo`](unlace_ir::ssa::JumpTableInfo)
@@ -2960,19 +3342,20 @@ pub fn emit_output(
             let inferred_preamble = unlace_output::emit_inferred_struct_preamble(ssa);
             let array_indices = unlace_output::compute_array_struct_indices(ssa);
             let has_arrays = !ssa.array_struct_layouts.is_empty();
-            let mut ann_owned: Option<unlace_output::PrinterAnnotations> = None;
+            let mut ann_clone = annotations.cloned().unwrap_or_default();
             if !inferred_preamble.is_empty() || has_arrays {
-                let mut clone = annotations.cloned().unwrap_or_default();
                 if !inferred_preamble.is_empty() {
-                    clone.inferred_struct_preamble = Some(inferred_preamble);
+                    ann_clone.inferred_struct_preamble = Some(inferred_preamble);
                 }
                 if has_arrays {
-                    clone.array_struct_layouts = ssa.array_struct_layouts.clone();
-                    clone.array_struct_indices = array_indices;
+                    ann_clone.array_struct_layouts = ssa.array_struct_layouts.clone();
+                    ann_clone.array_struct_indices = array_indices;
                 }
-                ann_owned = Some(clone);
             }
-            let ann_ref = ann_owned.as_ref().or(annotations);
+            ann_clone.ssa_statement_slots = collect_ssa_statement_slots(ssa);
+            ann_clone.return_value_aliases = collect_return_value_aliases(ssa, symbols);
+            let ann_owned = Some(ann_clone);
+            let ann_ref = ann_owned.as_ref();
 
             Ok(unlace_output::print_c_with_annotations(
                 &hir,
@@ -3040,6 +3423,82 @@ mod tests {
             auth_ptr_slots: Vec::new(),
             wasm_component: None,
         }
+    }
+
+    #[test]
+    fn jump_table_resolution_trims_probe_prefix_and_installs_successors() {
+        let mut func = Function::new("dispatch", BlockId(0), 0x1000);
+        let mut dispatch = BasicBlock::new(BlockId(0));
+        dispatch.insns.push(IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![Varnode::unique(0, 8)],
+            0x1010,
+        ));
+        func.insert_block(dispatch);
+
+        let rax = Varnode::reg(0, 4);
+        let mut case0 = BasicBlock::new(BlockId(1));
+        case0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rax,
+            smallvec![Varnode::constant(10, 4)],
+            0x1020,
+        ));
+        case0
+            .insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![rax], 0x1021));
+        func.insert_block(case0);
+
+        let mut case1 = BasicBlock::new(BlockId(2));
+        case1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rax,
+            smallvec![Varnode::constant(20, 4)],
+            0x1030,
+        ));
+        case1
+            .insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![rax], 0x1031));
+        func.insert_block(case1);
+
+        let mut ssa = build_ssa(func);
+        ssa.resolved_jump_tables.insert(
+            0x1010,
+            unlace_ir::ssa::JumpTableInfo {
+                base: 0x2000,
+                entry_size: 4,
+                num_entries: 0,
+                endian_little: true,
+                targets: Vec::new(),
+            },
+        );
+
+        let mut image = make_text_image(vec![0x90; 0x100], 0x1000);
+        let mut table = Vec::new();
+        table.extend_from_slice(&((0x1020_i64 - 0x2000_i64) as i32).to_le_bytes());
+        table.extend_from_slice(&((0x1030_i64 - 0x2000_i64) as i32).to_le_bytes());
+        table.extend_from_slice(&(0x7fff_0000_i32).to_le_bytes());
+        image.sections.push(Section {
+            name: ".rodata".to_string(),
+            vaddr: 0x2000,
+            size: table.len() as u64,
+            data: table,
+            flags: SectionFlags::READ,
+        });
+
+        resolve_jump_table_targets(&mut ssa, &image);
+
+        let resolved = ssa.resolved_jump_tables.get(&0x1010).unwrap();
+        assert_eq!(resolved.targets, vec![0x1020, 0x1030]);
+        assert_eq!(resolved.num_entries, 2);
+        assert_eq!(
+            ssa.function.blocks[&BlockId(0)].successors.as_slice(),
+            &[BlockId(1), BlockId(2)]
+        );
+
+        unlace_passes::DeadCodeElimPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.function.blocks[&BlockId(1)].insns.len(), 2);
+        assert_eq!(ssa.function.blocks[&BlockId(2)].insns.len(), 2);
     }
 
     fn empty_ssa_with_struct(name: &str, addr: u64, struct_name: &str) -> SsaFunction {

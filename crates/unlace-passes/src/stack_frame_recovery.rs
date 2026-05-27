@@ -42,6 +42,7 @@ fn resolve_spec(func: &SsaFunction) -> StackSpec {
 
 type DefMap = BTreeMap<Varnode, Vec<(BlockId, usize)>>;
 type ResolveCache = BTreeMap<(Varnode, u32), Option<i64>>;
+type SsaResolveCache = BTreeMap<(unlace_ir::ssa::SsaVarnode, u32), Option<i64>>;
 
 /// Recover the logical stack-frame layout of `func`.
 ///
@@ -60,6 +61,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     let spec = resolve_spec(func);
     let def_map = build_def_map(func);
     let mut resolve_cache: ResolveCache = BTreeMap::new();
+    let mut ssa_resolve_cache: SsaResolveCache = BTreeMap::new();
 
     // First pass: collect every (offset, width) observation.
     // BTreeMap keeps offsets sorted for the later fusion sweep.
@@ -71,16 +73,25 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
         }
     };
 
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            if func.frame_setup_insns.contains(&(bid, insn_idx)) {
+                continue;
+            }
             match insn.op {
                 IrOp::Store => {
                     if insn.inputs.len() < 3 {
                         continue;
                     }
-                    if let Some(offset) =
-                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache, &spec)
-                    {
+                    if let Some(offset) = extract_stack_offset(
+                        (bid, insn_idx),
+                        insn,
+                        func,
+                        &def_map,
+                        &mut resolve_cache,
+                        &mut ssa_resolve_cache,
+                        &spec,
+                    ) {
                         let width = insn.inputs[2].size;
                         if width > 0 {
                             record(offset, width, &mut observations);
@@ -91,9 +102,15 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                     if insn.inputs.len() < 2 {
                         continue;
                     }
-                    if let Some(offset) =
-                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache, &spec)
-                    {
+                    if let Some(offset) = extract_stack_offset(
+                        (bid, insn_idx),
+                        insn,
+                        func,
+                        &def_map,
+                        &mut resolve_cache,
+                        &mut ssa_resolve_cache,
+                        &spec,
+                    ) {
                         let width = insn.output.map(|o| o.size).unwrap_or(0);
                         if width > 0 {
                             record(offset, width, &mut observations);
@@ -349,12 +366,18 @@ fn build_def_map(func: &SsaFunction) -> DefMap {
 /// Resolve a LOAD/STORE address operand to a frame offset, returning
 /// `None` if the trace doesn't terminate at RSP or RBP.
 fn extract_stack_offset(
+    site: (BlockId, usize),
     insn: &IrInsn,
     func: &SsaFunction,
     def_map: &DefMap,
     resolve_cache: &mut ResolveCache,
+    ssa_resolve_cache: &mut SsaResolveCache,
     spec: &StackSpec,
 ) -> Option<i64> {
+    if let Some(&offset) = func.stack_offset_hints.get(&site) {
+        return Some(offset);
+    }
+
     let addr = &insn.inputs[1];
 
     if addr.space == SpaceId::Stack {
@@ -364,6 +387,17 @@ fn extract_stack_offset(
         return Some(0);
     }
     if addr.space == SpaceId::Unique || addr.space == SpaceId::Register {
+        if let Some(&addr_sv) = func.var_map.get(&(site.0, site.1, VarnodeSlot::Input(1))) {
+            return find_relative_offset_ssa(
+                &addr_sv,
+                func,
+                def_map,
+                resolve_cache,
+                ssa_resolve_cache,
+                0,
+                spec,
+            );
+        }
         return find_relative_offset(addr, func, def_map, resolve_cache, 0, spec);
     }
     None
@@ -459,6 +493,182 @@ fn find_relative_offset_uncached(
     None
 }
 
+fn find_relative_offset_ssa(
+    addr_sv: &unlace_ir::ssa::SsaVarnode,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+    ssa_resolve_cache: &mut SsaResolveCache,
+    depth: u32,
+    spec: &StackSpec,
+) -> Option<i64> {
+    if depth > MAX_RESOLVE_DEPTH {
+        return None;
+    }
+    if let Some(&cached) = ssa_resolve_cache.get(&(*addr_sv, depth)) {
+        return cached;
+    }
+    let resolved = find_relative_offset_ssa_uncached(
+        addr_sv,
+        func,
+        def_map,
+        resolve_cache,
+        ssa_resolve_cache,
+        depth,
+        spec,
+    );
+    ssa_resolve_cache.insert((*addr_sv, depth), resolved);
+    resolved
+}
+
+fn find_relative_offset_ssa_uncached(
+    addr_sv: &unlace_ir::ssa::SsaVarnode,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+    ssa_resolve_cache: &mut SsaResolveCache,
+    depth: u32,
+    spec: &StackSpec,
+) -> Option<i64> {
+    if addr_sv.base.space == SpaceId::Stack {
+        return Some(addr_sv.base.offset as i64);
+    }
+    if spec.is_frame_base(&addr_sv.base) {
+        return Some(0);
+    }
+
+    let (bid, insn_idx) = defining_site_for_sv(func, addr_sv)?;
+    let block = func.function.blocks.get(&bid)?;
+    let def = block.insns.get(insn_idx)?;
+    match def.op {
+        IrOp::IntAdd => {
+            if def.inputs.len() < 2 {
+                return None;
+            }
+            let (a, b) = (&def.inputs[0], &def.inputs[1]);
+            if b.space == SpaceId::Const
+                && let Some(base) = resolve_operand_offset(
+                    (bid, insn_idx),
+                    0,
+                    a,
+                    func,
+                    def_map,
+                    resolve_cache,
+                    ssa_resolve_cache,
+                    depth + 1,
+                    spec,
+                )
+            {
+                return Some(base.wrapping_add(b.offset as i64));
+            }
+            if a.space == SpaceId::Const
+                && let Some(base) = resolve_operand_offset(
+                    (bid, insn_idx),
+                    1,
+                    b,
+                    func,
+                    def_map,
+                    resolve_cache,
+                    ssa_resolve_cache,
+                    depth + 1,
+                    spec,
+                )
+            {
+                return Some(base.wrapping_add(a.offset as i64));
+            }
+            None
+        }
+        IrOp::IntSub => {
+            if def.inputs.len() < 2 {
+                return None;
+            }
+            let (a, b) = (&def.inputs[0], &def.inputs[1]);
+            if b.space == SpaceId::Const
+                && let Some(base) = resolve_operand_offset(
+                    (bid, insn_idx),
+                    0,
+                    a,
+                    func,
+                    def_map,
+                    resolve_cache,
+                    ssa_resolve_cache,
+                    depth + 1,
+                    spec,
+                )
+            {
+                return Some(base.wrapping_sub(b.offset as i64));
+            }
+            None
+        }
+        IrOp::Copy => {
+            let src = def.inputs.first()?;
+            resolve_operand_offset(
+                (bid, insn_idx),
+                0,
+                src,
+                func,
+                def_map,
+                resolve_cache,
+                ssa_resolve_cache,
+                depth + 1,
+                spec,
+            )
+        }
+        _ => None,
+    }
+}
+
+fn resolve_operand_offset(
+    site: (BlockId, usize),
+    input_idx: usize,
+    vn: &Varnode,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+    ssa_resolve_cache: &mut SsaResolveCache,
+    depth: u32,
+    spec: &StackSpec,
+) -> Option<i64> {
+    if vn.space == SpaceId::Stack {
+        return Some(vn.offset as i64);
+    }
+    if spec.is_frame_base(vn) {
+        return Some(0);
+    }
+    if vn.space == SpaceId::Const {
+        return None;
+    }
+    if let Some(&input_sv) = func
+        .var_map
+        .get(&(site.0, site.1, VarnodeSlot::Input(input_idx)))
+    {
+        return find_relative_offset_ssa(
+            &input_sv,
+            func,
+            def_map,
+            resolve_cache,
+            ssa_resolve_cache,
+            depth,
+            spec,
+        );
+    }
+    if vn.space == SpaceId::Unique || vn.space == SpaceId::Register {
+        return find_relative_offset(vn, func, def_map, resolve_cache, depth, spec);
+    }
+    None
+}
+
+fn defining_site_for_sv(
+    func: &SsaFunction,
+    needle: &unlace_ir::ssa::SsaVarnode,
+) -> Option<(BlockId, usize)> {
+    func.var_map
+        .iter()
+        .find_map(|(&(bid, insn_idx, ref slot), sv)| {
+            (*slot == VarnodeSlot::Output && sv == needle).then_some((bid, insn_idx))
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
@@ -515,6 +725,29 @@ mod tests {
         assert_eq!(frame.min_neg_offset, -8);
         assert_eq!(frame.max_pos_offset, -4);
         assert_eq!(frame.frame_size, 4);
+    }
+
+    #[test]
+    fn t209_uses_preopt_stack_offset_hint_when_address_shape_was_lost() {
+        let opaque_addr = Varnode::unique(0xfeed, 8);
+        let val = Varnode::reg(0, 4);
+        let ram = Varnode::constant(1, 8);
+
+        let insns = vec![IrInsn::without_output(
+            IrOp::Store,
+            smallvec![ram, opaque_addr, val],
+            0x1004,
+        )];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.stack_offset_hints.insert((BlockId(0), 0), -0x20);
+        let frame = recover_stack_frame(&ssa);
+
+        assert_eq!(frame.locals.len(), 1);
+        let local = &frame.locals[&-0x20];
+        assert_eq!(local.offset, -0x20);
+        assert_eq!(local.size, 4);
+        assert_eq!(local.access_widths, vec![4]);
     }
 
     /// Test 2: pair of locals at -8 and -16.  Distinct slots, both 8-byte

@@ -199,9 +199,10 @@ impl Pass for CsePass {
 struct Rewrite {
     block: BlockId,
     insn_idx: usize,
-    /// The varnode of the earlier (dominating) result.  Becomes the sole
-    /// input of the rewritten `COPY`.
-    earlier: Varnode,
+    /// The exact SSA varnode of the earlier (dominating) result.  The raw
+    /// base becomes the sole input of the rewritten `COPY`; the SSA version
+    /// is preserved in `var_map`.
+    earlier: SsaVarnode,
 }
 
 /// Walk the dominator tree iteratively (pre-order with cleanup actions) and
@@ -255,7 +256,7 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<Rewrite> {
                         rewrites.push(Rewrite {
                             block: bid,
                             insn_idx,
-                            earlier: earlier_sv.base,
+                            earlier: earlier_sv,
                         });
                     }
                     None => {
@@ -298,7 +299,12 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
 
         let original_input_count = insn.inputs.len();
 
-        *insn = IrInsn::with_output(IrOp::Copy, out, smallvec::smallvec![rw.earlier], insn.addr);
+        *insn = IrInsn::with_output(
+            IrOp::Copy,
+            out,
+            smallvec::smallvec![rw.earlier.base],
+            insn.addr,
+        );
 
         // Purge stale input mappings that no longer correspond to a real
         // input slot, then map the new sole input.
@@ -307,35 +313,11 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
                 .remove(&(rw.block, rw.insn_idx, VarnodeSlot::Input(i)));
         }
 
-        // The earlier result is the SSA varnode of the previously-defined
-        // output; locate it via reverse lookup so the new COPY input slot
-        // points at the right SSA version.
-        if rw.earlier.space != SpaceId::Const
-            && let Some(earlier_sv) = find_ssa_for_base(func, &rw.earlier)
-        {
+        if rw.earlier.base.space != SpaceId::Const {
             func.var_map
-                .insert((rw.block, rw.insn_idx, VarnodeSlot::Input(0)), earlier_sv);
+                .insert((rw.block, rw.insn_idx, VarnodeSlot::Input(0)), rw.earlier);
         }
     }
-}
-
-/// Find the highest-version `SsaVarnode` that currently maps to `base` as an
-/// instruction output.  CSE rewrites point at a definition that strictly
-/// dominates the use, so any extant mapping is correct as long as the base
-/// matches.
-///
-/// In practice the table stored the exact `SsaVarnode` of the earlier
-/// definition; we already saved `base` from that varnode.  When the earlier
-/// SSA varnode was retained, *some* mapping `(bid, idx, Output) → SsaVarnode`
-/// has the same base.  We pick the first such match — version selection is
-/// deterministic because `var_map` is a [`BTreeMap`].
-fn find_ssa_for_base(func: &SsaFunction, base: &Varnode) -> Option<SsaVarnode> {
-    for (&(_b, _i, ref slot), sv) in &func.var_map {
-        if matches!(slot, VarnodeSlot::Output) && sv.base == *base {
-            return Some(*sv);
-        }
-    }
-    None
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +374,64 @@ mod tests {
         assert_eq!(block.insns[1].output, Some(v7));
         assert_eq!(block.insns[1].inputs.len(), 1);
         assert_eq!(block.insns[1].inputs[0], v3);
+    }
+
+    #[test]
+    fn test_cse_preserves_exact_earlier_ssa_for_reused_unique_base() {
+        let rsp = Varnode::reg(32, 8);
+        let rbp = Varnode::reg(40, 8);
+        let u_addr = Varnode::unique(0, 8);
+        let u_use = Varnode::unique(16, 8);
+
+        let unrelated_prior = IrInsn::with_output(
+            IrOp::IntSub,
+            u_addr,
+            smallvec![rsp, Varnode::constant(8, 8)],
+            0x1000,
+        );
+        let first_addr = IrInsn::with_output(
+            IrOp::IntAdd,
+            u_addr,
+            smallvec![rbp, Varnode::constant(0xffffffffffffffe0, 8)],
+            0x1004,
+        );
+        let duplicate_addr = IrInsn::with_output(
+            IrOp::IntAdd,
+            u_addr,
+            smallvec![rbp, Varnode::constant(0xffffffffffffffe0, 8)],
+            0x1008,
+        );
+        let use_duplicate = IrInsn::with_output(
+            IrOp::IntAdd,
+            u_use,
+            smallvec![u_addr, Varnode::constant(1, 8)],
+            0x100c,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![
+            unrelated_prior,
+            first_addr,
+            duplicate_addr,
+            use_duplicate,
+        ]);
+        let first_addr_sv = ssa
+            .var_map
+            .get(&(BlockId(0), 1, VarnodeSlot::Output))
+            .copied()
+            .expect("first address output has SSA");
+        let changed = CsePass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[2].op, IrOp::Copy);
+        assert_eq!(block.insns[2].inputs[0], u_addr);
+        assert_eq!(
+            ssa.var_map
+                .get(&(BlockId(0), 2, VarnodeSlot::Input(0)))
+                .copied(),
+            Some(first_addr_sv),
+            "CSE must keep the exact dominating SSA version, not the first output with the same raw base"
+        );
     }
 
     /// `v3 = a + b; v7 = b + a;` — commutativity match → CSE.

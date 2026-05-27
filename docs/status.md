@@ -1,4 +1,4 @@
-# Status Matrix (Batch 26)
+# Status Matrix (Batch 27)
 
 This file is the public source of truth for what works, what is experimental,
 and what is aspirational in unlace. It is derived from:
@@ -6,6 +6,7 @@ and what is aspirational in unlace. It is derived from:
 - `crates/unlace-ir/src/arch_support.rs` (architecture tier classification).
 - `crates/unlace-cli/src/quality.rs` (output sanity gates).
 - `docs/rebaseline-2026-05-17.md` (current measured verification).
+- `docs/parity-quality-execution-plan-2026-05.md` (quality-axis split).
 - The per-batch handoffs under `docs/handoffs/`.
 
 Public claims in `README.md` must match what this file reports. When a batch
@@ -120,10 +121,19 @@ Current pins in `quality_smoke` (Batch 14 + 17 evidence):
 | `branches.elf` | 0 | 0 | 0 | 0 | 0 | 0 |
 | `loops.elf` | 0 | 0 | 0 | 0 | 0 | 0 |
 
-The aggregate parity gate (`bash scripts/score_parity.sh`) is currently at
-100.0% on the *narrow* fixture metric. That is not full Hex-Rays parity — it is
-a regression watchdog. See `docs/handoffs/README.md` for the active roadmap of
-real quality work.
+## Quality axes
+
+The old "aggregate parity" wording is retired. The current gates are:
+
+| axis | gate | current state | caveat |
+|------|------|---------------|--------|
+| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 91.1%` on the current 15 golden fixtures | Regression watchdog only; token/shape similarity is not semantic quality. |
+| Semantic correctness | `cargo run -p xtask -- semantic-report` | 9 source-known executable equivalence cases pass; 8 host/source-known cases are tracked as XFAIL; 3 non-host cases are unsupported | Not full-corpus semantic correctness yet; known semantic gaps stay visible as XFAIL until fixed. |
+| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=4 functions=17 recovered=74 expected=101 accuracy=73.3% source_known=20 dwarf_candidates=5` | First exact textual DWARF/source scorer; C++ templates/RTTI and non-host binaries are still explicit skips. |
+
+`bash scripts/quality_axes.sh` runs all three reports without treating a known
+XFAIL or skipped axis as solved. See
+`docs/parity-quality-execution-plan-2026-05.md` for the active metric plan.
 
 ## What is currently NOT shipped
 
@@ -138,6 +148,12 @@ production form. Tracked so the README doesn't overclaim:
 - Persistent `.unlace` project format with rename/comment/type round-trip.
 - LSP/TUI/Web UI front-ends.
 - Reproducible signed releases + SBOM publishing.
+- Full semantic recompile-and-compare across the source-known fixture corpus.
+  The current report covers 9 passing executable cases, 8 known failing host
+  cases, and 3 non-host unsupported cases.
+- Broad DWARF/source-ground-truth type and variable recovery accuracy metrics.
+  The current report scores 4 C DWARF fixtures exactly and skips C++/non-host
+  cases explicitly.
 
 Adding any of these moves the related row in the matrices above; do not promote
 items until the evidence exists.
@@ -153,4 +169,4 @@ When a batch lands code that should move a row:
 4. Update `docs/rebaseline-<date>.md` if the verification commands now report
    different totals.
 
-The handoff for this batch lives at `docs/handoffs/BATCH26_HANDOFF.md`.
+The handoff for this batch lives at `docs/handoffs/BATCH27_HANDOFF.md`.

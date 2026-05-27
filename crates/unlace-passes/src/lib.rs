@@ -193,7 +193,7 @@ pub use builtin_recognize::{
     BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,
 };
 pub use byref_detect::detect_byref;
-pub use call_args::recover_direct_call_args;
+pub use call_args::{recover_direct_call_args, recover_direct_call_args_with_param_counts};
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,

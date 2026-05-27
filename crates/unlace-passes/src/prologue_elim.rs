@@ -533,6 +533,9 @@ fn mark_pop_rbp_after(
 ) {
     let end = limit.min(insns.len());
     for idx in from..end {
+        if marked.contains(&(bid, idx)) {
+            continue;
+        }
         let insn = &insns[idx];
 
         // RBP = LOAD(addr) — loading saved RBP.
@@ -541,9 +544,31 @@ fn mark_pop_rbp_after(
             continue;
         }
 
+        // Lowered leave form: tmp = LOAD(addr); RBP = COPY(tmp).
+        if insn.op == IrOp::Load
+            && let Some(tmp) = insn.output
+            && idx + 1 < end
+            && copy_from_to(&insns[idx + 1], tmp, RBP)
+        {
+            marked.insert((bid, idx));
+            marked.insert((bid, idx + 1));
+            continue;
+        }
+
         // RSP = RSP + 8 — stack pointer increment (pop).
         if is_rsp_increment(insn, 8) {
             marked.insert((bid, idx));
+            continue;
+        }
+
+        // Lowered pop form: tmp = RSP + 8; RSP = COPY(tmp).
+        if is_rsp_increment_temp(insn, 8)
+            && let Some(tmp) = insn.output
+            && idx + 1 < end
+            && copy_from_to(&insns[idx + 1], tmp, RSP)
+        {
+            marked.insert((bid, idx));
+            marked.insert((bid, idx + 1));
             continue;
         }
 
@@ -555,6 +580,12 @@ fn mark_pop_rbp_after(
 
         break;
     }
+}
+
+fn copy_from_to(insn: &unlace_ir::IrInsn, src: Varnode, dst_reg: u64) -> bool {
+    insn.op == IrOp::Copy
+        && insn.output.is_some_and(|o| is_reg(&o, dst_reg))
+        && insn.inputs.first().is_some_and(|input| *input == src)
 }
 
 /// Scan backwards for callee-saved register restores.
@@ -619,6 +650,21 @@ fn scan_epilogue_callee_restores(
 fn is_rsp_increment(insn: &unlace_ir::IrInsn, expected: u64) -> bool {
     let output_is_rsp = insn.output.is_some_and(|o| is_reg(&o, RSP));
     if !output_is_rsp || insn.op != IrOp::IntAdd || insn.inputs.len() != 2 {
+        return false;
+    }
+
+    if is_reg(&insn.inputs[0], RSP) && is_const(&insn.inputs[1]) {
+        return expected == 0 || insn.inputs[1].offset == expected;
+    }
+    if is_reg(&insn.inputs[1], RSP) && is_const(&insn.inputs[0]) {
+        return expected == 0 || insn.inputs[0].offset == expected;
+    }
+
+    false
+}
+
+fn is_rsp_increment_temp(insn: &unlace_ir::IrInsn, expected: u64) -> bool {
+    if insn.output.is_none() || insn.op != IrOp::IntAdd || insn.inputs.len() != 2 {
         return false;
     }
 

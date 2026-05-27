@@ -113,6 +113,15 @@ architecture = "x86_64"
 feature_tags = []
 
 [[fixture]]
+name = "type_stack_o2"
+source_path = "fixtures/src/type_stack_o2.c"
+binary_path = "fixtures/type_stack_o2.elf"
+compiler = "gcc"
+flags = "-O2 -g -fno-omit-frame-pointer"
+architecture = "x86_64"
+feature_tags = ["stack_vars", "structs_arrays"]
+
+[[fixture]]
 name = "debug_templates"
 source_path = "fixtures/src/debug_templates.cpp"
 binary_path = "fixtures/debug_templates.elf"

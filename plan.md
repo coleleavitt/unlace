@@ -58,6 +58,17 @@ The main conclusion from the audit is:
   known non-void fallthrough helpers, so `sum_for` no longer ends with a bare
   `return;`. The remaining near-term output targets are final loop-counter/lvar
   splitting, guard shaping, and for-loop promotion for optimized loop helpers.
+- 2026-05-26 quality-axis update: the fixture score is now explicitly named
+  `Stylistic Fixture Parity` and currently reports 91.1% on the 15 golden
+  fixtures. This remains useful, but it is not semantic correctness or
+  type/variable recovery accuracy. The active metric plan is
+  `docs/parity-quality-execution-plan-2026-05.md`; `scripts/quality_axes.sh`
+  runs the style score, `xtask semantic-report`, and
+  `xtask type-recovery-report`. Current semantic coverage is 9 executable
+  source-known PASS rows, 8 XFAIL host/source-known rows, and 3 unsupported
+  non-host rows. The type axis now has a first DWARF/source textual score:
+  `fixtures=4 functions=17 recovered=74 expected=101 accuracy=73.3%`
+  with `source_known=20` and `dwarf_candidates=5`.
 
 ## Source Inventory
 
@@ -549,9 +560,10 @@ Implementation status:
 - `RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings` passes after
   mechanical lint cleanup across lifter/support crates.
 - `RUSTC_WRAPPER= cargo xtask lint-determinism` passes.
-- `RUSTC_WRAPPER= bash scripts/score_parity.sh` reports `Aggregate Parity:
-  100.0%` on the current narrow fixture metric; this is not treated as full
-  decompiler parity.
+- `RUSTC_WRAPPER= bash scripts/score_parity.sh` historically reported
+  `Aggregate Parity: 100.0%` in the 2026-05-17 rebaseline. As of the
+  2026-05-26 quality-axis cleanup the same gate reports `Stylistic Fixture
+  Parity: 91.1%`; it is not treated as semantic or type/variable parity.
 - Focused regressions pass for DCE stale output cleanup, dead-flag stale output
   cleanup, x86 call/ret lifting, direct-call argument recovery, bitfield
   printing, assignment-return merging, fortified printf rendering, and
@@ -587,6 +599,19 @@ Tasks:
   required typedefs/macros, compile with `cc`, and run input/output checks.
 - [~] Add semantic snapshots for `hello_world`, arithmetic, branches, loops,
   stack locals, calls, structs, switch tables, C++ vtables, and EH fixtures.
+- [x] Split the old single "parity" claim into explicit quality axes:
+  stylistic fixture similarity, semantic correctness, and type/variable
+  recovery accuracy.
+- [x] Add an honest quality-axis wrapper (`scripts/quality_axes.sh`) that runs
+  the current style score, the semantic report, and the type/variable recovery
+  report.
+- [~] Promote the compileable-subset tests into a broad semantic
+  recompile-and-compare harness with original-binary behavior capture.
+- [~] Add DWARF/source-ground-truth type and variable recovery metrics:
+  recovered/expected accuracy has landed for C debug fixtures; precision,
+  broader normalization, and C++/non-host coverage remain open.
+- [x] Add Dramko-style decompiler fidelity taxonomy counters to the fixture
+  metrics summary.
 - [~] Add negative-output tests for null-address writes, undeclared returns,
   impossible lvalues, lost stack-frame offsets, and unknown helper spam.
 - [x] Triage the CLI phase-monotonicity warning. Either reorder passes, encode
@@ -617,6 +642,22 @@ Implementation status:
   `hello_world.elf:main` stays `int main(void) { puts("Hello"); return 0; }`,
   and `branches.elf:main` stays `int main(void) { return 6; }` instead of
   becoming a void/stdcall function.
+- The 2026-05 quality-axis split is wired: `scripts/score_parity.sh` reports
+  `Stylistic Fixture Parity` instead of aggregate parity, and
+  `scripts/quality_axes.sh` runs all three reports without implying the style
+  score proves semantic or type parity.
+- `xtask semantic-report` is now the named semantic gate. It captures original
+  fixture behavior, recompiles the decompiled C subset, compares behavior, and
+  reports PASS/XFAIL/unsupported source-known fixtures with reasons. Current
+  state: 9 passed, 8 XFAIL, 0 unexpected failed, 3 unsupported.
+- The golden fixture metrics summary now reports fidelity taxonomy counters.
+  Current total: `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0
+  total=1059`.
+- `xtask type-recovery-report` now scores recovered C facts against
+  DWARF/source facts for C debug fixtures:
+  `fixtures=4 functions=17 recovered=74 expected=101 accuracy=73.3%`
+  with `source_known=20 dwarf_candidates=5`. Precision and C++/non-host
+  scoring remain open.
 
 Acceptance:
 
@@ -1687,6 +1728,10 @@ The previous session log claimed:
 - `cargo test --workspace`: 4528 passing, 0 failed.
 - `bash scripts/score_parity.sh`: 100.0% aggregate parity.
 - "North Star Achieved."
+
+Current note: `scripts/score_parity.sh` now reports `Stylistic Fixture
+Parity`, not aggregate parity. The old 100.0% claim was a narrow fixture-style
+metric, not full decompiler quality.
 
 Those claims are preserved only as historical context. They are invalidated for
 planning purposes until Batch 14 reproduces them in the current checkout.

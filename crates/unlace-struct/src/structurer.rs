@@ -16,7 +16,7 @@ use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::eager_returns::eager_returns;
-use crate::hir::{HirFunction, HirNode, LabelId, SwitchCase};
+use crate::hir::{HirCallArg, HirFunction, HirNode, LabelId, SwitchCase};
 use crate::switch_recovery::{IndirectBranchKind, classify_indirect_branch};
 
 /// Errors that can occur during control-flow structuring.
@@ -589,7 +589,10 @@ impl<'a> StructureCtx<'a> {
                         .tail_call_map
                         .get(&bid)
                         .copied()
-                        .map(|target| HirNode::TailCall { target })
+                        .map(|target| HirNode::TailCall {
+                            target,
+                            args: self.tail_call_args(bid, i, insn),
+                        })
                 }
                 IrOp::Cbranch => {
                     flush_guard(&mut pending_guard, nodes);
@@ -646,12 +649,54 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        let edges = self.func.cfg.edges_from(bid);
-        let targets: Vec<BlockId> = edges
-            .iter()
-            .filter(|(tgt, kind)| *kind == EdgeKind::IndirectJump && !self.synthetic.contains(tgt))
-            .map(|(tgt, _)| *tgt)
-            .collect();
+        let table_targets: Vec<(BlockId, u64)> = self
+            .func
+            .resolved_jump_tables
+            .get(&last.addr)
+            .or_else(|| {
+                self.func.resolved_jump_tables.values().find(|table| {
+                    table
+                        .targets
+                        .iter()
+                        .filter_map(|&addr| self.block_starting_at_addr(addr))
+                        .filter(|tgt| !self.synthetic.contains(tgt))
+                        .take(2)
+                        .count()
+                        >= 2
+                })
+            })
+            .map(|table| {
+                table
+                    .targets
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, &addr)| {
+                        self.block_starting_at_addr(addr)
+                            .map(|bid| (bid, idx as u64))
+                    })
+                    .filter(|(tgt, _)| !self.synthetic.contains(tgt))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut targets: Vec<BlockId> = table_targets.iter().map(|(bid, _)| *bid).collect();
+        if targets.is_empty() {
+            targets = block
+                .successors
+                .iter()
+                .copied()
+                .filter(|tgt| !self.synthetic.contains(tgt))
+                .collect();
+        }
+        if targets.is_empty() {
+            let edges = self.func.cfg.edges_from(bid);
+            targets = edges
+                .iter()
+                .filter(|(tgt, kind)| {
+                    *kind == EdgeKind::IndirectJump && !self.synthetic.contains(tgt)
+                })
+                .map(|(tgt, _)| *tgt)
+                .collect();
+        }
 
         if targets.len() < 2 {
             return None;
@@ -679,11 +724,8 @@ impl<'a> StructureCtx<'a> {
             .map(|t| targets.contains(&t))
             .unwrap_or(false);
 
-        let num_cases = if targets.len() > 2 && !has_explicit_default {
-            targets.len() - 1
-        } else {
-            targets.len()
-        };
+        let num_cases = targets.len();
+        let case_values: BTreeMap<_, _> = table_targets.iter().copied().collect();
         let mut cases = Vec::new();
         let mut default_body = None;
         for (i, &tgt) in targets.iter().enumerate() {
@@ -691,18 +733,14 @@ impl<'a> StructureCtx<'a> {
                 default_body = Some(self.structure_until(tgt, join));
                 continue;
             }
-            if !has_explicit_default && i == targets.len() - 1 && targets.len() > 2 {
-                let body = self.structure_until(tgt, join);
-                default_body = Some(body);
+            let is_fall_through = i + 1 < num_cases && targets[i] == targets[i + 1];
+            let body = if is_fall_through {
+                vec![]
             } else {
-                let is_fall_through = i + 1 < num_cases && targets[i] == targets[i + 1];
-                let body = if is_fall_through {
-                    vec![]
-                } else {
-                    self.structure_until(tgt, join)
-                };
-                cases.push((SwitchCase::Value(i as u64), body, is_fall_through));
-            }
+                self.structure_until(tgt, join)
+            };
+            let value = case_values.get(&tgt).copied().unwrap_or(i as u64);
+            cases.push((SwitchCase::Value(value), body, is_fall_through));
         }
 
         let jumptable_cases = bounds.map(|b| b.case_count as usize);
@@ -723,6 +761,16 @@ impl<'a> StructureCtx<'a> {
         };
 
         Some((combined, join))
+    }
+
+    fn block_starting_at_addr(&self, addr: u64) -> Option<BlockId> {
+        self.func.function.blocks.iter().find_map(|(&bid, block)| {
+            block
+                .insns
+                .first()
+                .is_some_and(|insn| insn.addr == addr)
+                .then_some(bid)
+        })
     }
 
     /// Bound information extracted from a CMP/SUB-then-CBRANCH guarding a
@@ -935,9 +983,43 @@ impl<'a> StructureCtx<'a> {
             {
                 return self.trace_scaled_index(bid, &addr_sv);
             }
+            if insn.op == IrOp::IntAdd {
+                for slot in [VarnodeSlot::Input(0), VarnodeSlot::Input(1)] {
+                    let Some(input_sv) = self.resolve_ssa_varnode(bid, i, slot) else {
+                        continue;
+                    };
+                    if let Some(index_sv) = self.trace_table_index_from_load_output(bid, &input_sv)
+                    {
+                        return Some(index_sv);
+                    }
+                }
+            }
             break;
         }
 
+        None
+    }
+
+    fn trace_table_index_from_load_output(
+        &self,
+        bid: BlockId,
+        load_value: &SsaVarnode,
+    ) -> Option<SsaVarnode> {
+        let block = self.func.function.blocks.get(&bid)?;
+        for (i, insn) in block.insns.iter().enumerate().rev() {
+            let Some(output_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output) else {
+                continue;
+            };
+            if output_sv.base != load_value.base || output_sv.version != load_value.version {
+                continue;
+            }
+            if insn.op == IrOp::Load
+                && let Some(addr_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
+            {
+                return self.trace_scaled_index(bid, &addr_sv);
+            }
+            break;
+        }
         None
     }
 
@@ -967,6 +1049,14 @@ impl<'a> StructureCtx<'a> {
                 {
                     return self.extract_index_from_scale(bid, &rhs_sv);
                 }
+                for slot in [VarnodeSlot::Input(0), VarnodeSlot::Input(1)] {
+                    let Some(input_sv) = self.resolve_ssa_varnode(bid, i, slot) else {
+                        continue;
+                    };
+                    if let Some(index_sv) = self.try_extract_scaled_index(bid, &input_sv) {
+                        return Some(index_sv);
+                    }
+                }
             }
 
             break;
@@ -976,6 +1066,14 @@ impl<'a> StructureCtx<'a> {
     }
 
     fn extract_index_from_scale(&self, bid: BlockId, scaled: &SsaVarnode) -> Option<SsaVarnode> {
+        if let Some(index) = self.try_extract_scaled_index(bid, scaled) {
+            return Some(index);
+        }
+        // The scaled value itself might be the index (scale == 1).
+        Some(self.normalize_switch_index(bid, self.walk_bitwise_chain(bid, scaled, 4)))
+    }
+
+    fn try_extract_scaled_index(&self, bid: BlockId, scaled: &SsaVarnode) -> Option<SsaVarnode> {
         let block = self.func.function.blocks.get(&bid)?;
 
         for (i, insn) in block.insns.iter().enumerate().rev() {
@@ -997,14 +1095,16 @@ impl<'a> StructureCtx<'a> {
                         && let Some(lhs_sv) =
                             self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
                     {
-                        return Some(self.walk_bitwise_chain(bid, &lhs_sv, 4));
+                        let index = self.walk_bitwise_chain(bid, &lhs_sv, 4);
+                        return Some(self.normalize_switch_index(bid, index));
                     }
                     if lhs_raw.space == SpaceId::Const
                         && is_scale_value(lhs_raw.offset)
                         && let Some(rhs_sv) =
                             self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
                     {
-                        return Some(self.walk_bitwise_chain(bid, &rhs_sv, 4));
+                        let index = self.walk_bitwise_chain(bid, &rhs_sv, 4);
+                        return Some(self.normalize_switch_index(bid, index));
                     }
                 }
                 IrOp::IntLeft if insn.inputs.len() >= 2 => {
@@ -1013,7 +1113,8 @@ impl<'a> StructureCtx<'a> {
                         && let Some(index_sv) =
                             self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
                     {
-                        return Some(self.walk_bitwise_chain(bid, &index_sv, 4));
+                        let index = self.walk_bitwise_chain(bid, &index_sv, 4);
+                        return Some(self.normalize_switch_index(bid, index));
                     }
                 }
                 _ => {}
@@ -1021,8 +1122,29 @@ impl<'a> StructureCtx<'a> {
             break;
         }
 
-        // The scaled value itself might be the index (scale == 1).
-        Some(self.walk_bitwise_chain(bid, scaled, 4))
+        None
+    }
+
+    fn normalize_switch_index(&self, bid: BlockId, index: SsaVarnode) -> SsaVarnode {
+        if index.base.space != SpaceId::Register || index.base.size <= 4 {
+            return index;
+        }
+        let Some(block) = self.func.function.blocks.get(&bid) else {
+            return index;
+        };
+        for (i, insn) in block.insns.iter().enumerate() {
+            let Some(output) = insn.output else {
+                continue;
+            };
+            if output.space == SpaceId::Register
+                && output.offset == index.base.offset
+                && output.size == 4
+                && let Some(sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output)
+            {
+                return sv;
+            }
+        }
+        index
     }
 
     /// Walk through a chain of `IntAnd(x, mask_const)`, `IntRight(x, shift_const)`,
@@ -1394,7 +1516,10 @@ impl<'a> StructureCtx<'a> {
             match insn.op {
                 IrOp::Branch => {
                     if let Some(&target) = self.func.tail_call_map.get(&bid) {
-                        nodes.push(HirNode::TailCall { target });
+                        nodes.push(HirNode::TailCall {
+                            target,
+                            args: self.tail_call_args(bid, i, insn),
+                        });
                     }
                 }
                 IrOp::Cbranch | IrOp::Branchind => continue,
@@ -1410,6 +1535,22 @@ impl<'a> StructureCtx<'a> {
     fn structure_loop_body(&mut self, start: BlockId, header: BlockId) -> Vec<HirNode> {
         let loop_blocks = self.collect_loop_blocks(header);
         self.structure_loop_body_inner(start, header, &loop_blocks)
+    }
+
+    fn tail_call_args(&self, bid: BlockId, insn_idx: usize, insn: &IrInsn) -> Vec<HirCallArg> {
+        insn.inputs
+            .iter()
+            .enumerate()
+            .skip(1)
+            .map(|(input_idx, operand)| HirCallArg {
+                operand: *operand,
+                ssa: self
+                    .func
+                    .var_map
+                    .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                    .copied(),
+            })
+            .collect()
     }
 
     fn collect_loop_blocks(&self, header: BlockId) -> BTreeSet<BlockId> {

@@ -53,6 +53,21 @@ pub fn recover_direct_call_args(
     func: &mut SsaFunction,
     callee_name_at_addr: &dyn Fn(u64) -> Option<&'static str>,
 ) -> usize {
+    recover_direct_call_args_with_param_counts(func, callee_name_at_addr, &|_| None)
+}
+
+/// Append visible ABI arguments to direct calls and tail-call branches with
+/// known libc signatures or caller-provided direct-call parameter counts.
+///
+/// The extra parameter-count resolver lets frontends feed source/debug or
+/// whole-program signature knowledge into the same ABI register scan used for
+/// libc calls. It is intentionally count-only; type refinement stays in the
+/// later signature/type passes.
+pub fn recover_direct_call_args_with_param_counts(
+    func: &mut SsaFunction,
+    callee_name_at_addr: &dyn Fn(u64) -> Option<&'static str>,
+    callee_param_count_at_addr: &dyn Fn(u64) -> Option<usize>,
+) -> usize {
     let def_map = build_def_map(func);
     let cc = calling_convention_for(func);
     let arg_regs = arg_regs_for(cc);
@@ -67,13 +82,22 @@ pub fn recover_direct_call_args(
         let mut reg_state = entry_states.get(&bid).cloned().unwrap_or_default();
         apply_phi_arg_defs(func, bid, arg_regs, &mut reg_state);
         for (insn_idx, insn) in block.insns.iter().enumerate() {
-            if insn.op == IrOp::Call
+            if matches!(insn.op, IrOp::Call | IrOp::Branch)
                 && let Some(target) = insn.inputs.first()
                 && target.space == SpaceId::Const
-                && let Some(raw_name) = callee_name_at_addr(target.offset)
-                && let Some(sig) = lookup_libc_normalized(raw_name)
             {
-                let wanted = wanted_arg_count(sig, arg_regs, &reg_state);
+                let wanted = callee_name_at_addr(target.offset)
+                    .and_then(lookup_libc_normalized)
+                    .map(|sig| wanted_arg_count(sig, arg_regs, &reg_state))
+                    .or_else(|| {
+                        callee_param_count_at_addr(target.offset).map(|n| n.min(arg_regs.len()))
+                    })
+                    .or_else(|| {
+                        callee_name_at_addr(target.offset)
+                            .and_then(param_count_from_itanium_symbol)
+                            .map(|n| n.min(arg_regs.len()))
+                    })
+                    .unwrap_or(0);
                 let existing = insn.inputs.len().saturating_sub(1);
                 if wanted > existing {
                     let mut args = Vec::new();
@@ -94,7 +118,7 @@ pub fn recover_direct_call_args(
             }
 
             record_arg_reg_inputs(func, bid, insn_idx, insn, arg_regs, &mut reg_state);
-            if matches!(insn.op, IrOp::Call | IrOp::Callind) {
+            if matches!(insn.op, IrOp::Call | IrOp::Callind | IrOp::Branch) {
                 clear_caller_saved_arg_regs(&mut reg_state, arg_regs);
             }
             if let Some(out) = insn.output
@@ -379,6 +403,20 @@ fn lookup_libc_normalized(name: &str) -> Option<&'static LibcSignature> {
                 .or_else(|| name.strip_prefix("__isoc23_").and_then(lookup_libc))
         })
         .or_else(|| name.strip_prefix('_').and_then(lookup_libc))
+}
+
+fn param_count_from_itanium_symbol(raw_name: &str) -> Option<usize> {
+    let demangled = crate::itanium_demangle::demangle_itanium(raw_name)?;
+    let open = demangled.find('(')?;
+    let close = demangled.rfind(')')?;
+    if close < open {
+        return None;
+    }
+    let params = demangled[open + 1..close].trim();
+    if params.is_empty() || params == "void" {
+        return Some(0);
+    }
+    Some(params.split(',').count())
 }
 
 fn canonical_register_offset(offset: u64) -> u64 {
@@ -916,6 +954,72 @@ mod tests {
                 .contains_key(&(BlockId(0), 2, VarnodeSlot::Input(1))),
             "constant recovered args should not keep the register copy live",
         );
+    }
+
+    #[test]
+    fn recovers_tail_branch_arg_from_param_count() {
+        let mut func = Function::new("main", BlockId(0), 0x1250);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let rdi = Varnode::reg(RDI, 4);
+
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rdi,
+            smallvec![Varnode::constant(0xffff_ffff, 4)],
+            0x1254,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Branch,
+            smallvec![Varnode::constant(0x1360, 8)],
+            0x1259,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+
+        let changed = recover_direct_call_args_with_param_counts(&mut ssa, &|_| None, &|addr| {
+            (addr == 0x1360).then_some(1)
+        });
+
+        assert_eq!(changed, 1);
+        let branch = &ssa.function.blocks[&BlockId(0)].insns[1];
+        assert_eq!(branch.inputs.len(), 2);
+        assert_eq!(branch.inputs[1], Varnode::constant(0xffff_ffff, 4));
+    }
+
+    #[test]
+    fn recovers_tail_branch_arg_from_itanium_symbol_signature() {
+        let mut func = Function::new("main", BlockId(0), 0x1250);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let rdi = Varnode::reg(RDI, 4);
+
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rdi,
+            smallvec![Varnode::constant(0xffff_ffff, 4)],
+            0x1254,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Branch,
+            smallvec![Varnode::constant(0x1360, 8)],
+            0x1259,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+
+        let changed = recover_direct_call_args_with_param_counts(
+            &mut ssa,
+            &|addr| (addr == 0x1360).then_some("_Z9safe_calli"),
+            &|_| None,
+        );
+
+        assert_eq!(changed, 1);
+        let branch = &ssa.function.blocks[&BlockId(0)].insns[1];
+        assert_eq!(branch.inputs.len(), 2);
+        assert_eq!(branch.inputs[1], Varnode::constant(0xffff_ffff, 4));
     }
 
     #[test]

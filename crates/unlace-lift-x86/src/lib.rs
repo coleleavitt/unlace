@@ -259,7 +259,27 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0xe8, 0x10, 0x00, 0x00, 0x00], 0x1000)
             .expect("should decode");
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Call));
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Call)
+            .expect("CALL should lift");
+        assert!(
+            call.output.is_some(),
+            "CALL should define the return register"
+        );
+        assert_eq!(
+            call.output.expect("CALL output").size,
+            8,
+            "x86-64 CALL must define the full RAX register; pointer returns otherwise read stale high bits"
+        );
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::Subpiece
+                    && i.output == Some(unlace_ir::Varnode::new(SpaceId::Register, 0, 4))
+            }),
+            "CALL should also materialize EAX for 32-bit integer return consumers"
+        );
         assert!(
             !result.ir_ops.iter().any(|i| i.op == IrOp::Store),
             "CALL should not leak the machine return-address push into decompiler IR"

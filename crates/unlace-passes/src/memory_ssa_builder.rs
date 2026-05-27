@@ -114,7 +114,8 @@ pub fn build_memory_ssa(func: &SsaFunction) -> (MemorySSAGraph, MemorySsaMap) {
 
 /// Try to extract a MemoryLocation for a Store instruction.
 ///
-/// Store layout in this IR: inputs[0] = address, inputs[1] = value.
+/// Store layout is either canonical `[space, address, value]` or legacy
+/// `[address, value]` in older unit fixtures.
 fn extract_store_location(
     _func: &SsaFunction,
     _bid: BlockId,
@@ -124,13 +125,13 @@ fn extract_store_location(
     if insn.inputs.is_empty() {
         return MemoryLocation::unknown();
     }
-    // Store size = size of the value being stored (inputs[1]).
-    let size = if insn.inputs.len() >= 2 {
-        insn.inputs[1].size as u32
+    let (addr_idx, value_idx) = if insn.inputs.len() >= 3 {
+        (1, 2)
     } else {
-        0
+        (0, 1)
     };
-    extract_location_from_address(&insn.inputs[0], size)
+    let size = insn.inputs.get(value_idx).map_or(0, |v| v.size as u32);
+    extract_location_from_address(&insn.inputs[addr_idx], size)
 }
 
 /// Try to extract a MemoryLocation for a Load instruction.
@@ -143,7 +144,8 @@ fn extract_load_location(
     if insn.inputs.is_empty() {
         return MemoryLocation::unknown();
     }
-    extract_location_from_address(&insn.inputs[0], insn_size(insn))
+    let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
+    extract_location_from_address(&insn.inputs[addr_idx], insn_size(insn))
 }
 
 fn extract_location_from_address(addr: &Varnode, size: u32) -> MemoryLocation {
@@ -326,5 +328,46 @@ mod tests {
         }];
         let clobber = clobber_for_load(&ssa, BlockId(0), 2, &graph, &map);
         assert_eq!(clobber, Some(store_a));
+    }
+
+    #[test]
+    fn test_memory_ssa_builder_canonical_store_load_operands() {
+        let r = Varnode::reg(0, 8);
+        let ram = Varnode::constant(SpaceId::Ram as u64, 8);
+        let slot = Varnode::new(SpaceId::Stack, (-8i64) as u64, 8);
+
+        let mut func = Function::new("test", BlockId(0), 0x1000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![ram, slot, Varnode::constant(42, 8)],
+            0x1000,
+        ));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            r,
+            smallvec![ram, slot],
+            0x1004,
+        ));
+        func.insert_block(b0);
+        let ssa = build_ssa(func);
+
+        let (graph, map) = build_memory_ssa(&ssa);
+        let store_id = map.by_site[&AccessSite {
+            block: BlockId(0),
+            insn_idx: 0,
+        }];
+        let load_clobber = clobber_for_load(&ssa, BlockId(0), 1, &graph, &map);
+        assert_eq!(load_clobber, Some(store_id));
+
+        let store_access = graph.accesses.get(&store_id).expect("store access");
+        match store_access {
+            unlace_ir::memory_ssa::MemoryAccess::Def { location, .. } => {
+                assert_eq!(location.space, SpaceId::Stack);
+                assert_eq!(location.offset, Some(-8));
+                assert_eq!(location.size, 8);
+            }
+            other => panic!("expected def, got {other:?}"),
+        }
     }
 }

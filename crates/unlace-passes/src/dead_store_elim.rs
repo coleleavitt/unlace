@@ -201,11 +201,11 @@ fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
         // SSA-varnode-keyed map: STOREs whose address is exactly the same
         // SSA varnode (catches the case where the address was already
         // hoisted into a single shared definition).
-        let mut last_store_sv: BTreeMap<SsaVarnode, usize> = BTreeMap::new();
+        let mut last_store_sv: BTreeMap<SsaVarnode, (usize, u8)> = BTreeMap::new();
         // Stack-offset-keyed map: STOREs whose address resolves to the same
         // RSP/RBP-relative offset.  Catches the case where two distinct
         // varnodes encode the same stack location.
-        let mut last_store_stack: BTreeMap<i64, usize> = BTreeMap::new();
+        let mut last_store_stack: BTreeMap<(i64, u8), usize> = BTreeMap::new();
 
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             // Preserved (MMIO/Volatile) accesses act as a full barrier:
@@ -226,39 +226,60 @@ fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
                 IrOp::Store => {
                     let (addr_slot, raw_addr) = store_address_slot(insn);
                     let addr_sv = func.var_map.get(&(bid, insn_idx, addr_slot)).copied();
+                    let store_size = store_value_size(insn);
 
-                    let stack_off = raw_addr.and_then(|a| stack_offsets.stack_offset_of(&a));
+                    let stack_off = match (addr_sv, raw_addr) {
+                        (Some(addr), _) => stack_offsets.stack_offset_of_sv(addr),
+                        (None, Some(a)) => stack_offsets.stack_offset_of_raw(&a),
+                        (None, None) => None,
+                    };
 
                     let mut prev: Option<usize> = None;
                     if let Some(addr) = addr_sv {
-                        prev = last_store_sv.get(&addr).copied();
+                        prev = last_store_sv
+                            .get(&addr)
+                            .and_then(|&(idx, size)| (size == store_size).then_some(idx));
                     }
                     if prev.is_none()
                         && let Some(off) = stack_off
                     {
-                        prev = last_store_stack.get(&off).copied();
+                        prev = last_store_stack.get(&(off, store_size)).copied();
                     }
                     if let Some(idx) = prev {
                         dead.push((bid, idx));
                     }
 
                     if let Some(addr) = addr_sv {
-                        last_store_sv.insert(addr, insn_idx);
+                        last_store_sv.insert(addr, (insn_idx, store_size));
                     }
                     if let Some(off) = stack_off {
-                        last_store_stack.insert(off, insn_idx);
+                        last_store_stack.insert((off, store_size), insn_idx);
                     }
                 }
                 IrOp::Load => {
                     let (addr_slot, raw_addr) = load_address_slot(insn);
                     let addr_sv = func.var_map.get(&(bid, insn_idx, addr_slot)).copied();
-                    let stack_off = raw_addr.and_then(|a| stack_offsets.stack_offset_of(&a));
+                    let load_size = load_value_size(insn);
+                    let stack_off = match (addr_sv, raw_addr) {
+                        (Some(addr), _) => stack_offsets.stack_offset_of_sv(addr),
+                        (None, Some(a)) => stack_offsets.stack_offset_of_raw(&a),
+                        (None, None) => None,
+                    };
 
                     if let Some(addr) = addr_sv {
                         last_store_sv.remove(&addr);
                     }
                     if let Some(off) = stack_off {
-                        last_store_stack.remove(&off);
+                        let overlapping: Vec<_> = last_store_stack
+                            .keys()
+                            .copied()
+                            .filter(|(store_off, store_size)| {
+                                ranges_overlap(*store_off, *store_size, off, load_size)
+                            })
+                            .collect();
+                        for key in overlapping {
+                            last_store_stack.remove(&key);
+                        }
                     }
                 }
                 IrOp::Call
@@ -309,6 +330,24 @@ fn load_address_slot(insn: &unlace_ir::IrInsn) -> (VarnodeSlot, Option<Varnode>)
     }
 }
 
+fn store_value_size(insn: &unlace_ir::IrInsn) -> u8 {
+    if insn.inputs.len() >= 3 {
+        insn.inputs[2].size.max(1)
+    } else {
+        insn.inputs.get(1).map_or(1, |v| v.size.max(1))
+    }
+}
+
+fn load_value_size(insn: &unlace_ir::IrInsn) -> u8 {
+    insn.output.map_or(8, |out| out.size.max(1))
+}
+
+fn ranges_overlap(a_start: i64, a_size: u8, b_start: i64, b_size: u8) -> bool {
+    let a_end = a_start.saturating_add(i64::from(a_size.max(1)));
+    let b_end = b_start.saturating_add(i64::from(b_size.max(1)));
+    a_start < b_end && b_start < a_end
+}
+
 /// Memoized resolver for RSP/RBP-relative stack offsets.
 ///
 /// The old implementation scanned `func.var_map` on every recursive query.
@@ -317,24 +356,32 @@ fn load_address_slot(insn: &unlace_ir::IrInsn) -> (VarnodeSlot, Option<Varnode>)
 /// to one DSE pass invocation.
 struct StackOffsetResolver<'a> {
     func: &'a SsaFunction,
+    def_by_sv: BTreeMap<SsaVarnode, (unlace_ir::BlockId, usize)>,
     def_by_base: BTreeMap<Varnode, (unlace_ir::BlockId, usize)>,
-    memo: BTreeMap<Varnode, Option<i64>>,
-    visiting: BTreeSet<Varnode>,
+    memo_sv: BTreeMap<SsaVarnode, Option<i64>>,
+    memo_raw: BTreeMap<Varnode, Option<i64>>,
+    visiting_sv: BTreeSet<SsaVarnode>,
+    visiting_raw: BTreeSet<Varnode>,
 }
 
 impl<'a> StackOffsetResolver<'a> {
     fn new(func: &'a SsaFunction) -> Self {
+        let mut def_by_sv = BTreeMap::new();
         let mut def_by_base = BTreeMap::new();
         for ((bid, insn_idx, slot), sv) in &func.var_map {
             if matches!(slot, VarnodeSlot::Output) {
+                def_by_sv.insert(*sv, (*bid, *insn_idx));
                 def_by_base.entry(sv.base).or_insert((*bid, *insn_idx));
             }
         }
         Self {
             func,
+            def_by_sv,
             def_by_base,
-            memo: BTreeMap::new(),
-            visiting: BTreeSet::new(),
+            memo_sv: BTreeMap::new(),
+            memo_raw: BTreeMap::new(),
+            visiting_sv: BTreeSet::new(),
+            visiting_raw: BTreeSet::new(),
         }
     }
 
@@ -346,11 +393,107 @@ impl<'a> StackOffsetResolver<'a> {
     ///   * `addr` produced by `INT_ADD(stack_reg, const)` → +const
     ///   * `addr` produced by `INT_SUB(stack_reg, const)` → -const
     ///   * `addr` produced by `COPY(stack_reg-relative)` → recursive
-    fn stack_offset_of(&mut self, addr: &Varnode) -> Option<i64> {
-        self.stack_offset_recursive(addr, 8)
+    fn stack_offset_of_sv(&mut self, addr: SsaVarnode) -> Option<i64> {
+        self.stack_offset_recursive_sv(addr, 8)
     }
 
-    fn stack_offset_recursive(&mut self, addr: &Varnode, depth: u32) -> Option<i64> {
+    fn stack_offset_of_raw(&mut self, addr: &Varnode) -> Option<i64> {
+        self.stack_offset_recursive_raw(addr, 8)
+    }
+
+    fn stack_offset_recursive_sv(&mut self, addr: SsaVarnode, depth: u32) -> Option<i64> {
+        if depth == 0 {
+            return None;
+        }
+
+        if is_rsp_or_rbp(&addr.base) {
+            return Some(0);
+        }
+        if addr.base.space != SpaceId::Unique && addr.base.space != SpaceId::Register {
+            return None;
+        }
+        if let Some(cached) = self.memo_sv.get(&addr) {
+            return *cached;
+        }
+        if !self.visiting_sv.insert(addr) {
+            self.memo_sv.insert(addr, None);
+            return None;
+        }
+
+        let result = self.stack_offset_from_sv_def(addr, depth);
+        self.visiting_sv.remove(&addr);
+        self.memo_sv.insert(addr, result);
+        result
+    }
+
+    fn stack_offset_from_sv_def(&mut self, addr: SsaVarnode, depth: u32) -> Option<i64> {
+        let (bid, insn_idx) = self.def_by_sv.get(&addr).copied()?;
+        let (op, inputs) = {
+            let block = self.func.function.blocks.get(&bid)?;
+            let def_insn = block.insns.get(insn_idx)?;
+            (def_insn.op, def_insn.inputs.clone())
+        };
+
+        match op {
+            IrOp::IntAdd if inputs.len() >= 2 => {
+                let (a, b) = (&inputs[0], &inputs[1]);
+                if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
+                    return Some(b.offset as i64);
+                }
+                if is_rsp_or_rbp(b) && a.space == SpaceId::Const {
+                    return Some(a.offset as i64);
+                }
+                if b.space == SpaceId::Const
+                    && let Some(off) = self.stack_offset_input(bid, insn_idx, 0, a, depth - 1)
+                {
+                    return Some(off.wrapping_add(b.offset as i64));
+                }
+                if a.space == SpaceId::Const
+                    && let Some(off) = self.stack_offset_input(bid, insn_idx, 1, b, depth - 1)
+                {
+                    return Some(off.wrapping_add(a.offset as i64));
+                }
+            }
+            IrOp::IntSub if inputs.len() >= 2 => {
+                let (a, b) = (&inputs[0], &inputs[1]);
+                if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
+                    return Some(-(b.offset as i64));
+                }
+                if b.space == SpaceId::Const
+                    && let Some(off) = self.stack_offset_input(bid, insn_idx, 0, a, depth - 1)
+                {
+                    return Some(off.wrapping_sub(b.offset as i64));
+                }
+            }
+            IrOp::Copy if !inputs.is_empty() => {
+                return self.stack_offset_input(bid, insn_idx, 0, &inputs[0], depth - 1);
+            }
+            _ => {}
+        }
+
+        None
+    }
+
+    fn stack_offset_input(
+        &mut self,
+        bid: unlace_ir::BlockId,
+        insn_idx: usize,
+        input_idx: usize,
+        raw: &Varnode,
+        depth: u32,
+    ) -> Option<i64> {
+        if is_rsp_or_rbp(raw) {
+            return Some(0);
+        }
+        self.func
+            .var_map
+            .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+            .copied()
+            .and_then(|sv| self.stack_offset_recursive_sv(sv, depth))
+            .or_else(|| self.stack_offset_recursive_raw(raw, depth))
+    }
+
+    fn stack_offset_recursive_raw(&mut self, addr: &Varnode, depth: u32) -> Option<i64> {
         if depth == 0 {
             return None;
         }
@@ -361,21 +504,21 @@ impl<'a> StackOffsetResolver<'a> {
         if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
             return None;
         }
-        if let Some(cached) = self.memo.get(addr) {
+        if let Some(cached) = self.memo_raw.get(addr) {
             return *cached;
         }
-        if !self.visiting.insert(*addr) {
-            self.memo.insert(*addr, None);
+        if !self.visiting_raw.insert(*addr) {
+            self.memo_raw.insert(*addr, None);
             return None;
         }
 
-        let result = self.stack_offset_from_def(addr, depth);
-        self.visiting.remove(addr);
-        self.memo.insert(*addr, result);
+        let result = self.stack_offset_from_raw_def(addr, depth);
+        self.visiting_raw.remove(addr);
+        self.memo_raw.insert(*addr, result);
         result
     }
 
-    fn stack_offset_from_def(&mut self, addr: &Varnode, depth: u32) -> Option<i64> {
+    fn stack_offset_from_raw_def(&mut self, addr: &Varnode, depth: u32) -> Option<i64> {
         let (bid, insn_idx) = self.def_by_base.get(addr).copied()?;
         let (op, inputs) = {
             let block = self.func.function.blocks.get(&bid)?;
@@ -393,12 +536,12 @@ impl<'a> StackOffsetResolver<'a> {
                     return Some(a.offset as i64);
                 }
                 if b.space == SpaceId::Const
-                    && let Some(off) = self.stack_offset_recursive(a, depth - 1)
+                    && let Some(off) = self.stack_offset_recursive_raw(a, depth - 1)
                 {
                     return Some(off.wrapping_add(b.offset as i64));
                 }
                 if a.space == SpaceId::Const
-                    && let Some(off) = self.stack_offset_recursive(b, depth - 1)
+                    && let Some(off) = self.stack_offset_recursive_raw(b, depth - 1)
                 {
                     return Some(off.wrapping_add(a.offset as i64));
                 }
@@ -409,7 +552,7 @@ impl<'a> StackOffsetResolver<'a> {
                     return Some(-(b.offset as i64));
                 }
                 if b.space == SpaceId::Const
-                    && let Some(off) = self.stack_offset_recursive(a, depth - 1)
+                    && let Some(off) = self.stack_offset_recursive_raw(a, depth - 1)
                 {
                     return Some(off.wrapping_sub(b.offset as i64));
                 }
@@ -419,7 +562,7 @@ impl<'a> StackOffsetResolver<'a> {
                 if is_rsp_or_rbp(src) {
                     return Some(0);
                 }
-                return self.stack_offset_recursive(src, depth - 1);
+                return self.stack_offset_recursive_raw(src, depth - 1);
             }
             _ => {}
         }
@@ -1092,6 +1235,147 @@ mod tests {
             ssa.function.blocks[&BlockId(0)].insns.len(),
             5,
             "all instructions must remain"
+        );
+    }
+
+    /// The x86 lifter reuses the same raw Unique base inside different
+    /// instructions. DSE must use the exact SSA version for stack offsets or
+    /// distinct stores like `[rbp-0x10] = 6; [rbp-0x18] = qword;` collapse.
+    #[test]
+    fn test_dse_stack_reused_unique_base_distinct_offsets_kept() {
+        let base = Varnode::unique(0, 8);
+        let addr1 = SsaVarnode { base, version: 1 };
+        let addr2 = SsaVarnode { base, version: 2 };
+        let c_neg16 = Varnode::constant((-16i64) as u64, 8);
+        let c_neg24 = Varnode::constant((-24i64) as u64, 8);
+        let val1 = Varnode::constant(6, 4);
+        let val2 = Varnode::constant(0x1122_3344_5566_7788, 8);
+        let space_ram = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rbp_v = Varnode::reg(super::RBP_OFFSET, 8);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr1.base,
+            smallvec![rbp_v, c_neg16],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr1.base, val1],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr2.base,
+            smallvec![rbp_v, c_neg24],
+            0x1008,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr2.base, val2],
+            0x100C,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), addr1);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), addr1);
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Output), addr2);
+        var_map.insert((BlockId(0), 3, VarnodeSlot::Input(1)), addr2);
+
+        let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());
+
+        let pass = DeadStoreElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+        assert!(
+            !changed,
+            "same raw Unique base with different SSA versions must not alias"
+        );
+        let stores = ssa.function.blocks[&BlockId(0)]
+            .insns
+            .iter()
+            .filter(|insn| insn.op == IrOp::Store)
+            .count();
+        assert_eq!(stores, 2, "both distinct stack stores must remain");
+    }
+
+    #[test]
+    fn test_dse_type_stack_o2_adjacent_stack_initializers_kept() {
+        let base = Varnode::unique(0, 8);
+        let canary = SsaVarnode { base, version: 3 };
+        let pair = SsaVarnode { base, version: 5 };
+        let value2 = SsaVarnode { base, version: 6 };
+        let values01 = SsaVarnode { base, version: 7 };
+        let space_ram = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rbp_v = Varnode::reg(super::RBP_OFFSET, 8);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            canary.base,
+            smallvec![rbp_v, Varnode::constant((-8i64) as u64, 8)],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, canary.base, Varnode::reg(0, 8)],
+            0x1001,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            pair.base,
+            smallvec![rbp_v, Varnode::constant((-32i64) as u64, 8)],
+            0x1002,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            value2.base,
+            smallvec![rbp_v, Varnode::constant((-16i64) as u64, 8)],
+            0x1003,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, value2.base, Varnode::constant(6, 4)],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            values01.base,
+            smallvec![rbp_v, Varnode::constant((-24i64) as u64, 8)],
+            0x1005,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, values01.base, Varnode::constant(0x400000002, 8)],
+            0x1006,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, pair.base, Varnode::constant(0xb00000007, 8)],
+            0x1007,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), canary);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), canary);
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Output), pair);
+        var_map.insert((BlockId(0), 3, VarnodeSlot::Output), value2);
+        var_map.insert((BlockId(0), 4, VarnodeSlot::Input(1)), value2);
+        var_map.insert((BlockId(0), 5, VarnodeSlot::Output), values01);
+        var_map.insert((BlockId(0), 6, VarnodeSlot::Input(1)), values01);
+        var_map.insert((BlockId(0), 7, VarnodeSlot::Input(1)), pair);
+
+        let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());
+
+        let pass = DeadStoreElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+        assert!(
+            !changed,
+            "adjacent non-overlapping stack aggregate initializers must all remain"
         );
     }
 

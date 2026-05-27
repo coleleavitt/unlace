@@ -6,5 +6,6 @@ edition.workspace = true
 [dependencies]
 serde = { workspace = true }
 toml = "0.8"
+unlace-loader = { path = "../crates/unlace-loader" }
 unlace-passes = { path = "../crates/unlace-passes" }
 unlace-sbom = { path = "../crates/unlace-sbom" }

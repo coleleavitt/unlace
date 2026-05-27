@@ -58,10 +58,10 @@ fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, IrInsn> {
     let mut map = BTreeMap::new();
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            if let Some(output) = insn.output {
-                if output.space != SpaceId::Const {
-                    map.insert(output, insn.clone());
-                }
+            if let Some(output) = insn.output
+                && output.space != SpaceId::Const
+            {
+                map.insert(output, insn.clone());
             }
         }
     }
@@ -273,12 +273,13 @@ fn flatten_or(
 }
 
 fn flatten_or_one(v: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>, leaves: &mut Vec<Varnode>) {
-    if let Some(def) = def_of(v, def_map) {
-        if def.op == IrOp::IntOr && def.inputs.len() == 2 {
-            flatten_or_one(&def.inputs[0], def_map, leaves);
-            flatten_or_one(&def.inputs[1], def_map, leaves);
-            return;
-        }
+    if let Some(def) = def_of(v, def_map)
+        && def.op == IrOp::IntOr
+        && def.inputs.len() == 2
+    {
+        flatten_or_one(&def.inputs[0], def_map, leaves);
+        flatten_or_one(&def.inputs[1], def_map, leaves);
+        return;
     }
     leaves.push(*v);
 }

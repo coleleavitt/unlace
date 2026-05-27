@@ -13,8 +13,8 @@ pub mod sig;
 pub use match_pass::{FlirtApplyReport, FlirtMatcher};
 
 pub use builder::{
-    FlirtSignature as SigV2, FlirtSignatureFile, build_from_function_map,
-    build_from_library, crc16_ccitt, match_function,
+    FlirtSignature as SigV2, FlirtSignatureFile, build_from_function_map, build_from_library,
+    crc16_ccitt, match_function,
 };
 pub use error::FlirtError;
 pub use pattern::{FlirtDb, FlirtMatch, FlirtPattern, load_patterns_from_toml, match_functions};

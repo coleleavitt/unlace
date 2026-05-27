@@ -220,10 +220,10 @@ fn detect_resume(func: &SsaFunction) -> Option<CoroutineSite> {
         for insn in &block.insns {
             if insn.op == IrOp::Load && !insn.inputs.is_empty() {
                 let addr_vn = load_address_vn(insn);
-                if let Some(offset) = resolve_base_offset_full(func, &defs, addr_vn, frame_param) {
-                    if offset == SUSPEND_INDEX_OFFSET {
-                        has_index_load = true;
-                    }
+                if let Some(offset) = resolve_base_offset_full(func, &defs, addr_vn, frame_param)
+                    && offset == SUSPEND_INDEX_OFFSET
+                {
+                    has_index_load = true;
                 }
             }
         }

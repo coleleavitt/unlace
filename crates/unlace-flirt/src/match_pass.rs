@@ -270,8 +270,8 @@ mod tests {
     }
 
     fn build_test_image(symbol_name: &str, prologue: &[u8]) -> unlace_loader::BinaryImage {
-        use unlace_loader::{BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind};
         use unlace_ir::ArchId;
+        use unlace_loader::{BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind};
         let mut img = BinaryImage::empty(ArchId::X86_64, Endian::Little);
         img.sections.push(Section {
             name: ".text".into(),
@@ -320,7 +320,10 @@ mod tests {
 
         let m = matcher_with("my_func", prologue.clone());
         let report = m.apply_to_session(&session, false);
-        assert_eq!(report.renamed, 0, "named funcs must be skipped without force");
+        assert_eq!(
+            report.renamed, 0,
+            "named funcs must be skipped without force"
+        );
 
         let forced = m.apply_to_session(&session, true);
         assert_eq!(forced.renamed, 1, "force must override existing names");

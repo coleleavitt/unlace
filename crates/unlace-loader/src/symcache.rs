@@ -37,9 +37,7 @@ pub fn msft_symbol_server_url(pdb_name: &str, guid: &[u8; 16], age: u32) -> Stri
     // append the age. Reference: docs.microsoft.com/symbol-server.
     let guid_hex = msft_guid_hex(guid);
     let age_hex = format!("{:x}", age);
-    format!(
-        "https://msdl.microsoft.com/download/symbols/{pdb_name}/{guid_hex}{age_hex}/{pdb_name}"
-    )
+    format!("https://msdl.microsoft.com/download/symbols/{pdb_name}/{guid_hex}{age_hex}/{pdb_name}")
 }
 
 /// Format a 16-byte GUID into MSFT's canonical uppercase no-dash form:
@@ -93,7 +91,12 @@ pub fn default_cache_dir() -> PathBuf {
 }
 
 /// Cache key for an MSFT PDB lookup.
-pub fn msft_cache_path(cache_dir: &std::path::Path, pdb_name: &str, guid: &[u8; 16], age: u32) -> PathBuf {
+pub fn msft_cache_path(
+    cache_dir: &std::path::Path,
+    pdb_name: &str,
+    guid: &[u8; 16],
+    age: u32,
+) -> PathBuf {
     let guid_hex = msft_guid_hex(guid);
     let age_hex = format!("{:x}", age);
     cache_dir
@@ -122,10 +125,7 @@ impl Default for SymcacheConfig {
         Self {
             path: default_cache_dir(),
             timeout_secs: 30,
-            servers: vec![
-                "msft".into(),
-                "debuginfod".into(),
-            ],
+            servers: vec!["msft".into(), "debuginfod".into()],
         }
     }
 }
@@ -192,12 +192,7 @@ mod tests {
     #[test]
     fn test_msft_cache_path() {
         let guid = [0x42u8; 16];
-        let p = msft_cache_path(
-            std::path::Path::new("/cache"),
-            "ntdll.pdb",
-            &guid,
-            2,
-        );
+        let p = msft_cache_path(std::path::Path::new("/cache"), "ntdll.pdb", &guid, 2);
         let s = p.to_string_lossy();
         assert!(s.contains("ntdll.pdb"));
         assert!(s.contains("/msft/"));

@@ -8,12 +8,15 @@
 //! forward-scan heuristics with whole-function reasoning anchored on
 //! MemorySSA def chains.
 
-use unlace_ir::memory_ssa::{MemoryAccess, MemoryAccessId};
-use unlace_ir::ssa::SsaFunction;
-use unlace_ir::IrOp;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::memory_ssa_builder::{build_memory_ssa, AccessSite};
-use crate::pass::{Pass, PassError, PassPhase};
+use unlace_ir::memory_ssa::{MemoryAccess, MemoryAccessId};
+use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
+use unlace_ir::{BlockId, IrOp};
+
+use crate::memory_ssa_builder::{AccessSite, build_memory_ssa};
+use crate::pass::{Pass, PassError, PassPhase, compact_var_map_for_moved_insn};
+use crate::{AliasAnalysis, AliasRelation};
 
 /// The MemorySSA-driven DSE pass.
 #[derive(Default)]
@@ -30,6 +33,14 @@ impl Pass for MemorySsaDsePass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let (graph, map) = build_memory_ssa(func);
+        graph
+            .verify()
+            .map_err(|err| PassError::InvariantViolation {
+                message: format!(
+                    "{} MemorySSA verification failed: {err}",
+                    func.function.name
+                ),
+            })?;
 
         // For each Def, check if it's dead (no Use reaches it before being
         // overwritten by another Def to a must-alias location).
@@ -65,37 +76,53 @@ impl Pass for MemorySsaDsePass {
             return Ok(false);
         }
 
-        // Remove dead stores by setting them to nop (Indirect = no-op marker).
-        // We use Copy(0) → discard, which downstream passes will treat as dead.
-        // Actually the cleanest is to skip emitting them. We'll mark the
-        // instruction as IrOp::Indirect (a no-op placeholder).
-        for site in &dead_sites {
-            let Some(block) = func.function.blocks.get_mut(&site.block) else {
-                continue;
-            };
-            let Some(insn) = block.insns.get_mut(site.insn_idx) else {
-                continue;
-            };
-            // Convert to a no-op: an Indirect with no inputs.
-            // (Indirect with empty inputs is conventionally a placeholder
-            //  for "this instruction does nothing".)
-            insn.op = IrOp::Indirect;
-            insn.inputs = smallvec::smallvec![];
-            insn.output = None;
-            // Drop var_map entries for this site.
-            let keys: Vec<_> = func
-                .var_map
-                .keys()
-                .filter(|(b, i, _)| *b == site.block && *i == site.insn_idx)
-                .cloned()
-                .collect();
-            for key in keys {
-                func.var_map.remove(&key);
-            }
-        }
+        remove_dead_sites(func, &dead_sites)?;
 
         Ok(true)
     }
+}
+
+fn remove_dead_sites(func: &mut SsaFunction, dead_sites: &[AccessSite]) -> Result<(), PassError> {
+    let mut by_block: BTreeMap<BlockId, BTreeSet<usize>> = BTreeMap::new();
+    for site in dead_sites {
+        by_block
+            .entry(site.block)
+            .or_default()
+            .insert(site.insn_idx);
+    }
+
+    for (bid, dead_indices) in by_block {
+        let Some(block) = func.function.blocks.get_mut(&bid) else {
+            continue;
+        };
+        let old_insns = std::mem::take(&mut block.insns);
+        block.insns = Vec::with_capacity(old_insns.len().saturating_sub(dead_indices.len()));
+
+        for (old_idx, insn) in old_insns.into_iter().enumerate() {
+            if dead_indices.contains(&old_idx) {
+                func.var_map.remove_site(bid, old_idx);
+                continue;
+            }
+
+            let new_idx = block.insns.len();
+            let input_count = insn.inputs.len();
+            block.insns.push(insn);
+            compact_var_map_for_moved_insn(&mut func.var_map, bid, old_idx, new_idx, input_count);
+        }
+
+        let new_len = block.insns.len();
+        let stale_keys: Vec<_> = func
+            .var_map
+            .range((bid, new_len, VarnodeSlot::Output)..)
+            .take_while(|&(&(b, _, _), _)| b == bid)
+            .map(|(k, _)| k.clone())
+            .collect();
+        for key in stale_keys {
+            func.var_map.remove(&key);
+        }
+    }
+
+    Ok(())
 }
 
 /// Check whether a Def is definitively dead — no Use depends on it AND
@@ -112,6 +139,7 @@ fn is_definitely_dead(
         }) => location.clone(),
         _ => return false,
     };
+    let aa = AliasAnalysis::new();
 
     // No Use depends on this def?
     let any_use = graph.accesses.values().any(|a| {
@@ -137,7 +165,9 @@ fn is_definitely_dead(
             if *id == def_id {
                 continue;
             }
-            if other_loc.must_alias(&def_loc) && chain_contains(graph, *reaching_def, def_id) {
+            if aa.alias(other_loc, &def_loc) == AliasRelation::MustAlias
+                && chain_contains(graph, *reaching_def, def_id)
+            {
                 return true;
             }
         }
@@ -201,22 +231,24 @@ mod tests {
         ));
         b0.insns
             .push(IrInsn::with_output(IrOp::Load, r, smallvec![slot], 0x1008));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![r],
-            0x100C,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x100C));
         func.insert_block(b0);
         let mut ssa = build_ssa(func);
 
         let changed = MemorySsaDsePass.run(&mut ssa).unwrap();
         assert!(changed);
 
-        // First store at idx 0 should now be Indirect (no-op).
+        // First store is removed and following instructions are compacted.
         let block = &ssa.function.blocks[&BlockId(0)];
-        assert_eq!(block.insns[0].op, IrOp::Indirect);
-        // Second store at idx 1 should remain a Store.
-        assert_eq!(block.insns[1].op, IrOp::Store);
+        assert_eq!(block.insns.len(), 3);
+        assert_eq!(block.insns[0].op, IrOp::Store);
+        assert_eq!(block.insns[1].op, IrOp::Load);
+        assert!(
+            ssa.var_map
+                .get(&(BlockId(0), 1, VarnodeSlot::Output))
+                .is_some()
+        );
     }
 
     #[test]
@@ -236,11 +268,8 @@ mod tests {
         ));
         b0.insns
             .push(IrInsn::with_output(IrOp::Load, r, smallvec![slot], 0x1004));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![r],
-            0x1008,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x1008));
         func.insert_block(b0);
         let mut ssa = build_ssa(func);
 
@@ -314,11 +343,8 @@ mod tests {
             smallvec![slot_a],
             0x1008,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![r],
-            0x100C,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x100C));
         func.insert_block(b0);
         let mut ssa = build_ssa(func);
 

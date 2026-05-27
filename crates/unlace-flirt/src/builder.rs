@@ -77,8 +77,7 @@ impl FlirtSignatureFile {
 
     /// Serialize to compact bincode + zstd for on-disk storage.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let encoded =
-            bincode::serde::encode_to_vec(self, bincode::config::standard())?;
+        let encoded = bincode::serde::encode_to_vec(self, bincode::config::standard())?;
         let compressed = zstd::encode_all(&encoded[..], 3)?;
         Ok(compressed)
     }
@@ -157,10 +156,7 @@ pub fn build_from_function_map(
 /// - 80% if prefix matches AND crc16 matches but length differs ≤ 16 bytes
 /// - 60% if only prefix matches (function may be too short for crc16)
 /// - else None
-pub fn match_function(
-    code: &[u8],
-    library: &FlirtSignatureFile,
-) -> Option<(String, u8)> {
+pub fn match_function(code: &[u8], library: &FlirtSignatureFile) -> Option<(String, u8)> {
     if code.is_empty() {
         return None;
     }
@@ -230,9 +226,11 @@ pub fn build_from_library(library_path: impl AsRef<Path>) -> Result<FlirtSignatu
             continue;
         }
         // Find the section containing this symbol.
-        let Some(section) = image.sections.iter().find(|s| {
-            ea >= s.vaddr && ea < s.vaddr + s.size
-        }) else {
+        let Some(section) = image
+            .sections
+            .iter()
+            .find(|s| ea >= s.vaddr && ea < s.vaddr + s.size)
+        else {
             continue;
         };
         if section.data.is_empty() {
@@ -241,7 +239,10 @@ pub fn build_from_library(library_path: impl AsRef<Path>) -> Result<FlirtSignatu
         let off = (ea - section.vaddr) as usize;
         // Symbol size: use next-symbol-address as upper bound (typical for
         // ELF when symbol sizes are missing).
-        let next_ea = sorted_eas.get(i + 1).copied().unwrap_or(section.vaddr + section.size);
+        let next_ea = sorted_eas
+            .get(i + 1)
+            .copied()
+            .unwrap_or(section.vaddr + section.size);
         let size = (next_ea.saturating_sub(ea)).min(2048) as usize;
         if size == 0 || off + size > section.data.len() {
             continue;

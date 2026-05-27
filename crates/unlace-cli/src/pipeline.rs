@@ -61,21 +61,25 @@ use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
-    AlgebraicSimplifyPass, BitfieldIdiomPass, BmiIdiomPass, CallBoundaryCopyPropPass,
-    CallingConvFinalizePass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppMethodPass, CppVtablePass, CryptoIdiomPass, CsePass,
-    DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimGlobalPass,
-    DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass,
-    IdiomRecognitionPass, IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, LicmPass,
-    LvarCollectPass, ModuloIdiomPass, NoreturnDetectPass, OpTypeBindingPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, RedundantFlagElimPass, RegisterCoalescePass,
-    ReturnTypeInferPass, RustEnumPass, RustPanicPass, RustVtablePass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass,
-    StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
-    VariableMergePass, annotate_libc_calls, bump_if_signature_changed,
-    canonical_pipeline_backedge_exceptions, canonical_pipeline_descriptor, detect_byref,
-    detect_go_defer, parse_printf_format_strings, recover_direct_call_args, recover_stack_frame,
-    recover_structs, run_instrumented, run_outer_fixedpoint, run_to_fixedpoint,
+    AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
+    BoolSimplifyPass, CallBoundaryCopyPropPass, CallingConvFinalizePass,
+    CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstantFoldPass,
+    CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass, CppVariantPass,
+    CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
+    DeadFlagElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass, DivisionIdiomPass,
+    ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IndirectCallResolvePass,
+    IndirectJumpResolvePass, IvElimPass, KnownBitsSimplifyPass, LicmPass, LvarCollectPass,
+    MemorySsaDsePass, ModuloIdiomPass, NoreturnDetectPass, ObjcDispatchPass, OpTypeBindingPass,
+    OuterFixedpointReport, ParamInferPass, PassAdapter, PassWithContext, PathSensitivePass,
+    PrologueElimPass, RedundantFlagElimPass, RegisterCoalescePass, RepStringIdiomPass,
+    ReturnTypeInferPass, RustAsyncPass, RustEnumPass, RustPanicPass, RustVtablePass, SccpPass,
+    SignatureSnapshot, SizeofRecognitionPass, StackOffsetSnapshotPass, StackPointerTrackingPass,
+    StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, TailCallDetectPass,
+    TypeConstraintSolverPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
+    bump_if_signature_changed, canonical_pipeline_backedge_exceptions,
+    canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
+    recover_direct_call_args, recover_stack_frame, recover_structs, run_instrumented,
+    run_outer_fixedpoint, run_to_fixedpoint_with_context,
     validate_named_phase_monotonicity_with_exceptions,
 };
 
@@ -423,7 +427,7 @@ fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
             // adjustments use the same encoding and would otherwise produce
             // spurious function entries.
             let addr = base + idx as u64;
-            if addr % 16 == 0 && preceded_by_boundary(data, idx) {
+            if addr.is_multiple_of(16) && preceded_by_boundary(data, idx) {
                 addrs.insert(addr);
             }
             idx += 3;
@@ -440,7 +444,7 @@ fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
                 //   3. it is not immediately preceded by another `push`
                 //      (which would indicate a chain of callee-saved pushes).
                 let addr = base + idx as u64;
-                let aligned = addr % 16 == 0;
+                let aligned = addr.is_multiple_of(16);
                 let boundary = preceded_by_boundary(data, idx);
                 let chained = preceded_by_push(data, idx);
                 if aligned && boundary && !chained {
@@ -451,7 +455,7 @@ fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
             }
         }
         if data[idx] == PUSH_RBX
-            && (base + idx as u64) % 16 == 0
+            && (base + idx as u64).is_multiple_of(16)
             && preceded_by_boundary(data, idx)
             && !preceded_by_push(data, idx)
         {
@@ -586,10 +590,10 @@ enum FunctionTarget {
 }
 
 fn parse_function_filter(s: &str) -> FunctionTarget {
-    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-        if let Ok(addr) = u64::from_str_radix(hex, 16) {
-            return FunctionTarget::Addr(addr);
-        }
+    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X"))
+        && let Ok(addr) = u64::from_str_radix(hex, 16)
+    {
+        return FunctionTarget::Addr(addr);
     }
     FunctionTarget::Name(s.to_string())
 }
@@ -716,14 +720,12 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
             }
 
             for ir_op in &rec.ir_ops {
-                if matches!(ir_op.op, IrOp::Branch | IrOp::Cbranch) {
-                    if let Some(target) = ir_op.inputs.first() {
-                        if target.space == unlace_ir::SpaceId::Const
-                            && insn_addr_set.contains(&target.offset)
-                        {
-                            block_starts.entry(target.offset).or_insert(0);
-                        }
-                    }
+                if matches!(ir_op.op, IrOp::Branch | IrOp::Cbranch)
+                    && let Some(target) = ir_op.inputs.first()
+                    && target.space == unlace_ir::SpaceId::Const
+                    && insn_addr_set.contains(&target.offset)
+                {
+                    block_starts.entry(target.offset).or_insert(0);
                 }
             }
         }
@@ -765,26 +767,24 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                 for ir_op in &rec.ir_ops {
                     match ir_op.op {
                         IrOp::Branch => {
-                            if let Some(target) = ir_op.inputs.first() {
-                                if target.space == unlace_ir::SpaceId::Const {
-                                    if let Some(&tid) = block_starts.get(&target.offset) {
-                                        let target_bid = BlockId(tid);
-                                        if !bb.successors.contains(&target_bid) {
-                                            bb.successors.push(target_bid);
-                                        }
-                                    }
+                            if let Some(target) = ir_op.inputs.first()
+                                && target.space == unlace_ir::SpaceId::Const
+                                && let Some(&tid) = block_starts.get(&target.offset)
+                            {
+                                let target_bid = BlockId(tid);
+                                if !bb.successors.contains(&target_bid) {
+                                    bb.successors.push(target_bid);
                                 }
                             }
                         }
                         IrOp::Cbranch => {
-                            if let Some(target) = ir_op.inputs.first() {
-                                if target.space == unlace_ir::SpaceId::Const {
-                                    if let Some(&tid) = block_starts.get(&target.offset) {
-                                        let target_bid = BlockId(tid);
-                                        if !bb.successors.contains(&target_bid) {
-                                            bb.successors.push(target_bid);
-                                        }
-                                    }
+                            if let Some(target) = ir_op.inputs.first()
+                                && target.space == unlace_ir::SpaceId::Const
+                                && let Some(&tid) = block_starts.get(&target.offset)
+                            {
+                                let target_bid = BlockId(tid);
+                                if !bb.successors.contains(&target_bid) {
+                                    bb.successors.push(target_bid);
                                 }
                             }
                             if let Some(next) = insns.get(
@@ -794,12 +794,11 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                                         .iter()
                                         .position(|r| std::ptr::eq(r, rec))
                                         .unwrap_or(0),
-                            ) {
-                                if let Some(&fid) = block_starts.get(&next.addr) {
-                                    let fall_bid = BlockId(fid);
-                                    if !bb.successors.contains(&fall_bid) {
-                                        bb.successors.push(fall_bid);
-                                    }
+                            ) && let Some(&fid) = block_starts.get(&next.addr)
+                            {
+                                let fall_bid = BlockId(fid);
+                                if !bb.successors.contains(&fall_bid) {
+                                    bb.successors.push(fall_bid);
                                 }
                             }
                         }
@@ -841,10 +840,11 @@ pub fn run_passes_with_resolver(
 /// This is plan.md Batch 5: refines per-function signatures using caller
 /// context until quiescence (or `cap` iterations).
 ///
-/// `cap` of `0` selects [`DEFAULT_INTERPROC_CAP`]. The per-function pass
-/// invoked inside the loop is [`run_passes`], so callers must have already
-/// finished any one-time setup that should *not* be re-run (DWARF apply,
-/// EH-landing-pad population, etc.).
+/// `cap` of `0` selects [`DEFAULT_INTERPROC_CAP`]. The per-function work
+/// inside the loop intentionally stops before lvar/final presentation stages:
+/// repeated expression-tree / variable-naming passes are not valid inputs to
+/// the low-level IR fixed-point cluster. Callers that emit C should refresh
+/// lvars/final signatures after this helper has converged.
 ///
 /// This helper is intentionally separate from the per-function CLI path:
 /// the existing `decompile_function_with_symbols` keeps emitting output
@@ -863,17 +863,34 @@ pub fn run_whole_program_interproc(
         cap
     };
     unlace_passes::run_interproc_fixpoint(funcs, cap, |ssa| {
-        // The per-function pass surface used inside the cross-function loop
-        // is the standard `run_passes`. We discard the inner `PassError`
-        // chain via `?` — the outer driver already records iteration count
-        // and signature deltas.
-        run_passes(ssa)
-            .map(|_| ())
-            .map_err(|e| unlace_passes::PassError::InvariantViolation {
-                message: format!("per-function pass failed: {e}"),
-            })
+        run_interproc_analysis_passes(ssa).map(|_| ()).map_err(|e| {
+            unlace_passes::PassError::InvariantViolation {
+                message: format!("per-function analysis failed: {e:#}"),
+            }
+        })
     })
     .context("interprocedural fixed-point loop failed")
+}
+
+fn run_interproc_analysis_passes(ssa: &mut SsaFunction) -> Result<PassesReport> {
+    maybe_validate_pipeline_once();
+    let pre_pipeline_sig = SignatureSnapshot::of(ssa);
+    let mut changed = false;
+
+    if ssa.maturity < Maturity::GlobalOpt {
+        ssa.maturity = Maturity::GlobalOpt;
+        pipeline_stage_type_recovery(ssa, None).context("interproc type refresh failed")?;
+        changed = bump_if_signature_changed(ssa, &pre_pipeline_sig);
+    }
+
+    Ok(PassesReport {
+        ir_changes: 0,
+        outer: OuterFixedpointReport {
+            iterations: 1,
+            hit_cap: false,
+            changed_per_iteration: vec![changed],
+        },
+    })
 }
 
 /// Whole-program driver for printf-style format-string parsing.
@@ -928,6 +945,91 @@ pub struct PassesReport {
     pub outer: OuterFixedpointReport,
 }
 
+/// Whole-program quality refinements run after per-function analysis and the
+/// interprocedural fixed-point loop, but before final emit.
+#[derive(Clone, Debug, Default)]
+pub struct WholeProgramQualityReport {
+    /// Caller-side argument facts changed at least one callee signature entry.
+    pub caller_param_changed: bool,
+    /// Applying the global signature registry changed at least one function.
+    pub registry_applied: bool,
+    /// Whole-program calling-convention / dead-param / return-use report.
+    pub calling_conv: unlace_passes::WholeProgramCcReport,
+    /// Number of distinct struct layouts canonicalised across the program.
+    pub canonical_struct_layouts: usize,
+    /// Number of functions whose struct names changed after canonicalisation.
+    pub struct_name_rewrite_functions: usize,
+    /// Number of functions whose lvar/final signature metadata changed when
+    /// refreshed after the whole-program updates.
+    pub final_refresh_changes: usize,
+}
+
+/// Run the active whole-program quality tier over already-analysed functions.
+///
+/// This is intentionally separate from the per-function pipeline: it needs the
+/// full function map to propagate caller argument types, drop dead parameters,
+/// unify calling conventions, and collapse identical recovered struct layouts
+/// to one canonical type name before final emission.
+pub fn run_whole_program_quality_refinement(
+    funcs: &mut std::collections::BTreeMap<u64, SsaFunction>,
+    cap: usize,
+) -> Result<WholeProgramQualityReport> {
+    let mut report = WholeProgramQualityReport::default();
+
+    let mut registry = unlace_ir::ssa::FunctionSignatureRegistry::new();
+    unlace_passes::seed_registry_from_funcs(funcs, &mut registry);
+
+    let ir_funcs: BTreeMap<u64, Function> = funcs
+        .iter()
+        .map(|(&addr, ssa)| (addr, ssa.function.clone()))
+        .collect();
+    let call_graph = unlace_ir::xref::build_call_graph(&ir_funcs);
+
+    report.caller_param_changed =
+        unlace_passes::propagate_caller_params(funcs, &call_graph, &mut registry);
+    report.registry_applied = unlace_passes::apply_registry_to_callees(funcs, &registry);
+
+    let cc_cap = if cap == 0 {
+        unlace_passes::DEFAULT_WHOLE_PROG_CC_CAP
+    } else {
+        cap
+    };
+    report.calling_conv = unlace_passes::run_whole_prog_cc(funcs, cc_cap);
+
+    let refs: Vec<&SsaFunction> = funcs.values().collect();
+    let unifier = unlace_passes::unify_structs_across_program(&refs);
+    report.canonical_struct_layouts = unifier.distinct_layouts();
+
+    for ssa in funcs.values_mut() {
+        let before_inferred = ssa.inferred_structs.clone();
+        let before_composite = ssa.composite_var_types.clone();
+        unifier.rename_to_canonical(ssa);
+        if ssa.inferred_structs != before_inferred || ssa.composite_var_types != before_composite {
+            report.struct_name_rewrite_functions += 1;
+        }
+
+        let before_lvars = ssa.lvars.clone();
+        let before_names = ssa.merged_names.clone();
+        let before_roles = ssa.var_role_names.clone();
+        let before_signature = ssa.finalized_signature.clone();
+
+        ssa.maturity = Maturity::Lvars;
+        pipeline_stage_lvar(ssa).context("whole-program lvar refresh failed")?;
+        ssa.maturity = Maturity::Final;
+        pipeline_stage_final(ssa, None).context("whole-program final refresh failed")?;
+
+        if ssa.lvars != before_lvars
+            || ssa.merged_names != before_names
+            || ssa.var_role_names != before_roles
+            || ssa.finalized_signature != before_signature
+        {
+            report.final_refresh_changes += 1;
+        }
+    }
+
+    Ok(report)
+}
+
 /// Run the pass pipeline and return a structured report.
 ///
 /// The pipeline mirrors IDA's two-tier driver (sub_14B8B0 / sub_F9180).
@@ -975,7 +1077,7 @@ pub struct PassesReport {
 ///    Each outer iteration runs:
 ///      - the inner IR-level fixed-point cluster — mostly LocalOpt /
 ///        GlobalOpt with three PreOpt cleanups (call-boundary, redundant
-///        flag, algebraic simplify), converging via [`run_to_fixedpoint`];
+///        flag, algebraic simplify), converging via [`run_to_fixedpoint_with_context`];
 ///      - LocalOpt/GlobalOpt cleanup (dead store, dead flag, cross-block
 ///        DSE, division/modulo idioms);
 ///      - PreOpt + StackRecovery + GlobalOpt + TypeRecovery structural
@@ -1072,7 +1174,7 @@ fn run_passes_with_report_inner(
 
             // Stage 5: M_GLBOPT — type recovery
             ssa.maturity = Maturity::GlobalOpt;
-            pipeline_stage_type_recovery(ssa)?;
+            pipeline_stage_type_recovery(ssa, resolver)?;
             maturity_snapshot(ssa, "M_GLBOPT", _iter);
 
             Ok(())
@@ -1091,6 +1193,7 @@ fn run_passes_with_report_inner(
     // Stage 6: M_LVARS — post-loop one-shots + lvar allocation
     ssa.maturity = Maturity::Lvars;
     pipeline_stage_post_loop(ssa)?;
+    pipeline_stage_experimental_old(ssa, resolver)?;
     pipeline_stage_lvar(ssa)?;
     maturity_snapshot(ssa, "M_LVARS", 0);
 
@@ -1167,31 +1270,86 @@ fn maturity_snapshot(ssa: &SsaFunction, stage: &str, iter: usize) {
 
 // ─── Pipeline Stage Helpers ─────────────────────────────────────────────────
 // Each helper below corresponds to one maturity-level stage. The pass
-// composition and execution order is identical to the prior monolithic
-// closure — this is a pure structural extraction.
+// composition follows the canonical descriptor in unlace-passes/src/pass.rs.
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .and_then(|v| v.into_string().ok())
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+        })
+        .unwrap_or(false)
+}
+
+fn old_experimental_passes_enabled() -> bool {
+    env_flag_enabled("UNLACE_EXPERIMENTAL_OLD_PASSES")
+}
+
+fn known_struct_types(ssa: &SsaFunction) -> Vec<Type> {
+    let mut structs: Vec<Type> = ssa.composite_var_types.values().cloned().collect();
+    structs.extend(ssa.inferred_structs.values().cloned());
+    structs
+}
 
 /// Stage 1 (M_GENERATED): IR-level fixed-point cluster.
 /// Runs ConstFold, CopyProp, SCCP, CSE, GVN, LICM, IV-elim, idioms,
 /// and condition simplification to convergence.
 fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_passes::PassError> {
-    let fold = ConstantFoldPass;
-    let prop = CopyPropagationPass;
-    let gprop = GlobalCopyPropPass;
-    let dce = DeadCodeElimPass;
-    let sccp = SccpPass;
-    let cse = CsePass;
-    let gvn = GvnPass;
-    let licm = LicmPass;
-    let iv_elim = IvElimPass;
-    let strength_reduce = StrengthReducePass;
-    let idiom = IdiomRecognitionPass;
-    let bmi = BmiIdiomPass;
-    let cond = ConditionSimplifyPass;
-    let cmov = unlace_passes::CmovPreservePass;
-    let call_bound = CallBoundaryCopyPropPass;
-    let red_flag = RedundantFlagElimPass;
-    let algebraic = AlgebraicSimplifyPass;
-    let passes: &[&dyn Pass] = &[
+    let alias_pass = AliasCategorizePass::new();
+    let fold_pass = ConstantFoldPass;
+    let prop_pass = CopyPropagationPass;
+    let gprop_pass = GlobalCopyPropPass;
+    let dce_pass = DeadCodeElimPass;
+    let sccp_pass = SccpPass;
+    let cse_pass = CsePass;
+    let gvn_pass = GvnPass;
+    let licm_pass = LicmPass;
+    let iv_elim_pass = IvElimPass;
+    let strength_reduce_pass = StrengthReducePass;
+    let idiom_pass = IdiomRecognitionPass;
+    let bmi_pass = BmiIdiomPass;
+    let cond_pass = ConditionSimplifyPass;
+    let bool_pass = BoolSimplifyPass;
+    let known_bits_pass = KnownBitsSimplifyPass;
+    let cmov_pass = unlace_passes::CmovPreservePass;
+    let call_bound_pass = CallBoundaryCopyPropPass;
+    let red_flag_pass = RedundantFlagElimPass;
+    let algebraic_pass = AlgebraicSimplifyPass;
+    let alias = PassAdapter { inner: &alias_pass };
+    let fold = PassAdapter { inner: &fold_pass };
+    let prop = PassAdapter { inner: &prop_pass };
+    let gprop = PassAdapter { inner: &gprop_pass };
+    let dce = PassAdapter { inner: &dce_pass };
+    let sccp = PassAdapter { inner: &sccp_pass };
+    let cse = PassAdapter { inner: &cse_pass };
+    let gvn = PassAdapter { inner: &gvn_pass };
+    let bmi = PassAdapter { inner: &bmi_pass };
+    let licm = PassAdapter { inner: &licm_pass };
+    let iv_elim = PassAdapter {
+        inner: &iv_elim_pass,
+    };
+    let strength_reduce = PassAdapter {
+        inner: &strength_reduce_pass,
+    };
+    let idiom = PassAdapter { inner: &idiom_pass };
+    let cond = PassAdapter { inner: &cond_pass };
+    let bool_simplify = PassAdapter { inner: &bool_pass };
+    let known_bits = PassAdapter {
+        inner: &known_bits_pass,
+    };
+    let cmov = PassAdapter { inner: &cmov_pass };
+    let call_bound = PassAdapter {
+        inner: &call_bound_pass,
+    };
+    let red_flag = PassAdapter {
+        inner: &red_flag_pass,
+    };
+    let algebraic = PassAdapter {
+        inner: &algebraic_pass,
+    };
+    let passes: &[&dyn PassWithContext] = &[
+        &alias,
         &fold,
         &prop,
         &gprop,
@@ -1205,12 +1363,15 @@ fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_p
         &strength_reduce,
         &idiom,
         &cond,
+        &bool_simplify,
+        &known_bits,
         &cmov,
         &call_bound,
         &red_flag,
         &algebraic,
     ];
-    run_to_fixedpoint(passes, ssa)
+    let mut ctx = AnalysisContext::new();
+    run_to_fixedpoint_with_context(passes, ssa, &mut ctx)
 }
 
 /// Stage 2 (M_PREOPTIMIZED): single-run cleanup passes.
@@ -1218,6 +1379,8 @@ fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_p
 fn pipeline_stage_cleanup(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
     run_instrumented(&DeadStoreElimPass, ssa)?;
     run_instrumented(&DeadFlagElimPass, ssa)?;
+    run_instrumented(&MemorySsaDsePass, ssa)?;
+    run_instrumented(&CfgRepairPass, ssa)?;
     run_instrumented(&DeadStoreElimGlobalPass, ssa)?;
     run_instrumented(&DivisionIdiomPass, ssa)?;
     run_instrumented(&ModuloIdiomPass, ssa)?;
@@ -1247,7 +1410,10 @@ fn pipeline_stage_call_resolution(ssa: &mut SsaFunction) -> Result<(), unlace_pa
 /// Stage 5 (M_GLBOPT): type recovery, calling convention, struct/byref.
 /// This is the stage whose output feeds the outer-fixedpoint convergence
 /// check via `ssa_type_signature`.
-fn pipeline_stage_type_recovery(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+fn pipeline_stage_type_recovery(
+    ssa: &mut SsaFunction,
+    resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
+) -> Result<(), unlace_passes::PassError> {
     run_instrumented(&CallingConventionDetectPass, ssa)?;
     run_instrumented(&ParamInferPass, ssa)?;
     run_instrumented(&ReturnTypeInferPass, ssa)?;
@@ -1256,17 +1422,54 @@ fn pipeline_stage_type_recovery(ssa: &mut SsaFunction) -> Result<(), unlace_pass
     ssa.array_struct_layouts = recover_structs(ssa);
     run_instrumented(&unlace_passes::type_infer::TypeInferPass, ssa)?;
     run_instrumented(&TypeConstraintSolverPass, ssa)?;
+    if let Some(resolve) = resolver {
+        let structs = known_struct_types(ssa);
+        let _ = unlace_passes::recognize_with_resolver(ssa, resolve, &structs);
+    } else {
+        run_instrumented(&SizeofRecognitionPass::default(), ssa)?;
+    }
+    run_instrumented(&CppVariantPass, ssa)?;
+    run_instrumented(&CppLambdaCapturePass, ssa)?;
+    run_instrumented(&CppCoroutinePass, ssa)?;
+    run_instrumented(&RustAsyncPass, ssa)?;
     Ok(())
 }
 
 /// Stage 6a (M_LVARS): post-loop one-shot annotation passes.
 /// Pattern-recognition that doesn't influence the outer fixedpoint.
 fn pipeline_stage_post_loop(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&RepStringIdiomPass, ssa)?;
     run_instrumented(&BitfieldIdiomPass, ssa)?;
     run_instrumented(&CryptoIdiomPass, ssa)?;
     run_instrumented(&IndirectCallResolvePass, ssa)?;
     run_instrumented(&IndirectJumpResolvePass, ssa)?;
     run_instrumented(&OpTypeBindingPass, ssa)?;
+    Ok(())
+}
+
+/// Optional one-shot bridge for older analysis/prototype passes.
+///
+/// This tier is intentionally outside the default fixedpoint and only runs old
+/// passes that currently write stable SSA metadata. Detection-only helpers and
+/// passes with stale side-table maintenance are kept as library code, but are
+/// not scheduled here until they gain a real output field.
+fn pipeline_stage_experimental_old(
+    ssa: &mut SsaFunction,
+    resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
+) -> Result<(), unlace_passes::PassError> {
+    if !old_experimental_passes_enabled() {
+        return Ok(());
+    }
+
+    run_instrumented(&PathSensitivePass, ssa)?;
+
+    if resolver.is_some() {
+        tracing::debug!(
+            func = %ssa.function.name,
+            "experimental old-pass tier ran with resolver available"
+        );
+    }
+
     Ok(())
 }
 
@@ -1292,13 +1495,6 @@ fn pipeline_stage_final(
     run_instrumented(&VarNamingPass, ssa)?;
     run_instrumented(&CallingConvFinalizePass, ssa)?;
 
-    // Opt-in alias categorization for debugging.
-    if std::env::var_os("UNLACE_ALIAS_DUMP").is_some() {
-        run_instrumented(
-            &unlace_passes::alias_categorize::AliasCategorizePass::new(),
-            ssa,
-        )?;
-    }
     Ok(())
 }
 
@@ -1596,6 +1792,7 @@ pub fn lift_and_run_passes(
     entry: &FunctionEntry,
     config: &PipelineConfig,
     dwarf: Option<&DwarfInfo>,
+    rtti: Option<&unlace_loader::RttiInfo>,
     discovered: &[FunctionEntry],
 ) -> Result<SsaFunction> {
     let _span = tracing::debug_span!("lift_and_run_passes", func = %entry.name).entered();
@@ -1616,7 +1813,7 @@ pub fn lift_and_run_passes(
     }
     apply_pdb_types_to_ssa(&mut ssa, image);
 
-    populate_eh_landing_pads(image, entry, &mut ssa);
+    populate_eh_landing_pads(image, entry, &mut ssa, rtti);
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;
 
@@ -1670,6 +1867,7 @@ pub fn emit_function_interproc(
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
     }
+    run_objc_dispatch_for_image(ssa, image, &symbols);
     if !symbols.is_empty() {
         ssa.go_defer_sites = detect_go_defer(ssa, |addr| stable_symbol_names.get(&addr).copied())
             .into_iter()
@@ -1687,12 +1885,13 @@ pub fn emit_function_interproc(
         &image.string_table,
     );
     let go_iface_devirtualized_calls = collect_go_iface_devirtualized_calls(ssa, image, &symbols);
+    let cxx_eh_actions = collect_cxx_eh_actions(ssa, &symbols);
     let mut libc_call_canonical: BTreeMap<u64, String> = BTreeMap::new();
     for (&(bid, idx), canonical) in &ssa.libc_call_annotations {
-        if let Some(block) = ssa.function.blocks.get(&bid) {
-            if let Some(insn) = block.insns.get(idx) {
-                libc_call_canonical.insert(insn.addr, canonical.clone());
-            }
+        if let Some(block) = ssa.function.blocks.get(&bid)
+            && let Some(insn) = block.insns.get(idx)
+        {
+            libc_call_canonical.insert(insn.addr, canonical.clone());
         }
     }
     let mut printer_annotations = config
@@ -1711,6 +1910,11 @@ pub fn emit_function_interproc(
     printer_annotations.go_interfaces = image.go_types.clone();
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
+    printer_annotations.cxx_eh_actions = cxx_eh_actions;
+    printer_annotations.msvc_rtti = image
+        .msvc_rtti
+        .clone()
+        .filter(|rtti| !rtti.classes.is_empty());
     // §5.5: surface per-callee FLIRT confidence so the C printer can
     // emit `/* flirt: <name>@<conf> */` trailing comments at Call sites.
     printer_annotations.flirt_call_annotations = flirt_map
@@ -1805,17 +2009,16 @@ pub fn decompile_one_function_cached(
         (Some(_), Some(sha)) => Some(crate::cache::CacheKey::new(sha, entry.addr, entry.size)),
         _ => None,
     };
-    if let (Some(cache), Some(key)) = (cache, cache_key.as_ref()) {
-        if let Ok(Some(body)) = cache.get(key) {
-            if let Ok(s) = std::str::from_utf8(&body) {
-                tracing::debug!(
-                    func = %entry.name,
-                    digest = %key.digest(),
-                    "cache hit: skipping pipeline"
-                );
-                return Ok(s.to_string());
-            }
-        }
+    if let (Some(cache), Some(key)) = (cache, cache_key.as_ref())
+        && let Ok(Some(body)) = cache.get(key)
+        && let Ok(s) = std::str::from_utf8(&body)
+    {
+        tracing::debug!(
+            func = %entry.name,
+            digest = %key.digest(),
+            "cache hit: skipping pipeline"
+        );
+        return Ok(s.to_string());
     }
 
     let config = PipelineConfig {
@@ -1825,10 +2028,10 @@ pub fn decompile_one_function_cached(
     };
     let rendered = decompile_function(image, lifter.as_ref(), entry, emit, &config, None)?;
 
-    if let (Some(cache), Some(key)) = (cache, cache_key.as_ref()) {
-        if let Err(e) = cache.put(key, rendered.as_bytes()) {
-            tracing::warn!(err = %e, "cache put failed");
-        }
+    if let (Some(cache), Some(key)) = (cache, cache_key.as_ref())
+        && let Err(e) = cache.put(key, rendered.as_bytes())
+    {
+        tracing::warn!(err = %e, "cache put failed");
     }
 
     Ok(rendered)
@@ -1999,11 +2202,11 @@ pub fn decompile_function_with_symbols(
     let _span = tracing::debug_span!("decompile_function", func = %entry.name).entered();
     let deadline = Instant::now() + config.timeout;
 
-    if matches!(emit, EmitFormat::C) {
-        if let Some(canonical) = flirt_match(image, entry) {
-            tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
-            return Ok(render_flirt_stub(&canonical, entry));
-        }
+    if matches!(emit, EmitFormat::C)
+        && let Some(canonical) = flirt_match(image, entry)
+    {
+        tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
+        return Ok(render_flirt_stub(&canonical, entry));
     }
 
     let t = Instant::now();
@@ -2062,7 +2265,7 @@ pub fn decompile_function_with_symbols(
     }
     apply_pdb_types_to_ssa(&mut ssa, image);
 
-    populate_eh_landing_pads(image, entry, &mut ssa);
+    populate_eh_landing_pads(image, entry, &mut ssa, rtti);
 
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;
@@ -2109,6 +2312,8 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
 
+    run_objc_dispatch_for_image(&mut ssa, image, &symbols);
+
     if !symbols.is_empty() {
         ssa.go_defer_sites = detect_go_defer(&ssa, |addr| stable_symbol_names.get(&addr).copied())
             .into_iter()
@@ -2146,15 +2351,16 @@ pub fn decompile_function_with_symbols(
     // target resolves to a unique method pointer recorded in a
     // `runtime.itab`, surface the concrete method symbol at print time.
     let go_iface_devirtualized_calls = collect_go_iface_devirtualized_calls(&ssa, image, &symbols);
+    let cxx_eh_actions = collect_cxx_eh_actions(&ssa, &symbols);
 
     // Re-key (BlockId, insn_idx) → canonical name to (call_va → canonical
     // name) for the printer, which sees instructions only by their VA.
     let mut libc_call_canonical: BTreeMap<u64, String> = BTreeMap::new();
     for (&(bid, idx), canonical) in &ssa.libc_call_annotations {
-        if let Some(block) = ssa.function.blocks.get(&bid) {
-            if let Some(insn) = block.insns.get(idx) {
-                libc_call_canonical.insert(insn.addr, canonical.clone());
-            }
+        if let Some(block) = ssa.function.blocks.get(&bid)
+            && let Some(insn) = block.insns.get(idx)
+        {
+            libc_call_canonical.insert(insn.addr, canonical.clone());
         }
     }
 
@@ -2174,6 +2380,11 @@ pub fn decompile_function_with_symbols(
     printer_annotations.go_interfaces = image.go_types.clone();
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
+    printer_annotations.cxx_eh_actions = cxx_eh_actions;
+    printer_annotations.msvc_rtti = image
+        .msvc_rtti
+        .clone()
+        .filter(|rtti| !rtti.classes.is_empty());
     // §5.5: surface per-callee FLIRT confidence so the C printer can
     // emit `/* flirt: <name>@<conf> */` trailing comments at Call sites.
     printer_annotations.flirt_call_annotations = flirt_map
@@ -2222,24 +2433,29 @@ fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
 
 /// Recover precise try/catch boundaries for `entry` from the binary's
 /// `.eh_frame` and `.gcc_except_table` sections, populating
-/// [`SsaFunction::eh_landing_pads`].
+/// [`SsaFunction::eh_landing_pads`], [`SsaFunction::eh_landing_pad_catches`],
+/// and [`SsaFunction::eh_cleanup_landing_pads`].
 ///
 /// This replaces the heuristic `__cxa_throw` / `__cxa_begin_catch` call-site
 /// detection with the authoritative LSDA call-site table that the C++
 /// personality routine consumes at runtime. Each landing-pad VA is the first
 /// instruction of a catch / cleanup handler — the structurer wraps blocks
-/// starting at these addresses in `HirNode::TryCatch`.
+/// starting at these addresses in `HirNode::TryCatch` or `HirNode::TryFinally`.
 ///
 /// On any failure (missing sections, parse error, no FDE for this function)
 /// the landing-pad set is left empty and structuring proceeds as if no
 /// exception data existed. This is safe: empty set ⇒
 /// `structure_with_landing_pads` behaves identically to plain `structure`.
 ///
-/// **Deferred:** this only stores landing-pad addresses, not the per-handler
-/// typeinfo / action chain. Multiple `catch (T1) / catch (T2)` arms collapse
-/// into a single `HirNode::TryCatch` body — disambiguating them requires
-/// extending the HIR with a per-arm typeinfo slot, which is left for later.
-fn populate_eh_landing_pads(image: &BinaryImage, entry: &FunctionEntry, ssa: &mut SsaFunction) {
+/// Multiple `catch (T1) / catch (T2)` arms that share one landing pad still
+/// share the same recovered handler body, but their LSDA action-chain types
+/// are now preserved as distinct HIR catch arms.
+fn populate_eh_landing_pads(
+    image: &BinaryImage,
+    entry: &FunctionEntry,
+    ssa: &mut SsaFunction,
+    rtti: Option<&unlace_loader::RttiInfo>,
+) {
     let eh = match unlace_loader::parse_eh_frame(image) {
         Ok(eh) if !eh.lsda_entries.is_empty() => eh,
         _ => return,
@@ -2261,6 +2477,17 @@ fn populate_eh_landing_pads(image: &BinaryImage, entry: &FunctionEntry, ssa: &mu
     for region in &lsda.try_regions {
         if let Some(lp) = region.landing_pad {
             ssa.eh_landing_pads.insert(lp);
+            let catch_types = lsda_region_catch_types(region, rtti);
+            if catch_types.is_empty() {
+                ssa.eh_cleanup_landing_pads.insert(lp);
+            } else {
+                let entry = ssa.eh_landing_pad_catches.entry(lp).or_default();
+                for ty in catch_types {
+                    if !entry.contains(&ty) {
+                        entry.push(ty);
+                    }
+                }
+            }
         }
     }
 
@@ -2271,6 +2498,50 @@ fn populate_eh_landing_pads(image: &BinaryImage, entry: &FunctionEntry, ssa: &mu
             "populated EH landing pads from LSDA",
         );
     }
+}
+
+fn lsda_region_catch_types(
+    region: &unlace_loader::TryRegion,
+    rtti: Option<&unlace_loader::RttiInfo>,
+) -> Vec<Type> {
+    region
+        .caught_typeinfo_addrs
+        .iter()
+        .map(|&addr| cxx_catch_type_for_typeinfo_addr(addr, rtti))
+        .collect()
+}
+
+fn cxx_catch_type_for_typeinfo_addr(
+    typeinfo_addr: u64,
+    rtti: Option<&unlace_loader::RttiInfo>,
+) -> Type {
+    if typeinfo_addr == 0 {
+        return Type::Primitive(PrimitiveType::Unknown);
+    }
+
+    if let Some(cls) = rtti.and_then(|info| info.classes.get(&typeinfo_addr)) {
+        return Type::Struct {
+            name: sanitize_cxx_type_name(&cls.demangled_name),
+            fields: Vec::new(),
+        };
+    }
+
+    Type::Struct {
+        name: format!("typeinfo_{typeinfo_addr:x}"),
+        fields: Vec::new(),
+    }
+}
+
+fn sanitize_cxx_type_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len().max(1));
+    for (idx, ch) in name.chars().enumerate() {
+        let valid = ch.is_ascii_alphanumeric() || ch == '_';
+        if idx == 0 && ch.is_ascii_digit() {
+            out.push('_');
+        }
+        out.push(if valid { ch } else { '_' });
+    }
+    if out.is_empty() { "_".to_string() } else { out }
 }
 
 /// Slice an [`AnnotationDb`] down to the per-function view the printer needs.
@@ -2347,6 +2618,74 @@ fn collect_go_iface_devirtualized_calls(
         }
     }
     resolved
+}
+
+fn collect_cxx_eh_actions(
+    ssa: &SsaFunction,
+    symbols: &BTreeMap<u64, String>,
+) -> BTreeMap<u64, unlace_passes::cxx_eh::CxxEhAction> {
+    let mut calls: BTreeMap<u64, String> = BTreeMap::new();
+
+    for (&bid, block) in &ssa.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            match insn.op {
+                IrOp::Call => {
+                    let Some(target) = insn.inputs.first() else {
+                        continue;
+                    };
+                    if target.space != SpaceId::Const {
+                        continue;
+                    }
+                    if let Some(name) = symbols.get(&target.offset) {
+                        calls.insert(insn.addr, name.clone());
+                    }
+                }
+                IrOp::Callind => {
+                    let Some(target) = ssa.resolved_indirect_calls.get(&(bid, idx)) else {
+                        continue;
+                    };
+                    if let Some(name) = symbols.get(target) {
+                        calls.insert(insn.addr, name.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    unlace_passes::cxx_eh::collect_eh_sites(&calls)
+}
+
+fn build_objc_dispatch_pass(
+    image: &BinaryImage,
+    symbols: &BTreeMap<u64, String>,
+) -> ObjcDispatchPass {
+    let class_symbols = symbols
+        .iter()
+        .filter_map(|(&addr, name)| {
+            name.strip_prefix("_OBJC_CLASS_$_")
+                .or_else(|| name.strip_prefix("OBJC_CLASS_$_"))
+                .map(|class| (addr, class.to_string()))
+        })
+        .collect();
+    let selector_strings = image.string_table.clone();
+    let objc_info = unlace_loader::scan_objc_classlist(image);
+
+    ObjcDispatchPass::from_plt_symbols(&image.plt_symbols)
+        .with_class_symbols(class_symbols)
+        .with_selector_strings(selector_strings)
+        .with_categories(&objc_info.categories)
+}
+
+fn run_objc_dispatch_for_image(
+    ssa: &mut SsaFunction,
+    image: &BinaryImage,
+    symbols: &BTreeMap<u64, String>,
+) {
+    let pass = build_objc_dispatch_pass(image, symbols);
+    if let Err(e) = run_instrumented(&pass, ssa) {
+        tracing::warn!(func = %ssa.function.name, err = %e, "objc dispatch pass failed");
+    }
 }
 
 /// Convert the loader's `Section` list into the `unlace-struct`-flavoured
@@ -2603,6 +2942,7 @@ pub fn emit_output(
             // bodies and drop redundant `default:` arms so the printer
             // emits IDA-style stacked case labels.
             unlace_struct::cleanup_switches(&mut hir);
+            unlace_struct::repair_missing_goto_labels(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, symbols);
 
             // t224: precompute the recovered-composite preamble from the
@@ -2656,6 +2996,7 @@ mod tests {
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{Function, IrInsn, Varnode};
     use unlace_loader::{BinaryImage, Endian, Section, SectionFlags};
+    use unlace_passes::Pass;
 
     fn make_text_image(code: Vec<u8>, base: u64) -> BinaryImage {
         let size = code.len() as u64;
@@ -2699,6 +3040,56 @@ mod tests {
             auth_ptr_slots: Vec::new(),
             wasm_component: None,
         }
+    }
+
+    fn empty_ssa_with_struct(name: &str, addr: u64, struct_name: &str) -> SsaFunction {
+        let mut func = Function::new(name, BlockId(0), addr);
+        func.insert_block(BasicBlock::new(BlockId(0)));
+        let mut ssa = build_ssa(func);
+        ssa.inferred_structs.insert(
+            -16,
+            Type::Struct {
+                name: struct_name.to_string(),
+                fields: vec![
+                    StructFieldType {
+                        name: "x".into(),
+                        ty: Type::int(4),
+                        offset: 0,
+                    },
+                    StructFieldType {
+                        name: "y".into(),
+                        ty: Type::int(4),
+                        offset: 4,
+                    },
+                ],
+            },
+        );
+        ssa
+    }
+
+    #[test]
+    fn whole_program_quality_refinement_canonicalizes_structs_and_refreshes_final_metadata() {
+        let mut funcs = BTreeMap::new();
+        funcs.insert(0x1000, empty_ssa_with_struct("a", 0x1000, "local_a"));
+        funcs.insert(0x2000, empty_ssa_with_struct("b", 0x2000, "local_b"));
+
+        let report = run_whole_program_quality_refinement(&mut funcs, 0)
+            .expect("whole-program quality refinement");
+
+        assert_eq!(report.canonical_struct_layouts, 1);
+        assert_eq!(report.struct_name_rewrite_functions, 2);
+        assert_eq!(report.final_refresh_changes, 2);
+
+        let names: BTreeSet<String> = funcs
+            .values()
+            .map(|ssa| match ssa.inferred_structs.get(&-16).unwrap() {
+                Type::Struct { name, .. } => name.clone(),
+                other => panic!("expected struct, got {other:?}"),
+            })
+            .collect();
+        assert_eq!(names.len(), 1);
+        assert!(names.iter().next().unwrap().starts_with("__anon_"));
+        assert!(funcs.values().all(|ssa| ssa.finalized_signature.is_some()));
     }
 
     #[test]
@@ -2746,6 +3137,90 @@ mod tests {
         assert_eq!(
             resolved.get(&0x1004).map(String::as_str),
             Some("main_MyType_Do")
+        );
+    }
+
+    #[test]
+    fn collects_cxx_eh_actions_from_direct_and_resolved_indirect_calls() {
+        let mut func = Function::new("eh_sites", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let indirect_target = Varnode::unique(0, 8);
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![Varnode::constant(0x4010, 8)],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            indirect_target,
+            smallvec![Varnode::constant(0x4020, 8)],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Callind,
+            smallvec![indirect_target],
+            0x1008,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x100c,
+        ));
+        func.insert_block(bb);
+        let mut ssa = build_ssa(func);
+        unlace_passes::IndirectCallResolvePass
+            .run(&mut ssa)
+            .unwrap();
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x4010, "__cxa_throw".to_string());
+        symbols.insert(0x4020, "__imp___CxxFrameHandler3".to_string());
+
+        let actions = collect_cxx_eh_actions(&ssa, &symbols);
+        assert_eq!(
+            actions.get(&0x1000),
+            Some(&unlace_passes::cxx_eh::CxxEhAction::Throw)
+        );
+        assert_eq!(
+            actions.get(&0x1008),
+            Some(&unlace_passes::cxx_eh::CxxEhAction::MsvcFrameHandler)
+        );
+    }
+
+    #[test]
+    fn cxx_catch_type_uses_rtti_names_and_catch_all_sentinel() {
+        let mut classes = BTreeMap::new();
+        classes.insert(
+            0x9000,
+            unlace_loader::CppClass {
+                mangled_name: "NSt3__112bad_allocE".to_string(),
+                demangled_name: "std::__1::bad_alloc".to_string(),
+                typeinfo_addr: 0x9000,
+                bases: vec![],
+                vtable_addr: None,
+                vtable_methods: vec![],
+                vtable_layout: None,
+            },
+        );
+        let rtti = unlace_loader::RttiInfo { classes };
+
+        assert_eq!(
+            cxx_catch_type_for_typeinfo_addr(0, Some(&rtti)),
+            Type::Primitive(PrimitiveType::Unknown),
+        );
+        assert_eq!(
+            cxx_catch_type_for_typeinfo_addr(0x9000, Some(&rtti)),
+            Type::Struct {
+                name: "std____1__bad_alloc".to_string(),
+                fields: vec![],
+            },
+        );
+        assert_eq!(
+            cxx_catch_type_for_typeinfo_addr(0xdead, Some(&rtti)),
+            Type::Struct {
+                name: "typeinfo_dead".to_string(),
+                fields: vec![],
+            },
         );
     }
 

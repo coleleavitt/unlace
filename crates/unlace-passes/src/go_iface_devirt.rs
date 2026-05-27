@@ -144,7 +144,7 @@ fn try_resolve_call(
         return None;
     }
     let slot_off = method_offset - GO_ITAB_FUN_OFFSET;
-    if slot_off % DEFAULT_PTR_SIZE != 0 {
+    if !slot_off.is_multiple_of(DEFAULT_PTR_SIZE) {
         return None;
     }
     let method_index = (slot_off / DEFAULT_PTR_SIZE) as usize;

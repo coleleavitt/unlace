@@ -59,13 +59,13 @@ pub fn align_blocks(old: &[AlignBlock], new: &[AlignBlock]) -> BlockAlignment {
                 best_ni = Some(ni);
             }
         }
-        if let Some(ni) = best_ni {
-            if best_score >= 30 {
-                // threshold
-                pairs.push((ob.id, new[ni].id, best_score));
-                used_new[ni] = true;
-                matched_old[oi] = true;
-            }
+        if let Some(ni) = best_ni
+            && best_score >= 30
+        {
+            // threshold
+            pairs.push((ob.id, new[ni].id, best_score));
+            used_new[ni] = true;
+            matched_old[oi] = true;
         }
     }
 

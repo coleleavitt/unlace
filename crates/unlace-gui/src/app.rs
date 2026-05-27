@@ -109,13 +109,9 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let main = row![
-            self.left_sidebar(),
-            self.center_pane(),
-            self.right_panel(),
-        ]
-        .spacing(8)
-        .height(Length::Fill);
+        let main = row![self.left_sidebar(), self.center_pane(), self.right_panel(),]
+            .spacing(8)
+            .height(Length::Fill);
         let layout: Column<'_, Message> = column![
             self.top_toolbar(),
             container(main).padding(8).height(Length::Fill),
@@ -164,20 +160,35 @@ impl App {
 
     fn left_sidebar(&self) -> Element<'_, Message> {
         let tabs = row![
-            tab_button("Funcs", self.state.layout.left_tab == LeftSidebarTab::Functions,
-                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Functions))),
-            tab_button("Strings", self.state.layout.left_tab == LeftSidebarTab::Strings,
-                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Strings))),
-            tab_button("Imports", self.state.layout.left_tab == LeftSidebarTab::Imports,
-                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Imports))),
-            tab_button("Exports", self.state.layout.left_tab == LeftSidebarTab::Exports,
-                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Exports))),
-            tab_button("Marks", self.state.layout.left_tab == LeftSidebarTab::Bookmarks,
-                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Bookmarks))),
+            tab_button(
+                "Funcs",
+                self.state.layout.left_tab == LeftSidebarTab::Functions,
+                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Functions))
+            ),
+            tab_button(
+                "Strings",
+                self.state.layout.left_tab == LeftSidebarTab::Strings,
+                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Strings))
+            ),
+            tab_button(
+                "Imports",
+                self.state.layout.left_tab == LeftSidebarTab::Imports,
+                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Imports))
+            ),
+            tab_button(
+                "Exports",
+                self.state.layout.left_tab == LeftSidebarTab::Exports,
+                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Exports))
+            ),
+            tab_button(
+                "Marks",
+                self.state.layout.left_tab == LeftSidebarTab::Bookmarks,
+                Message::Gui(GuiMessage::OpenLeftTab(LeftSidebarTab::Bookmarks))
+            ),
         ]
         .spacing(4);
-        let filter = text_input("filter…", &self.state.functions_filter)
-            .on_input(Message::FilterChanged);
+        let filter =
+            text_input("filter…", &self.state.functions_filter).on_input(Message::FilterChanged);
         let body: Element<'_, Message> = match self.state.layout.left_tab {
             LeftSidebarTab::Functions => self.functions_list(),
             LeftSidebarTab::Strings => placeholder("Strings (populated from session)"),
@@ -224,12 +235,21 @@ impl App {
 
     fn center_pane(&self) -> Element<'_, Message> {
         let tabs = row![
-            tab_button("Pseudocode", self.state.layout.active_tab == CenterTab::Pseudocode,
-                Message::Gui(GuiMessage::OpenTab(CenterTab::Pseudocode))),
-            tab_button("Disassembly", self.state.layout.active_tab == CenterTab::Disassembly,
-                Message::Gui(GuiMessage::OpenTab(CenterTab::Disassembly))),
-            tab_button("Hex", self.state.layout.active_tab == CenterTab::Hex,
-                Message::Gui(GuiMessage::OpenTab(CenterTab::Hex))),
+            tab_button(
+                "Pseudocode",
+                self.state.layout.active_tab == CenterTab::Pseudocode,
+                Message::Gui(GuiMessage::OpenTab(CenterTab::Pseudocode))
+            ),
+            tab_button(
+                "Disassembly",
+                self.state.layout.active_tab == CenterTab::Disassembly,
+                Message::Gui(GuiMessage::OpenTab(CenterTab::Disassembly))
+            ),
+            tab_button(
+                "Hex",
+                self.state.layout.active_tab == CenterTab::Hex,
+                Message::Gui(GuiMessage::OpenTab(CenterTab::Hex))
+            ),
         ]
         .spacing(4);
         let body: Element<'_, Message> = match self.state.layout.active_tab {
@@ -251,12 +271,21 @@ impl App {
 
     fn right_panel(&self) -> Element<'_, Message> {
         let tabs = row![
-            tab_button("Xrefs", self.state.layout.right_panel == RightPanel::Xrefs,
-                Message::Gui(GuiMessage::OpenRightPanel(RightPanel::Xrefs))),
-            tab_button("Type", self.state.layout.right_panel == RightPanel::TypeSignature,
-                Message::Gui(GuiMessage::OpenRightPanel(RightPanel::TypeSignature))),
-            tab_button("Comments", self.state.layout.right_panel == RightPanel::Comments,
-                Message::Gui(GuiMessage::OpenRightPanel(RightPanel::Comments))),
+            tab_button(
+                "Xrefs",
+                self.state.layout.right_panel == RightPanel::Xrefs,
+                Message::Gui(GuiMessage::OpenRightPanel(RightPanel::Xrefs))
+            ),
+            tab_button(
+                "Type",
+                self.state.layout.right_panel == RightPanel::TypeSignature,
+                Message::Gui(GuiMessage::OpenRightPanel(RightPanel::TypeSignature))
+            ),
+            tab_button(
+                "Comments",
+                self.state.layout.right_panel == RightPanel::Comments,
+                Message::Gui(GuiMessage::OpenRightPanel(RightPanel::Comments))
+            ),
         ]
         .spacing(4);
         let body = match self.state.layout.right_panel {
@@ -321,7 +350,9 @@ fn render_function(image: &unlace_loader::BinaryImage, ea: u64) -> (String, Stri
         .unwrap_or_else(|| format!("sub_{:x}", ea));
     let mut disasm = format!("; {} @ {:#x} in section {}\n\n", label, ea, section.name);
     let mut pseudo = format!("// Decompiled view of {} @ {:#x}\n// ", label, ea);
-    pseudo.push_str(&format!("(IR-level dump; full C printer not yet wired into the GUI)\n\n"));
+    pseudo.push_str(&format!(
+        "(IR-level dump; full C printer not yet wired into the GUI)\n\n"
+    ));
 
     let lifter = unlace_lift::get_lifter(image.arch);
     let mut cursor = ea;
@@ -335,8 +366,11 @@ fn render_function(image: &unlace_loader::BinaryImage, ea: u64) -> (String, Stri
         let window = &section.data[off..(off + 16).min(section.data.len())];
         match lifter.lift_insn(window, cursor) {
             Ok(lifted) => {
-                let bytes: Vec<String> =
-                    window.iter().take(lifted.len).map(|b| format!("{:02x}", b)).collect();
+                let bytes: Vec<String> = window
+                    .iter()
+                    .take(lifted.len)
+                    .map(|b| format!("{:02x}", b))
+                    .collect();
                 disasm.push_str(&format!(
                     "{:#010x}: {:<24}  ; {} pcode ops\n",
                     cursor,
@@ -373,7 +407,10 @@ fn render_function(image: &unlace_loader::BinaryImage, ea: u64) -> (String, Stri
 
 fn parse_hex_addr(s: &str) -> Option<u64> {
     let t = s.trim();
-    let hex = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let hex = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u64::from_str_radix(hex, 16).ok()
 }
 

@@ -282,10 +282,10 @@ fn count_arg_writes_before(
     let regs = arg_regs(cc);
     let mut written: BTreeSet<u64> = BTreeSet::new();
     for insn in insns[..call_idx].iter() {
-        if let Some(out) = insn.output {
-            if out.space == SpaceId::Register {
-                written.insert(out.offset);
-            }
+        if let Some(out) = insn.output
+            && out.space == SpaceId::Register
+        {
+            written.insert(out.offset);
         }
     }
     let mut count = 0usize;

@@ -1420,45 +1420,41 @@ where
     let thunk_size = std::mem::size_of::<Pe::ImageThunkData>() as u64;
 
     // Eager imports.
-    if let Ok(Some(table)) = file.import_table() {
-        if let Ok(mut descs) = table.descriptors() {
-            while let Ok(Some(desc)) = descs.next() {
-                let lib_bytes = match table.name(desc.name.get(object::endian::LittleEndian)) {
-                    Ok(b) => b,
-                    Err(_) => continue,
-                };
-                let _ = lib_bytes; // library name not needed for the map key
-                let iat_rva = desc.first_thunk.get(object::endian::LittleEndian);
-                if iat_rva == 0 {
-                    continue;
+    if let Ok(Some(table)) = file.import_table()
+        && let Ok(mut descs) = table.descriptors()
+    {
+        while let Ok(Some(desc)) = descs.next() {
+            let lib_bytes = match table.name(desc.name.get(object::endian::LittleEndian)) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+            let _ = lib_bytes; // library name not needed for the map key
+            let iat_rva = desc.first_thunk.get(object::endian::LittleEndian);
+            if iat_rva == 0 {
+                continue;
+            }
+            // Walk via OFT (name table) when present, since the IAT may
+            // have been overwritten at load time — names live in the
+            // hint-name table referenced by OFT thunks. Fall back to
+            // first_thunk if OFT is null.
+            let name_thunk_rva = {
+                let oft = desc.original_first_thunk.get(object::endian::LittleEndian);
+                if oft != 0 { oft } else { iat_rva }
+            };
+            let mut thunks = match table.thunks(name_thunk_rva) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            let mut slot_idx: u64 = 0;
+            while let Ok(Some(thunk)) = thunks.next::<Pe>() {
+                if !thunk.is_ordinal()
+                    && let Ok((_hint, name)) = table.hint_name(thunk.address())
+                    && let Some(resolved) = by_name.get(std::str::from_utf8(name).unwrap_or(""))
+                {
+                    let slot_va = image_base + u64::from(iat_rva) + slot_idx * thunk_size;
+                    out.insert(slot_va, resolved.clone());
                 }
-                // Walk via OFT (name table) when present, since the IAT may
-                // have been overwritten at load time — names live in the
-                // hint-name table referenced by OFT thunks. Fall back to
-                // first_thunk if OFT is null.
-                let name_thunk_rva = {
-                    let oft = desc.original_first_thunk.get(object::endian::LittleEndian);
-                    if oft != 0 { oft } else { iat_rva }
-                };
-                let mut thunks = match table.thunks(name_thunk_rva) {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                let mut slot_idx: u64 = 0;
-                while let Ok(Some(thunk)) = thunks.next::<Pe>() {
-                    if !thunk.is_ordinal() {
-                        if let Ok((_hint, name)) = table.hint_name(thunk.address()) {
-                            if let Some(resolved) =
-                                by_name.get(std::str::from_utf8(name).unwrap_or(""))
-                            {
-                                let slot_va =
-                                    image_base + u64::from(iat_rva) + slot_idx * thunk_size;
-                                out.insert(slot_va, resolved.clone());
-                            }
-                        }
-                    }
-                    slot_idx += 1;
-                }
+                slot_idx += 1;
             }
         }
     }
@@ -1490,41 +1486,40 @@ where
     let thunk_size = std::mem::size_of::<Pe::ImageThunkData>() as u64;
 
     // Eager imports (`IMAGE_DIRECTORY_ENTRY_IMPORT`).
-    if let Ok(Some(table)) = file.import_table() {
-        if let Ok(mut descs) = table.descriptors() {
-            while let Ok(Some(desc)) = descs.next() {
-                let lib = match table.name(desc.name.get(object::endian::LittleEndian)) {
-                    Ok(b) => String::from_utf8_lossy(b).to_string(),
-                    Err(_) => continue,
-                };
-                let iat_rva = desc.first_thunk.get(object::endian::LittleEndian);
-                if iat_rva == 0 {
-                    continue;
-                }
-                // Names live in OFT when present; fall back to first_thunk
-                // (matches `build_forwarded_resolutions`).
-                let name_thunk_rva = {
-                    let oft = desc.original_first_thunk.get(object::endian::LittleEndian);
-                    if oft != 0 { oft } else { iat_rva }
-                };
-                let mut thunks = match table.thunks(name_thunk_rva) {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                let mut slot_idx: u64 = 0;
-                while let Ok(Some(thunk)) = thunks.next::<Pe>() {
-                    if !thunk.is_ordinal() {
-                        if let Ok((_hint, name)) = table.hint_name(thunk.address()) {
-                            let fn_name = std::str::from_utf8(name).unwrap_or("");
-                            if !fn_name.is_empty() {
-                                let slot_va =
-                                    image_base + u64::from(iat_rva) + slot_idx * thunk_size;
-                                out.insert(slot_va, format!("{lib}!{fn_name}"));
-                            }
-                        }
+    if let Ok(Some(table)) = file.import_table()
+        && let Ok(mut descs) = table.descriptors()
+    {
+        while let Ok(Some(desc)) = descs.next() {
+            let lib = match table.name(desc.name.get(object::endian::LittleEndian)) {
+                Ok(b) => String::from_utf8_lossy(b).to_string(),
+                Err(_) => continue,
+            };
+            let iat_rva = desc.first_thunk.get(object::endian::LittleEndian);
+            if iat_rva == 0 {
+                continue;
+            }
+            // Names live in OFT when present; fall back to first_thunk
+            // (matches `build_forwarded_resolutions`).
+            let name_thunk_rva = {
+                let oft = desc.original_first_thunk.get(object::endian::LittleEndian);
+                if oft != 0 { oft } else { iat_rva }
+            };
+            let mut thunks = match table.thunks(name_thunk_rva) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            let mut slot_idx: u64 = 0;
+            while let Ok(Some(thunk)) = thunks.next::<Pe>() {
+                if !thunk.is_ordinal()
+                    && let Ok((_hint, name)) = table.hint_name(thunk.address())
+                {
+                    let fn_name = std::str::from_utf8(name).unwrap_or("");
+                    if !fn_name.is_empty() {
+                        let slot_va = image_base + u64::from(iat_rva) + slot_idx * thunk_size;
+                        out.insert(slot_va, format!("{lib}!{fn_name}"));
                     }
-                    slot_idx += 1;
                 }
+                slot_idx += 1;
             }
         }
     }

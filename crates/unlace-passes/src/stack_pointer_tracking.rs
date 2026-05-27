@@ -182,10 +182,10 @@ fn resolve_addr_to_sp_offset(
             }
             IrOp::Copy => {
                 // One-level copy passthrough.
-                if let Some(src) = prev.inputs.first() {
-                    if spec.is_sp(src) {
-                        return Some(entry_delta);
-                    }
+                if let Some(src) = prev.inputs.first()
+                    && spec.is_sp(src)
+                {
+                    return Some(entry_delta);
                 }
                 return None;
             }
@@ -276,15 +276,14 @@ fn walk_sp_deltas(
                     }
                 }
                 IrOp::Copy if writes_rsp => {
-                    if let Some(src) = insn.inputs.first() {
-                        if let Some((sign, k, is_dynamic)) =
+                    if let Some(src) = insn.inputs.first()
+                        && let Some((sign, k, is_dynamic)) =
                             trace_copy_source(func, bid, idx, src, spec)
-                        {
-                            if is_dynamic {
-                                dynamic_sp = true;
-                            } else {
-                                delta += sign * k;
-                            }
+                    {
+                        if is_dynamic {
+                            dynamic_sp = true;
+                        } else {
+                            delta += sign * k;
                         }
                     }
                 }

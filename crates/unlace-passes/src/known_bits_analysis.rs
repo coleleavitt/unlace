@@ -81,10 +81,7 @@ fn compute_insn_known_bits(
     insn: &IrInsn,
     current: &KnownBitsMap,
 ) -> KnownBits {
-    let out_width = insn
-        .output
-        .map(|o| (o.size as u8).saturating_mul(8))
-        .unwrap_or(64);
+    let out_width = insn.output.map(|o| o.size.saturating_mul(8)).unwrap_or(64);
     let out_width = out_width.min(64);
 
     match insn.op {
@@ -122,12 +119,12 @@ fn compute_insn_known_bits(
             a.ashr(shamt)
         }
         IrOp::IntZext if insn.inputs.len() == 1 => {
-            let in_width = (insn.inputs[0].size as u8).saturating_mul(8).min(64);
+            let in_width = insn.inputs[0].size.saturating_mul(8).min(64);
             let a = input_known_bits(func, bid, idx, 0, &insn.inputs[0], current, in_width);
             a.zext(out_width)
         }
         IrOp::IntSext if insn.inputs.len() == 1 => {
-            let in_width = (insn.inputs[0].size as u8).saturating_mul(8).min(64);
+            let in_width = insn.inputs[0].size.saturating_mul(8).min(64);
             let a = input_known_bits(func, bid, idx, 0, &insn.inputs[0], current, in_width);
             a.sext(out_width)
         }
@@ -180,7 +177,7 @@ fn input_known_bits(
 }
 
 fn varnode_bit_width(vn: Varnode) -> u8 {
-    (vn.size as u8).saturating_mul(8).min(64)
+    vn.size.saturating_mul(8).min(64)
 }
 
 #[cfg(test)]
@@ -210,11 +207,8 @@ mod tests {
             smallvec![x, Varnode::constant(0xF0, 4)],
             0x1004,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![y],
-            0x1008,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1008));
         func.insert_block(b0);
         build_ssa(func)
     }
@@ -248,11 +242,8 @@ mod tests {
             smallvec![x, Varnode::constant(0xFF, 8)],
             0x1000,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![y],
-            0x1004,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1004));
         func.insert_block(b0);
         let ssa = build_ssa(func);
         let map = compute_known_bits(&ssa);
@@ -280,11 +271,8 @@ mod tests {
             smallvec![x, Varnode::constant(4, 4)],
             0x1000,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![y],
-            0x1004,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1004));
         func.insert_block(b0);
         let ssa = build_ssa(func);
         let map = compute_known_bits(&ssa);

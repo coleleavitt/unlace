@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{EnumDiscriminant, SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{EnumDiscriminant, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -221,10 +221,11 @@ fn find_tag_comparisons(func: &SsaFunction) -> BTreeMap<SsaVarnode, Vec<(u64, Bl
                 if let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(1))) {
                     out.entry(sv).or_default().push((a.offset, bid, idx));
                 }
-            } else if b.space == SpaceId::Const && a.space != SpaceId::Const {
-                if let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(0))) {
-                    out.entry(sv).or_default().push((b.offset, bid, idx));
-                }
+            } else if b.space == SpaceId::Const
+                && a.space != SpaceId::Const
+                && let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(0)))
+            {
+                out.entry(sv).or_default().push((b.offset, bid, idx));
             }
         }
     }
@@ -259,15 +260,12 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     use smallvec::smallvec;
-    use unlace_ir::ssa::{CallingConvention, PrimitiveType};
+    use unlace_ir::ssa::{CallingConvention, PrimitiveType, VarMap};
     use unlace_ir::{BasicBlock, Function, IrInsn};
 
     use crate::pass::Pass;
 
-    fn make_ssa(
-        block: BasicBlock,
-        var_map: VarMap,
-    ) -> SsaFunction {
+    fn make_ssa(block: BasicBlock, var_map: VarMap) -> SsaFunction {
         let mut func = Function::new("cpp_variant_test", block.id, 0x1000);
         func.insert_block(block);
         let cfg = unlace_ir::cfg::build_cfg(&func);
@@ -304,6 +302,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

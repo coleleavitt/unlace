@@ -138,14 +138,15 @@ fn access_base(
 
     if let Some(&(def_bid, def_idx)) = def_map.get(&addr) {
         let def_insn = func.function.blocks.get(&def_bid)?.insns.get(def_idx)?;
-        if def_insn.op == IrOp::IntAdd && def_insn.inputs.len() >= 2 {
-            if let Some((base_slot, offset)) = base_plus_const(def_insn) {
-                let base = func
-                    .var_map
-                    .get(&(def_bid, def_idx, VarnodeSlot::Input(base_slot)))
-                    .copied()?;
-                return Some((base, offset));
-            }
+        if def_insn.op == IrOp::IntAdd
+            && def_insn.inputs.len() >= 2
+            && let Some((base_slot, offset)) = base_plus_const(def_insn)
+        {
+            let base = func
+                .var_map
+                .get(&(def_bid, def_idx, VarnodeSlot::Input(base_slot)))
+                .copied()?;
+            return Some((base, offset));
         }
     }
 
@@ -177,7 +178,7 @@ fn respects_alignment(offset: u64, width: u8) -> bool {
         return false;
     }
     if w.is_power_of_two() {
-        offset % w == 0
+        offset.is_multiple_of(w)
     } else {
         true
     }

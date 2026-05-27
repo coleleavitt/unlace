@@ -100,11 +100,11 @@ impl FieldKind {
 pub fn classify_aggregate(fields: &[(u32, FieldKind)], total_size: u32) -> Vec<EightbyteClass> {
     // psABI rule: aggregates >8 eightbytes (>64 bytes) are passed in MEMORY.
     if total_size > 64 {
-        let eightbyte_count = ((total_size + 7) / 8) as usize;
+        let eightbyte_count = total_size.div_ceil(8) as usize;
         return vec![EightbyteClass::Memory; eightbyte_count];
     }
 
-    let eightbyte_count = ((total_size + 7) / 8).max(1) as usize;
+    let eightbyte_count = total_size.div_ceil(8).max(1) as usize;
     let mut classes = vec![EightbyteClass::NoClass; eightbyte_count];
 
     for (offset, kind) in fields {
@@ -114,7 +114,7 @@ pub fn classify_aggregate(fields: &[(u32, FieldKind)], total_size: u32) -> Vec<E
     // Post-processing per psABI section 3.2.3, step 5.
     //
     // (a) If one eightbyte is MEMORY, the whole arg goes in memory.
-    if classes.iter().any(|c| *c == EightbyteClass::Memory) {
+    if classes.contains(&EightbyteClass::Memory) {
         return vec![EightbyteClass::Memory; eightbyte_count];
     }
     // (b) If X87UP isn't preceded by X87, change to SSE.
@@ -143,7 +143,7 @@ pub fn classify_aggregate(fields: &[(u32, FieldKind)], total_size: u32) -> Vec<E
 fn classify_field_into(classes: &mut [EightbyteClass], offset: u32, kind: &FieldKind) {
     let size = kind.size_in_bytes();
     let start_chunk = (offset / 8) as usize;
-    let end_chunk = ((offset + size + 7) / 8) as usize;
+    let end_chunk = (offset + size).div_ceil(8) as usize;
 
     let field_class = match kind {
         FieldKind::Int(_) => EightbyteClass::Integer,

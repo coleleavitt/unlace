@@ -286,10 +286,10 @@ fn resolve_offset(insns: &[IrInsn], before: usize, vn: &Varnode) -> (Varnode, u6
 /// `output` matches `target`. Returns the producing instruction index.
 fn find_def(insns: &[IrInsn], before: usize, target: &Varnode) -> Option<usize> {
     for j in (0..before).rev() {
-        if let Some(out) = insns[j].output {
-            if out == *target {
-                return Some(j);
-            }
+        if let Some(out) = insns[j].output
+            && out == *target
+        {
+            return Some(j);
         }
     }
     None
@@ -308,18 +308,17 @@ fn lookup_ssa(func: &SsaFunction, bid: BlockId, vn: &Varnode) -> SsaVarnode {
     };
     for (i, insn) in block.insns.iter().enumerate() {
         for (slot_idx, inp) in insn.inputs.iter().enumerate() {
-            if inp == vn {
-                if let Some(sv) = func.var_map.get(&(bid, i, VarnodeSlot::Input(slot_idx))) {
-                    return *sv;
-                }
+            if inp == vn
+                && let Some(sv) = func.var_map.get(&(bid, i, VarnodeSlot::Input(slot_idx)))
+            {
+                return *sv;
             }
         }
-        if let Some(out) = insn.output {
-            if out == *vn {
-                if let Some(sv) = func.var_map.get(&(bid, i, VarnodeSlot::Output)) {
-                    return *sv;
-                }
-            }
+        if let Some(out) = insn.output
+            && out == *vn
+            && let Some(sv) = func.var_map.get(&(bid, i, VarnodeSlot::Output))
+        {
+            return *sv;
         }
     }
     SsaVarnode {

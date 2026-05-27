@@ -53,18 +53,18 @@ fn collect_preserved_load_outputs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
             if insn.op != IrOp::Load {
                 continue;
             }
-            if let (Some(c), Some(out)) = (insn.category, insn.output) {
-                if c.is_preserved() {
-                    if let Some(out_ssa) = output_ssa(func, bid, insn_idx) {
-                        set.insert(out_ssa);
-                    } else {
-                        set.insert(SsaVarnode {
-                            base: out,
-                            version: 0,
-                        });
-                    }
-                    unlace_ir::alias::record_preserved();
+            if let (Some(c), Some(out)) = (insn.category, insn.output)
+                && c.is_preserved()
+            {
+                if let Some(out_ssa) = output_ssa(func, bid, insn_idx) {
+                    set.insert(out_ssa);
+                } else {
+                    set.insert(SsaVarnode {
+                        base: out,
+                        version: 0,
+                    });
                 }
+                unlace_ir::alias::record_preserved();
             }
         }
     }
@@ -114,6 +114,9 @@ fn collect_input_rewrites(
         let mut active: BTreeMap<SsaVarnode, CopySource> = BTreeMap::new();
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             for (input_idx, &raw) in insn.inputs.iter().enumerate() {
+                if is_call_argument_input(insn, input_idx) {
+                    continue;
+                }
                 if raw.space == SpaceId::Const {
                     continue;
                 }
@@ -160,6 +163,10 @@ fn collect_input_rewrites(
     rewrites
 }
 
+fn is_call_argument_input(insn: &unlace_ir::IrInsn, input_idx: usize) -> bool {
+    matches!(insn.op, IrOp::Call | IrOp::Callind) && input_idx > 0
+}
+
 fn resolve_active_source(
     active: &BTreeMap<SsaVarnode, CopySource>,
     source: CopySource,
@@ -190,7 +197,7 @@ fn kill_active_for_def(active: &mut BTreeMap<SsaVarnode, CopySource>, def: Varno
         return;
     }
     active.retain(|key, source| {
-        key.base != def && source.raw != def && source.ssa.map_or(true, |ssa| ssa.base != def)
+        key.base != def && source.raw != def && source.ssa.is_none_or(|ssa| ssa.base != def)
     });
 }
 
@@ -321,6 +328,35 @@ mod tests {
             .expect("has block")
             .insns[1];
         assert_eq!(add_insn.inputs[0], v1);
+    }
+
+    #[test]
+    fn test_copy_prop_preserves_call_argument_inputs() {
+        let rdi = Varnode::reg(56, 8);
+        let loaded = Varnode::unique(0x1000, 8);
+        let target = Varnode::constant(0x401000, 8);
+
+        let mut ssa = make_single_block_ssa(vec![
+            IrInsn::with_output(IrOp::Copy, rdi, smallvec![loaded], 0x1000),
+            IrInsn::without_output(IrOp::Call, smallvec![target, rdi], 0x1004),
+        ]);
+        let changed = CopyPropagationPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(
+            !changed,
+            "call argument inputs are a boundary for recovered ABI names"
+        );
+
+        let call = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[1];
+        assert_eq!(call.inputs[0], target);
+        assert_eq!(call.inputs[1], rdi);
     }
 
     #[test]

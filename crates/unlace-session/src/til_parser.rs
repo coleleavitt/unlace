@@ -118,10 +118,10 @@ fn find_zlib_start(bytes: &[u8], from: usize) -> Result<usize> {
         if bytes[i] == 0x78 && matches!(bytes[i + 1], 0x9C | 0xDA | 0x01) {
             let mut d = ZlibDecoder::new(&bytes[i..]);
             let mut sniff = [0u8; 16];
-            if let Ok(n) = d.read(&mut sniff) {
-                if n > 0 {
-                    return Ok(i);
-                }
+            if let Ok(n) = d.read(&mut sniff)
+                && n > 0
+            {
+                return Ok(i);
             }
         }
     }
@@ -240,7 +240,11 @@ mod tests {
         let names: Vec<&str> = til.symbols.iter().map(|s| s.name.as_str()).collect();
         // Verified empirically: gnulnx_x86.til exposes Linux syscalls
         // via SYS_<name> macro symbols.
-        assert!(names.contains(&"SYS_brk"), "expected SYS_brk in {} symbols", names.len());
+        assert!(
+            names.contains(&"SYS_brk"),
+            "expected SYS_brk in {} symbols",
+            names.len()
+        );
         assert!(names.contains(&"SYS_chdir"));
         assert!(names.contains(&"SYS_chmod"));
         assert!(names.contains(&"SYS__llseek"));

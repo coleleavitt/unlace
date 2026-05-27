@@ -83,7 +83,10 @@ mod tests {
         let mut name_bytes = b"foo.dwo".to_vec();
         name_bytes.push(0);
         let attrs = vec![
-            (DW_AT_GNU_DWO_ID, 0xDEADBEEFCAFEBABE_u64.to_le_bytes().to_vec()),
+            (
+                DW_AT_GNU_DWO_ID,
+                0xDEADBEEFCAFEBABE_u64.to_le_bytes().to_vec(),
+            ),
             (DW_AT_GNU_DWO_NAME, name_bytes),
         ];
         let s = extract_skeleton(&attrs).unwrap();

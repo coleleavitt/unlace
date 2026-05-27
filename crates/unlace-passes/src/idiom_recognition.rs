@@ -171,10 +171,10 @@ fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, IrInsn> {
     let mut map = BTreeMap::new();
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            if let Some(output) = insn.output {
-                if output.space != SpaceId::Const {
-                    map.insert(output, insn.clone());
-                }
+            if let Some(output) = insn.output
+                && output.space != SpaceId::Const
+            {
+                map.insert(output, insn.clone());
             }
         }
     }
@@ -246,20 +246,21 @@ fn try_subpiece_from_and(
         return None;
     }
 
-    if let Some(def_insn) = def_map.get(value) {
-        if def_insn.op == IrOp::IntRight && def_insn.inputs.len() == 2 {
-            let shift_src = def_insn.inputs[0];
-            let shift_amt = def_insn.inputs[1];
-            if shift_amt.space == SpaceId::Const && shift_amt.offset % 8 == 0 {
-                let byte_offset = shift_amt.offset / 8;
-                if byte_offset + (output.size as u64) <= shift_src.size as u64 {
-                    return Some(IrInsn::with_output(
-                        IrOp::Subpiece,
-                        output,
-                        smallvec::smallvec![shift_src, Varnode::constant(byte_offset, 4),],
-                        insn.addr,
-                    ));
-                }
+    if let Some(def_insn) = def_map.get(value)
+        && def_insn.op == IrOp::IntRight
+        && def_insn.inputs.len() == 2
+    {
+        let shift_src = def_insn.inputs[0];
+        let shift_amt = def_insn.inputs[1];
+        if shift_amt.space == SpaceId::Const && shift_amt.offset % 8 == 0 {
+            let byte_offset = shift_amt.offset / 8;
+            if byte_offset + (output.size as u64) <= shift_src.size as u64 {
+                return Some(IrInsn::with_output(
+                    IrOp::Subpiece,
+                    output,
+                    smallvec::smallvec![shift_src, Varnode::constant(byte_offset, 4),],
+                    insn.addr,
+                ));
             }
         }
     }
@@ -331,40 +332,38 @@ fn try_add_simplify(
     b: &Varnode,
     def_map: &BTreeMap<Varnode, IrInsn>,
 ) -> Option<IrInsn> {
-    if let Some((x, c1)) = def_binary(a, IrOp::IntSub, def_map) {
-        if c1 == *b {
-            return Some(make_copy(insn, x));
-        }
+    if let Some((x, c1)) = def_binary(a, IrOp::IntSub, def_map)
+        && c1 == *b
+    {
+        return Some(make_copy(insn, x));
     }
-    if let Some((x, c1)) = def_binary(b, IrOp::IntSub, def_map) {
-        if c1 == *a {
-            return Some(make_copy(insn, x));
-        }
+    if let Some((x, c1)) = def_binary(b, IrOp::IntSub, def_map)
+        && c1 == *a
+    {
+        return Some(make_copy(insn, x));
     }
 
-    if b.space == SpaceId::Const {
-        if let Some((x, c1)) = def_binary(a, IrOp::IntAdd, def_map) {
-            if c1.space == SpaceId::Const {
-                let folded = c1.offset.wrapping_add(b.offset) & mask_for_size(b.size);
-                return Some(make_replacement(
-                    insn,
-                    IrOp::IntAdd,
-                    smallvec::smallvec![x, Varnode::constant(folded, b.size)],
-                ));
-            }
-        }
+    if b.space == SpaceId::Const
+        && let Some((x, c1)) = def_binary(a, IrOp::IntAdd, def_map)
+        && c1.space == SpaceId::Const
+    {
+        let folded = c1.offset.wrapping_add(b.offset) & mask_for_size(b.size);
+        return Some(make_replacement(
+            insn,
+            IrOp::IntAdd,
+            smallvec::smallvec![x, Varnode::constant(folded, b.size)],
+        ));
     }
-    if a.space == SpaceId::Const {
-        if let Some((x, c1)) = def_binary(b, IrOp::IntAdd, def_map) {
-            if c1.space == SpaceId::Const {
-                let folded = c1.offset.wrapping_add(a.offset) & mask_for_size(a.size);
-                return Some(make_replacement(
-                    insn,
-                    IrOp::IntAdd,
-                    smallvec::smallvec![x, Varnode::constant(folded, a.size)],
-                ));
-            }
-        }
+    if a.space == SpaceId::Const
+        && let Some((x, c1)) = def_binary(b, IrOp::IntAdd, def_map)
+        && c1.space == SpaceId::Const
+    {
+        let folded = c1.offset.wrapping_add(a.offset) & mask_for_size(a.size);
+        return Some(make_replacement(
+            insn,
+            IrOp::IntAdd,
+            smallvec::smallvec![x, Varnode::constant(folded, a.size)],
+        ));
     }
 
     if let Some(y) = def_unary(b, IrOp::Int2comp, def_map) {
@@ -418,36 +417,37 @@ fn try_mult_simplify(
     def_map: &BTreeMap<Varnode, IrInsn>,
 ) -> Option<IrInsn> {
     if b.space == SpaceId::Const {
-        if let Some(shift) = power_of_two_log(b.offset) {
-            if shift >= 1 && a.space != SpaceId::Const {
-                return Some(make_replacement(
-                    insn,
-                    IrOp::IntLeft,
-                    smallvec::smallvec![*a, Varnode::constant(shift as u64, b.size)],
-                ));
-            }
+        if let Some(shift) = power_of_two_log(b.offset)
+            && shift >= 1
+            && a.space != SpaceId::Const
+        {
+            return Some(make_replacement(
+                insn,
+                IrOp::IntLeft,
+                smallvec::smallvec![*a, Varnode::constant(shift as u64, b.size)],
+            ));
         }
-        if let Some((x, c1)) = def_binary(a, IrOp::IntMult, def_map) {
-            if c1.space == SpaceId::Const {
-                let folded = c1.offset.wrapping_mul(b.offset) & mask_for_size(b.size);
-                return Some(make_replacement(
-                    insn,
-                    IrOp::IntMult,
-                    smallvec::smallvec![x, Varnode::constant(folded, b.size)],
-                ));
-            }
+        if let Some((x, c1)) = def_binary(a, IrOp::IntMult, def_map)
+            && c1.space == SpaceId::Const
+        {
+            let folded = c1.offset.wrapping_mul(b.offset) & mask_for_size(b.size);
+            return Some(make_replacement(
+                insn,
+                IrOp::IntMult,
+                smallvec::smallvec![x, Varnode::constant(folded, b.size)],
+            ));
         }
     }
-    if a.space == SpaceId::Const {
-        if let Some(shift) = power_of_two_log(a.offset) {
-            if shift >= 1 && b.space != SpaceId::Const {
-                return Some(make_replacement(
-                    insn,
-                    IrOp::IntLeft,
-                    smallvec::smallvec![*b, Varnode::constant(shift as u64, a.size)],
-                ));
-            }
-        }
+    if a.space == SpaceId::Const
+        && let Some(shift) = power_of_two_log(a.offset)
+        && shift >= 1
+        && b.space != SpaceId::Const
+    {
+        return Some(make_replacement(
+            insn,
+            IrOp::IntLeft,
+            smallvec::smallvec![*b, Varnode::constant(shift as u64, a.size)],
+        ));
     }
     None
 }
@@ -515,26 +515,26 @@ fn try_and_simplify(
     def_map: &BTreeMap<Varnode, IrInsn>,
 ) -> Option<IrInsn> {
     let output = insn.output?;
-    if let Some(inner) = def_unary(b, IrOp::IntNegate, def_map) {
-        if inner == *a {
-            return Some(make_copy(insn, Varnode::constant(0, output.size)));
-        }
+    if let Some(inner) = def_unary(b, IrOp::IntNegate, def_map)
+        && inner == *a
+    {
+        return Some(make_copy(insn, Varnode::constant(0, output.size)));
     }
-    if let Some(inner) = def_unary(a, IrOp::IntNegate, def_map) {
-        if inner == *b {
-            return Some(make_copy(insn, Varnode::constant(0, output.size)));
-        }
+    if let Some(inner) = def_unary(a, IrOp::IntNegate, def_map)
+        && inner == *b
+    {
+        return Some(make_copy(insn, Varnode::constant(0, output.size)));
     }
 
-    if let Some((x, y)) = def_binary(b, IrOp::IntOr, def_map) {
-        if x == *a || y == *a {
-            return Some(make_copy(insn, *a));
-        }
+    if let Some((x, y)) = def_binary(b, IrOp::IntOr, def_map)
+        && (x == *a || y == *a)
+    {
+        return Some(make_copy(insn, *a));
     }
-    if let Some((x, y)) = def_binary(a, IrOp::IntOr, def_map) {
-        if x == *b || y == *b {
-            return Some(make_copy(insn, *b));
-        }
+    if let Some((x, y)) = def_binary(a, IrOp::IntOr, def_map)
+        && (x == *b || y == *b)
+    {
+        return Some(make_copy(insn, *b));
     }
     None
 }
@@ -546,32 +546,32 @@ fn try_or_simplify(
     def_map: &BTreeMap<Varnode, IrInsn>,
 ) -> Option<IrInsn> {
     let output = insn.output?;
-    if let Some(inner) = def_unary(b, IrOp::IntNegate, def_map) {
-        if inner == *a {
-            return Some(make_copy(
-                insn,
-                Varnode::constant(mask_for_size(output.size), output.size),
-            ));
-        }
+    if let Some(inner) = def_unary(b, IrOp::IntNegate, def_map)
+        && inner == *a
+    {
+        return Some(make_copy(
+            insn,
+            Varnode::constant(mask_for_size(output.size), output.size),
+        ));
     }
-    if let Some(inner) = def_unary(a, IrOp::IntNegate, def_map) {
-        if inner == *b {
-            return Some(make_copy(
-                insn,
-                Varnode::constant(mask_for_size(output.size), output.size),
-            ));
-        }
+    if let Some(inner) = def_unary(a, IrOp::IntNegate, def_map)
+        && inner == *b
+    {
+        return Some(make_copy(
+            insn,
+            Varnode::constant(mask_for_size(output.size), output.size),
+        ));
     }
 
-    if let Some((x, y)) = def_binary(b, IrOp::IntAnd, def_map) {
-        if x == *a || y == *a {
-            return Some(make_copy(insn, *a));
-        }
+    if let Some((x, y)) = def_binary(b, IrOp::IntAnd, def_map)
+        && (x == *a || y == *a)
+    {
+        return Some(make_copy(insn, *a));
     }
-    if let Some((x, y)) = def_binary(a, IrOp::IntAnd, def_map) {
-        if x == *b || y == *b {
-            return Some(make_copy(insn, *b));
-        }
+    if let Some((x, y)) = def_binary(a, IrOp::IntAnd, def_map)
+        && (x == *b || y == *b)
+    {
+        return Some(make_copy(insn, *b));
     }
     None
 }
@@ -780,14 +780,15 @@ fn try_recognize_unary(
             if let Some(x) = def_unary(&inner, IrOp::IntNegate, def_map) {
                 return Some(make_copy(insn, x));
             }
-            if let Some((x, c1)) = def_binary(&inner, IrOp::IntSub, def_map) {
-                if is_const_val(&c1, 1) && x.space != SpaceId::Const {
-                    return Some(make_replacement(
-                        insn,
-                        IrOp::Int2comp,
-                        smallvec::smallvec![x],
-                    ));
-                }
+            if let Some((x, c1)) = def_binary(&inner, IrOp::IntSub, def_map)
+                && is_const_val(&c1, 1)
+                && x.space != SpaceId::Const
+            {
+                return Some(make_replacement(
+                    insn,
+                    IrOp::Int2comp,
+                    smallvec::smallvec![x],
+                ));
             }
         }
         IrOp::IntSext => {

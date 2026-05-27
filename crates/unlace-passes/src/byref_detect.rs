@@ -215,10 +215,10 @@ fn resolve_root(
     if is_rsp_or_rbp(addr) {
         return Some(AddrRoot::Stack(0));
     }
-    if addr.space == SpaceId::Register {
-        if let Some(idx) = active_param_regs.iter().position(|&r| r == addr.offset) {
-            return Some(AddrRoot::Param(idx as u32));
-        }
+    if addr.space == SpaceId::Register
+        && let Some(idx) = active_param_regs.iter().position(|&r| r == addr.offset)
+    {
+        return Some(AddrRoot::Param(idx as u32));
     }
     if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
         return None;
@@ -328,10 +328,10 @@ fn collect_call_arg_sources(
     let mut seen: BTreeSet<Varnode> = BTreeSet::new();
     let mut out = Vec::new();
     for &reg in active_param_regs {
-        if let Some(&vn) = last_def_input.get(&reg) {
-            if seen.insert(vn) {
-                out.push(vn);
-            }
+        if let Some(&vn) = last_def_input.get(&reg)
+            && seen.insert(vn)
+        {
+            out.push(vn);
         }
     }
     out

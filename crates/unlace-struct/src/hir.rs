@@ -193,7 +193,7 @@ pub enum HirNode {
     /// MSVC SEH lowering (t183) emits this variant when a try-block map
     /// entry has one or more typed handlers. The historical
     /// landing-pad-driven structurer also emits it with a single
-    /// catch-all arm to model C++ EH cleanup regions (the printer in
+    /// catch-all arm when no typed catch metadata is available (the printer in
     /// turn emits these as `__except` for back-compat with the previous
     /// fixed-shape rendering).
     TryCatch {

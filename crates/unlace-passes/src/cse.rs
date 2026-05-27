@@ -310,11 +310,11 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
         // The earlier result is the SSA varnode of the previously-defined
         // output; locate it via reverse lookup so the new COPY input slot
         // points at the right SSA version.
-        if rw.earlier.space != SpaceId::Const {
-            if let Some(earlier_sv) = find_ssa_for_base(func, &rw.earlier) {
-                func.var_map
-                    .insert((rw.block, rw.insn_idx, VarnodeSlot::Input(0)), earlier_sv);
-            }
+        if rw.earlier.space != SpaceId::Const
+            && let Some(earlier_sv) = find_ssa_for_base(func, &rw.earlier)
+        {
+            func.var_map
+                .insert((rw.block, rw.insn_idx, VarnodeSlot::Input(0)), earlier_sv);
         }
     }
 }

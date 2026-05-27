@@ -173,10 +173,10 @@ fn signature_matches(sig: &FlirtSignature, bytes: &[u8]) -> bool {
     if bytes.len() < sig.min_len {
         return false;
     }
-    if let Some(max) = sig.max_len {
-        if bytes.len() > max {
-            return false;
-        }
+    if let Some(max) = sig.max_len
+        && bytes.len() > max
+    {
+        return false;
     }
     if bytes.len() < sig.pattern.len() {
         return false;

@@ -142,10 +142,10 @@ fn collect_candidates(func: &SsaFunction) -> Vec<BlockId> {
         if block.insns.len() > MAX_TAIL_INSNS {
             continue;
         }
-        if let Some(phis) = func.phi_map.get(&bid) {
-            if !phis.is_empty() {
-                continue;
-            }
+        if let Some(phis) = func.phi_map.get(&bid)
+            && !phis.is_empty()
+        {
+            continue;
         }
         let preds = func.cfg.predecessors(bid);
         if preds.len() < MIN_PREDECESSORS {
@@ -163,7 +163,7 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{VarMap, CallingConvention, DominatorTree, PrimitiveType, SsaFunction};
+    use unlace_ir::ssa::{CallingConvention, DominatorTree, PrimitiveType, SsaFunction, VarMap};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -222,6 +222,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

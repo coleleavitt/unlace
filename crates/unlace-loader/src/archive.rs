@@ -33,7 +33,11 @@ pub fn is_archive(bytes: &[u8]) -> bool {
 
 /// Parse an archive header at `offset`. Returns the member name, payload
 /// offset, and payload size, plus the offset of the next header.
-fn parse_header(bytes: &[u8], offset: usize, long_names: Option<&[u8]>) -> Option<(ArchiveMember, usize)> {
+fn parse_header(
+    bytes: &[u8],
+    offset: usize,
+    long_names: Option<&[u8]>,
+) -> Option<(ArchiveMember, usize)> {
     if offset + HEADER_SIZE > bytes.len() {
         return None;
     }
@@ -50,27 +54,23 @@ fn parse_header(bytes: &[u8], offset: usize, long_names: Option<&[u8]>) -> Optio
 
     // BSD long filename: "#1/N" means next N bytes of payload are the name.
     let mut resolved_name = name_field.trim_end_matches('/').to_string();
-    if let Some(stripped) = name_field.strip_prefix("#1/") {
-        if let Ok(name_len) = stripped.parse::<usize>() {
-            if payload_offset + name_len <= bytes.len() {
-                resolved_name =
-                    String::from_utf8_lossy(&bytes[payload_offset..payload_offset + name_len])
-                        .trim_end_matches('\0')
-                        .to_string();
-                payload_offset += name_len;
-                payload_size -= name_len as u64;
-            }
-        }
+    if let Some(stripped) = name_field.strip_prefix("#1/")
+        && let Ok(name_len) = stripped.parse::<usize>()
+        && payload_offset + name_len <= bytes.len()
+    {
+        resolved_name = String::from_utf8_lossy(&bytes[payload_offset..payload_offset + name_len])
+            .trim_end_matches('\0')
+            .to_string();
+        payload_offset += name_len;
+        payload_size -= name_len as u64;
     }
     // GNU long filename: "/N" indexes into the long-names table at member "//".
-    if let Some(stripped) = name_field.strip_prefix('/') {
-        if let Ok(idx) = stripped.parse::<usize>() {
-            if let Some(table) = long_names {
-                if let Some(slash) = table[idx..].iter().position(|&b| b == b'\n' || b == b'/') {
-                    resolved_name = String::from_utf8_lossy(&table[idx..idx + slash]).to_string();
-                }
-            }
-        }
+    if let Some(stripped) = name_field.strip_prefix('/')
+        && let Ok(idx) = stripped.parse::<usize>()
+        && let Some(table) = long_names
+        && let Some(slash) = table[idx..].iter().position(|&b| b == b'\n' || b == b'/')
+    {
+        resolved_name = String::from_utf8_lossy(&table[idx..idx + slash]).to_string();
     }
 
     let next = payload_offset + payload_size as usize;

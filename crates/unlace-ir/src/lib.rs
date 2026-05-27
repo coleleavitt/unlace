@@ -10,14 +10,15 @@ mod arch;
 pub mod arch_support;
 mod block;
 pub mod cfg;
+pub mod data_layout;
 pub mod data_xrefs;
 mod display;
 mod function;
 mod insn;
 pub mod known_bits;
 mod lifter;
-pub mod memory_ssa;
 pub mod lvar;
+pub mod memory_ssa;
 mod op;
 pub mod reg_alias;
 mod space;
@@ -25,12 +26,15 @@ pub mod ssa;
 pub mod stack;
 pub mod tinfo;
 pub mod types;
+pub mod value_lattice;
 mod varnode;
+pub mod verify;
 pub mod xref;
 
 pub use alias::AliasCategory;
 pub use arch::ArchId;
 pub use block::{BasicBlock, BlockId};
+pub use data_layout::{DataLayout, Endianness};
 pub use function::Function;
 pub use insn::IrInsn;
 pub use lifter::{LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile};
@@ -41,4 +45,6 @@ pub use tinfo::{
     CallingConv, MemberPathEntry, ResolvedMember, TEnumVariant, TField, TInfo, TQualifiers,
     TypeSource,
 };
+pub use value_lattice::ValueLattice;
 pub use varnode::Varnode;
+pub use verify::{VerifyError, verify_ssa_function};

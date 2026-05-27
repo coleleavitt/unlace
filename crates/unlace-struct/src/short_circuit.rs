@@ -72,18 +72,17 @@ fn recover_short_circuits(
     let mut out = Vec::with_capacity(nodes.len());
     let mut idx = 0;
     while idx < nodes.len() {
-        if idx + 1 < nodes.len() {
-            if let (Some((cond_a, then_a)), Some((cond_b, then_b))) = (
+        if idx + 1 < nodes.len()
+            && let (Some((cond_a, then_a)), Some((cond_b, then_b))) = (
                 as_if_without_else_node(&nodes[idx]),
                 as_if_without_else_node(&nodes[idx + 1]),
-            ) {
-                if bodies_eq(&then_a, &then_b) {
-                    let then_body = recover_short_circuits(then_a, func, ctr);
-                    emit_or_if(cond_a, cond_b, then_body, None, func, ctr, &mut out);
-                    idx += 2;
-                    continue;
-                }
-            }
+            )
+            && bodies_eq(&then_a, &then_b)
+        {
+            let then_body = recover_short_circuits(then_a, func, ctr);
+            emit_or_if(cond_a, cond_b, then_body, None, func, ctr, &mut out);
+            idx += 2;
+            continue;
         }
 
         recover_into(nodes[idx].clone(), func, ctr, &mut out);
@@ -218,43 +217,40 @@ fn try_collapse(
     // --- Pattern: if (!a) {} else { if (!b) {} else { X } } ---
     // Recover as `if (a && b) { X }` by synthesizing negations for the two
     // already-negated branch conditions, then combining those with BoolAnd.
-    if then_body.is_empty() {
-        if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&else_body) {
-            if inner_then.is_empty() {
-                emit_negated_and_if(cond_a, cond_b, inner_else, func, ctr, out);
-                return;
-            }
-        }
+    if then_body.is_empty()
+        && let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&else_body)
+        && inner_then.is_empty()
+    {
+        emit_negated_and_if(cond_a, cond_b, inner_else, func, ctr, out);
+        return;
     }
 
     // --- Pattern: a && b ---
     // Outer then is a single If(b) whose else matches the outer else.
-    if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&then_body) {
-        if bodies_eq(&inner_else, &else_body) {
-            let (vn, sv) = ctr.next_varnode();
-            let insn =
-                IrInsn::with_output(IrOp::BoolAnd, vn, smallvec![cond_a.base, cond_b.base], 0);
-            func.foldable_exprs.insert(sv);
-            out.push(HirNode::Statement(insn));
-            // Recurse: the merged If may itself be collapsible (a && b && c).
-            try_collapse(sv, inner_then, else_body, func, ctr, out);
-            return;
-        }
+    if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&then_body)
+        && bodies_eq(&inner_else, &else_body)
+    {
+        let (vn, sv) = ctr.next_varnode();
+        let insn = IrInsn::with_output(IrOp::BoolAnd, vn, smallvec![cond_a.base, cond_b.base], 0);
+        func.foldable_exprs.insert(sv);
+        out.push(HirNode::Statement(insn));
+        // Recurse: the merged If may itself be collapsible (a && b && c).
+        try_collapse(sv, inner_then, else_body, func, ctr, out);
+        return;
     }
 
     // --- Pattern: a || b ---
     // Outer else is a single If(b) whose then matches the outer then.
-    if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&else_body) {
-        if bodies_eq(&inner_then, &then_body) {
-            let (vn, sv) = ctr.next_varnode();
-            let insn =
-                IrInsn::with_output(IrOp::BoolOr, vn, smallvec![cond_a.base, cond_b.base], 0);
-            func.foldable_exprs.insert(sv);
-            out.push(HirNode::Statement(insn));
-            // Recurse: the merged If may itself be collapsible.
-            try_collapse(sv, then_body, inner_else, func, ctr, out);
-            return;
-        }
+    if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&else_body)
+        && bodies_eq(&inner_then, &then_body)
+    {
+        let (vn, sv) = ctr.next_varnode();
+        let insn = IrInsn::with_output(IrOp::BoolOr, vn, smallvec![cond_a.base, cond_b.base], 0);
+        func.foldable_exprs.insert(sv);
+        out.push(HirNode::Statement(insn));
+        // Recurse: the merged If may itself be collapsible.
+        try_collapse(sv, then_body, inner_else, func, ctr, out);
+        return;
     }
 
     // No pattern matched — recurse into children, then emit.

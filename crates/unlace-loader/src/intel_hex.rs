@@ -336,7 +336,7 @@ enum HexErr {
 }
 
 fn decode_hex(s: &str) -> Result<Vec<u8>, HexErr> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return Err(HexErr::Odd);
     }
     let bytes = s.as_bytes();

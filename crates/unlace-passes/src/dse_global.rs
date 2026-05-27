@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use unlace_ir::ssa::{SsaFunction, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
@@ -302,16 +302,14 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
+        CallingConvention, DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarMap,
+        VarnodeSlot,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
     use super::*;
 
-    fn make_ssa(
-        blocks: Vec<BasicBlock>,
-        var_map: VarMap,
-    ) -> SsaFunction {
+    fn make_ssa(blocks: Vec<BasicBlock>, var_map: VarMap) -> SsaFunction {
         let entry = blocks.first().expect("blocks").id;
         let mut func = Function::new("test", entry, 0x1000);
         for bb in blocks {
@@ -365,6 +363,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

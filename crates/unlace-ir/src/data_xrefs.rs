@@ -207,10 +207,10 @@ fn classify(insn: &IrInsn, is_global_addr: impl Fn(u64) -> bool) -> Option<(Data
             // `&global[idx]` style: one operand is a global constant, the
             // other is a non-const index. Either operand position works.
             for i in 0..insn.inputs.len() {
-                if let Some(v) = const_input(i) {
-                    if is_global_addr(v) {
-                        return Some((DataXrefKind::Lea, v));
-                    }
+                if let Some(v) = const_input(i)
+                    && is_global_addr(v)
+                {
+                    return Some((DataXrefKind::Lea, v));
                 }
             }
             None

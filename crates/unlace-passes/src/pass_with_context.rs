@@ -9,7 +9,8 @@
 
 use unlace_ir::ssa::SsaFunction;
 
-use crate::analysis_context::AnalysisContext;
+use crate::analysis_context::{AnalysisContext, PreservedAnalyses};
+use crate::instrument::run_instrumented;
 use crate::pass::{Pass, PassError};
 
 /// A pass that consumes a shared [`AnalysisContext`].
@@ -18,11 +19,12 @@ pub trait PassWithContext: Send + Sync {
     fn name(&self) -> &str;
 
     /// Run one iteration. Returns `Ok(true)` if the function changed.
-    fn run(
-        &self,
-        func: &mut SsaFunction,
-        ctx: &mut AnalysisContext,
-    ) -> Result<bool, PassError>;
+    fn run(&self, func: &mut SsaFunction, ctx: &mut AnalysisContext) -> Result<bool, PassError>;
+
+    /// Analyses preserved when this pass reports `Ok(true)`.
+    fn preserved_analyses(&self) -> PreservedAnalyses {
+        PreservedAnalyses::none()
+    }
 }
 
 /// Adapt a regular [`Pass`] into a [`PassWithContext`] that simply ignores
@@ -36,12 +38,12 @@ impl<'a> PassWithContext for PassAdapter<'a> {
         self.inner.name()
     }
 
-    fn run(
-        &self,
-        func: &mut SsaFunction,
-        _ctx: &mut AnalysisContext,
-    ) -> Result<bool, PassError> {
-        self.inner.run(func)
+    fn run(&self, func: &mut SsaFunction, _ctx: &mut AnalysisContext) -> Result<bool, PassError> {
+        run_instrumented(self.inner, func)
+    }
+
+    fn preserved_analyses(&self) -> PreservedAnalyses {
+        self.inner.preserved_analyses()
     }
 }
 
@@ -63,6 +65,11 @@ pub fn run_to_fixedpoint_with_context(
     loop {
         round += 1;
         if round > MAX_ROUNDS {
+            tracing::error!(
+                func = %func_name,
+                rounds = MAX_ROUNDS,
+                "run_to_fixedpoint_with_context did not converge - passes are oscillating"
+            );
             return Err(PassError::InvariantViolation {
                 message: format!(
                     "run_to_fixedpoint_with_context exceeded {MAX_ROUNDS} rounds on '{func_name}'",
@@ -71,17 +78,44 @@ pub fn run_to_fixedpoint_with_context(
         }
 
         let mut changed_this_round = false;
+        let mut changed_passes: Vec<&str> = Vec::new();
         for pass in passes {
+            let pass_start = std::time::Instant::now();
             let changed = pass.run(func, ctx)?;
+            let elapsed = pass_start.elapsed();
+            if elapsed >= std::time::Duration::from_millis(500) {
+                tracing::warn!(
+                    func = %func_name,
+                    pass = pass.name(),
+                    round,
+                    elapsed_ms = elapsed.as_millis(),
+                    "slow pass"
+                );
+            }
             if changed {
                 changed_this_round = true;
                 total_changes += 1;
-                // Invalidate all cached analyses after any mutation.
-                ctx.invalidate_all();
+                changed_passes.push(pass.name());
+                ctx.invalidate_except(&pass.preserved_analyses());
             }
         }
 
+        if changed_this_round {
+            tracing::trace!(
+                func = %func_name,
+                round,
+                ?changed_passes,
+                "fixedpoint round"
+            );
+        }
+
         if !changed_this_round {
+            tracing::debug!(
+                func = %func_name,
+                rounds = round,
+                total_changes,
+                "run_to_fixedpoint_with_context converged"
+            );
             return Ok(total_changes);
         }
     }
@@ -128,9 +162,7 @@ mod tests {
             _func: &mut SsaFunction,
             _ctx: &mut AnalysisContext,
         ) -> Result<bool, PassError> {
-            let n = self
-                .runs
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let n = self.runs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             // Change for the first 2 invocations, then stop.
             Ok(n < 2)
         }
@@ -158,8 +190,7 @@ mod tests {
         let mut ctx = AnalysisContext::new();
         let noop = NoOpPass;
         let passes: &[&dyn PassWithContext] = &[&noop];
-        let total = run_to_fixedpoint_with_context(passes, &mut func, &mut ctx)
-            .expect("ok");
+        let total = run_to_fixedpoint_with_context(passes, &mut func, &mut ctx).expect("ok");
         assert_eq!(total, 0);
     }
 
@@ -171,8 +202,7 @@ mod tests {
             runs: std::sync::atomic::AtomicU32::new(0),
         };
         let passes: &[&dyn PassWithContext] = &[&pass];
-        let total = run_to_fixedpoint_with_context(passes, &mut func, &mut ctx)
-            .expect("ok");
+        let total = run_to_fixedpoint_with_context(passes, &mut func, &mut ctx).expect("ok");
         // Pass reports change for runs 0 and 1, then no change at run 2.
         assert_eq!(total, 2);
     }
@@ -187,8 +217,7 @@ mod tests {
                 "counting"
             }
             fn run(&self, _func: &mut SsaFunction) -> Result<bool, PassError> {
-                self.calls
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 Ok(false)
             }
         }
@@ -200,5 +229,45 @@ mod tests {
         let mut ctx = AnalysisContext::new();
         let _ = adapter.run(&mut func, &mut ctx).expect("ok");
         assert_eq!(inner.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_runner_honors_preserved_analyses() {
+        struct PreservingPass {
+            runs: std::sync::atomic::AtomicU32,
+        }
+
+        impl PassWithContext for PreservingPass {
+            fn name(&self) -> &str {
+                "preserving"
+            }
+
+            fn run(
+                &self,
+                func: &mut SsaFunction,
+                ctx: &mut AnalysisContext,
+            ) -> Result<bool, PassError> {
+                let _ = ctx.loops(func);
+                let _ = ctx.def_use_chains(func);
+                let n = self.runs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(n == 0)
+            }
+
+            fn preserved_analyses(&self) -> PreservedAnalyses {
+                PreservedAnalyses::only([AnalysisKind::Loops])
+            }
+        }
+
+        let mut func = trivial_function();
+        let mut ctx = AnalysisContext::new();
+        let pass = PreservingPass {
+            runs: std::sync::atomic::AtomicU32::new(0),
+        };
+        let passes: &[&dyn PassWithContext] = &[&pass];
+        let total = run_to_fixedpoint_with_context(passes, &mut func, &mut ctx).expect("ok");
+
+        assert_eq!(total, 1);
+        assert!(ctx.is_valid(AnalysisKind::Loops));
+        assert!(ctx.is_valid(AnalysisKind::DefUseChains));
     }
 }

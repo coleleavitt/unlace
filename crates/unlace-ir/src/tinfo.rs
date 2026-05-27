@@ -249,19 +249,19 @@ impl TInfo {
                 let field = best?;
                 let relative_offset = offset - field.offset;
                 // If the field is itself a struct/union, recurse.
-                if relative_offset > 0 {
-                    if let Some(inner) = field.ty.get_best_fit_member(relative_offset) {
-                        return Some(ResolvedMember {
-                            path: std::iter::once(MemberPathEntry {
-                                name: field.name.clone(),
-                                offset: field.offset,
-                            })
-                            .chain(inner.path)
-                            .collect(),
-                            ty: inner.ty,
-                            remainder_offset: inner.remainder_offset,
-                        });
-                    }
+                if relative_offset > 0
+                    && let Some(inner) = field.ty.get_best_fit_member(relative_offset)
+                {
+                    return Some(ResolvedMember {
+                        path: std::iter::once(MemberPathEntry {
+                            name: field.name.clone(),
+                            offset: field.offset,
+                        })
+                        .chain(inner.path)
+                        .collect(),
+                        ty: inner.ty,
+                        remainder_offset: inner.remainder_offset,
+                    });
                 }
                 Some(ResolvedMember {
                     path: vec![MemberPathEntry {
@@ -308,10 +308,10 @@ impl TInfo {
                     return None;
                 }
                 let index = offset / elem_size;
-                if let Some(n) = len {
-                    if index >= *n {
-                        return None;
-                    }
+                if let Some(n) = len
+                    && index >= *n
+                {
+                    return None;
                 }
                 let inner_offset = offset % elem_size;
                 if let Some(inner) = elem.get_best_fit_member(inner_offset) {

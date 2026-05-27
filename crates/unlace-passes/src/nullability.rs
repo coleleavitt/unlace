@@ -77,10 +77,10 @@ pub fn infer_param_nullability(func: &SsaFunction) -> BTreeMap<u32, Nullability>
                 read_before_write.insert(inp.offset);
             }
         }
-        if let Some(o) = insn.output {
-            if o.space == SpaceId::Register {
-                defined.insert(o.offset);
-            }
+        if let Some(o) = insn.output
+            && o.space == SpaceId::Register
+        {
+            defined.insert(o.offset);
         }
     }
 

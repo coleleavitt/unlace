@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::memory_ssa::{MemoryAccessId, MemoryLocation, MemorySSAGraph};
+use unlace_ir::memory_ssa::{MemoryAccessId, MemoryAccessSite, MemoryLocation, MemorySSAGraph};
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
@@ -52,24 +52,55 @@ pub fn build_memory_ssa(func: &SsaFunction) -> (MemorySSAGraph, MemorySsaMap) {
                 IrOp::Store => {
                     // Store(addr, value) — try to extract a constant offset.
                     let loc = extract_store_location(func, block.id, idx, insn);
-                    let id = graph.add_def(loc, latest_def, /*volatile=*/ false);
+                    let id = graph.add_def_at(
+                        MemoryAccessSite {
+                            block: site.block,
+                            insn_idx: site.insn_idx,
+                        },
+                        loc,
+                        latest_def,
+                        /*volatile=*/ false,
+                    );
                     sites.by_site.insert(site, id);
                     latest_def = Some(id);
                 }
                 IrOp::Load => {
                     let loc = extract_load_location(func, block.id, idx, insn);
-                    let id = graph.add_use(loc, latest_def);
+                    let id = graph.add_use_at(
+                        MemoryAccessSite {
+                            block: site.block,
+                            insn_idx: site.insn_idx,
+                        },
+                        loc,
+                        latest_def,
+                    );
                     sites.by_site.insert(site, id);
                 }
                 IrOp::AtomicStore | IrOp::AtomicLoad | IrOp::AtomicRmw | IrOp::AtomicCas => {
                     // Atomic ops are opaque barriers.
-                    let id = graph.add_def(MemoryLocation::unknown(), latest_def, true);
+                    let id = graph.add_def_at(
+                        MemoryAccessSite {
+                            block: site.block,
+                            insn_idx: site.insn_idx,
+                        },
+                        MemoryLocation::unknown(),
+                        latest_def,
+                        true,
+                    );
                     sites.by_site.insert(site, id);
                     latest_def = Some(id);
                 }
                 IrOp::Call | IrOp::Callind | IrOp::Callother => {
                     // Calls clobber everything (no mod-ref summary yet).
-                    let id = graph.add_def(MemoryLocation::unknown(), latest_def, false);
+                    let id = graph.add_def_at(
+                        MemoryAccessSite {
+                            block: site.block,
+                            insn_idx: site.insn_idx,
+                        },
+                        MemoryLocation::unknown(),
+                        latest_def,
+                        false,
+                    );
                     sites.by_site.insert(site, id);
                     latest_def = Some(id);
                 }
@@ -140,19 +171,12 @@ pub fn clobber_for_load(
     map: &MemorySsaMap,
 ) -> Option<MemoryAccessId> {
     // Verify the instruction is a load.
-    let Some(b) = func.function.blocks.get(&block) else {
-        return None;
-    };
-    let Some(insn) = b.insns.get(insn_idx) else {
-        return None;
-    };
+    let b = func.function.blocks.get(&block)?;
+    let insn = b.insns.get(insn_idx)?;
     if insn.op != IrOp::Load {
         return None;
     }
-    let site = AccessSite {
-        block,
-        insn_idx,
-    };
+    let site = AccessSite { block, insn_idx };
     let use_id = map.by_site.get(&site)?;
     graph.get_clobbering_access(*use_id)
 }
@@ -185,11 +209,8 @@ mod tests {
             smallvec![stack_slot],
             0x1004,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![r],
-            0x1008,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x1008));
         func.insert_block(b0);
         build_ssa(func)
     }
@@ -244,11 +265,8 @@ mod tests {
             smallvec![stack_slot],
             0x1008,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![r],
-            0x100C,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x100C));
         func.insert_block(b0);
         let ssa = build_ssa(func);
 
@@ -296,11 +314,8 @@ mod tests {
             smallvec![slot_a],
             0x1008,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![r],
-            0x100C,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x100C));
         func.insert_block(b0);
         let ssa = build_ssa(func);
 

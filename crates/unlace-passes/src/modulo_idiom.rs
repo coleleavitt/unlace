@@ -258,10 +258,10 @@ fn rewrite_and_to_mod(insn: &mut IrInsn, modulus: u64) {
 
 fn find_def(insns: &[IrInsn], before: usize, target: &Varnode) -> Option<usize> {
     for j in (0..before).rev() {
-        if let Some(out) = insns[j].output {
-            if out == *target {
-                return Some(j);
-            }
+        if let Some(out) = insns[j].output
+            && out == *target
+        {
+            return Some(j);
         }
     }
     None

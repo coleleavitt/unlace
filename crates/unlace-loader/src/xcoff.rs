@@ -62,7 +62,9 @@ mod tests {
 
     #[test]
     fn test_xcoff_magic_32() {
-        let bytes = [0x01, 0xDF, 0x00, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let bytes = [
+            0x01, 0xDF, 0x00, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
         assert!(is_xcoff(&bytes));
         let h = parse_header(&bytes).unwrap();
         assert_eq!(h.class, XcoffClass::Xcoff32);
@@ -71,7 +73,9 @@ mod tests {
 
     #[test]
     fn test_xcoff_magic_64() {
-        let bytes = [0x01, 0xF7, 0x00, 0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let bytes = [
+            0x01, 0xF7, 0x00, 0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
         assert!(is_xcoff(&bytes));
         let h = parse_header(&bytes).unwrap();
         assert_eq!(h.class, XcoffClass::Xcoff64);

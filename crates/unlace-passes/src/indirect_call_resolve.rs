@@ -176,11 +176,11 @@ fn gather_constants(
 
     match insn.op {
         IrOp::Copy => {
-            if let Some(inp) = insn.inputs.first() {
-                if inp.space == SpaceId::Const {
-                    sinks.insert(inp.offset);
-                    return;
-                }
+            if let Some(inp) = insn.inputs.first()
+                && inp.space == SpaceId::Const
+            {
+                sinks.insert(inp.offset);
+                return;
             }
             if let Some(next) = func
                 .var_map
@@ -191,17 +191,18 @@ fn gather_constants(
             }
         }
         IrOp::Load => {
-            if let Some(addr) = insn.inputs.get(1) {
-                if addr.space == SpaceId::Const {
-                    sinks.insert(addr.offset);
-                }
+            if let Some(addr) = insn.inputs.get(1)
+                && addr.space == SpaceId::Const
+            {
+                sinks.insert(addr.offset);
             }
         }
         IrOp::IntAdd => {
-            if let (Some(a), Some(b)) = (insn.inputs.first(), insn.inputs.get(1)) {
-                if a.space == SpaceId::Const && b.space == SpaceId::Const {
-                    sinks.insert(a.offset.wrapping_add(b.offset));
-                }
+            if let (Some(a), Some(b)) = (insn.inputs.first(), insn.inputs.get(1))
+                && a.space == SpaceId::Const
+                && b.space == SpaceId::Const
+            {
+                sinks.insert(a.offset.wrapping_add(b.offset));
             }
         }
         _ => {}

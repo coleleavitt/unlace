@@ -57,7 +57,12 @@ mod tests {
         let c = CFunc {
             entry_ea: 0x400000,
             name: "main".into(),
-            pseudocode: vec!["int main(void)".into(), "{".into(), "    return 0;".into(), "}".into()],
+            pseudocode: vec![
+                "int main(void)".into(),
+                "{".into(),
+                "    return 0;".into(),
+                "}".into(),
+            ],
         };
         assert!(c.as_text().contains("return 0"));
     }

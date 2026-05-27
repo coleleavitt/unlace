@@ -11,9 +11,7 @@ use crate::coverage;
 /// `idaapi.get_imagebase()` — the binary's image base address.
 pub fn get_imagebase(session: &Session) -> Option<u64> {
     coverage::mark_implemented("idaapi.get_imagebase");
-    session.with_binary(|img| {
-        img.sections.iter().map(|s| s.vaddr).min().unwrap_or(0)
-    })
+    session.with_binary(|img| img.sections.iter().map(|s| s.vaddr).min().unwrap_or(0))
 }
 
 /// `idaapi.get_imagename()` — the binary's filename.

@@ -102,11 +102,11 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
             };
 
             // --- Pattern 1: Branchind ← Load (absolute jump table) ---
-            if prod_op == IrOp::Load {
-                if let Some(cand) = extract_load_candidate(func, &defs, prod_loc) {
-                    out.insert(insn.addr, cand);
-                    continue;
-                }
+            if prod_op == IrOp::Load
+                && let Some(cand) = extract_load_candidate(func, &defs, prod_loc)
+            {
+                out.insert(insn.addr, cand);
+                continue;
             }
 
             // --- Pattern 2: Branchind ← IntAdd(base, Load) (RIP-relative) ---
@@ -184,10 +184,11 @@ fn extract_load_candidate(
 
     // First try a constant address in the raw instruction inputs
     // (skip placeholder values where offset < 0x1000).
-    if let Some(addr_vn) = load_insn.inputs.get(1) {
-        if addr_vn.space == SpaceId::Const && addr_vn.offset >= 0x1000 {
-            return Some(unresolved(addr_vn.offset, entry_size));
-        }
+    if let Some(addr_vn) = load_insn.inputs.get(1)
+        && addr_vn.space == SpaceId::Const
+        && addr_vn.offset >= 0x1000
+    {
+        return Some(unresolved(addr_vn.offset, entry_size));
     }
 
     // Follow the SSA var_map for the Load's address input.

@@ -77,11 +77,7 @@ pub fn run(interp: &mut Interpreter, cfg: &RunConfig) -> RunResult {
 /// `cfg.max_instructions`. Lifts the instruction at `rip` each step,
 /// updates `rip` on Continue or branch outcomes, and stops on
 /// SyscallExit / Faulted / Return / unmapped PC.
-pub fn run_image(
-    interp: &mut Interpreter,
-    image: &BinaryImage,
-    cfg: &RunConfig,
-) -> RunResult {
+pub fn run_image(interp: &mut Interpreter, image: &BinaryImage, cfg: &RunConfig) -> RunResult {
     // Map every section into memory.
     for sec in &image.sections {
         if sec.data.is_empty() {
@@ -273,7 +269,8 @@ mod tests {
     #[test]
     fn test_run_with_initial_syscall_exit() {
         let mut interp = Interpreter::new();
-        let result = run_with_initial_syscall(&mut interp, 60, [7, 0, 0, 0, 0, 0], &RunConfig::default());
+        let result =
+            run_with_initial_syscall(&mut interp, 60, [7, 0, 0, 0, 0, 0], &RunConfig::default());
         assert_eq!(result.exit_code, Some(7));
         assert!(result.fault.is_none());
     }

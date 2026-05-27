@@ -18,9 +18,9 @@ pub mod breakpoint;
 pub mod gdb_rsp;
 pub mod regs;
 
-pub use backends::NullDebugger;
 #[cfg(feature = "linux-ptrace")]
 pub use backends::LinuxPtraceDebugger;
+pub use backends::NullDebugger;
 
 use std::collections::BTreeMap;
 

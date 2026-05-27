@@ -282,7 +282,7 @@ fn decompile_all_parallel(
             // completions; rayon's work-stealing distributes the
             // strided fan-out reasonably across threads.
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-            if report && (n % stride == 0 || n == total) {
+            if report && (n.is_multiple_of(stride) || n == total) {
                 report_progress("batch", n, total, started);
             }
             BatchResult {
@@ -356,10 +356,11 @@ fn decompile_interproc(
                 entry,
                 &pipeline_config,
                 dwarf,
+                rtti,
                 functions,
             );
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-            if report && (n % stride == 0 || n == total_phase1) {
+            if report && (n.is_multiple_of(stride) || n == total_phase1) {
                 report_progress("interproc-phase1", n, total_phase1, started);
             }
             (entry.addr, entry.name.clone(), r)
@@ -403,6 +404,27 @@ fn decompile_interproc(
     );
     if let Err(e) = pipeline::run_whole_program_interproc(&mut ssa_map, config.max_iterations) {
         tracing::warn!(err = %e, "interprocedural fixed-point failed; emitting with per-function results");
+    }
+
+    match pipeline::run_whole_program_quality_refinement(&mut ssa_map, config.max_iterations) {
+        Ok(report) => {
+            tracing::info!(
+                caller_param_changed = report.caller_param_changed,
+                registry_applied = report.registry_applied,
+                cc_iters = report.calling_conv.iterations,
+                cc_hit_cap = report.calling_conv.hit_cap,
+                params_dropped = report.calling_conv.params_dropped,
+                returns_voided = report.calling_conv.returns_voided,
+                conventions_unified = report.calling_conv.conventions_unified,
+                canonical_struct_layouts = report.canonical_struct_layouts,
+                struct_name_rewrite_functions = report.struct_name_rewrite_functions,
+                final_refresh_changes = report.final_refresh_changes,
+                "interproc phase 2.5: whole-program quality refinement"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(err = %e, "whole-program quality refinement failed; emitting current interproc results");
+        }
     }
 
     // Phase 3: parallel emit
@@ -453,7 +475,7 @@ fn decompile_interproc(
                 rtti,
             );
             let n = done_phase3.fetch_add(1, Ordering::Relaxed) + 1;
-            if report && (n % stride_phase3 == 0 || n == total_phase3) {
+            if report && (n.is_multiple_of(stride_phase3) || n == total_phase3) {
                 report_progress("interproc-phase3", n, total_phase3, started_phase3);
             }
             BatchResult { addr, name, output }
@@ -469,9 +491,7 @@ fn write_merged(results: &[BatchResult]) {
 
     let mut buf = String::new();
     for result in sorted {
-        let sep: String = std::iter::repeat(SEPARATOR_CHAR)
-            .take(SEPARATOR_LEN)
-            .collect();
+        let sep: String = std::iter::repeat_n(SEPARATOR_CHAR, SEPARATOR_LEN).collect();
         buf.push_str(&format!(
             "// {} {} @ {:#x} {}\n",
             sep, result.name, result.addr, sep

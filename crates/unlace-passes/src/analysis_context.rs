@@ -33,6 +33,41 @@ pub enum AnalysisKind {
     ScalarEvolution,
 }
 
+/// Analyses a mutating pass promises are still valid after it runs.
+///
+/// This mirrors LLVM's `PreservedAnalyses` at a smaller scale. Passes default
+/// to preserving nothing; scalar/metadata-only passes can opt in so the shared
+/// context does not throw away CFG-derived facts unnecessarily.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PreservedAnalyses {
+    None,
+    All,
+    Some(BTreeSet<AnalysisKind>),
+}
+
+impl PreservedAnalyses {
+    pub fn none() -> Self {
+        Self::None
+    }
+
+    pub fn all() -> Self {
+        Self::All
+    }
+
+    pub fn only(kinds: impl IntoIterator<Item = AnalysisKind>) -> Self {
+        let kinds = kinds.into_iter().collect();
+        Self::Some(kinds)
+    }
+
+    pub fn preserves(&self, kind: AnalysisKind) -> bool {
+        match self {
+            Self::None => false,
+            Self::All => true,
+            Self::Some(kinds) => kinds.contains(&kind),
+        }
+    }
+}
+
 /// Cached analysis results for a single function.
 ///
 /// Created before a pipeline stage, shared across passes within that stage,
@@ -88,6 +123,39 @@ impl AnalysisContext {
         }
         self.valid.remove(&kind);
         self.generation += 1;
+    }
+
+    /// Invalidate everything except analyses explicitly preserved by a pass.
+    pub fn invalidate_except(&mut self, preserved: &PreservedAnalyses) {
+        if matches!(preserved, PreservedAnalyses::All) {
+            return;
+        }
+
+        let mut invalidated = false;
+        for kind in [
+            AnalysisKind::Loops,
+            AnalysisKind::Dominators,
+            AnalysisKind::ReversePostorder,
+            AnalysisKind::DefUseChains,
+            AnalysisKind::ScalarEvolution,
+        ] {
+            if preserved.preserves(kind) {
+                continue;
+            }
+            if self.valid.remove(&kind) {
+                invalidated = true;
+            }
+            match kind {
+                AnalysisKind::Loops => self.loops = None,
+                AnalysisKind::Dominators => {}
+                AnalysisKind::ReversePostorder => self.rpo = None,
+                AnalysisKind::DefUseChains => self.def_use = None,
+                AnalysisKind::ScalarEvolution => {}
+            }
+        }
+        if invalidated {
+            self.generation += 1;
+        }
     }
 
     /// Whether a given analysis is currently cached and valid.
@@ -238,33 +306,22 @@ mod tests {
         b0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut b1 = BasicBlock::new(BlockId(1));
-        b1.insns.push(IrInsn::with_output(
-            IrOp::Copy,
-            out,
-            smallvec![r0],
-            0x1100,
-        ));
+        b1.insns
+            .push(IrInsn::with_output(IrOp::Copy, out, smallvec![r0], 0x1100));
         b1.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1104));
         b1.successors = smallvec![BlockId(3)];
 
         let mut b2 = BasicBlock::new(BlockId(2));
-        b2.insns.push(IrInsn::with_output(
-            IrOp::Copy,
-            out,
-            smallvec![r1],
-            0x1200,
-        ));
+        b2.insns
+            .push(IrInsn::with_output(IrOp::Copy, out, smallvec![r1], 0x1200));
         b2.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1204));
         b2.successors = smallvec![BlockId(3)];
 
         let mut b3 = BasicBlock::new(BlockId(3));
-        b3.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![out],
-            0x1300,
-        ));
+        b3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![out], 0x1300));
 
         func.insert_block(b0);
         func.insert_block(b1);
@@ -396,6 +453,27 @@ mod tests {
         ctx.invalidate(AnalysisKind::Loops);
         assert!(!ctx.is_valid(AnalysisKind::Loops));
         assert!(ctx.is_valid(AnalysisKind::ReversePostorder));
+    }
+
+    #[test]
+    fn test_analysis_context_preserved_invalidation() {
+        let func = make_loop();
+        let mut ctx = AnalysisContext::new();
+
+        let _ = ctx.loops(&func);
+        let _ = ctx.reverse_postorder(&func);
+        let _ = ctx.def_use_chains(&func);
+        let gen_before = ctx.generation();
+
+        ctx.invalidate_except(&PreservedAnalyses::only([
+            AnalysisKind::Loops,
+            AnalysisKind::ReversePostorder,
+        ]));
+
+        assert!(ctx.is_valid(AnalysisKind::Loops));
+        assert!(ctx.is_valid(AnalysisKind::ReversePostorder));
+        assert!(!ctx.is_valid(AnalysisKind::DefUseChains));
+        assert_eq!(ctx.generation(), gen_before + 1);
     }
 
     #[test]

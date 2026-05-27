@@ -162,7 +162,7 @@ pub fn run(args: &[String]) -> i32 {
                         }
                     }
                 }
-                if !quiet && processed % 32 == 0 {
+                if !quiet && processed.is_multiple_of(32) {
                     let elapsed = started.elapsed();
                     let rate = processed as f64 / elapsed.as_secs_f64().max(1e-6);
                     eprintln!(

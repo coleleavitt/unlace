@@ -144,7 +144,7 @@ pub fn compute_trip_count(
             }
             if step > 0 {
                 let distance = bound - start;
-                Some((distance + step as u64 - 1) / step as u64)
+                Some(distance.div_ceil(step as u64))
             } else {
                 None // step < 0 with Ult — infinite or wrapping
             }
@@ -156,7 +156,7 @@ pub fn compute_trip_count(
             }
             if step > 0 && bound > start {
                 let distance = bound - start;
-                if distance % step as u64 == 0 {
+                if distance.is_multiple_of(step as u64) {
                     Some(distance / step as u64)
                 } else {
                     None // doesn't exactly hit the bound
@@ -164,7 +164,7 @@ pub fn compute_trip_count(
             } else if step < 0 && bound < start {
                 let distance = start - bound;
                 let abs_step = step.unsigned_abs();
-                if distance % abs_step == 0 {
+                if distance.is_multiple_of(abs_step) {
                     Some(distance / abs_step)
                 } else {
                     None
@@ -182,7 +182,7 @@ pub fn compute_trip_count(
             }
             if step > 0 {
                 let distance = (bound_s - start_s) as u64;
-                Some((distance + step as u64 - 1) / step as u64)
+                Some(distance.div_ceil(step as u64))
             } else {
                 None
             }
@@ -961,9 +961,15 @@ mod tests {
             step: 3,
         };
         // At iteration 0: start = 5.
-        assert_eq!(expr.evaluate_at_iteration(0), ScevExpr::Const { value: 5, size: 4 });
+        assert_eq!(
+            expr.evaluate_at_iteration(0),
+            ScevExpr::Const { value: 5, size: 4 }
+        );
         // At iteration 4: 5 + 3*4 = 17.
-        assert_eq!(expr.evaluate_at_iteration(4), ScevExpr::Const { value: 17, size: 4 });
+        assert_eq!(
+            expr.evaluate_at_iteration(4),
+            ScevExpr::Const { value: 17, size: 4 }
+        );
     }
 
     #[test]
@@ -977,7 +983,10 @@ mod tests {
             }),
             2,
         );
-        assert_eq!(expr.evaluate_at_iteration(3), ScevExpr::Const { value: 6, size: 4 });
+        assert_eq!(
+            expr.evaluate_at_iteration(3),
+            ScevExpr::Const { value: 6, size: 4 }
+        );
     }
 
     #[test]
@@ -1023,12 +1032,18 @@ mod tests {
             to_width: 32,
         };
         let sext = ScevExpr::SextCast {
-            inner: Box::new(ScevExpr::Const { value: 0xFF, size: 1 }),
+            inner: Box::new(ScevExpr::Const {
+                value: 0xFF,
+                size: 1,
+            }),
             from_width: 8,
             to_width: 32,
         };
         let trunc = ScevExpr::TruncCast {
-            inner: Box::new(ScevExpr::Const { value: 0xABCD, size: 2 }),
+            inner: Box::new(ScevExpr::Const {
+                value: 0xABCD,
+                size: 2,
+            }),
             to_width: 8,
         };
         assert!(!zext.is_could_not_compute());

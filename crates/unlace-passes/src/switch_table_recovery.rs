@@ -36,17 +36,17 @@ pub fn detect_switch_tables(insns: &[IrInsn]) -> Vec<SwitchTable> {
         let prev = &insns[i - 1];
         if prev.op == IrOp::Load {
             // Check if the load address computation looks like base + idx*scale
-            if let Some(output) = &prev.output {
-                if output.space == SpaceId::Register || output.space == SpaceId::Unique {
-                    // This is a potential switch table pattern
-                    tables.push(SwitchTable {
-                        branch_addr: insn.addr,
-                        table_base: 0, // Would be resolved by concrete analysis
-                        entry_count: 0,
-                        entry_size: output.size,
-                        targets: Vec::new(),
-                    });
-                }
+            if let Some(output) = &prev.output
+                && (output.space == SpaceId::Register || output.space == SpaceId::Unique)
+            {
+                // This is a potential switch table pattern
+                tables.push(SwitchTable {
+                    branch_addr: insn.addr,
+                    table_base: 0, // Would be resolved by concrete analysis
+                    entry_count: 0,
+                    entry_size: output.size,
+                    targets: Vec::new(),
+                });
             }
         }
     }

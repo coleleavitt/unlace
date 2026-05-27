@@ -5,8 +5,6 @@
 //! code addresses. Associates each slot with its target function symbol when
 //! available.
 
-use std::collections::BTreeMap;
-
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
@@ -65,17 +63,19 @@ pub fn detect_table_loads(func: &SsaFunction) -> Vec<(BlockId, usize, u64)> {
             if insn.op == IrOp::Callind && !insn.inputs.is_empty() {
                 // The target of CALLIND is typically a LOAD result.
                 // Check if it comes from a scaled-index address computation.
-                if let Some(load_insn) = find_def_in_func(func, &insn.inputs[0]) {
-                    if load_insn.op == IrOp::Load && load_insn.inputs.len() >= 2 {
-                        // Check for base + offset pattern in the address.
-                        if let Some(addr_insn) = find_def_in_func(func, &load_insn.inputs[0]) {
-                            if addr_insn.op == IrOp::IntAdd && addr_insn.inputs.len() == 2 {
-                                // One of the inputs might be a constant base address.
-                                for inp in &addr_insn.inputs {
-                                    if inp.space == SpaceId::Const && inp.offset > 0x1000 {
-                                        results.push((block_id, idx, inp.offset));
-                                    }
-                                }
+                if let Some(load_insn) = find_def_in_func(func, &insn.inputs[0])
+                    && load_insn.op == IrOp::Load
+                    && load_insn.inputs.len() >= 2
+                {
+                    // Check for base + offset pattern in the address.
+                    if let Some(addr_insn) = find_def_in_func(func, &load_insn.inputs[0])
+                        && addr_insn.op == IrOp::IntAdd
+                        && addr_insn.inputs.len() == 2
+                    {
+                        // One of the inputs might be a constant base address.
+                        for inp in &addr_insn.inputs {
+                            if inp.space == SpaceId::Const && inp.offset > 0x1000 {
+                                results.push((block_id, idx, inp.offset));
                             }
                         }
                     }
@@ -89,10 +89,10 @@ pub fn detect_table_loads(func: &SsaFunction) -> Vec<(BlockId, usize, u64)> {
 fn find_def_in_func(func: &SsaFunction, varnode: &Varnode) -> Option<unlace_ir::IrInsn> {
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            if let Some(out) = insn.output {
-                if out == *varnode {
-                    return Some(insn.clone());
-                }
+            if let Some(out) = insn.output
+                && out == *varnode
+            {
+                return Some(insn.clone());
             }
         }
     }
@@ -100,7 +100,12 @@ fn find_def_in_func(func: &SsaFunction, varnode: &Varnode) -> Option<unlace_ir::
 }
 
 /// Parse a function-pointer table from raw bytes at the given address.
-pub fn parse_func_ptr_table(data: &[u8], base_addr: u64, ptr_size: u8, max_entries: usize) -> Option<FuncPtrTable> {
+pub fn parse_func_ptr_table(
+    data: &[u8],
+    base_addr: u64,
+    ptr_size: u8,
+    max_entries: usize,
+) -> Option<FuncPtrTable> {
     if data.is_empty() || (ptr_size != 4 && ptr_size != 8) {
         return None;
     }

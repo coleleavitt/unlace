@@ -54,10 +54,10 @@ fn build_def_map(ssa: &SsaFunction) -> BTreeMap<SsaVarnode, IrInsn> {
         if *slot != VarnodeSlot::Output {
             continue;
         }
-        if let Some(block) = ssa.function.blocks.get(&bid) {
-            if let Some(insn) = block.insns.get(idx) {
-                map.insert(*sv, insn.clone());
-            }
+        if let Some(block) = ssa.function.blocks.get(&bid)
+            && let Some(insn) = block.insns.get(idx)
+        {
+            map.insert(*sv, insn.clone());
         }
     }
     map

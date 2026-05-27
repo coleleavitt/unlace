@@ -4,8 +4,6 @@
 //! operations alias. Used by dead-store elimination and pointer analysis
 //! to disambiguate memory accesses without a full points-to analysis.
 
-use std::collections::BTreeMap;
-
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
@@ -114,12 +112,18 @@ mod tests {
         let mut func = Function::new("mem", BlockId(0), 0x4000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns.push(IrInsn::without_output(
-            IrOp::Store, smallvec![addr1, val], 0x4000,
+            IrOp::Store,
+            smallvec![addr1, val],
+            0x4000,
         ));
         bb.insns.push(IrInsn::with_output(
-            IrOp::Load, loaded, smallvec![addr1], 0x4004,
+            IrOp::Load,
+            loaded,
+            smallvec![addr1],
+            0x4004,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x4008));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x4008));
         func.insert_block(bb);
 
         let ssa = build_ssa(func);
@@ -132,16 +136,25 @@ mod tests {
     #[test]
     fn test_alias_check() {
         let a = MemAccess {
-            block: BlockId(0), insn_idx: 0, is_write: true,
-            addr: Varnode::constant(0x1000, 8), size: 4,
+            block: BlockId(0),
+            insn_idx: 0,
+            is_write: true,
+            addr: Varnode::constant(0x1000, 8),
+            size: 4,
         };
         let b = MemAccess {
-            block: BlockId(0), insn_idx: 1, is_write: false,
-            addr: Varnode::constant(0x1002, 8), size: 4,
+            block: BlockId(0),
+            insn_idx: 1,
+            is_write: false,
+            addr: Varnode::constant(0x1002, 8),
+            size: 4,
         };
         let c = MemAccess {
-            block: BlockId(0), insn_idx: 2, is_write: false,
-            addr: Varnode::constant(0x2000, 8), size: 4,
+            block: BlockId(0),
+            insn_idx: 2,
+            is_write: false,
+            addr: Varnode::constant(0x2000, 8),
+            size: 4,
         };
         assert!(may_alias(&a, &b)); // overlapping
         assert!(!may_alias(&a, &c)); // disjoint

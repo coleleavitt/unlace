@@ -2,7 +2,7 @@
 //! using algebraic identities (double negation, absorption, De Morgan).
 
 use std::collections::BTreeMap;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -57,81 +57,86 @@ impl Pass for ConditionSimplifyPass {
                     ),
                 });
             }
-            let mut changed = false;
-            let old_var_map = func.var_map.clone();
-            let mut rebuilt_var_map = VarMap::new();
+            let (changed, rebuilt_var_map) = {
+                let old_var_map = &func.var_map;
+                let mut changed = false;
+                let mut rebuilt_var_map = VarMap::new();
 
-            for (&bid, block) in func.function.blocks.iter_mut() {
-                let mut new_insns: Vec<IrInsn> = Vec::with_capacity(block.insns.len());
-                let mut def_map = BTreeMap::new();
-                let mut raw_ssa_map = BTreeMap::new();
+                for (&bid, block) in func.function.blocks.iter_mut() {
+                    let mut new_insns: Vec<IrInsn> = Vec::with_capacity(block.insns.len());
+                    let mut def_map = BTreeMap::new();
+                    let mut def_seq = BTreeMap::new();
+                    let mut raw_ssa_map = BTreeMap::new();
 
-                for (insn_idx, insn) in block.insns.iter().enumerate() {
-                    record_input_ssa(&old_var_map, &mut raw_ssa_map, bid, insn_idx, insn);
-                    let new_idx = new_insns.len();
-                    match try_simplify(insn, &def_map, &mut next_unique) {
-                        Some(Simplification::Replace(replacement)) => {
-                            remap_replacement_var_map(
-                                &old_var_map,
-                                &raw_ssa_map,
-                                &mut rebuilt_var_map,
-                                bid,
-                                insn_idx,
-                                new_idx,
-                                &replacement,
-                            );
-                            new_insns.push(replacement);
-                            changed = true;
-                        }
-                        Some(Simplification::InsertAndReplace {
-                            prefix,
-                            replacement,
-                        }) => {
-                            for prefix_insn in prefix {
-                                let prefix_idx = new_insns.len();
-                                map_new_insn_var_map(
+                    for (insn_idx, insn) in block.insns.iter().enumerate() {
+                        record_input_ssa(old_var_map, &mut raw_ssa_map, bid, insn_idx, insn);
+                        let new_idx = new_insns.len();
+                        match try_simplify(insn, &def_map, &def_seq, &mut next_unique) {
+                            Some(Simplification::Replace(replacement)) => {
+                                remap_replacement_var_map(
+                                    old_var_map,
                                     &raw_ssa_map,
                                     &mut rebuilt_var_map,
                                     bid,
-                                    prefix_idx,
-                                    &prefix_insn,
+                                    insn_idx,
+                                    new_idx,
+                                    &replacement,
                                 );
-                                record_new_output_ssa(&mut raw_ssa_map, &prefix_insn);
-                                new_insns.push(prefix_insn);
+                                new_insns.push(replacement);
+                                changed = true;
                             }
-                            let replacement_idx = new_insns.len();
-                            remap_replacement_var_map(
-                                &old_var_map,
-                                &raw_ssa_map,
-                                &mut rebuilt_var_map,
-                                bid,
-                                insn_idx,
-                                replacement_idx,
-                                &replacement,
-                            );
-                            new_insns.push(replacement);
-                            changed = true;
+                            Some(Simplification::InsertAndReplace {
+                                prefix,
+                                replacement,
+                            }) => {
+                                for prefix_insn in prefix {
+                                    let prefix_idx = new_insns.len();
+                                    map_new_insn_var_map(
+                                        &raw_ssa_map,
+                                        &mut rebuilt_var_map,
+                                        bid,
+                                        prefix_idx,
+                                        &prefix_insn,
+                                    );
+                                    record_new_output_ssa(&mut raw_ssa_map, &prefix_insn);
+                                    new_insns.push(prefix_insn);
+                                }
+                                let replacement_idx = new_insns.len();
+                                remap_replacement_var_map(
+                                    old_var_map,
+                                    &raw_ssa_map,
+                                    &mut rebuilt_var_map,
+                                    bid,
+                                    insn_idx,
+                                    replacement_idx,
+                                    &replacement,
+                                );
+                                new_insns.push(replacement);
+                                changed = true;
+                            }
+                            None => {
+                                copy_old_var_map_entries(
+                                    old_var_map,
+                                    &mut rebuilt_var_map,
+                                    bid,
+                                    insn_idx,
+                                    new_idx,
+                                );
+                                new_insns.push(insn.clone());
+                            }
                         }
-                        None => {
-                            copy_old_var_map_entries(
-                                &old_var_map,
-                                &mut rebuilt_var_map,
-                                bid,
-                                insn_idx,
-                                new_idx,
-                            );
-                            new_insns.push(insn.clone());
-                        }
+                        record_def(&mut def_map, &mut def_seq, insn_idx, insn);
+                        record_output_ssa(old_var_map, &mut raw_ssa_map, bid, insn_idx, insn);
                     }
-                    record_def(&mut def_map, insn);
-                    record_output_ssa(&old_var_map, &mut raw_ssa_map, bid, insn_idx, insn);
+
+                    block.insns = new_insns;
                 }
 
-                block.insns = new_insns;
-            }
+                (changed, rebuilt_var_map)
+            };
 
             if changed {
-                func.var_map = rebuilt_var_map.into();
+                func.var_map = rebuilt_var_map;
             }
 
             if changed {
@@ -151,11 +156,17 @@ impl Pass for ConditionSimplifyPass {
 /// Raw register/unique varnodes are reused across basic blocks before the
 /// printer sees HIR. Keeping this map block-local avoids folding a condition
 /// through an unrelated definition from another block with the same raw name.
-fn record_def(map: &mut BTreeMap<Varnode, IrInsn>, insn: &IrInsn) {
-    if let Some(output) = insn.output {
-        if output.space != SpaceId::Const {
-            map.insert(output, insn.clone());
-        }
+fn record_def(
+    map: &mut BTreeMap<Varnode, IrInsn>,
+    seq: &mut BTreeMap<Varnode, usize>,
+    insn_idx: usize,
+    insn: &IrInsn,
+) {
+    if let Some(output) = insn.output
+        && output.space != SpaceId::Const
+    {
+        map.insert(output, insn.clone());
+        seq.insert(output, insn_idx);
     }
 }
 
@@ -253,16 +264,16 @@ fn map_new_insn_var_map(
     new_idx: usize,
     insn: &IrInsn,
 ) {
-    if let Some(output) = insn.output {
-        if output.space != SpaceId::Const {
-            rebuilt_var_map.insert(
-                (bid, new_idx, VarnodeSlot::Output),
-                SsaVarnode {
-                    base: output,
-                    version: 0,
-                },
-            );
-        }
+    if let Some(output) = insn.output
+        && output.space != SpaceId::Const
+    {
+        rebuilt_var_map.insert(
+            (bid, new_idx, VarnodeSlot::Output),
+            SsaVarnode {
+                base: output,
+                version: 0,
+            },
+        );
     }
     map_replacement_inputs(raw_ssa_map, rebuilt_var_map, bid, new_idx, insn);
 }
@@ -288,10 +299,10 @@ fn find_max_unique_offset(func: &SsaFunction) -> u64 {
     let mut max_offset = 0u64;
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            if let Some(output) = insn.output {
-                if output.space == SpaceId::Unique {
-                    max_offset = max_offset.max(output.offset);
-                }
+            if let Some(output) = insn.output
+                && output.space == SpaceId::Unique
+            {
+                max_offset = max_offset.max(output.offset);
             }
             for input in &insn.inputs {
                 if input.space == SpaceId::Unique {
@@ -347,6 +358,7 @@ fn simplify_eq(
     insn: &IrInsn,
     output: Varnode,
     def_map: &BTreeMap<Varnode, IrInsn>,
+    def_seq: &BTreeMap<Varnode, usize>,
 ) -> Option<Simplification> {
     let (a, b) = two(&insn.inputs)?;
 
@@ -366,83 +378,84 @@ fn simplify_eq(
         )));
     }
 
-    if b.space == SpaceId::Const && b.offset == 0 {
-        if let Some(inner) = def_map.get(&a) {
-            if is_boolean_result(inner) {
-                if insn.op == IrOp::IntNotequal {
-                    return Some(Simplification::Replace(make_copy(insn, a)));
-                }
-                return Some(Simplification::Replace(replace_op(
-                    insn,
-                    IrOp::BoolNegate,
-                    smallvec::smallvec![a],
-                )));
+    if b.space == SpaceId::Const
+        && b.offset == 0
+        && let Some(inner) = def_map.get(&a)
+    {
+        if is_boolean_result(inner) {
+            if insn.op == IrOp::IntNotequal {
+                return Some(Simplification::Replace(make_copy(insn, a)));
             }
+            return Some(Simplification::Replace(replace_op(
+                insn,
+                IrOp::BoolNegate,
+                smallvec::smallvec![a],
+            )));
+        }
 
-            if inner.op == IrOp::IntAnd && inner.inputs.len() == 2 {
-                let x = inner.inputs[0];
-                let y = inner.inputs[1];
-                if inner.output.as_ref() == Some(&a) {
-                    if insn.op == IrOp::IntEqual {
-                        let negate_input = if x == y && x.space != SpaceId::Const {
-                            x
-                        } else {
-                            a
-                        };
-                        return Some(Simplification::Replace(replace_op(
-                            insn,
-                            IrOp::BoolNegate,
-                            smallvec::smallvec![negate_input],
-                        )));
-                    }
-
-                    if x == y && x.space != SpaceId::Const {
-                        return Some(Simplification::Replace(make_copy(insn, x)));
-                    }
-                }
-            }
-
-            if inner.op == IrOp::IntSub && inner.inputs.len() == 2 {
-                let x = inner.inputs[0];
-                let y = inner.inputs[1];
-                if is_safe_offset_fold_target(&a, &x, inner) {
+        if inner.op == IrOp::IntAnd && inner.inputs.len() == 2 {
+            let x = inner.inputs[0];
+            let y = inner.inputs[1];
+            if inner.output.as_ref() == Some(&a) {
+                if insn.op == IrOp::IntEqual {
+                    let negate_input = if x == y && x.space != SpaceId::Const {
+                        x
+                    } else {
+                        a
+                    };
                     return Some(Simplification::Replace(replace_op(
                         insn,
-                        insn.op,
-                        smallvec::smallvec![x, y],
+                        IrOp::BoolNegate,
+                        smallvec::smallvec![negate_input],
                     )));
                 }
+
+                if x == y && x.space != SpaceId::Const {
+                    return Some(Simplification::Replace(make_copy(insn, x)));
+                }
+            }
+        }
+
+        if inner.op == IrOp::IntSub && inner.inputs.len() == 2 {
+            let x = inner.inputs[0];
+            let y = inner.inputs[1];
+            if is_safe_offset_fold_target(&a, &x, inner, def_map, def_seq) {
+                return Some(Simplification::Replace(replace_op(
+                    insn,
+                    insn.op,
+                    smallvec::smallvec![x, y],
+                )));
             }
         }
     }
 
-    if b.space == SpaceId::Const {
-        if let Some(inner) = def_map.get(&a) {
-            if inner.inputs.len() == 2 && inner.inputs[1].space == SpaceId::Const {
-                let x = inner.inputs[0];
-                if !is_safe_offset_fold_target(&a, &x, inner) {
-                    return None;
-                }
-                let c1 = inner.inputs[1].offset;
-                let size = b.size;
-                let mask = if size >= 8 {
-                    u64::MAX
-                } else {
-                    (1u64 << (size as u32 * 8)) - 1
-                };
-                let new_const_offset = match inner.op {
-                    IrOp::IntAdd => Some(b.offset.wrapping_sub(c1) & mask),
-                    IrOp::IntSub => Some(b.offset.wrapping_add(c1) & mask),
-                    _ => None,
-                };
-                if let Some(off) = new_const_offset {
-                    return Some(Simplification::Replace(replace_op(
-                        insn,
-                        insn.op,
-                        smallvec::smallvec![x, Varnode::constant(off, size)],
-                    )));
-                }
-            }
+    if b.space == SpaceId::Const
+        && let Some(inner) = def_map.get(&a)
+        && inner.inputs.len() == 2
+        && inner.inputs[1].space == SpaceId::Const
+    {
+        let x = inner.inputs[0];
+        if !is_safe_offset_fold_target(&a, &x, inner, def_map, def_seq) {
+            return None;
+        }
+        let c1 = inner.inputs[1].offset;
+        let size = b.size;
+        let mask = if size >= 8 {
+            u64::MAX
+        } else {
+            (1u64 << (size as u32 * 8)) - 1
+        };
+        let new_const_offset = match inner.op {
+            IrOp::IntAdd => Some(b.offset.wrapping_sub(c1) & mask),
+            IrOp::IntSub => Some(b.offset.wrapping_add(c1) & mask),
+            _ => None,
+        };
+        if let Some(off) = new_const_offset {
+            return Some(Simplification::Replace(replace_op(
+                insn,
+                insn.op,
+                smallvec::smallvec![x, Varnode::constant(off, size)],
+            )));
         }
     }
 
@@ -472,17 +485,29 @@ fn is_boolean_result(insn: &IrInsn) -> bool {
         )
 }
 
-fn is_safe_offset_fold_target(a: &Varnode, x: &Varnode, inner: &IrInsn) -> bool {
+fn is_safe_offset_fold_target(
+    a: &Varnode,
+    x: &Varnode,
+    inner: &IrInsn,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+    def_seq: &BTreeMap<Varnode, usize>,
+) -> bool {
     if inner.output.as_ref() != Some(a) {
         return false;
     }
     if x == a {
         return false;
     }
-    if let Some(out) = inner.output {
-        if inner.inputs.contains(&out) {
-            return false;
-        }
+    if let Some(out) = inner.output
+        && inner.inputs.contains(&out)
+    {
+        return false;
+    }
+    if let (Some(&inner_seq), Some(&x_seq)) = (def_seq.get(a), def_seq.get(x))
+        && x_seq > inner_seq
+        && def_map.contains_key(x)
+    {
+        return false;
     }
     true
 }
@@ -491,6 +516,7 @@ fn simplify_less(
     insn: &IrInsn,
     output: Varnode,
     def_map: &BTreeMap<Varnode, IrInsn>,
+    def_seq: &BTreeMap<Varnode, usize>,
 ) -> Option<Simplification> {
     let (a, b) = two(&insn.inputs)?;
 
@@ -508,19 +534,21 @@ fn simplify_less(
         )));
     }
 
-    if insn.op == IrOp::IntSless && b.space == SpaceId::Const && b.offset == 0 {
-        if let Some(inner) = def_map.get(&a) {
-            if inner.op == IrOp::IntSub && inner.inputs.len() == 2 {
-                let x = inner.inputs[0];
-                let y = inner.inputs[1];
-                if is_safe_offset_fold_target(&a, &x, inner) {
-                    return Some(Simplification::Replace(replace_op(
-                        insn,
-                        IrOp::IntSless,
-                        smallvec::smallvec![x, y],
-                    )));
-                }
-            }
+    if insn.op == IrOp::IntSless
+        && b.space == SpaceId::Const
+        && b.offset == 0
+        && let Some(inner) = def_map.get(&a)
+        && inner.op == IrOp::IntSub
+        && inner.inputs.len() == 2
+    {
+        let x = inner.inputs[0];
+        let y = inner.inputs[1];
+        if is_safe_offset_fold_target(&a, &x, inner, def_map, def_seq) {
+            return Some(Simplification::Replace(replace_op(
+                insn,
+                IrOp::IntSless,
+                smallvec::smallvec![x, y],
+            )));
         }
     }
 
@@ -554,6 +582,7 @@ fn simplify_lessequal(
 fn try_simplify(
     insn: &IrInsn,
     def_map: &BTreeMap<Varnode, IrInsn>,
+    def_seq: &BTreeMap<Varnode, usize>,
     next_unique: &mut u64,
 ) -> Option<Simplification> {
     let output = insn.output?;
@@ -564,7 +593,9 @@ fn try_simplify(
             let inner = insn.inputs.first()?;
 
             if let Some(inner_insn) = def_map.get(inner) {
-                if let Some(folded) = simplify_negated_flag_chain(insn, inner_insn, def_map) {
+                if let Some(folded) =
+                    simplify_negated_flag_chain(insn, inner_insn, def_map, def_seq)
+                {
                     return Some(folded);
                 }
 
@@ -646,9 +677,9 @@ fn try_simplify(
             None
         }
 
-        IrOp::IntEqual | IrOp::IntNotequal => simplify_eq(insn, output, def_map),
+        IrOp::IntEqual | IrOp::IntNotequal => simplify_eq(insn, output, def_map, def_seq),
 
-        IrOp::IntLess | IrOp::IntSless => simplify_less(insn, output, def_map),
+        IrOp::IntLess | IrOp::IntSless => simplify_less(insn, output, def_map, def_seq),
 
         IrOp::IntLessequal | IrOp::IntSlessequal => simplify_lessequal(insn, output, def_map),
 
@@ -731,6 +762,7 @@ fn simplify_negated_flag_chain(
     insn: &IrInsn,
     flag_insn: &IrInsn,
     def_map: &BTreeMap<Varnode, IrInsn>,
+    def_seq: &BTreeMap<Varnode, usize>,
 ) -> Option<Simplification> {
     let (lhs, rhs) = two(&flag_insn.inputs)?;
     if rhs.space != SpaceId::Const || rhs.offset != 0 {
@@ -743,7 +775,7 @@ fn simplify_negated_flag_chain(
     }
     let a = sub.inputs[0];
     let b = sub.inputs[1];
-    if !is_safe_offset_fold_target(&lhs, &a, sub) {
+    if !is_safe_offset_fold_target(&lhs, &a, sub, def_map, def_seq) {
         return None;
     }
 
@@ -1657,6 +1689,45 @@ mod tests {
             .find(|i| i.op == IrOp::IntEqual)
             .expect("comparison preserved");
         assert_eq!(cmp.inputs[1], c100, "constant must not have shifted");
+    }
+
+    #[test]
+    fn test_offset_fold_skips_later_raw_redefinition() {
+        // Regression from /usr/bin/echo::sub_2a10: folding
+        // `(tmp = r - 1; r = tmp; tmp != 4)` to `r != 5` is unsafe in
+        // raw-varnode IR because `r` now names the later copy output, not the
+        // value used by the original subtraction.
+        let r = Varnode::reg(72, 4);
+        let tmp = Varnode::unique(0, 4);
+        let out = Varnode::unique(8, 1);
+        let sub = IrInsn::with_output(
+            IrOp::IntSub,
+            tmp,
+            smallvec![r, Varnode::constant(1, 4)],
+            0x1000,
+        );
+        let copy = IrInsn::with_output(IrOp::Copy, r, smallvec![tmp], 0x1004);
+        let cmp = IrInsn::with_output(
+            IrOp::IntNotequal,
+            out,
+            smallvec![tmp, Varnode::constant(4, 4)],
+            0x1008,
+        );
+        let mut ssa = make_single_block_ssa(vec![sub, copy, cmp]);
+
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(!changed, "unsafe offset fold must not fire");
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let cmp = block
+            .insns
+            .iter()
+            .find(|i| i.output == Some(out))
+            .expect("comparison preserved");
+        assert_eq!(cmp.inputs[0], tmp);
+        assert_eq!(cmp.inputs[1], Varnode::constant(4, 4));
     }
 
     #[test]

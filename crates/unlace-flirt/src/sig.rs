@@ -134,10 +134,10 @@ fn find_zlib_start(bytes: &[u8], from: usize) -> Result<usize, FlirtError> {
             let mut sniff = [0u8; 16];
             // A genuine stream yields >=1 decompressed byte without error.
             // False positives (magic bytes inside a name) error immediately.
-            if let Ok(n) = decoder.read(&mut sniff) {
-                if n > 0 {
-                    return Ok(i);
-                }
+            if let Ok(n) = decoder.read(&mut sniff)
+                && n > 0
+            {
+                return Ok(i);
             }
         }
     }
@@ -183,7 +183,7 @@ fn consume_identifier(body: &[u8], start: usize, out: &mut Vec<SigFunction>) -> 
 }
 
 fn is_ident_start(b: u8) -> bool {
-    b == b'_' || (b'a'..=b'z').contains(&b) || (b'A'..=b'Z').contains(&b)
+    b == b'_' || b.is_ascii_lowercase() || b.is_ascii_uppercase()
 }
 
 fn is_ident_cont(b: u8) -> bool {
@@ -269,7 +269,11 @@ mod tests {
         assert!(!sig.functions.is_empty());
         // At least 90% of records should have a pattern of >=8 bytes;
         // some sig formats put short names directly after the header.
-        let with_pat = sig.functions.iter().filter(|f| f.pattern.len() >= 8).count();
+        let with_pat = sig
+            .functions
+            .iter()
+            .filter(|f| f.pattern.len() >= 8)
+            .count();
         let total = sig.functions.len();
         assert!(
             with_pat * 10 >= total * 9,

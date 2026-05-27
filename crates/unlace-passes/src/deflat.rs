@@ -213,10 +213,10 @@ fn find_state_variable(block: &BasicBlock) -> Option<Varnode> {
             IrOp::Branchind => {
                 // The indirect branch operand is the state variable itself
                 // (jump-table pattern).
-                if let Some(input) = insn.inputs.first() {
-                    if input.space != SpaceId::Const {
-                        *candidates.entry(*input).or_default() += 10;
-                    }
+                if let Some(input) = insn.inputs.first()
+                    && input.space != SpaceId::Const
+                {
+                    *candidates.entry(*input).or_default() += 10;
                 }
             }
             _ => {}
@@ -266,10 +266,10 @@ fn extract_state_to_block_map(
                 if let Some(val) = last_compared_const {
                     // The true-branch target of this cbranch is the case block
                     // for this state value.
-                    if let Some(&target) = disp_block.successors.first() {
-                        if case_blocks.contains(&target) {
-                            map.insert(val, target);
-                        }
+                    if let Some(&target) = disp_block.successors.first()
+                        && case_blocks.contains(&target)
+                    {
+                        map.insert(val, target);
                     }
                     // Check successive successors too.
                     for &succ in disp_block.successors.iter() {
@@ -304,16 +304,13 @@ fn extract_case_successor(block: &BasicBlock, state_var: &Varnode) -> CaseSucces
     let mut assigned_values: Vec<(usize, u64)> = Vec::new();
 
     for (i, insn) in block.insns.iter().enumerate() {
-        if insn.op == IrOp::Copy {
-            if let Some(output) = &insn.output {
-                if output == state_var {
-                    if let Some(input) = insn.inputs.first() {
-                        if input.space == SpaceId::Const {
-                            assigned_values.push((i, input.offset));
-                        }
-                    }
-                }
-            }
+        if insn.op == IrOp::Copy
+            && let Some(output) = &insn.output
+            && output == state_var
+            && let Some(input) = insn.inputs.first()
+            && input.space == SpaceId::Const
+        {
+            assigned_values.push((i, input.offset));
         }
     }
 
@@ -335,16 +332,13 @@ fn extract_case_successor(block: &BasicBlock, state_var: &Varnode) -> CaseSucces
 /// Remove instructions that assign constants to the state variable.
 fn remove_state_assignments(block: &mut BasicBlock, state_var: &Varnode) {
     block.insns.retain(|insn| {
-        if insn.op == IrOp::Copy {
-            if let Some(output) = &insn.output {
-                if output == state_var {
-                    if let Some(input) = insn.inputs.first() {
-                        if input.space == SpaceId::Const {
-                            return false;
-                        }
-                    }
-                }
-            }
+        if insn.op == IrOp::Copy
+            && let Some(output) = &insn.output
+            && output == state_var
+            && let Some(input) = insn.inputs.first()
+            && input.space == SpaceId::Const
+        {
+            return false;
         }
         true
     });
@@ -353,17 +347,17 @@ fn remove_state_assignments(block: &mut BasicBlock, state_var: &Varnode) {
 /// Rewrite the block's terminator to an unconditional branch to `target`.
 fn rewrite_terminator_unconditional(block: &mut BasicBlock, target: BlockId) {
     // Remove existing branch/cbranch terminator at the end.
-    if let Some(last) = block.insns.last() {
-        if matches!(last.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind) {
-            let addr = last.addr;
-            block.insns.pop();
-            // Insert an unconditional branch.
-            block.insns.push(unlace_ir::IrInsn::without_output(
-                IrOp::Branch,
-                smallvec::smallvec![Varnode::constant(target.0 as u64, 8)],
-                addr,
-            ));
-        }
+    if let Some(last) = block.insns.last()
+        && matches!(last.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind)
+    {
+        let addr = last.addr;
+        block.insns.pop();
+        // Insert an unconditional branch.
+        block.insns.push(unlace_ir::IrInsn::without_output(
+            IrOp::Branch,
+            smallvec::smallvec![Varnode::constant(target.0 as u64, 8)],
+            addr,
+        ));
     }
 }
 
@@ -375,30 +369,30 @@ fn rewrite_terminator_conditional(
     false_target: BlockId,
 ) {
     // Find the cbranch terminator and update its successor encoding.
-    if let Some(last) = block.insns.last() {
-        if last.op == IrOp::Cbranch || last.op == IrOp::Branch || last.op == IrOp::Branchind {
-            let addr = last.addr;
-            // Keep the condition input if it's a cbranch.
-            let condition = if last.op == IrOp::Cbranch {
-                last.inputs.first().copied()
-            } else {
-                None
-            };
-            block.insns.pop();
+    if let Some(last) = block.insns.last()
+        && (last.op == IrOp::Cbranch || last.op == IrOp::Branch || last.op == IrOp::Branchind)
+    {
+        let addr = last.addr;
+        // Keep the condition input if it's a cbranch.
+        let condition = if last.op == IrOp::Cbranch {
+            last.inputs.first().copied()
+        } else {
+            None
+        };
+        block.insns.pop();
 
-            if let Some(cond) = condition {
-                block.insns.push(unlace_ir::IrInsn::without_output(
-                    IrOp::Cbranch,
-                    smallvec::smallvec![cond, Varnode::constant(true_target.0 as u64, 8),],
-                    addr,
-                ));
-            } else {
-                block.insns.push(unlace_ir::IrInsn::without_output(
-                    IrOp::Branch,
-                    smallvec::smallvec![Varnode::constant(true_target.0 as u64, 8)],
-                    addr,
-                ));
-            }
+        if let Some(cond) = condition {
+            block.insns.push(unlace_ir::IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec::smallvec![cond, Varnode::constant(true_target.0 as u64, 8),],
+                addr,
+            ));
+        } else {
+            block.insns.push(unlace_ir::IrInsn::without_output(
+                IrOp::Branch,
+                smallvec::smallvec![Varnode::constant(true_target.0 as u64, 8)],
+                addr,
+            ));
         }
     }
 

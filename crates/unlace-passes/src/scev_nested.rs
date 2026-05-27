@@ -123,11 +123,7 @@ pub fn scev_mul_const(expr: &ScevExpr, c: i64) -> ScevExpr {
 /// outer IV's step. `inner` is the SCEV of the inner-loop IV expression.
 ///
 /// Returns: `AddRec(start = inner, step = outer_step)` outer-loop recurrence.
-pub fn nested_add_rec(
-    outer_header: BlockId,
-    outer_step: i64,
-    inner: ScevExpr,
-) -> ScevExpr {
+pub fn nested_add_rec(outer_header: BlockId, outer_step: i64, inner: ScevExpr) -> ScevExpr {
     ScevExpr::AddRec {
         loop_header: outer_header,
         start: Box::new(inner),
@@ -160,15 +156,10 @@ pub fn loop_nest_depth(expr: &ScevExpr) -> usize {
     headers.len()
 }
 
-fn collect_loop_headers(
-    expr: &ScevExpr,
-    out: &mut std::collections::BTreeSet<BlockId>,
-) {
+fn collect_loop_headers(expr: &ScevExpr, out: &mut std::collections::BTreeSet<BlockId>) {
     match expr {
         ScevExpr::AddRec {
-            loop_header,
-            start,
-            ..
+            loop_header, start, ..
         } => {
             out.insert(*loop_header);
             collect_loop_headers(start, out);
@@ -240,9 +231,7 @@ mod tests {
         let r = addrec(0, const_(5), 3);
         let scaled = scev_mul_const(&r, 2);
         match scaled {
-            ScevExpr::AddRec {
-                start, step, ..
-            } => {
+            ScevExpr::AddRec { start, step, .. } => {
                 assert_eq!(step, 6);
                 match *start {
                     ScevExpr::Const { value, .. } => assert_eq!(value, 10),

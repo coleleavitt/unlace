@@ -1,7 +1,6 @@
 //! Control-flow structuring: recover `if`/`while`/`switch` from SSA CFGs.
 
 pub mod bitfield_recovery;
-pub mod graph_layout;
 pub mod block_merge;
 pub mod cmov_switch;
 pub mod condition_dup;
@@ -15,6 +14,7 @@ pub mod goto_classify;
 pub mod goto_elim;
 pub mod goto_to_break;
 pub mod goto_to_continue;
+pub mod graph_layout;
 pub mod hir;
 pub mod hir_cse;
 pub mod hir_licm;
@@ -55,7 +55,7 @@ pub use hir_cse::eliminate_common_subexpressions;
 pub use hir_licm::hoist_loop_invariants;
 pub use if_to_switch::{if_chain_to_switch, range_chain_to_switch};
 pub use irreducible::{IrreducibleRegion, detect_irreducible_regions};
-pub use label_cleanup::cleanup_unreachable_labels;
+pub use label_cleanup::{cleanup_unreachable_labels, repair_missing_goto_labels};
 pub use label_fallthrough::collapse_label_fallthroughs;
 pub use label_hoist::hoist_cross_branch_labels;
 pub use loop_classify::{LoopFormCounts, classify_function, classify_loop_form, classify_nodes};

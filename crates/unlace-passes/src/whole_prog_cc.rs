@@ -261,10 +261,11 @@ fn is_param_read_in_body(ssa: &SsaFunction, reg_offset: u64) -> bool {
                 }
             }
             // Track redefinitions.
-            if let Some(out) = insn.output {
-                if out.space == SpaceId::Register && out.offset == reg_offset {
-                    written = true;
-                }
+            if let Some(out) = insn.output
+                && out.space == SpaceId::Register
+                && out.offset == reg_offset
+            {
+                written = true;
             }
         }
     }
@@ -390,10 +391,11 @@ fn caller_uses_return_of(caller: &SsaFunction, callee_addr: u64, ret_reg: u64) -
                     }
                 }
                 // Check if the return register is written (kills it).
-                if let Some(out) = insn.output {
-                    if out.space == SpaceId::Register && out.offset == ret_reg {
-                        after_call = false; // reset — no longer tracking
-                    }
+                if let Some(out) = insn.output
+                    && out.space == SpaceId::Register
+                    && out.offset == ret_reg
+                {
+                    after_call = false; // reset — no longer tracking
                 }
                 // Another call also clobbers the return register.
                 if insn.op == IrOp::Call || insn.op == IrOp::Callind {
@@ -402,12 +404,12 @@ fn caller_uses_return_of(caller: &SsaFunction, callee_addr: u64, ret_reg: u64) -
             }
 
             // Detect the call to our target.
-            if insn.op == IrOp::Call {
-                if let Some(target) = insn.inputs.first() {
-                    if target.space == SpaceId::Const && target.offset == callee_addr {
-                        after_call = true;
-                    }
-                }
+            if insn.op == IrOp::Call
+                && let Some(target) = insn.inputs.first()
+                && target.space == SpaceId::Const
+                && target.offset == callee_addr
+            {
+                after_call = true;
             }
         }
     }

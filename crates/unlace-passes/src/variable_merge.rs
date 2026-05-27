@@ -203,10 +203,9 @@ fn compute_live_ranges(
                 if let Some(&sv) = func
                     .var_map
                     .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                    && !liveness.def_set.contains(&sv)
                 {
-                    if !liveness.def_set.contains(&sv) {
-                        liveness.use_set.insert(sv);
-                    }
+                    liveness.use_set.insert(sv);
                 }
             }
             if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)) {
@@ -486,21 +485,21 @@ fn assign_names(
     let mut order: BTreeMap<usize, u32> = BTreeMap::new();
     let mut next_index: u32 = 1;
     for sv in all_vars {
-        if let Some(&cidx) = cluster_of.get(sv) {
-            if let std::collections::btree_map::Entry::Vacant(e) = order.entry(cidx) {
-                e.insert(next_index);
-                next_index += 1;
-            }
+        if let Some(&cidx) = cluster_of.get(sv)
+            && let std::collections::btree_map::Entry::Vacant(e) = order.entry(cidx)
+        {
+            e.insert(next_index);
+            next_index += 1;
         }
     }
 
     // Materialise final names.
     let mut merged: BTreeMap<SsaVarnode, String> = BTreeMap::new();
     for sv in all_vars {
-        if let Some(&cidx) = cluster_of.get(sv) {
-            if let Some(&n) = order.get(&cidx) {
-                merged.insert(*sv, format!("v{}", n));
-            }
+        if let Some(&cidx) = cluster_of.get(sv)
+            && let Some(&n) = order.get(&cidx)
+        {
+            merged.insert(*sv, format!("v{}", n));
         }
     }
     merged

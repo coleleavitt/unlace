@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -65,14 +65,12 @@ impl Pass for CallBoundaryCopyPropPass {
             if let Some(sv) = func.var_map.get_mut(&(bid, idx, VarnodeSlot::Input(i))) {
                 *sv = new_sv;
             }
-            if let Some(block) = func.function.blocks.get_mut(&bid) {
-                if let Some(insn) = block.insns.get_mut(idx) {
-                    if let Some(input) = insn.inputs.get_mut(i) {
-                        if input.space != SpaceId::Const {
-                            *input = new_sv.base;
-                        }
-                    }
-                }
+            if let Some(block) = func.function.blocks.get_mut(&bid)
+                && let Some(insn) = block.insns.get_mut(idx)
+                && let Some(input) = insn.inputs.get_mut(i)
+                && input.space != SpaceId::Const
+            {
+                *input = new_sv.base;
             }
             changed = true;
         }
@@ -111,14 +109,12 @@ fn collect_restore_pairs(func: &SsaFunction) -> Vec<(SsaVarnode, SsaVarnode)> {
             match insn.op {
                 IrOp::Store => {
                     let (val_slot, addr_raw) = store_addr_and_val(insn);
-                    if let (Some(addr), Some(val_slot)) = (addr_raw, val_slot) {
-                        if let Some(off) = stack_offset_of(&addr, func) {
-                            if let Some(&val_sv) = func.var_map.get(&(bid, idx, val_slot)) {
-                                if val_sv.base.space == SpaceId::Register {
-                                    saves.insert(off, val_sv);
-                                }
-                            }
-                        }
+                    if let (Some(addr), Some(val_slot)) = (addr_raw, val_slot)
+                        && let Some(off) = stack_offset_of(&addr, func)
+                        && let Some(&val_sv) = func.var_map.get(&(bid, idx, val_slot))
+                        && val_sv.base.space == SpaceId::Register
+                    {
+                        saves.insert(off, val_sv);
                     }
                 }
                 IrOp::Call | IrOp::Callind | IrOp::Callother => {
@@ -140,10 +136,10 @@ fn collect_restore_pairs(func: &SsaFunction) -> Vec<(SsaVarnode, SsaVarnode)> {
                     let Some(off) = stack_offset_of(&addr, func) else {
                         continue;
                     };
-                    if let Some(&pre_sv) = saves.get(&off) {
-                        if pre_sv.base == out_sv.base {
-                            pairs.push((out_sv, pre_sv));
-                        }
+                    if let Some(&pre_sv) = saves.get(&off)
+                        && pre_sv.base == out_sv.base
+                    {
+                        pairs.push((out_sv, pre_sv));
                     }
                 }
                 _ => {}
@@ -238,16 +234,14 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
+        CallingConvention, DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarMap,
+        VarnodeSlot,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
     use super::*;
 
-    fn make_ssa(
-        blocks: Vec<BasicBlock>,
-        var_map: VarMap,
-    ) -> SsaFunction {
+    fn make_ssa(blocks: Vec<BasicBlock>, var_map: VarMap) -> SsaFunction {
         let entry = blocks.first().expect("blocks").id;
         let mut func = Function::new("test", entry, 0x1000);
         for bb in blocks {
@@ -301,6 +295,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

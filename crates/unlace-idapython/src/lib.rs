@@ -27,17 +27,17 @@
 //! - `research/ida-hexrays-docs/sdk/idapython-examples/` — 152 example
 //!   IDAPython scripts that act as the compat test corpus.
 
-pub mod idaapi;
 pub mod ida_bytes;
-pub mod pybridge;
 pub mod ida_funcs;
 pub mod ida_hexrays;
 pub mod ida_name;
 pub mod ida_segment;
 pub mod ida_typeinf;
 pub mod ida_xref;
+pub mod idaapi;
 pub mod idautils;
 pub mod idc;
+pub mod pybridge;
 
 /// Top-level convenience re-exports — mirror IDA's `from idaapi import *`
 /// flat namespace.
@@ -83,7 +83,10 @@ mod tests {
         // Smoke test: API is callable and returns a Vec (sentinel value
         // depends on test order so we don't assert length).
         let v = coverage::implemented_apis();
-        assert!(v.len() < usize::MAX, "implemented_apis returned a valid Vec");
+        assert!(
+            v.len() < usize::MAX,
+            "implemented_apis returned a valid Vec"
+        );
     }
 
     #[test]

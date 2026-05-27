@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -109,13 +109,13 @@ impl Pass for RedundantFlagElimPass {
         }
 
         for rw in &rewrites {
-            if let Some(block) = func.function.blocks.get_mut(&rw.bid) {
-                if let Some(insn) = block.insns.get_mut(rw.idx) {
-                    insn.op = rw.new_op;
-                    if insn.inputs.len() >= 2 {
-                        insn.inputs[0] = rw.new_in[0];
-                        insn.inputs[1] = rw.new_in[1];
-                    }
+            if let Some(block) = func.function.blocks.get_mut(&rw.bid)
+                && let Some(insn) = block.insns.get_mut(rw.idx)
+            {
+                insn.op = rw.new_op;
+                if insn.inputs.len() >= 2 {
+                    insn.inputs[0] = rw.new_in[0];
+                    insn.inputs[1] = rw.new_in[1];
                 }
             }
             func.var_map
@@ -160,10 +160,10 @@ fn collect_sub_defs(func: &SsaFunction) -> BTreeMap<SsaVarnode, (BlockId, usize)
     let mut map = BTreeMap::new();
     for (&bid, block) in &func.function.blocks {
         for (idx, insn) in block.insns.iter().enumerate() {
-            if insn.op == IrOp::IntSub {
-                if let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Output)) {
-                    map.insert(sv, (bid, idx));
-                }
+            if insn.op == IrOp::IntSub
+                && let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Output))
+            {
+                map.insert(sv, (bid, idx));
             }
         }
     }
@@ -177,16 +177,14 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
+        CallingConvention, DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarMap,
+        VarnodeSlot,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
 
-    fn make_ssa(
-        blocks: Vec<BasicBlock>,
-        var_map: VarMap,
-    ) -> SsaFunction {
+    fn make_ssa(blocks: Vec<BasicBlock>, var_map: VarMap) -> SsaFunction {
         let entry = blocks.first().expect("blocks").id;
         let mut func = Function::new("test", entry, 0x1000);
         for bb in blocks {
@@ -240,6 +238,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

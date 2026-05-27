@@ -63,21 +63,20 @@ fn main() {
 }
 
 fn workspace_root() -> PathBuf {
-    if let Ok(dir) = env::var("CARGO_MANIFEST_DIR") {
-        if let Some(parent) = Path::new(&dir).parent() {
-            return parent.to_path_buf();
-        }
+    if let Ok(dir) = env::var("CARGO_MANIFEST_DIR")
+        && let Some(parent) = Path::new(&dir).parent()
+    {
+        return parent.to_path_buf();
     }
 
     let mut dir = env::current_dir().expect("cannot determine cwd");
     loop {
         let candidate = dir.join("Cargo.toml");
-        if candidate.exists() {
-            if let Ok(contents) = std::fs::read_to_string(&candidate) {
-                if contents.contains("[workspace]") {
-                    return dir;
-                }
-            }
+        if candidate.exists()
+            && let Ok(contents) = std::fs::read_to_string(&candidate)
+            && contents.contains("[workspace]")
+        {
+            return dir;
         }
         if !dir.pop() {
             eprintln!("error: could not find workspace root");

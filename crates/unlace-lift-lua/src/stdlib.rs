@@ -269,14 +269,14 @@ pub fn detect_stdlib_calls(proto: &Prototype) -> Vec<StdlibAnnotation> {
             // 5.1: GETGLOBAL R(A), K(Bx)
             LuaOpcode::GetGlobal => {
                 let k_idx = insn.bx as usize;
-                if let Some(name) = get_string_constant(&proto.constants, k_idx) {
-                    if let Some(func) = StdlibFunc::from_name(&name) {
-                        annotations.push(StdlibAnnotation {
-                            func,
-                            pc,
-                            name: func.name(),
-                        });
-                    }
+                if let Some(name) = get_string_constant(&proto.constants, k_idx)
+                    && let Some(func) = StdlibFunc::from_name(&name)
+                {
+                    annotations.push(StdlibAnnotation {
+                        func,
+                        pc,
+                        name: func.name(),
+                    });
                 }
             }
             // 5.2+: GETTABUP R(A), Up(B), RK(C) — loading from _ENV
@@ -291,27 +291,27 @@ pub fn detect_stdlib_calls(proto: &Prototype) -> Vec<StdlibAnnotation> {
                         continue;
                     }
                 };
-                if let Some(name) = get_string_constant(&proto.constants, c_idx) {
-                    if let Some(func) = StdlibFunc::from_name(&name) {
-                        annotations.push(StdlibAnnotation {
-                            func,
-                            pc,
-                            name: func.name(),
-                        });
-                    }
+                if let Some(name) = get_string_constant(&proto.constants, c_idx)
+                    && let Some(func) = StdlibFunc::from_name(&name)
+                {
+                    annotations.push(StdlibAnnotation {
+                        func,
+                        pc,
+                        name: func.name(),
+                    });
                 }
             }
             // GETFIELD R(A), R(B), K(C) — for table.method patterns
             LuaOpcode::GetField => {
                 let c_idx = insn.c as usize;
-                if let Some(name) = get_string_constant(&proto.constants, c_idx) {
-                    if let Some(func) = StdlibFunc::from_name(&name) {
-                        annotations.push(StdlibAnnotation {
-                            func,
-                            pc,
-                            name: func.name(),
-                        });
-                    }
+                if let Some(name) = get_string_constant(&proto.constants, c_idx)
+                    && let Some(func) = StdlibFunc::from_name(&name)
+                {
+                    annotations.push(StdlibAnnotation {
+                        func,
+                        pc,
+                        name: func.name(),
+                    });
                 }
             }
             _ => {}

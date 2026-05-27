@@ -294,10 +294,10 @@ fn collect_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, IrInsn>) {
     for node in nodes {
         match node {
             HirNode::Statement(insn) => {
-                if let Some(out) = insn.output {
-                    if out.space != SpaceId::Const {
-                        defs.insert(out, insn.clone());
-                    }
+                if let Some(out) = insn.output
+                    && out.space != SpaceId::Const
+                {
+                    defs.insert(out, insn.clone());
                 }
             }
             HirNode::Block(children) => collect_defs_inner(children, defs),
@@ -502,10 +502,10 @@ fn contains_label_or_goto(nodes: &[HirNode]) -> bool {
 
 fn condition_counter(cond: Varnode, defs: &BTreeMap<Varnode, IrInsn>) -> Option<Varnode> {
     if cond.space != SpaceId::Const {
-        if let Some(insn) = defs.get(&cond) {
-            if is_compare_op(insn.op) {
-                return compared_nonconst_input(insn);
-            }
+        if let Some(insn) = defs.get(&cond)
+            && is_compare_op(insn.op)
+        {
+            return compared_nonconst_input(insn);
         }
         return Some(cond);
     }

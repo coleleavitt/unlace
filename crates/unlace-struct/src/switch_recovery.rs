@@ -385,14 +385,15 @@ fn flatten_targets(
 ) -> Vec<u64> {
     let mut out = Vec::new();
     for &t in targets {
-        if depth_remaining > 0 && !visited.contains(&t) {
-            if let Some((_, inner)) = tables.get(&t) {
-                visited.insert(t);
-                let expanded = flatten_targets(inner, tables, visited, depth_remaining - 1);
-                visited.remove(&t);
-                out.extend(expanded);
-                continue;
-            }
+        if depth_remaining > 0
+            && !visited.contains(&t)
+            && let Some((_, inner)) = tables.get(&t)
+        {
+            visited.insert(t);
+            let expanded = flatten_targets(inner, tables, visited, depth_remaining - 1);
+            visited.remove(&t);
+            out.extend(expanded);
+            continue;
         }
         out.push(t);
     }

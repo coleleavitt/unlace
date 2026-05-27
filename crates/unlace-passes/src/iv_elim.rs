@@ -357,11 +357,11 @@ fn rewrite_derived_iv(
     func.phi_map.entry(header).or_default().push(phi);
 
     // Rewrite original IntMult to Copy(iv_sv).
-    if let Some(block) = func.function.blocks.get_mut(&d.block) {
-        if let Some(insn) = block.insns.get_mut(d.idx) {
-            insn.op = IrOp::Copy;
-            insn.inputs = smallvec![base];
-        }
+    if let Some(block) = func.function.blocks.get_mut(&d.block)
+        && let Some(insn) = block.insns.get_mut(d.idx)
+    {
+        insn.op = IrOp::Copy;
+        insn.inputs = smallvec![base];
     }
     // var_map: keep Output, replace Input(0), drop Input(1).
     func.var_map

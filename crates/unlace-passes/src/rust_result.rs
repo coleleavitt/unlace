@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
 /// A detected Rust tagged union (`Result<T,E>` or `Option<T>`).
@@ -209,13 +209,14 @@ fn find_int_equal_comparisons(
                         .or_default()
                         .push((b.offset, bid, insn_idx));
                 }
-            } else if a.space == SpaceId::Const && b.space != SpaceId::Const {
-                if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(1))) {
-                    result
-                        .entry(sv)
-                        .or_default()
-                        .push((a.offset, bid, insn_idx));
-                }
+            } else if a.space == SpaceId::Const
+                && b.space != SpaceId::Const
+                && let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(1)))
+            {
+                result
+                    .entry(sv)
+                    .or_default()
+                    .push((a.offset, bid, insn_idx));
             }
         }
     }
@@ -229,7 +230,7 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+    use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
     use super::*;
@@ -266,10 +267,7 @@ mod tests {
         unlace_ir::ssa::DominatorTree::new(idom, children, entry)
     }
 
-    fn make_ssa(
-        blocks: Vec<BasicBlock>,
-        var_map: VarMap,
-    ) -> SsaFunction {
+    fn make_ssa(blocks: Vec<BasicBlock>, var_map: VarMap) -> SsaFunction {
         let entry = blocks.first().expect("blocks non-empty").id;
         let mut func = Function::new("test", entry, 0x1000);
         for bb in blocks {
@@ -325,6 +323,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

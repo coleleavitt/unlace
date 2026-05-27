@@ -238,10 +238,10 @@ fn resolve_landing_pad_addrs(
 ) -> BTreeSet<u64> {
     let mut confirmed = BTreeSet::new();
     for block in func.function.blocks.values() {
-        if let Some(first_insn) = block.insns.first() {
-            if landing_pad_addrs.contains(&first_insn.addr) {
-                confirmed.insert(first_insn.addr);
-            }
+        if let Some(first_insn) = block.insns.first()
+            && landing_pad_addrs.contains(&first_insn.addr)
+        {
+            confirmed.insert(first_insn.addr);
         }
     }
     confirmed
@@ -264,6 +264,9 @@ fn wrap_try_catch(
     };
 
     let (try_nodes, catch_and_rest) = nodes.split_at(idx);
+    let split_landing_pad = catch_and_rest
+        .first()
+        .and_then(|node| node_landing_pad_addr(node, landing_pad_addrs));
 
     let catch_end = catch_and_rest
         .iter()
@@ -277,15 +280,15 @@ fn wrap_try_catch(
     let mut result = Vec::new();
     if try_body.is_empty() {
         result.extend(catch_body);
+    } else if split_landing_pad.is_some_and(|lp| func.eh_cleanup_landing_pads.contains(&lp)) {
+        result.push(HirNode::TryFinally {
+            try_body,
+            finally_body: catch_body,
+        });
     } else {
-        // Landing-pad recovery produces a single catch-all arm. The
-        // typed-catch shape (`Vec<(Type, Vec<HirNode>)>`) is the t183
-        // generalisation; `PrimitiveType::Unknown` is the printer's
-        // sentinel for `catch (...)`.
-        let catch_all = unlace_ir::types::Type::Primitive(unlace_ir::ssa::PrimitiveType::Unknown);
         result.push(HirNode::TryCatch {
             try_body,
-            catch_arms: vec![(catch_all, catch_body)],
+            catch_arms: catch_arms_for_landing_pad(func, split_landing_pad, catch_body),
         });
     }
 
@@ -297,13 +300,39 @@ fn wrap_try_catch(
 }
 
 fn node_starts_at_landing_pad(node: &HirNode, landing_pad_addrs: &BTreeSet<u64>) -> bool {
+    node_landing_pad_addr(node, landing_pad_addrs).is_some()
+}
+
+fn node_landing_pad_addr(node: &HirNode, landing_pad_addrs: &BTreeSet<u64>) -> Option<u64> {
     match node {
-        HirNode::Statement(insn) => landing_pad_addrs.contains(&insn.addr),
+        HirNode::Statement(insn) => landing_pad_addrs.contains(&insn.addr).then_some(insn.addr),
         HirNode::Block(children) => children
             .first()
-            .is_some_and(|n| node_starts_at_landing_pad(n, landing_pad_addrs)),
-        _ => false,
+            .and_then(|n| node_landing_pad_addr(n, landing_pad_addrs)),
+        _ => None,
     }
+}
+
+fn catch_arms_for_landing_pad(
+    func: &SsaFunction,
+    landing_pad: Option<u64>,
+    catch_body: Vec<HirNode>,
+) -> Vec<(unlace_ir::types::Type, Vec<HirNode>)> {
+    let catch_all = unlace_ir::types::Type::Primitive(unlace_ir::ssa::PrimitiveType::Unknown);
+    let Some(landing_pad) = landing_pad else {
+        return vec![(catch_all, catch_body)];
+    };
+    let Some(types) = func.eh_landing_pad_catches.get(&landing_pad) else {
+        return vec![(catch_all, catch_body)];
+    };
+    if types.is_empty() {
+        return vec![(catch_all, catch_body)];
+    }
+    types
+        .iter()
+        .cloned()
+        .map(|ty| (ty, catch_body.clone()))
+        .collect()
 }
 
 fn recurse_try_catch_children(
@@ -901,10 +930,10 @@ impl<'a> StructureCtx<'a> {
             }
 
             // Pattern: LOAD(space, addr) — addr is computed from base + index * scale
-            if insn.op == IrOp::Load {
-                if let Some(addr_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1)) {
-                    return self.trace_scaled_index(bid, &addr_sv);
-                }
+            if insn.op == IrOp::Load
+                && let Some(addr_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
+            {
+                return self.trace_scaled_index(bid, &addr_sv);
             }
             break;
         }
@@ -928,15 +957,15 @@ impl<'a> StructureCtx<'a> {
             if insn.op == IrOp::IntAdd && insn.inputs.len() >= 2 {
                 let lhs_const = insn.inputs[0].space == SpaceId::Const;
                 let rhs_const = insn.inputs[1].space == SpaceId::Const;
-                if rhs_const {
-                    if let Some(lhs_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0)) {
-                        return self.extract_index_from_scale(bid, &lhs_sv);
-                    }
+                if rhs_const
+                    && let Some(lhs_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
+                {
+                    return self.extract_index_from_scale(bid, &lhs_sv);
                 }
-                if lhs_const {
-                    if let Some(rhs_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1)) {
-                        return self.extract_index_from_scale(bid, &rhs_sv);
-                    }
+                if lhs_const
+                    && let Some(rhs_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
+                {
+                    return self.extract_index_from_scale(bid, &rhs_sv);
                 }
             }
 
@@ -963,29 +992,28 @@ impl<'a> StructureCtx<'a> {
                 IrOp::IntMult if insn.inputs.len() >= 2 => {
                     let lhs_raw = insn.inputs[0];
                     let rhs_raw = insn.inputs[1];
-                    if rhs_raw.space == SpaceId::Const && is_scale_value(rhs_raw.offset) {
-                        if let Some(lhs_sv) =
+                    if rhs_raw.space == SpaceId::Const
+                        && is_scale_value(rhs_raw.offset)
+                        && let Some(lhs_sv) =
                             self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
-                        {
-                            return Some(self.walk_bitwise_chain(bid, &lhs_sv, 4));
-                        }
+                    {
+                        return Some(self.walk_bitwise_chain(bid, &lhs_sv, 4));
                     }
-                    if lhs_raw.space == SpaceId::Const && is_scale_value(lhs_raw.offset) {
-                        if let Some(rhs_sv) =
+                    if lhs_raw.space == SpaceId::Const
+                        && is_scale_value(lhs_raw.offset)
+                        && let Some(rhs_sv) =
                             self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
-                        {
-                            return Some(self.walk_bitwise_chain(bid, &rhs_sv, 4));
-                        }
+                    {
+                        return Some(self.walk_bitwise_chain(bid, &rhs_sv, 4));
                     }
                 }
                 IrOp::IntLeft if insn.inputs.len() >= 2 => {
                     let shift_raw = insn.inputs[1];
-                    if shift_raw.space == SpaceId::Const {
-                        if let Some(index_sv) =
+                    if shift_raw.space == SpaceId::Const
+                        && let Some(index_sv) =
                             self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
-                        {
-                            return Some(self.walk_bitwise_chain(bid, &index_sv, 4));
-                        }
+                    {
+                        return Some(self.walk_bitwise_chain(bid, &index_sv, 4));
                     }
                 }
                 _ => {}
@@ -1490,12 +1518,13 @@ impl<'a> StructureCtx<'a> {
             }
 
             // Nested loops.
-            if self.loop_headers.contains(&bid) && !self.emitted.contains(&bid) {
-                if let Some(loop_node) = self.try_structure_loop(bid) {
-                    nodes.push(loop_node);
-                    current = self.find_loop_exit(bid);
-                    continue;
-                }
+            if self.loop_headers.contains(&bid)
+                && !self.emitted.contains(&bid)
+                && let Some(loop_node) = self.try_structure_loop(bid)
+            {
+                nodes.push(loop_node);
+                current = self.find_loop_exit(bid);
+                continue;
             }
 
             // Nested switch.
@@ -2222,10 +2251,11 @@ fn fold_csel_ternary(nodes: &mut [HirNode]) {
                         break;
                     }
                     // Allow flag-byte writes to flow through.
-                    if let Some(out) = prev.output {
-                        if out.space == SpaceId::Register && out.size == 1 {
-                            continue;
-                        }
+                    if let Some(out) = prev.output
+                        && out.space == SpaceId::Register
+                        && out.size == 1
+                    {
+                        continue;
                     }
                     break;
                 }
@@ -2425,17 +2455,15 @@ fn recover_aarch64_bcc_cc(
                 return Some((2, i)); // NE
             }
             // GE: BoolNegate(t) where t = BoolXor(NF, VF) immediately prior.
-            if i > 0 {
-                if let HirNode::Statement(prev) = &body[i - 1] {
-                    if prev.op == IrOp::BoolXor
-                        && prev.inputs.len() == 2
-                        && prev.output.as_ref() == Some(inp)
-                        && is_register_flag(&prev.inputs[0], 264)
-                        && is_register_flag(&prev.inputs[1], 267)
-                    {
-                        return Some((11, i - 1)); // GE
-                    }
-                }
+            if i > 0
+                && let HirNode::Statement(prev) = &body[i - 1]
+                && prev.op == IrOp::BoolXor
+                && prev.inputs.len() == 2
+                && prev.output.as_ref() == Some(inp)
+                && is_register_flag(&prev.inputs[0], 264)
+                && is_register_flag(&prev.inputs[1], 267)
+            {
+                return Some((11, i - 1)); // GE
             }
             // PL: BoolNegate(NF) — no integer-op mapping, bail.
             None
@@ -2727,13 +2755,13 @@ pub fn recover_for_loops(nodes: &mut Vec<HirNode>) {
     let defs = collect_hir_defs(nodes);
     let mut i = 0;
     while i < nodes.len() {
-        if i + 1 < nodes.len() {
-            if let Some(replacement) = try_recover_for_at(nodes, i, &defs) {
-                let after_i = nodes.split_off(i + 2);
-                nodes.truncate(i);
-                nodes.push(replacement);
-                nodes.extend(after_i);
-            }
+        if i + 1 < nodes.len()
+            && let Some(replacement) = try_recover_for_at(nodes, i, &defs)
+        {
+            let after_i = nodes.split_off(i + 2);
+            nodes.truncate(i);
+            nodes.push(replacement);
+            nodes.extend(after_i);
         }
         // Aggressive: while(cond) { body; step } → for(; cond; step) without init
         if let Some(replacement) = try_recover_for_no_init(&nodes[i], &defs) {
@@ -2759,16 +2787,16 @@ fn collect_hir_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, HirDef
     for node in nodes {
         match node {
             HirNode::Statement(insn) => {
-                if let Some(out) = insn.output {
-                    if out.space != SpaceId::Const {
-                        defs.insert(
-                            out,
-                            HirDef {
-                                op: insn.op,
-                                inputs: insn.inputs.iter().copied().collect(),
-                            },
-                        );
-                    }
+                if let Some(out) = insn.output
+                    && out.space != SpaceId::Const
+                {
+                    defs.insert(
+                        out,
+                        HirDef {
+                            op: insn.op,
+                            inputs: insn.inputs.iter().copied().collect(),
+                        },
+                    );
                 }
             }
             HirNode::Block(children) => collect_hir_defs_inner(children, defs),
@@ -4212,6 +4240,117 @@ mod tests {
         let (try_body, catch_body) = get_try_catch(&hir.body).expect("should have TryCatch");
         assert!(!try_body.is_empty(), "try body should not be empty");
         assert!(!catch_body.is_empty(), "catch body should not be empty");
+    }
+
+    #[test]
+    fn test_try_catch_uses_typed_landing_pad_catches() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("with_typed_lp", BlockId(0), 0xF000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0xF000));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0xF004));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0xF010));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0xF018));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+
+        let mut ssa = build_ssa(func);
+        let mut landing_pads = BTreeSet::new();
+        landing_pads.insert(0xF010_u64);
+        ssa.eh_landing_pad_catches.insert(
+            0xF010,
+            vec![unlace_ir::types::Type::Struct {
+                name: "Dog".to_string(),
+                fields: vec![],
+            }],
+        );
+
+        let hir = super::structure_with_landing_pads(&ssa, &landing_pads)
+            .expect("structuring should succeed");
+
+        fn first_catch_type(nodes: &[HirNode]) -> Option<&unlace_ir::types::Type> {
+            for n in nodes {
+                match n {
+                    HirNode::TryCatch { catch_arms, .. } => {
+                        return catch_arms.first().map(|(ty, _)| ty);
+                    }
+                    HirNode::Block(inner) => {
+                        if let Some(ty) = first_catch_type(inner) {
+                            return Some(ty);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+
+        let ty = first_catch_type(&hir.body).expect("typed catch arm");
+        assert_eq!(
+            ty,
+            &unlace_ir::types::Type::Struct {
+                name: "Dog".to_string(),
+                fields: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn test_cleanup_landing_pad_structures_as_try_finally() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("with_cleanup_lp", BlockId(0), 0xF100);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0xF100));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0xF104));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0xF110));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0xF118));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+
+        let mut ssa = build_ssa(func);
+        let mut landing_pads = BTreeSet::new();
+        landing_pads.insert(0xF110_u64);
+        ssa.eh_cleanup_landing_pads.insert(0xF110);
+
+        let hir = super::structure_with_landing_pads(&ssa, &landing_pads)
+            .expect("structuring should succeed");
+
+        fn find_try_finally(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::TryFinally { .. } => true,
+                HirNode::Block(inner) => find_try_finally(inner),
+                HirNode::TryCatch {
+                    try_body,
+                    catch_arms,
+                } => {
+                    find_try_finally(try_body)
+                        || catch_arms.iter().any(|(_, body)| find_try_finally(body))
+                }
+                _ => false,
+            })
+        }
+
+        assert!(
+            find_try_finally(&hir.body),
+            "cleanup landing pad should produce TryFinally, got: {:#?}",
+            hir.body
+        );
     }
 
     #[test]

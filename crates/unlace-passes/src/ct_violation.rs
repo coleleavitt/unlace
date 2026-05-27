@@ -163,11 +163,10 @@ fn propagate_taint(func: &SsaFunction, secrets: &[SsaVarnode]) -> BTreeSet<SsaVa
                         .var_map
                         .get(&(bid, i, VarnodeSlot::Input(idx)))
                         .copied()
+                        && tainted.contains(&in_sv)
                     {
-                        if tainted.contains(&in_sv) {
-                            any_in_tainted = true;
-                            break;
-                        }
+                        any_in_tainted = true;
+                        break;
                     }
                 }
                 if any_in_tainted {

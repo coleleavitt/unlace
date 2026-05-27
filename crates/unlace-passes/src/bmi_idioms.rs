@@ -59,10 +59,10 @@ fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, IrInsn> {
     let mut map = BTreeMap::new();
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            if let Some(output) = insn.output {
-                if output.space != SpaceId::Const {
-                    map.insert(output, insn.clone());
-                }
+            if let Some(output) = insn.output
+                && output.space != SpaceId::Const
+            {
+                map.insert(output, insn.clone());
             }
         }
     }

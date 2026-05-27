@@ -8,7 +8,6 @@
 use std::collections::BTreeMap;
 
 use unlace_ir::ssa::SsaFunction;
-use unlace_ir::{BlockId, IrOp};
 
 use crate::pass::{Pass, PassError};
 
@@ -33,19 +32,16 @@ pub fn detect_cold_fragments(symbols: &[(u64, &str)]) -> Vec<OutlinedFragment> {
         .collect();
 
     for &(addr, name) in symbols {
-        if let Some(parent_name) = name.strip_suffix(".cold")
-            .or_else(|| {
-                // Handle ".cold.N" suffixes.
-                name.rfind(".cold.").map(|pos| &name[..pos])
-            })
+        if let Some(parent_name) = name.strip_suffix(".cold").or_else(|| {
+            // Handle ".cold.N" suffixes.
+            name.rfind(".cold.").map(|pos| &name[..pos])
+        }) && let Some(&parent_addr) = parent_addrs.get(parent_name)
         {
-            if let Some(&parent_addr) = parent_addrs.get(parent_name) {
-                fragments.push(OutlinedFragment {
-                    fragment_addr: addr,
-                    parent_addr,
-                    fragment_name: name.to_string(),
-                });
-            }
+            fragments.push(OutlinedFragment {
+                fragment_addr: addr,
+                parent_addr,
+                fragment_name: name.to_string(),
+            });
         }
     }
     fragments

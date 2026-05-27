@@ -109,11 +109,11 @@ fn detect_array_strides(func: &mut SsaFunction) {
 
             for offset_idx in 0..2 {
                 let candidate = &insn.inputs[offset_idx];
-                if let Some(stride) = stride_of_varnode(candidate, func) {
-                    if matches!(stride, 1 | 2 | 4 | 8 | 16) {
-                        detections.push(((bid, insn_idx), stride));
-                        break;
-                    }
+                if let Some(stride) = stride_of_varnode(candidate, func)
+                    && matches!(stride, 1 | 2 | 4 | 8 | 16)
+                {
+                    detections.push(((bid, insn_idx), stride));
+                    break;
                 }
             }
         }
@@ -239,8 +239,8 @@ fn set_type(
     if joined != old {
         var_types.insert(sv, joined);
         true
-    } else if !var_types.contains_key(&sv) {
-        var_types.insert(sv, ty);
+    } else if let std::collections::btree_map::Entry::Vacant(e) = var_types.entry(sv) {
+        e.insert(ty);
         true
     } else {
         false

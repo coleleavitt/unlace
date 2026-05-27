@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode};
+use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -44,7 +44,7 @@ impl Pass for BitfieldRecoveryPass {
             return Ok(false);
         }
         // Record sites in the function's annotation map for the C printer.
-        for ((block_id, idx), site) in &sites {
+        for (block_id, idx) in sites.keys() {
             func.frame_setup_insns.remove(&(*block_id, *idx));
         }
         Ok(!sites.is_empty())
@@ -67,22 +67,21 @@ fn collect_bitfield_sites(
                     let width = mask.count_ones();
                     if width > 0 && width < 32 && is_consecutive_low_bits(mask) {
                         // Look for IntRight feeding this IntAnd.
-                        if let Some(shift_insn) = find_def(func, block_id, &insn.inputs[0]) {
-                            if shift_insn.op == IrOp::IntRight && shift_insn.inputs.len() == 2 {
-                                if let Some(shift_vn) =
-                                    shift_insn.inputs.iter().find(|v| v.space == SpaceId::Const)
-                                {
-                                    sites.insert(
-                                        (block_id, idx),
-                                        BitfieldSite {
-                                            storage: shift_insn.inputs[0],
-                                            bit_offset: shift_vn.offset as u32,
-                                            bit_width: width,
-                                            is_write: false,
-                                        },
-                                    );
-                                }
-                            }
+                        if let Some(shift_insn) = find_def(func, block_id, &insn.inputs[0])
+                            && shift_insn.op == IrOp::IntRight
+                            && shift_insn.inputs.len() == 2
+                            && let Some(shift_vn) =
+                                shift_insn.inputs.iter().find(|v| v.space == SpaceId::Const)
+                        {
+                            sites.insert(
+                                (block_id, idx),
+                                BitfieldSite {
+                                    storage: shift_insn.inputs[0],
+                                    bit_offset: shift_vn.offset as u32,
+                                    bit_width: width,
+                                    is_write: false,
+                                },
+                            );
                         }
                     }
                 }
@@ -103,10 +102,10 @@ fn find_def(
 ) -> Option<unlace_ir::IrInsn> {
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            if let Some(out) = insn.output {
-                if out == *varnode {
-                    return Some(insn.clone());
-                }
+            if let Some(out) = insn.output
+                && out == *varnode
+            {
+                return Some(insn.clone());
             }
         }
     }

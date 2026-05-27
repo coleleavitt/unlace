@@ -294,14 +294,14 @@ fn lift_store(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
 }
 
 fn lift_move_or_callother(ctx: &mut LiftCtx, ops: &[PpcOperand], mnemonic: &str) {
-    if mnemonic.eq_ignore_ascii_case("evmra") {
-        if let (Some(rd), Some(rs)) = (
+    if mnemonic.eq_ignore_ascii_case("evmra")
+        && let (Some(rd), Some(rs)) = (
             ops.first().and_then(|o| operand_reg(ctx, o)),
             ops.get(1).and_then(|o| operand_reg(ctx, o)),
-        ) {
-            ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![rs], ctx.addr));
-            return;
-        }
+        )
+    {
+        ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![rs], ctx.addr));
+        return;
     }
     emit_callother(
         ctx,

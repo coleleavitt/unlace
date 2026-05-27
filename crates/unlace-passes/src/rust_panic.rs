@@ -4,7 +4,7 @@
 //! `SsaFunction::panic_sites` so downstream consumers (e.g. the C printer)
 //! can annotate them.
 
-use unlace_ir::ssa::{PanicKind, SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
+use unlace_ir::ssa::{PanicKind, SsaFunction};
 use unlace_ir::{IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -87,11 +87,11 @@ impl RustPanicPass {
                     continue;
                 }
 
-                if let Some(name) = resolve_name(target_addr) {
-                    if let Some(kind) = classify_panic(name) {
-                        func.panic_sites.insert(key, kind);
-                        changed = true;
-                    }
+                if let Some(name) = resolve_name(target_addr)
+                    && let Some(kind) = classify_panic(name)
+                {
+                    func.panic_sites.insert(key, kind);
+                    changed = true;
                 }
             }
         }
@@ -121,17 +121,13 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PanicKind, PrimitiveType, SsaFunction, SsaVarnode,
-        VarnodeSlot,
+        CallingConvention, DominatorTree, PanicKind, PrimitiveType, SsaFunction, VarMap,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
 
-    fn make_ssa(
-        blocks: Vec<BasicBlock>,
-        var_map: VarMap,
-    ) -> SsaFunction {
+    fn make_ssa(blocks: Vec<BasicBlock>, var_map: VarMap) -> SsaFunction {
         let entry = blocks.first().expect("blocks non-empty").id;
         let mut func = Function::new("test", entry, 0x1000);
         for bb in blocks {
@@ -187,6 +183,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

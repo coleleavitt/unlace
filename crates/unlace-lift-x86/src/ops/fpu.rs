@@ -394,7 +394,12 @@ pub fn lift_int_to_float(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, float_
     };
 
     let out = Varnode::new(dst.space, dst.offset, float_size);
-    ctx.emit(IrInsn::with_output(IrOp::FloatInt2float, out, smallvec![src], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::FloatInt2float,
+        out,
+        smallvec![src],
+        ctx.addr,
+    ));
 }
 
 /// Lift cvttsd2si / cvttss2si (float → integer truncation).
@@ -408,7 +413,12 @@ pub fn lift_float_to_int(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         return;
     };
 
-    ctx.emit(IrInsn::with_output(IrOp::FloatTrunc, dst, smallvec![src], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::FloatTrunc,
+        dst,
+        smallvec![src],
+        ctx.addr,
+    ));
 }
 
 /// Lift ucomisd / ucomiss / comisd / comiss (scalar float compare → flags).
@@ -432,5 +442,10 @@ pub fn lift_sse_scalar_compare(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, 
     // Emit FloatLess for the ZF/CF flag effects — downstream passes can
     // interpret the flags. We use a 1-byte unique output for the comparison result.
     let cmp_out = Varnode::new(SpaceId::Unique, ctx.alloc_unique(), 1);
-    ctx.emit(IrInsn::with_output(IrOp::FloatLess, cmp_out, smallvec![a, b], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::FloatLess,
+        cmp_out,
+        smallvec![a, b],
+        ctx.addr,
+    ));
 }

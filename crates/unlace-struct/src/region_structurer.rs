@@ -250,63 +250,64 @@ fn structure_from(
                 // Find merge point via post-dominator.
                 let merge = post_dom_tree.idom(current);
 
-                if let Some(merge_bid) = merge {
-                    if merge_bid != exit_block && merge_bid != unknown_block {
-                        // Emit the condition block.
-                        if let Some(stmts) = blocks.get(&current) {
-                            if !stmts.is_empty() {
-                                regions.push(Region::Linear(stmts.clone()));
-                            }
-                        }
-
-                        // Structure then-region.
-                        let then_regions = structure_from(
-                            true_target,
-                            cfg,
-                            dom_tree,
-                            post_dom_tree,
-                            blocks,
-                            loop_headers,
-                            visited,
-                            exit_block,
-                            unknown_block,
-                        );
-
-                        // Structure else-region.
-                        let else_regions = structure_from(
-                            false_target,
-                            cfg,
-                            dom_tree,
-                            post_dom_tree,
-                            blocks,
-                            loop_headers,
-                            visited,
-                            exit_block,
-                            unknown_block,
-                        );
-
-                        let then_region = if then_regions.len() == 1 {
-                            then_regions.into_iter().next().unwrap()
-                        } else {
-                            Region::Sequence(then_regions)
-                        };
-
-                        let else_region = if else_regions.len() == 1 {
-                            else_regions.into_iter().next().unwrap()
-                        } else {
-                            Region::Sequence(else_regions)
-                        };
-
-                        regions.push(Region::IfThenElse {
-                            cond: current,
-                            then_region: Box::new(then_region),
-                            else_region: Box::new(else_region),
-                        });
-
-                        // Continue from merge point.
-                        current = merge_bid;
-                        continue;
+                if let Some(merge_bid) = merge
+                    && merge_bid != exit_block
+                    && merge_bid != unknown_block
+                {
+                    // Emit the condition block.
+                    if let Some(stmts) = blocks.get(&current)
+                        && !stmts.is_empty()
+                    {
+                        regions.push(Region::Linear(stmts.clone()));
                     }
+
+                    // Structure then-region.
+                    let then_regions = structure_from(
+                        true_target,
+                        cfg,
+                        dom_tree,
+                        post_dom_tree,
+                        blocks,
+                        loop_headers,
+                        visited,
+                        exit_block,
+                        unknown_block,
+                    );
+
+                    // Structure else-region.
+                    let else_regions = structure_from(
+                        false_target,
+                        cfg,
+                        dom_tree,
+                        post_dom_tree,
+                        blocks,
+                        loop_headers,
+                        visited,
+                        exit_block,
+                        unknown_block,
+                    );
+
+                    let then_region = if then_regions.len() == 1 {
+                        then_regions.into_iter().next().unwrap()
+                    } else {
+                        Region::Sequence(then_regions)
+                    };
+
+                    let else_region = if else_regions.len() == 1 {
+                        else_regions.into_iter().next().unwrap()
+                    } else {
+                        Region::Sequence(else_regions)
+                    };
+
+                    regions.push(Region::IfThenElse {
+                        cond: current,
+                        then_region: Box::new(then_region),
+                        else_region: Box::new(else_region),
+                    });
+
+                    // Continue from merge point.
+                    current = merge_bid;
+                    continue;
                 }
 
                 // Fallback: can't determine merge point — emit atomic + goto.

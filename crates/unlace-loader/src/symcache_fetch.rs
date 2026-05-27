@@ -15,6 +15,7 @@
 //! pre-resolved URL plus the destination path so tests can stand up an
 //! `httpmock`-style server and pass the resulting URL in.
 
+#[cfg(feature = "http-symfetch")]
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -76,15 +77,13 @@ pub fn fetch_to_path(url: &str, destination: &Path) -> Result<FetchReport, Fetch
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let resp = ureq::get(url)
-        .call()
-        .map_err(|e| match e {
-            ureq::Error::Status(code, _) => FetchError::Http {
-                status: code,
-                url: url.to_string(),
-            },
-            ureq::Error::Transport(t) => FetchError::Network(t.to_string()),
-        })?;
+    let resp = ureq::get(url).call().map_err(|e| match e {
+        ureq::Error::Status(code, _) => FetchError::Http {
+            status: code,
+            url: url.to_string(),
+        },
+        ureq::Error::Transport(t) => FetchError::Network(t.to_string()),
+    })?;
     let mut reader = resp.into_reader();
     let mut bytes = Vec::new();
     std::io::copy(&mut reader, &mut bytes)?;
@@ -113,7 +112,11 @@ mod tests {
 
     fn tmp_cache(name: &str) -> PathBuf {
         let mut p = std::env::temp_dir();
-        p.push(format!("unlace_symcache_test_{}_{}", name, std::process::id()));
+        p.push(format!(
+            "unlace_symcache_test_{}_{}",
+            name,
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&p);
         p
     }

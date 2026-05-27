@@ -60,12 +60,18 @@ mod tests {
 
     #[test]
     fn test_pac_paciasp() {
-        assert_eq!(classify_aarch64_runtime("paciasp"), Some(AArch64Runtime::PacIaSp));
+        assert_eq!(
+            classify_aarch64_runtime("paciasp"),
+            Some(AArch64Runtime::PacIaSp)
+        );
     }
 
     #[test]
     fn test_pac_autiasp() {
-        assert_eq!(classify_aarch64_runtime("autiasp"), Some(AArch64Runtime::AutIaSp));
+        assert_eq!(
+            classify_aarch64_runtime("autiasp"),
+            Some(AArch64Runtime::AutIaSp)
+        );
     }
 
     #[test]
@@ -76,8 +82,14 @@ mod tests {
 
     #[test]
     fn test_pac_xpaci() {
-        assert_eq!(classify_aarch64_runtime("xpaci"), Some(AArch64Runtime::Xpaci));
-        assert_eq!(classify_aarch64_runtime("xpaclri"), Some(AArch64Runtime::Xpaci));
+        assert_eq!(
+            classify_aarch64_runtime("xpaci"),
+            Some(AArch64Runtime::Xpaci)
+        );
+        assert_eq!(
+            classify_aarch64_runtime("xpaclri"),
+            Some(AArch64Runtime::Xpaci)
+        );
     }
 
     #[test]

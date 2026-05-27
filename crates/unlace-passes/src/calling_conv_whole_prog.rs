@@ -4,8 +4,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction};
 use unlace_ir::IrOp;
+use unlace_ir::ssa::{CallingConvention, FunctionSignatureRegistry, SsaFunction};
 
 use crate::pass::{Pass, PassError};
 
@@ -26,26 +26,24 @@ impl Pass for WholeProgCallingConvPass {
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut changed = false;
 
-        if func.calling_convention == CallingConvention::Unknown {
-            if let Some(sig) = self.registry.get(&func.function.addr) {
-                if sig.calling_convention != CallingConvention::Unknown {
-                    func.calling_convention = sig.calling_convention;
-                    changed = true;
-                }
-            }
+        if func.calling_convention == CallingConvention::Unknown
+            && let Some(sig) = self.registry.get(&func.function.addr)
+            && sig.calling_convention != CallingConvention::Unknown
+        {
+            func.calling_convention = sig.calling_convention;
+            changed = true;
         }
 
         for block in func.function.blocks.values() {
             for insn in &block.insns {
                 if insn.op == IrOp::Call && !insn.inputs.is_empty() {
                     let target = insn.inputs[0].offset;
-                    if let Some(sig) = self.registry.get(&target) {
-                        if sig.calling_convention != CallingConvention::Unknown
-                            && func.calling_convention == CallingConvention::Unknown
-                        {
-                            func.calling_convention = sig.calling_convention;
-                            changed = true;
-                        }
+                    if let Some(sig) = self.registry.get(&target)
+                        && sig.calling_convention != CallingConvention::Unknown
+                        && func.calling_convention == CallingConvention::Unknown
+                    {
+                        func.calling_convention = sig.calling_convention;
+                        changed = true;
                     }
                 }
             }
@@ -75,9 +73,9 @@ pub fn infer_program_convention(functions: &[&SsaFunction]) -> CallingConvention
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_ir::ssa::{FunctionSignature, build_ssa};
-    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
     use smallvec::smallvec;
+    use unlace_ir::ssa::{FunctionSignature, PrimitiveType, build_ssa};
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
 
     #[test]
     fn test_propagates_convention_from_registry() {
@@ -99,11 +97,14 @@ mod tests {
         assert_eq!(ssa.calling_convention, CallingConvention::Unknown);
 
         let mut registry = FunctionSignatureRegistry::new();
-        registry.insert(0x2000, FunctionSignature {
-            param_types: vec![PrimitiveType::Int(8), PrimitiveType::Int(8)],
-            return_type: PrimitiveType::Int(4),
-            calling_convention: CallingConvention::SystemV,
-        });
+        registry.insert(
+            0x2000,
+            FunctionSignature {
+                param_types: vec![PrimitiveType::Int(8), PrimitiveType::Int(8)],
+                return_type: PrimitiveType::Int(4),
+                calling_convention: CallingConvention::SystemV,
+            },
+        );
 
         let pass = WholeProgCallingConvPass { registry };
         let changed = pass.run(&mut ssa).unwrap();
@@ -116,7 +117,8 @@ mod tests {
         let make = |addr, cc: CallingConvention| {
             let mut f = Function::new("f", BlockId(0), addr);
             let mut bb = BasicBlock::new(BlockId(0));
-            bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], addr));
+            bb.insns
+                .push(IrInsn::without_output(IrOp::Return, smallvec![], addr));
             f.insert_block(bb);
             let mut s = build_ssa(f);
             s.calling_convention = cc;

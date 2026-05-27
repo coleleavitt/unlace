@@ -9,7 +9,7 @@ use crate::coverage;
 fn read_n(session: &Session, ea: u64, n: usize) -> Option<u64> {
     session.with_binary(|img| {
         for section in &img.sections {
-            if ea >= section.vaddr && ea + n as u64 <= section.vaddr + section.size as u64 {
+            if ea >= section.vaddr && ea + n as u64 <= section.vaddr + section.size {
                 let off = (ea - section.vaddr) as usize;
                 let slice = &section.data[off..off + n];
                 let mut buf = [0u8; 8];
@@ -46,8 +46,7 @@ pub fn get_bytes(session: &Session, ea: u64, length: usize) -> Option<Vec<u8>> {
     coverage::mark_implemented("ida_bytes.get_bytes");
     session.with_binary(|img| {
         for section in &img.sections {
-            if ea >= section.vaddr && ea + length as u64 <= section.vaddr + section.size as u64
-            {
+            if ea >= section.vaddr && ea + length as u64 <= section.vaddr + section.size {
                 let off = (ea - section.vaddr) as usize;
                 return Some(section.data[off..off + length].to_vec());
             }

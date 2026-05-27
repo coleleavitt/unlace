@@ -197,10 +197,10 @@ fn walk_addr(
                         return Some((*b, left.1, left.2, left.3));
                     }
                 }
-                if let Some(right) = walk_addr(func, *b, iv_set, acc_stride, acc_offset) {
-                    if right.1 != 0 {
-                        return Some((*a, right.1, right.2, right.3));
-                    }
+                if let Some(right) = walk_addr(func, *b, iv_set, acc_stride, acc_offset)
+                    && right.1 != 0
+                {
+                    return Some((*a, right.1, right.2, right.3));
                 }
             }
             None

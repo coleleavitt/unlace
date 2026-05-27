@@ -101,22 +101,19 @@ where
         for (idx, insn) in block.insns.iter().enumerate() {
             // Pattern 1-3: allocators — Call with a Const target whose
             // resolved name is in ALLOC_FAMILY.
-            if insn.op == IrOp::Call {
-                if let Some((target_name, sz_pos)) = resolve_call_alloc(insn, &resolve_name) {
-                    if let Some(reg) = arg_regs.get(sz_pos).copied() {
-                        if let Some(c) = trace_const_into_reg(block, idx, reg) {
-                            if let Some(t) = sized.iter().find(|s| s.size == c) {
-                                func.sizeof_type_map.insert((bid, idx), t.ty.clone());
-                                changed = true;
-                                tracing::trace!(
-                                    target = target_name,
-                                    size = c,
-                                    "sizeof recognised at {bid:?}, idx={idx}"
-                                );
-                            }
-                        }
-                    }
-                }
+            if insn.op == IrOp::Call
+                && let Some((target_name, sz_pos)) = resolve_call_alloc(insn, &resolve_name)
+                && let Some(reg) = arg_regs.get(sz_pos).copied()
+                && let Some(c) = trace_const_into_reg(block, idx, reg)
+                && let Some(t) = sized.iter().find(|s| s.size == c)
+            {
+                func.sizeof_type_map.insert((bid, idx), t.ty.clone());
+                changed = true;
+                tracing::trace!(
+                    target = target_name,
+                    size = c,
+                    "sizeof recognised at {bid:?}, idx={idx}"
+                );
             }
 
             // Pattern 4: `IntAnd(addr, ~(N-1))` for N = 2^k.
@@ -128,18 +125,17 @@ where
                 } else {
                     None
                 };
-                if let Some(mask) = mask_vn {
-                    if let Some(align) = mask_to_alignment(mask.offset, mask.size) {
-                        if let Some(t) = sized.iter().find(|s| s.size == align) {
-                            // Only mark "alignof" if the mask actually
-                            // corresponds to a *power-of-two* alignment
-                            // matching a known type's size — primitives
-                            // larger than 1 with size 1/2/4/8/16 qualify.
-                            if align.is_power_of_two() {
-                                func.alignof_type_map.insert((bid, idx), t.ty.clone());
-                                changed = true;
-                            }
-                        }
+                if let Some(mask) = mask_vn
+                    && let Some(align) = mask_to_alignment(mask.offset, mask.size)
+                    && let Some(t) = sized.iter().find(|s| s.size == align)
+                {
+                    // Only mark "alignof" if the mask actually
+                    // corresponds to a *power-of-two* alignment
+                    // matching a known type's size — primitives
+                    // larger than 1 with size 1/2/4/8/16 qualify.
+                    if align.is_power_of_two() {
+                        func.alignof_type_map.insert((bid, idx), t.ty.clone());
+                        changed = true;
                     }
                 }
             }

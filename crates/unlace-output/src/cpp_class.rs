@@ -42,11 +42,11 @@ fn annotate_from_demangle(func: &mut HirFunction, dr: &DemangleResult) -> bool {
 
     // Only override class_name when the demangler produced one — leave any
     // existing user-supplied annotation alone.
-    if let Some(cls) = dr.class_name.as_ref() {
-        if func.class_name.as_deref() != Some(cls.as_str()) {
-            func.class_name = Some(cls.clone());
-            changed = true;
-        }
+    if let Some(cls) = dr.class_name.as_ref()
+        && func.class_name.as_deref() != Some(cls.as_str())
+    {
+        func.class_name = Some(cls.clone());
+        changed = true;
     }
 
     changed

@@ -21,10 +21,10 @@ pub fn getseg(session: &Session, ea: u64) -> Option<Segment> {
     session.with_binary(|img| {
         img.sections
             .iter()
-            .find(|s| ea >= s.vaddr && ea < s.vaddr + s.size as u64)
+            .find(|s| ea >= s.vaddr && ea < s.vaddr + s.size)
             .map(|s| Segment {
                 start_ea: s.vaddr,
-                end_ea: s.vaddr + s.size as u64,
+                end_ea: s.vaddr + s.size,
                 name: s.name.clone(),
                 readable: s.flags.contains(unlace_loader::SectionFlags::READ),
                 writable: s.flags.contains(unlace_loader::SectionFlags::WRITE),

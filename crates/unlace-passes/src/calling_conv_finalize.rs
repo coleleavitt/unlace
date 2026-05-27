@@ -190,10 +190,11 @@ fn param_register_uses(func: &SsaFunction, reg_offset: u64) -> Vec<ParamUse> {
                     uses.push(classify_param_use(insn, input));
                 }
             }
-            if let Some(out) = insn.output {
-                if out.space == SpaceId::Register && out.offset == reg_offset {
-                    written_in_block = true;
-                }
+            if let Some(out) = insn.output
+                && out.space == SpaceId::Register
+                && out.offset == reg_offset
+            {
+                written_in_block = true;
             }
         }
     }
@@ -278,10 +279,11 @@ fn first_return_use(block: &unlace_ir::BasicBlock, call_idx: usize, ret_reg: u64
         }
         // A write to the return register that doesn't read it first
         // means the original return value was discarded.
-        if let Some(out) = insn.output {
-            if out.space == SpaceId::Register && out.offset == ret_reg {
-                return None;
-            }
+        if let Some(out) = insn.output
+            && out.space == SpaceId::Register
+            && out.offset == ret_reg
+        {
+            return None;
         }
     }
     None
@@ -380,10 +382,11 @@ pub fn detect_sret(func: &SsaFunction) -> bool {
                 match insn.op {
                     IrOp::Store => {
                         // Store(space, addr, value) — addr is input[1]
-                        if let Some(addr) = insn.inputs.get(1) {
-                            if addr.space == SpaceId::Register && addr.offset == first_arg_reg {
-                                store_addr_uses += 1;
-                            }
+                        if let Some(addr) = insn.inputs.get(1)
+                            && addr.space == SpaceId::Register
+                            && addr.offset == first_arg_reg
+                        {
+                            store_addr_uses += 1;
                         }
                     }
                     _ => {

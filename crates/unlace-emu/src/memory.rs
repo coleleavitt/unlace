@@ -122,10 +122,11 @@ mod tests {
     fn test_memory_map_spans_page_boundary() {
         let mut m = MemoryMap::new();
         // Map 8 bytes straddling pages 0 and 1.
-        m.map(0xFFC, &[10, 20, 30, 40, 50, 60, 70, 80], (true, true, false));
-        assert_eq!(
-            m.read(0xFFC, 8),
-            Some(vec![10, 20, 30, 40, 50, 60, 70, 80])
+        m.map(
+            0xFFC,
+            &[10, 20, 30, 40, 50, 60, 70, 80],
+            (true, true, false),
         );
+        assert_eq!(m.read(0xFFC, 8), Some(vec![10, 20, 30, 40, 50, 60, 70, 80]));
     }
 }

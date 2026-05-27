@@ -14,9 +14,7 @@ pub fn functions(session: &Session, start: Option<u64>, end: Option<u64>) -> Vec
             img.symbols
                 .keys()
                 .copied()
-                .filter(|&ea| {
-                    start.map_or(true, |s| ea >= s) && end.map_or(true, |e| ea < e)
-                })
+                .filter(|&ea| start.is_none_or(|s| ea >= s) && end.is_none_or(|e| ea < e))
                 .collect()
         })
         .unwrap_or_default()

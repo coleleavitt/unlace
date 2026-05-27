@@ -325,12 +325,13 @@ fn strip_label_return_pairs(
 ) {
     let mut i = 0;
     while i + 1 < nodes.len() {
-        if let (HirNode::Label(label), HirNode::Return(_)) = (&nodes[i], &nodes[i + 1]) {
-            if label_returns.contains_key(label) && !still_used.contains(label) {
-                nodes.remove(i + 1);
-                nodes.remove(i);
-                continue;
-            }
+        if let (HirNode::Label(label), HirNode::Return(_)) = (&nodes[i], &nodes[i + 1])
+            && label_returns.contains_key(label)
+            && !still_used.contains(label)
+        {
+            nodes.remove(i + 1);
+            nodes.remove(i);
+            continue;
         }
         i += 1;
     }

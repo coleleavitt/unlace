@@ -175,12 +175,13 @@ fn resolve_operand_const(func: &SsaFunction, insn: &IrInsn, idx: usize) -> Optio
             continue;
         }
         // Found the SSA varnode whose base is our operand; check its def.
-        if let Some((_, _, def_insn)) = defining_insn(func, *ssa_var) {
-            if def_insn.op == IrOp::Copy && def_insn.inputs.len() == 1 {
-                let src = def_insn.inputs[0];
-                if src.space == SpaceId::Const {
-                    return Some(src.offset);
-                }
+        if let Some((_, _, def_insn)) = defining_insn(func, *ssa_var)
+            && def_insn.op == IrOp::Copy
+            && def_insn.inputs.len() == 1
+        {
+            let src = def_insn.inputs[0];
+            if src.space == SpaceId::Const {
+                return Some(src.offset);
             }
         }
     }

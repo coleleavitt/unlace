@@ -151,15 +151,15 @@ fn resolve_this_field(
         IrOp::IntAdd | IrOp::Ptradd => {
             let a = ssa_input(func, bid, idx, 0);
             let b = ssa_input(func, bid, idx, 1);
-            if let (Some(base), Some(raw)) = (a, def.inputs.get(1)) {
-                if let Some(k) = const_value(*raw) {
-                    return Some((base, k));
-                }
+            if let (Some(base), Some(raw)) = (a, def.inputs.get(1))
+                && let Some(k) = const_value(*raw)
+            {
+                return Some((base, k));
             }
-            if let (Some(base), Some(raw)) = (b, def.inputs.first()) {
-                if let Some(k) = const_value(*raw) {
-                    return Some((base, k));
-                }
+            if let (Some(base), Some(raw)) = (b, def.inputs.first())
+                && let Some(k) = const_value(*raw)
+            {
+                return Some((base, k));
             }
             if let (Some(a), Some(b)) = (a, b) {
                 if let Some(k) = const_value(b.base) {

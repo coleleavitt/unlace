@@ -604,10 +604,9 @@ fn find_named_struct(name: &str, table: &BTreeMap<u32, CvType>, out: &PdbTypes) 
             forward_ref: false,
             ..
         } = cv
+            && n == name
         {
-            if n == name {
-                return out.by_index.get(idx).cloned();
-            }
+            return out.by_index.get(idx).cloned();
         }
     }
     None
@@ -1146,13 +1145,12 @@ pub fn walk_tpi_with_index(
                     }
                     _ => continue,
                 };
-                if let Some(new_ty) = resolved_ptr_arr {
-                    if let Some(slot) = by_index.get_mut(&ti) {
-                        if *slot != new_ty {
-                            *slot = new_ty;
-                            changed = true;
-                        }
-                    }
+                if let Some(new_ty) = resolved_ptr_arr
+                    && let Some(slot) = by_index.get_mut(&ti)
+                    && *slot != new_ty
+                {
+                    *slot = new_ty;
+                    changed = true;
                 }
             }
         }
@@ -1775,11 +1773,11 @@ pub fn apply_field_type_map(
     match aggregate {
         Type::Struct { name, fields } | Type::Union { name, fields } => {
             for field in fields {
-                if matches!(&field.ty, Type::Primitive(PrimitiveType::Unknown)) {
-                    if let Some(resolved) = field_types.get(&(name.clone(), field.name.clone())) {
-                        field.ty = resolved.clone();
-                        hits += 1;
-                    }
+                if matches!(&field.ty, Type::Primitive(PrimitiveType::Unknown))
+                    && let Some(resolved) = field_types.get(&(name.clone(), field.name.clone()))
+                {
+                    field.ty = resolved.clone();
+                    hits += 1;
                 }
             }
         }

@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use unlace_ir::ssa::SsaFunction;
-use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
+use unlace_ir::{BlockId, IrOp, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -94,7 +94,8 @@ mod tests {
             ],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
         func.insert_block(bb);
 
         let ssa = build_ssa(func);

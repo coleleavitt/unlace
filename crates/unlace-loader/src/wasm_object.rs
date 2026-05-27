@@ -85,11 +85,7 @@ pub fn parse_wasm(bytes: &[u8]) -> Option<Vec<WasmSection>> {
             12 => WasmSectionKind::DataCount,
             _ => WasmSectionKind::Unknown,
         };
-        sections.push(WasmSection {
-            kind,
-            offset,
-            size,
-        });
+        sections.push(WasmSection { kind, offset, size });
         offset = offset.saturating_add(size as usize);
         if offset > bytes.len() {
             break;

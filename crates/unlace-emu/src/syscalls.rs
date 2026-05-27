@@ -93,10 +93,7 @@ mod tests {
     #[test]
     fn test_syscall_unknown_returns_unimplemented() {
         let m = MemoryMap::new();
-        assert_eq!(
-            dispatch(0xDEAD, [0; 6], &m),
-            SyscallOutcome::Unimplemented
-        );
+        assert_eq!(dispatch(0xDEAD, [0; 6], &m), SyscallOutcome::Unimplemented);
     }
 
     #[test]

@@ -26,7 +26,10 @@ pub enum StepOutcome {
     /// Static branch — caller should jump to this address.
     Jump(u64),
     /// Conditional branch — caller should jump to `target` iff `taken`.
-    ConditionalJump { target: u64, taken: bool },
+    ConditionalJump {
+        target: u64,
+        taken: bool,
+    },
     /// Indirect branch — caller should jump to this register value.
     IndirectJump(u64),
     /// Function call — push return address, jump.
@@ -103,10 +106,7 @@ impl Interpreter {
         Err(format!("unhandled IR op: {}", insn.op.name()))
     }
 
-    fn dispatch_data_or_arith(
-        &mut self,
-        insn: &IrInsn,
-    ) -> Option<Result<StepOutcome, String>> {
+    fn dispatch_data_or_arith(&mut self, insn: &IrInsn) -> Option<Result<StepOutcome, String>> {
         use IrOp::*;
         Some(match insn.op {
             Copy | Indirect => self.exec_unary(insn, |a, _| a),
@@ -130,10 +130,7 @@ impl Interpreter {
         })
     }
 
-    fn dispatch_compare_or_logic(
-        &mut self,
-        insn: &IrInsn,
-    ) -> Option<Result<StepOutcome, String>> {
+    fn dispatch_compare_or_logic(&mut self, insn: &IrInsn) -> Option<Result<StepOutcome, String>> {
         use IrOp::*;
         let sz = max_input_size(insn);
         Some(match insn.op {
@@ -756,8 +753,8 @@ fn encode_float(v: f64, sz: u8) -> u64 {
     }
 }
 
-/// Map (offset, size) → register name. Covers x86_64 GPRs + AArch64 X0-X30
-/// + RISC-V x0-x31, which is what every lifter in the workspace currently
+/// Map (offset, size) → register name. Covers x86_64 GPRs, AArch64 X0-X30,
+/// and RISC-V x0-x31, which is what every lifter in the workspace currently
 /// emits. Unknown offsets degrade to `r<offset>`.
 fn register_name(offset: u64, size: u8) -> String {
     // x86_64 GPRs (offset 0..128, size 1/2/4/8)
@@ -765,7 +762,7 @@ fn register_name(offset: u64, size: u8) -> String {
         return n.to_string();
     }
     // AArch64 X0..X30 typically at offsets 0,8,16,...,240
-    if size == 8 && offset < 248 && offset % 8 == 0 {
+    if size == 8 && offset < 248 && offset.is_multiple_of(8) {
         let i = offset / 8;
         if i <= 30 {
             return format!("x{}", i);
@@ -994,7 +991,12 @@ mod tests {
         assert_eq!(i.regs.get("eax"), 0x0F);
         run_step(
             &mut i,
-            &binary(IrOp::IntSright, out, vn_const(0xFFFFFF00, 4), vn_const(4, 4)),
+            &binary(
+                IrOp::IntSright,
+                out,
+                vn_const(0xFFFFFF00, 4),
+                vn_const(4, 4),
+            ),
         );
         assert_eq!(i.regs.get("eax"), 0xFFFFFFF0);
     }
@@ -1003,15 +1005,9 @@ mod tests {
     fn test_step_popcount_lzcount() {
         let mut i = Interpreter::new();
         let out = Varnode::reg(0x00, 4);
-        run_step(
-            &mut i,
-            &unary(IrOp::Popcount, out, vn_const(0b10110, 4)),
-        );
+        run_step(&mut i, &unary(IrOp::Popcount, out, vn_const(0b10110, 4)));
         assert_eq!(i.regs.get("eax"), 3);
-        run_step(
-            &mut i,
-            &unary(IrOp::Lzcount, out, vn_const(0x00000010, 4)),
-        );
+        run_step(&mut i, &unary(IrOp::Lzcount, out, vn_const(0x00000010, 4)));
         // 32-bit input, value 0x10 has 27 leading zeros (bit 4 is highest).
         assert_eq!(i.regs.get("eax"), 27);
     }
@@ -1086,10 +1082,7 @@ mod tests {
         let mut i = Interpreter::new();
         i.regs.set("rip", 0x700000);
         let insn = IrInsn::without_output(IrOp::Branchind, smallvec![vn_rip()], 0);
-        assert_eq!(
-            run_step(&mut i, &insn),
-            StepOutcome::IndirectJump(0x700000)
-        );
+        assert_eq!(run_step(&mut i, &insn), StepOutcome::IndirectJump(0x700000));
     }
 
     #[test]
@@ -1186,7 +1179,8 @@ mod tests {
     #[test]
     fn test_step_atomic_rmw_xchg_and_add() {
         let mut i = Interpreter::new();
-        i.memory.map(0x5000, &[10, 0, 0, 0, 0, 0, 0, 0], (true, true, false));
+        i.memory
+            .map(0x5000, &[10, 0, 0, 0, 0, 0, 0, 0], (true, true, false));
         let out = Varnode::reg(0x00, 8);
         let insn = IrInsn::with_output(
             IrOp::AtomicRmw,
@@ -1258,12 +1252,7 @@ mod tests {
     fn test_step_carry_flag_unsigned_overflow() {
         let mut i = Interpreter::new();
         let out = vn_unique(0, 1);
-        let insn = binary(
-            IrOp::IntCarry,
-            out,
-            vn_const(u64::MAX, 8),
-            vn_const(1, 8),
-        );
+        let insn = binary(IrOp::IntCarry, out, vn_const(u64::MAX, 8), vn_const(1, 8));
         run_step(&mut i, &insn);
         assert_eq!(i.unique_slots[&(0, 1)], 1);
     }

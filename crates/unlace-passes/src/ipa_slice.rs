@@ -5,10 +5,10 @@
 //! that affect (backward) or are affected by (forward) the criterion.
 //! Crosses function boundaries via call/return edges.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{BlockId, IrOp, Varnode};
+use unlace_ir::ssa::SsaFunction;
+use unlace_ir::{BlockId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -43,15 +43,14 @@ pub fn backward_slice(func: &SsaFunction, criterion: &SliceCriterion) -> Program
         // Find all instructions that define `target`.
         for (&block_id, block) in &func.function.blocks {
             for (idx, insn) in block.insns.iter().enumerate() {
-                if let Some(out) = insn.output {
-                    if out == target {
-                        if in_slice.insert((block_id, idx)) {
-                            // Add all inputs to the worklist.
-                            for inp in &insn.inputs {
-                                if relevant_vars.insert(*inp) {
-                                    worklist.push_back(*inp);
-                                }
-                            }
+                if let Some(out) = insn.output
+                    && out == target
+                    && in_slice.insert((block_id, idx))
+                {
+                    // Add all inputs to the worklist.
+                    for inp in &insn.inputs {
+                        if relevant_vars.insert(*inp) {
+                            worklist.push_back(*inp);
                         }
                     }
                 }
@@ -72,27 +71,24 @@ pub fn forward_slice(func: &SsaFunction, criterion: &SliceCriterion) -> ProgramS
     let mut worklist: VecDeque<Varnode> = VecDeque::new();
 
     // Start from the output of the criterion instruction.
-    if let Some(block) = func.function.blocks.get(&criterion.block) {
-        if let Some(insn) = block.insns.get(criterion.insn_idx) {
-            if let Some(out) = insn.output {
-                relevant_vars.insert(out);
-                worklist.push_back(out);
-            }
-        }
+    if let Some(block) = func.function.blocks.get(&criterion.block)
+        && let Some(insn) = block.insns.get(criterion.insn_idx)
+        && let Some(out) = insn.output
+    {
+        relevant_vars.insert(out);
+        worklist.push_back(out);
     }
     in_slice.insert((criterion.block, criterion.insn_idx));
 
     while let Some(source) = worklist.pop_front() {
         for (&block_id, block) in &func.function.blocks {
             for (idx, insn) in block.insns.iter().enumerate() {
-                if insn.inputs.contains(&source) {
-                    if in_slice.insert((block_id, idx)) {
-                        if let Some(out) = insn.output {
-                            if relevant_vars.insert(out) {
-                                worklist.push_back(out);
-                            }
-                        }
-                    }
+                if insn.inputs.contains(&source)
+                    && in_slice.insert((block_id, idx))
+                    && let Some(out) = insn.output
+                    && relevant_vars.insert(out)
+                {
+                    worklist.push_back(out);
                 }
             }
         }
@@ -121,13 +117,12 @@ impl Pass for IpaSlicePass {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use smallvec::smallvec;
     use unlace_ir::ssa::build_ssa;
-    use unlace_ir::{BasicBlock, Function, IrInsn};
+    use unlace_ir::{BasicBlock, Function, IrInsn, IrOp};
 
     #[test]
     fn test_backward_slice_contains_criterion() {
@@ -136,9 +131,13 @@ mod tests {
         let mut func = Function::new("slice_test", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns.push(IrInsn::with_output(
-            IrOp::Copy, c, smallvec![Varnode::constant(42, 4)], 0x1000,
+            IrOp::Copy,
+            c,
+            smallvec![Varnode::constant(42, 4)],
+            0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![c], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![c], 0x1004));
         func.insert_block(bb);
 
         let ssa = build_ssa(func);
@@ -161,15 +160,25 @@ mod tests {
         let mut func = Function::new("fwd", BlockId(0), 0x2000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns.push(IrInsn::with_output(
-            IrOp::Copy, a, smallvec![Varnode::constant(1, 4)], 0x2000,
+            IrOp::Copy,
+            a,
+            smallvec![Varnode::constant(1, 4)],
+            0x2000,
         ));
         bb.insns.push(IrInsn::with_output(
-            IrOp::IntAdd, b, smallvec![a, Varnode::constant(2, 4)], 0x2004,
+            IrOp::IntAdd,
+            b,
+            smallvec![a, Varnode::constant(2, 4)],
+            0x2004,
         ));
         bb.insns.push(IrInsn::with_output(
-            IrOp::IntAdd, c, smallvec![b, Varnode::constant(3, 4)], 0x2008,
+            IrOp::IntAdd,
+            c,
+            smallvec![b, Varnode::constant(3, 4)],
+            0x2008,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![c], 0x200c));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![c], 0x200c));
         func.insert_block(bb);
 
         let ssa = build_ssa(func);

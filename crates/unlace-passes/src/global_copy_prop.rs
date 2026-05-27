@@ -117,6 +117,9 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                 // Step 1: rewrite inputs that have a known dominating
                 // equivalent. Skip constants and self-equivalences.
                 for (input_idx, raw) in insn.inputs.iter().enumerate() {
+                    if is_call_argument_input(insn, input_idx) {
+                        continue;
+                    }
                     if raw.space == SpaceId::Const {
                         continue;
                     }
@@ -146,35 +149,35 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                 // Step 2: record a new COPY equivalence. Resolve the source
                 // through any existing equivalence so chains collapse to their
                 // ultimate origin in one pass.
-                if insn.op == IrOp::Copy {
-                    if let (Some(out), Some(&raw_src)) = (insn.output, insn.inputs.first()) {
-                        if out.space != SpaceId::Const && out != raw_src {
-                            let Some(output_sv) = output_ssa(func, bid, insn_idx) else {
-                                continue;
-                            };
-                            let source_ssa = if raw_src.space == SpaceId::Const {
-                                None
-                            } else {
-                                let Some(sv) = input_ssa(func, bid, insn_idx, 0) else {
-                                    continue;
-                                };
-                                Some(sv)
-                            };
-                            let source = resolve_chain(
-                                &equiv,
-                                CopySource {
-                                    raw: raw_src,
-                                    ssa: source_ssa,
-                                },
-                            );
-                            if source.raw != out || source.ssa != Some(output_sv) {
-                                let prev = equiv.insert(output_sv, source);
-                                local_log.push(EquivMutation::Inserted {
-                                    key: output_sv,
-                                    previous: prev,
-                                });
-                            }
-                        }
+                if insn.op == IrOp::Copy
+                    && let (Some(out), Some(&raw_src)) = (insn.output, insn.inputs.first())
+                    && out.space != SpaceId::Const
+                    && out != raw_src
+                {
+                    let Some(output_sv) = output_ssa(func, bid, insn_idx) else {
+                        continue;
+                    };
+                    let source_ssa = if raw_src.space == SpaceId::Const {
+                        None
+                    } else {
+                        let Some(sv) = input_ssa(func, bid, insn_idx, 0) else {
+                            continue;
+                        };
+                        Some(sv)
+                    };
+                    let source = resolve_chain(
+                        &equiv,
+                        CopySource {
+                            raw: raw_src,
+                            ssa: source_ssa,
+                        },
+                    );
+                    if source.raw != out || source.ssa != Some(output_sv) {
+                        let prev = equiv.insert(output_sv, source);
+                        local_log.push(EquivMutation::Inserted {
+                            key: output_sv,
+                            previous: prev,
+                        });
                     }
                 }
 
@@ -192,6 +195,10 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
     }
 
     rewrites
+}
+
+fn is_call_argument_input(insn: &unlace_ir::IrInsn, input_idx: usize) -> bool {
+    matches!(insn.op, IrOp::Call | IrOp::Callind) && input_idx > 0
 }
 
 /// One mutation applied to `equiv` while visiting a block.  Stored so the
@@ -354,6 +361,49 @@ mod tests {
             "use of v3 in dominated BB1 must propagate to a"
         );
         assert_eq!(bb1_after.insns[0].inputs[1], b);
+    }
+
+    #[test]
+    fn test_global_copy_prop_preserves_call_argument_inputs() {
+        let rdi = Varnode::reg(56, 8);
+        let loaded = Varnode::unique(0x1000, 8);
+        let target = Varnode::constant(0x401000, 8);
+
+        let mut func = Function::new("call_arg_boundary", BlockId(0), 0x2000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rdi,
+            smallvec![loaded],
+            0x2000,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x2004));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![target, rdi],
+            0x2010,
+        ));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+
+        let mut ssa = build_ssa(func);
+        let changed = GlobalCopyPropPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(
+            !changed,
+            "call argument inputs are a boundary for recovered ABI names"
+        );
+
+        let call = &ssa.function.blocks[&BlockId(1)].insns[0];
+        assert_eq!(call.inputs[0], target);
+        assert_eq!(call.inputs[1], rdi);
     }
 
     /// Sibling blocks: BB1 defines a COPY but does not dominate BB2, so

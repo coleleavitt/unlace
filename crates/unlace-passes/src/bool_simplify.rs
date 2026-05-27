@@ -5,7 +5,7 @@
 //! 2. Runs Quine-McCluskey to find prime implicants.
 //! 3. Rebuilds as a simplified HIR condition (sum-of-products form).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use smallvec::smallvec;
 use unlace_ir::ssa::SsaFunction;
@@ -15,6 +15,8 @@ use crate::pass::{Pass, PassError};
 
 /// Maximum number of input variables we'll attempt QM minimization on.
 const MAX_VARS: usize = 6;
+/// Avoid spending unbounded recursion on malformed or cyclic def-use chains.
+const MAX_EXPR_DEPTH: usize = 128;
 
 /// Boolean simplification pass (Espresso-lite via Quine-McCluskey).
 pub struct BoolSimplifyPass;
@@ -58,10 +60,10 @@ fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, IrInsn> {
     let mut map = BTreeMap::new();
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            if let Some(output) = insn.output {
-                if output.space != SpaceId::Const {
-                    map.insert(output, insn.clone());
-                }
+            if let Some(output) = insn.output
+                && output.space != SpaceId::Const
+            {
+                map.insert(output, insn.clone());
             }
         }
     }
@@ -72,10 +74,10 @@ fn find_max_unique_offset(func: &SsaFunction) -> u64 {
     let mut max_offset = 0u64;
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            if let Some(output) = insn.output {
-                if output.space == SpaceId::Unique {
-                    max_offset = max_offset.max(output.offset);
-                }
+            if let Some(output) = insn.output
+                && output.space == SpaceId::Unique
+            {
+                max_offset = max_offset.max(output.offset);
             }
             for input in &insn.inputs {
                 if input.space == SpaceId::Unique {
@@ -124,54 +126,70 @@ fn extract_expr(
     def_map: &BTreeMap<Varnode, IrInsn>,
     vars: &mut Vec<Varnode>,
 ) -> Option<BoolExpr> {
+    let mut visiting = BTreeSet::new();
+    extract_expr_inner(root, def_map, vars, &mut visiting, 0)
+}
+
+fn extract_expr_inner(
+    root: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+    vars: &mut Vec<Varnode>,
+    visiting: &mut BTreeSet<Varnode>,
+    depth: usize,
+) -> Option<BoolExpr> {
+    if depth >= MAX_EXPR_DEPTH {
+        return None;
+    }
     if root.space == SpaceId::Const {
         // Constants: true → AND identity, false → OR identity
         return None; // Don't try to QM-minimize expressions with embedded constants
     }
 
+    if !visiting.insert(*root) {
+        return None;
+    }
+
     if let Some(insn) = def_map.get(root) {
-        match insn.op {
+        let expr = match insn.op {
             IrOp::BoolAnd if insn.inputs.len() == 2 => {
-                let a = extract_expr(&insn.inputs[0], def_map, vars)?;
-                let b = extract_expr(&insn.inputs[1], def_map, vars)?;
+                let a = extract_expr_inner(&insn.inputs[0], def_map, vars, visiting, depth + 1)?;
+                let b = extract_expr_inner(&insn.inputs[1], def_map, vars, visiting, depth + 1)?;
                 Some(BoolExpr::And(Box::new(a), Box::new(b)))
             }
             IrOp::BoolOr if insn.inputs.len() == 2 => {
-                let a = extract_expr(&insn.inputs[0], def_map, vars)?;
-                let b = extract_expr(&insn.inputs[1], def_map, vars)?;
+                let a = extract_expr_inner(&insn.inputs[0], def_map, vars, visiting, depth + 1)?;
+                let b = extract_expr_inner(&insn.inputs[1], def_map, vars, visiting, depth + 1)?;
                 Some(BoolExpr::Or(Box::new(a), Box::new(b)))
             }
             IrOp::BoolNegate if insn.inputs.len() == 1 => {
-                let inner = extract_expr(&insn.inputs[0], def_map, vars)?;
+                let inner =
+                    extract_expr_inner(&insn.inputs[0], def_map, vars, visiting, depth + 1)?;
                 Some(BoolExpr::Not(Box::new(inner)))
             }
-            _ => {
-                // Leaf: an opaque boolean-producing instruction
-                let idx = if let Some(pos) = vars.iter().position(|v| v == root) {
-                    pos
-                } else {
-                    if vars.len() >= MAX_VARS {
-                        return None;
-                    }
-                    vars.push(*root);
-                    vars.len() - 1
-                };
-                Some(BoolExpr::Var(idx))
-            }
-        }
-    } else {
-        // No defining instruction (e.g., function parameter / register)
-        let idx = if let Some(pos) = vars.iter().position(|v| v == root) {
-            pos
-        } else {
-            if vars.len() >= MAX_VARS {
-                return None;
-            }
-            vars.push(*root);
-            vars.len() - 1
+            _ => leaf_expr(root, vars),
         };
-        Some(BoolExpr::Var(idx))
+        visiting.remove(root);
+        expr
+    } else {
+        let expr = leaf_expr(root, vars);
+        visiting.remove(root);
+        expr
     }
+}
+
+fn leaf_expr(root: &Varnode, vars: &mut Vec<Varnode>) -> Option<BoolExpr> {
+    // No defining instruction (e.g., function parameter / register), or an
+    // opaque boolean-producing instruction.
+    let idx = if let Some(pos) = vars.iter().position(|v| v == root) {
+        pos
+    } else {
+        if vars.len() >= MAX_VARS {
+            return None;
+        }
+        vars.push(*root);
+        vars.len() - 1
+    };
+    Some(BoolExpr::Var(idx))
 }
 
 // ── Quine-McCluskey ─────────────────────────────────────────────────────
@@ -614,6 +632,26 @@ mod tests {
             .unwrap();
         assert_eq!(result_insn.op, IrOp::Copy);
         assert_eq!(result_insn.inputs[0], a);
+    }
+
+    #[test]
+    fn test_extract_expr_rejects_cyclic_def_use_graph() {
+        let a = Varnode::unique(0, 1);
+        let b = Varnode::unique(8, 1);
+        let leaf = Varnode::reg(0, 1);
+
+        let mut def_map = BTreeMap::new();
+        def_map.insert(
+            a,
+            IrInsn::with_output(IrOp::BoolAnd, a, smallvec![b, leaf], 0x1000),
+        );
+        def_map.insert(
+            b,
+            IrInsn::with_output(IrOp::BoolOr, b, smallvec![a, leaf], 0x1004),
+        );
+
+        let mut vars = Vec::new();
+        assert_eq!(extract_expr(&a, &def_map, &mut vars), None);
     }
 
     // ── Unit tests for Quine-McCluskey itself ───────────────────────────

@@ -593,6 +593,19 @@ pub struct SsaFunction {
     /// `HirNode::TryCatch` nodes at the correct boundaries instead of
     /// relying on `__cxa_begin_catch` call-site heuristics.
     pub eh_landing_pads: BTreeSet<u64>,
+    /// Typed catch arms recovered for each EH landing pad. Keyed by landing
+    /// pad VA; each value is the ordered action-chain catch type list decoded
+    /// from LSDA type filters. A `PrimitiveType::Unknown` entry denotes the
+    /// Itanium catch-all sentinel (`catch (...)`).
+    ///
+    /// This refines [`Self::eh_landing_pads`]: the set still answers "where is
+    /// the handler?", while this map answers "what does it catch?".
+    pub eh_landing_pad_catches: BTreeMap<u64, Vec<crate::types::Type>>,
+    /// EH landing pads that are cleanup-only regions rather than catch
+    /// handlers. Itanium LSDA call-site entries encode these as landing pads
+    /// with no catch action chain; the structurer renders them as
+    /// `TryFinally` instead of manufacturing a catch-all handler.
+    pub eh_cleanup_landing_pads: BTreeSet<u64>,
     /// Detected stack-frame gaps (regions of the local frame that no
     /// LOAD/STORE/Stack-space access has covered). Keyed by RSP-relative
     /// start offset; value is the gap's byte length. Populated by
@@ -1279,7 +1292,8 @@ pub struct VarMap {
 
 impl<'a> IntoIterator for &'a VarMap {
     type Item = (&'a (BlockId, usize, VarnodeSlot), &'a SsaVarnode);
-    type IntoIter = std::collections::btree_map::Iter<'a, (BlockId, usize, VarnodeSlot), SsaVarnode>;
+    type IntoIter =
+        std::collections::btree_map::Iter<'a, (BlockId, usize, VarnodeSlot), SsaVarnode>;
     fn into_iter(self) -> Self::IntoIter {
         self.inner.iter()
     }
@@ -1306,7 +1320,9 @@ impl From<BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>> for VarMap {
 
 impl VarMap {
     pub fn new() -> Self {
-        Self { inner: BTreeMap::new() }
+        Self {
+            inner: BTreeMap::new(),
+        }
     }
 
     /// Insert a mapping. Returns the previous value if the key was already present.
@@ -1337,21 +1353,42 @@ impl VarMap {
         self.inner.remove(key)
     }
 
+    /// Remove every `(bid, insn_idx, *)` entry from the map.
+    ///
+    /// Keys are ordered as `(BlockId, instruction index, slot)`, so all slots for
+    /// one instruction are contiguous. This avoids full-map scans in passes that
+    /// compact or delete instructions.
+    #[inline]
+    pub fn remove_site(&mut self, bid: BlockId, insn_idx: usize) {
+        let start = (bid, insn_idx, VarnodeSlot::Output);
+        let end = (bid, insn_idx, VarnodeSlot::Input(usize::MAX));
+        self.inner
+            .extract_if(start..=end, |_, _| true)
+            .for_each(drop);
+    }
+
     /// Iterate all entries in sorted order.
     #[inline]
-    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
+    pub fn iter(
+        &self,
+    ) -> std::collections::btree_map::Iter<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
         self.inner.iter()
     }
 
     /// Iterate all values.
     #[inline]
-    pub fn values(&self) -> std::collections::btree_map::Values<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
+    pub fn values(
+        &self,
+    ) -> std::collections::btree_map::Values<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
         self.inner.values()
     }
 
     /// Range query over a key range.
     #[inline]
-    pub fn range<R>(&self, range: R) -> std::collections::btree_map::Range<'_, (BlockId, usize, VarnodeSlot), SsaVarnode>
+    pub fn range<R>(
+        &self,
+        range: R,
+    ) -> std::collections::btree_map::Range<'_, (BlockId, usize, VarnodeSlot), SsaVarnode>
     where
         R: std::ops::RangeBounds<(BlockId, usize, VarnodeSlot)>,
     {
@@ -1360,7 +1397,11 @@ impl VarMap {
 
     /// In-place drain by range + predicate (stable since Rust 1.91).
     #[inline]
-    pub fn extract_if<R, F>(&mut self, range: R, pred: F) -> std::collections::btree_map::ExtractIf<'_, (BlockId, usize, VarnodeSlot), SsaVarnode, R, F>
+    pub fn extract_if<R, F>(
+        &mut self,
+        range: R,
+        pred: F,
+    ) -> std::collections::btree_map::ExtractIf<'_, (BlockId, usize, VarnodeSlot), SsaVarnode, R, F>
     where
         R: std::ops::RangeBounds<(BlockId, usize, VarnodeSlot)>,
         F: FnMut(&(BlockId, usize, VarnodeSlot), &mut SsaVarnode) -> bool,
@@ -1381,13 +1422,18 @@ impl VarMap {
 
     /// Get-or-insert-default via the entry API.
     #[inline]
-    pub fn entry(&mut self, key: (BlockId, usize, VarnodeSlot)) -> std::collections::btree_map::Entry<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
+    pub fn entry(
+        &mut self,
+        key: (BlockId, usize, VarnodeSlot),
+    ) -> std::collections::btree_map::Entry<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
         self.inner.entry(key)
     }
 
     /// Keys iterator (used by some passes for scanning).
     #[inline]
-    pub fn keys(&self) -> std::collections::btree_map::Keys<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
+    pub fn keys(
+        &self,
+    ) -> std::collections::btree_map::Keys<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
         self.inner.keys()
     }
 
@@ -1467,6 +1513,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         array_strides: BTreeMap::new(),
         external_signatures: BTreeMap::new(),
         eh_landing_pads: BTreeSet::new(),
+        eh_landing_pad_catches: BTreeMap::new(),
+        eh_cleanup_landing_pads: BTreeSet::new(),
         stack_gaps: BTreeMap::new(),
         frame_size: 0,
         sp_delta_at: BTreeMap::new(),
@@ -1578,12 +1626,11 @@ pub fn build_post_dominator_tree(cfg: &ControlFlowGraph, _func: &Function) -> Do
             continue;
         }
         let has_real_succ = cfg.edges_from(bid).iter().any(|(t, _)| *t != unknown_bid);
-        if !has_real_succ {
-            if let (Some(&exit_ni), Some(&bid_ni)) =
+        if !has_real_succ
+            && let (Some(&exit_ni), Some(&bid_ni)) =
                 (rev_node_map.get(&exit_bid), rev_node_map.get(&bid))
-            {
-                rev_graph.add_edge(exit_ni, bid_ni, ());
-            }
+        {
+            rev_graph.add_edge(exit_ni, bid_ni, ());
         }
     }
 
@@ -1708,10 +1755,7 @@ fn place_phis(
 ///
 /// Factored into a named tuple alias to keep clippy's `type_complexity`
 /// lint happy.
-type RenameResult = (
-    BTreeMap<BlockId, Vec<PhiNode>>,
-    VarMap,
-);
+type RenameResult = (BTreeMap<BlockId, Vec<PhiNode>>, VarMap);
 
 fn rename_variables(
     func: &Function,

@@ -38,16 +38,16 @@ pub fn detect_union_candidates(insns: &[IrInsn]) -> Vec<UnionCandidate> {
                 | IrOp::FloatFloat2int
         );
 
-        if let Some(output) = &insn.output {
-            if output.space == SpaceId::Stack || output.space == SpaceId::Register {
-                let key = (output.space, output.offset);
-                let entry = access_map.entry(key).or_insert_with(|| (Vec::new(), false));
-                if !entry.0.contains(&output.size) {
-                    entry.0.push(output.size);
-                }
-                if is_float_op {
-                    entry.1 = true;
-                }
+        if let Some(output) = &insn.output
+            && (output.space == SpaceId::Stack || output.space == SpaceId::Register)
+        {
+            let key = (output.space, output.offset);
+            let entry = access_map.entry(key).or_insert_with(|| (Vec::new(), false));
+            if !entry.0.contains(&output.size) {
+                entry.0.push(output.size);
+            }
+            if is_float_op {
+                entry.1 = true;
             }
         }
     }

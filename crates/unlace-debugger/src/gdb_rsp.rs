@@ -59,13 +59,16 @@ pub fn hex_encode(bytes: &[u8]) -> String {
 
 /// Decode a GDB hex string back to raw bytes.
 pub fn hex_decode(hex: &str) -> Result<Vec<u8>> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return Err(GdbRspError::BadHex('?'));
     }
     let mut out = Vec::with_capacity(hex.len() / 2);
     for chunk in hex.as_bytes().chunks(2) {
         let s = std::str::from_utf8(chunk).map_err(|_| GdbRspError::BadHex('?'))?;
-        out.push(u8::from_str_radix(s, 16).map_err(|_| GdbRspError::BadHex(s.chars().next().unwrap_or('?')))?);
+        out.push(
+            u8::from_str_radix(s, 16)
+                .map_err(|_| GdbRspError::BadHex(s.chars().next().unwrap_or('?')))?,
+        );
     }
     Ok(out)
 }
@@ -121,15 +124,15 @@ pub fn read_regs_packet() -> String {
 /// Parse a stop reply packet (e.g. `T05thread:1;`).
 /// Returns the signal number that caused the stop.
 pub fn parse_stop_reply(payload: &str) -> Option<u8> {
-    if let Some(rest) = payload.strip_prefix('T') {
-        if rest.len() >= 2 {
-            return u8::from_str_radix(&rest[..2], 16).ok();
-        }
+    if let Some(rest) = payload.strip_prefix('T')
+        && rest.len() >= 2
+    {
+        return u8::from_str_radix(&rest[..2], 16).ok();
     }
-    if let Some(rest) = payload.strip_prefix('S') {
-        if rest.len() >= 2 {
-            return u8::from_str_radix(&rest[..2], 16).ok();
-        }
+    if let Some(rest) = payload.strip_prefix('S')
+        && rest.len() >= 2
+    {
+        return u8::from_str_radix(&rest[..2], 16).ok();
     }
     None
 }

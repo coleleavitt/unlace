@@ -80,6 +80,40 @@ struct SccpSolver<'a> {
     phi_uses: BTreeMap<SsaVarnode, Vec<(BlockId, SsaVarnode)>>,
 }
 
+struct DominanceIndex {
+    dominators: BTreeMap<BlockId, BTreeSet<BlockId>>,
+}
+
+impl DominanceIndex {
+    fn new(func: &SsaFunction) -> Self {
+        let mut dominators = BTreeMap::new();
+        for &bid in func.function.blocks.keys() {
+            let mut set = BTreeSet::new();
+            let mut seen = BTreeSet::new();
+            let mut cur = bid;
+            set.insert(cur);
+            seen.insert(cur);
+
+            while let Some(parent) = func.dom_tree.idom(cur) {
+                set.insert(parent);
+                if parent == cur || !seen.insert(parent) {
+                    break;
+                }
+                cur = parent;
+            }
+
+            dominators.insert(bid, set);
+        }
+        Self { dominators }
+    }
+
+    fn dominates(&self, dominator: BlockId, block: BlockId) -> bool {
+        self.dominators
+            .get(&block)
+            .is_some_and(|blocks| blocks.contains(&dominator))
+    }
+}
+
 impl<'a> SccpSolver<'a> {
     fn new(func: &'a SsaFunction) -> Self {
         let mut solver = Self {
@@ -120,6 +154,7 @@ impl<'a> SccpSolver<'a> {
     fn init_external_inputs(&mut self) {
         let def_locs = self.collect_instruction_def_locs();
         let phi_def_blocks = self.collect_phi_def_blocks();
+        let dominance = DominanceIndex::new(self.func);
         let defined: BTreeSet<SsaVarnode> = def_locs
             .keys()
             .copied()
@@ -130,7 +165,8 @@ impl<'a> SccpSolver<'a> {
             if !matches!(slot, VarnodeSlot::Input(_)) || sv.base.space == SpaceId::Const {
                 continue;
             }
-            if !self.has_dominating_def(&def_locs, &phi_def_blocks, *sv, bid, insn_idx) {
+            if !self.has_dominating_def(&def_locs, &phi_def_blocks, &dominance, *sv, bid, insn_idx)
+            {
                 self.values.insert(*sv, LatticeValue::Bottom);
             }
         }
@@ -166,6 +202,7 @@ impl<'a> SccpSolver<'a> {
         &self,
         def_locs: &BTreeMap<SsaVarnode, Vec<(BlockId, usize)>>,
         phi_def_blocks: &BTreeMap<SsaVarnode, Vec<BlockId>>,
+        dominance: &DominanceIndex,
         sv: SsaVarnode,
         use_bid: BlockId,
         use_idx: usize,
@@ -173,7 +210,7 @@ impl<'a> SccpSolver<'a> {
         let has_phi_def = phi_def_blocks.get(&sv).is_some_and(|blocks| {
             blocks
                 .iter()
-                .any(|&def_bid| self.block_dominates(def_bid, use_bid))
+                .any(|&def_bid| dominance.dominates(def_bid, use_bid))
         });
         if has_phi_def {
             return true;
@@ -181,13 +218,13 @@ impl<'a> SccpSolver<'a> {
 
         def_locs.get(&sv).is_some_and(|locs| {
             locs.iter().any(|&(def_bid, def_idx)| {
-                self.instruction_def_dominates_use(def_bid, def_idx, use_bid, use_idx)
+                Self::instruction_def_dominates_use(dominance, def_bid, def_idx, use_bid, use_idx)
             })
         })
     }
 
     fn instruction_def_dominates_use(
-        &self,
+        dominance: &DominanceIndex,
         def_bid: BlockId,
         def_idx: usize,
         use_bid: BlockId,
@@ -196,23 +233,7 @@ impl<'a> SccpSolver<'a> {
         if def_bid == use_bid {
             return def_idx < use_idx;
         }
-        self.block_dominates(def_bid, use_bid)
-    }
-
-    fn block_dominates(&self, dominator: BlockId, mut block: BlockId) -> bool {
-        if dominator == block {
-            return true;
-        }
-        while let Some(parent) = self.func.dom_tree.idom(block) {
-            if parent == dominator {
-                return true;
-            }
-            if parent == block {
-                break;
-            }
-            block = parent;
-        }
-        false
+        dominance.dominates(def_bid, use_bid)
     }
 
     /// Get the lattice value for an SSA varnode. Defaults to `Top`.
@@ -538,11 +559,11 @@ impl<'a> SccpSolver<'a> {
                         if !self.reachable.contains(&bid) {
                             continue;
                         }
-                        if let Some(block) = self.func.function.blocks.get(&bid) {
-                            if insn_idx < block.insns.len() {
-                                let insn = block.insns[insn_idx].clone();
-                                self.visit_insn(bid, insn_idx, insn);
-                            }
+                        if let Some(block) = self.func.function.blocks.get(&bid)
+                            && insn_idx < block.insns.len()
+                        {
+                            let insn = block.insns[insn_idx].clone();
+                            self.visit_insn(bid, insn_idx, insn);
                         }
                     }
                 }
@@ -879,10 +900,10 @@ fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
                     continue;
                 }
                 let key = (bid, insn_idx, VarnodeSlot::Input(input_pos));
-                if let Some(&sv) = func.var_map.get(&key) {
-                    if protected.insert(sv) {
-                        worklist.push(sv);
-                    }
+                if let Some(&sv) = func.var_map.get(&key)
+                    && protected.insert(sv)
+                {
+                    worklist.push(sv);
                 }
             }
         }
@@ -931,13 +952,12 @@ fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
             // downstream read of a memory-mapped or volatile address
             // must observe the explicit access. Bump the global
             // preserved-access counter for observability.
-            if insn.op == IrOp::Load {
-                if let Some(c) = insn.category {
-                    if c.is_preserved() {
-                        unlace_ir::alias::record_preserved();
-                        continue;
-                    }
-                }
+            if insn.op == IrOp::Load
+                && let Some(c) = insn.category
+                && c.is_preserved()
+            {
+                unlace_ir::alias::record_preserved();
+                continue;
             }
 
             let key = (bid, insn_idx, VarnodeSlot::Output);

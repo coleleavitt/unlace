@@ -210,10 +210,10 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                     }
                 }
             }
-            if let Some(output) = insn.output {
-                if output.space == SpaceId::Register {
-                    defined.insert(output.offset);
-                }
+            if let Some(output) = insn.output
+                && output.space == SpaceId::Register
+            {
+                defined.insert(output.offset);
             }
         }
     }

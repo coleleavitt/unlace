@@ -59,14 +59,13 @@ fn strip_swift_prefix(name: &str) -> Option<&str> {
     if let Some(rest) = name.strip_prefix("_T0") {
         return Some(rest);
     }
-    if let Some(rest) = name.strip_prefix("_T") {
-        if rest
+    if let Some(rest) = name.strip_prefix("_T")
+        && rest
             .as_bytes()
             .first()
             .is_some_and(|b| b.is_ascii_uppercase())
-        {
-            return Some(rest);
-        }
+    {
+        return Some(rest);
     }
     None
 }

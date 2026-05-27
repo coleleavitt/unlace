@@ -150,12 +150,12 @@ impl Pass for StackVarRecoveryPass {
         // or emitted by lifters that use the stack space directly).
         for (&bid, block) in &func.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
-                if let Some(output) = insn.output {
-                    if output.space == SpaceId::Stack {
-                        let offset = output.offset as i64;
-                        if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)) {
-                            accesses.entry(offset).or_default().push((sv, output.size));
-                        }
+                if let Some(output) = insn.output
+                    && output.space == SpaceId::Stack
+                {
+                    let offset = output.offset as i64;
+                    if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)) {
+                        accesses.entry(offset).or_default().push((sv, output.size));
                     }
                 }
                 for (inp_idx, inp) in insn.inputs.iter().enumerate() {
@@ -252,19 +252,19 @@ fn detect_frame_gaps(func: &mut SsaFunction) {
     };
 
     for &(s, e) in &covered {
-        if s > cursor {
-            if let Some((g_off, g_size)) = emit(cursor, s.min(frame_end), &covered) {
-                func.stack_gaps.insert(g_off, g_size);
-            }
+        if s > cursor
+            && let Some((g_off, g_size)) = emit(cursor, s.min(frame_end), &covered)
+        {
+            func.stack_gaps.insert(g_off, g_size);
         }
         if e > cursor {
             cursor = e;
         }
     }
-    if cursor < frame_end {
-        if let Some((g_off, g_size)) = emit(cursor, frame_end, &covered) {
-            func.stack_gaps.insert(g_off, g_size);
-        }
+    if cursor < frame_end
+        && let Some((g_off, g_size)) = emit(cursor, frame_end, &covered)
+    {
+        func.stack_gaps.insert(g_off, g_size);
     }
 }
 
@@ -509,29 +509,29 @@ fn find_rsp_relative_offset_uncached(
                     return Some(base.offset as i64);
                 }
                 // base could be an SSA version of SP produced by INT_SUB
-                if disp.space == SpaceId::Const {
-                    if let Some(base_off) = find_rsp_relative_offset(
+                if disp.space == SpaceId::Const
+                    && let Some(base_off) = find_rsp_relative_offset(
                         base,
                         func,
                         def_map,
                         resolve_cache,
                         depth + 1,
                         spec,
-                    ) {
-                        return Some(base_off.wrapping_add(disp.offset as i64));
-                    }
+                    )
+                {
+                    return Some(base_off.wrapping_add(disp.offset as i64));
                 }
-                if base.space == SpaceId::Const {
-                    if let Some(disp_off) = find_rsp_relative_offset(
+                if base.space == SpaceId::Const
+                    && let Some(disp_off) = find_rsp_relative_offset(
                         disp,
                         func,
                         def_map,
                         resolve_cache,
                         depth + 1,
                         spec,
-                    ) {
-                        return Some(disp_off.wrapping_add(base.offset as i64));
-                    }
+                    )
+                {
+                    return Some(disp_off.wrapping_add(base.offset as i64));
                 }
             }
             IrOp::IntSub => {
@@ -543,17 +543,17 @@ fn find_rsp_relative_offset_uncached(
                     return Some(-(disp.offset as i64));
                 }
                 // base could be an SSA version of SP
-                if disp.space == SpaceId::Const {
-                    if let Some(base_off) = find_rsp_relative_offset(
+                if disp.space == SpaceId::Const
+                    && let Some(base_off) = find_rsp_relative_offset(
                         base,
                         func,
                         def_map,
                         resolve_cache,
                         depth + 1,
                         spec,
-                    ) {
-                        return Some(base_off.wrapping_sub(disp.offset as i64));
-                    }
+                    )
+                {
+                    return Some(base_off.wrapping_sub(disp.offset as i64));
                 }
             }
             IrOp::Copy => {
@@ -593,12 +593,11 @@ fn infer_stack_var_type(
         }
     }
     // If still unknown, use the most common access size.
-    if ty == PrimitiveType::Unknown {
-        if let Some(&(_, size)) = access_list.first() {
-            if size > 0 {
-                ty = PrimitiveType::Int(size);
-            }
-        }
+    if ty == PrimitiveType::Unknown
+        && let Some(&(_, size)) = access_list.first()
+        && size > 0
+    {
+        ty = PrimitiveType::Int(size);
     }
     ty
 }

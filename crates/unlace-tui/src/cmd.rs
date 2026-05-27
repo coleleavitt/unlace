@@ -11,7 +11,10 @@ pub enum Command {
     /// Jump to address.
     Goto(u64),
     /// Rename the symbol at address.
-    Rename { ea: u64, name: String },
+    Rename {
+        ea: u64,
+        name: String,
+    },
 }
 
 /// Parse a command-palette line into a [`Command`].
@@ -57,7 +60,10 @@ mod tests {
 
     #[test]
     fn test_parse_palette_goto_hex() {
-        assert_eq!(parse_palette("goto 0x401000"), Some(Command::Goto(0x401000)));
+        assert_eq!(
+            parse_palette("goto 0x401000"),
+            Some(Command::Goto(0x401000))
+        );
         assert_eq!(parse_palette("g 0x401000"), Some(Command::Goto(0x401000)));
         assert_eq!(parse_palette("goto 401000"), Some(Command::Goto(0x401000)));
     }

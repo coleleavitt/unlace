@@ -77,12 +77,8 @@ fn apply_one_patch(
             break;
         }
     }
-    let section = section_found.ok_or_else(|| {
-        anyhow!(
-            "patch at {:#x} not within any section",
-            patch.ea
-        )
-    })?;
+    let section =
+        section_found.ok_or_else(|| anyhow!("patch at {:#x} not within any section", patch.ea))?;
 
     // unlace-loader's BinaryImage doesn't expose file_offset directly per
     // section; we approximate by searching for the section's bytes in the
@@ -142,15 +138,11 @@ mod tests {
     #[test]
     fn test_apply_patches_to_empty_session_errors() {
         let s = Session::new();
-        let tmp_orig = std::env::temp_dir().join(format!(
-            "patches_orig_{}_empty",
-            std::process::id()
-        ));
+        let tmp_orig =
+            std::env::temp_dir().join(format!("patches_orig_{}_empty", std::process::id()));
         std::fs::write(&tmp_orig, b"some bytes").unwrap();
-        let tmp_out = std::env::temp_dir().join(format!(
-            "patches_out_{}_empty",
-            std::process::id()
-        ));
+        let tmp_out =
+            std::env::temp_dir().join(format!("patches_out_{}_empty", std::process::id()));
         let r = apply_patches_to(&s, &tmp_orig, &tmp_out);
         assert!(r.is_err());
         std::fs::remove_file(&tmp_orig).ok();

@@ -12,8 +12,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode};
 use unlace_ir::BlockId;
+use unlace_ir::ssa::{SsaFunction, SsaVarnode};
 
 use crate::scalar_evolution::{LoopExitPredicate, analyze_loop_scevs, compute_trip_count};
 
@@ -114,7 +114,9 @@ fn compute_trip_count_from_exit(
 ) -> Option<u64> {
     // Extract a constant bound if possible.
     use crate::scalar_evolution::ScevExpr;
-    let Some(bound) = &exit.bound else { return None };
+    let Some(bound) = &exit.bound else {
+        return None;
+    };
     let bound_val = match bound {
         ScevExpr::Const { value, .. } => *value,
         _ => return None,
@@ -133,8 +135,8 @@ fn detect_reduction(
     header: BlockId,
     ivs: &[crate::scalar_evolution::AffineIv],
 ) -> Option<Reduction> {
-    use unlace_ir::ssa::VarnodeSlot;
     use unlace_ir::IrOp;
+    use unlace_ir::ssa::VarnodeSlot;
 
     let phis = func.phi_map.get(&header)?;
     for phi in phis {
@@ -193,10 +195,7 @@ fn detect_reduction(
     None
 }
 
-fn find_def(
-    func: &SsaFunction,
-    sv: SsaVarnode,
-) -> Option<((BlockId, usize), &unlace_ir::IrInsn)> {
+fn find_def(func: &SsaFunction, sv: SsaVarnode) -> Option<((BlockId, usize), &unlace_ir::IrInsn)> {
     use unlace_ir::ssa::VarnodeSlot;
     for ((bid, idx, slot), v) in &func.var_map {
         if !matches!(slot, VarnodeSlot::Output) {

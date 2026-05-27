@@ -105,10 +105,11 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
 
             // Also pick up direct `SpaceId::Stack` operands — some lifters
             // emit those instead of `LOAD(ram, RSP+K)`.
-            if let Some(out) = insn.output {
-                if out.space == SpaceId::Stack && out.size > 0 {
-                    record(out.offset as i64, out.size, &mut observations);
-                }
+            if let Some(out) = insn.output
+                && out.space == SpaceId::Stack
+                && out.size > 0
+            {
+                record(out.offset as i64, out.size, &mut observations);
             }
             for inp in &insn.inputs {
                 if inp.space == SpaceId::Stack && inp.size > 0 {
@@ -411,19 +412,17 @@ fn find_relative_offset_uncached(
                 if spec.is_frame_base(b) && a.space == SpaceId::Const {
                     return Some(a.offset as i64);
                 }
-                if b.space == SpaceId::Const {
-                    if let Some(base) =
+                if b.space == SpaceId::Const
+                    && let Some(base) =
                         find_relative_offset(a, func, def_map, resolve_cache, depth + 1, spec)
-                    {
-                        return Some(base.wrapping_add(b.offset as i64));
-                    }
+                {
+                    return Some(base.wrapping_add(b.offset as i64));
                 }
-                if a.space == SpaceId::Const {
-                    if let Some(base) =
+                if a.space == SpaceId::Const
+                    && let Some(base) =
                         find_relative_offset(b, func, def_map, resolve_cache, depth + 1, spec)
-                    {
-                        return Some(base.wrapping_add(a.offset as i64));
-                    }
+                {
+                    return Some(base.wrapping_add(a.offset as i64));
                 }
             }
             IrOp::IntSub => {
@@ -434,12 +433,11 @@ fn find_relative_offset_uncached(
                 if spec.is_frame_base(a) && b.space == SpaceId::Const {
                     return Some(-(b.offset as i64));
                 }
-                if b.space == SpaceId::Const {
-                    if let Some(base) =
+                if b.space == SpaceId::Const
+                    && let Some(base) =
                         find_relative_offset(a, func, def_map, resolve_cache, depth + 1, spec)
-                    {
-                        return Some(base.wrapping_sub(b.offset as i64));
-                    }
+                {
+                    return Some(base.wrapping_sub(b.offset as i64));
                 }
             }
             IrOp::Copy => {

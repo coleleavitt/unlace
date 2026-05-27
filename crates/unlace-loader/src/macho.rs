@@ -716,15 +716,15 @@ fn walk_export_trie(
         let mut terminal =
             DyldBytecode::new(&bytes[offset + terminal_start..offset + terminal_end]);
         let flags = terminal.read_uleb128().unwrap_or(0);
-        if flags & 0x08 == 0 {
-            if let Some(addr) = terminal.read_uleb128() {
-                out.push(Symbol {
-                    name: name.clone(),
-                    addr,
-                    size: 0,
-                    kind: SymbolKind::Function,
-                });
-            }
+        if flags & 0x08 == 0
+            && let Some(addr) = terminal.read_uleb128()
+        {
+            out.push(Symbol {
+                name: name.clone(),
+                addr,
+                size: 0,
+                kind: SymbolKind::Function,
+            });
         }
     }
 
@@ -1526,11 +1526,11 @@ where
             if nlist_idx >= 0x4000_0000 {
                 continue;
             }
-            if let Some(name) = nlist_names.get(nlist_idx) {
-                if !name.is_empty() {
-                    let stub_addr = sec_vaddr + (i as u64) * (entry_size as u64);
-                    plt.insert(stub_addr, name.clone());
-                }
+            if let Some(name) = nlist_names.get(nlist_idx)
+                && !name.is_empty()
+            {
+                let stub_addr = sec_vaddr + (i as u64) * (entry_size as u64);
+                plt.insert(stub_addr, name.clone());
             }
         }
     }
@@ -2493,14 +2493,14 @@ fn walk_export_trie_public(
         let flags = terminal.read_uleb128().unwrap_or(0);
         // Skip re-exports (REEXPORT bit): they encode `(ordinal, name)`, not
         // an in-image address.
-        if flags & 0x08 == 0 {
-            if let Some(addr) = terminal.read_uleb128() {
-                out.push(ExportEntry {
-                    name: name.clone(),
-                    flags: flags as u32,
-                    address: addr,
-                });
-            }
+        if flags & 0x08 == 0
+            && let Some(addr) = terminal.read_uleb128()
+        {
+            out.push(ExportEntry {
+                name: name.clone(),
+                flags: flags as u32,
+                address: addr,
+            });
         }
     }
 

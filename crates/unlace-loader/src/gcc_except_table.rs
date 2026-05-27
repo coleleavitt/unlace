@@ -32,7 +32,8 @@ use std::ops::Range;
 
 use crate::eh_frame::LsdaEntry;
 use crate::error::LoadError;
-use crate::image::BinaryImage;
+use crate::image::{BinaryImage, Endian};
+use unlace_ir::ArchId;
 
 /// A contiguous PC range protected by an exception handler.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +46,10 @@ pub struct TryRegion {
     /// the type table; 0 means cleanup; negative values are exception spec
     /// filters.
     pub type_filters: Vec<i64>,
+    /// Resolved catch typeinfo addresses for this region, in action-chain
+    /// order. A zero entry is the Itanium ABI catch-all sentinel
+    /// (`catch (...)`). Exception-spec filters are not included here.
+    pub caught_typeinfo_addrs: Vec<u64>,
 }
 
 /// Parsed LSDA for a single function.
@@ -108,6 +113,7 @@ struct Cursor<'a> {
     pos: usize,
     /// Section virtual address, for pc-relative calculations.
     section_va: u64,
+    image: Option<&'a BinaryImage>,
 }
 
 impl<'a> Cursor<'a> {
@@ -116,6 +122,16 @@ impl<'a> Cursor<'a> {
             data,
             pos: 0,
             section_va,
+            image: None,
+        }
+    }
+
+    fn with_image(data: &'a [u8], section_va: u64, image: &'a BinaryImage) -> Self {
+        Self {
+            data,
+            pos: 0,
+            section_va,
+            image: Some(image),
         }
     }
 
@@ -243,9 +259,14 @@ impl<'a> Cursor<'a> {
         };
 
         if encoding & DW_EH_PE_INDIRECT != 0 {
-            // Indirect encoding: the value is a pointer to the real value.
-            // We can't dereference at load time, so return the address.
-            Some(result)
+            // Indirect encoding: the encoded value points at the real pointer.
+            // When the containing image is available, dereference it so LSDA
+            // type-table entries resolve to `_ZTI*` objects instead of GOT
+            // slots. Fall back to the address for synthetic tests / partial
+            // images where the pointee bytes are not mapped.
+            self.image
+                .and_then(|image| read_pointer_at_va(image, result))
+                .or(Some(result))
         } else {
             Some(result)
         }
@@ -264,6 +285,100 @@ impl<'a> Cursor<'a> {
             _ => None, // LEB128 is variable-length
         }
     }
+}
+
+fn pointer_size_for_arch(arch: ArchId) -> usize {
+    match arch {
+        ArchId::X86
+        | ArchId::Arm
+        | ArchId::Mips
+        | ArchId::Ppc
+        | ArchId::V850
+        | ArchId::Arc
+        | ArchId::TriCore
+        | ArchId::Stm8
+        | ArchId::Z80
+        | ArchId::RxRenesas
+        | ArchId::Sparc
+        | ArchId::M68k
+        | ArchId::SuperH
+        | ArchId::Xtensa
+        | ArchId::Mos6502
+        | ArchId::I8051
+        | ArchId::Pic16 => 4,
+        ArchId::Avr | ArchId::Msp430 => 2,
+        _ => 8,
+    }
+}
+
+fn read_pointer_at_va(image: &BinaryImage, va: u64) -> Option<u64> {
+    let ptr_size = pointer_size_for_arch(image.arch);
+    for section in &image.sections {
+        let section_end = section.vaddr.checked_add(section.size)?;
+        if va < section.vaddr || va >= section_end {
+            continue;
+        }
+        let offset = va.checked_sub(section.vaddr)? as usize;
+        if offset.checked_add(ptr_size)? > section.data.len() {
+            return None;
+        }
+        let bytes = &section.data[offset..offset + ptr_size];
+        return Some(match (ptr_size, image.endian) {
+            (2, Endian::Little) => u16::from_le_bytes(bytes.try_into().ok()?) as u64,
+            (2, Endian::Big) => u16::from_be_bytes(bytes.try_into().ok()?) as u64,
+            (4, Endian::Little) => u32::from_le_bytes(bytes.try_into().ok()?) as u64,
+            (4, Endian::Big) => u32::from_be_bytes(bytes.try_into().ok()?) as u64,
+            (8, Endian::Little) => u64::from_le_bytes(bytes.try_into().ok()?),
+            (8, Endian::Big) => u64::from_be_bytes(bytes.try_into().ok()?),
+            _ => return None,
+        });
+    }
+    None
+}
+
+fn read_action_record(cursor: &mut Cursor<'_>, action_pos: usize) -> Option<(i64, i64, usize)> {
+    if action_pos >= cursor.data.len() {
+        return None;
+    }
+    let saved_pos = cursor.pos;
+    cursor.pos = action_pos;
+    let ttype_index = cursor.read_sleb128()?;
+    let action_offset_field_pos = cursor.pos;
+    let action_offset = cursor.read_sleb128()?;
+    cursor.pos = saved_pos;
+    Some((ttype_index, action_offset, action_offset_field_pos))
+}
+
+fn resolve_typeinfo_addr(
+    cursor: &Cursor<'_>,
+    class_info_offset: Option<(u64, u8)>,
+    ttype_index: i64,
+) -> Option<u64> {
+    if ttype_index <= 0 {
+        return None;
+    }
+    let (class_info_base, tte) = class_info_offset?;
+    let entry_size = Cursor::encoded_size(tte).unwrap_or(4);
+    let table_pos = class_info_base as usize;
+
+    // Type table is reverse-indexed: index 1 is at classInfo[-entry_size],
+    // index 2 at classInfo[-2*entry_size], etc.
+    let offset = (ttype_index as usize).checked_mul(entry_size)?;
+    if table_pos < offset {
+        return None;
+    }
+
+    let addr_pos = table_pos - offset;
+    if addr_pos.checked_add(entry_size)? > cursor.data.len() {
+        return None;
+    }
+
+    let mut sub = match cursor.image {
+        Some(image) => Cursor::with_image(cursor.data, cursor.section_va, image),
+        None => Cursor::new(cursor.data, cursor.section_va),
+    };
+    sub.pos = addr_pos;
+    sub.read_encoded(tte)
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +440,7 @@ fn parse_single_lsda(cursor: &mut Cursor<'_>, function_start: u64) -> Option<Fun
 
     for (pc_begin, pc_end, landing_pad, action_entry) in &call_sites {
         let mut type_filters = Vec::new();
+        let mut region_typeinfo_addrs = Vec::new();
 
         if *action_entry != 0 {
             // Walk the action chain.
@@ -335,36 +451,21 @@ fn parse_single_lsda(cursor: &mut Cursor<'_>, function_start: u64) -> Option<Fun
                     break;
                 }
 
-                // Save position, read ttypeIndex and actionOffset.
-                let saved_pos = cursor.pos;
-                cursor.pos = action_pos;
-                let ttype_index = cursor.read_sleb128()?;
-                let action_offset = cursor.read_sleb128()?;
-                cursor.pos = saved_pos;
+                let (ttype_index, action_offset, action_offset_field_pos) =
+                    read_action_record(cursor, action_pos)?;
 
                 type_filters.push(ttype_index);
 
-                // Resolve typeinfo address from the type table.
-                if ttype_index > 0 {
-                    if let Some((class_info_base, tte)) = class_info_offset {
-                        let entry_size = Cursor::encoded_size(tte).unwrap_or(4);
-                        let table_pos = class_info_base as usize;
-                        // Type table is reverse-indexed: index 1 is at
-                        // classInfo[-entry_size], index 2 at
-                        // classInfo[-2*entry_size], etc.
-                        let offset = (ttype_index as usize) * entry_size;
-                        if table_pos >= offset {
-                            let addr_pos = table_pos - offset;
-                            if addr_pos + entry_size <= cursor.data.len() {
-                                let mut sub = Cursor::new(cursor.data, cursor.section_va);
-                                sub.pos = addr_pos;
-                                if let Some(typeinfo_addr) = sub.read_encoded(tte) {
-                                    if typeinfo_addr != 0 {
-                                        all_typeinfo_addrs.push(typeinfo_addr);
-                                    }
-                                }
-                            }
-                        }
+                if ttype_index == 0 {
+                    // Itanium catch-all sentinel (`catch (...)`).
+                    region_typeinfo_addrs.push(0);
+                } else if ttype_index > 0
+                    && let Some(typeinfo_addr) =
+                        resolve_typeinfo_addr(cursor, class_info_offset, ttype_index)
+                {
+                    region_typeinfo_addrs.push(typeinfo_addr);
+                    if typeinfo_addr != 0 {
+                        all_typeinfo_addrs.push(typeinfo_addr);
                     }
                 }
 
@@ -372,18 +473,29 @@ fn parse_single_lsda(cursor: &mut Cursor<'_>, function_start: u64) -> Option<Fun
                     break;
                 }
 
-                // Next action record is relative to the current action_pos
-                // + sizeof(SLEB128 ttypeIndex). We approximate by computing
-                // the offset from the current action position.
-                action_pos = (action_pos as i64 + action_offset) as usize + 1; // +1 because actionOffset is relative to its own start
+                // libcxxabi advances from the address of the `actionOffset`
+                // field, not from the beginning/end of the record:
+                //   action = action_offset_field + actionOffset
+                let next_action = (action_offset_field_pos as i64).checked_add(action_offset)?;
+                if next_action < 0 {
+                    break;
+                }
+                action_pos = next_action as usize;
                 seen += 1;
             }
         }
+
+        let mut seen_region_addrs = std::collections::BTreeSet::new();
+        let caught_typeinfo_addrs = region_typeinfo_addrs
+            .into_iter()
+            .filter(|a| seen_region_addrs.insert(*a))
+            .collect();
 
         try_regions.push(TryRegion {
             pc_range: *pc_begin..*pc_end,
             landing_pad: *landing_pad,
             type_filters,
+            caught_typeinfo_addrs,
         });
     }
 
@@ -432,7 +544,7 @@ pub fn parse_gcc_except_table(
             _ => continue,
         };
 
-        let mut cursor = Cursor::new(&section.data, section_va);
+        let mut cursor = Cursor::with_image(&section.data, section_va, image);
         cursor.pos = offset;
 
         if let Some(lsda) = parse_single_lsda(&mut cursor, entry.function_start) {
@@ -644,6 +756,11 @@ mod tests {
             "action == 0 ⇒ no type filters, got {:?}",
             region.type_filters,
         );
+        assert!(
+            region.caught_typeinfo_addrs.is_empty(),
+            "action == 0 ⇒ no catch typeinfo addrs, got {:?}",
+            region.caught_typeinfo_addrs,
+        );
     }
 
     #[test]
@@ -718,6 +835,53 @@ mod tests {
 
         assert_eq!(lsda.try_regions[1].pc_range, 0x1040..0x1050);
         assert_eq!(lsda.try_regions[1].landing_pad, Some(0x1090));
+    }
+
+    #[test]
+    fn test_synthetic_lsda_action_chain_resolves_region_typeinfo() {
+        // One call site points at an action chain:
+        //   action #1: ttypeIndex=1, next=+1
+        //   action #2: ttypeIndex=0, next=0      (catch-all)
+        //
+        // The +1 offset is relative to the address of action #1's
+        // actionOffset field, matching libcxxabi/GCC unwinder semantics.
+        // A previous parser approximation advanced from the record start and
+        // skipped the second action.
+        #[rustfmt::skip]
+        let bytes = vec![
+            0xFF,                        // lpStartEncoding
+            0x00,                        // ttypeEncoding = absptr
+            0x1B,                        // classInfoOffset: pos 3 + 27 = 30
+            0x03,                        // callSiteEncoding = udata4
+            0x0D,                        // callSiteLength = 13
+            0x10, 0x00, 0x00, 0x00,      // cs_start
+            0x20, 0x00, 0x00, 0x00,      // cs_length
+            0x40, 0x00, 0x00, 0x00,      // cs_lpad
+            0x01,                        // cs_action = first action (1-based)
+            0x01, 0x01,                  // action #1: type 1, next +1
+            0x00, 0x00,                  // action #2: catch-all, end
+            0x00, 0x90, 0x00, 0x00,      // typeinfo pointer 0x9000
+            0x00, 0x00, 0x00, 0x00,
+        ];
+
+        let lsda_va: u64 = 0x4000;
+        let function_start: u64 = 0x1000;
+        let img = make_lsda_image(lsda_va, bytes);
+        let info = parse_gcc_except_table(
+            &img,
+            &[LsdaEntry {
+                lsda_addr: lsda_va,
+                function_start,
+            }],
+        )
+        .expect("parse");
+
+        let lsda = info.functions.get(&function_start).expect("LSDA present");
+        assert_eq!(lsda.try_regions.len(), 1);
+        let region = &lsda.try_regions[0];
+        assert_eq!(region.type_filters, vec![1, 0]);
+        assert_eq!(region.caught_typeinfo_addrs, vec![0x9000, 0]);
+        assert_eq!(lsda.caught_typeinfo_addrs, vec![0x9000]);
     }
 
     #[test]

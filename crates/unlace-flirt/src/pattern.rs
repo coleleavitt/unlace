@@ -70,7 +70,7 @@ struct TomlPattern {
 /// Decode a hex string like "ff0042" into bytes.
 fn decode_hex(name: &str, hex: &str) -> Result<Vec<u8>, FlirtError> {
     let hex = hex.trim();
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return Err(FlirtError::InvalidHex {
             name: name.to_string(),
             detail: "odd number of hex characters".to_string(),

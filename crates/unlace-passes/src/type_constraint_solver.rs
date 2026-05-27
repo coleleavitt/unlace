@@ -341,10 +341,10 @@ pub fn collect_constraints(func: &SsaFunction) -> Vec<Constraint> {
                 | IrOp::IntSless
                 | IrOp::IntSlessequal => {
                     add_integer_op_constraints(&mut cs, out_sv, in_sv(0), in_sv(1), true);
-                    if matches!(insn.op, IrOp::IntSless | IrOp::IntSlessequal) {
-                        if let Some(z) = out_sv {
-                            cs.push(Constraint::Equal(z, PrimitiveType::Bool));
-                        }
+                    if matches!(insn.op, IrOp::IntSless | IrOp::IntSlessequal)
+                        && let Some(z) = out_sv
+                    {
+                        cs.push(Constraint::Equal(z, PrimitiveType::Bool));
                     }
                 }
 

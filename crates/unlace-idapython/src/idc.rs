@@ -14,16 +14,13 @@ use crate::coverage;
 pub fn get_func_name(session: &Session, ea: u64) -> Option<String> {
     coverage::mark_implemented("idc.get_func_name");
     session.with_binary(|img| {
-        img.symbols
-            .get(&ea)
-            .map(|s| s.name.clone())
-            .or_else(|| {
-                // Walk function entries to find the containing function.
-                img.symbols
-                    .range(..=ea)
-                    .next_back()
-                    .map(|(_, s)| s.name.clone())
-            })
+        img.symbols.get(&ea).map(|s| s.name.clone()).or_else(|| {
+            // Walk function entries to find the containing function.
+            img.symbols
+                .range(..=ea)
+                .next_back()
+                .map(|(_, s)| s.name.clone())
+        })
     })?
 }
 
@@ -45,7 +42,7 @@ pub fn get_segm_name(session: &Session, ea: u64) -> Option<String> {
     session.with_binary(|img| {
         img.sections
             .iter()
-            .find(|s| ea >= s.vaddr && ea < s.vaddr + s.size as u64)
+            .find(|s| ea >= s.vaddr && ea < s.vaddr + s.size)
             .map(|s| s.name.clone())
     })?
 }
@@ -55,7 +52,7 @@ pub fn get_bytes(session: &Session, ea: u64, n: usize) -> Option<Vec<u8>> {
     coverage::mark_implemented("idc.get_bytes");
     session.with_binary(|img| {
         for section in &img.sections {
-            if ea >= section.vaddr && ea + n as u64 <= section.vaddr + section.size as u64 {
+            if ea >= section.vaddr && ea + n as u64 <= section.vaddr + section.size {
                 let off = (ea - section.vaddr) as usize;
                 return Some(section.data[off..off + n].to_vec());
             }
@@ -104,11 +101,7 @@ pub fn get_inf_attr(session: &Session, attr: &str) -> Option<u64> {
     session.with_binary(|img| match attr {
         "INF_IMAGE_BASE" | "image_base" => Some(img.entry),
         "INF_MIN_EA" | "min_ea" => img.sections.iter().map(|s| s.vaddr).min(),
-        "INF_MAX_EA" | "max_ea" => img
-            .sections
-            .iter()
-            .map(|s| s.vaddr + s.size as u64)
-            .max(),
+        "INF_MAX_EA" | "max_ea" => img.sections.iter().map(|s| s.vaddr + s.size).max(),
         _ => None,
     })?
 }

@@ -15,7 +15,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::IrOp;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
@@ -195,6 +195,7 @@ fn find_dead_ssa_defs(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
 /// [`unlace_ir::alias::record_preserved`] counter for observability.
 fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
     let mut dead = Vec::new();
+    let mut stack_offsets = StackOffsetResolver::new(func);
 
     for (&bid, block) in &func.function.blocks {
         // SSA-varnode-keyed map: STOREs whose address is exactly the same
@@ -226,16 +227,16 @@ fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
                     let (addr_slot, raw_addr) = store_address_slot(insn);
                     let addr_sv = func.var_map.get(&(bid, insn_idx, addr_slot)).copied();
 
-                    let stack_off = raw_addr.and_then(|a| stack_offset_of(&a, func));
+                    let stack_off = raw_addr.and_then(|a| stack_offsets.stack_offset_of(&a));
 
                     let mut prev: Option<usize> = None;
                     if let Some(addr) = addr_sv {
                         prev = last_store_sv.get(&addr).copied();
                     }
-                    if prev.is_none() {
-                        if let Some(off) = stack_off {
-                            prev = last_store_stack.get(&off).copied();
-                        }
+                    if prev.is_none()
+                        && let Some(off) = stack_off
+                    {
+                        prev = last_store_stack.get(&off).copied();
                     }
                     if let Some(idx) = prev {
                         dead.push((bid, idx));
@@ -251,7 +252,7 @@ fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
                 IrOp::Load => {
                     let (addr_slot, raw_addr) = load_address_slot(insn);
                     let addr_sv = func.var_map.get(&(bid, insn_idx, addr_slot)).copied();
-                    let stack_off = raw_addr.and_then(|a| stack_offset_of(&a, func));
+                    let stack_off = raw_addr.and_then(|a| stack_offsets.stack_offset_of(&a));
 
                     if let Some(addr) = addr_sv {
                         last_store_sv.remove(&addr);
@@ -308,84 +309,123 @@ fn load_address_slot(insn: &unlace_ir::IrInsn) -> (VarnodeSlot, Option<Varnode>)
     }
 }
 
-/// Returns the RSP/RBP-relative offset of `addr`, if it can be statically
-/// recognised as a stack-relative address.
+/// Memoized resolver for RSP/RBP-relative stack offsets.
 ///
-/// Recognises:
-///   * `addr == RSP` or `addr == RBP` directly  → offset 0
-///   * `addr` produced by `INT_ADD(stack_reg, const)` → +const
-///   * `addr` produced by `INT_SUB(stack_reg, const)` → -const
-///   * `addr` produced by `COPY(stack_reg-relative)` → recursive
-///
-/// Resolution chases definitions through the `var_map` for at most a
-/// fixed depth to defeat any pathological cycles.
-fn stack_offset_of(addr: &Varnode, func: &SsaFunction) -> Option<i64> {
-    stack_offset_recursive(addr, func, 8)
+/// The old implementation scanned `func.var_map` on every recursive query.
+/// Large functions can ask about the same address roots hundreds of times, so
+/// this keeps the reverse definition lookup and the resolved offset cache local
+/// to one DSE pass invocation.
+struct StackOffsetResolver<'a> {
+    func: &'a SsaFunction,
+    def_by_base: BTreeMap<Varnode, (unlace_ir::BlockId, usize)>,
+    memo: BTreeMap<Varnode, Option<i64>>,
+    visiting: BTreeSet<Varnode>,
 }
 
-fn stack_offset_recursive(addr: &Varnode, func: &SsaFunction, depth: u32) -> Option<i64> {
-    if depth == 0 {
-        return None;
+impl<'a> StackOffsetResolver<'a> {
+    fn new(func: &'a SsaFunction) -> Self {
+        let mut def_by_base = BTreeMap::new();
+        for ((bid, insn_idx, slot), sv) in &func.var_map {
+            if matches!(slot, VarnodeSlot::Output) {
+                def_by_base.entry(sv.base).or_insert((*bid, *insn_idx));
+            }
+        }
+        Self {
+            func,
+            def_by_base,
+            memo: BTreeMap::new(),
+            visiting: BTreeSet::new(),
+        }
     }
 
-    if is_rsp_or_rbp(addr) {
-        return Some(0);
-    }
-    if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
-        return None;
+    /// Returns the RSP/RBP-relative offset of `addr`, if it can be statically
+    /// recognised as a stack-relative address.
+    ///
+    /// Recognises:
+    ///   * `addr == RSP` or `addr == RBP` directly  → offset 0
+    ///   * `addr` produced by `INT_ADD(stack_reg, const)` → +const
+    ///   * `addr` produced by `INT_SUB(stack_reg, const)` → -const
+    ///   * `addr` produced by `COPY(stack_reg-relative)` → recursive
+    fn stack_offset_of(&mut self, addr: &Varnode) -> Option<i64> {
+        self.stack_offset_recursive(addr, 8)
     }
 
-    for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
-        if !matches!(slot, VarnodeSlot::Output) || sv.base != *addr {
-            continue;
+    fn stack_offset_recursive(&mut self, addr: &Varnode, depth: u32) -> Option<i64> {
+        if depth == 0 {
+            return None;
         }
 
-        let block = func.function.blocks.get(&bid)?;
-        let def_insn = block.insns.get(insn_idx)?;
+        if is_rsp_or_rbp(addr) {
+            return Some(0);
+        }
+        if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
+            return None;
+        }
+        if let Some(cached) = self.memo.get(addr) {
+            return *cached;
+        }
+        if !self.visiting.insert(*addr) {
+            self.memo.insert(*addr, None);
+            return None;
+        }
 
-        match def_insn.op {
-            IrOp::IntAdd if def_insn.inputs.len() >= 2 => {
-                let (a, b) = (&def_insn.inputs[0], &def_insn.inputs[1]);
+        let result = self.stack_offset_from_def(addr, depth);
+        self.visiting.remove(addr);
+        self.memo.insert(*addr, result);
+        result
+    }
+
+    fn stack_offset_from_def(&mut self, addr: &Varnode, depth: u32) -> Option<i64> {
+        let (bid, insn_idx) = self.def_by_base.get(addr).copied()?;
+        let (op, inputs) = {
+            let block = self.func.function.blocks.get(&bid)?;
+            let def_insn = block.insns.get(insn_idx)?;
+            (def_insn.op, def_insn.inputs.clone())
+        };
+
+        match op {
+            IrOp::IntAdd if inputs.len() >= 2 => {
+                let (a, b) = (&inputs[0], &inputs[1]);
                 if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
                     return Some(b.offset as i64);
                 }
                 if is_rsp_or_rbp(b) && a.space == SpaceId::Const {
                     return Some(a.offset as i64);
                 }
-                if b.space == SpaceId::Const {
-                    if let Some(off) = stack_offset_recursive(a, func, depth - 1) {
-                        return Some(off.wrapping_add(b.offset as i64));
-                    }
+                if b.space == SpaceId::Const
+                    && let Some(off) = self.stack_offset_recursive(a, depth - 1)
+                {
+                    return Some(off.wrapping_add(b.offset as i64));
                 }
-                if a.space == SpaceId::Const {
-                    if let Some(off) = stack_offset_recursive(b, func, depth - 1) {
-                        return Some(off.wrapping_add(a.offset as i64));
-                    }
+                if a.space == SpaceId::Const
+                    && let Some(off) = self.stack_offset_recursive(b, depth - 1)
+                {
+                    return Some(off.wrapping_add(a.offset as i64));
                 }
             }
-            IrOp::IntSub if def_insn.inputs.len() >= 2 => {
-                let (a, b) = (&def_insn.inputs[0], &def_insn.inputs[1]);
+            IrOp::IntSub if inputs.len() >= 2 => {
+                let (a, b) = (&inputs[0], &inputs[1]);
                 if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
                     return Some(-(b.offset as i64));
                 }
-                if b.space == SpaceId::Const {
-                    if let Some(off) = stack_offset_recursive(a, func, depth - 1) {
-                        return Some(off.wrapping_sub(b.offset as i64));
-                    }
+                if b.space == SpaceId::Const
+                    && let Some(off) = self.stack_offset_recursive(a, depth - 1)
+                {
+                    return Some(off.wrapping_sub(b.offset as i64));
                 }
             }
-            IrOp::Copy if !def_insn.inputs.is_empty() => {
-                let src = &def_insn.inputs[0];
+            IrOp::Copy if !inputs.is_empty() => {
+                let src = &inputs[0];
                 if is_rsp_or_rbp(src) {
                     return Some(0);
                 }
-                return stack_offset_recursive(src, func, depth - 1);
+                return self.stack_offset_recursive(src, depth - 1);
             }
             _ => {}
         }
-    }
 
-    None
+        None
+    }
 }
 
 fn is_rsp_or_rbp(v: &Varnode) -> bool {
@@ -422,7 +462,7 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PhiNode, PrimitiveType, SsaFunction, SsaVarnode,
+        CallingConvention, DominatorTree, PhiNode, PrimitiveType, SsaFunction, SsaVarnode, VarMap,
         VarnodeSlot,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
@@ -491,6 +531,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

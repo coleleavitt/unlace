@@ -211,15 +211,15 @@ pub fn build_cfg(func: &Function) -> ControlFlowGraph {
                     .copied()
                     .or_else(|| next_sequential(bid));
 
-                if let Some(t) = true_target {
-                    if let Some(&to_ni) = node_map.get(&t) {
-                        graph.add_edge(from_ni, to_ni, EdgeKind::ConditionalTrue);
-                    }
+                if let Some(t) = true_target
+                    && let Some(&to_ni) = node_map.get(&t)
+                {
+                    graph.add_edge(from_ni, to_ni, EdgeKind::ConditionalTrue);
                 }
-                if let Some(f) = false_target {
-                    if let Some(&to_ni) = node_map.get(&f) {
-                        graph.add_edge(from_ni, to_ni, EdgeKind::ConditionalFalse);
-                    }
+                if let Some(f) = false_target
+                    && let Some(&to_ni) = node_map.get(&f)
+                {
+                    graph.add_edge(from_ni, to_ni, EdgeKind::ConditionalFalse);
                 }
             }
             Some(IrOp::Branchind) => {
@@ -237,10 +237,10 @@ pub fn build_cfg(func: &Function) -> ControlFlowGraph {
                 graph.add_edge(from_ni, exit_ni, EdgeKind::Return);
             }
             Some(IrOp::Call | IrOp::Callind) => {
-                if let Some(&target) = block.successors.first() {
-                    if let Some(&to_ni) = node_map.get(&target) {
-                        graph.add_edge(from_ni, to_ni, EdgeKind::Call);
-                    }
+                if let Some(&target) = block.successors.first()
+                    && let Some(&to_ni) = node_map.get(&target)
+                {
+                    graph.add_edge(from_ni, to_ni, EdgeKind::Call);
                 }
                 if let Some(next) = next_sequential(bid) {
                     graph.add_edge(from_ni, node_map[&next], EdgeKind::Fallthrough);

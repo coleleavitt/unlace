@@ -479,10 +479,10 @@ fn detect_symbol_kind(name: &str) -> SymbolKind {
         return SymbolKind::GuardVariable;
     }
 
-    if body.starts_with('N') {
-        if let Some(kind) = ctor_dtor_kind_in_nested(body) {
-            return kind;
-        }
+    if body.starts_with('N')
+        && let Some(kind) = ctor_dtor_kind_in_nested(body)
+    {
+        return kind;
     }
 
     SymbolKind::Normal

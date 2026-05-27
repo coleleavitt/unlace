@@ -126,13 +126,13 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
                     ));
                 }
 
-                if input.space != SpaceId::Const {
-                    if let Some(ssa) = input_ssa {
-                        func.var_map.insert(
-                            (rewrite.block, rewrite.insn_idx, VarnodeSlot::Input(0)),
-                            ssa,
-                        );
-                    }
+                if input.space != SpaceId::Const
+                    && let Some(ssa) = input_ssa
+                {
+                    func.var_map.insert(
+                        (rewrite.block, rewrite.insn_idx, VarnodeSlot::Input(0)),
+                        ssa,
+                    );
                 }
             }
             Replacement::Reop {
@@ -216,7 +216,7 @@ fn try_simplify(
         IrOp::IntXor => simplify_commutative_const(func, bid, insn_idx, insn, 0)
             .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 0)),
         IrOp::IntNegate | IrOp::BoolNegate | IrOp::FloatNeg => {
-            simplify_double_negate(func, bid, insn_idx, insn)
+            simplify_double_negate(func, defs, bid, insn_idx, insn)
         }
         IrOp::FloatAdd => simplify_commutative_float_zero(func, bid, insn_idx, insn)
             .or_else(|| simplify_fadd_negation(func, defs, bid, insn_idx, insn)),
@@ -417,31 +417,23 @@ fn simplify_same_ssa_to_const(
 
 fn simplify_double_negate(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
 ) -> Option<Replacement> {
     one_input(insn)?;
     let outer_input = input_ssa(func, bid, insn_idx, 0)?;
-
-    for (&(def_bid, def_idx, ref slot), &def_ssa) in &func.var_map {
-        if !matches!(slot, VarnodeSlot::Output) || def_ssa != outer_input {
-            continue;
-        }
-
-        let def_insn = func.function.blocks.get(&def_bid)?.insns.get(def_idx)?;
-        if def_insn.op != insn.op {
-            return None;
-        }
-
-        let inner_input = one_input(def_insn)?;
-        return Some(Replacement::Copy {
-            input: inner_input,
-            input_ssa: input_ssa(func, def_bid, def_idx, 0),
-        });
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, outer_input)?;
+    if def_insn.op != insn.op {
+        return None;
     }
 
-    None
+    let inner_input = one_input(def_insn)?;
+    Some(Replacement::Copy {
+        input: inner_input,
+        input_ssa: input_ssa(func, def_bid, def_idx, 0),
+    })
 }
 
 /// Returns true if `input` is the IEEE 754 representation of `+0.0` for its size.
@@ -554,37 +546,33 @@ fn simplify_fadd_negation(
     let (lhs, rhs) = two_inputs(insn)?;
 
     // Try `x + (-y)` → `x - y`: rhs is FloatNeg(y)
-    if let Some(rhs_ssa) = input_ssa(func, bid, insn_idx, 1) {
-        if let Some((def_bid, def_idx, def_insn)) = defining_insn(func, defs, rhs_ssa) {
-            if def_insn.op == IrOp::FloatNeg {
-                if let Some(inner) = one_input(def_insn) {
-                    let lhs_ssa = input_ssa(func, bid, insn_idx, 0);
-                    let inner_ssa = input_ssa(func, def_bid, def_idx, 0);
-                    return Some(Replacement::Reop {
-                        op: IrOp::FloatSub,
-                        inputs: smallvec::smallvec![lhs, inner],
-                        input_ssas: smallvec::smallvec![lhs_ssa, inner_ssa],
-                    });
-                }
-            }
-        }
+    if let Some(rhs_ssa) = input_ssa(func, bid, insn_idx, 1)
+        && let Some((def_bid, def_idx, def_insn)) = defining_insn(func, defs, rhs_ssa)
+        && def_insn.op == IrOp::FloatNeg
+        && let Some(inner) = one_input(def_insn)
+    {
+        let lhs_ssa = input_ssa(func, bid, insn_idx, 0);
+        let inner_ssa = input_ssa(func, def_bid, def_idx, 0);
+        return Some(Replacement::Reop {
+            op: IrOp::FloatSub,
+            inputs: smallvec::smallvec![lhs, inner],
+            input_ssas: smallvec::smallvec![lhs_ssa, inner_ssa],
+        });
     }
 
     // Try `(-x) + y` → `y - x`: lhs is FloatNeg(x)
-    if let Some(lhs_ssa) = input_ssa(func, bid, insn_idx, 0) {
-        if let Some((def_bid, def_idx, def_insn)) = defining_insn(func, defs, lhs_ssa) {
-            if def_insn.op == IrOp::FloatNeg {
-                if let Some(inner) = one_input(def_insn) {
-                    let rhs_ssa = input_ssa(func, bid, insn_idx, 1);
-                    let inner_ssa = input_ssa(func, def_bid, def_idx, 0);
-                    return Some(Replacement::Reop {
-                        op: IrOp::FloatSub,
-                        inputs: smallvec::smallvec![rhs, inner],
-                        input_ssas: smallvec::smallvec![rhs_ssa, inner_ssa],
-                    });
-                }
-            }
-        }
+    if let Some(lhs_ssa) = input_ssa(func, bid, insn_idx, 0)
+        && let Some((def_bid, def_idx, def_insn)) = defining_insn(func, defs, lhs_ssa)
+        && def_insn.op == IrOp::FloatNeg
+        && let Some(inner) = one_input(def_insn)
+    {
+        let rhs_ssa = input_ssa(func, bid, insn_idx, 1);
+        let inner_ssa = input_ssa(func, def_bid, def_idx, 0);
+        return Some(Replacement::Reop {
+            op: IrOp::FloatSub,
+            inputs: smallvec::smallvec![rhs, inner],
+            input_ssas: smallvec::smallvec![rhs_ssa, inner_ssa],
+        });
     }
 
     None

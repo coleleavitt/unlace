@@ -109,19 +109,16 @@ impl TilFile {
         if bytes.len() < 16 || &bytes[..8] != MAGIC {
             bail!("not a .until file");
         }
-        let version =
-            u32::from_le_bytes(bytes[8..12].try_into().unwrap());
+        let version = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
         if version > CURRENT_VERSION {
             bail!("unsupported .until version: v{version}, current is v{CURRENT_VERSION}");
         }
-        let platform_len =
-            u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        let platform_len = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
         let mut pos = 16;
         if pos + platform_len > bytes.len() {
             bail!("truncated platform string");
         }
-        let platform =
-            String::from_utf8(bytes[pos..pos + platform_len].to_vec())?;
+        let platform = String::from_utf8(bytes[pos..pos + platform_len].to_vec())?;
         pos += platform_len;
 
         let mut til = TilFile::new(&platform);
@@ -131,27 +128,24 @@ impl TilFile {
             let decompressed = zstd::decode_all(&payload[..])?;
             match section_name.as_str() {
                 "typedef_table" => {
-                    let (v, _): (BTreeMap<String, Typedef>, _) =
-                        bincode::serde::decode_from_slice(
-                            &decompressed,
-                            bincode::config::standard(),
-                        )?;
+                    let (v, _): (BTreeMap<String, Typedef>, _) = bincode::serde::decode_from_slice(
+                        &decompressed,
+                        bincode::config::standard(),
+                    )?;
                     til.typedef_table = v;
                 }
                 "struct_table" => {
-                    let (v, _): (BTreeMap<String, Record>, _) =
-                        bincode::serde::decode_from_slice(
-                            &decompressed,
-                            bincode::config::standard(),
-                        )?;
+                    let (v, _): (BTreeMap<String, Record>, _) = bincode::serde::decode_from_slice(
+                        &decompressed,
+                        bincode::config::standard(),
+                    )?;
                     til.struct_table = v;
                 }
                 "union_table" => {
-                    let (v, _): (BTreeMap<String, Record>, _) =
-                        bincode::serde::decode_from_slice(
-                            &decompressed,
-                            bincode::config::standard(),
-                        )?;
+                    let (v, _): (BTreeMap<String, Record>, _) = bincode::serde::decode_from_slice(
+                        &decompressed,
+                        bincode::config::standard(),
+                    )?;
                     til.union_table = v;
                 }
                 "enum_table" => {
@@ -171,11 +165,10 @@ impl TilFile {
                     til.fn_prototype_table = v;
                 }
                 "macro_table" => {
-                    let (v, _): (BTreeMap<String, String>, _) =
-                        bincode::serde::decode_from_slice(
-                            &decompressed,
-                            bincode::config::standard(),
-                        )?;
+                    let (v, _): (BTreeMap<String, String>, _) = bincode::serde::decode_from_slice(
+                        &decompressed,
+                        bincode::config::standard(),
+                    )?;
                     til.macro_table = v;
                 }
                 _ => {
@@ -187,11 +180,7 @@ impl TilFile {
     }
 }
 
-fn write_section<T: Serialize>(
-    file: &mut std::fs::File,
-    name: &str,
-    value: &T,
-) -> Result<()> {
+fn write_section<T: Serialize>(file: &mut std::fs::File, name: &str, value: &T) -> Result<()> {
     use std::io::Write;
     let encoded = bincode::serde::encode_to_vec(value, bincode::config::standard())?;
     let compressed = zstd::encode_all(&encoded[..], 3)?;
@@ -216,8 +205,7 @@ fn parse_section(bytes: &[u8]) -> Result<(String, Vec<u8>, usize)> {
     if pos + 8 > bytes.len() {
         bail!("missing payload length");
     }
-    let payload_len =
-        u64::from_le_bytes(bytes[pos..pos + 8].try_into().unwrap()) as usize;
+    let payload_len = u64::from_le_bytes(bytes[pos..pos + 8].try_into().unwrap()) as usize;
     pos += 8;
     if pos + payload_len > bytes.len() {
         bail!("payload overflow");

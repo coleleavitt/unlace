@@ -148,7 +148,11 @@ fn format_declaration(name: &str, entry: &CatalogEntry) -> String {
         .take(32)
         .map(|b| format!("{:02X}", b))
         .collect();
-    let suffix = if entry.type_bytes.len() > 32 { "…" } else { "" };
+    let suffix = if entry.type_bytes.len() > 32 {
+        "…"
+    } else {
+        ""
+    };
     format!(
         "// ordinal={} type_bytes={}{}\n{};",
         entry.ordinal, hex, suffix, name
@@ -199,14 +203,8 @@ mod tests {
     #[test]
     fn test_first_writer_wins_on_duplicate_names() {
         let mut c = TilCatalog::new();
-        c.add_from_til(&til_with(
-            "first",
-            vec![("printf", 1, vec![0xAA])],
-        ));
-        c.add_from_til(&til_with(
-            "second",
-            vec![("printf", 99, vec![0xBB])],
-        ));
+        c.add_from_til(&til_with("first", vec![("printf", 1, vec![0xAA])]));
+        c.add_from_til(&til_with("second", vec![("printf", 99, vec![0xBB])]));
         let e = c.get("printf").unwrap();
         assert_eq!(e.ordinal, 1, "first writer must win");
         assert_eq!(e.type_bytes, vec![0xAA]);
@@ -215,10 +213,7 @@ mod tests {
     #[test]
     fn test_empty_names_are_skipped() {
         let mut c = TilCatalog::new();
-        let added = c.add_from_til(&til_with(
-            "x",
-            vec![("", 1, vec![]), ("ok", 2, vec![0x10])],
-        ));
+        let added = c.add_from_til(&til_with("x", vec![("", 1, vec![]), ("ok", 2, vec![0x10])]));
         assert_eq!(added, 1);
         assert_eq!(c.get("ok").unwrap().ordinal, 2);
     }
@@ -256,10 +251,7 @@ mod tests {
     #[test]
     fn test_apply_attaches_type_annotation_for_known_symbols() {
         let mut c = TilCatalog::new();
-        c.add_from_til(&til_with(
-            "libc",
-            vec![("printf", 1, vec![0xDE, 0xAD])],
-        ));
+        c.add_from_til(&til_with("libc", vec![("printf", 1, vec![0xDE, 0xAD])]));
         let s = make_session_with_symbol(0x1100, "printf");
         let report = c.apply_to_session(&s);
         assert_eq!(report.annotated, 1);

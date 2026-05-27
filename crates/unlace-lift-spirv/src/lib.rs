@@ -120,7 +120,7 @@ struct SpirVInsn<'a> {
 }
 
 fn read_words(bytes: &[u8]) -> Result<&[u32], LiftError> {
-    if bytes.len() % WORD_BYTES != 0 {
+    if !bytes.len().is_multiple_of(WORD_BYTES) {
         return Err(LiftError::Decode(
             "SPIR-V byte stream not word-aligned".into(),
         ));

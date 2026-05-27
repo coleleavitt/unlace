@@ -12,8 +12,7 @@ pub fn is_mips_delay_slot_branch(mnemonic: &str) -> bool {
     let mn = mnemonic.to_lowercase();
     matches!(
         mn.as_str(),
-        "j"
-            | "jal"
+        "j" | "jal"
             | "jr"
             | "jalr"
             | "beq"

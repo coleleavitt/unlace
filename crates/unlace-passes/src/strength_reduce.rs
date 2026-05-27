@@ -314,11 +314,11 @@ fn rewrite_var_iv(
     func.phi_map.entry(header).or_default().push(phi);
 
     // Original IntMult → Copy(iv_sv).
-    if let Some(block) = func.function.blocks.get_mut(&d.block) {
-        if let Some(insn) = block.insns.get_mut(d.idx) {
-            insn.op = IrOp::Copy;
-            insn.inputs = smallvec![base];
-        }
+    if let Some(block) = func.function.blocks.get_mut(&d.block)
+        && let Some(insn) = block.insns.get_mut(d.idx)
+    {
+        insn.op = IrOp::Copy;
+        insn.inputs = smallvec![base];
     }
     func.var_map
         .insert((d.block, d.idx, VarnodeSlot::Input(0)), iv_sv);

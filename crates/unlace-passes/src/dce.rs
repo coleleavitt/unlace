@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use unlace_ir::IrOp;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
@@ -152,7 +152,7 @@ impl Pass for DeadCodeElimPass {
 mod tests {
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
+    use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -217,6 +217,8 @@ mod tests {
             array_strides: std::collections::BTreeMap::new(),
             external_signatures: std::collections::BTreeMap::new(),
             eh_landing_pads: std::collections::BTreeSet::new(),
+            eh_landing_pad_catches: std::collections::BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: std::collections::BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: std::collections::BTreeMap::new(),

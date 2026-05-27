@@ -21,11 +21,9 @@ pub fn parse_compact_unwind_64(bytes: &[u8]) -> Vec<CompactUnwindEntry> {
     let mut offset = 0;
     while offset + ENTRY_SIZE_64 <= bytes.len() {
         let func_start = u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap());
-        let func_length =
-            u32::from_le_bytes(bytes[offset + 8..offset + 12].try_into().unwrap());
+        let func_length = u32::from_le_bytes(bytes[offset + 8..offset + 12].try_into().unwrap());
         let encoding = u32::from_le_bytes(bytes[offset + 12..offset + 16].try_into().unwrap());
-        let personality =
-            u64::from_le_bytes(bytes[offset + 16..offset + 24].try_into().unwrap());
+        let personality = u64::from_le_bytes(bytes[offset + 16..offset + 24].try_into().unwrap());
         let lsda = u64::from_le_bytes(bytes[offset + 24..offset + 32].try_into().unwrap());
         out.push(CompactUnwindEntry {
             func_start,

@@ -274,13 +274,12 @@ pub fn declare_pseudo_c_externals(output: &str) -> String {
 
     for line in output.lines() {
         let trimmed = line.trim();
-        if trimmed.ends_with('{') {
-            if let Some((name, proto)) = parse_function_definition_prototype(trimmed) {
-                if name.starts_with("sub_") {
-                    defined_subs.insert(name.to_string());
-                    decls.insert(proto);
-                }
-            }
+        if trimmed.ends_with('{')
+            && let Some((name, proto)) = parse_function_definition_prototype(trimmed)
+            && name.starts_with("sub_")
+        {
+            defined_subs.insert(name.to_string());
+            decls.insert(proto);
         }
     }
 
@@ -456,6 +455,19 @@ pub struct PrinterAnnotations {
     /// direct source-like calls when the concrete receiver type is statically
     /// determinable.
     pub go_iface_devirtualized_calls: BTreeMap<u64, String>,
+    /// C++ ABI/runtime action sites keyed by call instruction VA.
+    ///
+    /// Populated by the CLI from `unlace_passes::cxx_eh::collect_eh_sites`
+    /// after call-target resolution. This carries the compiler/runtime
+    /// classification into the printer even when the final call expression is
+    /// indirect, such as a PE IAT thunk resolved by the SSA pipeline.
+    pub cxx_eh_actions: BTreeMap<u64, unlace_passes::cxx_eh::CxxEhAction>,
+    /// MSVC RTTI classes recovered by the PE loader.
+    ///
+    /// The Itanium path is passed as the explicit `rtti` argument. MSVC RTTI
+    /// already lives on `BinaryImage`, so the CLI transports it through
+    /// annotations to avoid widening the public printer entry points.
+    pub msvc_rtti: Option<unlace_loader::msvc_rtti::MsvcRtti>,
     /// Pre-rendered preamble block for synthesised composite types
     /// recovered by the SSA analyses (t147 stack-frame composites in
     /// `SsaFunction::inferred_structs` and t213 array-of-structs layouts
@@ -624,6 +636,7 @@ pub fn print_c_with_annotations(
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
         ctx.go_iface_devirtualized_calls = ann.go_iface_devirtualized_calls.clone();
+        ctx.cxx_eh_actions = ann.cxx_eh_actions.clone();
         ctx.libc_call_canonical = ann.libc_call_canonical.clone();
         ctx.libc_call_original = ann.libc_call_original.clone();
         ctx.array_struct_layouts = ann.array_struct_layouts.clone();
@@ -750,6 +763,13 @@ pub fn print_c_with_annotations(
         // ctor of each class — pinned at the top of the function so it
         // sits *above* the function-header comment.
         emit_class_layout_for_func(func, rtti, &mut out);
+    }
+
+    if let Some(msvc_rtti) = annotations
+        .and_then(|a| a.msvc_rtti.as_ref())
+        .filter(|r| !r.classes.is_empty())
+    {
+        emit_msvc_rtti_hierarchy(msvc_rtti, &mut out);
     }
 
     if let Some(summary) = render_go_defer_summary(func.go_defer_sites.as_slice(), symbols) {
@@ -978,7 +998,7 @@ pub fn print_c_with_annotations(
                 param_idx += 1;
             }
         }
-        if param_idx == 0 && dwarf_func.map_or(true, |df| df.params.is_empty()) {
+        if param_idx == 0 && dwarf_func.is_none_or(|df| df.params.is_empty()) {
             out.push_str("void");
         }
     }
@@ -989,14 +1009,14 @@ pub fn print_c_with_annotations(
     // spec: `// dropped N param(s) (dead in body)` — the `(s)`
     // bracket is literal (no singular/plural variation) so the comment
     // string is stable across functions.
-    if let Some(sig) = func.finalized_signature.as_ref() {
-        if sig.dropped_param_count > 0 {
-            let _ = write!(
-                out,
-                " // dropped {} param(s) (dead in body)",
-                sig.dropped_param_count,
-            );
-        }
+    if let Some(sig) = func.finalized_signature.as_ref()
+        && sig.dropped_param_count > 0
+    {
+        let _ = write!(
+            out,
+            " // dropped {} param(s) (dead in body)",
+            sig.dropped_param_count,
+        );
     }
     out.push_str(" {\n");
 
@@ -1020,10 +1040,10 @@ pub fn print_c_with_annotations(
             if is_control_only_condition_use_or_base(sv, &ctx) {
                 continue;
             }
-            if *count > 0 {
-                if let Some(n) = ctx.var_names.get(sv) {
-                    names.insert(n.as_str());
-                }
+            if *count > 0
+                && let Some(n) = ctx.var_names.get(sv)
+            {
+                names.insert(n.as_str());
             }
         }
         // Variables used as conditions.
@@ -1288,7 +1308,7 @@ fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
             );
             if !sub.virtual_base_offsets.is_empty() {
                 for (i, off) in sub.virtual_base_offsets.iter().enumerate() {
-                    let _ = writeln!(out, " *       vbase_offset[{i}] = {off}");
+                    let _ = writeln!(out, " *       vbase/vcall_offset[{i}] = {off}");
                 }
             }
             let _ = writeln!(out, " *       offset_to_top = {}", sub.offset_to_top);
@@ -1314,15 +1334,12 @@ fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
                         let mut tag = String::new();
                         if *is_thunk {
                             tag.push_str(" [thunk]");
-                        } else if !cls.bases.is_empty() {
-                            if let Some(n) = name {
-                                if let Some(d) = crate::demangle::demangle(n) {
-                                    if d.class_name.as_deref() == Some(cls.demangled_name.as_str())
-                                    {
-                                        tag.push_str(" [override]");
-                                    }
-                                }
-                            }
+                        } else if !cls.bases.is_empty()
+                            && let Some(n) = name
+                            && let Some(d) = crate::demangle::demangle(n)
+                            && d.class_name.as_deref() == Some(cls.demangled_name.as_str())
+                        {
+                            tag.push_str(" [override]");
                         }
                         let _ = writeln!(out, " *       vfunc[{slot}] = {display}{tag}");
                     }
@@ -1356,6 +1373,68 @@ fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
     out.push_str(RTTI_BLOCK_END);
     out.push('\n');
     out.push('\n');
+}
+
+fn emit_msvc_rtti_hierarchy(rtti: &unlace_loader::msvc_rtti::MsvcRtti, out: &mut String) {
+    if rtti.classes.is_empty() {
+        return;
+    }
+
+    out.push_str("// MSVC RTTI class hierarchy (from PE .rdata)\n");
+    for cls in rtti.classes.values() {
+        let name = cls.demangled.as_deref().unwrap_or(&cls.mangled_name);
+        let bases: Vec<String> = cls
+            .bases
+            .iter()
+            .map(|base| unlace_loader::msvc_rtti::demangle_rtti_name(&base.mangled_name))
+            .collect();
+        if bases.is_empty() {
+            let _ = writeln!(out, "// class {name}");
+        } else {
+            let _ = writeln!(out, "// class {name} : {}", bases.join(", "));
+        }
+
+        let flags = msvc_inheritance_flags(cls.inheritance);
+        if flags.is_empty() {
+            let _ = writeln!(
+                out,
+                "//   vftable @ {:#x}, methods={}",
+                cls.vtable_addr, cls.method_count
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "//   vftable @ {:#x}, methods={}, inheritance={}",
+                cls.vtable_addr,
+                cls.method_count,
+                flags.join("|")
+            );
+        }
+
+        for base in &cls.bases {
+            let base_name = unlace_loader::msvc_rtti::demangle_rtti_name(&base.mangled_name);
+            let _ = writeln!(
+                out,
+                "//   base {base_name}: mdisp={}, pdisp={}, vdisp={}, attrs={:#x}",
+                base.mdisp, base.pdisp, base.vdisp, base.attributes
+            );
+        }
+    }
+    out.push('\n');
+}
+
+fn msvc_inheritance_flags(flags: u32) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    if flags & 0x1 != 0 {
+        out.push("multiple");
+    }
+    if flags & 0x2 != 0 {
+        out.push("virtual");
+    }
+    if flags & 0x4 != 0 {
+        out.push("ambiguous");
+    }
+    out
 }
 
 /// After concatenating per-function outputs, keep the first RTTI block
@@ -1459,14 +1538,12 @@ fn emit_class_layout_for_func(
                 let mut tag = String::new();
                 if *is_thunk {
                     tag.push_str(" [thunk]");
-                } else if !cls.bases.is_empty() {
-                    if let Some(n) = name {
-                        if let Some(d) = crate::demangle::demangle(n) {
-                            if d.class_name.as_deref() == Some(class_name) {
-                                tag.push_str(" [override]");
-                            }
-                        }
-                    }
+                } else if !cls.bases.is_empty()
+                    && let Some(n) = name
+                    && let Some(d) = crate::demangle::demangle(n)
+                    && d.class_name.as_deref() == Some(class_name)
+                {
+                    tag.push_str(" [override]");
                 }
                 let _ = writeln!(out, " *   vfunc[{slot}] = {display}{tag}");
             }
@@ -1503,10 +1580,10 @@ fn rtti_this_param_type(
     let class_name = dr.class_name.as_ref()?;
 
     // Prefer RTTI when the binary itself names the class.
-    if let Some(rtti) = rtti {
-        if rtti.class_by_name(class_name).is_some() {
-            return Some(class_name.clone());
-        }
+    if let Some(rtti) = rtti
+        && rtti.class_by_name(class_name).is_some()
+    {
+        return Some(class_name.clone());
     }
 
     // Fall back to STL container recognition driven by the demangled
@@ -1788,6 +1865,10 @@ struct PrintCtx {
     /// VA. When present, [`resolve_call_target`] renders the concrete callee
     /// name instead of the opaque function-pointer expression.
     go_iface_devirtualized_calls: BTreeMap<u64, String>,
+    /// C++ ABI/runtime action annotations keyed by call VA.
+    cxx_eh_actions: BTreeMap<u64, unlace_passes::cxx_eh::CxxEhAction>,
+    /// Nesting depth while emitting a `TryFinally` cleanup body.
+    cleanup_depth: u32,
     /// Canonical libc family name keyed by Call VA (t229). Lifted from
     /// [`PrinterAnnotations::libc_call_canonical`]; consulted by
     /// [`resolve_call_target`] before the symbol-table fallback so a
@@ -1897,10 +1978,10 @@ impl PrintCtx {
         // pre-coalesced ones.
         let mut start_next: u32 = 1;
         for n in merged_names.values() {
-            if let Some(rest) = n.strip_prefix('v') {
-                if let Ok(idx) = rest.parse::<u32>() {
-                    start_next = start_next.max(idx + 1);
-                }
+            if let Some(rest) = n.strip_prefix('v')
+                && let Ok(idx) = rest.parse::<u32>()
+            {
+                start_next = start_next.max(idx + 1);
             }
         }
         Self {
@@ -1950,6 +2031,8 @@ impl PrintCtx {
             forwarded_resolutions: BTreeMap::new(),
             auth_calls: BTreeMap::new(),
             go_iface_devirtualized_calls: BTreeMap::new(),
+            cxx_eh_actions: BTreeMap::new(),
+            cleanup_depth: 0,
             libc_call_canonical: BTreeMap::new(),
             libc_call_original: BTreeMap::new(),
             array_struct_layouts: BTreeMap::new(),
@@ -2442,16 +2525,15 @@ fn walk_print_addr(
             let lhs_sv = input_sv(ctx, def_stmt, lhs);
             let rhs_sv = input_sv(ctx, def_stmt, rhs);
             if let (Some(a), Some(b)) = (lhs_sv, rhs_sv) {
-                if let Some(left) = walk_print_addr(a, iv_candidates, ctx, acc_stride, acc_offset) {
-                    if left.1 != 0 {
-                        return Some((b, left.1, left.2, left.3));
-                    }
+                if let Some(left) = walk_print_addr(a, iv_candidates, ctx, acc_stride, acc_offset)
+                    && left.1 != 0
+                {
+                    return Some((b, left.1, left.2, left.3));
                 }
                 if let Some(right) = walk_print_addr(b, iv_candidates, ctx, acc_stride, acc_offset)
+                    && right.1 != 0
                 {
-                    if right.1 != 0 {
-                        return Some((a, right.1, right.2, right.3));
-                    }
+                    return Some((a, right.1, right.2, right.3));
                 }
             }
             None
@@ -3424,11 +3506,11 @@ fn propagate_dead_chains(ctx: &mut PrintCtx) {
                 continue;
             };
             for input_sv in inputs {
-                if let Some(count) = ctx.sv_use_counts.get_mut(&input_sv) {
-                    if *count > 0 {
-                        *count -= 1;
-                        changed = true;
-                    }
+                if let Some(count) = ctx.sv_use_counts.get_mut(&input_sv)
+                    && *count > 0
+                {
+                    *count -= 1;
+                    changed = true;
                 }
             }
         }
@@ -3629,27 +3711,28 @@ fn compute_byref_bases(ctx: &mut PrintCtx) {
             None => continue,
         };
 
-        if matches!(insn.op, IrOp::IntAdd) && insn.inputs.len() == 2 {
-            if let Some(out) = insn.output {
-                let a = &insn.inputs[0];
-                let b = &insn.inputs[1];
-                let off = stack_offset_of_add(a, b).or_else(|| stack_offset_of_add(b, a));
-                if let Some(off) = off {
-                    stack_addr_def.insert(out, off);
-                    continue;
-                }
-                if let Some(&base_off) = stack_addr_def.get(a) {
-                    if b.space == SpaceId::Const {
-                        stack_addr_def.insert(out, base_off.wrapping_add(b.offset as i64));
-                        continue;
-                    }
-                }
-                if let Some(&base_off) = stack_addr_def.get(b) {
-                    if a.space == SpaceId::Const {
-                        stack_addr_def.insert(out, base_off.wrapping_add(a.offset as i64));
-                        continue;
-                    }
-                }
+        if matches!(insn.op, IrOp::IntAdd)
+            && insn.inputs.len() == 2
+            && let Some(out) = insn.output
+        {
+            let a = &insn.inputs[0];
+            let b = &insn.inputs[1];
+            let off = stack_offset_of_add(a, b).or_else(|| stack_offset_of_add(b, a));
+            if let Some(off) = off {
+                stack_addr_def.insert(out, off);
+                continue;
+            }
+            if let Some(&base_off) = stack_addr_def.get(a)
+                && b.space == SpaceId::Const
+            {
+                stack_addr_def.insert(out, base_off.wrapping_add(b.offset as i64));
+                continue;
+            }
+            if let Some(&base_off) = stack_addr_def.get(b)
+                && a.space == SpaceId::Const
+            {
+                stack_addr_def.insert(out, base_off.wrapping_add(a.offset as i64));
+                continue;
             }
         }
 
@@ -4614,10 +4697,10 @@ fn collect_statement_level_roles(ctx: &PrintCtx, roles: &mut BTreeMap<Varnode, V
             }
         }
 
-        if insn.op.type_family() == Some('b') {
-            if let Some(out) = insn.output {
-                record_role(roles, out, VarRole::Cond);
-            }
+        if insn.op.type_family() == Some('b')
+            && let Some(out) = insn.output
+        {
+            record_role(roles, out, VarRole::Cond);
         }
     }
 
@@ -4691,6 +4774,49 @@ fn is_catch_all_type(ty: &unlace_ir::types::Type) -> bool {
         ty,
         unlace_ir::types::Type::Primitive(unlace_ir::ssa::PrimitiveType::Unknown)
     )
+}
+
+struct CatchObjectBinding {
+    name: String,
+    skip_leading_stmt: bool,
+}
+
+fn catch_object_binding(body: &[HirNode], ctx: &mut PrintCtx) -> Option<CatchObjectBinding> {
+    let HirNode::Statement(insn) = body.first()? else {
+        return None;
+    };
+    if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
+        return None;
+    }
+    let action = cxx_eh_action_for_call(insn, ctx)?;
+    if !matches!(
+        action,
+        unlace_passes::cxx_eh::CxxEhAction::BeginCatch
+            | unlace_passes::cxx_eh::CxxEhAction::GetExceptionPtr
+    ) {
+        return None;
+    }
+    let sv = ctx.stmt_outputs.get(&ctx.emit_stmt).copied().flatten()?;
+    let name = ctx.name_of(&sv);
+    Some(CatchObjectBinding {
+        name,
+        skip_leading_stmt: true,
+    })
+}
+
+fn emit_catch_body(
+    body: &[HirNode],
+    binding: Option<&CatchObjectBinding>,
+    depth: usize,
+    ctx: &mut PrintCtx,
+    out: &mut String,
+) {
+    if binding.is_some_and(|b| b.skip_leading_stmt) && !body.is_empty() {
+        ctx.emit_stmt += 1;
+        emit_nodes(&body[1..], depth, ctx, out);
+    } else {
+        emit_nodes(body, depth, ctx, out);
+    }
 }
 
 fn c_type(ty: &PrimitiveType) -> &'static str {
@@ -4865,12 +4991,22 @@ fn body_ends_with_terminator(body: &[HirNode]) -> bool {
         return false;
     };
     match last {
+        HirNode::Block(inner) => body_ends_with_terminator(inner),
+        HirNode::Commented { inner, .. } => {
+            body_ends_with_terminator(std::slice::from_ref(inner.as_ref()))
+        }
+        node => node_is_terminal_for_emission(node),
+    }
+}
+
+fn node_is_terminal_for_emission(node: &HirNode) -> bool {
+    match node {
         HirNode::Return(_)
         | HirNode::Goto(_)
         | HirNode::Break
         | HirNode::Continue
         | HirNode::TailCall { .. } => true,
-        HirNode::Statement(insn) => matches!(insn.op, IrOp::Return),
+        HirNode::Statement(insn) => matches!(insn.op, IrOp::Return | IrOp::Branchind),
         HirNode::Block(inner) => body_ends_with_terminator(inner),
         HirNode::Commented { inner, .. } => {
             body_ends_with_terminator(std::slice::from_ref(inner.as_ref()))
@@ -4883,23 +5019,19 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
     let mut i = 0;
     let mut last_dowhile_stmt_range: Option<(u32, u32)> = None;
     while i < nodes.len() {
-        if let HirNode::Return(Some(sv)) = &nodes[i] {
-            if !ctx.parent_returns_void
-                && let Some((start, end)) = last_dowhile_stmt_range
-                && let Some(expr) = resolve_post_dowhile_return_expr(sv, start, end, ctx)
-            {
-                indent(depth, ctx.config.tab_width, out);
-                let _ = writeln!(out, "return {};", expr);
-                let next_is_label = nodes
-                    .get(i + 1)
-                    .is_some_and(|n| matches!(n, HirNode::Label(_)));
-                if !next_is_label {
-                    break;
-                }
-                i += 1;
-                last_dowhile_stmt_range = None;
-                continue;
+        if let HirNode::Return(Some(sv)) = &nodes[i]
+            && !ctx.parent_returns_void
+            && let Some((start, end)) = last_dowhile_stmt_range
+            && let Some(expr) = resolve_post_dowhile_return_expr(sv, start, end, ctx)
+        {
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "return {};", expr);
+            if !has_later_sibling_label(nodes, i + 1) {
+                break;
             }
+            i += 1;
+            last_dowhile_stmt_range = None;
+            continue;
         }
         if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
             ctx.emit_stmt += 1;
@@ -4911,7 +5043,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
         }
         if let Some(first) = inline_node_text(&nodes[i], ctx) {
             let mut parts = Vec::new();
-            let first_is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
+            let first_is_terminal = node_is_terminal_for_emission(&nodes[i]);
             let mut group_has_terminal = first_is_terminal;
             if !first.is_empty() {
                 parts.push(first);
@@ -4928,7 +5060,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 let Some(next) = inline_node_text(&nodes[i], ctx) else {
                     break;
                 };
-                let is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
+                let is_terminal = node_is_terminal_for_emission(&nodes[i]);
                 if is_terminal {
                     group_has_terminal = true;
                 }
@@ -4944,16 +5076,13 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 indent(depth, ctx.config.tab_width, out);
                 let _ = writeln!(out, "{}", parts.join(" "));
             }
-            if group_has_terminal {
-                let next_is_label = nodes.get(i).is_some_and(|n| matches!(n, HirNode::Label(_)));
-                if !next_is_label {
-                    break;
-                }
+            if group_has_terminal && !has_later_sibling_label(nodes, i) {
+                break;
             }
             last_dowhile_stmt_range = None;
             continue;
         }
-        let is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
+        let is_terminal = node_is_terminal_for_emission(&nodes[i]);
         let start_stmt = ctx.emit_stmt;
         let is_dowhile = matches!(nodes[i], HirNode::DoWhile { .. });
         emit_node(&nodes[i], depth, ctx, out);
@@ -4964,16 +5093,21 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             None
         };
         if is_terminal {
-            // Don't break if the next node is a Label — labels must still be emitted
-            let next_is_label = nodes
-                .get(i + 1)
-                .is_some_and(|n| matches!(n, HirNode::Label(_)));
-            if !next_is_label {
+            // Do not stop before later sibling labels. Real HIR can contain
+            // unreachable cleanup/statements between a terminal branch and a
+            // later target label; suppressing that label leaves dangling gotos.
+            if !has_later_sibling_label(nodes, i + 1) {
                 break;
             }
         }
         i += 1;
     }
+}
+
+fn has_later_sibling_label(nodes: &[HirNode], start: usize) -> bool {
+    nodes
+        .get(start..)
+        .is_some_and(|tail| tail.iter().any(|n| matches!(n, HirNode::Label(_))))
 }
 
 fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
@@ -5305,10 +5439,10 @@ fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) 
             }
             // Don't drop a hoisted variable's declaration into a `return`
             // shortcut — the variable is referenced elsewhere too.
-            if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base) {
-                if plan.stmt_idx == stmt_idx {
-                    return false;
-                }
+            if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base)
+                && plan.stmt_idx == stmt_idx
+            {
+                return false;
             }
             let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
             if total_uses > 1 {
@@ -5332,10 +5466,10 @@ fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) 
             if is_dead_zero_init(insn, stmt_idx, ctx) {
                 return false;
             }
-            if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base) {
-                if plan.stmt_idx == stmt_idx {
-                    return false;
-                }
+            if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base)
+                && plan.stmt_idx == stmt_idx
+            {
+                return false;
             }
             let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
             if total_uses > 0 {
@@ -5354,10 +5488,10 @@ fn resolve_sv_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
         }
         return format_constant_ctx(sv.base.offset, sv.base.size, ConstContext::Signed);
     }
-    if let Some(&def_stmt) = ctx.sv_defining_stmt.get(sv) {
-        if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
-            return emit_expr(&def_insn, def_stmt, ctx);
-        }
+    if let Some(&def_stmt) = ctx.sv_defining_stmt.get(sv)
+        && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
+    {
+        return emit_expr(&def_insn, def_stmt, ctx);
     }
     ctx.name_of(sv)
 }
@@ -5453,15 +5587,15 @@ fn latest_output_for_base_in_range(
 }
 
 fn resolve_control_cond_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
-    if let Some(def_stmt) = inlineable_condition_def_stmt(sv, ctx) {
-        if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
-            return emit_expr(&def_insn, def_stmt, ctx);
-        }
+    if let Some(def_stmt) = inlineable_condition_def_stmt(sv, ctx)
+        && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
+    {
+        return emit_expr(&def_insn, def_stmt, ctx);
     }
-    if let Some(def_stmt) = latest_inlineable_condition_def_stmt_for_base(sv, ctx) {
-        if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
-            return emit_expr(&def_insn, def_stmt, ctx);
-        }
+    if let Some(def_stmt) = latest_inlineable_condition_def_stmt_for_base(sv, ctx)
+        && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
+    {
+        return emit_expr(&def_insn, def_stmt, ctx);
     }
     resolve_sv_expr(sv, ctx)
 }
@@ -5963,13 +6097,17 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 indent(depth, ctx.config.tab_width, out);
                 if all_catch_all {
                     let _ = writeln!(out, "}} __except {{");
+                    emit_nodes(body, depth + 1, ctx, out);
                 } else if is_catch_all_type(ty) {
                     let _ = writeln!(out, "}} catch (...) {{");
+                    emit_nodes(body, depth + 1, ctx, out);
                 } else {
                     let captured_c = render_type_as_c(ty);
-                    let _ = writeln!(out, "}} catch ({} e) {{", captured_c);
+                    let binding = catch_object_binding(body, ctx);
+                    let name = binding.as_ref().map(|b| b.name.as_str()).unwrap_or("e");
+                    let _ = writeln!(out, "}} catch ({} {}) {{", captured_c, name);
+                    emit_catch_body(body, binding.as_ref(), depth + 1, ctx, out);
                 }
-                emit_nodes(body, depth + 1, ctx, out);
             }
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
@@ -5987,7 +6125,9 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             emit_nodes(try_body, depth + 1, ctx, out);
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}} __finally {{");
+            ctx.cleanup_depth += 1;
             emit_nodes(finally_body, depth + 1, ctx, out);
+            ctx.cleanup_depth -= 1;
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
         }
@@ -6050,11 +6190,11 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 let rendered: Vec<String> = captures
                     .iter()
                     .map(|cap| {
-                        if let Some(sv) = &cap.varnode {
-                            if let Some(bx) = ctx.byref_boxes.get(&sv.base) {
-                                let captured_c = render_type_as_c(&bx.captured_type);
-                                return format!("__block {} {}", captured_c, cap.name);
-                            }
+                        if let Some(sv) = &cap.varnode
+                            && let Some(bx) = ctx.byref_boxes.get(&sv.base)
+                        {
+                            let captured_c = render_type_as_c(&bx.captured_type);
+                            return format!("__block {} {}", captured_c, cap.name);
                         }
                         cap.name.clone()
                     })
@@ -6398,9 +6538,52 @@ fn emit_direct_call_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> St
     if let Some(printf_call) = try_emit_printf_call(insn, stmt_idx, ctx) {
         return printf_call;
     }
+    if ctx.cleanup_depth > 0
+        && let Some(dtor_call) = try_emit_cxx_destructor_cleanup_call(insn, stmt_idx, ctx)
+    {
+        return dtor_call;
+    }
     let target = resolve_call_target(insn, stmt_idx, ctx);
     let args = emit_call_args(insn, stmt_idx, ctx);
     format!("{}({})", target, args)
+}
+
+fn try_emit_cxx_destructor_cleanup_call(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if insn.op != IrOp::Call || insn.inputs.len() < 2 {
+        return None;
+    }
+    let target = insn.inputs.first()?;
+    if target.space != SpaceId::Const {
+        return None;
+    }
+    let raw = ctx.symbols.get(&target.offset)?;
+    let demangled = crate::demangle::demangle(raw)?;
+    if !demangled.is_dtor {
+        return None;
+    }
+    let class_name = demangled.class_name.as_deref()?;
+    let class_name = crate::demangle::sanitize_for_c(class_name);
+    let receiver = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
+    if insn.inputs.len() == 2 {
+        return Some(format!("({})->~{}()", receiver, class_name));
+    }
+
+    let extra_args = insn
+        .inputs
+        .iter()
+        .enumerate()
+        .skip(2)
+        .map(|(i, vn)| emit_operand_resolved(vn, i, stmt_idx, ctx))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!(
+        "/* cleanup destructor */ ({})->~{}(/* extra */ {})",
+        receiver, class_name, extra_args
+    ))
 }
 
 /// Resolve a tail-call target address to a C identifier. Falls back to the
@@ -6586,10 +6769,10 @@ fn try_emit_compound_assign(
             .stmt_inputs
             .get(&stmt_idx)
             .and_then(|inputs| inputs.iter().find(|sv| sv.base == *counter_vn).copied());
-        if let Some(csv) = counter_sv {
-            if ctx.sv_defining_stmt.contains_key(&csv) {
-                return None;
-            }
+        if let Some(csv) = counter_sv
+            && ctx.sv_defining_stmt.contains_key(&csv)
+        {
+            return None;
         }
     }
 
@@ -6671,10 +6854,11 @@ pub fn objc_type_encoding_to_c(encoding: &str) -> String {
     }
 
     if let Some(rest) = trimmed.strip_prefix('@') {
-        if let Some(class) = rest.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
-            if !class.is_empty() && !class.starts_with('<') {
-                return format!("{}*", class);
-            }
+        if let Some(class) = rest.strip_prefix('"').and_then(|s| s.strip_suffix('"'))
+            && !class.is_empty()
+            && !class.starts_with('<')
+        {
+            return format!("{}*", class);
         }
         return "id".into();
     }
@@ -6693,25 +6877,26 @@ pub fn objc_type_encoding_to_c(encoding: &str) -> String {
         }
     }
 
-    if let Some(body) = trimmed.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
-        if let Some(name) = body.split('=').next() {
-            if !name.is_empty() && name != "?" {
-                return format!("struct {}", name);
-            }
-        }
+    if let Some(body) = trimmed.strip_prefix('{').and_then(|s| s.strip_suffix('}'))
+        && let Some(name) = body.split('=').next()
+        && !name.is_empty()
+        && name != "?"
+    {
+        return format!("struct {}", name);
     }
-    if let Some(body) = trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
-        if let Some(name) = body.split('=').next() {
-            if !name.is_empty() && name != "?" {
-                return format!("union {}", name);
-            }
-        }
+    if let Some(body) = trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')'))
+        && let Some(name) = body.split('=').next()
+        && !name.is_empty()
+        && name != "?"
+    {
+        return format!("union {}", name);
     }
 
-    if let Some(width) = trimmed.strip_prefix('b') {
-        if !width.is_empty() && width.chars().all(|c| c.is_ascii_digit()) {
-            return format!("unsigned int /* :{} */", width);
-        }
+    if let Some(width) = trimmed.strip_prefix('b')
+        && !width.is_empty()
+        && width.chars().all(|c| c.is_ascii_digit())
+    {
+        return format!("unsigned int /* :{} */", width);
     }
 
     format!("void* /* type={} */", trimmed.escape_default())
@@ -6883,7 +7068,41 @@ pub fn render_objc_category(cat: &unlace_loader::ObjcCategory) -> String {
     out
 }
 
-fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
+fn cxx_eh_action_comment(action: unlace_passes::cxx_eh::CxxEhAction) -> &'static str {
+    use unlace_passes::cxx_eh::CxxEhAction;
+    match action {
+        CxxEhAction::BeginCatch => "catch",
+        CxxEhAction::EndCatch => "end catch",
+        CxxEhAction::UnwindResume => "unwind resume",
+        CxxEhAction::Throw | CxxEhAction::Rethrow | CxxEhAction::MsvcThrow => "throw",
+        CxxEhAction::AllocateException => "allocate exception",
+        CxxEhAction::FreeException => "free exception",
+        CxxEhAction::GetExceptionPtr => "get exception ptr",
+        CxxEhAction::CurrentExceptionType => "current exception type",
+        CxxEhAction::BadCast => "bad cast",
+        CxxEhAction::BadTypeid => "bad typeid",
+        CxxEhAction::DynamicCast => "dynamic cast",
+        CxxEhAction::PureVirtual => "pure virtual",
+        CxxEhAction::DeletedVirtual => "deleted virtual",
+        CxxEhAction::GuardAcquire => "guard acquire",
+        CxxEhAction::GuardRelease => "guard release",
+        CxxEhAction::GuardAbort => "guard abort",
+        CxxEhAction::Personality => "C++ EH personality",
+        CxxEhAction::MsvcFrameHandler => "MSVC C++ frame handler",
+    }
+}
+
+fn cxx_eh_action_for_call(
+    insn: &IrInsn,
+    ctx: &PrintCtx,
+) -> Option<unlace_passes::cxx_eh::CxxEhAction> {
+    if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
+        return None;
+    }
+    if let Some(action) = ctx.cxx_eh_actions.get(&insn.addr).copied() {
+        return Some(action);
+    }
+
     if insn.op != IrOp::Call || insn.inputs.is_empty() {
         return None;
     }
@@ -6892,13 +7111,11 @@ fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
         return None;
     }
     let name = ctx.symbols.get(&target.offset)?;
-    match name.as_str() {
-        "__cxa_throw" | "__cxa_rethrow" => Some("throw"),
-        "__cxa_begin_catch" => Some("catch"),
-        "__cxa_end_catch" => Some("end catch"),
-        "__cxa_allocate_exception" => Some("allocate exception"),
-        _ => None,
-    }
+    unlace_passes::cxx_eh::classify_eh_call(name)
+}
+
+fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
+    cxx_eh_action_for_call(insn, ctx).map(cxx_eh_action_comment)
 }
 
 fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
@@ -6930,12 +7147,12 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     // the type prefix and `// <location>` trailer can be emitted on a
     // dedicated line.  Inline grouping joins adjacent stmts on one line
     // which is incompatible with mid-line decl annotations.
-    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).copied() {
-        if let Some(plan) = ctx.hoist_decl_plan.get(&sv.base) {
-            if plan.stmt_idx == idx && plan.fold_into_assignment {
-                return None;
-            }
-        }
+    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).copied()
+        && let Some(plan) = ctx.hoist_decl_plan.get(&sv.base)
+        && plan.stmt_idx == idx
+        && plan.fold_into_assignment
+    {
+        return None;
     }
 
     ctx.emit_stmt += 1;
@@ -7135,10 +7352,10 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         return;
     }
 
-    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
-        if is_control_only_condition_assignment(idx, &sv, insn, ctx) {
-            return;
-        }
+    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned()
+        && is_control_only_condition_assignment(idx, &sv, insn, ctx)
+    {
+        return;
     }
 
     // t264 — when DWARF/PDB line-number info maps this instruction
@@ -7177,11 +7394,11 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         let lhs = ctx.name_of(&sv);
 
-        if matches!(insn.op, IrOp::Call | IrOp::Callind) {
-            if let Some(ann) = cxa_call_annotation(insn, ctx) {
-                let _ = writeln!(out, "/* {} */", ann);
-                indent(depth, ctx.config.tab_width, out);
-            }
+        if matches!(insn.op, IrOp::Call | IrOp::Callind)
+            && let Some(ann) = cxa_call_annotation(insn, ctx)
+        {
+            let _ = writeln!(out, "/* {} */", ann);
+            indent(depth, ctx.config.tab_width, out);
         }
 
         // CSEL → if-else assignment (ARM64 conditional select)
@@ -7705,14 +7922,14 @@ fn measure_expr_width(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> usize {
         if let Some(name) = ctx.name_overrides.get(vn) {
             return name.len();
         }
-        if let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx) {
-            if let Some(sv) = inputs.iter().find(|sv| sv.base == *vn) {
-                if let Some(name) = ctx.var_names.get(sv) {
-                    return name.len();
-                }
-                if let Some(name) = ctx.merged_names.get(sv) {
-                    return name.len();
-                }
+        if let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx)
+            && let Some(sv) = inputs.iter().find(|sv| sv.base == *vn)
+        {
+            if let Some(name) = ctx.var_names.get(sv) {
+                return name.len();
+            }
+            if let Some(name) = ctx.merged_names.get(sv) {
+                return name.len();
             }
         }
         // Default `vN` placeholder width — three chars covers v1..v99,
@@ -7877,10 +8094,10 @@ fn should_break_before(
         if p == insn.op {
             return false;
         }
-        if let (Some(fp), Some(fc)) = (family(p), family(insn.op)) {
-            if fp == fc {
-                return false;
-            }
+        if let (Some(fp), Some(fc)) = (family(p), family(insn.op))
+            && fp == fc
+        {
+            return false;
         }
     }
 
@@ -8570,16 +8787,15 @@ fn emit_bool_negate(insn: &IrInsn, stmt_idx: u32, parent: ParentCtx, ctx: &mut P
             version: 0,
         });
 
-        if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
-            if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
-                if let Some(negated_op) = negate_comparison(def_insn.op) {
-                    let is_unsigned = matches!(def_insn.op, IrOp::IntLess | IrOp::IntLessequal);
-                    if is_unsigned {
-                        return emit_unsigned_binop(&def_insn, negated_op, def_stmt, parent, ctx);
-                    }
-                    return emit_binop(&def_insn, negated_op, def_stmt, parent, ctx);
-                }
+        if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv)
+            && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
+            && let Some(negated_op) = negate_comparison(def_insn.op)
+        {
+            let is_unsigned = matches!(def_insn.op, IrOp::IntLess | IrOp::IntLessequal);
+            if is_unsigned {
+                return emit_unsigned_binop(&def_insn, negated_op, def_stmt, parent, ctx);
             }
+            return emit_binop(&def_insn, negated_op, def_stmt, parent, ctx);
         }
     }
 
@@ -8661,6 +8877,11 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x170 => Some("_mm_blend_ps"),    // BLENDPS
         0x171 => Some("_mm_blendv_epi8"), // PBLENDVB
 
+        // ── AVX-512 EVEX packed integer ops (0x1D0..0x1D2) ─────
+        0x1D0 => Some("_mm512_add_epi64"),   // VPADDQ
+        0x1D1 => Some("_mm512_sub_epi64"),   // VPSUBQ
+        0x1D2 => Some("_mm512_mullo_epi64"), // VPMULLQ
+
         // ── AVX-512 generic EVEX fallback (t306) ─────────────────
         0x1F0 => Some("__builtin_ia32_avx512_evex"),
 
@@ -8687,6 +8908,17 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
 
         // ── Trap (0x300) ───────────────────────────────────────
         0x300 => Some("__builtin_trap"), // UD2 / INT3
+
+        // ── x87 FPU stack pseudo-intrinsics (0x310..0x318) ──────
+        0x310 => Some("__fld"),
+        0x311 => Some("__fstp"),
+        0x312 => Some("__fadd"),
+        0x313 => Some("__fsub"),
+        0x314 => Some("__fmul"),
+        0x315 => Some("__fdiv"),
+        0x316 => Some("__fcom"),
+        0x317 => Some("__fxch"),
+        0x318 => Some("__fst"),
 
         // ── Idiom-recognized intrinsics (0x320..0x328) ─────────
         0x320 => Some("__ROL__"),
@@ -9305,10 +9537,9 @@ fn const_context_for_binop_pair(
             | IrOp::IntSlessequal
     ) && insn.inputs[this_idx].space == SpaceId::Const
         && insn.inputs[this_idx].size == 1
+        && let Some(unsigned) = char_typed_input(&insn.inputs[other_idx], stmt_idx, ctx)
     {
-        if let Some(unsigned) = char_typed_input(&insn.inputs[other_idx], stmt_idx, ctx) {
-            return ConstContext::Char { unsigned };
-        }
+        return ConstContext::Char { unsigned };
     }
     base_ctx
 }
@@ -9339,10 +9570,10 @@ fn emit_operand_with_prec(
         version: 0,
     });
 
-    if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
-        if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
-            return emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
-        }
+    if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv)
+        && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
+    {
+        return emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
     }
 
     ctx.name_of(&sv)
@@ -9493,10 +9724,10 @@ fn format_constant_ctx(value: u64, size: u8, context: ConstContext) -> String {
     }
 
     if let ConstContext::Char { unsigned } = context {
-        if size == 1 {
-            if let Some(lit) = format_char_literal(value, unsigned) {
-                return lit;
-            }
+        if size == 1
+            && let Some(lit) = format_char_literal(value, unsigned)
+        {
+            return lit;
         }
         // Fall through to the appropriate numeric rendering when the value
         // can't be represented as a char literal (oversized, out-of-range).
@@ -9854,23 +10085,22 @@ fn try_emit_int_right_byte_macro(
             .stmt_inputs
             .get(&stmt_idx)
             .and_then(|svs| svs.iter().find(|s| s.base == *lhs_vn).copied());
-        if let Some(sv) = lhs_sv {
-            if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
-                let producer = ctx.stmt_insns.get(&def_stmt).cloned();
-                if let Some(p) = producer {
-                    if p.op == IrOp::IntAnd
-                        && p.inputs.len() >= 2
-                        && p.inputs[1].space == SpaceId::Const
-                    {
-                        let mask = p.inputs[1].offset;
-                        let inner_src = emit_operand_resolved(&p.inputs[0], 0, def_stmt, ctx);
-                        match (mask, shift) {
-                            (0xFF00, 8) => return Some(format!("BYTE1({})", inner_src)),
-                            (0xFF0000, 16) => return Some(format!("BYTE2({})", inner_src)),
-                            (0xFF000000, 24) => return Some(format!("BYTE3({})", inner_src)),
-                            _ => {}
-                        }
-                    }
+        if let Some(sv) = lhs_sv
+            && let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv)
+        {
+            let producer = ctx.stmt_insns.get(&def_stmt).cloned();
+            if let Some(p) = producer
+                && p.op == IrOp::IntAnd
+                && p.inputs.len() >= 2
+                && p.inputs[1].space == SpaceId::Const
+            {
+                let mask = p.inputs[1].offset;
+                let inner_src = emit_operand_resolved(&p.inputs[0], 0, def_stmt, ctx);
+                match (mask, shift) {
+                    (0xFF00, 8) => return Some(format!("BYTE1({})", inner_src)),
+                    (0xFF0000, 16) => return Some(format!("BYTE2({})", inner_src)),
+                    (0xFF000000, 24) => return Some(format!("BYTE3({})", inner_src)),
+                    _ => {}
                 }
             }
         }
@@ -10025,11 +10255,11 @@ fn decode_open_overflow(
         // Flatten one level of xor in case it's nested with -1.
         let mut flat: Vec<Varnode> = Vec::new();
         for v in &and_lhs_xor.inputs {
-            if let Some(p) = producer_insn(v, at_stmt, ctx) {
-                if p.op == IrOp::IntXor {
-                    flat.extend(p.inputs.iter().copied());
-                    continue;
-                }
+            if let Some(p) = producer_insn(v, at_stmt, ctx)
+                && p.op == IrOp::IntXor
+            {
+                flat.extend(p.inputs.iter().copied());
+                continue;
             }
             flat.push(*v);
         }
@@ -10107,7 +10337,7 @@ fn x86_64_register_name(offset: u64, size: u8) -> &'static str {
 
     if offset >= VEC_BASE {
         let idx = (offset - VEC_BASE) / VEC_STRIDE;
-        if idx <= 31 && (offset - VEC_BASE) % VEC_STRIDE == 0 {
+        if idx <= 31 && (offset - VEC_BASE).is_multiple_of(VEC_STRIDE) {
             // 64-byte writes are ZMM (AVX-512). ZMM16..ZMM31 only exist
             // in the 512-bit form; they have no XMM/YMM alias.
             if size > 32 {
@@ -10770,8 +11000,8 @@ fn contains_identifier(haystack: &str, needle: &str) -> bool {
         let idx = start + pos;
         let before = idx.checked_sub(1).and_then(|i| bytes.get(i)).copied();
         let after = bytes.get(idx + needle_bytes.len()).copied();
-        let before_boundary = before.map_or(true, |b| !is_ident_byte(b));
-        let after_boundary = after.map_or(true, |b| !is_ident_byte(b));
+        let before_boundary = before.is_none_or(|b| !is_ident_byte(b));
+        let after_boundary = after.is_none_or(|b| !is_ident_byte(b));
         if before_boundary && after_boundary {
             return true;
         }
@@ -11009,7 +11239,7 @@ mod tests {
     use unlace_ir::{IrInsn, IrOp, Varnode};
     use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
 
-    use super::{PrinterAnnotations, print_c};
+    use super::{PrinterAnnotations, print_c, print_c_with_annotations};
 
     fn make_func(name: &str, body: Vec<HirNode>) -> HirFunction {
         HirFunction {
@@ -11842,6 +12072,30 @@ mod tests {
 
         assert!(output.contains("goto label_0;"), "goto: {output}");
         assert!(output.contains("label_0:;"), "label: {output}");
+    }
+
+    #[test]
+    fn test_print_goto_keeps_non_adjacent_later_label() {
+        let body = vec![
+            HirNode::Goto(LabelId(1)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                reg(0, 4),
+                smallvec![con(7, 4)],
+                0x1000,
+            )),
+            HirNode::Label(LabelId(1)),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("goto_non_adjacent_label_test", body);
+        let output = print_c(&func);
+
+        assert!(output.contains("goto label_1;"), "goto: {output}");
+        assert!(
+            output.contains("label_1:;"),
+            "non-adjacent later label must still be emitted: {output}"
+        );
     }
 
     #[test]
@@ -13584,6 +13838,194 @@ mod tests {
 
         assert!(output.contains("__try {"), "__try: {output}");
         assert!(output.contains("} __except {"), "__except: {output}");
+    }
+
+    #[test]
+    fn test_typed_try_catch_c_output() {
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![HirNode::TryCatch {
+            try_body: vec![HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c1],
+                0x1000,
+            ))],
+            catch_arms: vec![(
+                unlace_ir::types::Type::Struct {
+                    name: "Dog".to_string(),
+                    fields: vec![],
+                },
+                vec![HirNode::Return(None)],
+            )],
+        }];
+
+        let func = make_func("typed_try_catch_func", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("try {"),
+            "typed catch should use C++ try: {output}"
+        );
+        assert!(
+            output.contains("} catch (struct Dog e) {"),
+            "typed catch should render catch type: {output}"
+        );
+        assert!(
+            !output.contains("__except"),
+            "typed catch should not use SEH __except: {output}"
+        );
+    }
+
+    #[test]
+    fn test_typed_try_catch_binds_begin_catch_object() {
+        let mut ann = PrinterAnnotations::default();
+        ann.cxx_eh_actions
+            .insert(0x1010, unlace_passes::cxx_eh::CxxEhAction::BeginCatch);
+
+        let body = vec![HirNode::TryCatch {
+            try_body: vec![HirNode::Return(None)],
+            catch_arms: vec![(
+                unlace_ir::types::Type::Struct {
+                    name: "Dog".to_string(),
+                    fields: vec![],
+                },
+                vec![
+                    HirNode::Statement(IrInsn::with_output(
+                        IrOp::Call,
+                        reg(8, 8),
+                        smallvec![con(0x4010, 8), reg(16, 8)],
+                        0x1010,
+                    )),
+                    HirNode::Return(None),
+                ],
+            )],
+        }];
+
+        let func = make_func("typed_try_catch_begin_catch_object", body);
+        let output =
+            print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+
+        let catch_line = output
+            .lines()
+            .find(|line| line.contains("catch (struct Dog "))
+            .expect("typed catch line should be present");
+        assert!(
+            !catch_line.contains(" e)"),
+            "catch object should use the __cxa_begin_catch output name: {output}"
+        );
+        assert!(
+            !output.contains("/* catch */"),
+            "bound __cxa_begin_catch call should not render as a body statement: {output}"
+        );
+        assert!(
+            !output.contains("sub_4010"),
+            "bound __cxa_begin_catch call expression should be suppressed: {output}"
+        );
+    }
+
+    #[test]
+    fn test_typed_try_catch_binds_get_exception_ptr_symbol() {
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x4020, "__cxa_get_exception_ptr".to_string());
+
+        let body = vec![HirNode::TryCatch {
+            try_body: vec![HirNode::Return(None)],
+            catch_arms: vec![(
+                unlace_ir::types::Type::Struct {
+                    name: "Cat".to_string(),
+                    fields: vec![],
+                },
+                vec![
+                    HirNode::Statement(IrInsn::with_output(
+                        IrOp::Call,
+                        reg(24, 8),
+                        smallvec![con(0x4020, 8), reg(32, 8)],
+                        0x1020,
+                    )),
+                    HirNode::Return(None),
+                ],
+            )],
+        }];
+
+        let func = make_func("typed_try_catch_get_exception_ptr", body);
+        let output =
+            print_c_with_annotations(&func, None, None, Some(&symbols), None, None, None, None);
+
+        let catch_line = output
+            .lines()
+            .find(|line| line.contains("catch (struct Cat "))
+            .expect("typed catch line should be present");
+        assert!(
+            !catch_line.contains(" e)"),
+            "catch object should use the __cxa_get_exception_ptr output name: {output}"
+        );
+        assert!(
+            !output.contains("__cxa_get_exception_ptr"),
+            "bound __cxa_get_exception_ptr call should not render in the catch body: {output}"
+        );
+    }
+
+    #[test]
+    fn test_try_finally_c_output() {
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![HirNode::TryFinally {
+            try_body: vec![HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c1],
+                0x1000,
+            ))],
+            finally_body: vec![HirNode::Return(None)],
+        }];
+
+        let func = make_func("try_finally_func", body);
+        let output = print_c(&func);
+
+        assert!(output.contains("__try {"), "__try: {output}");
+        assert!(
+            output.contains("} __finally {"),
+            "cleanup should render as __finally: {output}"
+        );
+        assert!(
+            !output.contains("__except"),
+            "cleanup should not render as __except: {output}"
+        );
+    }
+
+    #[test]
+    fn test_try_finally_renders_cxx_destructor_cleanup() {
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x4020, "_ZN3DogD1Ev".to_string());
+
+        let body = vec![HirNode::TryFinally {
+            try_body: vec![HirNode::Return(None)],
+            finally_body: vec![HirNode::Statement(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![con(0x4020, 8), reg(8, 8)],
+                0x1020,
+            ))],
+        }];
+
+        let func = make_func("try_finally_destructor_cleanup", body);
+        let output =
+            print_c_with_annotations(&func, None, None, Some(&symbols), None, None, None, None);
+
+        assert!(
+            output.contains("} __finally {"),
+            "cleanup should render as __finally: {output}"
+        );
+        assert!(
+            output.contains("->~Dog();"),
+            "cleanup destructor should render as an explicit destructor call: {output}"
+        );
+        assert!(
+            !output.contains("_ZN3DogD1Ev"),
+            "raw destructor ABI symbol should not leak into cleanup output: {output}"
+        );
     }
 
     #[test]
@@ -16117,6 +16559,35 @@ mod tests {
     }
 
     #[test]
+    fn test_vtable_tail_branch_suppresses_following_return() {
+        use unlace_ir::ssa::TargetSet;
+
+        let fptr = reg(0, 8);
+        let branchind = IrInsn::without_output(IrOp::Branchind, smallvec![fptr], 0x2100);
+        let body = vec![HirNode::Statement(branchind), HirNode::Return(None)];
+
+        let mut func = make_func("vtable_tail_branch", body);
+        func.vtable_call_targets.insert(
+            0x2100,
+            TargetSet::VtableSlot {
+                class_name: "Base".to_string(),
+                slot_idx: 0,
+            },
+        );
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("return this->__vftable->method_0();"),
+            "vtable BRANCHIND should render as tail return: {output}",
+        );
+        assert_eq!(
+            output.matches("return").count(),
+            1,
+            "following synthetic return should be suppressed: {output}"
+        );
+    }
+
+    #[test]
     fn test_callind_without_vtable_annotation_still_cast() {
         // CALLIND without a vtable entry still uses the IDA-style cast.
         let fptr = reg(0, 8);
@@ -16188,6 +16659,74 @@ mod tests {
         assert!(
             output.contains("/* CALLOTHER tag=57005 */"),
             "unknown tag should have CALLOTHER comment with decimal tag: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_avx512_addq_resolved() {
+        let r0 = reg(0, 64);
+        let r64 = reg(64, 64);
+        let out = reg(128, 64);
+        let tag = con(0x1D0, 8); // VPADDQ_512
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                out,
+                smallvec![tag, r0, r64],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
+        ];
+
+        let func = make_func("avx512_addq", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("_mm512_add_epi64("),
+            "AVX-512 VPADDQ tag should emit _mm512_add_epi64: {output}",
+        );
+        assert!(
+            !output.contains("/* CALLOTHER"),
+            "known AVX-512 tag should not leak CALLOTHER fallback: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_x87_fld_fstp_resolved() {
+        let mem = reg(0, 8);
+        let st0 = reg(400, 10);
+        let tag_fld = con(0x310, 8);
+        let tag_fstp = con(0x311, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                st0,
+                smallvec![tag_fld, mem],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag_fstp, mem, st0],
+                0x1004,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("x87_helpers", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("__fld(") && output.contains("__fstp("),
+            "x87 Callother tags should emit named helpers: {output}",
+        );
+        assert!(
+            !output.contains("/* CALLOTHER"),
+            "known x87 tags should not leak CALLOTHER fallback: {output}",
         );
     }
 
@@ -18613,6 +19152,72 @@ mod tests {
         assert!(
             output.contains("/* catch */"),
             "should annotate __cxa_begin_catch, got: {output}",
+        );
+    }
+
+    #[test]
+    fn test_cxx_eh_annotation_map_handles_indirect_sites() {
+        let target = reg(10, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callind,
+                smallvec![target],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("test_indirect_eh", body);
+        let mut ann = super::PrinterAnnotations::default();
+        ann.cxx_eh_actions
+            .insert(0x1000, unlace_passes::cxx_eh::CxxEhAction::UnwindResume);
+
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+
+        assert!(
+            output.contains("/* unwind resume */"),
+            "should annotate resolved indirect EH sites, got: {output}",
+        );
+    }
+
+    #[test]
+    fn test_msvc_rtti_preamble_renders() {
+        let func = make_func("msvc_class_user", vec![HirNode::Return(None)]);
+        let mut rtti = unlace_loader::msvc_rtti::MsvcRtti::default();
+        rtti.classes.insert(
+            ".?AVDog@@".to_string(),
+            unlace_loader::msvc_rtti::MsvcClass {
+                mangled_name: ".?AVDog@@".to_string(),
+                demangled: Some("Dog".to_string()),
+                vtable_addr: 0x140002000,
+                method_count: 3,
+                bases: vec![unlace_loader::msvc_rtti::MsvcBaseClass {
+                    mangled_name: ".?AVAnimal@@".to_string(),
+                    mdisp: 0,
+                    pdisp: -1,
+                    vdisp: 0,
+                    attributes: 0,
+                }],
+                inheritance: 0x1,
+            },
+        );
+        let mut ann = super::PrinterAnnotations::default();
+        ann.msvc_rtti = Some(rtti);
+
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+
+        assert!(
+            output.contains("MSVC RTTI class hierarchy"),
+            "missing MSVC RTTI header: {output}",
+        );
+        assert!(
+            output.contains("class Dog : Animal"),
+            "missing MSVC class/base line: {output}",
+        );
+        assert!(
+            output.contains("vftable @ 0x140002000, methods=3, inheritance=multiple"),
+            "missing MSVC vftable details: {output}",
         );
     }
 

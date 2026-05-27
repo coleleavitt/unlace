@@ -145,10 +145,10 @@ fn read_cstring_at_va(image: &BinaryImage, va: u64, max_len: usize) -> Option<St
 }
 
 fn decode_objc_selector_name(raw: String) -> String {
-    if is_swift_mangled(&raw) {
-        if let Some(demangled) = try_demangle_swift(&raw) {
-            return demangled;
-        }
+    if is_swift_mangled(&raw)
+        && let Some(demangled) = try_demangle_swift(&raw)
+    {
+        return demangled;
     }
     raw
 }
@@ -618,16 +618,16 @@ fn resolve_category_target(image: &BinaryImage, cat: &ObjcCategory) -> Option<St
         return None;
     }
     for reloc in &image.relocations {
-        if reloc.addr == cat.class_addr {
-            if let Some(name) = strip_objc_class_symbol(&reloc.sym_name) {
-                return Some(name.to_string());
-            }
-        }
-    }
-    if let Some(sym) = image.symbols.get(&cat.class_addr) {
-        if let Some(name) = strip_objc_class_symbol(&sym.name) {
+        if reloc.addr == cat.class_addr
+            && let Some(name) = strip_objc_class_symbol(&reloc.sym_name)
+        {
             return Some(name.to_string());
         }
+    }
+    if let Some(sym) = image.symbols.get(&cat.class_addr)
+        && let Some(name) = strip_objc_class_symbol(&sym.name)
+    {
+        return Some(name.to_string());
     }
     None
 }

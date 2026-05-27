@@ -24,9 +24,7 @@ pub enum FunctionVisibility {
 /// User code defaults to [`FunctionVisibility::Show`]. Tagged runtime/CRT/EH
 /// functions get [`FunctionVisibility::Annotate`] or [`Hide`] depending on
 /// `FunctionTag::should_hide()`.
-pub fn classify_pipeline(
-    functions: &[(u64, &str)],
-) -> BTreeMap<u64, FunctionVisibility> {
+pub fn classify_pipeline(functions: &[(u64, &str)]) -> BTreeMap<u64, FunctionVisibility> {
     let mut out = BTreeMap::new();
     for &(addr, name) in functions {
         let tags = classify_by_name(name);
@@ -63,12 +61,12 @@ mod tests {
     #[test]
     fn test_classify_pipeline_mixed() {
         let funcs = vec![
-            (0x1000u64, "main"),                  // Show
-            (0x2000u64, "_start"),                // Annotate (CrtStartup)
-            (0x3000u64, "__stack_chk_fail"),      // Hide (StackProtector)
-            (0x4000u64, "__imp_CreateFileW"),     // Hide (ImportThunk)
-            (0x5000u64, "process_data"),          // Show
-            (0x6000u64, "__cxa_throw"),           // Annotate (EhRuntime)
+            (0x1000u64, "main"),              // Show
+            (0x2000u64, "_start"),            // Annotate (CrtStartup)
+            (0x3000u64, "__stack_chk_fail"),  // Hide (StackProtector)
+            (0x4000u64, "__imp_CreateFileW"), // Hide (ImportThunk)
+            (0x5000u64, "process_data"),      // Show
+            (0x6000u64, "__cxa_throw"),       // Annotate (EhRuntime)
         ];
         let map = classify_pipeline(&funcs);
         assert_eq!(map[&0x1000], FunctionVisibility::Show);

@@ -725,10 +725,10 @@ fn is_compound_assign_pattern(insn: &unlace_ir::IrInsn) -> bool {
             (_, SpaceId::Const) => Some(&insn.inputs[1]),
             _ => None,
         };
-        if let Some(c) = const_in {
-            if c.offset == 1 {
-                return false;
-            }
+        if let Some(c) = const_in
+            && c.offset == 1
+        {
+            return false;
         }
     }
 
@@ -1145,6 +1145,7 @@ fn analyze_function(
     unlace_struct::eliminate_forward_gotos(&mut hir);
     unlace_struct::collapse_label_fallthroughs(&mut hir);
     unlace_struct::cleanup_unreachable_labels(&mut hir);
+    unlace_struct::repair_missing_goto_labels(&mut hir);
 
     let emitted_c =
         unlace_output::print_c_full(&hir, None, None, Some(&symbols), Some(&image.string_table));

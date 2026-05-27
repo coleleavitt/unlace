@@ -8,7 +8,7 @@
 //! Attributes inferred:
 //! - `noreturn`: function never returns (always calls abort/exit/panic).
 //! - `pure`: function has no observable side effects (no stores, no calls
-//!           to non-pure functions). May read memory.
+//!   to non-pure functions). May read memory.
 //! - `const`: function has no memory access at all (only register/IR ops).
 //! - `readonly`: function reads memory but doesn't write.
 //! - `nonnull_return`: function never returns null/zero.
@@ -117,10 +117,7 @@ pub fn infer_attrs_batch(funcs: &[(u64, &SsaFunction)]) -> AttrMap {
 /// A function calling a known noreturn callee may itself become noreturn if
 /// the call is unconditional and dominates the (missing) return.
 /// This is a fixed-point algorithm: iterate until no attrs change.
-pub fn propagate_noreturn(
-    attrs: &mut AttrMap,
-    call_edges: &[(u64, u64)],
-) -> usize {
+pub fn propagate_noreturn(attrs: &mut AttrMap, call_edges: &[(u64, u64)]) -> usize {
     let mut iterations = 0;
     const MAX_ITERS: usize = 50;
     loop {
@@ -130,10 +127,7 @@ pub fn propagate_noreturn(
         }
         let changed = false;
         for &(caller_addr, callee_addr) in call_edges {
-            let callee_noreturn = attrs
-                .get(&callee_addr)
-                .map(|a| a.noreturn)
-                .unwrap_or(false);
+            let callee_noreturn = attrs.get(&callee_addr).map(|a| a.noreturn).unwrap_or(false);
             if !callee_noreturn {
                 continue;
             }
@@ -172,11 +166,8 @@ mod tests {
             smallvec![Varnode::constant(1, 4), Varnode::constant(2, 4)],
             0x1000,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![out],
-            0x1004,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![out], 0x1004));
         func.insert_block(b0);
         build_ssa(func)
     }
@@ -189,11 +180,8 @@ mod tests {
         let mut b0 = BasicBlock::new(BlockId(0));
         b0.insns
             .push(IrInsn::with_output(IrOp::Load, r, smallvec![addr], 0x2000));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![r],
-            0x2004,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x2004));
         func.insert_block(b0);
         build_ssa(func)
     }

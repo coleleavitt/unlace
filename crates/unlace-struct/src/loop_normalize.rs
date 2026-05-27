@@ -133,10 +133,10 @@ fn collect_writes_node(node: &HirNode, set: &mut BTreeSet<Varnode>) {
         HirNode::For {
             init, body, update, ..
         } => {
-            if let Some(init_insn) = init {
-                if let Some(output) = init_insn.output {
-                    set.insert(output);
-                }
+            if let Some(init_insn) = init
+                && let Some(output) = init_insn.output
+            {
+                set.insert(output);
             }
             if let Some(output) = update.output {
                 set.insert(output);

@@ -226,10 +226,7 @@ pub fn to_ascii(result: &LayoutResult) -> String {
             EdgeKind::Return => "─ret→",
             _ => "→",
         };
-        out.push_str(&format!(
-            "  {:#x} {arrow} {:#x}\n",
-            e.from.0, e.to.0
-        ));
+        out.push_str(&format!("  {:#x} {arrow} {:#x}\n", e.from.0, e.to.0));
     }
     out
 }
@@ -239,8 +236,7 @@ mod tests {
     use super::*;
 
     fn linear_graph() -> (BTreeSet<NodeId>, Vec<Edge>) {
-        let nodes: BTreeSet<NodeId> =
-            [0x100u64, 0x200, 0x300].into_iter().map(NodeId).collect();
+        let nodes: BTreeSet<NodeId> = [0x100u64, 0x200, 0x300].into_iter().map(NodeId).collect();
         let edges = vec![
             Edge {
                 from: NodeId(0x100),

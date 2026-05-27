@@ -119,10 +119,10 @@ fn collect_arg_types_at_call(
             break;
         }
         let Some(out) = insn.output else { continue };
-        if out.space == SpaceId::Register {
-            if let Some(&sv) = ssa.var_map.get(&(bid, idx, VarnodeSlot::Output)) {
-                last_def.insert(out.offset, sv);
-            }
+        if out.space == SpaceId::Register
+            && let Some(&sv) = ssa.var_map.get(&(bid, idx, VarnodeSlot::Output))
+        {
+            last_def.insert(out.offset, sv);
         }
     }
 

@@ -56,7 +56,7 @@ pub fn filter_by_prologue(bytes: &[u8], candidates: &[PrologueConstrainedMatch])
     let detected = classify_prologue(bytes);
     candidates
         .iter()
-        .filter(|c| c.required_prologue.map_or(true, |r| r == detected))
+        .filter(|c| c.required_prologue.is_none_or(|r| r == detected))
         .map(|c| c.pattern_index)
         .collect()
 }

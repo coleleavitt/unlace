@@ -133,11 +133,8 @@ mod tests {
             smallvec::SmallVec::from_vec(inputs),
             0x1000,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![out],
-            0x1004,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![out], 0x1004));
         func.insert_block(b0);
         build_ssa(func)
     }

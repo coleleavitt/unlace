@@ -45,10 +45,12 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use unlace_ir::ssa::SsaFunction;
+use unlace_ir::verify_ssa_function;
 
 use crate::pass::{Pass, PassError, PassPhase};
 
@@ -95,6 +97,40 @@ fn timing_flag() -> bool {
             .map(|v| v == "1")
             .unwrap_or(false)
     })
+}
+
+/// Cached `UNLACE_VERIFY_EACH` decision. Any non-empty value except common
+/// false spellings enables structural IR verification after successful passes.
+fn verify_each_flag() -> bool {
+    static CELL: OnceLock<bool> = OnceLock::new();
+    *CELL.get_or_init(|| {
+        std::env::var_os("UNLACE_VERIFY_EACH")
+            .and_then(|v| v.into_string().ok())
+            .map(|v| {
+                let v = v.trim().to_ascii_lowercase();
+                !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn disabled_passes() -> &'static Option<Vec<String>> {
+    static CELL: OnceLock<Option<Vec<String>>> = OnceLock::new();
+    CELL.get_or_init(|| parse_pass_csv_env("UNLACE_DISABLE_PASSES"))
+}
+
+fn opt_bisect_limit() -> Option<usize> {
+    static CELL: OnceLock<Option<usize>> = OnceLock::new();
+    *CELL.get_or_init(|| {
+        std::env::var("UNLACE_OPT_BISECT_LIMIT")
+            .ok()
+            .and_then(|raw| raw.trim().parse::<usize>().ok())
+    })
+}
+
+fn opt_bisect_counter() -> &'static AtomicUsize {
+    static CELL: OnceLock<AtomicUsize> = OnceLock::new();
+    CELL.get_or_init(|| AtomicUsize::new(0))
 }
 
 // ---------------------------------------------------------------------------
@@ -213,12 +249,12 @@ pub fn schedule_audit_oscillations() -> Vec<String> {
     let mut violations = Vec::new();
     let mut prev: Option<&ScheduleRow> = None;
     for row in &rows {
-        if let Some(p) = prev {
-            if p.function == row.function
-                && row.phase.ordinal() < p.phase.ordinal()
-                && row.iteration > 0
-            {
-                violations.push(format!(
+        if let Some(p) = prev
+            && p.function == row.function
+            && row.phase.ordinal() < p.phase.ordinal()
+            && row.iteration > 0
+        {
+            violations.push(format!(
                     "oscillation in '{fn_n}': pass '{p}' [{pp:?}] re-ran at iter {ri} after later phase '{ln}' [{lp:?}]",
                     fn_n = row.function,
                     p = row.pass,
@@ -227,7 +263,6 @@ pub fn schedule_audit_oscillations() -> Vec<String> {
                     ln = p.pass,
                     lp = p.phase,
                 ));
-            }
         }
         prev = Some(row);
     }
@@ -240,15 +275,17 @@ pub fn schedule_audit_oscillations() -> Vec<String> {
 /// explicitly in [`pass_should_trace`].
 fn trace_set() -> &'static Option<Vec<String>> {
     static CELL: OnceLock<Option<Vec<String>>> = OnceLock::new();
-    CELL.get_or_init(|| {
-        let raw = std::env::var("UNLACE_TRACE_PASSES").ok()?;
-        let parts: Vec<String> = raw
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if parts.is_empty() { None } else { Some(parts) }
-    })
+    CELL.get_or_init(|| parse_pass_csv_env("UNLACE_TRACE_PASSES"))
+}
+
+fn parse_pass_csv_env(name: &str) -> Option<Vec<String>> {
+    let raw = std::env::var(name).ok()?;
+    let parts: Vec<String> = raw
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if parts.is_empty() { None } else { Some(parts) }
 }
 
 /// `true` iff `UNLACE_TIMING=1` is set in the environment.
@@ -258,6 +295,12 @@ fn trace_set() -> &'static Option<Vec<String>> {
 #[inline]
 pub fn pass_timing_enabled() -> bool {
     timing_flag()
+}
+
+/// `true` iff per-pass structural IR verification is enabled.
+#[inline]
+pub fn verify_each_enabled() -> bool {
+    verify_each_flag()
 }
 
 /// Configured path for `UNLACE_TIMING_CSV` (Batch 17 slice 2), or `None`
@@ -288,9 +331,28 @@ fn func_timing_enabled() -> bool {
 #[inline]
 pub fn pass_should_trace(name: &str) -> bool {
     match trace_set() {
-        Some(set) => set.iter().any(|s| s == "*" || s == name),
+        Some(set) => pass_name_matches(set, name),
         None => false,
     }
+}
+
+pub fn pass_is_disabled(name: &str) -> bool {
+    match disabled_passes() {
+        Some(set) => pass_name_matches(set, name),
+        None => false,
+    }
+}
+
+fn pass_name_matches(set: &[String], name: &str) -> bool {
+    set.iter().any(|s| s == "*" || s == name)
+}
+
+fn pass_allowed_by_opt_bisect() -> bool {
+    let Some(limit) = opt_bisect_limit() else {
+        return true;
+    };
+    let ordinal = opt_bisect_counter().fetch_add(1, Ordering::Relaxed) + 1;
+    ordinal <= limit
 }
 
 /// Append one timing sample for the `(function, pass)` pair.
@@ -411,6 +473,10 @@ pub fn dump_pass_timings_csv() -> String {
 /// `OnceLock` loads + the underlying [`Pass::run`] call — no allocation,
 /// no string formatting, no clock read.
 pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool, PassError> {
+    if pass_is_disabled(pass.name()) || !pass_allowed_by_opt_bisect() {
+        return Ok(false);
+    }
+
     // A per-pass span so `tracing-flame` (UNLACE_FLAME=<path>) attributes
     // wall-clock to the pass that consumed it. When no flame/fmt layer is
     // interested this is a single atomic load + early return inside
@@ -421,8 +487,9 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
     let timing = pass_timing_enabled();
     let csv = func_timing_enabled();
     let audit = schedule_audit_enabled();
+    let verify = verify_each_enabled();
 
-    if !trace && !timing && !csv && !audit {
+    if !trace && !timing && !csv && !audit && !verify {
         return pass.run(func);
     }
 
@@ -475,7 +542,21 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
         emit_trace_diff(pass.name(), &pre, &post);
     }
 
-    res
+    match res {
+        Ok(changed) => {
+            if verify {
+                verify_ssa_function(func).map_err(|err| PassError::InvariantViolation {
+                    message: format!(
+                        "{} after {} failed IR verification: {err}",
+                        func.function.name,
+                        pass.name()
+                    ),
+                })?;
+            }
+            Ok(changed)
+        }
+        Err(err) => Err(err),
+    }
 }
 
 /// Emit a minimal pre/post IR diff to stderr.
@@ -651,6 +732,16 @@ mod tests {
     fn pass_timing_enabled_no_panic() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         _ = pass_timing_enabled();
+    }
+
+    #[test]
+    fn pass_name_matches_supports_wildcard_and_exact_names() {
+        let set = vec!["alpha".to_string(), "beta".to_string()];
+        assert!(pass_name_matches(&set, "alpha"));
+        assert!(!pass_name_matches(&set, "gamma"));
+
+        let wildcard = vec!["*".to_string()];
+        assert!(pass_name_matches(&wildcard, "anything"));
     }
 
     // ---- UNLACE_TIMING_CSV (Batch 17 slice 2) ----

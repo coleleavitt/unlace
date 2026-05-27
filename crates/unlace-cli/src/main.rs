@@ -393,10 +393,10 @@ fn run_ir_dump(
                 if let Err(e) = pipeline::run_passes(&mut ssa) {
                     tracing::warn!(name = %entry.name, err = %e, "pass pipeline failed; dumping unoptimized");
                 }
-                if matches!(phase, IrDumpPhase::PostStructuring) {
-                    if let Err(e) = unlace_struct::structure_preserve_returns(&mut ssa) {
-                        tracing::warn!(name = %entry.name, err = ?e, "structurer failed; dumping post-passes IR");
-                    }
+                if matches!(phase, IrDumpPhase::PostStructuring)
+                    && let Err(e) = unlace_struct::structure_preserve_returns(&mut ssa)
+                {
+                    tracing::warn!(name = %entry.name, err = ?e, "structurer failed; dumping post-passes IR");
                 }
             }
         }
@@ -428,9 +428,9 @@ fn run_quality(binary_path: &std::path::Path, format: args::QualityFormat) -> Re
 fn run_gui(binary: Option<&std::path::Path>) -> Result<()> {
     let session = unlace_session::Session::new();
     if let Some(p) = binary {
-        session.load_binary(p).with_context(|| {
-            format!("loading {} into GUI session", p.display())
-        })?;
+        session
+            .load_binary(p)
+            .with_context(|| format!("loading {} into GUI session", p.display()))?;
     }
     #[cfg(feature = "gui-render")]
     {
@@ -449,8 +449,7 @@ fn run_gui(binary: Option<&std::path::Path>) -> Result<()> {
 }
 
 fn run_emu(binary: &std::path::Path, max_instructions: u64, trace: bool) -> Result<()> {
-    let bytes = std::fs::read(binary)
-        .with_context(|| format!("reading {}", binary.display()))?;
+    let bytes = std::fs::read(binary).with_context(|| format!("reading {}", binary.display()))?;
     let image = dispatch_loader(&bytes)?;
     let cfg = unlace_emu::runner::RunConfig {
         max_instructions,
@@ -459,10 +458,7 @@ fn run_emu(binary: &std::path::Path, max_instructions: u64, trace: bool) -> Resu
     };
     let mut interp = unlace_emu::Interpreter::new();
     let result = unlace_emu::runner::run_image(&mut interp, &image, &cfg);
-    println!(
-        "executed {} IR instructions",
-        result.instructions_executed
-    );
+    println!("executed {} IR instructions", result.instructions_executed);
     if let Some(code) = result.exit_code {
         println!("exited with code {code}");
     }
@@ -470,9 +466,15 @@ fn run_emu(binary: &std::path::Path, max_instructions: u64, trace: bool) -> Resu
         println!("faulted: {fault}");
     }
     if trace {
-        println!("\n--- syscall trace ({} entries) ---", result.syscall_trace.len());
+        println!(
+            "\n--- syscall trace ({} entries) ---",
+            result.syscall_trace.len()
+        );
         for entry in &result.syscall_trace {
-            println!("  nr={} args={:?} -> {:?}", entry.nr, entry.args, entry.outcome);
+            println!(
+                "  nr={} args={:?} -> {:?}",
+                entry.nr, entry.args, entry.outcome
+            );
         }
     }
     Ok(())
@@ -483,7 +485,8 @@ fn run_dbg(pid: u32, breakpoint: Option<&str>, cont: bool) -> Result<()> {
     {
         use unlace_debugger::Debugger;
         let mut dbg = unlace_debugger::LinuxPtraceDebugger::new();
-        dbg.attach(pid).with_context(|| format!("ptrace attach pid={pid}"))?;
+        dbg.attach(pid)
+            .with_context(|| format!("ptrace attach pid={pid}"))?;
         println!("attached to pid {pid}");
         if let Some(s) = breakpoint {
             let ea = parse_hex_u64(s)?;
@@ -516,7 +519,8 @@ fn run_patch(
     let addr = parse_hex_u64(ea)?;
     let patch_bytes = parse_hex_bytes(bytes_hex)?;
     let session = unlace_session::Session::new();
-    session.load_binary(binary)
+    session
+        .load_binary(binary)
         .with_context(|| format!("loading {}", binary.display()))?;
     session.add_patch(unlace_session::Patch {
         ea: addr,
@@ -546,11 +550,12 @@ fn run_patch(
 fn run_py(script: &std::path::Path, binary: Option<&std::path::Path>) -> Result<()> {
     let session = unlace_session::Session::new();
     if let Some(b) = binary {
-        session.load_binary(b)
+        session
+            .load_binary(b)
             .with_context(|| format!("loading {}", b.display()))?;
     }
-    let source = std::fs::read_to_string(script)
-        .with_context(|| format!("reading {}", script.display()))?;
+    let source =
+        std::fs::read_to_string(script).with_context(|| format!("reading {}", script.display()))?;
     unlace_idapython::pybridge::run_script(session, &source)
         .map_err(|e| anyhow::anyhow!("python: {e}"))
 }
@@ -575,11 +580,11 @@ fn run_sigload(
     let sig = unlace_flirt::sig::SigFile::load(path)
         .with_context(|| format!("parsing {}", path.display()))?;
     if apply {
-        let bin = binary.ok_or_else(|| {
-            anyhow::anyhow!("--apply requires --binary <path-to-binary>")
-        })?;
+        let bin =
+            binary.ok_or_else(|| anyhow::anyhow!("--apply requires --binary <path-to-binary>"))?;
         let session = unlace_session::Session::new();
-        session.load_binary(bin)
+        session
+            .load_binary(bin)
             .with_context(|| format!("loading {}", bin.display()))?;
         let matcher = unlace_flirt::FlirtMatcher::from_sig(&sig);
         let report = matcher.apply_to_session(&session, force);
@@ -630,14 +635,20 @@ fn run_sigload(
         });
         println!("{}", serde_json::to_string_pretty(&summary)?);
     } else {
-        println!("IDASGN v{} arch={} features={:#x}", sig.version, sig.arch, sig.features);
+        println!(
+            "IDASGN v{} arch={} features={:#x}",
+            sig.version, sig.arch, sig.features
+        );
         println!("library: {:?}", sig.library_name);
         println!(
             "declared n_functions={}, extracted ascii names={}",
             sig.n_functions,
             sig.functions.len()
         );
-        println!("sample of first {} functions:", limit.min(sig.functions.len()));
+        println!(
+            "sample of first {} functions:",
+            limit.min(sig.functions.len())
+        );
         for f in sig.functions.iter().take(limit) {
             println!("  {} pattern={} bytes", f.name, f.pattern.len());
         }
@@ -655,11 +666,11 @@ fn run_tilload(
     let til = unlace_session::til_parser::TilFile::load(path)
         .with_context(|| format!("parsing {}", path.display()))?;
     if apply {
-        let bin = binary.ok_or_else(|| {
-            anyhow::anyhow!("--apply requires --binary <path-to-binary>")
-        })?;
+        let bin =
+            binary.ok_or_else(|| anyhow::anyhow!("--apply requires --binary <path-to-binary>"))?;
         let session = unlace_session::Session::new();
-        session.load_binary(bin)
+        session
+            .load_binary(bin)
             .with_context(|| format!("loading {}", bin.display()))?;
         let mut catalog = unlace_session::TilCatalog::new();
         catalog.add_from_til(&til);
@@ -711,7 +722,12 @@ fn run_tilload(
         println!("symbol_count: {}", til.symbols.len());
         println!("sample of first {} symbols:", limit.min(til.symbols.len()));
         for s in til.symbols.iter().take(limit) {
-            println!("  {} ord={} type={} bytes", s.name, s.ordinal, s.type_bytes.len());
+            println!(
+                "  {} ord={} type={} bytes",
+                s.name,
+                s.ordinal,
+                s.type_bytes.len()
+            );
         }
     }
     Ok(())
@@ -731,7 +747,8 @@ fn run_symfetch(
         println!("{url}");
         if fetch {
             let cache_dir = unlace_loader::symcache::default_cache_dir();
-            let target = unlace_loader::symcache::msft_cache_path(&cache_dir, pdb_name, &guid_bytes, age);
+            let target =
+                unlace_loader::symcache::msft_cache_path(&cache_dir, pdb_name, &guid_bytes, age);
             return fetch_url_to(&url, &target);
         }
         return Ok(());
@@ -776,18 +793,26 @@ fn dispatch_loader(data: &[u8]) -> Result<BinaryImage> {
 
 fn parse_hex_u64(s: &str) -> Result<u64> {
     let t = s.trim();
-    let hex = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let hex = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u64::from_str_radix(hex, 16).with_context(|| format!("parsing {s:?} as hex u64"))
 }
 
 fn parse_hex_bytes(s: &str) -> Result<Vec<u8>> {
-    let t: String = s.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
-    if t.len() % 2 != 0 {
+    let t: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .collect();
+    if !t.len().is_multiple_of(2) {
         bail!("hex byte string must have even length");
     }
     let mut out = Vec::with_capacity(t.len() / 2);
     for i in (0..t.len()).step_by(2) {
-        out.push(u8::from_str_radix(&t[i..i + 2], 16).with_context(|| format!("parsing byte at {i}"))?);
+        out.push(
+            u8::from_str_radix(&t[i..i + 2], 16).with_context(|| format!("parsing byte at {i}"))?,
+        );
     }
     Ok(out)
 }
@@ -948,7 +973,9 @@ fn hex_nibble(b: u8) -> Option<u8> {
 /// Usage to produce a flamegraph:
 ///   UNLACE_FLAME=/tmp/u.folded unlace decompile <bin>
 ///   cat /tmp/u.folded | inferno-flamegraph > /tmp/u.svg
-fn init_tracing(verbose: u8) -> Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>> {
+fn init_tracing(
+    verbose: u8,
+) -> Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>> {
     use tracing_flame::FlameLayer;
     use tracing_subscriber::Layer;
     use tracing_subscriber::layer::SubscriberExt;
@@ -960,8 +987,7 @@ fn init_tracing(verbose: u8) -> Option<tracing_flame::FlushGuard<std::io::BufWri
         2 => "debug",
         _ => "trace",
     };
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
 
     // The fmt layer respects the user's verbosity / RUST_LOG filter.
     let fmt_layer = tracing_subscriber::fmt::layer()
@@ -1045,10 +1071,10 @@ fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
     let mut candidates: Vec<std::path::PathBuf> = Vec::new();
 
     for rec in &image.debug_records {
-        if let Some(pdb_path) = rec.pdb_path.as_deref() {
-            if let Some(name) = std::path::Path::new(pdb_path).file_name() {
-                candidates.push(parent.join(name));
-            }
+        if let Some(pdb_path) = rec.pdb_path.as_deref()
+            && let Some(name) = std::path::Path::new(pdb_path).file_name()
+        {
+            candidates.push(parent.join(name));
         }
     }
     if let Some(stem) = binary_path.file_stem() {
@@ -1319,7 +1345,7 @@ impl StatsCollector {
         // Only redraw every ~32 functions or for the last one to avoid
         // killing throughput on huge binaries.
         let interval = (total / 100).max(1);
-        if idx % interval != 0 && idx + 1 != total {
+        if !idx.is_multiple_of(interval) && idx + 1 != total {
             return;
         }
         let pct = (idx as f64 / total as f64) * 100.0;

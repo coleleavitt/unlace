@@ -179,10 +179,10 @@ fn resolve_offset(insns: &[IrInsn], before: usize, vn: &Varnode) -> Option<(Varn
 
 fn find_def(insns: &[IrInsn], before: usize, target: &Varnode) -> Option<usize> {
     for j in (0..before).rev() {
-        if let Some(out) = insns[j].output {
-            if out == *target {
-                return Some(j);
-            }
+        if let Some(out) = insns[j].output
+            && out == *target
+        {
+            return Some(j);
         }
     }
     None

@@ -276,10 +276,10 @@ fn operand_size(insn: &Instruction, _idx: u32) -> u8 {
         0 => {
             // Non-memory operand: infer from first register operand or default to 4
             for i in 0..insn.op_count() {
-                if insn.op_kind(i) == OpKind::Register {
-                    if let Some((_, size)) = iced_reg_to_varnode(insn.op_register(i)) {
-                        return size;
-                    }
+                if insn.op_kind(i) == OpKind::Register
+                    && let Some((_, size)) = iced_reg_to_varnode(insn.op_register(i))
+                {
+                    return size;
                 }
             }
             4

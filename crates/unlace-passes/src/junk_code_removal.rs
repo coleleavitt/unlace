@@ -6,7 +6,7 @@
 //! - Unreachable blocks only reachable through opaque predicates
 
 use unlace_ir::ssa::SsaFunction;
-use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
+use unlace_ir::{IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
 
@@ -48,9 +48,7 @@ fn is_junk_insn(insn: &unlace_ir::IrInsn) -> bool {
                 && insn.inputs[0].space == SpaceId::Register
         }
         // MOV reg, reg (copy to self).
-        IrOp::Copy if insn.inputs.len() == 1 => {
-            insn.output == Some(insn.inputs[0])
-        }
+        IrOp::Copy if insn.inputs.len() == 1 => insn.output == Some(insn.inputs[0]),
         _ => false,
     }
 }
@@ -70,17 +68,25 @@ mod tests {
     use super::*;
     use smallvec::smallvec;
     use unlace_ir::ssa::build_ssa;
-    use unlace_ir::{BasicBlock, Function, IrInsn, Varnode};
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
 
     #[test]
     fn test_removes_self_xor() {
-        let reg = Varnode { space: SpaceId::Register, offset: 0, size: 8 };
+        let reg = Varnode {
+            space: SpaceId::Register,
+            offset: 0,
+            size: 8,
+        };
         let mut func = Function::new("junk", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns.push(IrInsn::with_output(
-            IrOp::IntXor, reg, smallvec![reg, reg], 0x1000,
+            IrOp::IntXor,
+            reg,
+            smallvec![reg, reg],
+            0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
         func.insert_block(bb);
 
         let mut ssa = build_ssa(func);
@@ -92,13 +98,17 @@ mod tests {
 
     #[test]
     fn test_removes_self_copy() {
-        let reg = Varnode { space: SpaceId::Register, offset: 8, size: 8 };
+        let reg = Varnode {
+            space: SpaceId::Register,
+            offset: 8,
+            size: 8,
+        };
         let mut func = Function::new("nop", BlockId(0), 0x2000);
         let mut bb = BasicBlock::new(BlockId(0));
-        bb.insns.push(IrInsn::with_output(
-            IrOp::Copy, reg, smallvec![reg], 0x2000,
-        ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x2004));
+        bb.insns
+            .push(IrInsn::with_output(IrOp::Copy, reg, smallvec![reg], 0x2000));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x2004));
         func.insert_block(bb);
 
         let mut ssa = build_ssa(func);

@@ -158,8 +158,8 @@ fn baseline_branches() {
         "branches: no Callother ops (SSE mov lowered to Copy)"
     );
     assert_eq!(
-        t.stack_vars_recovered, 2,
-        "branches: two startup/helper stack vars remain recovered"
+        t.stack_vars_recovered, 1,
+        "branches: one startup stack var artifact remains recovered"
     );
     assert_eq!(
         t.struct_fields_recovered, 0,
@@ -234,9 +234,9 @@ fn baseline_loops() {
         "loops: expected >20 IR insns, got {}",
         t.ir_insns
     );
-    // Batch 0+ extended counters: loops contains `&local` flows into calls;
-    // current detector picks up one in each sum_* body.
-    assert_eq!(t.byref_args, 3, "loops: three byref-taken locals");
+    // Batch 0+ extended counters: loops.c has no address-taken locals or
+    // calls inside the loop bodies, so byref detection should stay quiet.
+    assert_eq!(t.byref_args, 0, "loops: no byref-taken locals");
     assert_eq!(
         t.call_resolution_rate, 100.0,
         "loops: every call site is direct → 100% resolved",

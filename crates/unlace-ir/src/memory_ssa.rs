@@ -9,12 +9,19 @@
 //! - Locations are SpaceId + optional offset + size.
 //! - Clobber walk is iterative (no walker cache).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::SpaceId;
+use crate::{BlockId, SpaceId};
 
 /// Unique identifier for a memory access in the MemorySSA graph.
 pub type MemoryAccessId = u32;
+
+/// Position of a memory access in the function body.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MemoryAccessSite {
+    pub block: BlockId,
+    pub insn_idx: usize,
+}
 
 /// A memory location: base space + optional known offset + access size.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -128,13 +135,73 @@ impl MemoryAccess {
     }
 }
 
+/// Dense storage for memory accesses.
+///
+/// `MemoryAccessId` is allocated monotonically from zero, so a flat vector gives
+/// O(1) lookups without the per-node allocation and iterator overhead of a tree.
+#[derive(Clone, Debug, Default)]
+pub struct MemoryAccesses(Vec<MemoryAccess>);
+
+impl MemoryAccesses {
+    pub fn push(&mut self, access: MemoryAccess) {
+        debug_assert_eq!(access.id() as usize, self.0.len());
+        self.0.push(access);
+    }
+
+    pub fn get(&self, id: &MemoryAccessId) -> Option<&MemoryAccess> {
+        self.0.get(*id as usize).filter(|access| access.id() == *id)
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &MemoryAccess> {
+        self.0.iter()
+    }
+}
+
 /// The MemorySSA graph for a single function.
 #[derive(Clone, Debug, Default)]
 pub struct MemorySSAGraph {
-    /// All memory accesses, keyed by their unique ID.
-    pub accesses: BTreeMap<MemoryAccessId, MemoryAccess>,
+    /// All memory accesses, indexed by their unique ID.
+    pub accesses: MemoryAccesses,
+    /// Instruction-site lookup for memory-touching IR instructions.
+    pub by_site: BTreeMap<MemoryAccessSite, MemoryAccessId>,
+    /// Per-block access lists in instruction order.
+    pub by_block: BTreeMap<BlockId, Vec<MemoryAccessId>>,
     /// Next available ID.
     next_id: MemoryAccessId,
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum MemorySsaVerifyError {
+    #[error("access id {found} appears at dense slot {slot}")]
+    NonDenseId { slot: usize, found: MemoryAccessId },
+
+    #[error("access {access} references missing access {referenced}")]
+    MissingReferencedAccess {
+        access: MemoryAccessId,
+        referenced: MemoryAccessId,
+    },
+
+    #[error("site {site:?} references missing access {access}")]
+    SiteReferencesMissingAccess {
+        site: MemoryAccessSite,
+        access: MemoryAccessId,
+    },
+
+    #[error("block {block} list references missing access {access}")]
+    BlockReferencesMissingAccess {
+        block: BlockId,
+        access: MemoryAccessId,
+    },
+
+    #[error("access {access} is recorded in block {listed_block} but site says {site_block}")]
+    BlockSiteMismatch {
+        access: MemoryAccessId,
+        listed_block: BlockId,
+        site_block: BlockId,
+    },
+
+    #[error("access {access} appears in more than one block list")]
+    DuplicateBlockAccess { access: MemoryAccessId },
 }
 
 impl MemorySSAGraph {
@@ -157,15 +224,24 @@ impl MemorySSAGraph {
         is_volatile: bool,
     ) -> MemoryAccessId {
         let id = self.alloc_id();
-        self.accesses.insert(
+        self.accesses.push(MemoryAccess::Def {
             id,
-            MemoryAccess::Def {
-                id,
-                location,
-                reaching_def,
-                is_volatile,
-            },
-        );
+            location,
+            reaching_def,
+            is_volatile,
+        });
+        id
+    }
+
+    pub fn add_def_at(
+        &mut self,
+        site: MemoryAccessSite,
+        location: MemoryLocation,
+        reaching_def: Option<MemoryAccessId>,
+        is_volatile: bool,
+    ) -> MemoryAccessId {
+        let id = self.add_def(location, reaching_def, is_volatile);
+        self.record_site(id, site);
         id
     }
 
@@ -176,23 +252,118 @@ impl MemorySSAGraph {
         defining_access: Option<MemoryAccessId>,
     ) -> MemoryAccessId {
         let id = self.alloc_id();
-        self.accesses.insert(
+        self.accesses.push(MemoryAccess::Use {
             id,
-            MemoryAccess::Use {
-                id,
-                location,
-                defining_access,
-            },
-        );
+            location,
+            defining_access,
+        });
+        id
+    }
+
+    pub fn add_use_at(
+        &mut self,
+        site: MemoryAccessSite,
+        location: MemoryLocation,
+        defining_access: Option<MemoryAccessId>,
+    ) -> MemoryAccessId {
+        let id = self.add_use(location, defining_access);
+        self.record_site(id, site);
         id
     }
 
     /// Add a memory phi.
     pub fn add_phi(&mut self, inputs: Vec<(u32, MemoryAccessId)>) -> MemoryAccessId {
         let id = self.alloc_id();
-        self.accesses
-            .insert(id, MemoryAccess::Phi { id, inputs });
+        self.accesses.push(MemoryAccess::Phi { id, inputs });
         id
+    }
+
+    pub fn record_site(&mut self, id: MemoryAccessId, site: MemoryAccessSite) {
+        self.by_site.insert(site, id);
+        self.by_block.entry(site.block).or_default().push(id);
+    }
+
+    pub fn access_at(&self, site: MemoryAccessSite) -> Option<&MemoryAccess> {
+        self.by_site.get(&site).and_then(|id| self.accesses.get(id))
+    }
+
+    pub fn block_accesses(&self, block: BlockId) -> &[MemoryAccessId] {
+        self.by_block.get(&block).map_or(&[], Vec::as_slice)
+    }
+
+    pub fn verify(&self) -> Result<(), MemorySsaVerifyError> {
+        for (slot, access) in self.accesses.values().enumerate() {
+            if access.id() as usize != slot {
+                return Err(MemorySsaVerifyError::NonDenseId {
+                    slot,
+                    found: access.id(),
+                });
+            }
+            match access {
+                MemoryAccess::Def {
+                    id,
+                    reaching_def: Some(referenced),
+                    ..
+                }
+                | MemoryAccess::Use {
+                    id,
+                    defining_access: Some(referenced),
+                    ..
+                } => {
+                    if self.accesses.get(referenced).is_none() {
+                        return Err(MemorySsaVerifyError::MissingReferencedAccess {
+                            access: *id,
+                            referenced: *referenced,
+                        });
+                    }
+                }
+                MemoryAccess::Phi { id, inputs } => {
+                    for &(_, referenced) in inputs {
+                        if self.accesses.get(&referenced).is_none() {
+                            return Err(MemorySsaVerifyError::MissingReferencedAccess {
+                                access: *id,
+                                referenced,
+                            });
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut access_sites = BTreeMap::new();
+        for (&site, &access) in &self.by_site {
+            if self.accesses.get(&access).is_none() {
+                return Err(MemorySsaVerifyError::SiteReferencesMissingAccess { site, access });
+            }
+            access_sites.insert(access, site);
+        }
+
+        let mut listed = BTreeSet::new();
+        for (&block, accesses) in &self.by_block {
+            for &access in accesses {
+                if self.accesses.get(&access).is_none() {
+                    return Err(MemorySsaVerifyError::BlockReferencesMissingAccess {
+                        block,
+                        access,
+                    });
+                }
+                if !listed.insert(access) {
+                    return Err(MemorySsaVerifyError::DuplicateBlockAccess { access });
+                }
+                if let Some(site) = access_sites.get(&access)
+                    && site.block != block
+                {
+                    return Err(MemorySsaVerifyError::BlockSiteMismatch {
+                        access,
+                        listed_block: block,
+                        site_block: site.block,
+                    });
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Walk the clobber chain from a Use to find the nearest Def that
@@ -200,14 +371,13 @@ impl MemorySSAGraph {
     ///
     /// Returns the MemoryAccessId of the clobbering Def, or None if we
     /// reach the function entry without finding one.
-    pub fn get_clobbering_access(
-        &self,
-        use_id: MemoryAccessId,
-    ) -> Option<MemoryAccessId> {
+    pub fn get_clobbering_access(&self, use_id: MemoryAccessId) -> Option<MemoryAccessId> {
         let use_loc = match self.accesses.get(&use_id)? {
-            MemoryAccess::Use { location, defining_access, .. } => {
-                (location.clone(), *defining_access)
-            }
+            MemoryAccess::Use {
+                location,
+                defining_access,
+                ..
+            } => (location.clone(), *defining_access),
             _ => return None,
         };
         let (loc, mut current) = use_loc;
@@ -243,7 +413,7 @@ impl MemorySSAGraph {
                     // May-alias: conservative, treat as clobber.
                     return Some(*id);
                 }
-                MemoryAccess::Phi { inputs: _, .. } => {
+                MemoryAccess::Phi { .. } => {
                     // Conservative: if any phi input could clobber, return this phi.
                     // A real implementation would walk each arm.
                     return Some(cur_id);
@@ -373,9 +543,38 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_ssa_no_hashmap_used() {
-        // Structural assertion: MemorySSAGraph uses BTreeMap internally.
+    fn test_memory_ssa_dense_storage_used() {
+        // Structural assertion: MemorySSAGraph uses dense storage internally.
         let g = MemorySSAGraph::new();
-        let _ = g.accesses; // BTreeMap<MemoryAccessId, MemoryAccess>
+        let _ = g.accesses; // MemoryAccesses(Vec<MemoryAccess>)
+    }
+
+    #[test]
+    fn test_memory_ssa_site_and_block_lookup() {
+        let mut g = MemorySSAGraph::new();
+        let site = MemoryAccessSite {
+            block: BlockId(0),
+            insn_idx: 3,
+        };
+        let id = g.add_def_at(site, MemoryLocation::stack(-8, 8), None, false);
+
+        assert_eq!(g.by_site.get(&site), Some(&id));
+        assert_eq!(g.block_accesses(BlockId(0)), &[id]);
+        assert!(matches!(g.access_at(site), Some(MemoryAccess::Def { .. })));
+        g.verify().expect("memory ssa should verify");
+    }
+
+    #[test]
+    fn test_memory_ssa_verify_catches_missing_reference() {
+        let mut g = MemorySSAGraph::new();
+        let id = g.add_use(MemoryLocation::stack(-8, 8), Some(99));
+        let err = g.verify().expect_err("missing defining access should fail");
+        assert_eq!(
+            err,
+            MemorySsaVerifyError::MissingReferencedAccess {
+                access: id,
+                referenced: 99
+            }
+        );
     }
 }

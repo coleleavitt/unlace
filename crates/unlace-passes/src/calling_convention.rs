@@ -73,10 +73,10 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
             }
         }
 
-        if let Some(output) = insn.output {
-            if output.space == SpaceId::Register {
-                defined.insert(output.offset);
-            }
+        if let Some(output) = insn.output
+            && output.space == SpaceId::Register
+        {
+            defined.insert(output.offset);
         }
     }
 
@@ -126,10 +126,10 @@ fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
                     reads.insert(inp.offset);
                 }
             }
-            if let Some(output) = insn.output {
-                if output.space == SpaceId::Register {
-                    defined_in_block.insert(output.offset);
-                }
+            if let Some(output) = insn.output
+                && output.space == SpaceId::Register
+            {
+                defined_in_block.insert(output.offset);
             }
         }
     }
@@ -322,12 +322,13 @@ fn has_shadow_space_stores(func: &SsaFunction) -> bool {
 
     let mut shadow_stores = 0u32;
     for insn in &entry_block.insns {
-        if insn.op == IrOp::Store {
-            if let Some(addr) = insn.inputs.get(1) {
-                if addr.space == SpaceId::Stack && addr.offset <= 32 && addr.offset >= 8 {
-                    shadow_stores += 1;
-                }
-            }
+        if insn.op == IrOp::Store
+            && let Some(addr) = insn.inputs.get(1)
+            && addr.space == SpaceId::Stack
+            && addr.offset <= 32
+            && addr.offset >= 8
+        {
+            shadow_stores += 1;
         }
     }
     shadow_stores >= 2
@@ -422,10 +423,10 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
                 read_before_write.insert(inp.offset);
             }
         }
-        if let Some(output) = insn.output {
-            if output.space == SpaceId::Register {
-                defined.insert(output.offset);
-            }
+        if let Some(output) = insn.output
+            && output.space == SpaceId::Register
+        {
+            defined.insert(output.offset);
         }
     }
 

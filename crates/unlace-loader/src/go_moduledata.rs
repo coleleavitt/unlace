@@ -244,12 +244,13 @@ fn scan_section(image: &BinaryImage, section_name: &str) -> Option<GoModuleInfo>
     let limit = sec.data.len().saturating_sub(MODULEDATA_READ_SPAN);
     let mut off = 0usize;
     while off <= limit {
-        if let Some(first_ptr) = read_u64_le(&sec.data, off) {
-            if first_ptr != 0 && is_pc_header(image, first_ptr) {
-                let candidate_va = sec.vaddr + off as u64;
-                if let Some(info) = parse_at(image, candidate_va) {
-                    return Some(info);
-                }
+        if let Some(first_ptr) = read_u64_le(&sec.data, off)
+            && first_ptr != 0
+            && is_pc_header(image, first_ptr)
+        {
+            let candidate_va = sec.vaddr + off as u64;
+            if let Some(info) = parse_at(image, candidate_va) {
+                return Some(info);
             }
         }
         off += 8;
@@ -269,10 +270,9 @@ pub fn parse_firstmoduledata(image: &BinaryImage) -> Option<GoModuleInfo> {
         .symbols
         .values()
         .find(|s| s.name == "runtime.firstmoduledata")
+        && let Some(info) = parse_at(image, sym.addr)
     {
-        if let Some(info) = parse_at(image, sym.addr) {
-            return Some(info);
-        }
+        return Some(info);
     }
     for sect in [".noptrdata", ".data", ".rodata"] {
         if let Some(info) = scan_section(image, sect) {

@@ -315,15 +315,15 @@ pub fn lift_jr(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[0]);
     match target {
         Some(target) => {
-            if let MipsOperand::Reg(reg) = &ops[0] {
-                if register_file::capstone_reg_to_offset(*reg) == Some(RA) {
-                    ctx.emit(IrInsn::without_output(
-                        IrOp::Return,
-                        smallvec![target],
-                        ctx.addr,
-                    ));
-                    return;
-                }
+            if let MipsOperand::Reg(reg) = &ops[0]
+                && register_file::capstone_reg_to_offset(*reg) == Some(RA)
+            {
+                ctx.emit(IrInsn::without_output(
+                    IrOp::Return,
+                    smallvec![target],
+                    ctx.addr,
+                ));
+                return;
             }
             ctx.emit(IrInsn::without_output(
                 IrOp::Branchind,

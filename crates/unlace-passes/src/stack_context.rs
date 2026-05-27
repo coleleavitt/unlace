@@ -34,10 +34,10 @@ pub fn prioritize_functions(traces: &[StackTrace]) -> Vec<u64> {
     let max_depth = traces.iter().map(|t| t.frames.len()).max().unwrap_or(0);
     for depth in 0..max_depth {
         for trace in traces {
-            if let Some(frame) = trace.frames.get(depth) {
-                if seen.insert(frame.pc) {
-                    result.push(frame.pc);
-                }
+            if let Some(frame) = trace.frames.get(depth)
+                && seen.insert(frame.pc)
+            {
+                result.push(frame.pc);
             }
         }
     }

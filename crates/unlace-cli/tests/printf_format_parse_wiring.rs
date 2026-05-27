@@ -118,6 +118,7 @@ fn whole_program_driver_populates_variadic_call_types() {
             entry,
             &pipeline_config,
             None,
+            None,
             &functions,
         ) {
             ssa_map.insert(entry.addr, ssa);

@@ -35,6 +35,7 @@ use std::ops::Range;
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{AliasCategory, IrOp, SpaceId, Varnode};
 
+use crate::analysis_context::PreservedAnalyses;
 use crate::pass::{Pass, PassError, PassPhase};
 
 /// Architectural stack-pointer register offsets recognised as `Stack`.
@@ -110,6 +111,10 @@ impl Pass for AliasCategorizePass {
         PassPhase::PreOpt
     }
 
+    fn preserved_analyses(&self) -> PreservedAnalyses {
+        PreservedAnalyses::all()
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         // Reserved for a future DWARF/PDB-driven volatile-stack-slot
         // pass; today the lvar model doesn't expose `volatile` on every
@@ -137,11 +142,11 @@ impl Pass for AliasCategorizePass {
         }
 
         for (bid, idx, cat) in classifications {
-            if let Some(block) = func.function.blocks.get_mut(&bid) {
-                if let Some(insn) = block.insns.get_mut(idx) {
-                    insn.category = Some(cat);
-                    changed = true;
-                }
+            if let Some(block) = func.function.blocks.get_mut(&bid)
+                && let Some(insn) = block.insns.get_mut(idx)
+            {
+                insn.category = Some(cat);
+                changed = true;
             }
         }
 

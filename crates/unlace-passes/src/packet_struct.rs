@@ -126,10 +126,10 @@ fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, (BlockId, usize)> {
     let mut map = BTreeMap::new();
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
-            if let Some(output) = insn.output {
-                if output.space != SpaceId::Const {
-                    map.insert(output, (bid, insn_idx));
-                }
+            if let Some(output) = insn.output
+                && output.space != SpaceId::Const
+            {
+                map.insert(output, (bid, insn_idx));
             }
         }
     }
@@ -171,14 +171,15 @@ fn load_base_and_offset(
     // Case 1: addr = IntAdd(base, const_offset).
     if let Some(&(def_bid, def_idx)) = def_map.get(&addr) {
         let def_insn = func.function.blocks.get(&def_bid)?.insns.get(def_idx)?;
-        if def_insn.op == IrOp::IntAdd && def_insn.inputs.len() >= 2 {
-            if let Some((base_slot, offset)) = base_plus_const(def_insn) {
-                let base = func
-                    .var_map
-                    .get(&(def_bid, def_idx, VarnodeSlot::Input(base_slot)))
-                    .copied()?;
-                return Some((base, offset));
-            }
+        if def_insn.op == IrOp::IntAdd
+            && def_insn.inputs.len() >= 2
+            && let Some((base_slot, offset)) = base_plus_const(def_insn)
+        {
+            let base = func
+                .var_map
+                .get(&(def_bid, def_idx, VarnodeSlot::Input(base_slot)))
+                .copied()?;
+            return Some((base, offset));
         }
     }
 

@@ -286,12 +286,11 @@ pub fn lift_ldp(ctx: &mut LiftCtx, ops: &Ops) {
         ctx.addr,
     ));
     let loaded2 = ctx.emit_load(size1, addr2);
-    if let Some((Arm64OperandType::Reg(reg), _)) = ops.get(1) {
-        if !register_file::is_zero_reg(*reg) {
-            if let Some(dst) = register_file::reg_varnode(*reg) {
-                ctx.emit_copy(dst, loaded2);
-            }
-        }
+    if let Some((Arm64OperandType::Reg(reg), _)) = ops.get(1)
+        && !register_file::is_zero_reg(*reg)
+        && let Some(dst) = register_file::reg_varnode(*reg)
+    {
+        ctx.emit_copy(dst, loaded2);
     }
 }
 

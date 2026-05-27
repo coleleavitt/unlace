@@ -28,7 +28,7 @@ pub fn parse_tcg_coverage(data: &[u8]) -> Result<TcgCoverageTrace, QemuTcgError>
     if data.is_empty() {
         return Err(QemuTcgError::Empty);
     }
-    if data.len() % 8 != 0 {
+    if !data.len().is_multiple_of(8) {
         return Err(QemuTcgError::BadAlignment { len: data.len() });
     }
 

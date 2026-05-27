@@ -305,7 +305,14 @@ mod tests {
 
     #[test]
     fn test_dwarf_expr_piece_composite() {
-        let bytes = [DW_OP_REG0, DW_OP_PIECE, 0x08, DW_OP_REG0 + 1, DW_OP_PIECE, 0x08];
+        let bytes = [
+            DW_OP_REG0,
+            DW_OP_PIECE,
+            0x08,
+            DW_OP_REG0 + 1,
+            DW_OP_PIECE,
+            0x08,
+        ];
         assert_eq!(evaluate(&bytes), Location::Composite);
     }
 

@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use unlace_ir::ssa::{VarMap, PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 /// Dump an SSA function in the canonical text form defined by IR spec §2.
@@ -297,11 +297,11 @@ fn write_insn(func: &SsaFunction, bid: BlockId, insn_idx: usize, insn: &IrInsn, 
             out.push_str(", ");
         }
 
-        if is_branch_target(insn.op, i) {
-            if let Some(target_bid) = resolve_branch_target(func, input) {
-                let _ = write!(out, "@BB_{}", target_bid.0);
-                continue;
-            }
+        if is_branch_target(insn.op, i)
+            && let Some(target_bid) = resolve_branch_target(func, input)
+        {
+            let _ = write!(out, "@BB_{}", target_bid.0);
+            continue;
         }
 
         if let Some(sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(i))) {
@@ -331,10 +331,10 @@ fn resolve_branch_target(func: &SsaFunction, vn: &Varnode) -> Option<BlockId> {
     let target_addr = vn.offset;
 
     for (&bid, block) in &func.function.blocks {
-        if let Some(first_insn) = block.insns.first() {
-            if first_insn.addr == target_addr {
-                return Some(bid);
-            }
+        if let Some(first_insn) = block.insns.first()
+            && first_insn.addr == target_addr
+        {
+            return Some(bid);
         }
     }
 
@@ -403,7 +403,7 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::cfg::build_cfg;
-    use unlace_ir::ssa::{VarMap, DominatorTree, PhiNode, SsaFunction, SsaVarnode};
+    use unlace_ir::ssa::{DominatorTree, PhiNode, SsaFunction, SsaVarnode, VarMap};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::dump_ir;
@@ -451,6 +451,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),
@@ -818,7 +820,7 @@ mod tests {
     #[test]
     fn dump_type_audit_emits_header_and_rows() {
         use super::dump_type_audit;
-        use unlace_ir::ssa::{VarMap, PrimitiveType, SsaVarnode};
+        use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
         let func = Function::new("ty_audit", BlockId(0), 0x1000);
         let mut ssa = make_ssa(func);
 
@@ -850,7 +852,7 @@ mod tests {
     #[test]
     fn dump_type_audit_buckets_signature_params() {
         use super::dump_type_audit;
-        use unlace_ir::ssa::{VarMap, CallingConvention, PrimitiveType, SsaVarnode};
+        use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaVarnode};
         let func = Function::new("sig_bucket", BlockId(0), 0x1000);
         let mut ssa = make_ssa(func);
         ssa.calling_convention = CallingConvention::SystemV;
@@ -889,7 +891,7 @@ mod tests {
     #[test]
     fn dump_type_audit_signature_requires_known_cc() {
         use super::dump_type_audit;
-        use unlace_ir::ssa::{VarMap, CallingConvention, PrimitiveType, SsaVarnode};
+        use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaVarnode};
         let func = Function::new("no_cc", BlockId(0), 0x1000);
         let mut ssa = make_ssa(func);
         ssa.calling_convention = CallingConvention::Unknown;

@@ -365,12 +365,12 @@ fn parse_itanium_name(s: &str) -> String {
             while pos < bytes.len() && bytes[pos].is_ascii_digit() {
                 pos += 1;
             }
-            if let Ok(len) = s[num_start..pos].parse::<usize>() {
-                if pos + len <= bytes.len() {
-                    parts.push(&s[pos..pos + len]);
-                    pos += len;
-                    continue;
-                }
+            if let Ok(len) = s[num_start..pos].parse::<usize>()
+                && pos + len <= bytes.len()
+            {
+                parts.push(&s[pos..pos + len]);
+                pos += len;
+                continue;
             }
         }
         // Skip non-digit prefix characters (like 'N' for nested names).
@@ -399,15 +399,15 @@ fn parse_typeinfo_at(image: &BinaryImage, typeinfo_addr: u64, name: &str) -> Opt
     match kind {
         TypeInfoKind::SingleInheritance => {
             // [16] base_type ptr (8 bytes)
-            if let Some(base_ptr) = read_u64_at_va(image, typeinfo_addr + 16) {
-                if base_ptr != 0 {
-                    bases.push(BaseClass {
-                        typeinfo_addr: base_ptr,
-                        offset: 0,
-                        is_virtual: false,
-                        is_public: true,
-                    });
-                }
+            if let Some(base_ptr) = read_u64_at_va(image, typeinfo_addr + 16)
+                && base_ptr != 0
+            {
+                bases.push(BaseClass {
+                    typeinfo_addr: base_ptr,
+                    offset: 0,
+                    is_virtual: false,
+                    is_public: true,
+                });
             }
         }
         TypeInfoKind::VirtualMultipleInheritance => {
@@ -501,10 +501,10 @@ fn associate_vtables(image: &BinaryImage, classes: &mut BTreeMap<u64, CppClass>)
 
         let vtable_name = &sym.name[4..];
 
-        if let Some(&ti_addr) = name_to_ti.get(vtable_name) {
-            if let Some(cls) = classes.get_mut(&ti_addr) {
-                cls.vtable_addr = Some(*addr);
-            }
+        if let Some(&ti_addr) = name_to_ti.get(vtable_name)
+            && let Some(cls) = classes.get_mut(&ti_addr)
+        {
+            cls.vtable_addr = Some(*addr);
         }
     }
 }
@@ -555,6 +555,39 @@ fn ptr_in_executable(image: &BinaryImage, p: u64) -> bool {
 
 fn typeinfo_addr_set(classes: &BTreeMap<u64, CppClass>) -> std::collections::BTreeSet<u64> {
     classes.keys().copied().collect()
+}
+
+fn is_plausible_vtable_offset_slot(
+    image: &BinaryImage,
+    known_typeinfos: &std::collections::BTreeSet<u64>,
+    slot: u64,
+) -> bool {
+    if slot == 0 || known_typeinfos.contains(&slot) || ptr_in_executable(image, slot) {
+        return false;
+    }
+
+    // Vcall/vbase components are ptrdiff_t entries, almost always small
+    // signed object-layout offsets. Treat large non-code/non-typeinfo values
+    // as raw slots instead of silently moving arbitrary data into the offset
+    // prefix.
+    let signed = slot as i64;
+    signed.unsigned_abs() <= 0x100000
+}
+
+fn vtable_offset_prefix_start(
+    image: &BinaryImage,
+    slots: &[u64],
+    subtable_start: usize,
+    lower_bound: usize,
+    known_typeinfos: &std::collections::BTreeSet<u64>,
+) -> usize {
+    let mut prefix_start = subtable_start;
+    while prefix_start > lower_bound
+        && is_plausible_vtable_offset_slot(image, known_typeinfos, slots[prefix_start - 1])
+    {
+        prefix_start -= 1;
+    }
+    prefix_start
 }
 
 /// Walk forward from `vtable_addr`, segmenting the bytes into subtables
@@ -623,15 +656,32 @@ fn reconstruct_vtable_layout(
         return None;
     }
 
+    let mut prefix_starts = Vec::with_capacity(subtable_starts.len());
+    for (idx, &start) in subtable_starts.iter().enumerate() {
+        let lower_bound = if idx == 0 {
+            0
+        } else {
+            subtable_starts[idx - 1].saturating_add(2)
+        };
+        prefix_starts.push(vtable_offset_prefix_start(
+            image,
+            &slots,
+            start,
+            lower_bound,
+            known_typeinfos,
+        ));
+    }
+
     let mut subtables = Vec::with_capacity(subtable_starts.len());
     for (idx, &start) in subtable_starts.iter().enumerate() {
         let off_top = slots[start] as i64;
         let rtti = slots[start + 1];
         let address_point = vtable_addr + ((start + 2) as u64) * 8;
 
-        let end = subtable_starts.get(idx + 1).copied().unwrap_or(slots.len());
+        let prefix_start = prefix_starts[idx];
+        let end = prefix_starts.get(idx + 1).copied().unwrap_or(slots.len());
         let mut fns = Vec::new();
-        for &v in &slots[(start + 2)..end] {
+        for &v in &slots[(start + 2).min(end)..end] {
             if v == 0 {
                 fns.push(VtableSlotKind::Zero);
                 continue;
@@ -654,10 +704,12 @@ fn reconstruct_vtable_layout(
             offset_to_top: off_top,
             rtti_addr: rtti,
             // Itanium puts virtual-base / vcall offsets *before* the
-            // offset-to-top slot. Without DWARF or per-class metadata
-            // we can't reliably pull them out for a stripped binary;
-            // leaving the vector empty keeps the layout truthful.
-            virtual_base_offsets: Vec::new(),
+            // offset-to-top slot. Preserve that prefix separately so it
+            // doesn't get mistaken for raw vfunc data in the previous subtable.
+            virtual_base_offsets: slots[prefix_start..start]
+                .iter()
+                .map(|&v| v as i64)
+                .collect(),
             functions: fns,
         });
     }
@@ -692,15 +744,15 @@ fn enumerate_vtable_methods(image: &BinaryImage, classes: &mut BTreeMap<u64, Cpp
         // legacy contract was "stop at the first non-function slot",
         // which we preserve below.
         let mut methods = Vec::new();
-        if let Some(layout) = &layout {
-            if let Some(primary) = layout.subtables.first() {
-                for (slot, kind) in primary.functions.iter().enumerate() {
-                    match kind {
-                        VtableSlotKind::Function { va, name, .. } => {
-                            methods.push((slot, *va, name.clone()));
-                        }
-                        _ => break,
+        if let Some(layout) = &layout
+            && let Some(primary) = layout.subtables.first()
+        {
+            for (slot, kind) in primary.functions.iter().enumerate() {
+                match kind {
+                    VtableSlotKind::Function { va, name, .. } => {
+                        methods.push((slot, *va, name.clone()));
                     }
+                    _ => break,
                 }
             }
         }
@@ -729,6 +781,8 @@ pub fn scan_rtti(image: &BinaryImage) -> RttiInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ArchId;
+    use crate::image::{Section, SectionFlags, Symbol, SymbolKind};
     use crate::{ElfLoader, Loader};
 
     fn load_fixture(name: &str) -> BinaryImage {
@@ -1034,5 +1088,77 @@ mod tests {
                 cls.demangled_name,
             );
         }
+    }
+
+    #[test]
+    fn test_vtable_layout_keeps_vcall_vbase_offsets_out_of_function_slots() {
+        let vtable_addr = 0x3000;
+        let typeinfo_addr = 0x5000;
+        let slots = [
+            (-24_i64) as u64,
+            (-8_i64) as u64,
+            0,
+            typeinfo_addr,
+            0x1000,
+            0x1010,
+            (-16_i64) as u64,
+            typeinfo_addr,
+            0x1020,
+        ];
+
+        let mut data = Vec::new();
+        for slot in slots {
+            data.extend_from_slice(&slot.to_le_bytes());
+        }
+
+        let mut image = BinaryImage::empty(ArchId::X86_64, Endian::Little);
+        image.sections.push(Section {
+            name: ".text".into(),
+            vaddr: 0x1000,
+            size: 0x100,
+            data: vec![0; 0x100],
+            flags: SectionFlags::READ | SectionFlags::EXEC,
+        });
+        image.sections.push(Section {
+            name: ".data.rel.ro".into(),
+            vaddr: vtable_addr,
+            size: data.len() as u64,
+            data,
+            flags: SectionFlags::READ,
+        });
+        for va in [0x1000, 0x1010, 0x1020] {
+            image.symbols.insert(
+                va,
+                Symbol {
+                    name: format!("_ZN7Derived{:x}Ev", va),
+                    addr: va,
+                    size: 16,
+                    kind: SymbolKind::Function,
+                },
+            );
+        }
+
+        let known_typeinfos = std::collections::BTreeSet::from([typeinfo_addr]);
+        let layout = reconstruct_vtable_layout(
+            &image,
+            vtable_addr,
+            (slots.len() * std::mem::size_of::<u64>()) as u64,
+            &known_typeinfos,
+        )
+        .expect("synthetic vtable layout");
+
+        assert_eq!(layout.subtables.len(), 2);
+        assert_eq!(layout.subtables[0].virtual_base_offsets, vec![-24, -8]);
+        assert_eq!(
+            layout.subtables[0]
+                .functions
+                .iter()
+                .filter(|slot| matches!(slot, VtableSlotKind::Function { .. }))
+                .count(),
+            2,
+            "primary subtable should not swallow the next subtable's prefix offsets",
+        );
+        assert_eq!(layout.subtables[1].offset_to_top, -16);
+        assert_eq!(layout.subtables[1].functions.len(), 1);
     }
 }

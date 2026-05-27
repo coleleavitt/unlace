@@ -85,7 +85,8 @@ impl KnownBits {
         let unknown_or_zero = (self.zero | !(self.one)) & mask;
         // Leading zeros in the effective width.
         let shift = 64 - self.width as u32;
-        (unknown_or_zero << shift).leading_ones()
+        (unknown_or_zero << shift)
+            .leading_ones()
             .min(self.zero.reverse_bits().leading_ones())
             .min(self.width as u32)
     }
@@ -268,7 +269,9 @@ impl KnownBits {
 
         // Conservative: low bits that are both known-zero stay zero until
         // a carry propagates through them. Count trailing known-zeros on both.
-        let trailing_zeros_a = (self.zero & !self.one).trailing_ones().min(self.width as u32);
+        let trailing_zeros_a = (self.zero & !self.one)
+            .trailing_ones()
+            .min(self.width as u32);
         let trailing_zeros_b = (rhs.zero & !rhs.one).trailing_ones().min(self.width as u32);
         let common_trailing = trailing_zeros_a.min(trailing_zeros_b);
 
@@ -309,7 +312,9 @@ impl KnownBits {
         }
 
         // Trailing zeros of the product >= sum of trailing zeros of operands.
-        let tz_a = (self.zero & !self.one).trailing_ones().min(self.width as u32);
+        let tz_a = (self.zero & !self.one)
+            .trailing_ones()
+            .min(self.width as u32);
         let tz_b = (rhs.zero & !rhs.one).trailing_ones().min(self.width as u32);
         let tz_sum = (tz_a + tz_b).min(self.width as u32);
 

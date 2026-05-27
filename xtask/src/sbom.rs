@@ -60,10 +60,10 @@ pub fn run(args: &[String]) -> i32 {
 }
 
 fn write_file(path: &Path, body: &str) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
     }
     std::fs::write(path, body)
 }

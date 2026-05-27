@@ -2,16 +2,19 @@
 
 pub mod aarch64_pac_bti;
 pub mod abi_layout;
-pub mod arm_it_block;
-pub mod cxx_eh;
-pub mod mips_delay_slot;
 pub mod algebraic_simplify;
-pub mod analysis_context;
+pub mod alias_analysis;
 pub mod alias_categorize;
+pub mod analysis_context;
+pub mod arm_it_block;
+pub mod assumption_cache;
+pub mod attributor;
 pub mod auth_call_resolve;
 pub mod bb_align;
 pub mod bitfield_idioms;
+pub mod bitfield_recovery;
 pub mod bmi_idioms;
+pub mod bool_coverage;
 pub mod bool_simplify;
 pub mod boost_recognize;
 pub mod bsim_db;
@@ -22,8 +25,11 @@ pub mod call_boundary_copyprop;
 pub mod caller_param_propagate;
 pub mod calling_conv_coverage;
 pub mod calling_conv_finalize;
+pub mod calling_conv_whole_prog;
 pub mod calling_convention;
+pub mod cfg_repair;
 pub mod cmov_preserve;
+pub mod combine_worklist;
 pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
@@ -41,6 +47,8 @@ pub mod cse;
 pub mod ct_violation;
 pub mod cve_classify;
 pub mod cwe_detect;
+pub mod cxx_eh;
+pub mod daikon_invariants;
 pub mod db_recognize;
 pub mod dce;
 pub mod dead_flag_elim;
@@ -48,13 +56,16 @@ pub mod dead_store_elim;
 pub mod deflat;
 pub mod diff_coverage;
 pub mod division_idiom;
+pub mod dom_update;
 pub mod dse_global;
 pub mod embed_interp_recognize;
 pub mod expression_tree;
 pub mod format_magic;
 pub mod func_fingerprint;
+pub mod func_ptr_table;
+pub mod function_analysis_manager;
 pub mod function_attrs;
-pub mod hir_loop_recovery;
+pub mod gcc_cleanup;
 pub mod generated_code;
 pub mod generated_code_filter;
 pub mod global_copy_prop;
@@ -64,26 +75,36 @@ pub mod go_iface_devirt;
 pub mod go_select;
 pub mod gui_lib_recognize;
 pub mod gvn;
+pub mod hir_loop_recovery;
 pub mod idiom_recognition;
 pub mod indirect_call_resolve;
 pub mod indirect_jump_resolve;
 pub mod inline_foldback;
 pub mod instrument;
 pub mod interproc_fixpoint;
+pub mod ipa_slice;
+pub mod ipa_summary;
 pub mod itanium_demangle;
 pub mod iv_elim;
+pub mod jump_threading;
+pub mod junk_code_removal;
 pub mod known_bits_analysis;
 pub mod known_bits_simplify;
-pub mod memory_ssa_builder;
-pub mod memory_ssa_dse;
 pub mod lazy_lift;
+pub mod lazy_value_info;
+pub mod lcssa;
 pub mod libc_idioms;
-#[cfg(test)]
-mod llvm_fixture_tests;
 pub mod libc_signatures;
 pub mod licm;
 pub mod live_concrete;
+#[cfg(test)]
+mod llvm_fixture_tests;
+pub mod loop_canonical;
 pub mod lvar_collect;
+pub mod memory_ssa_builder;
+pub mod memory_ssa_dse;
+pub mod memory_ssa_updater;
+pub mod mips_delay_slot;
 pub mod modulo_idiom;
 pub mod msvc_seh;
 pub mod nday_correlate;
@@ -96,9 +117,14 @@ pub mod objc_byref;
 pub mod objc_dispatch;
 pub mod op_type_binding;
 pub mod opaque_pred;
+pub mod opt_remarks;
 pub mod packet_struct;
 pub mod pass;
+pub mod pass_adaptors;
 pub mod pass_with_context;
+pub mod path_sensitive;
+pub mod pgo_outlining;
+pub mod pipeline_parser;
 pub mod printf_type_infer;
 pub mod prologue_elim;
 pub mod protobuf_recognize;
@@ -114,14 +140,16 @@ pub mod rust_panic;
 pub mod rust_result;
 pub mod rust_vtable;
 pub mod scalar_evolution;
-pub mod scev_nested;
-pub mod sysv_eightbyte;
 pub mod sccp;
+pub mod scev_nested;
 pub mod serial_recognize;
+pub mod simplify_cfg;
 pub mod sixty_four_bit_demote;
 pub mod sizeof_recognition;
 pub mod smc_unwrap;
 pub mod source_sink;
+pub mod sroa;
+pub mod sroa_plan;
 pub mod ssa_cache;
 pub mod stack_context;
 pub mod stack_frame_recovery;
@@ -133,9 +161,13 @@ pub mod struct_boundary;
 pub mod struct_field_detect;
 pub mod struct_field_recovery;
 pub mod switch_table_recovery;
+pub mod symbolic_heap;
 pub mod symex_coverage;
+pub mod sysv_eightbyte;
 pub mod tail_call;
 pub mod tail_duplication;
+pub mod taint_engine;
+pub mod target_transform;
 pub mod type_constraint_solver;
 pub mod type_infer;
 pub mod union_recovery;
@@ -146,11 +178,16 @@ pub mod whole_prog_cc;
 pub mod whole_prog_type_unify;
 
 pub use algebraic_simplify::AlgebraicSimplifyPass;
-pub use analysis_context::{AnalysisContext, AnalysisKind};
-pub use pass_with_context::{PassAdapter, PassWithContext, run_to_fixedpoint_with_context};
+pub use alias_analysis::{AliasAnalysis, AliasRelation, ModRef};
+pub use alias_categorize::AliasCategorizePass;
+pub use analysis_context::{AnalysisContext, AnalysisKind, PreservedAnalyses};
+pub use assumption_cache::{Assumption, AssumptionCache};
+pub use attributor::{merge_summary, propagate_readonly_once};
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
+pub use bitfield_recovery::{BitfieldRecoveryPass, BitfieldSite};
 pub use bmi_idioms::BmiIdiomPass;
+pub use bool_coverage::BoolCoveragePass;
 pub use bool_simplify::BoolSimplifyPass;
 pub use builtin_recognize::{
     BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,
@@ -162,8 +199,11 @@ pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,
 };
 pub use calling_conv_finalize::{CallingConvFinalizePass, FinalizedSignature, finalize_signature};
+pub use calling_conv_whole_prog::WholeProgCallingConvPass;
 pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, ReturnTypeInferPass};
+pub use cfg_repair::CfgRepairPass;
 pub use cmov_preserve::CmovPreservePass;
+pub use combine_worklist::{CombineWorklist, WorkItem};
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
@@ -171,25 +211,32 @@ pub use coverage_ingest::{
     AFL_MAP_SIZE, CoverageError, CoverageMap, LLVM_PROFRAW_MAGIC_BE, LLVM_PROFRAW_MAGIC_LE,
     ProfRaw, parse_afl_coverage, parse_profraw,
 };
+pub use cpp_coroutine::{CppCoroutinePass, detect_coroutine_sites};
+pub use cpp_lambda::{CppLambdaCapturePass, recover_lambda_captures};
 pub use cpp_method::{CppMethodPass, ParsedMethod, parse_mangled_method};
 pub use cpp_stl::recognize_stl_type;
+pub use cpp_variant::CppVariantPass;
 pub use cpp_vtable::CppVtablePass;
 pub use crypto_idioms::CryptoIdiomPass;
 pub use cse::CsePass;
+pub use daikon_invariants::DaikonInvariantPass;
 pub use dce::DeadCodeElimPass;
 pub use dead_flag_elim::DeadFlagElimPass;
 pub use dead_store_elim::DeadStoreElimPass;
 pub use deflat::{CaseSuccessors, FlattenedCfg, detect_flattened_dispatch, recover_original_cfg};
 pub use division_idiom::DivisionIdiomPass;
+pub use dom_update::DominatorUpdater;
 pub use dse_global::DeadStoreElimGlobalPass;
 pub use expression_tree::ExpressionTreePass;
 pub use format_magic::{MagicCheck, detect_magic_check};
 pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarity};
+pub use func_ptr_table::{FuncPtrEntry, FuncPtrTable, FuncPtrTablePass, detect_table_loads};
+pub use function_analysis_manager::FunctionAnalysisManager;
 pub use function_attrs::{
     AttrMap, FunctionAttrs, infer_attrs_batch, infer_attrs_for_function,
     propagate_noreturn as propagate_attrs_noreturn,
 };
-pub use hir_loop_recovery::{CountedLoop, LoopFacts, Reduction, ReductionOp, recover_loop_facts};
+pub use gcc_cleanup::{CleanupHandler, GccCleanupPass, detect_cleanup_calls};
 pub use generated_code::{
     FunctionTag, classify_by_name, classify_functions, classify_plt_stub, classify_wrapper_thunk,
     count_hidden_shown,
@@ -202,6 +249,7 @@ pub use go_closure::{ClosureAllocation, ClosureCall, detect_go_closures};
 pub use go_defer::{GoDeferSite, detect_go_defer};
 pub use go_select::{GoChannelOp, GoChannelOpKind, detect_go_channel_ops};
 pub use gvn::GvnPass;
+pub use hir_loop_recovery::{CountedLoop, LoopFacts, Reduction, ReductionOp, recover_loop_facts};
 pub use idiom_recognition::IdiomRecognitionPass;
 pub use indirect_call_resolve::IndirectCallResolvePass;
 pub use indirect_jump_resolve::{IndirectJumpResolvePass, collect_jump_table_candidates};
@@ -212,17 +260,25 @@ pub use instrument::{
     schedule_audit_oscillations, schedule_audit_path,
 };
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
+pub use ipa_slice::{IpaSlicePass, ProgramSlice, SliceCriterion};
+pub use ipa_summary::{
+    FunctionSummary, FunctionSummaryRegistry, build_summary_registry, summarize_function,
+};
 pub use itanium_demangle::{VtableHeader, demangle_itanium, read_vtable_header};
 pub use iv_elim::IvElimPass;
+pub use jump_threading::{JumpThreadCandidate, collect_jump_thread_candidates};
+pub use junk_code_removal::JunkCodeRemovalPass;
 pub use known_bits_analysis::{KnownBitsMap, compute_known_bits};
 pub use known_bits_simplify::KnownBitsSimplifyPass;
-pub use memory_ssa_builder::{
-    AccessSite, MemorySsaMap, build_memory_ssa, clobber_for_load,
-};
-pub use memory_ssa_dse::MemorySsaDsePass;
+pub use lazy_value_info::{FactSite, LazyValueInfo};
+pub use lcssa::{LcssaDiagnostic, diagnose_lcssa};
 pub use libc_idioms::{LibcKind, annotate_libc_calls, recognize_libc};
 pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
+pub use loop_canonical::{LoopCanonicalDiagnostic, diagnose_loop_canonical_form};
 pub use lvar_collect::LvarCollectPass;
+pub use memory_ssa_builder::{AccessSite, MemorySsaMap, build_memory_ssa, clobber_for_load};
+pub use memory_ssa_dse::MemorySsaDsePass;
+pub use memory_ssa_updater::MemorySsaUpdater;
 pub use modulo_idiom::ModuloIdiomPass;
 pub use nday_correlate::{NdayHit, NdayPattern, match_against_binary as match_nday_patterns};
 pub use noreturn::NoreturnDetectPass;
@@ -236,6 +292,7 @@ pub use objc_byref::{ByrefBox, apply_objc_byref, detect_objc_byref_boxes};
 pub use objc_dispatch::ObjcDispatchPass;
 pub use op_type_binding::{OpTypeBindingPass, render_enum_const, render_field_access};
 pub use opaque_pred::opaque_predicate_detect;
+pub use opt_remarks::{OptimizationRemark, RemarkKind, RemarkSink};
 pub use packet_struct::{PacketStruct, detect_packet_struct};
 pub use pass::{
     AllowedBackedge, DEFAULT_OUTER_FIXEDPOINT_CAP, DefIndex, OuterFixedpointReport, Pass,
@@ -244,6 +301,11 @@ pub use pass::{
     validate_named_phase_monotonicity, validate_named_phase_monotonicity_with_exceptions,
     validate_phase_monotonicity,
 };
+pub use pass_adaptors::{AdaptedPass, PassScope};
+pub use pass_with_context::{PassAdapter, PassWithContext, run_to_fixedpoint_with_context};
+pub use path_sensitive::PathSensitivePass;
+pub use pgo_outlining::{OutlinedFragment, PgoOutliningPass};
+pub use pipeline_parser::{ParsedPipeline, parse_pipeline};
 pub use prologue_elim::PrologueElimPass;
 pub use reanalysis::{
     DEFAULT_REANALYSIS_CAP, ReanalysisReport, SignatureSnapshot, bump_if_signature_changed,
@@ -251,6 +313,10 @@ pub use reanalysis::{
 };
 pub use redundant_flag_elim::RedundantFlagElimPass;
 pub use register_coalesce::RegisterCoalescePass;
+pub use rep_string_idiom::{
+    RepStringIdiomPass, RepStringKind, RepStringLoop, detect_rep_string_loops,
+};
+pub use rust_async::{AsyncStateMachine, RustAsyncPass, detect_async_state_machines};
 pub use rust_enum::RustEnumPass;
 pub use rust_panic::RustPanicPass;
 pub use rust_result::{RustTaggedUnion, detect_rust_tagged_unions};
@@ -259,14 +325,16 @@ pub use scalar_evolution::{
     AffineIv, LoopExitFact, LoopExitPredicate, LoopScevInfo, ScevExpr, TriangularSumReduction,
     analyze_loop_scevs, compute_trip_count, derive_scev_expr, detect_triangular_sum_reduction,
 };
+pub use sccp::SccpPass;
 pub use scev_nested::{
     NoWrapFlags, contains_addrec, loop_nest_depth, nested_add_rec, scev_add, scev_mul_const,
 };
-pub use sysv_eightbyte::{EightbyteClass, FieldKind as SysvFieldKind, classify_aggregate};
-pub use sccp::SccpPass;
 pub use serial_recognize::{SerialKind, recognize_serial_api};
+pub use simplify_cfg::{CfgSimplifyAction, collect_simplify_cfg_actions};
 pub use sixty_four_bit_demote::SixtyFourBitDemotePass;
 pub use sizeof_recognition::{SizeofRecognitionPass, recognize_with_resolver};
+pub use sroa::{StackSlotFragment, StackSlotPartition, collect_stack_slot_partitions};
+pub use sroa_plan::{SroaRewriteAction, plan_sroa_rewrites};
 pub use stack_frame_recovery::recover_stack_frame;
 pub use stack_pointer_tracking::StackPointerTrackingPass;
 pub use stack_vars::{StackOffsetSnapshotPass, StackVarRecoveryPass};
@@ -282,8 +350,12 @@ pub use string_hash_switch::{
 };
 pub use struct_field_detect::StructFieldDetectPass;
 pub use struct_field_recovery::recover_structs;
+pub use symbolic_heap::{HeapRegion, MemAccess, SymbolicHeapPass};
+pub use sysv_eightbyte::{EightbyteClass, FieldKind as SysvFieldKind, classify_aggregate};
 pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;
+pub use taint_engine::{TaintEnginePass, TaintFinding, TaintSink, TaintSource, propagate_taint};
+pub use target_transform::{TargetTransformInfo, TransformBenefit};
 pub use type_constraint_solver::{
     Constraint, PolyTypeBounds, PolyTypeSolution, TypeCapability, TypeConstraintSolverPass,
     collect_and_apply as solve_type_constraints, collect_constraints, solve_constraints,
@@ -294,6 +366,8 @@ pub use vararg_detect::{
     detect_variadic_callees, parse_format_string, parse_printf_format_strings,
 };
 pub use variable_merge::VariableMergePass;
+pub use whole_prog_cc::{DEFAULT_WHOLE_PROG_CC_CAP, WholeProgramCcReport, run_whole_prog_cc};
+pub use whole_prog_type_unify::{ProgramTypeUnifier, unify_structs_across_program};
 
 /// Names of the passes scheduled in the default per-function pipeline's
 /// inner fixed-point cluster, in execution order. Mirrors the schedule
@@ -302,6 +376,7 @@ pub use variable_merge::VariableMergePass;
 /// spinning up a binary image. Keep in sync with the CLI orchestrator.
 pub fn default_pass_names() -> Vec<&'static str> {
     vec![
+        "alias-categorize",
         "constant-fold",
         "copy-propagation",
         "global-copy-propagation",
@@ -315,6 +390,12 @@ pub fn default_pass_names() -> Vec<&'static str> {
         "strength-reduce",
         "idiom-recognition",
         "condition-simplify",
+        "bool-simplify",
+        "known-bits-simplify",
+        "CmovPreservePass",
+        "call-boundary-copyprop",
+        "redundant-flag-elim",
+        "algebraic-simplify",
     ]
 }
 

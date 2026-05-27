@@ -15,7 +15,7 @@
 use std::collections::BTreeSet;
 
 use unlace_ir::SpaceId;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
@@ -147,7 +147,7 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{PhiNode, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+    use unlace_ir::ssa::{PhiNode, PrimitiveType, SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -215,6 +215,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

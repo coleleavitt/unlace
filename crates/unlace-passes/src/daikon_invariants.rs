@@ -9,10 +9,8 @@
 //! These invariants are recorded as annotations for the C printer to emit
 //! as comments or `assert()` macro suggestions.
 
-use std::collections::BTreeMap;
-
-use unlace_ir::ssa::{SsaFunction, SsaVarnode};
-use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
+use unlace_ir::ssa::SsaFunction;
+use unlace_ir::{IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -53,35 +51,38 @@ pub fn detect_invariants(func: &SsaFunction) -> Vec<LikelyInvariant> {
     let mut invariants = Vec::new();
 
     for block in func.function.blocks.values() {
-        for (idx, insn) in block.insns.iter().enumerate() {
+        for insn in &block.insns {
             // Pattern: IntLess(var, const) in a Cbranch context → bounded above.
-            if insn.op == IrOp::IntLess && insn.inputs.len() == 2 {
-                if insn.inputs[1].space == SpaceId::Const {
-                    invariants.push(LikelyInvariant::BoundedAbove {
-                        var: insn.inputs[0],
-                        bound: insn.inputs[1].offset,
-                    });
-                }
+            if insn.op == IrOp::IntLess
+                && insn.inputs.len() == 2
+                && insn.inputs[1].space == SpaceId::Const
+            {
+                invariants.push(LikelyInvariant::BoundedAbove {
+                    var: insn.inputs[0],
+                    bound: insn.inputs[1].offset,
+                });
             }
             // Pattern: Copy(var, 0) → initial value.
-            if insn.op == IrOp::Copy && insn.inputs.len() == 1 {
-                if insn.inputs[0].space == SpaceId::Const {
-                    if let Some(out) = insn.output {
-                        invariants.push(LikelyInvariant::InitialValue {
-                            var: out,
-                            value: insn.inputs[0].offset,
-                        });
-                    }
-                }
+            if insn.op == IrOp::Copy
+                && insn.inputs.len() == 1
+                && insn.inputs[0].space == SpaceId::Const
+                && let Some(out) = insn.output
+            {
+                invariants.push(LikelyInvariant::InitialValue {
+                    var: out,
+                    value: insn.inputs[0].offset,
+                });
             }
             // Pattern: IntAdd(var, 1) → stride of 1.
-            if insn.op == IrOp::IntAdd && insn.inputs.len() == 2 {
-                if insn.inputs[1].space == SpaceId::Const && insn.inputs[1].offset == 1 {
-                    invariants.push(LikelyInvariant::Stride {
-                        var: insn.inputs[0],
-                        stride: 1,
-                    });
-                }
+            if insn.op == IrOp::IntAdd
+                && insn.inputs.len() == 2
+                && insn.inputs[1].space == SpaceId::Const
+                && insn.inputs[1].offset == 1
+            {
+                invariants.push(LikelyInvariant::Stride {
+                    var: insn.inputs[0],
+                    stride: 1,
+                });
             }
         }
     }
@@ -93,7 +94,7 @@ mod tests {
     use super::*;
     use smallvec::smallvec;
     use unlace_ir::ssa::build_ssa;
-    use unlace_ir::{BasicBlock, Function, IrInsn};
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn};
 
     #[test]
     fn test_detects_loop_bound() {
@@ -103,16 +104,21 @@ mod tests {
         let mut func = Function::new("loop", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns.push(IrInsn::with_output(
-            IrOp::IntLess, cmp, smallvec![i, Varnode::constant(10, 4)], 0x1000,
+            IrOp::IntLess,
+            cmp,
+            smallvec![i, Varnode::constant(10, 4)],
+            0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return, smallvec![], 0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
         func.insert_block(bb);
 
         let ssa = build_ssa(func);
         let invs = detect_invariants(&ssa);
-        assert!(invs.iter().any(|inv| matches!(inv, LikelyInvariant::BoundedAbove { bound: 10, .. })));
+        assert!(
+            invs.iter()
+                .any(|inv| matches!(inv, LikelyInvariant::BoundedAbove { bound: 10, .. }))
+        );
     }
 
     #[test]
@@ -123,15 +129,20 @@ mod tests {
         let mut func = Function::new("inc", BlockId(0), 0x2000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns.push(IrInsn::with_output(
-            IrOp::IntAdd, i_next, smallvec![i, Varnode::constant(1, 4)], 0x2000,
+            IrOp::IntAdd,
+            i_next,
+            smallvec![i, Varnode::constant(1, 4)],
+            0x2000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return, smallvec![], 0x2004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x2004));
         func.insert_block(bb);
 
         let ssa = build_ssa(func);
         let invs = detect_invariants(&ssa);
-        assert!(invs.iter().any(|inv| matches!(inv, LikelyInvariant::Stride { stride: 1, .. })));
+        assert!(
+            invs.iter()
+                .any(|inv| matches!(inv, LikelyInvariant::Stride { stride: 1, .. }))
+        );
     }
 }

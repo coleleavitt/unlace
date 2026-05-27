@@ -432,10 +432,10 @@ pub fn discover_go_functions(image: &mut BinaryImage) {
 
     let text_base = image.section_by_name(".text").map(|s| s.vaddr).unwrap_or(0);
 
-    if let Some(data) = gopclntab_data {
-        if let Some(info) = parse_gopclntab(&data, text_base) {
-            merge_go_symbols(image, &info);
-        }
+    if let Some(data) = gopclntab_data
+        && let Some(info) = parse_gopclntab(&data, text_base)
+    {
+        merge_go_symbols(image, &info);
     }
 }
 

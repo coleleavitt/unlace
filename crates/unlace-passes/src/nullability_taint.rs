@@ -298,10 +298,9 @@ fn any_input_tainted(
             .var_map
             .get(&(bid, idx, VarnodeSlot::Input(input_idx)))
             .copied()
+            && tainted.contains(&sv)
         {
-            if tainted.contains(&sv) {
-                return true;
-            }
+            return true;
         }
     }
     false
@@ -349,10 +348,9 @@ fn find_tainted_arg(
             .var_map
             .get(&(bid, idx, VarnodeSlot::Input(input_idx)))
             .copied()
+            && tainted.contains(&sv)
         {
-            if tainted.contains(&sv) {
-                return Some(input_idx);
-            }
+            return Some(input_idx);
         }
     }
     None
@@ -377,15 +375,15 @@ mod tests {
             smallvec![Varnode::constant(0, 8)],
             0x1000,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![out],
-            0x1004,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![out], 0x1004));
         func.insert_block(b0);
         let ssa = build_ssa(func);
         let result = infer_nullability(&ssa);
-        let sv = *ssa.var_map.get(&(BlockId(0), 0, VarnodeSlot::Output)).unwrap();
+        let sv = *ssa
+            .var_map
+            .get(&(BlockId(0), 0, VarnodeSlot::Output))
+            .unwrap();
         assert_eq!(result[&sv], Nullability::MustNull);
     }
 
@@ -400,15 +398,15 @@ mod tests {
             smallvec![Varnode::constant(42, 8)],
             0x1000,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![out],
-            0x1004,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![out], 0x1004));
         func.insert_block(b0);
         let ssa = build_ssa(func);
         let result = infer_nullability(&ssa);
-        let sv = *ssa.var_map.get(&(BlockId(0), 0, VarnodeSlot::Output)).unwrap();
+        let sv = *ssa
+            .var_map
+            .get(&(BlockId(0), 0, VarnodeSlot::Output))
+            .unwrap();
         assert_eq!(result[&sv], Nullability::NotNull);
     }
 
@@ -423,23 +421,32 @@ mod tests {
             smallvec![Varnode::constant(0x9000, 8)], // malloc
             0x1000,
         ));
-        b0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![out],
-            0x1004,
-        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![out], 0x1004));
         func.insert_block(b0);
         let ssa = build_ssa(func);
         let result = infer_nullability(&ssa);
-        let sv = *ssa.var_map.get(&(BlockId(0), 0, VarnodeSlot::Output)).unwrap();
+        let sv = *ssa
+            .var_map
+            .get(&(BlockId(0), 0, VarnodeSlot::Output))
+            .unwrap();
         assert_eq!(result[&sv], Nullability::MayNull);
     }
 
     #[test]
     fn test_nullability_join() {
-        assert_eq!(Nullability::Unknown.join(Nullability::NotNull), Nullability::NotNull);
-        assert_eq!(Nullability::MustNull.join(Nullability::NotNull), Nullability::MayNull);
-        assert_eq!(Nullability::NotNull.join(Nullability::NotNull), Nullability::NotNull);
+        assert_eq!(
+            Nullability::Unknown.join(Nullability::NotNull),
+            Nullability::NotNull
+        );
+        assert_eq!(
+            Nullability::MustNull.join(Nullability::NotNull),
+            Nullability::MayNull
+        );
+        assert_eq!(
+            Nullability::NotNull.join(Nullability::NotNull),
+            Nullability::NotNull
+        );
     }
 
     #[test]

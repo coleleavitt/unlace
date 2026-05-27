@@ -173,7 +173,11 @@ pub enum TargetAbi {
 }
 
 /// Classify how an aggregate of the given size/alignment is passed.
-pub fn classify_aggregate_passing(size: u64, _alignment: u64, abi: TargetAbi) -> AggregatePassingClass {
+pub fn classify_aggregate_passing(
+    size: u64,
+    _alignment: u64,
+    abi: TargetAbi,
+) -> AggregatePassingClass {
     match abi {
         TargetAbi::SystemVAmd64 => {
             if size == 0 {
@@ -221,9 +225,21 @@ mod tests {
         //   c at 16, size 4, align 4
         //   total size: 24 (padded to 8-byte alignment)
         let fields = vec![
-            FieldDesc { index: 0, size: 4, alignment: 4 },
-            FieldDesc { index: 1, size: 8, alignment: 8 },
-            FieldDesc { index: 2, size: 4, alignment: 4 },
+            FieldDesc {
+                index: 0,
+                size: 4,
+                alignment: 4,
+            },
+            FieldDesc {
+                index: 1,
+                size: 8,
+                alignment: 8,
+            },
+            FieldDesc {
+                index: 2,
+                size: 4,
+                alignment: 4,
+            },
         ];
         let layout = compute_record_layout(&fields, 8, false);
         assert_eq!(layout.field_offsets[&0], 0);
@@ -237,7 +253,11 @@ mod tests {
     fn test_abi_layout_with_vptr() {
         // struct with vptr + one uint32_t field.
         // Vptr at 0 (8 bytes), field at 8.
-        let fields = vec![FieldDesc { index: 0, size: 4, alignment: 4 }];
+        let fields = vec![FieldDesc {
+            index: 0,
+            size: 4,
+            alignment: 4,
+        }];
         let layout = compute_record_layout(&fields, 8, true);
         assert_eq!(layout.vptr_offset, 0);
         assert_eq!(layout.field_offsets[&0], 8);
@@ -250,9 +270,21 @@ mod tests {
         // struct { uint8_t a; uint8_t b; uint8_t c; }
         // All 1-byte aligned, no padding.
         let fields = vec![
-            FieldDesc { index: 0, size: 1, alignment: 1 },
-            FieldDesc { index: 1, size: 1, alignment: 1 },
-            FieldDesc { index: 2, size: 1, alignment: 1 },
+            FieldDesc {
+                index: 0,
+                size: 1,
+                alignment: 1,
+            },
+            FieldDesc {
+                index: 1,
+                size: 1,
+                alignment: 1,
+            },
+            FieldDesc {
+                index: 2,
+                size: 1,
+                alignment: 1,
+            },
         ];
         let layout = compute_record_layout(&fields, 8, false);
         assert_eq!(layout.field_offsets[&0], 0);

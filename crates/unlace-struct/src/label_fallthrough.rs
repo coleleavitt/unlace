@@ -41,15 +41,14 @@ fn collapse_in_scope(nodes: &mut Vec<HirNode>, changed: &mut bool) {
     while i + 2 < nodes.len() {
         if let (HirNode::Label(_n), HirNode::Goto(m), HirNode::Label(m2)) =
             (&nodes[i], &nodes[i + 1], &nodes[i + 2])
+            && m == m2
         {
-            if m == m2 {
-                // Remove Label(N) at index i and Goto(M) at index i+1.
-                nodes.remove(i); // removes Label(N)
-                nodes.remove(i); // removes Goto(M) (was i+1, now i)
-                *changed = true;
-                // Don't advance i — re-check from the same position.
-                continue;
-            }
+            // Remove Label(N) at index i and Goto(M) at index i+1.
+            nodes.remove(i); // removes Label(N)
+            nodes.remove(i); // removes Goto(M) (was i+1, now i)
+            *changed = true;
+            // Don't advance i — re-check from the same position.
+            continue;
         }
         i += 1;
     }
@@ -57,13 +56,13 @@ fn collapse_in_scope(nodes: &mut Vec<HirNode>, changed: &mut bool) {
     // Pattern 1: Goto(L); Label(L) → remove both.
     let mut i = 0;
     while i + 1 < nodes.len() {
-        if let (HirNode::Goto(g), HirNode::Label(l)) = (&nodes[i], &nodes[i + 1]) {
-            if g == l {
-                nodes.remove(i); // removes Goto(L)
-                nodes.remove(i); // removes Label(L)
-                *changed = true;
-                continue;
-            }
+        if let (HirNode::Goto(g), HirNode::Label(l)) = (&nodes[i], &nodes[i + 1])
+            && g == l
+        {
+            nodes.remove(i); // removes Goto(L)
+            nodes.remove(i); // removes Label(L)
+            *changed = true;
+            continue;
         }
         i += 1;
     }

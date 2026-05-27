@@ -74,10 +74,10 @@ fn read_workspace_cargo_lock() -> String {
     let mut cursor: Option<&std::path::Path> = Some(start.as_path());
     while let Some(dir) = cursor {
         let candidate = dir.join("Cargo.lock");
-        if candidate.is_file() {
-            if let Ok(text) = std::fs::read_to_string(&candidate) {
-                return text;
-            }
+        if candidate.is_file()
+            && let Ok(text) = std::fs::read_to_string(&candidate)
+        {
+            return text;
         }
         cursor = dir.parent();
     }

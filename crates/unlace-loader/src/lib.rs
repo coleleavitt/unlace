@@ -5,15 +5,15 @@
 //! starting with [`ElfLoader`].
 
 pub mod android_art;
+pub mod android_boot;
 pub mod archive;
-pub mod symcache;
-pub mod symcache_fetch;
 pub mod btf;
 pub mod compact_unwind;
 pub mod sframe;
+pub mod symcache;
+pub mod symcache_fetch;
 pub mod wasm_object;
 pub mod xcoff;
-pub mod android_boot;
 pub use android_boot::{
     AndroidBoot, AndroidBootError, android_boot_to_binary_image, parse_android_boot,
 };
@@ -25,8 +25,8 @@ pub mod demangle_rust;
 pub mod demangle_swift;
 pub mod dwarf;
 pub mod dwarf_expr;
-pub mod split_dwarf;
 pub mod dyld_cache;
+pub mod split_dwarf;
 pub use dyld_cache::{
     ArmAuthKey, ArmAuthMeta, ChainedFixups, ChainedImport, DyldCache, DyldCacheCollection,
     DyldCacheHeader, ImageEntry, ImagePlan, Mapping, RebaseEntry, SegmentPlan, SubCacheEntry,

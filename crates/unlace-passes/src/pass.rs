@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
 use unlace_ir::BlockId;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
+
+use crate::analysis_context::PreservedAnalyses;
 
 /// Error type for optimization passes.
 #[derive(Debug, thiserror::Error)]
@@ -135,6 +137,15 @@ pub trait Pass: Send + Sync {
         unlace_ir::Maturity::Final
     }
 
+    /// Analyses preserved when this pass reports `Ok(true)`.
+    ///
+    /// The default is conservative. Passes that only touch presentation
+    /// metadata, categories, names, or type annotations can preserve CFG/SSA
+    /// analyses so context-aware runners avoid needless recomputation.
+    fn preserved_analyses(&self) -> PreservedAnalyses {
+        PreservedAnalyses::none()
+    }
+
     /// Run one iteration of the pass.
     ///
     /// Returns `Ok(true)` if the function was modified, `Ok(false)` if
@@ -189,14 +200,8 @@ pub(crate) fn compact_var_map_for_moved_insn(
 /// each of which scans `var_map.iter()` to find an SsaVarnode by
 /// value. Those are fixed by building a per-pass [`DefIndex`] once at
 /// pass entry — see below.)
-fn clear_var_map_entries_at(
-    var_map: &mut VarMap,
-    bid: BlockId,
-    idx: usize,
-) {
-    let start = (bid, idx, VarnodeSlot::Output);
-    let end = (bid, idx, VarnodeSlot::Input(usize::MAX));
-    var_map.extract_if(start..=end, |_, _| true).for_each(drop);
+fn clear_var_map_entries_at(var_map: &mut VarMap, bid: BlockId, idx: usize) {
+    var_map.remove_site(bid, idx);
 }
 
 /// Per-pass reverse index from a defined SSA varnode to its
@@ -628,8 +633,8 @@ pub fn canonical_pipeline_backedge_exceptions() -> &'static [AllowedBackedge] {
             "inner fixedpoint cluster: IV elim consumes LICM-hoisted loop invariants",
         ),
         AllowedBackedge::new(
-            "ConditionSimplifyPass",
-            "CallBoundaryCopyPropPass",
+            "KnownBitsSimplifyPass",
+            "CmovPreservePass",
             "inner fixedpoint cluster: re-run PreOpt cleanups after condition simplify exposes new copies",
         ),
         AllowedBackedge::new(
@@ -648,9 +653,9 @@ pub fn canonical_pipeline_backedge_exceptions() -> &'static [AllowedBackedge] {
             "structural detection re-entry: indirect-call resolve after stack vars exposes pointer args",
         ),
         AllowedBackedge::new(
-            "TypeConstraintSolverPass",
-            "BitfieldIdiomPass",
-            "post-loop single shot: bitfield idiom recognition uses solved types",
+            "RustAsyncPass",
+            "RepStringIdiomPass",
+            "post-loop single shot: low-level idiom recognition uses solved language/type facts",
         ),
         AllowedBackedge::new(
             "ExpressionTreePass",
@@ -786,6 +791,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("StackOffsetSnapshotPass", StackRecovery),
         PassDescriptor::new("NoreturnDetectPass", PreOpt),
         // (2) outer fixed-point body — IR-level cluster
+        PassDescriptor::new("AliasCategorizePass", PreOpt),
         PassDescriptor::new("ConstantFoldPass", LocalOpt),
         PassDescriptor::new("CopyPropagationPass", LocalOpt),
         PassDescriptor::new("GlobalCopyPropPass", GlobalOpt),
@@ -799,12 +805,17 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("StrengthReducePass", LocalOpt),
         PassDescriptor::new("IdiomRecognitionPass", LocalOpt),
         PassDescriptor::new("ConditionSimplifyPass", LocalOpt),
+        PassDescriptor::new("BoolSimplifyPass", LocalOpt),
+        PassDescriptor::new("KnownBitsSimplifyPass", LocalOpt),
+        PassDescriptor::new("CmovPreservePass", PreOpt),
         PassDescriptor::new("CallBoundaryCopyPropPass", PreOpt),
         PassDescriptor::new("RedundantFlagElimPass", PreOpt),
         PassDescriptor::new("AlgebraicSimplifyPass", PreOpt),
         // ---- cleanup ----
         PassDescriptor::new("DeadStoreElimPass", LocalOpt),
         PassDescriptor::new("DeadFlagElimPass", LocalOpt),
+        PassDescriptor::new("MemorySsaDsePass", LocalOpt),
+        PassDescriptor::new("CfgRepairPass", GlobalOpt),
         PassDescriptor::new("DeadStoreElimGlobalPass", GlobalOpt),
         PassDescriptor::new("DivisionIdiomPass", LocalOpt),
         PassDescriptor::new("ModuloIdiomPass", LocalOpt),
@@ -816,6 +827,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("StackVarRecoveryPass", StackRecovery),
         PassDescriptor::new("IndirectCallResolvePass", GlobalOpt),
         PassDescriptor::new("CppVtablePass", TypeRecovery),
+        PassDescriptor::new("CppMethodPass", TypeRecovery),
         // ---- type recovery ----
         PassDescriptor::new("CallingConventionDetectPass", TypeRecovery),
         PassDescriptor::new("ParamInferPass", TypeRecovery),
@@ -823,7 +835,13 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("StructFieldDetectPass", TypeRecovery),
         PassDescriptor::new("TypeInferPass", TypeRecovery),
         PassDescriptor::new("TypeConstraintSolverPass", TypeRecovery),
+        PassDescriptor::new("SizeofRecognitionPass", TypeRecovery),
+        PassDescriptor::new("CppVariantPass", TypeRecovery),
+        PassDescriptor::new("CppLambdaCapturePass", TypeRecovery),
+        PassDescriptor::new("CppCoroutinePass", TypeRecovery),
+        PassDescriptor::new("RustAsyncPass", TypeRecovery),
         // (post-loop, single shot)
+        PassDescriptor::new("RepStringIdiomPass", LocalOpt),
         PassDescriptor::new("BitfieldIdiomPass", LocalOpt),
         PassDescriptor::new("CryptoIdiomPass", LocalOpt),
         PassDescriptor::new("IndirectCallResolvePass", GlobalOpt),
@@ -832,6 +850,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         // (3) presentation post-passes
         PassDescriptor::new("ExpressionTreePass", FinalCleanup),
         PassDescriptor::new("VariableMergePass", LVarAlloc),
+        PassDescriptor::new("LvarCollectPass", FinalCleanup),
         PassDescriptor::new("RegisterCoalescePass", FinalCleanup),
         PassDescriptor::new("RustEnumPass", TypeRecovery),
         PassDescriptor::new("RustVtablePass", TypeRecovery),
@@ -865,11 +884,8 @@ mod def_index_tests {
         ));
         bb.insns
             .push(IrInsn::with_output(IrOp::Copy, u1, smallvec![u0], 0x1004));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![u1],
-            0x1008,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![u1], 0x1008));
         func.insert_block(bb);
         let ssa = build_ssa(func);
 
@@ -1093,16 +1109,8 @@ mod phase_tests {
     /// When you add a new pass, *append it here* — the
     /// `every_pass_has_explicit_phase` test will tell you about it.
     fn all_passes() -> Vec<Box<dyn Pass>> {
-        // Includes only passes whose modules are declared in `lib.rs`.
-        // Several pass source files exist in the tree but are not
-        // currently wired into the workspace
-        // (`bitfield_recovery`, `bool_coverage`,
-        // `calling_conv_whole_prog`, `daikon_invariants`,
-        // `func_ptr_table`, `gcc_cleanup`, `ipa_slice`,
-        // `junk_code_removal`, `path_sensitive`, `pgo_outlining`,
-        // `symbolic_heap`, `taint_engine`). They are still tagged with
-        // a phase so that wiring them in later is mechanical, but they
-        // can't appear here without first declaring `pub mod …;`.
+        // Includes all pass modules declared in `lib.rs` that can be
+        // constructed without borrowing an external analysis/resolver.
         vec![
             // ---- PreOpt ----
             Box::new(crate::alias_categorize::AliasCategorizePass::new()),
@@ -1112,6 +1120,10 @@ mod phase_tests {
             Box::new(crate::prologue_elim::PrologueElimPass),
             Box::new(crate::noreturn::NoreturnDetectPass::new()),
             Box::new(crate::cmov_preserve::CmovPreservePass),
+            Box::new(crate::gcc_cleanup::GccCleanupPass {
+                cleanup_symbols: std::collections::BTreeMap::new(),
+            }),
+            Box::new(crate::junk_code_removal::JunkCodeRemovalPass),
             // ---- LocalOpt ----
             Box::new(crate::sccp::SccpPass),
             Box::new(crate::copy_prop::CopyPropagationPass),
@@ -1121,6 +1133,7 @@ mod phase_tests {
             Box::new(crate::dead_flag_elim::DeadFlagElimPass),
             Box::new(crate::condition_simplify::ConditionSimplifyPass),
             Box::new(crate::bool_simplify::BoolSimplifyPass),
+            Box::new(crate::known_bits_simplify::KnownBitsSimplifyPass),
             Box::new(crate::strength_reduce::StrengthReducePass),
             Box::new(crate::iv_elim::IvElimPass),
             Box::new(crate::idiom_recognition::IdiomRecognitionPass),
@@ -1136,8 +1149,11 @@ mod phase_tests {
             Box::new(crate::licm::LicmPass),
             Box::new(crate::global_copy_prop::GlobalCopyPropPass),
             Box::new(crate::dse_global::DeadStoreElimGlobalPass),
+            Box::new(crate::cfg_repair::CfgRepairPass),
             Box::new(crate::tail_call::TailCallDetectPass),
             Box::new(crate::tail_duplication::TailDuplicationPass),
+            Box::new(crate::bool_coverage::BoolCoveragePass),
+            Box::new(crate::func_ptr_table::FuncPtrTablePass),
             Box::new(crate::indirect_call_resolve::IndirectCallResolvePass),
             Box::new(crate::indirect_jump_resolve::IndirectJumpResolvePass),
             Box::new(crate::sixty_four_bit_demote::SixtyFourBitDemotePass),
@@ -1150,18 +1166,31 @@ mod phase_tests {
             Box::new(crate::op_type_binding::OpTypeBindingPass),
             Box::new(crate::counterexample_refine::CounterexampleRefinePass),
             Box::new(crate::calling_convention::CallingConventionDetectPass),
+            Box::new(crate::calling_conv_whole_prog::WholeProgCallingConvPass {
+                registry: unlace_ir::ssa::FunctionSignatureRegistry::new(),
+            }),
             Box::new(crate::calling_convention::ParamInferPass),
             Box::new(crate::calling_convention::ReturnTypeInferPass),
             Box::new(crate::struct_field_detect::StructFieldDetectPass),
+            Box::new(crate::bitfield_recovery::BitfieldRecoveryPass),
             Box::new(crate::sizeof_recognition::SizeofRecognitionPass::default()),
             Box::new(crate::cpp_vtable::CppVtablePass),
+            Box::new(crate::cpp_method::CppMethodPass),
             Box::new(crate::cpp_lambda::CppLambdaCapturePass),
             Box::new(crate::cpp_coroutine::CppCoroutinePass),
             Box::new(crate::cpp_variant::CppVariantPass),
+            Box::new(crate::daikon_invariants::DaikonInvariantPass),
+            Box::new(crate::ipa_slice::IpaSlicePass),
+            Box::new(crate::path_sensitive::PathSensitivePass),
+            Box::new(crate::pgo_outlining::PgoOutliningPass),
             Box::new(crate::rust_enum::RustEnumPass),
             Box::new(crate::rust_vtable::RustVtablePass),
             Box::new(crate::rust_panic::RustPanicPass),
             Box::new(crate::rust_async::RustAsyncPass),
+            Box::new(crate::symbolic_heap::SymbolicHeapPass),
+            Box::new(crate::taint_engine::TaintEnginePass {
+                symbols: std::collections::BTreeMap::new(),
+            }),
             Box::new(crate::objc_dispatch::ObjcDispatchPass::new()),
             // GoIfaceDevirtPass has a lifetime parameter; skipped here.
             // ---- StackRecovery ----
@@ -1170,6 +1199,7 @@ mod phase_tests {
             Box::new(crate::stack_vars::StackVarRecoveryPass),
             // ---- LVarAlloc ----
             Box::new(crate::variable_merge::VariableMergePass),
+            Box::new(crate::lvar_collect::LvarCollectPass),
             // ---- FinalCleanup ----
             Box::new(crate::register_coalesce::RegisterCoalescePass),
             Box::new(crate::var_naming::VarNamingPass),
@@ -1209,13 +1239,13 @@ mod phase_tests {
         // GoIfaceDevirtPass (TypeRecovery) is omitted from `all_passes`
         // because it borrows a `&dyn` resolver.
         let expected: BTreeMap<u8, usize> = [
-            (PassPhase::PreOpt.ordinal(), 7),
-            (PassPhase::LocalOpt.ordinal(), 17),
-            (PassPhase::GlobalOpt.ordinal(), 11),
-            (PassPhase::TypeRecovery.ordinal(), 18),
+            (PassPhase::PreOpt.ordinal(), 9),
+            (PassPhase::LocalOpt.ordinal(), 18),
+            (PassPhase::GlobalOpt.ordinal(), 14),
+            (PassPhase::TypeRecovery.ordinal(), 27),
             (PassPhase::StackRecovery.ordinal(), 3),
             (PassPhase::LVarAlloc.ordinal(), 1),
-            (PassPhase::FinalCleanup.ordinal(), 4),
+            (PassPhase::FinalCleanup.ordinal(), 5),
         ]
         .into_iter()
         .collect();
@@ -1244,6 +1274,7 @@ mod phase_tests {
             StackRecovery, // StackOffsetSnapshotPass
             PreOpt,        // NoreturnDetectPass (resolver-gated, once)
             // (2) outer fixed-point body — IR-level cluster
+            PreOpt,    // AliasCategorizePass
             LocalOpt,  // ConstantFoldPass
             LocalOpt,  // CopyPropagationPass
             GlobalOpt, // GlobalCopyPropPass
@@ -1257,12 +1288,17 @@ mod phase_tests {
             LocalOpt,  // StrengthReducePass
             LocalOpt,  // IdiomRecognitionPass
             LocalOpt,  // ConditionSimplifyPass
+            LocalOpt,  // BoolSimplifyPass
+            LocalOpt,  // KnownBitsSimplifyPass
+            PreOpt,    // CmovPreservePass
             PreOpt,    // CallBoundaryCopyPropPass
             PreOpt,    // RedundantFlagElimPass
             PreOpt,    // AlgebraicSimplifyPass
             // ---- cleanup ----
             LocalOpt,  // DeadStoreElimPass
             LocalOpt,  // DeadFlagElimPass
+            LocalOpt,  // MemorySsaDsePass
+            GlobalOpt, // CfgRepairPass
             GlobalOpt, // DeadStoreElimGlobalPass
             LocalOpt,  // DivisionIdiomPass
             LocalOpt,  // ModuloIdiomPass
@@ -1274,6 +1310,7 @@ mod phase_tests {
             StackRecovery, // StackVarRecoveryPass
             GlobalOpt,     // IndirectCallResolvePass
             TypeRecovery,  // CppVtablePass
+            TypeRecovery,  // CppMethodPass
             // ---- type recovery ----
             TypeRecovery, // CallingConventionDetectPass
             TypeRecovery, // ParamInferPass
@@ -1281,7 +1318,13 @@ mod phase_tests {
             TypeRecovery, // StructFieldDetectPass
             TypeRecovery, // TypeInferPass
             TypeRecovery, // TypeConstraintSolverPass
+            TypeRecovery, // SizeofRecognitionPass
+            TypeRecovery, // CppVariantPass
+            TypeRecovery, // CppLambdaCapturePass
+            TypeRecovery, // CppCoroutinePass
+            TypeRecovery, // RustAsyncPass
             // (post-loop, single shot)
+            LocalOpt,     // RepStringIdiomPass
             LocalOpt,     // BitfieldIdiomPass
             LocalOpt,     // CryptoIdiomPass
             GlobalOpt,    // IndirectCallResolvePass (2nd)
@@ -1290,6 +1333,7 @@ mod phase_tests {
             // (3) presentation post-passes
             FinalCleanup, // ExpressionTreePass
             LVarAlloc,    // VariableMergePass
+            FinalCleanup, // LvarCollectPass
             FinalCleanup, // RegisterCoalescePass
             TypeRecovery, // RustEnumPass
             TypeRecovery, // RustVtablePass
@@ -1349,9 +1393,8 @@ mod phase_tests {
     }
 
     /// Pinned count, kept as a separate fn so the diff is obvious when
-    /// it changes. Counted from `canonical_pipeline_phases()` above as
-    /// of Batch 10 slice 1 (11 backward transitions across 49 windows,
-    /// 50 scheduled passes total).
+    /// it changes. Counted from `canonical_pipeline_phases()` above:
+    /// 11 backward transitions across 60 windows, 61 scheduled passes total.
     pub(super) const fn canonical_pipeline_transgression_count() -> usize {
         11
     }

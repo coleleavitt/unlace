@@ -125,19 +125,19 @@ impl DbContents {
         if let Some(sha) = session.binary_sha256() {
             self.verify_against(&sha)?;
         }
-        for (_, r) in &self.annotations.renames {
+        for r in self.annotations.renames.values() {
             session.rename(r.clone());
         }
-        for (_, c) in &self.annotations.comments {
+        for c in self.annotations.comments.values() {
             session.add_comment(c.clone());
         }
-        for (_, t) in &self.annotations.types {
+        for t in self.annotations.types.values() {
             session.set_type(t.clone());
         }
-        for (_, b) in &self.annotations.bookmarks {
+        for b in self.annotations.bookmarks.values() {
             session.add_bookmark(b.clone());
         }
-        for (_, p) in &self.annotations.patches {
+        for p in self.annotations.patches.values() {
             session.add_patch(p.clone());
         }
         session.set_selection(self.selection);
@@ -154,8 +154,7 @@ fn parse(bytes: &[u8]) -> Result<DbContents> {
     }
     let mut pos = 8usize;
 
-    let format_version =
-        u32::from_le_bytes(bytes[pos..pos + 4].try_into().unwrap());
+    let format_version = u32::from_le_bytes(bytes[pos..pos + 4].try_into().unwrap());
     pos += 4;
     if format_version > CURRENT_VERSION {
         bail!(
@@ -163,14 +162,12 @@ fn parse(bytes: &[u8]) -> Result<DbContents> {
         );
     }
 
-    let version_len =
-        u32::from_le_bytes(bytes[pos..pos + 4].try_into().unwrap()) as usize;
+    let version_len = u32::from_le_bytes(bytes[pos..pos + 4].try_into().unwrap()) as usize;
     pos += 4;
     if pos + version_len > bytes.len() {
         bail!("malformed header: version string overflow");
     }
-    let unlace_version =
-        String::from_utf8(bytes[pos..pos + version_len].to_vec())?;
+    let unlace_version = String::from_utf8(bytes[pos..pos + version_len].to_vec())?;
     pos += version_len;
 
     if pos + 32 > bytes.len() {
@@ -196,17 +193,13 @@ fn parse(bytes: &[u8]) -> Result<DbContents> {
             .context("zstd decompression failed")?;
         match section.name.as_str() {
             "annotations" => {
-                let (val, _): (Annotations, _) = bincode::serde::decode_from_slice(
-                    &decompressed,
-                    bincode::config::standard(),
-                )?;
+                let (val, _): (Annotations, _) =
+                    bincode::serde::decode_from_slice(&decompressed, bincode::config::standard())?;
                 annotations = Some(val);
             }
             "selection" => {
-                let (val, _): (Selection, _) = bincode::serde::decode_from_slice(
-                    &decompressed,
-                    bincode::config::standard(),
-                )?;
+                let (val, _): (Selection, _) =
+                    bincode::serde::decode_from_slice(&decompressed, bincode::config::standard())?;
                 selection = Some(val);
             }
             _other => {

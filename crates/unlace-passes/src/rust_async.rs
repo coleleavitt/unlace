@@ -80,10 +80,10 @@ pub fn detect_async_state_machines(func: &SsaFunction) -> Vec<AsyncStateMachine>
         for (i, insn) in block.insns.iter().enumerate() {
             if insn.op == IrOp::Cbranch && insn.inputs.len() >= 2 {
                 // The target is an immediate in the branch
-                if let Some(target) = insn.inputs.get(1) {
-                    if target.space == unlace_ir::SpaceId::Const {
-                        states.insert(i as u64, BlockId(target.offset as u32));
-                    }
+                if let Some(target) = insn.inputs.get(1)
+                    && target.space == unlace_ir::SpaceId::Const
+                {
+                    states.insert(i as u64, BlockId(target.offset as u32));
                 }
             }
         }

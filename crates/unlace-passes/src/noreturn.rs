@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use unlace_ir::ssa::{SsaFunction, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -150,12 +150,12 @@ impl NoreturnDetectPass {
                     _ => continue,
                 };
 
-                if let Some(name) = resolve_name(target_addr) {
-                    if self.matches_name(name) {
-                        found_noreturn = true;
-                        noreturn_insn_idx = Some(insn_idx);
-                        break;
-                    }
+                if let Some(name) = resolve_name(target_addr)
+                    && self.matches_name(name)
+                {
+                    found_noreturn = true;
+                    noreturn_insn_idx = Some(insn_idx);
+                    break;
                 }
             }
 
@@ -309,15 +309,14 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+    use unlace_ir::ssa::{
+        DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarMap, VarnodeSlot,
+    };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
 
-    fn make_ssa(
-        blocks: Vec<BasicBlock>,
-        var_map: VarMap,
-    ) -> SsaFunction {
+    fn make_ssa(blocks: Vec<BasicBlock>, var_map: VarMap) -> SsaFunction {
         let entry = blocks.first().expect("blocks non-empty").id;
         let mut func = Function::new("test", entry, 0x1000);
         for bb in blocks {
@@ -373,6 +372,8 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            eh_landing_pad_catches: BTreeMap::new(),
+            eh_cleanup_landing_pads: std::collections::BTreeSet::new(),
             stack_gaps: BTreeMap::new(),
             frame_size: 0,
             sp_delta_at: BTreeMap::new(),

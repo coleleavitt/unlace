@@ -105,14 +105,15 @@ fn struct_access_base(
 
     if let Some(&(def_bid, def_idx)) = def_map.get(&addr) {
         let def_insn = func.function.blocks.get(&def_bid)?.insns.get(def_idx)?;
-        if def_insn.op == IrOp::IntAdd && def_insn.inputs.len() >= 2 {
-            if let Some((base_idx, offset)) = base_plus_const(def_insn) {
-                let base = func
-                    .var_map
-                    .get(&(def_bid, def_idx, VarnodeSlot::Input(base_idx)))
-                    .copied()?;
-                return Some((base, offset));
-            }
+        if def_insn.op == IrOp::IntAdd
+            && def_insn.inputs.len() >= 2
+            && let Some((base_idx, offset)) = base_plus_const(def_insn)
+        {
+            let base = func
+                .var_map
+                .get(&(def_bid, def_idx, VarnodeSlot::Input(base_idx)))
+                .copied()?;
+            return Some((base, offset));
         }
     }
 

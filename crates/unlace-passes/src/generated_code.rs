@@ -181,9 +181,7 @@ pub fn classify_wrapper_thunk(insn_count: usize, ends_in_tail_call: bool) -> boo
 }
 
 /// Classify a batch of functions by name and return a map of entry address → tags.
-pub fn classify_functions(
-    functions: &[(u64, &str)],
-) -> BTreeMap<u64, Vec<FunctionTag>> {
+pub fn classify_functions(functions: &[(u64, &str)]) -> BTreeMap<u64, Vec<FunctionTag>> {
     let mut result = BTreeMap::new();
     for &(addr, name) in functions {
         let tags = classify_by_name(name);

@@ -10,9 +10,10 @@ pub use lift::X86Lifter;
 
 #[cfg(test)]
 mod tests {
-    use unlace_ir::{ArchId, IrOp, Lifter};
+    use unlace_ir::{ArchId, IrOp, Lifter, SpaceId, Varnode};
 
     use crate::X86Lifter;
+    use crate::register_file::{RDI, RSP};
 
     fn lifter() -> X86Lifter {
         X86Lifter::new()
@@ -370,6 +371,43 @@ mod tests {
             .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_mov_stack_reload_reads_from_rsp_slot() {
+        // 48 8b 7c 24 08 = mov rdi, [rsp+8]
+        let result = lifter()
+            .lift_insn(&[0x48, 0x8b, 0x7c, 0x24, 0x08], 0x1000)
+            .expect("should decode");
+
+        let load = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Load)
+            .expect("memory source should lower to a Load");
+        assert_eq!(load.inputs[0], Varnode::constant(SpaceId::Ram as u64, 8));
+        assert_ne!(
+            load.inputs[1],
+            Varnode::reg(RDI, 8),
+            "the load address must be the source memory operand, not the destination register",
+        );
+
+        let addr = load.inputs[1];
+        let addr_def = result
+            .ir_ops
+            .iter()
+            .find(|i| i.output == Some(addr))
+            .expect("stack address should be materialized before the Load");
+        assert_eq!(addr_def.op, IrOp::IntAdd);
+        assert_eq!(addr_def.inputs[0], Varnode::reg(RSP, 8));
+        assert_eq!(addr_def.inputs[1], Varnode::constant(8, 8));
+
+        let copy = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(RDI, 8)))
+            .expect("loaded value should be copied into rdi");
+        assert_eq!(copy.inputs[0], load.output.expect("Load has an output"));
     }
 
     #[test]

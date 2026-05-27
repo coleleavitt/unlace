@@ -19,6 +19,27 @@ pub fn cleanup_unreachable_labels(func: &mut HirFunction) {
     remove_unused_labels(&mut func.body, &used);
 }
 
+/// Ensure every surviving `Goto` has a same-function `Label`.
+///
+/// Some higher-level cleanups can legally move or drop HIR tails after a
+/// terminal branch. When that happens after the original structurer allocated
+/// a label, the C printer has no valid destination for the surviving goto.
+/// C labels are function-scoped, so appending a conservative empty landing
+/// label preserves syntactic validity without inventing nested structure.
+pub fn repair_missing_goto_labels(func: &mut HirFunction) {
+    let mut used = BTreeSet::new();
+    collect_gotos(&func.body, &mut used);
+    if used.is_empty() {
+        return;
+    }
+
+    let mut defined = BTreeSet::new();
+    collect_labels(&func.body, &mut defined);
+    for label in used.difference(&defined).copied() {
+        func.body.push(HirNode::Label(label));
+    }
+}
+
 fn remove_same_scope_backedges(nodes: &mut Vec<HirNode>) {
     remove_backedges_visible_from_scope(nodes, &BTreeSet::new());
 }
@@ -316,6 +337,57 @@ fn remove_unused_labels(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
     }
 }
 
+fn collect_labels(nodes: &[HirNode], defined: &mut BTreeSet<LabelId>) {
+    for node in nodes {
+        match node {
+            HirNode::Label(label) => {
+                defined.insert(*label);
+            }
+            HirNode::Block(children) => collect_labels(children, defined),
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_labels(then_body, defined);
+                if let Some(else_body) = else_body {
+                    collect_labels(else_body, defined);
+                }
+            }
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => {
+                collect_labels(body, defined);
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    collect_labels(body, defined);
+                }
+                if let Some(default) = default {
+                    collect_labels(default, defined);
+                }
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                collect_labels(try_body, defined);
+                for (_ty, body) in catch_arms {
+                    collect_labels(body, defined);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_labels(try_body, defined);
+                collect_labels(finally_body, defined);
+            }
+            _ => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
@@ -389,5 +461,25 @@ mod tests {
         cleanup_unreachable_labels(&mut hir);
 
         assert_eq!(hir.body, vec![HirNode::Break]);
+    }
+
+    #[test]
+    fn repairs_missing_goto_label_at_function_scope() {
+        let mut hir = func(vec![HirNode::If {
+            cond: unlace_ir::ssa::SsaVarnode {
+                base: unlace_ir::Varnode::reg(0, 1),
+                version: 0,
+            },
+            then_body: vec![HirNode::Goto(LabelId(7))],
+            else_body: None,
+        }]);
+
+        repair_missing_goto_labels(&mut hir);
+
+        assert!(
+            matches!(hir.body.last(), Some(HirNode::Label(LabelId(7)))),
+            "missing target label should be appended at function scope: {:?}",
+            hir.body
+        );
     }
 }

@@ -73,10 +73,8 @@ pub fn parse_fdes(bytes: &[u8], count: usize) -> Vec<SFrameFde> {
         }
         let start_addr = i32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap());
         let size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap());
-        let start_fre_off =
-            u32::from_le_bytes(bytes[offset + 8..offset + 12].try_into().unwrap());
-        let num_fres =
-            u32::from_le_bytes(bytes[offset + 12..offset + 16].try_into().unwrap());
+        let start_fre_off = u32::from_le_bytes(bytes[offset + 8..offset + 12].try_into().unwrap());
+        let num_fres = u32::from_le_bytes(bytes[offset + 12..offset + 16].try_into().unwrap());
         out.push(SFrameFde {
             start_addr,
             size,

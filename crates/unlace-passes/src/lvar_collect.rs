@@ -374,10 +374,10 @@ fn collect_params(
 ) {
     for (idx, (name, pty)) in func.inferred_params.iter().enumerate() {
         let mut flags = LvarFlags::IS_PARAM;
-        if let Some(byref) = &func.byref_info {
-            if byref.byref_params.contains(&(idx as u32)) {
-                flags |= LvarFlags::ADDRESS_TAKEN;
-            }
+        if let Some(byref) = &func.byref_info
+            && byref.byref_params.contains(&(idx as u32))
+        {
+            flags |= LvarFlags::ADDRESS_TAKEN;
         }
         // Params have no per-SSA-varnode binding in
         // `inferred_params`, so use the function-wide range — sound
@@ -455,10 +455,10 @@ fn stack_local_typekind(func: &SsaFunction, offset: i64, _size: u64) -> TypeKind
 /// user yet.
 fn stack_flags(func: &SsaFunction, offset: i64) -> LvarFlags {
     let mut f = LvarFlags::SYNTHETIC;
-    if let Some(byref) = &func.byref_info {
-        if byref.byref_locals.contains(&offset) {
-            f |= LvarFlags::ADDRESS_TAKEN;
-        }
+    if let Some(byref) = &func.byref_info
+        && byref.byref_locals.contains(&offset)
+    {
+        f |= LvarFlags::ADDRESS_TAKEN;
     }
     if func.dwarf_local_names.contains_key(&offset) {
         f |= LvarFlags::FROM_DEBUG;

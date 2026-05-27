@@ -14,12 +14,12 @@
 use smallvec::smallvec;
 use unlace_ir::known_bits::{ConstantRange, KnownBits};
 use unlace_ir::memory_ssa::MemoryLocation;
-use unlace_ir::ssa::{build_ssa, VarnodeSlot};
+use unlace_ir::ssa::{VarnodeSlot, build_ssa};
 use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::known_bits_analysis::compute_known_bits;
-use crate::memory_ssa_builder::{build_memory_ssa, clobber_for_load, AccessSite};
-use crate::scalar_evolution::{compute_trip_count, LoopExitPredicate};
+use crate::memory_ssa_builder::{AccessSite, build_memory_ssa, clobber_for_load};
+use crate::scalar_evolution::{LoopExitPredicate, compute_trip_count};
 
 // ===========================================================================
 // LLVM ValueTracking: KnownBits patterns
@@ -39,11 +39,15 @@ fn llvm_known_bits_and_mask_high_zero() {
         smallvec![x, Varnode::constant(0xFF, 8)],
         0x1000,
     ));
-    b0.insns.push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1004));
+    b0.insns
+        .push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1004));
     func.insert_block(b0);
     let ssa = build_ssa(func);
     let map = compute_known_bits(&ssa);
-    let y_sv = *ssa.var_map.get(&(BlockId(0), 0, VarnodeSlot::Output)).unwrap();
+    let y_sv = *ssa
+        .var_map
+        .get(&(BlockId(0), 0, VarnodeSlot::Output))
+        .unwrap();
     let kb = map.get(&y_sv);
     assert_eq!(kb.zero & 0xFFFFFFFFFFFFFF00, 0xFFFFFFFFFFFFFF00);
 }
@@ -62,11 +66,15 @@ fn llvm_known_bits_or_const_high_bits_known() {
         smallvec![x, Varnode::constant(0xF0, 8)],
         0x1000,
     ));
-    b0.insns.push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1004));
+    b0.insns
+        .push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1004));
     func.insert_block(b0);
     let ssa = build_ssa(func);
     let map = compute_known_bits(&ssa);
-    let y_sv = *ssa.var_map.get(&(BlockId(0), 0, VarnodeSlot::Output)).unwrap();
+    let y_sv = *ssa
+        .var_map
+        .get(&(BlockId(0), 0, VarnodeSlot::Output))
+        .unwrap();
     let kb = map.get(&y_sv);
     // Bits in 0xF0 should be known one.
     assert_eq!(kb.one & 0xF0, 0xF0);
@@ -86,11 +94,15 @@ fn llvm_known_bits_shl_low_bits_zero() {
         smallvec![x, Varnode::constant(3, 4)],
         0x1000,
     ));
-    b0.insns.push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1004));
+    b0.insns
+        .push(IrInsn::without_output(IrOp::Return, smallvec![y], 0x1004));
     func.insert_block(b0);
     let ssa = build_ssa(func);
     let map = compute_known_bits(&ssa);
-    let y_sv = *ssa.var_map.get(&(BlockId(0), 0, VarnodeSlot::Output)).unwrap();
+    let y_sv = *ssa
+        .var_map
+        .get(&(BlockId(0), 0, VarnodeSlot::Output))
+        .unwrap();
     let kb = map.get(&y_sv);
     assert_eq!(kb.zero & 0x7, 0x7); // low 3 bits zero
 }
@@ -212,14 +224,23 @@ fn llvm_memssa_disjoint_stack_slots() {
         smallvec![slot_b, Varnode::constant(2, 8)],
         0x1004,
     ));
-    b0.insns.push(IrInsn::with_output(IrOp::Load, r, smallvec![slot_a], 0x1008));
-    b0.insns.push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x100C));
+    b0.insns.push(IrInsn::with_output(
+        IrOp::Load,
+        r,
+        smallvec![slot_a],
+        0x1008,
+    ));
+    b0.insns
+        .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x100C));
     func.insert_block(b0);
     let ssa = build_ssa(func);
 
     let (graph, map) = build_memory_ssa(&ssa);
     let clobber = clobber_for_load(&ssa, BlockId(0), 2, &graph, &map);
-    let store_a_id = map.by_site[&AccessSite { block: BlockId(0), insn_idx: 0 }];
+    let store_a_id = map.by_site[&AccessSite {
+        block: BlockId(0),
+        insn_idx: 0,
+    }];
     assert_eq!(clobber, Some(store_a_id));
 }
 
@@ -242,14 +263,19 @@ fn llvm_memssa_call_clobbers_everything() {
         smallvec![Varnode::constant(0x2000, 8)],
         0x1004,
     ));
-    b0.insns.push(IrInsn::with_output(IrOp::Load, r, smallvec![slot], 0x1008));
-    b0.insns.push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x100C));
+    b0.insns
+        .push(IrInsn::with_output(IrOp::Load, r, smallvec![slot], 0x1008));
+    b0.insns
+        .push(IrInsn::without_output(IrOp::Return, smallvec![r], 0x100C));
     func.insert_block(b0);
     let ssa = build_ssa(func);
 
     let (graph, map) = build_memory_ssa(&ssa);
     let clobber = clobber_for_load(&ssa, BlockId(0), 2, &graph, &map);
-    let call_id = map.by_site[&AccessSite { block: BlockId(0), insn_idx: 1 }];
+    let call_id = map.by_site[&AccessSite {
+        block: BlockId(0),
+        insn_idx: 1,
+    }];
     assert_eq!(clobber, Some(call_id));
 }
 

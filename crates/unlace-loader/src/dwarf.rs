@@ -543,10 +543,10 @@ fn extract_composites_from_unit(
             if let Some(et) = extract_enum_type(dwarf, unit, child)? {
                 enums.insert(et.name.clone(), et);
             }
-        } else if tag == DW_TAG_union_type {
-            if let Some(ut) = extract_union_type(dwarf, unit, child)? {
-                unions.insert(ut.name.clone(), ut);
-            }
+        } else if tag == DW_TAG_union_type
+            && let Some(ut) = extract_union_type(dwarf, unit, child)?
+        {
+            unions.insert(ut.name.clone(), ut);
         }
     }
 

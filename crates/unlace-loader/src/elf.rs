@@ -341,12 +341,12 @@ where
 {
     if let object::read::RelocationTarget::Symbol(idx) = reloc.target() {
         // Try dynamic symbol table first, then static.
-        if let Some(table) = dynsym {
-            if let Ok(sym) = table.symbol_by_index(idx) {
-                let name = sym.name().unwrap_or_default();
-                if !name.is_empty() {
-                    return name.to_string();
-                }
+        if let Some(table) = dynsym
+            && let Ok(sym) = table.symbol_by_index(idx)
+        {
+            let name = sym.name().unwrap_or_default();
+            if !name.is_empty() {
+                return name.to_string();
             }
         }
         if let Ok(sym) = file.symbol_by_index(idx) {

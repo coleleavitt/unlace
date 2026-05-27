@@ -201,11 +201,11 @@ fn extract_invariants(loop_body: &mut Vec<HirNode>, iv_guard: Option<Varnode>) -
     let mut kept: Vec<HirNode> = Vec::with_capacity(original.len());
 
     for node in original {
-        if let HirNode::Statement(insn) = &node {
-            if is_hoistable(insn, &modified, &write_counts, iv_guard) {
-                hoisted.push(node);
-                continue;
-            }
+        if let HirNode::Statement(insn) = &node
+            && is_hoistable(insn, &modified, &write_counts, iv_guard)
+        {
+            hoisted.push(node);
+            continue;
         }
         kept.push(node);
     }
@@ -250,10 +250,10 @@ fn collect_modified(node: &HirNode, modified: &mut BTreeSet<Varnode>) {
                 if let Some(out) = update.output {
                     modified.insert(out);
                 }
-                if let Some(init_insn) = init {
-                    if let Some(out) = init_insn.output {
-                        modified.insert(out);
-                    }
+                if let Some(init_insn) = init
+                    && let Some(out) = init_insn.output
+                {
+                    modified.insert(out);
                 }
             }
         }
@@ -346,12 +346,11 @@ fn count_top_level_writes(nodes: &[HirNode]) -> BTreeSet<Varnode> {
     let mut seen_once: BTreeSet<Varnode> = BTreeSet::new();
     let mut seen_twice: BTreeSet<Varnode> = BTreeSet::new();
     for node in nodes {
-        if let HirNode::Statement(insn) = node {
-            if let Some(out) = insn.output {
-                if !seen_once.insert(out) {
-                    seen_twice.insert(out);
-                }
-            }
+        if let HirNode::Statement(insn) = node
+            && let Some(out) = insn.output
+            && !seen_once.insert(out)
+        {
+            seen_twice.insert(out);
         }
     }
     seen_twice

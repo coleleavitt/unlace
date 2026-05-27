@@ -205,15 +205,18 @@ Ordered by value-per-effort, grounded in the findings above:
 
 ## Part 2: Deep-dive on remaining recovery gaps (2026-05-27)
 
-Expanded research on the specific gaps blocking medium/stripped/debug_templates
-fixture convergence and broader output quality.
+Expanded research on the specific gaps blocking `medium`/`stripped` fixture
+convergence and broader output quality. `debug_templates` has since moved from
+XFAIL to PASS in `xtask semantic-report`.
 
 ### 1. Optimized loop recovery (medium/stripped XFAIL timeout)
 
-**The problem:** Compiler-optimized loops (loop rotation, unswitching, unrolling,
-LICM, induction variable strength-reduction) produce CFGs that don't match any
-simple while/for template. Our structurer either infinite-loops trying to match
-or produces goto-heavy output.
+**The problem:** Compiler-optimized loops (loop rotation, unswitching,
+unrolling, LICM, induction variable strength-reduction) produce CFGs that don't
+match any simple while/for template. The current failure is concrete: generated
+C for optimized `main` now materializes more loop seed assignments, but still
+loses loop-carried lvar/phi state and x86 subregister state in loop bodies
+(`eax`/`rax` style aliases), so the recompiled subset times out.
 
 **Binary Ninja 4.1's approach (2024-06):**
 A blog post from Vector 35 describes their complete rewrite of control-flow
@@ -459,13 +462,13 @@ binaries.
 4. **Interprocedural propagation** — if function A passes a pointer to function
    B, and B accesses fields, propagate the struct type back to A's variable
 
-### Summary: specific fixes for the three XFAILs
+### Summary: specific fixes for the remaining XFAILs
 
 | XFAIL | Root cause | Fix |
 |---|---|---|
-| medium | structurer timeout on -O2 loop rotation | fuel limit + loop-rotation reversal pass |
-| stripped | same as medium (same binary, stripped) | same fix benefits both |
-| debug_templates | C++ sret not detected → raw pointer writes | sret detection in calling_conv + printer rendering |
+| medium | optimized `main` loses loop-carried lvar/phi and x86 subregister state in loop bodies | lvar/phi coalescing that materializes initial values and loop-carried updates, plus subregister-aware expression recovery |
+| stripped | same optimized-main recovery bug under stripped symbols | same fix benefits both |
+| debug_templates | fixed: C++ template helper subset now recompiles and behavior-matches | keep semantic PASS covered by `xtask semantic-report` |
 
 ### Additional sources found
 
@@ -478,3 +481,248 @@ binaries.
 - Decompilation Wiki: https://decompilation.wiki/ (Zion Basque et al.)
 - DIRTY code/model: https://github.com/CMUSTRUDEL/DIRTY
 - VarBERT: https://sefcom.asu.edu/publications/varbert-oakland24.pdf
+
+
+---
+
+## Part 3: Register aliasing, partial-register SSA, and lvar recovery (2026-05-27)
+
+This is the core technical gap blocking correct variable recovery in unlace.
+The problem: x86-64 has hierarchically overlapping registers (RAX ⊃ EAX ⊃ AX ⊃
+{AH, AL}), and a 32-bit write implicitly zero-extends into the 64-bit parent.
+Our SSA construction treats each (space, offset, size) tuple as an independent
+variable, so `rax:8` and `eax:4` become separate SSA names with no semantic
+connection. This breaks data flow, type propagation, and variable recovery.
+
+### The problem in detail (unlace-specific)
+
+Current state in `crates/unlace-lift-x86/src/register_file.rs:819`:
+- RAX → (offset=0, size=8)
+- EAX → (offset=0, size=4)
+- AX → (offset=0, size=2)
+- AL → (offset=0, size=1)
+- AH → (offset=1, size=1)
+
+In `crates/unlace-ir/src/ssa.rs:1760`, SSA keys by exact `(space, offset, size)`.
+So a write to EAX and a subsequent read of RAX are **disconnected** — no
+def-use chain, no data flow. This is semantically wrong on x86-64 where
+`mov eax, 5` implicitly sets `rax = 5` (zero-extends upper 32 bits).
+
+### Van Emmerik's solution (Boomerang decompiler, PhD 2007)
+
+The canonical reference: "Static Single Assignment for Decompilation" (PhD thesis,
+U. Queensland, 2007). Chapter 3.7 "Overlapped Registers":
+
+**Core principle:** Treat overlapped registers as separate IR variables, but make
+the side-effects explicit at decode time. After any assignment to an overlapped
+register, the decoder emits assignments representing the aliasing effects:
+
+**Four cases for x86 (eax/ax/al/ah):**
+
+1. After `eax := expr`:
+   - `ax := truncate(eax)`
+   - `al := truncate(eax)`
+   - `ah := eax@[8:15]`
+
+2. After `ax := expr`:
+   - `eax := (eax & 0xFFFF0000) | zext(ax)`
+   - `al := truncate(ax)`
+   - `ah := ax@[8:15]`
+
+3. After `al := expr`:
+   - `eax := (eax & 0xFFFFFF00) | zext(al)`
+   - `ax := (ax & 0xFF00) | zext(al)`
+
+4. After `ah := expr`:
+   - `eax := (eax & 0xFFFF00FF) | (zext(ah) << 8)`
+   - `ax := (ax & 0x00FF) | (zext(ah) << 8)`
+
+**Key insight:** Dead code elimination removes almost all of these. Where `al` and
+`ah` are used as independent variables, the parent `ax`/`eax`/`rax` assignments
+are dead and get eliminated. Where the complex manipulations survive, the
+original source genuinely performed those operations.
+
+**x86-64 extension:** On x86-64, a 32-bit write to EAX implicitly zero-extends
+to RAX. So the rule becomes:
+
+After `eax := expr`:
+- `rax := zext32_to_64(eax)`  ← this is the critical one
+- `ax := truncate(eax)`
+- `al := truncate(eax)`
+- `ah := eax@[8:15]`
+
+After `rax := expr`:
+- `eax := truncate(rax)`
+- `ax := truncate(rax)`
+- `al := truncate(rax)`
+- `ah := rax@[8:15]`
+
+16-bit and 8-bit writes do NOT zero-extend on x86-64 (only 32-bit does):
+
+After `ax := expr`:
+- `rax := (rax & 0xFFFFFFFFFFFF0000) | zext(ax)`
+- (etc.)
+
+### Ghidra's pcode approach
+
+Ghidra uses SUBPIECE and INT_ZEXT p-code ops to model this:
+- A write to a sub-register emits `COPY` to the sub-register varnode, then
+  `INT_ZEXT` or `PIECE`/`SUBPIECE` to connect to the parent varnode
+- SSA is constructed over the resulting p-code, where the aliasing is already
+  explicit in the IR
+- The decompiler later **merges** varnodes that are proven to be parts of the
+  same high-level variable (the "merge" phase after type propagation)
+
+### Hex-Rays lvar model (from indexed SDK)
+
+From `research/ida-hexrays-docs/sdk/include/hexrays.hpp:2387`:
+- `lvar_ref_t` only exists after `MMAT_LVARS` maturity
+- It carries `mba` (microcode block array) + `idx` (lvar index) + `off` (byte
+  offset within the lvar)
+- This means sub-pieces of locals are represented as **byte-range references
+  into a recovered variable**, not as independent SSA names
+- The key architectural difference: Hex-Rays first recovers full-width variables
+  (via microcode optimization + GLBOPT stages), then references sub-pieces by
+  offset within the lvar — our approach tries to version sub-pieces independently
+  and then coalesce later, which is architecturally backwards
+
+### LLVM's sub-register liveness model
+
+From LLVM's `lib/CodeGen/RegisterCoalescer.cpp`:
+- LLVM tracks **lane masks** — each sub-register has a bitmask identifying which
+  lanes of the super-register it covers
+- `LiveRange` has `subranges` — sub-register-granularity liveness tracked
+  separately when needed
+- The `RegisterCoalescer` handles aliased copies by checking whether the copy
+  source/dest lane masks overlap and whether the interference is only on
+  certain sub-ranges
+- Key concept: **partial defs** — a write to a sub-register is a partial def of
+  the super-register, requiring special handling in liveness (the super-register
+  is not fully killed)
+
+### Colibri: coalescing algorithm for aliased registers (UFMG, 2009)
+
+Pereira & Palsberg's "Coalescing Algorithm for Aliased Registers":
+- Models register aliasing as a **hierarchy**: RAX at level 3, EAX at level 2,
+  AX at level 1, AL/AH at level 0
+- The interference graph has both regular edges (conflict) and **alias edges**
+  (same physical storage, different widths)
+- Coalescing decision: two variables can share a register only if:
+  1. They don't interfere (standard Chaitin condition)
+  2. Their combined width fits the alias hierarchy (e.g., two 32-bit values
+     can't both live in the same 64-bit register at the same time unless one
+     dominates the other)
+- The approach adapts Bouchez et al.'s optimistic/conservative coalescing to
+  handle hierarchical aliasing
+- NP-complete in general (Lee et al., ICALP'07), but practical heuristics work
+  well
+
+### Puzzle-solving formulation (Pereira & Palsberg, PLDI'08)
+
+- Models register allocation as a puzzle: each register is a "board" with slots
+  of different sizes, each variable is a "piece" that must fit
+- For x86: RAX is a board with slots {RAX:64, EAX:32, AX:16, AH:8, AL:8}
+- Constraint: pieces cannot overlap in time (liveness) or space (physical bits)
+- Polynomial-time solvable for fixed-depth hierarchies (which x86 is)
+- Directly applicable to decompiler lvar allocation: instead of allocating
+  registers, we're allocating variable names to overlapping live ranges
+
+### What unlace needs: a concrete implementation plan
+
+**Phase 1: Explicit aliasing in the lifter (immediate fix)**
+
+In `crates/unlace-lift-x86/src/lift.rs`, after each register write:
+
+```rust
+// After a 32-bit write (e.g., `mov eax, expr`):
+// Emit: rax := zext32_to_64(eax)
+emit(IrOp::ZExt, dst=rax_var, src=eax_var);
+// Emit: ax := truncate16(eax)  [optional, only if ax is live]
+// Emit: al := truncate8(eax)   [optional, only if al is live]
+
+// After a 16-bit write (e.g., `mov ax, expr`):
+// Emit: rax := (rax & ~0xFFFF) | zext(ax)
+emit(IrOp::Compose, dst=rax_var, hi=rax_upper, lo=ax_var);
+
+// After an 8-bit write to AL:
+// Emit: rax := (rax & ~0xFF) | zext(al)
+emit(IrOp::Compose, dst=rax_var, hi=rax_upper, lo=al_var);
+```
+
+The IR needs two new ops (or reuse existing):
+- `IrOp::ZExt { from_bits, to_bits }` — zero-extend
+- `IrOp::SubPiece { offset, size }` — extract byte range (like Ghidra SUBPIECE)
+- `IrOp::Compose` — combine high/low parts (like Ghidra PIECE)
+
+**Phase 2: Dead code elimination cleans up**
+
+After explicit aliasing, most of the auxiliary assignments will be dead (the
+original source only used one width). Our existing `eliminate_dead_code_ssa`
+will remove them. The ones that survive represent genuine partial-register
+operations in the source.
+
+**Phase 3: Canonical-width SSA**
+
+After DCE, introduce a normalization pass:
+- For each register family (RAX/EAX/AX/AL/AH), determine the "canonical width"
+  actually used in the function (typically 64-bit for x86-64)
+- Replace remaining sub-register references with explicit zext/truncate of the
+  canonical variable
+- SSA then versions the canonical-width variable, and sub-accesses become
+  expressions on it
+
+**Phase 4: Lvar allocation (matches Hex-Rays model)**
+
+After SSA optimization and before structuring:
+1. Build interference graph over canonical variables
+2. Apply graph-coloring coalescing (Hack & Goos, or Bouchez et al.)
+3. Merge non-interfering SSA names that originated from the same register family
+4. Name the result: `v1` (64-bit use of RAX), or if only 32-bit is ever used,
+   declare as `int v1` (32-bit) and suppress the zext
+
+**Alternative approach: pre-SSA canonicalization (simpler, recommended first)**
+
+Before SSA construction:
+1. In the lifter, always emit writes to the full 64-bit register
+2. For `mov eax, X`: emit `rax := zext32(X)`
+3. For `mov ax, X`: emit `rax := (rax & ~0xFFFF) | zext16(X)`
+4. For `mov al, X`: emit `rax := (rax & ~0xFF) | zext8(X)`
+5. For reads of sub-registers: emit `eax := trunc32(rax)` as needed
+
+This means SSA only ever versions `rax`, never `eax`/`ax`/`al`/`ah` directly.
+Sub-register reads become explicit truncation expressions. This is simpler to
+implement and avoids the need for post-SSA coalescing of aliases entirely.
+
+**Tradeoff:** The pre-SSA approach produces more verbose IR initially (lots of
+mask-and-or operations) but DCE + expression simplification will eliminate most
+of them. It also makes the "two independent 8-bit variables in AL and AH" case
+slightly harder to recover (requires detecting that the high/low halves are
+independent after SSA — but this is rare in x86-64 code).
+
+### Summary: recommended implementation order
+
+1. **Pre-SSA canonicalization** (Phase 4 alternative above) — simplest, highest
+   value, directly fixes the register aliasing bug. All register writes target
+   the 64-bit parent; reads of sub-registers become explicit truncations.
+2. **Add ZExt/SubPiece/Compose IR ops** if not already present (check current
+   `IrOp` enum — we may already have these or equivalent).
+3. **Expression simplification** to clean up the verbose patterns:
+   - `trunc32(zext32(x))` → `x`
+   - `(x & ~0xFF) | (x & 0xFF)` → `x`
+   - `zext32(trunc32(x))` → `x` when upper bits are known zero
+4. **Type-driven width selection** in the printer: if a variable is only ever
+   used at 32-bit width, declare as `int` not `__int64`.
+
+### Sources
+
+- Van Emmerik, M.J. "Static Single Assignment for Decompilation" PhD thesis,
+  U. Queensland, 2007. Ch. 3.7 "Overlapped Registers". PDF: yurichev.com/mirrors/vanEmmerik_ssa.pdf
+- Pereira, F.M.Q. & Palsberg, J. "Register Allocation by Puzzle Solving"
+  PLDI'08. PDF: llvm.org/pubs/2008-06-PLDI-PuzzleSolving.pdf
+- Pereira et al. "A Coalescing Algorithm for Aliased Registers" UFMG 2009.
+  PDF: homepages.dcc.ufmg.br/~fernando/publications/papers/Colibri2009.pdf
+- Lee, J.K., Palsberg, J., Pereira, F.M.Q. "Aliased Register Allocation"
+  ICALP'07.
+- LLVM RegisterCoalescer: llvm.org/doxygen/RegisterCoalescer_8cpp_source.html
+- Hex-Rays SDK: hexrays.hpp lvar_ref_t (MMAT_LVARS model)
+- Ghidra p-code: SUBPIECE/INT_ZEXT/PIECE ops for sub-register modeling

@@ -10,6 +10,9 @@ pub fn cleanup_unreachable_labels(func: &mut HirFunction) {
     let mut aliases = BTreeMap::new();
     collapse_label_clusters(&mut func.body, &mut aliases);
     if !aliases.is_empty() {
+        if label_cleanup_trace_enabled() {
+            eprintln!("[unlace-label-cleanup] aliases={aliases:?}");
+        }
         rewrite_gotos(&mut func.body, &aliases);
     }
     remove_same_scope_backedges(&mut func.body);
@@ -17,6 +20,11 @@ pub fn cleanup_unreachable_labels(func: &mut HirFunction) {
     let mut used = BTreeSet::new();
     collect_gotos(&func.body, &mut used);
     remove_unused_labels(&mut func.body, &used);
+}
+
+fn label_cleanup_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_LABEL_CLEANUP_TRACE").is_some()
+        || std::env::var_os("UNLACE_HIR_TRACE_VERBOSE").is_some()
 }
 
 /// Ensure every surviving `Goto` has a same-function `Label`.
@@ -41,11 +49,7 @@ pub fn repair_missing_goto_labels(func: &mut HirFunction) {
 }
 
 fn remove_same_scope_backedges(nodes: &mut Vec<HirNode>) {
-    remove_backedges_visible_from_scope(nodes, &BTreeSet::new());
-}
-
-fn remove_backedges_visible_from_scope(nodes: &mut Vec<HirNode>, inherited: &BTreeSet<LabelId>) {
-    let mut visible = inherited.clone();
+    let mut visible: BTreeSet<LabelId> = BTreeSet::new();
     let mut retained = Vec::with_capacity(nodes.len());
 
     for mut node in std::mem::take(nodes) {
@@ -54,9 +58,17 @@ fn remove_backedges_visible_from_scope(nodes: &mut Vec<HirNode>, inherited: &BTr
                 visible.insert(*label);
                 retained.push(node);
             }
-            HirNode::Goto(label) if visible.contains(label) => {}
+            HirNode::Goto(label) if visible.contains(label) => {
+                if label_cleanup_trace_enabled() {
+                    eprintln!("[unlace-label-cleanup] remove-same-scope-backedge label={label:?}");
+                }
+                // drop the redundant in-same-scope backward goto
+            }
             HirNode::Block(children) => {
-                remove_backedges_visible_from_scope(children, &visible);
+                // Block is a flat lexical scope continuation — recurse with a
+                // fresh visible set; a label nested inside the block is not a
+                // sibling of the outer scope.
+                remove_same_scope_backedges(children);
                 retained.push(node);
             }
             HirNode::If {
@@ -64,24 +76,24 @@ fn remove_backedges_visible_from_scope(nodes: &mut Vec<HirNode>, inherited: &BTr
                 else_body,
                 ..
             } => {
-                remove_backedges_visible_from_scope(then_body, &visible);
+                remove_same_scope_backedges(then_body);
                 if let Some(else_body) = else_body {
-                    remove_backedges_visible_from_scope(else_body, &visible);
+                    remove_same_scope_backedges(else_body);
                 }
                 retained.push(node);
             }
             HirNode::While { body, .. }
             | HirNode::DoWhile { body, .. }
             | HirNode::For { body, .. } => {
-                remove_backedges_visible_from_scope(body, &visible);
+                remove_same_scope_backedges(body);
                 retained.push(node);
             }
             HirNode::Switch { cases, default, .. } => {
                 for (_, body, _) in cases {
-                    remove_backedges_visible_from_scope(body, &visible);
+                    remove_same_scope_backedges(body);
                 }
                 if let Some(default) = default {
-                    remove_backedges_visible_from_scope(default, &visible);
+                    remove_same_scope_backedges(default);
                 }
                 retained.push(node);
             }
@@ -89,9 +101,9 @@ fn remove_backedges_visible_from_scope(nodes: &mut Vec<HirNode>, inherited: &BTr
                 try_body,
                 catch_arms,
             } => {
-                remove_backedges_visible_from_scope(try_body, &visible);
+                remove_same_scope_backedges(try_body);
                 for (_ty, body) in catch_arms.iter_mut() {
-                    remove_backedges_visible_from_scope(body, &visible);
+                    remove_same_scope_backedges(body);
                 }
                 retained.push(node);
             }
@@ -99,8 +111,8 @@ fn remove_backedges_visible_from_scope(nodes: &mut Vec<HirNode>, inherited: &BTr
                 try_body,
                 finally_body,
             } => {
-                remove_backedges_visible_from_scope(try_body, &visible);
-                remove_backedges_visible_from_scope(finally_body, &visible);
+                remove_same_scope_backedges(try_body);
+                remove_same_scope_backedges(finally_body);
                 retained.push(node);
             }
             _ => retained.push(node),
@@ -289,7 +301,16 @@ fn collect_gotos(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
 }
 
 fn remove_unused_labels(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
-    nodes.retain(|node| !matches!(node, HirNode::Label(label) if !used.contains(label)));
+    nodes.retain(|node| {
+        let remove = matches!(node, HirNode::Label(label) if !used.contains(label));
+        if remove
+            && label_cleanup_trace_enabled()
+            && let HirNode::Label(label) = node
+        {
+            eprintln!("[unlace-label-cleanup] remove-unused-label label={label:?}");
+        }
+        !remove
+    });
     for node in nodes {
         match node {
             HirNode::Block(children) => remove_unused_labels(children, used),
@@ -461,6 +482,75 @@ mod tests {
         cleanup_unreachable_labels(&mut hir);
 
         assert_eq!(hir.body, vec![HirNode::Break]);
+    }
+
+    fn dummy_cond() -> unlace_ir::ssa::SsaVarnode {
+        unlace_ir::ssa::SsaVarnode {
+            base: unlace_ir::Varnode::reg(0, 1),
+            version: 0,
+        }
+    }
+
+    #[test]
+    fn preserves_goto_to_label_in_outer_scope() {
+        // Label at outer scope; backward goto lives inside a While body.
+        // This is the irreducible-loop pattern: the goto must be retained,
+        // because it re-enters the code between the label and the conditional.
+        let mut hir = func(vec![
+            HirNode::Label(LabelId(1)),
+            HirNode::While {
+                cond: dummy_cond(),
+                body: vec![HirNode::If {
+                    cond: dummy_cond(),
+                    then_body: vec![HirNode::Goto(LabelId(1))],
+                    else_body: None,
+                }],
+            },
+        ]);
+
+        cleanup_unreachable_labels(&mut hir);
+
+        let mut gotos = BTreeSet::new();
+        collect_gotos(&hir.body, &mut gotos);
+        assert!(
+            gotos.contains(&LabelId(1)),
+            "cross-scope backward Goto(1) must survive cleanup: {:?}",
+            hir.body
+        );
+        let mut labels = BTreeSet::new();
+        collect_labels(&hir.body, &mut labels);
+        assert!(
+            labels.contains(&LabelId(1)),
+            "Label(1) must survive cleanup because Goto(1) still targets it: {:?}",
+            hir.body
+        );
+    }
+
+    #[test]
+    fn preserves_goto_inside_if_inside_if() {
+        // Deeper nesting: Label at outer scope, Goto two If-bodies deep.
+        let mut hir = func(vec![
+            HirNode::Label(LabelId(1)),
+            HirNode::If {
+                cond: dummy_cond(),
+                then_body: vec![HirNode::If {
+                    cond: dummy_cond(),
+                    then_body: vec![HirNode::Goto(LabelId(1))],
+                    else_body: None,
+                }],
+                else_body: None,
+            },
+        ]);
+
+        cleanup_unreachable_labels(&mut hir);
+
+        let mut gotos = BTreeSet::new();
+        collect_gotos(&hir.body, &mut gotos);
+        assert!(
+            gotos.contains(&LabelId(1)),
+            "deeply nested cross-scope Goto(1) must survive cleanup: {:?}",
+            hir.body
+        );
     }
 
     #[test]

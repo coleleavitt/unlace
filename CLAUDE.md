@@ -183,6 +183,7 @@ research sessions. This ignores stale Sisyphus task state.
 
 15. Control-flow structuring.
    IDA uses dominators, loop detection/classification, if/else recovery, break/continue recovery, goto minimization, switch recovery, short-circuiting, and irreducible-CFG fallback. Unlace has many passes, but broad-corpus sessions still flag loop/break/goto gaps.
+   Note (2026-05-27, commit 65482f216): `label_cleanup::remove_same_scope_backedges` now correctly preserves backward gotos that target an outer-scope label (irreducible-loop back-edges from inside an `If`/`While`/`Switch`/`Try*` body). Previously it inherited the visible-label set into nested bodies and incorrectly dropped the cross-scope back-edge; each nested scope now starts with a fresh visible set. This unblocks the goto-driven irreducible fallback emitted by the structurer when `split_irreducible_entries` is conservative. The medium/stripped `main` XFAIL still observes `cc failed` because `__stack_chk_fail()` is rendered as a value assignment and a stack-canary scalar (`v_72`) is referenced without a declaration — those are downstream codegen bugs, separate from the label-cleanup fix.
 
 16. C printer as an AST printer, not string surgery.
    IDA's printer is ctree/opcode-dispatch based. For parity, add semantic expression nodes/helpers for casts, member/array/deref, calls, IDA macros (`LOBYTE`, `HIDWORD`, `COERCE_*`), and operator precedence/width rules. Avoid late textual rewrites.

@@ -2455,7 +2455,16 @@ fn try_resolve_struct_field(
     if base_input.space == SpaceId::Const {
         return None;
     }
-    let field_name = field_name_for_offset(ctx, const_offset)?;
+    let trace = std::env::var_os("UNLACE_TYPE_TRACE").is_some();
+    let Some(field_name) = field_name_for_offset(ctx, const_offset) else {
+        if trace {
+            eprintln!(
+                "[unlace:type] struct-field no-field-at-offset off={const_offset} known_offsets={:?}",
+                ctx.field_by_offset.keys().collect::<Vec<_>>()
+            );
+        }
+        return None;
+    };
     let base_sv = ctx
         .stmt_inputs
         .get(&addr_stmt_idx)
@@ -2467,18 +2476,42 @@ fn try_resolve_struct_field(
                 if let Some(di) = ctx.stmt_insns.get(&ds).cloned() {
                     format!("({})", emit_expr(&di, ds, ctx))
                 } else {
-                    meaningful_field_base_name(ctx.name_overrides.get(&sv.base)?)?
+                    fallback_field_base_name(ctx, &sv.base, trace)?
                 }
             } else {
-                meaningful_field_base_name(ctx.name_overrides.get(&sv.base)?)?
+                fallback_field_base_name(ctx, &sv.base, trace)?
             }
         }
-        None => meaningful_field_base_name(ctx.name_overrides.get(base_input)?)?,
+        None => fallback_field_base_name(ctx, base_input, trace)?,
     };
     if is_generic_address_expr(&base_expr) {
+        if trace {
+            eprintln!("[unlace:type] struct-field generic-base base_expr={base_expr:?}");
+        }
         return None;
     }
     Some(format!("{}->{}", base_expr, field_name))
+}
+
+/// Resolve the printable name of a struct-access base varnode, falling back to
+/// the cached `vN` name when the base has no role/DWARF override. Previously
+/// this required a `name_overrides` entry and returned `None` otherwise, which
+/// made a struct field load through a plain `vN` base (no DWARF param) miss the
+/// `->field` rendering and fall through to raw array-index output.
+fn fallback_field_base_name(ctx: &mut PrintCtx, base: &Varnode, trace: bool) -> Option<String> {
+    if let Some(name) = ctx.name_overrides.get(base) {
+        return meaningful_field_base_name(name);
+    }
+    // No explicit override: use the deterministic `vN` cache name. This is a
+    // legitimate base expression (`v1->size`), not a generic `aN` arg name.
+    let name = ctx.name_of(&SsaVarnode {
+        base: *base,
+        version: 0,
+    });
+    if trace {
+        eprintln!("[unlace:type] struct-field fallback-base name={name:?}");
+    }
+    meaningful_field_base_name(&name)
 }
 
 fn field_name_for_offset(ctx: &PrintCtx, offset: u64) -> Option<String> {
@@ -16602,11 +16635,15 @@ mod tests {
         let func = make_func("ternary_func", body);
         let output = print_c(&func);
 
+        // Scope to the function body — the shared IDA/SSE prelude legitimately
+        // contains `?:` (e.g. `__unlace_psrldq`), which would otherwise be the
+        // first `?`-bearing line found.
+        let body_text = function_body_text(&output, "ternary_func");
         assert!(
-            output.contains("?") && output.contains(":"),
-            "should contain ternary operator: {output}"
+            body_text.contains("?") && body_text.contains(":"),
+            "should contain ternary operator: {body_text}"
         );
-        let ternary_line = output
+        let ternary_line = body_text
             .lines()
             .find(|l| l.contains("?"))
             .expect("should find ternary line");

@@ -1267,16 +1267,64 @@ pub fn print_c_with_annotations(
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
 
     out.push_str("}\n");
-    let output = repair_arg_versioned_address_uses(rename_unreturned_bare_result(
-        declare_missing_temp_v_decls(declare_missing_control_v_decls(
-            prune_unused_plain_local_decls(prune_unused_labels(prune_dead_plain_assignments(out))),
-        )),
-    ));
+
+    // Post-emission textual cleanup pipeline. Each stage is applied in order;
+    // under UNLACE_CPRINTER_STAGE_TRACE every stage logs whether it mutated the
+    // text and the line-count delta, so a vanished statement can be pinned to
+    // the exact transform that dropped it.
+    let func_label = func.name.as_str();
+    let output = run_cleanup_stage(func_label, "dead-plain-assignments", out, prune_dead_plain_assignments);
+    let output = run_cleanup_stage(func_label, "unused-labels", output, prune_unused_labels);
+    let output =
+        run_cleanup_stage(func_label, "unused-plain-decls", output, prune_unused_plain_local_decls);
+    let output = run_cleanup_stage(
+        func_label,
+        "declare-control-v",
+        output,
+        declare_missing_control_v_decls,
+    );
+    let output =
+        run_cleanup_stage(func_label, "declare-temp-v", output, declare_missing_temp_v_decls);
+    let output =
+        run_cleanup_stage(func_label, "rename-bare-result", output, rename_unreturned_bare_result);
+    let output = run_cleanup_stage(
+        func_label,
+        "repair-arg-address",
+        output,
+        repair_arg_versioned_address_uses,
+    );
+
     if annotations.is_some_and(|a| a.recover_triangular_sum_loop) {
-        recover_triangular_sum_loop(output)
+        run_cleanup_stage(func_label, "triangular-sum", output, recover_triangular_sum_loop)
     } else {
         output
     }
+}
+
+/// Apply one post-emission cleanup `stage` to `input`, logging a before/after
+/// summary when `UNLACE_CPRINTER_STAGE_TRACE` is set. The trace reports the
+/// stage name, the function it ran on, whether the text changed, and the line
+/// delta — enough to bisect "which transform dropped statement X" without
+/// re-reading every helper.
+fn run_cleanup_stage(
+    func_name: &str,
+    stage: &str,
+    input: String,
+    stage_fn: impl FnOnce(String) -> String,
+) -> String {
+    if std::env::var_os("UNLACE_CPRINTER_STAGE_TRACE").is_none() {
+        return stage_fn(input);
+    }
+    let before_lines = input.lines().count();
+    let before = input.clone();
+    let output = stage_fn(input);
+    let after_lines = output.lines().count();
+    let changed = output != before;
+    eprintln!(
+        "[unlace-output] stage func={func_name} name={stage} changed={changed} lines={before_lines}->{after_lines} delta={}",
+        after_lines as isize - before_lines as isize
+    );
+    output
 }
 
 fn function_param_names(
@@ -14071,6 +14119,15 @@ fn prune_unused_plain_local_decls(output: String) -> String {
             if !used_later {
                 remove.insert(line_idx);
             }
+            if prune_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] decl-prune line={} name={name} block=[{}..{}) decision={}",
+                    line_idx + 1,
+                    body_start + 1,
+                    body_end + 1,
+                    if used_later { "keep" } else { "remove" }
+                );
+            }
         }
     }
 
@@ -14477,24 +14534,91 @@ fn collect_v_number_names(line: &str, names: &mut BTreeSet<String>) {
 }
 
 fn prune_dead_plain_assignments(output: String) -> String {
-    // Iterate to a fixed point. A common pattern is a chain of writes:
+    // Fixpoint iteration exists ONLY to collapse cond-family flag-temp chains:
     //     cond = 0; ... cond = a < b; ...
-    // where every "later use" of `cond` is itself an assignment to `cond`.
-    // One pass removes the last assignment; a second pass then sees the
-    // earlier ones are now genuinely dead. Cap at a small iteration count
-    // so unbalanced grammar can't loop.
+    // where every later reference to `cond` is itself a write, so one pass
+    // removes the last write and a second sees the earlier ones are dead.
+    //
+    // That backward cascade is WRONG for real register values: a `vN` named
+    // after a hardware register (`// r10d`) whose last store reaches a return
+    // is live-out to the caller and must survive even though no *intra-function*
+    // statement reads it. The single-pass `contains_identifier` semantics (any
+    // later textual reference is a use) already protects those; the fixpoint
+    // defeated it by deleting the lone reader first, then cascading backward.
+    //
+    // So: iterate to a fixpoint only when the text actually contains a
+    // cond-family temp. Register-only functions take exactly one pass, matching
+    // the pre-1e3703d86 behaviour the v850/register goldens depend on.
+    let trace = prune_trace_enabled();
+    let max_passes = if output_has_cond_family_temp(&output) {
+        8
+    } else {
+        1
+    };
+    if trace {
+        eprintln!(
+            "[unlace-output] plain-prune begin max_passes={max_passes} has_cond_family={}",
+            output_has_cond_family_temp(&output)
+        );
+    }
     let mut current = output;
-    for _ in 0..8 {
-        let next = prune_dead_plain_assignments_once(current.clone());
+    for pass in 0..max_passes {
+        let next = prune_dead_plain_assignments_once(&current, pass);
         if next == current {
+            if trace {
+                eprintln!("[unlace-output] plain-prune fixpoint reached after pass={pass}");
+            }
             return next;
         }
         current = next;
     }
+    if trace && max_passes > 1 {
+        eprintln!("[unlace-output] plain-prune hit {max_passes}-pass cap without fixpoint");
+    }
     current
 }
 
-fn prune_dead_plain_assignments_once(output: String) -> String {
+/// Cheap scan: does the emitted function *body* declare or assign any
+/// cond-family flag temporary (`cond` / `cond_N`)? Gates the dead-assignment
+/// fixpoint so a register-only function takes a single, non-cascading pass.
+///
+/// CRITICAL: only the function body is scanned, not the shared IDA prelude —
+/// the prelude's SSE helpers (`memory_order_consume`, the `__unlace_psrlq`
+/// ternary, etc.) contain the substring `cond`, which would otherwise make
+/// every function (even register-only ones like v850 `sub_10118`) take the
+/// 8-pass cascade and re-trigger the live-out over-prune this gate prevents.
+fn output_has_cond_family_temp(output: &str) -> bool {
+    // The body is everything from the first function-signature line (`… ) {`)
+    // onward; the prelude precedes it. A line that opens the body both
+    // contains `(` and ends with `{` and is not a comment.
+    let mut in_body = false;
+    for line in output.lines() {
+        if !in_body {
+            let t = line.trim_start();
+            if t.contains('(') && line.trim_end().ends_with('{') && !t.starts_with("//") {
+                in_body = true;
+            }
+            continue;
+        }
+        let t = line.trim_start();
+        if t.starts_with("cond =")
+            || t.starts_with("cond;")
+            || t.starts_with("_BOOL cond")
+            || t.starts_with("char cond")
+            || t.starts_with("int cond")
+            || t.starts_with("__int64 cond")
+            || t.contains(" cond ")
+            || t.contains(" cond;")
+            || t.contains(" cond =")
+            || t.contains("cond_")
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let mut changed = false;
     let mut pruned_lines = Vec::with_capacity(lines.len());
@@ -14508,9 +14632,35 @@ fn prune_dead_plain_assignments_once(output: String) -> String {
         let mut kept = Vec::new();
         for (seg_idx, segment) in segments.iter().enumerate() {
             let remove = parse_plain_assignment_lhs(segment).is_some_and(|lhs| {
-                // A re-assignment to the same lhs (no compound op) is NOT a
-                // genuine use — only RHS reads keep the original write live.
-                let is_real_use = |later: &str| identifier_used_as_rvalue(later, lhs);
+                let is_cond_family = is_cond_family_local(lhs);
+
+                // The backward fixpoint cascade (pass > 0) exists solely to
+                // collapse cond-family flag-temp chains. A real register value
+                // (`vN`) may only be removed on the FIRST pass, with single-pass
+                // `contains_identifier` semantics — its last store is live-out
+                // to the caller and must not be cascade-deleted after its lone
+                // reader was removed on an earlier pass. This is the precise
+                // boundary the v850 register goldens depend on (pre-1e3703d86).
+                if pass > 0 && !is_cond_family {
+                    trace_prune_plain_assignment_full(
+                        pass, idx, lhs, segment, true, false, true, false,
+                    );
+                    return false;
+                }
+
+                // A re-assignment to the same lhs counts as a genuine use ONLY
+                // for non-cond-family locals. For `cond`/`cond_N` flag temps the
+                // chain `cond = 0; … cond = a < b;` is pure dead scaffolding, so
+                // a re-write does NOT keep the earlier write alive. For real
+                // register values a re-write IS observable.
+                let treat_reassign_as_use = !is_cond_family;
+                let is_real_use = |later: &str| {
+                    if treat_reassign_as_use {
+                        contains_identifier(later, lhs)
+                    } else {
+                        identifier_used_as_rvalue(later, lhs)
+                    }
+                };
                 let used_later_on_line = segments
                     .iter()
                     .skip(seg_idx + 1)
@@ -14518,7 +14668,16 @@ fn prune_dead_plain_assignments_once(output: String) -> String {
                 let used_later = used_later_on_line
                     || lines.iter().skip(idx + 1).any(|later| is_real_use(later));
                 let remove = !used_later;
-                trace_prune_plain_assignment(idx, lhs, segment, remove);
+                trace_prune_plain_assignment_full(
+                    pass,
+                    idx,
+                    lhs,
+                    segment,
+                    treat_reassign_as_use,
+                    used_later_on_line,
+                    used_later,
+                    remove,
+                );
                 remove
             });
             if remove {
@@ -14534,12 +14693,21 @@ fn prune_dead_plain_assignments_once(output: String) -> String {
     }
 
     if !changed {
-        return output;
+        return output.to_string();
     }
 
     let mut pruned = pruned_lines.join("\n");
     pruned.push('\n');
     pruned
+}
+
+/// True for the synthetic flag/condition temporaries (`cond`, `cond_N`) whose
+/// re-assignment chains are pure dead scaffolding emitted by the x86 flag
+/// pipeline. These — and only these — may be aggressively pruned when every
+/// later reference is itself a write. Real register-named values (`vN`) and
+/// `result` are excluded so observable last-stores survive.
+fn is_cond_family_local(name: &str) -> bool {
+    name == "cond" || is_cond_number_name(name)
 }
 
 /// Returns true iff `name` appears as an rvalue use (not as the LHS of a
@@ -14583,14 +14751,31 @@ fn identifier_used_as_rvalue(text: &str, name: &str) -> bool {
     false
 }
 
-fn trace_prune_plain_assignment(line_idx: usize, lhs: &str, segment: &str, remove: bool) {
-    if std::env::var_os("UNLACE_CPRINTER_PRUNE_TRACE").is_none() && !c_printer_trace_enabled() {
+/// Whether the dead-assignment / dead-decl pruners should emit trace lines.
+/// Enabled by either `UNLACE_CPRINTER_PRUNE_TRACE` (focused) or the global
+/// `UNLACE_CPRINTER_TRACE`.
+fn prune_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_PRUNE_TRACE").is_some() || c_printer_trace_enabled()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn trace_prune_plain_assignment_full(
+    pass: u32,
+    line_idx: usize,
+    lhs: &str,
+    segment: &str,
+    treat_reassign_as_use: bool,
+    used_on_line: bool,
+    used_later: bool,
+    remove: bool,
+) {
+    if !prune_trace_enabled() {
         return;
     }
     let text = format!(
-        "plain-prune line={} lhs={} decision={} segment={:?}",
+        "plain-prune pass={pass} line={} lhs={lhs} cond_family={} reassign_is_use={treat_reassign_as_use} used_on_line={used_on_line} used_later={used_later} decision={} segment={:?}",
         line_idx + 1,
-        lhs,
+        is_cond_family_local(lhs),
         if remove { "remove" } else { "keep" },
         segment.trim()
     );

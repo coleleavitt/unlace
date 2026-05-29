@@ -104,3 +104,35 @@ Scope each agent to a DISJOINT crate/file:
 
 Each agent: isolated worktree, run full gate set, no structurer-core edits,
 commit only if green; I integrate via cherry-pick + combined re-verify.
+
+## Sizing the residual (2026-05-29, measured — NOT assumed)
+
+Before delegating I measured the actual surface of each candidate:
+
+- **ISD self-copy+goto cleanup** (`cN = cN; goto`): exactly **1** site across
+  ALL fixtures (medium). Not agent-sized. The other ~28 medium gotos are the
+  deeply-nested `while(1)`+label **irreducible-loop structuring** — the
+  high-blast-radius structurer-core rewrite.
+- **noreturn successor pruning (SAILR opt I)**: already implemented —
+  `noreturn.rs` truncates the block after a noreturn call and the CRT name set
+  is comprehensive (exit/abort/__stack_chk_fail/__cxa_throw/_Unwind/longjmp/
+  panic). No gap.
+- **leaked-temp folding**: in f_ackermann, only **1** temp (`v21`) has ≤2 refs
+  (foldable); every other `cN`/`vN` is reused 3+ times (reassigned across the
+  recursion) — folding them would be a CORRECTNESS bug. The canary flag temps
+  `c13`(35 refs)/`c14`(44)/`c17`(35) are heavily reused, NOT dead. So blanket
+  flag-DCE is unsafe. The apparent "bloat" is the irreducible structuring
+  emitting many blocks + reassignments, not foldable single-use temps.
+
+### Conclusion
+There is **no safe, agent-sized bounded win** left in the residual. What remains
+is the DREAM/SAILR condition-based-refinement structurer-core rewrite (recover
+the nested `while(1)`+goto irreducible regions into structured loops). That is:
+- multi-week, single shared hot file (the structurer),
+- explicitly guarded by CLAUDE.md ("do not edit structurer core casually"),
+- and unsafe to parallelize across agents (merge conflicts + regressions).
+
+Spawning agents at it would cause regressions, not progress. It is filed as a
+single design-first task (below), to be done deliberately — not via ad-hoc
+parallel agents. The papers (SAILR ISD/ISC reversal + DREAM reaching-condition
+refinement) are the implementation roadmap when that work is scheduled.

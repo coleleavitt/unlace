@@ -1,4 +1,5 @@
-//! DREAM condition-based refinement for ACYCLIC regions (NDSS 2015 §IV-B,
+//! DREAM condition-based refinement for acyclic and conservative cyclic regions
+//! (NDSS 2015 §IV-B/§IV-C,
 //! `research/papers/dream_ndss2015.txt`). Step 2 of the irreducible-structuring
 //! plan (`docs/design-structurer-irreducible-2026-05-29.md`).
 //!
@@ -9,18 +10,15 @@
 //! factors a common predicate `c` out of a group of nodes (those whose reaching
 //! condition implies `c` vs `¬c`) into the arms of an `If`, then recurses.
 //!
-//! This module is PURE and UNWIRED: it is exercised only by unit tests and is
-//! NOT called from the structurer or pipeline, so it has zero regression
-//! surface. Wiring (behind `UNLACE_DREAM_STRUCT`, residual-irreducible regions
-//! only) is step 3.
-//!
-//! ACYCLIC ONLY: if the region has back-edges, [`refine_region`] returns
-//! [`StructuredNode::Unsupported`] — cyclic regions are step 4.
+//! [`refine_region`] is acyclic-only. [`refine_cyclic_region_with_exits`]
+//! handles the conservative cyclic subset by replacing back-edges with
+//! synthetic `Continue` leaves and single-target exits with synthetic `Break`
+//! leaves before reusing the acyclic condition-refinement engine.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::reaching_conditions::{
-    Cond, ReachingConditions, Region, RegionNode, compute_reaching_conditions,
+    Cond, EdgeLabel, ReachingConditions, Region, RegionNode, compute_reaching_conditions,
 };
 
 /// A structured control-flow tree with no gotos.
@@ -45,8 +43,16 @@ pub enum StructuredNode {
         cases: Vec<(i64, StructuredNode)>,
         default: Option<Box<StructuredNode>>,
     },
-    /// Region could not be structured acyclically (has back-edges) — handled by
-    /// a later (cyclic) step.
+    /// `while (true) { body }` with structured `Break`/`Continue` inside —
+    /// the cyclic-region form (DREAM §IV-C, step 4). The loop's back-edge(s)
+    /// are represented by `Continue` and its exit edge(s) by `Break` within
+    /// `body`, so no `goto` is needed.
+    Loop { body: Box<StructuredNode> },
+    /// `continue;` — a back-edge to the loop header.
+    Continue,
+    /// `break;` — an exit edge leaving the loop region.
+    Break,
+    /// Region could not be structured by this conservative engine.
     Unsupported,
 }
 
@@ -145,6 +151,151 @@ fn atomic_factors(cond: &Cond, out: &mut Vec<Cond>) {
         // extract), and `True`/`False`/`NotCaseEq` are not atomic predicate
         // factors. Intentionally contribute nothing.
         Cond::Or(_, _) | Cond::True | Cond::False | Cond::NotCaseEq(_) => {}
+    }
+}
+
+/// Refine a *cyclic* region with a single loop header into a goto-free
+/// `Loop { body }` (DREAM §IV-C, step 4).
+///
+/// Supported shape (conservative): exactly one loop header (`region.header`),
+/// every back-edge targets that header, and removing the back-edges leaves an
+/// acyclic skeleton the existing engine can structure. Back-edges become
+/// synthetic `Continue` leaves. Use [`refine_cyclic_region_with_exits`] when
+/// the caller also has labelled external exits to synthesize as `Break`.
+pub fn refine_cyclic_region(region: &Region) -> StructuredNode {
+    refine_cyclic_region_with_exits(region, &[])
+}
+
+/// Refine a cyclic region and synthesize loop exits as `Break` leaves.
+///
+/// `exits` contains labelled edges from in-region nodes to a single external
+/// successor. The target is checked by the production seam; this pure layer only
+/// needs the source and edge label so reaching-condition refinement can guard
+/// the `Break` with the same predicate as the dropped CFG edge.
+pub fn refine_cyclic_region_with_exits(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+) -> StructuredNode {
+    let rc = compute_reaching_conditions(region);
+    if rc.back_edges.is_empty() {
+        // Acyclic — not our job (use `refine_region`).
+        return StructuredNode::Unsupported;
+    }
+    // Every back-edge must target the single loop header.
+    if rc.back_edges.iter().any(|(_, dst)| *dst != region.header) {
+        return StructuredNode::Unsupported;
+    }
+    let real_nodes = region_nodes(region);
+    if real_nodes
+        .iter()
+        .any(|n| matches!(rc.conditions.get(n), None | Some(Cond::False)))
+    {
+        return StructuredNode::Unsupported;
+    }
+
+    // Structure an acyclic skeleton where:
+    // - original back-edges are replaced by synthetic Continue leaves carrying
+    //   the original edge label, so conditional latches become guarded
+    //   continues;
+    // - external exits are represented by synthetic Break leaves carrying the
+    //   original exit edge label, so exits remain guarded instead of turning the
+    //   loop into an infinite `while (true)`.
+    let mut next_synthetic = real_nodes
+        .iter()
+        .next_back()
+        .copied()
+        .unwrap_or(region.header)
+        + 1;
+    let mut continue_nodes = BTreeSet::new();
+    let mut break_nodes = BTreeSet::new();
+    let mut skeleton_edges = Vec::new();
+    for (src, dst, label) in &region.edges {
+        if rc.back_edges.contains(&(*src, *dst)) {
+            let cont = next_synthetic;
+            next_synthetic += 1;
+            continue_nodes.insert(cont);
+            skeleton_edges.push((*src, cont, label.clone()));
+        } else {
+            skeleton_edges.push((*src, *dst, label.clone()));
+        }
+    }
+    for (src, label) in exits {
+        if !real_nodes.contains(src) {
+            return StructuredNode::Unsupported;
+        }
+        let brk = next_synthetic;
+        next_synthetic += 1;
+        break_nodes.insert(brk);
+        skeleton_edges.push((*src, brk, label.clone()));
+    }
+
+    let skeleton = Region {
+        header: region.header,
+        edges: skeleton_edges,
+    };
+    let body = refine_region(&skeleton);
+    if body == StructuredNode::Unsupported {
+        return StructuredNode::Unsupported;
+    }
+
+    let body_with_control = rewrite_cyclic_sentinels(body, &continue_nodes, &break_nodes);
+    StructuredNode::Loop {
+        body: Box::new(body_with_control),
+    }
+}
+
+fn region_nodes(region: &Region) -> BTreeSet<RegionNode> {
+    let mut nodes = BTreeSet::new();
+    nodes.insert(region.header);
+    for (src, dst, _) in &region.edges {
+        nodes.insert(*src);
+        nodes.insert(*dst);
+    }
+    nodes
+}
+
+/// Replace synthetic skeleton leaves with loop control statements.
+fn rewrite_cyclic_sentinels(
+    node: StructuredNode,
+    continue_nodes: &BTreeSet<RegionNode>,
+    break_nodes: &BTreeSet<RegionNode>,
+) -> StructuredNode {
+    match node {
+        StructuredNode::Block(rn) if continue_nodes.contains(&rn) => StructuredNode::Continue,
+        StructuredNode::Block(rn) if break_nodes.contains(&rn) => StructuredNode::Break,
+        StructuredNode::Seq(parts) => StructuredNode::seq(
+            parts
+                .into_iter()
+                .map(|p| rewrite_cyclic_sentinels(p, continue_nodes, break_nodes))
+                .collect(),
+        ),
+        StructuredNode::If { cond, then, els } => StructuredNode::If {
+            cond,
+            then: Box::new(rewrite_cyclic_sentinels(*then, continue_nodes, break_nodes)),
+            els: els.map(|e| Box::new(rewrite_cyclic_sentinels(*e, continue_nodes, break_nodes))),
+        },
+        StructuredNode::Switch {
+            selector,
+            cases,
+            default,
+        } => StructuredNode::Switch {
+            selector,
+            cases: cases
+                .into_iter()
+                .map(|(value, case)| {
+                    (
+                        value,
+                        rewrite_cyclic_sentinels(case, continue_nodes, break_nodes),
+                    )
+                })
+                .collect(),
+            default: default
+                .map(|d| Box::new(rewrite_cyclic_sentinels(*d, continue_nodes, break_nodes))),
+        },
+        StructuredNode::Loop { body } => StructuredNode::Loop {
+            body: Box::new(rewrite_cyclic_sentinels(*body, continue_nodes, break_nodes)),
+        },
+        other => other,
     }
 }
 
@@ -464,6 +615,64 @@ mod tests {
         assert_eq!(refine_region(&region), StructuredNode::Unsupported);
     }
 
+    #[test]
+    fn simple_cyclic_region_refines_to_loop_continue() {
+        let region = Region {
+            header: 0,
+            edges: vec![(0, 1, EdgeLabel::Always), (1, 0, EdgeLabel::Always)],
+        };
+        let tree = refine_cyclic_region(&region);
+        assert_eq!(tree.goto_count(), 0);
+        assert!(contains_loop(&tree), "expected Loop: {tree:?}");
+        assert!(mentions_block(&tree, 0));
+        assert!(mentions_block(&tree, 1));
+        assert!(contains_continue(&tree), "expected Continue: {tree:?}");
+    }
+
+    #[test]
+    fn cyclic_region_false_exit_becomes_guarded_break() {
+        let region = Region {
+            header: 0,
+            edges: vec![(0, 1, t(0)), (1, 0, EdgeLabel::Always)],
+        };
+        let tree = refine_cyclic_region_with_exits(&region, &[(0, f(0))]);
+        assert_eq!(tree.goto_count(), 0);
+        assert!(contains_loop(&tree), "expected Loop: {tree:?}");
+        assert!(contains_continue(&tree), "expected Continue: {tree:?}");
+        assert!(contains_break(&tree), "expected Break: {tree:?}");
+        assert!(contains_if_on(&tree, 0), "expected guard p0: {tree:?}");
+    }
+
+    #[test]
+    fn conditional_latch_synthesizes_guarded_continue_and_break() {
+        let region = Region {
+            header: 0,
+            edges: vec![(0, 1, EdgeLabel::Always), (1, 0, t(7))],
+        };
+        let tree = refine_cyclic_region_with_exits(&region, &[(1, f(7))]);
+        assert_eq!(tree.goto_count(), 0);
+        assert!(contains_loop(&tree), "expected Loop: {tree:?}");
+        assert!(contains_continue(&tree), "expected Continue: {tree:?}");
+        assert!(contains_break(&tree), "expected Break: {tree:?}");
+        assert!(
+            contains_if_on(&tree, 7),
+            "expected latch guard p7: {tree:?}"
+        );
+    }
+
+    #[test]
+    fn cyclic_region_with_non_header_backedge_is_unsupported() {
+        let region = Region {
+            header: 0,
+            edges: vec![
+                (0, 1, EdgeLabel::Always),
+                (1, 2, EdgeLabel::Always),
+                (2, 1, EdgeLabel::Always),
+            ],
+        };
+        assert_eq!(refine_cyclic_region(&region), StructuredNode::Unsupported);
+    }
+
     // --- tree-inspection helpers ---
     fn contains_if_on(node: &StructuredNode, pred: u32) -> bool {
         match node {
@@ -472,6 +681,7 @@ mod tests {
                     || contains_if_on(then, pred)
                     || els.as_ref().is_some_and(|e| contains_if_on(e, pred))
             }
+            StructuredNode::Loop { body } => contains_if_on(body, pred),
             StructuredNode::Seq(v) => v.iter().any(|n| contains_if_on(n, pred)),
             StructuredNode::Switch { cases, default, .. } => {
                 cases.iter().any(|(_, n)| contains_if_on(n, pred))
@@ -496,9 +706,54 @@ mod tests {
             StructuredNode::If { then, els, .. } => {
                 mentions_block(then, blk) || els.as_ref().is_some_and(|e| mentions_block(e, blk))
             }
+            StructuredNode::Loop { body } => mentions_block(body, blk),
             StructuredNode::Switch { cases, default, .. } => {
                 cases.iter().any(|(_, n)| mentions_block(n, blk))
                     || default.as_ref().is_some_and(|d| mentions_block(d, blk))
+            }
+            _ => false,
+        }
+    }
+    fn contains_loop(node: &StructuredNode) -> bool {
+        match node {
+            StructuredNode::Loop { .. } => true,
+            StructuredNode::Seq(v) => v.iter().any(contains_loop),
+            StructuredNode::If { then, els, .. } => {
+                contains_loop(then) || els.as_ref().is_some_and(|e| contains_loop(e))
+            }
+            StructuredNode::Switch { cases, default, .. } => {
+                cases.iter().any(|(_, n)| contains_loop(n))
+                    || default.as_ref().is_some_and(|d| contains_loop(d))
+            }
+            _ => false,
+        }
+    }
+    fn contains_continue(node: &StructuredNode) -> bool {
+        match node {
+            StructuredNode::Continue => true,
+            StructuredNode::Loop { body } => contains_continue(body),
+            StructuredNode::Seq(v) => v.iter().any(contains_continue),
+            StructuredNode::If { then, els, .. } => {
+                contains_continue(then) || els.as_ref().is_some_and(|e| contains_continue(e))
+            }
+            StructuredNode::Switch { cases, default, .. } => {
+                cases.iter().any(|(_, n)| contains_continue(n))
+                    || default.as_ref().is_some_and(|d| contains_continue(d))
+            }
+            _ => false,
+        }
+    }
+    fn contains_break(node: &StructuredNode) -> bool {
+        match node {
+            StructuredNode::Break => true,
+            StructuredNode::Loop { body } => contains_break(body),
+            StructuredNode::Seq(v) => v.iter().any(contains_break),
+            StructuredNode::If { then, els, .. } => {
+                contains_break(then) || els.as_ref().is_some_and(|e| contains_break(e))
+            }
+            StructuredNode::Switch { cases, default, .. } => {
+                cases.iter().any(|(_, n)| contains_break(n))
+                    || default.as_ref().is_some_and(|d| contains_break(d))
             }
             _ => false,
         }
@@ -510,6 +765,7 @@ mod tests {
             StructuredNode::If { then, els, .. } => {
                 find_switch(then).or_else(|| els.as_ref().and_then(|e| find_switch(e)))
             }
+            StructuredNode::Loop { body } => find_switch(body),
             _ => None,
         }
     }

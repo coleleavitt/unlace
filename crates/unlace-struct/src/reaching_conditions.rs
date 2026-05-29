@@ -88,7 +88,7 @@ pub enum Cond {
 }
 
 impl Cond {
-    fn and(self, other: Cond) -> Cond {
+    pub fn and(self, other: Cond) -> Cond {
         match (self, other) {
             (Cond::False, _) | (_, Cond::False) => Cond::False,
             (Cond::True, c) | (c, Cond::True) => c,
@@ -97,7 +97,7 @@ impl Cond {
         }
     }
 
-    fn or(self, other: Cond) -> Cond {
+    pub fn or(self, other: Cond) -> Cond {
         match (self, other) {
             (Cond::True, _) | (_, Cond::True) => Cond::True,
             (Cond::False, c) | (c, Cond::False) => c,
@@ -106,7 +106,7 @@ impl Cond {
         }
     }
 
-    fn from_label(label: &EdgeLabel) -> Cond {
+    pub fn from_label(label: &EdgeLabel) -> Cond {
         match label {
             EdgeLabel::Always => Cond::True,
             EdgeLabel::True(id) => Cond::Pred(*id),

@@ -660,12 +660,17 @@ fn collect_structured_predicates(
 ) {
     use condition_refinement::StructuredNode;
     match node {
-        StructuredNode::Empty | StructuredNode::Block(_) | StructuredNode::Unsupported => {}
+        StructuredNode::Empty
+        | StructuredNode::Block(_)
+        | StructuredNode::Continue
+        | StructuredNode::Break
+        | StructuredNode::Unsupported => {}
         StructuredNode::Seq(parts) => {
             for part in parts {
                 collect_structured_predicates(part, out);
             }
         }
+        StructuredNode::Loop { body } => collect_structured_predicates(body, out),
         StructuredNode::If { cond, then, els } => {
             collect_cond_predicates(cond, out);
             collect_structured_predicates(then, out);
@@ -701,6 +706,143 @@ fn collect_cond_predicates(cond: &Cond, out: &mut BTreeSet<u32>) {
         }
         Cond::True | Cond::False => {}
     }
+}
+
+fn structured_predicates_defined_before_use(
+    node: &condition_refinement::StructuredNode,
+    node_to_block: &BTreeMap<reaching_conditions::RegionNode, BlockId>,
+) -> bool {
+    let region_blocks: BTreeSet<BlockId> = node_to_block.values().copied().collect();
+    let mut emitted = BTreeSet::new();
+    structured_predicates_defined_before_use_inner(
+        node,
+        node_to_block,
+        &region_blocks,
+        &mut emitted,
+    )
+}
+
+fn structured_predicates_defined_before_use_inner(
+    node: &condition_refinement::StructuredNode,
+    node_to_block: &BTreeMap<reaching_conditions::RegionNode, BlockId>,
+    region_blocks: &BTreeSet<BlockId>,
+    emitted: &mut BTreeSet<BlockId>,
+) -> bool {
+    use condition_refinement::StructuredNode;
+    match node {
+        StructuredNode::Empty
+        | StructuredNode::Continue
+        | StructuredNode::Break
+        | StructuredNode::Unsupported => true,
+        StructuredNode::Block(region_node) => {
+            if let Some(block) = node_to_block.get(region_node) {
+                emitted.insert(*block);
+            }
+            true
+        }
+        StructuredNode::Seq(parts) => parts.iter().all(|part| {
+            structured_predicates_defined_before_use_inner(
+                part,
+                node_to_block,
+                region_blocks,
+                emitted,
+            )
+        }),
+        StructuredNode::Loop { body } => {
+            let mut loop_emitted = BTreeSet::new();
+            structured_predicates_defined_before_use_inner(
+                body,
+                node_to_block,
+                region_blocks,
+                &mut loop_emitted,
+            )
+        }
+        StructuredNode::If { cond, then, els } => {
+            if !cond_predicates_defined_before_use(cond, region_blocks, emitted) {
+                return false;
+            }
+            let mut then_emitted = emitted.clone();
+            if !structured_predicates_defined_before_use_inner(
+                then,
+                node_to_block,
+                region_blocks,
+                &mut then_emitted,
+            ) {
+                return false;
+            }
+            if let Some(els) = els {
+                let mut else_emitted = emitted.clone();
+                if !structured_predicates_defined_before_use_inner(
+                    els,
+                    node_to_block,
+                    region_blocks,
+                    &mut else_emitted,
+                ) {
+                    return false;
+                }
+            }
+            true
+        }
+        StructuredNode::Switch {
+            selector,
+            cases,
+            default,
+        } => {
+            if !predicate_source_defined_before_use(*selector, region_blocks, emitted) {
+                return false;
+            }
+            for (_, case) in cases {
+                let mut case_emitted = emitted.clone();
+                if !structured_predicates_defined_before_use_inner(
+                    case,
+                    node_to_block,
+                    region_blocks,
+                    &mut case_emitted,
+                ) {
+                    return false;
+                }
+            }
+            if let Some(default) = default {
+                let mut default_emitted = emitted.clone();
+                if !structured_predicates_defined_before_use_inner(
+                    default,
+                    node_to_block,
+                    region_blocks,
+                    &mut default_emitted,
+                ) {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+}
+
+fn cond_predicates_defined_before_use(
+    cond: &Cond,
+    region_blocks: &BTreeSet<BlockId>,
+    emitted: &BTreeSet<BlockId>,
+) -> bool {
+    match cond {
+        Cond::Pred(id) | Cond::NotPred(id) | Cond::CaseEq(id, _) => {
+            predicate_source_defined_before_use(*id, region_blocks, emitted)
+        }
+        Cond::NotCaseEq(inner) => cond_predicates_defined_before_use(inner, region_blocks, emitted),
+        Cond::And(a, b) | Cond::Or(a, b) => {
+            cond_predicates_defined_before_use(a, region_blocks, emitted)
+                && cond_predicates_defined_before_use(b, region_blocks, emitted)
+        }
+        Cond::True | Cond::False => true,
+    }
+}
+
+fn predicate_source_defined_before_use(
+    pred: u32,
+    region_blocks: &BTreeSet<BlockId>,
+    emitted: &BTreeSet<BlockId>,
+) -> bool {
+    let source = BlockId(pred);
+    !region_blocks.contains(&source) || emitted.contains(&source)
 }
 
 impl<'a> StructureCtx<'a> {
@@ -805,13 +947,13 @@ impl<'a> StructureCtx<'a> {
     /// irreducible region when all of the following are true:
     ///
     /// * `bid` is one of the region's residual entry blocks,
-    /// * the reaching-condition skeleton is acyclic,
+    /// * the reaching-condition skeleton is acyclic or a conservative
+    ///   single-header cyclic region,
     /// * condition refinement succeeds,
     /// * every predicate used by the structured tree resolves to a CBRANCH
     ///   condition varnode, and
     /// * the region has at most one external successor to continue from.
     ///
-    /// Cyclic regions are Step 4; they stay on the legacy goto path.
     fn try_structure_dream_residual_region(
         &mut self,
         bid: BlockId,
@@ -831,26 +973,47 @@ impl<'a> StructureCtx<'a> {
             );
         }
 
-        let (dream_region, node_to_block) =
-            region_bridge::cfg_region_to_region(&self.func.cfg, bid, &region.body_blocks);
+        let (dream_region, node_to_block, region_exits) =
+            region_bridge::cfg_region_to_region_with_exits(
+                &self.func.cfg,
+                bid,
+                &region.body_blocks,
+            );
         let rc = reaching_conditions::compute_reaching_conditions(&dream_region);
-        if !rc.back_edges.is_empty() {
+        let has_back_edges = !rc.back_edges.is_empty();
+        let real_region_exits: Vec<region_bridge::RegionExit> = region_exits
+            .into_iter()
+            .filter(|exit| !self.synthetic.contains(&exit.target))
+            .collect();
+        let real_exit_targets: BTreeSet<BlockId> =
+            real_region_exits.iter().map(|exit| exit.target).collect();
+        if has_back_edges && real_exit_targets.len() > 1 {
             if struct_trace_enabled() {
                 eprintln!(
-                    "[unlace-struct] dream skip entry={bid:?} reason=cyclic back_edges={:?}",
-                    rc.back_edges
+                    "[unlace-struct] dream skip entry={bid:?} reason=cyclic-multiple-exits exits={real_exit_targets:?}"
                 );
             }
             return None;
         }
 
-        let structured = condition_refinement::refine_region(&dream_region);
+        let structured = if has_back_edges {
+            let exit_edges: Vec<_> = real_region_exits
+                .iter()
+                .map(|exit| (exit.source, exit.label.clone()))
+                .collect();
+            condition_refinement::refine_cyclic_region_with_exits(&dream_region, &exit_edges)
+        } else {
+            condition_refinement::refine_region(&dream_region)
+        };
         if matches!(
             structured,
             condition_refinement::StructuredNode::Unsupported
         ) {
             if struct_trace_enabled() {
-                eprintln!("[unlace-struct] dream skip entry={bid:?} reason=unsupported");
+                eprintln!(
+                    "[unlace-struct] dream skip entry={bid:?} reason=unsupported back_edges={:?}",
+                    rc.back_edges
+                );
             }
             return None;
         }
@@ -865,8 +1028,27 @@ impl<'a> StructureCtx<'a> {
             }
             return None;
         }
+        if !structured_predicates_defined_before_use(&structured, &node_to_block) {
+            if struct_trace_enabled() {
+                eprintln!(
+                    "[unlace-struct] dream skip entry={bid:?} reason=predicate-before-source"
+                );
+            }
+            return None;
+        }
 
-        let exits = self.dream_region_exits(&region.body_blocks);
+        if self.dream_region_has_unspliced_control(&region.body_blocks) {
+            if struct_trace_enabled() {
+                eprintln!("[unlace-struct] dream skip entry={bid:?} reason=unspliced-control");
+            }
+            return None;
+        }
+
+        let exits = if has_back_edges {
+            real_exit_targets
+        } else {
+            self.dream_region_exits(&region.body_blocks)
+        };
         if exits.len() > 1 {
             if struct_trace_enabled() {
                 eprintln!(
@@ -893,6 +1075,20 @@ impl<'a> StructureCtx<'a> {
         }
 
         Some((hir, exits.into_iter().next()))
+    }
+
+    fn dream_region_has_unspliced_control(&self, body_blocks: &BTreeSet<BlockId>) -> bool {
+        body_blocks.iter().any(|&bid| {
+            let Some(block) = self.func.function.blocks.get(&bid) else {
+                return false;
+            };
+            block.insns.iter().enumerate().any(|(idx, insn)| {
+                matches!(insn.op, IrOp::Return)
+                    || (insn.op == IrOp::Branch && self.func.tail_call_map.contains_key(&bid))
+                    || (insn.op == IrOp::Branchind
+                        && self.func.indirect_call_targets.contains_key(&(bid, idx)))
+            })
+        })
     }
 
     fn dream_predicate_conditions(

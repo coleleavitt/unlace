@@ -39,8 +39,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::BlockId;
 use unlace_ir::ssa::SsaVarnode;
+use unlace_ir::{BlockId, Varnode};
 
 use crate::condition_refinement::StructuredNode;
 use crate::hir::{HirNode, SwitchCase};
@@ -86,9 +86,22 @@ pub fn splice_structured(
             block_bodies,
             pred_cond,
         ),
+        StructuredNode::Loop { body } => vec![HirNode::While {
+            cond: true_cond(),
+            body: splice_structured(body, node_to_block, block_bodies, pred_cond),
+        }],
+        StructuredNode::Continue => vec![HirNode::Continue],
+        StructuredNode::Break => vec![HirNode::Break],
         // Unstructurable (cyclic) region — the caller falls back to the legacy
         // structurer for these, so we emit nothing here.
         StructuredNode::Unsupported => vec![],
+    }
+}
+
+fn true_cond() -> SsaVarnode {
+    SsaVarnode {
+        base: Varnode::constant(1, 1),
+        version: 0,
     }
 }
 
@@ -407,6 +420,57 @@ mod tests {
                 default: Some(vec![stmt(13)]),
                 jumptable_addr: None,
                 jumptable_cases: None,
+            }]
+        );
+    }
+
+    #[test]
+    fn loop_lowers_to_while_true() {
+        let node = StructuredNode::Loop {
+            body: Box::new(StructuredNode::Seq(vec![
+                StructuredNode::Block(1),
+                StructuredNode::Continue,
+            ])),
+        };
+        let bodies = bodies(vec![(1, vec![stmt(11)])]);
+        let out = splice_structured(&node, &n2b(&[1]), &bodies, &BTreeMap::new());
+        assert_eq!(
+            out,
+            vec![HirNode::While {
+                cond: true_cond(),
+                body: vec![stmt(11), HirNode::Continue],
+            }]
+        );
+    }
+
+    #[test]
+    fn break_and_continue_lower_directly() {
+        let node = StructuredNode::Seq(vec![StructuredNode::Break, StructuredNode::Continue]);
+        let out = splice_structured(&node, &BTreeMap::new(), &BTreeMap::new(), &BTreeMap::new());
+        assert_eq!(out, vec![HirNode::Break, HirNode::Continue]);
+    }
+
+    #[test]
+    fn loop_with_guarded_break_preserves_guard() {
+        let node = StructuredNode::Loop {
+            body: Box::new(StructuredNode::If {
+                cond: Cond::Pred(3),
+                then: Box::new(StructuredNode::Break),
+                els: Some(Box::new(StructuredNode::Continue)),
+            }),
+        };
+        let mut pc = BTreeMap::new();
+        pc.insert(3u32, sv(0x33, 1));
+        let out = splice_structured(&node, &BTreeMap::new(), &BTreeMap::new(), &pc);
+        assert_eq!(
+            out,
+            vec![HirNode::While {
+                cond: true_cond(),
+                body: vec![HirNode::If {
+                    cond: sv(0x33, 1),
+                    then_body: vec![HirNode::Break],
+                    else_body: Some(vec![HirNode::Continue]),
+                }],
             }]
         );
     }

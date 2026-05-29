@@ -33,6 +33,14 @@ use unlace_ir::cfg::{ControlFlowGraph, EdgeKind};
 
 use crate::reaching_conditions::{EdgeLabel, Region, RegionNode};
 
+/// A labelled edge from a region node to a CFG block outside the region.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegionExit {
+    pub source: RegionNode,
+    pub target: BlockId,
+    pub label: EdgeLabel,
+}
+
 /// Convert a sub-CFG (`body` blocks rooted at `header`) into a
 /// [`reaching_conditions::Region`] plus the `RegionNode -> BlockId` map needed
 /// to splice the structured result back later.
@@ -50,6 +58,28 @@ pub fn cfg_region_to_region(
     let reverse: BTreeMap<RegionNode, BlockId> =
         node_of.iter().map(|(&bid, &n)| (n, bid)).collect();
     (region, reverse)
+}
+
+/// Convert a sub-CFG and also retain labelled exits to outside blocks.
+///
+/// This is used by cyclic DREAM refinement: exit edges are represented as
+/// synthetic `break` leaves before condition refinement, so a `while (true)`
+/// loop does not silently lose its exit condition.
+pub fn cfg_region_to_region_with_exits(
+    cfg: &ControlFlowGraph,
+    header: BlockId,
+    body: &BTreeSet<BlockId>,
+) -> (Region, BTreeMap<RegionNode, BlockId>, Vec<RegionExit>) {
+    let node_of = assign_nodes(header, body);
+    let adjacency = collect_adjacency(cfg, &node_of);
+    let (edges, exits) = map_edges_and_exits(&node_of, &adjacency);
+    let region = Region {
+        header: node_of[&header],
+        edges,
+    };
+    let reverse: BTreeMap<RegionNode, BlockId> =
+        node_of.iter().map(|(&bid, &n)| (n, bid)).collect();
+    (region, reverse, exits)
 }
 
 /// Assign each block in `body` a dense `RegionNode` in `BlockId` order.
@@ -101,21 +131,36 @@ pub fn map_edges(
     node_of: &BTreeMap<BlockId, RegionNode>,
     adjacency: &[(BlockId, Vec<(BlockId, EdgeKind)>)],
 ) -> Vec<(RegionNode, RegionNode, EdgeLabel)> {
+    map_edges_and_exits(node_of, adjacency).0
+}
+
+/// Pure mapping variant that also reports outside-target edges.
+pub fn map_edges_and_exits(
+    node_of: &BTreeMap<BlockId, RegionNode>,
+    adjacency: &[(BlockId, Vec<(BlockId, EdgeKind)>)],
+) -> (Vec<(RegionNode, RegionNode, EdgeLabel)>, Vec<RegionExit>) {
     let mut edges = Vec::new();
+    let mut exits = Vec::new();
     for (src, outs) in adjacency {
         let Some(&src_node) = node_of.get(src) else {
             continue;
         };
         for (ordinal, (dst, kind)) in outs.iter().enumerate() {
-            let Some(&dst_node) = node_of.get(dst) else {
-                continue; // region exit — target outside body
+            let Some(label) = edge_label(*src, *kind, ordinal) else {
+                continue;
             };
-            if let Some(label) = edge_label(*src, *kind, ordinal) {
+            if let Some(&dst_node) = node_of.get(dst) {
                 edges.push((src_node, dst_node, label));
-            }
+            } else {
+                exits.push(RegionExit {
+                    source: src_node,
+                    target: *dst,
+                    label,
+                });
+            };
         }
     }
-    edges
+    (edges, exits)
 }
 
 /// Map a single [`EdgeKind`] to its [`EdgeLabel`], using `src`'s numeric id as
@@ -235,6 +280,28 @@ mod tests {
         let edges = map_edges(&node_of, &adjacency);
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].2, EdgeLabel::Always);
+    }
+
+    #[test]
+    fn target_outside_body_is_reported_as_exit() {
+        let node_of = nodes(&[0, 1]);
+        let adjacency = vec![
+            (bid(0), vec![(bid(1), EdgeKind::Unconditional)]),
+            (bid(1), vec![(bid(42), EdgeKind::ConditionalFalse)]),
+        ];
+        let (edges, exits) = map_edges_and_exits(&node_of, &adjacency);
+        assert_eq!(
+            edges,
+            vec![(node_of[&bid(0)], node_of[&bid(1)], EdgeLabel::Always)]
+        );
+        assert_eq!(
+            exits,
+            vec![RegionExit {
+                source: node_of[&bid(1)],
+                target: bid(42),
+                label: EdgeLabel::False(1),
+            }]
+        );
     }
 
     #[test]

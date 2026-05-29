@@ -604,6 +604,50 @@ fn defining_insn<'a>(
     Some((bid, idx, insn))
 }
 
+/// True when reassociating `(p + a) + b → p + (a+b)` would feed the rewrite's
+/// own result back into its base, preventing convergence.
+///
+/// `base_ssa` is the SSA value the rewrite would adopt as its new base (the
+/// inner add's pointer operand); `folded_ssa` is the inner add's output (the
+/// value we fold *through*). We follow `COPY` defs from `base_ssa` (bounded)
+/// and report aliasing if the chain reaches `folded_ssa`.
+///
+/// This catches the MIPS/x86 stack-pointer adjust `tmp = sp - N; sp = COPY tmp`
+/// where the spill address `tmp + k` would refold to base `sp`, which
+/// copy-aliases `tmp`. Copy-propagation then re-substitutes `sp → tmp` and the
+/// fold re-fires every fixedpoint round, walking the offset by the frame size
+/// (t41: spills drifting to `-12776`). Stable SSA bases never close the loop,
+/// so legitimate chained-offset folds are unaffected.
+fn reassoc_base_aliases_def(
+    func: &SsaFunction,
+    defs: &DefIndex,
+    base_ssa: Option<SsaVarnode>,
+    folded_ssa: SsaVarnode,
+) -> bool {
+    let Some(mut cur) = base_ssa else {
+        return false;
+    };
+    // Copy chains for SP adjusts are length 1-2; cap above that to tolerate
+    // longer alias chains while staying terminating.
+    for _ in 0..16 {
+        if cur == folded_ssa {
+            return true;
+        }
+        let Some((def_bid, def_idx, def_insn)) = defining_insn(func, defs, cur) else {
+            return false;
+        };
+        if def_insn.op != IrOp::Copy || def_insn.inputs.len() != 1 {
+            return false;
+        }
+        match input_ssa(func, def_bid, def_idx, 0) {
+            Some(next) => cur = next,
+            None => return false,
+        }
+    }
+    // Chain longer than the bound: treat as aliasing to stay terminating.
+    true
+}
+
 /// Rewrites `(-x) + y` → `y - x` and `x + (-y)` → `x - y` (FloatAdd only).
 fn simplify_fadd_negation(
     func: &SsaFunction,
@@ -811,12 +855,24 @@ fn simplify_addr_offset_fold(
         return None;
     };
 
+    // Decline to reassociate when the new base `p` copy-aliases the inner
+    // add's own output (the value we just folded through). That closes a
+    // cycle: copy-propagation keeps re-substituting the SP register for the
+    // prologue's `unique`, so the fold re-fires every fixedpoint round,
+    // walking the spill offset by the frame size without converging
+    // (t41: spill stores drifting to `-12776`). Stable SSA bases never
+    // close such a loop, so legitimate `(p + a) + b → p + (a+b)` folds are
+    // unaffected.
+    let p_ssa = input_ssa(func, def_bid, def_idx, p_idx);
+    if reassoc_base_aliases_def(func, defs, p_ssa, lhs_ssa) {
+        return None;
+    }
+
     // Use the result-size mask so the fold matches what the machine would compute.
     let mask = mask_for_size(rhs.size);
     let combined = a.offset.wrapping_add(rhs.offset) & mask;
     let combined_vn = Varnode::constant(combined, rhs.size);
 
-    let p_ssa = input_ssa(func, def_bid, def_idx, p_idx);
     Some(Replacement::Reop {
         op: IrOp::IntAdd,
         inputs: smallvec::smallvec![p, combined_vn],
@@ -852,11 +908,17 @@ fn simplify_addr_offset_sub_fold(
         return None;
     };
 
+    // See `simplify_addr_offset_fold`: decline when the new base copy-aliases
+    // the value we folded through, which would oscillate with copy-prop.
+    let p_ssa = input_ssa(func, def_bid, def_idx, p_idx);
+    if reassoc_base_aliases_def(func, defs, p_ssa, lhs_ssa) {
+        return None;
+    }
+
     let mask = mask_for_size(rhs.size);
     let combined = a.offset.wrapping_sub(rhs.offset) & mask;
     let combined_vn = Varnode::constant(combined, rhs.size);
 
-    let p_ssa = input_ssa(func, def_bid, def_idx, p_idx);
     Some(Replacement::Reop {
         op: IrOp::IntAdd,
         inputs: smallvec::smallvec![p, combined_vn],

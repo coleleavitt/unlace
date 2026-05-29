@@ -113,11 +113,12 @@ impl Pass for IdiomRecognitionPass {
                 });
             }
             let def_map = build_def_map(func);
+            let copy_targets = build_copy_targets(func);
             let mut changed = false;
 
             for block in func.function.blocks.values_mut() {
                 for insn in &mut block.insns {
-                    if let Some(replacement) = try_recognize(insn, &def_map) {
+                    if let Some(replacement) = try_recognize(insn, &def_map, &copy_targets) {
                         *insn = replacement;
                         changed = true;
                     }
@@ -284,6 +285,74 @@ fn def_of<'a>(v: &Varnode, def_map: &'a BTreeMap<Varnode, IrInsn>) -> Option<&'a
     def_map.get(v)
 }
 
+/// Detect whether reassociating `(x + c1) + c2 → x + (c1+c2)` would feed
+/// the rewritten instruction's own result back into its base, producing a
+/// non-terminating fold.
+///
+/// The MIPS/x86 stack-pointer adjust `sp = sp - 32` lowers to a pair
+/// `tmp = INT_ADD(sp, -32); sp = COPY(tmp)`. A plain [`Varnode`] carries no
+/// SSA version, so after copy-propagation the offset chain becomes
+/// `INT_ADD(tmp, c)` whose proposed new base `x == sp` copy-aliases `tmp`.
+/// Folding then re-derives `INT_ADD(sp, c-32)` every fixedpoint round,
+/// walking the spill displacement by the frame size without converging
+/// (t41: spills drifting to `-12776`).
+///
+/// `inner_out` is the operand we fold *through* (the inner `INT_ADD`'s
+/// output); `new_base` is the base the rewrite would adopt. We follow `COPY`
+/// definitions of `new_base` and report a cycle if the chain reaches
+/// `inner_out`.
+///
+/// Because a register can be defined more than once (prologue *and* epilogue
+/// both write `sp`), a single-entry def map cannot reliably name a register's
+/// relevant def. `copy_targets` therefore records *every* `COPY`'s
+/// `output → input`, so the `sp = COPY(tmp)` write-back is found regardless of
+/// how many times `sp` is assigned. We walk those edges (breadth-first,
+/// bounded) and report a cycle if any path reaches `inner_out`. Well-formed
+/// SSA values are defined once and never close such a loop, so legitimate
+/// chained-offset folds (e.g. `(r0 + 3) + 5 → r0 + 8`) are unaffected.
+fn reassoc_base_cycles(
+    copy_targets: &BTreeMap<Varnode, Vec<Varnode>>,
+    inner_out: &Varnode,
+    new_base: &Varnode,
+) -> bool {
+    let mut frontier = vec![*new_base];
+    let mut seen = 0usize;
+    // Copy chains for SP adjusts are length 1-2; cap above that to tolerate
+    // longer/branching alias chains while staying terminating.
+    while let Some(cur) = frontier.pop() {
+        if cur == *inner_out {
+            return true;
+        }
+        seen += 1;
+        if seen > 64 {
+            // Unexpectedly long/branchy chain: decline to fold (stays safe).
+            return true;
+        }
+        if let Some(srcs) = copy_targets.get(&cur) {
+            frontier.extend(srcs.iter().copied());
+        }
+    }
+    false
+}
+
+/// Map every `COPY` instruction's `output → [input...]`. Used by
+/// [`reassoc_base_cycles`] to follow copy write-backs that a single-entry
+/// def map would lose for multiply-assigned registers.
+fn build_copy_targets(func: &SsaFunction) -> BTreeMap<Varnode, Vec<Varnode>> {
+    let mut map: BTreeMap<Varnode, Vec<Varnode>> = BTreeMap::new();
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if insn.op == IrOp::Copy
+                && insn.inputs.len() == 1
+                && let Some(out) = insn.output
+            {
+                map.entry(out).or_default().push(insn.inputs[0]);
+            }
+        }
+    }
+    map
+}
+
 fn def_unary(v: &Varnode, op: IrOp, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<Varnode> {
     let def = def_of(v, def_map)?;
     if def.op == op && def.inputs.len() == 1 {
@@ -331,6 +400,7 @@ fn try_add_simplify(
     a: &Varnode,
     b: &Varnode,
     def_map: &BTreeMap<Varnode, IrInsn>,
+    copy_targets: &BTreeMap<Varnode, Vec<Varnode>>,
 ) -> Option<IrInsn> {
     if let Some((x, c1)) = def_binary(a, IrOp::IntSub, def_map)
         && c1 == *b
@@ -346,6 +416,7 @@ fn try_add_simplify(
     if b.space == SpaceId::Const
         && let Some((x, c1)) = def_binary(a, IrOp::IntAdd, def_map)
         && c1.space == SpaceId::Const
+        && !reassoc_base_cycles(copy_targets, a, &x)
     {
         let folded = c1.offset.wrapping_add(b.offset) & mask_for_size(b.size);
         return Some(make_replacement(
@@ -357,6 +428,7 @@ fn try_add_simplify(
     if a.space == SpaceId::Const
         && let Some((x, c1)) = def_binary(b, IrOp::IntAdd, def_map)
         && c1.space == SpaceId::Const
+        && !reassoc_base_cycles(copy_targets, b, &x)
     {
         let folded = c1.offset.wrapping_add(a.offset) & mask_for_size(a.size);
         return Some(make_replacement(
@@ -1175,7 +1247,11 @@ fn try_bitfield_write_ordered(
 // `x | all_ones`) are intentionally written as separate, readable arms — collapsing
 // them would lose the operand-symmetry documentation that mirrors the code comments.
 #[allow(clippy::if_same_then_else)]
-fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<IrInsn> {
+fn try_recognize(
+    insn: &IrInsn,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+    copy_targets: &BTreeMap<Varnode, Vec<Varnode>>,
+) -> Option<IrInsn> {
     let output = insn.output?;
 
     if insn.op == IrOp::Copy {
@@ -1256,7 +1332,7 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
             } else if let Some(min) = try_min_idiom(insn, &a, &b, def_map) {
                 Some(min)
             } else {
-                try_add_simplify(insn, &a, &b, def_map)
+                try_add_simplify(insn, &a, &b, def_map, copy_targets)
             }
         }
 
@@ -1493,6 +1569,66 @@ mod tests {
         let block = ssa.function.blocks.values().next().expect("has block");
         assert_eq!(block.insns[0].op, IrOp::Copy);
         assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── t41 regression: SP-adjust spill-address reassociation ─────
+    //
+    // The MIPS prologue `daddiu $sp,$sp,-32` lowers to
+    //   u0 = INT_ADD($sp, -32);  $sp = COPY(u0)
+    // and a spill store addresses `$sp + 24` via
+    //   u1 = INT_ADD($sp, 24)   (after copy-prop: INT_ADD(u0, 24)).
+    //
+    // Reassociating `(u0 + (-32)) + 24 → $sp + (-8)` re-fired every
+    // fixedpoint round because the new base `$sp` copy-aliases `u0`,
+    // walking the displacement by the frame size until it became garbage
+    // (`-12776`). The pass must instead leave the address with a small,
+    // stable displacement. This test pins that convergence.
+    #[test]
+    fn test_idiom_sp_adjust_spill_does_not_run_away() {
+        let sp = Varnode::reg(29 * 8, 8); // a stack-pointer-like register
+        let u0 = Varnode::unique(0, 8); // = sp - 32 (prologue temp)
+        let addr = Varnode::unique(1, 8); // spill store address
+
+        // u0 = INT_ADD(sp, -32)
+        let prologue = IrInsn::with_output(
+            IrOp::IntAdd,
+            u0,
+            smallvec![sp, Varnode::constant((-32i64) as u64, 8)],
+            0x1000,
+        );
+        // sp = COPY(u0)  (writes the SP register back)
+        let copy_back = IrInsn::with_output(IrOp::Copy, sp, smallvec![u0], 0x1004);
+        // addr = INT_ADD(u0, 24)  (spill store address; small frame offset)
+        let spill_addr = IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![u0, Varnode::constant(24, 8)],
+            0x1008,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![prologue, copy_back, spill_addr]);
+        // Must not loop forever / blow the inner cap.
+        IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass must converge on SP-adjust spill pattern");
+
+        // Whatever the pass does, the spill-address INT_ADD's constant
+        // operand must stay a small frame offset, never the runaway value.
+        let block = ssa.function.blocks.values().next().expect("has block");
+        for insn in &block.insns {
+            if insn.op == IrOp::IntAdd {
+                for inp in &insn.inputs {
+                    if inp.space == SpaceId::Const {
+                        let signed = inp.offset as i64;
+                        assert!(
+                            (-64..=64).contains(&signed),
+                            "INT_ADD displacement {signed} drifted out of frame range \
+                             (t41 runaway reassociation regressed)"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // ── Pattern 6: INT_MUL(v, 1) → COPY v ─────────────────────────

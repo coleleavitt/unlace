@@ -184,3 +184,27 @@ count — the producer fixes substantially improve fixture BODIES toward their
 goldens but each fixture still has additional residual diffs; arc_features
 preserved as passing). All four producer fixes verified live in the integrated
 binary. x87 (t54) remains the one honestly-deferred deep gap.
+
+## t54 x87 TOP-tracking — IMPLEMENTED (2026-05-29 pm-5)
+
+Previously deferred as "needs static TOP tracking, cross-arch." Researched
+(Intel SDM Vol.1 ch.8 + Saarland formal x87 spec, see
+docs/x87-top-tracking-research.md), delegated to a background build agent, and
+completed: the agent did the lifter half (pop-variant fpu_tag constants +
+c_printer names), I wrote the pass after the agent hit its budget.
+
+`unlace_passes::rewrite_x87_top` (commit 64d52f26f) — a pre-SSA pass that
+forward-propagates the 3-bit TOP through the CFG and rewrites each x87
+Callother's ST(i) operands to physical R[(TOP+i)%8], with a conservative no-op
+at disagreeing CFG joins. sum_squares_x87 / compare_floats_x87 / mix_ops_x87
+now model the rotating stack correctly (both FLD operands live in distinct
+slots; no uninitialized ST reads) — strictly more correct than the lossy
+x87_math golden (which dropped a load). 7 unit tests; all workspace gates green.
+
+### All six deep producer tasks now resolved
+t40 (empty-if polarity), t41 (MIPS reassoc oscillation), t49 (PPC copy-prop
+arch-gating), t50 (cN coalesced naming), t52 (arm64 CSEL ternaries), t54 (x87
+TOP tracking) — all LANDED. Plus the t41-exposed dead-compound-assignment DCE.
+golden_fixtures remains 18/32 by count (several fixtures' goldens are
+lossy/stale relative to the now-more-correct output), but fixture BODIES are
+substantially more correct across arches.

@@ -1472,6 +1472,97 @@ mod tests {
     }
 
     #[test]
+    fn aarch64_bics_sets_logical_flags() {
+        // BICS X0, X1, X2  →  0xEA22_0020
+        let r = lifter()
+            .lift_insn(&0xEA22_0020u32.to_le_bytes(), 0x1000)
+            .expect("BICS decodes");
+
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntNegate));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntEqual),
+            "BICS must update ZF from the logical result"
+        );
+    }
+
+    #[test]
+    fn aarch64_ands_sets_logical_flags() {
+        // ANDS X0, X1, X2  →  0xEA02_0020
+        let r = lifter()
+            .lift_insn(&0xEA02_0020u32.to_le_bytes(), 0x1000)
+            .expect("ANDS decodes");
+
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntEqual),
+            "ANDS must update ZF from the logical result"
+        );
+    }
+
+    #[test]
+    fn aarch64_negs_sets_sub_flags() {
+        // NEGS X0, X1  →  0xEB01_03E0
+        let r = lifter()
+            .lift_insn(&0xEB01_03E0u32.to_le_bytes(), 0x1000)
+            .expect("NEGS decodes");
+
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntSborrow),
+            "NEGS must update signed overflow like a subtract"
+        );
+    }
+
+    #[test]
+    fn aarch64_smull_sign_extends_sources() {
+        // SMULL X0, W1, W2  →  0x9B22_7C20
+        let r = lifter()
+            .lift_insn(&0x9B22_7C20u32.to_le_bytes(), 0x1000)
+            .expect("SMULL decodes");
+
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let sexts = r.ir_ops.iter().filter(|i| i.op == IrOp::IntSext).count();
+        assert!(
+            sexts >= 2,
+            "SMULL must sign-extend both 32-bit multiplicands; got {sexts}"
+        );
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+    }
+
+    #[test]
+    fn aarch64_rev_lifts_to_callother() {
+        // REV X0, X1  →  0xDAC0_0C20
+        let r = lifter()
+            .lift_insn(&0xDAC0_0C20u32.to_le_bytes(), 0x1000)
+            .expect("REV decodes");
+
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_ARM_REV),
+            "REV must route through the canonical byte-reverse Callother"
+        );
+    }
+
+    #[test]
+    fn aarch64_bfxil_preserves_destination_bits() {
+        // BFXIL X0, X1, #8, #16  →  0xB348_5C20
+        let r = lifter()
+            .lift_insn(&0xB348_5C20u32.to_le_bytes(), 0x1000)
+            .expect("BFXIL decodes");
+
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+    }
+
+    #[test]
     fn try_aarch64_ccmp_recognizes_register_form() {
         // CCMP X0, X1, #4, EQ  →  0xFA41_0004
         let d = try_aarch64_ccmp(0xFA41_0004).expect("CCMP register form must decode");

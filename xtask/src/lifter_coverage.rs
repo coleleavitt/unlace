@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use capstone::prelude::*;
 use iced_x86::{Decoder, DecoderOptions};
 use unlace_cli::pipeline::{discover_functions, lift_function};
-use unlace_ir::{ArchId, IrOp};
+use unlace_ir::{ArchId, IrOp, SpaceId};
 use unlace_lift::get_lifter;
 use unlace_loader::{BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader};
 
@@ -43,6 +43,9 @@ struct ArchStats {
     skipped_functions: usize,
     unimplemented: usize,
     callother: usize,
+    callother_trap: usize,
+    callother_known: usize,
+    callother_semantic_gap: usize,
     unimpl_opcodes: HashMap<String, usize>,
     callother_opcodes: HashMap<String, usize>,
     unimpl_sites: Vec<OpcodeSite>,
@@ -55,6 +58,9 @@ struct CoverageCounts {
     skipped_functions: usize,
     unimplemented: usize,
     callother: usize,
+    callother_trap: usize,
+    callother_known: usize,
+    callother_semantic_gap: usize,
     unimpl_opcodes: HashMap<String, usize>,
     callother_opcodes: HashMap<String, usize>,
     unimpl_sites: Vec<OpcodeSite>,
@@ -364,6 +370,11 @@ fn run_lift_coverage(fixture: &Path) -> Result<CoverageCounts, String> {
                     }
                     IrOp::Callother => {
                         counts.callother += 1;
+                        match classify_callother(insn) {
+                            CallotherClass::TrapOrPadding => counts.callother_trap += 1,
+                            CallotherClass::KnownIntrinsic => counts.callother_known += 1,
+                            CallotherClass::SemanticGap => counts.callother_semantic_gap += 1,
+                        }
                         if let Some(hint) = opcode_hint(&image, insn.addr) {
                             *counts.callother_opcodes.entry(hint).or_insert(0) += 1;
                         }
@@ -375,6 +386,40 @@ fn run_lift_coverage(fixture: &Path) -> Result<CoverageCounts, String> {
     }
 
     Ok(counts)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CallotherClass {
+    TrapOrPadding,
+    KnownIntrinsic,
+    SemanticGap,
+}
+
+fn classify_callother(insn: &unlace_ir::IrInsn) -> CallotherClass {
+    match callother_tag(insn) {
+        Some(0x300) => CallotherClass::TrapOrPadding,
+        Some(tag) if is_known_callother_tag(tag) => CallotherClass::KnownIntrinsic,
+        _ => CallotherClass::SemanticGap,
+    }
+}
+
+fn callother_tag(insn: &unlace_ir::IrInsn) -> Option<u64> {
+    insn.inputs
+        .first()
+        .filter(|tag| tag.space == SpaceId::Const)
+        .map(|tag| tag.offset)
+}
+
+fn is_known_callother_tag(tag: u64) -> bool {
+    matches!(
+        tag,
+        0x1..=0x4
+            | 0x100..=0x1F0
+            | 0x200..=0x20C
+            | 0x301..=0x328
+            | 0x330..=0x437
+            | 0x500..=0x623
+    )
 }
 
 fn build_report(stats: &HashMap<String, ArchStats>) -> String {
@@ -395,11 +440,11 @@ fn build_report(stats: &HashMap<String, ArchStats>) -> String {
     let _ = writeln!(s);
     let _ = writeln!(
         s,
-        "| arch | fixtures | lifted funcs | skipped funcs | total Unimplemented | total Callother |"
+        "| arch | fixtures | lifted funcs | skipped funcs | total Unimplemented | total Callother | trap/padding | known intrinsic | semantic gap |"
     );
     let _ = writeln!(
         s,
-        "|------|---------:|-------------:|--------------:|--------------------:|----------------:|"
+        "|------|---------:|-------------:|--------------:|--------------------:|----------------:|-------------:|----------------:|-------------:|"
     );
 
     let mut archs: Vec<&String> = stats.keys().collect();
@@ -410,6 +455,9 @@ fn build_report(stats: &HashMap<String, ArchStats>) -> String {
     let mut tot_fixtures = 0usize;
     let mut tot_lifted_functions = 0usize;
     let mut tot_skipped_functions = 0usize;
+    let mut tot_callother_trap = 0usize;
+    let mut tot_callother_known = 0usize;
+    let mut tot_callother_semantic_gap = 0usize;
     for arch in &archs {
         let st = &stats[*arch];
         let n = st.fixtures.len();
@@ -418,15 +466,24 @@ fn build_report(stats: &HashMap<String, ArchStats>) -> String {
         tot_skipped_functions += st.skipped_functions;
         tot_unimpl += st.unimplemented;
         tot_callother += st.callother;
+        tot_callother_trap += st.callother_trap;
+        tot_callother_known += st.callother_known;
+        tot_callother_semantic_gap += st.callother_semantic_gap;
         let _ = writeln!(
             s,
-            "| `{arch}` | {n} | {} | {} | {} | {} |",
-            st.lifted_functions, st.skipped_functions, st.unimplemented, st.callother
+            "| `{arch}` | {n} | {} | {} | {} | {} | {} | {} | {} |",
+            st.lifted_functions,
+            st.skipped_functions,
+            st.unimplemented,
+            st.callother,
+            st.callother_trap,
+            st.callother_known,
+            st.callother_semantic_gap
         );
     }
     let _ = writeln!(
         s,
-        "| **total** | **{tot_fixtures}** | **{tot_lifted_functions}** | **{tot_skipped_functions}** | **{tot_unimpl}** | **{tot_callother}** |"
+        "| **total** | **{tot_fixtures}** | **{tot_lifted_functions}** | **{tot_skipped_functions}** | **{tot_unimpl}** | **{tot_callother}** | **{tot_callother_trap}** | **{tot_callother_known}** | **{tot_callother_semantic_gap}** |"
     );
 
     // Per-arch top opcodes (best-effort hints).
@@ -562,6 +619,9 @@ pub fn run(root: &Path) {
                 entry.skipped_functions += counts.skipped_functions;
                 entry.unimplemented += counts.unimplemented;
                 entry.callother += counts.callother;
+                entry.callother_trap += counts.callother_trap;
+                entry.callother_known += counts.callother_known;
+                entry.callother_semantic_gap += counts.callother_semantic_gap;
                 for (k, v) in counts.unimpl_opcodes {
                     *entry.unimpl_opcodes.entry(k).or_insert(0) += v;
                 }
@@ -570,12 +630,15 @@ pub fn run(root: &Path) {
                 }
                 entry.unimpl_sites.extend(counts.unimpl_sites);
                 eprintln!(
-                    "ok (discovered={}, lifted={}, skipped={}, unimpl={}, callother={})",
+                    "ok (discovered={}, lifted={}, skipped={}, unimpl={}, callother={} trap={} known={} gap={})",
                     counts.discovered_functions,
                     counts.lifted_functions,
                     counts.skipped_functions,
                     counts.unimplemented,
-                    counts.callother
+                    counts.callother,
+                    counts.callother_trap,
+                    counts.callother_known,
+                    counts.callother_semantic_gap
                 );
             }
             Err(e) => {
@@ -625,6 +688,29 @@ BB_0:
         assert_eq!(u_ops.get("bswap"), Some(&2));
         assert_eq!(u_ops.get("movbe"), Some(&1));
         assert_eq!(c_ops.get("aesenc"), Some(&2));
+    }
+
+    #[test]
+    fn classifies_callother_tags() {
+        let trap = unlace_ir::IrInsn::without_output(
+            IrOp::Callother,
+            vec![unlace_ir::Varnode::constant(0x300, 8)],
+            0,
+        );
+        let known = unlace_ir::IrInsn::without_output(
+            IrOp::Callother,
+            vec![unlace_ir::Varnode::constant(0x330, 8)],
+            0,
+        );
+        let gap = unlace_ir::IrInsn::without_output(
+            IrOp::Callother,
+            vec![unlace_ir::Varnode::constant(0xdead, 8)],
+            0,
+        );
+
+        assert_eq!(classify_callother(&trap), CallotherClass::TrapOrPadding);
+        assert_eq!(classify_callother(&known), CallotherClass::KnownIntrinsic);
+        assert_eq!(classify_callother(&gap), CallotherClass::SemanticGap);
     }
 
     #[test]

@@ -52,6 +52,12 @@ fn snapshot_signatures(funcs: &BTreeMap<u64, SsaFunction>) -> FunctionSignatureR
     out
 }
 
+fn interproc_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_INTERPROC_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false)
+}
+
 /// Drive the cross-function fixed-point loop.
 ///
 /// `per_function` runs the existing single-function analysis pipeline
@@ -70,6 +76,7 @@ where
 {
     use unlace_ir::xref::compute_sccs;
 
+    let trace = interproc_trace_enabled();
     let mut report = InterprocReport::default();
     let mut registry: FunctionSignatureRegistry = FunctionSignatureRegistry::new();
 
@@ -78,8 +85,23 @@ where
     // (e.g. indirect calls resolved to direct ones).
     for iter in 0..cap.max(1) {
         report.iterations = iter + 1;
+        if trace {
+            eprintln!(
+                "[unlace interproc] iter={} funcs={} registry={}",
+                iter + 1,
+                funcs.len(),
+                registry.len()
+            );
+        }
 
         let prev_sigs = snapshot_signatures(funcs);
+        if trace {
+            eprintln!(
+                "[unlace interproc] iter={} snapshot-prev={}",
+                iter + 1,
+                prev_sigs.len()
+            );
+        }
 
         let ir_funcs: BTreeMap<u64, _> = funcs
             .iter()
@@ -88,6 +110,15 @@ where
         let cg: CallGraph = build_call_graph(&ir_funcs);
         let all_addrs: Vec<u64> = funcs.keys().copied().collect();
         let sccs = compute_sccs(&cg, &all_addrs);
+        if trace {
+            eprintln!(
+                "[unlace interproc] iter={} callgraph: funcs={} sccs={} indirect={}",
+                iter + 1,
+                all_addrs.len(),
+                sccs.len(),
+                cg.indirect_call_count()
+            );
+        }
 
         // Process functions in SCC reverse-topological order (leaves first).
         // For each SCC, run every function in the component so that mutually-
@@ -96,13 +127,38 @@ where
         for scc in &sccs {
             for &addr in scc {
                 if let Some(ssa) = funcs.get_mut(&addr) {
+                    if trace {
+                        eprintln!(
+                            "[unlace interproc] iter={} before func={:#x} name={} maturity={:?}",
+                            iter + 1,
+                            addr,
+                            ssa.function.name,
+                            ssa.maturity
+                        );
+                    }
                     ssa.external_signatures = registry.clone();
                     per_function(ssa)?;
+                    if trace {
+                        eprintln!(
+                            "[unlace interproc] iter={} after func={:#x} name={} maturity={:?}",
+                            iter + 1,
+                            addr,
+                            ssa.function.name,
+                            ssa.maturity
+                        );
+                    }
                 }
             }
         }
 
         let new_sigs = snapshot_signatures(funcs);
+        if trace {
+            eprintln!(
+                "[unlace interproc] iter={} snapshot-new={}",
+                iter + 1,
+                new_sigs.len()
+            );
+        }
 
         seed_registry_from_funcs(funcs, &mut registry);
         let registry_changed = propagate_caller_params(funcs, &cg, &mut registry);
@@ -110,13 +166,32 @@ where
 
         let sig_delta = signatures_diff_count(&prev_sigs, &new_sigs);
         report.signature_changes = report.signature_changes.saturating_add(sig_delta);
+        if trace {
+            eprintln!(
+                "[unlace interproc] iter={} sig_delta={} registry_changed={} applied={} signature_changes={}",
+                iter + 1,
+                sig_delta,
+                registry_changed,
+                applied,
+                report.signature_changes
+            );
+        }
 
         if sig_delta == 0 && !registry_changed && !applied {
+            if trace {
+                eprintln!("[unlace interproc] converged iter={}", iter + 1);
+            }
             return Ok(report);
         }
     }
 
     report.hit_cap = true;
+    if trace {
+        eprintln!(
+            "[unlace interproc] hit cap iterations={} signature_changes={}",
+            report.iterations, report.signature_changes
+        );
+    }
     Ok(report)
 }
 

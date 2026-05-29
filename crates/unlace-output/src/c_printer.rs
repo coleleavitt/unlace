@@ -703,6 +703,7 @@ pub fn print_c_with_annotations(
     // call only fills in slots DWARF did not name.
     compute_stack_frame_names(func, &mut ctx);
     compute_loop_counter_names(&func.body, 0, &mut ctx);
+    compute_param_register_names(func, dwarf_func, header, &mut ctx);
     collect_varnodes(&func.body, &mut ctx);
     promote_stack_address_call_arrays(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
@@ -819,6 +820,12 @@ pub fn print_c_with_annotations(
         out.push('\n');
     }
 
+    if let Some(preamble) = dwarf.and_then(emit_dwarf_struct_preamble) {
+        out.push_str("// DWARF composite types\n");
+        out.push_str(&preamble);
+        out.push('\n');
+    }
+
     // t147 / t224: synthesised composite preamble (stack-frame structs +
     // array-of-structs layouts).  Pre-rendered by the CLI driver via
     // `emit_inferred_struct_preamble` and piped through `PrinterAnnotations`
@@ -895,15 +902,15 @@ pub fn print_c_with_annotations(
             }
             crate::demangle::sanitize_for_c(&dr.short_name)
         }
-        (None, None, None) => func.name.clone(),
+        (None, None, None) => c_symbol_name(&func.name),
     };
 
     // t230 — prefer the finalized signature over the raw inferred
     // params/return when the late calling-convention pass has run.
     // DWARF still wins above it (DWARF carries source-level truth that
     // the inference can only approximate).
-    let mut return_type_str = dwarf_func
-        .and_then(|df| df.return_type.as_deref())
+    let dwarf_return_type = dwarf_func.and_then(|df| df.return_type.as_deref());
+    let mut return_type_str = dwarf_return_type
         .map(dwarf_type_to_c)
         .or_else(|| {
             func.finalized_signature
@@ -911,7 +918,7 @@ pub fn print_c_with_annotations(
                 .map(|sig| c_sig_return_type_for_type(&sig.return_type))
         })
         .unwrap_or_else(|| c_sig_return_type(&func.return_type).to_string());
-    if emit_name == "main" && return_type_str == "void" {
+    if emit_name == "main" && dwarf_return_type.is_none() {
         return_type_str = "int".to_string();
     }
 
@@ -950,6 +957,8 @@ pub fn print_c_with_annotations(
         let _ = write!(out, "{}{} {}(", return_type_str, noreturn_mod, emit_name);
     }
 
+    let force_void_main_params =
+        emit_name == "main" && dwarf_func.is_none_or(|df| df.params.is_empty());
     if let Some(df) = dwarf_func.filter(|df| !df.params.is_empty()) {
         for (i, param) in df.params.iter().enumerate() {
             if i > 0 {
@@ -963,6 +972,8 @@ pub fn print_c_with_annotations(
             let name = param.name.as_deref().unwrap_or("arg");
             let _ = write!(out, "{} {}", ty, name);
         }
+    } else if force_void_main_params {
+        out.push_str("void");
     } else {
         // Prefer the RTTI-recovered class for `this` (it pins down the
         // concrete user-defined class).  When that's unavailable, fall back
@@ -1064,8 +1075,13 @@ pub fn print_c_with_annotations(
         );
     }
     out.push_str(" {\n");
+    emit_dwarf_local_summary(dwarf_func, &mut out);
 
-    let mut foldable_svs: BTreeSet<SsaVarnode> = ctx.sv_defining_stmt.keys().copied().collect();
+    let mut foldable_svs: BTreeSet<SsaVarnode> = ctx
+        .foldable_stmts
+        .iter()
+        .filter_map(|stmt_idx| ctx.stmt_outputs.get(stmt_idx).copied().flatten())
+        .collect();
     foldable_svs.extend(&func.foldable_exprs);
 
     // Build the set of variable names that are actually referenced in the
@@ -1141,7 +1157,11 @@ pub fn print_c_with_annotations(
     // in the generic var-name loop below.
     let stack_frame_names: BTreeSet<String> = emit_stack_frame_decls(func, &ctx, &mut out);
 
-    let param_names = function_param_names(func, dwarf_func);
+    let param_names = if force_void_main_params {
+        BTreeSet::new()
+    } else {
+        function_param_names(func, dwarf_func)
+    };
     let mut declared_names: BTreeSet<String> = param_names;
     // Seed `declared_names` with stack-frame slot names so the generic
     // loop below does not re-emit them.
@@ -1155,6 +1175,25 @@ pub fn print_c_with_annotations(
         .filter_map(|plan| ctx.stmt_outputs.get(&plan.stmt_idx).copied().flatten())
         .filter_map(|sv| ctx.var_names.get(&sv).map(String::as_str))
         .collect();
+    let mut preferred_decl_types: BTreeMap<String, PrimitiveType> = BTreeMap::new();
+    for (sv, name) in &ctx.var_names {
+        if foldable_svs.contains(sv)
+            || post_dowhile_return_svs.contains(sv)
+            || !referenced_names.contains(name.as_str())
+            || should_suppress_var_decl(sv, &ctx)
+        {
+            continue;
+        }
+        let ty = ctx
+            .var_types
+            .get(sv)
+            .copied()
+            .unwrap_or(PrimitiveType::Unknown);
+        preferred_decl_types
+            .entry(name.clone())
+            .and_modify(|existing| *existing = prefer_decl_type(*existing, ty))
+            .or_insert(ty);
+    }
     for (sv, name) in &ctx.var_names {
         if foldable_svs.contains(sv) {
             continue;
@@ -1174,10 +1213,10 @@ pub fn print_c_with_annotations(
         if !declared_names.insert(name.clone()) {
             continue;
         }
-        let ty = ctx
-            .var_types
-            .get(sv)
+        let ty = preferred_decl_types
+            .get(name)
             .copied()
+            .or_else(|| ctx.var_types.get(sv).copied())
             .unwrap_or(PrimitiveType::Unknown);
         let frame_size = header.map(|h| h.stack_frame);
         // t176 — Objective-C `__block` (byref) box: render
@@ -1228,8 +1267,10 @@ pub fn print_c_with_annotations(
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
 
     out.push_str("}\n");
-    let output = declare_missing_temp_v_decls(declare_missing_control_v_decls(
-        prune_unused_plain_local_decls(prune_dead_plain_assignments(out)),
+    let output = repair_arg_versioned_address_uses(rename_unreturned_bare_result(
+        declare_missing_temp_v_decls(declare_missing_control_v_decls(
+            prune_unused_plain_local_decls(prune_unused_labels(prune_dead_plain_assignments(out))),
+        )),
     ));
     if annotations.is_some_and(|a| a.recover_triangular_sum_loop) {
         recover_triangular_sum_loop(output)
@@ -1264,6 +1305,63 @@ fn function_param_names(
     }
     names.insert("this".to_string());
     names
+}
+
+fn compute_param_register_names(
+    func: &HirFunction,
+    dwarf_func: Option<&FunctionDebugInfo>,
+    header: Option<&FunctionHeaderInfo>,
+    ctx: &mut PrintCtx,
+) {
+    let Some(regs) = header.and_then(|h| param_registers_for_convention(&h.convention)) else {
+        return;
+    };
+    let params = ordered_function_param_names(func, dwarf_func);
+    for (idx, name) in params.into_iter().enumerate() {
+        let Some(&reg) = regs.get(idx) else {
+            break;
+        };
+        if !is_c_identifier(&name) {
+            continue;
+        }
+        for size in [8u8, 4, 2, 1] {
+            ctx.name_overrides
+                .entry(Varnode::new(SpaceId::Register, reg, size))
+                .or_insert_with(|| name.clone());
+        }
+    }
+}
+
+fn ordered_function_param_names(
+    func: &HirFunction,
+    dwarf_func: Option<&FunctionDebugInfo>,
+) -> Vec<String> {
+    if let Some(df) = dwarf_func.filter(|df| !df.params.is_empty()) {
+        return df
+            .params
+            .iter()
+            .map(|p| p.name.clone().unwrap_or_else(|| "arg".to_string()))
+            .collect();
+    }
+    if let Some(sig) = func.finalized_signature.as_ref() {
+        return sig.params.iter().map(|(name, _)| name.clone()).collect();
+    }
+    func.params.iter().map(|(name, _)| name.clone()).collect()
+}
+
+fn param_registers_for_convention(convention: &str) -> Option<&'static [u64]> {
+    const SYSV: &[u64] = &[56, 48, 16, 8, 64, 72];
+    const MSX64: &[u64] = &[8, 16, 64, 72];
+    const THISCALL: &[u64] = &[8];
+    const AARCH64: &[u64] = &[0, 8, 16, 24, 32, 40, 48, 56];
+
+    match convention {
+        "System V AMD64" => Some(SYSV),
+        "Microsoft x64" => Some(MSX64),
+        "thiscall" => Some(THISCALL),
+        "AArch64" => Some(AARCH64),
+        _ => None,
+    }
 }
 
 fn function_body_returns_void(func: &HirFunction, dwarf_func: Option<&FunctionDebugInfo>) -> bool {
@@ -2090,6 +2188,60 @@ fn render_go_defer_summary(
     Some(out)
 }
 
+fn emit_dwarf_struct_preamble(dwarf: &DwarfInfo) -> Option<String> {
+    let structs: Vec<_> = dwarf
+        .structs
+        .values()
+        .filter(|st| !st.name.is_empty())
+        .collect();
+    if structs.is_empty() {
+        return None;
+    }
+
+    let mut out = String::new();
+    for st in &structs {
+        let name = crate::demangle::sanitize_for_c(&st.name);
+        let _ = writeln!(out, "typedef struct {name} {name};");
+    }
+    for st in structs {
+        let name = crate::demangle::sanitize_for_c(&st.name);
+        let _ = writeln!(out, "struct {name} {{");
+        for field in &st.fields {
+            if field.name.is_empty() {
+                continue;
+            }
+            let ty = dwarf_type_to_c(&field.type_name);
+            let field_name = crate::demangle::sanitize_for_c(&field.name);
+            let _ = writeln!(out, "    {ty} {field_name};");
+        }
+        let _ = writeln!(out, "}};");
+    }
+    Some(out)
+}
+
+fn emit_dwarf_local_summary(dwarf_func: Option<&FunctionDebugInfo>, out: &mut String) {
+    let Some(dwarf_func) = dwarf_func else {
+        return;
+    };
+    if dwarf_func.locals.is_empty() {
+        return;
+    }
+
+    out.push_str("    // DWARF locals\n");
+    for local in &dwarf_func.locals {
+        if local.name.is_empty() {
+            continue;
+        }
+        let name = crate::demangle::sanitize_for_c(&local.name);
+        if let Some(type_name) = local.type_name.as_deref() {
+            let ty = dwarf_type_to_c(type_name);
+            let _ = writeln!(out, "    //   {ty} {name};");
+        } else {
+            let _ = writeln!(out, "    //   {name};");
+        }
+    }
+}
+
 impl PrintCtx {
     fn new(
         dwarf: Option<&DwarfInfo>,
@@ -2187,47 +2339,51 @@ impl PrintCtx {
 
     fn name_of(&mut self, sv: &SsaVarnode) -> String {
         if let Some(n) = self.var_names.get(sv) {
+            trace_name_decision("cache", sv, n, self);
             return n.clone();
         }
-        let name = if let Some(override_name) = self.name_overrides.get(&sv.base) {
+        let (source, name) = if let Some(override_name) = self.name_overrides.get(&sv.base) {
             // DWARF / role-based override (keyed by base) wins over coalescer.
-            override_name.clone()
+            ("override", override_name.clone())
         } else if let Some(merged) = self.merged_names.get(sv).filter(|n| !is_default_v_name(n)) {
             // Variable-merge pass result (per-SsaVarnode), and it carries
             // *semantic* content (not just a generic `vN` placeholder).
             // Reuse the same name for every SsaVarnode in the same
             // coalesced cluster, even if their base Varnodes differ
             // (Unique-space coalescing).
-            merged.clone()
+            ("merged-meaningful", merged.clone())
         } else if let Some(role_name) = self.var_role_names.get(sv) {
             // t227 — role-based name (e.g. `i`, `j`, `saved_rbx`, `a1`).
             // Wins over the merger's default `vN` choice but still loses
             // to the meaningful merger entries handled above.
-            role_name.clone()
+            ("role", role_name.clone())
         } else if let Some(merged) = self.merged_names.get(sv) {
             // Fall through to a generic merged `vN` when no role name
             // applied — keeps SSA versions on the same coalesced cluster
             // co-named even without semantic information.
-            merged.clone()
+            ("merged-default", merged.clone())
         } else if let Some(existing) = self.base_names.get(&sv.base) {
-            existing.clone()
+            ("base", existing.clone())
         } else {
             let fresh = format!("v{}", self.next_var);
             self.next_var += 1;
             self.base_names.insert(sv.base, fresh.clone());
-            fresh
+            ("fresh", fresh)
         };
         self.var_names.insert(*sv, name.clone());
+        trace_name_decision(source, sv, &name, self);
         name
     }
 
     fn fresh_ssa_name_of(&mut self, sv: &SsaVarnode) -> String {
         if let Some(n) = self.var_names.get(sv) {
+            trace_name_decision("fresh-cache", sv, n, self);
             return n.clone();
         }
         let fresh = format!("v{}", self.next_var);
         self.next_var += 1;
         self.var_names.insert(*sv, fresh.clone());
+        trace_name_decision("fresh-forced", sv, &fresh, self);
         fresh
     }
 
@@ -2285,8 +2441,7 @@ fn try_resolve_struct_field(
     if base_input.space == SpaceId::Const {
         return None;
     }
-    let entries = ctx.field_by_offset.get(&const_offset)?;
-    let field_name = entries.first()?.1.clone();
+    let field_name = field_name_for_offset(ctx, const_offset)?;
     let base_sv = ctx
         .stmt_inputs
         .get(&addr_stmt_idx)
@@ -2298,21 +2453,57 @@ fn try_resolve_struct_field(
                 if let Some(di) = ctx.stmt_insns.get(&ds).cloned() {
                     format!("({})", emit_expr(&di, ds, ctx))
                 } else {
-                    ctx.name_of(&sv)
+                    meaningful_field_base_name(ctx.name_overrides.get(&sv.base)?)?
                 }
             } else {
-                ctx.name_of(&sv)
+                meaningful_field_base_name(ctx.name_overrides.get(&sv.base)?)?
             }
         }
-        None => {
-            let sv = SsaVarnode {
-                base: *base_input,
-                version: 0,
-            };
-            ctx.name_of(&sv)
-        }
+        None => meaningful_field_base_name(ctx.name_overrides.get(base_input)?)?,
     };
+    if is_generic_address_expr(&base_expr) {
+        return None;
+    }
     Some(format!("{}->{}", base_expr, field_name))
+}
+
+fn field_name_for_offset(ctx: &PrintCtx, offset: u64) -> Option<String> {
+    ctx.field_by_offset
+        .get(&offset)
+        .and_then(|entries| entries.first())
+        .map(|(_, field, _)| field.clone())
+}
+
+fn try_base_struct_field_access(
+    addr_vn: &Varnode,
+    offset: u64,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if addr_vn.space == SpaceId::Const {
+        return None;
+    }
+    let field_name = field_name_for_offset(ctx, offset)?;
+    let base_name = meaningful_field_base_name(ctx.name_overrides.get(addr_vn)?)?;
+    Some(format!("{base_name}->{field_name}"))
+}
+
+fn meaningful_field_base_name(name: &str) -> Option<String> {
+    let mut chars = name.chars();
+    if chars.next() == Some('a') && chars.all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+fn is_generic_address_expr(expr: &str) -> bool {
+    let trimmed = expr.trim();
+    let trimmed = trimmed
+        .strip_prefix('(')
+        .and_then(|s| s.strip_suffix(')'))
+        .unwrap_or(trimmed)
+        .trim();
+    let mut chars = trimmed.chars();
+    chars.next() == Some('a') && chars.all(|c| c.is_ascii_digit())
 }
 
 fn try_resolve_field_from_addr(
@@ -2325,14 +2516,26 @@ fn try_resolve_field_from_addr(
     if ctx.field_by_offset.is_empty() || addr_vn.space == SpaceId::Const {
         return None;
     }
-    let addr_sv = ctx
+    let Some(addr_sv) = ctx
         .stmt_inputs
         .get(&stmt_idx)
         .cloned()
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
-    let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())
+    else {
+        return try_base_struct_field_access(addr_vn, 0, ctx);
+    };
+    let Some(&def_stmt) = ctx.sv_defining_stmt.get(&addr_sv) else {
+        return try_base_struct_field_access(addr_vn, 0, ctx);
+    };
     let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
-    try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx)
+    let resolved = try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx);
+    if resolved.is_none() && std::env::var_os("UNLACE_TYPE_TRACE").is_some() {
+        eprintln!(
+            "[unlace:type] field miss stmt={stmt_idx} addr={addr_vn:?} def_stmt={def_stmt} op={:?}",
+            def_insn.op
+        );
+    }
+    resolved
 }
 
 // ---------------------------------------------------------------------------
@@ -2433,6 +2636,9 @@ fn try_array_subscript(
 
                 let idx_expr = emit_operand_resolved(idx_vn, 0, mult_def, ctx);
                 let base_expr = emit_operand_resolved(base_vn, base_pos, def_stmt, ctx);
+                if is_generic_address_expr(&base_expr) {
+                    continue;
+                }
 
                 return Some(ArraySubscript {
                     base: base_expr,
@@ -2457,6 +2663,9 @@ fn try_array_subscript(
             }
             let computed_idx = offset / stride;
             let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
+            if is_generic_address_expr(&base_expr) {
+                return None;
+            }
             Some(ArraySubscript {
                 base: base_expr,
                 index: format!("{}", computed_idx),
@@ -2470,6 +2679,9 @@ fn try_array_subscript(
                 return None;
             }
             let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
+            if is_generic_address_expr(&base_expr) {
+                return None;
+            }
             let idx_expr = emit_operand_resolved(&def_insn.inputs[1], 1, def_stmt, ctx);
             Some(ArraySubscript {
                 base: base_expr,
@@ -2550,6 +2762,9 @@ fn try_struct_field_access(
         .unwrap_or_else(|| format!("field_{:X}", const_offset));
 
     let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
+    if is_generic_address_expr(&base_expr) {
+        return None;
+    }
     // Batch 11 slice 1: route this one emit path through the semantic
     // `CExpr` AST so we get correct precedence handling for free.
     // For a simple identifier base this renders byte-identically to
@@ -2834,12 +3049,19 @@ fn try_readonly_scalar_load(
     if !static_addr.from_instruction_pointer {
         return None;
     }
+    if access_size == 16 {
+        let low = *ctx.readonly_scalars.get(&(static_addr.addr, 8))?;
+        let high = *ctx
+            .readonly_scalars
+            .get(&(static_addr.addr.wrapping_add(8), 8))?;
+        let value = format!("(((unsigned __int128)0x{high:x}ULL << 64) | 0x{low:x}ULL)");
+        trace_readonly_resolution(stmt_idx, addr_vn, static_addr.addr, access_size, &value);
+        return Some(value);
+    }
     let value = ctx.readonly_scalars.get(&(static_addr.addr, access_size))?;
-    Some(format_constant_ctx(
-        *value,
-        access_size,
-        ConstContext::Unsigned,
-    ))
+    let value = format_constant_ctx(*value, access_size, ConstContext::Unsigned);
+    trace_readonly_resolution(stmt_idx, addr_vn, static_addr.addr, access_size, &value);
+    Some(value)
 }
 
 fn try_readonly_scalar_value_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<String> {
@@ -3095,26 +3317,48 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
     let annotated_slots = take_annotated_slots_for_insn(insn, ctx);
     let mut input_svs = Vec::new();
     let mut input_slots = BTreeMap::new();
-    if let Some(slots) = annotated_slots.as_ref() {
-        for (&raw_idx, &sv) in &slots.inputs {
-            ctx.name_of(&sv);
-            input_svs.push(sv);
-            input_slots.insert(raw_idx, sv);
+    for (raw_idx, input) in insn.inputs.iter().enumerate() {
+        if input.space == SpaceId::Const {
+            continue;
         }
-    } else {
-        for (raw_idx, input) in insn.inputs.iter().enumerate() {
-            if input.space == SpaceId::Const {
-                continue;
+        let sv = if let Some(sv) = annotated_slots
+            .as_ref()
+            .and_then(|slots| slots.inputs.get(&raw_idx).copied())
+        {
+            if sv.base != *input && c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] collect stmt={idx} addr=0x{:x} op={:?} input{raw_idx} raw={input:?} annotated={sv:?}; using annotated SSA slot",
+                    insn.addr, insn.op
+                );
             }
-            let ver = ctx.current_version(input);
-            let sv = SsaVarnode {
+            sv
+        } else {
+            SsaVarnode {
                 base: *input,
-                version: ver,
+                version: ctx.current_version(input),
+            }
+        };
+        let name = ctx.name_of(&sv);
+        if c_printer_name_trace_enabled() {
+            let source = if annotated_slots
+                .as_ref()
+                .and_then(|slots| slots.inputs.get(&raw_idx))
+                .is_some()
+            {
+                "collect-input-annotated"
+            } else {
+                "collect-input-current"
             };
-            ctx.name_of(&sv);
-            input_svs.push(sv);
-            input_slots.insert(raw_idx, sv);
+            let text = format!(
+                "{source} stmt={idx} addr=0x{:x} op={:?} raw_idx={raw_idx} raw={input:?} sv={sv:?} name={name}",
+                insn.addr, insn.op
+            );
+            if trace_text_matches_filter(&text) {
+                eprintln!("[unlace-output] {text}");
+            }
         }
+        input_svs.push(sv);
+        input_slots.insert(raw_idx, sv);
     }
     ctx.stmt_inputs.insert(idx, input_svs);
     ctx.stmt_input_slots.insert(idx, input_slots);
@@ -3150,6 +3394,36 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
     };
     ctx.stmt_outputs.insert(idx, output_sv);
     ctx.stmt_insns.insert(idx, insn.clone());
+    if c_printer_name_trace_enabled() {
+        if let Some(sv) = output_sv {
+            let text = format!(
+                "collect-output stmt={idx} addr=0x{:x} op={:?} output={sv:?} name={:?}",
+                insn.addr,
+                insn.op,
+                known_name_of_sv(ctx, &sv)
+            );
+            if trace_text_matches_filter(&text) {
+                eprintln!("[unlace-output] {text}");
+            }
+        } else {
+            let text = format!(
+                "collect-output stmt={idx} addr=0x{:x} op={:?} output=None",
+                insn.addr, insn.op
+            );
+            if trace_text_matches_filter(&text) {
+                eprintln!("[unlace-output] {text}");
+            }
+        }
+    }
+    if c_printer_trace_enabled() {
+        eprintln!(
+            "[unlace-output] collect stmt={idx} addr=0x{:x} op={:?} output={:?} inputs={:?}",
+            insn.addr,
+            insn.op,
+            output_sv,
+            ctx.stmt_input_slots.get(&idx)
+        );
+    }
     idx
 }
 
@@ -3162,7 +3436,14 @@ fn take_annotated_slots_for_insn(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<Ss
         .iter()
         .enumerate()
         .skip(*used)
-        .find(|(_, slots)| statement_slots_match_insn(slots, insn))
+        .find(|(_, slots)| statement_slots_match_insn(slots, insn, true))
+        .or_else(|| {
+            candidates
+                .iter()
+                .enumerate()
+                .skip(*used)
+                .find(|(_, slots)| statement_slots_match_insn(slots, insn, false))
+        })
         .map(|(idx, _)| idx)?;
 
     let slots = candidates.get(selected_idx).cloned();
@@ -3170,11 +3451,19 @@ fn take_annotated_slots_for_insn(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<Ss
     slots
 }
 
-fn statement_slots_match_insn(slots: &SsaStatementSlots, insn: &IrInsn) -> bool {
+fn statement_slots_match_insn(
+    slots: &SsaStatementSlots,
+    insn: &IrInsn,
+    require_input_match: bool,
+) -> bool {
     match (slots.output, insn.output) {
         (Some(sv), Some(output)) if sv.base == output => {}
         (None, None) => {}
         _ => return false,
+    }
+
+    if !require_input_match {
+        return true;
     }
 
     for (raw_idx, input) in insn.inputs.iter().enumerate() {
@@ -3568,10 +3857,24 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         };
 
         if is_never_foldable_op(insn.op) {
+            if insn.op == IrOp::Load && is_temp_varnode(&output_sv.base) {
+                ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
+            }
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=never",
+                    insn.op
+                );
+            }
             continue;
         }
 
         if insn.op == IrOp::Copy && copy_reads_call_output(stmt_idx, ctx) {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op=Copy output={output_sv:?} decision=call-output-copy"
+                );
+            }
             continue;
         }
 
@@ -3580,24 +3883,435 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             if use_count > 0 && is_temp_varnode(&output_sv.base) {
                 ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
             }
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=not-single-use",
+                    insn.op
+                );
+            }
+            continue;
+        }
+
+        if !sv_consumer_stmt.contains_key(&output_sv) && ctx.cond_uses.contains(&output_sv) {
+            ctx.foldable_stmts.insert(stmt_idx);
+            ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=cond-only",
+                    insn.op
+                );
+            }
             continue;
         }
 
         let def_depth = ctx.stmt_depths.get(&stmt_idx).copied().unwrap_or(0);
-        let consumer_depth = sv_consumer_stmt
-            .get(&output_sv)
-            .and_then(|&cid| ctx.stmt_depths.get(&cid).copied())
+        let consumer_stmt = last_consumer_stmt_for_sv(&output_sv, ctx)
+            .or_else(|| sv_consumer_stmt.get(&output_sv).copied());
+        if c_printer_trace_enabled()
+            && let Some(scanned_consumer) = consumer_stmt
+            && sv_consumer_stmt.get(&output_sv).copied() != Some(scanned_consumer)
+        {
+            eprintln!(
+                "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} consumer-map={:?} consumer-scan={scanned_consumer}",
+                insn.op,
+                sv_consumer_stmt.get(&output_sv)
+            );
+        }
+        let consumer_depth = consumer_stmt
+            .and_then(|cid| ctx.stmt_depths.get(&cid).copied())
             .unwrap_or(u32::MAX);
 
         if def_depth != consumer_depth {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=depth-mismatch def_depth={def_depth} consumer_depth={consumer_depth}",
+                    insn.op
+                );
+            }
+            continue;
+        }
+
+        if let Some(consumer_stmt) = consumer_stmt
+            && copy_like_snapshot_source_redefined_before_consumer(
+                &output_sv,
+                insn,
+                stmt_idx,
+                consumer_stmt,
+                ctx,
+            )
+        {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=snapshot-source-redefined consumer={consumer_stmt}",
+                    insn.op
+                );
+            }
+            continue;
+        }
+
+        if let Some(consumer_stmt) = consumer_stmt
+            && expression_inputs_aliased_redefined_before_consumer(
+                &output_sv,
+                insn,
+                stmt_idx,
+                consumer_stmt,
+                ctx,
+            )
+        {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=expr-input-redefined consumer={consumer_stmt}",
+                    insn.op
+                );
+            }
             continue;
         }
 
         ctx.foldable_stmts.insert(stmt_idx);
         ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
+        if c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=fold",
+                insn.op
+            );
+        }
     }
 
     ctx.sv_use_counts = use_counts;
+    // The transitive fold-pass guard is currently disabled: empirical regressions
+    // on small HIR fixtures show it removes folds that are needed for shape
+    // tests. The emit-time guard in [`emit_operand_with_prec`] handles the
+    // miscompile case (operand inlining past a same-base redefinition) without
+    // touching the fold set. Keep [`refuse_folds_past_aliased_input_redef`]
+    // available for future use if the emit-time guard proves insufficient.
+    let _ = refuse_folds_past_aliased_input_redef;
+}
+
+/// Second pass over [`compute_foldable`]: walk each foldable expression's
+/// transitive consumer chain to the textual emission point, then unfold any
+/// expression whose register inputs would be re-read at an emission point past
+/// a same-base SSA redefinition.
+///
+/// The fold pass marks a stmt foldable when its single use's immediate
+/// consumer is fine, but inlining is transitive — a foldable stmt's text gets
+/// substituted into its consumer's text, which itself may be folded further.
+/// `dedupe_var_names` collapses every SSA version of a given base register to
+/// one name, so once we emit the inlined token at the final emission point,
+/// the C compiler binds it to whatever was *last* written to that base. If a
+/// redefinition of one of our register inputs sits between us and the
+/// emission point, the resulting recompiled code reads the wrong value.
+fn refuse_folds_past_aliased_input_redef(ctx: &mut PrintCtx) {
+    let mut changed = true;
+    let mut iterations = 0u32;
+    while changed && iterations < 64 {
+        changed = false;
+        iterations += 1;
+        let folded: Vec<u32> = ctx.foldable_stmts.iter().copied().collect();
+        for stmt_idx in folded {
+            let Some(emission_stmt) = transitive_emission_stmt(stmt_idx, ctx) else {
+                continue;
+            };
+            if emission_stmt <= stmt_idx + 1 {
+                continue;
+            }
+            let Some(stmt_inputs) = ctx.stmt_inputs.get(&stmt_idx).cloned() else {
+                continue;
+            };
+            let output_sv = ctx.stmt_outputs.get(&stmt_idx).copied().flatten();
+            let mut conflict: Option<(SsaVarnode, u32, SsaVarnode)> = None;
+            for input_sv in &stmt_inputs {
+                if input_sv.base.space != SpaceId::Register {
+                    continue;
+                }
+                if output_sv.as_ref().is_some_and(|o| o == input_sv) {
+                    continue;
+                }
+                for (&redef_stmt, output) in ctx.stmt_outputs.range((stmt_idx + 1)..=emission_stmt)
+                {
+                    let Some(candidate) = output else {
+                        continue;
+                    };
+                    if *candidate == *input_sv {
+                        continue;
+                    }
+                    if candidate.base == input_sv.base || aliases(candidate.base, input_sv.base) {
+                        conflict = Some((*input_sv, redef_stmt, *candidate));
+                        break;
+                    }
+                }
+                if conflict.is_some() {
+                    break;
+                }
+            }
+            if let Some((input_sv, redef_stmt, candidate)) = conflict {
+                ctx.foldable_stmts.remove(&stmt_idx);
+                changed = true;
+                if c_printer_trace_enabled() {
+                    eprintln!(
+                        "[unlace-output] unfold stmt={stmt_idx} emission={emission_stmt} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?} reason=transitive-input-redefined",
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn transitive_emission_stmt(stmt_idx: u32, ctx: &PrintCtx) -> Option<u32> {
+    let mut current = stmt_idx;
+    for _ in 0..64 {
+        let output_sv = ctx.stmt_outputs.get(&current).copied().flatten()?;
+        let consumer = last_consumer_stmt_for_sv(&output_sv, ctx)?;
+        if consumer <= current {
+            return Some(consumer);
+        }
+        if !ctx.foldable_stmts.contains(&consumer) {
+            return Some(consumer);
+        }
+        current = consumer;
+    }
+    None
+}
+
+fn last_consumer_stmt_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<u32> {
+    let mut consumer = None;
+    for (&stmt_idx, inputs) in &ctx.stmt_inputs {
+        if inputs.iter().any(|input| input == sv) {
+            consumer = Some(stmt_idx);
+        }
+    }
+    for (&stmt_idx, slots) in &ctx.stmt_input_slots {
+        if slots.values().any(|input| input == sv) && consumer.is_none_or(|cur| stmt_idx > cur) {
+            consumer = Some(stmt_idx);
+        }
+    }
+    for &(cond_sv, stmt_idx) in &ctx.cond_use_stmts {
+        if cond_sv == *sv && consumer.is_none_or(|cur| stmt_idx > cur) {
+            consumer = Some(stmt_idx);
+        }
+    }
+    consumer
+}
+
+fn copy_like_snapshot_source_redefined_before_consumer(
+    output_sv: &SsaVarnode,
+    insn: &IrInsn,
+    stmt_idx: u32,
+    consumer_stmt: u32,
+    ctx: &PrintCtx,
+) -> bool {
+    if consumer_stmt <= stmt_idx + 1
+        || !matches!(
+            insn.op,
+            IrOp::Copy | IrOp::Subpiece | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
+        )
+    {
+        return false;
+    }
+    let Some(source) = insn.inputs.first() else {
+        return false;
+    };
+    if source.space == SpaceId::Const {
+        return false;
+    }
+    let Some(source_sv) = input_or_latest_sv_for_operand(source, Some(0), stmt_idx, ctx) else {
+        return false;
+    };
+    if source_sv == *output_sv {
+        return false;
+    }
+    if c_printer_trace_enabled() {
+        eprintln!(
+            "[unlace-output] snapshot-source-check stmt={stmt_idx} consumer={consumer_stmt} op={:?} output={output_sv:?} source={source_sv:?}",
+            insn.op
+        );
+    }
+
+    if ctx
+        .stmt_outputs
+        .range((stmt_idx + 1)..consumer_stmt)
+        .any(|(&redef_stmt, output)| {
+            let Some(candidate) = output else {
+                return false;
+            };
+            let redefined = *candidate != source_sv
+                && (candidate.base == source_sv.base || aliases(candidate.base, source_sv.base));
+            if redefined && c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] snapshot-source-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
+                );
+            }
+            redefined
+        })
+    {
+        return true;
+    }
+
+    snapshot_source_expression_input_redefined_before_consumer(
+        output_sv,
+        insn,
+        stmt_idx,
+        consumer_stmt,
+        &source_sv,
+        ctx,
+    )
+}
+
+fn snapshot_source_expression_input_redefined_before_consumer(
+    output_sv: &SsaVarnode,
+    insn: &IrInsn,
+    stmt_idx: u32,
+    consumer_stmt: u32,
+    source_sv: &SsaVarnode,
+    ctx: &PrintCtx,
+) -> bool {
+    if !matches!(
+        insn.op,
+        IrOp::IntZext | IrOp::IntSext | IrOp::Cast | IrOp::Copy
+    ) || output_sv.base.space != SpaceId::Register
+        || source_sv.base.space != SpaceId::Unique
+    {
+        if c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} op={:?} output={output_sv:?} source={source_sv:?} reason=shape",
+                insn.op
+            );
+        }
+        return false;
+    }
+
+    let Some(source_def_stmt) = defining_stmt_for_sv(source_sv, ctx) else {
+        if c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} reason=no-source-def",
+            );
+        }
+        return false;
+    };
+    if source_def_stmt >= stmt_idx {
+        if c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} source_def_stmt={source_def_stmt} reason=source-def-after-copy",
+            );
+        }
+        return false;
+    }
+    let Some(source_def) = ctx.stmt_insns.get(&source_def_stmt) else {
+        return false;
+    };
+    if source_def.inputs.len() < 2 || instr_has_side_effects(source_def) {
+        if c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} source_def_stmt={source_def_stmt} source_op={:?} input_count={} reason=source-not-expression",
+                source_def.op,
+                source_def.inputs.len()
+            );
+        }
+        return false;
+    }
+    if c_printer_trace_enabled() {
+        eprintln!(
+            "[unlace-output] snapshot-source-expr-check stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} source_def_stmt={source_def_stmt} source_op={:?}",
+            source_def.op
+        );
+    }
+
+    for (input_idx, input) in source_def.inputs.iter().enumerate() {
+        if input.space == SpaceId::Const {
+            continue;
+        }
+        let Some(input_sv) =
+            input_or_latest_sv_for_operand(input, Some(input_idx), source_def_stmt, ctx)
+        else {
+            continue;
+        };
+        if input_sv.base.space != SpaceId::Register {
+            continue;
+        }
+        if c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] snapshot-source-expr-input stmt={stmt_idx} source_def_stmt={source_def_stmt} input_idx={input_idx} input={input_sv:?}",
+            );
+        }
+        for (&redef_stmt, output) in ctx.stmt_outputs.range((stmt_idx + 1)..consumer_stmt) {
+            let Some(candidate) = output else {
+                continue;
+            };
+            if *candidate == input_sv {
+                continue;
+            }
+            if candidate.base == input_sv.base || aliases(candidate.base, input_sv.base) {
+                if c_printer_trace_enabled() {
+                    eprintln!(
+                        "[unlace-output] snapshot-source-expr-input-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} source_def_stmt={source_def_stmt} input_idx={input_idx} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
+                    );
+                }
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Refuse to fold a multi-operand expression when one of its register inputs
+/// has a same-base SSA redefinition between the def site and the consumer.
+///
+/// Why: `dedupe_var_names` collapses every SSA version of a given base register
+/// to a single name (`var_names_can_share_name` returns `Some("same-base")`
+/// unconditionally for matching `base`s). If we fold a flag/arithmetic
+/// expression like `IntXor(IntSless(v1, v13_v1), …)` into a later use point
+/// where `v13_v2` has overwritten `v13_v1`, the inlined `v13` token reads the
+/// wrong version and the recompiled output diverges. The existing
+/// `copy_like_*` guards only handle Copy/Cast snapshot patterns. This guard
+/// generalizes the same idea to any foldable expression by scanning its own
+/// inputs.
+fn expression_inputs_aliased_redefined_before_consumer(
+    output_sv: &SsaVarnode,
+    insn: &IrInsn,
+    stmt_idx: u32,
+    consumer_stmt: u32,
+    ctx: &PrintCtx,
+) -> bool {
+    if consumer_stmt <= stmt_idx + 1 {
+        return false;
+    }
+    // Copy/Subpiece/IntZext/IntSext/Cast are already handled by the dedicated
+    // `copy_like_snapshot_source_redefined_before_consumer` check — skip them
+    // here so we don't double-fire traces.
+    if matches!(
+        insn.op,
+        IrOp::Copy | IrOp::Subpiece | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
+    ) {
+        return false;
+    }
+    let Some(stmt_inputs) = ctx.stmt_inputs.get(&stmt_idx) else {
+        return false;
+    };
+    for input_sv in stmt_inputs {
+        if input_sv.base.space != SpaceId::Register {
+            continue;
+        }
+        if *input_sv == *output_sv {
+            continue;
+        }
+        for (&redef_stmt, output) in ctx.stmt_outputs.range((stmt_idx + 1)..consumer_stmt) {
+            let Some(candidate) = output else {
+                continue;
+            };
+            if *candidate == *input_sv {
+                continue;
+            }
+            if candidate.base == input_sv.base || aliases(candidate.base, input_sv.base) {
+                if c_printer_trace_enabled() {
+                    eprintln!(
+                        "[unlace-output] expr-input-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
+                    );
+                }
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn copy_reads_call_output(stmt_idx: u32, ctx: &PrintCtx) -> bool {
@@ -3619,6 +4333,107 @@ fn copy_reads_call_output(stmt_idx: u32, ctx: &PrintCtx) -> bool {
         .find_map(|(def_stmt, output)| (*output == Some(*input_sv)).then_some(def_stmt))
         .and_then(|def_stmt| ctx.stmt_insns.get(def_stmt))
         .is_some_and(|def_insn| matches!(def_insn.op, IrOp::Call | IrOp::Callind))
+}
+
+fn is_stack_canary_compare_artifact(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if matches!(
+        insn.op,
+        IrOp::Call | IrOp::Callind | IrOp::Store | IrOp::Return
+    ) {
+        return false;
+    }
+    if !ctx
+        .stmt_insns
+        .values()
+        .any(|candidate| insn_calls_symbol(candidate, "__stack_chk_fail", ctx))
+    {
+        return false;
+    }
+    let mut seen = BTreeSet::new();
+    if !expr_tree_has_fs_canary_load(insn, stmt_idx, ctx, &mut seen, 0) {
+        return false;
+    }
+    if c_printer_trace_enabled() {
+        eprintln!(
+            "[unlace-output] stmt={stmt_idx} addr=0x{:x} op={:?} decision=suppress-stack-canary-artifact",
+            insn.addr, insn.op
+        );
+    }
+    true
+}
+
+fn expr_tree_has_fs_canary_load(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+    seen: &mut BTreeSet<SsaVarnode>,
+    depth: u8,
+) -> bool {
+    if depth > 8 {
+        return false;
+    }
+    if insn_is_fs_canary_load(insn) {
+        return true;
+    }
+    for (input_idx, input) in insn.inputs.iter().enumerate() {
+        if input.space == SpaceId::Const {
+            continue;
+        }
+        let Some(sv) = input_or_latest_sv_for_operand(input, Some(input_idx), stmt_idx, ctx) else {
+            continue;
+        };
+        if !seen.insert(sv) {
+            continue;
+        }
+        let Some(def_stmt) = defining_stmt_for_sv(&sv, ctx) else {
+            continue;
+        };
+        let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
+            continue;
+        };
+        if expr_tree_has_fs_canary_load(def_insn, def_stmt, ctx, seen, depth + 1) {
+            return true;
+        }
+    }
+    false
+}
+
+fn insn_is_fs_canary_load(insn: &IrInsn) -> bool {
+    if insn.op != IrOp::Load || insn.inputs.is_empty() {
+        return false;
+    }
+    let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
+    let load_size = insn.output.map_or(8, |out| out.size);
+    try_fs_canary_load(&insn.inputs[addr_idx], load_size).is_some()
+}
+
+/// `true` when the `If`/`IfCmp` condition `cond_sv` is the stack-canary guard
+/// comparison — i.e. its defining expression tree reaches a `fs:0x28` canary
+/// load. The compiler emits `if (canary != reloaded) __stack_chk_fail();` in
+/// the epilogue; IDA/Hex-Rays elide this guard entirely. Detecting it by the
+/// *condition* (rather than the branch body) lets the printer drop the whole
+/// `if` even when the fail branch carries an extra `goto` to a shared exit
+/// label, which is the shape produced for canary checks inside irreducible
+/// regions.
+fn cond_sv_is_stack_canary_compare(cond_sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
+    // The canary guard only exists when the function actually calls
+    // __stack_chk_fail; gate on that to avoid mis-eliding an unrelated
+    // comparison that happens to read TLS.
+    if !ctx
+        .stmt_insns
+        .values()
+        .any(|candidate| insn_calls_symbol(candidate, "__stack_chk_fail", ctx))
+    {
+        return false;
+    }
+    let Some(def_stmt) = defining_stmt_for_sv(cond_sv, ctx) else {
+        return false;
+    };
+    let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
+        return false;
+    };
+    let mut seen = BTreeSet::new();
+    expr_tree_has_fs_canary_load(def_insn, def_stmt, ctx, &mut seen, 0)
 }
 
 /// 2-level dead-variable chain propagation (Batch 3 / Wave 4).
@@ -3664,6 +4479,9 @@ fn propagate_dead_chains(ctx: &mut PrintCtx) {
                 }
                 // Statement must not have side effects.
                 let insn = ctx.stmt_insns.get(&stmt_idx)?;
+                if snapshot_assignment_must_be_materialized(&out_sv, insn, stmt_idx, ctx) {
+                    return None;
+                }
                 if instr_has_side_effects(insn) {
                     return None;
                 }
@@ -3715,18 +4533,151 @@ fn is_dead_suppressible_store(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> b
         || instr_has_side_effects(insn)
         || ctx.foldable_stmts.contains(&stmt_idx)
     {
+        trace_dead_suppress_decision(stmt_idx, insn, None, false, "not-eligible", ctx);
         return false;
     }
     let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
+        trace_dead_suppress_decision(stmt_idx, insn, None, false, "missing-ssa-output", ctx);
         return false;
     };
     if ctx.byref_bases.contains(&out_sv.base) || ctx.cond_uses.contains(&out_sv) {
+        trace_dead_suppress_decision(stmt_idx, insn, Some(out_sv), false, "byref-or-cond", ctx);
         return false;
     }
     if is_redundant_inverted_control_compare(insn, stmt_idx, &out_sv, ctx) {
+        trace_dead_suppress_decision(
+            stmt_idx,
+            insn,
+            Some(out_sv),
+            true,
+            "redundant-inverted-control-compare",
+            ctx,
+        );
         return true;
     }
-    is_suppressible_storage(&out_sv.base, ctx)
+    if is_transient_x86_frame_base_update(insn, stmt_idx, ctx) {
+        trace_dead_suppress_decision(
+            stmt_idx,
+            insn,
+            Some(out_sv),
+            true,
+            "transient-frame-base-update",
+            ctx,
+        );
+        return true;
+    }
+    if snapshot_assignment_must_be_materialized(&out_sv, insn, stmt_idx, ctx) {
+        trace_dead_suppress_decision(
+            stmt_idx,
+            insn,
+            Some(out_sv),
+            false,
+            "snapshot-materialized",
+            ctx,
+        );
+        return false;
+    }
+    if insn.op == IrOp::Load {
+        let use_count = ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0);
+        if use_count == 0 {
+            trace_dead_suppress_decision(stmt_idx, insn, Some(out_sv), true, "dead-load", ctx);
+            return true;
+        }
+        let load_size = insn.output.map_or(8, |o| o.size);
+        let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
+        let readonly = insn.inputs.get(addr_idx).is_some_and(|addr| {
+            try_readonly_scalar_load(addr, Some(addr_idx), stmt_idx, load_size, ctx).is_some()
+        });
+        let inlineable = stable_load_expr_is_inlineable(insn, stmt_idx, ctx) || readonly;
+        let decision = inlineable && use_count <= 1;
+        trace_dead_suppress_decision(
+            stmt_idx,
+            insn,
+            Some(out_sv),
+            decision,
+            if decision {
+                "inlineable-load"
+            } else {
+                "materialized-load"
+            },
+            ctx,
+        );
+        return decision;
+    }
+    let use_count = ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0);
+    let decision = is_suppressible_storage(&out_sv.base, ctx) && use_count == 0;
+    trace_dead_suppress_decision(
+        stmt_idx,
+        insn,
+        Some(out_sv),
+        decision,
+        if decision {
+            "dead-suppressible-storage"
+        } else if use_count > 0 {
+            "live-storage"
+        } else {
+            "visible-storage"
+        },
+        ctx,
+    );
+    decision
+}
+
+fn trace_dead_suppress_decision(
+    stmt_idx: u32,
+    insn: &IrInsn,
+    out_sv: Option<SsaVarnode>,
+    decision: bool,
+    reason: &str,
+    ctx: &PrintCtx,
+) {
+    if !c_printer_trace_enabled() {
+        return;
+    }
+    let out_name = out_sv.and_then(|sv| known_name_of_sv(ctx, &sv));
+    let uses = out_sv
+        .map(|sv| ctx.sv_use_counts.get(&sv).copied().unwrap_or(0))
+        .unwrap_or(0);
+    let phi = out_sv.is_some_and(|sv| ctx.ssa_phi_uses.contains(&sv));
+    let inputs = ctx
+        .stmt_input_slots
+        .get(&stmt_idx)
+        .map(|slots| {
+            slots
+                .iter()
+                .map(|(slot, sv)| {
+                    format!(
+                        "{slot}:{sv:?}:{:?}",
+                        known_name_of_sv(ctx, sv).unwrap_or_default()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_default();
+    let text = format!(
+        "dead-suppress stmt={stmt_idx} addr=0x{:x} op={:?} out={out_sv:?} name={out_name:?} uses={uses} phi={phi} inputs=[{inputs}] decision={decision} reason={reason}",
+        insn.addr, insn.op
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
+}
+
+fn snapshot_assignment_must_be_materialized(
+    output_sv: &SsaVarnode,
+    insn: &IrInsn,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> bool {
+    ctx.stmt_inputs
+        .range((stmt_idx + 1)..)
+        .any(|(&use_stmt, inputs)| {
+            inputs.contains(output_sv)
+                && copy_like_snapshot_source_redefined_before_consumer(
+                    output_sv, insn, stmt_idx, use_stmt, ctx,
+                )
+        })
 }
 
 fn should_suppress_var_decl(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
@@ -4194,23 +5145,39 @@ fn compute_dwarf_locals(
     };
 
     for local in &dwarf_func.locals {
-        let frame_off = match local.frame_offset {
-            Some(o) => o,
-            None => continue,
-        };
-        let rsp_off = frame_size + frame_off;
-        if rsp_off < 0 {
-            continue;
+        let mut frame_offsets = Vec::new();
+        if let Some(o) = local.frame_offset {
+            frame_offsets.push(o);
         }
-        for size in [1u8, 2, 4, 8] {
-            let stk = Varnode::stack(rsp_off as u64, size);
-            ctx.name_overrides
-                .entry(stk)
-                .or_insert_with(|| local.name.clone());
-            if let Some(type_name) = local.type_name.as_deref() {
-                ctx.dwarf_local_types
-                    .entry(stk)
-                    .or_insert_with(|| dwarf_type_to_c(type_name));
+        for (_, loc) in &local.locations_dwarf_v5 {
+            if let unlace_loader::SimpleLocation::FrameOffset(o) = loc {
+                frame_offsets.push(*o);
+            }
+        }
+        frame_offsets.sort_unstable();
+        frame_offsets.dedup();
+
+        for frame_off in frame_offsets {
+            let mut candidate_offsets = vec![frame_off as u64];
+            let rsp_off = frame_size + frame_off;
+            if rsp_off >= 0 {
+                candidate_offsets.push(rsp_off as u64);
+            }
+            candidate_offsets.sort_unstable();
+            candidate_offsets.dedup();
+
+            for raw_off in candidate_offsets {
+                for size in [1u8, 2, 4, 8] {
+                    let stk = Varnode::stack(raw_off, size);
+                    ctx.name_overrides
+                        .entry(stk)
+                        .or_insert_with(|| local.name.clone());
+                    if let Some(type_name) = local.type_name.as_deref() {
+                        ctx.dwarf_local_types
+                            .entry(stk)
+                            .or_insert_with(|| dwarf_type_to_c(type_name));
+                    }
+                }
             }
         }
     }
@@ -4444,14 +5411,47 @@ fn try_stack_frame_access_name(
 ) -> Option<String> {
     let offset = resolve_stack_offset_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0)?;
     let slot = stack_slot_for_offset(offset, access_size, ctx)?;
-    if slot.is_buffer || slot.delta != 0 {
+    let rendered = if slot.is_buffer || slot.delta != 0 {
         let cast = ida_ptr_type(access_size);
         let cast_prim = cast.trim_end_matches(" *");
         let addr = stack_slot_address_expr(&slot);
-        Some(format!("*({cast_prim} *){addr}"))
+        format!("*({cast_prim} *){addr}")
     } else {
-        Some(slot.name)
-    }
+        slot.name
+    };
+    trace_stack_resolution(
+        "access",
+        stmt_idx,
+        addr_raw_idx,
+        addr_vn,
+        Some(rendered.as_str()),
+    );
+    Some(rendered)
+}
+
+fn try_stack_frame_address_expr(
+    addr_vn: &Varnode,
+    addr_raw_idx: Option<usize>,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> Option<String> {
+    let offset = resolve_stack_offset_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0)?;
+    let slot = stack_slot_for_address_offset(offset, ctx)?;
+    let rendered = if slot.is_buffer {
+        format!("(uintptr_t){}", stack_slot_address_expr(&slot))
+    } else if slot.delta == 0 {
+        format!("(uintptr_t)&{}", slot.name)
+    } else {
+        format!("(uintptr_t)((char *)&{} + {})", slot.name, slot.delta)
+    };
+    trace_stack_resolution(
+        "address",
+        stmt_idx,
+        addr_raw_idx,
+        addr_vn,
+        Some(rendered.as_str()),
+    );
+    Some(rendered)
 }
 
 #[derive(Clone, Debug)]
@@ -4499,6 +5499,48 @@ fn stack_slot_for_offset(offset: i64, access_size: u8, ctx: &PrintCtx) -> Option
         if size == 0 {
             continue;
         }
+        let stk = Varnode::stack(offset as u64, size);
+        if let Some(name) = ctx.name_overrides.get(&stk) {
+            return Some(StackSlotRef {
+                name: name.clone(),
+                delta: 0,
+                is_buffer: name.starts_with("buf_"),
+            });
+        }
+    }
+    None
+}
+
+fn stack_slot_for_address_offset(offset: i64, ctx: &PrintCtx) -> Option<StackSlotRef> {
+    let mut scalar_match: Option<StackSlotRef> = None;
+    for (&start, slot) in ctx.stack_frame_slots.range(..=offset).rev() {
+        let end = start.checked_add(slot.size as i64)?;
+        if offset >= start && offset <= end {
+            let delta = offset - start;
+            if slot.is_buffer {
+                return Some(StackSlotRef {
+                    name: slot.name.clone(),
+                    delta,
+                    is_buffer: true,
+                });
+            }
+            if delta == 0 && scalar_match.is_none() {
+                scalar_match = Some(StackSlotRef {
+                    name: slot.name.clone(),
+                    delta,
+                    is_buffer: false,
+                });
+            }
+        }
+        if end < offset {
+            break;
+        }
+    }
+    if scalar_match.is_some() {
+        return scalar_match;
+    }
+
+    for size in [8u8, 4, 2, 1] {
         let stk = Varnode::stack(offset as u64, size);
         if let Some(name) = ctx.name_overrides.get(&stk) {
             return Some(StackSlotRef {
@@ -4576,8 +5618,13 @@ fn input_or_latest_sv_for_operand(
             .stmt_input_slots
             .get(&stmt_idx)
             .and_then(|inputs| inputs.get(&raw_idx).copied())
-        && sv.base == *vn
     {
+        if sv.base != *vn && c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} annotated={sv:?}; using annotated SSA slot",
+            );
+        }
+        trace_operand_resolution("annotated-slot", stmt_idx, Some(raw_idx), vn, Some(sv), ctx);
         return Some(sv);
     }
     if let Some(sv) = ctx
@@ -4585,12 +5632,16 @@ fn input_or_latest_sv_for_operand(
         .get(&stmt_idx)
         .and_then(|inputs| inputs.iter().find(|sv| sv.base == *vn).copied())
     {
+        trace_operand_resolution("stmt-input", stmt_idx, raw_idx, vn, Some(sv), ctx);
         return Some(sv);
     }
-    ctx.stmt_outputs
+    let latest = ctx
+        .stmt_outputs
         .range(..stmt_idx)
         .rev()
-        .find_map(|(_, output)| output.filter(|sv| sv.base == *vn))
+        .find_map(|(_, output)| output.filter(|sv| sv.base == *vn));
+    trace_operand_resolution("latest-output", stmt_idx, raw_idx, vn, latest, ctx);
+    latest
 }
 
 fn defining_stmt_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<u32> {
@@ -4627,9 +5678,32 @@ fn is_x86_frame_base(vn: &Varnode) -> bool {
 }
 
 fn is_x86_frame_base_update(insn: &IrInsn, output: &Varnode) -> bool {
-    is_x86_frame_base(output)
-        && matches!(insn.op, IrOp::Copy | IrOp::IntAdd | IrOp::IntSub)
-        && insn.inputs.iter().any(is_x86_frame_base)
+    is_x86_frame_base(output) && matches!(insn.op, IrOp::Copy | IrOp::IntAdd | IrOp::IntSub)
+}
+
+fn is_transient_x86_frame_base_update(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if !matches!(insn.op, IrOp::Copy | IrOp::IntAdd | IrOp::IntSub)
+        || !insn.inputs.iter().any(is_x86_frame_base)
+    {
+        return false;
+    }
+    let Some(Some(output_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
+        return false;
+    };
+    if output_sv.base.space != SpaceId::Unique {
+        return false;
+    }
+
+    ctx.stmt_inputs.iter().any(|(&use_stmt, inputs)| {
+        use_stmt > stmt_idx
+            && inputs.contains(&output_sv)
+            && ctx.stmt_insns.get(&use_stmt).is_some_and(|use_insn| {
+                use_insn.op == IrOp::Copy
+                    && use_insn
+                        .output
+                        .is_some_and(|output| is_x86_frame_base(&output))
+            })
+    })
 }
 
 fn emit_memory_address_operand(
@@ -4638,6 +5712,9 @@ fn emit_memory_address_operand(
     stmt_idx: u32,
     ctx: &mut PrintCtx,
 ) -> String {
+    if let Some(addr) = try_stack_frame_address_expr(vn, Some(raw_idx), stmt_idx, ctx) {
+        return addr;
+    }
     let rendered = emit_operand_resolved(vn, raw_idx, stmt_idx, ctx);
     if vn.space != SpaceId::Const
         && is_zero_address_literal(&rendered)
@@ -4920,9 +5997,15 @@ const STRING_FUNCS: &[&str] = &[
 /// are never replaced.
 fn compute_heuristic_names(nodes: &[HirNode], ctx: &mut PrintCtx) {
     let mut roles: BTreeMap<Varnode, VarRole> = BTreeMap::new();
+    let mut return_svs: BTreeSet<SsaVarnode> = BTreeSet::new();
 
     walk_collect_roles(nodes, ctx, &mut roles);
+    collect_return_svs(nodes, ctx, &mut return_svs);
     collect_statement_level_roles(ctx, &mut roles);
+
+    for sv in return_svs {
+        apply_ssa_override(ctx, &sv, "result".to_string());
+    }
 
     let mut by_role: BTreeMap<VarRole, Vec<Varnode>> = BTreeMap::new();
     for (base, role) in &roles {
@@ -4975,12 +6058,8 @@ fn dedupe_var_names(ctx: &mut PrintCtx) {
 
     for (sv, name) in entries {
         if let Some((owner_sv, _owner_ty)) = used.get(&name).copied() {
-            if owner_sv.base == sv.base {
-                continue;
-            }
-            if ctx.merged_names.get(&owner_sv) == ctx.merged_names.get(&sv)
-                && ctx.merged_names.contains_key(&sv)
-            {
+            if let Some(reason) = var_names_can_share_name(ctx, owner_sv, sv) {
+                trace_dedupe_var_name(&name, owner_sv, sv, reason, None);
                 continue;
             }
             let mut suffix = 1u32;
@@ -4991,6 +6070,7 @@ fn dedupe_var_names(ctx: &mut PrintCtx) {
                     break candidate;
                 }
             };
+            trace_dedupe_var_name(&name, owner_sv, sv, "rename-collision", Some(&unique));
             ctx.var_names.insert(sv, unique);
         } else {
             let ty = ctx
@@ -5000,6 +6080,58 @@ fn dedupe_var_names(ctx: &mut PrintCtx) {
                 .unwrap_or(PrimitiveType::Unknown);
             used.insert(name, (sv, ty));
         }
+    }
+}
+
+fn var_names_can_share_name(
+    ctx: &PrintCtx,
+    owner_sv: SsaVarnode,
+    sv: SsaVarnode,
+) -> Option<&'static str> {
+    if owner_sv.base == sv.base {
+        return Some("same-base");
+    }
+    if ctx.merged_names.get(&owner_sv) == ctx.merged_names.get(&sv)
+        && ctx.merged_names.contains_key(&sv)
+    {
+        return Some("same-merged-name");
+    }
+    if aliases(owner_sv.base, sv.base) {
+        if ctx.name_overrides.get(&owner_sv.base) == ctx.name_overrides.get(&sv.base)
+            && ctx.name_overrides.contains_key(&sv.base)
+        {
+            return Some("same-alias-override");
+        }
+        if ctx.var_role_names.get(&owner_sv) == ctx.var_role_names.get(&sv)
+            && ctx.var_role_names.contains_key(&sv)
+        {
+            return Some("same-alias-role");
+        }
+        if ctx.merged_names.get(&owner_sv) == ctx.merged_names.get(&sv)
+            && ctx.merged_names.contains_key(&sv)
+        {
+            return Some("same-alias-merged");
+        }
+    }
+    None
+}
+
+fn trace_dedupe_var_name(
+    name: &str,
+    owner_sv: SsaVarnode,
+    sv: SsaVarnode,
+    decision: &str,
+    replacement: Option<&str>,
+) {
+    if !c_printer_name_trace_enabled() {
+        return;
+    }
+    let text = format!(
+        "dedupe name={name} decision={decision} owner={owner_sv:?} candidate={sv:?} replacement={}",
+        replacement.unwrap_or("<shared>")
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
     }
 }
 
@@ -5030,6 +6162,13 @@ fn apply_override(ctx: &mut PrintCtx, base: &Varnode, name: String) {
     for sv in to_update {
         ctx.var_names.insert(sv, name.clone());
     }
+}
+
+fn apply_ssa_override(ctx: &mut PrintCtx, sv: &SsaVarnode, name: String) {
+    if !is_synthetic_vn_name(ctx.var_names.get(sv).map(String::as_str)) {
+        return;
+    }
+    ctx.var_names.insert(*sv, name);
 }
 
 fn is_synthetic_vn_name(name: Option<&str>) -> bool {
@@ -5067,11 +6206,7 @@ fn walk_collect_roles(nodes: &[HirNode], ctx: &PrintCtx, roles: &mut BTreeMap<Va
     for node in nodes {
         match node {
             HirNode::Block(children) => walk_collect_roles(children, ctx, roles),
-            HirNode::Return(Some(sv)) => {
-                if !ctx.parent_returns_void && sv.base.space != SpaceId::Const {
-                    record_role(roles, sv.base, VarRole::Result);
-                }
-            }
+            HirNode::Return(Some(_)) | HirNode::Return(None) => {}
             HirNode::If {
                 cond,
                 then_body,
@@ -5133,6 +6268,84 @@ fn walk_collect_roles(nodes: &[HirNode], ctx: &PrintCtx, roles: &mut BTreeMap<Va
                 }
             }
             _ => {}
+        }
+    }
+}
+
+fn collect_return_svs(nodes: &[HirNode], ctx: &PrintCtx, return_svs: &mut BTreeSet<SsaVarnode>) {
+    for node in nodes {
+        match node {
+            HirNode::Block(children) => collect_return_svs(children, ctx, return_svs),
+            HirNode::Return(Some(sv)) => {
+                if !ctx.parent_returns_void && sv.base.space != SpaceId::Const {
+                    return_svs.insert(*sv);
+                }
+            }
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            }
+            | HirNode::IfCmp {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_return_svs(then_body, ctx, return_svs);
+                if let Some(eb) = else_body {
+                    collect_return_svs(eb, ctx, return_svs);
+                }
+            }
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => collect_return_svs(body, ctx, return_svs),
+            HirNode::Switch { cases, default, .. } => {
+                for (_case, body, _) in cases {
+                    collect_return_svs(body, ctx, return_svs);
+                }
+                if let Some(d) = default {
+                    collect_return_svs(d, ctx, return_svs);
+                }
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                collect_return_svs(try_body, ctx, return_svs);
+                for (_ty, body) in catch_arms {
+                    collect_return_svs(body, ctx, return_svs);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_return_svs(try_body, ctx, return_svs);
+                collect_return_svs(finally_body, ctx, return_svs);
+            }
+            HirNode::GuardedIf {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_return_svs(then_body, ctx, return_svs);
+                collect_return_svs(else_body, ctx, return_svs);
+            }
+            HirNode::Commented { inner, .. } => {
+                collect_return_svs(std::slice::from_ref(inner), ctx, return_svs);
+            }
+            HirNode::Statement(_)
+            | HirNode::Return(None)
+            | HirNode::Goto(_)
+            | HirNode::Label(_)
+            | HirNode::Ternary { .. }
+            | HirNode::TailCall { .. }
+            | HirNode::Break
+            | HirNode::Continue
+            | HirNode::ObjcBlock { .. }
+            | HirNode::GuardedTernary { .. }
+            | HirNode::CselTernary { .. }
+            | HirNode::Asm { .. } => {}
         }
     }
 }
@@ -5343,6 +6556,28 @@ fn c_type_for_var(ctx: &PrintCtx, var: &Varnode, fallback: &PrimitiveType) -> St
         .unwrap_or_else(|| c_type(fallback).to_string())
 }
 
+fn prefer_decl_type(existing: PrimitiveType, candidate: PrimitiveType) -> PrimitiveType {
+    use PrimitiveType::*;
+    match (existing, candidate) {
+        (Ptr, _) | (_, Ptr) => Ptr,
+        (Double, _) | (_, Double) => Double,
+        (Float, _) | (_, Float) => Float,
+        (UnsignedInt(a), UnsignedInt(b)) => UnsignedInt(a.max(b)),
+        (Int(a), Int(b)) => Int(a.max(b)),
+        (UnsignedInt(a), Int(b)) | (Int(b), UnsignedInt(a)) => {
+            if a >= b {
+                UnsignedInt(a)
+            } else {
+                Int(b)
+            }
+        }
+        (Unknown, other) => other,
+        (other, Unknown) => other,
+        (Bool, other) => other,
+        (other, Bool) => other,
+    }
+}
+
 #[allow(dead_code)]
 fn c_return_type(ty: &PrimitiveType) -> &'static str {
     match ty {
@@ -5510,13 +6745,18 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
     let mut i = 0;
     let mut last_dowhile_stmt_range: Option<(u32, u32)> = None;
     while i < nodes.len() {
+        trace_flow(format_args!(
+            "node-enter depth={depth} idx={i} stmt={} kind={}",
+            ctx.emit_stmt,
+            hir_node_trace_kind(&nodes[i])
+        ));
         if let HirNode::Return(Some(sv)) = &nodes[i]
             && !ctx.parent_returns_void
             && let Some((start, end)) = last_dowhile_stmt_range
             && let Some(expr) = resolve_post_dowhile_return_expr(sv, start, end, ctx)
         {
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "return {};", expr);
+            let _ = writeln!(out, "return {};", canonicalize_return_expr(expr));
             if !has_later_sibling_label(nodes, i + 1) {
                 break;
             }
@@ -5525,21 +6765,30 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             continue;
         }
         if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
+            trace_flow(format_args!(
+                "merge-assign-return depth={depth} idx={i} stmt={} expr={}",
+                ctx.emit_stmt, merged
+            ));
             ctx.emit_stmt += 1;
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "return {};", merged);
+            let _ = writeln!(out, "return {};", canonicalize_return_expr(merged));
             i += 2;
             last_dowhile_stmt_range = None;
             continue;
         }
         if let Some(merged) = try_merge_call_return(&nodes[i..], ctx) {
+            trace_flow(format_args!(
+                "merge-call-return depth={depth} idx={i} stmt={} stmt_count={} expr={}",
+                ctx.emit_stmt, merged.stmt_count, merged.expr
+            ));
             ctx.emit_stmt += merged.stmt_count;
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "return {};", merged.expr);
+            let _ = writeln!(out, "return {};", canonicalize_return_expr(merged.expr));
             i += merged.node_count;
             last_dowhile_stmt_range = None;
             continue;
         }
+        let before_inline_stmt = ctx.emit_stmt;
         if let Some(first) = inline_node_text(&nodes[i], ctx) {
             let mut parts = Vec::new();
             let first_is_terminal = node_is_terminal_for_emission(&nodes[i]);
@@ -5547,23 +6796,43 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             if !first.is_empty() {
                 parts.push(first);
             }
+            trace_flow(format_args!(
+                "inline-start depth={depth} idx={i} stmt_before={before_inline_stmt} stmt_after={} kind={} text={:?}",
+                ctx.emit_stmt,
+                hir_node_trace_kind(&nodes[i]),
+                parts.last()
+            ));
             i += 1;
             while !first_is_terminal && i < nodes.len() && parts.len() < 3 {
                 if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
+                    trace_flow(format_args!(
+                        "inline-merge-assign-return depth={depth} idx={i} stmt={} expr={}",
+                        ctx.emit_stmt, merged
+                    ));
                     ctx.emit_stmt += 1;
-                    parts.push(format!("return {};", merged));
+                    parts.push(format!("return {};", canonicalize_return_expr(merged)));
                     i += 2;
                     group_has_terminal = true;
                     break;
                 }
                 if let Some(merged) = try_merge_call_return(&nodes[i..], ctx) {
+                    trace_flow(format_args!(
+                        "inline-merge-call-return depth={depth} idx={i} stmt={} stmt_count={} expr={}",
+                        ctx.emit_stmt, merged.stmt_count, merged.expr
+                    ));
                     ctx.emit_stmt += merged.stmt_count;
-                    parts.push(format!("return {};", merged.expr));
+                    parts.push(format!("return {};", canonicalize_return_expr(merged.expr)));
                     i += merged.node_count;
                     group_has_terminal = true;
                     break;
                 }
+                let next_stmt_before = ctx.emit_stmt;
                 let Some(next) = inline_node_text(&nodes[i], ctx) else {
+                    trace_flow(format_args!(
+                        "inline-stop-noninline depth={depth} idx={i} stmt_before={next_stmt_before} stmt_after={} kind={}",
+                        ctx.emit_stmt,
+                        hir_node_trace_kind(&nodes[i])
+                    ));
                     break;
                 };
                 let is_terminal = node_is_terminal_for_emission(&nodes[i]);
@@ -5573,16 +6842,30 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 if !next.is_empty() {
                     parts.push(next);
                 }
+                trace_flow(format_args!(
+                    "inline-next depth={depth} idx={i} stmt_before={next_stmt_before} stmt_after={} kind={} terminal={is_terminal} text={:?}",
+                    ctx.emit_stmt,
+                    hir_node_trace_kind(&nodes[i]),
+                    parts.last()
+                ));
                 i += 1;
                 if is_terminal {
                     break;
                 }
             }
             if !parts.is_empty() {
+                trace_flow(format_args!(
+                    "inline-flush depth={depth} next_idx={i} stmt={} parts={:?}",
+                    ctx.emit_stmt, parts
+                ));
                 indent(depth, ctx.config.tab_width, out);
                 let _ = writeln!(out, "{}", parts.join(" "));
             }
             if group_has_terminal && !has_later_sibling_label(nodes, i) {
+                trace_flow(format_args!(
+                    "inline-terminal-break depth={depth} next_idx={i} stmt={}",
+                    ctx.emit_stmt
+                ));
                 break;
             }
             last_dowhile_stmt_range = None;
@@ -5593,6 +6876,10 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
         let is_dowhile = matches!(nodes[i], HirNode::DoWhile { .. });
         emit_node(&nodes[i], depth, ctx, out);
         let end_stmt = ctx.emit_stmt;
+        trace_flow(format_args!(
+            "node-exit depth={depth} idx={i} kind={} stmt_range={start_stmt}..{end_stmt} terminal={is_terminal}",
+            hir_node_trace_kind(&nodes[i])
+        ));
         last_dowhile_stmt_range = if is_dowhile {
             Some((start_stmt, end_stmt))
         } else {
@@ -5623,7 +6910,7 @@ fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
             if ctx.parent_returns_void {
                 Some("return;".to_string())
             } else {
-                Some(format!("return {};", resolve_sv_expr(sv, ctx)))
+                Some(format!("return {};", resolve_return_expr(sv, ctx)))
             }
         }
         HirNode::Return(None) => Some(nonvoid_or_void_return_text(ctx)),
@@ -6116,6 +7403,15 @@ fn statement_is_transparent_for_call_return(insn: &IrInsn, stmt_idx: u32, ctx: &
     if is_csel_callother(insn) || matches!(insn.op, IrOp::Call | IrOp::Callind) {
         return false;
     }
+    if ctx
+        .stmt_outputs
+        .get(&stmt_idx)
+        .copied()
+        .flatten()
+        .is_some_and(|sv| is_return_register(&sv.base))
+    {
+        return false;
+    }
     if ctx.foldable_stmts.contains(&stmt_idx)
         || is_dead_zero_init(insn, stmt_idx, ctx)
         || is_dead_suppressible_store(insn, stmt_idx, ctx)
@@ -6227,6 +7523,40 @@ fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) 
 
 fn resolve_sv_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
     resolve_sv_expr_inner(sv, ctx, true)
+}
+
+fn resolve_return_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
+    if sv.base.space == SpaceId::Const && sv.base.offset == 0 {
+        return "0".to_string();
+    }
+    canonicalize_return_expr(resolve_sv_expr(sv, ctx))
+}
+
+fn canonicalize_return_expr(expr: String) -> String {
+    if let Some(stripped) = strip_return_integer_suffix(&expr) {
+        return stripped;
+    }
+    expr
+}
+
+fn strip_return_integer_suffix(expr: &str) -> Option<String> {
+    for suffix in ["ULL", "LLU", "LL", "UL", "LU", "U", "L"] {
+        let Some(core) = expr.strip_suffix(suffix) else {
+            continue;
+        };
+        if is_simple_integer_literal(core) {
+            return Some(core.to_string());
+        }
+    }
+    None
+}
+
+fn is_simple_integer_literal(expr: &str) -> bool {
+    let expr = expr.strip_prefix('-').unwrap_or(expr);
+    if let Some(hex) = expr.strip_prefix("0x").or_else(|| expr.strip_prefix("0X")) {
+        return !hex.is_empty() && hex.bytes().all(|b| b.is_ascii_hexdigit());
+    }
+    !expr.is_empty() && expr.bytes().all(|b| b.is_ascii_digit())
 }
 
 fn resolve_sv_expr_inner(sv: &SsaVarnode, ctx: &mut PrintCtx, allow_covering: bool) -> String {
@@ -6411,7 +7741,8 @@ fn resolve_post_body_control_cond_expr(
     end_stmt: u32,
     ctx: &mut PrintCtx,
 ) -> Option<String> {
-    let def_stmt = inlineable_condition_def_stmt(sv, ctx)?;
+    let def_stmt = inlineable_condition_def_stmt(sv, ctx)
+        .or_else(|| latest_inlineable_condition_def_stmt_for_base(sv, ctx))?;
     let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
     let op = comparison_symbol(def_insn.op)?;
     if def_insn.inputs.len() != 2 {
@@ -6470,7 +7801,196 @@ fn resolve_post_body_control_cond_expr(
         return None;
     }
 
-    (lhs.changed || rhs.changed).then(|| format!("{} {} {}", lhs.text, op, rhs.text))
+    if c_printer_trace_enabled() {
+        eprintln!(
+            "[unlace-output] post-body-cond def_stmt={def_stmt} range={start_stmt}..{end_stmt} op={:?} lhs={:?} rhs={:?}",
+            def_insn.op, lhs, rhs
+        );
+    }
+
+    (lhs.changed || rhs.changed).then(|| {
+        format!(
+            "{} {} {}",
+            simplify_condition_operand_text(&lhs.text),
+            op,
+            simplify_condition_operand_text(&rhs.text)
+        )
+    })
+}
+
+fn simplify_condition_operand_text(text: &str) -> String {
+    let trimmed = text.trim();
+    if let Some(inner) = trimmed
+        .strip_prefix("LODWORD(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        let inner = inner.trim();
+        if let Some(stripped) = strip_return_integer_suffix(inner) {
+            return stripped;
+        }
+        if is_simple_integer_literal(inner) {
+            return inner.to_string();
+        }
+        if is_c_identifier(inner) {
+            return inner.to_string();
+        }
+    }
+    trimmed.to_string()
+}
+
+fn simplify_condition_expr_text(expr: &str) -> String {
+    if let Some((lhs, op, rhs)) = split_top_level_comparison(expr) {
+        return format!(
+            "{} {} {}",
+            simplify_condition_operand_text(lhs),
+            op,
+            simplify_condition_operand_text(rhs)
+        );
+    }
+    expr.trim().to_string()
+}
+
+fn c_printer_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_TRACE").is_some()
+        || std::env::var_os("UNLACE_TRACE_ALL").is_some()
+}
+
+fn c_printer_name_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_NAME_TRACE").is_some() || c_printer_trace_enabled()
+}
+
+fn c_printer_stack_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_STACK_TRACE").is_some() || c_printer_trace_enabled()
+}
+
+fn c_printer_flow_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_FLOW_TRACE").is_some() || c_printer_trace_enabled()
+}
+
+fn c_printer_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_CPRINTER_TRACE_FILTER")
+        .ok()
+        .filter(|s| !s.is_empty())
+}
+
+fn trace_text_matches_filter(text: &str) -> bool {
+    c_printer_trace_filter()
+        .as_deref()
+        .is_none_or(|filter| text.contains(filter))
+}
+
+fn trace_flow(message: impl std::fmt::Display) {
+    if !c_printer_flow_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] flow {text}");
+    }
+}
+
+fn hir_node_trace_kind(node: &HirNode) -> &'static str {
+    match node {
+        HirNode::Block(_) => "Block",
+        HirNode::Statement(_) => "Statement",
+        HirNode::If { .. } => "If",
+        HirNode::IfCmp { .. } => "IfCmp",
+        HirNode::While { .. } => "While",
+        HirNode::DoWhile { .. } => "DoWhile",
+        HirNode::For { .. } => "For",
+        HirNode::Switch { .. } => "Switch",
+        HirNode::Return(_) => "Return",
+        HirNode::Goto(_) => "Goto",
+        HirNode::Label(_) => "Label",
+        HirNode::Ternary { .. } => "Ternary",
+        HirNode::GuardedTernary { .. } => "GuardedTernary",
+        HirNode::CselTernary { .. } => "CselTernary",
+        HirNode::TailCall { .. } => "TailCall",
+        HirNode::Continue => "Continue",
+        HirNode::Break => "Break",
+        HirNode::TryCatch { .. } => "TryCatch",
+        HirNode::TryFinally { .. } => "TryFinally",
+        HirNode::GuardedIf { .. } => "GuardedIf",
+        HirNode::Commented { .. } => "Commented",
+        HirNode::ObjcBlock { .. } => "ObjcBlock",
+        HirNode::Asm { .. } => "Asm",
+    }
+}
+
+fn known_name_of_sv(ctx: &PrintCtx, sv: &SsaVarnode) -> Option<String> {
+    ctx.var_names
+        .get(sv)
+        .or_else(|| ctx.name_overrides.get(&sv.base))
+        .or_else(|| ctx.merged_names.get(sv))
+        .or_else(|| ctx.var_role_names.get(sv))
+        .or_else(|| ctx.base_names.get(&sv.base))
+        .cloned()
+}
+
+fn trace_name_decision(source: &str, sv: &SsaVarnode, name: &str, ctx: &PrintCtx) {
+    if !c_printer_name_trace_enabled() {
+        return;
+    }
+    let text = format!(
+        "name source={source} name={name} sv={sv:?} base={:?} merged={:?} role={:?} override={:?}",
+        sv.base,
+        ctx.merged_names.get(sv),
+        ctx.var_role_names.get(sv),
+        ctx.name_overrides.get(&sv.base)
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
+}
+
+fn trace_operand_resolution(
+    source: &str,
+    stmt_idx: u32,
+    raw_idx: Option<usize>,
+    vn: &Varnode,
+    sv: Option<SsaVarnode>,
+    ctx: &PrintCtx,
+) {
+    if !c_printer_name_trace_enabled() {
+        return;
+    }
+    let known = sv.and_then(|sv| known_name_of_sv(ctx, &sv));
+    let text = format!(
+        "operand source={source} stmt={stmt_idx} raw_idx={raw_idx:?} raw={vn:?} sv={sv:?} known_name={known:?}"
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
+}
+
+fn trace_stack_resolution(
+    source: &str,
+    stmt_idx: u32,
+    raw_idx: Option<usize>,
+    vn: &Varnode,
+    result: Option<&str>,
+) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    let text = format!(
+        "stack source={source} stmt={stmt_idx} raw_idx={raw_idx:?} raw={vn:?} result={result:?}"
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
+}
+
+fn trace_readonly_resolution(stmt_idx: u32, vn: &Varnode, addr: u64, access_size: u8, value: &str) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    let text = format!(
+        "readonly stmt={stmt_idx} raw={vn:?} addr=0x{addr:x} size={access_size} value={value}"
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
 }
 
 fn rebase_cond_operand_after_body(
@@ -6506,10 +8026,16 @@ fn rebase_cond_operand_after_body(
         ParentCtx::top(),
         ctx,
     );
+    if c_printer_trace_enabled() {
+        eprintln!(
+            "[unlace-output] rebase-cond operand stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} sv={sv:?} original={original_text}"
+        );
+    }
 
-    for candidate_base in condition_rebase_candidate_bases(&sv, ctx) {
+    let candidate_bases = condition_rebase_candidate_bases(&sv, ctx);
+    for candidate_base in &candidate_bases {
         if let Some(alias_sv) =
-            latest_visible_copy_from_base_in_range(&candidate_base, start_stmt, end_stmt, ctx)
+            latest_visible_copy_from_base_in_range(candidate_base, start_stmt, end_stmt, ctx)
         {
             return RebasedCondOperand {
                 text: ctx.name_of(&alias_sv),
@@ -6521,16 +8047,18 @@ fn rebase_cond_operand_after_body(
         }
     }
 
-    if let Some((alias_sv, delta)) =
-        latest_linear_update_copy_for_base_in_range(&sv.base, start_stmt, end_stmt, ctx)
-    {
-        return RebasedCondOperand {
-            text: ctx.name_of(&alias_sv),
-            original_text,
-            changed: true,
-            delta: Some(delta),
-            const_value: None,
-        };
+    for candidate_base in &candidate_bases {
+        if let Some((alias_sv, delta)) =
+            latest_linear_update_copy_for_base_in_range(candidate_base, start_stmt, end_stmt, ctx)
+        {
+            return RebasedCondOperand {
+                text: ctx.name_of(&alias_sv),
+                original_text,
+                changed: true,
+                delta: Some(delta),
+                const_value: None,
+            };
+        }
     }
 
     RebasedCondOperand {
@@ -6546,13 +8074,28 @@ fn condition_rebase_candidate_bases(sv: &SsaVarnode, ctx: &PrintCtx) -> Vec<Varn
     let mut bases = vec![sv.base];
     let mut current = *sv;
     for _ in 0..4 {
+        if !bases.contains(&current.base) {
+            bases.push(current.base);
+        }
         let Some(def_stmt) = defining_stmt_for_sv(&current, ctx) else {
+            if c_printer_trace_enabled() {
+                eprintln!("[unlace-output] rebase-candidates no def for {current:?}");
+            }
             break;
         };
         let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
             break;
         };
-        if def_insn.op != IrOp::Copy {
+        if c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] rebase-candidates current={current:?} def_stmt={def_stmt} op={:?} inputs={:?}",
+                def_insn.op, def_insn.inputs
+            );
+        }
+        if !matches!(
+            def_insn.op,
+            IrOp::Copy | IrOp::Subpiece | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
+        ) {
             break;
         }
         let Some(input) = def_insn.inputs.first().copied() else {
@@ -6605,6 +8148,11 @@ fn latest_linear_update_copy_for_base_in_range(
     end_stmt: u32,
     ctx: &PrintCtx,
 ) -> Option<(SsaVarnode, i128)> {
+    if c_printer_trace_enabled() {
+        eprintln!(
+            "[unlace-output] linear-rebase search base={base:?} range={start_stmt}..{end_stmt}"
+        );
+    }
     ctx.stmt_outputs
         .range(start_stmt..end_stmt)
         .rev()
@@ -6614,7 +8162,17 @@ fn latest_linear_update_copy_for_base_in_range(
                 return None;
             }
             let copy = ctx.stmt_insns.get(&stmt_idx)?;
-            if copy.op != IrOp::Copy || copy.inputs.len() != 1 {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] linear-rebase candidate stmt={stmt_idx} output={output_sv:?} op={:?} inputs={:?}",
+                    copy.op, copy.inputs
+                );
+            }
+            if !matches!(
+                copy.op,
+                IrOp::Copy | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
+            ) || copy.inputs.len() != 1
+            {
                 return None;
             }
             let source = copy.inputs[0];
@@ -6627,29 +8185,82 @@ fn latest_linear_update_copy_for_base_in_range(
                 return None;
             }
             let source_def = ctx.stmt_insns.get(&source_def_stmt)?;
-            linear_update_delta_from_base(source_def, base).map(|delta| (output_sv, delta))
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] linear-rebase source stmt={source_def_stmt} op={:?} inputs={:?}",
+                    source_def.op, source_def.inputs
+                );
+            }
+            linear_update_delta_from_base_resolved(source_def, source_def_stmt, base, ctx)
+                .map(|delta| (output_sv, delta))
         })
 }
 
 fn linear_update_delta_from_base(insn: &IrInsn, base: &Varnode) -> Option<i128> {
     match insn.op {
         IrOp::IntAdd if insn.inputs.len() >= 2 => {
-            if insn.inputs[0] == *base && insn.inputs[1].space == SpaceId::Const {
+            if same_linear_update_base(&insn.inputs[0], base)
+                && insn.inputs[1].space == SpaceId::Const
+            {
                 Some(insn.inputs[1].offset as i128)
-            } else if insn.inputs[1] == *base && insn.inputs[0].space == SpaceId::Const {
+            } else if same_linear_update_base(&insn.inputs[1], base)
+                && insn.inputs[0].space == SpaceId::Const
+            {
                 Some(insn.inputs[0].offset as i128)
             } else {
                 None
             }
         }
         IrOp::IntSub if insn.inputs.len() >= 2 => {
-            if insn.inputs[0] == *base && insn.inputs[1].space == SpaceId::Const {
+            if same_linear_update_base(&insn.inputs[0], base)
+                && insn.inputs[1].space == SpaceId::Const
+            {
                 Some(-(insn.inputs[1].offset as i128))
             } else {
                 None
             }
         }
         _ => None,
+    }
+}
+
+fn same_linear_update_base(candidate: &Varnode, base: &Varnode) -> bool {
+    candidate == base
+        || (candidate.space == SpaceId::Register
+            && base.space == SpaceId::Register
+            && candidate.offset == base.offset)
+}
+
+fn linear_update_delta_from_base_resolved(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    base: &Varnode,
+    ctx: &PrintCtx,
+) -> Option<i128> {
+    let input_matches = |idx: usize, input: &Varnode| {
+        same_linear_update_base(input, base)
+            || input_or_latest_sv_for_operand(input, Some(idx), stmt_idx, ctx)
+                .is_some_and(|sv| same_linear_update_base(&sv.base, base))
+    };
+
+    match insn.op {
+        IrOp::IntAdd if insn.inputs.len() >= 2 => {
+            if input_matches(0, &insn.inputs[0]) && insn.inputs[1].space == SpaceId::Const {
+                Some(insn.inputs[1].offset as i128)
+            } else if input_matches(1, &insn.inputs[1]) && insn.inputs[0].space == SpaceId::Const {
+                Some(insn.inputs[0].offset as i128)
+            } else {
+                linear_update_delta_from_base(insn, base)
+            }
+        }
+        IrOp::IntSub if insn.inputs.len() >= 2 => {
+            if input_matches(0, &insn.inputs[0]) && insn.inputs[1].space == SpaceId::Const {
+                Some(-(insn.inputs[1].offset as i128))
+            } else {
+                linear_update_delta_from_base(insn, base)
+            }
+        }
+        _ => linear_update_delta_from_base(insn, base),
     }
 }
 
@@ -6806,6 +8417,23 @@ fn node_is_stack_chk_fail_call(node: &HirNode, ctx: &PrintCtx) -> bool {
     }
 }
 
+/// `true` when `body` contains a call to `__stack_chk_fail` somewhere in its
+/// direct children (optionally wrapped in a `Block`/`Commented`), regardless of
+/// any trailing `goto`/`return`. Unlike [`body_is_stack_chk_fail_only`] this
+/// tolerates the extra control-transfer statements the structurer appends to a
+/// canary-fail branch inside an irreducible region.
+fn body_contains_stack_chk_fail_call(body: &[HirNode], ctx: &PrintCtx) -> bool {
+    fn node_contains(node: &HirNode, ctx: &PrintCtx) -> bool {
+        match node {
+            HirNode::Statement(insn) => insn_calls_symbol(insn, "__stack_chk_fail", ctx),
+            HirNode::Block(children) => children.iter().any(|n| node_contains(n, ctx)),
+            HirNode::Commented { inner, .. } => node_contains(inner, ctx),
+            _ => false,
+        }
+    }
+    body.iter().any(|node| node_contains(node, ctx))
+}
+
 fn insn_calls_symbol(insn: &IrInsn, name: &str, ctx: &PrintCtx) -> bool {
     if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
         return false;
@@ -6820,7 +8448,45 @@ fn insn_calls_symbol(insn: &IrInsn, name: &str, ctx: &PrintCtx) -> bool {
             .is_some_and(|sym| sym == name || sym.ends_with(name))
 }
 
+/// Runtime/CRT helpers whose C prototype returns `void`. A direct call to one
+/// of these must never be rendered as the right-hand side of an assignment
+/// (`v = __stack_chk_fail();`) — that is a hard `-Werror` "invalid use of void
+/// expression" / type error. The IR may carry a spurious output varnode for
+/// these (the lifter models the call's clobber of a return register), but the
+/// C-level prototype is `void`, so the assignment is dropped and only the call
+/// statement is emitted.
+fn call_targets_void_runtime_symbol(insn: &IrInsn, ctx: &PrintCtx) -> bool {
+    const VOID_RUNTIME_SYMBOLS: &[&str] = &[
+        "__stack_chk_fail",
+        "__stack_chk_fail_local",
+        "abort",
+        "__assert_fail",
+        "__cxa_rethrow",
+        "_Unwind_Resume",
+    ];
+    if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
+        return false;
+    }
+    let Some(target) = insn.inputs.first() else {
+        return false;
+    };
+    if target.space != SpaceId::Const {
+        return false;
+    }
+    let Some(sym) = ctx.symbols.get(&target.offset) else {
+        return false;
+    };
+    VOID_RUNTIME_SYMBOLS
+        .iter()
+        .any(|name| sym == name || sym.ends_with(name))
+}
+
 fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
+    trace_flow(format_args!(
+        "emit-node depth={depth} stmt={} kind={}",
+        ctx.emit_stmt,
+        hir_node_trace_kind(node)
+    ));
     match node {
         HirNode::Block(children) => emit_nodes(children, depth, ctx, out),
 
@@ -6831,6 +8497,12 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             then_body,
             else_body,
         } => {
+            trace_flow(format_args!(
+                "emit-if depth={depth} stmt={} then_len={} else_len={}",
+                ctx.emit_stmt,
+                then_body.len(),
+                else_body.as_ref().map_or(0, |body| body.len())
+            ));
             if body_is_stack_chk_fail_only(then_body, ctx) {
                 if let Some(eb) = else_body {
                     emit_nodes(eb, depth, ctx, out);
@@ -6843,6 +8515,27 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             {
                 emit_nodes(then_body, depth, ctx, out);
                 return;
+            }
+            // Stack-canary guard `if (canary != reloaded) { __stack_chk_fail();
+            // goto exit; }`: the fail branch (the one containing the call) is
+            // the trap and is dropped; the other branch is the normal path.
+            // Detected by condition so it fires even when the trap body carries
+            // a trailing goto (irreducible-region shape) that defeats the
+            // body-only check above.
+            if cond_sv_is_stack_canary_compare(cond, ctx) {
+                if body_contains_stack_chk_fail_call(then_body, ctx) {
+                    if let Some(eb) = else_body {
+                        emit_nodes(eb, depth, ctx, out);
+                    }
+                    return;
+                }
+                if else_body
+                    .as_deref()
+                    .is_some_and(|eb| body_contains_stack_chk_fail_call(eb, ctx))
+                {
+                    emit_nodes(then_body, depth, ctx, out);
+                    return;
+                }
             }
 
             let cond_expr = resolve_control_cond_expr(cond, ctx);
@@ -6926,6 +8619,11 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
         HirNode::While { cond, body } => {
             let cond_expr = resolve_control_cond_expr(cond, ctx);
+            trace_flow(format_args!(
+                "emit-while depth={depth} stmt={} cond={cond_expr:?} body_len={}",
+                ctx.emit_stmt,
+                body.len()
+            ));
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "while ({}) {{", cond_expr);
             emit_nodes(body, depth + 1, ctx, out);
@@ -6941,7 +8639,9 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let body_end_stmt = ctx.emit_stmt;
             let cond_expr =
                 resolve_post_body_control_cond_expr(cond, body_start_stmt, body_end_stmt, ctx)
-                    .unwrap_or_else(|| resolve_control_cond_expr(cond, ctx));
+                    .unwrap_or_else(|| {
+                        simplify_condition_expr_text(&resolve_control_cond_expr(cond, ctx))
+                    });
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}} while ({});", cond_expr);
         }
@@ -6960,14 +8660,14 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 String::new()
             };
 
+            let cond_expr = resolve_control_cond_expr(cond, ctx);
+
             let mut body_buf = String::new();
             emit_nodes(body, depth + 1, ctx, &mut body_buf);
 
             let update_idx = ctx.emit_stmt;
             ctx.emit_stmt += 1;
             let update_str = emit_for_clause(update, update_idx, ctx);
-
-            let cond_expr = resolve_control_cond_expr(cond, ctx);
 
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "for ({}; {}; {}) {{", init_str, cond_expr, update_str);
@@ -7066,7 +8766,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             if ctx.parent_returns_void {
                 let _ = writeln!(out, "return;");
             } else {
-                let name = resolve_sv_expr(sv, ctx);
+                let name = resolve_return_expr(sv, ctx);
                 let _ = writeln!(out, "return {};", name);
             }
         }
@@ -7077,11 +8777,19 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         }
 
         HirNode::Goto(label) => {
+            trace_flow(format_args!(
+                "emit-goto depth={depth} stmt={} label={label}",
+                ctx.emit_stmt
+            ));
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "goto {};", label);
         }
 
         HirNode::Label(label) => {
+            trace_flow(format_args!(
+                "emit-label depth={depth} stmt={} label={label}",
+                ctx.emit_stmt
+            ));
             if depth > 0 {
                 indent(depth - 1, ctx.config.tab_width, out);
             }
@@ -7464,7 +9172,15 @@ fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Stri
 fn demangle_callee_name(raw: &str) -> String {
     match crate::demangle::demangle(raw) {
         Some(d) => crate::demangle::sanitize_for_c(&d.short_name),
-        None => raw.to_string(),
+        None => c_symbol_name(raw),
+    }
+}
+
+fn c_symbol_name(raw: &str) -> String {
+    if is_c_identifier(raw) {
+        raw.to_string()
+    } else {
+        crate::demangle::sanitize_for_c(raw)
     }
 }
 
@@ -7813,7 +9529,7 @@ fn emit_for_clause(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     };
     let lhs = ctx.name_of(&lhs_sv);
 
-    if let Some(short) = try_emit_increment_form(insn, &lhs) {
+    if let Some(short) = try_emit_increment_form(insn, stmt_idx, &lhs, ctx) {
         return short;
     }
 
@@ -7825,16 +9541,67 @@ fn emit_for_clause(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     format!("{} = {}", lhs, rhs)
 }
 
-fn try_emit_increment_form(insn: &IrInsn, lhs: &str) -> Option<String> {
+fn stmt_output_sv(ctx: &PrintCtx, stmt_idx: u32) -> Option<SsaVarnode> {
+    ctx.stmt_outputs.get(&stmt_idx).copied().flatten()
+}
+
+fn stmt_input_sv(ctx: &PrintCtx, stmt_idx: u32, raw_idx: usize) -> Option<SsaVarnode> {
+    ctx.stmt_input_slots
+        .get(&stmt_idx)
+        .and_then(|inputs| inputs.get(&raw_idx).copied())
+        .or_else(|| {
+            ctx.stmt_inputs
+                .get(&stmt_idx)
+                .and_then(|inputs| inputs.get(raw_idx).copied())
+        })
+}
+
+fn stmt_has_ssa_identity(ctx: &PrintCtx, stmt_idx: u32) -> bool {
+    ctx.stmt_outputs.contains_key(&stmt_idx)
+        || ctx
+            .stmt_input_slots
+            .get(&stmt_idx)
+            .is_some_and(|inputs| !inputs.is_empty())
+}
+
+fn input_is_statement_output(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    input_idx: usize,
+    ctx: &PrintCtx,
+) -> bool {
+    let output_sv = stmt_output_sv(ctx, stmt_idx);
+    let input_sv = stmt_input_sv(ctx, stmt_idx, input_idx);
+    if stmt_has_ssa_identity(ctx, stmt_idx) {
+        let matched = output_sv.is_some() && input_sv == output_sv;
+        if !matched && c_printer_trace_enabled() {
+            eprintln!(
+                "[unlace-output] self-update stmt={stmt_idx} input={input_idx} decision=reject-ssa-mismatch raw_in={:?} raw_out={:?} input_sv={input_sv:?} output_sv={output_sv:?}",
+                insn.inputs.get(input_idx),
+                insn.output,
+            );
+        }
+        matched
+    } else {
+        insn.inputs.get(input_idx).copied() == insn.output
+    }
+}
+
+fn try_emit_increment_form(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    lhs: &str,
+    ctx: &PrintCtx,
+) -> Option<String> {
     if insn.inputs.len() != 2 {
         return None;
     }
-    let (counter_in, const_in) = match (insn.inputs[0].space, insn.inputs[1].space) {
-        (SpaceId::Const, _) => (&insn.inputs[1], &insn.inputs[0]),
-        (_, SpaceId::Const) => (&insn.inputs[0], &insn.inputs[1]),
+    let (counter_idx, const_in) = match (insn.inputs[0].space, insn.inputs[1].space) {
+        (SpaceId::Const, _) => (1, &insn.inputs[0]),
+        (_, SpaceId::Const) => (0, &insn.inputs[1]),
         _ => return None,
     };
-    if Some(*counter_in) != insn.output {
+    if !input_is_statement_output(insn, stmt_idx, counter_idx, ctx) {
         return None;
     }
     if const_in.offset != 1 {
@@ -7856,8 +9623,8 @@ fn try_emit_compound_assign(
     if insn.inputs.len() != 2 {
         return None;
     }
-    let counter_is_first = Some(insn.inputs[0]) == insn.output;
-    let counter_is_second = Some(insn.inputs[1]) == insn.output;
+    let counter_is_first = input_is_statement_output(insn, stmt_idx, 0, ctx);
+    let counter_is_second = input_is_statement_output(insn, stmt_idx, 1, ctx);
 
     let counter_idx = if counter_is_first {
         0
@@ -7871,10 +9638,11 @@ fn try_emit_compound_assign(
     // inline and compound form would be wrong (e.g. `((1) + 2) += 3`).
     let counter_vn = &insn.inputs[counter_idx];
     if counter_vn.space != SpaceId::Const {
-        let counter_sv = ctx
-            .stmt_inputs
-            .get(&stmt_idx)
-            .and_then(|inputs| inputs.iter().find(|sv| sv.base == *counter_vn).copied());
+        let counter_sv = stmt_input_sv(ctx, stmt_idx, counter_idx).or_else(|| {
+            ctx.stmt_inputs
+                .get(&stmt_idx)
+                .and_then(|inputs| inputs.iter().find(|sv| sv.base == *counter_vn).copied())
+        });
         if let Some(csv) = counter_sv
             && ctx.sv_defining_stmt.contains_key(&csv)
         {
@@ -8226,7 +9994,18 @@ fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
 
 fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     let idx = ctx.emit_stmt;
+    if c_printer_trace_enabled() {
+        eprintln!(
+            "[unlace-output] inline stmt={idx} addr=0x{:x} op={:?} enter output={:?}",
+            insn.addr,
+            insn.op,
+            ctx.stmt_outputs.get(&idx).copied().flatten()
+        );
+    }
     if ctx.source_map.contains_key(&insn.addr) {
+        if c_printer_trace_enabled() {
+            eprintln!("[unlace-output] inline stmt={idx} decision=defer-source-map");
+        }
         return None;
     }
     if matches!(insn.op, IrOp::Call | IrOp::Callind)
@@ -8265,16 +10044,38 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     if ctx.foldable_stmts.contains(&idx)
         || is_dead_zero_init(insn, idx, ctx)
         || is_dead_suppressible_store(insn, idx, ctx)
+        || is_stack_canary_compare_artifact(insn, idx, ctx)
     {
+        if c_printer_trace_enabled() {
+            eprintln!("[unlace-output] inline stmt={idx} decision=suppress-fold-dead");
+        }
         return Some(String::new());
     }
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         if is_x86_frame_base_update(insn, &sv.base) {
+            if c_printer_trace_enabled() {
+                eprintln!("[unlace-output] inline stmt={idx} decision=suppress-frame-base");
+            }
             return Some(String::new());
         }
         if is_control_only_condition_assignment(idx, &sv, insn, ctx) {
+            if c_printer_trace_enabled() {
+                eprintln!("[unlace-output] inline stmt={idx} decision=suppress-control-cond");
+            }
             return Some(String::new());
+        }
+        // A void-returning runtime helper (e.g. `__stack_chk_fail`) must never
+        // be rendered as an assignment RHS even when its spurious return-reg
+        // output appears live — the C prototype is `void`. Drop the LHS and
+        // emit the bare call statement.
+        if call_targets_void_runtime_symbol(insn, ctx) {
+            let call = if insn.op == IrOp::Callind {
+                emit_callind_cast(insn, idx, ctx)
+            } else {
+                emit_direct_call_expr(insn, idx, ctx)
+            };
+            return Some(format!("{};", call));
         }
         if matches!(insn.op, IrOp::Call | IrOp::Callind)
             && ctx.sv_use_counts.get(&sv).copied().unwrap_or(0) == 0
@@ -8290,20 +10091,40 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             return Some(format!("{};", call));
         }
         let lhs = ctx.name_of(&sv);
-        if let Some(short) = try_emit_increment_form(insn, &lhs) {
-            Some(format!("{};", short))
+        if let Some(short) = try_emit_increment_form(insn, idx, &lhs, ctx) {
+            let rendered = format!("{};", short);
+            if c_printer_trace_enabled() {
+                eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
+            }
+            Some(rendered)
         } else if let Some(short) = try_emit_compound_assign(insn, idx, &lhs, ctx) {
-            Some(format!("{};", short))
+            let rendered = format!("{};", short);
+            if c_printer_trace_enabled() {
+                eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
+            }
+            Some(rendered)
         } else if insn.op == IrOp::Call {
             if let Some(bracket) = objc_bracket_call(insn, ctx) {
-                Some(format_inline_assignment(idx, &sv, &lhs, bracket, ctx))
+                let rendered = format_inline_assignment(idx, &sv, &lhs, bracket, ctx);
+                if c_printer_trace_enabled() {
+                    eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
+                }
+                Some(rendered)
             } else {
                 let rhs = emit_direct_call_expr(insn, idx, ctx);
-                Some(format_inline_assignment(idx, &sv, &lhs, rhs, ctx))
+                let rendered = format_inline_assignment(idx, &sv, &lhs, rhs, ctx);
+                if c_printer_trace_enabled() {
+                    eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
+                }
+                Some(rendered)
             }
         } else {
             let rhs = emit_expr(insn, idx, ctx);
-            Some(format_inline_assignment(idx, &sv, &lhs, rhs, ctx))
+            let rendered = format_inline_assignment(idx, &sv, &lhs, rhs, ctx);
+            if c_printer_trace_enabled() {
+                eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
+            }
+            Some(rendered)
         }
     } else {
         match insn.op {
@@ -8496,18 +10317,40 @@ fn hoisted_decl_for_stmt(idx: u32, sv: &SsaVarnode, ctx: &PrintCtx) -> Option<(S
 fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     let idx = ctx.emit_stmt;
     ctx.emit_stmt += 1;
+    trace_flow(format_args!(
+        "emit-statement-enter depth={depth} stmt={idx} addr=0x{:x} op={:?} output={:?}",
+        insn.addr,
+        insn.op,
+        ctx.stmt_outputs.get(&idx).copied().flatten()
+    ));
 
     if ctx.foldable_stmts.contains(&idx) {
+        trace_flow(format_args!(
+            "emit-statement-skip stmt={idx} reason=foldable"
+        ));
         return;
     }
 
     if is_dead_zero_init(insn, idx, ctx) || is_dead_suppressible_store(insn, idx, ctx) {
+        trace_flow(format_args!(
+            "emit-statement-skip stmt={idx} reason=dead-or-suppressible"
+        ));
+        return;
+    }
+
+    if is_stack_canary_compare_artifact(insn, idx, ctx) {
+        trace_flow(format_args!(
+            "emit-statement-skip stmt={idx} reason=stack-canary"
+        ));
         return;
     }
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned()
         && is_control_only_condition_assignment(idx, &sv, insn, ctx)
     {
+        trace_flow(format_args!(
+            "emit-statement-skip stmt={idx} reason=control-cond"
+        ));
         return;
     }
 
@@ -8546,9 +10389,51 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         if is_x86_frame_base_update(insn, &sv.base) {
+            trace_flow(format_args!(
+                "emit-statement-skip stmt={idx} reason=frame-base"
+            ));
+            return;
+        }
+        // A call to a void-returning runtime helper (e.g. `__stack_chk_fail`)
+        // may carry a spurious IR output varnode for the clobbered return
+        // register, but its C prototype is `void`. Emitting `v = f();` is a
+        // hard type error, so render the bare call statement instead.
+        if call_targets_void_runtime_symbol(insn, ctx) {
+            let expr = if insn.op == IrOp::Callind {
+                emit_callind_cast(insn, idx, ctx)
+            } else {
+                emit_direct_call_expr(insn, idx, ctx)
+            };
+            let _ = writeln!(out, "{};", expr);
             return;
         }
         let lhs = ctx.name_of(&sv);
+        if c_printer_name_trace_enabled() {
+            let input_names: Vec<String> = ctx
+                .stmt_input_slots
+                .get(&idx)
+                .map(|slots| {
+                    slots
+                        .iter()
+                        .map(|(raw_idx, input_sv)| {
+                            format!(
+                                "{raw_idx}:{input_sv:?}:{:?}",
+                                known_name_of_sv(ctx, input_sv)
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let text = format!(
+                "emit-stmt stmt={idx} addr=0x{:x} op={:?} output={sv:?} lhs={lhs} inputs=[{}]",
+                insn.addr,
+                insn.op,
+                input_names.join(", ")
+            );
+            if trace_text_matches_filter(&text) {
+                eprintln!("[unlace-output] {text}");
+            }
+        }
 
         if matches!(insn.op, IrOp::Call | IrOp::Callind)
             && let Some(ann) = cxa_call_annotation(insn, ctx)
@@ -8567,7 +10452,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 "if ({}) {{ {} = {}; }} else {{ {} = {}; }}",
                 cond, lhs, true_val, lhs, false_val
             );
-        } else if let Some(short) = try_emit_increment_form(insn, &lhs) {
+        } else if let Some(short) = try_emit_increment_form(insn, idx, &lhs, ctx) {
             let _ = writeln!(out, "{};", short);
         } else if let Some(short) = try_emit_compound_assign(insn, idx, &lhs, ctx) {
             let _ = writeln!(out, "{};", short);
@@ -9404,7 +11289,20 @@ fn emit_expr_with_prec(
             } else {
                 "0".to_string()
             };
-            format!("{} ? {} : {}", cond, true_val, false_val)
+            let expr = format!("{} ? {} : {}", cond, true_val, false_val);
+            let rendered = if needs_parens(IrOp::Select, parent) {
+                format!("({expr})")
+            } else {
+                expr
+            };
+            if c_printer_trace_enabled() {
+                let text =
+                    format!("emit-select stmt={stmt_idx} parent={parent:?} rendered={rendered:?}");
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
+            }
+            rendered
         }
 
         // -- Copy / move --
@@ -10054,9 +11952,12 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x136 => Some("_mm_sqrt_ps"), // SQRTPS
 
         // ── SSE2 shuffle/unpack (0x140..0x142) ─────────────────
-        0x140 => Some("_mm_shuffle_epi32"), // PSHUFD
-        0x141 => Some("_mm_shuffle_epi8"),  // PSHUFB
-        0x142 => Some("_mm_unpacklo_epi8"), // PUNPCKLBW
+        0x140 => Some("_mm_shuffle_epi32"),  // PSHUFD
+        0x141 => Some("_mm_shuffle_epi8"),   // PSHUFB
+        0x142 => Some("_mm_unpacklo_epi8"),  // PUNPCKLBW
+        0x614 => Some("__unlace_psrldq"),    // PSRLDQ
+        0x61D => Some("__unlace_psrlq"),     // PSRLQ
+        0x61E => Some("__unlace_punpckldq"), // PUNPCKLDQ
 
         // ── SSE misc (0x150) ───────────────────────────────────
         0x150 => Some("_mm_movemask_epi8"), // PMOVMSKB
@@ -10768,22 +12669,205 @@ fn emit_operand_with_prec(
             version: 0,
         });
 
+    if let Some(addr) = try_stack_frame_address_expr(vn, Some(raw_idx), stmt_idx, ctx) {
+        return addr;
+    }
+
     if let Some(value) = try_readonly_scalar_value_for_sv(&sv, ctx) {
+        if c_printer_name_trace_enabled() {
+            let text = format!(
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=readonly value={value}"
+            );
+            if trace_text_matches_filter(&text) {
+                eprintln!("[unlace-output] {text}");
+            }
+        }
         return value;
     }
 
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv)
         && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
     {
+        if def_insn.op == IrOp::Load && !stable_load_expr_is_inlineable(&def_insn, def_stmt, ctx) {
+            let name = ctx.name_of(&sv);
+            if c_printer_name_trace_enabled() {
+                let text = format!(
+                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op=Load decision=unstable-load-name name={name}",
+                );
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
+            }
+            return name;
+        }
+        if !ctx.foldable_stmts.contains(&def_stmt)
+            && copy_like_snapshot_source_redefined_before_consumer(
+                &sv, &def_insn, def_stmt, stmt_idx, ctx,
+            )
+        {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] operand stmt={stmt_idx} sv={sv:?} def_stmt={def_stmt} decision=snapshot-name"
+                );
+            }
+            let name = ctx.name_of(&sv);
+            if c_printer_name_trace_enabled() {
+                let text = format!(
+                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=snapshot-name name={name}",
+                    def_insn.op
+                );
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
+            }
+            return name;
+        }
+        if expression_inputs_aliased_redefined_before_consumer(
+            &sv, &def_insn, def_stmt, stmt_idx, ctx,
+        ) {
+            let name = ctx.name_of(&sv);
+            if c_printer_name_trace_enabled() {
+                let text = format!(
+                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=expr-input-stale name={name}",
+                    def_insn.op
+                );
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
+            }
+            return name;
+        }
         if !ctx.resolving_exprs.insert(sv) {
-            return ctx.name_of(&sv);
+            let name = ctx.name_of(&sv);
+            if c_printer_name_trace_enabled() {
+                let text = format!(
+                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=cycle name={name}",
+                    def_insn.op
+                );
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
+            }
+            return name;
         }
         let rendered = emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
         ctx.resolving_exprs.remove(&sv);
+        if c_printer_name_trace_enabled() {
+            let text = format!(
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=inline rendered={rendered}",
+                def_insn.op
+            );
+            if trace_text_matches_filter(&text) {
+                eprintln!("[unlace-output] {text}");
+            }
+        }
         return rendered;
     }
 
-    ctx.name_of(&sv)
+    if let Some(def_stmt) = defining_stmt_for_sv(&sv, ctx)
+        && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
+        && stable_load_expr_is_inlineable(&def_insn, def_stmt, ctx)
+    {
+        if !ctx.resolving_exprs.insert(sv) {
+            let name = ctx.name_of(&sv);
+            if c_printer_name_trace_enabled() {
+                let text = format!(
+                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-cycle name={name}",
+                    def_insn.op
+                );
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
+            }
+            return name;
+        }
+        let rendered = emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
+        ctx.resolving_exprs.remove(&sv);
+        if c_printer_name_trace_enabled() {
+            let text = format!(
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-inline rendered={rendered}",
+                def_insn.op
+            );
+            if trace_text_matches_filter(&text) {
+                eprintln!("[unlace-output] {text}");
+            }
+        }
+        return rendered;
+    }
+
+    let name = ctx.name_of(&sv);
+    if c_printer_name_trace_enabled() {
+        let text = format!(
+            "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=name name={name}"
+        );
+        if trace_text_matches_filter(&text) {
+            eprintln!("[unlace-output] {text}");
+        }
+    }
+    name
+}
+
+fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if insn.op != IrOp::Load {
+        return false;
+    }
+    let load_size = insn.output.map_or(8, |o| o.size);
+    let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
+    addr_idx < insn.inputs.len()
+        && (try_stack_frame_access_name(
+            &insn.inputs[addr_idx],
+            Some(addr_idx),
+            stmt_idx,
+            load_size,
+            ctx,
+        )
+        .is_some()
+            || field_load_expr_is_stable(&insn.inputs[addr_idx], stmt_idx, ctx))
+}
+
+fn field_load_expr_is_stable(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if ctx.field_by_offset.is_empty() || addr_vn.space == SpaceId::Const {
+        return false;
+    }
+    let Some(addr_sv) = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())
+    else {
+        return field_name_for_offset(ctx, 0).is_some()
+            && ctx
+                .name_overrides
+                .get(addr_vn)
+                .and_then(|name| meaningful_field_base_name(name))
+                .is_some();
+    };
+    let Some(&def_stmt) = ctx.sv_defining_stmt.get(&addr_sv) else {
+        return field_name_for_offset(ctx, 0).is_some()
+            && ctx
+                .name_overrides
+                .get(addr_vn)
+                .and_then(|name| meaningful_field_base_name(name))
+                .is_some();
+    };
+    let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
+        return false;
+    };
+    if def_insn.op != IrOp::IntAdd || def_insn.inputs.len() < 2 {
+        return false;
+    }
+    let (base_input, const_offset) = if def_insn.inputs[1].space == SpaceId::Const {
+        (&def_insn.inputs[0], def_insn.inputs[1].offset)
+    } else if def_insn.inputs[0].space == SpaceId::Const {
+        (&def_insn.inputs[1], def_insn.inputs[0].offset)
+    } else {
+        return false;
+    };
+    field_name_for_offset(ctx, const_offset).is_some()
+        && ctx
+            .name_overrides
+            .get(base_input)
+            .and_then(|name| meaningful_field_base_name(name))
+            .is_some()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -11851,6 +13935,64 @@ fn prune_unused_plain_local_decls(output: String) -> String {
     pruned
 }
 
+/// Drop label definition lines (`label_N:;`) that have no remaining `goto
+/// label_N;` referencing them. Such orphans arise when a later printer pass
+/// elides the only branch to a label — e.g. stack-canary guard removal drops
+/// the `goto <exit>` in the fail branch, leaving the exit label dangling.
+/// gcc/clang reject these under `-Werror=unused-label`, so they must be swept.
+fn prune_unused_labels(output: String) -> String {
+    // Collect every label that is still the target of a `goto`.
+    let mut referenced: BTreeSet<String> = BTreeSet::new();
+    for line in output.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("goto ") {
+            let name: String = rest
+                .trim_end_matches(|c: char| c == ';' || c.is_whitespace())
+                .to_string();
+            if !name.is_empty() {
+                referenced.insert(name);
+            }
+        }
+    }
+
+    let mut changed = false;
+    let mut pruned = String::with_capacity(output.len());
+    for line in output.lines() {
+        if let Some(label) = parse_label_definition(line)
+            && !referenced.contains(&label)
+        {
+            changed = true;
+            continue;
+        }
+        pruned.push_str(line);
+        pruned.push('\n');
+    }
+
+    if changed { pruned } else { output }
+}
+
+/// Parse a label-definition line of the form `label_16:;` or `label_16:`
+/// (optionally indented), returning the bare label identifier. Returns `None`
+/// for `case`/`default` labels and any line that is not solely a label
+/// definition (so `goto` lines and statements are never matched).
+fn parse_label_definition(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    let body = trimmed.strip_suffix(';').unwrap_or(trimmed);
+    let name = body.strip_suffix(':')?;
+    if name.is_empty()
+        || name.contains(':')
+        || name == "default"
+        || name.starts_with("case ")
+        || !name
+            .chars()
+            .all(|c| c == '_' || c.is_ascii_alphanumeric())
+        || name.chars().next().is_some_and(|c| c.is_ascii_digit())
+    {
+        return None;
+    }
+    Some(name.to_string())
+}
+
 fn brace_delta(line: &str) -> i32 {
     line.chars().fold(0, |depth, ch| match ch {
         '{' => depth + 1,
@@ -11886,6 +14028,9 @@ fn declare_missing_control_v_decls(output: String) -> String {
         if line == "}" {
             for name in &pending_decls {
                 if !declared.contains(name) {
+                    if c_printer_trace_enabled() {
+                        eprintln!("[unlace-output] post-declare control missing name={name}");
+                    }
                     let _ = writeln!(out, "    int {}; // temp", name);
                 }
             }
@@ -11945,6 +14090,9 @@ fn declare_missing_temp_v_decls(output: String) -> String {
         if line == "}" {
             for name in &pending_decls {
                 if !declared.contains(name) {
+                    if c_printer_trace_enabled() {
+                        eprintln!("[unlace-output] post-declare temp missing name={name}");
+                    }
                     let _ = writeln!(out, "    __int64 {}; // temp", name);
                 }
             }
@@ -12123,14 +14271,29 @@ fn collect_v_number_names(line: &str, names: &mut BTreeSet<String>) {
     let mut idx = 0;
     while idx < bytes.len() {
         let starts_temp = bytes[idx] == b'v';
+        let starts_coalesced =
+            bytes[idx] == b'c' && bytes.get(idx + 1).is_some_and(|b| b.is_ascii_digit());
         let starts_cond = bytes[idx..].starts_with(b"cond_");
-        if !starts_temp && !starts_cond {
+        let starts_arg_version = bytes[idx] == b'a'
+            && bytes.get(idx + 1).is_some_and(|b| b.is_ascii_digit())
+            && bytes.get(idx + 2) == Some(&b'_');
+        if !starts_temp && !starts_coalesced && !starts_cond && !starts_arg_version {
             idx += 1;
             continue;
         }
         let start = idx;
         if starts_cond {
             idx += "cond_".len();
+        } else if starts_arg_version {
+            idx += 1;
+            while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+                idx += 1;
+            }
+            if bytes.get(idx) != Some(&b'_') {
+                idx += 1;
+                continue;
+            }
+            idx += 1;
         } else {
             idx += 1;
         }
@@ -12182,7 +14345,9 @@ fn prune_dead_plain_assignments(output: String) -> String {
                         .iter()
                         .skip(idx + 1)
                         .any(|later| contains_identifier(later, lhs));
-                !used_later
+                let remove = !used_later;
+                trace_prune_plain_assignment(idx, lhs, segment, remove);
+                remove
             });
             if remove {
                 changed = true;
@@ -12203,6 +14368,124 @@ fn prune_dead_plain_assignments(output: String) -> String {
     let mut pruned = pruned_lines.join("\n");
     pruned.push('\n');
     pruned
+}
+
+fn trace_prune_plain_assignment(line_idx: usize, lhs: &str, segment: &str, remove: bool) {
+    if std::env::var_os("UNLACE_CPRINTER_PRUNE_TRACE").is_none() && !c_printer_trace_enabled() {
+        return;
+    }
+    let text = format!(
+        "plain-prune line={} lhs={} decision={} segment={:?}",
+        line_idx + 1,
+        lhs,
+        if remove { "remove" } else { "keep" },
+        segment.trim()
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
+}
+
+fn rename_unreturned_bare_result(output: String) -> String {
+    if !output.contains("int result;") || output.contains("return result;") {
+        return output;
+    }
+    replace_identifier_text(&output, "result", "result_0")
+}
+
+fn repair_arg_versioned_address_uses(output: String) -> String {
+    if !output.contains("->field_") && !output.contains("*)(") {
+        return output;
+    }
+
+    let mut names = BTreeSet::new();
+    for line in output.lines() {
+        collect_v_number_names(line, &mut names);
+    }
+    names.retain(|name| is_arg_versioned_name(name));
+    if names.is_empty() {
+        return output;
+    }
+
+    let mut repaired = output;
+    for name in names {
+        repaired = repair_arg_versioned_pointer_casts(repaired, &name);
+        repaired = repair_arg_versioned_arrow_fields(repaired, &name);
+    }
+    repaired
+}
+
+fn repair_arg_versioned_pointer_casts(mut output: String, name: &str) -> String {
+    for ty in ["_BYTE", "_WORD", "_DWORD", "_QWORD", "_OWORD"] {
+        let from = format!("*({ty} *)({name})");
+        if !output.contains(&from) {
+            continue;
+        }
+        let to = format!("*({ty} *)(uintptr_t)({name})");
+        if c_printer_trace_enabled() {
+            eprintln!("[unlace-output] repair arg-address-cast name={name} ty={ty}");
+        }
+        output = output.replace(&from, &to);
+    }
+    output
+}
+
+fn repair_arg_versioned_arrow_fields(output: String, name: &str) -> String {
+    let needle = format!("{name}->field_");
+    if !output.contains(&needle) {
+        return output;
+    }
+
+    let mut out = String::with_capacity(output.len());
+    let mut rest = output.as_str();
+    while let Some(pos) = rest.find(&needle) {
+        out.push_str(&rest[..pos]);
+        let after_prefix = &rest[pos + needle.len()..];
+        let digits_len = after_prefix
+            .bytes()
+            .take_while(|b| b.is_ascii_digit())
+            .count();
+        if digits_len == 0 {
+            out.push_str(&needle);
+            rest = after_prefix;
+            continue;
+        }
+        let offset = &after_prefix[..digits_len];
+        if c_printer_trace_enabled() {
+            eprintln!("[unlace-output] repair arg-arrow-field name={name} offset={offset}");
+        }
+        let _ = write!(out, "*(_DWORD *)((uintptr_t){name} + {offset})");
+        rest = &after_prefix[digits_len..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn replace_identifier_text(text: &str, from: &str, to: &str) -> String {
+    let bytes = text.as_bytes();
+    let from_bytes = from.as_bytes();
+    if from_bytes.is_empty() {
+        return text.to_string();
+    }
+
+    let mut out = String::with_capacity(text.len());
+    let mut idx = 0usize;
+    while idx < bytes.len() {
+        if bytes[idx..].starts_with(from_bytes) {
+            let before = idx.checked_sub(1).and_then(|i| bytes.get(i)).copied();
+            let after = bytes.get(idx + from_bytes.len()).copied();
+            let before_boundary = before.is_none_or(|b| !is_ident_byte(b));
+            let after_boundary = after.is_none_or(|b| !is_ident_byte(b));
+            if before_boundary && after_boundary {
+                out.push_str(to);
+                idx += from_bytes.len();
+                continue;
+            }
+        }
+        out.push(bytes[idx] as char);
+        idx += 1;
+    }
+    out
 }
 
 fn split_plain_statement_segments(line: &str) -> Option<(&str, Vec<&str>)> {
@@ -12292,7 +14575,7 @@ fn parse_local_decl_name_inner(line: &str, require_prunable_init: bool) -> Optio
         return None;
     }
     let name = decl.split_whitespace().last()?.trim_start_matches('*');
-    (is_c_identifier(name) && is_prunable_synthetic_local(name)).then_some(name)
+    (is_c_identifier(name) && is_decl_synthetic_local(name)).then_some(name)
 }
 
 fn is_plain_local_decl_type_start(first: &str) -> bool {
@@ -12335,6 +14618,10 @@ fn is_side_effect_free_temp_initializer(init: &str) -> bool {
             .rfind(|c: char| !(c == '_' || c.is_ascii_alphanumeric()))
             .map_or(0, |idx| idx + 1);
         let ident = &before[ident_start..];
+        if ident.is_empty() {
+            rest = &rest[paren + 1..];
+            continue;
+        }
         if !is_known_pure_macro_call(ident) {
             return false;
         }
@@ -12360,7 +14647,14 @@ fn is_known_pure_macro_call(name: &str) -> bool {
 }
 
 fn is_prunable_synthetic_local(name: &str) -> bool {
-    matches!(name, "cond" | "result") || is_v_number_name(name) || is_cond_number_name(name)
+    matches!(name, "cond" | "result")
+        || is_v_number_name(name)
+        || is_coalesced_number_name(name)
+        || is_cond_number_name(name)
+}
+
+fn is_decl_synthetic_local(name: &str) -> bool {
+    is_prunable_synthetic_local(name) || is_arg_versioned_name(name)
 }
 
 fn is_v_number_name(name: &str) -> bool {
@@ -12385,6 +14679,26 @@ fn is_cond_number_name(name: &str) -> bool {
         return false;
     };
     !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn is_coalesced_number_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('c') else {
+        return false;
+    };
+    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn is_arg_versioned_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('a') else {
+        return false;
+    };
+    let Some((arg, version)) = rest.split_once('_') else {
+        return false;
+    };
+    !arg.is_empty()
+        && arg.bytes().all(|b| b.is_ascii_digit())
+        && !version.is_empty()
+        && version.bytes().all(|b| b.is_ascii_digit())
 }
 
 fn contains_identifier(haystack: &str, needle: &str) -> bool {
@@ -12427,6 +14741,7 @@ fn type_for_size(size: u8, signed: bool) -> &'static str {
             2 => "__int16",
             4 => "int",
             8 => "__int64",
+            16 => "__int128",
             _ => "int",
         }
     } else {
@@ -12435,6 +14750,7 @@ fn type_for_size(size: u8, signed: bool) -> &'static str {
             2 => "_WORD",
             4 => "_DWORD",
             8 => "_QWORD",
+            16 => "_OWORD",
             _ => "_DWORD",
         }
     }
@@ -12594,7 +14910,7 @@ fn calling_convention_annotation(convention: &str) -> Option<&'static str> {
 const IDA_TYPEDEFS: &str = "\
 typedef unsigned char _BYTE;
 typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef unsigned long long _QWORD;
-typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD; typedef signed short __int16; typedef signed long long __int64;
+typedef unsigned __int128 _OWORD; typedef signed short __int16; typedef signed long long __int64;
 #define LOBYTE(x)  ((_BYTE)(x))
 #define BYTE1(x)   ((_BYTE)((x) >> 8))
 #define BYTE2(x)   ((_BYTE)((x) >> 16))
@@ -12617,6 +14933,15 @@ _DWORD __readfsdword(unsigned int offset);
 #ifndef INFINITY
 #define INFINITY __builtin_inff()
 #endif
+// Minimal executable semantics for the SSE vector helpers emitted below.
+static inline unsigned int __unlace_vec_u32(unsigned __int128 v, unsigned int lane) { return (unsigned int)(v >> (lane * 32)); }
+static inline unsigned long long __unlace_vec_u64(unsigned __int128 v, unsigned int lane) { return (unsigned long long)(v >> (lane * 64)); }
+static inline unsigned __int128 _mm_add_epi32(unsigned __int128 a, unsigned __int128 b) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)(__unlace_vec_u32(a, i) + __unlace_vec_u32(b, i)) << (i * 32); return out; }
+static inline unsigned __int128 _mm_mul_epu32(unsigned __int128 a, unsigned __int128 b) { unsigned long long lo = (unsigned long long)__unlace_vec_u32(a, 0) * __unlace_vec_u32(b, 0); unsigned long long hi = (unsigned long long)__unlace_vec_u32(a, 2) * __unlace_vec_u32(b, 2); return (unsigned __int128)lo | ((unsigned __int128)hi << 64); }
+static inline unsigned __int128 _mm_shuffle_epi32(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)__unlace_vec_u32(a, (imm >> (i * 2)) & 3u) << (i * 32); return out; }
+static inline unsigned __int128 __unlace_psrldq(unsigned __int128 a, unsigned int imm) { return imm >= 16 ? 0 : a >> (imm * 8); }
+static inline unsigned __int128 __unlace_psrlq(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 2; i++) { unsigned long long lane = __unlace_vec_u64(a, i); lane = imm >= 64 ? 0 : lane >> imm; out |= (unsigned __int128)lane << (i * 64); } return out; }
+static inline unsigned __int128 __unlace_punpckldq(unsigned __int128 a, unsigned __int128 b) { return (unsigned __int128)__unlace_vec_u32(a, 0) | ((unsigned __int128)__unlace_vec_u32(b, 0) << 32) | ((unsigned __int128)__unlace_vec_u32(a, 1) << 64) | ((unsigned __int128)__unlace_vec_u32(b, 1) << 96); }
 // Minimal C11 atomic declarations used by recovered AArch64 atomics.
 typedef enum { memory_order_relaxed, memory_order_consume, memory_order_acquire, memory_order_release, memory_order_acq_rel, memory_order_seq_cst } memory_order;
 #define _Atomic
@@ -12787,6 +15112,74 @@ mod tests {
     }
 
     #[test]
+    fn test_prune_unused_labels_drops_orphan_keeps_referenced() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    if (a) {\n",
+            "        goto label_3;\n",
+            "    }\n",
+            "label_3:;\n",
+            "label_7:;\n",
+            "    return 0;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_unused_labels(output);
+
+        // label_3 still has an incoming goto → kept.
+        assert!(pruned.contains("label_3:;"), "{pruned}");
+        assert!(pruned.contains("goto label_3;"), "{pruned}");
+        // label_7 has no goto → swept (would trip -Werror=unused-label).
+        assert!(!pruned.contains("label_7:;"), "{pruned}");
+        // Surrounding statements are untouched.
+        assert!(pruned.contains("return 0;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_prune_unused_labels_ignores_comments_and_strings() {
+        // A label-looking token inside a comment or string literal must not be
+        // treated as a definition (parse_label_definition requires the line to
+        // be *solely* a label), and a referenced label must survive even when a
+        // comment mentions an unrelated label name.
+        let output = concat!(
+            "int f(void) {\n",
+            "    // label_7: is described here\n",
+            "    const char *s = \"label_7:\";\n",
+            "    goto label_3;\n",
+            "label_3:;\n",
+            "    return 0;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_unused_labels(output);
+
+        assert!(pruned.contains("// label_7: is described here"), "{pruned}");
+        assert!(pruned.contains("\"label_7:\""), "{pruned}");
+        assert!(pruned.contains("label_3:;"), "{pruned}");
+        assert!(pruned.contains("goto label_3;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_parse_label_definition_matches_only_labels() {
+        assert_eq!(
+            super::parse_label_definition("label_16:;"),
+            Some("label_16".to_string())
+        );
+        assert_eq!(
+            super::parse_label_definition("    label_2:"),
+            Some("label_2".to_string())
+        );
+        // Not label definitions.
+        assert_eq!(super::parse_label_definition("goto label_3;"), None);
+        assert_eq!(super::parse_label_definition("case 5:"), None);
+        assert_eq!(super::parse_label_definition("default:"), None);
+        assert_eq!(super::parse_label_definition("    x = y;"), None);
+        assert_eq!(super::parse_label_definition("a ? b : c;"), None);
+    }
+
+    #[test]
     fn test_prune_dead_plain_cond_assignment_before_decl_prune() {
         let output = concat!(
             "int f(void) {\n",
@@ -12814,6 +15207,173 @@ mod tests {
     }
 
     #[test]
+    fn test_dedupe_var_names_keeps_alias_param_versions_together() {
+        let full = SsaVarnode {
+            base: reg(16, 8),
+            version: 1,
+        };
+        let low = SsaVarnode {
+            base: reg(16, 4),
+            version: 0,
+        };
+        let mut ctx = super::PrintCtx::new(
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        ctx.name_overrides.insert(full.base, "a3".to_string());
+        ctx.name_overrides.insert(low.base, "a3".to_string());
+        ctx.var_names.insert(full, "a3".to_string());
+        ctx.var_names.insert(low, "a3".to_string());
+
+        super::dedupe_var_names(&mut ctx);
+
+        assert_eq!(ctx.var_names.get(&full).map(String::as_str), Some("a3"));
+        assert_eq!(ctx.var_names.get(&low).map(String::as_str), Some("a3"));
+    }
+
+    #[test]
+    fn test_prune_dead_plain_assignments_keeps_versioned_arg_state() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    a3_1 = 0xaLL;\n",
+            "    a4_1 = 0LL;\n",
+            "    return a3_2 + a4_2;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_dead_plain_assignments(output);
+
+        assert!(pruned.contains("a3_1 = 0xaLL;"), "{pruned}");
+        assert!(pruned.contains("a4_1 = 0LL;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_select_parenthesizes_when_used_as_comparison_operand() {
+        let mut ctx = super::PrintCtx::new(
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let select = IrInsn::with_output(
+            IrOp::Select,
+            Varnode::unique(0x100, 4),
+            smallvec![reg(259, 1), reg(16, 4), reg(0, 4)],
+            0x1000,
+        );
+
+        let nested = super::emit_expr_with_prec(
+            &select,
+            0,
+            super::ParentCtx::lhs_of(IrOp::IntSless),
+            &mut ctx,
+        );
+
+        assert!(
+            nested.starts_with('(') && nested.ends_with(')'),
+            "select used as comparison operand must be grouped: {nested}"
+        );
+        assert!(nested.contains(" ? ") && nested.contains(" : "), "{nested}");
+    }
+
+    #[test]
+    fn test_expression_inputs_aliased_redefined_detects_same_base_redef() {
+        // Reproduce the array-max miscompile shape: a foldable IntSless taking
+        // (reg_acc, reg_b_v1) is consumed later, after reg_b is rewritten to
+        // reg_b_v2. The guard must report a redefinition so the emitter falls
+        // back to the captured temp's name instead of re-inlining the SLESS.
+        let mut ctx = super::PrintCtx::new(
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let r_acc = reg(16, 4);
+        let r_b = reg(24, 4);
+        let u_flag = Varnode::unique(0x200, 1);
+
+        let acc_sv0 = SsaVarnode {
+            base: r_acc,
+            version: 0,
+        };
+        let b_sv1 = SsaVarnode {
+            base: r_b,
+            version: 1,
+        };
+        let b_sv2 = SsaVarnode {
+            base: r_b,
+            version: 2,
+        };
+        let flag_sv = SsaVarnode {
+            base: u_flag,
+            version: 0,
+        };
+
+        let sless = IrInsn::with_output(IrOp::IntSless, u_flag, smallvec![r_acc, r_b], 0x1000);
+        let redef_b = IrInsn::with_output(IrOp::Copy, r_b, smallvec![con(0xa, 4)], 0x1004);
+
+        ctx.stmt_insns.insert(100, sless.clone());
+        ctx.stmt_insns.insert(101, redef_b);
+        ctx.stmt_inputs.insert(100, vec![acc_sv0, b_sv1]);
+        ctx.stmt_outputs.insert(100, Some(flag_sv));
+        ctx.stmt_outputs.insert(101, Some(b_sv2));
+
+        let triggers = super::expression_inputs_aliased_redefined_before_consumer(
+            &flag_sv, &sless, 100, 102, &ctx,
+        );
+        assert!(
+            triggers,
+            "guard should detect r_b redef between def 100 and consumer 102"
+        );
+
+        // Same setup without the redef must NOT trigger.
+        ctx.stmt_outputs.remove(&101);
+        let triggers = super::expression_inputs_aliased_redefined_before_consumer(
+            &flag_sv, &sless, 100, 102, &ctx,
+        );
+        assert!(
+            !triggers,
+            "guard should not fire when r_b is stable between def and consumer"
+        );
+    }
+
+    #[test]
+    fn test_prune_dead_plain_assignments_keeps_argument_register_repairs() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    while (1) {\n",
+            "        v1 = *(_DWORD *)(a6);\n",
+            "    label_1:;\n",
+            "        a2 = a2 + a3; a6 = a1; cond_7 = end == a1;\n",
+            "        if (end == a1) {\n",
+            "            break;\n",
+            "        }\n",
+            "        a1 = a1 + 4LL; continue;\n",
+            "    }\n",
+            "    return a2;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_dead_plain_assignments(output);
+
+        assert!(pruned.contains("a6 = a1;"), "{pruned}");
+        assert!(!pruned.contains("cond_7 ="), "{pruned}");
+    }
+
+    #[test]
     fn test_declare_missing_control_v_decls_recognizes_later_typed_decl() {
         let output = concat!(
             "int f(void) {\n",
@@ -12828,6 +15388,49 @@ mod tests {
 
         assert_eq!(declared.matches("v34").count(), 2, "{declared}");
         assert!(!declared.contains("int v34; // temp"), "{declared}");
+    }
+
+    #[test]
+    fn test_declare_missing_temp_decls_handles_versioned_arg_names() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    __int64 a4_13; // rcx\n",
+            "    a3_1 = 0xaLL;\n",
+            "    a4_1 = 0LL;\n",
+            "    a4_13 = a4_1 + a3_1;\n",
+            "    return a4_13;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let declared = super::declare_missing_temp_v_decls(output);
+
+        assert!(declared.contains("__int64 a3_1; // temp"), "{declared}");
+        assert!(declared.contains("__int64 a4_1; // temp"), "{declared}");
+        assert_eq!(declared.matches("__int64 a4_13;").count(), 1, "{declared}");
+    }
+
+    #[test]
+    fn test_repair_arg_versioned_address_uses() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    int a4_11; // rcx\n",
+            "    v253 = *(_DWORD *)(a4_11);\n",
+            "    v270 = a4_11->field_4;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let repaired = super::repair_arg_versioned_address_uses(output);
+
+        assert!(
+            repaired.contains("v253 = *(_DWORD *)(uintptr_t)(a4_11);"),
+            "{repaired}"
+        );
+        assert!(
+            repaired.contains("v270 = *(_DWORD *)((uintptr_t)a4_11 + 4);"),
+            "{repaired}"
+        );
     }
 
     #[test]
@@ -20582,6 +23185,28 @@ mod tests {
         assert!(
             output.contains("printf();"),
             "non-mangled callee should pass through, got: {output}",
+        );
+    }
+
+    #[test]
+    fn test_non_mangled_dotted_call_target_is_c_identifier() {
+        let target_addr = con(0x401030, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "f_rec_power.constprop.0".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("f_rec_power_constprop_0();"),
+            "raw ELF clone name must be sanitized as a C identifier, got: {output}",
+        );
+        assert!(
+            !output.contains("f_rec_power.constprop.0();"),
+            "raw dotted callee name must not leak into C syntax: {output}",
         );
     }
 

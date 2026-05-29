@@ -1,3 +1,4 @@
+use iced_x86::OpKind;
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
@@ -115,6 +116,19 @@ pub fn lift_or(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
 }
 
 pub fn lift_xor(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    if insn.op_kind(0) == OpKind::Register
+        && insn.op_kind(1) == OpKind::Register
+        && insn.op_register(0) == insn.op_register(1)
+    {
+        let Some(dst) = ctx.operand_write(insn, 0) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        let zero = Varnode::constant(0, dst.size);
+        emit_logical_flags(ctx, zero, dst.size);
+        ctx.write_operand_insn(insn, 0, dst, zero);
+        return;
+    }
     lift_binop(ctx, insn, IrOp::IntXor);
 }
 

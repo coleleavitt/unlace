@@ -261,6 +261,18 @@ fn structure_from(
                         regions.push(Region::Linear(stmts.clone()));
                     }
 
+                    // Pre-mark the merge point as visited so the recursive
+                    // structuring of then/else stops there. Without this,
+                    // structure_from greedily consumes the shared post-merge
+                    // code (including any shared loop header) inside whichever
+                    // branch reaches it first, and the other branch then sees
+                    // it as already visited and produces an empty body — losing
+                    // the loop entirely. We restore the merge point's
+                    // unvisited status afterward so the outer loop can
+                    // continue from `current = merge_bid` and structure the
+                    // shared continuation exactly once.
+                    let merge_was_unvisited = visited.insert(merge_bid);
+
                     // Structure then-region.
                     let then_regions = structure_from(
                         true_target,
@@ -286,6 +298,10 @@ fn structure_from(
                         exit_block,
                         unknown_block,
                     );
+
+                    if merge_was_unvisited {
+                        visited.remove(&merge_bid);
+                    }
 
                     let then_region = if then_regions.len() == 1 {
                         then_regions.into_iter().next().unwrap()

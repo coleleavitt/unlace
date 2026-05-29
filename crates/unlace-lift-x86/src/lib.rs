@@ -13,7 +13,7 @@ mod tests {
     use unlace_ir::{ArchId, IrOp, Lifter, SpaceId, Varnode};
 
     use crate::X86Lifter;
-    use crate::register_file::{RAX, RCX, RDI, RSP};
+    use crate::register_file::{RAX, RCX, RDI, RDX, RSP};
 
     fn lifter() -> X86Lifter {
         X86Lifter::new()
@@ -75,6 +75,23 @@ mod tests {
                 .iter()
                 .any(|i| i.output == Some(Varnode::reg(RAX, 4))),
             "EAX must not be versioned as an independent SSA destination"
+        );
+    }
+
+    #[test]
+    fn t316_xor_eax_eax_zeroes_canonical_rax() {
+        // 31 c0 = xor eax, eax.
+        let result = lifter()
+            .lift_insn(&[0x31, 0xc0], 0x1000)
+            .expect("should decode xor eax, eax");
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntZext
+                    && i.output == Some(Varnode::reg(RAX, 8))
+                    && i.inputs.as_slice() == [Varnode::constant(0, 4)]
+            }),
+            "xor eax, eax must write canonical RAX from a constant zero: {:?}",
+            result.ir_ops
         );
     }
 
@@ -278,9 +295,9 @@ mod tests {
 
     #[test]
     fn test_xor() {
-        // 48 31 c0 = xor rax, rax
+        // 48 31 d8 = xor rax, rbx. Self-XOR is canonicalized to zero separately.
         let result = lifter()
-            .lift_insn(&[0x48, 0x31, 0xc0], 0x1000)
+            .lift_insn(&[0x48, 0x31, 0xd8], 0x1000)
             .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntXor));
     }
@@ -387,7 +404,12 @@ mod tests {
     fn test_ret() {
         // c3 = ret
         let result = lifter().lift_insn(&[0xc3], 0x1000).expect("should decode");
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Return));
+        let ret = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Return)
+            .expect("should emit return");
+        assert_eq!(ret.inputs.as_slice(), [Varnode::reg(RAX, 8)]);
         assert!(
             !result.ir_ops.iter().any(|i| i.op == IrOp::Load),
             "RET should not load the machine return address as the C return value"
@@ -465,6 +487,43 @@ mod tests {
             .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntDiv));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRem));
+    }
+
+    #[test]
+    fn t313_idiv_edx_result_updates_canonical_rdx() {
+        // f7 fe = idiv esi. The 32-bit quotient/remainder architecturally write
+        // EAX/EDX, which in 64-bit mode must update canonical RAX/RDX.
+        let result = lifter()
+            .lift_insn(&[0xf7, 0xfe], 0x1000)
+            .expect("should decode idiv esi");
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntZext
+                    && i.output == Some(Varnode::reg(RAX, 8))
+                    && i.inputs.first().is_some_and(|input| input.size == 4)
+            }),
+            "IDIV quotient must write canonical RAX: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntSdiv
+                    && i.inputs
+                        .first()
+                        .is_some_and(|input| input.space == SpaceId::Unique && input.size == 4)
+            }),
+            "IDIV must read EAX through the canonical subregister path, not a raw 4-byte RAX varnode: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntZext
+                    && i.output == Some(Varnode::reg(RDX, 8))
+                    && i.inputs.first().is_some_and(|input| input.size == 4)
+            }),
+            "IDIV remainder must write canonical RDX so later EDX reads see it: {:?}",
+            result.ir_ops
+        );
     }
 
     #[test]
@@ -1286,6 +1345,39 @@ mod tests {
     }
 
     #[test]
+    fn pshufd_preserves_imm8_selector() {
+        // 66 0F 70 C9 08 = pshufd xmm1, xmm1, 8.
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x70, 0xC9, 0x08], 0x1000)
+            .unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PSHUFD must emit Callother");
+        assert_eq!(co.inputs[0].offset, sse_tag::PSHUFD);
+        assert_eq!(co.inputs.len(), 3, "shape is tag, src, imm8");
+        assert_eq!(co.inputs[2], unlace_ir::Varnode::constant(8, 1));
+        assert_eq!(co.output.unwrap().size, 16);
+    }
+
+    #[test]
+    fn punpckldq_reads_old_dst_and_src() {
+        // 66 0F 62 C8 = punpckldq xmm1, xmm0.
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x62, 0xC8], 0x1000)
+            .unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PUNPCKLDQ must emit Callother");
+        assert_eq!(co.inputs[0].offset, sse_tag::PUNPCKLDQ);
+        assert_eq!(co.inputs.len(), 3, "shape is tag, old_dst, src");
+        assert_eq!(co.output.unwrap().size, 16);
+    }
+
+    #[test]
     fn psubd_emits_callother() {
         // 66 0F FA C1 = psubd xmm0, xmm1
         let result = lifter()
@@ -1426,15 +1518,15 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x66, 0x0F, 0x7F, 0x07], 0x1000)
             .expect("should decode movdqa store");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        assert!(co.output.is_none(), "store form should have no output");
-        assert_eq!(
-            co.inputs[0],
-            unlace_ir::Varnode::constant(sse_tag::MOVDQA, 8)
+        let store = result.ir_ops.iter().find(|i| i.op == IrOp::Store).unwrap();
+        assert!(store.output.is_none(), "store form should have no output");
+        assert_eq!(store.inputs.len(), 3, "Store takes (space, address, value)");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs
+                    .first()
+                    .is_some_and(|tag| tag.offset == sse_tag::MOVDQA)),
+            "movdqa store should not fall back to Callother"
         );
     }
 
@@ -1656,17 +1748,24 @@ mod tests {
     #[test]
     fn test_lift_movsd_reg_to_reg() {
         // F2 0F 10 C1 = movsd xmm0, xmm1
-        assert_callother_tag(&[0xF2, 0x0F, 0x10, 0xC1], sse_tag::MOVSD);
         let result = lifter()
             .lift_insn(&[0xF2, 0x0F, 0x10, 0xC1], 0x1000)
             .unwrap();
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        let dst = co.output.expect("reg form should have output");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Piece),
+            "reg-reg MOVSD should preserve the destination high lane: {:?}",
+            result.ir_ops
+        );
+        let copy = result.ir_ops.iter().find(|i| i.op == IrOp::Copy).unwrap();
+        let dst = copy.output.expect("reg form should have output");
         assert_eq!(dst.size, 16);
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::MOVSD),
+            "MOVSD should not fall back to Callother"
+        );
     }
 
     // -- ADC / SBB carry arithmetic -----------------------------------------
@@ -1911,13 +2010,48 @@ mod tests {
     }
 
     #[test]
+    fn test_pxor_non_self_lowers_to_intxor() {
+        // 66 0F EF C1 = pxor xmm0, xmm1
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xEF, 0xC1], 0x1000)
+            .expect("should decode pxor xmm0, xmm1");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::IntXor),
+            "PXOR should lower to a bitwise IR op: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PXOR),
+            "PXOR should not fall back to Callother"
+        );
+    }
+
+    #[test]
     fn test_movq_vector_not_unimplemented() {
         // 66 48 0F 6E C0 = movq xmm0, rax
         let result = lifter()
             .lift_insn(&[0x66, 0x48, 0x0F, 0x6E, 0xC0], 0x1000)
             .expect("should decode movq xmm0, rax");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Copy && i.output.is_some_and(|out| out.size == 16)),
+            "movq into XMM should resize and copy, not fall back: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::MOVQ),
+            "movq should not fall back to Callother"
+        );
     }
 
     #[test]
@@ -1927,7 +2061,14 @@ mod tests {
             .lift_insn(&[0xF3, 0x0F, 0x10, 0xC1], 0x1000)
             .expect("should decode movss xmm0, xmm1");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Piece));
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::MOVSS),
+            "MOVSS should not fall back to Callother"
+        );
     }
 
     #[test]
@@ -1993,20 +2134,15 @@ mod tests {
             .lift_insn(&[0xF0, 0x48, 0x0F, 0xB1, 0x1F], 0x1000)
             .expect("should decode lock cmpxchg");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        let co = result
+        let cas = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("LOCK CMPXCHG should emit Callother");
+            .find(|i| i.op == IrOp::AtomicCas)
+            .expect("LOCK CMPXCHG should emit AtomicCas");
         assert_eq!(
-            co.inputs[0],
-            unlace_ir::Varnode::constant(atomic_tag::CMPXCHG, 8),
-            "tag should be CMPXCHG"
-        );
-        assert_eq!(
-            co.inputs.len(),
-            4,
-            "Callother CMPXCHG takes (tag, dst, src, RAX)"
+            cas.inputs.len(),
+            5,
+            "AtomicCas takes (space, addr, expected, desired, ordering)"
         );
         let zf = unlace_ir::Varnode::reg(259, 1);
         assert!(
@@ -2043,17 +2179,17 @@ mod tests {
             .lift_insn(&[0xF0, 0x48, 0x0F, 0xC1, 0x1F], 0x1000)
             .expect("should decode lock xadd");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        let co = result
+        let rmw = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("LOCK XADD should emit Callother");
+            .find(|i| i.op == IrOp::AtomicRmw)
+            .expect("LOCK XADD should emit AtomicRmw");
         assert_eq!(
-            co.inputs[0],
-            unlace_ir::Varnode::constant(atomic_tag::XADD, 8),
-            "tag should be XADD"
+            rmw.inputs.len(),
+            5,
+            "AtomicRmw takes (space, addr, operand, op_kind, ordering)"
         );
-        assert_eq!(co.inputs.len(), 3, "Callother XADD takes (tag, dst, src)");
+        assert_eq!(rmw.inputs[3], unlace_ir::Varnode::constant(1, 8));
         assert!(
             result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd),
             "LOCK XADD still updates flags via add of original + src"

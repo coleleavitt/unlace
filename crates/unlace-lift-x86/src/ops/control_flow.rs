@@ -310,7 +310,7 @@ pub fn lift_call(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
 }
 
 pub fn lift_ret(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
-    let return_value = Varnode::new(SpaceId::Register, RAX, 4);
+    let return_value = Varnode::new(SpaceId::Register, RAX, 8);
     ctx.emit(IrInsn::without_output(
         IrOp::Return,
         smallvec![return_value],

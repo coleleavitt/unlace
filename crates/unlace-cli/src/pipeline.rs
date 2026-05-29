@@ -60,7 +60,7 @@ use unlace_ir::ssa::SsaFunction;
 use unlace_ir::ssa::VarnodeSlot;
 use unlace_ir::ssa::{Maturity, PrimitiveType, SsaVarnode};
 use unlace_ir::types::{StructFieldType, Type};
-use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
+use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId, Varnode};
 use unlace_loader::{BinaryImage, DwarfInfo, Endian, FlirtDb, Section, SectionFlags, SymbolKind};
 use unlace_passes::{
     AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
@@ -197,6 +197,8 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         funcs = scan_for_prologues(image);
     }
 
+    add_macho_function_starts(image, &mut funcs);
+
     if funcs.is_empty() {
         tracing::info!("prologue scan found nothing; falling back to entry point");
         funcs.push(FunctionEntry {
@@ -228,6 +230,8 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     }
     recover_libc_start_main_main_alias(image, &mut funcs);
     prune_invalid_function_starts(image, &mut funcs);
+    prune_non_text_function_entries(image, &mut funcs);
+    prune_padding_function_starts(image, &mut funcs);
 
     if let Some(filter) = filter {
         let target = parse_function_filter(filter);
@@ -241,6 +245,50 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     }
 
     Ok(funcs)
+}
+
+fn add_macho_function_starts(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    if image.function_starts.is_empty() {
+        return;
+    }
+    let Some(text) = text_section(image) else {
+        return;
+    };
+    let text_end = text.vaddr.saturating_add(text.data.len() as u64);
+    let align = function_start_alignment(image.arch);
+    let mut known: BTreeSet<u64> = funcs.iter().map(|func| func.addr).collect();
+
+    for &addr in &image.function_starts {
+        if addr < text.vaddr || addr >= text_end {
+            continue;
+        }
+        if align > 1 && !addr.is_multiple_of(align) {
+            continue;
+        }
+        if known.insert(addr) {
+            funcs.push(FunctionEntry {
+                name: format!("sub_{addr:x}"),
+                addr,
+                size: 0,
+            });
+        }
+    }
+
+    infer_arch_fixture_sizes(image, funcs);
+}
+
+fn prune_non_text_function_entries(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    let Some(text) = text_section(image) else {
+        return;
+    };
+    let text_end = text.vaddr.saturating_add(text.data.len() as u64);
+    let has_text_func = funcs
+        .iter()
+        .any(|func| func.addr >= text.vaddr && func.addr < text_end);
+    if !has_text_func {
+        return;
+    }
+    funcs.retain(|func| func.addr >= text.vaddr && func.addr < text_end);
 }
 
 fn uses_x86_function_discovery(arch: ArchId) -> bool {
@@ -260,6 +308,25 @@ fn prune_invalid_function_starts(image: &BinaryImage, funcs: &mut Vec<FunctionEn
         return;
     }
     funcs.retain(|func| func.addr.is_multiple_of(align));
+}
+
+fn prune_padding_function_starts(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    if !uses_x86_function_discovery(image.arch) {
+        return;
+    }
+    let Some(text) = text_section(image) else {
+        return;
+    };
+    let text_end = text.vaddr.saturating_add(text.data.len() as u64);
+    funcs.retain(|func| {
+        if func.addr < text.vaddr || func.addr >= text_end {
+            return true;
+        }
+        let off = (func.addr - text.vaddr) as usize;
+        text.data
+            .get(off)
+            .is_none_or(|byte| !is_padding_byte(image.arch, *byte))
+    });
 }
 
 fn recover_libc_start_main_main_alias(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
@@ -749,7 +816,12 @@ fn lift_instructions(
     base_addr: u64,
 ) -> Result<Vec<LiftedInsnRecord>> {
     let mut records = Vec::new();
+    let mut next_unique_base = 0u64;
     let mut offset = 0usize;
+    let code_end = base_addr.saturating_add(code.len() as u64);
+    let trace_lift_bounds = std::env::var_os("UNLACE_LIFT_BOUNDS_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false);
 
     while offset < code.len() {
         let addr = base_addr + offset as u64;
@@ -757,20 +829,33 @@ fn lift_instructions(
 
         match lifter.lift_insn(remaining, addr) {
             Ok(lifted) => {
-                let is_term = lifted.ir_ops.iter().any(|op| is_terminator(op.op));
-                let no_fallthrough = lifted
-                    .ir_ops
-                    .iter()
-                    .any(|op| is_no_fallthrough_terminator(op.op));
+                let mut ir_ops = lifted.ir_ops;
+                next_unique_base += rebase_instruction_uniques(&mut ir_ops, next_unique_base);
+                let is_term = ir_ops.iter().any(|op| is_terminator(op.op));
+                let no_fallthrough = ir_ops.iter().any(|op| is_no_fallthrough_terminator(op.op));
                 let len = lifted.len;
                 records.push(LiftedInsnRecord {
                     addr,
                     len,
-                    ir_ops: lifted.ir_ops,
+                    ir_ops,
                     is_terminator: is_term,
                 });
                 let next_offset = offset.saturating_add(len);
-                if no_fallthrough && is_padding_tail(lifter.arch(), &code[next_offset..]) {
+                if no_fallthrough
+                    && should_stop_after_no_fallthrough(
+                        lifter.arch(),
+                        &records.last().expect("just pushed").ir_ops,
+                        base_addr,
+                        code_end,
+                        &code[next_offset..],
+                    )
+                {
+                    if trace_lift_bounds {
+                        eprintln!(
+                            "[unlace:lift-bounds] stop func={base_addr:#x} at insn={addr:#x} next={:#x} end={code_end:#x}",
+                            base_addr.saturating_add(next_offset as u64)
+                        );
+                    }
                     break;
                 }
                 offset = next_offset;
@@ -804,6 +889,67 @@ fn lift_instructions(
     Ok(records)
 }
 
+fn should_stop_after_no_fallthrough(
+    arch: ArchId,
+    ir_ops: &[unlace_ir::IrInsn],
+    func_start: u64,
+    func_end: u64,
+    remaining: &[u8],
+) -> bool {
+    if !is_padding_prefix(arch, remaining) {
+        return false;
+    }
+    if ir_ops.iter().any(|op| op.op == IrOp::Return) {
+        return true;
+    }
+    if ir_ops.iter().any(|op| {
+        op.op == IrOp::Branch
+            && op.inputs.first().is_some_and(|target| {
+                target.space == SpaceId::Const
+                    && target.offset >= func_start
+                    && target.offset < func_end
+            })
+    }) {
+        return false;
+    }
+    true
+}
+
+fn rebase_instruction_uniques(ir_ops: &mut [unlace_ir::IrInsn], base: u64) -> u64 {
+    let span = ir_ops
+        .iter()
+        .flat_map(unique_offsets_in_insn)
+        .max()
+        .map(|max| max.saturating_add(1))
+        .unwrap_or(0);
+    if base == 0 || span == 0 {
+        return span;
+    }
+
+    for insn in ir_ops {
+        if let Some(output) = insn.output.as_mut() {
+            rebase_unique_varnode(output, base);
+        }
+        for input in &mut insn.inputs {
+            rebase_unique_varnode(input, base);
+        }
+    }
+    span
+}
+
+fn unique_offsets_in_insn(insn: &unlace_ir::IrInsn) -> impl Iterator<Item = u64> + '_ {
+    insn.output
+        .iter()
+        .chain(insn.inputs.iter())
+        .filter_map(|vn| (vn.space == SpaceId::Unique).then_some(vn.offset))
+}
+
+fn rebase_unique_varnode(vn: &mut unlace_ir::Varnode, base: u64) {
+    if vn.space == SpaceId::Unique {
+        vn.offset = vn.offset.saturating_add(base);
+    }
+}
+
 fn decode_error_advance(arch: ArchId, remaining: usize) -> usize {
     let width = match arch {
         ArchId::AArch64 | ArchId::Mips | ArchId::Mips64 | ArchId::Ppc | ArchId::Ppc64 => 4,
@@ -826,6 +972,12 @@ fn is_no_fallthrough_terminator(op: IrOp) -> bool {
 
 fn is_padding_tail(arch: ArchId, bytes: &[u8]) -> bool {
     !bytes.is_empty() && bytes.iter().all(|byte| is_padding_byte(arch, *byte))
+}
+
+fn is_padding_prefix(arch: ArchId, bytes: &[u8]) -> bool {
+    bytes
+        .first()
+        .is_some_and(|byte| is_padding_byte(arch, *byte))
 }
 
 fn is_padding_byte(arch: ArchId, byte: u8) -> bool {
@@ -1015,11 +1167,40 @@ fn run_interproc_analysis_passes(ssa: &mut SsaFunction) -> Result<PassesReport> 
     maybe_validate_pipeline_once();
     let pre_pipeline_sig = SignatureSnapshot::of(ssa);
     let mut changed = false;
+    let trace = std::env::var_os("UNLACE_INTERPROC_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false);
+
+    if trace {
+        eprintln!(
+            "[unlace interproc] analysis-start name={} maturity={:?} sig_rev={}",
+            ssa.function.name, ssa.maturity, ssa.signature_revision
+        );
+    }
 
     if ssa.maturity < Maturity::GlobalOpt {
         ssa.maturity = Maturity::GlobalOpt;
+        if trace {
+            eprintln!(
+                "[unlace interproc] type-refresh-start name={} maturity={:?}",
+                ssa.function.name, ssa.maturity
+            );
+        }
         pipeline_stage_type_recovery(ssa, None).context("interproc type refresh failed")?;
         changed = bump_if_signature_changed(ssa, &pre_pipeline_sig);
+        if trace {
+            eprintln!(
+                "[unlace interproc] type-refresh-done name={} changed={} sig_rev={}",
+                ssa.function.name, changed, ssa.signature_revision
+            );
+        }
+    }
+
+    if trace {
+        eprintln!(
+            "[unlace interproc] analysis-done name={} maturity={:?} changed={}",
+            ssa.function.name, ssa.maturity, changed
+        );
     }
 
     Ok(PassesReport {
@@ -1113,10 +1294,20 @@ pub fn run_whole_program_quality_refinement(
     funcs: &mut std::collections::BTreeMap<u64, SsaFunction>,
     cap: usize,
 ) -> Result<WholeProgramQualityReport> {
+    let trace = std::env::var_os("UNLACE_INTERPROC_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false);
     let mut report = WholeProgramQualityReport::default();
 
     let mut registry = unlace_ir::ssa::FunctionSignatureRegistry::new();
     unlace_passes::seed_registry_from_funcs(funcs, &mut registry);
+    if trace {
+        eprintln!(
+            "[unlace interproc] quality-start funcs={} registry={}",
+            funcs.len(),
+            registry.len()
+        );
+    }
 
     let ir_funcs: BTreeMap<u64, Function> = funcs
         .iter()
@@ -1133,13 +1324,37 @@ pub fn run_whole_program_quality_refinement(
     } else {
         cap
     };
+    if trace {
+        eprintln!(
+            "[unlace interproc] quality-cc-start cap={} caller_param_changed={} registry_applied={}",
+            cc_cap, report.caller_param_changed, report.registry_applied
+        );
+    }
     report.calling_conv = unlace_passes::run_whole_prog_cc(funcs, cc_cap);
+    if trace {
+        eprintln!(
+            "[unlace interproc] quality-cc-done iters={} hit_cap={}",
+            report.calling_conv.iterations, report.calling_conv.hit_cap
+        );
+    }
 
     let refs: Vec<&SsaFunction> = funcs.values().collect();
     let unifier = unlace_passes::unify_structs_across_program(&refs);
     report.canonical_struct_layouts = unifier.distinct_layouts();
+    if trace {
+        eprintln!(
+            "[unlace interproc] quality-structs distinct_layouts={}",
+            report.canonical_struct_layouts
+        );
+    }
 
     for ssa in funcs.values_mut() {
+        if trace {
+            eprintln!(
+                "[unlace interproc] quality-refresh-start name={} maturity={:?}",
+                ssa.function.name, ssa.maturity
+            );
+        }
         let before_inferred = ssa.inferred_structs.clone();
         let before_composite = ssa.composite_var_types.clone();
         unifier.rename_to_canonical(ssa);
@@ -1153,8 +1368,20 @@ pub fn run_whole_program_quality_refinement(
         let before_signature = ssa.finalized_signature.clone();
 
         ssa.maturity = Maturity::Lvars;
+        if trace {
+            eprintln!(
+                "[unlace interproc] quality-lvar-start name={} maturity={:?}",
+                ssa.function.name, ssa.maturity
+            );
+        }
         pipeline_stage_lvar(ssa).context("whole-program lvar refresh failed")?;
         ssa.maturity = Maturity::Final;
+        if trace {
+            eprintln!(
+                "[unlace interproc] quality-final-start name={} maturity={:?}",
+                ssa.function.name, ssa.maturity
+            );
+        }
         pipeline_stage_final(ssa, None).context("whole-program final refresh failed")?;
 
         if ssa.lvars != before_lvars
@@ -1164,8 +1391,20 @@ pub fn run_whole_program_quality_refinement(
         {
             report.final_refresh_changes += 1;
         }
+        if trace {
+            eprintln!(
+                "[unlace interproc] quality-refresh-done name={} final_changed={}",
+                ssa.function.name, report.final_refresh_changes
+            );
+        }
     }
 
+    if trace {
+        eprintln!(
+            "[unlace interproc] quality-done struct_rewrites={} final_refresh_changes={}",
+            report.struct_name_rewrite_functions, report.final_refresh_changes
+        );
+    }
     Ok(report)
 }
 
@@ -1292,29 +1531,45 @@ fn run_passes_with_report_inner(
                 );
             }
             ssa.maturity = Maturity::Generated;
+            let stage_start = Instant::now();
             let ir_changes = pipeline_stage_ir_fixedpoint(ssa)?;
             total_ir_changes = total_ir_changes.saturating_add(ir_changes);
             maturity_snapshot(ssa, "M_GENERATED", _iter);
+            pipeline_trace_maturity_stage(
+                ssa,
+                "M_GENERATED",
+                _iter,
+                stage_start,
+                &format!(" ir_changes={ir_changes}"),
+            );
 
             // Stage 2: M_PREOPTIMIZED — cleanup passes
             ssa.maturity = Maturity::PreOptimized;
+            let stage_start = Instant::now();
             pipeline_stage_cleanup(ssa)?;
             maturity_snapshot(ssa, "M_PREOPTIMIZED", _iter);
+            pipeline_trace_maturity_stage(ssa, "M_PREOPTIMIZED", _iter, stage_start, "");
 
             // Stage 3: M_LOCOPT — structural detection + stack recovery
             ssa.maturity = Maturity::LocalOpt;
+            let stage_start = Instant::now();
             pipeline_stage_structural(ssa)?;
             maturity_snapshot(ssa, "M_LOCOPT", _iter);
+            pipeline_trace_maturity_stage(ssa, "M_LOCOPT", _iter, stage_start, "");
 
             // Stage 4: M_CALLS — call resolution + vtables
             ssa.maturity = Maturity::Calls;
+            let stage_start = Instant::now();
             pipeline_stage_call_resolution(ssa)?;
             maturity_snapshot(ssa, "M_CALLS", _iter);
+            pipeline_trace_maturity_stage(ssa, "M_CALLS", _iter, stage_start, "");
 
             // Stage 5: M_GLBOPT — type recovery
             ssa.maturity = Maturity::GlobalOpt;
+            let stage_start = Instant::now();
             pipeline_stage_type_recovery(ssa, resolver)?;
             maturity_snapshot(ssa, "M_GLBOPT", _iter);
+            pipeline_trace_maturity_stage(ssa, "M_GLBOPT", _iter, stage_start, "");
 
             Ok(())
         },
@@ -1331,15 +1586,23 @@ fn run_passes_with_report_inner(
 
     // Stage 6: M_LVARS — post-loop one-shots + lvar allocation
     ssa.maturity = Maturity::Lvars;
+    let stage_start = Instant::now();
     pipeline_stage_post_loop(ssa)?;
+    pipeline_trace_maturity_stage(ssa, "M_LVARS_POST_LOOP", 0, stage_start, "");
+    let stage_start = Instant::now();
     pipeline_stage_experimental_old(ssa, resolver)?;
+    pipeline_trace_maturity_stage(ssa, "M_LVARS_EXPERIMENTAL_OLD", 0, stage_start, "");
+    let stage_start = Instant::now();
     pipeline_stage_lvar(ssa)?;
     maturity_snapshot(ssa, "M_LVARS", 0);
+    pipeline_trace_maturity_stage(ssa, "M_LVARS", 0, stage_start, "");
 
     // Stage 7: M_FINAL — language-specific + naming + finalization
     ssa.maturity = Maturity::Final;
+    let stage_start = Instant::now();
     pipeline_stage_final(ssa, resolver)?;
     maturity_snapshot(ssa, "M_FINAL", 0);
+    pipeline_trace_maturity_stage(ssa, "M_FINAL", 0, stage_start, "");
 
     let _ = bump_if_signature_changed(ssa, &pre_pipeline_sig);
 
@@ -1419,6 +1682,181 @@ fn env_flag_enabled(name: &str) -> bool {
             !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
         })
         .unwrap_or(false)
+}
+
+fn pipeline_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_PIPELINE_TRACE")
+        || env_flag_enabled("UNLACE_PIPELINE_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn pipeline_trace_verbose_enabled() -> bool {
+    env_flag_enabled("UNLACE_PIPELINE_TRACE_VERBOSE") || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn pipeline_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_PIPELINE_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn pipeline_trace_matches(line: &str) -> bool {
+    pipeline_trace_filter()
+        .map(|filter| line.contains(&filter))
+        .unwrap_or(true)
+}
+
+fn function_shape(function: &Function) -> (usize, usize) {
+    let blocks = function.blocks.len();
+    let insns = function.blocks.values().map(|b| b.insns.len()).sum();
+    (blocks, insns)
+}
+
+fn ssa_shape(ssa: &SsaFunction) -> (usize, usize, usize, usize) {
+    let (blocks, insns) = function_shape(&ssa.function);
+    let phis = ssa.phi_map.values().map(|phis| phis.len()).sum();
+    (blocks, insns, phis, ssa.var_map.len())
+}
+
+fn pipeline_trace_start(func_name: &str, stage: &str) {
+    if pipeline_trace_enabled() {
+        eprintln!("[unlace pipeline] func={func_name} stage={stage} start");
+    }
+}
+
+fn pipeline_trace_done(func_name: &str, stage: &str, start: Instant, deadline: Instant) {
+    if pipeline_trace_enabled() {
+        let remaining_ms = deadline
+            .saturating_duration_since(Instant::now())
+            .as_millis();
+        eprintln!(
+            "[unlace pipeline] func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms}",
+            start.elapsed().as_millis(),
+        );
+    }
+}
+
+fn pipeline_trace_ir(
+    func_name: &str,
+    stage: &str,
+    start: Instant,
+    deadline: Instant,
+    func: &Function,
+) {
+    if pipeline_trace_enabled() {
+        let (blocks, insns) = function_shape(func);
+        let remaining_ms = deadline
+            .saturating_duration_since(Instant::now())
+            .as_millis();
+        eprintln!(
+            "[unlace pipeline] func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms} blocks={blocks} insns={insns}",
+            start.elapsed().as_millis(),
+        );
+    }
+}
+
+fn pipeline_trace_ssa(
+    func_name: &str,
+    stage: &str,
+    start: Instant,
+    deadline: Instant,
+    ssa: &SsaFunction,
+) {
+    if pipeline_trace_enabled() {
+        let (blocks, insns, phis, var_map) = ssa_shape(ssa);
+        let remaining_ms = deadline
+            .saturating_duration_since(Instant::now())
+            .as_millis();
+        eprintln!(
+            "[unlace pipeline] func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms} blocks={blocks} insns={insns} phis={phis} var_map={var_map} maturity={:?}",
+            start.elapsed().as_millis(),
+            ssa.maturity,
+        );
+        pipeline_trace_ssa_details(func_name, stage, ssa);
+    }
+}
+
+fn pipeline_trace_maturity_stage(
+    ssa: &SsaFunction,
+    stage: &str,
+    iter: usize,
+    start: Instant,
+    extra: &str,
+) {
+    if pipeline_trace_enabled() {
+        let (blocks, insns, phis, var_map) = ssa_shape(ssa);
+        eprintln!(
+            "[unlace pipeline] func={} outer_iter={iter} stage={stage} done elapsed_ms={} blocks={blocks} insns={insns} phis={phis} var_map={var_map} maturity={:?}{extra}",
+            ssa.function.name,
+            start.elapsed().as_millis(),
+            ssa.maturity,
+        );
+        pipeline_trace_ssa_details(&ssa.function.name, stage, ssa);
+    }
+}
+
+fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
+    if !pipeline_trace_verbose_enabled() {
+        return;
+    }
+    let header = format!(
+        "func={func_name} stage={stage} detail var_types={} merged_names={} foldable={} stack_vars={} lvars={} params={} return_type={}",
+        ssa.var_types.len(),
+        ssa.merged_names.len(),
+        ssa.foldable_exprs.len(),
+        ssa.stack_vars.len(),
+        ssa.lvars.len(),
+        ssa.inferred_params.len(),
+        ssa.inferred_return_type,
+    );
+    if pipeline_trace_matches(&header) {
+        eprintln!("[unlace pipeline] {header}");
+    }
+    for (block, phis) in &ssa.phi_map {
+        for phi in phis {
+            let line = format!(
+                "func={func_name} stage={stage} phi block={block:?} output={:?} inputs={:?}",
+                phi.output, phi.inputs
+            );
+            if pipeline_trace_matches(&line) {
+                eprintln!("[unlace pipeline] {line}");
+            }
+        }
+    }
+    for (key, sv) in &ssa.var_map {
+        let line = format!("func={func_name} stage={stage} var_map key={key:?} sv={sv:?}");
+        if pipeline_trace_matches(&line) {
+            eprintln!("[unlace pipeline] {line}");
+        }
+    }
+    for (&bid, block) in &ssa.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            let output = ssa.var_map.get(&(bid, idx, VarnodeSlot::Output)).copied();
+            let inputs: Vec<_> = (0..insn.inputs.len())
+                .filter_map(|input_idx| {
+                    ssa.var_map
+                        .get(&(bid, idx, VarnodeSlot::Input(input_idx)))
+                        .copied()
+                        .map(|sv| (input_idx, sv))
+                })
+                .collect();
+            let line = format!(
+                "func={func_name} stage={stage} insn block={bid:?} idx={idx} addr=0x{:x} op={:?} output={output:?} inputs={inputs:?}",
+                insn.addr, insn.op
+            );
+            if pipeline_trace_matches(&line) {
+                eprintln!("[unlace pipeline] {line}");
+            }
+        }
+    }
+    for (sv, name) in &ssa.merged_names {
+        let line = format!("func={func_name} stage={stage} merged_name sv={sv:?} name={name}");
+        if pipeline_trace_matches(&line) {
+            eprintln!("[unlace pipeline] {line}");
+        }
+    }
 }
 
 fn old_experimental_passes_enabled() -> bool {
@@ -1614,10 +2052,55 @@ fn pipeline_stage_experimental_old(
 
 /// Stage 6b (M_LVARS): lvar allocation and variable merging.
 fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+    let trace = std::env::var_os("UNLACE_INTERPROC_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false);
+    if trace {
+        eprintln!(
+            "[unlace interproc] lvar-pass-start name={} pass=ExpressionTreePass",
+            ssa.function.name
+        );
+    }
     run_instrumented(&ExpressionTreePass, ssa)?;
+    if trace {
+        eprintln!(
+            "[unlace interproc] lvar-pass-done name={} pass=ExpressionTreePass",
+            ssa.function.name
+        );
+        eprintln!(
+            "[unlace interproc] lvar-pass-start name={} pass=VariableMergePass",
+            ssa.function.name
+        );
+    }
     run_instrumented(&VariableMergePass, ssa)?;
+    if trace {
+        eprintln!(
+            "[unlace interproc] lvar-pass-done name={} pass=VariableMergePass",
+            ssa.function.name
+        );
+        eprintln!(
+            "[unlace interproc] lvar-pass-start name={} pass=LvarCollectPass",
+            ssa.function.name
+        );
+    }
     run_instrumented(&LvarCollectPass, ssa)?;
+    if trace {
+        eprintln!(
+            "[unlace interproc] lvar-pass-done name={} pass=LvarCollectPass",
+            ssa.function.name
+        );
+        eprintln!(
+            "[unlace interproc] lvar-pass-start name={} pass=RegisterCoalescePass",
+            ssa.function.name
+        );
+    }
     run_instrumented(&RegisterCoalescePass, ssa)?;
+    if trace {
+        eprintln!(
+            "[unlace interproc] lvar-pass-done name={} pass=RegisterCoalescePass",
+            ssa.function.name
+        );
+    }
     Ok(())
 }
 
@@ -1961,10 +2444,14 @@ pub fn lift_and_run_passes(
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
     }
+    let estimated_param_counts =
+        estimate_direct_target_param_counts(image, lifter, discovered, &ssa);
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
     let dwarf_param_count = |addr: u64| -> Option<usize> {
-        dwarf.and_then(|d| d.functions.get(&addr).map(|f| f.params.len()))
+        dwarf
+            .and_then(|d| d.functions.get(&addr).map(|f| f.params.len()))
+            .or_else(|| estimated_param_counts.get(&addr).copied())
     };
 
     let _call_args_pre =
@@ -1993,6 +2480,100 @@ pub fn lift_and_run_passes(
 
     check_timeout(deadline, &entry.name)?;
     Ok(ssa)
+}
+
+const X86_SYSV_PARAM_REGS: [u64; 6] = [56, 48, 16, 8, 64, 72];
+
+fn estimate_direct_target_param_counts(
+    image: &BinaryImage,
+    lifter: &dyn Lifter,
+    discovered: &[FunctionEntry],
+    ssa: &SsaFunction,
+) -> BTreeMap<u64, usize> {
+    if image.arch != ArchId::X86_64 {
+        return BTreeMap::new();
+    }
+
+    let entries: BTreeMap<u64, &FunctionEntry> =
+        discovered.iter().map(|entry| (entry.addr, entry)).collect();
+    let mut out = BTreeMap::new();
+    for target in direct_call_targets(ssa) {
+        let entry = entries
+            .get(&target)
+            .map(|entry| (*entry).clone())
+            .or_else(|| {
+                image.symbols.get(&target).and_then(|symbol| {
+                    (symbol.kind == SymbolKind::Function).then(|| FunctionEntry {
+                        name: symbol.name.clone(),
+                        addr: symbol.addr,
+                        size: symbol.size,
+                    })
+                })
+            });
+        let Some(entry) = entry else {
+            continue;
+        };
+        let Ok(func) = lift_function(image, lifter, &entry) else {
+            continue;
+        };
+        let count = estimate_sysv_param_count(&func);
+        if std::env::var_os("UNLACE_CALL_ARGS_TRACE").is_some() {
+            eprintln!(
+                "[unlace-call-args] estimated-param-count target=0x{target:x} name={} count={count}",
+                entry.name
+            );
+        }
+        out.insert(target, count);
+    }
+    out
+}
+
+fn direct_call_targets(ssa: &SsaFunction) -> BTreeSet<u64> {
+    let mut targets = BTreeSet::new();
+    for block in ssa.function.blocks.values() {
+        for insn in &block.insns {
+            if matches!(insn.op, IrOp::Call | IrOp::Branch)
+                && let Some(target) = insn.inputs.first()
+                && target.space == SpaceId::Const
+            {
+                targets.insert(target.offset);
+            }
+        }
+    }
+    targets
+}
+
+fn estimate_sysv_param_count(func: &Function) -> usize {
+    let mut read_before_def = [false; 6];
+    let mut defined = [false; 6];
+
+    for block in func.blocks.values() {
+        for insn in &block.insns {
+            for input in &insn.inputs {
+                if let Some(index) = sysv_param_reg_index(input)
+                    && !defined[index]
+                {
+                    read_before_def[index] = true;
+                }
+            }
+            if let Some(output) = insn.output
+                && let Some(index) = sysv_param_reg_index(&output)
+            {
+                defined[index] = true;
+            }
+        }
+    }
+
+    read_before_def.iter().take_while(|&&read| read).count()
+}
+
+fn sysv_param_reg_index(vn: &Varnode) -> Option<usize> {
+    if vn.space != SpaceId::Register {
+        return None;
+    }
+    X86_SYSV_PARAM_REGS
+        .iter()
+        .position(|&offset| offset == vn.offset)
 }
 
 /// Phase-3 helper for interproc batch: emit output from a refined `SsaFunction`.
@@ -2345,6 +2926,15 @@ pub fn decompile_function_with_symbols(
 ) -> Result<String> {
     let _span = tracing::debug_span!("decompile_function", func = %entry.name).entered();
     let deadline = Instant::now() + config.timeout;
+    if pipeline_trace_enabled() {
+        eprintln!(
+            "[unlace pipeline] func={} addr=0x{:x} size=0x{:x} emit={emit:?} timeout_ms={} start",
+            entry.name,
+            entry.addr,
+            entry.size,
+            config.timeout.as_millis(),
+        );
+    }
 
     if matches!(emit, EmitFormat::C)
         && let Some(canonical) = flirt_match(image, entry)
@@ -2354,7 +2944,9 @@ pub fn decompile_function_with_symbols(
     }
 
     let t = Instant::now();
+    pipeline_trace_start(&entry.name, "lift");
     let mut ir_func = lift_function(image, lifter, entry)?;
+    pipeline_trace_ir(&entry.name, "lift", t, deadline, &ir_func);
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         blocks = ir_func.blocks.len(),
@@ -2367,7 +2959,9 @@ pub fn decompile_function_with_symbols(
     );
 
     let t = Instant::now();
+    pipeline_trace_start(&entry.name, "merge-linear-blocks");
     let merges = unlace_struct::merge_linear_blocks(&mut ir_func);
+    pipeline_trace_ir(&entry.name, "merge-linear-blocks", t, deadline, &ir_func);
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         merges,
@@ -2375,7 +2969,9 @@ pub fn decompile_function_with_symbols(
     );
 
     let t = Instant::now();
+    pipeline_trace_start(&entry.name, "tail-duplicate");
     let dups = unlace_struct::tail_duplicate_small_blocks(&mut ir_func);
+    pipeline_trace_ir(&entry.name, "tail-duplicate", t, deadline, &ir_func);
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         dups,
@@ -2383,53 +2979,79 @@ pub fn decompile_function_with_symbols(
     );
 
     let t = Instant::now();
+    pipeline_trace_start(&entry.name, "split-irreducible");
     let splits = unlace_struct::split_irreducible_entries(&mut ir_func);
+    pipeline_trace_ir(&entry.name, "split-irreducible", t, deadline, &ir_func);
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         splits,
         "split_irreducible_entries done"
     );
 
+    pipeline_trace_start(&entry.name, "timeout-check-after-lift");
     check_timeout(deadline, &entry.name)?;
+    pipeline_trace_done(
+        &entry.name,
+        "timeout-check-after-lift",
+        Instant::now(),
+        deadline,
+    );
 
     let t = Instant::now();
+    pipeline_trace_start(&entry.name, "build-ssa");
     let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
     // Batch 2: tag the SSA function with its target arch so stack-recovery
     // passes consult the right [`unlace_ir::stack::StackSpec`]. Previously
     // every non-x86 binary fell through to a hard-coded RSP=32 lookup and
     // produced `stack_vars.len() == 0`.
     ssa.arch = image.arch;
+    pipeline_trace_ssa(&entry.name, "build-ssa", t, deadline, &ssa);
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         "build_ssa done"
     );
 
+    let t = Instant::now();
+    pipeline_trace_start(&entry.name, "debug-info-overlay");
     if let Some(dwarf_info) = dwarf {
         apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
     }
     apply_pdb_types_to_ssa(&mut ssa, image);
 
     populate_eh_landing_pads(image, entry, &mut ssa, rtti);
+    pipeline_trace_ssa(&entry.name, "debug-info-overlay", t, deadline, &ssa);
 
     warn_if_large_ir(&entry.name, &ssa);
+    pipeline_trace_start(&entry.name, "timeout-check-after-ssa");
     check_timeout(deadline, &entry.name)?;
+    pipeline_trace_done(
+        &entry.name,
+        "timeout-check-after-ssa",
+        Instant::now(),
+        deadline,
+    );
 
     // Batch 1: build the call-target VA → name resolver *before* the pass
     // pipeline so symbol-pattern-gated passes (NoreturnDetectPass,
     // RustPanicPass) can match against PLT/import names. The leaked
     // `&'static str`s previously built only for `detect_go_defer` are now
     // also reused as the resolver backing store.
+    let t_pre_pass = Instant::now();
+    pipeline_trace_start(&entry.name, "pre-pass-analysis");
     let (symbols, flirt_map) = build_symbol_table_and_flirt_with_functions(image, discovered);
     let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
     }
+    let estimated_param_counts =
+        estimate_direct_target_param_counts(image, lifter, discovered, &ssa);
 
-    let t = Instant::now();
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
     let dwarf_param_count = |addr: u64| -> Option<usize> {
-        dwarf.and_then(|d| d.functions.get(&addr).map(|f| f.params.len()))
+        dwarf
+            .and_then(|d| d.functions.get(&addr).map(|f| f.params.len()))
+            .or_else(|| estimated_param_counts.get(&addr).copied())
     };
 
     let _call_args_pre =
@@ -2447,20 +3069,41 @@ pub fn decompile_function_with_symbols(
         &|addr| stable_symbol_names.get(&addr).copied(),
         &image.string_table,
     );
+    pipeline_trace_ssa(&entry.name, "pre-pass-analysis", t_pre_pass, deadline, &ssa);
 
+    let t_jt_pre = Instant::now();
+    pipeline_trace_start(&entry.name, "jump-table-pre");
     resolve_jump_tables_for_pipeline(&mut ssa, image);
+    pipeline_trace_ssa(&entry.name, "jump-table-pre", t_jt_pre, deadline, &ssa);
 
+    let t_passes = Instant::now();
+    pipeline_trace_start(&entry.name, "run-passes");
     if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
         tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
+        if pipeline_trace_enabled() {
+            eprintln!(
+                "[unlace pipeline] func={} stage=run-passes error={e:#}",
+                entry.name
+            );
+        }
     }
+    pipeline_trace_ssa(&entry.name, "run-passes", t_passes, deadline, &ssa);
     tracing::trace!(
-        elapsed_us = t.elapsed().as_micros() as u64,
+        elapsed_us = t_passes.elapsed().as_micros() as u64,
         "run_passes done"
     );
 
+    pipeline_trace_start(&entry.name, "timeout-check-after-passes");
     check_timeout(deadline, &entry.name)?;
+    pipeline_trace_done(
+        &entry.name,
+        "timeout-check-after-passes",
+        Instant::now(),
+        deadline,
+    );
 
     let t = Instant::now();
+    pipeline_trace_start(&entry.name, "post-pass-annotations");
 
     run_objc_dispatch_for_image(&mut ssa, image, &symbols);
 
@@ -2545,6 +3188,7 @@ pub fn decompile_function_with_symbols(
     printer_annotations.recover_triangular_sum_loop =
         unlace_passes::detect_triangular_sum_reduction(&ssa).is_some();
     let printer_annotations = Some(printer_annotations);
+    pipeline_trace_ssa(&entry.name, "post-pass-annotations", t, deadline, &ssa);
 
     // Batch 9: section-aware second phase of jump-table recovery.
     // `IndirectJumpResolvePass` (run as a post-loop one-shot above) has
@@ -2552,9 +3196,14 @@ pub fn decompile_function_with_symbols(
     // their bases on `ssa.resolved_jump_tables`; here we walk the binary
     // image to decode the concrete target addresses out of `.rodata`.
     // No-op when no candidates were detected.
+    let t_jt_post = Instant::now();
+    pipeline_trace_start(&entry.name, "jump-table-post");
     resolve_jump_tables_for_pipeline(&mut ssa, image);
     let jt_sections = build_jump_table_section_views(image);
+    pipeline_trace_ssa(&entry.name, "jump-table-post", t_jt_post, deadline, &ssa);
 
+    let t_emit = Instant::now();
+    pipeline_trace_start(&entry.name, "emit-output");
     let result = emit_output(
         emit,
         &ssa,
@@ -2566,6 +3215,7 @@ pub fn decompile_function_with_symbols(
         printer_annotations.as_ref(),
         &jt_sections,
     );
+    pipeline_trace_done(&entry.name, "emit-output", t_emit, deadline);
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         "emit_output done"
@@ -3052,11 +3702,39 @@ fn resolve_jump_tables_for_pipeline(
     ssa: &mut unlace_ir::ssa::SsaFunction,
     image: &unlace_loader::BinaryImage,
 ) {
+    let trace = env_flag_enabled("UNLACE_JUMPTABLE_TRACE");
     if let Err(e) = run_instrumented(&IndirectJumpResolvePass, ssa) {
         tracing::warn!(func = %ssa.function.name, err = %e, "jump-table candidate recovery failed");
     }
+    if trace {
+        eprintln!(
+            "[unlace jt] after-candidate func={} tables={:?}",
+            ssa.function.name, ssa.resolved_jump_tables
+        );
+    }
     resolve_jump_table_targets(ssa, image);
+    if trace {
+        eprintln!(
+            "[unlace jt] after-resolve func={} tables={:?}",
+            ssa.function.name, ssa.resolved_jump_tables
+        );
+    }
     unlace_ir::ssa::rebuild_cfg(ssa);
+    if trace {
+        let branch_edges: Vec<_> = ssa
+            .function
+            .blocks
+            .iter()
+            .filter_map(|(&bid, block)| {
+                block
+                    .insns
+                    .last()
+                    .is_some_and(|insn| insn.op == IrOp::Branchind)
+                    .then_some((bid, block.successors.clone()))
+            })
+            .collect();
+        eprintln!("[unlace jt] branchind-successors={branch_edges:?}");
+    }
 }
 
 /// Section-aware second phase of jump-table recovery: walks each candidate
@@ -3356,6 +4034,7 @@ pub fn emit_output(
                 unlace_struct::structure_with_landing_pads(ssa, &ssa.eh_landing_pads)
                     .context("control-flow structuring failed")?
             };
+            trace_hir_pipeline("structure", &hir);
             // Batch 9: post-structuring switch recovery, followed by
             // jump-table-aware refinement. `recover_switches` walks the
             // HIR and normalises any `HirNode::Switch` produced by the
@@ -3365,6 +4044,7 @@ pub fn emit_output(
             // tables (populated upstream by
             // `IndirectJumpResolvePass` + `resolve_jump_table_targets`).
             unlace_struct::recover_switches(&mut hir);
+            trace_hir_pipeline("recover_switches", &hir);
             if !ssa.resolved_jump_tables.is_empty() && !jump_table_sections.is_empty() {
                 let tables_for_refine = jump_table_info_map_to_struct(&ssa.resolved_jump_tables);
                 if !tables_for_refine.is_empty() {
@@ -3373,26 +4053,51 @@ pub fn emit_output(
                         &tables_for_refine,
                         jump_table_sections,
                     );
+                    trace_hir_pipeline("refine_switches", &hir);
                 }
             }
             unlace_struct::ternary_recovery(&mut hir);
+            trace_hir_pipeline("ternary", &hir);
             unlace_struct::short_circuit_recovery(&mut hir);
+            trace_hir_pipeline("short_circuit", &hir);
             unlace_struct::flatten_if_else_chains(&mut hir);
+            trace_hir_pipeline("flatten_if_else", &hir);
             unlace_struct::simplify_chain_conditions(&mut hir, ssa);
+            trace_hir_pipeline("simplify_chain_conditions", &hir);
             unlace_struct::if_chain_to_switch(&mut hir, ssa);
+            trace_hir_pipeline("if_chain_to_switch", &hir);
             unlace_struct::recover_cmov_switches(&mut hir, ssa);
+            trace_hir_pipeline("recover_cmov_switches", &hir);
             unlace_struct::goto_to_break(&mut hir);
+            trace_hir_pipeline("goto_to_break", &hir);
             unlace_struct::goto_to_continue(&mut hir);
+            trace_hir_pipeline("goto_to_continue", &hir);
+            unlace_struct::detect_continue_break(&mut hir.body);
+            trace_hir_pipeline("detect_continue_break1", &hir);
             unlace_struct::while_to_for(&mut hir);
+            trace_hir_pipeline("while_to_for", &hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
+            trace_hir_pipeline("eliminate_forward_gotos1", &hir);
             unlace_struct::hoist_cross_branch_labels(&mut hir);
+            trace_hir_pipeline("hoist_cross_branch_labels", &hir);
             unlace_struct::duplicate_goto_conditions(&mut hir);
+            trace_hir_pipeline("duplicate_goto_conditions", &hir);
+            unlace_struct::detect_continue_break(&mut hir.body);
+            trace_hir_pipeline("detect_continue_break2", &hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
+            trace_hir_pipeline("eliminate_forward_gotos2", &hir);
             unlace_struct::cleanup_unreachable_labels(&mut hir);
+            trace_hir_pipeline("cleanup_unreachable_labels", &hir);
             unlace_struct::return_merge(&mut hir);
+            trace_hir_pipeline("return_merge", &hir);
+            unlace_struct::detect_continue_break(&mut hir.body);
+            trace_hir_pipeline("detect_continue_break3", &hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
+            trace_hir_pipeline("eliminate_forward_gotos3", &hir);
             unlace_struct::recover_guarded_whiles(&mut hir);
+            trace_hir_pipeline("recover_guarded_whiles", &hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
+            trace_hir_pipeline("cleanup_empty_ifs", &hir);
             // Batch 9 slice 2: collapse consecutive cases with equal
             // bodies and drop redundant `default:` arms so the printer
             // emits IDA-style stacked case labels.
@@ -3441,6 +4146,236 @@ pub fn emit_output(
                 print_config,
                 ann_ref,
             ))
+        }
+    }
+}
+
+fn trace_hir_pipeline(stage: &str, hir: &unlace_struct::hir::HirFunction) {
+    if std::env::var_os("UNLACE_HIR_TRACE").is_none() {
+        return;
+    }
+    let mut counts = HirTraceCounts::default();
+    count_hir_nodes(&hir.body, &mut counts);
+    eprintln!(
+        "[unlace-cli] hir stage={stage} top={} nodes={} stmts={} calls={} returns={} gotos={} labels={} breaks={} continues={} empty_ifs={}",
+        hir.body.len(),
+        counts.nodes,
+        counts.statements,
+        counts.calls,
+        counts.returns,
+        counts.gotos,
+        counts.labels,
+        counts.breaks,
+        counts.continues,
+        counts.empty_ifs
+    );
+    if std::env::var_os("UNLACE_HIR_TRACE_VERBOSE").is_some() {
+        let mut details = Vec::new();
+        collect_hir_trace_details(&hir.body, "body".to_string(), &mut details);
+        for detail in details.into_iter().take(64) {
+            eprintln!("[unlace-cli] hir-detail stage={stage} {detail}");
+        }
+    }
+}
+
+#[derive(Default)]
+struct HirTraceCounts {
+    nodes: usize,
+    statements: usize,
+    calls: usize,
+    returns: usize,
+    gotos: usize,
+    labels: usize,
+    breaks: usize,
+    continues: usize,
+    empty_ifs: usize,
+}
+
+fn count_hir_nodes(nodes: &[unlace_struct::hir::HirNode], counts: &mut HirTraceCounts) {
+    use unlace_struct::hir::HirNode;
+    for node in nodes {
+        counts.nodes += 1;
+        match node {
+            HirNode::Statement(insn) => {
+                counts.statements += 1;
+                if matches!(insn.op, IrOp::Call | IrOp::Callind) {
+                    counts.calls += 1;
+                }
+            }
+            HirNode::Block(children) => count_hir_nodes(children, counts),
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                if then_body.is_empty() && else_body.as_ref().is_none_or(Vec::is_empty) {
+                    counts.empty_ifs += 1;
+                }
+                count_hir_nodes(then_body, counts);
+                if let Some(else_body) = else_body {
+                    count_hir_nodes(else_body, counts);
+                }
+            }
+            HirNode::IfCmp {
+                then_body,
+                else_body,
+                ..
+            } => {
+                if then_body.is_empty() && else_body.as_ref().is_none_or(Vec::is_empty) {
+                    counts.empty_ifs += 1;
+                }
+                count_hir_nodes(then_body, counts);
+                if let Some(else_body) = else_body {
+                    count_hir_nodes(else_body, counts);
+                }
+            }
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => count_hir_nodes(body, counts),
+            HirNode::GuardedIf {
+                then_body,
+                else_body,
+                ..
+            } => {
+                count_hir_nodes(then_body, counts);
+                count_hir_nodes(else_body, counts);
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    count_hir_nodes(body, counts);
+                }
+                if let Some(default) = default {
+                    count_hir_nodes(default, counts);
+                }
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                count_hir_nodes(try_body, counts);
+                for (_, body) in catch_arms {
+                    count_hir_nodes(body, counts);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                count_hir_nodes(try_body, counts);
+                count_hir_nodes(finally_body, counts);
+            }
+            HirNode::Commented { inner, .. } => {
+                count_hir_nodes(std::slice::from_ref(inner.as_ref()), counts)
+            }
+            HirNode::Return(_) => counts.returns += 1,
+            HirNode::Goto(_) => counts.gotos += 1,
+            HirNode::Label(_) => counts.labels += 1,
+            HirNode::Break => counts.breaks += 1,
+            HirNode::Continue => counts.continues += 1,
+            HirNode::GuardedTernary { .. }
+            | HirNode::CselTernary { .. }
+            | HirNode::Ternary { .. }
+            | HirNode::TailCall { .. }
+            | HirNode::ObjcBlock { .. }
+            | HirNode::Asm { .. } => {}
+        }
+    }
+}
+
+fn collect_hir_trace_details(
+    nodes: &[unlace_struct::hir::HirNode],
+    path: String,
+    details: &mut Vec<String>,
+) {
+    use unlace_struct::hir::HirNode;
+    for (idx, node) in nodes.iter().enumerate() {
+        let here = format!("{path}.{idx}");
+        match node {
+            HirNode::Goto(label) => details.push(format!("{here} goto={:?}", label)),
+            HirNode::Label(label) => details.push(format!("{here} label={:?}", label)),
+            HirNode::Break => details.push(format!("{here} break")),
+            HirNode::Continue => details.push(format!("{here} continue")),
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                if then_body.is_empty() && else_body.as_ref().is_none_or(Vec::is_empty) {
+                    details.push(format!("{here} empty_if"));
+                }
+                collect_hir_trace_details(then_body, format!("{here}.then"), details);
+                if let Some(else_body) = else_body {
+                    collect_hir_trace_details(else_body, format!("{here}.else"), details);
+                }
+            }
+            HirNode::IfCmp {
+                then_body,
+                else_body,
+                ..
+            } => {
+                if then_body.is_empty() && else_body.as_ref().is_none_or(Vec::is_empty) {
+                    details.push(format!("{here} empty_ifcmp"));
+                }
+                collect_hir_trace_details(then_body, format!("{here}.then"), details);
+                if let Some(else_body) = else_body {
+                    collect_hir_trace_details(else_body, format!("{here}.else"), details);
+                }
+            }
+            HirNode::Block(children) => {
+                collect_hir_trace_details(children, format!("{here}.block"), details);
+            }
+            HirNode::While { body, .. } => {
+                details.push(format!("{here} while body_len={}", body.len()));
+                collect_hir_trace_details(body, format!("{here}.while"), details);
+            }
+            HirNode::DoWhile { body, .. } => {
+                details.push(format!("{here} dowhile body_len={}", body.len()));
+                collect_hir_trace_details(body, format!("{here}.dowhile"), details);
+            }
+            HirNode::For { body, .. } => {
+                details.push(format!("{here} for body_len={}", body.len()));
+                collect_hir_trace_details(body, format!("{here}.for"), details);
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (case_idx, (_, body, _)) in cases.iter().enumerate() {
+                    collect_hir_trace_details(body, format!("{here}.case{case_idx}"), details);
+                }
+                if let Some(default) = default {
+                    collect_hir_trace_details(default, format!("{here}.default"), details);
+                }
+            }
+            HirNode::GuardedIf {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_hir_trace_details(then_body, format!("{here}.guard_then"), details);
+                collect_hir_trace_details(else_body, format!("{here}.guard_else"), details);
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                collect_hir_trace_details(try_body, format!("{here}.try"), details);
+                for (arm_idx, (_, body)) in catch_arms.iter().enumerate() {
+                    collect_hir_trace_details(body, format!("{here}.catch{arm_idx}"), details);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_hir_trace_details(try_body, format!("{here}.try"), details);
+                collect_hir_trace_details(finally_body, format!("{here}.finally"), details);
+            }
+            HirNode::Commented { inner, .. } => {
+                collect_hir_trace_details(
+                    std::slice::from_ref(inner.as_ref()),
+                    format!("{here}.commented"),
+                    details,
+                );
+            }
+            _ => {}
         }
     }
 }
@@ -3497,6 +4432,32 @@ mod tests {
             auth_ptr_slots: Vec::new(),
             wasm_component: None,
         }
+    }
+
+    #[test]
+    fn rebase_instruction_uniques_keeps_lifted_instruction_temps_disjoint() {
+        let mut first = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0, 4),
+            smallvec![Varnode::unique(1, 4), Varnode::constant(1, 4)],
+            0x1000,
+        )];
+        let mut second = vec![IrInsn::with_output(
+            IrOp::IntSub,
+            Varnode::unique(0, 4),
+            smallvec![Varnode::unique(1, 4), Varnode::constant(1, 4)],
+            0x1004,
+        )];
+
+        let span = rebase_instruction_uniques(&mut first, 0);
+        assert_eq!(span, 2);
+        let second_span = rebase_instruction_uniques(&mut second, span);
+
+        assert_eq!(second_span, 2);
+        assert_eq!(first[0].output.unwrap().offset, 0);
+        assert_eq!(first[0].inputs[0].offset, 1);
+        assert_eq!(second[0].output.unwrap().offset, 2);
+        assert_eq!(second[0].inputs[0].offset, 3);
     }
 
     #[test]
@@ -3835,6 +4796,37 @@ mod tests {
     }
 
     #[test]
+    fn test_macho_function_starts_win_over_header_symbol() {
+        let base: u64 = 0x1_0000_8000;
+        let mut image = make_text_image(vec![0; 0x80], base);
+        image.arch = ArchId::AArch64;
+        image.sections[0].name = "__text".to_string();
+        image.entry = 0x1_0000_0000;
+        image.function_starts = vec![base, base + 0x20, base + 0x40];
+        image.symbols.insert(
+            image.entry,
+            unlace_loader::Symbol {
+                name: "__mh_execute_header".into(),
+                addr: image.entry,
+                size: 0,
+                kind: SymbolKind::Function,
+            },
+        );
+
+        let result = discover_functions(&image, None).expect("discover");
+        let addrs: Vec<u64> = result.iter().map(|func| func.addr).collect();
+        assert_eq!(
+            addrs,
+            vec![base, base + 0x20, base + 0x40],
+            "Mach-O LC_FUNCTION_STARTS should drive real text discovery, not the header symbol"
+        );
+        assert!(
+            result.iter().all(|func| func.size > 0),
+            "function-start entries should receive inferred sizes: {result:?}",
+        );
+    }
+
+    #[test]
     fn test_aarch64_function_prune_rejects_unaligned_entries() {
         let base: u64 = 0x1000;
         let mut image = make_text_image(vec![0; 0x40], base);
@@ -3873,6 +4865,53 @@ mod tests {
         assert!(is_padding_tail(ArchId::X86_64, &[0xcc, 0x90, 0x00]));
         assert!(!is_padding_tail(ArchId::Arc, &[0, 0x22]));
         assert!(!is_padding_tail(ArchId::X86_64, &[0xcc, 0x48]));
+        assert!(is_padding_prefix(ArchId::X86_64, &[0xcc, 0x48]));
+        assert!(!is_padding_prefix(ArchId::X86_64, &[0x48, 0xcc]));
+    }
+
+    #[test]
+    fn test_lift_continues_after_internal_branch_over_alignment_nops() {
+        let base = 0x1000;
+        let mut code = vec![0xeb, 0x0b];
+        code.extend_from_slice(&[0x90; 11]);
+        code.push(0xc3);
+
+        let lifter = unlace_lift::X86Lifter::new();
+        let records = lift_instructions(&lifter, &code, base).expect("lift");
+        let addrs: BTreeSet<u64> = records.iter().map(|rec| rec.addr).collect();
+
+        assert!(
+            addrs.contains(&(base + 0x0d)),
+            "internal branch over padding must not truncate the function: {addrs:?}",
+        );
+    }
+
+    #[test]
+    fn test_x86_padding_function_starts_are_pruned() {
+        let base: u64 = 0x1000;
+        let image = make_text_image(vec![0x55, 0x48, 0x89, 0xe5, 0xcc, 0x55], base);
+        let mut funcs = vec![
+            FunctionEntry {
+                name: "real".into(),
+                addr: base,
+                size: 4,
+            },
+            FunctionEntry {
+                name: "padding".into(),
+                addr: base + 4,
+                size: 1,
+            },
+            FunctionEntry {
+                name: "after_padding".into(),
+                addr: base + 5,
+                size: 1,
+            },
+        ];
+
+        prune_padding_function_starts(&image, &mut funcs);
+
+        let addrs: Vec<u64> = funcs.iter().map(|func| func.addr).collect();
+        assert_eq!(addrs, vec![base, base + 5]);
     }
 
     #[test]

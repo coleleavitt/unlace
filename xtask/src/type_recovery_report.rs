@@ -373,6 +373,7 @@ fn scoreable_functions(dwarf: &DwarfInfo) -> Vec<&FunctionDebugInfo> {
 }
 
 fn score_function(function: &FunctionDebugInfo, text: &str, score: &mut TypeScore) {
+    let trace = type_trace_enabled();
     let signature = signature_line(text, &function.name);
     if let Some(return_type) = function.return_type.as_deref() {
         score.return_types.add(
@@ -400,30 +401,64 @@ fn score_function(function: &FunctionDebugInfo, text: &str, score: &mut TypeScor
     }
 
     for local in &function.locals {
-        score.local_names.add(word_contains(text, &local.name));
+        let name_recovered = word_contains(text, &local.name);
+        if trace && !name_recovered {
+            eprintln!(
+                "[type-recovery:miss] function={} local_name={} type={:?} frame_offset={:?}",
+                function.name, local.name, local.type_name, local.frame_offset
+            );
+        }
+        score.local_names.add(name_recovered);
         if let Some(type_name) = local.type_name.as_deref() {
-            score
-                .local_types
-                .add(type_and_name_appear(text, type_name, Some(&local.name)));
+            let type_recovered = type_and_name_appear(text, type_name, Some(&local.name));
+            if trace && !type_recovered {
+                eprintln!(
+                    "[type-recovery:miss] function={} local_type={} name={}",
+                    function.name, type_name, local.name
+                );
+            }
+            score.local_types.add(type_recovered);
         }
     }
 }
 
 fn score_structs(dwarf: &DwarfInfo, output: &str, score: &mut TypeScore) {
+    let trace = type_trace_enabled();
     for strukt in dwarf.structs.values() {
         if strukt.name.is_empty() {
             continue;
         }
-        score.struct_names.add(word_contains(output, &strukt.name));
+        let struct_recovered = word_contains(output, &strukt.name);
+        if trace && !struct_recovered {
+            eprintln!("[type-recovery:miss] struct_name={}", strukt.name);
+        }
+        score.struct_names.add(struct_recovered);
         for field in &strukt.fields {
-            score.field_names.add(field_name_appears(output, field));
-            score.field_types.add(type_and_name_appear(
-                output,
-                &field.type_name,
-                Some(&field.name),
-            ));
+            let field_name_recovered = field_name_appears(output, field);
+            if trace && !field_name_recovered {
+                eprintln!(
+                    "[type-recovery:miss] struct={} field_name={} offset={} type={}",
+                    strukt.name, field.name, field.offset, field.type_name
+                );
+            }
+            score.field_names.add(field_name_recovered);
+            let field_type_recovered =
+                type_and_name_appear(output, &field.type_name, Some(&field.name));
+            if trace && !field_type_recovered {
+                eprintln!(
+                    "[type-recovery:miss] struct={} field_type={} name={}",
+                    strukt.name, field.type_name, field.name
+                );
+            }
+            score.field_types.add(field_type_recovered);
         }
     }
+}
+
+fn type_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_TYPE_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false)
 }
 
 fn signature_line(text: &str, function_name: &str) -> Option<String> {

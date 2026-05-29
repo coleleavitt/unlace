@@ -8,8 +8,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use smallvec::smallvec;
-use unlace_ir::ssa::SsaFunction;
-use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
+use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -17,6 +17,17 @@ use crate::pass::{Pass, PassError};
 const MAX_VARS: usize = 6;
 /// Avoid spending unbounded recursion on malformed or cyclic def-use chains.
 const MAX_EXPR_DEPTH: usize = 128;
+
+fn bool_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_BOOL_TRACE")
+        .or_else(|| std::env::var_os("UNLACE_PASS_TRACE"))
+        .and_then(|v| v.into_string().ok())
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+        })
+        .unwrap_or(false)
+}
 
 /// Boolean simplification pass (Espresso-lite via Quine-McCluskey).
 pub struct BoolSimplifyPass;
@@ -31,23 +42,61 @@ impl Pass for BoolSimplifyPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let def_map = build_def_map(func);
+        let func_name = func.function.name.clone();
         let mut changed = false;
         let mut next_unique = find_max_unique_offset(func) + 8;
+        let old_var_map = &func.var_map;
+        let mut rebuilt_var_map = VarMap::new();
 
-        for block in func.function.blocks.values_mut() {
+        for (&bid, block) in func.function.blocks.iter_mut() {
             let mut new_insns: Vec<IrInsn> = Vec::with_capacity(block.insns.len());
+            let mut def_map = BTreeMap::new();
+            let mut raw_ssa_map = BTreeMap::new();
 
-            for insn in &block.insns {
+            for (old_idx, insn) in block.insns.iter().enumerate() {
+                record_input_ssa(old_var_map, &mut raw_ssa_map, bid, old_idx, insn);
+                record_def(&mut def_map, insn);
+                let new_idx = new_insns.len();
                 if let Some(simplified) = try_simplify(insn, &def_map, &mut next_unique) {
+                    if bool_trace_enabled() {
+                        eprintln!(
+                            "[unlace bool] func={} block={bid:?} old_idx={old_idx} new_idx={} op={:?} output={:?} emitted={}",
+                            func_name,
+                            new_insns.len(),
+                            insn.op,
+                            insn.output,
+                            simplified.len(),
+                        );
+                    }
+                    remap_simplified_var_map(
+                        old_var_map,
+                        &mut raw_ssa_map,
+                        &mut rebuilt_var_map,
+                        bid,
+                        old_idx,
+                        &simplified,
+                        new_insns.len(),
+                    );
                     new_insns.extend(simplified);
                     changed = true;
                 } else {
+                    copy_old_var_map_entries(
+                        old_var_map,
+                        &mut rebuilt_var_map,
+                        bid,
+                        old_idx,
+                        new_idx,
+                    );
                     new_insns.push(insn.clone());
+                    record_output_ssa(old_var_map, &mut raw_ssa_map, bid, old_idx, insn);
                 }
             }
 
             block.insns = new_insns;
+        }
+
+        if changed {
+            func.var_map = rebuilt_var_map;
         }
 
         Ok(changed)
@@ -56,18 +105,12 @@ impl Pass for BoolSimplifyPass {
 
 // ── IR helpers ──────────────────────────────────────────────────────────
 
-fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, IrInsn> {
-    let mut map = BTreeMap::new();
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
-            if let Some(output) = insn.output
-                && output.space != SpaceId::Const
-            {
-                map.insert(output, insn.clone());
-            }
-        }
+fn record_def(map: &mut BTreeMap<Varnode, IrInsn>, insn: &IrInsn) {
+    if let Some(output) = insn.output
+        && output.space != SpaceId::Const
+    {
+        map.insert(output, insn.clone());
     }
-    map
 }
 
 fn find_max_unique_offset(func: &SsaFunction) -> u64 {
@@ -87,6 +130,140 @@ fn find_max_unique_offset(func: &SsaFunction) -> u64 {
         }
     }
     max_offset
+}
+
+fn record_input_ssa(
+    old_var_map: &VarMap,
+    raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>,
+    bid: BlockId,
+    old_idx: usize,
+    insn: &IrInsn,
+) {
+    for (input_idx, raw) in insn.inputs.iter().enumerate() {
+        if raw.space == SpaceId::Const {
+            continue;
+        }
+        if let Some(&sv) = old_var_map.get(&(bid, old_idx, VarnodeSlot::Input(input_idx))) {
+            raw_ssa_map.insert(*raw, sv);
+        }
+    }
+}
+
+fn record_output_ssa(
+    old_var_map: &VarMap,
+    raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>,
+    bid: BlockId,
+    old_idx: usize,
+    insn: &IrInsn,
+) {
+    let Some(output) = insn.output else {
+        return;
+    };
+    if output.space == SpaceId::Const {
+        return;
+    }
+    if let Some(&sv) = old_var_map.get(&(bid, old_idx, VarnodeSlot::Output)) {
+        raw_ssa_map.insert(output, sv);
+    }
+}
+
+fn record_generated_output_ssa(
+    old_var_map: &VarMap,
+    raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>,
+    bid: BlockId,
+    old_idx: usize,
+    insn: &IrInsn,
+) {
+    let Some(output) = insn.output else {
+        return;
+    };
+    if output.space == SpaceId::Const {
+        return;
+    }
+    let sv = if let Some(&old_sv) = old_var_map.get(&(bid, old_idx, VarnodeSlot::Output))
+        && old_sv.base == output
+    {
+        old_sv
+    } else {
+        SsaVarnode {
+            base: output,
+            version: 0,
+        }
+    };
+    raw_ssa_map.insert(output, sv);
+}
+
+fn copy_old_var_map_entries(
+    old_var_map: &VarMap,
+    rebuilt_var_map: &mut VarMap,
+    bid: BlockId,
+    old_idx: usize,
+    new_idx: usize,
+) {
+    let start = (bid, old_idx, VarnodeSlot::Output);
+    let end = (bid, old_idx, VarnodeSlot::Input(usize::MAX));
+    for ((_b, _i, slot), &sv) in old_var_map.range(start..=end) {
+        rebuilt_var_map.insert((bid, new_idx, slot.clone()), sv);
+    }
+}
+
+fn remap_simplified_var_map(
+    old_var_map: &VarMap,
+    raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>,
+    rebuilt_var_map: &mut VarMap,
+    bid: BlockId,
+    old_idx: usize,
+    simplified: &[IrInsn],
+    first_new_idx: usize,
+) {
+    for (offset, insn) in simplified.iter().enumerate() {
+        let new_idx = first_new_idx + offset;
+        map_generated_insn_var_map(
+            old_var_map,
+            raw_ssa_map,
+            rebuilt_var_map,
+            bid,
+            old_idx,
+            new_idx,
+            insn,
+        );
+        record_generated_output_ssa(old_var_map, raw_ssa_map, bid, old_idx, insn);
+    }
+}
+
+fn map_generated_insn_var_map(
+    old_var_map: &VarMap,
+    raw_ssa_map: &BTreeMap<Varnode, SsaVarnode>,
+    rebuilt_var_map: &mut VarMap,
+    bid: BlockId,
+    old_idx: usize,
+    new_idx: usize,
+    insn: &IrInsn,
+) {
+    if let Some(output) = insn.output
+        && output.space != SpaceId::Const
+    {
+        let sv = if let Some(&old_sv) = old_var_map.get(&(bid, old_idx, VarnodeSlot::Output))
+            && old_sv.base == output
+        {
+            old_sv
+        } else {
+            SsaVarnode {
+                base: output,
+                version: 0,
+            }
+        };
+        rebuilt_var_map.insert((bid, new_idx, VarnodeSlot::Output), sv);
+    }
+
+    for (input_idx, raw) in insn.inputs.iter().enumerate() {
+        if raw.space == SpaceId::Const {
+            continue;
+        }
+        if let Some(&sv) = raw_ssa_map.get(raw) {
+            rebuilt_var_map.insert((bid, new_idx, VarnodeSlot::Input(input_idx)), sv);
+        }
+    }
 }
 
 // ── Expression tree extraction ──────────────────────────────────────────
@@ -115,6 +292,14 @@ impl BoolExpr {
             BoolExpr::Var(_) => 0,
             BoolExpr::Not(e) => 1 + e.depth(),
             BoolExpr::And(a, b) | BoolExpr::Or(a, b) => 1 + a.depth().max(b.depth()),
+        }
+    }
+
+    fn op_count(&self) -> usize {
+        match self {
+            BoolExpr::Var(_) => 0,
+            BoolExpr::Not(e) => 1 + e.op_count(),
+            BoolExpr::And(a, b) | BoolExpr::Or(a, b) => 1 + a.op_count() + b.op_count(),
         }
     }
 }
@@ -542,6 +727,9 @@ fn try_simplify(
 
     // Build simplified IR
     let result = build_sop_ir(&implicants, &vars, output, insn.addr, next_unique);
+    if result.len() >= expr.op_count() {
+        return None;
+    }
     Some(result)
 }
 
@@ -632,6 +820,93 @@ mod tests {
             .unwrap();
         assert_eq!(result_insn.op, IrOp::Copy);
         assert_eq!(result_insn.inputs[0], a);
+    }
+
+    #[test]
+    fn does_not_rewrite_single_product_normal_form() {
+        let a = Varnode::reg(0, 1);
+        let b = Varnode::reg(8, 1);
+        let not_b = Varnode::unique(0, 1);
+        let result = Varnode::unique(8, 1);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::BoolNegate, not_b, smallvec![b], 0x1000),
+            IrInsn::with_output(IrOp::BoolAnd, result, smallvec![a, not_b], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let changed = BoolSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        assert!(!changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result_insn = block
+            .insns
+            .iter()
+            .find(|i| i.output == Some(result))
+            .unwrap();
+        assert_eq!(result_insn.op, IrOp::BoolAnd);
+        assert_eq!(result_insn.inputs.as_slice(), &[a, not_b]);
+    }
+
+    #[test]
+    fn preserves_var_map_when_rewrite_expands_and_shifts_branch() {
+        let a = Varnode::reg(0, 1);
+        let b = Varnode::reg(8, 1);
+        let not_a = Varnode::unique(0, 1);
+        let not_b = Varnode::unique(8, 1);
+        let not_a_not_b = Varnode::unique(16, 1);
+        let not_a_b = Varnode::unique(24, 1);
+        let ab = Varnode::unique(32, 1);
+        let prefix_or = Varnode::unique(40, 1);
+        let result = Varnode::unique(48, 1);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::BoolNegate, not_a, smallvec![a], 0x1000),
+            IrInsn::with_output(IrOp::BoolNegate, not_b, smallvec![b], 0x1004),
+            IrInsn::with_output(IrOp::BoolAnd, not_a_not_b, smallvec![not_a, not_b], 0x1008),
+            IrInsn::with_output(IrOp::BoolAnd, not_a_b, smallvec![not_a, b], 0x100C),
+            IrInsn::with_output(IrOp::BoolAnd, ab, smallvec![a, b], 0x1010),
+            IrInsn::with_output(
+                IrOp::BoolOr,
+                prefix_or,
+                smallvec![not_a_not_b, not_a_b],
+                0x1014,
+            ),
+            IrInsn::with_output(IrOp::BoolOr, result, smallvec![prefix_or, ab], 0x1018),
+            IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![Varnode::constant(0x2000, 8), result],
+                0x101C,
+            ),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let changed = BoolSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result_idx = block
+            .insns
+            .iter()
+            .position(|i| i.output == Some(result))
+            .expect("result output still exists");
+        let branch_idx = block
+            .insns
+            .iter()
+            .position(|i| i.op == IrOp::Cbranch)
+            .expect("branch still exists");
+        assert!(branch_idx > result_idx);
+
+        let result_sv = *ssa
+            .var_map
+            .get(&(BlockId(0), result_idx, VarnodeSlot::Output))
+            .expect("result output keeps SSA");
+        let branch_cond_sv = *ssa
+            .var_map
+            .get(&(BlockId(0), branch_idx, VarnodeSlot::Input(1)))
+            .expect("branch condition keeps SSA after index shift");
+        assert_eq!(branch_cond_sv, result_sv);
+        assert_eq!(branch_cond_sv.base, result);
     }
 
     #[test]

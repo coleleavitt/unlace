@@ -9,7 +9,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, SsaVarnode};
+use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -61,15 +61,17 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
     let mut defined: BTreeSet<u64> = BTreeSet::new();
     let mut read_before_write: BTreeSet<u64> = BTreeSet::new();
 
-    for insn in &entry_block.insns {
+    for (insn_idx, insn) in entry_block.insns.iter().enumerate() {
         match insn.op {
             IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
             _ => {}
         }
 
-        for inp in &insn.inputs {
-            if inp.space == SpaceId::Register && !defined.contains(&inp.offset) {
-                read_before_write.insert(inp.offset);
+        for (input_idx, inp) in insn.inputs.iter().enumerate() {
+            if let Some((reg, _size)) = input_register(func, entry, insn_idx, input_idx, inp)
+                && !defined.contains(&reg)
+            {
+                read_before_write.insert(reg);
             }
         }
 
@@ -116,14 +118,16 @@ fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
                 }
             }
         }
-        for insn in &block.insns {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
             match insn.op {
                 IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
                 _ => {}
             }
-            for inp in &insn.inputs {
-                if inp.space == SpaceId::Register && !defined_in_block.contains(&inp.offset) {
-                    reads.insert(inp.offset);
+            for (input_idx, inp) in insn.inputs.iter().enumerate() {
+                if let Some((reg, _size)) = input_register(func, *bid, insn_idx, input_idx, inp)
+                    && !defined_in_block.contains(&reg)
+                {
+                    reads.insert(reg);
                 }
             }
             if let Some(output) = insn.output
@@ -134,6 +138,23 @@ fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
         }
     }
     reads
+}
+
+fn input_register(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+    input: &unlace_ir::Varnode,
+) -> Option<(u64, u8)> {
+    if input.space == SpaceId::Register {
+        return Some((input.offset, input.size));
+    }
+    func.var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+        .and_then(|sv| {
+            (sv.base.space == SpaceId::Register).then_some((sv.base.offset, sv.base.size))
+        })
 }
 
 /// Architecture-implied default calling convention. Used as a final fallback
@@ -213,32 +234,13 @@ fn stores_this_pointer(func: &SsaFunction) -> bool {
     false
 }
 
-/// Inspect every `Return` instruction and return the maximum non-zero
-/// constant operand (the bytes the callee pops from the stack). A value of
-/// `0` means no `ret N`-style epilogue was observed.
-///
-/// Small constants are also how SCCP represents `return 0;` / `return 6;`
-/// after the return register has folded away, so they must not be used as
-/// callee-pop evidence.
+/// Inspect every `Return` instruction and return the bytes the callee pops
+/// from the stack. The current IR models `RETURN input[0]` as the source-level
+/// return value register, not the machine `ret imm16` stack-pop immediate, so
+/// folded constants like `return 42;` are not callee-pop evidence.
 fn callee_pop_bytes(func: &SsaFunction) -> u64 {
-    let mut max_pop = 0u64;
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
-            if insn.op != IrOp::Return {
-                continue;
-            }
-            for inp in &insn.inputs {
-                if inp.space == SpaceId::Const
-                    && inp.size > 4
-                    && inp.offset > 0
-                    && inp.offset > max_pop
-                {
-                    max_pop = inp.offset;
-                }
-            }
-        }
-    }
-    max_pop
+    let _ = func;
+    0
 }
 
 fn score_convention(read_before_write: &BTreeSet<u64>) -> CallingConvention {
@@ -413,14 +415,16 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
     let mut defined: BTreeSet<u64> = BTreeSet::new();
     let mut read_before_write: BTreeSet<u64> = BTreeSet::new();
 
-    for insn in &entry_block.insns {
+    for (insn_idx, insn) in entry_block.insns.iter().enumerate() {
         match insn.op {
             IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
             _ => {}
         }
-        for inp in &insn.inputs {
-            if inp.space == SpaceId::Register && !defined.contains(&inp.offset) {
-                read_before_write.insert(inp.offset);
+        for (input_idx, inp) in insn.inputs.iter().enumerate() {
+            if let Some((reg, _size)) = input_register(func, entry, insn_idx, input_idx, inp)
+                && !defined.contains(&reg)
+            {
+                read_before_write.insert(reg);
             }
         }
         if let Some(output) = insn.output
@@ -497,10 +501,10 @@ fn collect_reg_consumer_ops_block(func: &SsaFunction, entry: BlockId) -> BTreeMa
         return BTreeMap::new();
     };
     let mut map: BTreeMap<u64, Vec<IrOp>> = BTreeMap::new();
-    for insn in &block.insns {
-        for inp in &insn.inputs {
-            if inp.space == SpaceId::Register {
-                map.entry(inp.offset).or_default().push(insn.op);
+    for (insn_idx, insn) in block.insns.iter().enumerate() {
+        for (input_idx, inp) in insn.inputs.iter().enumerate() {
+            if let Some((reg, _size)) = input_register(func, entry, insn_idx, input_idx, inp) {
+                map.entry(reg).or_default().push(insn.op);
             }
         }
     }
@@ -510,11 +514,11 @@ fn collect_reg_consumer_ops_block(func: &SsaFunction, entry: BlockId) -> BTreeMa
 /// Collect register→consumer-op mappings across all blocks.
 fn collect_reg_consumer_ops_all(func: &SsaFunction) -> BTreeMap<u64, Vec<IrOp>> {
     let mut map: BTreeMap<u64, Vec<IrOp>> = BTreeMap::new();
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
-            for inp in &insn.inputs {
-                if inp.space == SpaceId::Register {
-                    map.entry(inp.offset).or_default().push(insn.op);
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            for (input_idx, inp) in insn.inputs.iter().enumerate() {
+                if let Some((reg, _size)) = input_register(func, bid, insn_idx, input_idx, inp) {
+                    map.entry(reg).or_default().push(insn.op);
                 }
             }
         }
@@ -530,10 +534,10 @@ fn collect_reg_input_size_set_block(
         return BTreeMap::new();
     };
     let mut map: BTreeMap<u64, BTreeSet<u8>> = BTreeMap::new();
-    for insn in &block.insns {
-        for inp in &insn.inputs {
-            if inp.space == SpaceId::Register {
-                map.entry(inp.offset).or_default().insert(inp.size);
+    for (insn_idx, insn) in block.insns.iter().enumerate() {
+        for (input_idx, inp) in insn.inputs.iter().enumerate() {
+            if let Some((reg, size)) = input_register(func, entry, insn_idx, input_idx, inp) {
+                map.entry(reg).or_default().insert(size);
             }
         }
     }
@@ -542,11 +546,11 @@ fn collect_reg_input_size_set_block(
 
 fn collect_reg_input_size_set_all(func: &SsaFunction) -> BTreeMap<u64, BTreeSet<u8>> {
     let mut map: BTreeMap<u64, BTreeSet<u8>> = BTreeMap::new();
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
-            for inp in &insn.inputs {
-                if inp.space == SpaceId::Register {
-                    map.entry(inp.offset).or_default().insert(inp.size);
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            for (input_idx, inp) in insn.inputs.iter().enumerate() {
+                if let Some((reg, size)) = input_register(func, bid, insn_idx, input_idx, inp) {
+                    map.entry(reg).or_default().insert(size);
                 }
             }
         }
@@ -835,13 +839,18 @@ fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
 
 fn constant_return_type(insn: &unlace_ir::IrInsn) -> Option<PrimitiveType> {
     let ret = insn.inputs.first()?;
-    if ret.space != SpaceId::Const || ret.size > 4 {
+    if ret.space != SpaceId::Const {
+        return None;
+    }
+    if ret.size == 8 && ret.offset == 0 {
         return None;
     }
     Some(match ret.size {
         1 => PrimitiveType::Bool,
         2 => PrimitiveType::Int(2),
         4 => PrimitiveType::Int(4),
+        8 if ret.offset <= u32::MAX as u64 => PrimitiveType::Int(4),
+        8 => PrimitiveType::Int(8),
         _ => PrimitiveType::Int(8),
     })
 }
@@ -1122,6 +1131,23 @@ mod tests {
 
         let mut ssa = build_ssa(func);
         ssa.arch = unlace_ir::ArchId::X86_64;
+        assert_eq!(detect_calling_convention(&ssa), CallingConvention::SystemV);
+    }
+
+    #[test]
+    fn folded_64_bit_return_value_is_not_stdcall_callee_pop_evidence() {
+        let mut func = Function::new("test", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(87, 8)],
+            0x1000,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        ssa.arch = unlace_ir::ArchId::X86_64;
+        assert_eq!(infer_return_type(&ssa), PrimitiveType::Int(4));
         assert_eq!(detect_calling_convention(&ssa), CallingConvention::SystemV);
     }
 

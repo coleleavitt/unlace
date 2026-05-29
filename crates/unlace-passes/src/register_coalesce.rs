@@ -1,9 +1,7 @@
-//! Chaitin-Briggs PHI-operand coalescing.
+//! PHI-operand register/name coalescing.
 //!
-//! Builds an interference graph over SSA varnodes and coalesces each PHI
-//! result with its operands when the Briggs safety test is satisfied
-//! (i.e. the merged node has fewer than `K` neighbours of significant
-//! degree, where `K = NUM_COLOURS`). Coalesced groups are recorded in
+//! Coalesces each PHI result with its operands when their observed SSA
+//! live intervals do not overlap. Coalesced groups are recorded in
 //! [`SsaFunction::merged_names`] so downstream printing emits one C
 //! variable per cluster.
 //!
@@ -12,8 +10,6 @@
 //!   register space NEVER coalesce (rax must not become rbx).
 //! - A live-range overlap (interference edge) blocks coalescing
 //!   unconditionally.
-//! - The Briggs degree test only looks at neighbours with degree ≥ K to
-//!   decide whether the merge would force a spill.
 //!
 //! This pass produces no IR changes; it only fills `merged_names`. Run it
 //! after all SSA-modifying passes.
@@ -25,7 +21,39 @@ use unlace_ir::{BlockId, SpaceId};
 
 use crate::pass::{Pass, PassError};
 
-const NUM_COLOURS: usize = 16;
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .and_then(|v| v.into_string().ok())
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+        })
+        .unwrap_or(false)
+}
+
+fn reg_coalesce_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_REG_COALESCE_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn reg_coalesce_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_REG_COALESCE_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn reg_coalesce_trace_line(line: &str) {
+    if !reg_coalesce_trace_enabled() {
+        return;
+    }
+    if let Some(filter) = reg_coalesce_trace_filter()
+        && !line.contains(&filter)
+    {
+        return;
+    }
+    eprintln!("[unlace reg-coalesce] {line}");
+}
 
 pub struct RegisterCoalescePass;
 
@@ -40,21 +68,38 @@ impl Pass for RegisterCoalescePass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let all_vars = collect_all_ssa_vars(func);
+        reg_coalesce_trace_line(&format!(
+            "start func={} all_vars={} phis={} existing_merged={}",
+            func.function.name,
+            all_vars.len(),
+            func.phi_map.values().map(|phis| phis.len()).sum::<usize>(),
+            func.merged_names.len(),
+        ));
         if all_vars.is_empty() {
+            reg_coalesce_trace_line(&format!("empty func={}", func.function.name));
             return Ok(false);
         }
 
         let live = compute_live_ranges(func, &all_vars);
-        let interference = build_interference(&live);
+        for (sv, interval) in &live.intervals {
+            reg_coalesce_trace_line(&format!(
+                "interval func={} sv={:?} start={} end={}",
+                func.function.name, sv, interval.start, interval.end
+            ));
+        }
 
         let mut uf = UnionFind::new(&all_vars);
 
-        // For each PHI operand pair (result, input), try Briggs-coalesce.
+        // For each PHI operand pair (result, input), try to coalesce just the
+        // candidate pair. Building a full point-live interference graph is
+        // quadratic in the number of SSA temps at every instruction and can
+        // dominate post-interproc refresh on large or partially optimized
+        // functions.
         for phis in func.phi_map.values() {
             for phi in phis {
                 let res = phi.output;
                 for (_pred, input) in &phi.inputs {
-                    try_coalesce_briggs(&mut uf, &interference, res, *input);
+                    try_coalesce_live_intervals(&func.function.name, &mut uf, &live, res, *input);
                 }
             }
         }
@@ -63,40 +108,71 @@ impl Pass for RegisterCoalescePass {
     }
 }
 
-fn try_coalesce_briggs(
+fn try_coalesce_live_intervals(
+    func_name: &str,
     uf: &mut UnionFind,
-    interference: &BTreeMap<SsaVarnode, BTreeSet<SsaVarnode>>,
+    live: &LiveSets,
     a: SsaVarnode,
     b: SsaVarnode,
 ) -> bool {
     if a == b {
+        reg_coalesce_trace_line(&format!(
+            "try func={} a={:?} b={:?} decision=skip-same",
+            func_name, a, b
+        ));
         return false;
     }
     if !same_base_class(a, b) {
+        reg_coalesce_trace_line(&format!(
+            "try func={} a={:?} b={:?} decision=reject-base-class",
+            func_name, a, b
+        ));
         return false;
     }
     let ra = uf.find(a);
     let rb = uf.find(b);
     if ra == rb {
+        reg_coalesce_trace_line(&format!(
+            "try func={} a={:?} b={:?} root={:?} decision=already-merged",
+            func_name, a, b, ra
+        ));
         return false;
     }
 
-    let neigh_a = interference.get(&ra).cloned().unwrap_or_default();
-    let neigh_b = interference.get(&rb).cloned().unwrap_or_default();
-    if neigh_a.contains(&rb) || neigh_b.contains(&ra) {
-        return false;
+    let group_a = uf.members_of(ra).cloned().unwrap_or_else(|| {
+        let mut set = BTreeSet::new();
+        set.insert(ra);
+        set
+    });
+    let group_b = uf.members_of(rb).cloned().unwrap_or_else(|| {
+        let mut set = BTreeSet::new();
+        set.insert(rb);
+        set
+    });
+    for &ga in &group_a {
+        for &gb in &group_b {
+            if !same_base_class(ga, gb) || live.overlaps(ga, gb) {
+                reg_coalesce_trace_line(&format!(
+                    "try func={} a={:?} b={:?} ga={:?} gb={:?} group_a={:?} group_b={:?} decision=reject-interference",
+                    func_name, a, b, ga, gb, group_a, group_b
+                ));
+                return false;
+            }
+        }
     }
-
-    let merged_neighbours: BTreeSet<&SsaVarnode> = neigh_a.iter().chain(neigh_b.iter()).collect();
-    let high_degree = merged_neighbours
-        .iter()
-        .filter(|n| interference.get(n).map(|s| s.len()).unwrap_or(0) >= NUM_COLOURS)
-        .count();
-    if high_degree >= NUM_COLOURS {
+    if group_a.is_empty() || group_b.is_empty() {
+        reg_coalesce_trace_line(&format!(
+            "try func={} a={:?} b={:?} decision=reject-empty-group group_a={:?} group_b={:?}",
+            func_name, a, b, group_a, group_b
+        ));
         return false;
     }
 
     uf.union(ra, rb);
+    reg_coalesce_trace_line(&format!(
+        "try func={} a={:?} b={:?} root_a={:?} root_b={:?} decision=merged group_a={:?} group_b={:?}",
+        func_name, a, b, ra, rb, group_a, group_b
+    ));
     true
 }
 
@@ -131,70 +207,132 @@ fn collect_all_ssa_vars(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
 
 #[derive(Default)]
 struct LiveSets {
-    /// For each block, the set of varnodes live at any point of the block.
-    block_live: BTreeMap<BlockId, BTreeSet<SsaVarnode>>,
-    /// Per-program-point live set (used to build interference precisely
-    /// across one block).
-    point_live: BTreeMap<(BlockId, usize), BTreeSet<SsaVarnode>>,
+    intervals: BTreeMap<SsaVarnode, LiveInterval>,
 }
 
 fn compute_live_ranges(func: &SsaFunction, _all_vars: &BTreeSet<SsaVarnode>) -> LiveSets {
     let mut sets = LiveSets::default();
+    let mut block_bounds: BTreeMap<BlockId, (u64, u64)> = BTreeMap::new();
+    let mut point = 0u64;
+
     for (&bid, block) in &func.function.blocks {
-        let mut live: BTreeSet<SsaVarnode> = BTreeSet::new();
+        let block_start = point;
+        reg_coalesce_trace_line(&format!(
+            "block-start func={} block={:?} point={} insns={}",
+            func.function.name,
+            bid,
+            block_start,
+            block.insns.len(),
+        ));
         if let Some(phis) = func.phi_map.get(&bid) {
             for phi in phis {
-                live.insert(phi.output);
+                sets.touch(phi.output, block_start);
+                reg_coalesce_trace_line(&format!(
+                    "touch-phi-output func={} block={:?} point={} output={:?}",
+                    func.function.name, bid, block_start, phi.output
+                ));
             }
         }
         for (idx, insn) in block.insns.iter().enumerate() {
+            point = point.saturating_add(1);
             for i in 0..insn.inputs.len() {
                 if let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(i))) {
-                    live.insert(sv);
+                    sets.touch(sv, point);
+                    reg_coalesce_trace_line(&format!(
+                        "touch-input func={} block={:?} insn={} addr=0x{:x} op={:?} idx={} point={} sv={:?}",
+                        func.function.name, bid, idx, insn.addr, insn.op, i, point, sv
+                    ));
                 }
             }
             if let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Output)) {
-                live.insert(sv);
+                sets.touch(sv, point);
+                reg_coalesce_trace_line(&format!(
+                    "touch-output func={} block={:?} insn={} addr=0x{:x} op={:?} point={} sv={:?}",
+                    func.function.name, bid, idx, insn.addr, insn.op, point, sv
+                ));
             }
-            sets.point_live.insert((bid, idx), live.clone());
         }
-        sets.block_live.insert(bid, live);
+        block_bounds.insert(bid, (block_start, point));
+        reg_coalesce_trace_line(&format!(
+            "block-end func={} block={:?} start={} end={}",
+            func.function.name, bid, block_start, point
+        ));
+        point = point.saturating_add(1);
     }
+
+    for (&bid, phis) in &func.phi_map {
+        let phi_point = block_bounds
+            .get(&bid)
+            .map(|(start, _end)| *start)
+            .unwrap_or(point);
+        for phi in phis {
+            sets.touch(phi.output, phi_point);
+            for (pred, input) in &phi.inputs {
+                let input_point = block_bounds
+                    .get(pred)
+                    .map(|(_start, end)| *end)
+                    .unwrap_or(phi_point);
+                sets.touch(*input, input_point);
+                reg_coalesce_trace_line(&format!(
+                    "touch-phi-edge func={} pred={:?} succ={:?} input_point={} phi_point={} input={:?} output={:?}",
+                    func.function.name, pred, bid, input_point, phi_point, input, phi.output
+                ));
+            }
+        }
+    }
+
     sets
 }
 
-fn build_interference(live: &LiveSets) -> BTreeMap<SsaVarnode, BTreeSet<SsaVarnode>> {
-    let mut g: BTreeMap<SsaVarnode, BTreeSet<SsaVarnode>> = BTreeMap::new();
-    for set in live.point_live.values() {
-        let vec: Vec<SsaVarnode> = set.iter().copied().collect();
-        for (i, &a) in vec.iter().enumerate() {
-            for &b in &vec[i + 1..] {
-                if a == b {
-                    continue;
-                }
-                if a.base == b.base && a.version == b.version {
-                    continue;
-                }
-                g.entry(a).or_default().insert(b);
-                g.entry(b).or_default().insert(a);
-            }
-        }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LiveInterval {
+    start: u64,
+    end: u64,
+}
+
+impl LiveSets {
+    fn touch(&mut self, var: SsaVarnode, point: u64) {
+        self.intervals
+            .entry(var)
+            .and_modify(|range| {
+                range.start = range.start.min(point);
+                range.end = range.end.max(point);
+            })
+            .or_insert(LiveInterval {
+                start: point,
+                end: point,
+            });
     }
-    g
+
+    fn overlaps(&self, a: SsaVarnode, b: SsaVarnode) -> bool {
+        let Some(a) = self.intervals.get(&a) else {
+            return false;
+        };
+        let Some(b) = self.intervals.get(&b) else {
+            return false;
+        };
+        a.start <= b.end && b.start <= a.end
+    }
 }
 
 struct UnionFind {
     parent: BTreeMap<SsaVarnode, SsaVarnode>,
+    members: BTreeMap<SsaVarnode, BTreeSet<SsaVarnode>>,
 }
 
 impl UnionFind {
     fn new(vs: &BTreeSet<SsaVarnode>) -> Self {
         let mut parent = BTreeMap::new();
+        let mut members = BTreeMap::new();
         for &v in vs {
             parent.insert(v, v);
+            let mut set = BTreeSet::new();
+            set.insert(v);
+            members.insert(v, set);
         }
-        Self { parent }
+        Self { parent, members }
     }
+
     fn find(&mut self, v: SsaVarnode) -> SsaVarnode {
         let p = self.parent.get(&v).copied().unwrap_or(v);
         if p == v {
@@ -204,11 +342,22 @@ impl UnionFind {
         self.parent.insert(v, r);
         r
     }
+
+    fn members_of(&self, root: SsaVarnode) -> Option<&BTreeSet<SsaVarnode>> {
+        self.members.get(&root)
+    }
+
     fn union(&mut self, a: SsaVarnode, b: SsaVarnode) {
         let ra = self.find(a);
         let rb = self.find(b);
         if ra != rb {
             self.parent.insert(ra, rb);
+            let moved = self.members.remove(&ra).unwrap_or_else(|| {
+                let mut set = BTreeSet::new();
+                set.insert(ra);
+                set
+            });
+            self.members.entry(rb).or_default().extend(moved);
         }
     }
 }
@@ -224,8 +373,18 @@ fn emit_merged_names(
         let r = uf.find(v);
         groups.entry(r).or_default().push(v);
     }
+    for (root, group) in &groups {
+        reg_coalesce_trace_line(&format!(
+            "group func={} root={:?} members={:?}",
+            func.function.name, root, group
+        ));
+    }
     let multi_groups: Vec<&Vec<SsaVarnode>> = groups.values().filter(|g| g.len() > 1).collect();
     if multi_groups.is_empty() {
+        reg_coalesce_trace_line(&format!(
+            "emit func={} multi_groups=0 changed=false",
+            func.function.name
+        ));
         return Ok(false);
     }
     let mut name_idx = 0usize;
@@ -234,20 +393,61 @@ fn emit_merged_names(
         if group.len() <= 1 {
             continue;
         }
-        let name = format!("c{}", name_idx);
-        name_idx += 1;
+        let name = match existing_group_name(func, group) {
+            Some(name) => {
+                reg_coalesce_trace_line(&format!(
+                    "reuse-name func={} group={:?} name={}",
+                    func.function.name, group, name
+                ));
+                name
+            }
+            None => {
+                let name = format!("c{}", name_idx);
+                name_idx += 1;
+                name
+            }
+        };
         for &v in group {
             new_names.insert(v, name.clone());
+            reg_coalesce_trace_line(&format!(
+                "name func={} sv={:?} name={}",
+                func.function.name, v, name
+            ));
         }
     }
-    let changed = new_names != func.merged_names || !func.merged_names.is_empty();
-    func.merged_names.extend(new_names);
+    let mut merged = func.merged_names.clone();
+    merged.extend(new_names);
+    let changed = merged != func.merged_names;
+    func.merged_names = merged;
+    reg_coalesce_trace_line(&format!(
+        "emit func={} changed={} merged_names={}",
+        func.function.name,
+        changed,
+        func.merged_names.len()
+    ));
     Ok(changed)
+}
+
+fn existing_group_name(func: &SsaFunction, group: &[SsaVarnode]) -> Option<String> {
+    let mut names: Vec<String> = group
+        .iter()
+        .filter_map(|sv| func.merged_names.get(sv).cloned())
+        .collect();
+    names.sort();
+    names.dedup();
+    if names.len() > 1 {
+        reg_coalesce_trace_line(&format!(
+            "reuse-name-conflict func={} group={:?} names={:?} chosen={}",
+            func.function.name, group, names, names[0]
+        ));
+    }
+    names.into_iter().next()
 }
 
 fn clone_uf(uf: &UnionFind) -> UnionFind {
     UnionFind {
         parent: uf.parent.clone(),
+        members: uf.members.clone(),
     }
 }
 
@@ -456,6 +656,92 @@ mod tests {
         assert!(n_ua.is_some() && n_ua == n_ub && n_ub == n_phi);
     }
 
+    #[test]
+    fn test_phi_coalesce_preserves_existing_variable_merge_name() {
+        let ua = SsaVarnode {
+            base: Varnode::unique(0, 8),
+            version: 0,
+        };
+        let ub = SsaVarnode {
+            base: Varnode::unique(8, 8),
+            version: 0,
+        };
+        let uphi = SsaVarnode {
+            base: Varnode::unique(16, 8),
+            version: 0,
+        };
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![c1, c1],
+            0x1000,
+        ));
+        b0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ua.base,
+            smallvec![c1],
+            0x1010,
+        ));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1014));
+        b1.successors = smallvec![BlockId(3)];
+
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ub.base,
+            smallvec![c2],
+            0x1020,
+        ));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1024));
+        b2.successors = smallvec![BlockId(3)];
+
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![uphi.base],
+            0x1030,
+        ));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(1), 0, VarnodeSlot::Output), ua);
+        var_map.insert((BlockId(2), 0, VarnodeSlot::Output), ub);
+        var_map.insert((BlockId(3), 0, VarnodeSlot::Input(0)), uphi);
+
+        let phi = PhiNode {
+            output: uphi,
+            inputs: vec![(BlockId(1), ua), (BlockId(2), ub)],
+        };
+        let mut phi_map = BTreeMap::new();
+        phi_map.insert(BlockId(3), vec![phi]);
+
+        let mut ssa = make_ssa(vec![b0, b1, b2, b3], var_map, phi_map);
+        ssa.merged_names.insert(ua, "loop_idx".to_string());
+        ssa.merged_names.insert(ub, "loop_idx".to_string());
+
+        let changed = RegisterCoalescePass.run(&mut ssa).expect("ok");
+        assert!(changed);
+        assert_eq!(
+            ssa.merged_names.get(&ua).map(String::as_str),
+            Some("loop_idx")
+        );
+        assert_eq!(
+            ssa.merged_names.get(&ub).map(String::as_str),
+            Some("loop_idx")
+        );
+        assert_eq!(
+            ssa.merged_names.get(&uphi).map(String::as_str),
+            Some("loop_idx")
+        );
+    }
+
     /// Two distinct architectural registers must NOT be coalesced even
     /// when their live ranges happen not to overlap.
     #[test]
@@ -531,5 +817,66 @@ mod tests {
         if let (Some(a), Some(b)) = (n_rax, n_rbx) {
             assert_ne!(a, b, "rax and rbx must remain in different colour classes");
         }
+    }
+
+    #[test]
+    fn test_phi_coalescing_ignores_unrelated_temp_volume() {
+        let ua = SsaVarnode {
+            base: Varnode::unique(0x10_000, 8),
+            version: 0,
+        };
+        let uphi = SsaVarnode {
+            base: Varnode::unique(0x10_008, 8),
+            version: 0,
+        };
+        let c1 = Varnode::constant(1, 8);
+
+        let mut b0 = BasicBlock::new(BlockId(0));
+        let mut var_map = VarMap::new();
+        for idx in 0..512usize {
+            let sv = SsaVarnode {
+                base: Varnode::unique((idx as u64) * 8, 8),
+                version: 0,
+            };
+            b0.insns.push(IrInsn::with_output(
+                IrOp::Copy,
+                sv.base,
+                smallvec![c1],
+                0x1000 + idx as u64,
+            ));
+            var_map.insert((BlockId(0), idx, VarnodeSlot::Output), sv);
+        }
+        b0.successors = smallvec![BlockId(1)];
+
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ua.base,
+            smallvec![c1],
+            0x2000,
+        ));
+        b1.successors = smallvec![BlockId(2)];
+
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![uphi.base],
+            0x3000,
+        ));
+
+        var_map.insert((BlockId(1), 0, VarnodeSlot::Output), ua);
+        var_map.insert((BlockId(2), 0, VarnodeSlot::Input(0)), uphi);
+
+        let phi = PhiNode {
+            output: uphi,
+            inputs: vec![(BlockId(1), ua)],
+        };
+        let mut phi_map = BTreeMap::new();
+        phi_map.insert(BlockId(2), vec![phi]);
+
+        let mut ssa = make_ssa(vec![b0, b1, b2], var_map, phi_map);
+        let changed = RegisterCoalescePass.run(&mut ssa).expect("ok");
+        assert!(changed);
+        assert_eq!(ssa.merged_names.get(&ua), ssa.merged_names.get(&uphi));
     }
 }

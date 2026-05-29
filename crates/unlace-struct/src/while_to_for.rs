@@ -10,11 +10,11 @@ use crate::hir::{HirFunction, HirNode};
 /// Recover `for` loops from adjacent init/while/update statements.
 pub fn while_to_for(func: &mut HirFunction) {
     let defs = collect_defs(&func.body);
-    let mut fallback_budget = if func.name == "main" || func.name.starts_with("f_") {
-        4
-    } else {
-        0
-    };
+    // Only promote loops when we can prove a real counter/update
+    // relationship.  The old condition-only fallback turned arbitrary
+    // `while (cond)` regions into `for (; cond; synthetic_update)` and
+    // produced undefined C when `cond` was computed inside the loop header.
+    let mut fallback_budget = 0;
     promote_scope(&mut func.body, &defs, &mut fallback_budget);
 }
 
@@ -718,5 +718,29 @@ mod tests {
             }
             other => panic!("expected For, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn does_not_promote_condition_only_without_real_update() {
+        let cond = Varnode::unique(0x100, 1);
+        let tmp = Varnode::unique(0x200, 4);
+        let body_stmt =
+            IrInsn::with_output(IrOp::Copy, tmp, smallvec![Varnode::constant(1, 4)], 0x1008);
+
+        let mut hir = func(vec![HirNode::While {
+            cond: SsaVarnode {
+                base: cond,
+                version: 0,
+            },
+            body: vec![HirNode::Statement(body_stmt)],
+        }]);
+
+        while_to_for(&mut hir);
+
+        assert!(
+            matches!(hir.body[0], HirNode::While { .. }),
+            "unproven condition-only loop must stay while: {:#?}",
+            hir.body
+        );
     }
 }

@@ -62,6 +62,16 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     let def_map = build_def_map(func);
     let mut resolve_cache: ResolveCache = BTreeMap::new();
     let mut ssa_resolve_cache: SsaResolveCache = BTreeMap::new();
+    stack_frame_trace_line(
+        func,
+        format_args!(
+            "start arch={:?} frame_setup_insns={} stack_offset_hints={} stack_accesses={}",
+            func.arch,
+            func.frame_setup_insns.len(),
+            func.stack_offset_hints.len(),
+            func.stack_accesses.len()
+        ),
+    );
 
     // First pass: collect every (offset, width) observation.
     // BTreeMap keeps offsets sorted for the later fusion sweep.
@@ -76,6 +86,13 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             if func.frame_setup_insns.contains(&(bid, insn_idx)) {
+                stack_frame_trace_line(
+                    func,
+                    format_args!(
+                        "skip-frame-setup bid={:?} idx={} op={:?} addr={:#x}",
+                        bid, insn_idx, insn.op, insn.addr
+                    ),
+                );
                 continue;
             }
             match insn.op {
@@ -95,7 +112,25 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                         let width = insn.inputs[2].size;
                         if width > 0 {
                             record(offset, width, &mut observations);
+                            stack_frame_trace_line(
+                                func,
+                                format_args!(
+                                    "record-store bid={:?} idx={} addr={:#x} offset={} width={} value={:?}",
+                                    bid, insn_idx, insn.addr, offset, width, insn.inputs[2]
+                                ),
+                            );
                         }
+                    } else {
+                        stack_frame_trace_line(
+                            func,
+                            format_args!(
+                                "unresolved-store bid={:?} idx={} addr={:#x} addr_vn={:?}",
+                                bid,
+                                insn_idx,
+                                insn.addr,
+                                insn.inputs.get(1)
+                            ),
+                        );
                     }
                 }
                 IrOp::Load => {
@@ -114,7 +149,25 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                         let width = insn.output.map(|o| o.size).unwrap_or(0);
                         if width > 0 {
                             record(offset, width, &mut observations);
+                            stack_frame_trace_line(
+                                func,
+                                format_args!(
+                                    "record-load bid={:?} idx={} addr={:#x} offset={} width={} out={:?}",
+                                    bid, insn_idx, insn.addr, offset, width, insn.output
+                                ),
+                            );
                         }
+                    } else {
+                        stack_frame_trace_line(
+                            func,
+                            format_args!(
+                                "unresolved-load bid={:?} idx={} addr={:#x} addr_vn={:?}",
+                                bid,
+                                insn_idx,
+                                insn.addr,
+                                insn.inputs.get(1)
+                            ),
+                        );
                     }
                 }
                 _ => {}
@@ -127,13 +180,33 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                 && out.size > 0
             {
                 record(out.offset as i64, out.size, &mut observations);
+                stack_frame_trace_line(
+                    func,
+                    format_args!(
+                        "record-direct-stack-output bid={:?} idx={} offset={} width={}",
+                        bid, insn_idx, out.offset as i64, out.size
+                    ),
+                );
             }
             for inp in &insn.inputs {
                 if inp.space == SpaceId::Stack && inp.size > 0 {
                     record(inp.offset as i64, inp.size, &mut observations);
+                    stack_frame_trace_line(
+                        func,
+                        format_args!(
+                            "record-direct-stack-input bid={:?} idx={} offset={} width={}",
+                            bid, insn_idx, inp.offset as i64, inp.size
+                        ),
+                    );
                 }
             }
         }
+    }
+    for (offset, widths) in &observations {
+        stack_frame_trace_line(
+            func,
+            format_args!("observed offset={} widths={:?}", offset, widths),
+        );
     }
 
     // Second pass: fusion sweep.  Walk offsets in ascending order; whenever
@@ -158,10 +231,24 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                     }
                 }
                 prev.size = prev.size.max(max_w as u64);
+                stack_frame_trace_line(
+                    func,
+                    format_args!(
+                        "fuse-partial offset={} into={} prev_size={} widths={:?}",
+                        offset, prev_off, prev.size, prev.access_widths
+                    ),
+                );
                 continue;
             }
         }
 
+        stack_frame_trace_line(
+            func,
+            format_args!(
+                "insert-local offset={} size={} widths={:?}",
+                offset, max_w, widths
+            ),
+        );
         locals.insert(
             offset,
             StackLocal {
@@ -180,6 +267,13 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     // The surviving slot keeps every observed access width.
     let array_groups = detect_arrays(&locals);
     for (start, span, widths) in array_groups {
+        stack_frame_trace_line(
+            func,
+            format_args!(
+                "array-group start={} span={} widths={:?}",
+                start, span, widths
+            ),
+        );
         // Remove fused tail slots; keep the head.
         let to_remove: Vec<i64> = locals
             .range((start + (widths[0] as i64))..(start + span as i64))
@@ -230,6 +324,22 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     }
 
     classify_slot_kinds(func, &spec, &mut locals);
+    for (&offset, local) in &locals {
+        stack_frame_trace_line(
+            func,
+            format_args!(
+                "final-local offset={} size={} widths={:?} kind={:?}",
+                offset, local.size, local.access_widths, local.kind
+            ),
+        );
+    }
+    stack_frame_trace_line(
+        func,
+        format_args!(
+            "done frame_size={} min={} max={}",
+            frame_size, min_neg_offset, max_pos_offset
+        ),
+    );
 
     StackFrame {
         locals,
@@ -349,6 +459,38 @@ fn detect_arrays(locals: &BTreeMap<i64, StackLocal>) -> Vec<(i64, u64, Vec<u8>)>
     out
 }
 
+fn stack_frame_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
+    if !stack_frame_trace_enabled() {
+        return;
+    }
+    if let Some(filter) = stack_frame_trace_filter()
+        && !func.function.name.contains(&filter)
+    {
+        return;
+    }
+    eprintln!("[unlace stack-frame] func={} {message}", func.function.name);
+}
+
+fn stack_frame_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_STACK_FRAME_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn stack_frame_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_STACK_FRAME_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .filter(|s| !s.is_empty())
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .map(|value| {
+            let value = value.to_string_lossy();
+            !matches!(value.as_ref(), "" | "0" | "false" | "FALSE" | "off" | "OFF")
+        })
+        .unwrap_or(false)
+}
+
 /// Build a map from defined varnode → list of definition sites.
 ///
 /// Mirrors [`crate::stack_vars::build_def_map`] but kept local so this
@@ -374,10 +516,41 @@ fn extract_stack_offset(
     ssa_resolve_cache: &mut SsaResolveCache,
     spec: &StackSpec,
 ) -> Option<i64> {
-    if let Some(&offset) = func.stack_offset_hints.get(&site) {
-        return Some(offset);
+    let hint = func.stack_offset_hints.get(&site).copied();
+    let fresh = extract_stack_offset_fresh(
+        site,
+        insn,
+        func,
+        def_map,
+        resolve_cache,
+        ssa_resolve_cache,
+        spec,
+    );
+
+    if let (Some(fresh), Some(hint)) = (fresh, hint)
+        && fresh != hint
+    {
+        stack_frame_trace_line(
+            func,
+            format_args!(
+                "stale-hint site={:?} addr={:#x} fresh={} hint={}",
+                site, insn.addr, fresh, hint
+            ),
+        );
     }
 
+    fresh.or(hint)
+}
+
+fn extract_stack_offset_fresh(
+    site: (BlockId, usize),
+    insn: &IrInsn,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+    ssa_resolve_cache: &mut SsaResolveCache,
+    spec: &StackSpec,
+) -> Option<i64> {
     let addr = &insn.inputs[1];
 
     if addr.space == SpaceId::Stack {
@@ -748,6 +921,30 @@ mod tests {
         assert_eq!(local.offset, -0x20);
         assert_eq!(local.size, 4);
         assert_eq!(local.access_widths, vec![4]);
+    }
+
+    #[test]
+    fn t209_fresh_stack_offset_beats_stale_snapshot_hint() {
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(0, 16);
+        let c16 = Varnode::constant(16, 8);
+        let ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, u0, smallvec![rsp(), c16], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, val], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.stack_offset_hints.insert((BlockId(0), 1), 72);
+        let frame = recover_stack_frame(&ssa);
+
+        assert!(
+            frame.locals.contains_key(&16),
+            "freshly recovered offset should win over stale hint, got {:?}",
+            frame.locals.keys().collect::<Vec<_>>()
+        );
+        assert!(!frame.locals.contains_key(&72));
     }
 
     /// Test 2: pair of locals at -8 and -16.  Distinct slots, both 8-byte

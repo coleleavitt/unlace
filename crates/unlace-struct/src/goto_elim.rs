@@ -7,10 +7,134 @@ use crate::hir::{HirFunction, HirNode, LabelId};
 /// Remove redundant forward gotos and convert fake `while { break; }` regions
 /// into `if` statements.
 pub fn eliminate_forward_gotos(func: &mut HirFunction) {
+    trace_goto_stage("entry", &func.body);
     cleanup_scope(&mut func.body);
+    trace_goto_stage("after-cleanup1", &func.body);
     remove_forward_gotos(&mut func.body);
+    trace_goto_stage("after-remove-forward", &func.body);
     cleanup_scope(&mut func.body);
+    trace_goto_stage("after-cleanup2", &func.body);
     strip_unused_labels(&mut func.body);
+    trace_goto_stage("after-strip-labels", &func.body);
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+struct HirStats {
+    nodes: usize,
+    calls: usize,
+    returns: usize,
+    gotos: usize,
+    labels: usize,
+}
+
+fn goto_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_GOTO_ELIM_TRACE").is_some()
+}
+
+fn trace_goto_stage(stage: &str, nodes: &[HirNode]) {
+    if !goto_trace_enabled() {
+        return;
+    }
+    let stats = hir_stats(nodes);
+    eprintln!(
+        "[unlace-goto-elim] stage={stage} nodes={} calls={} returns={} gotos={} labels={}",
+        stats.nodes, stats.calls, stats.returns, stats.gotos, stats.labels
+    );
+}
+
+fn trace_removed_unreachable(index: usize, removed: &[HirNode]) {
+    if !goto_trace_enabled() {
+        return;
+    }
+    let stats = hir_stats(removed);
+    if stats.calls == 0 && stats.returns == 0 && stats.labels == 0 {
+        return;
+    }
+    eprintln!(
+        "[unlace-goto-elim] truncate-after-terminal index={index} removed_nodes={} calls={} returns={} gotos={} labels={}",
+        stats.nodes, stats.calls, stats.returns, stats.gotos, stats.labels
+    );
+}
+
+fn hir_stats(nodes: &[HirNode]) -> HirStats {
+    let mut stats = HirStats::default();
+    for node in nodes {
+        add_hir_stats(node, &mut stats);
+    }
+    stats
+}
+
+fn add_hir_stats(node: &HirNode, stats: &mut HirStats) {
+    stats.nodes += 1;
+    match node {
+        HirNode::Statement(insn) => {
+            if insn.op == unlace_ir::IrOp::Call {
+                stats.calls += 1;
+            }
+        }
+        HirNode::Return(_) => stats.returns += 1,
+        HirNode::Goto(_) => stats.gotos += 1,
+        HirNode::Label(_) => stats.labels += 1,
+        HirNode::Block(children)
+        | HirNode::While { body: children, .. }
+        | HirNode::DoWhile { body: children, .. }
+        | HirNode::For { body: children, .. } => {
+            for child in children {
+                add_hir_stats(child, stats);
+            }
+        }
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            for child in then_body {
+                add_hir_stats(child, stats);
+            }
+            if let Some(else_body) = else_body {
+                for child in else_body {
+                    add_hir_stats(child, stats);
+                }
+            }
+        }
+        HirNode::Switch { cases, default, .. } => {
+            for (_, body, _) in cases {
+                for child in body {
+                    add_hir_stats(child, stats);
+                }
+            }
+            if let Some(default) = default {
+                for child in default {
+                    add_hir_stats(child, stats);
+                }
+            }
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_arms,
+        } => {
+            for child in try_body {
+                add_hir_stats(child, stats);
+            }
+            for (_, body) in catch_arms {
+                for child in body {
+                    add_hir_stats(child, stats);
+                }
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            for child in try_body {
+                add_hir_stats(child, stats);
+            }
+            for child in finally_body {
+                add_hir_stats(child, stats);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn cleanup_scope(nodes: &mut Vec<HirNode>) {
@@ -137,6 +261,11 @@ fn remove_unreachable_after_terminal(nodes: &mut Vec<HirNode>) {
     let Some(index) = nodes.iter().position(is_terminal) else {
         return;
     };
+    let removed_stats = hir_stats(&nodes[index + 1..]);
+    if removed_stats.labels > 0 || removed_stats.calls > 0 || removed_stats.returns > 0 {
+        return;
+    }
+    trace_removed_unreachable(index, &nodes[index + 1..]);
     nodes.truncate(index + 1);
 }
 
@@ -239,15 +368,7 @@ fn retain_nonforward_gotos(
 ) {
     let mut i = 0;
     while i < nodes.len() {
-        let current = *pos;
         *pos += 1;
-        if let HirNode::Goto(label) = nodes[i]
-            && labels.get(&label).is_some_and(|target| *target > current)
-        {
-            nodes.remove(i);
-            continue;
-        }
-
         retain_nonforward_gotos_in_node(&mut nodes[i], pos, labels);
         i += 1;
     }
@@ -427,5 +548,80 @@ mod tests {
         }]);
         eliminate_forward_gotos(&mut hir);
         assert!(matches!(hir.body[0], HirNode::If { ref then_body, .. } if then_body.is_empty()));
+    }
+
+    #[test]
+    fn terminal_before_later_label_keeps_labelled_tail() {
+        let mut hir = func(vec![
+            HirNode::Goto(LabelId(1)),
+            HirNode::Statement(unlace_ir::IrInsn::without_output(
+                unlace_ir::IrOp::Call,
+                smallvec::smallvec![Varnode::constant(0x1000, 8)],
+                0x10,
+            )),
+            HirNode::Label(LabelId(1)),
+            HirNode::Return(None),
+        ]);
+        eliminate_forward_gotos(&mut hir);
+        assert!(
+            hir.body
+                .iter()
+                .any(|node| matches!(node, HirNode::Return(_))),
+            "later labelled tail must not be truncated: {:#?}",
+            hir.body
+        );
+    }
+
+    #[test]
+    fn terminal_before_nested_later_label_keeps_labelled_tail() {
+        let mut hir = func(vec![
+            HirNode::If {
+                cond: cond(),
+                then_body: vec![HirNode::Return(None)],
+                else_body: Some(vec![HirNode::Goto(LabelId(1))]),
+            },
+            HirNode::Block(vec![
+                HirNode::Statement(unlace_ir::IrInsn::without_output(
+                    unlace_ir::IrOp::Call,
+                    smallvec::smallvec![Varnode::constant(0x1000, 8)],
+                    0x10,
+                )),
+                HirNode::Label(LabelId(1)),
+                HirNode::Return(None),
+            ]),
+        ]);
+        eliminate_forward_gotos(&mut hir);
+        assert!(
+            hir.body
+                .iter()
+                .any(|node| matches!(node, HirNode::Block(_))),
+            "nested labelled tail must not be truncated: {:#?}",
+            hir.body
+        );
+    }
+
+    #[test]
+    fn terminal_before_side_effect_tail_keeps_tail() {
+        let mut hir = func(vec![
+            HirNode::If {
+                cond: cond(),
+                then_body: vec![HirNode::Return(None)],
+                else_body: Some(vec![HirNode::Goto(LabelId(1))]),
+            },
+            HirNode::Statement(unlace_ir::IrInsn::without_output(
+                unlace_ir::IrOp::Call,
+                smallvec::smallvec![Varnode::constant(0x1000, 8)],
+                0x10,
+            )),
+            HirNode::Return(None),
+        ]);
+        eliminate_forward_gotos(&mut hir);
+        assert!(
+            hir.body.iter().any(
+                |node| matches!(node, HirNode::Statement(insn) if insn.op == unlace_ir::IrOp::Call)
+            ),
+            "side-effect tail must not be truncated: {:#?}",
+            hir.body
+        );
     }
 }

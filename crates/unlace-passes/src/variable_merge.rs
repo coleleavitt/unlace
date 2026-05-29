@@ -34,6 +34,40 @@ use unlace_ir::{BlockId, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .and_then(|v| v.into_string().ok())
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+        })
+        .unwrap_or(false)
+}
+
+fn var_merge_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_VAR_MERGE_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn var_merge_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_VAR_MERGE_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn var_merge_trace_line(line: &str) {
+    if !var_merge_trace_enabled() {
+        return;
+    }
+    if let Some(filter) = var_merge_trace_filter()
+        && !line.contains(&filter)
+    {
+        return;
+    }
+    eprintln!("[unlace var-merge] {line}");
+}
+
 /// A point in the function's program: `(block, instruction index)`.
 ///
 /// Phi nodes are modelled as `insn_idx == usize::MAX` for the "before any
@@ -59,6 +93,26 @@ impl ProgramPoint {
             insn: Self::PHI,
         }
     }
+}
+
+fn fmt_program_point(pp: ProgramPoint) -> String {
+    if pp.insn == ProgramPoint::PHI {
+        format!("{:?}:phi", pp.block)
+    } else {
+        format!("{:?}:{}", pp.block, pp.insn)
+    }
+}
+
+fn fmt_program_points(points: &BTreeSet<ProgramPoint>, limit: usize) -> String {
+    let mut rendered: Vec<String> = points
+        .iter()
+        .take(limit)
+        .map(|pp| fmt_program_point(*pp))
+        .collect();
+    if points.len() > limit {
+        rendered.push(format!("...+{}", points.len() - limit));
+    }
+    rendered.join(",")
 }
 
 /// Per-block live sets used by the dataflow.
@@ -110,15 +164,38 @@ impl Pass for VariableMergePass {
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         // 1. Collect every SSA varnode that needs a name.
         let all_vars = collect_all_ssa_vars(func);
+        var_merge_trace_line(&format!(
+            "start func={} all_vars={} existing_merged={} phis={} var_map={} var_types={} foldable={}",
+            func.function.name,
+            all_vars.len(),
+            func.merged_names.len(),
+            func.phi_map.values().map(|phis| phis.len()).sum::<usize>(),
+            func.var_map.len(),
+            func.var_types.len(),
+            func.foldable_exprs.len(),
+        ));
 
         if all_vars.is_empty() {
             let changed = !func.merged_names.is_empty();
             func.merged_names.clear();
+            var_merge_trace_line(&format!(
+                "empty func={} changed={} cleared_merged_names",
+                func.function.name, changed
+            ));
             return Ok(changed);
         }
 
         // 2. Compute live ranges via standard backward dataflow.
         let live_ranges = compute_live_ranges(func, &all_vars);
+        for (sv, points) in &live_ranges {
+            var_merge_trace_line(&format!(
+                "range func={} sv={:?} len={} points=[{}]",
+                func.function.name,
+                sv,
+                points.len(),
+                fmt_program_points(points, 24),
+            ));
+        }
 
         // 3. Bucket by coalescence key, then greedy-coalesce inside each bucket.
         // Pass byref offsets so address-taken variables are never merged.
@@ -128,10 +205,28 @@ impl Pass for VariableMergePass {
             .map(|bi| &bi.byref_locals)
             .cloned()
             .unwrap_or_default();
-        let clusters = coalesce_clusters(&all_vars, &live_ranges, &func.var_types, &byref_offsets);
+        let clusters = coalesce_clusters(
+            &func.function.name,
+            &all_vars,
+            &live_ranges,
+            &func.var_types,
+            &byref_offsets,
+        );
+        for (idx, cluster) in clusters.iter().enumerate() {
+            var_merge_trace_line(&format!(
+                "cluster func={} idx={} members={:?}",
+                func.function.name, idx, cluster
+            ));
+        }
 
         // 4. Assign deterministic v-names per cluster.
-        let merged = assign_names(&all_vars, &clusters);
+        let merged = assign_names(&func.function.name, &all_vars, &clusters);
+        for (sv, name) in &merged {
+            var_merge_trace_line(&format!(
+                "name func={} sv={:?} name={}",
+                func.function.name, sv, name
+            ));
+        }
 
         tracing::debug!(
             func = %func.function.name,
@@ -142,6 +237,12 @@ impl Pass for VariableMergePass {
 
         let changed = merged != func.merged_names;
         func.merged_names = merged;
+        var_merge_trace_line(&format!(
+            "done func={} changed={} merged_names={}",
+            func.function.name,
+            changed,
+            func.merged_names.len(),
+        ));
         Ok(changed)
     }
 }
@@ -227,6 +328,12 @@ fn compute_live_ranges(
             }
         }
     }
+    for (bid, liveness) in &blocks {
+        var_merge_trace_line(&format!(
+            "liveness-seed func={} block={:?} use={:?} def={:?} phi_use_out={:?}",
+            func.function.name, bid, liveness.use_set, liveness.def_set, liveness.phi_use_out,
+        ));
+    }
 
     // ---- Step 2: iterate to fixpoint -------------------------------------
     // Successors come from the CFG so we follow real control-flow edges
@@ -266,11 +373,31 @@ fn compute_live_ranges(
             }
 
             if new_in != liveness.live_in || new_out != liveness.live_out {
+                var_merge_trace_line(&format!(
+                    "liveness-update func={} iter={} block={:?} live_in_old={:?} live_out_old={:?} live_in_new={:?} live_out_new={:?}",
+                    func.function.name,
+                    iters,
+                    bid,
+                    liveness.live_in,
+                    liveness.live_out,
+                    new_in,
+                    new_out,
+                ));
                 liveness.live_in = new_in;
                 liveness.live_out = new_out;
                 changed = true;
             }
         }
+    }
+    var_merge_trace_line(&format!(
+        "liveness-fixpoint func={} iters={} hit_cap={}",
+        func.function.name, iters, changed,
+    ));
+    for (bid, liveness) in &blocks {
+        var_merge_trace_line(&format!(
+            "liveness-final func={} block={:?} live_in={:?} live_out={:?}",
+            func.function.name, bid, liveness.live_in, liveness.live_out
+        ));
     }
 
     // ---- Step 3: materialise per-varnode point sets via backward walk ----
@@ -412,6 +539,7 @@ fn ranges_interfere(a: &BTreeSet<ProgramPoint>, b: &BTreeSet<ProgramPoint>) -> b
 /// Register, stack, and RAM bases skip step 2 — their bases name distinct
 /// physical storage which the user must see as distinct variables.
 fn coalesce_clusters(
+    func_name: &str,
     all_vars: &BTreeSet<SsaVarnode>,
     live_ranges: &BTreeMap<SsaVarnode, BTreeSet<ProgramPoint>>,
     var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
@@ -438,23 +566,52 @@ fn coalesce_clusters(
                     }
                 }
                 let mkey = merge_key_for_base(base, &members, var_types);
+                var_merge_trace_line(&format!(
+                    "unique-base func={} base={:?} members={:?} key={:?} range_len={} range=[{}]",
+                    func_name,
+                    base,
+                    members,
+                    mkey,
+                    union_range.len(),
+                    fmt_program_points(&union_range, 24),
+                ));
 
                 let mut placed = false;
-                for (cluster_members, cluster_range, cluster_mkey) in unique_clusters.iter_mut() {
-                    if *cluster_mkey == mkey && !ranges_interfere(&union_range, cluster_range) {
+                for (cluster_idx, (cluster_members, cluster_range, cluster_mkey)) in
+                    unique_clusters.iter_mut().enumerate()
+                {
+                    let key_match = *cluster_mkey == mkey;
+                    let interferes = ranges_interfere(&union_range, cluster_range);
+                    var_merge_trace_line(&format!(
+                        "unique-try func={} base={:?} cluster={} key_match={} interferes={} existing_members={:?}",
+                        func_name, base, cluster_idx, key_match, interferes, cluster_members
+                    ));
+                    if key_match && !interferes {
                         cluster_members.extend(members.iter().copied());
                         for p in &union_range {
                             cluster_range.insert(*p);
                         }
+                        var_merge_trace_line(&format!(
+                            "unique-merge func={} base={:?} cluster={} new_members={:?}",
+                            func_name, base, cluster_idx, cluster_members
+                        ));
                         placed = true;
                         break;
                     }
                 }
                 if !placed {
+                    var_merge_trace_line(&format!(
+                        "unique-new-cluster func={} base={:?} members={:?}",
+                        func_name, base, members
+                    ));
                     unique_clusters.push((members, union_range, mkey));
                 }
             }
             _ => {
+                var_merge_trace_line(&format!(
+                    "physical-cluster func={} base={:?} members={:?}",
+                    func_name, base, members
+                ));
                 clusters.push(members);
             }
         }
@@ -470,6 +627,7 @@ fn coalesce_clusters(
 /// Walk all SSA varnodes in canonical order; assign cluster names `v1..vN`
 /// based on the cluster's first-appearance.
 fn assign_names(
+    func_name: &str,
     all_vars: &BTreeSet<SsaVarnode>,
     clusters: &[Vec<SsaVarnode>],
 ) -> BTreeMap<SsaVarnode, String> {
@@ -489,6 +647,10 @@ fn assign_names(
             && let std::collections::btree_map::Entry::Vacant(e) = order.entry(cidx)
         {
             e.insert(next_index);
+            var_merge_trace_line(&format!(
+                "assign-order func={} cluster={} first_sv={:?} name=v{}",
+                func_name, cidx, sv, next_index
+            ));
             next_index += 1;
         }
     }

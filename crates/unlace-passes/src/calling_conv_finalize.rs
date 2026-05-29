@@ -35,7 +35,7 @@
 //! responsible for splicing the result wherever it makes sense
 //! (printer prototype, registry, downstream type propagation).
 
-use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction};
+use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, VarnodeSlot};
 use unlace_ir::types::Type;
 use unlace_ir::{IrOp, SpaceId, Varnode};
 
@@ -177,17 +177,18 @@ fn return_register(cc: CallingConvention) -> Option<u64> {
 fn param_register_uses(func: &SsaFunction, reg_offset: u64) -> Vec<ParamUse> {
     let mut uses = Vec::new();
 
-    for block in func.function.blocks.values() {
+    for (&bid, block) in &func.function.blocks {
         let mut written_in_block = false;
-        for insn in &block.insns {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
             // Read first (the instruction reads its inputs before
             // computing the output).
-            for input in &insn.inputs {
+            for (input_idx, input) in insn.inputs.iter().enumerate() {
                 if !written_in_block
-                    && input.space == SpaceId::Register
-                    && input.offset == reg_offset
+                    && input_reads_register(func, bid, insn_idx, input_idx, input, reg_offset)
                 {
-                    uses.push(classify_param_use(insn, input));
+                    uses.push(classify_param_use(
+                        func, bid, insn_idx, insn, input_idx, reg_offset,
+                    ));
                 }
             }
             if let Some(out) = insn.output
@@ -202,19 +203,44 @@ fn param_register_uses(func: &SsaFunction, reg_offset: u64) -> Vec<ParamUse> {
     uses
 }
 
+fn input_reads_register(
+    func: &SsaFunction,
+    bid: unlace_ir::BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+    input: &Varnode,
+    reg_offset: u64,
+) -> bool {
+    if input.space == SpaceId::Register && input.offset == reg_offset {
+        return true;
+    }
+    func.var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+        .is_some_and(|sv| sv.base.space == SpaceId::Register && sv.base.offset == reg_offset)
+}
+
 /// Classify how `reg_input` is consumed by `insn`.
-fn classify_param_use(insn: &unlace_ir::IrInsn, reg_input: &Varnode) -> ParamUse {
+fn classify_param_use(
+    func: &SsaFunction,
+    bid: unlace_ir::BlockId,
+    insn_idx: usize,
+    insn: &unlace_ir::IrInsn,
+    input_idx: usize,
+    reg_offset: u64,
+) -> ParamUse {
     if insn.op == IrOp::IntAnd && insn.inputs.len() == 2 {
-        let (a, b) = (&insn.inputs[0], &insn.inputs[1]);
-        // Identify which side is the register and which is the mask.
-        let (reg_side, other) = if a == reg_input {
-            (a, b)
-        } else if b == reg_input {
-            (b, a)
-        } else {
+        let other_idx = if input_idx == 0 { 1 } else { 0 };
+        if !input_reads_register(
+            func,
+            bid,
+            insn_idx,
+            input_idx,
+            &insn.inputs[input_idx],
+            reg_offset,
+        ) {
             return ParamUse::Other;
-        };
-        let _ = reg_side;
+        }
+        let other = &insn.inputs[other_idx];
         if other.space == SpaceId::Const && other.offset == 0xFF {
             return ParamUse::AndMaskFF;
         }

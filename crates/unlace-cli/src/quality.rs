@@ -13,8 +13,8 @@
 //! Each counter is classified into one of three buckets so the report can
 //! distinguish:
 //! - **not implemented** — the lifter/pass has no handler (`Unimplemented`).
-//! - **not wired** — a handler exists but the value leaked through as an
-//!   opaque `Callother`, or recovery did not run.
+//! - **not wired** — a handler exists but a `Callother` leaked through with
+//!   an unknown semantic tag, or recovery did not run.
 //! - **implemented but wrong** — recovery ran but produced low-quality output
 //!   (raw temporaries, `Unknown` types).
 
@@ -24,7 +24,7 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 use unlace_ir::ssa::{FrameSlotKind, PrimitiveType, SsaFunction};
-use unlace_ir::{IrOp, Lifter};
+use unlace_ir::{IrInsn, IrOp, Lifter};
 use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader};
 use unlace_struct::{HirFunction, HirNode};
@@ -95,6 +95,16 @@ pub struct FunctionQuality {
     /// `IrOp::Callother` ops — opaque intrinsics that leaked into output
     /// instead of being lowered or recognised.
     pub callother_ops: usize,
+    /// `Callother(TRAP)` ops from padding/terminal trap instructions such as
+    /// `hlt`, `int3`, or `ud2`. These are counted separately from real
+    /// semantic gaps so startup epilogues do not fail the opaque-intrinsic
+    /// gate.
+    pub callother_trap_ops: usize,
+    /// `Callother` ops whose tag is a known intrinsic/pseudo-intrinsic. These
+    /// still deserve volume tracking, but they are not "unknown semantics".
+    pub callother_known_intrinsic_ops: usize,
+    /// `Callother` ops without a known tag. This is the real "not wired" gate.
+    pub callother_semantic_gap_ops: usize,
 
     // --- recovery results (higher = better) ---
     /// Stack variables recovered (`ssa.stack_vars`).
@@ -323,7 +333,22 @@ impl FunctionQuality {
                 q.ir_insns += 1;
                 match insn.op {
                     IrOp::Unimplemented => q.unimplemented_ops += 1,
-                    IrOp::Callother => q.callother_ops += 1,
+                    IrOp::Callother => {
+                        q.callother_ops += 1;
+                        match classify_callother(insn) {
+                            CallotherClass::TrapOrPadding => q.callother_trap_ops += 1,
+                            CallotherClass::KnownIntrinsic => q.callother_known_intrinsic_ops += 1,
+                            CallotherClass::SemanticGap => q.callother_semantic_gap_ops += 1,
+                        }
+                        if quality_trace_enabled() {
+                            eprintln!(
+                                "[unlace-quality] func={name} callother addr=0x{:x} tag={:?} class={:?}",
+                                insn.addr,
+                                callother_tag(insn),
+                                classify_callother(insn),
+                            );
+                        }
+                    }
                     IrOp::BoolAnd | IrOp::BoolOr => q.short_circuit_ops += 1,
                     IrOp::Call => {
                         direct_calls += 1;
@@ -735,6 +760,52 @@ fn is_compound_assign_pattern(insn: &unlace_ir::IrInsn) -> bool {
     true
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CallotherClass {
+    TrapOrPadding,
+    KnownIntrinsic,
+    SemanticGap,
+}
+
+fn classify_callother(insn: &IrInsn) -> CallotherClass {
+    match callother_tag(insn) {
+        Some(0x300) => CallotherClass::TrapOrPadding,
+        Some(tag) if is_known_callother_tag(tag) => CallotherClass::KnownIntrinsic,
+        _ => CallotherClass::SemanticGap,
+    }
+}
+
+fn callother_tag(insn: &IrInsn) -> Option<u64> {
+    insn.inputs
+        .first()
+        .filter(|tag| tag.space == SpaceId::Const)
+        .map(|tag| tag.offset)
+}
+
+fn is_known_callother_tag(tag: u64) -> bool {
+    matches!(
+        tag,
+        // x86 REP string builtins.
+        0x1..=0x4
+            // x86 SSE/AVX/AES/SHA/TSX/perf pseudo-intrinsics.
+            | 0x100..=0x1F0
+            // x86 scalar bit/flag/special instruction pseudo-intrinsics.
+            | 0x200..=0x20C
+            | 0x301..=0x328
+            | 0x350..=0x351
+            // ARM/AArch64 scalar, atomic, NEON, PAC, SVE, and miscellaneous tags.
+            // This also covers the x86 atomic/bswap tags that intentionally
+            // overlap the AArch64 NEON block.
+            | 0x330..=0x437
+            // Intel AMX plus the currently-known vector fallback block.
+            | 0x500..=0x623
+    )
+}
+
+fn quality_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_QUALITY_TRACE").is_some()
+}
+
 /// Count the leaf fields of a recovered struct/union type, recursing into
 /// nested struct/union members.
 fn struct_field_count(ty: &unlace_ir::types::Type) -> usize {
@@ -838,6 +909,9 @@ pub struct QualityTotals {
     pub ir_insns: usize,
     pub unimplemented_ops: usize,
     pub callother_ops: usize,
+    pub callother_trap_ops: usize,
+    pub callother_known_intrinsic_ops: usize,
+    pub callother_semantic_gap_ops: usize,
     pub stack_vars_recovered: usize,
     pub frame_holes: usize,
     pub frame_hole_entries: usize,
@@ -915,6 +989,9 @@ impl QualityTotals {
         self.ir_insns += q.ir_insns;
         self.unimplemented_ops += q.unimplemented_ops;
         self.callother_ops += q.callother_ops;
+        self.callother_trap_ops += q.callother_trap_ops;
+        self.callother_known_intrinsic_ops += q.callother_known_intrinsic_ops;
+        self.callother_semantic_gap_ops += q.callother_semantic_gap_ops;
         self.stack_vars_recovered += q.stack_vars_recovered;
         self.frame_holes += q.frame_holes;
         self.frame_hole_entries += q.frame_hole_entries;
@@ -1249,6 +1326,7 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - short-circuit ops (&&/||): {sc}\n\
          - byref args (&local/&param): {ba}\n\
          - SIMD-typed vars (>= 128 bits): {sv}\n\
+         - Callother total / trap-padding / known-intrinsic / semantic-gap: {co} / {cot} / {cok} / {cog}\n\
          - call resolution rate (mean per-fn): {crr:.1}%\n\
          - type quality score (mean per-fn): {tqs:.1}%\n\
          - frame_hole entries (inter-slot): {fhe}\n\
@@ -1262,6 +1340,10 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
         sc = t.short_circuit_ops,
         ba = t.byref_args,
         sv = t.simd_typed_vars,
+        co = t.callother_ops,
+        cot = t.callother_trap_ops,
+        cok = t.callother_known_intrinsic_ops,
+        cog = t.callother_semantic_gap_ops,
         crr = t.call_resolution_rate,
         tqs = t.type_quality_score,
         fhe = t.frame_hole_entries,
@@ -1358,8 +1440,11 @@ fn render_classification(t: &QualityTotals, s: &mut String) {
     );
     let _ = writeln!(
         s,
-        "- **not wired** (handler exists but value leaked opaque): {} `Callother` op(s)",
-        t.callother_ops
+        "- **not wired** (handler exists but an unknown semantic tag leaked opaque): {} semantic-gap `Callother` op(s) ({} total: {} trap/padding, {} known intrinsic)",
+        t.callother_semantic_gap_ops,
+        t.callother_ops,
+        t.callother_trap_ops,
+        t.callother_known_intrinsic_ops,
     );
     let _ = writeln!(
         s,
@@ -1383,7 +1468,36 @@ pub fn render_json(report: &BinaryQuality) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{impossible_lvalue_regex, lost_frame_offset_regex, stale_return_result_count};
+    use super::{
+        CallotherClass, classify_callother, impossible_lvalue_regex, lost_frame_offset_regex,
+        stale_return_result_count,
+    };
+    use smallvec::smallvec;
+    use unlace_ir::{IrInsn, IrOp, Varnode};
+
+    fn callother_with_tag(tag: u64) -> IrInsn {
+        IrInsn::without_output(
+            IrOp::Callother,
+            smallvec![Varnode::constant(tag, 8)],
+            0x1000,
+        )
+    }
+
+    #[test]
+    fn callother_classifier_splits_traps_known_intrinsics_and_gaps() {
+        assert_eq!(
+            classify_callother(&callother_with_tag(0x300)),
+            CallotherClass::TrapOrPadding
+        );
+        assert_eq!(
+            classify_callother(&callother_with_tag(0x112)),
+            CallotherClass::KnownIntrinsic
+        );
+        assert_eq!(
+            classify_callother(&callother_with_tag(0xfeed)),
+            CallotherClass::SemanticGap
+        );
+    }
 
     #[test]
     fn impossible_lvalue_matches_small_immediate_write() {

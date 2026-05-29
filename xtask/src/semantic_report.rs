@@ -6,6 +6,8 @@
 //! the recompiled C, and compare observable behavior.
 
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -35,10 +37,15 @@ struct SemanticCase {
     expected_failure: Option<&'static str>,
 }
 
-struct UnsupportedCase {
+struct ShapeCase {
     fixture: &'static str,
     function: &'static str,
-    reason: &'static str,
+    required_fragments: &'static [&'static str],
+}
+
+struct ShapeObservation {
+    line_count: usize,
+    callother_count: usize,
 }
 
 const SEMANTIC_CASES: &[SemanticCase] = &[
@@ -101,14 +108,14 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
         fixture: "medium",
         function: "main",
         expected_failure: Some(
-            "optimized main still loses loop-carried lvar/phi and x86 subregister state; recompiled subset times out",
+            "optimized main still loses vectorized stack-buffer/lvar state; recompiled subset exits differently",
         ),
     },
     SemanticCase {
         fixture: "stripped",
         function: "main",
         expected_failure: Some(
-            "same optimized main lvar/phi/subregister recovery gap under stripped symbols",
+            "same optimized main vectorized stack-buffer/lvar gap under stripped symbols",
         ),
     },
     SemanticCase {
@@ -133,21 +140,21 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
     },
 ];
 
-const UNSUPPORTED_CASES: &[UnsupportedCase] = &[
-    UnsupportedCase {
+const CROSS_ARCH_SHAPE_CASES: &[ShapeCase] = &[
+    ShapeCase {
         fixture: "arm64_features",
         function: "_start",
-        reason: "non-host architecture fixture cannot be executed by this host C subset gate",
+        required_fragments: &["mul_test()", "csel_test()", "bitfield_test()"],
     },
-    UnsupportedCase {
+    ShapeCase {
         fixture: "mips64_features",
         function: "_start",
-        reason: "non-host architecture fixture cannot be executed by this host C subset gate",
+        required_fragments: &["arithmetic_test()", "logic_test()", "memory_test()"],
     },
-    UnsupportedCase {
+    ShapeCase {
         fixture: "riscv64_features",
         function: "_start",
-        reason: "non-host architecture fixture cannot be executed by this host C subset gate",
+        required_fragments: &["arithmetic_test()"],
     },
 ];
 
@@ -245,24 +252,48 @@ pub fn run(root: &Path) -> i32 {
     }
 
     println!();
+    println!("semantic-report: source-known cross-arch decompile shape");
+    for case in CROSS_ARCH_SHAPE_CASES {
+        measured_names.insert(case.fixture);
+        let Some(fixture) = fixtures.get(case.fixture) else {
+            println!(
+                "[semantic] FAIL-SHAPE {}:{} - fixture missing from tests/corpus.toml",
+                case.fixture, case.function
+            );
+            failed += 1;
+            continue;
+        };
+
+        match run_shape_case(root, &unlace_bin, fixture, case) {
+            Ok(ShapeObservation {
+                line_count,
+                callother_count,
+            }) => {
+                println!(
+                    "[semantic] PASS-SHAPE {}:{} lines={} callother={}",
+                    fixture.name, case.function, line_count, callother_count
+                );
+                passed += 1;
+            }
+            Err(e) => {
+                println!(
+                    "[semantic] FAIL-SHAPE {}:{} - {e}",
+                    fixture.name, case.function
+                );
+                failed += 1;
+            }
+        }
+    }
+
+    println!();
     println!("semantic-report: unsupported source-known fixtures");
-    let unsupported_by_name: BTreeMap<&str, &UnsupportedCase> =
-        UNSUPPORTED_CASES.iter().map(|c| (c.fixture, c)).collect();
     for fixture in fixtures.values() {
         if fixture.source_path.is_none() || measured_names.contains(fixture.name.as_str()) {
             continue;
         }
-        let reason = unsupported_by_name
-            .get(fixture.name.as_str())
-            .map(|c| c.reason)
-            .unwrap_or("source-known fixture has no semantic case yet");
-        let function = unsupported_by_name
-            .get(fixture.name.as_str())
-            .map(|c| c.function)
-            .unwrap_or("main");
         println!(
             "[semantic] UNSUPPORTED {}:{} - {}",
-            fixture.name, function, reason
+            fixture.name, "main", "source-known fixture has no semantic or shape case yet"
         );
         unsupported += 1;
     }
@@ -326,12 +357,35 @@ impl Observation {
     }
 }
 
+fn output_status_detail(obs: &Observation) -> String {
+    if obs.exit >= 0 {
+        format!("exit({})", obs.exit)
+    } else {
+        "signal-or-unknown".to_string()
+    }
+}
+
+fn output_status_detail_raw(output: &Output) -> String {
+    if let Some(code) = output.status.code() {
+        return format!("exit({code})");
+    }
+    #[cfg(unix)]
+    if let Some(signal) = output.status.signal() {
+        return format!("signal({signal})");
+    }
+    "signal-or-unknown".to_string()
+}
+
 fn run_executable_case(
     root: &Path,
     unlace_bin: &Path,
     fixture: &Fixture,
     function: &str,
 ) -> Result<Observation, String> {
+    semantic_trace(format_args!(
+        "exec case {}:{} arch={:?} bin={}",
+        fixture.name, function, fixture.architecture, fixture.binary_path
+    ));
     if fixture.architecture.as_deref() != Some("x86_64") {
         return Err(format!(
             "unsupported host architecture {:?}",
@@ -344,6 +398,15 @@ fn run_executable_case(
         .output()
         .map_err(|e| format!("failed to run original {}: {e}", binary.display()))?;
     let original = Observation::from_output(original);
+    semantic_trace(format_args!(
+        "original {}:{} status={} exit={} stdout={} stderr={}",
+        fixture.name,
+        function,
+        output_status_detail(&original),
+        original.exit,
+        display_bytes(&original.stdout),
+        display_bytes(&original.stderr)
+    ));
 
     let decompile = Command::new(unlace_bin)
         .args(["decompile", "--emit", "c", "--function", function])
@@ -351,6 +414,14 @@ fn run_executable_case(
         .env_remove("RUST_LOG")
         .output()
         .map_err(|e| format!("failed to spawn unlace: {e}"))?;
+    semantic_trace(format_args!(
+        "decompile {}:{} status={} stdout_bytes={} stderr={}",
+        fixture.name,
+        function,
+        decompile.status,
+        decompile.stdout.len(),
+        display_bytes(&decompile.stderr)
+    ));
     if !decompile.status.success() {
         return Err(format!(
             "unlace failed: {}",
@@ -363,9 +434,27 @@ fn run_executable_case(
 
     let generated = String::from_utf8(decompile.stdout)
         .map_err(|e| format!("decompiler output was not UTF-8: {e}"))?;
+    semantic_trace(format_args!(
+        "generated {}:{} bytes={} lines={} labels={} gotos={}",
+        fixture.name,
+        function,
+        generated.len(),
+        generated.lines().count(),
+        generated.matches("label_").count(),
+        generated.matches("goto label_").count()
+    ));
     reject_known_bad_shapes(&generated)?;
 
     let recompiled = compile_and_run_c_subset(root, &generated, fixture, function, &binary)?;
+    semantic_trace(format_args!(
+        "recompiled {}:{} status={} exit={} stdout={} stderr={}",
+        fixture.name,
+        function,
+        output_status_detail(&recompiled),
+        recompiled.exit,
+        display_bytes(&recompiled.stdout),
+        display_bytes(&recompiled.stderr)
+    ));
     if original == recompiled {
         Ok(original)
     } else {
@@ -379,6 +468,58 @@ fn run_executable_case(
             display_bytes(&recompiled.stderr),
         ))
     }
+}
+
+fn run_shape_case(
+    root: &Path,
+    unlace_bin: &Path,
+    fixture: &Fixture,
+    case: &ShapeCase,
+) -> Result<ShapeObservation, String> {
+    semantic_trace(format_args!(
+        "shape case {}:{} arch={:?} bin={}",
+        fixture.name, case.function, fixture.architecture, fixture.binary_path
+    ));
+    let binary = root.join(&fixture.binary_path);
+    let decompile = Command::new(unlace_bin)
+        .args(["decompile", "--emit", "c", "--function", case.function])
+        .arg(&binary)
+        .env_remove("RUST_LOG")
+        .output()
+        .map_err(|e| format!("failed to spawn unlace: {e}"))?;
+    semantic_trace(format_args!(
+        "shape decompile {}:{} status={} stdout_bytes={} stderr={}",
+        fixture.name,
+        case.function,
+        decompile.status,
+        decompile.stdout.len(),
+        display_bytes(&decompile.stderr)
+    ));
+    if !decompile.status.success() {
+        return Err(format!(
+            "unlace failed: {}",
+            String::from_utf8_lossy(&decompile.stderr)
+                .lines()
+                .next()
+                .unwrap_or("unknown error")
+        ));
+    }
+
+    let generated = String::from_utf8(decompile.stdout)
+        .map_err(|e| format!("decompiler output was not UTF-8: {e}"))?;
+    reject_known_bad_shapes(&generated)?;
+    for required in case.required_fragments {
+        if !generated.contains(required) {
+            return Err(format!(
+                "generated C is missing required fragment {required:?}"
+            ));
+        }
+    }
+
+    Ok(ShapeObservation {
+        line_count: generated.lines().count(),
+        callother_count: generated.matches("CALLOTHER").count(),
+    })
 }
 
 fn reject_known_bad_shapes(generated: &str) -> Result<(), String> {
@@ -402,24 +543,41 @@ fn compile_and_run_c_subset(
     let _ = std::fs::remove_dir_all(&temp);
     std::fs::create_dir_all(&temp)
         .map_err(|e| format!("failed to create temp dir {}: {e}", temp.display()))?;
+    semantic_trace(format_args!(
+        "compile subset {}:{} temp={}",
+        fixture.name,
+        function,
+        temp.display()
+    ));
 
     let source = temp.join(format!("{stem}.c"));
     let compiled_binary = temp.join(stem);
     let helper_source = c_helper_source_path(root, fixture, function);
     let generated_helper = generated_c_helper_source(fixture, function);
-    let helper_decls = helper_source
+    let mut helper_decls = helper_source
         .as_deref()
         .map(helper_function_decls)
         .unwrap_or_else(|| generated_c_helper_decls(fixture, function));
+    helper_decls.push_str(&fixture_call_alias_decls(fixture, function));
     let prelude = c_subset_prelude(binary, &helper_decls);
     let driver = c_subset_driver(fixture, function);
     std::fs::write(&source, format!("{prelude}{generated}{driver}"))
         .map_err(|e| format!("failed to write {}: {e}", source.display()))?;
+    semantic_trace(format_args!(
+        "wrote subset source {} bytes={}",
+        source.display(),
+        std::fs::metadata(&source).map(|m| m.len()).unwrap_or(0)
+    ));
 
     let helper_object = if let Some(helper_source) = helper_source.as_deref() {
         let object = temp.join(format!("{stem}_helpers.o"));
+        semantic_trace(format_args!(
+            "compile helper source={} object={}",
+            helper_source.display(),
+            object.display()
+        ));
         let compile_helper = Command::new("cc")
-            .args(["-std=c99", "-Dmain=unlace_original_main", "-c"])
+            .args(["-std=c99", "-Dmain=unlace_original_main", "-Dstatic=", "-c"])
             .arg(helper_source)
             .arg("-o")
             .arg(&object)
@@ -428,7 +586,8 @@ fn compile_and_run_c_subset(
             .map_err(|e| format!("failed to invoke cc for helpers: {e}"))?;
         if !compile_helper.status.success() {
             return Err(format!(
-                "helper cc failed: {}",
+                "helper cc failed (source={}): {}",
+                helper_source.display(),
                 String::from_utf8_lossy(&compile_helper.stderr)
                     .lines()
                     .next()
@@ -441,6 +600,11 @@ fn compile_and_run_c_subset(
         std::fs::write(&helper_source, helper_text)
             .map_err(|e| format!("failed to write {}: {e}", helper_source.display()))?;
         let object = temp.join(format!("{stem}_helpers.o"));
+        semantic_trace(format_args!(
+            "compile generated helper source={} object={}",
+            helper_source.display(),
+            object.display()
+        ));
         let compile_helper = Command::new("cc")
             .args(["-std=c99", "-c"])
             .arg(&helper_source)
@@ -451,7 +615,8 @@ fn compile_and_run_c_subset(
             .map_err(|e| format!("failed to invoke cc for generated helpers: {e}"))?;
         if !compile_helper.status.success() {
             return Err(format!(
-                "generated helper cc failed: {}",
+                "generated helper cc failed (source={}): {}",
+                helper_source.display(),
                 String::from_utf8_lossy(&compile_helper.stderr)
                     .lines()
                     .next()
@@ -484,9 +649,15 @@ fn compile_and_run_c_subset(
         .current_dir(root)
         .output()
         .map_err(|e| format!("failed to invoke cc: {e}"))?;
+    semantic_trace(format_args!(
+        "compile subset status={} stderr={}",
+        compile.status,
+        display_bytes(&compile.stderr)
+    ));
     if !compile.status.success() {
         return Err(format!(
-            "cc failed: {}",
+            "cc failed (source={}): {}",
+            source.display(),
             String::from_utf8_lossy(&compile.stderr)
                 .lines()
                 .next()
@@ -496,8 +667,20 @@ fn compile_and_run_c_subset(
 
     let run = run_with_timeout(&mut Command::new(&compiled_binary), Duration::from_secs(2))?
         .ok_or_else(|| "recompiled subset timed out".to_string())?;
-    let _ = std::fs::remove_dir_all(&temp);
-    Ok(Observation::from_output(run))
+    semantic_trace(format_args!(
+        "run subset binary={} status={} stdout={} stderr={}",
+        compiled_binary.display(),
+        output_status_detail_raw(&run),
+        display_bytes(&run.stdout),
+        display_bytes(&run.stderr)
+    ));
+    let observation = Observation::from_output(run);
+    if semantic_keep_temps() {
+        semantic_trace(format_args!("keeping semantic temp dir {}", temp.display()));
+    } else {
+        let _ = std::fs::remove_dir_all(&temp);
+    }
+    Ok(observation)
 }
 
 fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<Option<Output>, String> {
@@ -537,10 +720,6 @@ fn c_subset_prelude(binary: &Path, helper_decls: &str) -> String {
          #define __fastcall\n\
          #define __aapcs\n\
          #define __noreturn\n\
-         #define _mm_load_ps(addr, value) ((void)0)\n\
-         #define _mm_add_epi32(a, b) ((__int128)0)\n\
-         #define _mm_mul_epu32(a, b) ((__int128)0)\n\
-         #define _mm_shuffle_epi32(a, b) ((__int128)0)\n\
          void __stack_chk_fail(void);\n\
          unsigned long long __readfsqword(unsigned int offset) { (void)offset; return 0; }\n\
          unsigned int __readfsdword(unsigned int offset) { (void)offset; return 0; }\n\n",
@@ -594,6 +773,22 @@ fn generated_c_helper_decls(fixture: &Fixture, function: &str) -> String {
         ("debug_templates", "main") => {
             "long long make_box(int x);\nint use_box(int b);\nint call_add(int x);\nlong long make_array(long long *out);\n".to_string()
         }
+        _ => String::new(),
+    }
+}
+
+fn fixture_call_alias_decls(fixture: &Fixture, function: &str) -> String {
+    match (fixture.name.as_str(), function) {
+        ("medium", "main") => {
+            "long long f_rec_power_constprop_0(long long exp) { return f_rec_power(2, (int)exp); }\n"
+                .to_string()
+        }
+        ("stripped", "main") => [
+            "long long sub_1570(void) { return f_rec_fib(8); }\n",
+            "long long sub_1b80(void) { return f_rec_power(2, 8); }\n",
+            "long long sub_1830(void) { return f_ackermann(2, 3); }\n",
+        ]
+        .concat(),
         _ => String::new(),
     }
 }
@@ -766,6 +961,29 @@ fn display_bytes(bytes: &[u8]) -> String {
     }
     let s = String::from_utf8_lossy(bytes);
     format!("{:?}", s)
+}
+
+fn semantic_trace(message: impl std::fmt::Display) {
+    if semantic_trace_enabled() {
+        eprintln!("[unlace-semantic] {message}");
+    }
+}
+
+fn semantic_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_SEMANTIC_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn semantic_keep_temps() -> bool {
+    semantic_trace_enabled() || env_flag_enabled("UNLACE_SEMANTIC_KEEP_TEMPS")
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .map(|value| {
+            let value = value.to_string_lossy();
+            !matches!(value.as_ref(), "" | "0" | "false" | "FALSE" | "off" | "OFF")
+        })
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

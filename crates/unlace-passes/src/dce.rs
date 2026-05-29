@@ -55,6 +55,7 @@ impl Pass for DeadCodeElimPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        let trace = std::env::var_os("UNLACE_DCE_TRACE").is_some();
         let mut used: BTreeSet<SsaVarnode> = BTreeSet::new();
 
         for (&bid, block) in &func.function.blocks {
@@ -91,19 +92,46 @@ impl Pass for DeadCodeElimPass {
 
                 let output_sv = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output));
 
+                let mut keep_reason = None;
                 let is_dead = match output_sv {
                     Some(sv) => {
-                        !used.contains(sv)
-                            && !used
-                                .iter()
-                                .any(|used_sv| register_output_covers_use(sv, used_sv))
+                        if used.contains(sv) {
+                            keep_reason = Some("exact-use");
+                            false
+                        } else if let Some(used_sv) = used
+                            .iter()
+                            .find(|used_sv| register_output_covers_use(sv, used_sv))
+                        {
+                            if trace {
+                                eprintln!(
+                                    "[unlace-dce] keep block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?} alias-use={:?}",
+                                    insn.addr, insn.op, sv, used_sv
+                                );
+                            }
+                            keep_reason = Some("register-alias-use");
+                            false
+                        } else {
+                            true
+                        }
                     }
                     None => true,
                 };
 
                 if is_dead {
+                    if trace {
+                        eprintln!(
+                            "[unlace-dce] drop block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?}",
+                            insn.addr, insn.op, output_sv
+                        );
+                    }
                     changed = true;
                 } else {
+                    if trace && keep_reason == Some("exact-use") {
+                        eprintln!(
+                            "[unlace-dce] keep block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?} reason=exact-use",
+                            insn.addr, insn.op, output_sv
+                        );
+                    }
                     keep.push(insn_idx);
                 }
             }
@@ -191,7 +219,7 @@ fn register_output_covers_use(output: &SsaVarnode, used: &SsaVarnode) -> bool {
     let out_end = out_start.saturating_add(output.base.size as u64);
     let use_start = used.base.offset;
     let use_end = use_start.saturating_add(used.base.size as u64);
-    out_start <= use_start && use_end <= out_end
+    out_start < use_end && use_start < out_end
 }
 
 #[cfg(test)]
@@ -565,6 +593,56 @@ mod tests {
             "a live low-byte return must keep the covering dword definition"
         );
         assert_eq!(ssa.function.blocks[&BlockId(0)].insns[0].op, IrOp::IntAdd);
+    }
+
+    #[test]
+    fn test_dce_preserves_subregister_definition_used_by_full_register() {
+        let ecx = SsaVarnode {
+            base: Varnode::new(SpaceId::Register, 8, 4),
+            version: 0,
+        };
+        let rcx = SsaVarnode {
+            base: Varnode::new(SpaceId::Register, 8, 8),
+            version: 12,
+        };
+        let rdx = sv(16, 20);
+        let sum = sv(24, 0);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ecx.base,
+            smallvec![Varnode::constant(0x1234, 4)],
+            0x126d,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            sum.base,
+            smallvec![rcx.base, rdx.base],
+            0x1271,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![sum.base],
+            0x1275,
+        ));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), ecx);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(0)), rcx);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), rdx);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Output), sum);
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Input(0)), sum);
+
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
+
+        let changed = DeadCodeElimPass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(
+            !changed,
+            "a live full-register use must keep an overlapping subregister definition"
+        );
+        assert_eq!(ssa.function.blocks[&BlockId(0)].insns[0].addr, 0x126d);
     }
 
     #[test]

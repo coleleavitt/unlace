@@ -374,7 +374,7 @@ impl LiftCtx {
         x86_reg_view(reg).is_some_and(|view| view.is_gpr && !view.is_full_width())
     }
 
-    fn resize_value(&mut self, value: Varnode, size: u8) -> Varnode {
+    pub fn resize_value(&mut self, value: Varnode, size: u8) -> Varnode {
         if value.size == size {
             return value;
         }
@@ -748,12 +748,12 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Maxps => sse::lift_sse_binop(ctx, insn, sse::tag::MAXPS),
         M::Sqrtps => sse::lift_sse_unop(ctx, insn, sse::tag::SQRTPS),
 
-        M::Pshufd => sse::lift_sse_binop(ctx, insn, sse::tag::PSHUFD),
+        M::Pshufd => sse::lift_sse_shuffle_imm(ctx, insn, sse::tag::PSHUFD),
         M::Pshufhw => sse::lift_vector_generic(ctx, insn, sse::tag::PSHUFHW),
         M::Pshuflw => sse::lift_vector_generic(ctx, insn, sse::tag::PSHUFLW),
         M::Pshufb => sse::lift_sse_binop(ctx, insn, sse::tag::PSHUFB),
         M::Punpcklbw => sse::lift_sse_binop(ctx, insn, sse::tag::PUNPCKLBW),
-        M::Punpckldq => sse::lift_vector_generic(ctx, insn, sse::tag::PUNPCKLDQ),
+        M::Punpckldq => sse::lift_sse_binop(ctx, insn, sse::tag::PUNPCKLDQ),
         M::Pslld => sse::lift_sse_binop(ctx, insn, sse::tag::PSLLD),
         M::Psrld => sse::lift_sse_binop(ctx, insn, sse::tag::PSRLD),
         M::Psrldq => sse::lift_sse_binop(ctx, insn, sse::tag::PSRLDQ),

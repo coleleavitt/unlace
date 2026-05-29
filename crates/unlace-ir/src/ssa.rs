@@ -12,6 +12,40 @@ use petgraph::stable_graph::StableDiGraph;
 use crate::cfg::{ControlFlowGraph, build_cfg};
 use crate::{ArchId, BlockId, Function, Varnode};
 
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .and_then(|v| v.into_string().ok())
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+        })
+        .unwrap_or(false)
+}
+
+fn ssa_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_SSA_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn ssa_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_SSA_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn ssa_trace_line(line: &str) {
+    if !ssa_trace_enabled() {
+        return;
+    }
+    if let Some(filter) = ssa_trace_filter()
+        && !line.contains(&filter)
+    {
+        return;
+    }
+    eprintln!("[unlace ssa] {line}");
+}
+
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
@@ -1470,8 +1504,56 @@ pub fn build_ssa(func: Function) -> SsaFunction {
     let (defs_per_var, all_blocks) = collect_defs(&func);
 
     let phi_locations = place_phis(&defs_per_var, &df, &all_blocks);
+    if ssa_trace_enabled() {
+        let block_count = func.blocks.len();
+        let insn_count: usize = func.blocks.values().map(|b| b.insns.len()).sum();
+        let df_edges: usize = df.values().map(|frontier| frontier.len()).sum();
+        let def_vars = defs_per_var.len();
+        let def_blocks: usize = defs_per_var.values().map(|blocks| blocks.len()).sum();
+        let phi_sites: usize = phi_locations.values().map(|vars| vars.len()).sum();
+        ssa_trace_line(&format!(
+            "build-start func={} blocks={} insns={} cfg_nodes={} df_edges={} def_vars={} def_blocks={} phi_sites={}",
+            func.name,
+            block_count,
+            insn_count,
+            cfg.node_map().len(),
+            df_edges,
+            def_vars,
+            def_blocks,
+            phi_sites,
+        ));
+        for (var, blocks) in &defs_per_var {
+            ssa_trace_line(&format!(
+                "defs func={} var={:?} blocks={:?}",
+                func.name, var, blocks
+            ));
+        }
+        for (block, vars) in &phi_locations {
+            ssa_trace_line(&format!(
+                "phi-place func={} block={:?} vars={:?}",
+                func.name, block, vars
+            ));
+        }
+    }
 
     let (phi_map, var_map) = rename_variables(&func, &cfg, &dom_tree, &phi_locations);
+    if ssa_trace_enabled() {
+        let phis: usize = phi_map.values().map(|phis| phis.len()).sum();
+        ssa_trace_line(&format!(
+            "build-done func={} phis={} var_map={}",
+            func.name,
+            phis,
+            var_map.len(),
+        ));
+        for (block, phis) in &phi_map {
+            for phi in phis {
+                ssa_trace_line(&format!(
+                    "phi-final func={} block={:?} output={:?} inputs={:?}",
+                    func.name, block, phi.output, phi.inputs
+                ));
+            }
+        }
+    }
 
     SsaFunction {
         function: func,
@@ -1763,6 +1845,13 @@ fn rename_variables(
     dom_tree: &DominatorTree,
     phi_locations: &BTreeMap<BlockId, BTreeSet<Varnode>>,
 ) -> RenameResult {
+    ssa_trace_line(&format!(
+        "rename-start func={} root={:?} phi_blocks={} blocks={}",
+        func.name,
+        dom_tree.root(),
+        phi_locations.len(),
+        func.blocks.len(),
+    ));
     let mut version_counter: BTreeMap<Varnode, u32> = BTreeMap::new();
     let mut var_stack: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
     let mut phi_map: BTreeMap<BlockId, Vec<PhiNode>> = BTreeMap::new();
@@ -1801,12 +1890,20 @@ fn rename_variables(
                 inputs: Vec::new(),
             })
             .collect();
+        ssa_trace_line(&format!(
+            "rename-init-phis func={} block={:?} vars={:?}",
+            func.name, bid, vars
+        ));
         phi_map.insert(*bid, phis);
     }
 
     while let Some((bid, is_cleanup)) = work_stack.pop() {
         if is_cleanup {
             if let Some(counts) = push_counts.remove(&bid) {
+                ssa_trace_line(&format!(
+                    "rename-cleanup func={} block={:?} pops={:?}",
+                    func.name, bid, counts
+                ));
                 for (var, count) in counts {
                     if let Some(stack) = var_stack.get_mut(&var) {
                         let new_len = stack.len().saturating_sub(count);
@@ -1820,12 +1917,17 @@ fn rename_variables(
         work_stack.push((bid, true));
 
         let mut pushed: Vec<(Varnode, usize)> = Vec::new();
+        ssa_trace_line(&format!("rename-enter func={} block={:?}", func.name, bid));
 
         if let Some(phis) = phi_map.get_mut(&bid) {
             for phi in phis.iter_mut() {
                 let ver = new_version(phi.output.base, &mut version_counter, &mut var_stack);
                 track_push(&mut pushed, phi.output.base);
                 phi.output.version = ver;
+                ssa_trace_line(&format!(
+                    "rename-phi-def func={} block={:?} base={:?} version={} output={:?}",
+                    func.name, bid, phi.output.base, ver, phi.output
+                ));
             }
         }
 
@@ -1836,25 +1938,29 @@ fn rename_variables(
                         continue;
                     }
                     let ver = current_version(*input, &var_stack);
-                    var_map.insert(
-                        (bid, i, VarnodeSlot::Input(idx)),
-                        SsaVarnode {
-                            base: *input,
-                            version: ver,
-                        },
-                    );
+                    let sv = SsaVarnode {
+                        base: *input,
+                        version: ver,
+                    };
+                    var_map.insert((bid, i, VarnodeSlot::Input(idx)), sv);
+                    ssa_trace_line(&format!(
+                        "rename-input func={} block={:?} insn={} addr=0x{:x} op={:?} input_idx={} base={:?} version={} sv={:?}",
+                        func.name, bid, i, insn.addr, insn.op, idx, input, ver, sv
+                    ));
                 }
 
                 if let Some(output) = insn.output {
                     let ver = new_version(output, &mut version_counter, &mut var_stack);
                     track_push(&mut pushed, output);
-                    var_map.insert(
-                        (bid, i, VarnodeSlot::Output),
-                        SsaVarnode {
-                            base: output,
-                            version: ver,
-                        },
-                    );
+                    let sv = SsaVarnode {
+                        base: output,
+                        version: ver,
+                    };
+                    var_map.insert((bid, i, VarnodeSlot::Output), sv);
+                    ssa_trace_line(&format!(
+                        "rename-output func={} block={:?} insn={} addr=0x{:x} op={:?} base={:?} version={} sv={:?}",
+                        func.name, bid, i, insn.addr, insn.op, output, ver, sv
+                    ));
                 }
             }
         }
@@ -1864,12 +1970,14 @@ fn rename_variables(
             if let Some(phis) = phi_map.get_mut(succ) {
                 for phi in phis.iter_mut() {
                     let ver = current_version(phi.output.base, &var_stack);
-                    phi.inputs.push((
-                        bid,
-                        SsaVarnode {
-                            base: phi.output.base,
-                            version: ver,
-                        },
+                    let sv = SsaVarnode {
+                        base: phi.output.base,
+                        version: ver,
+                    };
+                    phi.inputs.push((bid, sv));
+                    ssa_trace_line(&format!(
+                        "rename-phi-input func={} pred={:?} succ={:?} base={:?} version={} sv={:?}",
+                        func.name, bid, succ, phi.output.base, ver, sv
                     ));
                 }
             }
@@ -1879,10 +1987,20 @@ fn rename_variables(
 
         let children = dom_tree.children(bid);
         for &child in children.iter().rev() {
+            ssa_trace_line(&format!(
+                "rename-child func={} parent={:?} child={:?}",
+                func.name, bid, child
+            ));
             work_stack.push((child, false));
         }
     }
 
+    ssa_trace_line(&format!(
+        "rename-done func={} phi_blocks={} var_map={}",
+        func.name,
+        phi_map.len(),
+        var_map.len(),
+    ));
     (phi_map, var_map)
 }
 

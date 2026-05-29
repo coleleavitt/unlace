@@ -222,12 +222,11 @@ pub fn is_zmm_dst(insn: &iced_x86::Instruction) -> bool {
     (R::ZMM0..=R::ZMM31).contains(&dst)
 }
 
-/// MOVDQA / MOVDQU: store form emits without output, load/reg form with output.
-pub fn lift_sse_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+/// MOVDQA / MOVDQU: store form emits a real store, load/reg form emits a copy.
+pub fn lift_sse_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, _callother_tag: u64) {
     use iced_x86::OpKind;
 
     if insn.op_kind(0) == OpKind::Memory {
-        let tag_vn = Varnode::constant(callother_tag, 8);
         let Some(dst_addr) = ctx.memory_address(insn) else {
             ctx.emit_unimplemented();
             return;
@@ -236,11 +235,7 @@ pub fn lift_sse_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_t
             ctx.emit_unimplemented();
             return;
         };
-        ctx.emit(IrInsn::without_output(
-            IrOp::Callother,
-            smallvec![tag_vn, dst_addr, src],
-            ctx.addr,
-        ));
+        ctx.emit_store(dst_addr, src);
         return;
     }
 
@@ -286,11 +281,39 @@ pub fn lift_sse_binop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
     ));
 }
 
+/// SSE shuffle with an immediate selector: `dest = Callother(tag, src, imm)`.
+///
+/// Unlike read-modify-write packed ops, PSHUFD reads operand 1 and the imm8
+/// selector; operand 0 is write-only. Keeping the immediate in the IR is
+/// required for executable vector helper rendering downstream.
+pub fn lift_sse_shuffle_imm(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    let tag_vn = Varnode::constant(callother_tag, 8);
+
+    let Some(src) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let imm = ctx
+        .operand_read(insn, 2)
+        .unwrap_or_else(|| Varnode::constant(0, 1));
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![tag_vn, src, imm],
+        ctx.addr,
+    ));
+}
+
 /// PXOR / XORPS / XORPD with self-XOR detection.
 ///
 /// `pxor xmm0, xmm0` is an idiom for zeroing a register — we lower it to
 /// `Copy(0)` instead of emitting a Callother.
-pub fn lift_sse_xor(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+pub fn lift_sse_xor(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, _callother_tag: u64) {
     use iced_x86::OpKind;
 
     // Detect self-XOR idiom: both operands are the same register.
@@ -311,8 +334,28 @@ pub fn lift_sse_xor(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_t
         return;
     }
 
-    // Non-idiom case: fall through to normal binop.
-    lift_sse_binop(ctx, insn, callother_tag);
+    let Some(src0) = ctx.operand_read(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src1) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (xor_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
+    let src0 = ctx.resize_value(src0, xor_dst.size);
+    let src1 = ctx.resize_value(src1, xor_dst.size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntXor,
+        xor_dst,
+        smallvec![src0, src1],
+        ctx.addr,
+    ));
+    ctx.finish_zero_extending_vector_output(zero_ext_reg, xor_dst);
 }
 
 /// Single-source packed SSE (e.g. SQRTPS, PMOVMSKB): `dst = Callother(tag, src)`.
@@ -453,6 +496,46 @@ pub fn lift_sse_string_compare(
 pub fn lift_vector_generic(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
     use iced_x86::OpKind;
 
+    if is_vector_move_tag(callother_tag) && insn.op_count() >= 2 {
+        if insn.op_kind(0) == OpKind::Memory {
+            let Some(dst_addr) = ctx.memory_address(insn) else {
+                ctx.emit_unimplemented();
+                return;
+            };
+            let Some(src) = ctx.operand_read(insn, 1) else {
+                ctx.emit_unimplemented();
+                return;
+            };
+            let store_size = insn.memory_size().size() as u8;
+            let src = if store_size == 0 {
+                src
+            } else {
+                ctx.resize_value(src, store_size)
+            };
+            ctx.emit_store(dst_addr, src);
+            return;
+        }
+
+        let Some(dst) = ctx.operand_write(insn, 0) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        let Some(src) = ctx.operand_read(insn, 1) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        let (copy_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
+        let src = ctx.resize_value(src, copy_dst.size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            copy_dst,
+            smallvec![src],
+            ctx.addr,
+        ));
+        ctx.finish_zero_extending_vector_output(zero_ext_reg, copy_dst);
+        return;
+    }
+
     let tag_vn = Varnode::constant(callother_tag, 8);
     let mut inputs = smallvec![tag_vn];
 
@@ -488,6 +571,21 @@ pub fn lift_vector_generic(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, call
         ctx.addr,
     ));
     ctx.finish_zero_extending_vector_output(zero_ext_reg, call_dst);
+}
+
+fn is_vector_move_tag(callother_tag: u64) -> bool {
+    matches!(
+        callother_tag,
+        tag::MOVD
+            | tag::MOVQ
+            | tag::KMOVB
+            | tag::KMOVQ
+            | tag::KMOVW
+            | tag::VMOVDQU
+            | tag::VMOVDQU64
+            | tag::VMOVNTDQ
+            | tag::VMOVDQA
+    )
 }
 
 pub fn lift_tag_only(ctx: &mut LiftCtx, callother_tag: u64) {
@@ -571,14 +669,18 @@ pub fn lift_avx_blend(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
     ctx.finish_zero_extending_vector_output(zero_ext_reg, call_dst);
 }
 
-/// MOVSD (scalar double): 8-byte move in the low half of an XMM register.
+/// MOVSD/MOVSS: scalar move in the low lane of an XMM register.
 ///
-/// Unlike the 16-byte MOVDQA/MOVUPS family, MOVSD operates on only 8 bytes.
-/// We emit a Callother with `tag::MOVSD` so the semantics are recoverable.
+/// Legacy SSE register-to-register scalar moves preserve the destination's
+/// upper lanes; memory loads zero the upper lanes; stores write only the
+/// scalar lane.
 pub fn lift_sse_mov_scalar(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
     use iced_x86::OpKind;
 
-    let tag_vn = Varnode::constant(callother_tag, 8);
+    let lane_size = match callother_tag {
+        tag::MOVSS => 4,
+        _ => 8,
+    };
 
     if insn.op_kind(0) == OpKind::Memory {
         let Some(dst_addr) = ctx.memory_address(insn) else {
@@ -589,11 +691,8 @@ pub fn lift_sse_mov_scalar(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, call
             ctx.emit_unimplemented();
             return;
         };
-        ctx.emit(IrInsn::without_output(
-            IrOp::Callother,
-            smallvec![tag_vn, dst_addr, src],
-            ctx.addr,
-        ));
+        let src = ctx.resize_value(src, lane_size);
+        ctx.emit_store(dst_addr, src);
         return;
     }
 
@@ -605,10 +704,52 @@ pub fn lift_sse_mov_scalar(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, call
         ctx.emit_unimplemented();
         return;
     };
+
+    if insn.op_kind(1) == OpKind::Register {
+        let Some(old_dst) = ctx.operand_read(insn, 0) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        let low = ctx.resize_value(src, lane_size);
+        let high_size = dst.size.saturating_sub(lane_size);
+        if high_size == 0 {
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst,
+                smallvec![low],
+                ctx.addr,
+            ));
+            return;
+        }
+
+        let high = Varnode::unique(ctx.alloc_unique(), high_size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            high,
+            smallvec![old_dst, Varnode::constant(lane_size as u64, 1)],
+            ctx.addr,
+        ));
+        let pieced = Varnode::unique(ctx.alloc_unique(), dst.size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Piece,
+            pieced,
+            smallvec![high, low],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            dst,
+            smallvec![pieced],
+            ctx.addr,
+        ));
+        return;
+    }
+
+    let src = ctx.resize_value(src, dst.size);
     ctx.emit(IrInsn::with_output(
-        IrOp::Callother,
+        IrOp::Copy,
         dst,
-        smallvec![tag_vn, src],
+        smallvec![src],
         ctx.addr,
     ));
 }

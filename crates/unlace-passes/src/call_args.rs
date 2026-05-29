@@ -86,14 +86,16 @@ pub fn recover_direct_call_args_with_param_counts(
                 && let Some(target) = insn.inputs.first()
                 && target.space == SpaceId::Const
             {
-                let wanted = callee_name_at_addr(target.offset)
+                let callee_name = callee_name_at_addr(target.offset);
+                let visible = visible_arg_count(arg_regs, &reg_state);
+                let wanted = callee_name
                     .and_then(lookup_libc_normalized)
                     .map(|sig| wanted_arg_count(sig, arg_regs, &reg_state))
                     .or_else(|| {
                         callee_param_count_at_addr(target.offset).map(|n| n.min(arg_regs.len()))
                     })
                     .or_else(|| {
-                        callee_name_at_addr(target.offset)
+                        callee_name
                             .and_then(param_count_from_itanium_symbol)
                             .map(|n| n.min(arg_regs.len()))
                     })
@@ -108,6 +110,15 @@ pub fn recover_direct_call_args_with_param_counts(
                         args.push(recover_arg(func, sv, &def_map));
                     }
                     if !args.is_empty() {
+                        trace_call_args(
+                            insn.addr,
+                            target.offset,
+                            callee_name,
+                            wanted,
+                            existing,
+                            visible,
+                            args.len(),
+                        );
                         updates.push(CallUpdate {
                             bid,
                             insn_idx,
@@ -155,6 +166,31 @@ pub fn recover_direct_call_args_with_param_counts(
     }
 
     changed_sites
+}
+
+fn visible_arg_count(arg_regs: &[u64], state: &RegState) -> usize {
+    arg_regs
+        .iter()
+        .take_while(|reg| state.contains_key(reg))
+        .count()
+}
+
+fn trace_call_args(
+    call_addr: u64,
+    target_addr: u64,
+    callee_name: Option<&str>,
+    wanted: usize,
+    existing: usize,
+    visible: usize,
+    added: usize,
+) {
+    if std::env::var_os("UNLACE_CALL_ARGS_TRACE").is_none() {
+        return;
+    }
+    eprintln!(
+        "[unlace-call-args] call=0x{call_addr:x} target=0x{target_addr:x} name={} wanted={wanted} existing={existing} visible={visible} added={added}",
+        callee_name.unwrap_or("<unknown>")
+    );
 }
 
 fn compute_arg_reg_entry_states(

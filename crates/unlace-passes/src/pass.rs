@@ -8,6 +8,17 @@ use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 
 use crate::analysis_context::PreservedAnalyses;
 
+fn pass_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_PASS_TRACE")
+        .or_else(|| std::env::var_os("UNLACE_PIPELINE_TRACE"))
+        .and_then(|v| v.into_string().ok())
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+        })
+        .unwrap_or(false)
+}
+
 /// Error type for optimization passes.
 #[derive(Debug, thiserror::Error)]
 pub enum PassError {
@@ -304,11 +315,25 @@ pub fn run_to_fixedpoint(passes: &[&dyn Pass], func: &mut SsaFunction) -> Result
         let mut changed_passes: Vec<&str> = Vec::new();
         for pass in passes {
             let pass_start = std::time::Instant::now();
+            if pass_trace_enabled() {
+                eprintln!(
+                    "[unlace pass] func={func_name} round={round} pass={} start",
+                    pass.name()
+                );
+            }
             // `run_instrumented` is a single-atomic-load no-op when
             // neither `UNLACE_TIMING` nor `UNLACE_TRACE_PASSES` is set,
             // so this preserves the prior hot-path cost.
             let changed = crate::instrument::run_instrumented(*pass, func)?;
             let elapsed = pass_start.elapsed();
+            if pass_trace_enabled() {
+                eprintln!(
+                    "[unlace pass] func={func_name} round={round} pass={} done changed={} elapsed_ms={}",
+                    pass.name(),
+                    changed,
+                    elapsed.as_millis(),
+                );
+            }
             if elapsed >= std::time::Duration::from_millis(500) {
                 tracing::warn!(
                     func = %func_name,

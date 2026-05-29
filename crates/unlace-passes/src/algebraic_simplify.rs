@@ -84,6 +84,9 @@ fn collect_rewrites(func: &SsaFunction, defs: &DefIndex) -> Vec<Rewrite> {
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             if let Some(replacement) = try_simplify(func, defs, bid, insn_idx, insn) {
+                if replacement_is_noop(func, bid, insn_idx, insn, &replacement) {
+                    continue;
+                }
                 rewrites.push(Rewrite {
                     block: bid,
                     insn_idx,
@@ -94,6 +97,72 @@ fn collect_rewrites(func: &SsaFunction, defs: &DefIndex) -> Vec<Rewrite> {
     }
 
     rewrites
+}
+
+fn replacement_is_noop(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+    replacement: &Replacement,
+) -> bool {
+    match replacement {
+        Replacement::Copy { input, input_ssa } => {
+            if insn.op != IrOp::Copy || insn.inputs.as_slice() != [*input] {
+                return false;
+            }
+            input_slot_matches(func, bid, insn_idx, 0, input, *input_ssa)
+                && no_stale_input_slots(func, bid, insn_idx, 1, insn.inputs.len())
+        }
+        Replacement::Reop {
+            op,
+            inputs,
+            input_ssas,
+        } => {
+            if insn.op != *op || insn.inputs.as_slice() != inputs.as_slice() {
+                return false;
+            }
+            for (idx, (input, input_ssa)) in inputs.iter().zip(input_ssas.iter()).enumerate() {
+                if !input_slot_matches(func, bid, insn_idx, idx, input, *input_ssa) {
+                    return false;
+                }
+            }
+            no_stale_input_slots(func, bid, insn_idx, inputs.len(), insn.inputs.len())
+        }
+    }
+}
+
+fn input_slot_matches(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+    input: &Varnode,
+    expected: Option<SsaVarnode>,
+) -> bool {
+    let current = func
+        .var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+        .copied();
+    if input.space == SpaceId::Const {
+        current.is_none()
+    } else {
+        current == expected
+    }
+}
+
+fn no_stale_input_slots(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    new_input_count: usize,
+    old_input_count: usize,
+) -> bool {
+    (new_input_count..old_input_count).all(|input_idx| {
+        !func
+            .var_map
+            .contains_key(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+    })
 }
 
 fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {

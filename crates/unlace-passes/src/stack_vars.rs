@@ -439,13 +439,7 @@ fn extract_stack_offset_with_hints(
     ssa_resolve_cache: &mut SsaResolveCache,
     spec: &StackSpec,
 ) -> Option<i64> {
-    // Case 0: pre-optimization snapshot hints captured before fixedpoint
-    // propagation can collapse stack-relative address expressions to constants.
-    if let Some(&hint) = func.stack_offset_hints.get(&current_loc) {
-        return Some(hint);
-    }
-
-    extract_stack_offset(
+    let fresh = extract_stack_offset(
         current_loc,
         insn,
         func,
@@ -453,7 +447,13 @@ fn extract_stack_offset_with_hints(
         resolve_cache,
         ssa_resolve_cache,
         spec,
-    )
+    );
+    // Pre-optimization snapshot hints are still valuable once fixedpoint
+    // propagation has collapsed a stack-relative expression to an opaque
+    // constant, but they can become stale after later index-shifting rewrites.
+    // Prefer a freshly recoverable address and fall back to the old snapshot
+    // only when the current expression can no longer be traced.
+    fresh.or_else(|| func.stack_offset_hints.get(&current_loc).copied())
 }
 
 fn extract_stack_offset(
@@ -916,6 +916,32 @@ mod tests {
         let sv = &ssa.stack_vars[&16];
         assert_eq!(sv.offset, 16);
         assert_eq!(sv.name, "local_10");
+    }
+
+    #[test]
+    fn test_fresh_stack_offset_beats_stale_snapshot_hint() {
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(0, 8);
+        let c16 = Varnode::constant(16, 8);
+        let space_ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, u0, smallvec![rsp(), c16], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![space_ram, u0, val], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.stack_offset_hints.insert((BlockId(0), 1), 72);
+        let pass = StackVarRecoveryPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(changed);
+        assert!(
+            ssa.stack_vars.contains_key(&16),
+            "freshly recovered offset should win over stale hint, got {:?}",
+            ssa.stack_vars.keys().collect::<Vec<_>>()
+        );
+        assert!(!ssa.stack_vars.contains_key(&72));
     }
 
     #[test]

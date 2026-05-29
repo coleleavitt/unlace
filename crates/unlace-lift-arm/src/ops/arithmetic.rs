@@ -59,7 +59,7 @@ pub(crate) fn emit_pack_nzcv(ctx: &mut LiftCtx) {
     ));
 }
 
-fn emit_result_flags(ctx: &mut LiftCtx, result: Varnode, op_size: u8) {
+pub(crate) fn emit_result_flags(ctx: &mut LiftCtx, result: Varnode, op_size: u8) {
     let zero = Varnode::constant(0, op_size);
     let zf = Varnode::reg(ZF, 1);
     ctx.emit(IrInsn::with_output(
@@ -140,6 +140,30 @@ fn emit_sub_flags(ctx: &mut LiftCtx, a: Varnode, b: Varnode, result: Varnode, op
         ctx.addr,
     ));
     emit_pack_nzcv(ctx);
+}
+
+fn sign_extend_to(ctx: &mut LiftCtx, value: Varnode, size: u8) -> Varnode {
+    if value.size == size {
+        value
+    } else if value.size < size {
+        let extended = Varnode::unique(ctx.alloc_unique(), size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntSext,
+            extended,
+            smallvec![value],
+            ctx.addr,
+        ));
+        extended
+    } else {
+        let piece = Varnode::unique(ctx.alloc_unique(), size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            piece,
+            smallvec![value, Varnode::constant(0, 1)],
+            ctx.addr,
+        ));
+        piece
+    }
 }
 
 fn dst_size(ops: &Ops) -> u8 {
@@ -346,6 +370,7 @@ pub fn lift_tst(ctx: &mut LiftCtx, ops: &Ops) {
                 smallvec![Varnode::constant(0, 1)],
                 ctx.addr,
             ));
+            emit_pack_nzcv(ctx);
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -373,6 +398,30 @@ pub fn lift_neg(ctx: &mut LiftCtx, ops: &Ops) {
     }
 }
 
+pub fn lift_negs(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let src = operand_to_varnode(ctx, &ops[1].0);
+    match src {
+        Some(src) => {
+            let zero = Varnode::constant(0, size);
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSub,
+                result,
+                smallvec![zero, src],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+            emit_sub_flags(ctx, zero, src, result, size);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
 fn lift_binop(ctx: &mut LiftCtx, ops: &Ops, op: IrOp) {
     if ops.len() < 3 {
         ctx.emit_unimplemented();
@@ -393,6 +442,31 @@ fn lift_binop(ctx: &mut LiftCtx, ops: &Ops, op: IrOp) {
 
 pub fn lift_mul(ctx: &mut LiftCtx, ops: &Ops) {
     lift_binop(ctx, ops, IrOp::IntMult);
+}
+
+pub fn lift_smull(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let a = sign_extend_to(ctx, a, size);
+            let b = sign_extend_to(ctx, b, size);
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntMult,
+                result,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
 }
 
 /// UMULH/SMULH Xd, Xn, Xm — Xd = (Xn * Xm) >> 64. Emit a single

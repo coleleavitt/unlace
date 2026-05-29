@@ -114,6 +114,20 @@ fn verify_each_flag() -> bool {
     })
 }
 
+fn pass_run_trace_flag() -> bool {
+    static CELL: OnceLock<bool> = OnceLock::new();
+    *CELL.get_or_init(|| {
+        std::env::var_os("UNLACE_PASS_TRACE")
+            .or_else(|| std::env::var_os("UNLACE_PIPELINE_TRACE"))
+            .and_then(|v| v.into_string().ok())
+            .map(|v| {
+                let v = v.trim().to_ascii_lowercase();
+                !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+            })
+            .unwrap_or(false)
+    })
+}
+
 fn disabled_passes() -> &'static Option<Vec<String>> {
     static CELL: OnceLock<Option<Vec<String>>> = OnceLock::new();
     CELL.get_or_init(|| parse_pass_csv_env("UNLACE_DISABLE_PASSES"))
@@ -303,6 +317,12 @@ pub fn verify_each_enabled() -> bool {
     verify_each_flag()
 }
 
+/// `true` iff direct pass start/end tracing is enabled.
+#[inline]
+pub fn pass_run_trace_enabled() -> bool {
+    pass_run_trace_flag()
+}
+
 /// Configured path for `UNLACE_TIMING_CSV` (Batch 17 slice 2), or `None`
 /// when the env var is unset.
 ///
@@ -488,9 +508,30 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
     let csv = func_timing_enabled();
     let audit = schedule_audit_enabled();
     let verify = verify_each_enabled();
+    let pass_trace = pass_run_trace_enabled();
 
-    if !trace && !timing && !csv && !audit && !verify {
+    if !trace && !timing && !csv && !audit && !verify && !pass_trace {
         return pass.run(func);
+    }
+
+    if pass_trace {
+        let blocks = func.function.blocks.len();
+        let insns: usize = func.function.blocks.values().map(|b| b.insns.len()).sum();
+        let phis: usize = func.phi_map.values().map(|phis| phis.len()).sum();
+        eprintln!(
+            "[unlace pass] func={} pass={} phase={:?} start maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={} foldable={} lvars={}",
+            func.function.name,
+            pass.name(),
+            pass.phase(),
+            func.maturity,
+            blocks,
+            insns,
+            phis,
+            func.var_map.len(),
+            func.merged_names.len(),
+            func.foldable_exprs.len(),
+            func.lvars.len(),
+        );
     }
 
     let before = if trace {
@@ -511,7 +552,7 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
     // passes don't rename functions, but a few (e.g. RustPanicPass) can
     // touch the name — record against the pre-pass identity so the CSV
     // groups behave like a stable key.
-    let func_name_owned = if csv || audit {
+    let func_name_owned = if csv || audit || pass_trace {
         Some(func.function.name.clone())
     } else {
         None
@@ -535,6 +576,38 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
         // otherwise an empty string — the aggregate branch ignores it.
         let func_name = func_name_owned.as_deref().unwrap_or("");
         record_pass_timing(func_name, pass.name(), ns_u64);
+    }
+
+    if pass_trace {
+        let blocks = func.function.blocks.len();
+        let insns: usize = func.function.blocks.values().map(|b| b.insns.len()).sum();
+        let phis: usize = func.phi_map.values().map(|phis| phis.len()).sum();
+        let func_name = func_name_owned.as_deref().unwrap_or(&func.function.name);
+        match &res {
+            Ok(changed) => eprintln!(
+                "[unlace pass] func={func_name} pass={} done changed={} maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={} foldable={} lvars={}",
+                pass.name(),
+                changed,
+                func.maturity,
+                blocks,
+                insns,
+                phis,
+                func.var_map.len(),
+                func.merged_names.len(),
+                func.foldable_exprs.len(),
+                func.lvars.len(),
+            ),
+            Err(err) => eprintln!(
+                "[unlace pass] func={func_name} pass={} error={err:?} maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={}",
+                pass.name(),
+                func.maturity,
+                blocks,
+                insns,
+                phis,
+                func.var_map.len(),
+                func.merged_names.len(),
+            ),
+        }
     }
 
     if let Some(pre) = before {

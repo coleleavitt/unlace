@@ -137,8 +137,8 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
     out
 }
 
-/// Chase through Copy instructions via var_map, returning the first
-/// non-Copy producer's location and opcode.
+/// Chase through value-transparent instructions via var_map, returning the
+/// first non-transparent producer's location and opcode.
 fn chase_copies_to_producer(
     func: &SsaFunction,
     defs: &DefIndex,
@@ -152,7 +152,10 @@ fn chase_copies_to_producer(
             .blocks
             .get(&def_loc.0)
             .and_then(|b| b.insns.get(def_loc.1))?;
-        if di.op != IrOp::Copy {
+        if !matches!(
+            di.op,
+            IrOp::Copy | IrOp::IntZext | IrOp::IntSext | IrOp::Subpiece | IrOp::Cast
+        ) {
             return Some((def_loc, di.op));
         }
         let next = func

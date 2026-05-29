@@ -1,5 +1,5 @@
 use smallvec::smallvec;
-use unlace_ir::{IrInsn, IrOp, Varnode};
+use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::lift::LiftCtx;
 use crate::register_file::{CF, OF, PF, RAX, SF, ZF};
@@ -9,10 +9,6 @@ use crate::register_file::{CF, OF, PF, RAX, SF, ZF};
 /// Distinct from `bit_tag::*` and the string-op tags so a downstream consumer
 /// can dispatch on the constant in `inputs[0]` without ambiguity.
 pub mod atomic_tag {
-    /// `_InterlockedCompareExchange(dst, src, expected)` — LOCK CMPXCHG.
-    pub const CMPXCHG: u64 = 0x400;
-    /// `_InterlockedExchangeAdd(dst, src)` — LOCK XADD.
-    pub const XADD: u64 = 0x401;
     /// `__builtin_bswap{32,64}(src)` — BSWAP / MOVBE byte reversal.
     pub const BSWAP: u64 = 0x402;
 }
@@ -420,42 +416,33 @@ pub fn lift_div(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     match src {
         Some(src) => {
             let op_size = src.size;
-            let rax = Varnode::new(
-                unlace_ir::SpaceId::Register,
-                crate::register_file::RAX,
-                op_size,
-            );
-            let rdx = Varnode::new(
-                unlace_ir::SpaceId::Register,
-                crate::register_file::RDX,
-                op_size,
-            );
+            let Some((quot_reg, rem_reg)) = div_result_registers(op_size) else {
+                ctx.emit_unimplemented();
+                return;
+            };
+            let Some(dividend) = ctx.read_register(dividend_register(op_size)) else {
+                ctx.emit_unimplemented();
+                return;
+            };
             let quot = Varnode::unique(ctx.alloc_unique(), op_size);
             let rem = Varnode::unique(ctx.alloc_unique(), op_size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntDiv,
                 quot,
-                smallvec![rax, src],
+                smallvec![dividend, src],
                 ctx.addr,
             ));
             ctx.emit(IrInsn::with_output(
                 IrOp::IntRem,
                 rem,
-                smallvec![rax, src],
+                smallvec![dividend, src],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::with_output(
-                IrOp::Copy,
-                rax,
-                smallvec![quot],
-                ctx.addr,
-            ));
-            ctx.emit(IrInsn::with_output(
-                IrOp::Copy,
-                rdx,
-                smallvec![rem],
-                ctx.addr,
-            ));
+            if ctx.write_register(quot_reg, quot).is_none()
+                || ctx.write_register(rem_reg, rem).is_none()
+            {
+                ctx.emit_unimplemented();
+            }
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -466,44 +453,59 @@ pub fn lift_idiv(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     match src {
         Some(src) => {
             let op_size = src.size;
-            let rax = Varnode::new(
-                unlace_ir::SpaceId::Register,
-                crate::register_file::RAX,
-                op_size,
-            );
-            let rdx = Varnode::new(
-                unlace_ir::SpaceId::Register,
-                crate::register_file::RDX,
-                op_size,
-            );
+            let Some((quot_reg, rem_reg)) = div_result_registers(op_size) else {
+                ctx.emit_unimplemented();
+                return;
+            };
+            let Some(dividend) = ctx.read_register(dividend_register(op_size)) else {
+                ctx.emit_unimplemented();
+                return;
+            };
             let quot = Varnode::unique(ctx.alloc_unique(), op_size);
             let rem = Varnode::unique(ctx.alloc_unique(), op_size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSdiv,
                 quot,
-                smallvec![rax, src],
+                smallvec![dividend, src],
                 ctx.addr,
             ));
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSrem,
                 rem,
-                smallvec![rax, src],
+                smallvec![dividend, src],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::with_output(
-                IrOp::Copy,
-                rax,
-                smallvec![quot],
-                ctx.addr,
-            ));
-            ctx.emit(IrInsn::with_output(
-                IrOp::Copy,
-                rdx,
-                smallvec![rem],
-                ctx.addr,
-            ));
+            if ctx.write_register(quot_reg, quot).is_none()
+                || ctx.write_register(rem_reg, rem).is_none()
+            {
+                ctx.emit_unimplemented();
+            }
         }
         _ => ctx.emit_unimplemented(),
+    }
+}
+
+fn div_result_registers(op_size: u8) -> Option<(iced_x86::Register, iced_x86::Register)> {
+    use iced_x86::Register as R;
+
+    match op_size {
+        1 => Some((R::AL, R::AH)),
+        2 => Some((R::AX, R::DX)),
+        4 => Some((R::EAX, R::EDX)),
+        8 => Some((R::RAX, R::RDX)),
+        _ => None,
+    }
+}
+
+fn dividend_register(op_size: u8) -> iced_x86::Register {
+    use iced_x86::Register as R;
+
+    match op_size {
+        1 => R::AX,
+        2 => R::AX,
+        4 => R::EAX,
+        8 => R::RAX,
+        _ => R::RAX,
     }
 }
 
@@ -732,12 +734,21 @@ pub fn lift_cmpxchg(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let rax_acc = Varnode::new(unlace_ir::SpaceId::Register, RAX, op_size);
 
     if insn.has_lock_prefix() {
-        let tag = Varnode::constant(atomic_tag::CMPXCHG, 8);
+        if insn.op_kind(0) != iced_x86::OpKind::Memory {
+            ctx.emit_unimplemented();
+            return;
+        }
         let original = Varnode::unique(ctx.alloc_unique(), op_size);
         ctx.emit(IrInsn::with_output(
-            IrOp::Callother,
+            IrOp::AtomicCas,
             original,
-            smallvec![tag, dst_val, src_val, rax_acc],
+            smallvec![
+                Varnode::constant(SpaceId::Ram as u64, 8),
+                dst_loc,
+                rax_acc,
+                src_val,
+                Varnode::constant(4, 8)
+            ],
             ctx.addr,
         ));
 
@@ -874,12 +885,21 @@ pub fn lift_xadd(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let op_size = dst_val.size;
 
     if insn.has_lock_prefix() {
-        let tag = Varnode::constant(atomic_tag::XADD, 8);
+        if insn.op_kind(0) != iced_x86::OpKind::Memory {
+            ctx.emit_unimplemented();
+            return;
+        }
         let original_dst = Varnode::unique(ctx.alloc_unique(), op_size);
         ctx.emit(IrInsn::with_output(
-            IrOp::Callother,
+            IrOp::AtomicRmw,
             original_dst,
-            smallvec![tag, dst_val, src_val],
+            smallvec![
+                Varnode::constant(SpaceId::Ram as u64, 8),
+                dst_loc,
+                src_val,
+                Varnode::constant(1, 8),
+                Varnode::constant(4, 8)
+            ],
             ctx.addr,
         ));
 

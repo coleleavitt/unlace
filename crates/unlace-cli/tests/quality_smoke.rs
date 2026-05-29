@@ -97,12 +97,21 @@ fn baseline_hello_world() {
         "hello_world should have no raw __asm blocks"
     );
     // Batch 0+ extended counters pinned baselines. hello_world is a
-    // single direct-call printf wrapper. Batch 17 stack/SSA provenance now
-    // preserves startup stack arithmetic, exposing two compound assignments
-    // in helper output; no short-circuit, no SIMD, all calls direct.
+    // single direct-call printf wrapper. Current frame-base cleanup suppresses
+    // startup stack arithmetic instead of counting it as source-shaped
+    // compound assignments; no short-circuit, no SIMD, all calls direct.
     assert_eq!(
-        t.compound_assignments, 2,
-        "hello_world: two startup compound assigns recovered"
+        t.compound_assignments, 0,
+        "hello_world: startup frame-base arithmetic is suppressed"
+    );
+    assert_eq!(t.callother_ops, 1, "hello_world: one terminal startup trap");
+    assert_eq!(
+        t.callother_trap_ops, 1,
+        "hello_world: terminal startup trap is classified"
+    );
+    assert_eq!(
+        t.callother_semantic_gap_ops, 0,
+        "hello_world: no unknown Callother semantic gaps"
     );
     assert_eq!(t.short_circuit_ops, 0, "hello_world: no &&/||");
     assert_eq!(t.simd_typed_vars, 0, "hello_world: no SIMD-typed vars");
@@ -146,24 +155,31 @@ fn baseline_hello_world() {
 
 /// Pinned baseline for `branches.elf`. Captures the current shape after x86
 /// calls stopped materializing synthetic return-address stack stores, SCCP
-/// stopped zeroing first-use register inputs, and stack/struct artifact
-/// suppression stopped counting non-source startup temporaries as recovered
-/// source objects.
+/// stopped zeroing first-use register inputs, and Callother accounting split
+/// terminal startup traps from real unknown semantic gaps.
 #[test]
 fn baseline_branches() {
     let t = analyze("branches.elf");
     assert_eq!(t.unimplemented_ops, 0, "branches: no Unimplemented ops");
     assert_eq!(
-        t.callother_ops, 0,
-        "branches: no Callother ops (SSE mov lowered to Copy)"
+        t.callother_ops, 1,
+        "branches: one terminal startup trap Callother remains visible"
     );
     assert_eq!(
-        t.stack_vars_recovered, 1,
-        "branches: one startup stack var artifact remains recovered"
+        t.callother_trap_ops, 1,
+        "branches: terminal startup trap is classified"
     );
     assert_eq!(
-        t.struct_fields_recovered, 0,
-        "branches: no source struct fields recovered"
+        t.callother_semantic_gap_ops, 0,
+        "branches: no unknown Callother semantic gaps"
+    );
+    assert_eq!(
+        t.stack_vars_recovered, 3,
+        "branches: startup stack artifacts remain recovered"
+    );
+    assert_eq!(
+        t.struct_fields_recovered, 2,
+        "branches: startup synthetic stack composite is still visible"
     );
     assert_eq!(t.gotos_emitted, 0, "branches: no gotos emitted");
     assert_eq!(t.labels_emitted, 0, "branches: no labels emitted");

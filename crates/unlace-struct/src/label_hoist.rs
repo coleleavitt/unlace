@@ -1,17 +1,48 @@
 //! Hoist cross-branch labels to a common enclosing scope.
 
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 
 use crate::hir::{HirFunction, HirNode, LabelId};
 
 /// Move labels that are targeted from outside their branch to the nearest
 /// common ancestor scope, carrying the label's tail with it.
 pub fn hoist_cross_branch_labels(func: &mut HirFunction) {
+    let mut iteration = 0usize;
     while let Some(plan) = find_hoist(&func.body) {
+        if label_hoist_trace_enabled() {
+            eprintln!(
+                "[unlace-label-hoist] iter={iteration} plan label_scope={} label_index={} insert_scope={} insert_index={}",
+                fmt_scope(&plan.label_scope),
+                plan.label_index,
+                fmt_scope(&plan.insert_scope),
+                plan.insert_index
+            );
+        }
         if !apply_hoist(&mut func.body, plan) {
+            if label_hoist_trace_enabled() {
+                eprintln!("[unlace-label-hoist] iter={iteration} apply=false");
+            }
             break;
         }
+        iteration += 1;
     }
+    if label_hoist_trace_enabled() {
+        eprintln!("[unlace-label-hoist] done iterations={iteration}");
+    }
+}
+
+fn label_hoist_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        env_flag("UNLACE_LABEL_HOIST_TRACE")
+            || env_flag("UNLACE_STRUCT_TRACE_VERBOSE")
+            || env_flag("UNLACE_HIR_TRACE_VERBOSE")
+    })
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name).map(|v| v != "0").unwrap_or(false)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -53,6 +84,28 @@ fn find_hoist(nodes: &[HirNode]) -> Option<HoistPlan> {
     let mut gotos = Vec::new();
     collect_positions(nodes, &mut Vec::new(), &mut labels, &mut gotos);
 
+    if label_hoist_trace_enabled() {
+        eprintln!(
+            "[unlace-label-hoist] scan labels={} gotos={}",
+            labels.len(),
+            gotos.len()
+        );
+        for (label, pos) in labels.iter().take(16) {
+            eprintln!(
+                "[unlace-label-hoist] label={label:?} scope={} index={}",
+                fmt_scope(&pos.scope),
+                pos.index
+            );
+        }
+        for (label, pos) in gotos.iter().take(16) {
+            eprintln!(
+                "[unlace-label-hoist] goto={label:?} scope={} index={}",
+                fmt_scope(&pos.scope),
+                pos.index
+            );
+        }
+    }
+
     for (target, goto_pos) in gotos {
         let Some(label_pos) = labels.get(&target) else {
             continue;
@@ -70,6 +123,17 @@ fn find_hoist(nodes: &[HirNode]) -> Option<HoistPlan> {
         let Some(insert_index) = child_index_after_prefix(&label_pos.scope, &insert_scope) else {
             continue;
         };
+        if label_hoist_trace_enabled() {
+            eprintln!(
+                "[unlace-label-hoist] candidate target={target:?} goto_scope={} goto_index={} label_scope={} label_index={} branch_prefix={} common={} insert_index={insert_index}",
+                fmt_scope(&goto_pos.scope),
+                goto_pos.index,
+                fmt_scope(&label_pos.scope),
+                label_pos.index,
+                fmt_scope(branch_prefix),
+                fmt_scope(&insert_scope)
+            );
+        }
         return Some(HoistPlan {
             label_scope: label_pos.scope.clone(),
             label_index: label_pos.index,
@@ -226,15 +290,176 @@ fn apply_hoist(nodes: &mut Vec<HirNode>, plan: HoistPlan) -> bool {
         if plan.label_index >= label_scope.len() {
             return false;
         }
-        label_scope.split_off(plan.label_index)
+        let suffix = label_scope.split_off(plan.label_index);
+        if label_hoist_trace_enabled() {
+            let stats = node_stats(&suffix);
+            eprintln!(
+                "[unlace-label-hoist] split label_scope={} remaining={} suffix_len={} suffix={}",
+                fmt_scope(&plan.label_scope),
+                label_scope.len(),
+                suffix.len(),
+                stats
+            );
+        }
+        suffix
     };
 
     let Some(insert_scope) = scope_mut(nodes, &plan.insert_scope) else {
         return false;
     };
     let insert_at = plan.insert_index.saturating_add(1).min(insert_scope.len());
+    if label_hoist_trace_enabled() {
+        eprintln!(
+            "[unlace-label-hoist] insert insert_scope={} insert_at={} before_len={}",
+            fmt_scope(&plan.insert_scope),
+            insert_at,
+            insert_scope.len()
+        );
+    }
     insert_scope.splice(insert_at..insert_at, suffix);
+    if label_hoist_trace_enabled() {
+        eprintln!(
+            "[unlace-label-hoist] insert-done insert_scope={} after_len={}",
+            fmt_scope(&plan.insert_scope),
+            insert_scope.len()
+        );
+    }
     true
+}
+
+#[derive(Default)]
+struct NodeStats {
+    nodes: usize,
+    labels: usize,
+    gotos: usize,
+    breaks: usize,
+    continues: usize,
+    empty_ifs: usize,
+}
+
+impl std::fmt::Display for NodeStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "nodes={} labels={} gotos={} breaks={} continues={} empty_ifs={}",
+            self.nodes, self.labels, self.gotos, self.breaks, self.continues, self.empty_ifs
+        )
+    }
+}
+
+fn node_stats(nodes: &[HirNode]) -> NodeStats {
+    let mut stats = NodeStats::default();
+    for node in nodes {
+        stats.nodes += 1;
+        match node {
+            HirNode::Label(_) => stats.labels += 1,
+            HirNode::Goto(_) => stats.gotos += 1,
+            HirNode::Break => stats.breaks += 1,
+            HirNode::Continue => stats.continues += 1,
+            HirNode::Block(children) => merge_stats(&mut stats, node_stats(children)),
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                if then_body.is_empty() && else_body.as_ref().is_none_or(Vec::is_empty) {
+                    stats.empty_ifs += 1;
+                }
+                merge_stats(&mut stats, node_stats(then_body));
+                if let Some(else_body) = else_body {
+                    merge_stats(&mut stats, node_stats(else_body));
+                }
+            }
+            HirNode::IfCmp {
+                then_body,
+                else_body,
+                ..
+            } => {
+                if then_body.is_empty() && else_body.as_ref().is_none_or(Vec::is_empty) {
+                    stats.empty_ifs += 1;
+                }
+                merge_stats(&mut stats, node_stats(then_body));
+                if let Some(else_body) = else_body {
+                    merge_stats(&mut stats, node_stats(else_body));
+                }
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                merge_stats(&mut stats, node_stats(body));
+            }
+            HirNode::For { body, .. } => merge_stats(&mut stats, node_stats(body)),
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    merge_stats(&mut stats, node_stats(body));
+                }
+                if let Some(default) = default {
+                    merge_stats(&mut stats, node_stats(default));
+                }
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                merge_stats(&mut stats, node_stats(try_body));
+                for (_, body) in catch_arms {
+                    merge_stats(&mut stats, node_stats(body));
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                merge_stats(&mut stats, node_stats(try_body));
+                merge_stats(&mut stats, node_stats(finally_body));
+            }
+            HirNode::Commented { inner, .. } => {
+                merge_stats(&mut stats, node_stats(std::slice::from_ref(inner.as_ref())));
+            }
+            HirNode::Statement(_)
+            | HirNode::Return(_)
+            | HirNode::Ternary { .. }
+            | HirNode::TailCall { .. }
+            | HirNode::GuardedIf { .. }
+            | HirNode::GuardedTernary { .. }
+            | HirNode::CselTernary { .. }
+            | HirNode::ObjcBlock { .. }
+            | HirNode::Asm { .. } => {}
+        }
+    }
+    stats
+}
+
+fn merge_stats(dst: &mut NodeStats, src: NodeStats) {
+    dst.nodes += src.nodes;
+    dst.labels += src.labels;
+    dst.gotos += src.gotos;
+    dst.breaks += src.breaks;
+    dst.continues += src.continues;
+    dst.empty_ifs += src.empty_ifs;
+}
+
+fn fmt_scope(scope: &[ScopeStep]) -> String {
+    if scope.is_empty() {
+        return "<root>".into();
+    }
+    scope
+        .iter()
+        .map(|step| match step {
+            ScopeStep::Block(index) => format!("block[{index}]"),
+            ScopeStep::IfThen(index) => format!("if[{index}].then"),
+            ScopeStep::IfElse(index) => format!("if[{index}].else"),
+            ScopeStep::While(index) => format!("while[{index}]"),
+            ScopeStep::DoWhile(index) => format!("dowhile[{index}]"),
+            ScopeStep::For(index) => format!("for[{index}]"),
+            ScopeStep::SwitchCase(index, case_index) => {
+                format!("switch[{index}].case[{case_index}]")
+            }
+            ScopeStep::SwitchDefault(index) => format!("switch[{index}].default"),
+            ScopeStep::Try(index) => format!("try[{index}]"),
+            ScopeStep::Catch(index, arm_index) => format!("catch[{index}][{arm_index}]"),
+            ScopeStep::Finally(index) => format!("finally[{index}]"),
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn scope_mut<'a>(nodes: &'a mut Vec<HirNode>, path: &[ScopeStep]) -> Option<&'a mut Vec<HirNode>> {

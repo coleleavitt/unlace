@@ -3,6 +3,8 @@ use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::lift::{LiftCtx, operand_to_varnode};
+use crate::ops::arithmetic::{emit_pack_nzcv, emit_result_flags};
+use crate::register_file::{CF, VF};
 
 type Ops = [(Arm64OperandType, Arm64Shift)];
 
@@ -26,6 +28,47 @@ fn write_dst(ctx: &mut LiftCtx, ops: &Ops, value: Varnode) {
     }
 }
 
+fn coerce_to_size(ctx: &mut LiftCtx, value: Varnode, size: u8) -> Varnode {
+    if value.size == size {
+        value
+    } else if value.size < size {
+        let extended = Varnode::unique(ctx.alloc_unique(), size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntZext,
+            extended,
+            smallvec![value],
+            ctx.addr,
+        ));
+        extended
+    } else {
+        let piece = Varnode::unique(ctx.alloc_unique(), size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            piece,
+            smallvec![value, Varnode::constant(0, 1)],
+            ctx.addr,
+        ));
+        piece
+    }
+}
+
+fn emit_logical_flags(ctx: &mut LiftCtx, result: Varnode, size: u8) {
+    emit_result_flags(ctx, result, size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        Varnode::reg(CF, 1),
+        smallvec![Varnode::constant(0, 1)],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        Varnode::reg(VF, 1),
+        smallvec![Varnode::constant(0, 1)],
+        ctx.addr,
+    ));
+    emit_pack_nzcv(ctx);
+}
+
 pub fn lift_and(ctx: &mut LiftCtx, ops: &Ops) {
     if ops.len() < 3 {
         ctx.emit_unimplemented();
@@ -44,6 +87,30 @@ pub fn lift_and(ctx: &mut LiftCtx, ops: &Ops) {
                 ctx.addr,
             ));
             write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_ands(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAnd,
+                result,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+            emit_logical_flags(ctx, result, size);
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -120,6 +187,37 @@ pub fn lift_bic(ctx: &mut LiftCtx, ops: &Ops) {
                 ctx.addr,
             ));
             write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_bics(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let inverted = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntNegate,
+                inverted,
+                smallvec![b],
+                ctx.addr,
+            ));
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAnd,
+                result,
+                smallvec![a, inverted],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+            emit_logical_flags(ctx, result, size);
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -491,6 +589,72 @@ pub fn lift_extr(ctx: &mut LiftCtx, ops: &Ops) {
                 IrOp::IntOr,
                 result,
                 smallvec![right, left],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_bfxil(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let bits = u64::from(size) * 8;
+    let Some((Arm64OperandType::Reg(dst_reg), _)) = ops.first() else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(old_dst) = crate::register_file::reg_varnode(*dst_reg) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let src = operand_to_varnode(ctx, &ops[1].0).map(|src| coerce_to_size(ctx, src, size));
+    let lsb = imm(&ops[2].0);
+    let width = imm(&ops[3].0);
+    match (src, lsb, width) {
+        (Some(src), Some(lsb), Some(width))
+            if width > 0 && lsb < bits && lsb.saturating_add(width) <= bits =>
+        {
+            let extract_mask = Varnode::constant(low_mask(width), size);
+            let extracted = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAnd,
+                extracted,
+                smallvec![src, extract_mask],
+                ctx.addr,
+            ));
+
+            let inserted = if lsb == 0 {
+                extracted
+            } else {
+                let shifted = Varnode::unique(ctx.alloc_unique(), size);
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntLeft,
+                    shifted,
+                    smallvec![extracted, Varnode::constant(lsb, 1)],
+                    ctx.addr,
+                ));
+                shifted
+            };
+
+            let field_mask = low_mask(width) << lsb;
+            let kept_mask = Varnode::constant(!field_mask & low_mask(bits), size);
+            let kept = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAnd,
+                kept,
+                smallvec![old_dst, kept_mask],
+                ctx.addr,
+            ));
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntOr,
+                result,
+                smallvec![kept, inserted],
                 ctx.addr,
             ));
             write_dst(ctx, ops, result);

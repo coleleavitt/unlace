@@ -13884,21 +13884,26 @@ fn indent(depth: usize, tab_width: usize, out: &mut String) {
 fn prune_unused_plain_local_decls(output: String) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let mut remove = BTreeSet::new();
-    let mut idx = 0usize;
-    while idx < lines.len() {
-        if !(lines[idx].contains('(') && lines[idx].trim_end().ends_with('{')) {
-            idx += 1;
+
+    // Walk every block-opening `{` line, not just function-decl lines, so
+    // shadowing decls inside `if`/`else`/`do`/`while`/`for` bodies are pruned
+    // with the same used-later check applied within their own lexical block.
+    for open_idx in 0..lines.len() {
+        if !lines[open_idx].trim_end().ends_with('{') {
             continue;
         }
 
-        let body_start = idx + 1;
-        let mut depth = brace_delta(lines[idx]);
-        idx += 1;
-        while idx < lines.len() && depth > 0 {
-            depth += brace_delta(lines[idx]);
-            idx += 1;
+        let body_start = open_idx + 1;
+        let mut depth = brace_delta(lines[open_idx]);
+        if depth <= 0 {
+            continue;
         }
-        let body_end = idx.saturating_sub(1);
+        let mut scan = body_start;
+        while scan < lines.len() && depth > 0 {
+            depth += brace_delta(lines[scan]);
+            scan += 1;
+        }
+        let body_end = scan.saturating_sub(1);
 
         for line_idx in body_start..body_end {
             let Some(name) = parse_plain_local_decl_name(lines[line_idx]) else {
@@ -14323,6 +14328,24 @@ fn collect_v_number_names(line: &str, names: &mut BTreeSet<String>) {
 }
 
 fn prune_dead_plain_assignments(output: String) -> String {
+    // Iterate to a fixed point. A common pattern is a chain of writes:
+    //     cond = 0; ... cond = a < b; ...
+    // where every "later use" of `cond` is itself an assignment to `cond`.
+    // One pass removes the last assignment; a second pass then sees the
+    // earlier ones are now genuinely dead. Cap at a small iteration count
+    // so unbalanced grammar can't loop.
+    let mut current = output;
+    for _ in 0..8 {
+        let next = prune_dead_plain_assignments_once(current.clone());
+        if next == current {
+            return next;
+        }
+        current = next;
+    }
+    current
+}
+
+fn prune_dead_plain_assignments_once(output: String) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let mut changed = false;
     let mut pruned_lines = Vec::with_capacity(lines.len());
@@ -14336,15 +14359,15 @@ fn prune_dead_plain_assignments(output: String) -> String {
         let mut kept = Vec::new();
         for (seg_idx, segment) in segments.iter().enumerate() {
             let remove = parse_plain_assignment_lhs(segment).is_some_and(|lhs| {
+                // A re-assignment to the same lhs (no compound op) is NOT a
+                // genuine use — only RHS reads keep the original write live.
+                let is_real_use = |later: &str| identifier_used_as_rvalue(later, lhs);
                 let used_later_on_line = segments
                     .iter()
                     .skip(seg_idx + 1)
-                    .any(|later| contains_identifier(later, lhs));
+                    .any(|later| is_real_use(later));
                 let used_later = used_later_on_line
-                    || lines
-                        .iter()
-                        .skip(idx + 1)
-                        .any(|later| contains_identifier(later, lhs));
+                    || lines.iter().skip(idx + 1).any(|later| is_real_use(later));
                 let remove = !used_later;
                 trace_prune_plain_assignment(idx, lhs, segment, remove);
                 remove
@@ -14370,6 +14393,47 @@ fn prune_dead_plain_assignments(output: String) -> String {
     pruned
 }
 
+/// Returns true iff `name` appears as an rvalue use (not as the LHS of a
+/// plain `name = …;` write) in `text`. Used by the dead-assignment pruner
+/// so that a chain of pure writes `cond = 0; … cond = a < b;` is recognised
+/// as dead even when later writes textually reference the variable.
+fn identifier_used_as_rvalue(text: &str, name: &str) -> bool {
+    let mut rest = text;
+    while let Some(pos) = rest.find(name) {
+        let before = &rest[..pos];
+        let after = &rest[pos + name.len()..];
+        // Identifier boundary check on both sides.
+        let prev_ok = before
+            .chars()
+            .last()
+            .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
+        let next_ok = after
+            .chars()
+            .next()
+            .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
+        if !(prev_ok && next_ok) {
+            rest = &rest[pos + name.len()..];
+            continue;
+        }
+        // Skip if this occurrence is a plain LHS of `name = …` (NOT `==`, `+=`).
+        let after_trim = after.trim_start();
+        let lhs_assignment = after_trim
+            .strip_prefix('=')
+            .is_some_and(|s| !s.starts_with('=') && !s.starts_with('>'));
+        let prev_trim = before.trim_end();
+        let prev_is_op = prev_trim
+            .chars()
+            .last()
+            .is_some_and(|c| !matches!(c, ' ' | '(' | ',' | ';' | '{'));
+        if lhs_assignment && !prev_is_op {
+            rest = &rest[pos + name.len()..];
+            continue;
+        }
+        return true;
+    }
+    false
+}
+
 fn trace_prune_plain_assignment(line_idx: usize, lhs: &str, segment: &str, remove: bool) {
     if std::env::var_os("UNLACE_CPRINTER_PRUNE_TRACE").is_none() && !c_printer_trace_enabled() {
         return;
@@ -14387,10 +14451,70 @@ fn trace_prune_plain_assignment(line_idx: usize, lhs: &str, segment: &str, remov
 }
 
 fn rename_unreturned_bare_result(output: String) -> String {
-    if !output.contains("int result;") || output.contains("return result;") {
+    // Three transformations on a per-function output:
+    //   (a) `result` is declared but never returned → rename so it doesn't
+    //       collide with later naming passes (legacy behaviour).
+    //   (b) `result` is declared AND returned, but never assigned anywhere
+    //       in the function body (uninitialized-read-then-return). Rewrite
+    //       each `return result;` to `return 0;` and drop the dead decl.
+    //   (c) `result` is NOT declared but `return result;` appears anyway
+    //       (the IDA-like emitter dropped the assignment under multi-stmt
+    //       coalescing, leaving a literal `return result;` with no binding).
+    //       Rewrite each such return to `return 0;`. Without this every
+    //       short-circuit early return through a register-collapsed multi
+    //       statement leaks a stale-helper-return.
+    let has_decl =
+        output.contains("int result;") || output.contains("__int64 result; // rax");
+    let has_bare_return = output.contains("return result;");
+    if !has_decl && !has_bare_return {
         return output;
     }
-    replace_identifier_text(&output, "result", "result_0")
+    if has_decl && !has_bare_return {
+        return replace_identifier_text(&output, "result", "result_0");
+    }
+
+    // has_bare_return is true. Decide whether to drop the decl too.
+    let has_assign = output.contains("result =")
+        || output.contains("result +=")
+        || output.contains("result -=")
+        || output.contains("result *=")
+        || output.contains("result /=")
+        || output.contains("result &=")
+        || output.contains("result |=")
+        || output.contains("result ^=")
+        || output.contains("result <<=")
+        || output.contains("result >>=")
+        || output.contains("result++")
+        || output.contains("result--");
+    if has_decl && has_assign {
+        // Path-sensitive use-before-def. Leaving alone is the safer
+        // behaviour; a later domination-aware pass can refine this.
+        return output;
+    }
+
+    // Rewrite every textual `return result;` to `return 0;`, including
+    // segments embedded in multi-statement lines, and drop the (possibly
+    // present) dead `T result; // rax` declaration line.
+    let mut rewritten = String::with_capacity(output.len());
+    for line in output.lines() {
+        let trimmed = line.trim_start();
+        if trimmed == "int result; // rax"
+            || trimmed == "__int64 result; // rax"
+            || trimmed == "int result;"
+            || trimmed == "__int64 result;"
+        {
+            continue;
+        }
+        if line.contains("return result;") {
+            let replaced = line.replace("return result;", "return 0;");
+            rewritten.push_str(&replaced);
+            rewritten.push('\n');
+            continue;
+        }
+        rewritten.push_str(line);
+        rewritten.push('\n');
+    }
+    rewritten
 }
 
 fn repair_arg_versioned_address_uses(output: String) -> String {
@@ -14533,18 +14657,37 @@ fn parse_shadowing_local_decl_name(line: &str) -> Option<&str> {
 }
 
 fn parse_local_decl_name_inner(line: &str, require_prunable_init: bool) -> Option<&str> {
-    let rest = line.strip_prefix("    ")?;
+    // Accept any indented declaration; previously this required exactly 4-space
+    // (function-top) indent and bailed on deeper nesting, leaving every inline
+    // shadowing `_BOOL cond_14 = ...` inside an `if`/`do` body undetected.
+    let indent_len = line.len() - line.trim_start().len();
+    if indent_len < 4 {
+        return None;
+    }
+    let rest = &line[indent_len..];
     if rest.contains("BYREF") || rest.contains("[rsp") || rest.contains("[rbp") {
         return None;
     }
-    if rest.starts_with(' ') || rest.starts_with("//") {
+    if rest.starts_with("//") {
         return None;
     }
     let semi = rest.find(';')?;
     let stmt = rest[..semi].trim();
     let decl = if let Some((decl, init)) = stmt.split_once(" = ") {
+        // Accept any trailing line comment as a synthetic-temp marker —
+        // the flag-recovery pass emits `// OF`, `// PF`, `// ZF` etc.; the
+        // generic pruner already gates the LHS via `is_decl_synthetic_local`,
+        // so checking only "// temp" was overly restrictive and let
+        // `_BOOL cond_1 = ... ; // PF` survive even when the rhs was pure.
+        let has_temp_comment = rest.contains("// temp")
+            || rest.contains("// OF")
+            || rest.contains("// PF")
+            || rest.contains("// ZF")
+            || rest.contains("// CF")
+            || rest.contains("// SF")
+            || rest.contains("// AF");
         if require_prunable_init
-            && (!rest.contains("// temp") || !is_side_effect_free_temp_initializer(init))
+            && (!has_temp_comment || !is_side_effect_free_temp_initializer(init))
         {
             return None;
         }
@@ -14643,6 +14786,25 @@ fn is_known_pure_macro_call(name: &str) -> bool {
             | "HIDWORD"
             | "__OFADD__"
             | "__OFSUB__"
+            // Compiler builtins that lower to a single pure instruction (POPCNT/LZCNT/TZCNT)
+            // are side-effect-free and safe to drop when their result is unused. Without
+            // this, x86 flag-recovery temps like `_BOOL cond = !(__builtin_popcount(x) & 1)`
+            // (PF) leak into every function with a comparison.
+            | "__builtin_popcount"
+            | "__builtin_popcountl"
+            | "__builtin_popcountll"
+            | "__builtin_clz"
+            | "__builtin_clzl"
+            | "__builtin_clzll"
+            | "__builtin_ctz"
+            | "__builtin_ctzl"
+            | "__builtin_ctzll"
+            | "__builtin_parity"
+            | "__builtin_parityl"
+            | "__builtin_parityll"
+            | "__builtin_bswap16"
+            | "__builtin_bswap32"
+            | "__builtin_bswap64"
     )
 }
 

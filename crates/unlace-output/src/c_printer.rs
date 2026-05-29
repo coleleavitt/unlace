@@ -4703,12 +4703,21 @@ fn propagate_dead_chains(ctx: &mut PrintCtx) {
                 if ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) != 0 {
                     return None;
                 }
+                let insn = ctx.stmt_insns.get(&stmt_idx)?;
+                // Pure AArch64 conditional-select callothers (CSEL family)
+                // are side-effect-free value computations: a dead-output one
+                // is genuinely dead even though its destination is a register
+                // (not "suppressible storage"). Retiring it here lets the
+                // predicate comparison that fed it become dead too, so no
+                // orphan `__unlace_int_*` statement leaks downstream.
+                if is_dead_suppressible_csel(insn, stmt_idx, ctx) {
+                    return Some(stmt_idx);
+                }
                 // Output must be suppressible storage.
                 if !is_suppressible_storage(&out_sv.base, ctx) {
                     return None;
                 }
                 // Statement must not have side effects.
-                let insn = ctx.stmt_insns.get(&stmt_idx)?;
                 if snapshot_assignment_must_be_materialized(&out_sv, insn, stmt_idx, ctx) {
                     return None;
                 }
@@ -7656,6 +7665,75 @@ fn statement_is_transparent_for_call_return(insn: &IrInsn, stmt_idx: u32, ctx: &
         return is_control_only_condition_assignment(stmt_idx, &sv, insn, ctx);
     }
     false
+}
+
+/// Recognise a dead, no-output *scalar value* op whose result was folded
+/// into a consumer (or whose consumer was DCE'd — e.g. a suppressed
+/// CSEL-family intrinsic) and which therefore has no observable effect.
+///
+/// "No-output" here means the emit-time `stmt_outputs` slot for this
+/// statement is absent: the printer's liveness analysis stripped the
+/// destination because nothing reads it. Restricted to the common
+/// integer-arithmetic / comparison / copy / boolean opcodes the structurer
+/// routinely emits and inlines. Exotic or bit-manipulation ops (`Insert`,
+/// `Extract`, `Piece`, …) are deliberately excluded so they still render as
+/// `__unlace_<op>(args)` helper calls, preserving operand visibility (the
+/// Batch-19 contract). All listed ops are side-effect-free, so dropping a
+/// dead no-output instance is sound.
+fn is_dead_no_output_scalar_op(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if ctx.stmt_outputs.get(&stmt_idx).copied().flatten().is_some() {
+        return false;
+    }
+    matches!(
+        insn.op,
+        IrOp::Copy
+            | IrOp::IntAdd
+            | IrOp::IntSub
+            | IrOp::IntMult
+            | IrOp::IntAnd
+            | IrOp::IntOr
+            | IrOp::IntXor
+            | IrOp::IntNegate
+            | IrOp::Int2comp
+            | IrOp::IntLeft
+            | IrOp::IntRight
+            | IrOp::IntSright
+            | IrOp::IntEqual
+            | IrOp::IntNotequal
+            | IrOp::IntLess
+            | IrOp::IntLessequal
+            | IrOp::IntSless
+            | IrOp::IntSlessequal
+            | IrOp::BoolAnd
+            | IrOp::BoolOr
+            | IrOp::BoolXor
+            | IrOp::BoolNegate
+    )
+}
+
+/// Recognise a pure AArch64 conditional-select callother (CSEL/CSINC/
+/// CSINV/CSNEG, tags 0x330..=0x333) whose result register is never read.
+///
+/// These intrinsics have no memory or control side effects — they compute
+/// a value from a predicate plus two source registers. When the SSA output
+/// has zero uses (e.g. a dead `Wd`/`Xd` write), the whole statement is dead
+/// and should be dropped, mirroring IDA's DCE. Suppressing it also lets
+/// [`propagate_dead_chains`] retire the predicate comparison that fed it,
+/// preventing orphan `__unlace_int_*` statement calls in the output.
+fn is_dead_suppressible_csel(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if !is_csel_callother(insn) {
+        return false;
+    }
+    if ctx.foldable_stmts.contains(&stmt_idx) {
+        return false;
+    }
+    let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
+        return false;
+    };
+    if ctx.byref_bases.contains(&out_sv.base) || ctx.cond_uses.contains(&out_sv) {
+        return false;
+    }
+    ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) == 0
 }
 
 fn is_dead_suppressed_stack_load(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
@@ -10662,6 +10740,20 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                 );
                 Some(format!("JUMPOUT({});", target))
             }
+            // A dead scalar value op (IntAdd/IntSlessequal/Copy/…) that
+            // reached this no-output branch had its result folded into a
+            // consumer (or the consumer was DCE'd, e.g. a suppressed
+            // CSEL-family intrinsic). Suppress it rather than leaking a
+            // side-effect-free `__unlace_int_*` / `__unlace_copy` statement.
+            _ if is_dead_no_output_scalar_op(insn, idx, ctx) => {
+                if c_printer_trace_enabled() {
+                    eprintln!(
+                        "[unlace-output] inline stmt={idx} decision=suppress-dead-pure-no-output op={:?}",
+                        insn.op
+                    );
+                }
+                Some(String::new())
+            }
             // Batch 19 DOD: unsupported statement-level opcodes render as
             // an annotated helper call (preserves opcode name + operand
             // dataflow) instead of a comment-only `/* OP */;` placeholder.
@@ -10752,6 +10844,15 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
     if is_dead_zero_init(insn, idx, ctx) || is_dead_suppressible_store(insn, idx, ctx) {
         trace_flow(format_args!(
             "emit-statement-skip stmt={idx} reason=dead-or-suppressible"
+        ));
+        return;
+    }
+
+    // Drop dead-output AArch64 conditional-select intrinsics (CSEL family):
+    // pure value computations into a register that's never read again.
+    if is_dead_suppressible_csel(insn, idx, ctx) {
+        trace_flow(format_args!(
+            "emit-statement-skip stmt={idx} reason=dead-csel"
         ));
         return;
     }
@@ -10860,15 +10961,25 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             indent(depth, ctx.config.tab_width, out);
         }
 
-        // CSEL → if-else assignment (ARM64 conditional select)
-        if is_csel_callother(insn) && insn.inputs.len() >= 4 {
+        // CSEL family → ternary assignment (ARM64 conditional select).
+        // The false branch is transformed per the specific intrinsic:
+        // CSEL → Rm, CSINC → Rm+1, CSINV → ~Rm, CSNEG → -Rm.
+        if let Some(tag) = csel_callother_tag(insn) {
             let cond = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
             let true_val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-            let false_val = emit_operand_resolved(&insn.inputs[3], 3, idx, ctx);
+            let false_operand = emit_operand_resolved(&insn.inputs[3], 3, idx, ctx);
+            let false_val = csel_false_value_expr(tag, &false_operand);
+            // Parenthesise a transformed (non-identity) false branch so the
+            // ternary alternative parses unambiguously, e.g. `... : (a4 + 1)`.
+            let false_rendered = if tag == 0x330 {
+                false_val
+            } else {
+                format!("({false_val})")
+            };
             let _ = writeln!(
                 out,
-                "if ({}) {{ {} = {}; }} else {{ {} = {}; }}",
-                cond, lhs, true_val, lhs, false_val
+                "{} = {} ? {} : {};",
+                lhs, cond, true_val, false_rendered
             );
         } else if let Some(short) = try_emit_increment_form(insn, idx, &lhs, ctx) {
             let _ = writeln!(out, "{};", short);
@@ -10976,6 +11087,19 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 let _ = writeln!(out, "__unknown_insn_0x{:X}();", insn.addr);
             }
             IrOp::Callother => {
+                // A pure AArch64 conditional-select intrinsic (CSEL family)
+                // that reached the no-output branch has no live consumer for
+                // its destination register — it is dead. Drop it (mirroring
+                // IDA's DCE) so we don't leak a raw `__csinv__(...)` /
+                // `__csneg__(...)` statement, and so the predicate comparison
+                // that fed it can also retire instead of orphaning as a
+                // standalone `__unlace_int_*` call.
+                if is_csel_callother(insn) {
+                    trace_flow(format_args!(
+                        "emit-statement-skip stmt={idx} reason=dead-csel-no-output"
+                    ));
+                    return;
+                }
                 let expr = emit_callother(insn, idx, ctx);
                 if is_cmov_callother(insn) {
                     let _ = writeln!(out, "{}", expr);
@@ -11020,6 +11144,20 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             // opcode name + operand dataflow) rather than a comment-only
             // placeholder that would silently drop inputs.
             _ => {
+                // A dead scalar value op (IntAdd/IntSlessequal/Copy/…) that
+                // reached this no-output branch had its result folded into a
+                // consumer (or its consumer was DCE'd — e.g. a suppressed
+                // CSEL-family intrinsic), leaving only this orphan. Emitting
+                // `__unlace_int_slessequal(...)` / `__unlace_copy(...)` would
+                // be a side-effect-free statement with no observable result,
+                // so drop it. Exotic ops still render their helper call.
+                if is_dead_no_output_scalar_op(insn, idx, ctx) {
+                    trace_flow(format_args!(
+                        "emit-statement-skip stmt={idx} reason=dead-pure-no-output op={:?}",
+                        insn.op
+                    ));
+                    return;
+                }
                 let call = emit_unsupported_op_helper(insn, idx, ctx);
                 let _ = writeln!(out, "{call};");
             }
@@ -12842,6 +12980,33 @@ fn is_csel_callother(insn: &IrInsn) -> bool {
             .is_some_and(|vn| vn.space == SpaceId::Const && matches!(vn.offset, 0x330..=0x333))
 }
 
+/// AArch64 conditional-select tag: the value taken when the predicate is
+/// *false* is a per-variant transform of the second source register.
+///   * CSEL  (0x330): `Rm`        — identity
+///   * CSINC (0x331): `Rm + 1`
+///   * CSINV (0x332): `~Rm`
+///   * CSNEG (0x333): `-Rm`
+///
+/// Given the already-rendered false-operand text, return the C expression
+/// for the false branch. The result is wrapped so it composes correctly as
+/// a ternary alternative (e.g. `(a4 + 1)`); the caller may add outer parens.
+fn csel_false_value_expr(tag: u64, false_operand: &str) -> String {
+    match tag {
+        0x331 => format!("{false_operand} + 1"), // CSINC
+        0x332 => format!("~{false_operand}"),    // CSINV
+        0x333 => format!("-{false_operand}"),    // CSNEG
+        _ => false_operand.to_string(),          // CSEL (0x330) / fallback
+    }
+}
+
+/// Tag (0x330..=0x333) of a CSEL-family callother, or `None`.
+fn csel_callother_tag(insn: &IrInsn) -> Option<u64> {
+    if !is_csel_callother(insn) {
+        return None;
+    }
+    insn.inputs.first().map(|vn| vn.offset)
+}
+
 fn is_cmov_callother(insn: &IrInsn) -> bool {
     insn.op == IrOp::Callother
         && insn.inputs.len() >= 4
@@ -12862,6 +13027,18 @@ fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
         let src = emit_operand_resolved(&insn.inputs[2], 2, stmt_idx, ctx);
         let dst = emit_operand_resolved(&insn.inputs[3], 3, stmt_idx, ctx);
         return format!("if ({}) {{ {} = {}; }}", cond, dst, src);
+    }
+
+    // CSEL family as a value expression (e.g. inlined into a consumer):
+    // render the C ternary `cond ? Rn : f(Rm)` rather than a raw
+    // `__csinv__(...)` intrinsic call. Mirrors the assignment-statement
+    // path's per-variant false-value transform.
+    if let Some(tag) = csel_callother_tag(insn) {
+        let cond = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
+        let true_val = emit_operand_resolved(&insn.inputs[2], 2, stmt_idx, ctx);
+        let false_operand = emit_operand_resolved(&insn.inputs[3], 3, stmt_idx, ctx);
+        let false_val = csel_false_value_expr(tag, &false_operand);
+        return format!("({cond} ? {true_val} : {false_val})");
     }
 
     if tag_vn.space != SpaceId::Const {
@@ -15673,7 +15850,7 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
-    use unlace_ir::{IrInsn, IrOp, Varnode};
+    use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
     use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
 
     use super::{PrinterAnnotations, print_c, print_c_with_annotations};
@@ -15831,6 +16008,135 @@ mod tests {
         assert!(output.contains("if (v1)"), "if: {output}");
         assert!(output.contains("} else {"), "else: {output}");
         assert!(output.contains("return result;"), "return: {output}");
+    }
+
+    // ── t52: AArch64 conditional-select intrinsics → C ternary ──────────
+
+    /// Build a function whose single body statement is a CSEL-family
+    /// callother (tag/cond/true/false/cc) writing register r16, which is
+    /// then returned so the output stays live.
+    fn csel_family_func(name: &str, tag: u64) -> HirFunction {
+        let cond = reg(264, 1); // predicate flag byte
+        let r8 = reg(8, 8); // true_val (Rn)
+        let r16 = reg(16, 8); // false_val (Rm)
+        let r0 = reg(0, 8); // Rd == return register
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                r0,
+                smallvec![con(tag, 8), cond, r8, r16, con(1, 1)],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r0,
+                version: 0,
+            })),
+        ];
+        make_func(name, body)
+    }
+
+    #[test]
+    fn t52_csel_renders_identity_ternary() {
+        let out = print_c(&csel_family_func("csel_id", 0x330));
+        let body = function_body_text(&out, "csel_id");
+        assert!(
+            body.contains(" ? ") && body.contains(" : "),
+            "expected a ternary, got:\n{body}"
+        );
+        assert!(
+            !body.contains("__csel__"),
+            "raw __csel__ intrinsic must not leak:\n{body}"
+        );
+        // Identity false branch — no transform applied.
+        assert!(
+            !body.contains('~') && !body.contains("+ 1"),
+            "CSEL false branch should be plain Rm:\n{body}"
+        );
+    }
+
+    #[test]
+    fn t52_csinc_renders_increment_false_branch() {
+        let out = print_c(&csel_family_func("csinc_fn", 0x331));
+        let body = function_body_text(&out, "csinc_fn");
+        assert!(
+            body.contains(" ? ") && body.contains("+ 1"),
+            "expected `cond ? Rn : (Rm + 1)`, got:\n{body}"
+        );
+        assert!(
+            !body.contains("__csinc__"),
+            "raw __csinc__ intrinsic must not leak:\n{body}"
+        );
+    }
+
+    #[test]
+    fn t52_csinv_renders_bitwise_not_false_branch() {
+        let out = print_c(&csel_family_func("csinv_fn", 0x332));
+        let body = function_body_text(&out, "csinv_fn");
+        assert!(
+            body.contains(" ? ") && body.contains('~'),
+            "expected `cond ? Rn : (~Rm)`, got:\n{body}"
+        );
+        assert!(
+            !body.contains("__csinv__"),
+            "raw __csinv__ intrinsic must not leak:\n{body}"
+        );
+    }
+
+    #[test]
+    fn t52_csneg_renders_negation_false_branch() {
+        let out = print_c(&csel_family_func("csneg_fn", 0x333));
+        let body = function_body_text(&out, "csneg_fn");
+        assert!(
+            body.contains(" ? ") && body.contains(": -"),
+            "expected `cond ? Rn : -Rm`, got:\n{body}"
+        );
+        assert!(
+            !body.contains("__csneg__"),
+            "raw __csneg__ intrinsic must not leak:\n{body}"
+        );
+    }
+
+    #[test]
+    fn t52_dead_csel_and_orphan_predicate_are_suppressed() {
+        // A CSEL-family callother whose result register is never read is
+        // dead. Its predicate is an explicit comparison consumed ONLY by
+        // that callother. Both must be dropped — no raw `__csinv__(...)`
+        // and no orphan `__unlace_int_*(...)` statement should leak.
+        let v0 = reg(0, 8);
+        let v8 = reg(8, 8);
+        let pred = Varnode {
+            space: SpaceId::Unique,
+            offset: 0x20,
+            size: 1,
+        };
+        let dead_rd = reg(0x100, 8); // never returned/read
+        let body = vec![
+            // pred = v0 != v8
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntNotequal,
+                pred,
+                smallvec![v0, v8],
+                0x1000,
+            )),
+            // dead = CSINV(pred, v0, v8)  → never used
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                dead_rd,
+                smallvec![con(0x332, 8), pred, v0, v8, con(1, 1)],
+                0x1004,
+            )),
+            HirNode::Return(None),
+        ];
+        let out = print_c(&make_func("dead_csel", body));
+        let body_text = function_body_text(&out, "dead_csel");
+        assert!(
+            !body_text.contains("__csinv__"),
+            "dead CSINV must be DCE'd, got:\n{body_text}"
+        );
+        assert!(
+            !body_text.contains("__unlace_int_notequal") && !body_text.contains("__unlace_int_"),
+            "orphan predicate comparison must not leak, got:\n{body_text}"
+        );
     }
 
     #[test]

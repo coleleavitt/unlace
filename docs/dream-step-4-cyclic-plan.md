@@ -13,6 +13,9 @@ That is the expected boundary from `docs/dream-step-3c-plan.md`: acyclic
 condition refinement is wired, but cyclic regions deliberately fall back to the
 legacy goto path. The remaining work is DREAM §IV-C.
 
+The full default-on rollout task list lives in
+`docs/dream-default-rollout-tasks.md`.
+
 ## Research basis
 
 - DREAM: compute reaching conditions over the acyclic skeleton, structure the

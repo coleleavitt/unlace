@@ -27,6 +27,22 @@ would lock in regressions.)
   bogus `__fastcall`/`__aapcs` on MIPS/RISC-V/PPC/V850/ARCompact. Now gated:
   arm64 reports AAPCS64, the RISC ISAs report `unknown` (matching goldens).
 
+## Bounded fixes landed in the follow-up session (2026-05-29 pm)
+
+- **Cross-arch calling convention** (`987453d91`) — gated the x86/AArch64
+  register-offset scorer so MIPS/RISC-V/PPC/V850/ARCompact report `unknown`
+  instead of bogus `__fastcall`/`__aapcs`.
+- **Negative-displacement array subscripts** (`7ce547456`) — `try_array_subscript`
+  no longer divides a negative `base - N` displacement by the stride into a
+  garbage index (`v1[4611686018427384710]` → `*(_DWORD *)(v1 - 12776)`).
+- **Signed-flag-compare fold** (`9ad99b0a5`) — `LOBYTE(a<b) ^ __OFSUB__(a,b)`
+  → `a < b`, and `a==b || (…)` → `a <= b` (single-line form). f_rec_fib's entry
+  guard now reads `if (a1 <= 1)`.
+
+The deep follow-ups are filed as tasks t40 (structurer empty-branch polarity),
+t41 (non-x86 stack-frame SP tracking), t42 (SSA-layer cross-statement
+signed-flag recognizer — the dominant medium.elf driver).
+
 ## Remaining gaps (deep, producer-side — not bounded printer fixes)
 
 1. **Stack-frame recovery on non-x86 ISAs** (mips64, riscv64, v850).

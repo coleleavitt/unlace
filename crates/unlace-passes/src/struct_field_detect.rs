@@ -44,8 +44,20 @@ impl Pass for StructFieldDetectPass {
             }
         }
 
+        let spec = unlace_ir::stack::StackSpec::for_arch(func.arch);
         for (base, fields_by_offset) in accesses {
             if fields_by_offset.len() < 2 || fields_by_offset.len() > MAX_STRUCT_FIELDS {
+                continue;
+            }
+            // Skip the stack/frame pointer: `*(sp + 8)`, `*(sp + 16)` are
+            // stack-frame slots, not struct fields. Treating SP/FP as a struct
+            // base produces garbage like `v4->field_18446744073709551600`
+            // (a negative stack offset wrapped to u64) and masks proper
+            // stack-variable recovery. Stack accesses are handled by
+            // StackVarRecoveryPass, not here.
+            if let Some(spec) = spec.as_ref()
+                && spec.is_frame_base(&base.base)
+            {
                 continue;
             }
 
@@ -230,6 +242,57 @@ mod tests {
         assert_eq!(
             fields[2].ty,
             Type::Primitive(PrimitiveType::UnsignedInt(16))
+        );
+    }
+
+    #[test]
+    fn struct_field_detect_skips_stack_pointer_base() {
+        // Accesses off the x86-64 SP (reg offset 32) at two offsets must NOT
+        // become a struct — they are stack-frame slots. Regression for the
+        // `v4->field_18446744073709551600` garbage on arm64 bitfield_test.
+        let sp = Varnode::reg(32, 8); // RSP per StackSpec for x86-64
+        let addr8 = Varnode::unique(0, 8);
+        let addr16 = Varnode::unique(8, 8);
+        let v5 = Varnode::reg(0, 8);
+        let v6 = Varnode::reg(8, 8);
+        let ram = Varnode::constant(1, 8);
+
+        let mut func = Function::new("sp_access", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr8,
+            smallvec![sp, Varnode::constant(8, 8)],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![ram, addr8, v5],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr16,
+            smallvec![sp, Varnode::constant(16, 8)],
+            0x1008,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![ram, addr16, v6],
+            0x100c,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        ssa.arch = unlace_ir::ArchId::X86_64;
+        StructFieldDetectPass.run(&mut ssa).expect("detect fields");
+
+        assert!(
+            ssa.composite_var_types.is_empty(),
+            "stack-pointer base must not be promoted to a struct: {:?}",
+            ssa.composite_var_types
         );
     }
 }

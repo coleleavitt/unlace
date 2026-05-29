@@ -119,3 +119,39 @@ vtable `this` shared bug), and several deep multi-session producer gaps (x87,
 string resolution, PPC immediates). There is no safe mechanical path to 32/32;
 each requires per-issue producer work with regression risk. The one cleanly-
 correct bounded fix (SP-as-struct) is landed.
+
+## Deep-task investigation outcomes (t49-t54, 2026-05-29 pm-3)
+
+Worked all 6 deep backlog tasks. Two yielded bounded fixes; four deferred with
+precise root causes (verified, not assumed).
+
+### Bounded fixes LANDED
+- **t49 PPC copy-prop** (`359f01467`): `is_x86_64_frame_register`/`_call_arg_register`
+  applied x86 register *offsets* on all arches; on PPC offset 32 is r4, so
+  `r4 = COPY 3` was blocked from propagating. Now arch-gated. ppc64 sub_10000120:
+  `if (v1 != v2)` → `if (v1 != 3LL)`. +2 tests.
+- **(prior) SP-as-struct** (`b780959e9`): arm64 garbage struct fields fixed.
+
+### Deferred (verified root cause, not bounded / golden stale)
+- **t50 cN coalesced naming**: `cN` = coalesced multi-version register (verified via
+  SSA: v850 sub_10118 r10d has v0/v1/v3 merged). register_coalesce.rs:405 already
+  emits cN but it's dead — variable_merge.rs assign_names names every cluster `vN`
+  first. Deferred: ZERO ROI (v850/ppc64 have 13/15 total diffs incl. polarity, so
+  cN flips no golden green) + regresses 549/1129 vN-asserting unit tests + the one
+  passing arch golden arc_features has cN=0.
+- **t51 leaked-temp folding**: medium v706/v707/v708 are single-use but SEQUENTIAL
+  CALL RESULTS — inlining reorders side-effecting calls (correctness regression).
+  Printer's conservative call-output policy is correct. medium/switch goldens are
+  stale-WORSE than current (empty `void f_rec_fib(){}` bodies).
+- **t52 arm64 CSEL**: CALLOTHER csel/csinv/csneg need a structuring pass (ternary/
+  if-else) + dead-flag cleanup — a multi-file FEATURE. csel_test golden is itself
+  buggy (wrong Microsoft x64 CC on ARM, double-declared cond).
+- **t53 string resolution**: CLOSED — current already BETTER than golden (current
+  resolves `printf("%s %s\n",…)`, golden has raw `0x3d28LL`).
+- **t54 x87 FPU**: sum_squares_x87 duplicate FLD is a real x87 stack-modeling
+  (TOP-tracking) lifter gap in ops/fpu.rs — multi-session, broad-risk.
+
+### Net
+golden_fixtures stays 18/32 (the 14 failures are stale-worse goldens and/or deep
+producer gaps; no remaining bounded fix flips one green on its own). Two real
+correctness fixes (PPC const-prop, SP-as-struct) landed with tests; all gates green.

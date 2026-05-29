@@ -307,9 +307,31 @@ fn score_convention_for_arch(
 
     let scored = score_convention(read_before_write);
     match func.arch {
-        ArchId::AArch64 => scored,
-        ArchId::X86_64 if scored == CallingConvention::AArch64 => CallingConvention::Unknown,
-        _ => scored,
+        // AArch64: trust the scorer's AArch64 result; an x86-CC guess on an
+        // ARM binary is a register-offset collision artifact, not a real CC.
+        ArchId::AArch64 => match scored {
+            CallingConvention::SystemV | CallingConvention::MicrosoftX64 => {
+                CallingConvention::Unknown
+            }
+            other => other,
+        },
+        // x86-64: the SystemV/MicrosoftX64 scorer is authoritative; an AArch64
+        // guess (X0/X1 overlapping RAX/RCX offsets) is the collision artifact.
+        ArchId::X86_64 | ArchId::X86 => {
+            if scored == CallingConvention::AArch64 {
+                CallingConvention::Unknown
+            } else {
+                scored
+            }
+        }
+        // Every other architecture (MIPS, RISC-V, PPC, V850, ARM32, …) has its
+        // own register file. The scorer reads x86 register-file *offsets*
+        // (RCX=8, RDX=16, …), which on these arches map to unrelated physical
+        // registers and spuriously produce `Microsoft x64` / `System V`. None
+        // of this scorer's x86/AArch64 verdicts are meaningful there, so report
+        // `Unknown` rather than a wrong convention. (This matches the golden
+        // fixtures, which show `unknown` for mips64/riscv64/ppc64/v850.)
+        _ => CallingConvention::Unknown,
     }
 }
 

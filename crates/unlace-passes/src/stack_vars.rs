@@ -307,11 +307,15 @@ fn is_padding_adjacent(start: i64, end: i64, covered: &[(i64, i64)]) -> bool {
     touches_left || touches_right
 }
 
-/// Locate `IntSub(RSP, const)` in the entry block where the output is RSP
-/// (or copied to RSP) and return `const` as the local-frame byte size.
+/// Locate the prologue frame allocation in the entry block and return its byte
+/// size. Two equivalent shapes are recognized:
 ///
-/// Returns 0 when no plausible prologue is found — this is conservative;
-/// gap detection silently skips functions without a recovered frame.
+/// * `IntSub(SP, const)` — the x86/AArch64 form (`sub rsp, N`).
+/// * `IntAdd(SP, negative_const)` — the MIPS/RISC-V form (`addiu $sp, $sp, -N`,
+///   lowered as add-of-negative), where the constant's high bit is set.
+///
+/// Returns 0 when no plausible prologue is found — this is conservative; gap
+/// detection silently skips functions without a recovered frame.
 fn recover_frame_size(func: &SsaFunction) -> u32 {
     let entry = func.function.entry;
     let Some(block) = func.function.blocks.get(&entry) else {
@@ -320,27 +324,44 @@ fn recover_frame_size(func: &SsaFunction) -> u32 {
     let spec = resolve_spec(func);
 
     for insn in &block.insns {
-        if insn.op != IrOp::IntSub {
-            continue;
-        }
         if insn.inputs.len() < 2 {
             continue;
         }
         let lhs = insn.inputs[0];
         let rhs = insn.inputs[1];
-        if !spec.is_sp(&lhs) {
+        if !spec.is_sp(&lhs) || rhs.space != SpaceId::Const {
             continue;
         }
-        if rhs.space != SpaceId::Const {
+        let size = match insn.op {
+            // `sub sp, N` → frame size N.
+            IrOp::IntSub => rhs.offset,
+            // `add sp, -N` → frame size N (constant is negative at its width).
+            IrOp::IntAdd => {
+                let neg = sign_extend_const(rhs.offset, rhs.size);
+                if neg >= 0 {
+                    continue;
+                }
+                neg.unsigned_abs()
+            }
+            _ => continue,
+        };
+        if size == 0 || size > 0x10_000 {
             continue;
         }
-        let k = rhs.offset;
-        if k == 0 || k > 0x10_000 {
-            continue;
-        }
-        return k as u32;
+        return size as u32;
     }
     0
+}
+
+/// Sign-extend a constant of `size` bytes (held in a `u64`) to `i64`. A 0 or
+/// >= 8 byte width is treated as a full 64-bit value.
+fn sign_extend_const(value: u64, size: u8) -> i64 {
+    let bits = (size as u32) * 8;
+    if bits == 0 || bits >= 64 {
+        return value as i64;
+    }
+    let shift = 64 - bits;
+    ((value << shift) as i64) >> shift
 }
 
 /// Group adjacent stack slots with compatible primitive types into structs.
@@ -1382,5 +1403,42 @@ mod tests {
         super::detect_frame_gaps(&mut ssa);
         assert_eq!(ssa.frame_size, 0);
         assert!(ssa.stack_gaps.is_empty());
+    }
+
+    #[test]
+    fn frame_size_recognizes_add_of_negative_mips() {
+        // MIPS `addiu $sp, $sp, -32` is lowered as INT_ADD($sp, -32). The
+        // frame-size recovery must treat the negative add like a `sub`.
+        let mut func = unlace_ir::Function::new("mips_frame", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let mips_sp = Varnode::reg(232, 8); // $sp per StackSpec for MIPS
+        let u0 = Varnode::unique(0, 8);
+        let neg32 = Varnode::constant(0xffff_ffff_ffff_ffe0, 8); // -32
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            u0,
+            smallvec![mips_sp, neg32],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+        ssa.arch = ArchId::Mips64;
+
+        super::detect_frame_gaps(&mut ssa);
+        assert_eq!(ssa.frame_size, 32, "add-of-negative frame must be recovered");
+    }
+
+    #[test]
+    fn test_sign_extend_const_widths() {
+        assert_eq!(super::sign_extend_const(0xffff_ffff_ffff_ffe0, 8), -32);
+        assert_eq!(super::sign_extend_const(0xffff_ffe0, 4), -32);
+        assert_eq!(super::sign_extend_const(0x20, 8), 32);
+        assert_eq!(super::sign_extend_const(0x20, 4), 32);
+        assert_eq!(super::sign_extend_const(0x8000_0000, 4), i32::MIN as i64);
     }
 }

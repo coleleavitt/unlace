@@ -787,7 +787,12 @@ pub fn lift_function(
         "lifting function"
     );
 
-    let lifted_insns = lift_instructions(lifter, code, func_start)?;
+    // When the symbol table gave us an exact size, `code` is precisely the
+    // function body and the early-stop padding heuristic must NOT fire inside
+    // it (doing so truncates a function that merely contains an interior
+    // zero byte, e.g. ARCompact `arc_branch` whose tail insn is `e0 7f 00 00`).
+    let has_known_size = entry.size > 0;
+    let lifted_insns = lift_instructions(lifter, code, func_start, has_known_size)?;
     let function = build_function_from_insns(&entry.name, func_start, &lifted_insns);
     Ok(function)
 }
@@ -814,6 +819,7 @@ fn lift_instructions(
     lifter: &dyn Lifter,
     code: &[u8],
     base_addr: u64,
+    has_known_size: bool,
 ) -> Result<Vec<LiftedInsnRecord>> {
     let mut records = Vec::new();
     let mut next_unique_base = 0u64;
@@ -822,6 +828,12 @@ fn lift_instructions(
     let trace_lift_bounds = std::env::var_os("UNLACE_LIFT_BOUNDS_TRACE")
         .map(|v| v != "0")
         .unwrap_or(false);
+    if trace_lift_bounds {
+        eprintln!(
+            "[unlace:lift-bounds] begin func={base_addr:#x} len={} end={code_end:#x} known_size={has_known_size}",
+            code.len()
+        );
+    }
 
     while offset < code.len() {
         let addr = base_addr + offset as u64;
@@ -841,15 +853,33 @@ fn lift_instructions(
                     is_terminator: is_term,
                 });
                 let next_offset = offset.saturating_add(len);
-                if no_fallthrough
+                debug_assert!(
+                    len > 0,
+                    "lifter returned zero-length insn at {addr:#x}; would loop forever"
+                );
+                // A function with a known symbol size is exactly `code`; the
+                // remaining bytes are still part of THIS function, so the
+                // padding-prefix early-stop must be suppressed until the slice
+                // is exhausted. Only size-unknown (synthetic-boundary)
+                // functions may stop early on a padding run.
+                let inside_known_function = has_known_size && next_offset < code.len();
+                let want_stop = no_fallthrough
+                    && !inside_known_function
                     && should_stop_after_no_fallthrough(
                         lifter.arch(),
                         &records.last().expect("just pushed").ir_ops,
                         base_addr,
                         code_end,
                         &code[next_offset..],
-                    )
-                {
+                    );
+                if trace_lift_bounds && no_fallthrough {
+                    eprintln!(
+                        "[unlace:lift-bounds] no-fallthrough func={base_addr:#x} insn={addr:#x} next={:#x} remaining={} inside_known={inside_known_function} stop={want_stop}",
+                        base_addr.saturating_add(next_offset as u64),
+                        code.len().saturating_sub(next_offset)
+                    );
+                }
+                if want_stop {
                     if trace_lift_bounds {
                         eprintln!(
                             "[unlace:lift-bounds] stop func={base_addr:#x} at insn={addr:#x} next={:#x} end={code_end:#x}",
@@ -889,6 +919,16 @@ fn lift_instructions(
     Ok(records)
 }
 
+/// Decide whether to stop lifting after a no-fallthrough terminator (`jmp`,
+/// `ret`, `branchind`) when the bytes that follow *look like* inter-function
+/// alignment padding.
+///
+/// CONTRACT: callers must only invoke this for size-*unknown* functions (or
+/// once a known-size slice is exhausted). For a function with an exact symbol
+/// size the remaining bytes are still part of the function body, so a leading
+/// zero is interior data, not padding — see the `inside_known_function` guard
+/// in [`lift_instructions`]. `func_end` is the (exclusive) end of the lifted
+/// code slice and must not be below `func_start`.
 fn should_stop_after_no_fallthrough(
     arch: ArchId,
     ir_ops: &[unlace_ir::IrInsn],
@@ -896,6 +936,10 @@ fn should_stop_after_no_fallthrough(
     func_end: u64,
     remaining: &[u8],
 ) -> bool {
+    debug_assert!(
+        func_end >= func_start,
+        "func_end {func_end:#x} below func_start {func_start:#x}"
+    );
     if !is_padding_prefix(arch, remaining) {
         return false;
     }
@@ -4877,12 +4921,55 @@ mod tests {
         code.push(0xc3);
 
         let lifter = unlace_lift::X86Lifter::new();
-        let records = lift_instructions(&lifter, &code, base).expect("lift");
+        // size-unknown (synthetic boundary): early-stop heuristic is allowed.
+        let records = lift_instructions(&lifter, &code, base, false).expect("lift");
         let addrs: BTreeSet<u64> = records.iter().map(|rec| rec.addr).collect();
 
         assert!(
             addrs.contains(&(base + 0x0d)),
             "internal branch over padding must not truncate the function: {addrs:?}",
+        );
+    }
+
+    /// Regression for the ARCompact `arc_branch` truncation: a function with a
+    /// *known* symbol size whose tail instruction contains interior zero bytes
+    /// (which look like a padding prefix to the early-stop heuristic) must lift
+    /// to its full extent, not stop at the first no-fallthrough insn followed
+    /// by a zero byte.
+    #[test]
+    fn test_known_size_function_not_truncated_by_interior_padding() {
+        let base: u64 = 0x1000;
+        // Two x86 instructions: `eb 02` (jmp +2, no-fallthrough) then a `00`
+        // byte that opens the *next* real instruction `00 c3` (add bl,al) —
+        // i.e. the byte after the branch looks like padding but is live code.
+        let code = vec![0xeb, 0x02, 0x00, 0xc3, 0xc3];
+
+        // size-unknown: the heuristic stops right after the `jmp` (legacy).
+        let unknown = lift_instructions(&unlace_lift::X86Lifter::new(), &code, base, false)
+            .expect("lift unknown");
+        let unknown_end = unknown
+            .iter()
+            .map(|r| r.addr + r.len as u64)
+            .max()
+            .unwrap_or(base);
+
+        // known size: must consume the whole slice despite the interior `00`.
+        let known = lift_instructions(&unlace_lift::X86Lifter::new(), &code, base, true)
+            .expect("lift known");
+        let known_end = known
+            .iter()
+            .map(|r| r.addr + r.len as u64)
+            .max()
+            .unwrap_or(base);
+
+        assert_eq!(
+            known_end,
+            base + code.len() as u64,
+            "known-size function must lift its entire byte range; got end={known_end:#x}",
+        );
+        assert!(
+            known_end >= unknown_end,
+            "known-size lift must reach at least as far as the size-unknown lift",
         );
     }
 

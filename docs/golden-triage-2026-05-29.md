@@ -155,3 +155,32 @@ precise root causes (verified, not assumed).
 golden_fixtures stays 18/32 (the 14 failures are stale-worse goldens and/or deep
 producer gaps; no remaining bounded fix flips one green on its own). Two real
 correctness fixes (PPC const-prop, SP-as-struct) landed with tests; all gates green.
+
+## Multi-session producer work — executed via parallel worktree build agents (2026-05-29 pm-4)
+
+The user directed "do all the deferred ones." Fired 5 isolated-worktree build
+agents; integrated 4 wins via cherry-pick onto master + 1 follow-up DCE fix.
+
+| Task | Commit (integrated) | Outcome |
+|------|--------------------|---------|
+| t41 MIPS garbage displacements | `d70ed03f1` | **Real root cause: reassoc OSCILLATION**, not lifter. idiom_recognition+algebraic_simplify re-applied `(sp-32)+disp → sp+(disp-32)` forever (base copy-aliases inner add output). Both passes now decline self-aliasing reassoc. memory_test garbage gone, stack vars recovered, pipeline converges. |
+| t52 arm64 CSEL | `650066387` | CSINV/CSNEG/CSINC → ternaries (`cond?Rn:~Rm/-Rm/Rm+1`); dead csel + orphan `__unlace_int_*` DCE'd. 0 raw csel intrinsics / orphans in arm64_features. |
+| t40 empty-if polarity | `c371391a1` | Final cleanup stage depolarizes genuinely-empty `if(!(X)){}` → `if(X){}`. mips64 logic_test matches golden. |
+| t50 cN coalesced naming | `c0b7c3808` | variable_merge names coalesced multi-version register clusters `cN` (separate counter, consumes v-slot). v850 sub_10118 r10d→c0. |
+| t54 x87 FPU | (not committed) | Agent correctly STOPPED: x87 needs static-TOP tracking, but Lifter::lift_insn has no function context — cross-arch trait change / new post-lift pass, genuinely multi-session. Honest current output preferred over masking. |
+| t49 PPC const-prop | `359f01467` (prior) | (landed earlier) arch-gated x86 frame/arg copy-prop barriers. |
+
+Follow-up DCE fix `1aeb04e0c`: t41's correct fold-decline exposed a latent DCE
+gap — a dead compound assignment (`v1 += 0x7f`, result unused) that the old
+over-eager reassoc had incidentally been collapsing. prune_dead_plain_assignments
+now removes dead `lhs OP= rhs` to a synthetic local with no later use.
+arc_features golden preserved.
+
+### Integration verification (combined, on master)
+unlace-output 560, unlace-passes 1134, unlace-struct 260, cli_smoke 29,
+quality_smoke 6 — all green. clippy --workspace -D warnings clean,
+lint-determinism OK, cargo fmt clean. golden_fixtures 18/32 (no net change in
+count — the producer fixes substantially improve fixture BODIES toward their
+goldens but each fixture still has additional residual diffs; arc_features
+preserved as passing). All four producer fixes verified live in the integrated
+binary. x87 (t54) remains the one honestly-deferred deep gap.

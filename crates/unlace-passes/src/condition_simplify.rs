@@ -2112,8 +2112,7 @@ mod tests {
         let xor_insn = IrInsn::with_output(IrOp::BoolXor, xor, smallvec![sf, of], 0x100c);
         let or_insn = IrInsn::with_output(IrOp::BoolOr, r, smallvec![eq, xor], 0x1010);
 
-        let mut ssa =
-            make_single_block_ssa(vec![eq_insn, sless, sborrow, xor_insn, or_insn]);
+        let mut ssa = make_single_block_ssa(vec![eq_insn, sless, sborrow, xor_insn, or_insn]);
         let changed = ConditionSimplifyPass
             .run(&mut ssa)
             .expect("pass should succeed");

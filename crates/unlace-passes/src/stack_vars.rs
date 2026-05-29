@@ -1430,7 +1430,10 @@ mod tests {
         ssa.arch = ArchId::Mips64;
 
         super::detect_frame_gaps(&mut ssa);
-        assert_eq!(ssa.frame_size, 32, "add-of-negative frame must be recovered");
+        assert_eq!(
+            ssa.frame_size, 32,
+            "add-of-negative frame must be recovered"
+        );
     }
 
     #[test]

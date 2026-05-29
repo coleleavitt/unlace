@@ -1273,22 +1273,43 @@ pub fn print_c_with_annotations(
     // text and the line-count delta, so a vanished statement can be pinned to
     // the exact transform that dropped it.
     let func_label = func.name.as_str();
-    let output = run_cleanup_stage(func_label, "signed-flag-compare", out, simplify_signed_flag_compares);
-    let output =
-        run_cleanup_stage(func_label, "dead-plain-assignments", output, prune_dead_plain_assignments);
+    let output = run_cleanup_stage(
+        func_label,
+        "signed-flag-compare",
+        out,
+        simplify_signed_flag_compares,
+    );
+    let output = run_cleanup_stage(
+        func_label,
+        "dead-plain-assignments",
+        output,
+        prune_dead_plain_assignments,
+    );
     let output = run_cleanup_stage(func_label, "unused-labels", output, prune_unused_labels);
-    let output =
-        run_cleanup_stage(func_label, "unused-plain-decls", output, prune_unused_plain_local_decls);
+    let output = run_cleanup_stage(
+        func_label,
+        "unused-plain-decls",
+        output,
+        prune_unused_plain_local_decls,
+    );
     let output = run_cleanup_stage(
         func_label,
         "declare-control-v",
         output,
         declare_missing_control_v_decls,
     );
-    let output =
-        run_cleanup_stage(func_label, "declare-temp-v", output, declare_missing_temp_v_decls);
-    let output =
-        run_cleanup_stage(func_label, "rename-bare-result", output, rename_unreturned_bare_result);
+    let output = run_cleanup_stage(
+        func_label,
+        "declare-temp-v",
+        output,
+        declare_missing_temp_v_decls,
+    );
+    let output = run_cleanup_stage(
+        func_label,
+        "rename-bare-result",
+        output,
+        rename_unreturned_bare_result,
+    );
     let output = run_cleanup_stage(
         func_label,
         "repair-arg-address",
@@ -1297,7 +1318,12 @@ pub fn print_c_with_annotations(
     );
 
     if annotations.is_some_and(|a| a.recover_triangular_sum_loop) {
-        run_cleanup_stage(func_label, "triangular-sum", output, recover_triangular_sum_loop)
+        run_cleanup_stage(
+            func_label,
+            "triangular-sum",
+            output,
+            recover_triangular_sum_loop,
+        )
     } else {
         output
     }
@@ -14389,9 +14415,7 @@ fn parse_label_definition(line: &str) -> Option<String> {
         || name.contains(':')
         || name == "default"
         || name.starts_with("case ")
-        || !name
-            .chars()
-            .all(|c| c == '_' || c.is_ascii_alphanumeric())
+        || !name.chars().all(|c| c == '_' || c.is_ascii_alphanumeric())
         || name.chars().next().is_some_and(|c| c.is_ascii_digit())
     {
         return None;
@@ -14992,8 +15016,7 @@ fn rename_unreturned_bare_result(output: String) -> String {
     //       Rewrite each such return to `return 0;`. Without this every
     //       short-circuit early return through a register-collapsed multi
     //       statement leaks a stale-helper-return.
-    let has_decl =
-        output.contains("int result;") || output.contains("__int64 result; // rax");
+    let has_decl = output.contains("int result;") || output.contains("__int64 result; // rax");
     let has_bare_return = output.contains("return result;");
     if !has_decl && !has_bare_return {
         return output;
@@ -21245,7 +21268,10 @@ mod tests {
     #[test]
     fn test_const_offset_is_negative_width_aware() {
         // 8-byte: high bit set => negative.
-        assert!(super::const_offset_is_negative(&con(0xffff_ffff_ffff_9c30, 8)));
+        assert!(super::const_offset_is_negative(&con(
+            0xffff_ffff_ffff_9c30,
+            8
+        )));
         assert!(!super::const_offset_is_negative(&con(16, 8)));
         // 4-byte: 0xffff9c30 is negative at 32 bits.
         assert!(super::const_offset_is_negative(&con(0xffff_9c30, 4)));

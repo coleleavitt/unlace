@@ -422,6 +422,36 @@ mod tests {
     }
 
     #[test]
+    fn negate_is_involutive() {
+        // negate(negate(x)) == x for every Cond shape, including the new
+        // NotCaseEq variant and nested And/Or (De Morgan round-trip).
+        let cases = [
+            Cond::True,
+            Cond::False,
+            Cond::Pred(3),
+            Cond::NotPred(3),
+            Cond::CaseEq(7, 2),
+            Cond::And(Box::new(Cond::Pred(1)), Box::new(Cond::NotPred(2))),
+            Cond::Or(Box::new(Cond::Pred(1)), Box::new(Cond::CaseEq(5, 9))),
+        ];
+        for c in cases {
+            assert_eq!(
+                super::negate(&super::negate(&c)),
+                c,
+                "not involutive for {c:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn negate_caseeq_roundtrips_via_notcaseeq() {
+        let ce = Cond::CaseEq(4, 11);
+        let n = super::negate(&ce);
+        assert_eq!(n, Cond::NotCaseEq(Box::new(ce.clone())));
+        assert_eq!(super::negate(&n), ce);
+    }
+
+    #[test]
     fn cyclic_region_is_unsupported() {
         let region = Region {
             header: 0,

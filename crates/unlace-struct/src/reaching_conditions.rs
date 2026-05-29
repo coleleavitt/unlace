@@ -373,6 +373,19 @@ mod tests {
     }
 
     #[test]
+    fn notcaseeq_variant_constructs_and_compares() {
+        // The NotCaseEq variant (added for refinement's negation) participates
+        // in Cond's derived Eq/Ord like any other leaf.
+        let a = Cond::NotCaseEq(Box::new(Cond::CaseEq(7, 3)));
+        let b = Cond::NotCaseEq(Box::new(Cond::CaseEq(7, 3)));
+        assert_eq!(a, b);
+        assert_ne!(a, Cond::CaseEq(7, 3));
+        // And/Or still fold identities with it present.
+        assert_eq!(a.clone().and(Cond::True), a);
+        assert_eq!(Cond::False.or(b.clone()), b);
+    }
+
+    #[test]
     fn and_or_identities() {
         assert_eq!(Cond::True.and(Cond::Pred(0)), Cond::Pred(0));
         assert_eq!(Cond::False.and(Cond::Pred(0)), Cond::False);

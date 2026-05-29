@@ -648,6 +648,53 @@ fn structured_predicates_resolve(
         .all(|pred| pred_cond.contains_key(&pred))
 }
 
+/// Count the `HirNode::Statement` leaves reachable in `nodes`, recursing
+/// through every body-bearing HIR variant. Used by the DREAM seam's
+/// statement-preservation oracle to assert the spliced region neither drops nor
+/// duplicates a body statement.
+fn count_hir_statements(nodes: &[HirNode]) -> usize {
+    nodes.iter().map(count_hir_statements_node).sum()
+}
+
+fn count_hir_statements_node(node: &HirNode) -> usize {
+    match node {
+        HirNode::Statement(_) => 1,
+        HirNode::Block(body) => count_hir_statements(body),
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => count_hir_statements(body),
+        HirNode::For { body, .. } => count_hir_statements(body),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            count_hir_statements(then_body)
+                + else_body.as_deref().map(count_hir_statements).unwrap_or(0)
+        }
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => count_hir_statements(then_body) + count_hir_statements(else_body),
+        HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
+            count_hir_statements(then_body)
+                + else_body.as_deref().map(count_hir_statements).unwrap_or(0)
+        }
+        HirNode::Switch { cases, default, .. } => {
+            let case_total: usize = cases
+                .iter()
+                .map(|(_, body, _)| count_hir_statements(body))
+                .sum();
+            case_total + default.as_deref().map(count_hir_statements).unwrap_or(0)
+        }
+        HirNode::Commented { inner, .. } => count_hir_statements_node(inner),
+        _ => 0,
+    }
+}
+
 fn used_predicates(node: &condition_refinement::StructuredNode) -> BTreeSet<u32> {
     let mut out = BTreeSet::new();
     collect_structured_predicates(node, &mut out);
@@ -939,12 +986,12 @@ impl<'a> StructureCtx<'a> {
         label
     }
 
-    /// Experimental DREAM Step 3c seam.
+    /// DREAM residual-region seam.
     ///
-    /// This is deliberately conservative. With `UNLACE_DREAM_STRUCT` unset it
-    /// returns `None` before doing any work, preserving byte-identity by
-    /// construction. With the flag enabled it only consumes a residual
-    /// irreducible region when all of the following are true:
+    /// This is deliberately conservative. DREAM is default-on, but
+    /// `UNLACE_DREAM_STRUCT=0` returns `None` before doing any work, preserving
+    /// the legacy rollback path by construction. When enabled, it only consumes
+    /// a residual irreducible region when all of the following are true:
     ///
     /// * `bid` is one of the region's residual entry blocks,
     /// * the reaching-condition skeleton is acyclic or a conservative
@@ -952,7 +999,8 @@ impl<'a> StructureCtx<'a> {
     /// * condition refinement succeeds,
     /// * every predicate used by the structured tree resolves to a CBRANCH
     ///   condition varnode, and
-    /// * the region has at most one external successor to continue from.
+    /// * the region has at most one external successor after loop-successor
+    ///   tail refinement.
     ///
     fn try_structure_dream_residual_region(
         &mut self,
@@ -973,12 +1021,38 @@ impl<'a> StructureCtx<'a> {
             );
         }
 
+        let mut dream_body_blocks = region.body_blocks.clone();
+        let (initial_dream_region, _, initial_region_exits) =
+            region_bridge::cfg_region_to_region_with_exits(&self.func.cfg, bid, &dream_body_blocks);
+        let initial_rc = reaching_conditions::compute_reaching_conditions(&initial_dream_region);
+        if !initial_rc.back_edges.is_empty() {
+            let initial_real_exits: BTreeSet<BlockId> = initial_region_exits
+                .iter()
+                .filter(|exit| !self.synthetic.contains(&exit.target))
+                .map(|exit| exit.target)
+                .collect();
+            if initial_real_exits.len() > 1 {
+                let Some((join, exit_tail_blocks)) =
+                    self.dream_expand_linear_exit_tails(&dream_body_blocks, &initial_real_exits)
+                else {
+                    if struct_trace_enabled() {
+                        eprintln!(
+                            "[unlace-struct] dream skip entry={bid:?} reason=cyclic-multiple-exits exits={initial_real_exits:?}"
+                        );
+                    }
+                    return None;
+                };
+                if struct_trace_enabled() {
+                    eprintln!(
+                        "[unlace-struct] dream expand-exits entry={bid:?} join={join:?} tails={exit_tail_blocks:?}"
+                    );
+                }
+                dream_body_blocks.extend(exit_tail_blocks);
+            }
+        }
+
         let (dream_region, node_to_block, region_exits) =
-            region_bridge::cfg_region_to_region_with_exits(
-                &self.func.cfg,
-                bid,
-                &region.body_blocks,
-            );
+            region_bridge::cfg_region_to_region_with_exits(&self.func.cfg, bid, &dream_body_blocks);
         let rc = reaching_conditions::compute_reaching_conditions(&dream_region);
         let has_back_edges = !rc.back_edges.is_empty();
         let real_region_exits: Vec<region_bridge::RegionExit> = region_exits
@@ -1018,7 +1092,7 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        let pred_cond = self.dream_predicate_conditions(&region.body_blocks);
+        let pred_cond = self.dream_predicate_conditions(&dream_body_blocks);
         if !structured_predicates_resolve(&structured, &pred_cond) {
             if struct_trace_enabled() {
                 eprintln!(
@@ -1037,7 +1111,7 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        if self.dream_region_has_unspliced_control(&region.body_blocks) {
+        if self.dream_region_has_unspliced_control(&dream_body_blocks) {
             if struct_trace_enabled() {
                 eprintln!("[unlace-struct] dream skip entry={bid:?} reason=unspliced-control");
             }
@@ -1047,7 +1121,7 @@ impl<'a> StructureCtx<'a> {
         let exits = if has_back_edges {
             real_exit_targets
         } else {
-            self.dream_region_exits(&region.body_blocks)
+            self.dream_region_exits(&dream_body_blocks)
         };
         if exits.len() > 1 {
             if struct_trace_enabled() {
@@ -1058,8 +1132,7 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        let block_bodies = region
-            .body_blocks
+        let block_bodies = dream_body_blocks
             .iter()
             .map(|&block| (block, self.non_control_block_statements(block)))
             .collect();
@@ -1070,7 +1143,28 @@ impl<'a> StructureCtx<'a> {
             &pred_cond,
         );
 
-        for block in &region.body_blocks {
+        // Statement-preservation oracle: the spliced HIR must contain each body
+        // block's non-control statements EXACTLY once — no drops, no
+        // duplication. This is the correctness guarantee for the DREAM path
+        // (golden parity only proves the regions are *skipped*, not that the
+        // engine is *sound*); without it a mis-structured region could silently
+        // lose or double a statement. It is a pure acceptance check: it only
+        // ever adds a `return None`, so the rollback path is unaffected.
+        let expected_statements: usize = block_bodies
+            .values()
+            .map(|body| count_hir_statements(body))
+            .sum();
+        let spliced_statements = count_hir_statements(&hir);
+        if spliced_statements != expected_statements {
+            if struct_trace_enabled() {
+                eprintln!(
+                    "[unlace-struct] dream skip entry={bid:?} reason=statement-count-mismatch expected={expected_statements} spliced={spliced_statements}"
+                );
+            }
+            return None;
+        }
+
+        for block in &dream_body_blocks {
             self.emitted.insert(*block);
         }
 
@@ -1112,6 +1206,105 @@ impl<'a> StructureCtx<'a> {
             }
         }
         exits
+    }
+
+    fn dream_expand_linear_exit_tails(
+        &self,
+        body_blocks: &BTreeSet<BlockId>,
+        exit_targets: &BTreeSet<BlockId>,
+    ) -> Option<(BlockId, BTreeSet<BlockId>)> {
+        for join in self.dream_common_exit_join_candidates(body_blocks, exit_targets) {
+            let mut tails = BTreeSet::new();
+            let mut ok = true;
+            for &target in exit_targets {
+                match self.dream_linear_exit_tail(target, join, body_blocks) {
+                    Some(tail) => tails.extend(tail),
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if !ok {
+                continue;
+            }
+            let mut expanded_body = body_blocks.clone();
+            expanded_body.extend(tails.iter().copied());
+            let reachable = self.reachable_blocks_from_entry();
+            if self.dream_tail_has_reachable_external_predecessor(
+                &tails,
+                &expanded_body,
+                &reachable,
+            ) {
+                continue;
+            }
+            return Some((join, tails));
+        }
+        None
+    }
+
+    fn dream_common_exit_join_candidates(
+        &self,
+        body_blocks: &BTreeSet<BlockId>,
+        exit_targets: &BTreeSet<BlockId>,
+    ) -> Vec<BlockId> {
+        let mut reachable_sets = exit_targets
+            .iter()
+            .map(|&target| self.collect_reachable(target, 16));
+        let Some(mut common) = reachable_sets.next() else {
+            return Vec::new();
+        };
+        for reachable in reachable_sets {
+            common = common.intersection(&reachable).copied().collect();
+        }
+        common
+            .into_iter()
+            .filter(|candidate| {
+                !self.synthetic.contains(candidate) && !body_blocks.contains(candidate)
+            })
+            .collect()
+    }
+
+    fn dream_linear_exit_tail(
+        &self,
+        start: BlockId,
+        join: BlockId,
+        body_blocks: &BTreeSet<BlockId>,
+    ) -> Option<BTreeSet<BlockId>> {
+        if start == join {
+            return Some(BTreeSet::new());
+        }
+        let mut tail = BTreeSet::new();
+        let mut current = start;
+        for _ in 0..16 {
+            if self.synthetic.contains(&current) || body_blocks.contains(&current) {
+                return None;
+            }
+            if !tail.insert(current) {
+                return None;
+            }
+            let next = self.single_successor(current)?;
+            if next == join {
+                return Some(tail);
+            }
+            current = next;
+        }
+        None
+    }
+
+    fn dream_tail_has_reachable_external_predecessor(
+        &self,
+        tail_blocks: &BTreeSet<BlockId>,
+        expanded_body: &BTreeSet<BlockId>,
+        reachable: &BTreeSet<BlockId>,
+    ) -> bool {
+        tail_blocks.iter().any(|&tail| {
+            self.func.cfg.edges_to(tail).into_iter().any(|(pred, _)| {
+                !self.synthetic.contains(&pred)
+                    && !expanded_body.contains(&pred)
+                    && reachable.contains(&pred)
+            })
+        })
     }
 
     fn structure_region(&mut self, start: BlockId) -> Vec<HirNode> {
@@ -3316,6 +3509,24 @@ impl<'a> StructureCtx<'a> {
             for (tgt, _) in edges {
                 if !visited.contains(&tgt) {
                     worklist.push((tgt, depth + 1));
+                }
+            }
+        }
+
+        visited
+    }
+
+    fn reachable_blocks_from_entry(&self) -> BTreeSet<BlockId> {
+        let mut visited = BTreeSet::new();
+        let mut worklist = vec![self.func.function.entry];
+
+        while let Some(bid) = worklist.pop() {
+            if self.synthetic.contains(&bid) || !visited.insert(bid) {
+                continue;
+            }
+            for (target, _) in self.func.cfg.edges_from(bid) {
+                if !visited.contains(&target) {
+                    worklist.push(target);
                 }
             }
         }

@@ -333,6 +333,16 @@ fn refine_items(items: Vec<(RegionNode, Cond)>, rc: &ReachingConditions) -> Stru
                 .collect(),
         );
     }
+    if let Some(first_conditional) = items.iter().position(|(_, c)| *c != Cond::True)
+        && first_conditional > 0
+    {
+        let mut parts: Vec<StructuredNode> = items[..first_conditional]
+            .iter()
+            .map(|(n, _)| StructuredNode::Block(*n))
+            .collect();
+        parts.push(refine_items(items[first_conditional..].to_vec(), rc));
+        return StructuredNode::seq(parts);
+    }
 
     // Try switch detection first: a shared selector across CaseEq factors.
     if let Some(sw) = try_switch(&items, rc) {
@@ -514,6 +524,22 @@ mod tests {
         assert!(found_if, "expected an If on predicate 0: {tree:?}");
         assert!(mentions_block(&tree, 1));
         assert!(mentions_block(&tree, 2));
+    }
+
+    #[test]
+    fn header_block_precedes_its_predicate_use() {
+        let region = Region {
+            header: 0,
+            edges: vec![(0, 1, t(7)), (0, 2, f(7))],
+        };
+        let tree = refine_region(&region);
+        match tree {
+            StructuredNode::Seq(parts) => {
+                assert_eq!(parts.first(), Some(&StructuredNode::Block(0)));
+                assert!(matches!(parts.get(1), Some(StructuredNode::If { .. })));
+            }
+            other => panic!("expected header block before predicate use, got {other:?}"),
+        }
     }
 
     #[test]

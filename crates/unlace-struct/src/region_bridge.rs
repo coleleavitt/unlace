@@ -2,10 +2,10 @@
 //! [`ControlFlowGraph`]) to an abstract [`reaching_conditions::Region`].
 //!
 //! This is step 3a of the DREAM condition-based structurer
-//! (`docs/design-structurer-irreducible-2026-05-29.md`). It is a **pure,
-//! unwired** translation: nothing in the structurer/pipeline calls it yet, so
-//! it has zero regression surface. Later steps (3b) will use the returned
-//! `RegionNode -> BlockId` map to splice a structured region back into the HIR.
+//! (`docs/design-structurer-irreducible-2026-05-29.md`). It is a pure
+//! translation used by the production DREAM seam; the returned `RegionNode ->
+//! BlockId` map lets [`crate::region_splice`] splice a structured region back
+//! into the HIR.
 //!
 //! # What it does
 //!
@@ -82,14 +82,20 @@ pub fn cfg_region_to_region_with_exits(
     (region, reverse, exits)
 }
 
-/// Assign each block in `body` a dense `RegionNode` in `BlockId` order.
-/// `header` is guaranteed a node even if it is absent from `body`.
+/// Assign each block in `body` a dense `RegionNode`.
+///
+/// The selected DREAM header is always node 0, even when lower-numbered
+/// `BlockId`s are also in the body. The remaining nodes are assigned in
+/// `BlockId` order for determinism. This keeps refinement order aligned with
+/// the region entry instead of accidentally placing a branch predicate before
+/// the block that defines it.
 fn assign_nodes(header: BlockId, body: &BTreeSet<BlockId>) -> BTreeMap<BlockId, RegionNode> {
     let mut all: BTreeSet<BlockId> = body.clone();
-    all.insert(header);
     let mut node_of = BTreeMap::new();
+    node_of.insert(header, 0);
+    all.remove(&header);
     for (idx, bid) in all.iter().enumerate() {
-        node_of.insert(*bid, idx as RegionNode);
+        node_of.insert(*bid, idx as RegionNode + 1);
     }
     node_of
 }
@@ -333,6 +339,17 @@ mod tests {
         // Sorted by BlockId: 5->0, 7->1, 9->2.
         assert_eq!(node_of[&bid(5)], 0);
         assert_eq!(node_of[&bid(7)], 1);
+        assert_eq!(node_of[&bid(9)], 2);
+    }
+
+    #[test]
+    fn header_is_node_zero_even_when_body_has_lower_block_id() {
+        let set: BTreeSet<BlockId> = [bid(5), bid(7), bid(9)].into_iter().collect();
+        let node_of = assign_nodes(bid(7), &set);
+        let assigned: BTreeSet<RegionNode> = node_of.values().copied().collect();
+        assert_eq!(assigned, [0, 1, 2].into_iter().collect());
+        assert_eq!(node_of[&bid(7)], 0);
+        assert_eq!(node_of[&bid(5)], 1);
         assert_eq!(node_of[&bid(9)], 2);
     }
 

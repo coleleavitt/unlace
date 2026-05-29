@@ -2,12 +2,12 @@
 //! ([`HirNode`]). Step 3b of the DREAM condition-based structurer
 //! (`docs/design-structurer-irreducible-2026-05-29.md`).
 //!
-//! This is a PURE, UNWIRED translation: nothing in the structurer/pipeline
-//! calls it yet, so it has zero regression surface. Step 3a
-//! ([`crate::region_bridge`]) produced the `RegionNode -> BlockId` map; the
-//! condition-refinement step ([`crate::condition_refinement`]) produced the
-//! [`StructuredNode`] tree. This module joins them with caller-supplied
-//! per-block HIR bodies and a predicate-id → branch-condition map.
+//! This is the HIR lowering layer used by the conservative DREAM production
+//! seam. Step 3a ([`crate::region_bridge`]) produces the `RegionNode ->
+//! BlockId` map; the condition-refinement step
+//! ([`crate::condition_refinement`]) produces the [`StructuredNode`] tree. This
+//! module joins them with caller-supplied per-block HIR bodies and a
+//! predicate-id → branch-condition map.
 //!
 //! # Inputs
 //!

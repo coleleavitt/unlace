@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Byte-identity guard for the default-off DREAM structurer path.
+# Byte-identity guard for the explicit DREAM rollback path.
 #
 # Usage:
 #   scripts/dream_byte_identity.sh capture /tmp/pre
 #   scripts/dream_byte_identity.sh compare /tmp/pre /tmp/post
 #   scripts/dream_byte_identity.sh run /tmp/pre /tmp/post
 #
-# Each fixture is decompiled with UNLACE_DREAM_STRUCT=0. A per-fixture timeout
-# keeps known slow fixtures from blocking the whole safety check; timed-out
-# fixtures leave an .err file and are reported in the manifest.
+# Each fixture is decompiled with UNLACE_DREAM_STRUCT=0, which forces the
+# legacy structurer even though DREAM is default-on. A per-fixture timeout keeps
+# known slow fixtures from blocking the whole safety check; timed-out fixtures
+# leave an .err file and are reported in the manifest.
 
 MODE="${1:-run}"
 BASE_DIR="${2:-/tmp/dream_baseline}"

@@ -59,10 +59,10 @@ be:
 2. **Acyclic condition-based refinement (new module).** Consume reaching
    conditions to emit `if/else`/switch for an acyclic region; unit-tested on
    synthetic CFGs. Still not wired into the main path.
-3. **Gated invocation.** In the structurer, *after* node_split, if a residual
-   irreducible region remains, route ONLY that region through the new engine;
-   reducible functions keep the existing path. Guard with an env flag first
-   (`UNLACE_DREAM_STRUCT=1`) so it's opt-in until proven, then flip default.
+3. **Conservative invocation.** In the structurer, *after* node_split, if a
+   residual irreducible region remains, route ONLY that region through the new
+   engine; reducible functions keep the existing path. DREAM is default-on for
+   fully accepted regions, and `UNLACE_DREAM_STRUCT=0` forces the legacy path.
 4. **Cyclic regions + abnormal entry/exit** (DREAM §IV-C) — only after 1–3 are
    green on the corpus.
 
@@ -72,10 +72,10 @@ Steps 1–2 are genuinely safe (pure new modules, no pipeline wiring, can't
 regress anything). Step 1 is the right place to start and is bounded enough to
 land this turn with tests. Steps 3–4 are the multi-session core work.
 
-2026-05-29 update: Steps 1, 2, 3a, 3b, and the conservative 3c seam are landed.
-The seam is gated behind `UNLACE_DREAM_STRUCT`; flag-off returns before doing
-any DREAM work, and flag-on currently routes only acyclic residual regions. The
-measured `medium` candidates are cyclic, so Step 4 is now the active reducer
+2026-05-29 update: Steps 1, 2, 3a, 3b, the conservative 3c seam, and the
+default-on flip are landed. `UNLACE_DREAM_STRUCT=0` returns before doing any
+DREAM work and remains the rollback path. The measured `medium` candidates are
+cyclic, so nested Step 4 loop-region decomposition remains the active reducer
 task (`docs/dream-step-4-cyclic-plan.md`).
 
 **Crucially: even fully done, this likely does NOT flip `medium` green** — that
@@ -105,24 +105,24 @@ time, each gated and merged before the next starts** — never in parallel.
   emits a structured HIR-ish tree for an *acyclic* region with NO gotos, with
   unit tests on synthetic diamonds/nested-ifs/switch skeletons. MUST stay
   unwired (zero golden delta). Decompose if it exceeds ~600 LOC.
-- **Step 3 — gated invocation.** Done iff: with `UNLACE_DREAM_STRUCT=1`, a
-  residual irreducible region (only) is routed through the engine; with the flag
-  OFF, output is byte-identical to baseline (assert via a golden-diff harness
-  run). Measurable win: `UNLACE_DREAM_STRUCT=1` reduces `medium` f_ackermann
-  gotos below 16. Default-off path: golden stays exactly 18/32.
-- **Step 4 — cyclic regions + abnormal entry/exit.** Done iff: flag-on medium
-  total gotos < 29 with no semantic regression (cli_smoke/quality_smoke green),
-  and no uninitialized/undeclared variables introduced.
+- **Step 3 — conservative invocation.** Done iff: a residual irreducible region
+  (only) is routed through the engine; with `UNLACE_DREAM_STRUCT=0`, output is
+  byte-identical to baseline (assert via the byte-identity harness).
+- **Step 4 — cyclic regions + abnormal entry/exit.** Done iff: default-on
+  `medium` total gotos < 29 with no semantic regression
+  (cli_smoke/quality_smoke green), and no uninitialized/undeclared variables
+  introduced.
 
 ### Rollback criteria (write it down)
-- Any step that, with the flag OFF, changes ANY of: unlace-struct lib tests,
-  cli_smoke, quality_smoke, or the golden pass-count (18) → REVERT immediately;
-  the gate is leaking.
-- Step 3/4 with flag ON: if it introduces undeclared vars, `goto` cycles, or
+- Any step that, with `UNLACE_DREAM_STRUCT=0`, changes ANY of: unlace-struct
+  lib tests, cli_smoke, quality_smoke, or the golden pass-count (18) → REVERT
+  immediately; the rollback path is leaking.
+- Step 3/4 with DREAM enabled: if it introduces undeclared vars, `goto` cycles, or
   drops a live statement on ANY fixture → REVERT; correctness outranks goto
   count.
 
-### Gating scaffold (landed now, step-1.5)
-`reaching_conditions::dream_structuring_enabled()` reads `UNLACE_DREAM_STRUCT`,
-defaults false. Step 3 consults it at the structurer seam. Pre-reviewed so the
-first wiring agent isn't blocked and the default path is provably off.
+### Rollback scaffold
+`reaching_conditions::dream_structuring_enabled()` reads `UNLACE_DREAM_STRUCT`.
+It defaults true and treats `UNLACE_DREAM_STRUCT=0` as an explicit rollback to
+the legacy structurer. Step 3 consults it at the structurer seam before doing
+any DREAM work.

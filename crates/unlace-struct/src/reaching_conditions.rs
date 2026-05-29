@@ -7,11 +7,10 @@
 //! reducible OR irreducible — by emitting `if (cr(h, n)) { n }` guards instead
 //! of `goto`, which is why it never needs node duplication.
 //!
-//! This module is the *pure, unwired* first step of that engine
-//! (`docs/design-structurer-irreducible-2026-05-29.md`, step 1). It computes
-//! reaching conditions over an abstract region graph and is exercised only by
-//! unit tests; it is intentionally NOT yet called from the structurer, so it
-//! has zero regression surface.
+//! This module is the pure reaching-condition core for that engine
+//! (`docs/design-structurer-irreducible-2026-05-29.md`, step 1). Production
+//! wiring is conservative: only fully accepted residual regions are spliced,
+//! and `UNLACE_DREAM_STRUCT=0` remains the legacy rollback path.
 //!
 //! # Model
 //!
@@ -37,18 +36,17 @@ use std::collections::{BTreeMap, BTreeSet};
 /// decoupled from `BlockId` and trivially unit-testable.
 pub type RegionNode = u32;
 
-/// Whether the experimental DREAM condition-based structuring path is enabled.
+/// Whether the DREAM condition-based structuring path is enabled.
 ///
-/// Off by default. Set `UNLACE_DREAM_STRUCT=1` (or any non-empty/non-`0` value)
-/// to route residual irreducible regions through the reaching-condition engine
-/// once steps 2-4 wire it in. Until then this gate is a no-op consulted only by
-/// tests — it exists now so step-3 wiring has a stable, pre-reviewed seam and
-/// the default path is provably untouched (gate defaults false).
+/// DREAM is default-on for residual irreducible regions. Set
+/// `UNLACE_DREAM_STRUCT=0` to force the legacy structurer path; any other value
+/// (including an unset variable) enables DREAM.
 pub fn dream_structuring_enabled() -> bool {
-    matches!(
-        std::env::var("UNLACE_DREAM_STRUCT"),
-        Ok(v) if !v.is_empty() && v != "0"
-    )
+    dream_structuring_enabled_from(std::env::var("UNLACE_DREAM_STRUCT").ok().as_deref())
+}
+
+fn dream_structuring_enabled_from(value: Option<&str>) -> bool {
+    !matches!(value, Some("0"))
 }
 
 /// The branch decision a CFG edge represents.
@@ -362,14 +360,14 @@ mod tests {
     }
 
     #[test]
-    fn dream_gate_defaults_off() {
-        // The default (env unset) MUST be false so the production structuring
-        // path is provably untouched until steps 2-4 deliberately flip it.
-        // (We don't mutate process env here to stay test-parallel-safe; this
-        // asserts the unset-env branch.)
-        if std::env::var_os("UNLACE_DREAM_STRUCT").is_none() {
-            assert!(!dream_structuring_enabled());
-        }
+    fn dream_gate_policy_defaults_on_with_zero_rollback() {
+        // Pure helper tests avoid process-env mutation so the test remains
+        // parallel-safe.
+        assert!(dream_structuring_enabled_from(None));
+        assert!(dream_structuring_enabled_from(Some("")));
+        assert!(dream_structuring_enabled_from(Some("1")));
+        assert!(dream_structuring_enabled_from(Some("true")));
+        assert!(!dream_structuring_enabled_from(Some("0")));
     }
 
     #[test]

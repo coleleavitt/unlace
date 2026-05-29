@@ -76,7 +76,7 @@ Current code status:
 - Irreducible two-entry loop: emits guarded body + `Continue` / `Break`.
 - Multiple exits: either emits structured breaks when all exits resolve, or
   falls back to legacy output.
-- `medium.elf` flag-on measurement:
+- `medium.elf` default-on measurement:
   - current baseline: total 29 gotos
   - f_ackermann: 16
   - f_rec_fib: 8
@@ -87,17 +87,17 @@ Current code status:
 
 - `UNLACE_DREAM_STRUCT=0` changes any output, test count, or golden pass count:
   revert immediately.
-- Flag-on introduces undeclared variables, drops statements, or creates goto
+- Default-on introduces undeclared variables, drops statements, or creates goto
   cycles: revert the cyclic wiring and keep only pure modules.
 
-## Status update (commit 20f110177) — sound engine done; multi-header is the frontier
+## Status update — sound engine done; multi-header is the frontier
 
 The goto-free DREAM engine is now COMPLETE and SOUND for the cases it claims:
 - acyclic regions (step 2/3) and **single-exit, single-header cyclic loops**
-  (step 4) are structured behind `UNLACE_DREAM_STRUCT`.
+  (step 4) are structured by default, with `UNLACE_DREAM_STRUCT=0` as rollback.
 - A **statement-preservation oracle** (structurer.rs `count_hir_statements`)
-  rejects any spliced region that drops/duplicates a body statement, so flag-ON
-  output is provably statement-faithful (flag-OFF stays byte-identical).
+  rejects any spliced region that drops/duplicates a body statement, so DREAM
+  output is statement-faithful and rollback stays byte-identical.
 - Two acyclic-ordering fixes (header always RegionNode 0; leading True-guarded
   header blocks emitted before the first predicate use) unblocked medium's small
   `entry=7` 3-block region — it is now accepted and passes the oracle.

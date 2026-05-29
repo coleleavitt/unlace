@@ -1,13 +1,12 @@
 # DREAM Step 3c — gated wiring plan (the high-risk step)
 
-2026-05-29 status: **the conservative Step 3c seam is wired behind
-`UNLACE_DREAM_STRUCT`**. With the flag unset/off, the hook returns before doing
-any work. With the flag on, it reaches residual irreducible candidates and only
-consumes regions that are acyclic, single-exit, and have all predicates
-resolved. The observed `medium` candidates are cyclic, so they intentionally
-fall back to legacy output until Step 4 (`docs/dream-step-4-cyclic-plan.md`).
+2026-05-29 status: **the conservative Step 3c seam is now default-on for fully
+accepted residual regions**. `UNLACE_DREAM_STRUCT=0` is the rollback path that
+returns before doing any DREAM work. Unsupported cyclic shapes still fall back
+to legacy output; the remaining reducer work is Step 4
+(`docs/dream-step-4-cyclic-plan.md`).
 
-Steps 1, 2, 3a, 3b are **landed, fully tested, and unwired** on master:
+Steps 1, 2, 3a, 3b are **landed, fully tested, and wired** on master:
 
 | step | module | what it does |
 |------|--------|--------------|
@@ -16,9 +15,9 @@ Steps 1, 2, 3a, 3b are **landed, fully tested, and unwired** on master:
 | 3a | `region_bridge.rs` | sub-CFG (`BlockId` set) → `Region` + `RegionNode↔BlockId` map |
 | 3b | `region_splice.rs` | `StructuredNode` → `Vec<HirNode>` (arm-swap for NotPred; no-drop fallbacks + `tracing::debug!`) |
 
-Step 3c is the ONLY step where the flag-OFF byte-identity claim can actually
-break, because it edits the production structurer path. Do it in a dedicated
-session with fresh budget. This doc is the spec.
+Step 3c was the only step where the rollback byte-identity claim could break,
+because it edits the production structurer path. Keep
+`UNLACE_DREAM_STRUCT=0` guarded by `scripts/dream_byte_identity.sh`.
 
 ## Wiring seam
 
@@ -61,36 +60,37 @@ Run the new engine on a region ONLY when ALL hold:
 - every predicate-id used in the `StructuredNode` resolves in `pred_cond` (else
   the splice fallbacks fire and you lose guards — watch the
   `unlace::dream::splice` debug log).
-Otherwise: legacy path. This keeps 3c's blast radius to genuinely-irreducible
-acyclic regions only.
+Otherwise: legacy path. This keeps 3c's blast radius to accepted
+genuinely-irreducible regions only.
 
-## Test plan (REQUIRED before flipping default)
+## Test plan
 
-1. **flag-OFF byte-identity on ALL goldens** (not sampled): for every fixture,
-   `diff <(UNLACE_DREAM_STRUCT=0 decompile)` vs the committed pre-3c binary
-   output — must be empty for all. A harness loop, not a spot check.
-2. **flag-ON measurement**: `UNLACE_DREAM_STRUCT=1` on `medium` — record per-fn
+1. **rollback byte-identity on ALL goldens** (not sampled): for every fixture,
+   `diff <(UNLACE_DREAM_STRUCT=0 decompile)` vs committed legacy output — must
+   be empty for all. A harness loop, not a spot check.
+2. **default-on measurement**: DREAM-enabled `medium` — record per-fn
    goto counts vs the baseline (f_ackermann 16, f_rec_fib 8, main 4,
    f_rec_power 1; total 29). Success = strict reduction with NO new undeclared
    vars, NO dropped statements, cli_smoke/quality_smoke still green.
-3. **flag-ON correctness**: the spliced output must reference only declared
+3. **default-on correctness**: the spliced output must reference only declared
    vars and contain no `goto` cycles for the regions it claims.
 
 ## Rollback
 
-- flag-OFF changes ANYTHING (struct tests / cli_smoke / quality_smoke / golden
+- rollback changes ANYTHING (struct tests / cli_smoke / quality_smoke / golden
   pass-count / byte-identity) → the gate is leaking → REVERT immediately.
-- flag-ON introduces undeclared vars, dropped statements, or goto cycles on any
+- default-on introduces undeclared vars, dropped statements, or goto cycles on any
   fixture → REVERT; correctness outranks goto count.
 
 ## Step 4 (after 3c proves out)
 
 Cyclic regions: structure the loop body via reaching conditions, handle abnormal
-entries/exits (DREAM §IV-C). Only once 3c is green and the default is flipped.
+entries/exits (DREAM §IV-C), and decompose nested cyclic targets without using
+a synthetic dispatcher.
 
 ## Why this was NOT done this session
 
-Two agents exhausted budget mid-write on smaller pure modules; 3c is larger,
-touches the 273KB hot file, and is the one step whose safety claim (flag-OFF
-byte-identity) is empirical, not by-construction. It deserves a fresh session
-with the full byte-identity harness as the first deliverable.
+Historical note: two agents exhausted budget mid-write on smaller pure modules;
+3c was larger, touched the 273KB hot file, and had an empirical rollback
+byte-identity claim. The current safety harness is
+`scripts/dream_byte_identity.sh`.

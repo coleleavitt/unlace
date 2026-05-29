@@ -1,33 +1,63 @@
 # DREAM Default-On Rollout Tasks
 
-This is the task backlog to move the DREAM/SAILR structurer from the current
-default-off gated seam to fully wired, default-on production behavior.
+This is the task backlog and rollout record for moving the DREAM/SAILR
+structurer from the original opt-in seam to default-on production behavior.
 
 Current status:
 
 - Steps 1, 2, 3a, 3b are implemented and tested.
-- Step 3c is wired conservatively behind `UNLACE_DREAM_STRUCT`.
+- The production seam is default-on for fully accepted residual regions.
+  `UNLACE_DREAM_STRUCT=0` forces the legacy rollback path.
 - Step 4 Tasks 1-4 now have code support: exit-aware region bridging,
   synthetic guarded `Continue` / `Break` leaves, cyclic `StructuredNode::Loop`,
   and HIR lowering to `While` / `Break` / `Continue`.
-- Flag-off byte-identity is guarded by `scripts/dream_byte_identity.sh`.
-- Flag-on reaches residual candidates in `medium`, but the production seam still
-  rejects both observed cyclic regions:
-  - the 3-block region would use a branch predicate before the predicate source
-    block is emitted (`predicate-before-source`),
-  - the 68-block region has three real outside successors, which cannot yet be
-    represented by a single `break` continuation.
+- Rollback byte-identity is guarded by `scripts/dream_byte_identity.sh`.
+- Default-on reaches residual candidates in `medium`:
+  - the 3-block region is accepted after header/source ordering fixes,
+  - the 68-block region now refines linear exit tails to a single successor but
+    still falls back because it contains nested/internal back-edge targets that
+    cannot be represented by a single top-level `continue`.
 - Current `medium` baseline remains 29 gotos:
   - `f_ackermann`: 16
   - `f_rec_fib`: 8
   - `main`: 4
   - `f_rec_power`: 1
 
-Default-on is still blocked until Task 5 can accept at least one `medium`
-cyclic region without undeclared/uninitialized predicate temporaries or
-multi-exit ambiguity.
+The default-on flip is complete for the conservative DREAM seam. Full
+goto-free lowering of the large `f_ackermann` SCC remains blocked on real
+nested cyclic-region decomposition, not on the flag wiring.
 
-The remaining work is Step 4 plus rollout hardening.
+## Remaining Single Task: Nested Cyclic-Region Decomposition
+
+This is the only remaining implementation task for the large `medium`
+frontier. Do not solve it with a synthetic dispatcher/state machine.
+
+Write scope:
+- `crates/unlace-struct/src/condition_refinement.rs`
+- `crates/unlace-struct/src/structurer.rs`
+- a pure cyclic-region helper module if the model becomes too large for either
+  file.
+
+Build a real loop-region model that:
+- identifies loop nodes per back-edge target,
+- structures inner cyclic regions before outer cyclic regions,
+- refines loop successors using DREAM successor refinement,
+- represents each accepted back-edge as an actual `continue` to the current
+  loop header, not to an arbitrary internal node,
+- represents exits as guarded `break` only when the successor is unique after
+  refinement,
+- returns `Unsupported` for any shape that would require a synthetic state
+  variable or labelled control not present in HIR.
+
+Acceptance:
+- The 68-block `f_ackermann` DREAM candidate no longer fails with
+  `reason=unsupported back_edges={...}`.
+- `medium` total goto count drops below 29 without undeclared variables,
+  dropped statements, or goto cycles.
+- `UNLACE_DREAM_STRUCT=0` remains byte-identical under
+  `scripts/dream_byte_identity.sh`.
+- `cargo test -p unlace-struct --lib`, `cli_smoke`, `quality_smoke`, clippy,
+  and formatting checks pass.
 
 ## Task 1: Pure Cyclic Region Model
 
@@ -151,7 +181,7 @@ Write scope:
 - only the `try_structure_dream_residual_region` seam.
 
 Allow cyclic residual regions through the DREAM path when:
-- `UNLACE_DREAM_STRUCT=1`,
+- DREAM is enabled (default, or explicit `UNLACE_DREAM_STRUCT=1`),
 - the cyclic engine returns a fully structured tree,
 - all predicates resolve,
 - all exits can be represented as `break` or a single continuation target,
@@ -161,7 +191,8 @@ Default-off path must still return before any DREAM work.
 
 Acceptance:
 - `UNLACE_DREAM_STRUCT=0` byte-identity harness passes.
-- `UNLACE_DREAM_STRUCT=1` reduces at least one `medium` function goto count.
+- DREAM-enabled output reduces at least one `medium` function goto count once
+  nested cyclic-region decomposition is implemented.
 - No new undeclared variables in `medium` output.
 - `cli_smoke` and `quality_smoke` pass.
 
@@ -172,16 +203,16 @@ RUSTC_WRAPPER= cargo test -p unlace-struct --lib
 RUSTC_WRAPPER= cargo test -p unlace-cli --test cli_smoke
 RUSTC_WRAPPER= cargo test -p unlace-cli --test quality_smoke
 RUSTC_WRAPPER= DREAM_IDENTITY_TIMEOUT_SECS=120 scripts/dream_byte_identity.sh run /tmp/dream_id_a /tmp/dream_id_b
-UNLACE_DREAM_STRUCT=1 target/debug/unlace decompile --emit c fixtures/medium.elf > /tmp/medium_dream.c
+target/debug/unlace decompile --emit c fixtures/medium.elf > /tmp/medium_dream.c
 rg -n '\bgoto\b' /tmp/medium_dream.c
 ```
 
-## Task 6: Flag-On Corpus Hardening
+## Task 6: Default-On Corpus Hardening
 
 Write scope:
 - whichever module caused failures found by this task.
 
-Run flag-on across every fixture and classify changes:
+Run default-on DREAM across every fixture and classify changes:
 - strict improvements,
 - no-op,
 - unsupported fallback,
@@ -198,7 +229,7 @@ Verification:
 ```bash
 for f in fixtures/*.elf fixtures/*.macho; do
   [ -e "$f" ] || continue
-  timeout 120 env UNLACE_DREAM_STRUCT=1 target/debug/unlace decompile --emit c "$f" > "/tmp/dream-$(basename "$f").c"
+  timeout 120 target/debug/unlace decompile --emit c "$f" > "/tmp/dream-$(basename "$f").c"
 done
 RUSTC_WRAPPER= cargo test -p unlace-cli --test cli_smoke
 RUSTC_WRAPPER= cargo test -p unlace-cli --test quality_smoke
@@ -216,11 +247,12 @@ Change the flag helper from opt-in to default-on:
 - `UNLACE_DREAM_STRUCT=1` remains enabled.
 
 Acceptance:
-- Default output equals previous flag-on accepted output.
-- `UNLACE_DREAM_STRUCT=0` still equals the old legacy output by byte-identity
-  harness.
-- CLI/quality smoke pass.
-- The remaining golden failures are documented as stale/mixed, not hidden.
+- Done: default output equals explicit DREAM-enabled output.
+- Done: `UNLACE_DREAM_STRUCT=0` still equals the old legacy output by
+  byte-identity harness.
+- Done: CLI/quality smoke, structurer tests, clippy, and rollback
+  byte-identity pass on the flip commit.
+- Remaining golden failures stay documented as stale/mixed, not hidden.
 
 Verification:
 
@@ -271,6 +303,6 @@ progress.
 
 ## Global Rollback Rule
 
-If any default-off or `UNLACE_DREAM_STRUCT=0` run changes output before Task 7,
-revert the leaking commit immediately. The whole rollout depends on the legacy
-path remaining byte-identical until the explicit default-on flip.
+If any `UNLACE_DREAM_STRUCT=0` run changes output, revert the leaking commit
+immediately. The whole rollout depends on the legacy rollback path remaining
+byte-identical after the default-on flip.

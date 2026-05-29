@@ -89,22 +89,81 @@ changes and verify the resulting output is actually better.
 
 ## Current Verified State
 
-Last verified on 2026-05-17 (see `docs/rebaseline-2026-05-17.md`):
+Last verified on 2026-05-29 (commit `c07a9be2e`), after recovering the
+`964a5f7b` WIP baseline:
 
-- `RUSTC_WRAPPER= bash scripts/score_parity.sh` reports `Aggregate Parity: 100.0%`.
-- Golden fixture tests pass on the current narrow metric.
-- `RUSTC_WRAPPER= cargo test --workspace` passes in the current sandbox.
-- `RUSTC_WRAPPER= cargo xtask lint-determinism` passes.
 - `RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings` is clean.
+- `RUSTC_WRAPPER= cargo xtask lint-determinism` passes.
 - `RUSTC_WRAPPER= cargo check --workspace` passes.
-- A root `README.md` now exists (commit `8ddb9369b`).
-- `unlace quality <binary>` subcommand exists for honest output measurement (commits `137b743f7`, `84c38e68d`). 33 feature counters, md/json output.
-- Sandboxed `cargo test --workspace` can fail in `unlace_lumina` because a test binds a local TCP socket. Rerun outside the sandbox when needed.
-- `docs/PARITY_PLAN.md` is useful as a long-range roadmap, but its status numbers are historical and conflict with current verification. Treat it as intent, not ground truth.
-- `crates/unlace-output/src/COVERAGE.md` audits C emitter support for IDA `cot_*` forms. It does not prove that lifters/passes currently produce all those forms.
+- `RUSTC_WRAPPER= cargo test --workspace` passes **except**
+  `unlace-test-harness --test golden_fixtures` (18 pass / 14 fail). Every
+  other crate's tests, including `unlace-output --lib` (541/541),
+  `unlace-cli --test cli_smoke` (29/29), and `--test quality_smoke` (6/6),
+  are green.
+- `RUSTC_WRAPPER= bash scripts/score_parity.sh` reports `Stylistic Fixture
+  Parity: ~86%` (the script was renamed from "Aggregate Parity"; the old
+  100% number is gone — it measured a narrower counter set).
 
-The current 100% parity score is real for the measured fixture counters. It is
-not full IDA/Hex-Rays parity.
+### The 14 failing goldens are stale, not regressions
+
+`scripts/classify_golden_diffs.sh` (new) buckets each failing golden's diff
+into prelude / size / renum / struct and prints a refresh-vs-review verdict.
+Per-fixture git blame against the WIP parent (`4da39dbd6`) and the last-good
+WIP baseline (`7aa62dc0`) established:
+
+- **14 of 15 goldens already diverged from actual output before the WIP
+  commit** — they are long-stale, drifted across many prior commits. Blanket
+  `UPDATE_GOLDEN=1` would lock in that historical drift, which CLAUDE.md
+  forbids. They need per-fixture review against *intended* output, not a
+  mechanical refresh.
+- **Only `arc_features` was byte-clean at the parent** and was freshly
+  regressed by the WIP's recursive-descent rewrite (ARCompact `arc_branch`
+  truncated 24→16 bytes by an over-eager interior-padding early-stop). Fixed
+  in `65ecc42d2`; its golden was refreshed (verified body-identical,
+  prelude-only diff).
+
+### What the post-WIP recovery work changed (commits `520bee492`..`c07a9be2e`)
+
+- Restored `clippy -D warnings` clean (ptr_arg, print_literal).
+- Closed all 20 WIP-regressed `unlace-output` c_printer unit tests (returned-
+  branch-merge fold guard, commented/line-comment fold guards, for-loop
+  counter self-update detection, struct-field base fallback, fold-identity
+  test policy). Root cause was the WIP's aggressive expression folding.
+- Fixed `cli_smoke` (sum_for flag-temp leak) and `quality_smoke`
+  (stale-`return result` counter).
+- Fixed two of my OWN over-corrections found by WIP-baseline diffing: the
+  dead-assignment fixpoint deleting live-out register stores (v850), and the
+  DWARF source-map fold barrier defeating folding (debug_structs/debug_calls).
+- `medium.elf`: 2610 lines / 847 vars (WIP baseline) → 1224 / 116 — a ~7×
+  reduction in leaked SSA temps. Still scores 0.0 on its ancient 460-line
+  golden; the residual gap is the deep flag-condition-recovery work (raw
+  `__OFSUB__`/XOR flag dataflow not simplified to `v <= 1`), a long-standing
+  pre-WIP gap.
+
+### Debugging instrumentation (env-gated, all in `unlace-output`/`unlace-cli`)
+
+- `UNLACE_CPRINTER_STAGE_TRACE` — per post-emission cleanup stage:
+  changed flag + line-count delta (pins which transform dropped a statement).
+- `UNLACE_CPRINTER_PRUNE_TRACE` — per-segment dead-assignment decisions
+  (pass #, cond_family, used_later, keep/remove) + per-decl prune decisions.
+- `UNLACE_CPRINTER_TRACE` — global; fold decisions incl. `multi-def-merge`,
+  `returned-branch-merge-keep`, `commented-keep`, `line-comment-keep`.
+- `UNLACE_LIFT_BOUNDS_TRACE` — function lift extent: begin/no-fallthrough/stop
+  with known_size + all_padding flags (pins early-stop truncation).
+
+Other durable facts:
+
+- A root `README.md` exists (commit `8ddb9369b`).
+- `unlace quality <binary>` exists for honest output measurement.
+- Sandboxed `cargo test --workspace` can also fail in `unlace_lumina`
+  (a test binds a local TCP socket). Rerun outside the sandbox when needed.
+- `docs/PARITY_PLAN.md` status numbers are historical; treat as intent.
+- `crates/unlace-output/src/COVERAGE.md` audits emitter support, not producer.
+
+There is no real "100% parity" number anymore. The honest current state is:
+toolchain gates green, all unit/integration suites green, and a golden corpus
+that is mostly stale and needs deliberate per-fixture rebaselining against
+verified-better output — not full IDA/Hex-Rays parity.
 
 ## Standard Commands
 

@@ -1,5 +1,15 @@
 # Status Matrix (Batch 27)
 
+> **2026-05-29 update (commit `c07a9be2e`).** Toolchain gates (clippy
+> `-D warnings`, `lint-determinism`, `check`) are clean and every test target
+> is green **except** `unlace-test-harness --test golden_fixtures` (18 pass /
+> 14 fail). The 14 failing goldens are *stale* — they diverged from actual
+> output before the `964a5f7b` WIP baseline and need per-fixture rebaselining,
+> not a blanket refresh (see CLAUDE.md "Current Verified State" and
+> `scripts/classify_golden_diffs.sh`). `scripts/score_parity.sh` now reports
+> "Stylistic Fixture Parity ~86%"; the historical "100%" number measured a
+> narrower counter set and is gone. Treat the batch numbers below as intent.
+
 This file is the public source of truth for what works, what is experimental,
 and what is aspirational in unlace. It is derived from:
 

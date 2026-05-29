@@ -1,8 +1,8 @@
 # DREAM Step 4 — cyclic irreducible regions (remaining refactor work)
 
-Step 3c now reaches the production structurer seam behind
-`UNLACE_DREAM_STRUCT`, but `medium` still has 29 gotos because every residual
-DREAM candidate observed there is cyclic:
+Step 3c now reaches the production structurer seam by default
+(`UNLACE_DREAM_STRUCT=0` is the rollback knob), but `medium` still has 29 gotos
+because the largest residual DREAM candidate is a nested cyclic SCC:
 
 ```text
 entry=BlockId(7)  body_blocks=3  back_edges={(0, 1), (2, 1)}
@@ -34,9 +34,10 @@ Current code status:
   leaves.
 - `region_splice` lowers cyclic nodes into `HirNode::While`,
   `HirNode::Break`, and `HirNode::Continue`.
-- The production seam is still gated behind `UNLACE_DREAM_STRUCT` and rejects
-  cyclic regions when predicate source blocks would be emitted after their use
-  or when the region has multiple real outside successors.
+- The production seam is default-on and still rejects cyclic regions when
+  predicate source blocks would be emitted after their use, when exits cannot
+  be refined to a single successor, or when the cyclic region has internal
+  back-edge targets that require nested loop-region decomposition.
 
 1. **Loop-region model (pure, unwired).**
    Add a representation for a cyclic region:
@@ -64,10 +65,10 @@ Current code status:
    nested `If` / `Break` / `Continue`. Preserve the existing invariant:
    unresolved predicates fall back without dropping statements.
 
-5. **Gated production wiring.**
-   Only after the pure cyclic engine is unit-tested, update
-   `try_structure_dream_residual_region` to accept cyclic residual regions when
-   `UNLACE_DREAM_STRUCT=1`.
+5. **Production wiring.**
+   `try_structure_dream_residual_region` accepts conservative cyclic residual
+   regions by default and leaves `UNLACE_DREAM_STRUCT=0` as the legacy
+   fallback.
 
 ## Required tests
 
@@ -88,3 +89,42 @@ Current code status:
   revert immediately.
 - Flag-on introduces undeclared variables, drops statements, or creates goto
   cycles: revert the cyclic wiring and keep only pure modules.
+
+## Status update (commit 20f110177) — sound engine done; multi-header is the frontier
+
+The goto-free DREAM engine is now COMPLETE and SOUND for the cases it claims:
+- acyclic regions (step 2/3) and **single-exit, single-header cyclic loops**
+  (step 4) are structured behind `UNLACE_DREAM_STRUCT`.
+- A **statement-preservation oracle** (structurer.rs `count_hir_statements`)
+  rejects any spliced region that drops/duplicates a body statement, so flag-ON
+  output is provably statement-faithful (flag-OFF stays byte-identical).
+- Two acyclic-ordering fixes (header always RegionNode 0; leading True-guarded
+  header blocks emitted before the first predicate use) unblocked medium's small
+  `entry=7` 3-block region — it is now accepted and passes the oracle.
+
+### The remaining frontier: multi-header irreducible nests
+
+`medium`'s f_ackermann (and similar recursion-as-state-machine code) lifts to a
+**68-block region whose back-edges target 9 DISTINCT headers**
+(`{(35,32),(36,28),(37,24),(38,20),(39,16),(40,12),(41,8),(42,4),(43,0),...}`)
+and which has **3 exit targets**. `refine_cyclic_region_with_exits` requires a
+single loop header (every back-edge → `region.header`) and a single exit, so it
+correctly returns `Unsupported`; the 16 f_ackermann gotos remain.
+
+Reducing them requires DREAM §IV-C **abnormal-entry handling**: collapse a
+multi-entry irreducible loop into one `while(1)` driven by a synthetic
+state-dispatch variable (each header becomes a `case`), with **labeled
+multi-level `break`** for the multiple exits. This needs:
+1. a `StructuredNode::Loop` extension carrying a dispatch selector + per-header
+   case bodies, and labeled `Break(label)`/`Continue(label)`;
+2. a state-variable synthesis pass (assign each header an integer state; rewrite
+   inter-header edges as `state = K`);
+3. splice lowering to `while(1) { switch(state) { ... } }` with labeled breaks.
+
+This is a substantial, design-first effort with **uncertain quality payoff**:
+IDA/Hex-Rays themselves frequently emit `goto` for such irreducible nests, and
+medium's golden is independently stale. It should be a dedicated session — NOT
+parallelized (single hot file) — and only pursued if a state-dispatch rendering
+is demonstrably *better* than the current goto form on real fixtures. Until
+then, the honest state is: the sound goto-free engine fires on every region it
+can prove safe, and defers the rest.

@@ -26,6 +26,7 @@ pub mod label_hoist;
 pub mod loop_classify;
 pub mod loop_normalize;
 pub mod node_split;
+pub mod reaching_conditions;
 pub mod region_structurer;
 pub mod return_merge;
 pub mod seh_lower;

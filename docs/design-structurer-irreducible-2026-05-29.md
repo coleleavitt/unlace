@@ -1,0 +1,79 @@
+# Design: irreducible-region structuring (t55)
+
+Design-first analysis for the residual `medium` gotos (the deeply-nested
+`while(1)`+`goto label_N` output of the recursive functions). Grounded in the
+actual structurer code + the SAILR/DREAM papers (`research/papers/`,
+`research/structuring-and-temps-research.md`).
+
+## Concrete diagnosis (measured, not assumed)
+
+`medium`'s recursive functions (f_ackermann, f_rec_fib) lift to a **single
+giant irreducible CFG region**. Trace of `node_split` on f_ackermann:
+
+```
+node_split skipped non-shrinking candidate entry=BlockId(1)  current_body=68 remaining_largest_body=68
+node_split skipped non-shrinking candidate entry=BlockId(24) current_body=68 remaining_largest_body=68
+… (~20+ entry blocks, all skipped)
+```
+
+So the region is **68 blocks with 20+ entries**, and *every* split candidate is
+non-shrinking (`remaining_largest_body == current_body`). The existing pipeline
+is already correct and complete for what it does:
+
+- `irreducible::detect_irreducible_regions` — Tarjan SCC + multi-entry test ✓
+- `node_split::split_irreducible_entries` — entry duplication to reducify ✓
+- `cross_jump_revert` (SAILR ISC), `condition_dup`, `tail_duplication` ✓
+- `goto_elim`, `label_cleanup`, `label_hoist` ✓
+
+The gotos remain because **node-splitting cannot economically reducify a
+68-block / 20-entry region**: every split duplicates the whole body without
+shrinking the largest sub-region, so `node_split` correctly bails (splitting
+would blow up code size for no structural gain). Raising `MAX_SPLIT_ROUNDS`
+(currently 16) does **NOT** help — the guard that fires is the *non-shrinking*
+check (line 127), not the round cap.
+
+## Why this is design-first, not a bounded patch
+
+The only correct fix for a large multi-entry irreducible region that resists
+node-splitting is **DREAM-style condition-based refinement** (NDSS 2015,
+`research/papers/dream_ndss2015.txt` §IV): structure the region by computing
+per-node *reaching conditions* and emitting `if(cr)…` guards instead of gotos —
+which structures *any* region (reducible or not) without node duplication. This
+is a parallel structuring engine to the current dominator/interval approach.
+
+Blast radius: it is a new top-level structuring strategy in `structurer.rs`
+(272 KB, the single hottest file). CLAUDE.md forbids casual edits there. It must
+be:
+- gated behind a fall-back (only invoked when node-split leaves a residual
+  irreducible region, so reducible functions are untouched — zero regression
+  surface for the 99% case),
+- landed incrementally with the full gate set green at each step,
+- NOT parallelized across agents (one shared file).
+
+## Proposed incremental plan (each step independently gated + committed)
+
+1. **Reaching-condition engine (pure, new module, no wiring).**
+   `reaching_conditions.rs`: given a region CFG + entry, compute `cr(entry, n)`
+   as a boolean expression over edge predicates (DREAM eq. for cr). Pure
+   function + unit tests only; not yet called. Zero blast radius.
+2. **Acyclic condition-based refinement (new module).** Consume reaching
+   conditions to emit `if/else`/switch for an acyclic region; unit-tested on
+   synthetic CFGs. Still not wired into the main path.
+3. **Gated invocation.** In the structurer, *after* node_split, if a residual
+   irreducible region remains, route ONLY that region through the new engine;
+   reducible functions keep the existing path. Guard with an env flag first
+   (`UNLACE_DREAM_STRUCT=1`) so it's opt-in until proven, then flip default.
+4. **Cyclic regions + abnormal entry/exit** (DREAM §IV-C) — only after 1–3 are
+   green on the corpus.
+
+## Honest status / decision
+
+Steps 1–2 are genuinely safe (pure new modules, no pipeline wiring, can't
+regress anything). Step 1 is the right place to start and is bounded enough to
+land this turn with tests. Steps 3–4 are the multi-session core work.
+
+**Crucially: even fully done, this likely does NOT flip `medium` green** — that
+golden is independently stale/lossy (empty `void f_rec_fib(){}` bodies, verified
+earlier). The value is *correct structured output*, not golden match. The medium
+golden should be re-evaluated (refresh-when-better) separately once structuring
+improves.

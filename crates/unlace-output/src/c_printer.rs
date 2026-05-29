@@ -9658,6 +9658,28 @@ fn input_is_statement_output(
     }
 }
 
+/// Like [`input_is_statement_output`] but matches on the *base* varnode,
+/// ignoring the SSA version. A self-update such as a for-loop counter
+/// `i = i + 1` reads version N and writes version N+1 of the same base, so the
+/// version-exact check rejects it; for the increment / compound-assignment
+/// contraction we only need to know the same storage is read and written.
+fn input_base_is_statement_output(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    input_idx: usize,
+    ctx: &PrintCtx,
+) -> bool {
+    if input_is_statement_output(insn, stmt_idx, input_idx, ctx) {
+        return true;
+    }
+    let output_sv = stmt_output_sv(ctx, stmt_idx);
+    let input_sv = stmt_input_sv(ctx, stmt_idx, input_idx);
+    match (input_sv, output_sv) {
+        (Some(i), Some(o)) => i.base == o.base,
+        _ => insn.inputs.get(input_idx).copied() == insn.output,
+    }
+}
+
 fn try_emit_increment_form(
     insn: &IrInsn,
     stmt_idx: u32,
@@ -9672,7 +9694,7 @@ fn try_emit_increment_form(
         (_, SpaceId::Const) => (0, &insn.inputs[1]),
         _ => return None,
     };
-    if !input_is_statement_output(insn, stmt_idx, counter_idx, ctx) {
+    if !input_base_is_statement_output(insn, stmt_idx, counter_idx, ctx) {
         return None;
     }
     if const_in.offset != 1 {
@@ -9694,8 +9716,8 @@ fn try_emit_compound_assign(
     if insn.inputs.len() != 2 {
         return None;
     }
-    let counter_is_first = input_is_statement_output(insn, stmt_idx, 0, ctx);
-    let counter_is_second = input_is_statement_output(insn, stmt_idx, 1, ctx);
+    let counter_is_first = input_base_is_statement_output(insn, stmt_idx, 0, ctx);
+    let counter_is_second = input_base_is_statement_output(insn, stmt_idx, 1, ctx);
 
     let counter_idx = if counter_is_first {
         0
@@ -15234,6 +15256,31 @@ mod tests {
 
     fn con(value: u64, size: u8) -> Varnode {
         Varnode::constant(value, size)
+    }
+
+    /// Extract the body (everything from the function signature line through
+    /// its closing brace) for `func_name` out of a full `print_c` rendering.
+    /// Used by tests that must assert on the recovered statements without the
+    /// shared IDA prelude (whose macros legitimately contain `^`, `|`, etc.).
+    fn function_body_text(output: &str, func_name: &str) -> String {
+        let lines: Vec<&str> = output.lines().collect();
+        let needle = format!("{func_name}(");
+        let Some(start) = lines.iter().position(|l| {
+            l.contains(&needle) && l.trim_end().ends_with('{') && !l.trim_start().starts_with("//")
+        }) else {
+            return String::new();
+        };
+        let mut depth = 0i32;
+        let mut collected = Vec::new();
+        for line in &lines[start..] {
+            collected.push(*line);
+            depth += line.matches('{').count() as i32;
+            depth -= line.matches('}').count() as i32;
+            if depth <= 0 && collected.len() > 1 {
+                break;
+            }
+        }
+        collected.join("\n")
     }
 
     fn sv(offset: u64, size: u8) -> SsaVarnode {
@@ -21614,14 +21661,20 @@ mod tests {
         let func = make_func("xor_self", body);
         let output = print_c(&func);
 
+        // XOR(v, v) folds to the constant 0. The returned value may either be
+        // materialised as `result = 0;` or folded straight into `return 0;`
+        // (the latter matches Hex-Rays output and is what the returned-value
+        // fold policy now produces for a single-def single-use value).
         assert!(
-            output.contains("result = 0;"),
+            output.contains("result = 0;") || output.contains("return 0;"),
             "XOR(v, v) should fold to 0: {output}",
         );
-        let xor_line = output.lines().find(|l| l.contains("result ="));
+        // Whichever form, the `^` operator must not survive the fold. Check
+        // the function body only — the IDA prelude macros legitimately use `^`.
+        let body_text = function_body_text(&output, "xor_self");
         assert!(
-            xor_line.map_or(false, |l| !l.contains("^")),
-            "XOR-self should not contain ^ in assignment: {output}",
+            !body_text.contains('^'),
+            "XOR-self should not contain ^ in body: {body_text}",
         );
     }
 
@@ -21675,9 +21728,15 @@ mod tests {
         let func = make_func("and_zero", body);
         let output = print_c(&func);
 
+        // v & 0 folds to the constant 0, either materialised as `result = 0;`
+        // or folded into `return 0;` under the returned-value fold policy.
         assert!(
-            output.contains("result = 0;"),
+            output.contains("result = 0;") || output.contains("return 0;"),
             "v & 0 should fold to 0: {output}",
+        );
+        assert!(
+            !output.contains(" & 0"),
+            "and-zero should not contain `& 0` in output: {output}",
         );
     }
 
@@ -21703,14 +21762,18 @@ mod tests {
         let func = make_func("or_zero", body);
         let output = print_c(&func);
 
+        // v | 0 folds to v, either materialised as `result = v1;` or folded
+        // into `return v1;` under the returned-value fold policy.
         assert!(
-            output.contains("result = v1;"),
+            output.contains("result = v1;") || output.contains("return v1;"),
             "v | 0 should fold to v: {output}",
         );
-        let or_line = output.lines().find(|l| l.contains("result ="));
+        // Whichever form, the `|` operator must not survive the fold. Check
+        // the function body only — the IDA prelude macros legitimately use `|`.
+        let body_text = function_body_text(&output, "or_zero");
         assert!(
-            or_line.map_or(false, |l| !l.contains("|")),
-            "or-zero should not contain | in assignment: {output}",
+            !body_text.contains('|'),
+            "or-zero should not contain | in body: {body_text}",
         );
     }
 

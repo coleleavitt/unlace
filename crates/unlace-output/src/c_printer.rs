@@ -1961,6 +1961,18 @@ struct PrintCtx {
     sv_use_counts: BTreeMap<SsaVarnode, usize>,
     cond_uses: Vec<SsaVarnode>,
     control_cond_uses: Vec<SsaVarnode>,
+    /// SSA values that flow into a `return` statement (recorded during
+    /// `collect_varnodes`).  A returned value acquires the `result` role name
+    /// in `compute_heuristic_names`; folding its definition would inline the
+    /// expression into the `return` and, when the value is assigned in more
+    /// than one branch of an if/else, silently drop every branch but one.
+    /// `compute_foldable` consults this set to keep such merges materialised.
+    returned_svs: BTreeSet<SsaVarnode>,
+    /// Statement indices wrapped in a `HirNode::Commented` node. The attached
+    /// comment is anchored to the statement, so the statement must render
+    /// standalone — folding it into a later consumer would orphan the comment.
+    /// `compute_foldable` consults this set to keep such statements materialised.
+    commented_stmts: BTreeSet<u32>,
     /// `(varnode, anchor stmt idx)` pairs recording which statement reads
     /// each `cond_uses` entry.  Used together with `stmt_inputs`/`stmt_outputs`
     /// to compute the LCA scope of a declared name when deciding whether to
@@ -2284,6 +2296,8 @@ impl PrintCtx {
             sv_use_counts: BTreeMap::new(),
             cond_uses: Vec::new(),
             control_cond_uses: Vec::new(),
+            returned_svs: BTreeSet::new(),
+            commented_stmts: BTreeSet::new(),
             cond_use_stmts: Vec::new(),
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
@@ -3609,6 +3623,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     let ret_sv = ctx.return_value_aliases.get(sv).copied().unwrap_or(*sv);
                     ctx.name_of(&ret_sv);
                     ctx.cond_uses.push(ret_sv);
+                    ctx.returned_svs.insert(ret_sv);
                     ctx.cond_use_stmts.push((ret_sv, ctx.next_stmt));
                 }
             }
@@ -3779,7 +3794,15 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
             HirNode::Commented { inner, .. } => {
                 // Comments are pass-through for varnode collection — recurse
-                // into the wrapped node as if the wrapper weren't there.
+                // into the wrapped node as if the wrapper weren't there. But
+                // record the stmt index the wrapped `Statement` is about to be
+                // assigned so `compute_foldable` keeps it materialised: the
+                // attached comment is anchored to a rendered statement, and
+                // folding the statement into a consumer would orphan it.
+                if matches!(inner.as_ref(), HirNode::Statement(_)) {
+                    let wrapped_idx = ctx.next_stmt;
+                    ctx.commented_stmts.insert(wrapped_idx);
+                }
                 collect_varnodes(std::slice::from_ref(inner.as_ref()), ctx);
             }
 
@@ -3845,6 +3868,17 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         *use_counts.entry(*sv).or_insert(0) += 1;
     }
 
+    // Count how many distinct statements define each output SSA value. A value
+    // defined in more than one statement is a control-flow merge (the HIR-level
+    // analogue of an SSA phi: e.g. `r8` assigned in both arms of an if/else and
+    // then returned). Folding such a value would inline ONE arm's expression
+    // past the merge and silently drop the others — a correctness bug. These
+    // must stay materialised as a named variable assigned in each arm.
+    let mut def_counts: BTreeMap<SsaVarnode, usize> = BTreeMap::new();
+    for sv in ctx.stmt_outputs.values().flatten() {
+        *def_counts.entry(*sv).or_insert(0) += 1;
+    }
+
     for (&stmt_idx, output_sv_opt) in &ctx.stmt_outputs {
         let output_sv = match output_sv_opt {
             Some(sv) => *sv,
@@ -3855,6 +3889,26 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             Some(insn) => insn,
             None => continue,
         };
+
+        if ctx.commented_stmts.contains(&stmt_idx) {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=commented-keep",
+                    insn.op
+                );
+            }
+            continue;
+        }
+
+        if def_counts.get(&output_sv).copied().unwrap_or(0) > 1 {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=multi-def-merge",
+                    insn.op
+                );
+            }
+            continue;
+        }
 
         if is_never_foldable_op(insn.op) {
             if insn.op == IrOp::Load && is_temp_varnode(&output_sv.base) {
@@ -3893,11 +3947,28 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         }
 
         if !sv_consumer_stmt.contains_key(&output_sv) && ctx.cond_uses.contains(&output_sv) {
+            // A returned value defined inside a nested branch (depth > 0) is a
+            // control-flow merge: e.g. `r8` assigned in both arms of an
+            // if/else then returned. The `cond_uses` set conflates "used by a
+            // condition" with "used by a return", so without this guard the
+            // first arm's definition gets folded straight into `return …`,
+            // dropping the other arm(s). Keep it materialised as `result`.
+            let def_depth = ctx.stmt_depths.get(&stmt_idx).copied().unwrap_or(0);
+            let is_returned_merge = ctx.returned_svs.contains(&output_sv) && def_depth > 0;
+            if is_returned_merge {
+                if c_printer_trace_enabled() {
+                    eprintln!(
+                        "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} def_depth={def_depth} decision=returned-branch-merge-keep",
+                        insn.op
+                    );
+                }
+                continue;
+            }
             ctx.foldable_stmts.insert(stmt_idx);
             ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
             if c_printer_trace_enabled() {
                 eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=cond-only",
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} def_depth={def_depth} decision=cond-only",
                     insn.op
                 );
             }

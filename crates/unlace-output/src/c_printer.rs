@@ -1273,7 +1273,9 @@ pub fn print_c_with_annotations(
     // text and the line-count delta, so a vanished statement can be pinned to
     // the exact transform that dropped it.
     let func_label = func.name.as_str();
-    let output = run_cleanup_stage(func_label, "dead-plain-assignments", out, prune_dead_plain_assignments);
+    let output = run_cleanup_stage(func_label, "signed-flag-compare", out, simplify_signed_flag_compares);
+    let output =
+        run_cleanup_stage(func_label, "dead-plain-assignments", output, prune_dead_plain_assignments);
     let output = run_cleanup_stage(func_label, "unused-labels", output, prune_unused_labels);
     let output =
         run_cleanup_stage(func_label, "unused-plain-decls", output, prune_unused_plain_local_decls);
@@ -8050,6 +8052,164 @@ fn simplify_condition_expr_text(expr: &str) -> String {
         );
     }
     expr.trim().to_string()
+}
+
+/// Post-emission pass: fold the x86 signed-comparison flag idiom that the
+/// lifter emits verbatim back into the C relational operator IDA/Hex-Rays show.
+///
+/// The hardware computes a signed `a < b` as `SF != OF`. Our printer renders
+/// `SF` as `LOBYTE(a < b)` (the raw subtract's sign bit) and `OF` as
+/// `__OFSUB__(a, b)`, so a signed less-than leaks as:
+///
+/// ```text
+///     LOBYTE(a < b) ^ __OFSUB__(a, b)        =>  a < b
+/// ```
+///
+/// and the `<=` form (the `jle`/`jng` pattern, `ZF | (SF != OF)`) as:
+///
+/// ```text
+///     a == b || (LOBYTE(a < b) ^ __OFSUB__(a, b))   =>  a <= b
+///     a == b || LOBYTE(a < b) ^ __OFSUB__(a, b)     =>  a <= b
+/// ```
+///
+/// The transform is purely textual and conservative: it only fires when the two
+/// operand pairs match exactly, so it can never change the meaning of an
+/// unrelated XOR. Folding these collapses the `cond_N` flag temporaries that
+/// then die in the dead-assignment pass — the dominant source of medium.elf's
+/// line bloat.
+fn simplify_signed_flag_compares(output: String) -> String {
+    if !output.contains("__OFSUB__") && !output.contains("__OFADD__") {
+        return output;
+    }
+    let mut out = String::with_capacity(output.len());
+    for (i, line) in output.lines().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        // Skip the prelude `#define __OFSUB__` lines.
+        if line.trim_start().starts_with("#define") {
+            out.push_str(line);
+            continue;
+        }
+        out.push_str(&simplify_signed_flag_line(line));
+    }
+    if output.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
+/// Apply the signed-flag-compare rewrites to a single line, repeatedly until no
+/// further match (a line can hold several idioms, e.g. an `||` chain).
+fn simplify_signed_flag_line(line: &str) -> String {
+    let mut current = line.to_string();
+    for _ in 0..8 {
+        let Some(next) = rewrite_one_signed_flag_idiom(&current) else {
+            break;
+        };
+        current = next;
+    }
+    current
+}
+
+/// Find the first `LOBYTE(<A> < <B>) ^ __OFSUB__(<A>, <B>)` occurrence (with the
+/// operand pairs matching) and rewrite it to `<A> < <B>`, additionally
+/// collapsing a preceding `<A> == <B> ||` into `<A> <= <B>`. Returns `None` when
+/// no idiom is present.
+fn rewrite_one_signed_flag_idiom(line: &str) -> Option<String> {
+    let xor_pos = line.find(" ^ __OFSUB__(")?;
+    // Parse the LOBYTE(...) immediately to the left of ` ^ `.
+    let lobyte_close = xor_pos; // index of the space before ^
+    let before_xor = &line[..lobyte_close];
+    let lobyte_open = before_xor.rfind("LOBYTE(")?;
+    let sf_inner = &before_xor[lobyte_open + "LOBYTE(".len()..];
+    let sf_inner = sf_inner.strip_suffix(')')?.trim();
+    // sf_inner must be `A < B` (the raw subtract sign bit).
+    let (sf_a, sf_op, sf_b) = split_top_level_comparison(sf_inner)?;
+    if sf_op != "<" {
+        return None;
+    }
+    // Parse the __OFSUB__(A, B) to the right of ` ^ `.
+    let of_start = xor_pos + " ^ ".len();
+    let of_rest = &line[of_start..];
+    let of_inner_start = of_rest.find("__OFSUB__(")? + "__OFSUB__(".len();
+    let of_inner_rel_end = matching_paren_end(&of_rest[of_inner_start..])?;
+    let of_inner = &of_rest[of_inner_start..of_inner_start + of_inner_rel_end];
+    let (of_a, of_b) = split_top_level_comma(of_inner)?;
+    // Operand pairs must match exactly (modulo whitespace).
+    if sf_a.trim() != of_a.trim() || sf_b.trim() != of_b.trim() {
+        return None;
+    }
+    let a = sf_a.trim();
+    let b = sf_b.trim();
+    let idiom_start = lobyte_open;
+    let idiom_end = of_start + of_inner_start + of_inner_rel_end + 1; // include ')'
+
+    // Check for a preceding `A == B || ` to fold into `<=`.
+    let eq_prefix = format!("{a} == {b} || ");
+    let head = &line[..idiom_start];
+    if let Some(stripped) = head.strip_suffix(&eq_prefix) {
+        let replacement = format!("{a} <= {b}");
+        return Some(format!("{stripped}{replacement}{}", &line[idiom_end..]));
+    }
+    // Also accept a parenthesized idiom: `A == B || (IDIOM)`.
+    let eq_prefix_paren = format!("{a} == {b} || (");
+    if let Some(stripped) = head.strip_suffix(&eq_prefix_paren)
+        && line[idiom_end..].starts_with(')')
+    {
+        let replacement = format!("{a} <= {b}");
+        return Some(format!("{stripped}{replacement}{}", &line[idiom_end + 1..]));
+    }
+
+    let replacement = format!("{a} < {b}");
+    Some(format!(
+        "{}{replacement}{}",
+        &line[..idiom_start],
+        &line[idiom_end..]
+    ))
+}
+
+/// Return the byte index just past the `)` that closes the paren group opened at
+/// the start of `s` (i.e. `s[0]` is the first char *inside* the group). Returns
+/// `None` if unbalanced.
+fn matching_paren_end(s: &str) -> Option<usize> {
+    let mut depth = 1i32;
+    for (i, b) in s.bytes().enumerate() {
+        match b {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Split `a, b` at the top-level comma (depth 0). Returns `None` if there isn't
+/// exactly one top-level comma.
+fn split_top_level_comma(s: &str) -> Option<(&str, &str)> {
+    let bytes = s.as_bytes();
+    let mut depth = 0i32;
+    let mut comma: Option<usize> = None;
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b',' if depth == 0 => {
+                if comma.is_some() {
+                    return None;
+                }
+                comma = Some(i);
+            }
+            _ => {}
+        }
+    }
+    let c = comma?;
+    Some((&s[..c], &s[c + 1..]))
 }
 
 fn c_printer_trace_enabled() -> bool {
@@ -15494,6 +15654,56 @@ mod tests {
     use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
 
     use super::{PrinterAnnotations, print_c, print_c_with_annotations};
+
+    #[test]
+    fn test_signed_flag_compare_folds_less_than() {
+        // SF ^ OF == signed `<`. __OFSUB__ only appears in signed lowering, so
+        // its presence is the signedness signal.
+        let got = super::simplify_signed_flag_line("    if (LOBYTE(a1 < 1) ^ __OFSUB__(a1, 1)) {");
+        assert_eq!(got, "    if (a1 < 1) {", "{got}");
+    }
+
+    #[test]
+    fn test_signed_flag_compare_folds_less_equal() {
+        // `a == b || (SF ^ OF)` == signed `<=` (the jle/jng pattern).
+        let got = super::simplify_signed_flag_line(
+            "    if (a1 == 1 || LOBYTE(a1 < 1) ^ __OFSUB__(a1, 1)) {",
+        );
+        assert_eq!(got, "    if (a1 <= 1) {", "{got}");
+    }
+
+    #[test]
+    fn test_signed_flag_compare_folds_less_equal_parenthesized() {
+        let got = super::simplify_signed_flag_line(
+            "    x = (a1 == 1 || (LOBYTE(a1 < 1) ^ __OFSUB__(a1, 1)));",
+        );
+        assert_eq!(got, "    x = (a1 <= 1);", "{got}");
+    }
+
+    #[test]
+    fn test_signed_flag_compare_requires_operand_identity() {
+        // Mismatched operands (a1 vs a2) must NOT fold — leave verbatim.
+        let line = "    if (LOBYTE(a1 < 1) ^ __OFSUB__(a2, 1)) {";
+        assert_eq!(super::simplify_signed_flag_line(line), line);
+        // Mismatched rhs constant must not fold either.
+        let line2 = "    if (LOBYTE(a1 < 1) ^ __OFSUB__(a1, 2)) {";
+        assert_eq!(super::simplify_signed_flag_line(line2), line2);
+    }
+
+    #[test]
+    fn test_signed_flag_compare_leaves_unrelated_xor() {
+        // A plain XOR with no __OFSUB__ partner is untouched.
+        let line = "    v3 = v1 ^ v2;";
+        assert_eq!(super::simplify_signed_flag_line(line), line);
+    }
+
+    #[test]
+    fn test_signed_flag_compare_handles_nested_operands() {
+        let got = super::simplify_signed_flag_line(
+            "    if (LODWORD(v4) == 1 || LOBYTE(LODWORD(v4) < 1) ^ __OFSUB__(LODWORD(v4), 1)) {",
+        );
+        assert_eq!(got, "    if (LODWORD(v4) <= 1) {", "{got}");
+    }
 
     fn make_func(name: &str, body: Vec<HirNode>) -> HirFunction {
         HirFunction {

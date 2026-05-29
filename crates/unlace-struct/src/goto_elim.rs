@@ -289,7 +289,7 @@ fn is_terminal(node: &HirNode) -> bool {
     }
 }
 
-fn remove_forward_gotos(nodes: &mut Vec<HirNode>) {
+fn remove_forward_gotos(nodes: &mut [HirNode]) {
     let mut labels = BTreeMap::new();
     let mut pos = 0;
     collect_label_positions(nodes, &mut pos, &mut labels);
@@ -362,7 +362,7 @@ fn collect_label_positions_in_node(
 }
 
 fn retain_nonforward_gotos(
-    nodes: &mut Vec<HirNode>,
+    nodes: &mut [HirNode],
     pos: &mut usize,
     labels: &BTreeMap<LabelId, usize>,
 ) {

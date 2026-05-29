@@ -292,8 +292,8 @@ pub fn run(root: &Path) -> i32 {
             continue;
         }
         println!(
-            "[semantic] UNSUPPORTED {}:{} - {}",
-            fixture.name, "main", "source-known fixture has no semantic or shape case yet"
+            "[semantic] UNSUPPORTED {}:main - source-known fixture has no semantic or shape case yet",
+            fixture.name
         );
         unsupported += 1;
     }

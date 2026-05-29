@@ -857,26 +857,22 @@ fn lift_instructions(
                     len > 0,
                     "lifter returned zero-length insn at {addr:#x}; would loop forever"
                 );
-                // A function with a known symbol size is exactly `code`; the
-                // remaining bytes are still part of THIS function, so the
-                // padding-prefix early-stop must be suppressed until the slice
-                // is exhausted. Only size-unknown (synthetic-boundary)
-                // functions may stop early on a padding run.
-                let inside_known_function = has_known_size && next_offset < code.len();
+                let remaining_after = &code[next_offset..];
                 let want_stop = no_fallthrough
-                    && !inside_known_function
-                    && should_stop_after_no_fallthrough(
+                    && should_stop_at_no_fallthrough_boundary(
                         lifter.arch(),
                         &records.last().expect("just pushed").ir_ops,
                         base_addr,
                         code_end,
-                        &code[next_offset..],
+                        remaining_after,
+                        has_known_size,
                     );
                 if trace_lift_bounds && no_fallthrough {
                     eprintln!(
-                        "[unlace:lift-bounds] no-fallthrough func={base_addr:#x} insn={addr:#x} next={:#x} remaining={} inside_known={inside_known_function} stop={want_stop}",
+                        "[unlace:lift-bounds] no-fallthrough func={base_addr:#x} insn={addr:#x} next={:#x} remaining={} known_size={has_known_size} all_padding={} stop={want_stop}",
                         base_addr.saturating_add(next_offset as u64),
-                        code.len().saturating_sub(next_offset)
+                        remaining_after.len(),
+                        is_padding_tail(lifter.arch(), remaining_after),
                     );
                 }
                 if want_stop {
@@ -917,6 +913,36 @@ fn lift_instructions(
     }
 
     Ok(records)
+}
+
+/// Top-level early-stop decision after a no-fallthrough terminator, layering
+/// the known-symbol-size policy over the padding heuristic.
+///
+/// Decision table (only reached when the current insn has no fallthrough):
+///
+/// | known_size | remainder is all padding | result |
+/// |------------|--------------------------|--------|
+/// | false      | (delegates to heuristic) | `should_stop_after_no_fallthrough` |
+/// | true       | yes                      | **stop** — overshooting-symbol guard: the claimed extent ran into a literal pool / next function's alignment, so honour the padding tail |
+/// | true       | no                       | **continue** — the remaining bytes are interior code of THIS function (e.g. ARCompact `arc_branch` tail `e0 7f 00 00`); a mere leading zero is not padding |
+///
+/// The `known_size && all-padding` carve-out keeps the old defensive behaviour
+/// for binaries whose `st_size` overshoots the real code, while the
+/// `known_size && !all-padding` branch fixes the arc_branch truncation.
+fn should_stop_at_no_fallthrough_boundary(
+    arch: ArchId,
+    ir_ops: &[unlace_ir::IrInsn],
+    func_start: u64,
+    func_end: u64,
+    remaining: &[u8],
+    has_known_size: bool,
+) -> bool {
+    if !has_known_size {
+        return should_stop_after_no_fallthrough(arch, ir_ops, func_start, func_end, remaining);
+    }
+    // Known size: only stop if EVERYTHING left is padding (symbol overshoot).
+    // An interior padding *prefix* is live code and must not truncate.
+    remaining.is_empty() || is_padding_tail(arch, remaining)
 }
 
 /// Decide whether to stop lifting after a no-fallthrough terminator (`jmp`,
@@ -4970,6 +4996,55 @@ mod tests {
         assert!(
             known_end >= unknown_end,
             "known-size lift must reach at least as far as the size-unknown lift",
+        );
+    }
+
+    /// The known-size carve-out must still honour a genuine all-padding tail:
+    /// if a symbol's `st_size` overshoots the real code into inter-function
+    /// alignment, lifting should stop at the padding run rather than decode
+    /// garbage. Exercises `should_stop_at_no_fallthrough_boundary` directly.
+    #[test]
+    fn test_known_size_still_stops_on_all_padding_tail() {
+        let ret_op = [unlace_ir::IrInsn::without_output(
+            IrOp::Return,
+            smallvec::smallvec![],
+            0x1000,
+        )];
+        // known size + remainder all NOPs (x86 padding) => stop (overshoot).
+        assert!(
+            should_stop_at_no_fallthrough_boundary(
+                ArchId::X86_64,
+                &ret_op,
+                0x1000,
+                0x1008,
+                &[0x90, 0x90, 0x90],
+                true,
+            ),
+            "all-padding tail after a known-size function must still stop",
+        );
+        // known size + remainder contains live code => continue.
+        assert!(
+            !should_stop_at_no_fallthrough_boundary(
+                ArchId::X86_64,
+                &ret_op,
+                0x1000,
+                0x1008,
+                &[0x00, 0x48, 0x89],
+                true,
+            ),
+            "interior padding-prefix-then-code must NOT truncate a known-size fn",
+        );
+        // known size + empty remainder => stop (slice exhausted).
+        assert!(
+            should_stop_at_no_fallthrough_boundary(
+                ArchId::X86_64,
+                &ret_op,
+                0x1000,
+                0x1008,
+                &[],
+                true,
+            ),
+            "exhausted known-size slice must stop",
         );
     }
 

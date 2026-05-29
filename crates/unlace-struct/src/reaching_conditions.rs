@@ -79,6 +79,10 @@ pub enum Cond {
     NotPred(u32),
     /// Switch selector `id` equals `value`.
     CaseEq(u32, i64),
+    /// Negation of a `CaseEq` (switch selector `id` does NOT equal `value`).
+    /// Produced only by condition negation in the refinement step; the
+    /// reaching-condition sweep itself never creates these.
+    NotCaseEq(Box<Cond>),
     And(Box<Cond>, Box<Cond>),
     Or(Box<Cond>, Box<Cond>),
 }

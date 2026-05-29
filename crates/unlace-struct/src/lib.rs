@@ -4,6 +4,7 @@ pub mod bitfield_recovery;
 pub mod block_merge;
 pub mod cmov_switch;
 pub mod condition_dup;
+pub mod condition_refinement;
 pub mod continue_break;
 pub mod cpp_eh;
 pub mod cross_jump_revert;

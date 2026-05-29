@@ -26,6 +26,18 @@ The full default-on rollout task list lives in
 
 ## Implementation tasks
 
+Current code status:
+
+- Pure cyclic refinement is implemented for conservative single-header regions.
+- Back-edges are represented as synthetic guarded `Continue` leaves.
+- Single-target external exits are represented as synthetic guarded `Break`
+  leaves.
+- `region_splice` lowers cyclic nodes into `HirNode::While`,
+  `HirNode::Break`, and `HirNode::Continue`.
+- The production seam is still gated behind `UNLACE_DREAM_STRUCT` and rejects
+  cyclic regions when predicate source blocks would be emitted after their use
+  or when the region has multiple real outside successors.
+
 1. **Loop-region model (pure, unwired).**
    Add a representation for a cyclic region:
    - region header / entry set,

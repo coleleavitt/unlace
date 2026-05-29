@@ -7,14 +7,25 @@ Current status:
 
 - Steps 1, 2, 3a, 3b are implemented and tested.
 - Step 3c is wired conservatively behind `UNLACE_DREAM_STRUCT`.
+- Step 4 Tasks 1-4 now have code support: exit-aware region bridging,
+  synthetic guarded `Continue` / `Break` leaves, cyclic `StructuredNode::Loop`,
+  and HIR lowering to `While` / `Break` / `Continue`.
 - Flag-off byte-identity is guarded by `scripts/dream_byte_identity.sh`.
-- Flag-on reaches residual candidates in `medium`, but they are cyclic and
-  intentionally fall back.
+- Flag-on reaches residual candidates in `medium`, but the production seam still
+  rejects both observed cyclic regions:
+  - the 3-block region would use a branch predicate before the predicate source
+    block is emitted (`predicate-before-source`),
+  - the 68-block region has three real outside successors, which cannot yet be
+    represented by a single `break` continuation.
 - Current `medium` baseline remains 29 gotos:
   - `f_ackermann`: 16
   - `f_rec_fib`: 8
   - `main`: 4
   - `f_rec_power`: 1
+
+Default-on is still blocked until Task 5 can accept at least one `medium`
+cyclic region without undeclared/uninitialized predicate temporaries or
+multi-exit ambiguity.
 
 The remaining work is Step 4 plus rollout hardening.
 

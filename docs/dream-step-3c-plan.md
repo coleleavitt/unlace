@@ -1,5 +1,12 @@
 # DREAM Step 3c — gated wiring plan (the high-risk step)
 
+2026-05-29 status: **the conservative Step 3c seam is wired behind
+`UNLACE_DREAM_STRUCT`**. With the flag unset/off, the hook returns before doing
+any work. With the flag on, it reaches residual irreducible candidates and only
+consumes regions that are acyclic, single-exit, and have all predicates
+resolved. The observed `medium` candidates are cyclic, so they intentionally
+fall back to legacy output until Step 4 (`docs/dream-step-4-cyclic-plan.md`).
+
 Steps 1, 2, 3a, 3b are **landed, fully tested, and unwired** on master:
 
 | step | module | what it does |

@@ -72,6 +72,12 @@ Steps 1–2 are genuinely safe (pure new modules, no pipeline wiring, can't
 regress anything). Step 1 is the right place to start and is bounded enough to
 land this turn with tests. Steps 3–4 are the multi-session core work.
 
+2026-05-29 update: Steps 1, 2, 3a, 3b, and the conservative 3c seam are landed.
+The seam is gated behind `UNLACE_DREAM_STRUCT`; flag-off returns before doing
+any DREAM work, and flag-on currently routes only acyclic residual regions. The
+measured `medium` candidates are cyclic, so Step 4 is now the active reducer
+task (`docs/dream-step-4-cyclic-plan.md`).
+
 **Crucially: even fully done, this likely does NOT flip `medium` green** — that
 golden is independently stale/lossy (empty `void f_rec_fib(){}` bodies, verified
 earlier). The value is *correct structured output*, not golden match. The medium

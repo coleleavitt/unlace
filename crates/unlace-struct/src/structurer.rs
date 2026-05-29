@@ -18,7 +18,9 @@ use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::eager_returns::eager_returns;
 use crate::hir::{HirCallArg, HirFunction, HirNode, LabelId, SwitchCase};
+use crate::reaching_conditions::{Cond, dream_structuring_enabled};
 use crate::switch_recovery::{IndirectBranchKind, classify_indirect_branch};
+use crate::{condition_refinement, irreducible, reaching_conditions, region_bridge, region_splice};
 
 /// Errors that can occur during control-flow structuring.
 #[derive(Debug, thiserror::Error)]
@@ -637,6 +639,70 @@ struct StructureCtx<'a> {
     goto_targets: BTreeSet<BlockId>,
 }
 
+fn structured_predicates_resolve(
+    node: &condition_refinement::StructuredNode,
+    pred_cond: &BTreeMap<u32, SsaVarnode>,
+) -> bool {
+    used_predicates(node)
+        .into_iter()
+        .all(|pred| pred_cond.contains_key(&pred))
+}
+
+fn used_predicates(node: &condition_refinement::StructuredNode) -> BTreeSet<u32> {
+    let mut out = BTreeSet::new();
+    collect_structured_predicates(node, &mut out);
+    out
+}
+
+fn collect_structured_predicates(
+    node: &condition_refinement::StructuredNode,
+    out: &mut BTreeSet<u32>,
+) {
+    use condition_refinement::StructuredNode;
+    match node {
+        StructuredNode::Empty | StructuredNode::Block(_) | StructuredNode::Unsupported => {}
+        StructuredNode::Seq(parts) => {
+            for part in parts {
+                collect_structured_predicates(part, out);
+            }
+        }
+        StructuredNode::If { cond, then, els } => {
+            collect_cond_predicates(cond, out);
+            collect_structured_predicates(then, out);
+            if let Some(els) = els {
+                collect_structured_predicates(els, out);
+            }
+        }
+        StructuredNode::Switch {
+            selector,
+            cases,
+            default,
+        } => {
+            out.insert(*selector);
+            for (_, case) in cases {
+                collect_structured_predicates(case, out);
+            }
+            if let Some(default) = default {
+                collect_structured_predicates(default, out);
+            }
+        }
+    }
+}
+
+fn collect_cond_predicates(cond: &Cond, out: &mut BTreeSet<u32>) {
+    match cond {
+        Cond::Pred(id) | Cond::NotPred(id) | Cond::CaseEq(id, _) => {
+            out.insert(*id);
+        }
+        Cond::NotCaseEq(inner) => collect_cond_predicates(inner, out),
+        Cond::And(a, b) | Cond::Or(a, b) => {
+            collect_cond_predicates(a, out);
+            collect_cond_predicates(b, out);
+        }
+        Cond::True | Cond::False => {}
+    }
+}
+
 impl<'a> StructureCtx<'a> {
     fn new(func: &'a SsaFunction) -> Self {
         let mut back_edges = BTreeSet::new();
@@ -731,6 +797,127 @@ impl<'a> StructureCtx<'a> {
         label
     }
 
+    /// Experimental DREAM Step 3c seam.
+    ///
+    /// This is deliberately conservative. With `UNLACE_DREAM_STRUCT` unset it
+    /// returns `None` before doing any work, preserving byte-identity by
+    /// construction. With the flag enabled it only consumes a residual
+    /// irreducible region when all of the following are true:
+    ///
+    /// * `bid` is one of the region's residual entry blocks,
+    /// * the reaching-condition skeleton is acyclic,
+    /// * condition refinement succeeds,
+    /// * every predicate used by the structured tree resolves to a CBRANCH
+    ///   condition varnode, and
+    /// * the region has at most one external successor to continue from.
+    ///
+    /// Cyclic regions are Step 4; they stay on the legacy goto path.
+    fn try_structure_dream_residual_region(
+        &mut self,
+        bid: BlockId,
+    ) -> Option<(Vec<HirNode>, Option<BlockId>)> {
+        if !dream_structuring_enabled() {
+            return None;
+        }
+        let region = irreducible::detect_irreducible_regions(self.func)
+            .into_iter()
+            .find(|r| r.entry_blocks.contains(&bid))?;
+
+        if struct_trace_enabled() {
+            eprintln!(
+                "[unlace-struct] dream candidate entry={bid:?} body_blocks={} entries={:?}",
+                region.body_blocks.len(),
+                region.entry_blocks
+            );
+        }
+
+        let (dream_region, node_to_block) =
+            region_bridge::cfg_region_to_region(&self.func.cfg, bid, &region.body_blocks);
+        let rc = reaching_conditions::compute_reaching_conditions(&dream_region);
+        if !rc.back_edges.is_empty() {
+            if struct_trace_enabled() {
+                eprintln!(
+                    "[unlace-struct] dream skip entry={bid:?} reason=cyclic back_edges={:?}",
+                    rc.back_edges
+                );
+            }
+            return None;
+        }
+
+        let structured = condition_refinement::refine_region(&dream_region);
+        if matches!(
+            structured,
+            condition_refinement::StructuredNode::Unsupported
+        ) {
+            if struct_trace_enabled() {
+                eprintln!("[unlace-struct] dream skip entry={bid:?} reason=unsupported");
+            }
+            return None;
+        }
+
+        let pred_cond = self.dream_predicate_conditions(&region.body_blocks);
+        if !structured_predicates_resolve(&structured, &pred_cond) {
+            if struct_trace_enabled() {
+                eprintln!(
+                    "[unlace-struct] dream skip entry={bid:?} reason=unresolved-predicate preds={:?}",
+                    used_predicates(&structured)
+                );
+            }
+            return None;
+        }
+
+        let exits = self.dream_region_exits(&region.body_blocks);
+        if exits.len() > 1 {
+            if struct_trace_enabled() {
+                eprintln!(
+                    "[unlace-struct] dream skip entry={bid:?} reason=multiple-exits exits={exits:?}"
+                );
+            }
+            return None;
+        }
+
+        let block_bodies = region
+            .body_blocks
+            .iter()
+            .map(|&block| (block, self.non_control_block_statements(block)))
+            .collect();
+        let hir = region_splice::splice_structured(
+            &structured,
+            &node_to_block,
+            &block_bodies,
+            &pred_cond,
+        );
+
+        for block in &region.body_blocks {
+            self.emitted.insert(*block);
+        }
+
+        Some((hir, exits.into_iter().next()))
+    }
+
+    fn dream_predicate_conditions(
+        &self,
+        body_blocks: &BTreeSet<BlockId>,
+    ) -> BTreeMap<u32, SsaVarnode> {
+        body_blocks
+            .iter()
+            .filter(|&&bid| self.block_has_cbranch(bid))
+            .map(|&bid| (bid.0, self.find_cbranch_cond(bid)))
+            .collect()
+    }
+
+    fn dream_region_exits(&self, body_blocks: &BTreeSet<BlockId>) -> BTreeSet<BlockId> {
+        let mut exits = BTreeSet::new();
+        for &block in body_blocks {
+            for (target, _) in self.func.cfg.edges_from(block) {
+                if !self.synthetic.contains(&target) && !body_blocks.contains(&target) {
+                    exits.insert(target);
+                }
+            }
+        }
+        exits
+    }
+
     fn structure_region(&mut self, start: BlockId) -> Vec<HirNode> {
         let mut nodes = Vec::new();
         let mut current = Some(start);
@@ -759,6 +946,16 @@ impl<'a> StructureCtx<'a> {
                     eprintln!("[unlace-struct] region stop already-emitted={bid:?}");
                 }
                 break;
+            }
+
+            if let Some((dream_nodes, next)) = self.try_structure_dream_residual_region(bid) {
+                trace_hir_counts("region-dream-node", &dream_nodes);
+                nodes.extend(dream_nodes);
+                current = next;
+                if struct_trace_enabled() {
+                    eprintln!("[unlace-struct] region dream bid={bid:?} next={current:?}");
+                }
+                continue;
             }
 
             // If this block is a loop header, try to structure the loop.

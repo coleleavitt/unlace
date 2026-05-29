@@ -155,6 +155,15 @@ fn fallback_if(
     els: Option<&StructuredNode>,
     splice: &impl Fn(&StructuredNode) -> Vec<HirNode>,
 ) -> Vec<HirNode> {
+    // Observability for step 3c: when this conservative path fires the guard is
+    // lost (statements are preserved but un-predicated), so a wired-in region
+    // may not shed its gotos. Log it so 3c triage can see *why* a goto count
+    // didn't improve rather than debugging blind.
+    tracing::debug!(
+        target: "unlace::dream::splice",
+        has_else = els.is_some(),
+        "region_splice: unresolvable guard, emitting un-predicated Block fallback"
+    );
     let mut out = splice(then);
     if let Some(e) = els {
         out.extend(splice(e));

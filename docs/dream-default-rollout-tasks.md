@@ -11,26 +11,36 @@ Current status:
 - Step 4 Tasks 1-4 now have code support: exit-aware region bridging,
   synthetic guarded `Continue` / `Break` leaves, cyclic `StructuredNode::Loop`,
   and HIR lowering to `While` / `Break` / `Continue`.
+- Nested single-successor cyclic decomposition is implemented in the pure
+  DREAM refiner: inner loop slices are structured first, collapsed to subtree
+  placeholders, then spliced into the enclosing region without a dispatcher.
 - Rollback byte-identity is guarded by `scripts/dream_byte_identity.sh`.
 - Default-on reaches residual candidates in `medium`:
   - the 3-block region is accepted after header/source ordering fixes,
   - the 68-block region now refines linear exit tails to a single successor but
-    still falls back because it contains nested/internal back-edge targets that
-    cannot be represented by a single top-level `continue`.
+    still falls back because every internal loop-header slice has multiple
+    remaining successors after safe successor refinement. Example trace:
+    header node `32` exits to `{24, 28, 38}`. Accepting that without gotos
+    requires state dispatch, labelled multi-level control, or statement
+    duplication, none of which exists in current HIR.
 - Current `medium` baseline remains 29 gotos:
   - `f_ackermann`: 16
   - `f_rec_fib`: 8
   - `main`: 4
   - `f_rec_power`: 1
 
-The default-on flip is complete for the conservative DREAM seam. Full
-goto-free lowering of the large `f_ackermann` SCC remains blocked on real
-nested cyclic-region decomposition, not on the flag wiring.
+The default-on flip is complete for the conservative DREAM seam. Native
+single-successor nested cyclic decomposition is implemented. Full goto-free
+lowering of the large `f_ackermann` SCC is now blocked on multi-successor
+abnormal-exit handling, not on flag wiring or simple nested loop discovery.
 
-## Remaining Single Task: Nested Cyclic-Region Decomposition
+## Remaining Frontier: Multi-Successor Abnormal Exits
 
-This is the only remaining implementation task for the large `medium`
-frontier. Do not solve it with a synthetic dispatcher/state machine.
+The real nested decomposition path is implemented for loops that current HIR
+can express with ordinary `break` / `continue`. The large `medium` frontier is
+more complex: its internal loop slices have multiple successors that target
+different enclosing headers or the final exit. Do not solve that by pretending
+an unlabeled `continue` can target an arbitrary internal header.
 
 Write scope:
 - `crates/unlace-struct/src/condition_refinement.rs`
@@ -38,22 +48,24 @@ Write scope:
 - a pure cyclic-region helper module if the model becomes too large for either
   file.
 
-Build a real loop-region model that:
-- identifies loop nodes per back-edge target,
+Implemented:
+- identifies loop nodes per back-edge target on the acyclic skeleton,
 - structures inner cyclic regions before outer cyclic regions,
-- refines loop successors using DREAM successor refinement,
-- represents each accepted back-edge as an actual `continue` to the current
-  loop header, not to an arbitrary internal node,
+- refines loop successors while the successor set is ambiguous,
+- represents accepted back-edges as actual `continue` to the current loop
+  header,
 - represents exits as guarded `break` only when the successor is unique after
   refinement,
-- returns `Unsupported` for any shape that would require a synthetic state
-  variable or labelled control not present in HIR.
+- returns `Unsupported` for shapes that require a synthetic state variable,
+  labelled multi-level control, or statement duplication.
 
 Acceptance:
-- The 68-block `f_ackermann` DREAM candidate no longer fails with
-  `reason=unsupported back_edges={...}`.
-- `medium` total goto count drops below 29 without undeclared variables,
-  dropped statements, or goto cycles.
+- Synthetic nested-loop tests produce nested `Loop` / `Subtree` output.
+- The 68-block `f_ackermann` DREAM candidate continues to fall back honestly
+  because its internal loop slices are multi-successor, not single-successor.
+- Any future multi-successor implementation must either extend HIR with real
+  labelled control, add an explicit dispatch/state model, or prove a
+  statement-preserving abnormal-exit rewrite.
 - `UNLACE_DREAM_STRUCT=0` remains byte-identical under
   `scripts/dream_byte_identity.sh`.
 - `cargo test -p unlace-struct --lib`, `cli_smoke`, `quality_smoke`, clippy,

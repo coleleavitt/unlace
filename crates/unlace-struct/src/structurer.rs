@@ -712,6 +712,7 @@ fn collect_structured_predicates(
         | StructuredNode::Continue
         | StructuredNode::Break
         | StructuredNode::Unsupported => {}
+        StructuredNode::Subtree(inner) => collect_structured_predicates(inner, out),
         StructuredNode::Seq(parts) => {
             for part in parts {
                 collect_structured_predicates(part, out);
@@ -781,6 +782,12 @@ fn structured_predicates_defined_before_use_inner(
         | StructuredNode::Continue
         | StructuredNode::Break
         | StructuredNode::Unsupported => true,
+        StructuredNode::Subtree(inner) => structured_predicates_defined_before_use_inner(
+            inner,
+            node_to_block,
+            region_blocks,
+            emitted,
+        ),
         StructuredNode::Block(region_node) => {
             if let Some(block) = node_to_block.get(region_node) {
                 emitted.insert(*block);

@@ -28,6 +28,13 @@ pub enum StructuredNode {
     Empty,
     /// A single region node (basic block).
     Block(RegionNode),
+    /// An already-refined subtree spliced at a collapsed region placeholder.
+    ///
+    /// Nested cyclic decomposition structures inner loops first, replaces the
+    /// inner loop's node set by one placeholder in the enclosing skeleton, and
+    /// rewrites that placeholder back to this subtree after the enclosing
+    /// region has been refined.
+    Subtree(Box<StructuredNode>),
     /// Ordered sequence of sub-trees.
     Seq(Vec<StructuredNode>),
     /// `if (cond) { then } else { els }` — `els` absent when there is no
@@ -176,6 +183,30 @@ pub fn refine_cyclic_region_with_exits(
     region: &Region,
     exits: &[(RegionNode, EdgeLabel)],
 ) -> StructuredNode {
+    refine_cyclic_region_nested(region, exits, 0)
+}
+
+const MAX_NESTED_CYCLIC_DEPTH: usize = 32;
+
+fn cyclic_trace<F>(message: F)
+where
+    F: FnOnce() -> String,
+{
+    if std::env::var_os("UNLACE_STRUCT_TRACE").is_some()
+        || std::env::var_os("UNLACE_STRUCT_TRACE_VERBOSE").is_some()
+    {
+        eprintln!("[unlace-struct] dream cyclic {}", message());
+    }
+}
+
+fn refine_cyclic_region_nested(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+    depth: usize,
+) -> StructuredNode {
+    if depth > MAX_NESTED_CYCLIC_DEPTH {
+        return StructuredNode::Unsupported;
+    }
     let rc = compute_reaching_conditions(region);
     if rc.back_edges.is_empty() {
         // Acyclic — not our job (use `refine_region`).
@@ -183,8 +214,16 @@ pub fn refine_cyclic_region_with_exits(
     }
     // Every back-edge must target the single loop header.
     if rc.back_edges.iter().any(|(_, dst)| *dst != region.header) {
-        return StructuredNode::Unsupported;
+        return refine_nested_cyclic_region(region, exits, &rc, depth);
     }
+    refine_single_header_cyclic_region(region, exits, &rc)
+}
+
+fn refine_single_header_cyclic_region(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+    rc: &ReachingConditions,
+) -> StructuredNode {
     let real_nodes = region_nodes(region);
     if real_nodes
         .iter()
@@ -244,6 +283,452 @@ pub fn refine_cyclic_region_with_exits(
     }
 }
 
+#[derive(Clone, Debug)]
+struct LoopSlice {
+    header: RegionNode,
+    nodes: BTreeSet<RegionNode>,
+    internal_exits: Vec<(RegionNode, RegionNode, EdgeLabel)>,
+    external_exits: Vec<(RegionNode, EdgeLabel)>,
+    unique_internal_successor: Option<RegionNode>,
+    exits_external: bool,
+}
+
+fn refine_nested_cyclic_region(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+    rc: &ReachingConditions,
+    depth: usize,
+) -> StructuredNode {
+    let mut headers: Vec<_> = rc
+        .back_edges
+        .iter()
+        .filter_map(|(_, dst)| (*dst != region.header).then_some(*dst))
+        .collect();
+    headers.sort_unstable_by(|a, b| b.cmp(a));
+    headers.dedup();
+
+    for header in headers {
+        let Some(slice) = build_loop_slice(region, exits, rc, header) else {
+            cyclic_trace(|| {
+                format!(
+                    "skip header={header} reason=slice region_header={} depth={depth}",
+                    region.header
+                )
+            });
+            continue;
+        };
+        cyclic_trace(|| {
+            format!(
+                "candidate header={header} nodes={} internal_exits={} external_exits={} successor={:?} depth={depth}",
+                slice.nodes.len(),
+                slice.internal_exits.len(),
+                slice.external_exits.len(),
+                slice.unique_internal_successor
+            )
+        });
+        let inner_region = subregion(region, slice.header, &slice.nodes);
+        let inner_exits: Vec<_> = slice
+            .internal_exits
+            .iter()
+            .map(|(src, _, label)| (*src, label.clone()))
+            .chain(
+                slice
+                    .external_exits
+                    .iter()
+                    .map(|(src, label)| (*src, label.clone())),
+            )
+            .collect();
+        let inner_tree = refine_cyclic_region_nested(&inner_region, &inner_exits, depth + 1);
+        if inner_tree == StructuredNode::Unsupported {
+            cyclic_trace(|| format!("skip header={header} reason=inner-unsupported depth={depth}"));
+            continue;
+        }
+        let Some(collapsed) = collapse_loop_slice(region, exits, &slice, inner_tree) else {
+            cyclic_trace(|| format!("skip header={header} reason=collapse depth={depth}"));
+            continue;
+        };
+        let collapsed_rc = compute_reaching_conditions(&collapsed.region);
+        let outer_tree = if collapsed_rc.back_edges.is_empty() {
+            refine_region(&collapsed.region)
+        } else {
+            refine_cyclic_region_nested(&collapsed.region, &collapsed.exits, depth + 1)
+        };
+        if outer_tree == StructuredNode::Unsupported {
+            cyclic_trace(|| format!("skip header={header} reason=outer-unsupported depth={depth}"));
+            continue;
+        }
+        return replace_subtree_placeholders(outer_tree, &collapsed.subtrees);
+    }
+
+    StructuredNode::Unsupported
+}
+
+#[derive(Clone, Debug)]
+struct CollapsedRegion {
+    region: Region,
+    exits: Vec<(RegionNode, EdgeLabel)>,
+    subtrees: BTreeMap<RegionNode, StructuredNode>,
+}
+
+fn build_loop_slice(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+    rc: &ReachingConditions,
+    header: RegionNode,
+) -> Option<LoopSlice> {
+    let latches: BTreeSet<_> = rc
+        .back_edges
+        .iter()
+        .filter_map(|(src, dst)| (*dst == header).then_some(*src))
+        .collect();
+    if latches.is_empty() {
+        cyclic_trace(|| format!("slice header={header} reject=no-latches"));
+        return None;
+    }
+
+    let mut nodes = initial_loop_nodes(region, header, &latches, &rc.back_edges);
+    if nodes.is_empty() || !nodes.contains(&header) {
+        cyclic_trace(|| {
+            format!(
+                "slice header={header} reject=empty-initial nodes={:?} latches={latches:?}",
+                nodes
+            )
+        });
+        return None;
+    }
+    refine_loop_successors(region, header, &mut nodes);
+
+    if has_abnormal_loop_entry(region, header, &nodes) {
+        cyclic_trace(|| {
+            format!(
+                "slice header={header} reject=abnormal-entry nodes={} latches={latches:?}",
+                nodes.len()
+            )
+        });
+        return None;
+    }
+
+    let internal_exits = loop_internal_exits(region, &nodes);
+    let external_exits: Vec<_> = exits
+        .iter()
+        .filter(|(src, _)| nodes.contains(src))
+        .cloned()
+        .collect();
+    let internal_targets: BTreeSet<_> = internal_exits.iter().map(|(_, dst, _)| *dst).collect();
+    let exits_external = !external_exits.is_empty();
+    if internal_targets.len() + usize::from(exits_external) > 1 {
+        cyclic_trace(|| {
+            format!(
+                "slice header={header} reject=multiple-successors nodes={} internal_targets={internal_targets:?} external_exits={}",
+                nodes.len(),
+                external_exits.len()
+            )
+        });
+        return None;
+    }
+
+    Some(LoopSlice {
+        header,
+        nodes,
+        internal_exits,
+        external_exits,
+        unique_internal_successor: internal_targets.into_iter().next(),
+        exits_external,
+    })
+}
+
+fn initial_loop_nodes(
+    region: &Region,
+    header: RegionNode,
+    latches: &BTreeSet<RegionNode>,
+    back_edges: &BTreeSet<(RegionNode, RegionNode)>,
+) -> BTreeSet<RegionNode> {
+    let forward = reachable_from(region, header, None, back_edges);
+    let reverse = reverse_reachable_to(region, latches, back_edges);
+    forward.intersection(&reverse).copied().collect()
+}
+
+fn refine_loop_successors(
+    region: &Region,
+    loop_header: RegionNode,
+    nodes: &mut BTreeSet<RegionNode>,
+) {
+    loop {
+        let successors = loop_successors(region, nodes);
+        if successors.len() <= 1 {
+            break;
+        }
+        let mut add = BTreeSet::new();
+        for successor in successors {
+            if nodes.contains(&successor) {
+                continue;
+            }
+            if !dominates_in_region(region, loop_header, successor) {
+                continue;
+            }
+            let preds = in_region_predecessors(region, successor);
+            if !preds.is_empty() && preds.iter().all(|pred| nodes.contains(pred)) {
+                add.insert(successor);
+            }
+        }
+        if add.is_empty() {
+            break;
+        }
+        nodes.extend(add);
+    }
+}
+
+fn has_abnormal_loop_entry(
+    region: &Region,
+    loop_header: RegionNode,
+    nodes: &BTreeSet<RegionNode>,
+) -> bool {
+    region
+        .edges
+        .iter()
+        .any(|(src, dst, _)| !nodes.contains(src) && nodes.contains(dst) && *dst != loop_header)
+}
+
+fn loop_internal_exits(
+    region: &Region,
+    nodes: &BTreeSet<RegionNode>,
+) -> Vec<(RegionNode, RegionNode, EdgeLabel)> {
+    region
+        .edges
+        .iter()
+        .filter(|(src, dst, _)| nodes.contains(src) && !nodes.contains(dst))
+        .cloned()
+        .collect()
+}
+
+fn loop_successors(region: &Region, nodes: &BTreeSet<RegionNode>) -> BTreeSet<RegionNode> {
+    loop_internal_exits(region, nodes)
+        .into_iter()
+        .map(|(_, dst, _)| dst)
+        .collect()
+}
+
+fn collapse_loop_slice(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+    slice: &LoopSlice,
+    inner_tree: StructuredNode,
+) -> Option<CollapsedRegion> {
+    let placeholder = next_region_node(region, exits);
+    let mut edges = Vec::new();
+    let mut inserted_placeholder_successor = false;
+    let mut seen_edges = BTreeSet::new();
+
+    for (src, dst, label) in &region.edges {
+        let src_in = slice.nodes.contains(src);
+        let dst_in = slice.nodes.contains(dst);
+        match (src_in, dst_in) {
+            (true, true) => {}
+            (false, true) => {
+                if *dst != slice.header {
+                    return None;
+                }
+                push_unique_edge(
+                    &mut edges,
+                    &mut seen_edges,
+                    *src,
+                    placeholder,
+                    label.clone(),
+                );
+            }
+            (true, false) => {
+                if Some(*dst) != slice.unique_internal_successor || slice.exits_external {
+                    return None;
+                }
+                if !inserted_placeholder_successor {
+                    push_unique_edge(
+                        &mut edges,
+                        &mut seen_edges,
+                        placeholder,
+                        *dst,
+                        EdgeLabel::Always,
+                    );
+                    inserted_placeholder_successor = true;
+                }
+            }
+            (false, false) => {
+                push_unique_edge(&mut edges, &mut seen_edges, *src, *dst, label.clone());
+            }
+        }
+    }
+
+    let mut collapsed_exits = Vec::new();
+    let mut inserted_external_exit = false;
+    for (src, label) in exits {
+        if slice.nodes.contains(src) {
+            if !slice.exits_external || slice.unique_internal_successor.is_some() {
+                return None;
+            }
+            if !inserted_external_exit {
+                collapsed_exits.push((placeholder, EdgeLabel::Always));
+                inserted_external_exit = true;
+            }
+        } else {
+            collapsed_exits.push((*src, label.clone()));
+        }
+    }
+
+    let header = if slice.nodes.contains(&region.header) {
+        placeholder
+    } else {
+        region.header
+    };
+    let mut subtrees = BTreeMap::new();
+    subtrees.insert(placeholder, inner_tree);
+
+    Some(CollapsedRegion {
+        region: Region { header, edges },
+        exits: collapsed_exits,
+        subtrees,
+    })
+}
+
+fn push_unique_edge(
+    edges: &mut Vec<(RegionNode, RegionNode, EdgeLabel)>,
+    seen: &mut BTreeSet<(RegionNode, RegionNode, EdgeLabel)>,
+    src: RegionNode,
+    dst: RegionNode,
+    label: EdgeLabel,
+) {
+    if seen.insert((src, dst, label.clone())) {
+        edges.push((src, dst, label));
+    }
+}
+
+fn next_region_node(region: &Region, exits: &[(RegionNode, EdgeLabel)]) -> RegionNode {
+    let max_region_node = region_nodes(region)
+        .into_iter()
+        .max()
+        .unwrap_or(region.header);
+    let max_exit_node = exits
+        .iter()
+        .map(|(src, _)| *src)
+        .max()
+        .unwrap_or(region.header);
+    max_region_node.max(max_exit_node) + 1
+}
+
+fn subregion(region: &Region, header: RegionNode, nodes: &BTreeSet<RegionNode>) -> Region {
+    Region {
+        header,
+        edges: region
+            .edges
+            .iter()
+            .filter(|(src, dst, _)| nodes.contains(src) && nodes.contains(dst))
+            .cloned()
+            .collect(),
+    }
+}
+
+fn replace_subtree_placeholders(
+    node: StructuredNode,
+    subtrees: &BTreeMap<RegionNode, StructuredNode>,
+) -> StructuredNode {
+    match node {
+        StructuredNode::Block(rn) => subtrees
+            .get(&rn)
+            .cloned()
+            .map(|tree| StructuredNode::Subtree(Box::new(tree)))
+            .unwrap_or(StructuredNode::Block(rn)),
+        StructuredNode::Seq(parts) => StructuredNode::seq(
+            parts
+                .into_iter()
+                .map(|part| replace_subtree_placeholders(part, subtrees))
+                .collect(),
+        ),
+        StructuredNode::If { cond, then, els } => StructuredNode::If {
+            cond,
+            then: Box::new(replace_subtree_placeholders(*then, subtrees)),
+            els: els.map(|e| Box::new(replace_subtree_placeholders(*e, subtrees))),
+        },
+        StructuredNode::Switch {
+            selector,
+            cases,
+            default,
+        } => StructuredNode::Switch {
+            selector,
+            cases: cases
+                .into_iter()
+                .map(|(value, case)| (value, replace_subtree_placeholders(case, subtrees)))
+                .collect(),
+            default: default.map(|d| Box::new(replace_subtree_placeholders(*d, subtrees))),
+        },
+        StructuredNode::Loop { body } => StructuredNode::Loop {
+            body: Box::new(replace_subtree_placeholders(*body, subtrees)),
+        },
+        StructuredNode::Subtree(inner) => {
+            StructuredNode::Subtree(Box::new(replace_subtree_placeholders(*inner, subtrees)))
+        }
+        other => other,
+    }
+}
+
+fn reachable_from(
+    region: &Region,
+    start: RegionNode,
+    skip: Option<RegionNode>,
+    skip_edges: &BTreeSet<(RegionNode, RegionNode)>,
+) -> BTreeSet<RegionNode> {
+    if skip == Some(start) {
+        return BTreeSet::new();
+    }
+    let mut reachable = BTreeSet::new();
+    let mut stack = vec![start];
+    while let Some(node) = stack.pop() {
+        if skip == Some(node) || !reachable.insert(node) {
+            continue;
+        }
+        for (_, dst, _) in region.edges.iter().filter(|(src, _, _)| *src == node) {
+            if skip_edges.contains(&(node, *dst)) {
+                continue;
+            }
+            if skip != Some(*dst) {
+                stack.push(*dst);
+            }
+        }
+    }
+    reachable
+}
+
+fn reverse_reachable_to(
+    region: &Region,
+    targets: &BTreeSet<RegionNode>,
+    skip_edges: &BTreeSet<(RegionNode, RegionNode)>,
+) -> BTreeSet<RegionNode> {
+    let mut reachable = BTreeSet::new();
+    let mut stack: Vec<_> = targets.iter().copied().collect();
+    while let Some(node) = stack.pop() {
+        if !reachable.insert(node) {
+            continue;
+        }
+        for (src, _, _) in region.edges.iter().filter(|(_, dst, _)| *dst == node) {
+            if skip_edges.contains(&(*src, node)) {
+                continue;
+            }
+            stack.push(*src);
+        }
+    }
+    reachable
+}
+
+fn in_region_predecessors(region: &Region, node: RegionNode) -> BTreeSet<RegionNode> {
+    region
+        .edges
+        .iter()
+        .filter_map(|(src, dst, _)| (*dst == node).then_some(*src))
+        .collect()
+}
+
+fn dominates_in_region(region: &Region, dominator: RegionNode, node: RegionNode) -> bool {
+    node == dominator
+        || !reachable_from(region, region.header, Some(dominator), &BTreeSet::new()).contains(&node)
+}
+
 fn region_nodes(region: &Region) -> BTreeSet<RegionNode> {
     let mut nodes = BTreeSet::new();
     nodes.insert(region.header);
@@ -295,6 +780,9 @@ fn rewrite_cyclic_sentinels(
         StructuredNode::Loop { body } => StructuredNode::Loop {
             body: Box::new(rewrite_cyclic_sentinels(*body, continue_nodes, break_nodes)),
         },
+        StructuredNode::Subtree(inner) => StructuredNode::Subtree(Box::new(
+            rewrite_cyclic_sentinels(*inner, continue_nodes, break_nodes),
+        )),
         other => other,
     }
 }
@@ -687,7 +1175,52 @@ mod tests {
     }
 
     #[test]
-    fn cyclic_region_with_non_header_backedge_is_unsupported() {
+    fn nested_cyclic_region_refines_inner_loop_before_outer_loop() {
+        let region = Region {
+            header: 0,
+            edges: vec![
+                (0, 1, EdgeLabel::Always),
+                (1, 2, EdgeLabel::Always),
+                (2, 1, t(2)),
+                (2, 3, f(2)),
+                (3, 0, t(3)),
+            ],
+        };
+        let tree = refine_cyclic_region_with_exits(&region, &[(3, f(3))]);
+        assert_eq!(tree.goto_count(), 0);
+        assert!(contains_loop(&tree), "expected outer Loop: {tree:?}");
+        assert!(
+            loop_count(&tree) >= 2,
+            "expected nested inner/outer loops: {tree:?}"
+        );
+        assert!(contains_continue(&tree), "expected Continue: {tree:?}");
+        assert!(contains_break(&tree), "expected Break: {tree:?}");
+        assert!(mentions_block(&tree, 1));
+        assert!(mentions_block(&tree, 2));
+        assert!(mentions_block(&tree, 3));
+    }
+
+    #[test]
+    fn nested_cyclic_region_with_abnormal_inner_entry_is_unsupported() {
+        let region = Region {
+            header: 0,
+            edges: vec![
+                (0, 1, EdgeLabel::Always),
+                (0, 2, t(0)),
+                (1, 2, EdgeLabel::Always),
+                (2, 1, t(2)),
+                (2, 3, f(2)),
+                (3, 0, t(3)),
+            ],
+        };
+        assert_eq!(
+            refine_cyclic_region_with_exits(&region, &[(3, f(3))]),
+            StructuredNode::Unsupported
+        );
+    }
+
+    #[test]
+    fn cyclic_region_with_nested_header_refines_to_subtree_loop() {
         let region = Region {
             header: 0,
             edges: vec![
@@ -696,7 +1229,9 @@ mod tests {
                 (2, 1, EdgeLabel::Always),
             ],
         };
-        assert_eq!(refine_cyclic_region(&region), StructuredNode::Unsupported);
+        let tree = refine_cyclic_region(&region);
+        assert_ne!(tree, StructuredNode::Unsupported);
+        assert!(contains_loop(&tree), "expected nested Loop: {tree:?}");
     }
 
     // --- tree-inspection helpers ---
@@ -708,6 +1243,7 @@ mod tests {
                     || els.as_ref().is_some_and(|e| contains_if_on(e, pred))
             }
             StructuredNode::Loop { body } => contains_if_on(body, pred),
+            StructuredNode::Subtree(inner) => contains_if_on(inner, pred),
             StructuredNode::Seq(v) => v.iter().any(|n| contains_if_on(n, pred)),
             StructuredNode::Switch { cases, default, .. } => {
                 cases.iter().any(|(_, n)| contains_if_on(n, pred))
@@ -733,6 +1269,7 @@ mod tests {
                 mentions_block(then, blk) || els.as_ref().is_some_and(|e| mentions_block(e, blk))
             }
             StructuredNode::Loop { body } => mentions_block(body, blk),
+            StructuredNode::Subtree(inner) => mentions_block(inner, blk),
             StructuredNode::Switch { cases, default, .. } => {
                 cases.iter().any(|(_, n)| mentions_block(n, blk))
                     || default.as_ref().is_some_and(|d| mentions_block(d, blk))
@@ -743,6 +1280,7 @@ mod tests {
     fn contains_loop(node: &StructuredNode) -> bool {
         match node {
             StructuredNode::Loop { .. } => true,
+            StructuredNode::Subtree(inner) => contains_loop(inner),
             StructuredNode::Seq(v) => v.iter().any(contains_loop),
             StructuredNode::If { then, els, .. } => {
                 contains_loop(then) || els.as_ref().is_some_and(|e| contains_loop(e))
@@ -754,10 +1292,26 @@ mod tests {
             _ => false,
         }
     }
+    fn loop_count(node: &StructuredNode) -> usize {
+        match node {
+            StructuredNode::Loop { body } => 1 + loop_count(body),
+            StructuredNode::Subtree(inner) => loop_count(inner),
+            StructuredNode::Seq(v) => v.iter().map(loop_count).sum(),
+            StructuredNode::If { then, els, .. } => {
+                loop_count(then) + els.as_ref().map(|e| loop_count(e)).unwrap_or(0)
+            }
+            StructuredNode::Switch { cases, default, .. } => {
+                cases.iter().map(|(_, n)| loop_count(n)).sum::<usize>()
+                    + default.as_ref().map(|d| loop_count(d)).unwrap_or(0)
+            }
+            _ => 0,
+        }
+    }
     fn contains_continue(node: &StructuredNode) -> bool {
         match node {
             StructuredNode::Continue => true,
             StructuredNode::Loop { body } => contains_continue(body),
+            StructuredNode::Subtree(inner) => contains_continue(inner),
             StructuredNode::Seq(v) => v.iter().any(contains_continue),
             StructuredNode::If { then, els, .. } => {
                 contains_continue(then) || els.as_ref().is_some_and(|e| contains_continue(e))
@@ -773,6 +1327,7 @@ mod tests {
         match node {
             StructuredNode::Break => true,
             StructuredNode::Loop { body } => contains_break(body),
+            StructuredNode::Subtree(inner) => contains_break(inner),
             StructuredNode::Seq(v) => v.iter().any(contains_break),
             StructuredNode::If { then, els, .. } => {
                 contains_break(then) || els.as_ref().is_some_and(|e| contains_break(e))
@@ -792,6 +1347,7 @@ mod tests {
                 find_switch(then).or_else(|| els.as_ref().and_then(|e| find_switch(e)))
             }
             StructuredNode::Loop { body } => find_switch(body),
+            StructuredNode::Subtree(inner) => find_switch(inner),
             _ => None,
         }
     }

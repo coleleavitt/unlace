@@ -62,6 +62,9 @@ pub fn splice_structured(
     match node {
         StructuredNode::Empty => vec![],
         StructuredNode::Block(rn) => splice_block(*rn, node_to_block, block_bodies),
+        StructuredNode::Subtree(inner) => {
+            splice_structured(inner, node_to_block, block_bodies, pred_cond)
+        }
         StructuredNode::Seq(parts) => parts
             .iter()
             .flat_map(|p| splice_structured(p, node_to_block, block_bodies, pred_cond))

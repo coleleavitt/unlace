@@ -93,8 +93,9 @@ Current code status:
 ## Status update — sound engine done; multi-header is the frontier
 
 The goto-free DREAM engine is now COMPLETE and SOUND for the cases it claims:
-- acyclic regions (step 2/3) and **single-exit, single-header cyclic loops**
-  (step 4) are structured by default, with `UNLACE_DREAM_STRUCT=0` as rollback.
+- acyclic regions (step 2/3), **single-exit single-header cyclic loops**, and
+  **nested single-successor cyclic loops** (step 4) are structured by default,
+  with `UNLACE_DREAM_STRUCT=0` as rollback.
 - A **statement-preservation oracle** (structurer.rs `count_hir_statements`)
   rejects any spliced region that drops/duplicates a body statement, so DREAM
   output is statement-faithful and rollback stays byte-identical.
@@ -102,14 +103,15 @@ The goto-free DREAM engine is now COMPLETE and SOUND for the cases it claims:
   header blocks emitted before the first predicate use) unblocked medium's small
   `entry=7` 3-block region — it is now accepted and passes the oracle.
 
-### The remaining frontier: multi-header irreducible nests
+### The remaining frontier: multi-successor irreducible nests
 
 `medium`'s f_ackermann (and similar recursion-as-state-machine code) lifts to a
 **68-block region whose back-edges target 9 DISTINCT headers**
 (`{(35,32),(36,28),(37,24),(38,20),(39,16),(40,12),(41,8),(42,4),(43,0),...}`)
-and which has **3 exit targets**. `refine_cyclic_region_with_exits` requires a
-single loop header (every back-edge → `region.header`) and a single exit, so it
-correctly returns `Unsupported`; the 16 f_ackermann gotos remain.
+and which has **3 exit targets**. The nested decomposition pass now tries each
+internal header, but every loop slice keeps multiple successors after safe
+successor refinement (for example header node `32` exits to `{24, 28, 38}`),
+so it correctly returns `Unsupported`; the 16 f_ackermann gotos remain.
 
 Reducing them requires DREAM §IV-C **abnormal-entry handling**: collapse a
 multi-entry irreducible loop into one `while(1)` driven by a synthetic

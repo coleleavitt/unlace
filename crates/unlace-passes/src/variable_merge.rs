@@ -624,8 +624,28 @@ fn coalesce_clusters(
     clusters
 }
 
-/// Walk all SSA varnodes in canonical order; assign cluster names `v1..vN`
-/// based on the cluster's first-appearance.
+/// A coalesced multi-version register cluster reuses IDA's `cN` naming.
+///
+/// `register_coalesce` merges multiple SSA versions of the *same* architectural
+/// register into one source-level variable; IDA spells those `c0`, `c1`, …
+/// (a separate, zero-based counter) instead of the ordinary `vN` series.  By
+/// construction [`coalesce_clusters`] keeps each physical-register base in its
+/// own cluster, so a register cluster with more than one member *is* a
+/// coalesced multi-version register — exactly the `cN` case.  Single-version
+/// clusters, and Unique/Stack/Ram clusters, keep their `vN` name.
+fn is_coalesced_register_cluster(members: &[SsaVarnode]) -> bool {
+    members.len() > 1 && members.iter().all(|sv| sv.base.space == SpaceId::Register)
+}
+
+/// Walk all SSA varnodes in canonical order; assign cluster names.
+///
+/// A single global, 1-based ordinal counter advances per cluster in
+/// first-appearance order.  Ordinary clusters print `v{ordinal}`.  A coalesced
+/// multi-version register cluster (see [`is_coalesced_register_cluster`])
+/// instead prints `c{k}`, where `k` is a *separate* zero-based counter — but it
+/// still consumes its slot in the global ordinal sequence, so the `vN` numbers
+/// it would otherwise have used are skipped (matching IDA: r10d → `c0`,
+/// r11d → `v2`).
 fn assign_names(
     func_name: &str,
     all_vars: &BTreeSet<SsaVarnode>,
@@ -640,18 +660,31 @@ fn assign_names(
     }
 
     // First-appearance order over the canonical sorted varnode iteration.
-    let mut order: BTreeMap<usize, u32> = BTreeMap::new();
-    let mut next_index: u32 = 1;
+    // `order` maps cluster index → its final source-level name.
+    let mut order: BTreeMap<usize, String> = BTreeMap::new();
+    let mut next_v_index: u32 = 1;
+    let mut next_c_index: u32 = 0;
     for sv in all_vars {
         if let Some(&cidx) = cluster_of.get(sv)
             && let std::collections::btree_map::Entry::Vacant(e) = order.entry(cidx)
         {
-            e.insert(next_index);
+            let name = if is_coalesced_register_cluster(&clusters[cidx]) {
+                let name = format!("c{}", next_c_index);
+                next_c_index += 1;
+                // A coalesced register cluster still consumes a global ordinal
+                // slot, so the `vN` number is skipped rather than reused.
+                next_v_index += 1;
+                name
+            } else {
+                let name = format!("v{}", next_v_index);
+                next_v_index += 1;
+                name
+            };
             var_merge_trace_line(&format!(
-                "assign-order func={} cluster={} first_sv={:?} name=v{}",
-                func_name, cidx, sv, next_index
+                "assign-order func={} cluster={} first_sv={:?} name={}",
+                func_name, cidx, sv, name
             ));
-            next_index += 1;
+            e.insert(name);
         }
     }
 
@@ -659,9 +692,9 @@ fn assign_names(
     let mut merged: BTreeMap<SsaVarnode, String> = BTreeMap::new();
     for sv in all_vars {
         if let Some(&cidx) = cluster_of.get(sv)
-            && let Some(&n) = order.get(&cidx)
+            && let Some(name) = order.get(&cidx)
         {
-            merged.insert(*sv, format!("v{}", n));
+            merged.insert(*sv, name.clone());
         }
     }
     merged
@@ -1066,5 +1099,128 @@ mod tests {
 
         // u0 produces exactly one cluster — pass should always assign a name.
         assert!(name_of(&ssa, u0, 0).is_some(), "u0 must receive a name");
+    }
+
+    // ------------------------------------------------------------------
+    // `cN` coalesced-register naming convention (IDA parity).
+    // ------------------------------------------------------------------
+
+    /// A register with multiple coalesced SSA versions is a coalesced
+    /// multi-version register cluster and must be spelled `c0`, not `v1`.
+    #[test]
+    fn test_coalesced_register_gets_cn_name() {
+        // r0 is written three times → three SSA versions, one register cluster.
+        let r0 = Varnode::reg(0, 4);
+        let c1 = Varnode::constant(1, 4);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r0, c1], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r0, c1], 0x1008),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let pass = VariableMergePass;
+        pass.run(&mut ssa).expect("pass should succeed");
+
+        let names: BTreeSet<&str> = ssa
+            .merged_names
+            .iter()
+            .filter(|(sv, _)| sv.base == r0)
+            .map(|(_, n)| n.as_str())
+            .collect();
+        assert_eq!(names.len(), 1, "all r0 versions share one name: {names:?}");
+        assert_eq!(
+            *names.iter().next().unwrap(),
+            "c0",
+            "coalesced multi-version register must be named c0, got {names:?}",
+        );
+    }
+
+    /// A single-version register cluster keeps its ordinary `vN` name.
+    #[test]
+    fn test_single_version_register_keeps_vn_name() {
+        // r0 written exactly once → single-version cluster → not coalesced.
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let c1 = Varnode::constant(1, 4);
+        let c2 = Varnode::constant(2, 4);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000),
+            IrInsn::with_output(IrOp::Copy, r8, smallvec![c2], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let pass = VariableMergePass;
+        pass.run(&mut ssa).expect("pass should succeed");
+
+        let r0_name = name_of(&ssa, r0, 0).expect("r0 named");
+        assert!(
+            r0_name.starts_with('v'),
+            "single-version register must keep a vN name, got {r0_name}",
+        );
+    }
+
+    /// A coalesced Unique cluster (cross-base coalescing) keeps `vN`, never
+    /// `cN`: only register-space coalescing uses the `c` series.
+    #[test]
+    fn test_coalesced_unique_keeps_vn_name() {
+        // u0 dies before u4 is born → both fold into the SAME cluster via the
+        // Unique cross-base path, but the cluster is Unique-space, not register.
+        let u0 = Varnode::unique(0, 4);
+        let u4 = Varnode::unique(4, 4);
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let c1 = Varnode::constant(1, 4);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::Copy, u0, smallvec![c1], 0x1000),
+            IrInsn::with_output(IrOp::Copy, r0, smallvec![u0], 0x1004), // u0 dies
+            IrInsn::with_output(IrOp::Copy, u4, smallvec![c1], 0x1008),
+            IrInsn::with_output(IrOp::Copy, r8, smallvec![u4], 0x100C),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let pass = VariableMergePass;
+        pass.run(&mut ssa).expect("pass should succeed");
+
+        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
+        assert!(
+            u0_name.starts_with('v'),
+            "coalesced Unique cluster must use a vN name, got {u0_name}",
+        );
+    }
+
+    /// Numbering convention: a coalesced register cluster consumes a global
+    /// ordinal slot (so a following single-version register skips that vN),
+    /// while the `cN` counter is separate and zero-based.  Mirrors IDA's
+    /// r10d → c0, r11d → v2.
+    #[test]
+    fn test_cn_and_vn_counters_independent() {
+        // r0: three versions → coalesced → c0 (consumes ordinal slot 1).
+        // r8: one version → next ordinal slot → v2 (v1 is skipped).
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let c1 = Varnode::constant(1, 4);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r0, c1], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r0, c1], 0x1008),
+            IrInsn::with_output(IrOp::Copy, r8, smallvec![c1], 0x100C),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let pass = VariableMergePass;
+        pass.run(&mut ssa).expect("pass should succeed");
+
+        let r0_name = name_of(&ssa, r0, 0).expect("r0 named");
+        let r8_name = name_of(&ssa, r8, 0).expect("r8 named");
+        assert_eq!(r0_name, "c0", "coalesced r0 → c0, got {r0_name}");
+        assert_eq!(
+            r8_name, "v2",
+            "single-version r8 → v2 (v1 consumed by c0 cluster), got {r8_name}",
+        );
     }
 }

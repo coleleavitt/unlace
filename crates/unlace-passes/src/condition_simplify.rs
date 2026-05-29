@@ -719,29 +719,51 @@ fn try_simplify(
             None
         }
 
-        // ── BoolOr ──────────────────────────────────────────────────
-        IrOp::BoolOr => {
+        // ── BoolOr / IntOr ──────────────────────────────────────────
+        IrOp::BoolOr | IrOp::IntOr => {
             let (x, y) = two(&insn.inputs)?;
 
-            if is_const_true(&y) || is_const_true(&x) {
-                return Some(Simplification::Replace(make_copy(
+            // `a == b || (a < b signed)` → `a <= b` (the jle/jng pattern). One
+            // operand is an IntEqual(a,b); the other is the signed-less XOR
+            // idiom over the same operands.
+            if let Some(le) = match_signed_lessequal_or(&x, &y, def_map) {
+                return Some(Simplification::Replace(replace_op(
                     insn,
-                    Varnode::constant(1, output.size),
+                    IrOp::IntSlessequal,
+                    le,
                 )));
             }
 
-            if is_const_false(&y) {
-                return Some(Simplification::Replace(make_copy(insn, x)));
-            }
-            if is_const_false(&x) {
-                return Some(Simplification::Replace(make_copy(insn, y)));
+            if insn.op == IrOp::BoolOr {
+                if is_const_true(&y) || is_const_true(&x) {
+                    return Some(Simplification::Replace(make_copy(
+                        insn,
+                        Varnode::constant(1, output.size),
+                    )));
+                }
+
+                if is_const_false(&y) {
+                    return Some(Simplification::Replace(make_copy(insn, x)));
+                }
+                if is_const_false(&x) {
+                    return Some(Simplification::Replace(make_copy(insn, y)));
+                }
             }
 
             None
         }
 
-        // ── BoolXor ─────────────────────────────────────────────────
-        IrOp::BoolXor => {
+        // ── BoolXor / IntXor ────────────────────────────────────────
+        IrOp::BoolXor | IrOp::IntXor => {
+            // `SF != OF` signed-less idiom: XOR(IntSless(a,b), IntSborrow(a,b)).
+            if let Some((a, b)) = match_signed_less_xor(insn, def_map) {
+                return Some(Simplification::Replace(replace_op(
+                    insn,
+                    IrOp::IntSless,
+                    smallvec::smallvec![a, b],
+                )));
+            }
+
             let (x, y) = two(&insn.inputs)?;
 
             if is_const_false(&y) {
@@ -756,6 +778,66 @@ fn try_simplify(
 
         _ => None,
     }
+}
+
+/// Resolve a varnode to its defining flag instruction, peeling width-only
+/// pass-through ops (`Subpiece`/`Copy`/`IntZext`) that the lifter inserts
+/// between a comparison result and its use (e.g. `SUBPIECE(IntSless, 0)` =
+/// `LOBYTE(a < b)`). Bounded at a few hops so it can't loop.
+fn resolve_flag_def<'a>(
+    vn: &Varnode,
+    def_map: &'a BTreeMap<Varnode, IrInsn>,
+) -> Option<&'a IrInsn> {
+    let mut cur = *vn;
+    for _ in 0..4 {
+        let def = def_map.get(&cur)?;
+        match def.op {
+            IrOp::Subpiece | IrOp::Copy | IrOp::IntZext => {
+                let src = def.inputs.first()?;
+                if src.space == SpaceId::Const {
+                    return Some(def);
+                }
+                cur = *src;
+            }
+            _ => return Some(def),
+        }
+    }
+    None
+}
+
+/// For a `BoolOr`/`IntOr` over `(x, y)`, recognize the `a == b || (a <s b)`
+/// pattern and return the `[a, b]` operands for the combined `IntSlessequal`.
+/// Either operand may be the `IntEqual`; the other must be the signed-less XOR
+/// idiom over the SAME operands (checked structurally).
+fn match_signed_lessequal_or(
+    x: &Varnode,
+    y: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<smallvec::SmallVec<[Varnode; 3]>> {
+    for (eq_vn, xor_vn) in [(x, y), (y, x)] {
+        if eq_vn.space == SpaceId::Const || xor_vn.space == SpaceId::Const {
+            continue;
+        }
+        let Some(eq_def) = def_map.get(eq_vn) else {
+            continue;
+        };
+        if eq_def.op != IrOp::IntEqual {
+            continue;
+        }
+        let Some((ea, eb)) = two(&eq_def.inputs) else {
+            continue;
+        };
+        let Some(xor_def) = def_map.get(xor_vn) else {
+            continue;
+        };
+        if let Some((la, lb)) = match_signed_less_xor(xor_def, def_map) {
+            // The equality and the signed-less must compare the same operands.
+            if (ea == la && eb == lb) || (ea == lb && eb == la) {
+                return Some(smallvec::smallvec![la, lb]);
+            }
+        }
+    }
+    None
 }
 
 fn simplify_negated_flag_chain(
@@ -786,6 +868,47 @@ fn simplify_negated_flag_chain(
     };
 
     Some(Simplification::Replace(replace_op(insn, op, inputs)))
+}
+
+/// Recognize the x86 signed-less-than flag idiom `SF != OF`, lowered as
+/// `XOR(IntSless(a, b), IntSborrow(a, b))`, and fold the XOR to `IntSless(a, b)`.
+///
+/// The lifter emits the sign flag as `IntSless(a, b)` (the raw subtract's sign
+/// bit, printed `LOBYTE(a < b)`) and the overflow flag as `IntSborrow(a, b)`
+/// (printed `__OFSUB__(a, b)`). Their XOR is exactly the signed `<` predicate.
+/// Returns the matched operands `(a, b)` so callers can also build the `<=`
+/// form. Strictly structural: both flag defs must reference the SAME operands
+/// in the same order, so an unrelated XOR is never folded. `IntSborrow` is
+/// produced only by signed lowering, so the result is unambiguously signed.
+fn match_signed_less_xor(
+    xor_insn: &IrInsn,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<(Varnode, Varnode)> {
+    if !matches!(xor_insn.op, IrOp::IntXor | IrOp::BoolXor) {
+        return None;
+    }
+    let (x, y) = two(&xor_insn.inputs)?;
+    if x.space == SpaceId::Const || y.space == SpaceId::Const {
+        return None;
+    }
+    // The sign-flag operand is frequently a width-narrowing of the IntSless
+    // result (`SUBPIECE`/`LOBYTE`, or a Copy/zero-extend), so peel those
+    // pass-through ops before classifying.
+    let dx = resolve_flag_def(&x, def_map)?;
+    let dy = resolve_flag_def(&y, def_map)?;
+    // Identify which side is the IntSless and which is the IntSborrow.
+    let (sless, sborrow) = match (dx.op, dy.op) {
+        (IrOp::IntSless, IrOp::IntSborrow) => (dx, dy),
+        (IrOp::IntSborrow, IrOp::IntSless) => (dy, dx),
+        _ => return None,
+    };
+    let (la, lb) = two(&sless.inputs)?;
+    let (oa, ob) = two(&sborrow.inputs)?;
+    // Operand identity (same a, b, same order) is mandatory.
+    if la != oa || lb != ob {
+        return None;
+    }
+    Some((la, lb))
 }
 
 fn demorgan(
@@ -1907,5 +2030,121 @@ mod tests {
         let final_insn = block.insns.iter().find(|i| i.output == Some(cond)).unwrap();
         assert_eq!(final_insn.op, IrOp::BoolNegate);
         assert_eq!(final_insn.inputs[0], r0);
+    }
+
+    // ── Signed-flag-compare idiom (SF != OF) ────────────────────────
+
+    #[test]
+    fn test_signed_less_xor_folds_to_sless() {
+        // sf = INT_SLESS(a, b); of = INT_SBORROW(a, b); x = BOOL_XOR(sf, of)
+        //   → x = INT_SLESS(a, b)
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let sf = Varnode::unique(0, 1);
+        let of = Varnode::unique(8, 1);
+        let x = Varnode::unique(16, 1);
+
+        let sless = IrInsn::with_output(IrOp::IntSless, sf, smallvec![a, b], 0x1000);
+        let sborrow = IrInsn::with_output(IrOp::IntSborrow, of, smallvec![a, b], 0x1004);
+        let xor = IrInsn::with_output(IrOp::BoolXor, x, smallvec![sf, of], 0x1008);
+
+        let mut ssa = make_single_block_ssa(vec![sless, sborrow, xor]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed, "SF^OF should fold");
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let folded = block.insns.iter().find(|i| i.output == Some(x)).unwrap();
+        assert_eq!(folded.op, IrOp::IntSless, "XOR(SLess,SBorrow) → SLess");
+        assert_eq!(folded.inputs[0], a);
+        assert_eq!(folded.inputs[1], b);
+    }
+
+    #[test]
+    fn test_signed_less_xor_through_subpiece() {
+        // The sign flag is a SUBPIECE (LOBYTE) of the wider IntSless result.
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let sless_wide = Varnode::unique(0, 4);
+        let sf = Varnode::unique(8, 1);
+        let of = Varnode::unique(16, 1);
+        let x = Varnode::unique(24, 1);
+
+        let sless = IrInsn::with_output(IrOp::IntSless, sless_wide, smallvec![a, b], 0x1000);
+        let sub = IrInsn::with_output(
+            IrOp::Subpiece,
+            sf,
+            smallvec![sless_wide, Varnode::constant(0, 1)],
+            0x1004,
+        );
+        let sborrow = IrInsn::with_output(IrOp::IntSborrow, of, smallvec![a, b], 0x1008);
+        let xor = IrInsn::with_output(IrOp::BoolXor, x, smallvec![sf, of], 0x100c);
+
+        let mut ssa = make_single_block_ssa(vec![sless, sub, sborrow, xor]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed, "SF^OF (SF via SUBPIECE) should fold");
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let folded = block.insns.iter().find(|i| i.output == Some(x)).unwrap();
+        assert_eq!(folded.op, IrOp::IntSless);
+        assert_eq!(folded.inputs[0], a);
+        assert_eq!(folded.inputs[1], b);
+    }
+
+    #[test]
+    fn test_eq_or_signed_less_xor_folds_to_slessequal() {
+        // eq = INT_EQUAL(a, b); [SF^OF over a,b]; r = BOOL_OR(eq, xor)
+        //   → r = INT_SLESSEQUAL(a, b)
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let eq = Varnode::unique(0, 1);
+        let sf = Varnode::unique(8, 1);
+        let of = Varnode::unique(16, 1);
+        let xor = Varnode::unique(24, 1);
+        let r = Varnode::unique(32, 1);
+
+        let eq_insn = IrInsn::with_output(IrOp::IntEqual, eq, smallvec![a, b], 0x1000);
+        let sless = IrInsn::with_output(IrOp::IntSless, sf, smallvec![a, b], 0x1004);
+        let sborrow = IrInsn::with_output(IrOp::IntSborrow, of, smallvec![a, b], 0x1008);
+        let xor_insn = IrInsn::with_output(IrOp::BoolXor, xor, smallvec![sf, of], 0x100c);
+        let or_insn = IrInsn::with_output(IrOp::BoolOr, r, smallvec![eq, xor], 0x1010);
+
+        let mut ssa =
+            make_single_block_ssa(vec![eq_insn, sless, sborrow, xor_insn, or_insn]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed, "eq || (SF^OF) should fold to <=");
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let folded = block.insns.iter().find(|i| i.output == Some(r)).unwrap();
+        assert_eq!(folded.op, IrOp::IntSlessequal, "→ SLessEqual");
+        assert_eq!(folded.inputs[0], a);
+        assert_eq!(folded.inputs[1], b);
+    }
+
+    #[test]
+    fn test_signed_less_xor_rejects_mismatched_operands() {
+        // SLess(a,b) ^ SBorrow(a,c) — different second operand, must NOT fold.
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let c = Varnode::reg(16, 4);
+        let sf = Varnode::unique(0, 1);
+        let of = Varnode::unique(8, 1);
+        let x = Varnode::unique(16, 1);
+
+        let sless = IrInsn::with_output(IrOp::IntSless, sf, smallvec![a, b], 0x1000);
+        let sborrow = IrInsn::with_output(IrOp::IntSborrow, of, smallvec![a, c], 0x1004);
+        let xor = IrInsn::with_output(IrOp::BoolXor, x, smallvec![sf, of], 0x1008);
+
+        let mut ssa = make_single_block_ssa(vec![sless, sborrow, xor]);
+        let _ = ConditionSimplifyPass.run(&mut ssa);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let kept = block.insns.iter().find(|i| i.output == Some(x)).unwrap();
+        assert_eq!(kept.op, IrOp::BoolXor, "mismatched operands must not fold");
     }
 }

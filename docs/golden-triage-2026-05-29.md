@@ -72,3 +72,50 @@ RUSTC_WRAPPER= cargo build -q -p unlace-cli
 bash scripts/classify_golden_diffs.sh            # all 15
 bash scripts/classify_golden_diffs.sh mips64_features   # one fixture
 ```
+
+## Follow-up: full 14-fixture explore-agent investigation (2026-05-29 pm-2)
+
+Five parallel Explore agents root-caused all 14 fixtures. Synthesis:
+
+### Bounded fix LANDED
+- **SP-as-struct** (`b780959e9`) — StructFieldDetectPass clustered stack-pointer
+  accesses into fake structs (`v4->field_18446744073709551600` on arm64
+  bitfield_test). Now excludes SP/FP register bases via StackSpec::is_frame_base.
+  arm64 body meaningfully cleaner; +1 regression test.
+
+### Verified NOT safely fixable to "match golden" (golden is wrong/contested)
+- **_start / function tail size** (debug_hello, cpp_vtable): golden trims _start to
+  0x1a (26 B) but the symbol size is 38 B and bytes 26-38 are REAL code
+  (`lea; call __libc_start_main; hlt`), not padding. Current's larger size is more
+  correct — the golden is truncated. Do NOT "fix" to match.
+- **vtable receiver `this`** (cpp_vtable use_base): BOTH current and golden emit
+  `return this->__vftable->method_0();` — the golden has the same `this` bug, so
+  threading base_varnode would make current DIVERGE from the golden, not match it.
+  (Also: touches structurer, against CLAUDE.md guidance.) Deferred.
+- **`cN` coalesced naming** (ppc64/v850/riscv): golden uses `c0`/`c1` (coalesced
+  register names) that the current var-naming/register-coalesce pipeline no longer
+  produces (only `vN`/`saved_rN`). This is a naming-convention regression spanning
+  var_naming + register_coalesce — multi-file, real, deferred.
+
+### Genuine producer gaps (deferred, distinct root causes, multi-session)
+- **PPC immediate-as-register** (ppc64 sub_10000120): `if (v1 != v2//rsp)` where
+  golden has `if (c0 == 3LL)` — the immediate `3` was mis-lifted to a register
+  read. PPC LIFTER bug.
+- **arm64 CSEL→if-else + CSINV/CSNEG signed-flag predicates**: raw `__csel__`/
+  `__csinv__` intrinsics not structured; signed-less XOR fold not reaching csel
+  predicate operands.
+- **x87 FPU** (x87_math): duplicate FLD, incomplete FCOM flag semantics — x87
+  stack modeling in unlace-lift-x86/src/ops/fpu.rs.
+- **string/symbol resolution** (cpp_rtti main): golden resolves `printf("%s %s\n",…)`;
+  current emits raw `0x3d28LL` addresses.
+- **leaked temps / function-size over-read on symbol-less CRT functions**
+  (debug_*, medium, switch_table): recursive-descent over-read + residual
+  cross-statement folding; medium already 2610→1134 from prior work.
+
+### Honest verdict
+The 14 remaining goldens are a MIX: some current-regressions (naming, PPC lift,
+CSEL), some current-IMPROVEMENTS where the golden is stale/wrong (_start size,
+vtable `this` shared bug), and several deep multi-session producer gaps (x87,
+string resolution, PPC immediates). There is no safe mechanical path to 32/32;
+each requires per-issue producer work with regression risk. The one cleanly-
+correct bounded fix (SP-as-struct) is landed.

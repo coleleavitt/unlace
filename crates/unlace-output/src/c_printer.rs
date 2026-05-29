@@ -15218,6 +15218,34 @@ fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
                 );
                 remove
             });
+            // Fallback: a dead compound assignment (`lhs OP= rhs`) to a
+            // synthetic local. A compound assign both reads and writes `lhs`,
+            // so it is only dead when `lhs` has NO later occurrence at all
+            // (no rvalue read, no further write) after this point — the
+            // computed value is never observed. This catches e.g. ARCompact
+            // `_start`'s tail `v1 += 0x7f;` whose result is unused before
+            // return (the golden omits it). Only fires on the first pass.
+            let remove = remove
+                || (pass == 0
+                    && parse_dead_compound_assignment_lhs(segment).is_some_and(|lhs| {
+                        let used_on_line = segments
+                            .iter()
+                            .skip(seg_idx + 1)
+                            .any(|later| contains_identifier(later, lhs));
+                        let used_below = lines
+                            .iter()
+                            .skip(idx + 1)
+                            .any(|later| contains_identifier(later, lhs));
+                        let dead = !used_on_line && !used_below;
+                        if dead && prune_trace_enabled() {
+                            eprintln!(
+                                "[unlace-output] plain-prune pass={pass} line={} lhs={lhs} decision=remove segment={:?} kind=dead-compound",
+                                idx + 1,
+                                segment.trim()
+                            );
+                        }
+                        dead
+                    }));
             if remove {
                 changed = true;
             } else {
@@ -15513,6 +15541,29 @@ fn parse_plain_assignment_lhs(segment: &str) -> Option<&str> {
         || !is_c_identifier(lhs)
         || !is_prunable_synthetic_local(lhs)
         || (rhs.contains('(') && !is_side_effect_free_temp_initializer(rhs))
+    {
+        return None;
+    }
+    Some(lhs)
+}
+
+/// Match a compound assignment `lhs OP= rhs;` (`+=`, `-=`, `*=`, `&=`, …) to a
+/// prunable synthetic local, returning `lhs`. Caller must verify `lhs` is
+/// genuinely dead (no later occurrence) before removing, since a compound
+/// assignment reads its lhs. The rhs must be side-effect-free (no call) so
+/// dropping it can't lose an observable effect.
+fn parse_dead_compound_assignment_lhs(segment: &str) -> Option<&str> {
+    let stmt = segment.trim().strip_suffix(';')?.trim();
+    // Find the compound-assign operator `<op>=` (but not `==`, `<=`, `>=`,
+    // `!=`). Scan for " X= " where X is one of + - * / % & | ^ or << >>.
+    const OPS: &[&str] = &[
+        " += ", " -= ", " *= ", " /= ", " %= ", " &= ", " |= ", " ^= ", " <<= ", " >>= ",
+    ];
+    let (lhs, rhs) = OPS.iter().find_map(|op| stmt.split_once(op))?;
+    if lhs.contains(char::is_whitespace)
+        || !is_c_identifier(lhs)
+        || !is_prunable_synthetic_local(lhs)
+        || rhs.contains('(')
     {
         return None;
     }

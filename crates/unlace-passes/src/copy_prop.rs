@@ -39,6 +39,16 @@ impl Pass for CopyPropagationPass {
     }
 }
 
+/// The x86 frame/arg-register copy-prop barriers below key off raw register
+/// *offsets* (RSP=32, RBP=40, RDI=56, …) that are x86-64-specific. On every
+/// other architecture those offsets map to ordinary GPRs (e.g. PPC r4 is at
+/// offset 32), so the barriers must only apply to x86/x86-64. Without this gate
+/// a PPC `r4 = COPY 3` is wrongly treated as a frame-register def and never
+/// propagated, leaving `if (v1 != v2)` where the constant `3` should appear.
+fn arch_uses_x86_register_layout(arch: unlace_ir::ArchId) -> bool {
+    matches!(arch, unlace_ir::ArchId::X86 | unlace_ir::ArchId::X86_64)
+}
+
 /// Outputs of `LOAD` instructions whose [`unlace_ir::AliasCategory`] is
 /// preserved (`Mmio` or `Volatile`). Copy-prop must never resolve any
 /// varnode equivalent to one of these to its source — the LOAD has
@@ -110,11 +120,12 @@ fn collect_input_rewrites(
 ) -> Vec<InputRewrite> {
     let mut rewrites = Vec::new();
 
+    let x86 = arch_uses_x86_register_layout(func.arch);
     for (&bid, block) in &func.function.blocks {
         let mut active: BTreeMap<SsaVarnode, CopySource> = BTreeMap::new();
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             for (input_idx, &raw) in insn.inputs.iter().enumerate() {
-                if is_propagation_barrier_input(insn, input_idx, raw) {
+                if is_propagation_barrier_input(insn, input_idx, raw, x86) {
                     continue;
                 }
                 if raw.space == SpaceId::Const {
@@ -155,6 +166,7 @@ fn collect_input_rewrites(
                     insn,
                     preserved_load_outputs,
                     &mut active,
+                    x86,
                 );
             }
         }
@@ -163,17 +175,24 @@ fn collect_input_rewrites(
     rewrites
 }
 
-fn is_propagation_barrier_input(insn: &unlace_ir::IrInsn, input_idx: usize, raw: Varnode) -> bool {
+fn is_propagation_barrier_input(
+    insn: &unlace_ir::IrInsn,
+    input_idx: usize,
+    raw: Varnode,
+    x86: bool,
+) -> bool {
     (matches!(insn.op, IrOp::Call | IrOp::Callind) && input_idx > 0)
         || (matches!(insn.op, IrOp::Load | IrOp::Store) && input_idx == 1)
         || (insn.op == IrOp::Copy && input_idx == 0 && insn.output == Some(raw))
-        || (insn.op == IrOp::Copy
+        || (x86
+            && insn.op == IrOp::Copy
             && input_idx == 0
             && insn.output.is_some_and(is_x86_64_call_arg_register))
-        || (insn.op == IrOp::Copy
+        || (x86
+            && insn.op == IrOp::Copy
             && input_idx == 0
             && insn.output.is_some_and(is_x86_64_frame_register))
-        || (matches!(insn.op, IrOp::IntAdd | IrOp::IntSub) && is_x86_64_frame_register(raw))
+        || (x86 && matches!(insn.op, IrOp::IntAdd | IrOp::IntSub) && is_x86_64_frame_register(raw))
 }
 
 fn is_x86_64_call_arg_register(vn: Varnode) -> bool {
@@ -225,6 +244,7 @@ fn record_copy_equiv(
     insn: &unlace_ir::IrInsn,
     preserved_load_outputs: &BTreeSet<SsaVarnode>,
     active: &mut BTreeMap<SsaVarnode, CopySource>,
+    x86: bool,
 ) {
     let (Some(output), Some(&source_raw)) = (insn.output, insn.inputs.first()) else {
         return;
@@ -235,7 +255,7 @@ fn record_copy_equiv(
     if output == source_raw {
         return;
     }
-    if is_x86_64_frame_register(output) || is_x86_64_frame_register(source_raw) {
+    if x86 && (is_x86_64_frame_register(output) || is_x86_64_frame_register(source_raw)) {
         return;
     }
     let Some(output_ssa) = output_ssa(func, bid, insn_idx) else {
@@ -499,6 +519,10 @@ mod tests {
             clobber_rsp,
             use_clobbered_rsp,
         ]);
+        // RSP=offset-32 frame-register boundary handling is x86-64-specific
+        // (the offset is a normal GPR on other arches), so the test must run
+        // under the x86-64 register layout.
+        ssa.arch = unlace_ir::ArchId::X86_64;
         let changed = CopyPropagationPass
             .run(&mut ssa)
             .expect("pass should succeed");
@@ -590,5 +614,72 @@ mod tests {
             "volatile-LOAD barrier must keep COPY chain intact"
         );
         assert!(after > before, "preservation counter must have incremented");
+    }
+
+    #[test]
+    fn test_copy_prop_constant_into_non_x86_gpr() {
+        // On PPC, register offset 32 is r4 (a normal GPR), NOT the x86 RSP
+        // frame register. `r4 = COPY 3; use(r4)` must propagate the constant
+        // so the use reads `3`, not the register. Regression for ppc64
+        // sub_10000120 emitting `if (v1 != v2)` instead of `if (v1 != 3)`.
+        let r4 = Varnode::reg(32, 8);
+        let r3 = Varnode::reg(24, 8);
+        let out = Varnode::unique(0, 1);
+        let three = Varnode::constant(3, 8);
+
+        let mut ssa = make_single_block_ssa(vec![
+            IrInsn::with_output(IrOp::Copy, r4, smallvec![three], 0x1000),
+            IrInsn::with_output(IrOp::IntEqual, out, smallvec![r3, r4], 0x1004),
+        ]);
+        ssa.arch = unlace_ir::ArchId::Ppc64;
+        let changed = CopyPropagationPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed, "constant copy into a PPC GPR must propagate");
+
+        let eq_insn = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[1];
+        assert_eq!(
+            eq_insn.inputs[1], three,
+            "use of r4 must be rewritten to the constant 3: {:?}",
+            eq_insn.inputs[1]
+        );
+    }
+
+    #[test]
+    fn test_copy_prop_still_blocks_x86_frame_register() {
+        // The same shape under x86-64: offset 32 IS RSP, a frame-register
+        // boundary — the constant must NOT propagate (stack-recovery relies on
+        // the raw frame register surviving).
+        let rsp = Varnode::reg(32, 8);
+        let rax = Varnode::reg(0, 8);
+        let out = Varnode::unique(0, 1);
+        let three = Varnode::constant(3, 8);
+
+        let mut ssa = make_single_block_ssa(vec![
+            IrInsn::with_output(IrOp::Copy, rsp, smallvec![three], 0x1000),
+            IrInsn::with_output(IrOp::IntEqual, out, smallvec![rax, rsp], 0x1004),
+        ]);
+        ssa.arch = unlace_ir::ArchId::X86_64;
+        let _ = CopyPropagationPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+
+        let eq_insn = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[1];
+        assert_eq!(
+            eq_insn.inputs[1], rsp,
+            "x86 RSP frame-register copy must NOT propagate the constant"
+        );
     }
 }

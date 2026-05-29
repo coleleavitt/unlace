@@ -3933,6 +3933,21 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             continue;
         }
 
+        // A statement carrying a user/debug line comment or source-map entry
+        // (keyed by its instruction address) must render standalone so the
+        // comment has an anchor. Folding it into a consumer would drop the
+        // comment. Same rationale as `commented_stmts` but for address-keyed
+        // annotations attached after collection.
+        if ctx.line_comments.contains_key(&insn.addr) || ctx.source_map.contains_key(&insn.addr) {
+            if c_printer_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} addr={:#x} decision=line-comment-keep",
+                    insn.op, insn.addr
+                );
+            }
+            continue;
+        }
+
         if def_counts.get(&output_sv).copied().unwrap_or(0) > 1 {
             if c_printer_trace_enabled() {
                 eprintln!(
@@ -9206,9 +9221,14 @@ fn emit_comment_line(text: &str, depth: usize, tab_width: usize, out: &mut Strin
 
 /// If this Call's target is an IAT slot whose forwarder chain has been
 /// resolved (via [`PrinterAnnotations::forwarded_resolutions`]), return
-/// the trailing `/* -> dll!sym */` comment text the printer should append
-/// to the call statement. Returns `None` for non-CALL insns or when the
-/// target VA is not a key in the resolution map.
+/// the trailing `/* <raw> -> dll!sym */` comment text the printer should
+/// append to the call statement. Returns `None` for non-CALL insns or when
+/// the target VA is not a key in the resolution map.
+///
+/// The raw import symbol (e.g. `kernel32!HeapAlloc`) is included when the
+/// rendered call target had to be sanitised to a valid C identifier
+/// (`kernel32_HeapAlloc`): the comment is the only place the original
+/// `dll!sym` spelling survives, so a reader can still map it back.
 fn forwarded_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
     if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
         return None;
@@ -9221,7 +9241,10 @@ fn forwarded_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
         return None;
     }
     let resolved = ctx.forwarded_resolutions.get(&target.offset)?;
-    Some(format!("/* -> {} */", resolved))
+    match ctx.symbols.get(&target.offset) {
+        Some(raw) if !is_c_identifier(raw) => Some(format!("/* {raw} -> {resolved} */")),
+        _ => Some(format!("/* -> {resolved} */")),
+    }
 }
 
 /// §5.5: If this Call's *target* function was identified by FLIRT,
@@ -16117,18 +16140,23 @@ mod tests {
         let func = make_func("no_roles", body);
         let output = print_c(&func);
 
+        // Scope assertions to the function body — the shared SSE prelude
+        // legitimately uses `for (unsigned int i = 0; …)` (a ` i ` substring).
+        let body_text = function_body_text(&output, "no_roles");
+
         // Body should mention a generic `vN`-style variable for the
         // unnamed r8 input. The exact index isn't important — only
         // that no role-style identifier leaked in from anywhere.
-        let has_default = output.contains("v1") || output.contains("v2") || output.contains("v3");
+        let has_default =
+            body_text.contains("v1") || body_text.contains("v2") || body_text.contains("v3");
         assert!(
             has_default,
-            "with no roles or loops we should see a default vN name: {output}",
+            "with no roles or loops we should see a default vN name: {body_text}",
         );
         for forbidden in [" i ", " j ", " k ", "saved_"] {
             assert!(
-                !output.contains(forbidden),
-                "unexpected role-style name `{forbidden}` in {output}",
+                !body_text.contains(forbidden),
+                "unexpected role-style name `{forbidden}` in {body_text}",
             );
         }
     }
@@ -16293,12 +16321,13 @@ mod tests {
             output.contains("counter_total"),
             "meaningful merged name should win: {output}",
         );
-        // The role-name `i` must not leak as a standalone identifier
-        // for this varnode (it can still appear inside e.g. `i32` types
-        // in the preamble, which is fine).
+        // The role-name `i` must not leak as a standalone identifier for this
+        // varnode. Scope to the function body — the shared SSE prelude uses
+        // `for (unsigned int i = 0; …)` loop counters, which are fine.
+        let body_text = function_body_text(&output, "conflict");
         assert!(
-            !output.contains(" i ") && !output.contains(" i;") && !output.contains(" i,"),
-            "role name `i` leaked despite meaningful merged name: {output}",
+            !body_text.contains(" i ") && !body_text.contains(" i;") && !body_text.contains(" i,"),
+            "role name `i` leaked despite meaningful merged name: {body_text}",
         );
     }
 
@@ -20013,12 +20042,17 @@ mod tests {
             Some(&ann),
         );
 
+        // The forwarded resolution renders as a trailing comment pointing at
+        // the resolved target. When the raw import symbol is not a valid C
+        // identifier (it contains `!`), the comment also carries the raw
+        // `dll!sym` spelling so it survives the call-target sanitisation
+        // (`kernel32!HeapAlloc` → `kernel32_HeapAlloc`).
         assert!(
-            output.contains("/* -> NTDLL!RtlAllocateHeap */"),
+            output.contains("-> NTDLL!RtlAllocateHeap */"),
             "forwarded-resolution comment must render on CALL: {output}",
         );
-        // The original (un-resolved) symbol name still appears as the
-        // call target — the comment is *additive*, not a rename.
+        // The original (un-resolved) symbol name still appears — in the
+        // comment — so the additive resolution does not erase it.
         assert!(
             output.contains("kernel32!HeapAlloc"),
             "primary symbol name must still render: {output}",
@@ -20939,10 +20973,13 @@ mod tests {
             output.contains("return this->__vftable->method_0();"),
             "vtable BRANCHIND should render as tail return: {output}",
         );
+        // Count returns in the function body only — the shared SSE/atomic
+        // prelude helpers legitimately contain their own `return` statements.
+        let body_text = function_body_text(&output, "vtable_tail_branch");
         assert_eq!(
-            output.matches("return").count(),
+            body_text.matches("return").count(),
             1,
-            "following synthetic return should be suppressed: {output}"
+            "following synthetic return should be suppressed: {body_text}"
         );
     }
 
@@ -23849,10 +23886,15 @@ mod tests {
         let func = make_func("dead_var", body);
         let output = print_c(&func);
 
+        // The returned value (r8 = 2) must reach the output: either
+        // materialised as a `result` variable or folded into `return 2;`
+        // under the single-def single-use returned-value fold policy.
         assert!(
-            output.contains("result"),
-            "r8 (returned) should be declared: {output}",
+            output.contains("result") || output.contains("return 2;"),
+            "r8 (returned) should reach the output: {output}",
         );
+        // The point of this test: the write-only variable v1 (r0, assigned 1
+        // but never read) must NOT be declared or assigned.
         let has_v1_decl = output.lines().any(|l| {
             let t = l.trim();
             t.starts_with("int v1;") || t.starts_with("int v1; //")

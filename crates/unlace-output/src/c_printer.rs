@@ -1317,7 +1317,7 @@ pub fn print_c_with_annotations(
         repair_arg_versioned_address_uses,
     );
 
-    if annotations.is_some_and(|a| a.recover_triangular_sum_loop) {
+    let output = if annotations.is_some_and(|a| a.recover_triangular_sum_loop) {
         run_cleanup_stage(
             func_label,
             "triangular-sum",
@@ -1326,7 +1326,17 @@ pub fn print_c_with_annotations(
         )
     } else {
         output
-    }
+    };
+
+    // MUST be the final stage: emptiness of an if-body is only known after every
+    // pruning pass above has removed dead stores/decls. Flip `if (!(X)) {}` to
+    // the positive `if (X) {}` form once the body is provably empty.
+    run_cleanup_stage(
+        func_label,
+        "depolarize-empty-if",
+        output,
+        depolarize_empty_negated_ifs,
+    )
 }
 
 /// Apply one post-emission cleanup `stage` to `input`, logging a before/after
@@ -8747,6 +8757,138 @@ fn negate_condition_expr(expr: &str) -> String {
     format!("!({expr})")
 }
 
+/// Late, text-only cleanup: rewrite `if (!(X)) {}` (an empty then-body with no
+/// `else`) to the positive `if (X) {}`.
+///
+/// WHY this lives at the very end of the cleanup pipeline rather than in the
+/// structurer: the emptiness is a *print-time* artifact. Architectures like
+/// mips64 / v850 / ppc64 lift a `logic_test`-style stub to the HIR shape
+/// `if (!v) { v2 = 0 }` — a negated guard whose then-body holds a register
+/// store. That store is a dead assignment removed only by the c_printer's
+/// `prune_dead_plain_assignments` + decl-prune passes, AFTER the if-polarity is
+/// already locked at structurer time. So at structurer time the body is
+/// NON-empty and `empty_if_cleanup` never fires. Running here — after pruning —
+/// is the only place where the emptiness is final.
+///
+/// An empty branch executes nothing regardless of polarity, so flipping the
+/// guard is semantically free and matches the golden `if (v) {}` form.
+///
+/// Conservatism guards (each one prevents a false positive):
+///   * The then-body must be GENUINELY empty: the line after the `{` is exactly
+///     `}` at the matching indent. This is why `if (!(v1)) { result = 1; }`
+///     (the inverted-else merge, asserted by
+///     `test_empty_then_else_prints_inverted_condition`) is left untouched.
+///   * The closing `}` must NOT be followed by `else` — an `if/else` keeps its
+///     inverted guard (`test_print_if_else`).
+///   * Only a single balanced outer `!(...)` is stripped. `if (!(a) && b)` is
+///     not a leading negation of the whole condition and is skipped.
+fn depolarize_empty_negated_ifs(output: String) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let mut out_lines: Vec<String> = Vec::with_capacity(lines.len());
+    let mut i = 0usize;
+    while i < lines.len() {
+        if let Some(positive) = empty_negated_if_rewrite(&lines, i) {
+            // Replace the guard line; the body (`}`) line is emitted as-is on
+            // the next iteration.
+            out_lines.push(positive);
+            i += 1;
+            continue;
+        }
+        out_lines.push(lines[i].to_string());
+        i += 1;
+    }
+    let mut result = out_lines.join("\n");
+    if output.ends_with('\n') {
+        result.push('\n');
+    }
+    result
+}
+
+/// If `lines[idx]` is the guard line of an `if (!(X)) {}` with a genuinely empty
+/// body and no `else`, return the rewritten `if (X) {` guard line (preserving
+/// the original leading indent). Otherwise `None`.
+fn empty_negated_if_rewrite(lines: &[&str], idx: usize) -> Option<String> {
+    let line = lines[idx];
+    let indent_len = line.len() - line.trim_start().len();
+    let indent = &line[..indent_len];
+    let trimmed = line.trim_start();
+
+    // Guard must be exactly `if (<cond>) {` — opening brace on the same line.
+    let after_if = trimmed.strip_prefix("if (")?;
+    let cond_with_brace = after_if.strip_suffix(" {")?;
+    // The condition is everything up to the closing paren that balances the
+    // `if (` opener. Require the line to end with `) {`.
+    let cond = cond_with_brace.strip_suffix(')')?;
+
+    // Strip exactly one balanced leading `!(...)` that wraps the whole cond.
+    let positive = strip_single_outer_negation(cond)?;
+
+    // Next non-blank line must be exactly the matching `}` (empty body), and
+    // it must not begin an `else`.
+    let mut j = idx + 1;
+    while j < lines.len() && lines[j].trim().is_empty() {
+        j += 1;
+    }
+    let close = lines.get(j)?;
+    let close_trimmed = close.trim();
+    if close_trimmed != "}" {
+        return None;
+    }
+    // The body line must be at the same indent as the guard (matching brace),
+    // confirming this `}` closes the `if` and nothing is nested inside.
+    let close_indent_len = close.len() - close.trim_start().len();
+    if close_indent_len != indent_len {
+        return None;
+    }
+    // No `else` chained onto the closing brace (handled by the trim == "}"
+    // check, but a `} else {` would already have failed that).
+
+    Some(format!("{indent}if ({positive}) {{"))
+}
+
+/// If `cond` is exactly a single balanced `!(...)` wrapping its whole body,
+/// return the inner expression (trimmed). Returns `None` when the leading `!`
+/// does not parenthesize the entire condition (e.g. `!(a) && b`) or when there
+/// is no leading negation.
+fn strip_single_outer_negation(cond: &str) -> Option<String> {
+    let cond = cond.trim();
+    let rest = cond.strip_prefix('!')?;
+    let rest = rest.trim_start();
+    if !rest.starts_with('(') {
+        return None;
+    }
+    // Find the paren that balances the opening `(`.
+    let bytes = rest.as_bytes();
+    let mut depth = 0usize;
+    let mut close_idx = None;
+    for (k, &b) in bytes.iter().enumerate() {
+        match b {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    close_idx = Some(k);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let close_idx = close_idx?;
+    // The `(...)` must span the entire remaining condition; otherwise the `!`
+    // negates only a sub-expression (e.g. `!(a) && b`) and stripping it would
+    // change semantics.
+    if close_idx != bytes.len() - 1 {
+        return None;
+    }
+    let inner = &rest[1..close_idx];
+    let inner = inner.trim();
+    if inner.is_empty() {
+        return None;
+    }
+    Some(inner.to_string())
+}
+
 fn split_top_level_comparison(expr: &str) -> Option<(&str, &str, &str)> {
     let bytes = expr.as_bytes();
     let ops = ["==", "!=", ">=", "<=", ">", "<"];
@@ -16144,6 +16286,13 @@ mod tests {
         let r8 = reg(8, 4);
         let c1 = con(1, 4);
 
+        // An empty then-branch with a *live* else-body collapses to a single
+        // inverted guard: `if (!(v1)) { v2 = 1; }`. The else-body store must be
+        // returned so it survives the dead-assignment prune — otherwise the
+        // body empties out and the final `depolarize-empty-if` stage (correctly)
+        // flips the now-empty guard to its positive form. This test pins the
+        // genuine NON-empty-else inversion; the empty/dead-body flip is covered
+        // by `test_depolarize_empty_negated_if_flips_to_positive`.
         let body = vec![
             HirNode::If {
                 cond: sv(0, 4),
@@ -16155,7 +16304,7 @@ mod tests {
                     0x1000,
                 ))]),
             },
-            HirNode::Return(None),
+            HirNode::Return(Some(sv(8, 4))),
         ];
 
         let func = make_func("empty_then_else", body);
@@ -16169,6 +16318,111 @@ mod tests {
             !output.contains("} else {"),
             "empty then-branch should not print an else shell: {output}"
         );
+    }
+
+    #[test]
+    fn test_depolarize_empty_negated_if_flips_to_positive() {
+        let output = concat!(
+            "void f(void) {\n",
+            "    int v3; // reg?\n",
+            "    if (!(v3)) {\n",
+            "    }\n",
+            "    return;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let result = super::depolarize_empty_negated_ifs(output);
+        assert!(result.contains("    if (v3) {\n"), "{result}");
+        assert!(!result.contains("if (!(v3))"), "{result}");
+    }
+
+    #[test]
+    fn test_depolarize_empty_negated_if_leaves_nonempty_body() {
+        // `if (!c) { real }` must keep its inverted guard — only the body is
+        // empty case fires.
+        let output = concat!(
+            "void f(void) {\n",
+            "    if (!(v1)) {\n",
+            "        result = 1;\n",
+            "    }\n",
+            "    return;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let result = super::depolarize_empty_negated_ifs(output.clone());
+        assert_eq!(result, output, "non-empty body must be untouched");
+    }
+
+    #[test]
+    fn test_depolarize_empty_negated_if_leaves_else_chain() {
+        // The inverted-else merge form (`test_empty_then_else_prints_inverted_condition`)
+        // must survive even if the `if` brace block looks empty, because the
+        // `} else {` is not a bare `}`.
+        let output = concat!(
+            "void f(void) {\n",
+            "    if (!(v1)) {\n",
+            "    } else {\n",
+            "        result = 1;\n",
+            "    }\n",
+            "    return;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let result = super::depolarize_empty_negated_ifs(output.clone());
+        assert_eq!(result, output, "else chain must be untouched");
+    }
+
+    #[test]
+    fn test_depolarize_empty_negated_if_nested_and() {
+        // `!(a && b)` with an empty body de-polarizes to `a && b`.
+        let output = concat!(
+            "void f(void) {\n",
+            "    if (!(a && b)) {\n",
+            "    }\n",
+            "    return;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let result = super::depolarize_empty_negated_ifs(output);
+        assert!(result.contains("    if (a && b) {\n"), "{result}");
+        assert!(!result.contains("!(a && b)"), "{result}");
+    }
+
+    #[test]
+    fn test_depolarize_empty_negated_if_skips_partial_negation() {
+        // `!(a) && b` — the `!` negates only a sub-expr, not the whole guard,
+        // so stripping it would change semantics. Leave it.
+        let output = concat!(
+            "void f(void) {\n",
+            "    if (!(a) && b) {\n",
+            "    }\n",
+            "    return;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let result = super::depolarize_empty_negated_ifs(output.clone());
+        assert_eq!(result, output, "partial negation must be untouched");
+    }
+
+    #[test]
+    fn test_depolarize_empty_negated_if_skips_positive_guard() {
+        // Already-positive empty guard is left exactly as-is.
+        let output = concat!(
+            "void f(void) {\n",
+            "    if (v3) {\n",
+            "    }\n",
+            "    return;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let result = super::depolarize_empty_negated_ifs(output.clone());
+        assert_eq!(result, output);
     }
 
     #[test]

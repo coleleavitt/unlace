@@ -42,6 +42,32 @@ pub mod fpu_tag {
     pub const FXCH: u64 = 0x317;
     /// `FST` — store ST(0) to memory/ST(i) without pop.
     pub const FST: u64 = 0x318;
+
+    // ── Pop-variant x87 tags (0x360..0x36F) ─────────────────────────────
+    //
+    // These distinguish the stack-*popping* x87 forms from their non-popping
+    // siblings, which is information the post-lift x87 TOP-tracking pass
+    // (`unlace-passes::x87_top`) needs to model the rotating register stack:
+    // `FADD` and `FADDP` are otherwise lifted to identical Callother shapes,
+    // yet only `FADDP` advances TOP. The base-arithmetic tags above stay
+    // reserved for the non-popping forms.
+
+    /// `FADDP` — add then pop.
+    pub const FADDP: u64 = 0x360;
+    /// `FSUBP` — subtract then pop.
+    pub const FSUBP: u64 = 0x361;
+    /// `FSUBRP` — reverse-subtract then pop (operands swapped at emit time).
+    pub const FSUBRP: u64 = 0x362;
+    /// `FMULP` — multiply then pop.
+    pub const FMULP: u64 = 0x363;
+    /// `FDIVP` — divide then pop.
+    pub const FDIVP: u64 = 0x364;
+    /// `FDIVRP` — reverse-divide then pop (operands swapped at emit time).
+    pub const FDIVRP: u64 = 0x365;
+    /// `FCOMP`/`FUCOMP`/`FCOMIP` — compare then pop once.
+    pub const FCOMP: u64 = 0x366;
+    /// `FCOMPP`/`FUCOMPP` — compare then pop twice.
+    pub const FCOMPP: u64 = 0x367;
 }
 
 /// Read an x87 source operand. Returns either the memory load varnode or the
@@ -181,6 +207,10 @@ pub fn lift_fstp(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
 /// `swap_operands` is `true` for the *reverse* variants (`FSUBR`, `FSUBRP`,
 /// `FDIVR`, `FDIVRP`) so callers can use a single tag (`FSUB`/`FDIV`) and let
 /// the operand order encode the direction.
+///
+/// `callother_tag` distinguishes popping forms (`FADDP`/`FMULP`/… use the
+/// `0x36x` pop tags) from non-popping ones (`FADD`/`FMUL`/…), so the post-lift
+/// x87 TOP-tracking pass can apply the right TOP delta from the tag alone.
 pub fn lift_fpu_binop(
     ctx: &mut LiftCtx,
     insn: &iced_x86::Instruction,
@@ -251,8 +281,8 @@ pub fn lift_fpu_binop(
 /// zero-operand encoding (`FCOMPP`, `FUCOMPP`) implicitly compares ST(0)
 /// against ST(1). We emit the tagged Callother without an output; downstream
 /// passes can still recognise the comparison via the tag.
-pub fn lift_fcom(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
-    let tag = Varnode::constant(fpu_tag::FCOM, 8);
+pub fn lift_fcom(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    let tag = Varnode::constant(callother_tag, 8);
 
     let (lhs, rhs) = match insn.op_count() {
         0 => (st_reg(0), st_reg(1)),

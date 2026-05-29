@@ -12711,6 +12711,18 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x317 => Some("__fxch"),
         0x318 => Some("__fst"),
 
+        // ── x87 popping arithmetic/compare variants (0x360..0x367) ──
+        // Distinct tags so the x87 TOP-tracking pass can model the
+        // stack pop; rendered with their canonical `p`-suffixed names.
+        0x360 => Some("__faddp"),
+        0x361 => Some("__fsubp"),
+        0x362 => Some("__fsubrp"),
+        0x363 => Some("__fmulp"),
+        0x364 => Some("__fdivp"),
+        0x365 => Some("__fdivrp"),
+        0x366 => Some("__fcomp"),
+        0x367 => Some("__fcompp"),
+
         // ── Idiom-recognized intrinsics (0x320..0x328) ─────────
         0x320 => Some("__ROL__"),
         0x321 => Some("__ROR__"),

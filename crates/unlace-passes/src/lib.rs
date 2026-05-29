@@ -179,6 +179,7 @@ pub mod vararg_detect;
 pub mod variable_merge;
 pub mod whole_prog_cc;
 pub mod whole_prog_type_unify;
+pub mod x87_top;
 
 pub use abi_clobber::{
     CallClobber, CallClobberModel, UpperLaneEffect, argument_registers, classify_call_clobber,
@@ -378,6 +379,7 @@ pub use vararg_detect::{
 pub use variable_merge::VariableMergePass;
 pub use whole_prog_cc::{DEFAULT_WHOLE_PROG_CC_CAP, WholeProgramCcReport, run_whole_prog_cc};
 pub use whole_prog_type_unify::{ProgramTypeUnifier, unify_structs_across_program};
+pub use x87_top::rewrite_x87_top;
 
 /// Names of the passes scheduled in the default per-function pipeline's
 /// inner fixed-point cluster, in execution order. Mirrors the schedule

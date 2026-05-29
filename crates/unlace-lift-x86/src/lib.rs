@@ -2412,7 +2412,7 @@ mod tests {
     #[test]
     fn test_lift_faddp_implicit() {
         // DE C1 = faddp st1, st0
-        assert_fpu_tag(&[0xDE, 0xC1], fpu_tag::FADD);
+        assert_fpu_tag(&[0xDE, 0xC1], fpu_tag::FADDP);
         let result = lifter().lift_insn(&[0xDE, 0xC1], 0x1000).unwrap();
         let co = result
             .ir_ops
@@ -2491,7 +2491,7 @@ mod tests {
     #[test]
     fn test_lift_fmulp_implicit() {
         // DE C9 = fmulp st1, st0
-        assert_fpu_tag(&[0xDE, 0xC9], fpu_tag::FMUL);
+        assert_fpu_tag(&[0xDE, 0xC9], fpu_tag::FMULP);
         let result = lifter().lift_insn(&[0xDE, 0xC9], 0x1000).unwrap();
         let co = result
             .ir_ops
@@ -2552,7 +2552,7 @@ mod tests {
     #[test]
     fn test_lift_fcompp_implicit() {
         // DE D9 = fcompp   (compare ST(0) with ST(1), pop both)
-        assert_fpu_tag(&[0xDE, 0xD9], fpu_tag::FCOM);
+        assert_fpu_tag(&[0xDE, 0xD9], fpu_tag::FCOMPP);
         let result = lifter().lift_insn(&[0xDE, 0xD9], 0x1000).unwrap();
         let co = result
             .ir_ops

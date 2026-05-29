@@ -2494,6 +2494,9 @@ pub fn lift_and_run_passes(
     unlace_struct::merge_linear_blocks(&mut ir_func);
     unlace_struct::tail_duplicate_small_blocks(&mut ir_func);
     unlace_struct::split_irreducible_entries(&mut ir_func);
+    // Resolve x87 ST(i) stack-relative references to concrete physical slots
+    // before SSA construction (no-op for non-x87 functions).
+    unlace_passes::rewrite_x87_top(&mut ir_func);
 
     check_timeout(deadline, &entry.name)?;
 
@@ -3056,6 +3059,16 @@ pub fn decompile_function_with_symbols(
         elapsed_us = t.elapsed().as_micros() as u64,
         splits,
         "split_irreducible_entries done"
+    );
+
+    let t = Instant::now();
+    pipeline_trace_start(&entry.name, "x87-top");
+    let x87_rewrites = unlace_passes::rewrite_x87_top(&mut ir_func);
+    pipeline_trace_ir(&entry.name, "x87-top", t, deadline, &ir_func);
+    tracing::trace!(
+        elapsed_us = t.elapsed().as_micros() as u64,
+        x87_rewrites,
+        "rewrite_x87_top done"
     );
 
     pipeline_trace_start(&entry.name, "timeout-check-after-lift");

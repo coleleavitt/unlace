@@ -49,3 +49,6 @@ notes
 rust_out
 .worktrees/
 .claude/
+
+# CodeGraph local index/cache (per-machine, not source)
+.codegraph/

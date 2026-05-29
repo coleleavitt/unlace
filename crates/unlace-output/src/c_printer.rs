@@ -2637,6 +2637,22 @@ fn try_resolve_field_from_addr(
 // Array subscript recovery
 // ---------------------------------------------------------------------------
 
+/// True when a constant varnode encodes a negative displacement at its own
+/// operand width (high bit set). `0xffffffffffff9c30` at 8 bytes is `-25552`;
+/// `0xffff9c30` at 4 bytes is likewise negative. Such constants are `base - N`
+/// stack/struct displacements, never positive array offsets, so the
+/// array-subscript matcher must reject them rather than divide the wrapped
+/// magnitude by the stride.
+fn const_offset_is_negative(vn: &Varnode) -> bool {
+    debug_assert!(vn.space == SpaceId::Const);
+    let bits = (vn.size as u32) * 8;
+    if bits == 0 || bits >= 64 {
+        return (vn.offset as i64) < 0;
+    }
+    let sign_bit = 1u64 << (bits - 1);
+    vn.offset & sign_bit != 0
+}
+
 /// Result of array subscript pattern matching on an address expression.
 struct ArraySubscript {
     /// The base expression (already rendered as a C string).
@@ -2753,6 +2769,15 @@ fn try_array_subscript(
                 return None;
             }
             let offset = const_vn.offset;
+            // A negative displacement (high bit set when interpreted at the
+            // operand width) is a `*(base - N)` stack-frame / struct access, not
+            // a positive `base[i]` array subscript. Dividing the wrapped u64 by
+            // the stride otherwise yields a garbage index like
+            // `v1[4611686018427384710]` (= -25552/8 reinterpreted). Bail so the
+            // caller falls through to the pointer-deref / stack-slot rendering.
+            if const_offset_is_negative(const_vn) {
+                return None;
+            }
             if offset == 0 || offset % stride != 0 {
                 return None;
             }
@@ -20960,6 +20985,64 @@ mod tests {
             output.contains("v1[4]"),
             "constant offset 16 / stride 4 should emit base[4]: {output}",
         );
+    }
+
+    #[test]
+    fn test_array_negative_const_offset_not_subscript() {
+        // *(base + (-32)) at 4 bytes: a `base - 32` stack/struct displacement,
+        // NOT base[huge]. The constant 0xffffffffffffffe0 (=-32) must not be
+        // divided by the stride into a giant unsigned index.
+        let space = con(0, 8);
+        let base = reg(0, 8);
+        let neg_off = con(0xffff_ffff_ffff_ffe0, 8); // -32
+        let add_out = Varnode::unique(100, 8);
+        let load_out = reg(8, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                add_out,
+                smallvec![base, neg_off],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                load_out,
+                smallvec![space, add_out],
+                0x1004,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: load_out,
+                version: 0,
+            })),
+        ];
+
+        let func = make_func("neg_off_load", body);
+        let output = print_c(&func);
+
+        // Must NOT produce a giant unsigned subscript.
+        assert!(
+            !output.contains("[4611686018427387900]") && !output.contains("[2305843"),
+            "negative displacement must not become a giant array index: {output}",
+        );
+        // No positive small subscript should be invented either.
+        assert!(
+            !output.contains("[1]") && !output.contains("[4]"),
+            "negative displacement must not become any positive subscript: {output}",
+        );
+    }
+
+    #[test]
+    fn test_const_offset_is_negative_width_aware() {
+        // 8-byte: high bit set => negative.
+        assert!(super::const_offset_is_negative(&con(0xffff_ffff_ffff_9c30, 8)));
+        assert!(!super::const_offset_is_negative(&con(16, 8)));
+        // 4-byte: 0xffff9c30 is negative at 32 bits.
+        assert!(super::const_offset_is_negative(&con(0xffff_9c30, 4)));
+        assert!(!super::const_offset_is_negative(&con(0x10, 4)));
+        // 0x80000000 at 4 bytes is the minimum negative i32.
+        assert!(super::const_offset_is_negative(&con(0x8000_0000, 4)));
+        assert!(!super::const_offset_is_negative(&con(0x7fff_ffff, 4)));
     }
 
     #[test]

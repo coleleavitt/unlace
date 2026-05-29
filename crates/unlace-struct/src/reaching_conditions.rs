@@ -37,6 +37,20 @@ use std::collections::{BTreeMap, BTreeSet};
 /// decoupled from `BlockId` and trivially unit-testable.
 pub type RegionNode = u32;
 
+/// Whether the experimental DREAM condition-based structuring path is enabled.
+///
+/// Off by default. Set `UNLACE_DREAM_STRUCT=1` (or any non-empty/non-`0` value)
+/// to route residual irreducible regions through the reaching-condition engine
+/// once steps 2-4 wire it in. Until then this gate is a no-op consulted only by
+/// tests — it exists now so step-3 wiring has a stable, pre-reviewed seam and
+/// the default path is provably untouched (gate defaults false).
+pub fn dream_structuring_enabled() -> bool {
+    matches!(
+        std::env::var("UNLACE_DREAM_STRUCT"),
+        Ok(v) if !v.is_empty() && v != "0"
+    )
+}
+
 /// The branch decision a CFG edge represents.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EdgeLabel {
@@ -341,6 +355,17 @@ mod tests {
         // cr(1) only sees the forward edge from 0 → True.
         assert_eq!(rc.conditions[&1], Cond::True);
         assert_eq!(rc.conditions[&2], Cond::True);
+    }
+
+    #[test]
+    fn dream_gate_defaults_off() {
+        // The default (env unset) MUST be false so the production structuring
+        // path is provably untouched until steps 2-4 deliberately flip it.
+        // (We don't mutate process env here to stay test-parallel-safe; this
+        // asserts the unset-env branch.)
+        if std::env::var_os("UNLACE_DREAM_STRUCT").is_none() {
+            assert!(!dream_structuring_enabled());
+        }
     }
 
     #[test]

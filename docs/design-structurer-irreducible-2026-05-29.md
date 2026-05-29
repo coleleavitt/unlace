@@ -77,3 +77,46 @@ golden is independently stale/lossy (empty `void f_rec_fib(){}` bodies, verified
 earlier). The value is *correct structured output*, not golden match. The medium
 golden should be re-evaluated (refresh-when-better) separately once structuring
 improves.
+
+## Serialized delegation plan (advisor-mandated: NOT parallel)
+
+CLAUDE.md forbids casual structurer-core edits and the structurer is one 273KB
+hot file (`structurer.rs`), so steps 2-4 are delegated to agents **one at a
+time, each gated and merged before the next starts** — never in parallel.
+
+### Baseline (2026-05-29, commit 5f096ba1e) — the measurable target
+- `medium`: 29 gotos (f_ackermann 16, f_rec_fib 8, main 4, f_rec_power 1),
+  1388 lines.
+- `switch_table`: 0 gotos.
+- golden_fixtures: 18/32 (the 14 failing are the known pre-existing set).
+- Toolchain: rustc 1.98.0-nightly (cced03bfd 2026-05-28). The new-pattern
+  strictness (deref-in-borrowing-pattern, explicit enum paths) is real on this
+  toolchain — agents must `cargo build` not assume.
+
+### Exit criteria per step (define "done" BEFORE delegating)
+- **Step 2 — acyclic condition-based refinement (pure module, unwired).**
+  Done iff: a new `condition_refinement.rs` consumes `ReachingConditions` and
+  emits a structured HIR-ish tree for an *acyclic* region with NO gotos, with
+  unit tests on synthetic diamonds/nested-ifs/switch skeletons. MUST stay
+  unwired (zero golden delta). Decompose if it exceeds ~600 LOC.
+- **Step 3 — gated invocation.** Done iff: with `UNLACE_DREAM_STRUCT=1`, a
+  residual irreducible region (only) is routed through the engine; with the flag
+  OFF, output is byte-identical to baseline (assert via a golden-diff harness
+  run). Measurable win: `UNLACE_DREAM_STRUCT=1` reduces `medium` f_ackermann
+  gotos below 16. Default-off path: golden stays exactly 18/32.
+- **Step 4 — cyclic regions + abnormal entry/exit.** Done iff: flag-on medium
+  total gotos < 29 with no semantic regression (cli_smoke/quality_smoke green),
+  and no uninitialized/undeclared variables introduced.
+
+### Rollback criteria (write it down)
+- Any step that, with the flag OFF, changes ANY of: unlace-struct lib tests,
+  cli_smoke, quality_smoke, or the golden pass-count (18) → REVERT immediately;
+  the gate is leaking.
+- Step 3/4 with flag ON: if it introduces undeclared vars, `goto` cycles, or
+  drops a live statement on ANY fixture → REVERT; correctness outranks goto
+  count.
+
+### Gating scaffold (landed now, step-1.5)
+`reaching_conditions::dream_structuring_enabled()` reads `UNLACE_DREAM_STRUCT`,
+defaults false. Step 3 consults it at the structurer seam. Pre-reviewed so the
+first wiring agent isn't blocked and the default path is provably off.

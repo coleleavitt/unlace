@@ -3981,12 +3981,22 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             continue;
         }
 
-        // A statement carrying a user/debug line comment or source-map entry
-        // (keyed by its instruction address) must render standalone so the
-        // comment has an anchor. Folding it into a consumer would drop the
-        // comment. Same rationale as `commented_stmts` but for address-keyed
-        // annotations attached after collection.
-        if ctx.line_comments.contains_key(&insn.addr) || ctx.source_map.contains_key(&insn.addr) {
+        // A statement carrying a USER/debug line comment (keyed by its
+        // instruction address) must render standalone so the comment has an
+        // anchor — folding it into a consumer would drop it. Same rationale as
+        // `commented_stmts` but for address-keyed annotations attached after
+        // collection.
+        //
+        // NOTE: DWARF `source_map` entries are deliberately NOT a fold barrier
+        // here. `inline_statement_text` already declines to inline a source-map
+        // statement (it returns None for those), so a genuinely consumed
+        // statement keeps its `// file:line` provenance, while a foldable
+        // single-use temp can still collapse into its consumer. Gating folds on
+        // source_map too (the original 84b3eb719 form) suppressed legitimate
+        // folding everywhere debug info exists — e.g. debug_structs went from
+        // `v4 = *(_DWORD *)(a1 + 8)` back to a 3-line `v3 = a1 + 8; v4 = *v3;`
+        // with an interposed comment.
+        if ctx.line_comments.contains_key(&insn.addr) {
             if c_printer_trace_enabled() {
                 eprintln!(
                     "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} addr={:#x} decision=line-comment-keep",

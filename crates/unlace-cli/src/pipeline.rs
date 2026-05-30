@@ -2552,7 +2552,7 @@ pub fn lift_and_run_passes(
 
     let mut ir_func = lift_function(image, lifter, entry)?;
     unlace_struct::merge_linear_blocks(&mut ir_func);
-    unlace_struct::tail_duplicate_small_blocks(&mut ir_func);
+    unlace_struct::tail_duplicate_aggressive(&mut ir_func);
     unlace_struct::split_irreducible_entries(&mut ir_func);
     // Resolve x87 ST(i) stack-relative references to concrete physical slots
     // before SSA construction (no-op for non-x87 functions).
@@ -3103,12 +3103,12 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "tail-duplicate");
-    let dups = unlace_struct::tail_duplicate_small_blocks(&mut ir_func);
+    let dups = unlace_struct::tail_duplicate_aggressive(&mut ir_func);
     pipeline_trace_ir(&entry.name, "tail-duplicate", t, deadline, &ir_func);
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         dups,
-        "tail_duplicate_small_blocks done"
+        "tail_duplicate_aggressive done"
     );
 
     let t = Instant::now();
@@ -4207,6 +4207,8 @@ pub fn emit_output(
             trace_hir_pipeline("flatten_if_else", &hir);
             unlace_struct::simplify_chain_conditions(&mut hir, ssa);
             trace_hir_pipeline("simplify_chain_conditions", &hir);
+            unlace_struct::normalize_conditions(&mut hir);
+            trace_hir_pipeline("normalize_conditions1", &hir);
             unlace_struct::if_chain_to_switch(&mut hir, ssa);
             trace_hir_pipeline("if_chain_to_switch", &hir);
             unlace_struct::recover_cmov_switches(&mut hir, ssa);
@@ -4217,6 +4219,10 @@ pub fn emit_output(
             trace_hir_pipeline("goto_to_continue", &hir);
             unlace_struct::detect_continue_break(&mut hir.body);
             trace_hir_pipeline("detect_continue_break1", &hir);
+            unlace_struct::reverse_loop_rotation(&mut hir);
+            trace_hir_pipeline("reverse_loop_rotation", &hir);
+            unlace_struct::normalize_dowhile_to_while(&mut hir);
+            trace_hir_pipeline("normalize_dowhile_to_while", &hir);
             unlace_struct::while_to_for(&mut hir);
             trace_hir_pipeline("while_to_for", &hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
@@ -4225,6 +4231,8 @@ pub fn emit_output(
             trace_hir_pipeline("hoist_cross_branch_labels", &hir);
             unlace_struct::duplicate_goto_conditions(&mut hir);
             trace_hir_pipeline("duplicate_goto_conditions", &hir);
+            unlace_struct::normalize_conditions(&mut hir);
+            trace_hir_pipeline("normalize_conditions2", &hir);
             unlace_struct::detect_continue_break(&mut hir.body);
             trace_hir_pipeline("detect_continue_break2", &hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);

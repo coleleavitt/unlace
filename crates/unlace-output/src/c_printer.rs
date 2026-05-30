@@ -967,10 +967,14 @@ pub fn print_c_with_annotations(
             let ty = param
                 .type_name
                 .as_deref()
-                .map(dwarf_type_to_c)
+                .map(|ty| dwarf_decl_to_c(ty, param.name.as_deref().unwrap_or("arg")))
                 .unwrap_or_else(|| "int".to_string());
             let name = param.name.as_deref().unwrap_or("arg");
-            let _ = write!(out, "{} {}", ty, name);
+            if param.type_name.is_some() {
+                let _ = write!(out, "{ty}");
+            } else {
+                let _ = write!(out, "{} {}", ty, name);
+            }
         }
     } else if force_void_main_params {
         out.push_str("void");
@@ -2308,9 +2312,9 @@ fn emit_dwarf_struct_preamble(dwarf: &DwarfInfo) -> Option<String> {
             if field.name.is_empty() {
                 continue;
             }
-            let ty = dwarf_type_to_c(&field.type_name);
             let field_name = crate::demangle::sanitize_for_c(&field.name);
-            let _ = writeln!(out, "    {ty} {field_name};");
+            let decl = dwarf_decl_to_c(&field.type_name, &field_name);
+            let _ = writeln!(out, "    {decl};");
         }
         let _ = writeln!(out, "}};");
     }
@@ -2332,8 +2336,8 @@ fn emit_dwarf_local_summary(dwarf_func: Option<&FunctionDebugInfo>, out: &mut St
         }
         let name = crate::demangle::sanitize_for_c(&local.name);
         if let Some(type_name) = local.type_name.as_deref() {
-            let ty = dwarf_type_to_c(type_name);
-            let _ = writeln!(out, "    //   {ty} {name};");
+            let decl = dwarf_decl_to_c(type_name, &name);
+            let _ = writeln!(out, "    //   {decl};");
         } else {
             let _ = writeln!(out, "    //   {name};");
         }
@@ -2445,9 +2449,13 @@ impl PrintCtx {
         let (source, name) = if let Some(override_name) = self.name_overrides.get(&sv.base) {
             // DWARF / role-based override (keyed by base) wins over coalescer.
             ("override", override_name.clone())
-        } else if let Some(merged) = self.merged_names.get(sv).filter(|n| !is_default_v_name(n)) {
+        } else if let Some(merged) = self
+            .merged_names
+            .get(sv)
+            .filter(|n| !is_generic_lvar_name(n))
+        {
             // Variable-merge pass result (per-SsaVarnode), and it carries
-            // *semantic* content (not just a generic `vN` placeholder).
+            // *semantic* content (not just a generic `vN`/`cN` placeholder).
             // Reuse the same name for every SsaVarnode in the same
             // coalesced cluster, even if their base Varnodes differ
             // (Unique-space coalescing).
@@ -6835,18 +6843,22 @@ fn c_return_type(ty: &PrimitiveType) -> &'static str {
     }
 }
 
-/// `true` when `name` matches the printer's default fresh-name pattern
-/// (`v` followed by one or more ASCII digits) and therefore carries no
+/// `true` when `name` matches one of the printer's generic allocator
+/// patterns (`vN` or coalesced-register `cN`) and therefore carries no
 /// semantic content. Used by the name-lookup chain (t227) to decide
 /// whether a [`PrintCtx::merged_names`] entry should be preferred over
 /// a role-based suggestion: a "meaningful" merger entry (DWARF-derived
-/// or otherwise non-`vN`) always wins, but a default `v3` should yield
-/// to a role-based `i` / `saved_rbx`.
+/// or otherwise non-generic) always wins, but a generic `v3`/`c0`
+/// should yield to a role-based `i` / `this` / `buf` / `len`.
 fn is_default_v_name(name: &str) -> bool {
     let Some(rest) = name.strip_prefix('v') else {
         return false;
     };
     is_v_number_suffix(rest)
+}
+
+fn is_generic_lvar_name(name: &str) -> bool {
+    is_default_v_name(name) || name.strip_prefix('c').is_some_and(is_v_number_suffix)
 }
 
 /// IDA-style signature type rendering for a [`unlace_ir::types::Type`].
@@ -6912,7 +6924,10 @@ fn c_sig_return_type(ty: &PrimitiveType) -> &'static str {
 }
 
 fn dwarf_type_to_c(dwarf_type: &str) -> String {
+    let (base_type, _) = split_dwarf_array_suffix(dwarf_type);
     let mut normalized = dwarf_type
+        .get(..base_type)
+        .unwrap_or(dwarf_type)
         .trim()
         .replace("const ", "")
         .replace("volatile ", "")
@@ -6932,8 +6947,8 @@ fn dwarf_type_to_c(dwarf_type: &str) -> String {
         "unsigned short" | "unsigned short int" => "_WORD",
         "int" | "signed int" => "int",
         "unsigned int" | "unsigned" => "_DWORD",
-        "long" | "long int" | "signed long" | "signed long int" => "int",
-        "unsigned long" | "unsigned long int" | "long unsigned int" => "_DWORD",
+        "long" | "long int" | "signed long" | "signed long int" => "__int64",
+        "unsigned long" | "unsigned long int" | "long unsigned int" => "_QWORD",
         "long long" | "long long int" | "signed long long" | "signed long long int" => "__int64",
         "unsigned long long" | "unsigned long long int" | "long long unsigned int" => "_QWORD",
         other => other,
@@ -6943,6 +6958,41 @@ fn dwarf_type_to_c(dwarf_type: &str) -> String {
     } else {
         format!("{} {}", base, "*".repeat(ptr_depth))
     }
+}
+
+fn dwarf_decl_to_c(dwarf_type: &str, name: &str) -> String {
+    let (base_end, suffix) = split_dwarf_array_suffix(dwarf_type);
+    let base = dwarf_type.get(..base_end).unwrap_or(dwarf_type).trim();
+    let ty = dwarf_type_to_c(base);
+    if suffix.is_empty() {
+        format!("{ty} {name}")
+    } else {
+        format!("{ty} {name}{suffix}")
+    }
+}
+
+fn split_dwarf_array_suffix(dwarf_type: &str) -> (usize, String) {
+    let trimmed_end = dwarf_type.trim_end().len();
+    let mut end = trimmed_end;
+    let mut suffixes = Vec::new();
+
+    loop {
+        let head = &dwarf_type[..end];
+        let Some(close_rel) = head.rfind(']') else {
+            break;
+        };
+        if close_rel + 1 != end {
+            break;
+        }
+        let Some(open_rel) = head[..close_rel].rfind('[') else {
+            break;
+        };
+        suffixes.push(dwarf_type[open_rel..=close_rel].to_string());
+        end = dwarf_type[..open_rel].trim_end().len();
+    }
+
+    suffixes.reverse();
+    (end, suffixes.join(""))
 }
 
 // ---------------------------------------------------------------------------
@@ -17190,6 +17240,43 @@ mod tests {
         );
     }
 
+    /// Generic coalesced-register names (`cN`) are allocator artifacts like
+    /// `vN`, not semantic names. A factual role such as `i` should win.
+    #[test]
+    fn t227_var_role_name_overrides_generic_cn() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r8, c1],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let mut func = make_func("role_cn", body);
+        let r8_sv = SsaVarnode {
+            base: r8,
+            version: 0,
+        };
+        func.merged_names.insert(r8_sv, "c0".to_string());
+        func.var_role_names.insert(r8_sv, "i".to_string());
+
+        let output = print_c(&func);
+        assert!(
+            output.contains(" i "),
+            "role name should beat generic cN name: {output}",
+        );
+        assert!(
+            !function_body_text(&output, "role_cn").contains("c0"),
+            "generic cN name leaked despite role name: {output}",
+        );
+    }
+
     /// t227 — with no role names and no loops, the printer keeps using
     /// its default `vN` allocator (regression guard so the role-name
     /// path doesn't accidentally start firing when no classification
@@ -18166,6 +18253,15 @@ mod tests {
     }
 
     #[test]
+    fn test_dwarf_array_declarator_uses_c_suffix_form() {
+        assert_eq!(super::dwarf_decl_to_c("int[3]", "values"), "int values[3]");
+        assert_eq!(
+            super::dwarf_decl_to_c("long int[4]", "data"),
+            "__int64 data[4]"
+        );
+    }
+
+    #[test]
     fn test_dwarf_param_names_used() {
         use std::collections::BTreeMap;
         use unlace_loader::{DwarfInfo, FunctionDebugInfo, ParameterInfo};
@@ -18332,8 +18428,8 @@ mod tests {
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(
-            output.contains("int get_value("),
-            "should use DWARF return type (normalized to int): {output}",
+            output.contains("__int64 get_value("),
+            "should use LP64 DWARF return width: {output}",
         );
     }
 

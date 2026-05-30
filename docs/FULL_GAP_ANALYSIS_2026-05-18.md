@@ -298,8 +298,10 @@ a precise, non-overlapping allocation.
 **Decompiler reverse**: Recover original variable identities from SSA
 temporaries.
 
-**Current state**: PARTIAL — SSA temporaries leak into output as `t1`, `t2`,
-etc.; coalescing incomplete.
+**Current state**: PARTIAL — the default pipeline now has interference-aware
+coalescing, one lvar candidate per coalesced temp cluster, and factual
+`this`/`len`/`i`/`buf`/`result` role names. Remaining leaks are scorer-driven
+producer gaps, not a missing naming/coalescing pass.
 
 **Pipeline**:
 1. **Live range computation**: For each SSA value, compute its live range
@@ -310,7 +312,7 @@ etc.; coalescing incomplete.
 4. **Stack slot merge**: Overlapping stack accesses that don't interfere →
    same variable.
 5. **Type unification**: After merging, pick widest/most specific type.
-6. **Naming** (IDA convention):
+6. **Naming** (IDA convention; wired where facts justify it):
    - Function arguments: `a1`, `a2`, ... (from ABI model)
    - Local variables: `v1`, `v2`, ...
    - Return value: `result`

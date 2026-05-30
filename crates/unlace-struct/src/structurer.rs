@@ -701,6 +701,45 @@ fn used_predicates(node: &condition_refinement::StructuredNode) -> BTreeSet<u32>
     out
 }
 
+fn collect_structured_label_targets(
+    node: &condition_refinement::StructuredNode,
+    out: &mut BTreeSet<reaching_conditions::RegionNode>,
+) {
+    use condition_refinement::StructuredNode;
+    match node {
+        StructuredNode::Goto(region_node) | StructuredNode::Label(region_node) => {
+            out.insert(*region_node);
+        }
+        StructuredNode::Seq(parts) => {
+            for part in parts {
+                collect_structured_label_targets(part, out);
+            }
+        }
+        StructuredNode::Loop { body } | StructuredNode::Subtree(body) => {
+            collect_structured_label_targets(body, out);
+        }
+        StructuredNode::If { then, els, .. } => {
+            collect_structured_label_targets(then, out);
+            if let Some(els) = els {
+                collect_structured_label_targets(els, out);
+            }
+        }
+        StructuredNode::Switch { cases, default, .. } => {
+            for (_, case) in cases {
+                collect_structured_label_targets(case, out);
+            }
+            if let Some(default) = default {
+                collect_structured_label_targets(default, out);
+            }
+        }
+        StructuredNode::Empty
+        | StructuredNode::Block(_)
+        | StructuredNode::Continue
+        | StructuredNode::Break
+        | StructuredNode::Unsupported => {}
+    }
+}
+
 fn collect_structured_predicates(
     node: &condition_refinement::StructuredNode,
     out: &mut BTreeSet<u32>,
@@ -709,6 +748,8 @@ fn collect_structured_predicates(
     match node {
         StructuredNode::Empty
         | StructuredNode::Block(_)
+        | StructuredNode::Label(_)
+        | StructuredNode::Goto(_)
         | StructuredNode::Continue
         | StructuredNode::Break
         | StructuredNode::Unsupported => {}
@@ -779,6 +820,8 @@ fn structured_predicates_defined_before_use_inner(
     use condition_refinement::StructuredNode;
     match node {
         StructuredNode::Empty
+        | StructuredNode::Label(_)
+        | StructuredNode::Goto(_)
         | StructuredNode::Continue
         | StructuredNode::Break
         | StructuredNode::Unsupported => true,
@@ -813,6 +856,14 @@ fn structured_predicates_defined_before_use_inner(
         }
         StructuredNode::If { cond, then, els } => {
             if !cond_predicates_defined_before_use(cond, region_blocks, emitted) {
+                if struct_trace_enabled()
+                    && let Some(pred) = first_undefined_predicate(cond, region_blocks, emitted)
+                {
+                    eprintln!(
+                        "[unlace-struct] dream predicate-before-source pred=BlockId({}) emitted={emitted:?}",
+                        pred.0
+                    );
+                }
                 return false;
             }
             let mut then_emitted = emitted.clone();
@@ -843,6 +894,11 @@ fn structured_predicates_defined_before_use_inner(
             default,
         } => {
             if !predicate_source_defined_before_use(*selector, region_blocks, emitted) {
+                if struct_trace_enabled() {
+                    eprintln!(
+                        "[unlace-struct] dream predicate-before-source pred=BlockId({selector}) emitted={emitted:?}"
+                    );
+                }
                 return false;
             }
             for (_, case) in cases {
@@ -897,6 +953,32 @@ fn predicate_source_defined_before_use(
 ) -> bool {
     let source = BlockId(pred);
     !region_blocks.contains(&source) || emitted.contains(&source)
+}
+
+fn first_undefined_predicate(
+    cond: &Cond,
+    region_blocks: &BTreeSet<BlockId>,
+    emitted: &BTreeSet<BlockId>,
+) -> Option<BlockId> {
+    match cond {
+        Cond::Pred(id) | Cond::NotPred(id) | Cond::CaseEq(id, _) => {
+            let source = BlockId(*id);
+            (region_blocks.contains(&source) && !emitted.contains(&source)).then_some(source)
+        }
+        Cond::NotCaseEq(inner) => first_undefined_predicate(inner, region_blocks, emitted),
+        Cond::And(a, b) | Cond::Or(a, b) => first_undefined_predicate(a, region_blocks, emitted)
+            .or_else(|| first_undefined_predicate(b, region_blocks, emitted)),
+        Cond::True | Cond::False => None,
+    }
+}
+
+fn dream_predicate_source_nodes(
+    node_to_block: &BTreeMap<reaching_conditions::RegionNode, BlockId>,
+) -> BTreeMap<u32, reaching_conditions::RegionNode> {
+    node_to_block
+        .iter()
+        .map(|(&region_node, &block)| (block.0, region_node))
+        .collect()
 }
 
 impl<'a> StructureCtx<'a> {
@@ -1001,13 +1083,14 @@ impl<'a> StructureCtx<'a> {
     /// a residual irreducible region when all of the following are true:
     ///
     /// * `bid` is one of the region's residual entry blocks,
-    /// * the reaching-condition skeleton is acyclic or a conservative
-    ///   single-header cyclic region,
+    /// * the reaching-condition skeleton is acyclic, a conservative
+    ///   single-header cyclic region, or an abnormal cyclic region that can
+    ///   be represented with real labels/gotos,
     /// * condition refinement succeeds,
     /// * every predicate used by the structured tree resolves to a CBRANCH
     ///   condition varnode, and
-    /// * the region has at most one external successor after loop-successor
-    ///   tail refinement.
+    /// * the region has at most one external successor after cyclic
+    ///   exit-tail refinement.
     ///
     fn try_structure_dream_residual_region(
         &mut self,
@@ -1082,7 +1165,21 @@ impl<'a> StructureCtx<'a> {
                 .iter()
                 .map(|exit| (exit.source, exit.label.clone()))
                 .collect();
-            condition_refinement::refine_cyclic_region_with_exits(&dream_region, &exit_edges)
+            let structured =
+                condition_refinement::refine_cyclic_region_with_exits(&dream_region, &exit_edges);
+            if matches!(
+                structured,
+                condition_refinement::StructuredNode::Unsupported
+            ) {
+                let predicate_sources = dream_predicate_source_nodes(&node_to_block);
+                condition_refinement::refine_abnormal_cyclic_region_with_exits_and_sources(
+                    &dream_region,
+                    &exit_edges,
+                    &predicate_sources,
+                )
+            } else {
+                structured
+            }
         } else {
             condition_refinement::refine_region(&dream_region)
         };
@@ -1143,11 +1240,13 @@ impl<'a> StructureCtx<'a> {
             .iter()
             .map(|&block| (block, self.non_control_block_statements(block)))
             .collect();
-        let hir = region_splice::splice_structured(
+        let label_map = self.dream_structured_label_map(&structured, &node_to_block)?;
+        let hir = region_splice::splice_structured_with_labels(
             &structured,
             &node_to_block,
             &block_bodies,
             &pred_cond,
+            &label_map,
         );
 
         // Statement-preservation oracle: the spliced HIR must contain each body
@@ -1176,6 +1275,22 @@ impl<'a> StructureCtx<'a> {
         }
 
         Some((hir, exits.into_iter().next()))
+    }
+
+    fn dream_structured_label_map(
+        &mut self,
+        structured: &condition_refinement::StructuredNode,
+        node_to_block: &BTreeMap<reaching_conditions::RegionNode, BlockId>,
+    ) -> Option<BTreeMap<reaching_conditions::RegionNode, LabelId>> {
+        let mut targets = BTreeSet::new();
+        collect_structured_label_targets(structured, &mut targets);
+        let mut labels = BTreeMap::new();
+        for target in targets {
+            let block = *node_to_block.get(&target)?;
+            let label = self.alloc_label(block);
+            labels.insert(target, label);
+        }
+        Some(labels)
     }
 
     fn dream_region_has_unspliced_control(&self, body_blocks: &BTreeSet<BlockId>) -> bool {

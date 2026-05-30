@@ -61,6 +61,11 @@ fn cleanup_node(node: &mut HirNode, modified: &mut usize) {
             then_body,
             else_body,
             ..
+        }
+        | HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
         } => {
             cleanup_nodes(then_body, modified);
             if let Some(eb) = else_body.as_mut() {
@@ -101,6 +106,14 @@ fn cleanup_node(node: &mut HirNode, modified: &mut usize) {
             cleanup_nodes(finally_body, modified);
         }
         HirNode::Commented { inner, .. } => cleanup_node(inner, modified),
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => {
+            cleanup_nodes(then_body, modified);
+            cleanup_nodes(else_body, modified);
+        }
         HirNode::ObjcBlock { .. } => {}
         // Leaf nodes — nothing to recurse into.
         HirNode::Statement(_)
@@ -111,10 +124,8 @@ fn cleanup_node(node: &mut HirNode, modified: &mut usize) {
         | HirNode::TailCall { .. }
         | HirNode::Break
         | HirNode::Continue
-        | HirNode::GuardedIf { .. }
         | HirNode::GuardedTernary { .. }
         | HirNode::CselTernary { .. }
-        | HirNode::IfCmp { .. }
         | HirNode::Asm { .. } => {}
     }
 }

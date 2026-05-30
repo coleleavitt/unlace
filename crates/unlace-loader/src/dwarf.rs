@@ -16,9 +16,10 @@
 //!    location expression.
 //!
 //! Recursive types are resolved through [`resolve_type_name`], which
-//! recurses through `DW_TAG_pointer_type`, `DW_TAG_const_type`,
-//! `DW_TAG_volatile_type`, `DW_TAG_restrict_type`, and `DW_TAG_typedef`
-//! to produce a printable C-style name (e.g. `"const Rect *"`).
+//! recurses through `DW_TAG_pointer_type`, `DW_TAG_array_type`,
+//! `DW_TAG_const_type`, `DW_TAG_volatile_type`, `DW_TAG_restrict_type`,
+//! and `DW_TAG_typedef` to produce a printable C-style name (e.g.
+//! `"const Rect *"` or `"int[4]"`).
 //!
 //! Missing or empty `.debug_*` sections are not an error: callers
 //! receive an empty [`DwarfInfo`] and can fall back to symbol-table
@@ -32,11 +33,12 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use gimli::{
-    AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_data_member_location, DW_AT_high_pc,
-    DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type, DW_TAG_base_type,
-    DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter,
-    DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
-    DW_TAG_subprogram, DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type,
+    AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_count, DW_AT_data_member_location,
+    DW_AT_high_pc, DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type,
+    DW_AT_upper_bound, DW_TAG_array_type, DW_TAG_base_type, DW_TAG_const_type,
+    DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter, DW_TAG_member,
+    DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type, DW_TAG_subprogram,
+    DW_TAG_subrange_type, DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type,
     DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
 };
 
@@ -1179,6 +1181,13 @@ fn resolve_type_name(
             None => Some("void".to_owned()),
         };
         Ok(pointee.map(|t| format!("{t} *")))
+    } else if tag == DW_TAG_array_type {
+        let element = match type_die.attr_value(DW_AT_type) {
+            Some(val) => resolve_type_name(dwarf, unit, val)?,
+            None => Some("void".to_owned()),
+        };
+        let dims = array_dimensions(unit, type_die)?;
+        Ok(element.map(|t| render_array_type(&t, &dims)))
     } else if tag == DW_TAG_const_type {
         Ok(inner_type()?.map(|t| format!("const {t}")))
     } else if tag == DW_TAG_volatile_type {
@@ -1192,6 +1201,55 @@ fn resolve_type_name(
     } else {
         attr_string(dwarf, unit, type_die, DW_AT_name)
     }
+}
+
+fn array_dimensions(
+    unit: &gimli::Unit<R<'_>>,
+    type_die: &gimli::DebuggingInformationEntry<R<'_>>,
+) -> Result<Vec<Option<u64>>, gimli::Error> {
+    let mut cursor = unit.entries_at_offset(type_die.offset())?;
+    cursor.next_entry()?;
+    let root_depth = cursor.depth();
+    let mut dims = Vec::new();
+
+    while cursor.next_entry()? {
+        if cursor.depth() <= root_depth {
+            break;
+        }
+        let Some(entry) = cursor.current() else {
+            continue;
+        };
+        if entry.tag() != DW_TAG_subrange_type {
+            continue;
+        }
+        let dim = entry
+            .attr_value(DW_AT_count)
+            .and_then(|v| v.udata_value())
+            .or_else(|| {
+                entry
+                    .attr_value(DW_AT_upper_bound)
+                    .and_then(|v| v.udata_value())
+                    .map(|upper| upper.saturating_add(1))
+            });
+        dims.push(dim);
+    }
+
+    Ok(dims)
+}
+
+fn render_array_type(element: &str, dims: &[Option<u64>]) -> String {
+    let mut out = element.to_owned();
+    if dims.is_empty() {
+        out.push_str("[]");
+        return out;
+    }
+    for dim in dims {
+        match dim {
+            Some(n) => out.push_str(&format!("[{n}]")),
+            None => out.push_str("[]"),
+        }
+    }
+    out
 }
 
 fn extract_template_params_for_type_die(
@@ -1847,6 +1905,15 @@ mod tests {
 
         let vec = info.structs.get("Vec").expect("Vec struct should exist");
         assert_eq!(vec.template_params, vec!["T = int"]);
+    }
+
+    #[test]
+    fn array_type_renderer_preserves_dimensions() {
+        assert_eq!(render_array_type("int", &[Some(3)]), "int[3]");
+        assert_eq!(
+            render_array_type("long int", &[Some(4), None]),
+            "long int[4][]"
+        );
     }
 
     #[test]

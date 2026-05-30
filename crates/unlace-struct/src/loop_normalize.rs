@@ -17,9 +17,142 @@ use unlace_ir::Varnode;
 
 use crate::hir::{HirFunction, HirNode};
 
+/// Reverse the canonical compiler loop-rotation shape:
+///
+/// ```text
+/// if (C) {
+///     do { body } while (C);
+/// }
+/// ```
+///
+/// back into:
+///
+/// ```text
+/// while (C) { body }
+/// ```
+///
+/// This is exact and local: the entry guard and latch condition must be the
+/// same SSA varnode, and the `if` must have no non-empty else arm.
+pub fn reverse_loop_rotation(func: &mut HirFunction) {
+    reverse_rotation_scope(&mut func.body);
+}
+
 /// Post-structuring pass: promote loop-invariant `do-while` to `while`.
 pub fn normalize_dowhile_to_while(func: &mut HirFunction) {
     normalize_scope(&mut func.body);
+}
+
+fn reverse_rotation_scope(nodes: &mut [HirNode]) {
+    for node in nodes {
+        reverse_rotation_node(node);
+    }
+}
+
+fn reverse_rotation_node(node: &mut HirNode) {
+    match node {
+        HirNode::Block(children) => reverse_rotation_scope(children),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        }
+        | HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
+            reverse_rotation_scope(then_body);
+            if let Some(else_body) = else_body {
+                reverse_rotation_scope(else_body);
+            }
+        }
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            reverse_rotation_scope(body);
+        }
+        HirNode::Switch { cases, default, .. } => {
+            for (_, body, _) in cases {
+                reverse_rotation_scope(body);
+            }
+            if let Some(default) = default {
+                reverse_rotation_scope(default);
+            }
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_arms,
+        } => {
+            reverse_rotation_scope(try_body);
+            for (_, body) in catch_arms {
+                reverse_rotation_scope(body);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            reverse_rotation_scope(try_body);
+            reverse_rotation_scope(finally_body);
+        }
+        HirNode::Commented { inner, .. } => reverse_rotation_node(inner),
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => {
+            reverse_rotation_scope(then_body);
+            reverse_rotation_scope(else_body);
+        }
+        _ => {}
+    }
+
+    let HirNode::If {
+        cond,
+        then_body,
+        else_body,
+    } = node
+    else {
+        return;
+    };
+    if else_body.as_ref().is_some_and(|body| !body.is_empty()) {
+        return;
+    }
+    let Some(body) = take_rotated_body(then_body, *cond) else {
+        return;
+    };
+    *node = HirNode::While { cond: *cond, body };
+}
+
+fn take_rotated_body(
+    then_body: &mut Vec<HirNode>,
+    cond: unlace_ir::ssa::SsaVarnode,
+) -> Option<Vec<HirNode>> {
+    if then_body.len() != 1 {
+        return None;
+    }
+    let only = then_body.pop().expect("len checked");
+    match only {
+        HirNode::DoWhile {
+            body,
+            cond: loop_cond,
+        } if loop_cond == cond => Some(body),
+        HirNode::Block(mut children) if children.len() == 1 => {
+            let child = children.pop().expect("len checked");
+            match child {
+                HirNode::DoWhile {
+                    body,
+                    cond: loop_cond,
+                } if loop_cond == cond => Some(body),
+                other => {
+                    then_body.push(HirNode::Block(vec![other]));
+                    None
+                }
+            }
+        }
+        other => {
+            then_body.push(other);
+            None
+        }
+    }
 }
 
 fn normalize_scope(nodes: &mut [HirNode]) {
@@ -324,5 +457,68 @@ mod tests {
             }
             other => panic!("Expected DoWhile (unchanged), got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn loop_rotation_rewrites_if_do_while_to_while() {
+        let cond = SsaVarnode {
+            base: Varnode::reg(1, 1),
+            version: 0,
+        };
+        let body_stmt = HirNode::Statement(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(8, 4),
+            smallvec![Varnode::constant(1, 4)],
+            0x1000,
+        ));
+        let mut hir = func(vec![HirNode::If {
+            cond,
+            then_body: vec![HirNode::DoWhile {
+                body: vec![body_stmt.clone()],
+                cond,
+            }],
+            else_body: None,
+        }]);
+
+        reverse_loop_rotation(&mut hir);
+
+        assert_eq!(
+            hir.body,
+            vec![HirNode::While {
+                cond,
+                body: vec![body_stmt],
+            }]
+        );
+    }
+
+    #[test]
+    fn loop_rotation_keeps_distinct_latch_condition() {
+        let entry_cond = SsaVarnode {
+            base: Varnode::reg(1, 1),
+            version: 0,
+        };
+        let latch_cond = SsaVarnode {
+            base: Varnode::reg(2, 1),
+            version: 0,
+        };
+        let mut hir = func(vec![HirNode::If {
+            cond: entry_cond,
+            then_body: vec![HirNode::DoWhile {
+                body: vec![],
+                cond: latch_cond,
+            }],
+            else_body: None,
+        }]);
+
+        reverse_loop_rotation(&mut hir);
+
+        assert!(matches!(
+            &hir.body[0],
+            HirNode::If {
+                cond,
+                then_body,
+                else_body: None
+            } if *cond == entry_cond && matches!(then_body.as_slice(), [HirNode::DoWhile { cond, .. }] if *cond == latch_cond)
+        ));
     }
 }

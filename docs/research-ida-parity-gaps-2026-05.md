@@ -177,8 +177,10 @@ Ordered by value-per-effort, grounded in the findings above:
 3. **Heuristic variable naming** (idiom-derived `len`/`i`/`buf`/`result`/`this`)
    before any ML. Cheap, high readability payoff, beats raw `vN`. (#10)
 4. **SAILR-style de-optimization passes** as post-processing over the structurer:
-   short-circuit recovery, loop-rotation reversal, condition de-duplication.
-   Matches our CLAUDE.md "post-processing not core structurer" rule. (#15)
+   short-circuit recovery, loop-rotation reversal, condition de-duplication,
+   safe tail duplication, and switch/condition normalization are now wired into
+   the default pipeline. Further work should target measured gaps in specific
+   SAILR schemas. (#15)
 5. **Array length inference** — detecting the access pattern is the easy half we
    may already do; inferring length is where even IDA fails, so partial wins are
    competitive. (#8)
@@ -271,15 +273,15 @@ GCC's `-O2` applies loop rotation: transforms `while(cond) { body }` into
 point. The fix is a post-structuring pass:
 1. Detect `if(C) { do { body } while(C) }` where C is the same condition
 2. Collapse back to `while(C) { body }`
-Our `recover_for_loops` in `refinement.rs` does part of this, but only for
-for-loop patterns — need a generic while-rotation reversal pass.
+The default cleanup pipeline now includes a generic exact-match while-rotation
+reversal pass in addition to the existing for-loop recovery.
 
 **Actionable for unlace:**
 - Add a **timeout/fuel limit** to `structure_region` so it can't infinite-loop
   (this fixes the XFAIL hang immediately)
-- Add **condition duplication** and **code duplication** transforms as
-  alternatives to goto insertion
-- Add **loop rotation reversal** as a refinement pass
+- Extend **condition duplication** and **code duplication** transforms only for
+  measured fixture gaps beyond the default cleanup pipeline
+- Extend **loop rotation reversal** only for non-exact measured patterns
 - Add **ISC reversal** (duplicate condensed exit blocks — especially stack-canary
   patterns which we already detect in `prologue_elim.rs`)
 - Add **non-returning function detection** pre-pass (we have `attributor.rs` —

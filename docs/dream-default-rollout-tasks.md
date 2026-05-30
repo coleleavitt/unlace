@@ -14,39 +14,43 @@ Current status:
 - Nested single-successor cyclic decomposition is implemented in the pure
   DREAM refiner: inner loop slices are structured first, collapsed to subtree
   placeholders, then spliced into the enclosing region without a dispatcher.
+- The dispatch-free abnormal-entry frontier is implemented for multi-entry
+  cyclic regions: non-header internal back-edges lower to real
+  `Label` / `Goto` nodes, header back-edges lower to `continue`, and external
+  exits lower to `break`.
 - Rollback byte-identity is guarded by `scripts/dream_byte_identity.sh`.
 - Default-on reaches residual candidates in `medium`:
   - the 3-block region is accepted after header/source ordering fixes,
-  - the 68-block region now refines linear exit tails to a single successor but
-    still falls back because every internal loop-header slice has multiple
-    remaining successors after safe successor refinement. Example trace:
-    header node `32` exits to `{24, 28, 38}`. Accepting that without gotos
-    requires state dispatch, labelled multi-level control, or statement
-    duplication, none of which exists in current HIR.
-- Current `medium` baseline remains 29 gotos:
-  - `f_ackermann`: 16
+  - the 68-block `f_ackermann` region is accepted by the abnormal-entry
+    labelled-control path without a synthetic state dispatcher.
+- Rollback `UNLACE_DREAM_STRUCT=0` keeps the old `medium` baseline at 29 gotos:
+  - `f_ackermann`: 16 legacy fallback gotos
   - `f_rec_fib`: 8
   - `main`: 4
   - `f_rec_power`: 1
+- Default DREAM output currently has 46 `medium` gotos because the
+  dispatch-free abnormal-entry path preserves each irreducible transfer as
+  labelled control. This is statement-preserving and default-wired, but it is
+  not yet a goto-count win for `f_ackermann`.
 
-The default-on flip is complete for the conservative DREAM seam. Native
-single-successor nested cyclic decomposition is implemented. Full goto-free
-lowering of the large `f_ackermann` SCC is now blocked on multi-successor
-abnormal-exit handling, not on flag wiring or simple nested loop discovery.
+The default-on flip is complete for the conservative DREAM seam and for the
+dispatch-free abnormal-entry labelled-control frontier. Remaining quality work
+is trace scheduling / higher-level recovery that reduces those preserved
+irreducible gotos without introducing a synthetic state dispatcher.
 
-## Remaining Frontier: Multi-Successor Abnormal Exits
+## Implemented Frontier: Dispatch-Free Abnormal Entries
 
 The real nested decomposition path is implemented for loops that current HIR
 can express with ordinary `break` / `continue`. The large `medium` frontier is
 more complex: its internal loop slices have multiple successors that target
-different enclosing headers or the final exit. Do not solve that by pretending
-an unlabeled `continue` can target an arbitrary internal header.
+different enclosing headers or the final exit. The implemented model preserves
+those transfers with real C labels/gotos rather than pretending an unlabeled
+`continue` can target an arbitrary internal header.
 
 Write scope:
 - `crates/unlace-struct/src/condition_refinement.rs`
 - `crates/unlace-struct/src/structurer.rs`
-- a pure cyclic-region helper module if the model becomes too large for either
-  file.
+- `crates/unlace-struct/src/region_splice.rs`
 
 Implemented:
 - identifies loop nodes per back-edge target on the acyclic skeleton,
@@ -56,16 +60,18 @@ Implemented:
   header,
 - represents exits as guarded `break` only when the successor is unique after
   refinement,
-- returns `Unsupported` for shapes that require a synthetic state variable,
-  labelled multi-level control, or statement duplication.
+- represents non-header internal back-edges as real `StructuredNode::Goto`
+  targets paired with `StructuredNode::Label`,
+- lowers abnormal labels/gotos through the existing HIR `LabelId` path,
+- falls back to a statement-preserving labelled linearization when pure
+  condition refinement cannot cover every abnormal-entry block.
 
 Acceptance:
 - Synthetic nested-loop tests produce nested `Loop` / `Subtree` output.
-- The 68-block `f_ackermann` DREAM candidate continues to fall back honestly
-  because its internal loop slices are multi-successor, not single-successor.
-- Any future multi-successor implementation must either extend HIR with real
-  labelled control, add an explicit dispatch/state model, or prove a
-  statement-preserving abnormal-exit rewrite.
+- Synthetic abnormal-entry tests produce `Loop` plus `Label` / `Goto`.
+- The 68-block `f_ackermann` DREAM candidate is accepted by default and emits a
+  single outer `while (1)` with labelled internal transfers.
+- The implementation does not synthesize a dispatcher state variable.
 - `UNLACE_DREAM_STRUCT=0` remains byte-identical under
   `scripts/dream_byte_identity.sh`.
 - `cargo test -p unlace-struct --lib`, `cli_smoke`, `quality_smoke`, clippy,

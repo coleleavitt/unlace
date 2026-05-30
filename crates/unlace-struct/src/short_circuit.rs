@@ -127,6 +127,24 @@ fn recover_into(
             });
         }
 
+        HirNode::IfCmp {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            then_body,
+            else_body,
+            addr,
+        } => {
+            out.push(HirNode::IfCmp {
+                cmp_op,
+                cmp_lhs,
+                cmp_rhs,
+                then_body: recover_short_circuits(then_body, func, ctr),
+                else_body: else_body.map(|body| recover_short_circuits(body, func, ctr)),
+                addr,
+            });
+        }
+
         HirNode::Block(children) => {
             out.push(HirNode::Block(recover_short_circuits(children, func, ctr)));
         }
@@ -198,6 +216,32 @@ fn recover_into(
             out.push(HirNode::TryFinally {
                 try_body: recover_short_circuits(try_body, func, ctr),
                 finally_body: recover_short_circuits(finally_body, func, ctr),
+            });
+        }
+
+        HirNode::GuardedIf {
+            cond_code,
+            then_body,
+            else_body,
+        } => {
+            out.push(HirNode::GuardedIf {
+                cond_code,
+                then_body: recover_short_circuits(then_body, func, ctr),
+                else_body: recover_short_circuits(else_body, func, ctr),
+            });
+        }
+
+        HirNode::Commented { pre, post, inner } => {
+            let mut recovered = recover_short_circuits(vec![*inner], func, ctr);
+            let inner = if recovered.len() == 1 {
+                recovered.pop().expect("len checked")
+            } else {
+                HirNode::Block(recovered)
+            };
+            out.push(HirNode::Commented {
+                pre,
+                post,
+                inner: Box::new(inner),
             });
         }
 

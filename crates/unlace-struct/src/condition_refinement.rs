@@ -6,14 +6,18 @@
 //! Given a [`Region`] and its [`ReachingConditions`] (from
 //! [`crate::reaching_conditions`]), this produces a [`StructuredNode`] tree that
 //! emits each region node guarded by its reaching condition — `if`/`else`,
-//! `switch`, and sequence — with **zero gotos**. The refinement repeatedly
-//! factors a common predicate `c` out of a group of nodes (those whose reaching
-//! condition implies `c` vs `¬c`) into the arms of an `If`, then recurses.
+//! `switch`, and sequence. Acyclic and conservative single-header cyclic
+//! refinements are goto-free; abnormal cyclic refinement uses real labels/gotos
+//! for internal non-header back-edges. The refinement repeatedly factors a
+//! common predicate `c` out of a group of nodes (those whose reaching condition
+//! implies `c` vs `¬c`) into the arms of an `If`, then recurses.
 //!
 //! [`refine_region`] is acyclic-only. [`refine_cyclic_region_with_exits`]
 //! handles the conservative cyclic subset by replacing back-edges with
 //! synthetic `Continue` leaves and single-target exits with synthetic `Break`
-//! leaves before reusing the acyclic condition-refinement engine.
+//! leaves before reusing the acyclic condition-refinement engine. The abnormal
+//! cyclic frontier uses real labels/gotos for internal non-header back-edges so
+//! irreducible SCCs can be preserved without a synthetic state dispatcher.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,7 +25,7 @@ use crate::reaching_conditions::{
     Cond, EdgeLabel, ReachingConditions, Region, RegionNode, compute_reaching_conditions,
 };
 
-/// A structured control-flow tree with no gotos.
+/// A structured control-flow tree produced by DREAM refinement.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StructuredNode {
     /// An empty region (no statements).
@@ -55,6 +59,15 @@ pub enum StructuredNode {
     /// are represented by `Continue` and its exit edge(s) by `Break` within
     /// `body`, so no `goto` is needed.
     Loop { body: Box<StructuredNode> },
+    /// A label for an abnormal-entry target inside a cyclic region.
+    ///
+    /// This is used only by the multi-entry cyclic fallback where C cannot
+    /// encode an internal back-edge as an unlabeled `continue`.
+    Label(RegionNode),
+    /// A jump to a labelled abnormal-entry target inside the current cyclic
+    /// region. This preserves irreducible control flow without synthesizing a
+    /// state-dispatch variable.
+    Goto(RegionNode),
     /// `continue;` — a back-edge to the loop header.
     Continue,
     /// `break;` — an exit edge leaving the loop region.
@@ -82,10 +95,29 @@ impl StructuredNode {
         }
     }
 
-    /// Count the `goto`s in this tree — always 0 by construction; used by tests
-    /// to assert the goto-free invariant.
+    /// Count the explicit labelled jumps in this tree.
     pub fn goto_count(&self) -> usize {
-        0
+        match self {
+            StructuredNode::Goto(_) => 1,
+            StructuredNode::Seq(parts) => parts.iter().map(StructuredNode::goto_count).sum(),
+            StructuredNode::If { then, els, .. } => {
+                then.goto_count() + els.as_deref().map_or(0, StructuredNode::goto_count)
+            }
+            StructuredNode::Switch { cases, default, .. } => {
+                cases
+                    .iter()
+                    .map(|(_, case)| case.goto_count())
+                    .sum::<usize>()
+                    + default.as_deref().map_or(0, StructuredNode::goto_count)
+            }
+            StructuredNode::Loop { body } | StructuredNode::Subtree(body) => body.goto_count(),
+            StructuredNode::Empty
+            | StructuredNode::Block(_)
+            | StructuredNode::Label(_)
+            | StructuredNode::Continue
+            | StructuredNode::Break
+            | StructuredNode::Unsupported => 0,
+        }
     }
 }
 
@@ -184,6 +216,38 @@ pub fn refine_cyclic_region_with_exits(
     exits: &[(RegionNode, EdgeLabel)],
 ) -> StructuredNode {
     refine_cyclic_region_nested(region, exits, 0)
+}
+
+/// Refine a cyclic region with abnormal internal entries.
+///
+/// This is the dispatch-free DREAM §IV-C frontier: remove every classified
+/// back-edge from the reaching-condition skeleton, turn back-edges to the loop
+/// header into `Continue`, and turn back-edges to other headers into real
+/// labelled jumps. The resulting tree is still statement-preserving and uses
+/// only source CFG labels; it never synthesizes a selector/state variable.
+pub fn refine_abnormal_cyclic_region_with_exits(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+) -> StructuredNode {
+    refine_abnormal_cyclic_region_with_exits_and_sources(region, exits, &BTreeMap::new())
+}
+
+/// Refine an abnormal cyclic region with a predicate-id -> source-node map.
+///
+/// The source map lets the abnormal path preserve C evaluation order: a branch
+/// predicate may only be factored after the block that defines it has appeared
+/// on the same structured path. Missing predicate ids are treated as external
+/// and therefore already available.
+pub fn refine_abnormal_cyclic_region_with_exits_and_sources(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+    predicate_sources: &BTreeMap<u32, RegionNode>,
+) -> StructuredNode {
+    let rc = compute_reaching_conditions(region);
+    if rc.back_edges.is_empty() {
+        return StructuredNode::Unsupported;
+    }
+    refine_abnormal_cyclic_region(region, exits, &rc, predicate_sources)
 }
 
 const MAX_NESTED_CYCLIC_DEPTH: usize = 32;
@@ -361,6 +425,282 @@ fn refine_nested_cyclic_region(
     }
 
     StructuredNode::Unsupported
+}
+
+fn refine_abnormal_cyclic_region(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+    rc: &ReachingConditions,
+    predicate_sources: &BTreeMap<u32, RegionNode>,
+) -> StructuredNode {
+    let real_nodes = region_nodes(region);
+    let skeleton = Region {
+        header: region.header,
+        edges: region
+            .edges
+            .iter()
+            .filter(|(src, dst, _)| !rc.back_edges.contains(&(*src, *dst)))
+            .cloned()
+            .collect(),
+    };
+    let body = if real_nodes
+        .iter()
+        .any(|n| matches!(rc.conditions.get(n), None | Some(Cond::False)))
+    {
+        StructuredNode::Unsupported
+    } else {
+        refine_region_with_source_order(&skeleton, predicate_sources)
+    };
+    if body == StructuredNode::Unsupported || !mentions_all_region_nodes(&body, &real_nodes) {
+        return linearize_abnormal_cyclic_region(region, exits, rc)
+            .unwrap_or(StructuredNode::Unsupported);
+    }
+
+    let mut label_nodes = BTreeSet::new();
+    let mut controls: BTreeMap<RegionNode, Vec<StructuredNode>> = BTreeMap::new();
+
+    for (src, dst, label) in &region.edges {
+        if rc.back_edges.contains(&(*src, *dst)) {
+            let action = if *dst == region.header {
+                StructuredNode::Continue
+            } else {
+                label_nodes.insert(*dst);
+                StructuredNode::Goto(*dst)
+            };
+            controls
+                .entry(*src)
+                .or_default()
+                .push(guard_control(label, action));
+        }
+    }
+
+    for (src, label) in exits {
+        if !real_nodes.contains(src) {
+            return StructuredNode::Unsupported;
+        }
+        controls
+            .entry(*src)
+            .or_default()
+            .push(guard_control(label, StructuredNode::Break));
+    }
+
+    let body = inject_abnormal_block_controls(body, &label_nodes, &controls);
+    StructuredNode::Loop {
+        body: Box::new(body),
+    }
+}
+
+fn mentions_all_region_nodes(node: &StructuredNode, expected: &BTreeSet<RegionNode>) -> bool {
+    let mut mentioned = BTreeSet::new();
+    collect_mentioned_region_nodes(node, &mut mentioned);
+    expected.is_subset(&mentioned)
+}
+
+fn collect_mentioned_region_nodes(node: &StructuredNode, out: &mut BTreeSet<RegionNode>) {
+    match node {
+        StructuredNode::Block(rn) => {
+            out.insert(*rn);
+        }
+        StructuredNode::Seq(parts) => {
+            for part in parts {
+                collect_mentioned_region_nodes(part, out);
+            }
+        }
+        StructuredNode::If { then, els, .. } => {
+            collect_mentioned_region_nodes(then, out);
+            if let Some(els) = els {
+                collect_mentioned_region_nodes(els, out);
+            }
+        }
+        StructuredNode::Switch { cases, default, .. } => {
+            for (_, case) in cases {
+                collect_mentioned_region_nodes(case, out);
+            }
+            if let Some(default) = default {
+                collect_mentioned_region_nodes(default, out);
+            }
+        }
+        StructuredNode::Loop { body } | StructuredNode::Subtree(body) => {
+            collect_mentioned_region_nodes(body, out);
+        }
+        StructuredNode::Empty
+        | StructuredNode::Label(_)
+        | StructuredNode::Goto(_)
+        | StructuredNode::Continue
+        | StructuredNode::Break
+        | StructuredNode::Unsupported => {}
+    }
+}
+
+fn linearize_abnormal_cyclic_region(
+    region: &Region,
+    exits: &[(RegionNode, EdgeLabel)],
+    rc: &ReachingConditions,
+) -> Option<StructuredNode> {
+    let mut order: Vec<_> = region_nodes(region).into_iter().collect();
+    order.retain(|node| *node != region.header);
+    order.insert(0, region.header);
+    let next_of: BTreeMap<RegionNode, RegionNode> =
+        order.windows(2).map(|pair| (pair[0], pair[1])).collect();
+    let exit_by_source = exits_by_source(exits);
+    let mut label_nodes = BTreeSet::new();
+    let mut controls_by_source = BTreeMap::new();
+
+    for &node in &order {
+        let outgoing: Vec<_> = region
+            .edges
+            .iter()
+            .filter(|(src, _, _)| *src == node)
+            .cloned()
+            .collect();
+        let controls = linear_controls_for_node(
+            region,
+            rc,
+            node,
+            next_of.get(&node).copied(),
+            &outgoing,
+            exit_by_source.get(&node).map(Vec::as_slice).unwrap_or(&[]),
+            &mut label_nodes,
+        )?;
+        if !controls.is_empty() {
+            controls_by_source.insert(node, controls);
+        }
+    }
+
+    let mut parts = Vec::new();
+    for node in order {
+        if label_nodes.contains(&node) {
+            parts.push(StructuredNode::Label(node));
+        }
+        parts.push(StructuredNode::Block(node));
+        if let Some(controls) = controls_by_source.get(&node) {
+            parts.extend(controls.iter().cloned());
+        }
+    }
+
+    Some(StructuredNode::Loop {
+        body: Box::new(StructuredNode::seq(parts)),
+    })
+}
+
+fn exits_by_source(exits: &[(RegionNode, EdgeLabel)]) -> BTreeMap<RegionNode, Vec<EdgeLabel>> {
+    let mut by_source: BTreeMap<RegionNode, Vec<EdgeLabel>> = BTreeMap::new();
+    for (src, label) in exits {
+        by_source.entry(*src).or_default().push(label.clone());
+    }
+    by_source
+}
+
+fn linear_controls_for_node(
+    region: &Region,
+    rc: &ReachingConditions,
+    node: RegionNode,
+    next: Option<RegionNode>,
+    outgoing: &[(RegionNode, RegionNode, EdgeLabel)],
+    exits: &[EdgeLabel],
+    label_nodes: &mut BTreeSet<RegionNode>,
+) -> Option<Vec<StructuredNode>> {
+    let mut controls = Vec::new();
+    let mut branch_edges = Vec::new();
+    for (_, dst, label) in outgoing {
+        branch_edges.push((
+            label.clone(),
+            linear_action(region, rc, node, *dst, next, label_nodes),
+        ));
+    }
+    for label in exits {
+        branch_edges.push((label.clone(), Some(StructuredNode::Break)));
+    }
+
+    match branch_edges.as_slice() {
+        [] => {
+            if next.is_some() {
+                controls.push(StructuredNode::Break);
+            }
+        }
+        [(EdgeLabel::Always, action)] => {
+            if let Some(action) = action {
+                controls.push(action.clone());
+            }
+        }
+        [(label, action)] => {
+            if let Some(action) = action {
+                controls.push(guard_control(label, action.clone()));
+            }
+        }
+        [first, second] => {
+            controls.push(linear_conditional_control(first, second)?);
+        }
+        _ => return None,
+    }
+
+    Some(controls)
+}
+
+fn linear_action(
+    region: &Region,
+    rc: &ReachingConditions,
+    src: RegionNode,
+    dst: RegionNode,
+    next: Option<RegionNode>,
+    label_nodes: &mut BTreeSet<RegionNode>,
+) -> Option<StructuredNode> {
+    if Some(dst) == next && !rc.back_edges.contains(&(src, dst)) {
+        return None;
+    }
+    if dst == region.header {
+        Some(StructuredNode::Continue)
+    } else {
+        label_nodes.insert(dst);
+        Some(StructuredNode::Goto(dst))
+    }
+}
+
+fn linear_conditional_control(
+    first: &(EdgeLabel, Option<StructuredNode>),
+    second: &(EdgeLabel, Option<StructuredNode>),
+) -> Option<StructuredNode> {
+    let (true_action, false_action, pred) = match (&first.0, &second.0) {
+        (EdgeLabel::True(id), EdgeLabel::False(other)) if id == other => {
+            (first.1.clone(), second.1.clone(), *id)
+        }
+        (EdgeLabel::False(id), EdgeLabel::True(other)) if id == other => {
+            (second.1.clone(), first.1.clone(), *id)
+        }
+        _ => return None,
+    };
+    match (true_action, false_action) {
+        (None, None) => Some(StructuredNode::Empty),
+        (Some(action), None) => Some(StructuredNode::If {
+            cond: Cond::Pred(pred),
+            then: Box::new(action),
+            els: None,
+        }),
+        (None, Some(action)) => Some(StructuredNode::If {
+            cond: Cond::Pred(pred),
+            then: Box::new(StructuredNode::Empty),
+            els: Some(Box::new(action)),
+        }),
+        (Some(then_action), Some(else_action)) => Some(StructuredNode::If {
+            cond: Cond::Pred(pred),
+            then: Box::new(then_action),
+            els: Some(Box::new(else_action)),
+        }),
+    }
+}
+
+fn guard_control(label: &EdgeLabel, action: StructuredNode) -> StructuredNode {
+    let cond = match label {
+        EdgeLabel::Always => return action,
+        EdgeLabel::True(id) => Cond::Pred(*id),
+        EdgeLabel::False(id) => Cond::NotPred(*id),
+        EdgeLabel::Case(id, value) => Cond::CaseEq(*id, *value),
+    };
+    StructuredNode::If {
+        cond,
+        then: Box::new(action),
+        els: None,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -787,6 +1127,62 @@ fn rewrite_cyclic_sentinels(
     }
 }
 
+fn inject_abnormal_block_controls(
+    node: StructuredNode,
+    label_nodes: &BTreeSet<RegionNode>,
+    controls: &BTreeMap<RegionNode, Vec<StructuredNode>>,
+) -> StructuredNode {
+    match node {
+        StructuredNode::Block(rn) => {
+            let mut parts = Vec::new();
+            if label_nodes.contains(&rn) {
+                parts.push(StructuredNode::Label(rn));
+            }
+            parts.push(StructuredNode::Block(rn));
+            if let Some(trailing_controls) = controls.get(&rn) {
+                parts.extend(trailing_controls.iter().cloned());
+            }
+            StructuredNode::seq(parts)
+        }
+        StructuredNode::Seq(parts) => StructuredNode::seq(
+            parts
+                .into_iter()
+                .map(|p| inject_abnormal_block_controls(p, label_nodes, controls))
+                .collect(),
+        ),
+        StructuredNode::If { cond, then, els } => StructuredNode::If {
+            cond,
+            then: Box::new(inject_abnormal_block_controls(*then, label_nodes, controls)),
+            els: els.map(|e| Box::new(inject_abnormal_block_controls(*e, label_nodes, controls))),
+        },
+        StructuredNode::Switch {
+            selector,
+            cases,
+            default,
+        } => StructuredNode::Switch {
+            selector,
+            cases: cases
+                .into_iter()
+                .map(|(value, case)| {
+                    (
+                        value,
+                        inject_abnormal_block_controls(case, label_nodes, controls),
+                    )
+                })
+                .collect(),
+            default: default
+                .map(|d| Box::new(inject_abnormal_block_controls(*d, label_nodes, controls))),
+        },
+        StructuredNode::Loop { body } => StructuredNode::Loop {
+            body: Box::new(inject_abnormal_block_controls(*body, label_nodes, controls)),
+        },
+        StructuredNode::Subtree(inner) => StructuredNode::Subtree(Box::new(
+            inject_abnormal_block_controls(*inner, label_nodes, controls),
+        )),
+        other => other,
+    }
+}
+
 /// Refine a region into a goto-free [`StructuredNode`]. Returns
 /// [`StructuredNode::Unsupported`] if the region is cyclic (has back-edges).
 pub fn refine_region(region: &Region) -> StructuredNode {
@@ -801,6 +1197,21 @@ pub fn refine_region(region: &Region) -> StructuredNode {
         rc.conditions.iter().map(|(&n, c)| (n, c.clone())).collect();
     items.sort_by_key(|(n, _)| *n);
     refine_items(items, &rc)
+}
+
+fn refine_region_with_source_order(
+    region: &Region,
+    predicate_sources: &BTreeMap<u32, RegionNode>,
+) -> StructuredNode {
+    let rc = compute_reaching_conditions(region);
+    if !rc.back_edges.is_empty() {
+        return StructuredNode::Unsupported;
+    }
+    let mut items: Vec<(RegionNode, Cond)> =
+        rc.conditions.iter().map(|(&n, c)| (n, c.clone())).collect();
+    items.sort_by_key(|(n, _)| *n);
+    let mut emitted = BTreeSet::new();
+    refine_items_source_ordered(items, &rc, predicate_sources, &mut emitted)
 }
 
 /// Recursive refinement core over `(node, condition)` items already factored by
@@ -884,6 +1295,163 @@ fn refine_items(items: Vec<(RegionNode, Cond)>, rc: &ReachingConditions) -> Stru
     }
 }
 
+fn refine_items_source_ordered(
+    items: Vec<(RegionNode, Cond)>,
+    rc: &ReachingConditions,
+    predicate_sources: &BTreeMap<u32, RegionNode>,
+    emitted: &mut BTreeSet<RegionNode>,
+) -> StructuredNode {
+    if items.is_empty() {
+        return StructuredNode::Empty;
+    }
+
+    let all_true = items.iter().all(|(_, c)| *c == Cond::True);
+    if all_true {
+        return StructuredNode::seq(
+            items
+                .into_iter()
+                .map(|(n, _)| {
+                    emitted.insert(n);
+                    StructuredNode::Block(n)
+                })
+                .collect(),
+        );
+    }
+
+    if let Some(first_conditional) = items.iter().position(|(_, c)| *c != Cond::True)
+        && first_conditional > 0
+    {
+        let mut parts: Vec<StructuredNode> = items[..first_conditional]
+            .iter()
+            .map(|(n, _)| {
+                emitted.insert(*n);
+                StructuredNode::Block(*n)
+            })
+            .collect();
+        parts.push(refine_items_source_ordered(
+            items[first_conditional..].to_vec(),
+            rc,
+            predicate_sources,
+            emitted,
+        ));
+        return StructuredNode::seq(parts);
+    }
+
+    if let Some(sw) = try_switch_source_ordered(&items, rc, predicate_sources, emitted) {
+        return sw;
+    }
+
+    let factor = match pick_common_factor_source_ordered(&items, predicate_sources, emitted) {
+        Some(f) => f,
+        None => {
+            if items
+                .iter()
+                .all(|(_, c)| cond_sources_available(c, predicate_sources, emitted))
+            {
+                return StructuredNode::seq(
+                    items.into_iter().map(|(n, c)| guard_one(n, c)).collect(),
+                );
+            }
+            return StructuredNode::Unsupported;
+        }
+    };
+    let neg = negate(&factor);
+
+    let mut then_items = Vec::new();
+    let mut else_items = Vec::new();
+    let mut other_items = Vec::new();
+    for (n, c) in items {
+        if c == Cond::True {
+            other_items.push((n, c));
+        } else if implies_factor(&c, &factor) {
+            then_items.push((n, strip_factor(&c, &factor)));
+        } else if implies_factor(&c, &neg) {
+            else_items.push((n, strip_factor(&c, &neg)));
+        } else {
+            other_items.push((n, c));
+        }
+    }
+
+    let mut then_emitted = emitted.clone();
+    let then_tree =
+        refine_items_source_ordered(then_items, rc, predicate_sources, &mut then_emitted);
+    if then_tree == StructuredNode::Unsupported {
+        return StructuredNode::Unsupported;
+    }
+    let mut else_emitted = emitted.clone();
+    let else_tree =
+        refine_items_source_ordered(else_items, rc, predicate_sources, &mut else_emitted);
+    if else_tree == StructuredNode::Unsupported {
+        return StructuredNode::Unsupported;
+    }
+    let if_node = StructuredNode::If {
+        cond: factor,
+        then: Box::new(then_tree),
+        els: match else_tree {
+            StructuredNode::Empty => None,
+            t => Some(Box::new(t)),
+        },
+    };
+
+    if other_items.is_empty() {
+        if_node
+    } else {
+        let mut parts = vec![if_node];
+        parts.push(refine_items_source_ordered(
+            other_items,
+            rc,
+            predicate_sources,
+            emitted,
+        ));
+        StructuredNode::seq(parts)
+    }
+}
+
+fn pick_common_factor_source_ordered(
+    items: &[(RegionNode, Cond)],
+    predicate_sources: &BTreeMap<u32, RegionNode>,
+    emitted: &BTreeSet<RegionNode>,
+) -> Option<Cond> {
+    let mut counts: BTreeMap<Cond, usize> = BTreeMap::new();
+    for (_, c) in items {
+        if *c == Cond::True {
+            continue;
+        }
+        let mut factors = Vec::new();
+        atomic_factors(c, &mut factors);
+        for f in factors {
+            if !cond_sources_available(&f, predicate_sources, emitted) {
+                continue;
+            }
+            let key = canonical_factor(&f);
+            *counts.entry(key).or_insert(0) += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .filter(|(_, n)| *n >= 1)
+        .max_by(|a, b| a.1.cmp(&b.1).then(b.0.cmp(&a.0)))
+        .map(|(f, _)| f)
+}
+
+fn cond_sources_available(
+    cond: &Cond,
+    predicate_sources: &BTreeMap<u32, RegionNode>,
+    emitted: &BTreeSet<RegionNode>,
+) -> bool {
+    match cond {
+        Cond::Pred(id) | Cond::NotPred(id) | Cond::CaseEq(id, _) => predicate_sources
+            .get(id)
+            .is_none_or(|source| emitted.contains(source)),
+        Cond::NotCaseEq(inner) => cond_sources_available(inner, predicate_sources, emitted),
+        Cond::And(a, b) | Cond::Or(a, b) => {
+            cond_sources_available(a, predicate_sources, emitted)
+                && cond_sources_available(b, predicate_sources, emitted)
+        }
+        Cond::True | Cond::False => true,
+    }
+}
+
 /// Emit a single node guarded by its (non-True) condition as an `if`.
 fn guard_one(n: RegionNode, cond: Cond) -> StructuredNode {
     if cond == Cond::True {
@@ -964,6 +1532,52 @@ fn try_switch(items: &[(RegionNode, Cond)], rc: &ReachingConditions) -> Option<S
         Some(switch)
     } else {
         Some(StructuredNode::seq(vec![switch, refine_items(rest, rc)]))
+    }
+}
+
+fn try_switch_source_ordered(
+    items: &[(RegionNode, Cond)],
+    rc: &ReachingConditions,
+    predicate_sources: &BTreeMap<u32, RegionNode>,
+    emitted: &BTreeSet<RegionNode>,
+) -> Option<StructuredNode> {
+    let mut by_selector: BTreeMap<u32, Vec<(i64, RegionNode)>> = BTreeMap::new();
+    for (n, c) in items {
+        if let Cond::CaseEq(sel, v) = c
+            && predicate_sources
+                .get(sel)
+                .is_none_or(|source| emitted.contains(source))
+        {
+            by_selector.entry(*sel).or_default().push((*v, *n));
+        }
+    }
+    let (selector, mut cases_raw) = by_selector
+        .into_iter()
+        .filter(|(_, v)| v.len() >= 2)
+        .max_by_key(|(_, v)| v.len())?;
+    cases_raw.sort();
+    let cases: Vec<(i64, StructuredNode)> = cases_raw
+        .into_iter()
+        .map(|(v, n)| (v, StructuredNode::Block(n)))
+        .collect();
+
+    let rest: Vec<(RegionNode, Cond)> = items
+        .iter()
+        .filter(|(_, c)| !matches!(c, Cond::CaseEq(s, _) if *s == selector))
+        .cloned()
+        .collect();
+    let switch = StructuredNode::Switch {
+        selector,
+        cases,
+        default: None,
+    };
+    if rest.is_empty() {
+        Some(switch)
+    } else {
+        let mut rest_emitted = emitted.clone();
+        let rest_tree = refine_items_source_ordered(rest, rc, predicate_sources, &mut rest_emitted);
+        (rest_tree != StructuredNode::Unsupported)
+            .then(|| StructuredNode::seq(vec![switch, rest_tree]))
     }
 }
 
@@ -1234,6 +1848,67 @@ mod tests {
         assert!(contains_loop(&tree), "expected nested Loop: {tree:?}");
     }
 
+    #[test]
+    fn abnormal_cyclic_region_uses_labelled_jump_for_internal_back_edge() {
+        let region = Region {
+            header: 0,
+            edges: vec![
+                (0, 1, EdgeLabel::Always),
+                (1, 2, t(1)),
+                (1, 3, f(1)),
+                (2, 1, EdgeLabel::Always),
+                (3, 0, EdgeLabel::Always),
+            ],
+        };
+
+        let tree = refine_abnormal_cyclic_region_with_exits(&region, &[]);
+
+        assert_ne!(tree, StructuredNode::Unsupported);
+        assert_eq!(tree.goto_count(), 1, "expected one internal goto: {tree:?}");
+        assert!(contains_loop(&tree), "expected Loop: {tree:?}");
+        assert!(
+            contains_label(&tree, 1),
+            "expected label for block 1: {tree:?}"
+        );
+        assert!(
+            contains_goto_to(&tree, 1),
+            "expected goto to block 1: {tree:?}"
+        );
+        assert!(
+            contains_continue(&tree),
+            "expected header continue: {tree:?}"
+        );
+        for block in 0..=3 {
+            assert!(
+                mentions_block(&tree, block),
+                "missing block {block}: {tree:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn abnormal_cyclic_region_preserves_external_exit_as_break() {
+        let region = Region {
+            header: 0,
+            edges: vec![(0, 1, EdgeLabel::Always), (1, 2, t(1)), (1, 0, f(1))],
+        };
+
+        let tree = refine_abnormal_cyclic_region_with_exits(&region, &[(2, EdgeLabel::Always)]);
+
+        assert_ne!(tree, StructuredNode::Unsupported);
+        assert_eq!(tree.goto_count(), 0);
+        assert!(contains_loop(&tree), "expected Loop: {tree:?}");
+        assert!(
+            contains_continue(&tree),
+            "expected header continue: {tree:?}"
+        );
+        assert!(contains_break(&tree), "expected exit break: {tree:?}");
+        assert!(
+            mentions_block(&tree, 2),
+            "missing exit source block: {tree:?}"
+        );
+    }
+
     // --- tree-inspection helpers ---
     fn contains_if_on(node: &StructuredNode, pred: u32) -> bool {
         match node {
@@ -1288,6 +1963,42 @@ mod tests {
             StructuredNode::Switch { cases, default, .. } => {
                 cases.iter().any(|(_, n)| contains_loop(n))
                     || default.as_ref().is_some_and(|d| contains_loop(d))
+            }
+            _ => false,
+        }
+    }
+    fn contains_label(node: &StructuredNode, target: RegionNode) -> bool {
+        match node {
+            StructuredNode::Label(n) => *n == target,
+            StructuredNode::Seq(v) => v.iter().any(|n| contains_label(n, target)),
+            StructuredNode::If { then, els, .. } => {
+                contains_label(then, target)
+                    || els.as_ref().is_some_and(|e| contains_label(e, target))
+            }
+            StructuredNode::Loop { body } => contains_label(body, target),
+            StructuredNode::Subtree(inner) => contains_label(inner, target),
+            StructuredNode::Switch { cases, default, .. } => {
+                cases.iter().any(|(_, n)| contains_label(n, target))
+                    || default.as_ref().is_some_and(|d| contains_label(d, target))
+            }
+            _ => false,
+        }
+    }
+    fn contains_goto_to(node: &StructuredNode, target: RegionNode) -> bool {
+        match node {
+            StructuredNode::Goto(n) => *n == target,
+            StructuredNode::Seq(v) => v.iter().any(|n| contains_goto_to(n, target)),
+            StructuredNode::If { then, els, .. } => {
+                contains_goto_to(then, target)
+                    || els.as_ref().is_some_and(|e| contains_goto_to(e, target))
+            }
+            StructuredNode::Loop { body } => contains_goto_to(body, target),
+            StructuredNode::Subtree(inner) => contains_goto_to(inner, target),
+            StructuredNode::Switch { cases, default, .. } => {
+                cases.iter().any(|(_, n)| contains_goto_to(n, target))
+                    || default
+                        .as_ref()
+                        .is_some_and(|d| contains_goto_to(d, target))
             }
             _ => false,
         }

@@ -797,8 +797,8 @@ pub struct SsaFunction {
     /// Populated by `unlace_passes::var_naming::VarNamingPass` (t211 +
     /// t227 wiring): every SSA value classified as a `LoopCounter`,
     /// `LoopBound`, `SavedRegister`, `Argument`, … gets a human-meaningful
-    /// name like `i`, `j`, `n`, `saved_rbx`, `a1`. Empty for `Temporary`
-    /// values — those fall through to the printer's existing
+    /// name like `this`, `i`, `j`, `len`, `buf`, `saved_rbx`, `a1`, or
+    /// `result`. Empty for `Temporary` values — those fall through to the printer's existing
     /// `merged_names` / fresh-`vN` chain.
     ///
     /// Consulted by the C printer *between* a non-default

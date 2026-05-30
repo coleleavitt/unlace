@@ -1150,7 +1150,7 @@ fn analyze_function(
 ) -> Result<FunctionQuality> {
     let mut ir_func = pipeline::lift_function(image, lifter, entry)?;
     unlace_struct::merge_linear_blocks(&mut ir_func);
-    unlace_struct::tail_duplicate_small_blocks(&mut ir_func);
+    unlace_struct::tail_duplicate_aggressive(&mut ir_func);
     unlace_struct::split_irreducible_entries(&mut ir_func);
 
     let mut ssa = unlace_ir::ssa::build_ssa(ir_func);

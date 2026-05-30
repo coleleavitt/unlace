@@ -48,8 +48,9 @@ Current known state:
   `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0 total=1059`.
 - Fixture optimization levels: recorded in `tests/corpus.toml`.
 - Type/variable recovery accuracy:
-  `fixtures=4 functions=17 recovered=73 expected=101 accuracy=72.3%`
-  with `source_known=20 dwarf_candidates=5`.
+  `fixtures=5 functions=23 c_functions=18 cpp_functions=5 recovered=148 expected=148 reported=355 recall=100.0% precision=41.7%`
+  with `source_known=20 source_only=15 dwarf_candidates=5 cpp_candidates=4
+  scored_cpp=1 optimized_scored=3 non_host_candidates=3`.
 
 ## Tier 0 - Claim Cleanup And Honest Reporting
 
@@ -111,20 +112,23 @@ requiring a human to infer the reason from a C diff.
 
 ## Tier 3 - Type And Variable Ground Truth
 
-Status: first exact DWARF/source scorer landed; breadth and precision remain
-open.
+Status: broadened DWARF/source scorer landed; source-only and non-host
+denominators remain explicit until source parsers or non-host debug fixtures
+exist.
 
 15. Add a DWARF/source-ground-truth extractor for source-known fixtures:
     function signatures, local names, parameter names, stack slots, struct
     members, arrays, and pointer target types. Landed for C DWARF function
     signatures, params, locals, structs, and fields through the
-    `type-recovery-report` textual scorer.
+    `type-recovery-report` textual scorer. C++ DWARF template functions are
+    now scored too.
 16. Compare recovered C facts against ground truth using coverage, accuracy,
     and precision, matching the SURE'25-style metrics from the research doc.
-    First exact recovered/expected accuracy is reported; precision and richer
-    fact normalization remain open.
+    Recall and reported-fact precision are reported, with separate pointer,
+    array, and struct-reference fact counters.
 17. Separate `-O0`, `-O1`, and `-O2` results; optimization level materially
-    changes what can be recovered.
+    changes what can be recovered. Scored buckets are emitted for every
+    optimization level that has DWARF facts.
 18. Add at least one `-O2 -g -fno-omit-frame-pointer` type/stack fixture so the
     type harness does not only measure easy `-O0` cases. Landed as
     `type_stack_o2`.
@@ -142,11 +146,16 @@ After the gates above exist, prioritize implementation by measured failure
 count:
 
 - SAILR-style structuring cleanup: short-circuit recovery, loop-rotation
-  reversal, condition de-duplication.
+  reversal, condition de-duplication, safe tail duplication, and
+  switch/condition normalization are wired into the default cleanup pipeline.
+  Remaining work here should be metric-driven extensions to specific SAILR
+  schemas rather than another pass-integration task.
 - Cross-statement expression recovery: fold multi-use temps only when side
   effects and dominance make it legal.
-- Lvar allocation and naming: interference-aware coalescing plus heuristic
-  names (`this`, `len`, `i`, `buf`, `result`) where facts justify them.
+- Lvar allocation and naming: interference-aware coalescing, coalesced temp
+  lvar clustering, and fact-derived names (`this`, `len`, `i`, `buf`,
+  `result`) are wired. Remaining work should be driven by scorer failures in
+  stack-slot provenance, debug-name precision, or missing source-level facts.
 - Array length inference: identify base/stride first, then derive conservative
   bounds from loops, compare chains, and debug info.
 - Type solver rewrite research: keep the current solver as baseline while

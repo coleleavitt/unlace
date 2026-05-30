@@ -92,10 +92,10 @@ Five parallel Explore agents root-caused all 14 fixtures. Synthesis:
   `return this->__vftable->method_0();` — the golden has the same `this` bug, so
   threading base_varnode would make current DIVERGE from the golden, not match it.
   (Also: touches structurer, against CLAUDE.md guidance.) Deferred.
-- **`cN` coalesced naming** (ppc64/v850/riscv): golden uses `c0`/`c1` (coalesced
-  register names) that the current var-naming/register-coalesce pipeline no longer
-  produces (only `vN`/`saved_rN`). This is a naming-convention regression spanning
-  var_naming + register_coalesce — multi-file, real, deferred.
+- **`cN`/role naming** (ppc64/v850/riscv): the current pipeline now keeps generic
+  coalesced-register `cN` names when no stronger fact exists, while factual role
+  names (`this`, `i`, `len`, `buf`, `result`) win over generic `vN`/`cN`.
+  Remaining diffs in this bucket should be re-triaged against current output.
 
 ### Genuine producer gaps (deferred, distinct root causes, multi-session)
 - **PPC immediate-as-register** (ppc64 sub_10000120): `if (v1 != v2//rsp)` where
@@ -134,11 +134,10 @@ precise root causes (verified, not assumed).
 
 ### Deferred (verified root cause, not bounded / golden stale)
 - **t50 cN coalesced naming**: `cN` = coalesced multi-version register (verified via
-  SSA: v850 sub_10118 r10d has v0/v1/v3 merged). register_coalesce.rs:405 already
-  emits cN but it's dead — variable_merge.rs assign_names names every cluster `vN`
-  first. Deferred: ZERO ROI (v850/ppc64 have 13/15 total diffs incl. polarity, so
-  cN flips no golden green) + regresses 549/1129 vN-asserting unit tests + the one
-  passing arch golden arc_features has cN=0.
+  SSA: v850 sub_10118 r10d has v0/v1/v3 merged). The default path now treats
+  `cN` as a generic allocator name: it is preserved when no semantic role exists
+  and yields to stronger role names. Re-run current golden triage before treating
+  this as still deferred.
 - **t51 leaked-temp folding**: medium v706/v707/v708 are single-use but SEQUENTIAL
   CALL RESULTS — inlining reorders side-effecting calls (correctness regression).
   Printer's conservative call-output policy is correct. medium/switch goldens are

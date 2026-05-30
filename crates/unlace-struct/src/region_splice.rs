@@ -43,7 +43,7 @@ use unlace_ir::ssa::SsaVarnode;
 use unlace_ir::{BlockId, Varnode};
 
 use crate::condition_refinement::StructuredNode;
-use crate::hir::{HirNode, SwitchCase};
+use crate::hir::{HirNode, LabelId, SwitchCase};
 use crate::reaching_conditions::{Cond, RegionNode};
 
 /// Convert a [`StructuredNode`] tree into a `Vec<HirNode>`, splicing in the
@@ -59,15 +59,35 @@ pub fn splice_structured(
     block_bodies: &BTreeMap<BlockId, Vec<HirNode>>,
     pred_cond: &BTreeMap<u32, SsaVarnode>,
 ) -> Vec<HirNode> {
+    splice_structured_with_labels(
+        node,
+        node_to_block,
+        block_bodies,
+        pred_cond,
+        &BTreeMap::new(),
+    )
+}
+
+/// Convert a [`StructuredNode`] tree into HIR with a RegionNode-to-LabelId map
+/// for dispatch-free abnormal cyclic regions.
+pub fn splice_structured_with_labels(
+    node: &StructuredNode,
+    node_to_block: &BTreeMap<RegionNode, BlockId>,
+    block_bodies: &BTreeMap<BlockId, Vec<HirNode>>,
+    pred_cond: &BTreeMap<u32, SsaVarnode>,
+    labels: &BTreeMap<RegionNode, LabelId>,
+) -> Vec<HirNode> {
     match node {
         StructuredNode::Empty => vec![],
         StructuredNode::Block(rn) => splice_block(*rn, node_to_block, block_bodies),
         StructuredNode::Subtree(inner) => {
-            splice_structured(inner, node_to_block, block_bodies, pred_cond)
+            splice_structured_with_labels(inner, node_to_block, block_bodies, pred_cond, labels)
         }
         StructuredNode::Seq(parts) => parts
             .iter()
-            .flat_map(|p| splice_structured(p, node_to_block, block_bodies, pred_cond))
+            .flat_map(|p| {
+                splice_structured_with_labels(p, node_to_block, block_bodies, pred_cond, labels)
+            })
             .collect(),
         StructuredNode::If { cond, then, els } => splice_if(
             cond,
@@ -76,6 +96,7 @@ pub fn splice_structured(
             node_to_block,
             block_bodies,
             pred_cond,
+            labels,
         ),
         StructuredNode::Switch {
             selector,
@@ -88,11 +109,30 @@ pub fn splice_structured(
             node_to_block,
             block_bodies,
             pred_cond,
+            labels,
         ),
         StructuredNode::Loop { body } => vec![HirNode::While {
             cond: true_cond(),
-            body: splice_structured(body, node_to_block, block_bodies, pred_cond),
+            body: splice_structured_with_labels(
+                body,
+                node_to_block,
+                block_bodies,
+                pred_cond,
+                labels,
+            ),
         }],
+        StructuredNode::Label(rn) => labels
+            .get(rn)
+            .copied()
+            .map(HirNode::Label)
+            .into_iter()
+            .collect(),
+        StructuredNode::Goto(rn) => labels
+            .get(rn)
+            .copied()
+            .map(HirNode::Goto)
+            .into_iter()
+            .collect(),
         StructuredNode::Continue => vec![HirNode::Continue],
         StructuredNode::Break => vec![HirNode::Break],
         // Unstructurable (cyclic) region — the caller falls back to the legacy
@@ -132,8 +172,11 @@ fn splice_if(
     node_to_block: &BTreeMap<RegionNode, BlockId>,
     block_bodies: &BTreeMap<BlockId, Vec<HirNode>>,
     pred_cond: &BTreeMap<u32, SsaVarnode>,
+    labels: &BTreeMap<RegionNode, LabelId>,
 ) -> Vec<HirNode> {
-    let splice = |n: &StructuredNode| splice_structured(n, node_to_block, block_bodies, pred_cond);
+    let splice = |n: &StructuredNode| {
+        splice_structured_with_labels(n, node_to_block, block_bodies, pred_cond, labels)
+    };
     let els_body = |e: Option<&StructuredNode>| e.map(&splice);
     match cond {
         Cond::Pred(id) => match pred_cond.get(id) {
@@ -196,8 +239,11 @@ fn splice_switch(
     node_to_block: &BTreeMap<RegionNode, BlockId>,
     block_bodies: &BTreeMap<BlockId, Vec<HirNode>>,
     pred_cond: &BTreeMap<u32, SsaVarnode>,
+    labels: &BTreeMap<RegionNode, LabelId>,
 ) -> Vec<HirNode> {
-    let splice = |n: &StructuredNode| splice_structured(n, node_to_block, block_bodies, pred_cond);
+    let splice = |n: &StructuredNode| {
+        splice_structured_with_labels(n, node_to_block, block_bodies, pred_cond, labels)
+    };
     let Some(cv) = pred_cond.get(&selector) else {
         // No selector varnode resolvable: emit every arm's body unguarded,
         // wrapped in a Block, so no statement is dropped. (TODO 3c.)
@@ -442,6 +488,33 @@ mod tests {
             vec![HirNode::While {
                 cond: true_cond(),
                 body: vec![stmt(11), HirNode::Continue],
+            }]
+        );
+    }
+
+    #[test]
+    fn loop_with_labelled_jump_lowers_to_existing_hir_labels() {
+        let node = StructuredNode::Loop {
+            body: Box::new(StructuredNode::Seq(vec![
+                StructuredNode::Label(1),
+                StructuredNode::Block(1),
+                StructuredNode::Goto(1),
+            ])),
+        };
+        let bodies = bodies(vec![(1, vec![stmt(11)])]);
+        let mut labels = BTreeMap::new();
+        labels.insert(1, LabelId(7));
+        let out =
+            splice_structured_with_labels(&node, &n2b(&[1]), &bodies, &BTreeMap::new(), &labels);
+        assert_eq!(
+            out,
+            vec![HirNode::While {
+                cond: true_cond(),
+                body: vec![
+                    HirNode::Label(LabelId(7)),
+                    stmt(11),
+                    HirNode::Goto(LabelId(7))
+                ],
             }]
         );
     }

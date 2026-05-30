@@ -139,7 +139,7 @@ The old "aggregate parity" wording is retired. The current gates are:
 |------|------|---------------|--------|
 | Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 86.8%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. The exact-line golden test still exits nonzero because checked-in goldens are stale. |
 | Semantic correctness | `cargo run -p xtask -- semantic-report` | 15 source-known executable equivalence cases pass; 2 host/source-known cases (`medium`, `stripped`) are tracked as XFAIL; 3 non-host cases are unsupported | Not full-corpus semantic correctness yet; known semantic gaps stay visible as XFAIL until fixed. |
-| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=4 functions=17 recovered=73 expected=101 accuracy=72.3% source_known=20 dwarf_candidates=5` | First exact textual DWARF/source scorer; C++ templates/RTTI and non-host binaries are still explicit skips. |
+| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=5 functions=23 c_functions=18 cpp_functions=5 recovered=148 expected=148 reported=355 recall=100.0% precision=41.7% source_known=20 source_only=15 dwarf_candidates=5 cpp_candidates=4 scored_cpp=1 optimized_scored=3 non_host_candidates=3` | Exact textual DWARF/source scorer now includes C++ template DWARF, per-opt/per-arch buckets, and pointer/array/struct-reference fact counters; source-only and non-host cases remain explicit breadth denominators. |
 
 `bash scripts/quality_axes.sh` runs all three reports without treating a known
 XFAIL or skipped axis as solved. See

@@ -5,16 +5,16 @@
 //!
 //! 1. Recovered stack-frame members (`stack_frame.locals` + `stack_vars`)
 //!    → [`LvarStorage::Stack { offset }`].
-//! 2. SSA temporaries surviving `variable_merge` (each distinct key in
-//!    `merged_names`) → [`LvarStorage::Temp { ssa_var }`].
+//! 2. SSA temporaries surviving `variable_merge` (one candidate per distinct
+//!    emitted `merged_names` cluster) → [`LvarStorage::Temp { ssa_var }`].
 //! 3. Function parameters (`inferred_params`) → [`LvarStorage::Param { idx }`].
 //! 4. The function's return slot when its inferred return type is not
 //!    `PrimitiveType::Unknown` → [`LvarStorage::Return`].
 //!
-//! This pass deliberately performs **no merging**: duplicate candidates
-//! across storage classes (e.g. a stack slot that also surfaces as a
-//! `Temp` via `merged_names`) are allowed. Coalescing, interference
-//! graph construction, and naming all land in follow-up batches.
+//! This pass deliberately performs **no storage-class merging**: duplicate
+//! candidates across storage classes (e.g. a stack slot that also surfaces as
+//! a `Temp` via `merged_names`) are allowed. SSA temp versions that already
+//! share one coalesced emitted name are represented by one temp candidate.
 //!
 //! The pass writes only [`SsaFunction::lvars`] — no other IR field is
 //! touched. It runs after `VariableMergePass` and before the C printer,
@@ -366,9 +366,11 @@ fn stack_live_range(
     lr.unwrap_or(func_range)
 }
 
-/// (2) SSA temporaries surviving `variable_merge`. `merged_names` is
-/// keyed per `SsaVarnode`; each distinct key is a candidate `Temp`.
-/// Live range derived from `var_map` (block of first/last observation).
+/// (2) SSA temporaries surviving `variable_merge`. `merged_names` is keyed
+/// per `SsaVarnode`, but one logical temp may cover several coalesced SSA
+/// versions with the same emitted name. Emit one `Temp` lvar per visible
+/// merged-name cluster, with a unioned coarse live range, so the lvar metadata
+/// matches the source-level variable rather than the raw SSA version count.
 fn collect_temps(
     func: &SsaFunction,
     out: &mut Vec<Lvar>,
@@ -378,48 +380,81 @@ fn collect_temps(
     use_counts: &BTreeMap<SsaVarnode, usize>,
     entry: BlockId,
 ) {
-    for sv in func.merged_names.keys() {
+    let mut by_name: BTreeMap<String, Vec<SsaVarnode>> = BTreeMap::new();
+    for (sv, name) in &func.merged_names {
+        by_name.entry(name.clone()).or_default().push(*sv);
+    }
+
+    for (name, members) in by_name {
         // Suppression: flag bits, the instruction pointer, and one-shot
         // Unique temps never become user-visible declarations. The audit
         // dump derives the same decision from `merged_names` keys so
         // suppressed entries are still explainable.
-        let uses = use_counts.get(sv).copied().unwrap_or(0);
-        if let Some(reason) = classify_temp_suppression(*sv, uses) {
-            lvar_trace_line(&format!(
-                "suppress-temp func={} sv={:?} name={:?} uses={} reason={}",
-                func.function.name,
-                sv,
-                func.merged_names.get(sv),
-                uses,
-                reason.tag(),
-            ));
+        let visible: Vec<SsaVarnode> = members
+            .iter()
+            .copied()
+            .filter(|sv| {
+                let uses = use_counts.get(sv).copied().unwrap_or(0);
+                if let Some(reason) = classify_temp_suppression(*sv, uses) {
+                    lvar_trace_line(&format!(
+                        "suppress-temp func={} sv={:?} name={} uses={} reason={}",
+                        func.function.name,
+                        sv,
+                        name,
+                        uses,
+                        reason.tag(),
+                    ));
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
+        let Some(&representative) = visible.first() else {
             continue;
+        };
+        let mut lr = LiveRange::point(entry);
+        let mut first_range = true;
+        let mut pty = PrimitiveType::Unknown;
+        for sv in &visible {
+            let member_lr = live_range_for_temp(*sv, use_blocks, entry);
+            if first_range {
+                lr = member_lr;
+                first_range = false;
+            } else {
+                lr.extend_to(member_lr.start_block);
+                lr.extend_to(member_lr.end_block);
+            }
+            pty = pty.join(
+                func.var_types
+                    .get(sv)
+                    .copied()
+                    .unwrap_or(PrimitiveType::Unknown),
+            );
         }
-        let lr = live_range_for_temp(*sv, use_blocks, entry);
-        let ty = primitive_to_kind(
-            func.var_types
-                .get(sv)
-                .copied()
-                .unwrap_or(PrimitiveType::Unknown),
-        );
+        let ty = primitive_to_kind(pty);
         lvar_trace_line(&format!(
-            "emit-temp func={} sv={:?} name={:?} uses={} range={:?}->{:?} ty={:?}",
+            "emit-temp func={} sv={:?} name={} members={} range={:?}->{:?} ty={:?}",
             func.function.name,
-            sv,
-            func.merged_names.get(sv),
-            uses,
+            representative,
+            name,
+            visible.len(),
             lr.start_block,
             lr.end_block,
             ty,
         ));
-        out.push(Lvar::new(
+        let mut lv = Lvar::new(
             alloc_id(next_id),
-            LvarStorage::Temp { ssa_var: *sv },
+            LvarStorage::Temp {
+                ssa_var: representative,
+            },
             lr,
             ty,
             LvarSource::Inferred,
             LvarFlags::EMPTY,
-        ));
+        );
+        lv.name = Some(name);
+        out.push(lv);
     }
 }
 
@@ -768,6 +803,39 @@ mod tests {
         assert!(LvarCollectPass.run(&mut ssa).unwrap());
         assert_eq!(ssa.lvars.len(), 1);
         assert!(matches!(ssa.lvars[0].storage, LvarStorage::Temp { .. }));
+    }
+
+    #[test]
+    fn coalesced_temp_names_emit_one_lvar() {
+        let mut ssa = empty_ssa("coalesced_temps");
+        let sv0 = SsaVarnode {
+            base: Varnode::unique(0, 4),
+            version: 0,
+        };
+        let sv1 = SsaVarnode {
+            base: Varnode::unique(4, 4),
+            version: 0,
+        };
+        ssa.merged_names.insert(sv0, "v1".to_string());
+        ssa.merged_names.insert(sv1, "v1".to_string());
+        ssa.var_map
+            .insert((BlockId(0), 0, VarnodeSlot::Output), sv0);
+        ssa.var_map
+            .insert((BlockId(0), 1, VarnodeSlot::Input(0)), sv0);
+        ssa.var_map
+            .insert((BlockId(0), 2, VarnodeSlot::Output), sv1);
+        ssa.var_map
+            .insert((BlockId(0), 3, VarnodeSlot::Input(0)), sv1);
+
+        LvarCollectPass.run(&mut ssa).expect("collect");
+
+        let temps: Vec<_> = ssa
+            .lvars
+            .iter()
+            .filter(|lv| matches!(lv.storage, LvarStorage::Temp { .. }))
+            .collect();
+        assert_eq!(temps.len(), 1, "coalesced temp cluster should be one lvar");
+        assert_eq!(temps[0].name.as_deref(), Some("v1"));
     }
 
     /// (Batch 3 slice 2, case a) A `Temp` lvar whose SSA varnode is

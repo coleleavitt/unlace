@@ -91,6 +91,21 @@ fn simplify_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNo
                 else_body,
             }
         }
+        HirNode::IfCmp {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            then_body,
+            else_body,
+            addr,
+        } => HirNode::IfCmp {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            then_body: simplify_nodes(then_body, def_map),
+            else_body: else_body.map(|eb| simplify_nodes(eb, def_map)),
+            addr,
+        },
         HirNode::Block(children) => HirNode::Block(simplify_nodes(children, def_map)),
         HirNode::While { cond, body } => HirNode::While {
             cond,
@@ -143,6 +158,20 @@ fn simplify_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNo
         } => HirNode::TryFinally {
             try_body: simplify_nodes(try_body, def_map),
             finally_body: simplify_nodes(finally_body, def_map),
+        },
+        HirNode::GuardedIf {
+            cond_code,
+            then_body,
+            else_body,
+        } => HirNode::GuardedIf {
+            cond_code,
+            then_body: simplify_nodes(then_body, def_map),
+            else_body: simplify_nodes(else_body, def_map),
+        },
+        HirNode::Commented { pre, post, inner } => HirNode::Commented {
+            pre,
+            post,
+            inner: Box::new(simplify_node(*inner, def_map)),
         },
         other => other,
     }
@@ -245,6 +274,21 @@ fn flatten_node(node: HirNode) -> HirNode {
                 else_body,
             }
         }
+        HirNode::IfCmp {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            then_body,
+            else_body,
+            addr,
+        } => HirNode::IfCmp {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            then_body: flatten_nodes(then_body),
+            else_body: else_body.map(flatten_nodes),
+            addr,
+        },
         HirNode::Block(children) => HirNode::Block(flatten_nodes(children)),
         HirNode::While { cond, body } => HirNode::While {
             cond,
@@ -297,6 +341,20 @@ fn flatten_node(node: HirNode) -> HirNode {
         } => HirNode::TryFinally {
             try_body: flatten_nodes(try_body),
             finally_body: flatten_nodes(finally_body),
+        },
+        HirNode::GuardedIf {
+            cond_code,
+            then_body,
+            else_body,
+        } => HirNode::GuardedIf {
+            cond_code,
+            then_body: flatten_nodes(then_body),
+            else_body: flatten_nodes(else_body),
+        },
+        HirNode::Commented { pre, post, inner } => HirNode::Commented {
+            pre,
+            post,
+            inner: Box::new(flatten_node(*inner)),
         },
         other => other,
     }

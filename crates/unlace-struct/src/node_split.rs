@@ -42,18 +42,63 @@ const MAX_SPLIT_ROUNDS: usize = 16;
 /// Operates on a raw [`Function`] (pre-SSA). The CFG is rebuilt internally
 /// each round.
 pub fn split_irreducible_entries(func: &mut Function) -> usize {
+    let trace = std::env::var_os("UNLACE_SPLIT_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false);
     let mut total = 0;
-    for _ in 0..MAX_SPLIT_ROUNDS {
+    for round in 0..MAX_SPLIT_ROUNDS {
         let cfg = build_cfg(func);
         let regions = detect_irreducible_regions_in_cfg(&cfg);
+        if trace {
+            eprintln!(
+                "[unlace:split] func={} round={round} blocks={} irreducible_regions={}",
+                func.name,
+                func.blocks.len(),
+                regions.len()
+            );
+            for (i, r) in regions.iter().enumerate() {
+                eprintln!(
+                    "[unlace:split]   region#{i} entries={:?} body_blocks={}",
+                    r.entry_blocks,
+                    r.body_blocks.len()
+                );
+            }
+        }
         if regions.is_empty() {
+            if trace {
+                eprintln!(
+                    "[unlace:split] func={} CONVERGED (reducible) after {round} rounds, {total} splits, blocks={}",
+                    func.name,
+                    func.blocks.len()
+                );
+            }
             return total;
         }
         let split_now = split_one_round(func, &regions);
+        if trace {
+            eprintln!(
+                "[unlace:split] func={} round={round} split_now={split_now}",
+                func.name
+            );
+        }
         if split_now == 0 {
+            if trace {
+                eprintln!(
+                    "[unlace:split] func={} STUCK (irreducible, no productive split) after {round} rounds, blocks={}",
+                    func.name,
+                    func.blocks.len()
+                );
+            }
             return total;
         }
         total += split_now;
+    }
+    if trace {
+        eprintln!(
+            "[unlace:split] func={} HIT MAX_SPLIT_ROUNDS={MAX_SPLIT_ROUNDS}, blocks={}, total_splits={total}",
+            func.name,
+            func.blocks.len()
+        );
     }
     total
 }

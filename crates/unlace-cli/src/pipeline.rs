@@ -1070,6 +1070,14 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
         return Function::new(name, BlockId(0), entry_addr);
     }
 
+    let trace_cfg = cfg_build_trace_enabled();
+    if trace_cfg {
+        eprintln!(
+            "[unlace:cfg-build] begin func={name} entry={entry_addr:#x} insns={}",
+            insns.len()
+        );
+    }
+
     let insn_addr_set: BTreeSet<u64> = insns.iter().map(|rec| rec.addr).collect();
     let mut block_starts: BTreeMap<u64, u32> = BTreeMap::new();
     block_starts.insert(entry_addr, 0);
@@ -1084,9 +1092,24 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                 if matches!(ir_op.op, IrOp::Branch | IrOp::Cbranch)
                     && let Some(target) = ir_op.inputs.first()
                     && target.space == unlace_ir::SpaceId::Const
-                    && insn_addr_set.contains(&target.offset)
                 {
-                    block_starts.entry(target.offset).or_insert(0);
+                    let in_set = insn_addr_set.contains(&target.offset);
+                    if trace_cfg {
+                        eprintln!(
+                            "[unlace:cfg-build] leader-scan insn={:#x} op={:?} target={:#x} in_insn_set={in_set}{}",
+                            rec.addr,
+                            ir_op.op,
+                            target.offset,
+                            if in_set {
+                                ""
+                            } else {
+                                "  <<< UNRESOLVED branch target"
+                            }
+                        );
+                    }
+                    if in_set {
+                        block_starts.entry(target.offset).or_insert(0);
+                    }
                 }
             }
         }
@@ -1141,11 +1164,17 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                         IrOp::Cbranch => {
                             if let Some(target) = ir_op.inputs.first()
                                 && target.space == unlace_ir::SpaceId::Const
-                                && let Some(&tid) = block_starts.get(&target.offset)
                             {
-                                let target_bid = BlockId(tid);
-                                if !bb.successors.contains(&target_bid) {
-                                    bb.successors.push(target_bid);
+                                if let Some(&tid) = block_starts.get(&target.offset) {
+                                    let target_bid = BlockId(tid);
+                                    if !bb.successors.contains(&target_bid) {
+                                        bb.successors.push(target_bid);
+                                    }
+                                } else if trace_cfg {
+                                    eprintln!(
+                                        "[unlace:cfg-build] BB_{block_idx} cbranch insn={:#x} TAKEN target={:#x} has NO block leader  <<< edge dropped",
+                                        rec.addr, target.offset
+                                    );
                                 }
                             }
                             if let Some(next) = insns.get(
@@ -1155,11 +1184,17 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                                         .iter()
                                         .position(|r| std::ptr::eq(r, rec))
                                         .unwrap_or(0),
-                            ) && let Some(&fid) = block_starts.get(&next.addr)
-                            {
-                                let fall_bid = BlockId(fid);
-                                if !bb.successors.contains(&fall_bid) {
-                                    bb.successors.push(fall_bid);
+                            ) {
+                                if let Some(&fid) = block_starts.get(&next.addr) {
+                                    let fall_bid = BlockId(fid);
+                                    if !bb.successors.contains(&fall_bid) {
+                                        bb.successors.push(fall_bid);
+                                    }
+                                } else if trace_cfg {
+                                    eprintln!(
+                                        "[unlace:cfg-build] BB_{block_idx} cbranch insn={:#x} FALLTHROUGH next={:#x} has NO block leader  <<< edge dropped",
+                                        rec.addr, next.addr
+                                    );
                                 }
                             }
                         }
@@ -1171,10 +1206,35 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
             }
         }
 
+        if trace_cfg {
+            let last_op = bb.insns.last().map(|i| i.op);
+            eprintln!(
+                "[unlace:cfg-build] built BB_{block_idx} addr={block_addr:#x} insns={} last_op={last_op:?} successors={:?}",
+                bb.insns.len(),
+                bb.successors
+            );
+        }
+
         function.insert_block(bb);
     }
 
+    if trace_cfg {
+        eprintln!(
+            "[unlace:cfg-build] done func={name} blocks={} leaders={}",
+            function.blocks.len(),
+            block_starts.len()
+        );
+    }
+
     function
+}
+
+/// Whether `UNLACE_CFG_BUILD_TRACE` is set — enables per-instruction
+/// block-leader + successor-resolution tracing in `build_function_from_insns`.
+fn cfg_build_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CFG_BUILD_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false)
 }
 
 pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {

@@ -578,6 +578,14 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
 
     if !has_arg_reg_in_entry {
         read_before_write = collect_whole_function_reads(func);
+        calling_trace_line(
+            func,
+            format!(
+                "param-fallback reason=no-arg-reg-in-entry scan=whole-function whole_fn_reads={read_before_write:?} \
+                 note=registers read-before-write in ANY block (may include outgoing-call-arg setups, \
+                 risking phantom params on functions like main)"
+            ),
+        );
     }
 
     // Build a map of which registers feed into which ops for type inference
@@ -604,12 +612,17 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
             break;
         }
         let ty = infer_param_type(reg_off, &reg_consumer_ops, &reg_input_sizes);
-        calling_trace_line_verbose(
+        calling_trace_line(
             func,
             format!(
-                "param-candidate kind=int idx={} reg={} sizes={:?} ops={:?} ty={ty:?}",
+                "param-promote kind=int idx={} reg={} scan={} sizes={:?} ops={:?} ty={ty:?}",
                 param_idx,
                 reg_off,
+                if has_arg_reg_in_entry {
+                    "entry"
+                } else {
+                    "whole-function"
+                },
                 reg_input_sizes.get(&reg_off),
                 reg_consumer_ops.get(&reg_off)
             ),
@@ -623,11 +636,17 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         if !read_before_write.contains(&reg_off) {
             break;
         }
-        calling_trace_line_verbose(
+        calling_trace_line(
             func,
             format!(
-                "param-candidate kind=float idx={} reg={} ty=Double",
-                param_idx, reg_off
+                "param-promote kind=float idx={} reg={} scan={} ty=Double",
+                param_idx,
+                reg_off,
+                if has_arg_reg_in_entry {
+                    "entry"
+                } else {
+                    "whole-function"
+                }
             ),
         );
         params.push((format!("a{}", param_idx), PrimitiveType::Double));

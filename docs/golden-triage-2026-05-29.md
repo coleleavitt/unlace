@@ -1,12 +1,23 @@
 # Golden-fixture triage — 2026-05-29
 
-Per-fixture audit of the 14 failing `golden_fixtures` after the post-WIP
-recovery work. Method: `scripts/classify_golden_diffs.sh` plus a directional
-diff of current output vs golden (lost calling convention, garbage stack
-indices, inverted conditions, size shrink). Parent (`4da39dbd6`) and last-good
-WIP baseline (`7aa62dc0`) used for blame.
+> **Reconciled status.** This is a historical triage log. The initial headline
+> below was superseded by later same-day investigations in this file and by
+> `docs/current-parity-ledger-2026-05-30.md`. Current policy: exact-line
+> fixture goldens are classified by `tests/golden/triage.toml` and enforced by
+> `cargo run -p xtask -- golden-triage`. On the current worktree that gate has
+> 2 exact-pass rows (`debug_hello`, `x87_math`) and 13 review rows: 3
+> producer-bug and 10 mixed. Do not blanket-refresh them, and do not treat the
+> initial headline as current policy.
 
-## Headline verdict
+Historical per-fixture audit of the then-14 failing `golden_fixtures` after the
+post-WIP recovery work. The current row ledger has moved to
+`tests/golden/triage.toml`; use `xtask golden-triage` for the current row
+classification. The historical method was `scripts/classify_golden_diffs.sh`
+plus a directional diff of current output vs golden (lost calling convention,
+garbage stack indices, inverted conditions, size shrink). Parent (`4da39dbd6`)
+and last-good WIP baseline (`7aa62dc0`) used for blame.
+
+## Initial headline verdict (superseded)
 
 **None of the 14 are refresh candidates.** Every fixture's current output is
 larger and worse than its golden — the goldens are valid regression gates that
@@ -14,6 +25,9 @@ expose real producer-side bugs, not stale snapshots to be rebaselined. (This
 revises the earlier "mostly stale" framing: they *are* stale relative to actual
 output, but stale in the direction of being *better* than current, so refresh
 would lock in regressions.)
+
+Later investigations below found this headline too broad. Keep it as historical
+context only; the current working rule is per-fixture classification.
 
 ## Bugs fixed this session
 
@@ -150,10 +164,11 @@ precise root causes (verified, not assumed).
 - **t54 x87 FPU**: sum_squares_x87 duplicate FLD is a real x87 stack-modeling
   (TOP-tracking) lifter gap in ops/fpu.rs — multi-session, broad-risk.
 
-### Net
-golden_fixtures stays 18/32 (the 14 failures are stale-worse goldens and/or deep
-producer gaps; no remaining bounded fix flips one green on its own). Two real
-correctness fixes (PPC const-prop, SP-as-struct) landed with tests; all gates green.
+### Historical Net
+At this point in the historical session, `golden_fixtures` stayed 18/32 (the 14
+failures were stale-worse goldens and/or deep producer gaps; no remaining
+bounded fix flipped one green on its own). The current exact-line row state has
+since moved to `tests/golden/triage.toml` and `xtask golden-triage`.
 
 ## Multi-session producer work — executed via parallel worktree build agents (2026-05-29 pm-4)
 

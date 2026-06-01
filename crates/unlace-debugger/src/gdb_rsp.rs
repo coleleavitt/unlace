@@ -6,7 +6,7 @@
 //! `backends.rs` and is feature-gated under `gdb-stub`.
 //!
 //! Reference: GDB manual "Remote Serial Protocols", and
-//! references/ida/plugins/gdb_user/all/ (984 decompiled fns).
+//! research/decompiled-references/ida/plugins/gdb_user/all/ (984 decompiled fns).
 
 use thiserror::Error;
 

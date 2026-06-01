@@ -2,7 +2,7 @@
 
 This plan consolidates the codebase audit, the opencode session dumps in
 `research/opencode-sessions/`, and the Hex-Rays/IDA dump analysis under
-`references/hexrays/ida_dump/`. It is written as an implementation backlog,
+`research/decompiled-references/hexrays/ida_dump/`. It is written as an implementation backlog,
 ordered in batches so work can land incrementally without turning the repo into
 a long-running half-refactor.
 
@@ -58,17 +58,23 @@ The main conclusion from the audit is:
   known non-void fallthrough helpers, so `sum_for` no longer ends with a bare
   `return;`. The remaining near-term output targets are final loop-counter/lvar
   splitting, guard shaping, and for-loop promotion for optimized loop helpers.
-- 2026-05-26 quality-axis update: the fixture score is now explicitly named
-  `Stylistic Fixture Parity` and currently reports 91.1% on the 15 golden
-  fixtures. This remains useful, but it is not semantic correctness or
+- 2026-05-30 quality-axis reconciliation: the fixture score is explicitly named
+  `Stylistic Fixture Parity` and currently reports 84.5% on the current golden
+  stream. This remains useful, but it is not semantic correctness or
   type/variable recovery accuracy. The active metric plan is
-  `docs/parity-quality-execution-plan-2026-05.md`; `scripts/quality_axes.sh`
+  `docs/parity-quality-execution-plan-2026-05.md`, and the stale/reframed
+  ledger is `docs/current-parity-ledger-2026-05-30.md`. `scripts/quality_axes.sh`
   runs the style score, `xtask semantic-report`, and
-  `xtask type-recovery-report`. Current semantic coverage is 9 executable
-  source-known PASS rows, 8 XFAIL host/source-known rows, and 3 unsupported
-  non-host rows. The type axis now has a first DWARF/source textual score:
-  `fixtures=4 functions=17 recovered=74 expected=101 accuracy=73.3%`
-  with `source_known=20` and `dwarf_candidates=5`.
+  `xtask type-recovery-report`; `score_parity.sh` reports the style score even
+  though the exact-line golden test exits nonzero. Current semantic coverage is
+  14 executable
+  source-known PASS rows, 3 XFAIL host/source-known rows (`type_stack_o2`,
+  `medium`, `stripped`), 3 non-host shape-only PASS rows, and 0 unsupported
+  rows. The type axis reports:
+  `fixtures=20 functions=63 c_functions=49 cpp_functions=14 recovered=206 expected=323 reported=1115 recall=63.8% precision=18.5%`
+  with `source_known=20 source_only=15 source_parsed=15 dwarf_candidates=5
+  cpp_candidates=4 scored_cpp=4 optimized_scored=15 scored_source_only=15
+  non_host_candidates=3 scored_non_host=3`.
 
 ## Source Inventory
 
@@ -92,37 +98,37 @@ Operational handoffs:
 
 Primary IDA/Hex-Rays evidence (as mapped in Batch 0 audit):
 
-- `references/hexrays/ida_dump/hexx64/all/sub_14B8B0.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_14B8B0.c`
   - Core decompiler maturity pipeline (loop-driven, `M_ZERO` to `M_FINAL`).
-- `references/hexrays/ida_dump/hexx64/all/sub_13B0F0.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_13B0F0.c`
   - Stack variable address resolution and operand-to-frame mapping.
-- `references/hexrays/ida_dump/hexx64/all/sub_3EEC80.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_3EEC80.c`
   - Instruction/operand/dtype stack offset detection.
-- `references/hexrays/ida_dump/hexx64/all/sub_21B2A0.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_21B2A0.c`
   - Lvar allocation, `qvector` sorting, merging via `get_merge_state`.
-- `references/hexrays/ida_dump/hexx64/all/sub_215AC0.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_215AC0.c`
   - Lvar comparator/interference ordering (storage-first, then type).
-- `references/hexrays/ida_dump/hexx64/all/sub_21F320.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_21F320.c`
   - Stack frame and local layout.
-- `references/hexrays/ida_dump/hexx64/all/sub_2112D0.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_2112D0.c`
   - Lvar naming (`a1`, `v1`, `result`, `this`).
-- `references/hexrays/ida_dump/hexx64/all/sub_2662B0.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_2662B0.c`
   - Expression printing (`cot_*` dispatch).
-- `references/hexrays/ida_dump/hexx64/all/sub_268570.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_268570.c`
   - Statement printing (`cas_*` dispatch).
-- `references/hexrays/ida_dump/hexx64/all/sub_3DBC50.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_3DBC50.c`
   - Top-level ctree printing and line breaking.
-- `references/hexrays/ida_dump/hexx64/all/sub_40FBC0.c`
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_40FBC0.c`
   - Massive type/expression dispatcher (600+ case arms).
-- `references/hexrays/ida_dump/idallib/`
+- `research/decompiled-references/hexrays/ida_dump/idallib/`
   - `tinfo_t` support, `udt_type_data_t__get_best_fit_member`, `calc_tinfo_gaps`.
 
 ## Evidence Read for This Update
 
 This update folds in the current `research/` exports, `.sisyphus` phase plans,
-and the IDA/Hex-Rays decompiler dumps under `references/hexrays/ida_dump/`.
-The reference tree is large: `references/hexrays/ida_dump/hexx64/all/` contains
-8,398 decompiled C files, and `references/hexrays/ida_dump/` contains 46,131
+and the IDA/Hex-Rays decompiler dumps under `research/decompiled-references/hexrays/ida_dump/`.
+The reference tree is large: `research/decompiled-references/hexrays/ida_dump/hexx64/all/` contains
+8,398 decompiled C files, and `research/decompiled-references/hexrays/ida_dump/` contains 46,131
 `sub_*.c` files across processor/plugin dumps. The plan should therefore cite
 representative algorithm evidence instead of pretending every function was
 reverse-engineered manually.
@@ -561,9 +567,10 @@ Implementation status:
   mechanical lint cleanup across lifter/support crates.
 - `RUSTC_WRAPPER= cargo xtask lint-determinism` passes.
 - `RUSTC_WRAPPER= bash scripts/score_parity.sh` historically reported
-  `Aggregate Parity: 100.0%` in the 2026-05-17 rebaseline. As of the
-  2026-05-26 quality-axis cleanup the same gate reports `Stylistic Fixture
-  Parity: 91.1%`; it is not treated as semantic or type/variable parity.
+  `Aggregate Parity: 100.0%` in the 2026-05-17 rebaseline. The current
+  quality-axis cleanup reports `Stylistic Fixture Parity: 84.5%`; it is not
+  treated as semantic or type/variable parity. See
+  `docs/current-parity-ledger-2026-05-30.md` for stale/reframed status.
 - Focused regressions pass for DCE stale output cleanup, dead-flag stale output
   cleanup, x86 call/ret lifting, direct-call argument recovery, bitfield
   printing, assignment-return merging, fortified printf rendering, and
@@ -602,14 +609,16 @@ Tasks:
 - [x] Split the old single "parity" claim into explicit quality axes:
   stylistic fixture similarity, semantic correctness, and type/variable
   recovery accuracy.
-- [x] Add an honest quality-axis wrapper (`scripts/quality_axes.sh`) that runs
-  the current style score, the semantic report, and the type/variable recovery
-  report.
+- [x] Add an honest quality-axis wrapper (`scripts/quality_axes.sh`) intended
+  to run the current style score, the semantic report, and the type/variable
+  recovery report. `score_parity.sh` now reports the style score from emitted
+  `[score]` lines and keeps the exact-line golden failure as a note, so the
+  wrapper reaches all axes.
 - [~] Promote the compileable-subset tests into a broad semantic
   recompile-and-compare harness with original-binary behavior capture.
-- [~] Add DWARF/source-ground-truth type and variable recovery metrics:
-  recovered/expected accuracy has landed for C debug fixtures; precision,
-  broader normalization, and C++/non-host coverage remain open.
+- [x] Add DWARF/source-ground-truth type and variable recovery metrics:
+  recovered/expected recall and reported-fact precision now cover DWARF-backed,
+  parsed C/C++ source-only, optimized, and non-host signature facts.
 - [x] Add Dramko-style decompiler fidelity taxonomy counters to the fixture
   metrics summary.
 - [~] Add negative-output tests for null-address writes, undeclared returns,
@@ -644,20 +653,24 @@ Implementation status:
   becoming a void/stdcall function.
 - The 2026-05 quality-axis split is wired: `scripts/score_parity.sh` reports
   `Stylistic Fixture Parity` instead of aggregate parity, and
-  `scripts/quality_axes.sh` runs all three reports without implying the style
-  score proves semantic or type parity.
+  `scripts/quality_axes.sh` is the wrapper for all three axes. The style score
+  records the exact-line golden test's nonzero exit as a note, then lets the
+  semantic and type axes run; do not imply the style score proves semantic or
+  type parity.
 - `xtask semantic-report` is now the named semantic gate. It captures original
   fixture behavior, recompiles the decompiled C subset, compares behavior, and
   reports PASS/XFAIL/unsupported source-known fixtures with reasons. Current
-  state: 9 passed, 8 XFAIL, 0 unexpected failed, 3 unsupported.
+  state: 17 total PASS rows (14 executable equivalence + 3 non-host
+  shape-only), 3 XFAIL, 0 unexpected failed, 0 unsupported.
 - The golden fixture metrics summary now reports fidelity taxonomy counters.
   Current total: `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0
   total=1059`.
-- `xtask type-recovery-report` now scores recovered C facts against
-  DWARF/source facts for C debug fixtures:
-  `fixtures=4 functions=17 recovered=74 expected=101 accuracy=73.3%`
-  with `source_known=20 dwarf_candidates=5`. Precision and C++/non-host
-  scoring remain open.
+- `xtask type-recovery-report` now scores recovered DWARF and parsed-source
+  facts:
+  `fixtures=20 functions=63 c_functions=49 cpp_functions=14 recovered=206 expected=323 reported=1115 recall=63.8% precision=18.5%`
+  with `source_known=20 source_only=15 source_parsed=15
+  dwarf_candidates=5 cpp_candidates=4 scored_cpp=4 optimized_scored=15
+  scored_source_only=15 non_host_candidates=3 scored_non_host=3`.
 
 Acceptance:
 
@@ -1507,11 +1520,11 @@ Reference material:
 
 - `research/ida-hexrays-docs/sdk/dbg/` — 87 SDK files showing how IDA
   models a debugger backend (`dbg_plugmod.hpp`, `dbg_rpc_*.cpp`).
-- `references/ida/plugins/gdb_user/all/` — decompiled GDB-stub plugin
+- `research/decompiled-references/ida/plugins/gdb_user/all/` — decompiled GDB-stub plugin
   (984 functions).
-- `references/ida/plugins/linux_user/all/` — decompiled local Linux
+- `research/decompiled-references/ida/plugins/linux_user/all/` — decompiled local Linux
   debugger (610 functions).
-- `references/ida/plugins/bochs_user/all/` — Bochs integration (946
+- `research/decompiled-references/ida/plugins/bochs_user/all/` — Bochs integration (946
   functions).
 
 ### Tasks

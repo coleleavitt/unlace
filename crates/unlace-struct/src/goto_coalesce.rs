@@ -112,9 +112,7 @@ fn collect_aliases(nodes: &[HirNode], aliases: &mut BTreeMap<LabelId, LabelId>) 
 /// map. Cycles (which can only arise from synthetic test inputs, but are
 /// possible in principle) are broken by stopping at the first revisit so
 /// the resolver always terminates.
-fn resolve_aliases(
-    aliases: &BTreeMap<LabelId, LabelId>,
-) -> BTreeMap<LabelId, LabelId> {
+fn resolve_aliases(aliases: &BTreeMap<LabelId, LabelId>) -> BTreeMap<LabelId, LabelId> {
     let mut resolved = BTreeMap::new();
     for &src in aliases.keys() {
         let mut current = src;
@@ -210,7 +208,21 @@ mod tests {
             rust_async: None,
             noreturn: false,
             composite_var_types: BTreeMap::new(),
-            cpp_vtable_calls: BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
+            byref_params: BTreeSet::new(),
+            var_role_names: BTreeMap::new(),
+            finalized_signature: None,
+            byref_locals: BTreeSet::new(),
+            stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
         }
     }
 

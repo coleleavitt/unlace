@@ -158,6 +158,10 @@ pub struct FunctionQuality {
     pub output_stale_return_result: usize,
     /// Final emitted-C `Unimplemented` token leaks.
     pub output_unimplemented_tokens: usize,
+    /// Final emitted-C declarations that still use synthetic `vN`/`v_N`
+    /// temporary names. This tracks readability-visible leaked temps after
+    /// naming/coalescing, not semantic correctness.
+    pub output_leaked_temp_decls: usize,
     /// HIR control-flow nodes whose body collapsed to zero statements. Empty
     /// `if (...) { }` / `while (...) { }` etc. are usually structuring or
     /// DCE bugs — the cleanup never ran or the structurer kept a shell that
@@ -485,11 +489,52 @@ impl FunctionQuality {
         self.output_null_deref_sites = null_deref_regex().find_iter(emitted_c).count();
         self.output_stale_return_result = stale_return_result_count(emitted_c);
         self.output_unimplemented_tokens = emitted_c.matches("Unimplemented").count();
+        self.output_leaked_temp_decls = leaked_temp_decl_count(emitted_c);
         self.output_impossible_lvalue_sites =
             impossible_lvalue_regex().find_iter(emitted_c).count();
         self.output_lost_frame_offset_sites =
             lost_frame_offset_regex().find_iter(emitted_c).count();
     }
+}
+
+fn leaked_temp_decl_count(emitted_c: &str) -> usize {
+    let trace = quality_trace_enabled();
+    let mut count = 0usize;
+    for (line_no, line) in emitted_c.lines().enumerate() {
+        let trimmed = line.trim();
+        if !trimmed.contains("// temp") {
+            continue;
+        }
+        let decl = trimmed
+            .split_once("//")
+            .map_or(trimmed, |(decl, _)| decl)
+            .trim_end();
+        if !decl.ends_with(';') {
+            continue;
+        }
+        let leaked_name = decl
+            .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+            .find(|tok| is_leaked_temp_name(tok));
+        if let Some(name) = leaked_name {
+            count += 1;
+            if trace {
+                // Per-site visibility into the precision-denominator inflation:
+                // shows exactly which declaration each leaked temp came from,
+                // so a leaked-temp regression can be pinned to a single line.
+                eprintln!(
+                    "[unlace-quality] leaked-temp #{count} line={} name={name} decl={decl:?}",
+                    line_no + 1,
+                );
+            }
+        }
+    }
+    count
+}
+
+fn is_leaked_temp_name(name: &str) -> bool {
+    name.strip_prefix("v_")
+        .or_else(|| name.strip_prefix('v'))
+        .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
 }
 
 fn stale_return_result_count(emitted_c: &str) -> usize {
@@ -929,6 +974,7 @@ pub struct QualityTotals {
     pub output_null_deref_sites: usize,
     pub output_stale_return_result: usize,
     pub output_unimplemented_tokens: usize,
+    pub output_leaked_temp_decls: usize,
     pub output_empty_bodies: usize,
     pub output_impossible_lvalue_sites: usize,
     pub output_lost_frame_offset_sites: usize,
@@ -1009,6 +1055,7 @@ impl QualityTotals {
         self.output_null_deref_sites += q.output_null_deref_sites;
         self.output_stale_return_result += q.output_stale_return_result;
         self.output_unimplemented_tokens += q.output_unimplemented_tokens;
+        self.output_leaked_temp_decls += q.output_leaked_temp_decls;
         self.output_empty_bodies += q.output_empty_bodies;
         self.output_impossible_lvalue_sites += q.output_impossible_lvalue_sites;
         self.output_lost_frame_offset_sites += q.output_lost_frame_offset_sites;
@@ -1058,6 +1105,13 @@ impl QualityTotals {
 /// emission, and tolerates per-function failure (the malformed-input safety
 /// gate: one bad function must not abort the report).
 pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
+    analyze_binary_with_flirt(binary_path, &pipeline::FlirtConfig::default())
+}
+
+pub fn analyze_binary_with_flirt(
+    binary_path: &Path,
+    flirt_config: &pipeline::FlirtConfig,
+) -> Result<BinaryQuality> {
     let data = std::fs::read(binary_path)
         .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
 
@@ -1091,7 +1145,7 @@ pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
     };
 
     for entry in &functions {
-        match analyze_function(&image, lifter.as_ref(), entry, &functions) {
+        match analyze_function(&image, lifter.as_ref(), entry, &functions, flirt_config) {
             Ok(q) => {
                 report.totals.accumulate(&q);
                 report.functions.push(q);
@@ -1147,6 +1201,7 @@ fn analyze_function(
     lifter: &dyn Lifter,
     entry: &FunctionEntry,
     discovered: &[FunctionEntry],
+    flirt_config: &pipeline::FlirtConfig,
 ) -> Result<FunctionQuality> {
     let mut ir_func = pipeline::lift_function(image, lifter, entry)?;
     unlace_struct::merge_linear_blocks(&mut ir_func);
@@ -1162,7 +1217,7 @@ fn analyze_function(
     // so resolver-gated passes (noreturn, rust-panic) fire and their SSA
     // fields are populated for the counters below.
     let (symbols, flirt_calls) =
-        pipeline::build_symbol_table_and_flirt_with_functions(image, discovered);
+        pipeline::build_symbol_table_and_flirt_with_config(image, discovered, flirt_config);
     let mut stable_symbol_names: std::collections::BTreeMap<u64, &'static str> =
         std::collections::BTreeMap::new();
     for (&addr, name) in &symbols {
@@ -1211,21 +1266,61 @@ fn analyze_function(
     // Run the same post-structuring passes that the main pipeline applies so
     // the quality metric reflects the actual emitted output (not the raw
     // pre-pass HIR which is pessimistic on goto counts).
+    unlace_struct::flatten_if_else_chains(&mut hir);
+    unlace_struct::simplify_chain_conditions(&mut hir, &ssa);
+    unlace_struct::normalize_conditions(&mut hir);
+    unlace_struct::if_chain_to_switch(&mut hir, &ssa);
+    unlace_struct::recover_cmov_switches(&mut hir, &ssa);
     unlace_struct::goto_to_break(&mut hir);
     unlace_struct::goto_to_continue(&mut hir);
+    unlace_struct::detect_continue_break(&mut hir.body);
+    unlace_struct::reverse_loop_rotation(&mut hir);
+    unlace_struct::normalize_dowhile_to_while(&mut hir);
+    unlace_struct::while_to_for(&mut hir);
     unlace_struct::eliminate_forward_gotos(&mut hir);
     unlace_struct::hoist_cross_branch_labels(&mut hir);
+    unlace_struct::coalesce_goto_chains(&mut hir);
+    unlace_struct::collapse_label_fallthroughs(&mut hir);
     unlace_struct::duplicate_goto_conditions(&mut hir);
+    unlace_struct::duplicate_simple_label_tails(&mut hir);
+    unlace_struct::normalize_conditions(&mut hir);
+    unlace_struct::detect_continue_break(&mut hir.body);
     unlace_struct::eliminate_forward_gotos(&mut hir);
-    unlace_struct::cleanup_unreachable_labels(&mut hir);
-    unlace_struct::return_merge(&mut hir);
-    unlace_struct::eliminate_forward_gotos(&mut hir);
+    unlace_struct::coalesce_goto_chains(&mut hir);
     unlace_struct::collapse_label_fallthroughs(&mut hir);
     unlace_struct::cleanup_unreachable_labels(&mut hir);
+    unlace_struct::return_merge(&mut hir);
+    unlace_struct::duplicate_simple_label_tails(&mut hir);
+    unlace_struct::detect_continue_break(&mut hir.body);
+    unlace_struct::eliminate_forward_gotos(&mut hir);
+    unlace_struct::coalesce_goto_chains(&mut hir);
+    unlace_struct::collapse_label_fallthroughs(&mut hir);
+    unlace_struct::cleanup_unreachable_labels(&mut hir);
+    unlace_struct::eliminate_forward_gotos(&mut hir);
+    unlace_struct::cleanup_unreachable_labels(&mut hir);
+    unlace_struct::recover_guarded_whiles(&mut hir);
+    unlace_struct::cleanup_empty_ifs(&mut hir);
+    unlace_struct::cleanup_switches(&mut hir);
     unlace_struct::repair_missing_goto_labels(&mut hir);
 
-    let emitted_c =
-        unlace_output::print_c_full(&hir, None, None, Some(&symbols), Some(&image.string_table));
+    let annotations = unlace_output::PrinterAnnotations {
+        ssa_statement_slots: pipeline::collect_ssa_statement_slots(&ssa),
+        ssa_phi_uses: pipeline::collect_ssa_phi_uses(&ssa),
+        return_value_aliases: pipeline::collect_return_value_aliases(&ssa, &symbols),
+        stack_lvars: unlace_output::stack_lvar_annotations_from_ssa(&ssa),
+        ..Default::default()
+    };
+
+    let emitted_c = unlace_output::print_c_with_annotations(
+        &hir,
+        None,
+        None,
+        Some(&symbols),
+        Some(&image.string_table),
+        None,
+        None,
+        Some(&annotations),
+    );
     let mut quality = FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir, &flirt_calls);
     quality.collect_output_sanity(&emitted_c);
     Ok(quality)
@@ -1360,12 +1455,14 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - null deref sites: {nds}\n\
          - stale `return result;`: {srr}\n\
          - `Unimplemented` token leaks: {utl}\n\
+         - leaked temp declarations: {ltd}\n\
          - empty structured bodies: {eb}\n\
          - impossible lvalue sites: {il}\n\
          - lost stack-frame offset sites: {lf}",
         nds = t.output_null_deref_sites,
         srr = t.output_stale_return_result,
         utl = t.output_unimplemented_tokens,
+        ltd = t.output_leaked_temp_decls,
         eb = t.output_empty_bodies,
         il = t.output_impossible_lvalue_sites,
         lf = t.output_lost_frame_offset_sites,
@@ -1377,16 +1474,16 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
     use std::fmt::Write;
     let _ = writeln!(
         s,
-        "| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm | nullderef | badret | badtok |"
+        "| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm | nullderef | badret | badtok | leaktemp |"
     );
     let _ = writeln!(
         s,
-        "|----------|------:|-------:|----------:|--------:|------:|-------:|-------:|--------:|-----:|------:|--------:|----:|----------:|-------:|-------:|"
+        "|----------|------:|-------:|----------:|--------:|------:|-------:|-------:|--------:|-----:|------:|--------:|----:|----------:|-------:|-------:|---------:|"
     );
     for q in &report.functions {
         let _ = writeln!(
             s,
-            "| `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            "| `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
             q.name,
             q.ir_insns,
             q.unimplemented_ops,
@@ -1403,12 +1500,13 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
             q.output_null_deref_sites,
             q.output_stale_return_result,
             q.output_unimplemented_tokens,
+            q.output_leaked_temp_decls,
         );
     }
     let t = &report.totals;
     let _ = writeln!(
         s,
-        "| **TOTAL** | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+        "| **TOTAL** | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
         t.ir_insns,
         t.unimplemented_ops,
         t.callother_ops,
@@ -1424,6 +1522,7 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
         t.output_null_deref_sites,
         t.output_stale_return_result,
         t.output_unimplemented_tokens,
+        t.output_leaked_temp_decls,
     );
 }
 
@@ -1448,13 +1547,14 @@ fn render_classification(t: &QualityTotals, s: &mut String) {
     );
     let _ = writeln!(
         s,
-        "- **implemented but wrong** (recovery ran, low quality): {} unknown type(s), {} goto(s), {} asm block(s), {} null deref site(s), {} stale return(s), {} unimplemented token leak(s), {} empty body sites, {} impossible-lvalue site(s), {} lost-frame offset site(s)",
+        "- **implemented but wrong** (recovery ran, low quality): {} unknown type(s), {} goto(s), {} asm block(s), {} null deref site(s), {} stale return(s), {} unimplemented token leak(s), {} leaked temp declaration(s), {} empty body sites, {} impossible-lvalue site(s), {} lost-frame offset site(s)",
         t.unknown_types,
         t.gotos_emitted,
         t.asm_blocks,
         t.output_null_deref_sites,
         t.output_stale_return_result,
         t.output_unimplemented_tokens,
+        t.output_leaked_temp_decls,
         t.output_empty_bodies,
         t.output_impossible_lvalue_sites,
         t.output_lost_frame_offset_sites,
@@ -1469,8 +1569,8 @@ pub fn render_json(report: &BinaryQuality) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CallotherClass, classify_callother, impossible_lvalue_regex, lost_frame_offset_regex,
-        stale_return_result_count,
+        CallotherClass, classify_callother, impossible_lvalue_regex, leaked_temp_decl_count,
+        lost_frame_offset_regex, stale_return_result_count,
     };
     use smallvec::smallvec;
     use unlace_ir::{IrInsn, IrOp, Varnode};
@@ -1549,6 +1649,20 @@ mod tests {
     fn stale_return_counter_ignores_assigned_result_lvar() {
         let emitted = "int f(void) {\n    int result;\n    result = 3;\n    return result;\n}\n";
         assert_eq!(stale_return_result_count(emitted), 0);
+    }
+
+    #[test]
+    fn leaked_temp_decl_counter_matches_synthetic_temp_decls() {
+        let emitted = concat!(
+            "int f(int a1) {\n",
+            "    __int64 v12; // temp\n",
+            "    int v_4; // temp\n",
+            "    int result; // temp\n",
+            "    char c1; // ZF\n",
+            "    return a1;\n",
+            "}\n",
+        );
+        assert_eq!(leaked_temp_decl_count(emitted), 2);
     }
 
     #[test]

@@ -1,0 +1,16 @@
+unsigned __int64 __fastcall sub_305360(__int64 a1, unsigned __int8 a2)
+{
+  __int64 v2; // rax
+  unsigned __int8 v4; // [rsp+7h] [rbp-11h] BYREF
+  unsigned __int64 v5; // [rsp+8h] [rbp-10h]
+
+  v5 = __readfsqword(0x28u);
+  *(_BYTE *)(a1 + 745) = a2;
+  if ( QT::QCoreApplication::self )
+    sub_467A00(QT::QCoreApplication::self, a2);
+  v4 = a2;
+  v2 = sub_5313F0(qword_8C98B8);
+  if ( v2 )
+    sub_537630(v2, 7, &v4);
+  return v5 - __readfsqword(0x28u);
+}

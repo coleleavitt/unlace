@@ -23,20 +23,29 @@ Current status:
   - the 3-block region is accepted after header/source ordering fixes,
   - the 68-block `f_ackermann` region is accepted by the abnormal-entry
     labelled-control path without a synthetic state dispatcher.
+- Initial post-frontier quality cleanup is wired: simple labelled loop tails
+  are duplicated at goto sites, newly exposed dead tails are stripped after
+  label cleanup, and `UNLACE_LABEL_TAIL_DUP_TRACE=1` reports candidate labels
+  and replacements.
 - Rollback `UNLACE_DREAM_STRUCT=0` keeps the old `medium` baseline at 29 gotos:
   - `f_ackermann`: 16 legacy fallback gotos
   - `f_rec_fib`: 8
   - `main`: 4
   - `f_rec_power`: 1
-- Default DREAM output currently has 46 `medium` gotos because the
-  dispatch-free abnormal-entry path preserves each irreducible transfer as
-  labelled control. This is statement-preserving and default-wired, but it is
-  not yet a goto-count win for `f_ackermann`.
+- Default DREAM still preserves residual labelled control in `medium`, but the
+  first quality pass reduces the measured emitted whole-file `goto label_*` /
+  label counts from 81/57 to 76/52 without a synthetic dispatcher.
 
 The default-on flip is complete for the conservative DREAM seam and for the
 dispatch-free abnormal-entry labelled-control frontier. Remaining quality work
-is trace scheduling / higher-level recovery that reduces those preserved
-irreducible gotos without introducing a synthetic state dispatcher.
+is further trace scheduling / higher-level recovery that reduces preserved
+irreducible gotos without introducing a synthetic state dispatcher. The current
+non-slow ELF budgets are enforced by `quality_smoke`.
+
+For the current stale/reframed parity ledger, see
+`docs/current-parity-ledger-2026-05-30.md`. Do not list the multi-entry DREAM
+frontier itself as missing; the active work is goto/label quality after the
+dispatch-free frontier.
 
 ## Implemented Frontier: Dispatch-Free Abnormal Entries
 

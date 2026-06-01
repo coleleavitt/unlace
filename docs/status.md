@@ -3,12 +3,26 @@
 > **2026-05-29 update (commit `c07a9be2e`).** Toolchain gates (clippy
 > `-D warnings`, `lint-determinism`, `check`) are clean and every test target
 > is green **except** `unlace-test-harness --test golden_fixtures` (18 pass /
-> 14 fail). The 14 failing goldens are *stale* — they diverged from actual
-> output before the `964a5f7b` WIP baseline and need per-fixture rebaselining,
-> not a blanket refresh (see CLAUDE.md "Current Verified State" and
-> `scripts/classify_golden_diffs.sh`). `scripts/score_parity.sh` now reports
-> "Stylistic Fixture Parity ~86%"; the historical "100%" number measured a
-> narrower counter set and is gone. Treat the batch numbers below as intent.
+> 14 fail). Those 14 exact-line failures are a mixed set, not a blanket-stale
+> bucket: some expose producer bugs, some checked-in goldens are stale/lossy
+> relative to more correct current output, and some need per-fixture
+> reclassification after recent producer fixes. Do not blanket-refresh them;
+> use `docs/current-parity-ledger-2026-05-30.md`,
+> `docs/golden-triage-2026-05-29.md`, and
+> `scripts/classify_golden_diffs.sh` for row-by-row policy.
+> `scripts/score_parity.sh` now reports "Stylistic Fixture Parity ~82%"; the
+> historical "100%" number measured a narrower counter set and is gone. Treat
+> the batch numbers below as intent.
+
+> **2026-05-30 update.** The source-known semantic gate is green with
+> `xtask semantic-report` at 25 pass rows, 0 XFAIL, 0 failed, and 0
+> unsupported when the configured qemu-user runners are available. The
+> `quality_smoke` fixture loop now enforces per-fixture
+> budgets for gotos, labels, leaked temp declarations, raw stack-offset leaks,
+> unknown helpers, bad type facts, and zero semantic failures.
+> `xtask golden-triage` now has 2 exact-pass rows (`debug_hello`,
+> `x87_math`) and 13 classified review rows; the remaining exact-line
+> failures are still not eligible for blanket refresh.
 
 This file is the public source of truth for what works, what is experimental,
 and what is aspirational in unlace. It is derived from:
@@ -17,6 +31,8 @@ and what is aspirational in unlace. It is derived from:
 - `crates/unlace-cli/src/quality.rs` (output sanity gates).
 - `docs/rebaseline-2026-05-17.md` (current measured verification).
 - `docs/parity-quality-execution-plan-2026-05.md` (quality-axis split).
+- `docs/current-parity-ledger-2026-05-30.md` (current stale/reframed claim
+  reconciliation).
 - The per-batch handoffs under `docs/handoffs/`.
 
 Public claims in `README.md` must match what this file reports. When a batch
@@ -137,12 +153,13 @@ The old "aggregate parity" wording is retired. The current gates are:
 
 | axis | gate | current state | caveat |
 |------|------|---------------|--------|
-| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 86.8%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. The exact-line golden test still exits nonzero because checked-in goldens are stale. |
-| Semantic correctness | `cargo run -p xtask -- semantic-report` | 15 source-known executable equivalence cases pass; 2 host/source-known cases (`medium`, `stripped`) are tracked as XFAIL; 3 non-host cases are unsupported | Not full-corpus semantic correctness yet; known semantic gaps stay visible as XFAIL until fixed. |
-| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=5 functions=23 c_functions=18 cpp_functions=5 recovered=148 expected=148 reported=355 recall=100.0% precision=41.7% source_known=20 source_only=15 dwarf_candidates=5 cpp_candidates=4 scored_cpp=1 optimized_scored=3 non_host_candidates=3` | Exact textual DWARF/source scorer now includes C++ template DWARF, per-opt/per-arch buckets, and pointer/array/struct-reference fact counters; source-only and non-host cases remain explicit breadth denominators. |
+| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 84.9%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. `cargo run -p xtask -- golden-triage` currently has 2 exact-pass rows and 13 exact-line fixture rows for review, so do not blanket-refresh expected C. |
+| Semantic correctness | `cargo run -p xtask -- semantic-report` | 17 host/source-known executable equivalence cases pass; 0 host/source-known cases are tracked as XFAIL; 4 qemu-user non-host executable rows pass; 4 non-host cases also pass shape-only checks | Not full-corpus semantic correctness yet; qemu-user execution currently covers AArch64, MIPS64, PPC64, and RISC-V fixture behavior only. |
+| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=21 functions=64 c_functions=50 cpp_functions=14 recovered=207 expected=324 reported=1084 recall=63.9% precision=19.1% leaked_temp_decls=256 source_known=21 source_only=16 source_parsed=16 dwarf_candidates=5 cpp_candidates=4 scored_cpp=4 optimized_scored=15 scored_source_only=16 non_host_candidates=4 scored_non_host=4` | Exact textual scorer now includes DWARF facts, parsed C/C++ source-only facts, inline C++ source methods, per-opt/per-arch buckets, non-host source-defined signature facts, positional parameter type scoring, leaked-temp declaration counting, and pointer/array/struct-reference counters. |
 
-`bash scripts/quality_axes.sh` runs all three reports without treating a known
-XFAIL or skipped axis as solved. See
+`bash scripts/quality_axes.sh` runs all three reports without treating a
+skipped axis as solved. `scripts/score_parity.sh` reports the stylistic score
+even though the exact-line golden test exits nonzero. See
 `docs/parity-quality-execution-plan-2026-05.md` for the active metric plan.
 
 ## What is currently NOT shipped
@@ -152,20 +169,16 @@ production form. Tracked so the README doesn't overclaim:
 
 - FLIRT/SIG-driven library name recovery wired into the active CLI path.
 - DWARF v5 split-DWARF (`.dwo`/`.dwp`) evaluator and full DW_OP location lists.
-- PDB TPI/IPI stream walker.
+- PDB TPI/IPI breadth beyond the currently surfaced TPI slice.
 - dyld shared cache extraction and kernel-cache filesets.
 - Authenticode/SHA-2 signature verification on PE.
 - Persistent `.unlace` project format with rename/comment/type round-trip.
 - LSP/TUI/Web UI front-ends.
 - Reproducible signed releases + SBOM publishing.
 - Full semantic recompile-and-compare across the source-known fixture corpus.
-  The current report covers 15 passing executable cases, 2 known failing host
-  cases (optimized-main lvar/phi plus x86 subregister recovery), and 3
-  non-host unsupported cases.
-- Broad DWARF/source-ground-truth type and variable recovery accuracy metrics.
-  The current report scores 4 C DWARF fixtures exactly and skips C++/non-host
-  cases explicitly.
-
+  The current report covers 17 passing host executable cases, 0 known failing
+  host cases, 4 passing qemu-user non-host executable rows, and 4 non-host
+  shape-only rows.
 Adding any of these moves the related row in the matrices above; do not promote
 items until the evidence exists.
 

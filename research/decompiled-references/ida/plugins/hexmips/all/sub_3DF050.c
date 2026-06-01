@@ -1,0 +1,5 @@
+__int64 __fastcall sub_3DF050(__int64 a1, __int64 a2)
+{
+  return sub_3DEED0(a1 - 32, a2);
+}
+

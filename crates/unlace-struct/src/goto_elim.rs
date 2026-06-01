@@ -258,15 +258,69 @@ fn while_break_to_if(nodes: &mut [HirNode]) {
 }
 
 fn remove_unreachable_after_terminal(nodes: &mut Vec<HirNode>) {
-    let Some(index) = nodes.iter().position(is_terminal) else {
-        return;
-    };
-    let removed_stats = hir_stats(&nodes[index + 1..]);
-    if removed_stats.labels > 0 || removed_stats.calls > 0 || removed_stats.returns > 0 {
-        return;
+    let mut index = 0usize;
+    while index < nodes.len() {
+        if !is_terminal(&nodes[index]) {
+            index += 1;
+            continue;
+        }
+
+        let start = index + 1;
+        let mut end = start;
+        while end < nodes.len() && !contains_label(&nodes[end]) {
+            end += 1;
+        }
+        if start < end {
+            trace_removed_unreachable(index, &nodes[start..end]);
+            nodes.drain(start..end);
+        }
+        if start >= nodes.len() {
+            break;
+        }
+        index = start;
     }
-    trace_removed_unreachable(index, &nodes[index + 1..]);
-    nodes.truncate(index + 1);
+}
+
+fn contains_label(node: &HirNode) -> bool {
+    match node {
+        HirNode::Label(_) => true,
+        HirNode::Block(children) => children.iter().any(contains_label),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            then_body.iter().any(contains_label)
+                || else_body
+                    .as_ref()
+                    .is_some_and(|else_body| else_body.iter().any(contains_label))
+        }
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            body.iter().any(contains_label)
+        }
+        HirNode::Switch { cases, default, .. } => {
+            cases
+                .iter()
+                .any(|(_, body, _)| body.iter().any(contains_label))
+                || default
+                    .as_ref()
+                    .is_some_and(|default| default.iter().any(contains_label))
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_arms,
+        } => {
+            try_body.iter().any(contains_label)
+                || catch_arms
+                    .iter()
+                    .any(|(_, body)| body.iter().any(contains_label))
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => try_body.iter().any(contains_label) || finally_body.iter().any(contains_label),
+        _ => false,
+    }
 }
 
 fn is_terminal(node: &HirNode) -> bool {
@@ -601,7 +655,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_before_side_effect_tail_keeps_tail() {
+    fn terminal_before_unlabelled_side_effect_tail_drops_tail() {
         let mut hir = func(vec![
             HirNode::If {
                 cond: cond(),
@@ -617,10 +671,10 @@ mod tests {
         ]);
         eliminate_forward_gotos(&mut hir);
         assert!(
-            hir.body.iter().any(
+            !hir.body.iter().any(
                 |node| matches!(node, HirNode::Statement(insn) if insn.op == unlace_ir::IrOp::Call)
             ),
-            "side-effect tail must not be truncated: {:#?}",
+            "unlabelled side-effect tail after terminal flow is unreachable: {:#?}",
             hir.body
         );
     }

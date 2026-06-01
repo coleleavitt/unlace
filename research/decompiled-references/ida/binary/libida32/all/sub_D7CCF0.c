@@ -1,0 +1,6 @@
+// attributes: thunk
+__int64 __fastcall sub_D7CCF0(__int64 a1)
+{
+  return sub_DFF560(a1);
+}
+

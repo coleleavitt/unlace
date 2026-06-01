@@ -1,0 +1,63 @@
+__int64 __fastcall sub_1A2F4D0(__int64 *a1, __int64 *a2, _QWORD *a3)
+{
+  __int64 result; // rax
+  __int64 v4; // r9
+  __int64 v5; // rdi
+  int v6; // ecx
+  unsigned int v7; // eax
+  _QWORD *v8; // rsi
+  __int64 v9; // r8
+  int v10; // r10d
+  _QWORD *v11; // r11
+
+  result = *((unsigned int *)a1 + 4);
+  if ( (_DWORD)result )
+  {
+    v4 = *a1;
+    v5 = *a2;
+    v6 = result - 1;
+    v7 = (result - 1) & (((unsigned int)*a2 >> 4) ^ ((unsigned int)*a2 >> 9));
+    v8 = (_QWORD *)(v4 + 56LL * v7);
+    v9 = *v8;
+    if ( v5 == *v8 )
+    {
+      *a3 = v8;
+      return 1;
+    }
+    else if ( v9 == -4096 )
+    {
+      *a3 = v8;
+      return 0;
+    }
+    else
+    {
+      v10 = 1;
+      v11 = nullptr;
+      while ( 1 )
+      {
+        if ( !v11 && v9 == -8192 )
+          v11 = v8;
+        v7 = v6 & (v10 + v7);
+        v8 = (_QWORD *)(v4 + 56LL * v7);
+        v9 = *v8;
+        if ( *v8 == v5 )
+        {
+          *a3 = v8;
+          return 1;
+        }
+        if ( v9 == -4096 )
+          break;
+        ++v10;
+      }
+      if ( v11 )
+        v8 = v11;
+      *a3 = v8;
+      return 0;
+    }
+  }
+  else
+  {
+    *a3 = 0;
+  }
+  return result;
+}

@@ -13,7 +13,10 @@ That was the expected boundary from `docs/dream-step-3c-plan.md`: acyclic
 condition refinement was wired first, then cyclic regions were added in Step 4.
 
 The full default-on rollout task list lives in
-`docs/dream-default-rollout-tasks.md`.
+`docs/dream-default-rollout-tasks.md`. Current stale/reframed status is
+reconciled in `docs/current-parity-ledger-2026-05-30.md`: the multi-entry
+DREAM frontier is implemented, and the remaining work is labelled-control
+quality rather than dispatcher construction.
 
 ## Research basis
 

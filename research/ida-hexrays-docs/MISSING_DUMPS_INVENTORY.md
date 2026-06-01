@@ -4,13 +4,13 @@
 
 - **`.i64` exists** = IDA already decompiled the binary into a database; you can `idat` open it and extract pseudocode
 - **`.i64` missing** = no pre-decompiled database; you'd need to decompile yourself (idat headless or manually)
-- **`references/ida/.../all/` exists** = already extracted into the repo as C-like source dumps
+- **`research/decompiled-references/ida/.../all/` exists** = already extracted into the repo as C-like source dumps
 
 The goal is to know what to do next: nothing if both exist, "open existing .i64" if just .i64 exists, or "decompile fresh" if neither exists.
 
 ---
 
-## What you already have in `references/ida/`
+## What you already have in `research/decompiled-references/ida/`
 
 Big dumps (already extracted):
 - `idalib/all` — 60,174 C files
@@ -33,7 +33,7 @@ Plus the new `research/ida-hexrays-docs/` (this session): 55 changelogs + 33 PDF
 
 ## Priority 1 — Decompile these next (high value, NOT YET decompiled)
 
-These have **no `.i64`** and **no `references/ida/.../all/` dump**. Need fresh decompilation.
+These have **no `.i64`** and **no `research/decompiled-references/ida/.../all/` dump**. Need fresh decompilation.
 
 ### Critical for unlace's roadmap
 
@@ -62,7 +62,7 @@ These have **no `.i64`** and **no `references/ida/.../all/` dump**. Need fresh d
 | Binary | Why | Effort |
 |--------|-----|--------|
 | **`loaders/macho.so`** | Need full dump (you only have partial 40 files). Mach-O is critical for Apple RE | M |
-| **`loaders/pe.so`** | Need full dump (you have `references/ida/loaders/pe/all` 567 files — verify this matches latest) | S |
+| **`loaders/pe.so`** | Need full dump (you have `research/decompiled-references/ida/loaders/pe/all` 567 files — verify this matches latest) | S |
 
 ### Plugins not yet referenced
 
@@ -86,7 +86,7 @@ These have **no `.i64`** and **no `references/ida/.../all/` dump**. Need fresh d
 
 ## Priority 2 — Already has `.i64`, just need to open and extract
 
-These have IDA-decompiled `.i64` databases sitting next to them but no `references/ida/.../all/` extracted dump yet. Easy: open `.i64` and run "dump all functions" → C files.
+These have IDA-decompiled `.i64` databases sitting next to them but no `research/decompiled-references/ida/.../all/` extracted dump yet. Easy: open `.i64` and run "dump all functions" → C files.
 
 ### Plugins with `.i64` ready to extract
 
@@ -248,7 +248,7 @@ Open the `.i64` files for the **3 most valuable** plugins headlessly with `idat`
 4. `plugins/dwarf.so.i64` (DWARF processing)
 5. `plugins/pdb.so.i64` (PDB processing)
 
-For each, save as `references/ida/plugins/<name>/all/*.c`.
+For each, save as `research/decompiled-references/ida/plugins/<name>/all/*.c`.
 
 ### Day 3 (decompile fresh — the genuinely missing ones)
 

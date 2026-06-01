@@ -13,6 +13,6 @@ fi
 
 exec python3 scripts/measure_parity.py \
     --binary "${PARITY_BINARY:-hexrays/ida-9.1/hexx64.so}" \
-    --refs "${PARITY_REFS:-references/hexrays/ida_dump/hexx64/all}" \
+    --refs "${PARITY_REFS:-research/decompiled-references/hexrays/ida_dump/hexx64/all}" \
     --unlace target/release/unlace \
     "$@"

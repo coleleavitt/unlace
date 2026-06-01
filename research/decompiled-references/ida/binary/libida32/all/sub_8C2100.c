@@ -1,0 +1,51 @@
+_BYTE *__fastcall sub_8C2100(unsigned __int64 a1, __int64 a2)
+{
+  __int64 v2; // rax
+  _BYTE *v3; // rbx
+  void (__fastcall *v5)(void *); // rax
+  _BYTE *v6; // rdi
+  unsigned __int64 v7[5]; // [rsp+0h] [rbp-28h] BYREF
+
+  v7[1] = __readfsqword(0x28u);
+  v2 = operator new(0x18u);
+  *(_BYTE *)(v2 + 8) = 48;
+  v3 = (_BYTE *)v2;
+  *(_QWORD *)v2 = off_2B14848;
+  *(_DWORD *)(v2 + 12) = 0;
+  *(_BYTE *)(v2 + 16) = 0;
+  if ( a1 )
+  {
+    v7[0] = a1;
+    if ( __CFADD__(a2, a1) )
+    {
+      if ( !v2 )
+        return nullptr;
+    }
+    else
+    {
+      if ( sub_7BFDB0((_DWORD *)(v2 + 12), v7) )
+      {
+        if ( v7[0] < a2 + a1 )
+        {
+          v3[16] = *(_BYTE *)v7[0];
+          return v3;
+        }
+        v3[16] = 0;
+      }
+      if ( !v3 )
+        return nullptr;
+      v5 = *(void (__fastcall **)(void *))(*(_QWORD *)v3 + 8LL);
+      if ( v5 != sub_8B21B0 )
+      {
+        v6 = v3;
+        v3 = nullptr;
+        v5(v6);
+        return v3;
+      }
+    }
+    operator delete(v3, 0x18u);
+    return nullptr;
+  }
+  return v3;
+}
+

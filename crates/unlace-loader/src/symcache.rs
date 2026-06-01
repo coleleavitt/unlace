@@ -20,7 +20,7 @@
 //!
 //! References:
 //! - research/ida-hexrays-docs/changelogs/ida-9_0.txt — IDA 9.0 PDB module
-//! - references/ida/plugins/pdb/all/ (1421 fns) — IDA's PDB loader
+//! - research/decompiled-references/ida/plugins/pdb/all/ (1421 fns) — IDA's PDB loader
 //! - research/ida-hexrays-docs/changelogs/ida-9_3.txt — debuginfod support
 
 use std::path::PathBuf;

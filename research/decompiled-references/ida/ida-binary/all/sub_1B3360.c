@@ -1,0 +1,27 @@
+void __fastcall sub_1B3360(_QWORD *a1, const char *a2)
+{
+  QT::QWidget *v2; // rbp
+  __int64 v4; // rdi
+  __int64 v5; // rdi
+
+  v2 = (QT::QWidget *)(a1 - 5);
+  *(a1 - 5) = &GraphMiniView___vtable;
+  *a1 = GraphMiniView___vtable_at__40;
+  *(a1 - 3) = GraphMiniView___vtable_at__16;
+  sub_2A6D90(a1 - 5);
+  v4 = a1[4];
+  *a1 = &stylable_widget_mixin_t___vtable;
+  if ( v4 )
+  {
+    a1[5] = 0;
+    qfree(v4, a2);
+  }
+  v5 = a1[1];
+  if ( v5 )
+  {
+    a1[2] = 0;
+    qfree(v5, a2);
+  }
+  QT::QWidget::~QWidget(v2);
+  operator delete(v2, 0xB8u);
+}

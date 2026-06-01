@@ -1,0 +1,5 @@
+void TGroup::selectNext()
+{
+  ;
+}
+

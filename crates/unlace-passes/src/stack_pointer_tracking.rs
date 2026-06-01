@@ -57,6 +57,34 @@ impl Pass for StackPointerTrackingPass {
             classify_saved_register_slots(func, &spec, &block_entry_sp_delta);
         let frame_holes = compute_frame_holes(func, &spec, &saved_register_slots);
         let stack_accesses = collect_stack_accesses(func, &spec, &sp_delta_at);
+        stack_access_trace_line(
+            func,
+            format_args!(
+                "summary changed_pending={} sp_points={} block_entries={} stack_holes={} frame_holes={} saved_slots={} accesses={} resolved={} lost={} frame_present={}",
+                sp_delta_at != func.sp_delta_at
+                    || stack_holes != func.stack_holes
+                    || dynamic_sp != func.dynamic_sp
+                    || block_entry_sp_delta != func.block_entry_sp_delta
+                    || frame_holes != func.frame_holes
+                    || saved_register_slots != func.saved_register_slots
+                    || stack_accesses != func.stack_accesses,
+                sp_delta_at.len(),
+                block_entry_sp_delta.len(),
+                stack_holes.len(),
+                frame_holes.len(),
+                saved_register_slots.len(),
+                stack_accesses.len(),
+                stack_accesses
+                    .iter()
+                    .filter(|acc| acc.resolved_slot.is_some())
+                    .count(),
+                stack_accesses
+                    .iter()
+                    .filter(|acc| acc.lost_provenance)
+                    .count(),
+                func.stack_frame.is_some(),
+            ),
+        );
 
         let changed = sp_delta_at != func.sp_delta_at
             || stack_holes != func.stack_holes
@@ -91,6 +119,16 @@ fn collect_stack_accesses(
     let mut out = Vec::new();
     for (&bid, block) in &func.function.blocks {
         for (idx, insn) in block.insns.iter().enumerate() {
+            if func.frame_setup_insns.contains(&(bid, idx)) {
+                stack_access_trace_line(
+                    func,
+                    format_args!(
+                        "skip-frame-setup bid={bid:?} idx={idx} addr={:#x} op={:?}",
+                        insn.addr, insn.op
+                    ),
+                );
+                continue;
+            }
             let (is_store, addr_idx) = match insn.op {
                 IrOp::Load => (false, 1usize),
                 IrOp::Store => (true, 1usize),
@@ -102,6 +140,13 @@ fn collect_stack_accesses(
             let addr = &insn.inputs[addr_idx];
             let Some(delta) = resolve_addr_to_sp_offset(func, bid, idx, addr, spec, sp_delta_at)
             else {
+                stack_access_trace_line(
+                    func,
+                    format_args!(
+                        "unresolved-access bid={bid:?} idx={idx} addr={:#x} op={:?} addr_vn={addr:?}",
+                        insn.addr, insn.op
+                    ),
+                );
                 continue;
             };
             // Final width comes from the value operand on STORE (input[2])
@@ -112,10 +157,21 @@ fn collect_stack_accesses(
             } else {
                 insn.output.as_ref().map(|v| v.size).unwrap_or(8)
             };
-            let resolved_slot = func.stack_vars.keys().copied().find(|off| *off == delta);
-            let lost_provenance = resolved_slot.is_none()
-                && delta < 0
-                && delta >= func.dom_tree.root().0 as i64 - 4096;
+            let resolved_slot = resolved_stack_slot(func, delta, width);
+            let lost_provenance = stack_access_lost_provenance(func, delta, resolved_slot);
+            stack_access_trace_line(
+                func,
+                format_args!(
+                    "access bid={bid:?} idx={idx} addr={:#x} op={:?} delta={} width={} is_store={} resolved={resolved_slot:?} lost={lost_provenance} frame_present={} stack_vars={}",
+                    insn.addr,
+                    insn.op,
+                    delta,
+                    width,
+                    is_store,
+                    func.stack_frame.is_some(),
+                    func.stack_vars.len(),
+                ),
+            );
             out.push(StackAccess {
                 source_addr: insn.addr,
                 // No human-readable name for the SP varnode in the spec;
@@ -131,6 +187,76 @@ fn collect_stack_accesses(
         }
     }
     out
+}
+
+fn stack_access_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
+    if !stack_access_trace_enabled() {
+        return;
+    }
+    if let Some(filter) = stack_access_trace_filter()
+        && !func.function.name.contains(&filter)
+        && !message.to_string().contains(&filter)
+    {
+        return;
+    }
+    eprintln!(
+        "[unlace stack-access] func={} {message}",
+        func.function.name
+    );
+}
+
+fn stack_access_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_STACK_ACCESS_TRACE")
+        || env_flag_enabled("UNLACE_STACK_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn stack_access_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_STACK_ACCESS_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_STACK_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .filter(|s| !s.is_empty())
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .and_then(|v| v.into_string().ok())
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+        })
+        .unwrap_or(false)
+}
+
+fn resolved_stack_slot(func: &SsaFunction, delta: i64, width: u8) -> Option<i64> {
+    if let Some(frame) = &func.stack_frame {
+        if frame.locals.contains_key(&delta) {
+            return Some(delta);
+        }
+        let access_end = delta.saturating_add(i64::from(width.max(1)));
+        for (&offset, local) in frame.locals.range(..=delta).rev() {
+            let slot_end = offset.saturating_add(local.size as i64);
+            if delta >= offset && access_end <= slot_end {
+                return Some(offset);
+            }
+            if slot_end <= delta {
+                break;
+            }
+        }
+    }
+    func.stack_vars.keys().copied().find(|off| *off == delta)
+}
+
+fn stack_access_lost_provenance(
+    func: &SsaFunction,
+    delta: i64,
+    resolved_slot: Option<i64>,
+) -> bool {
+    if resolved_slot.is_some() || delta >= 0 {
+        return false;
+    }
+    !func.saved_register_slots.contains(&delta)
 }
 
 /// Resolve `addr` to a numeric SP-delta if and only if its definition
@@ -601,7 +727,7 @@ fn primitive_size(ty: PrimitiveType) -> u32 {
 mod tests {
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{StackVar, build_ssa};
+    use unlace_ir::ssa::{StackFrame, StackLocal, StackVar, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -977,6 +1103,60 @@ mod tests {
         assert_eq!(acc.delta, -8, "expected sp-relative offset -8, got {acc:?}");
         assert_eq!(acc.source_addr, 0x100C);
         assert_eq!(acc.base_register, "sp");
+    }
+
+    #[test]
+    fn stack_accesses_resolve_against_recovered_frame_slots() {
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let u2 = Varnode::unique(16, 4);
+        let mut ssa = build(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u0,
+                smallvec![rsp(), Varnode::constant(16, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u0], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                u1,
+                smallvec![rsp(), Varnode::constant(10, 8)],
+                0x1008,
+            ),
+            IrInsn::with_output(
+                IrOp::Load,
+                u2,
+                smallvec![Varnode::constant(0, 8), u1],
+                0x100C,
+            ),
+        ]);
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.stack_accesses[0].delta, -6);
+        assert_eq!(ssa.stack_accesses[0].resolved_slot, None);
+        assert!(ssa.stack_accesses[0].lost_provenance);
+
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 8,
+                access_widths: vec![4],
+                kind: Default::default(),
+            },
+        );
+        ssa.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 8,
+            max_pos_offset: 0,
+            min_neg_offset: -8,
+        });
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.stack_accesses[0].resolved_slot, Some(-8));
+        assert!(!ssa.stack_accesses[0].lost_provenance);
     }
 
     /// A STORE through `[rsp-8]` is recorded with `is_store=true` and the

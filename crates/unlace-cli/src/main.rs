@@ -9,12 +9,13 @@ use tracing_subscriber::EnvFilter;
 use unlace_ir::ArchId;
 use unlace_lift::get_lifter;
 use unlace_loader::{
-    BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf, import_pdb_types,
+    BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar,
+    import_pdb_types,
 };
 use unlace_plugin::PluginManager;
 
 use unlace_cli::annotations::{self, AnnotationDb};
-use unlace_cli::args::{self, Args, Cmd, LuminaAction};
+use unlace_cli::args::{self, Args, Cmd, LuminaAction, ProjectAction};
 use unlace_cli::batch::{self, BatchConfig};
 use unlace_cli::pipeline::{self, PipelineConfig};
 
@@ -22,6 +23,10 @@ fn main() {
     let args = Args::parse();
 
     let result = match args.cmd {
+        Cmd::Project { action } => {
+            let _flame_guard = init_tracing(0);
+            run_project(action)
+        }
         Cmd::Decompile {
             binary,
             function,
@@ -34,9 +39,14 @@ fn main() {
             plugin_dir,
             max_width,
             tab_width,
+            dwarf_sidecar,
             annotations_load,
             annotations_save,
             stats,
+            no_flirt,
+            sig,
+            sig_dir,
+            flirt_min_confidence,
         } => {
             let _flame_guard = init_tracing(verbose);
             let print_config = if max_width.is_some() || tab_width.is_some() {
@@ -56,23 +66,32 @@ fn main() {
                     tracing::warn!(err = %e, "failed to load annotations; continuing without");
                     None
                 });
-            let config = PipelineConfig {
-                timeout: Duration::from_secs(timeout),
-                print_config,
-                annotations: annotation_db.clone(),
-            };
-            let result = load_plugins(plugin_dir.as_deref()).and_then(|mgr| {
-                run_decompile(
-                    &binary,
-                    function.as_deref(),
-                    emit,
-                    arch.as_deref(),
-                    output.as_deref(),
-                    &config,
-                    &mgr,
-                    stats,
-                )
-            });
+            let result = read_dwarf_sidecar(dwarf_sidecar.as_deref())
+                .and_then(|dwarf_sidecar_bytes| {
+                    build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence)
+                        .map(|flirt| (dwarf_sidecar_bytes, flirt))
+                })
+                .and_then(|(dwarf_sidecar_bytes, flirt)| {
+                    let config = PipelineConfig {
+                        timeout: Duration::from_secs(timeout),
+                        print_config,
+                        annotations: annotation_db.clone(),
+                        flirt,
+                        dwarf_sidecar: dwarf_sidecar_bytes,
+                    };
+                    load_plugins(plugin_dir.as_deref()).and_then(|mgr| {
+                        run_decompile(
+                            &binary,
+                            function.as_deref(),
+                            emit,
+                            arch.as_deref(),
+                            output.as_deref(),
+                            &config,
+                            &mgr,
+                            stats,
+                        )
+                    })
+                });
             if let Some(path) = annotations_save.as_deref() {
                 let to_save = annotation_db.unwrap_or_default();
                 if let Err(e) = to_save.save(path) {
@@ -106,6 +125,7 @@ fn main() {
             emit,
             arch,
             output_dir,
+            dwarf_sidecar,
             merged: _,
             timeout,
             interproc,
@@ -113,28 +133,41 @@ fn main() {
             scope,
             max_iterations,
             verbose,
+            no_flirt,
+            sig,
+            sig_dir,
+            flirt_min_confidence,
         } => {
             let _flame_guard = init_tracing(verbose);
-            run_batch_cmd(
-                binary,
-                jobs,
-                emit,
-                arch,
-                output_dir,
-                timeout,
-                interproc,
-                all_functions,
-                scope,
-                max_iterations,
-            )
+            build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence).and_then(|flirt| {
+                run_batch_cmd(
+                    binary,
+                    jobs,
+                    emit,
+                    arch,
+                    output_dir,
+                    dwarf_sidecar,
+                    timeout,
+                    interproc,
+                    all_functions,
+                    scope,
+                    max_iterations,
+                    flirt,
+                )
+            })
         }
         Cmd::Quality {
             binary,
             format,
             verbose,
+            no_flirt,
+            sig,
+            sig_dir,
+            flirt_min_confidence,
         } => {
             let _flame_guard = init_tracing(verbose);
-            run_quality(&binary, format)
+            build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence)
+                .and_then(|flirt| run_quality(&binary, format, &flirt))
         }
         Cmd::IrDump {
             binary,
@@ -283,6 +316,87 @@ fn main() {
     }
 }
 
+fn run_project(action: ProjectAction) -> Result<()> {
+    match action {
+        ProjectAction::New { binary, output } => {
+            let project = unlace_session::project::create_for_binary(&binary)?;
+            project.save_to(&output)?;
+            println!(
+                "created {} for {} ({})",
+                output.display(),
+                binary.display(),
+                project.binary.sha256
+            );
+            Ok(())
+        }
+        ProjectAction::Open { file, binary, json } => {
+            let (_session, loaded) =
+                unlace_session::project::open_into_session(&file, binary.as_deref())?;
+            let annotations = loaded.annotations();
+            if json {
+                let summary = serde_json::json!({
+                    "file": file,
+                    "format": match &loaded {
+                        unlace_session::project::LoadedProject::Project(_) => ".unlace",
+                        unlace_session::project::LoadedProject::LegacyUnldb(_) => ".unldb",
+                    },
+                    "binary_path": loaded.binary_path(),
+                    "binary_sha256": loaded.binary_sha256(),
+                    "selection": loaded.selection(),
+                    "annotations": {
+                        "renames": annotations.renames.len(),
+                        "comments": annotations.comments.len(),
+                        "type_overlays": annotations.types.len(),
+                        "bookmarks": annotations.bookmarks.len(),
+                        "patches": annotations.patches.len(),
+                    },
+                });
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            } else {
+                println!("File:          {}", file.display());
+                println!(
+                    "Format:        {}",
+                    match &loaded {
+                        unlace_session::project::LoadedProject::Project(_) => ".unlace",
+                        unlace_session::project::LoadedProject::LegacyUnldb(_) => ".unldb (legacy)",
+                    }
+                );
+                if let Some(path) = loaded.binary_path() {
+                    println!("Binary:        {}", path.display());
+                }
+                println!("Binary SHA256: {}", loaded.binary_sha256());
+                println!(
+                    "Annotations:   {} renames, {} comments, {} types, {} bookmarks, {} patches",
+                    annotations.renames.len(),
+                    annotations.comments.len(),
+                    annotations.types.len(),
+                    annotations.bookmarks.len(),
+                    annotations.patches.len(),
+                );
+            }
+            Ok(())
+        }
+        ProjectAction::Save { file } => {
+            let loaded = unlace_session::project::load_any(&file)?;
+            let project = loaded.into_project(None);
+            project.save_to(&file)?;
+            println!("saved {}", file.display());
+            Ok(())
+        }
+        ProjectAction::ExportAnnotations { file, output } => {
+            let loaded = unlace_session::project::load_any(&file)?;
+            let json = unlace_session::project::export_annotations_json(&loaded)?;
+            if let Some(path) = output {
+                fs::write(&path, json)
+                    .with_context(|| format!("writing annotations to {}", path.display()))?;
+            } else {
+                println!("{json}");
+            }
+            Ok(())
+        }
+    }
+}
+
 fn run_siggen(
     archive_path: &std::path::Path,
     output_path: Option<&std::path::Path>,
@@ -412,8 +526,12 @@ fn run_ir_dump(
     Ok(())
 }
 
-fn run_quality(binary_path: &std::path::Path, format: args::QualityFormat) -> Result<()> {
-    let report = unlace_cli::quality::analyze_binary(binary_path)?;
+fn run_quality(
+    binary_path: &std::path::Path,
+    format: args::QualityFormat,
+    flirt: &pipeline::FlirtConfig,
+) -> Result<()> {
+    let report = unlace_cli::quality::analyze_binary_with_flirt(binary_path, flirt)?;
     let rendered = match format {
         args::QualityFormat::Md => unlace_cli::quality::render_markdown(&report),
         args::QualityFormat::Json => unlace_cli::quality::render_json(&report)?,
@@ -1037,6 +1155,20 @@ fn resolve_annotations(
     Ok(None)
 }
 
+fn build_flirt_config(
+    no_flirt: bool,
+    sig_paths: Vec<std::path::PathBuf>,
+    sig_dirs: Vec<std::path::PathBuf>,
+    min_confidence: u8,
+) -> Result<pipeline::FlirtConfig> {
+    pipeline::FlirtConfig::from_options(pipeline::FlirtOptions {
+        enabled: !no_flirt,
+        sig_paths,
+        sig_dirs,
+        min_confidence,
+    })
+}
+
 fn load_plugins(dir: Option<&std::path::Path>) -> Result<PluginManager> {
     let mut mgr = PluginManager::new();
     if let Some(dir) = dir {
@@ -1061,6 +1193,21 @@ fn load_plugins(dir: Option<&std::path::Path>) -> Result<PluginManager> {
 ///
 /// Failure is non-fatal: we trace and move on, mirroring how DWARF is
 /// handled in `run_decompile`.
+/// Read the optional `--dwarf-sidecar` file into memory. Returns `Ok(None)`
+/// when no path was supplied, and a contextual error when the path is set but
+/// unreadable (rather than silently degrading to no debug info).
+fn read_dwarf_sidecar(path: Option<&std::path::Path>) -> Result<Option<Vec<u8>>> {
+    match path {
+        Some(p) => {
+            let bytes = fs::read(p)
+                .with_context(|| format!("failed to read --dwarf-sidecar '{}'", p.display()))?;
+            tracing::info!(sidecar = %p.display(), bytes = bytes.len(), "loaded DWARF sidecar");
+            Ok(Some(bytes))
+        }
+        None => Ok(None),
+    }
+}
+
 fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
     if image.pdb_types.is_some() {
         return;
@@ -1178,7 +1325,7 @@ fn run_decompile(
     let t_discover = std::time::Instant::now();
     let mut functions = pipeline::discover_functions(&image, function_filter)?;
 
-    let dwarf = match import_dwarf(&image) {
+    let dwarf = match import_dwarf_with_sidecar(&image, config.dwarf_sidecar.as_deref()) {
         Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
             tracing::info!(
                 functions = d.functions.len(),
@@ -1511,11 +1658,13 @@ fn run_batch_cmd(
     emit: args::EmitFormat,
     arch: Option<String>,
     output_dir: Option<std::path::PathBuf>,
+    dwarf_sidecar: Option<std::path::PathBuf>,
     timeout: u64,
     interproc: bool,
     all_functions: bool,
     scope: Option<String>,
     max_iterations: usize,
+    flirt: pipeline::FlirtConfig,
 ) -> Result<()> {
     let scope_re = match scope.as_deref() {
         Some(pat) => {
@@ -1531,6 +1680,8 @@ fn run_batch_cmd(
         all_functions,
         scope: scope_re,
         max_iterations,
+        flirt,
+        dwarf_sidecar: read_dwarf_sidecar(dwarf_sidecar.as_deref())?,
     };
     batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
 }

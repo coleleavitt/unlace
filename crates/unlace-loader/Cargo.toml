@@ -12,7 +12,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 rustc-demangle = "0.1"
 unlace-ir = { workspace = true }
-wasmparser = "0.225"
+wasmparser = { workspace = true }
 ureq = { version = "2.10", default-features = false, features = ["tls"], optional = true }
 
 [features]
@@ -22,4 +22,4 @@ http-symfetch = ["dep:ureq"]
 
 [dev-dependencies]
 insta = { workspace = true }
-tempfile = "3"
+tempfile = { workspace = true }

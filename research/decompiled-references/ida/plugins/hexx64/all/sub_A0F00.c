@@ -1,0 +1,47 @@
+__int64 __fastcall sub_A0F00(__int64 a1, __int64 a2, __int64 a3, unsigned int a4, unsigned __int8 a5)
+{
+  unsigned __int64 *v6; // r14
+  int v8; // ebx
+  unsigned int v9; // eax
+  unsigned int v10; // ebx
+  unsigned int v12; // [rsp+0h] [rbp-98h] BYREF
+  __int128 v13; // [rsp+8h] [rbp-90h]
+  _QWORD v14[2]; // [rsp+20h] [rbp-78h] BYREF
+  _QWORD v15[2]; // [rsp+30h] [rbp-68h] BYREF
+  _QWORD v16[11]; // [rsp+40h] [rbp-58h] BYREF
+
+  v6 = *(unsigned __int64 **)(a1 + 112);
+  v16[3] = __readfsqword(0x28u);
+  v14[0] = 0xFFFFFFFF00000000LL;
+  v14[1] = 0;
+  v15[0] = 0xFFFFFFFF00000000LL;
+  v15[1] = 0;
+  v16[0] = 0xFFFFFFFF00000000LL;
+  v16[1] = 0;
+  v13 = 0;
+  sub_1253A0((__int64)&v12, a3);
+  if ( v12 == 2 )
+  {
+    if ( *(_BYTE *)(a1 + 145) == a5
+      || (unsigned __int8)sub_12CBA0((__int64)&v12, v6, HIDWORD(v16[0]) - *(_DWORD *)(a2 + 68)) )
+    {
+      goto LABEL_3;
+    }
+LABEL_7:
+    v10 = 0;
+    goto LABEL_4;
+  }
+  v8 = a5 + 10;
+  sub_12B6F0((__int64)&v12, (__int64)v6, v8, *(_DWORD *)(a2 + 68), 1);
+  if ( v12 == v8 )
+    goto LABEL_7;
+LABEL_3:
+  LOBYTE(v9) = sub_125B90((unsigned __int8 *)a2, (__int64)v6, &v12, a4);
+  v10 = v9;
+LABEL_4:
+  sub_11CDA0((__int64)v16);
+  sub_11CDA0((__int64)v15);
+  sub_11CDA0((__int64)v14);
+  return v10;
+}
+

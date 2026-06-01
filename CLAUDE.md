@@ -101,21 +101,25 @@ Last verified on 2026-05-29 (commit `c07a9be2e`), after recovering the
   `unlace-cli --test cli_smoke` (29/29), and `--test quality_smoke` (6/6),
   are green.
 - `RUSTC_WRAPPER= bash scripts/score_parity.sh` reports `Stylistic Fixture
-  Parity: ~86%` (the script was renamed from "Aggregate Parity"; the old
+  Parity: 84.5%` (the script was renamed from "Aggregate Parity"; the old
   100% number is gone — it measured a narrower counter set).
 
-### The 14 failing goldens are stale, not regressions
+### The 14 failing goldens are mixed; classify per fixture
 
 `scripts/classify_golden_diffs.sh` (new) buckets each failing golden's diff
 into prelude / size / renum / struct and prints a refresh-vs-review verdict.
 Per-fixture git blame against the WIP parent (`4da39dbd6`) and the last-good
-WIP baseline (`7aa62dc0`) established:
+WIP baseline (`7aa62dc0`) first established long-running drift, then the
+follow-up triage in `docs/golden-triage-2026-05-29.md` and
+`docs/current-parity-ledger-2026-05-30.md` refined the policy:
 
 - **14 of 15 goldens already diverged from actual output before the WIP
-  commit** — they are long-stale, drifted across many prior commits. Blanket
-  `UPDATE_GOLDEN=1` would lock in that historical drift, which CLAUDE.md
-  forbids. They need per-fixture review against *intended* output, not a
-  mechanical refresh.
+  commit**, but the remaining exact-line failures are not one uniform stale
+  bucket. Some expose real producer bugs, some checked-in expected files are
+  stale/lossy relative to more correct current output, and some are mixed.
+  Blanket `UPDATE_GOLDEN=1` would lock in unreviewed drift, which this file
+  forbids. They need per-fixture classification against *intended* output, not
+  a mechanical refresh.
 - **Only `arc_features` was byte-clean at the parent** and was freshly
   regressed by the WIP's recursive-descent rewrite (ARCompact `arc_branch`
   truncated 24→16 bytes by an over-eager interior-padding early-stop). Fixed

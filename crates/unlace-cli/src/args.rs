@@ -14,6 +14,12 @@ pub struct Args {
 
 #[derive(Subcommand)]
 pub enum Cmd {
+    /// Create, open, save, and export `.unlace` project files.
+    Project {
+        #[command(subcommand)]
+        action: ProjectAction,
+    },
+
     /// Decompile a binary file.
     Decompile {
         /// Path to the binary file.
@@ -62,6 +68,12 @@ pub enum Cmd {
         #[arg(long)]
         tab_width: Option<usize>,
 
+        /// External DWARF sidecar (a separate ELF carrying `.debug_*`
+        /// sections, e.g. from `objcopy --only-keep-debug`). Lets a stripped
+        /// binary recover parameter/local/type names from the companion file.
+        #[arg(long)]
+        dwarf_sidecar: Option<PathBuf>,
+
         /// Path to a JSON annotation database to load before printing.
         /// Defaults to `<binary>.unlace.json` when present.
         #[arg(long)]
@@ -78,6 +90,22 @@ pub enum Cmd {
         /// aggregate counters (Unimplemented/Callother/goto/etc.).
         #[arg(long)]
         stats: bool,
+
+        /// Disable FLIRT/SIG matching entirely.
+        #[arg(long)]
+        no_flirt: bool,
+
+        /// Additional IDA `.sig` signature file to load. May be repeated.
+        #[arg(long = "sig")]
+        sig: Vec<PathBuf>,
+
+        /// Directory containing IDA `.sig` files. May be repeated.
+        #[arg(long = "sig-dir")]
+        sig_dir: Vec<PathBuf>,
+
+        /// Minimum FLIRT confidence as an integer percentage.
+        #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u8).range(0..=100))]
+        flirt_min_confidence: u8,
     },
 
     /// Generate FLIRT patterns from a compiled static library archive (.a).
@@ -127,6 +155,12 @@ pub enum Cmd {
         #[arg(long)]
         output_dir: Option<PathBuf>,
 
+        /// External DWARF sidecar (a separate ELF carrying `.debug_*`
+        /// sections, e.g. from `objcopy --only-keep-debug`). Lets a stripped
+        /// binary recover parameter/local/type names from the companion file.
+        #[arg(long)]
+        dwarf_sidecar: Option<PathBuf>,
+
         /// Write single merged output (default when --output-dir is absent).
         #[arg(long)]
         merged: bool,
@@ -158,6 +192,22 @@ pub enum Cmd {
         /// Increase verbosity (-v, -vv, -vvv).
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,
+
+        /// Disable FLIRT/SIG matching entirely.
+        #[arg(long)]
+        no_flirt: bool,
+
+        /// Additional IDA `.sig` signature file to load. May be repeated.
+        #[arg(long = "sig")]
+        sig: Vec<PathBuf>,
+
+        /// Directory containing IDA `.sig` files. May be repeated.
+        #[arg(long = "sig-dir")]
+        sig_dir: Vec<PathBuf>,
+
+        /// Minimum FLIRT confidence as an integer percentage.
+        #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u8).range(0..=100))]
+        flirt_min_confidence: u8,
     },
 
     /// Dump end-state SSA IR text for one (or all) functions at a chosen
@@ -205,6 +255,22 @@ pub enum Cmd {
         /// Increase verbosity (-v, -vv, -vvv).
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,
+
+        /// Disable FLIRT/SIG matching entirely.
+        #[arg(long)]
+        no_flirt: bool,
+
+        /// Additional IDA `.sig` signature file to load. May be repeated.
+        #[arg(long = "sig")]
+        sig: Vec<PathBuf>,
+
+        /// Directory containing IDA `.sig` files. May be repeated.
+        #[arg(long = "sig-dir")]
+        sig_dir: Vec<PathBuf>,
+
+        /// Minimum FLIRT confidence as an integer percentage.
+        #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u8).range(0..=100))]
+        flirt_min_confidence: u8,
     },
 
     /// Launch the iced-based desktop GUI.
@@ -381,6 +447,43 @@ pub enum Cmd {
         /// Actually fetch (vs. just print the URL).
         #[arg(long)]
         fetch: bool,
+    },
+}
+
+/// Sub-actions for `unlace project`.
+#[derive(Subcommand)]
+pub enum ProjectAction {
+    /// Create a new empty `.unlace` project bound to a binary SHA-256.
+    New {
+        /// Binary the project is bound to.
+        binary: PathBuf,
+        /// Output project path.
+        #[arg(long, short)]
+        output: PathBuf,
+    },
+    /// Open a `.unlace` project or legacy `.unldb` database.
+    Open {
+        /// Project/database file to open.
+        file: PathBuf,
+        /// Override the binary path recorded in the project.
+        #[arg(long)]
+        binary: Option<PathBuf>,
+        /// Emit a JSON summary.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Re-save a project file in the current `.unlace` schema.
+    Save {
+        /// Project/database file to validate and save.
+        file: PathBuf,
+    },
+    /// Export only user annotations from a `.unlace` or `.unldb` file.
+    ExportAnnotations {
+        /// Project/database file to read.
+        file: PathBuf,
+        /// Write JSON to a file instead of stdout.
+        #[arg(long, short)]
+        output: Option<PathBuf>,
     },
 }
 

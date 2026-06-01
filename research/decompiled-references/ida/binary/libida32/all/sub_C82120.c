@@ -1,0 +1,8 @@
+__int64 __fastcall sub_C82120(__int64 a1, char a2, __int64 *a3)
+{
+  _BYTE v4[12]; // [rsp+Ch] [rbp-Ch] BYREF
+
+  v4[0] = a2;
+  return sub_C82010(a1, 0x18Bu, v4, a3);
+}
+

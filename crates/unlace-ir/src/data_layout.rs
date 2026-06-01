@@ -53,6 +53,8 @@ impl DataLayout {
     pub fn type_size(&self, ty: &Type) -> Option<u64> {
         match ty {
             Type::Primitive(p) => self.primitive_size(*p),
+            Type::Named(name) if name == "long double" => Some(16),
+            Type::Named(_) => None,
             Type::Ptr(_) | Type::FuncPtr { .. } => Some(u64::from(self.pointer_size)),
             Type::Array {
                 element,
@@ -77,6 +79,8 @@ impl DataLayout {
     pub fn type_align(&self, ty: &Type) -> Option<u64> {
         match ty {
             Type::Primitive(p) => self.primitive_align(*p),
+            Type::Named(name) if name == "long double" => Some(16),
+            Type::Named(_) => None,
             Type::Ptr(_) | Type::FuncPtr { .. } => Some(u64::from(self.pointer_align)),
             Type::Array { element, .. } => self.type_align(element),
             Type::Struct { fields, .. } | Type::Union { fields, .. } => fields

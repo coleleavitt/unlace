@@ -35,6 +35,8 @@
 //! responsible for splicing the result wherever it makes sense
 //! (printer prototype, registry, downstream type propagation).
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, VarnodeSlot};
 use unlace_ir::types::Type;
 use unlace_ir::{IrOp, SpaceId, Varnode};
@@ -49,6 +51,7 @@ const RSI: u64 = 48;
 const RDI: u64 = 56;
 const R8: u64 = 64;
 const R9: u64 = 72;
+const RIP: u64 = 0x288;
 
 const SYSV_ARG_REGS: &[u64] = &[RDI, RSI, RDX, RCX, R8, R9];
 const MSX64_ARG_REGS: &[u64] = &[RCX, RDX, R8, R9];
@@ -56,6 +59,72 @@ const AARCH64_ARG_REGS: &[u64] = &[0, 8, 16, 24, 32, 40, 48, 56];
 
 /// AArch64 return register (X0).
 const AARCH64_X0: u64 = 0;
+
+const X87_FLD: u64 = 0x310;
+const X87_FSTP: u64 = 0x311;
+const X87_FADD: u64 = 0x312;
+const X87_FSUB: u64 = 0x313;
+const X87_FMUL: u64 = 0x314;
+const X87_FDIV: u64 = 0x315;
+const X87_FCOM: u64 = 0x316;
+const X87_FXCH: u64 = 0x317;
+const X87_FST: u64 = 0x318;
+const X87_FADDP: u64 = 0x360;
+const X87_FSUBP: u64 = 0x361;
+const X87_FSUBRP: u64 = 0x362;
+const X87_FMULP: u64 = 0x363;
+const X87_FDIVP: u64 = 0x364;
+const X87_FDIVRP: u64 = 0x365;
+const X87_FCOMP: u64 = 0x366;
+const X87_FCOMPP: u64 = 0x367;
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .map(|v| !v.is_empty() && v != "0")
+        .unwrap_or(false)
+}
+
+fn sig_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_SIGNATURE_TRACE")
+        || env_flag_enabled("UNLACE_CALLING_TRACE")
+        || env_flag_enabled("UNLACE_TYPE_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn sig_trace_verbose_enabled() -> bool {
+    env_flag_enabled("UNLACE_SIGNATURE_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_CALLING_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TYPE_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn sig_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_SIGNATURE_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_CALLING_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TYPE_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .filter(|s| !s.is_empty())
+}
+
+fn sig_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
+    if !sig_trace_enabled() {
+        return;
+    }
+    if let Some(filter) = sig_trace_filter()
+        && !func.function.name.contains(&filter)
+    {
+        return;
+    }
+    eprintln!("[unlace signature] func={} {message}", func.function.name);
+}
+
+fn sig_trace_line_verbose(func: &SsaFunction, message: impl std::fmt::Display) {
+    if sig_trace_verbose_enabled() {
+        sig_trace_line(func, message);
+    }
+}
 
 /// Finalized prototype emitted for a function.
 ///
@@ -100,11 +169,21 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
         if uses.is_empty() {
             // Rule 1: dead param — drop entirely.
             dropped += 1;
+            sig_trace_line(
+                func,
+                format!("drop-param idx={idx} name={name} reg={reg} reason=no-uses"),
+            );
             continue;
         }
 
         // Rule 2: narrow type if every use is an `IntAnd(reg, 0xFF)` mask.
         let narrowed = if uses.iter().all(|u| matches!(u, ParamUse::AndMaskFF)) {
+            sig_trace_line(
+                func,
+                format!(
+                    "narrow-param idx={idx} name={name} reg={reg} from={ty:?} to=Int(1) uses={uses:?}"
+                ),
+            );
             Type::Primitive(PrimitiveType::Int(1))
         } else {
             Type::Primitive(*ty)
@@ -113,19 +192,80 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
         final_params.push((name.clone(), narrowed));
     }
 
+    if final_params.is_empty()
+        && let Some(x87_params) = x87_long_double_stack_params(func)
+    {
+        sig_trace_line(
+            func,
+            format!("x87-stack-params params={x87_params:?} source=inferred-stack-params"),
+        );
+        final_params = x87_params;
+    }
+
     // Rule 3: infer return type from caller-side use.
-    let return_type = infer_return_from_callers(func, callers)
+    let mut return_type = infer_return_from_callers(func, callers)
         .unwrap_or(Type::Primitive(func.inferred_return_type));
+    if matches!(return_type, Type::Primitive(PrimitiveType::Unknown))
+        && x87_arithmetic_returns_long_double(func)
+    {
+        sig_trace_line(
+            func,
+            "x87-return type=long double reason=st0-arithmetic-return",
+        );
+        return_type = long_double_type();
+    }
+    if matches!(return_type, Type::Primitive(PrimitiveType::Unknown))
+        && x87_compare_returns_int(func)
+    {
+        sig_trace_line(func, "x87-return type=int reason=compare-result-return");
+        return_type = Type::Primitive(PrimitiveType::Int(4));
+    }
+    if matches!(return_type, Type::Primitive(PrimitiveType::Unknown))
+        && cxx_explicit_zero_return_int(func)
+    {
+        sig_trace_line(func, "cxx-return type=int reason=explicit-zero-return");
+        return_type = Type::Primitive(PrimitiveType::Int(4));
+    }
+    if matches!(return_type, Type::Primitive(PrimitiveType::Unknown))
+        && cxx_indirect_tailcall_returns_int(func)
+    {
+        sig_trace_line(func, "cxx-return type=int reason=indirect-tailcall-return");
+        return_type = Type::Primitive(PrimitiveType::Int(4));
+    }
+    if matches!(
+        return_type,
+        Type::Primitive(PrimitiveType::Unknown | PrimitiveType::Int(8))
+    ) && cxx_returns_rip_relative_static_address(func)
+    {
+        sig_trace_line(
+            func,
+            "static-address-return type=char * reason=cxx-rip-relative-return",
+        );
+        return_type = char_ptr_type();
+    }
 
     // Rule 4: detect sret (hidden struct-return pointer).
     let sret = detect_sret(func);
 
-    FinalizedSignature {
+    let sig = FinalizedSignature {
         params: final_params,
         return_type,
         dropped_param_count: dropped,
         sret,
-    }
+    };
+    sig_trace_line(
+        func,
+        format!(
+            "finalize cc={cc:?} inferred_params={:?} inferred_return={:?} params={:?} return={:?} dropped={} sret={}",
+            func.inferred_params,
+            func.inferred_return_type,
+            sig.params,
+            sig.return_type,
+            sig.dropped_param_count,
+            sig.sret
+        ),
+    );
+    sig
 }
 
 /// Classification of one read of a parameter register in the function
@@ -186,9 +326,16 @@ fn param_register_uses(func: &SsaFunction, reg_offset: u64) -> Vec<ParamUse> {
                 if !written_in_block
                     && input_reads_register(func, bid, insn_idx, input_idx, input, reg_offset)
                 {
-                    uses.push(classify_param_use(
-                        func, bid, insn_idx, insn, input_idx, reg_offset,
-                    ));
+                    let use_kind =
+                        classify_param_use(func, bid, insn_idx, insn, input_idx, reg_offset);
+                    sig_trace_line_verbose(
+                        func,
+                        format!(
+                            "param-use reg={} bid={} insn={} input={} op={:?} kind={use_kind:?} raw={:?}",
+                            reg_offset, bid.0, insn_idx, input_idx, insn.op, input
+                        ),
+                    );
+                    uses.push(use_kind);
                 }
             }
             if let Some(out) = insn.output
@@ -266,6 +413,13 @@ fn infer_return_from_callers(func: &SsaFunction, callers: &[&SsaFunction]) -> Op
     let mut saw_any = false;
 
     for &caller in callers {
+        sig_trace_line_verbose(
+            func,
+            format!(
+                "return-from-callers inspect caller={} target=0x{:x} ret_reg={ret_reg}",
+                caller.function.name, this_addr
+            ),
+        );
         for block in caller.function.blocks.values() {
             for (idx, insn) in block.insns.iter().enumerate() {
                 if insn.op != IrOp::Call {
@@ -278,13 +432,36 @@ fn infer_return_from_callers(func: &SsaFunction, callers: &[&SsaFunction]) -> Op
                     continue;
                 }
                 let Some(use_ty) = first_return_use(block, idx, ret_reg) else {
+                    sig_trace_line_verbose(
+                        func,
+                        format!(
+                            "return-from-callers caller={} block={} call_idx={} no-first-use",
+                            caller.function.name, block.id.0, idx
+                        ),
+                    );
                     continue;
                 };
+                sig_trace_line_verbose(
+                    func,
+                    format!(
+                        "return-from-callers caller={} block={} call_idx={} use_ty={use_ty:?}",
+                        caller.function.name, block.id.0, idx
+                    ),
+                );
                 saw_any = true;
                 match observed {
                     None => observed = Some(use_ty),
                     Some(ref t) if *t == use_ty => {}
-                    Some(_) => return None, // conflict → bail
+                    Some(ref t) => {
+                        sig_trace_line(
+                            func,
+                            format!(
+                                "return-from-callers conflict caller={} previous={t:?} observed={use_ty:?}",
+                                caller.function.name
+                            ),
+                        );
+                        return None;
+                    }
                 }
             }
         }
@@ -337,6 +514,290 @@ fn infer_consumer_type(insn: &unlace_ir::IrInsn, reg_input: &Varnode) -> Type {
     // Generic copy / move / store / further arithmetic on the full
     // register treats it as the register's full width.
     Type::Primitive(PrimitiveType::Int(reg_input.size))
+}
+
+fn long_double_type() -> Type {
+    Type::Named("long double".to_string())
+}
+
+fn char_ptr_type() -> Type {
+    Type::Named("char *".to_string())
+}
+
+fn x87_long_double_stack_params(func: &SsaFunction) -> Option<Vec<(String, Type)>> {
+    if !has_x87_callother(func) || func.inferred_stack_params.is_empty() {
+        return None;
+    }
+    let params = func
+        .inferred_stack_params
+        .iter()
+        .copied()
+        .filter(|off| *off >= 8)
+        .enumerate()
+        .map(|(idx, _off)| (format!("a{}", idx + 1), long_double_type()))
+        .collect::<Vec<_>>();
+    (!params.is_empty()).then_some(params)
+}
+
+fn has_x87_callother(func: &SsaFunction) -> bool {
+    func.function
+        .blocks
+        .values()
+        .flat_map(|block| block.insns.iter())
+        .any(|insn| x87_callother_tag(insn).is_some())
+}
+
+fn x87_arithmetic_returns_long_double(func: &SsaFunction) -> bool {
+    let mut saw_arithmetic = false;
+    let mut saw_return = false;
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if let Some(tag) = x87_callother_tag(insn)
+                && matches!(
+                    tag,
+                    X87_FADD
+                        | X87_FSUB
+                        | X87_FMUL
+                        | X87_FDIV
+                        | X87_FADDP
+                        | X87_FSUBP
+                        | X87_FSUBRP
+                        | X87_FMULP
+                        | X87_FDIVP
+                        | X87_FDIVRP
+                )
+            {
+                saw_arithmetic = true;
+            }
+            if insn.op == IrOp::Return {
+                saw_return = true;
+            }
+        }
+    }
+    saw_arithmetic && saw_return
+}
+
+fn x87_compare_returns_int(func: &SsaFunction) -> bool {
+    if !func
+        .function
+        .blocks
+        .values()
+        .flat_map(|block| block.insns.iter())
+        .any(|insn| {
+            matches!(
+                x87_callother_tag(insn),
+                Some(X87_FCOM | X87_FCOMP | X87_FCOMPP)
+            )
+        })
+    {
+        return false;
+    }
+
+    let defs = build_def_map(func);
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if insn.op != IrOp::Return {
+                continue;
+            }
+            let Some(value) = insn.inputs.first() else {
+                continue;
+            };
+            let mut visiting = BTreeSet::new();
+            if value_is_int_like_return(*value, &defs, &mut visiting) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn x87_callother_tag(insn: &unlace_ir::IrInsn) -> Option<u64> {
+    if insn.op != IrOp::Callother {
+        return None;
+    }
+    let tag = insn.inputs.first()?;
+    if tag.space != SpaceId::Const {
+        return None;
+    }
+    matches!(
+        tag.offset,
+        X87_FLD
+            | X87_FSTP
+            | X87_FADD
+            | X87_FSUB
+            | X87_FMUL
+            | X87_FDIV
+            | X87_FCOM
+            | X87_FXCH
+            | X87_FST
+            | X87_FADDP
+            | X87_FSUBP
+            | X87_FSUBRP
+            | X87_FMULP
+            | X87_FDIVP
+            | X87_FDIVRP
+            | X87_FCOMP
+            | X87_FCOMPP
+    )
+    .then_some(tag.offset)
+}
+
+fn cxx_returns_rip_relative_static_address(func: &SsaFunction) -> bool {
+    if !is_itanium_cpp_symbol(func) {
+        return false;
+    }
+    let defs = build_def_map(func);
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if insn.op != IrOp::Return {
+                continue;
+            }
+            let Some(value) = insn.inputs.first() else {
+                continue;
+            };
+            let mut visiting = BTreeSet::new();
+            if value_is_rip_relative_static_address(*value, &defs, &mut visiting) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn cxx_explicit_zero_return_int(func: &SsaFunction) -> bool {
+    if !is_itanium_cpp_symbol(func) || is_itanium_ctor_or_dtor(&func.function.name) {
+        return false;
+    }
+    func.function.blocks.values().any(|block| {
+        block.insns.iter().any(|insn| {
+            insn.op == IrOp::Return
+                && insn.inputs.first().is_some_and(|value| {
+                    value.space == SpaceId::Const && value.offset == 0 && value.size <= 8
+                })
+        })
+    })
+}
+
+fn cxx_indirect_tailcall_returns_int(func: &SsaFunction) -> bool {
+    if !is_itanium_cpp_symbol(func) || is_itanium_ctor_or_dtor(&func.function.name) {
+        return false;
+    }
+    func.function
+        .blocks
+        .values()
+        .flat_map(|block| block.insns.iter())
+        .any(|insn| insn.op == IrOp::Branchind)
+}
+
+fn is_itanium_cpp_symbol(func: &SsaFunction) -> bool {
+    func.function.name.starts_with("_Z")
+}
+
+fn is_itanium_ctor_or_dtor(name: &str) -> bool {
+    name.contains("C1E")
+        || name.contains("C2E")
+        || name.contains("C3E")
+        || name.contains("D0E")
+        || name.contains("D1E")
+        || name.contains("D2E")
+}
+
+fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, &unlace_ir::IrInsn> {
+    let mut defs = BTreeMap::new();
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if let Some(out) = insn.output {
+                defs.entry(out).or_insert(insn);
+            }
+        }
+    }
+    defs
+}
+
+fn value_is_int_like_return(
+    value: Varnode,
+    defs: &BTreeMap<Varnode, &unlace_ir::IrInsn>,
+    visiting: &mut BTreeSet<Varnode>,
+) -> bool {
+    if value.space == SpaceId::Const {
+        return value.size <= 8;
+    }
+    if value.space == SpaceId::Register && value.offset == RAX {
+        return value.size <= 8;
+    }
+    if !visiting.insert(value) {
+        return false;
+    }
+    let result = defs.get(&value).is_some_and(|insn| match insn.op {
+        IrOp::Copy | IrOp::IntZext | IrOp::IntSext | IrOp::Subpiece => insn
+            .inputs
+            .first()
+            .copied()
+            .is_some_and(|input| value_is_int_like_return(input, defs, visiting)),
+        IrOp::IntOr
+        | IrOp::IntAnd
+        | IrOp::IntXor
+        | IrOp::IntAdd
+        | IrOp::IntSub
+        | IrOp::IntMult
+        | IrOp::IntSright
+        | IrOp::IntRight
+        | IrOp::IntLeft
+        | IrOp::Multiequal => insn
+            .inputs
+            .iter()
+            .copied()
+            .all(|input| value_is_int_like_return(input, defs, visiting)),
+        _ => false,
+    });
+    visiting.remove(&value);
+    result
+}
+
+fn value_is_rip_relative_static_address(
+    value: Varnode,
+    defs: &BTreeMap<Varnode, &unlace_ir::IrInsn>,
+    visiting: &mut BTreeSet<Varnode>,
+) -> bool {
+    if !visiting.insert(value) {
+        return false;
+    }
+    let result = defs.get(&value).is_some_and(|insn| match insn.op {
+        IrOp::IntAdd | IrOp::Ptradd => {
+            insn.inputs.len() == 2
+                && ((value_is_rip_base_or_address(insn.inputs[0], defs, visiting)
+                    && insn.inputs[1].space == SpaceId::Const)
+                    || (value_is_rip_base_or_address(insn.inputs[1], defs, visiting)
+                        && insn.inputs[0].space == SpaceId::Const))
+        }
+        IrOp::Copy | IrOp::IntZext | IrOp::IntSext | IrOp::Subpiece => insn
+            .inputs
+            .first()
+            .copied()
+            .is_some_and(|input| value_is_rip_relative_static_address(input, defs, visiting)),
+        IrOp::Multiequal => {
+            !insn.inputs.is_empty()
+                && insn
+                    .inputs
+                    .iter()
+                    .copied()
+                    .all(|input| value_is_rip_relative_static_address(input, defs, visiting))
+        }
+        _ => false,
+    });
+    visiting.remove(&value);
+    result
+}
+
+fn value_is_rip_base_or_address(
+    value: Varnode,
+    defs: &BTreeMap<Varnode, &unlace_ir::IrInsn>,
+    visiting: &mut BTreeSet<Varnode>,
+) -> bool {
+    if value.space == SpaceId::Register && value.offset == RIP {
+        return true;
+    }
+    value_is_rip_relative_static_address(value, defs, visiting)
 }
 
 /// Detect the sret (struct-return) pattern: the first parameter is a
@@ -438,7 +899,14 @@ pub fn detect_sret(func: &SsaFunction) -> bool {
     let predominantly_store = store_addr_uses >= 2 && store_addr_uses > other_uses;
     let is_ptr_like = first_param_is_ptr || (store_addr_uses >= 2 && other_uses == 0);
 
-    is_ptr_like && predominantly_store && returned_through_rax
+    let result = is_ptr_like && predominantly_store && returned_through_rax;
+    sig_trace_line_verbose(
+        func,
+        format!(
+            "sret first_arg_reg={first_arg_reg} ret_reg={ret_reg} first_param_is_ptr={first_param_is_ptr} store_addr_uses={store_addr_uses} other_uses={other_uses} returned_through_ret={returned_through_rax} predominantly_store={predominantly_store} result={result}"
+        ),
+    );
+    result
 }
 
 /// Late-pipeline pass that runs [`finalize_signature`] against the
@@ -512,6 +980,16 @@ mod tests {
         let mut ssa = build_ssa(f);
         ssa.calling_convention = CallingConvention::SystemV;
         ssa.inferred_params = params;
+        ssa
+    }
+
+    fn make_named_func(name: &str, addr: u64, insns: Vec<IrInsn>) -> SsaFunction {
+        let mut f = Function::new(name, BlockId(0), addr);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns = insns;
+        f.insert_block(bb);
+        let mut ssa = build_ssa(f);
+        ssa.calling_convention = CallingConvention::SystemV;
         ssa
     }
 
@@ -730,6 +1208,77 @@ mod tests {
         assert!(
             !detect_sret(&ssa),
             "should NOT detect sret: RDI is loaded from, not stored to"
+        );
+    }
+
+    #[test]
+    fn x87_compare_result_finalizes_int_return() {
+        let ssa = make_named_func(
+            "compare_x87",
+            0x1000,
+            vec![
+                IrInsn::without_output(
+                    IrOp::Callother,
+                    smallvec![Varnode::constant(X87_FCOM, 8), Varnode::unique(0, 10)],
+                    0x1000,
+                ),
+                IrInsn::without_output(IrOp::Return, smallvec![Varnode::constant(0, 8)], 0x1004),
+            ],
+        );
+
+        let sig = finalize_signature(&ssa, &[]);
+        assert_eq!(sig.return_type, Type::Primitive(PrimitiveType::Int(4)));
+    }
+
+    #[test]
+    fn cxx_rip_relative_return_finalizes_char_ptr() {
+        let out = Varnode::unique(0x100, 8);
+        let ssa = make_named_func(
+            "_ZN3Dog5speakEv",
+            0x1000,
+            vec![
+                IrInsn::with_output(
+                    IrOp::IntAdd,
+                    out,
+                    smallvec![Varnode::reg(RIP, 8), Varnode::constant(0x2000, 8)],
+                    0x1000,
+                ),
+                IrInsn::without_output(IrOp::Return, smallvec![out], 0x1004),
+            ],
+        );
+
+        let sig = finalize_signature(&ssa, &[]);
+        assert_eq!(sig.return_type, Type::Named("char *".to_string()));
+    }
+
+    #[test]
+    fn cxx_zero_return_and_indirect_tailcall_finalize_int() {
+        let zero = make_named_func(
+            "_Z9safe_calli",
+            0x1000,
+            vec![IrInsn::without_output(
+                IrOp::Return,
+                smallvec![Varnode::constant(0, 8)],
+                0x1000,
+            )],
+        );
+        assert_eq!(
+            finalize_signature(&zero, &[]).return_type,
+            Type::Primitive(PrimitiveType::Int(4))
+        );
+
+        let tail = make_named_func(
+            "_Z8use_baseP4Base",
+            0x2000,
+            vec![IrInsn::without_output(
+                IrOp::Branchind,
+                smallvec![Varnode::unique(0x200, 8)],
+                0x2000,
+            )],
+        );
+        assert_eq!(
+            finalize_signature(&tail, &[]).return_type,
+            Type::Primitive(PrimitiveType::Int(4))
         );
     }
 }

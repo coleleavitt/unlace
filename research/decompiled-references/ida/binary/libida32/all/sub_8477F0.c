@@ -1,0 +1,65 @@
+__int64 __fastcall sub_8477F0(unsigned int *a1, int a2, int a3, __int64 a4, int a5, __int64 a6)
+{
+  int v8; // edx
+  int v9; // r15d
+  char *v10; // rax
+  __int64 result; // rax
+  char *v12; // rax
+  char *v13; // rax
+  char *v14; // rax
+
+  v8 = a5;
+  a1[36] = 0;
+  if ( a5 == 127 )
+  {
+    if ( a3 > 126 )
+    {
+      v14 = sub_844340((__int64)a1, 0x241u, 127, a6, a3, a4);
+      if ( v14 )
+      {
+        *v14 = -58;
+        return 0;
+      }
+    }
+    else
+    {
+      v12 = sub_844340((__int64)a1, 1u, 127, a6, a3, 0);
+      if ( v12 )
+      {
+        *v12 = -57;
+        return 0;
+      }
+    }
+    return *a1;
+  }
+  v9 = 15;
+  if ( a3 <= 126 )
+    v9 = a3;
+  if ( (a3 & 0x80) != 0 && a5 <= 126 )
+  {
+LABEL_15:
+    v13 = sub_844340((__int64)a1, 0x301u, v8, 0, a3, a4);
+    if ( v13 )
+    {
+      *v13 = -120;
+      return 0;
+    }
+    return *a1;
+  }
+  v10 = sub_844340((__int64)a1, 2u, v9, 0, a5, a6);
+  if ( v10 )
+  {
+    *v10 = 15;
+    v10[1] = a2 == 0 ? -74 : -66;
+LABEL_8:
+    if ( (a3 & 0x80) == 0 )
+      return 0;
+    v8 = v9;
+    goto LABEL_15;
+  }
+  result = *a1;
+  if ( !(_DWORD)result )
+    goto LABEL_8;
+  return result;
+}
+

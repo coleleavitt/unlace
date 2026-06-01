@@ -68,6 +68,6 @@ malware behavioral analysis.
 
 - `research/ida-hexrays-docs/pdfs/bh-us-18-guilfanov-decompiler-internals-microcode.pdf`
   — the canonical IR opcode semantics (matches unlace's `IrInsn`).
-- `references/ida/plugins/bochs_user/all/` — 946 decompiled functions
+- `research/decompiled-references/ida/plugins/bochs_user/all/` — 946 decompiled functions
   of IDA's Bochs integration (a reference for the "emulator as debugger"
   pattern).

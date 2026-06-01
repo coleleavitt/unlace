@@ -17,7 +17,7 @@ IDA's `sub_14B8B0` solves all of this with explicit maturity levels and conditio
 
 ## 3. The IDA Blueprint: sub_14B8B0 Decoded
 
-From `references/hexrays/ida_dump/hexx64/all/sub_14B8B0.c` (358 lines), the pipeline is:
+From `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_14B8B0.c` (358 lines), the pipeline is:
 
 ```
 sub_14B8B0(mba_t *mba, int maturity_request):
@@ -446,7 +446,7 @@ After Batch 10:
 1. `crates/unlace-cli/src/pipeline.rs` — the current driver (READ ALL OF IT)
 2. `crates/unlace-passes/src/pass.rs` — `PassPhase`, `run_to_fixedpoint`, `run_outer_fixedpoint`
 3. `crates/unlace-ir/src/ssa.rs:394-600` — `SsaFunction` struct fields
-4. `references/hexrays/ida_dump/hexx64/all/sub_14B8B0.c` — the IDA blueprint
+4. `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_14B8B0.c` — the IDA blueprint
 5. `tests/golden/reference_metrics.toml` — what parity measures
 6. `CLAUDE.md` — all engineering rules and constraints
 

@@ -1,0 +1,35 @@
+__m128i *__fastcall sub_9A4560(__int64 a1, const __m128i *a2)
+{
+  __int64 v3; // rax
+  unsigned __int64 v4; // rcx
+  unsigned __int64 v5; // rdx
+  __m128i *result; // rax
+  __int64 v7; // rsi
+  __int8 *v8; // rbp
+
+  v3 = *(unsigned int *)(a1 + 8);
+  v4 = *(_QWORD *)a1;
+  v5 = v3 + 1;
+  result = (__m128i *)(*(_QWORD *)a1 + 32 * v3);
+  if ( v5 > *(unsigned int *)(a1 + 12) )
+  {
+    v7 = a1 + 16;
+    if ( v4 > (unsigned __int64)a2 || result <= a2 )
+    {
+      sub_22134E0(a1, v7, v5, 32);
+      result = (__m128i *)(*(_QWORD *)a1 + 32LL * *(unsigned int *)(a1 + 8));
+    }
+    else
+    {
+      v8 = &a2->m128i_i8[-v4];
+      sub_22134E0(a1, v7, v5, 32);
+      a2 = (const __m128i *)&v8[*(_QWORD *)a1];
+      result = (__m128i *)(*(_QWORD *)a1 + 32LL * *(unsigned int *)(a1 + 8));
+    }
+  }
+  *result = _mm_loadu_si128(a2);
+  result[1] = _mm_loadu_si128(a2 + 1);
+  ++*(_DWORD *)(a1 + 8);
+  return result;
+}
+

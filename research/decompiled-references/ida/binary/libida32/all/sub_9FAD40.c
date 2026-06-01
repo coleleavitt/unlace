@@ -1,0 +1,12 @@
+__int64 __fastcall sub_9FAD40(__int64 a1, void *a2)
+{
+  __int64 v2; // rdi
+  __int64 result; // rax
+
+  v2 = a1 + 16;
+  result = 0;
+  if ( a2 == &unk_2389A40 )
+    return v2;
+  return result;
+}
+

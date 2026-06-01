@@ -1,0 +1,5 @@
+__int64 __fastcall set_purged(unsigned int a1, int a2, char a3)
+{
+  return sub_59DAA0(*(_QWORD **)(qword_2CA1698 + 1480), a1, a2, a3);
+}
+

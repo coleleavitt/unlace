@@ -6,7 +6,7 @@ license.workspace = true
 description = "Debugger backends for unlace (Linux ptrace, Windows DebugAPI, GDB stub)"
 
 [dependencies]
-unlace-session = { path = "../unlace-session" }
+unlace-session = { workspace = true }
 unlace-ir.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true

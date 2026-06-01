@@ -1,0 +1,45 @@
+__m128i *__fastcall sub_2D58D0(__int64 a1, __int64 a2, __m128i *a3, unsigned __int64 a4)
+{
+  __m128i v4; // xmm1
+  __m128i *v6; // rbx
+  char v7; // al
+  __int64 v9; // rdi
+  __m128i *v10; // rax
+  unsigned __int64 v11; // [rsp+0h] [rbp-40h] BYREF
+  __m128 v12; // [rsp+8h] [rbp-38h] BYREF
+  unsigned __int64 v13; // [rsp+20h] [rbp-20h]
+
+  v4 = (__m128i)a4;
+  v13 = __readfsqword(0x28u);
+  v6 = *(__m128i **)(a1 + 24);
+  if ( !v6 )
+  {
+    v11 = a4;
+    v10 = (__m128i *)qalloc();
+    v6 = v10;
+    if ( !v10 )
+      sub_4F618();
+    v10->m128i_i64[0] = 0;
+    v4 = _mm_loadl_epi64((const __m128i *)&v11);
+    v10->m128i_i64[1] = 0;
+  }
+  v12 = (__m128)_mm_unpacklo_epi64(_mm_loadl_epi64(a3), v4);
+  v7 = sub_2D49C0(v6, (char **)&v12, nullptr, v12);
+  a3->m128i_i64[0] = v12.m128_u64[0];
+  if ( !v7 )
+  {
+    if ( *(_QWORD *)(a1 + 24) )
+    {
+      return nullptr;
+    }
+    else
+    {
+      sub_2BC560(v6->m128i_i64);
+      v9 = (__int64)v6;
+      v6 = nullptr;
+      qfree(v9);
+    }
+  }
+  return v6;
+}
+

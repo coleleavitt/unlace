@@ -20,10 +20,11 @@
 //! by the pipeline wiring in `unlace-cli` after the fixed-point loop
 //! reaches steady state.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{
-    CallingConvention, FrameSlotKind, SsaFunction, StackFrame, StackLocal, VarnodeSlot,
+    CallingConvention, FrameSlotKind, PrimitiveType, SsaFunction, StackFrame, StackLocal,
+    VarnodeSlot,
 };
 use unlace_ir::stack::StackSpec;
 use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
@@ -76,13 +77,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     // First pass: collect every (offset, width) observation.
     // BTreeMap keeps offsets sorted for the later fusion sweep.
     let mut observations: BTreeMap<i64, Vec<u8>> = BTreeMap::new();
-    let record = |off: i64, width: u8, obs: &mut BTreeMap<i64, Vec<u8>>| {
-        let widths = obs.entry(off).or_default();
-        if !widths.contains(&width) {
-            widths.push(width);
-        }
-    };
-
+    let mut heuristic_access_addrs: BTreeSet<u64> = BTreeSet::new();
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             if func.frame_setup_insns.contains(&(bid, insn_idx)) {
@@ -111,7 +106,8 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                     ) {
                         let width = insn.inputs[2].size;
                         if width > 0 {
-                            record(offset, width, &mut observations);
+                            record_observation(offset, width, &mut observations);
+                            heuristic_access_addrs.insert(insn.addr);
                             stack_frame_trace_line(
                                 func,
                                 format_args!(
@@ -148,7 +144,8 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                     ) {
                         let width = insn.output.map(|o| o.size).unwrap_or(0);
                         if width > 0 {
-                            record(offset, width, &mut observations);
+                            record_observation(offset, width, &mut observations);
+                            heuristic_access_addrs.insert(insn.addr);
                             stack_frame_trace_line(
                                 func,
                                 format_args!(
@@ -179,7 +176,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                 && out.space == SpaceId::Stack
                 && out.size > 0
             {
-                record(out.offset as i64, out.size, &mut observations);
+                record_observation(out.offset as i64, out.size, &mut observations);
                 stack_frame_trace_line(
                     func,
                     format_args!(
@@ -190,7 +187,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
             }
             for inp in &insn.inputs {
                 if inp.space == SpaceId::Stack && inp.size > 0 {
-                    record(inp.offset as i64, inp.size, &mut observations);
+                    record_observation(inp.offset as i64, inp.size, &mut observations);
                     stack_frame_trace_line(
                         func,
                         format_args!(
@@ -202,6 +199,8 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
             }
         }
     }
+    seed_recorded_stack_accesses(func, &heuristic_access_addrs, &mut observations);
+    seed_debug_stack_locals(func, &spec, &mut observations);
     for (offset, widths) in &observations {
         stack_frame_trace_line(
             func,
@@ -408,6 +407,77 @@ fn classify_slot_kinds(
             continue;
         }
         slot.kind = FrameSlotKind::StackArg;
+    }
+}
+
+fn record_observation(off: i64, width: u8, obs: &mut BTreeMap<i64, Vec<u8>>) {
+    if width == 0 {
+        return;
+    }
+    let widths = obs.entry(off).or_default();
+    if !widths.contains(&width) {
+        widths.push(width);
+    }
+}
+
+fn seed_recorded_stack_accesses(
+    func: &SsaFunction,
+    heuristic_access_addrs: &BTreeSet<u64>,
+    obs: &mut BTreeMap<i64, Vec<u8>>,
+) {
+    for acc in &func.stack_accesses {
+        if heuristic_access_addrs.contains(&acc.source_addr) {
+            stack_frame_trace_line(
+                func,
+                format_args!(
+                    "skip-stack-access addr={:#x} offset={} width={} reason=heuristic-observed",
+                    acc.source_addr, acc.delta, acc.width
+                ),
+            );
+            continue;
+        }
+        record_observation(acc.delta, acc.width.max(1), obs);
+        stack_frame_trace_line(
+            func,
+            format_args!(
+                "record-stack-access addr={:#x} offset={} width={} resolved={:?}",
+                acc.source_addr, acc.delta, acc.width, acc.resolved_slot
+            ),
+        );
+    }
+}
+
+fn seed_debug_stack_locals(func: &SsaFunction, spec: &StackSpec, obs: &mut BTreeMap<i64, Vec<u8>>) {
+    for (&offset, name) in &func.dwarf_local_names {
+        let width = debug_local_width(func, offset, spec);
+        record_observation(offset, width, obs);
+        stack_frame_trace_line(
+            func,
+            format_args!(
+                "record-debug-local offset={} width={} name={}",
+                offset, width, name
+            ),
+        );
+    }
+}
+
+fn debug_local_width(func: &SsaFunction, offset: i64, spec: &StackSpec) -> u8 {
+    if let Some(stack_var) = func.stack_vars.get(&offset)
+        && let Some(width) = primitive_width(stack_var.ty, spec)
+    {
+        return width.max(1);
+    }
+    spec.ptr_size.max(1)
+}
+
+fn primitive_width(ty: PrimitiveType, spec: &StackSpec) -> Option<u8> {
+    match ty {
+        PrimitiveType::Unknown => None,
+        PrimitiveType::Bool => Some(1),
+        PrimitiveType::Int(width) | PrimitiveType::UnsignedInt(width) => Some(width),
+        PrimitiveType::Float => Some(4),
+        PrimitiveType::Double => Some(8),
+        PrimitiveType::Ptr => Some(spec.ptr_size.max(1)),
     }
 }
 
@@ -945,6 +1015,53 @@ mod tests {
             frame.locals.keys().collect::<Vec<_>>()
         );
         assert!(!frame.locals.contains_key(&72));
+    }
+
+    #[test]
+    fn t209_seeds_recorded_stack_accesses() {
+        let mut ssa = make_single_block_ssa(vec![]);
+        ssa.stack_accesses.push(unlace_ir::ssa::StackAccess {
+            source_addr: 0x1234,
+            base_register: "sp".to_string(),
+            delta: -0x28,
+            width: 4,
+            is_store: false,
+            resolved_slot: None,
+            lost_provenance: true,
+        });
+
+        let frame = recover_stack_frame(&ssa);
+
+        let local = frame
+            .locals
+            .get(&-0x28)
+            .expect("recorded StackAccess should seed a frame slot");
+        assert_eq!(local.size, 4);
+        assert_eq!(local.access_widths, vec![4]);
+    }
+
+    #[test]
+    fn t209_seeds_debug_local_names_without_heuristic_accesses() {
+        let mut ssa = make_single_block_ssa(vec![]);
+        ssa.dwarf_local_names.insert(-0x20, "counter".to_string());
+        ssa.stack_vars.insert(
+            -0x20,
+            unlace_ir::ssa::StackVar {
+                offset: -0x20,
+                name: "counter".to_string(),
+                ty: PrimitiveType::Int(4),
+                accesses: vec![],
+            },
+        );
+
+        let frame = recover_stack_frame(&ssa);
+
+        let local = frame
+            .locals
+            .get(&-0x20)
+            .expect("debug local frame offset should seed a frame slot");
+        assert_eq!(local.size, 4);
+        assert_eq!(local.kind, FrameSlotKind::Local);
     }
 
     /// Test 2: pair of locals at -8 and -16.  Distinct slots, both 8-byte

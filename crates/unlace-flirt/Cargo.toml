@@ -8,15 +8,15 @@ license.workspace = true
 [dependencies]
 unlace-ir = { workspace = true }
 unlace-loader.workspace = true
-unlace-session = { path = "../unlace-session" }
+unlace-session = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 bincode.workspace = true
 anyhow.workspace = true
 thiserror = { workspace = true }
 tracing = { workspace = true }
-toml = "0.8"
+toml = { workspace = true }
 object = { workspace = true }
-zstd = "0.13"
-flate2 = "1.0"
+zstd = { workspace = true }
+flate2 = { workspace = true }
 
 [dev-dependencies]

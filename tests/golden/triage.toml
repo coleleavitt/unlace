@@ -1,0 +1,95 @@
+# Row-by-row exact-line golden triage.
+#
+# This file is a gate against blanket rebaselines. A row marked `mixed`,
+# `stale-golden`, or `producer-bug` may mismatch the stored expected C, but it
+# must keep a concrete reason and next action before anyone refreshes it.
+
+[[fixture]]
+name = "arc_features"
+classification = "producer-bug"
+reason = "ARC output still has non-host lifter/readability drift, and there is no executable semantic oracle for this row."
+next_action = "Fix the ARC producer gaps or add an oracle before refreshing expected output."
+
+[[fixture]]
+name = "arm64_features"
+classification = "mixed"
+reason = "AArch64 CSEL/bitfield output changed and has qemu-backed exit(0) coverage, but exact text still has residual naming/control readability drift."
+next_action = "Keep the qemu-backed execution and shape coverage, then split stale header churn from producer bugs."
+
+[[fixture]]
+name = "cpp_exceptions"
+classification = "mixed"
+reason = "Exception fixture output mixes stale expected text with remaining EH, parameter, and temp-readability gaps."
+next_action = "Tighten C++ EH/lvar recovery before any exact-line refresh."
+
+[[fixture]]
+name = "cpp_rtti"
+classification = "mixed"
+reason = "RTTI/vtable output has known source-type improvements plus remaining indirect-call, this-pointer, and leaked-temp readability gaps."
+next_action = "Use type-recovery misses for this-pointer and struct-reference facts before rebaselining."
+
+[[fixture]]
+name = "cpp_vtable"
+classification = "mixed"
+reason = "Vtable output has stale expected sections but still exposes weak this/virtual-call naming in optimized C++."
+next_action = "Improve C++ receiver naming and indirect-call rendering, then reclassify stale-only lines."
+
+[[fixture]]
+name = "debug_calls"
+classification = "mixed"
+reason = "DWARF-backed call fixture now recovers debug facts, but exact text still includes declaration and temp churn."
+next_action = "Preserve semantic/type passes, then refresh only rows whose body changes are stale debug-info improvements."
+
+[[fixture]]
+name = "debug_hello"
+classification = "mixed"
+reason = "Simple debug hello remains semantically green, but current temp/load cleanup changed body layout and startup helper declarations."
+next_action = "Keep semantic coverage locked, then split stale temp-cleanup improvements from the remaining formatting regressions before refresh."
+
+[[fixture]]
+name = "debug_structs"
+classification = "mixed"
+reason = "Struct DWARF facts recover cleanly, but the exact-line row still mixes stale struct/type output with local naming churn."
+next_action = "Keep DWARF struct recovery locked and isolate remaining local declaration diffs before refresh."
+
+[[fixture]]
+name = "medium"
+classification = "mixed"
+reason = "Medium is semantically green, but DREAM/lvar output still contains many preserved labels, gotos, and weak optimized names."
+next_action = "Continue DREAM quality and optimized lvar work; never blanket-refresh this large row."
+
+[[fixture]]
+name = "mips64_features"
+classification = "mixed"
+reason = "MIPS64 output has non-host lifter drift; qemu-backed execution confirms the fixture loops forever as expected."
+next_action = "Keep the timeout oracle and shape requirements while improving non-host output readability."
+
+[[fixture]]
+name = "ppc64_features"
+classification = "producer-bug"
+reason = "PPC64 now has a source-backed executable oracle, but exact-line output still needs non-host lifter/output quality work."
+next_action = "Use the qemu-backed oracle and ppc_branch shape case while improving producer quality before any expected-output refresh."
+
+[[fixture]]
+name = "riscv64_features"
+classification = "mixed"
+reason = "RISC-V output is source-known and qemu-backed timeout coverage is present; exact text still includes non-host naming/control drift."
+next_action = "Keep the timeout oracle and decompile fragments while improving non-host naming/control output."
+
+[[fixture]]
+name = "switch_table"
+classification = "mixed"
+reason = "Switch-table semantics pass for dispatch, but exact output still mixes stale formatting with switch/control readability gaps."
+next_action = "Improve switch normalization and classify remaining stale text before refresh."
+
+[[fixture]]
+name = "v850_features"
+classification = "producer-bug"
+reason = "V850 has no source oracle and still carries non-host lifter/readability drift."
+next_action = "Add a source/execution oracle or fix the producer gap before rebaselining."
+
+[[fixture]]
+name = "x87_math"
+classification = "mixed"
+reason = "x87 math remains semantically green, but temp-hoisting and startup helper cleanup changed exact body text around x87 temporaries."
+next_action = "Keep x87 semantic coverage locked while isolating stale temp-cleanup lines from long-double producer gaps before refresh."

@@ -1,8 +1,8 @@
 //! TIL type-library → Session import pass.
 //!
 //! Mirrors IDA's `add_til` / `apply_tinfo` flow from
-//! `references/ida/ida-binary/all/apply_tinfo.c` /
-//! `references/ida/ida-binary/all/add_til.c`. The high-level idea:
+//! `research/decompiled-references/ida/ida-binary/all/apply_tinfo.c` /
+//! `research/decompiled-references/ida/ida-binary/all/add_til.c`. The high-level idea:
 //!
 //! 1. Parse a `.til` file via [`crate::til_parser::TilFile`].
 //! 2. Build an in-memory catalog keyed by symbol name → ordinal +

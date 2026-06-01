@@ -9,9 +9,9 @@
 //!
 //! References:
 //! - `research/ida-hexrays-docs/sdk/dbg/` — IDA SDK debugger plugin samples
-//! - `references/ida/plugins/linux_user/all/` — IDA's local Linux debugger
-//! - `references/ida/plugins/gdb_user/all/` — IDA's GDB stub backend
-//! - `references/ida/plugins/bochs_user/all/` — IDA's Bochs integration
+//! - `research/decompiled-references/ida/plugins/linux_user/all/` — IDA's local Linux debugger
+//! - `research/decompiled-references/ida/plugins/gdb_user/all/` — IDA's GDB stub backend
+//! - `research/decompiled-references/ida/plugins/bochs_user/all/` — IDA's Bochs integration
 
 pub mod backends;
 pub mod breakpoint;

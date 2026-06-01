@@ -1,0 +1,33 @@
+__int64 __fastcall sub_AF7770(__int64 a1, __int64 a2, int *a3)
+{
+  int v4; // eax
+
+  switch ( a2 )
+  {
+    case 7LL:
+      if ( *(_DWORD *)a1 == 1634100580 && *(_WORD *)(a1 + 4) == 27765 )
+      {
+        v4 = 0;
+        if ( *(_BYTE *)(a1 + 6) == 116 )
+          goto LABEL_8;
+      }
+      return 0;
+    case 6LL:
+      if ( *(_DWORD *)a1 != 1684302184 || *(_WORD *)(a1 + 4) != 28261 )
+        return 0;
+LABEL_7:
+      v4 = 1;
+      goto LABEL_8;
+    case 8LL:
+      if ( *(_QWORD *)a1 != 0x6C616E7265746E69LL )
+        return 0;
+      goto LABEL_7;
+  }
+  if ( a2 != 9 || *(_QWORD *)a1 != 0x65746365746F7270LL || *(_BYTE *)(a1 + 8) != 100 )
+    return 0;
+  v4 = 2;
+LABEL_8:
+  *a3 = v4;
+  return 1;
+}
+

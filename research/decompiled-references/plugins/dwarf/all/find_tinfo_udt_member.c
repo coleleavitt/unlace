@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0xD0A00
+// Name:     find_tinfo_udt_member
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to find_tinfo_udt_member are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void find_tinfo_udt_member(/* see import library declaration */);
+

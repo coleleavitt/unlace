@@ -207,18 +207,19 @@ Ordered by value-per-effort, grounded in the findings above:
 
 ## Part 2: Deep-dive on remaining recovery gaps (2026-05-27)
 
-Expanded research on the specific gaps blocking `medium`/`stripped` fixture
-convergence and broader output quality. `debug_templates` has since moved from
-XFAIL to PASS in `xtask semantic-report`.
+Expanded research on the specific gaps that previously blocked
+`medium`/`stripped` fixture convergence and broader output quality.
+`debug_templates`, `medium`, and `stripped` have since moved from XFAIL to PASS
+in `xtask semantic-report`; the remaining value of this section is quality and
+regression guidance.
 
-### 1. Optimized loop recovery (medium/stripped XFAIL timeout)
+### 1. Optimized Loop Recovery (Former Medium/Stripped XFAIL)
 
-**The problem:** Compiler-optimized loops (loop rotation, unswitching,
-unrolling, LICM, induction variable strength-reduction) produce CFGs that don't
-match any simple while/for template. The current failure is concrete: generated
-C for optimized `main` now materializes more loop seed assignments, but still
-loses loop-carried lvar/phi state and x86 subregister state in loop bodies
-(`eax`/`rax` style aliases), so the recompiled subset times out.
+**The historical problem:** Compiler-optimized loops (loop rotation,
+unswitching, unrolling, LICM, induction variable strength-reduction) produce
+CFGs that don't match any simple while/for template. The semantic blocker is now
+fixed; keep this material as background for remaining readability and label/goto
+quality work.
 
 **Binary Ninja 4.1's approach (2024-06):**
 A blog post from Vector 35 describes their complete rewrite of control-flow
@@ -278,7 +279,7 @@ reversal pass in addition to the existing for-loop recovery.
 
 **Actionable for unlace:**
 - Add a **timeout/fuel limit** to `structure_region` so it can't infinite-loop
-  (this fixes the XFAIL hang immediately)
+  (historically this addressed the hang failure mode)
 - Extend **condition duplication** and **code duplication** transforms only for
   measured fixture gaps beyond the default cleanup pipeline
 - Extend **loop rotation reversal** only for non-exact measured patterns
@@ -464,13 +465,13 @@ binaries.
 4. **Interprocedural propagation** — if function A passes a pointer to function
    B, and B accesses fields, propagate the struct type back to A's variable
 
-### Summary: specific fixes for the remaining XFAILs
+### Summary: semantic XFAIL status
 
-| XFAIL | Root cause | Fix |
+| Former XFAIL | Current status | Follow-up |
 |---|---|---|
-| medium | optimized `main` loses loop-carried lvar/phi and x86 subregister state in loop bodies | lvar/phi coalescing that materializes initial values and loop-carried updates, plus subregister-aware expression recovery |
-| stripped | same optimized-main recovery bug under stripped symbols | same fix benefits both |
-| debug_templates | fixed: C++ template helper subset now recompiles and behavior-matches | keep semantic PASS covered by `xtask semantic-report` |
+| medium | fixed: `xtask semantic-report` now recompiles and behavior-matches `main`; the final blocker was empty-branch label-hoist control flow around the optimized nth-prime loop. | Keep the guarded-empty-sibling regression covered and continue reducing labels/gotos as quality work. |
+| stripped | fixed: same optimized `main` behavior now matches under stripped symbols. | Keep stripped-symbol helper aliases covered by `xtask semantic-report`. |
+| debug_templates | fixed: C++ template helper subset now recompiles and behavior-matches. | Keep semantic PASS covered by `xtask semantic-report`. |
 
 ### Additional sources found
 

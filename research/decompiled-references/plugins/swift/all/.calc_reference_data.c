@@ -1,0 +1,22 @@
+// ============================================================
+// THUNK / TRAMPOLINE
+// ============================================================
+// Address:         0x4110
+// Name:            .calc_reference_data
+// Size:            6 bytes (1 instructions)
+// Disassembly:
+//   0x4110 jmp     cs:off_28070
+//
+// Resolved target: calc_reference_data
+// Target address:  0x29A08
+// GOT/IAT slot:    0x28070
+// Slot symbol:     off_28070
+// Target type:     <no type info>
+// ============================================================
+
+void .calc_reference_data(/* see target signature */)
+{
+    // Tail-call to calc_reference_data via GOT/IAT indirection
+    return calc_reference_data(/* forwarded args */);
+}
+

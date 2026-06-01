@@ -1,0 +1,42 @@
+__int64 __fastcall sub_625620(__int64 a1, signed __int64 a2)
+{
+  int v3; // eax
+  int v4; // r13d
+  unsigned int v5; // r14d
+  unsigned int *v6; // rbx
+  int v7; // eax
+  signed __int64 v8; // rdx
+  int v9; // ecx
+  bool v10; // sf
+  int v11; // eax
+  unsigned int v12; // esi
+  __int64 v13; // rcx
+
+  v3 = sub_4EC8E0(a1 + 2672);
+  if ( v3 <= 0 )
+    return 0xFFFFFFFFLL;
+  v4 = v3;
+  v5 = 0;
+  while ( 1 )
+  {
+    v6 = sub_4EE890(a1 + 2672, v5);
+    v7 = nbits(*v6);
+    v8 = *((_QWORD *)v6 + 1);
+    if ( v8 <= a2 )
+    {
+      v9 = v7 + 14;
+      v10 = v7 + 7 < 0;
+      v11 = v7 + 7;
+      v12 = *v6;
+      if ( !v10 )
+        v9 = v11;
+      v13 = v9 >> 3;
+      if ( v8 + v13 * (v6[1] - v12) > a2 )
+        break;
+    }
+    if ( v4 == ++v5 )
+      return 0xFFFFFFFFLL;
+  }
+  return v12 + (unsigned int)((a2 - v8) / v13);
+}
+

@@ -106,6 +106,8 @@ fn whole_program_driver_populates_variadic_call_types() {
         timeout: std::time::Duration::from_secs(60),
         print_config: None,
         annotations: None,
+        flirt: pipeline::FlirtConfig::default(),
+        dwarf_sidecar: None,
     };
 
     // Lift every discovered function (same as batch.rs Phase 1).

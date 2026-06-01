@@ -116,6 +116,7 @@ impl ProgramTypeUnifier {
                 self.rewrite_struct_names(value);
             }
             Type::Primitive(_)
+            | Type::Named(_)
             | Type::Interface { .. }
             | Type::TypeParam { .. }
             | Type::Union { .. } => {}
@@ -180,6 +181,7 @@ fn collect_struct_hashes(ty: &Type, out: &mut BTreeMap<u64, String>) {
             collect_struct_hashes(value, out);
         }
         Type::Primitive(_)
+        | Type::Named(_)
         | Type::Interface { .. }
         | Type::TypeParam { .. }
         | Type::Union { .. } => {}
@@ -219,6 +221,10 @@ fn hash_type_shape(ty: &Type, hasher: &mut DefaultHasher) {
         Type::Primitive(p) => {
             "prim".hash(hasher);
             p.hash(hasher);
+        }
+        Type::Named(name) => {
+            "named".hash(hasher);
+            name.hash(hasher);
         }
         Type::Ptr(inner) => {
             "ptr".hash(hasher);

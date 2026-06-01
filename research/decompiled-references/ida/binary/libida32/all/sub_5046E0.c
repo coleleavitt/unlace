@@ -1,0 +1,23 @@
+__int64 __fastcall sub_5046E0(__int64 *a1, unsigned int *a2, signed int a3, unsigned __int32 a4)
+{
+  __int64 v4; // rax
+  unsigned int *v8; // r13
+
+  if ( a3 > *(_DWORD *)(v4 + 72) || *(_DWORD *)(v4 + 80) == a3 )
+    return 0;
+  if ( a2 )
+    return sub_504650(*a1, a2, a3, a4);
+  v8 = sub_4EEBF0((__int64)(a1 + 194));
+  if ( v8 )
+  {
+    while ( (unsigned __int8)sub_504650(*a1, v8, a3, a4) )
+    {
+      v8 = sub_4EE960((__int64)(a1 + 194), *v8);
+      if ( !v8 )
+        return 1;
+    }
+    return 0;
+  }
+  return 1;
+}
+

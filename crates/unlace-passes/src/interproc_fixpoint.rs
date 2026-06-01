@@ -12,7 +12,7 @@
 //! [`DEFAULT_INTERPROC_CAP`]) prevents pathological oscillation.
 //!
 //! Mirrors IDA's `auto_apply_type` driver
-//! (`references/ida/idalib/all/auto_apply_type.c`), which iterates
+//! (`research/decompiled-references/ida/idalib/all/auto_apply_type.c`), which iterates
 //! `apply_callee_tinfo` plus the per-function analyzer until quiescence.
 
 use std::collections::BTreeMap;

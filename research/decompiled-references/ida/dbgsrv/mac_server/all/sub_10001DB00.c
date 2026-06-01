@@ -1,0 +1,105 @@
+/* Split from IDA decompile_many output for CodeGraph indexing. */
+// Name: sub_10001DB00
+// Address: 0x000000010001DB00
+
+//----- (000000010001DB00) ----------------------------------------------------
+unsigned __int64 __fastcall sub_10001DB00(__int64 a1, unsigned __int64 a2, unsigned int *a3)
+{
+  unsigned __int64 result; // rax
+  unsigned __int64 v4; // rcx
+  unsigned __int64 v5; // r8
+  unsigned int v6; // r15d
+  __int64 v7; // rdx
+  unsigned int *v8; // r15
+  unsigned __int64 v9; // r8
+  __int64 v10; // rdx
+
+  v4 = *(_QWORD *)(a1 + 8);
+  if ( v4 > a2 )
+  {
+LABEL_2:
+    *(_QWORD *)(a1 + 8) = a2;
+    return result;
+  }
+  if ( v4 < a2 )
+  {
+    result = *(_QWORD *)a1;
+    v5 = *(_QWORD *)(a1 + 16);
+    if ( *(_QWORD *)a1 <= (unsigned __int64)a3 && *(_QWORD *)a1 + 4 * v5 > (unsigned __int64)a3 )
+    {
+      v6 = *a3;
+      if ( v5 < a2 )
+      {
+        *(_QWORD *)a1 = qvector_reserve(a1, *(void **)a1, a2, 4u);
+        v4 = *(_QWORD *)(a1 + 8);
+      }
+      result = v4 - a2;
+      if ( v4 < a2 )
+      {
+        v7 = ((_BYTE)a2 - (_BYTE)v4) & 3;
+        if ( (((_BYTE)a2 - (_BYTE)v4) & 3) != 0 )
+        {
+          do
+          {
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4++) = v6;
+            --v7;
+          }
+          while ( v7 );
+        }
+        if ( result <= 0xFFFFFFFFFFFFFFFCLL )
+        {
+          do
+          {
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4) = v6;
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4 + 4) = v6;
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4 + 8) = v6;
+            result = *(_QWORD *)a1;
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4 + 12) = v6;
+            v4 += 4LL;
+          }
+          while ( a2 != v4 );
+        }
+      }
+    }
+    else
+    {
+      if ( v5 < a2 )
+      {
+        v8 = a3;
+        result = (unsigned __int64)qvector_reserve(a1, *(void **)a1, a2, 4u);
+        a3 = v8;
+        *(_QWORD *)a1 = result;
+        v4 = *(_QWORD *)(a1 + 8);
+      }
+      v9 = v4 - a2;
+      if ( v4 < a2 )
+      {
+        result = *a3;
+        v10 = ((_BYTE)a2 - (_BYTE)v4) & 3;
+        if ( (((_BYTE)a2 - (_BYTE)v4) & 3) != 0 )
+        {
+          do
+          {
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4++) = result;
+            --v10;
+          }
+          while ( v10 );
+        }
+        if ( v9 <= 0xFFFFFFFFFFFFFFFCLL )
+        {
+          do
+          {
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4) = result;
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4 + 4) = result;
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4 + 8) = result;
+            *(_DWORD *)(*(_QWORD *)a1 + 4 * v4 + 12) = result;
+            v4 += 4LL;
+          }
+          while ( a2 != v4 );
+        }
+      }
+    }
+    goto LABEL_2;
+  }
+  return result;
+}

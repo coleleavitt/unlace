@@ -1,0 +1,5 @@
+__int64 __fastcall sub_1C67E0(__int64 a1, __int64 a2, _DWORD *a3, unsigned int a4, double a5)
+{
+  return sub_1C6060(*(_QWORD *)(a1 + 1504), a2, a3, a4, a5);
+}
+

@@ -14,8 +14,8 @@
 //!
 //! References:
 //! - `man 2 ptrace`
-//! - `references/ida/plugins/linux_user/all/` — IDA's Linux debugger
-//! - `references/ida/plugins/gdb_user/all/`   — reference for ptrace-shape ops
+//! - `research/decompiled-references/ida/plugins/linux_user/all/` — IDA's Linux debugger
+//! - `research/decompiled-references/ida/plugins/gdb_user/all/`   — reference for ptrace-shape ops
 
 use std::mem::MaybeUninit;
 

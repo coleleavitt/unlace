@@ -1,0 +1,95 @@
+__int64 __fastcall sub_D237A0(__int64 a1, __int64 a2, unsigned int a3, unsigned __int16 *a4, unsigned __int16 *a5)
+{
+  __int16 v9; // dx
+  __int64 v10; // rdi
+  __int16 v11; // bx
+  unsigned int v12; // ebx
+  unsigned __int16 v14; // si
+  __int64 v15; // rax
+  __int64 v16; // rcx
+  __int64 v17; // r8
+  __int64 v18; // rdx
+  unsigned int v19; // eax
+  void *v20; // rax
+  __int64 v21; // [rsp-8h] [rbp-110h]
+  unsigned __int64 v23; // [rsp+8h] [rbp-100h]
+  __int64 v24; // [rsp+10h] [rbp-F8h]
+  char v25; // [rsp+1Fh] [rbp-E9h]
+  void *v26; // [rsp+20h] [rbp-E8h] BYREF
+  unsigned int v27; // [rsp+28h] [rbp-E0h]
+  char v28; // [rsp+2Ch] [rbp-DCh]
+  void *v29; // [rsp+30h] [rbp-D8h] BYREF
+  unsigned int v30; // [rsp+38h] [rbp-D0h]
+  char v31; // [rsp+3Ch] [rbp-CCh]
+  void *ptr; // [rsp+40h] [rbp-C8h] BYREF
+  signed __int64 v33; // [rsp+48h] [rbp-C0h]
+  __int64 v34; // [rsp+50h] [rbp-B8h]
+  _BYTE v35[40]; // [rsp+58h] [rbp-B0h] BYREF
+  unsigned __int8 *v36; // [rsp+80h] [rbp-88h] BYREF
+  unsigned int v37; // [rsp+88h] [rbp-80h]
+
+  v9 = *a5;
+  v10 = *(_QWORD *)(a1 + 176);
+  v11 = *a4 + *a5;
+  if ( (__int16)*a4 <= 0 || v9 <= 0 )
+  {
+    if ( (*a4 & 0x8000u) == 0 || v9 >= 0 || v11 < 0 )
+      goto LABEL_4;
+  }
+  else if ( v11 > 0 )
+  {
+LABEL_4:
+    *(_WORD *)sub_E216C0(v10, 8) = v11;
+    return 1;
+  }
+  *(_WORD *)sub_E216C0(v10, 8) = v11;
+  sub_CF0990((__int64)&v36, *a5, a3);
+  v14 = *a4;
+  BYTE4(v33) = 0;
+  LODWORD(v33) = v37;
+  ptr = v36;
+  sub_CF0990((__int64)&v36, v14, a3);
+  v31 = 0;
+  v30 = v37;
+  v29 = v36;
+  sub_CF8880((__int64)&v26, (__int64 *)&v29, (__int64)&ptr);
+  if ( v30 > 0x40 && v29 )
+    operator delete[](v29);
+  if ( (unsigned int)v33 > 0x40 && ptr )
+    operator delete[](ptr);
+  if ( (*(unsigned __int8 (__fastcall **)(_QWORD))(**(_QWORD **)(a1 + 24) + 16LL))(*(_QWORD *)(a1 + 24)) )
+  {
+    v23 = sub_E1EF60(*(_QWORD *)(a1 + 400));
+    v15 = *(_QWORD *)(v23 + 8);
+    v33 = 0;
+    v24 = v15;
+    ptr = v35;
+    v34 = 32;
+    v25 = v28;
+    sub_2206A40(&v36, &v26);
+    v31 = v25;
+    v30 = v37;
+    v29 = v36;
+    sub_220BA90((unsigned int)&v29, (unsigned int)&ptr, 10, 1, 0, 1, 1);
+    v18 = v21;
+    if ( v30 > 0x40 && v29 )
+      operator delete[](v29);
+    v19 = sub_C00A40(v23, (__int64)&ptr, v18, v16, v17);
+    sub_E32200(&v36, a1, v19, 2561);
+    sub_AEC220(&v36, ptr, v33);
+    sub_AE9DF0(&v36, v24, 8u);
+    v20 = (void *)sub_EEC8C0(v23);
+    LOBYTE(v30) = 1;
+    v29 = v20;
+    sub_AEC610((__int64 *)&v36, (__int64 *)&v29);
+    sub_AEA040((__int64)&v36);
+    if ( ptr != v35 )
+      free(ptr);
+  }
+  v12 = sub_CF8AC0(a1, a2, (__int64)&v26);
+  if ( !(_BYTE)v12 )
+    sub_D23370(*(_QWORD *)(a1 + 176));
+  if ( v27 > 0x40 && v26 )
+    operator delete[](v26);
+  return v12;
+}

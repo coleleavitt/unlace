@@ -1,0 +1,11 @@
+/* Split from IDA decompile_many output for CodeGraph indexing. */
+// Name: sub_989C0
+// Address: 0x000989C0
+
+//----- (000989C0) --------------------------------------------------------
+int __fastcall sub_989C0(unsigned __int8 **a1, int a2)
+{
+  sub_923F8(a1[2], a2);
+  sub_93B8C(a2, " ", "");
+  return sub_93B8C(a2, a1[3], a1[4]);
+}

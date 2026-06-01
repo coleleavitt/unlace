@@ -5,10 +5,12 @@
 //! It is shared between the CLI, TUI, and GUI surfaces — all of them
 //! read and write through this single struct.
 //!
-//! Persistence (the `.unldb` format) is implemented in `db.rs`.
+//! Persistence is implemented in `project.rs` for the public `.unlace`
+//! project format and in `db.rs` for legacy `.unldb` files.
 
 pub mod db;
 pub mod patches;
+pub mod project;
 pub mod til;
 pub mod til_import;
 pub mod til_parser;

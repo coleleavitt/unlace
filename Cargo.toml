@@ -78,13 +78,26 @@ fallible-iterator = "0.2"
 petgraph = { version = "0.8", features = ["serde-1"] }
 # Serialization
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 bincode = { version = "2", features = ["serde"] }
+toml = "0.8"
 # CLI
 clap = { version = "4.6", features = ["derive"] }
+# Async runtime
+tokio = "1"
+# Binary/object helpers
+wasmparser = "0.225"
+# Compression
+zstd = "0.13"
+flate2 = "1.0"
+# Hashing
+sha2 = "0.10"
 # Symbol demangling
 symbolic-demangle = "12"
 # Snapshot testing
 insta = "1"
+# Test fixtures / temp files
+tempfile = "3"
 # Observability
 tracing = "0.1"
 # Error handling
@@ -136,6 +149,12 @@ unlace-flirt = { path = "crates/unlace-flirt" }
 unlace-sbom = { path = "crates/unlace-sbom" }
 unlace-test-harness = { path = "crates/unlace-test-harness" }
 unlace-lumina = { path = "crates/unlace-lumina" }
+unlace-session = { path = "crates/unlace-session" }
+unlace-idapython = { path = "crates/unlace-idapython" }
+unlace-tui = { path = "crates/unlace-tui" }
+unlace-gui = { path = "crates/unlace-gui" }
+unlace-debugger = { path = "crates/unlace-debugger" }
+unlace-emu = { path = "crates/unlace-emu" }
 
 [profile.dev]
 incremental = true

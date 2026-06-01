@@ -4,7 +4,7 @@
 //! Output is renderer-agnostic: TUI (ASCII box-drawing), iced canvas,
 //! SVG, GraphViz dot — all consume the same `LayoutResult`.
 //!
-//! Reference: references/ida/plugins/xref_graph/all/ (816 fns) — IDA's
+//! Reference: research/decompiled-references/ida/plugins/xref_graph/all/ (816 fns) — IDA's
 //! 9.2+ xref graph layout algorithm.
 
 use std::collections::{BTreeMap, BTreeSet};

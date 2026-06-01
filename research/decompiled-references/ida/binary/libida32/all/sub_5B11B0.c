@@ -1,0 +1,66 @@
+__int64 __fastcall sub_5B11B0(
+        _QWORD *a1,
+        __int64 a2,
+        __int64 (__fastcall **a3)(_QWORD, _QWORD *, __int64),
+        __int64 (__fastcall **a4)(_QWORD, _QWORD *, __int64))
+{
+  int v6; // r15d
+  unsigned int v7; // ebp
+  __int64 v8; // rax
+  __int64 v9; // rdx
+  int v10; // eax
+  __int64 v12; // rdx
+  int v13; // eax
+  unsigned __int64 v14; // rax
+
+  sub_5ACDD0(a1, *(_QWORD *)a2, 1);
+  v6 = *(_DWORD *)(a2 + 8);
+  v7 = *(_DWORD *)(a2 + 24);
+  do
+  {
+    v8 = *(_QWORD *)a2;
+    if ( *(_QWORD *)a2 )
+    {
+      v9 = *(int *)(a2 + 8);
+      if ( (int)v9 >= 0 && (int)v9 < *(_DWORD *)(v8 + 104) )
+        v8 = *(_QWORD *)(v8 + 112) + 8 * v9;
+    }
+    else
+    {
+      v8 = a2 + 12;
+    }
+    v7 = sub_3BCA60(a1, v7, *(_DWORD *)v8, a3, a4);
+    if ( v7 != -1 )
+      break;
+    v10 = *(_DWORD *)(a2 + 8);
+    if ( v10 < 0 )
+    {
+      *(_DWORD *)(a2 + 8) = v6;
+      return 0;
+    }
+    v12 = *(_QWORD *)a2;
+    v13 = v10 - 1;
+    *(_DWORD *)(a2 + 8) = v13;
+    if ( v12 )
+    {
+      if ( v13 != -1 && v13 < *(_DWORD *)(v12 + 104) )
+        v12 = *(_QWORD *)(v12 + 112) + 8LL * v13;
+      v7 = *(_DWORD *)(v12 + 4) - 1;
+      if ( !a3 )
+        break;
+    }
+    else
+    {
+      v7 = *(_DWORD *)(a2 + 16) - 1;
+      if ( !a3 )
+        break;
+    }
+    v14 = sub_3B9AA0((__int64)a1, v7, 1);
+  }
+  while ( !((unsigned __int8 (__fastcall *)(unsigned __int64, __int64 (__fastcall **)(_QWORD, _QWORD *, __int64)))a3)(
+             v14,
+             a4) );
+  *(_DWORD *)(a2 + 24) = v7;
+  return 1;
+}
+

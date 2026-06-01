@@ -1,0 +1,4 @@
+__int64 __fastcall sub_3B8060(__int64 a1, unsigned __int8 a2, __int64 a3)
+{
+  return sub_597520(a2, a3);
+}

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Bulk-dump all IDA Pro plugin/proc/loader binaries via idalib.
 #
-# Output: /home/cole/RustProjects/active/unlace/references/ida/<category>/<name>/all/
+# Output: /home/cole/RustProjects/active/unlace/research/decompiled-references/ida/<category>/<name>/all/
 set -u
 
 IDA_DIR="/home/cole/Downloads/Software/IDAPro/ida-pro-9.3sp1"
-REFS_DIR="/home/cole/RustProjects/active/unlace/references/ida"
+REFS_DIR="/home/cole/RustProjects/active/unlace/research/decompiled-references/ida"
 SCRIPT="/tmp/dump_one_binary.py"
 
 export PYTHONPATH="$IDA_DIR/idalib/python"

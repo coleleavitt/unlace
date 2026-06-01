@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{self, Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::cargo_bin;
 use serde::Deserialize;
 use unlace_loader::{ElfLoader, Loader, SectionFlags};
 
@@ -41,6 +42,20 @@ struct ShapeCase {
     fixture: &'static str,
     function: &'static str,
     required_fragments: &'static [&'static str],
+}
+
+struct NonHostExecCase {
+    fixture: &'static str,
+    function: &'static str,
+    runner_names: &'static [&'static str],
+    expected: NonHostExpected,
+    timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NonHostExpected {
+    Exit(i32),
+    Timeout,
 }
 
 struct ShapeObservation {
@@ -107,16 +122,12 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
     SemanticCase {
         fixture: "medium",
         function: "main",
-        expected_failure: Some(
-            "optimized main still loses vectorized stack-buffer/lvar state; recompiled subset exits differently",
-        ),
+        expected_failure: None,
     },
     SemanticCase {
         fixture: "stripped",
         function: "main",
-        expected_failure: Some(
-            "same optimized main vectorized stack-buffer/lvar gap under stripped symbols",
-        ),
+        expected_failure: None,
     },
     SemanticCase {
         fixture: "switch_table",
@@ -156,6 +167,42 @@ const CROSS_ARCH_SHAPE_CASES: &[ShapeCase] = &[
         function: "_start",
         required_fragments: &["arithmetic_test()"],
     },
+    ShapeCase {
+        fixture: "ppc64_features",
+        function: "ppc_branch",
+        required_fragments: &["if (", "return"],
+    },
+];
+
+const CROSS_ARCH_EXEC_CASES: &[NonHostExecCase] = &[
+    NonHostExecCase {
+        fixture: "arm64_features",
+        function: "_start",
+        runner_names: &["qemu-aarch64", "qemu-aarch64-static"],
+        expected: NonHostExpected::Exit(0),
+        timeout_ms: 2_000,
+    },
+    NonHostExecCase {
+        fixture: "mips64_features",
+        function: "_start",
+        runner_names: &["qemu-mips64", "qemu-mips64-static"],
+        expected: NonHostExpected::Timeout,
+        timeout_ms: 500,
+    },
+    NonHostExecCase {
+        fixture: "riscv64_features",
+        function: "_start",
+        runner_names: &["qemu-riscv64", "qemu-riscv64-static"],
+        expected: NonHostExpected::Timeout,
+        timeout_ms: 500,
+    },
+    NonHostExecCase {
+        fixture: "ppc64_features",
+        function: "_start",
+        runner_names: &["qemu-ppc64", "qemu-ppc64-static"],
+        expected: NonHostExpected::Exit(0),
+        timeout_ms: 2_000,
+    },
 ];
 
 pub fn run(root: &Path) -> i32 {
@@ -172,9 +219,12 @@ pub fn run(root: &Path) -> i32 {
         .map(|f| (f.name.clone(), f))
         .collect();
 
-    let Some(unlace_bin) = find_or_build_unlace(root) else {
-        eprintln!("semantic-report: unlace binary not found and build failed");
-        return 1;
+    let unlace_bin = match cargo_bin::build_unlace_bin(root) {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("semantic-report: {e}");
+            return 1;
+        }
     };
 
     println!("semantic-report: source-known executable equivalence");
@@ -252,6 +302,57 @@ pub fn run(root: &Path) -> i32 {
     }
 
     println!();
+    println!("semantic-report: source-known non-host executable observations");
+    for case in CROSS_ARCH_EXEC_CASES {
+        measured_names.insert(case.fixture);
+        let Some(fixture) = fixtures.get(case.fixture) else {
+            println!(
+                "[semantic] FAIL-NONHOST-EXEC {}:{} - fixture missing from tests/corpus.toml",
+                case.fixture, case.function
+            );
+            failed += 1;
+            continue;
+        };
+
+        match run_non_host_exec_case(root, fixture, case) {
+            Ok(observation) if non_host_observation_matches(&observation, case.expected) => {
+                println!(
+                    "[semantic] PASS-NONHOST-EXEC {}:{} expected={} observed={}",
+                    fixture.name,
+                    case.function,
+                    non_host_expected_detail(case.expected),
+                    observation.detail(),
+                );
+                passed += 1;
+            }
+            Ok(observation) => {
+                println!(
+                    "[semantic] FAIL-NONHOST-EXEC {}:{} expected={} observed={}",
+                    fixture.name,
+                    case.function,
+                    non_host_expected_detail(case.expected),
+                    observation.detail(),
+                );
+                failed += 1;
+            }
+            Err(NonHostExecError::Unsupported(reason)) => {
+                println!(
+                    "[semantic] UNSUPPORTED-NONHOST-EXEC {}:{} - {}",
+                    fixture.name, case.function, reason
+                );
+                unsupported += 1;
+            }
+            Err(NonHostExecError::Failed(reason)) => {
+                println!(
+                    "[semantic] FAIL-NONHOST-EXEC {}:{} - {}",
+                    fixture.name, case.function, reason
+                );
+                failed += 1;
+            }
+        }
+    }
+
+    println!();
     println!("semantic-report: source-known cross-arch decompile shape");
     for case in CROSS_ARCH_SHAPE_CASES {
         measured_names.insert(case.fixture);
@@ -313,33 +414,6 @@ fn read_manifest(root: &Path) -> Result<Manifest, String> {
     toml::from_str(&text).map_err(|e| format!("failed to parse {}: {e}", path.display()))
 }
 
-fn find_or_build_unlace(root: &Path) -> Option<PathBuf> {
-    let status = Command::new("cargo")
-        .args(["build", "-q", "-p", "unlace-cli"])
-        .current_dir(root)
-        .status()
-        .ok()?;
-    if !status.success() {
-        return None;
-    }
-    find_unlace_binary(root)
-}
-
-fn find_unlace_binary(root: &Path) -> Option<PathBuf> {
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| root.join("target"));
-    let debug_bin = target_dir.join("debug").join("unlace");
-    if debug_bin.exists() {
-        return Some(debug_bin);
-    }
-    let release_bin = target_dir.join("release").join("unlace");
-    if release_bin.exists() {
-        return Some(release_bin);
-    }
-    None
-}
-
 #[derive(Debug, PartialEq, Eq)]
 struct Observation {
     exit: i32,
@@ -355,6 +429,31 @@ impl Observation {
             stderr: output.stderr,
         }
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum NonHostObservation {
+    Exit(Observation),
+    Timeout,
+}
+
+impl NonHostObservation {
+    fn detail(&self) -> String {
+        match self {
+            NonHostObservation::Exit(obs) => format!(
+                "{} stdout={} stderr={}",
+                output_status_detail(obs),
+                display_bytes(&obs.stdout),
+                display_bytes(&obs.stderr)
+            ),
+            NonHostObservation::Timeout => "timeout".to_string(),
+        }
+    }
+}
+
+enum NonHostExecError {
+    Unsupported(String),
+    Failed(String),
 }
 
 fn output_status_detail(obs: &Observation) -> String {
@@ -374,6 +473,24 @@ fn output_status_detail_raw(output: &Output) -> String {
         return format!("signal({signal})");
     }
     "signal-or-unknown".to_string()
+}
+
+fn non_host_expected_detail(expected: NonHostExpected) -> String {
+    match expected {
+        NonHostExpected::Exit(code) => format!("exit({code})"),
+        NonHostExpected::Timeout => "timeout".to_string(),
+    }
+}
+
+fn non_host_observation_matches(
+    observation: &NonHostObservation,
+    expected: NonHostExpected,
+) -> bool {
+    match (observation, expected) {
+        (NonHostObservation::Exit(obs), NonHostExpected::Exit(code)) => obs.exit == code,
+        (NonHostObservation::Timeout, NonHostExpected::Timeout) => true,
+        _ => false,
+    }
 }
 
 fn run_executable_case(
@@ -468,6 +585,99 @@ fn run_executable_case(
             display_bytes(&recompiled.stderr),
         ))
     }
+}
+
+fn run_non_host_exec_case(
+    root: &Path,
+    fixture: &Fixture,
+    case: &NonHostExecCase,
+) -> Result<NonHostObservation, NonHostExecError> {
+    semantic_trace(format_args!(
+        "non-host exec case {}:{} arch={:?} bin={}",
+        fixture.name, case.function, fixture.architecture, fixture.binary_path
+    ));
+    if fixture.architecture.as_deref() == Some("x86_64") {
+        return Err(NonHostExecError::Failed(
+            "non-host exec case points at x86_64 fixture".to_string(),
+        ));
+    }
+    let runner = find_non_host_runner(fixture, case).ok_or_else(|| {
+        NonHostExecError::Unsupported(format!(
+            "no user-mode runner found; tried env {} / {} and commands {}",
+            fixture_runner_env_key(&fixture.name),
+            arch_runner_env_key(fixture.architecture.as_deref().unwrap_or("unknown")),
+            case.runner_names.join(", ")
+        ))
+    })?;
+    let binary = root.join(&fixture.binary_path);
+    semantic_trace(format_args!(
+        "non-host runner fixture={} runner={} binary={} timeout_ms={}",
+        fixture.name,
+        runner.display(),
+        binary.display(),
+        case.timeout_ms
+    ));
+    let mut command = Command::new(&runner);
+    command.arg(&binary);
+    match run_with_timeout(&mut command, Duration::from_millis(case.timeout_ms)) {
+        Ok(Some(output)) => {
+            semantic_trace(format_args!(
+                "non-host run fixture={} status={} stdout={} stderr={}",
+                fixture.name,
+                output_status_detail_raw(&output),
+                display_bytes(&output.stdout),
+                display_bytes(&output.stderr)
+            ));
+            Ok(NonHostObservation::Exit(Observation::from_output(output)))
+        }
+        Ok(None) => {
+            semantic_trace(format_args!(
+                "non-host run fixture={} timed out",
+                fixture.name
+            ));
+            Ok(NonHostObservation::Timeout)
+        }
+        Err(e) => Err(NonHostExecError::Failed(e)),
+    }
+}
+
+fn find_non_host_runner(fixture: &Fixture, case: &NonHostExecCase) -> Option<PathBuf> {
+    for key in [
+        fixture_runner_env_key(&fixture.name),
+        arch_runner_env_key(fixture.architecture.as_deref().unwrap_or("unknown")),
+    ] {
+        if let Some(path) = std::env::var_os(&key)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+        {
+            return Some(path);
+        }
+    }
+
+    case.runner_names
+        .iter()
+        .find(|name| command_available(name))
+        .map(|name| PathBuf::from(*name))
+}
+
+fn fixture_runner_env_key(fixture_name: &str) -> String {
+    format!(
+        "UNLACE_SEMANTIC_RUNNER_{}",
+        fixture_name.to_ascii_uppercase()
+    )
+}
+
+fn arch_runner_env_key(arch: &str) -> String {
+    format!("UNLACE_SEMANTIC_RUNNER_{}", arch.to_ascii_uppercase())
+}
+
+fn command_available(name: &str) -> bool {
+    Command::new(name)
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok()
 }
 
 fn run_shape_case(
@@ -1001,5 +1211,45 @@ mod tests {
         collect_c_strings(0x2000, b"\0%d\n\0x\0toolong", &mut strings);
         assert_eq!(strings.get(&0x2001).map(String::as_str), Some("%d\n"));
         assert!(!strings.contains_key(&0x2005));
+    }
+
+    #[test]
+    fn host_source_known_cases_have_zero_expected_failure_budget() {
+        let xfails: Vec<_> = SEMANTIC_CASES
+            .iter()
+            .filter(|case| case.expected_failure.is_some())
+            .map(|case| format!("{}:{}", case.fixture, case.function))
+            .collect();
+
+        assert!(
+            xfails.is_empty(),
+            "semantic failure budget should stay zero; remove expected failures or document a new blocker: {xfails:?}"
+        );
+    }
+
+    #[test]
+    fn non_host_exec_cases_cover_shape_cases() {
+        let exec: BTreeSet<_> = CROSS_ARCH_EXEC_CASES
+            .iter()
+            .map(|case| case.fixture)
+            .collect();
+        let shape: BTreeSet<_> = CROSS_ARCH_SHAPE_CASES
+            .iter()
+            .map(|case| case.fixture)
+            .collect();
+        assert_eq!(exec, shape);
+    }
+
+    #[test]
+    fn non_host_runner_env_keys_are_predictable() {
+        assert_eq!(
+            fixture_runner_env_key("arm64_features"),
+            "UNLACE_SEMANTIC_RUNNER_ARM64_FEATURES"
+        );
+        assert_eq!(arch_runner_env_key("riscv"), "UNLACE_SEMANTIC_RUNNER_RISCV");
+        assert!(non_host_observation_matches(
+            &NonHostObservation::Timeout,
+            NonHostExpected::Timeout
+        ));
     }
 }

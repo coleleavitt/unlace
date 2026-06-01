@@ -1,0 +1,4 @@
+__int64 __fastcall sub_20C31F0(_QWORD *a1)
+{
+  return *a1 + 2128LL;
+}

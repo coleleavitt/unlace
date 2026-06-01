@@ -22,7 +22,7 @@
 //!   IDAPython modules from IDA 9.3sp1.
 //! - `research/ida-hexrays-docs/sdk/idapython-swig/*.i` — 52 SWIG
 //!   binding files documenting every IDAPython symbol's exact signature.
-//! - `references/ida/plugins/idapython3/all/` — 339 decompiled functions
+//! - `research/decompiled-references/ida/plugins/idapython3/all/` — 339 decompiled functions
 //!   showing IDA's own runtime implementation.
 //! - `research/ida-hexrays-docs/sdk/idapython-examples/` — 152 example
 //!   IDAPython scripts that act as the compat test corpus.

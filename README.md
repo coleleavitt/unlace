@@ -18,7 +18,7 @@ verified end-to-end.
 | Loader support (ELF, PE/COFF, Mach-O, dyld cache, Intel HEX, …) | Per-format parser + symbol/debug-ingest matrix | [`docs/status.md`](docs/status.md) |
 | Expression printer (IDA `cot_*` coverage) | 36 explicit `CExpr` variants pinned by `cexpr_coverage_lists_every_variant`; remaining ~33 dispatch through `Binary` | [`crates/unlace-output/src/COVERAGE.md`](crates/unlace-output/src/COVERAGE.md) |
 | Output quality counters (`nullderef`, `badret`, `badtok`, `empty_bodies`, `impossible_lvalue`, `lost_frame_offsets`) | Pinned at 0 for `hello_world.elf`, `branches.elf`, `loops.elf` | [`docs/status.md`](docs/status.md) §"Output quality counters" |
-| Stylistic fixture score | `Stylistic Fixture Parity: 86.8%` from `bash scripts/score_parity.sh` on the current fixture metric | [`docs/status.md`](docs/status.md) §"Quality axes" |
+| Stylistic fixture score | `Stylistic Fixture Parity: 84.5%` from `bash scripts/score_parity.sh` on the current fixture metric | [`docs/status.md`](docs/status.md) §"Quality axes" |
 | Quality-axis report | `bash scripts/quality_axes.sh` reports stylistic score, `xtask semantic-report` executable equivalence status, and the DWARF/source-backed type/variable score | [`docs/parity-quality-execution-plan-2026-05.md`](docs/parity-quality-execution-plan-2026-05.md) |
 | Determinism in output-affecting crates | `cargo xtask lint-determinism` rejects `HashMap` / `HashSet` in `unlace-ir`, `unlace-passes`, `unlace-struct`, `unlace-output` (use `BTreeMap` / `BTreeSet` or `// determinism:allow`) | [`docs/determinism.md`](docs/determinism.md) |
 | Reproducible-build / SBOM tooling | `cargo xtask sbom` emits a CycloneDX 1.4 BOM from `Cargo.lock` | [`crates/unlace-sbom`](crates/unlace-sbom/) |
@@ -119,6 +119,7 @@ it, and the cached macro-expansion can stale on this codebase.
 | File | Purpose |
 |------|---------|
 | [`docs/status.md`](docs/status.md) | **Source of truth.** Architecture, loader, type/debug, and output support matrices. |
+| [`docs/current-parity-ledger-2026-05-30.md`](docs/current-parity-ledger-2026-05-30.md) | Current stale/reframed parity reconciliation across status, golden triage, DREAM, and handoff docs. |
 | [`docs/roadmap.md`](docs/roadmap.md) | Long-term parity direction. Bands, not schedule. |
 | [`docs/research-ideas.md`](docs/research-ideas.md) | Speculative / parking-lot items with no commitment. |
 | [`docs/historical-sessions.md`](docs/historical-sessions.md) | Older session-export claims, segregated from current status. |
@@ -131,7 +132,9 @@ it, and the cached macro-expansion can stale on this codebase.
 | [`plan.md`](plan.md) | Active backlog with batch boundaries. |
 | [`CLAUDE.md`](CLAUDE.md) | Guidance for AI agents working in this repo. |
 
-If two documents disagree about what is "done", `docs/status.md` wins.
+If two documents disagree about what is "done", `docs/status.md` wins for
+public support claims and the current parity ledger explains stale/reframed
+implementation details.
 
 ## License
 

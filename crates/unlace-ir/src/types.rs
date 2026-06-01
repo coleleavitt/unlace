@@ -45,6 +45,9 @@ use crate::ssa::PrimitiveType;
 pub enum Type {
     /// A scalar primitive type carried over from the SSA pipeline.
     Primitive(PrimitiveType),
+    /// Named scalar or ABI type that is not represented in
+    /// [`PrimitiveType`], for example SysV x87 `long double`.
+    Named(String),
     /// Pointer to another type (e.g. `int *`).
     Ptr(Box<Type>),
     /// Array with element type and optional length (`size = None` ⇒ `T[]`).
@@ -315,6 +318,8 @@ impl Type {
     pub fn size(&self) -> Option<u8> {
         match self {
             Type::Primitive(p) => primitive_size(*p),
+            Type::Named(name) if name == "long double" => Some(16),
+            Type::Named(_) => None,
             // Pointer width is target-dependent; assume 64-bit (8 bytes) since
             // every architecture this crate targets is 64-bit.
             Type::Ptr(_) | Type::FuncPtr { .. } => Some(8),
@@ -482,6 +487,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::Primitive(p) => f.write_str(primitive_c_name(*p)),
+            Type::Named(name) => f.write_str(name),
             Type::Ptr(inner) => match &**inner {
                 // Print typed pointers compactly, e.g. `int *`, `int **`.
                 Type::Primitive(p) if !matches!(p, PrimitiveType::Ptr) => {

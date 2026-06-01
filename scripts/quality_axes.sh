@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Honest decompiler-quality axis report.
 #
-# Axis 1 is the existing fixture-style score. Axis 2 runs the source-known
-# executable-equivalence report with PASS/XFAIL/unsupported rows. Axis 3 runs
-# the first DWARF/source-ground-truth type and variable recovery scorer.
+# Axis 1 is the existing fixture-style score plus exact-line golden triage.
+# Axis 2 runs the source-known executable-equivalence report with
+# PASS/XFAIL/unsupported rows. Axis 3 runs the DWARF/source-ground-truth type
+# and variable recovery scorer.
 
 set -euo pipefail
 
@@ -12,6 +13,10 @@ cd "$ROOT"
 
 echo "== Stylistic similarity axis =="
 bash scripts/score_parity.sh
+
+echo
+echo "== Exact-line golden triage =="
+cargo run -p xtask -- golden-triage
 
 echo
 echo "== Semantic correctness axis =="

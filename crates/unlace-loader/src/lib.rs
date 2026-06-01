@@ -24,6 +24,7 @@ pub mod android_vdex;
 pub mod demangle_rust;
 pub mod demangle_swift;
 pub mod dwarf;
+pub use dwarf::{DebugLocationResolver, import_dwarf_with_resolver};
 pub mod dwarf_expr;
 pub mod dyld_cache;
 pub mod split_dwarf;
@@ -96,7 +97,7 @@ pub use android_image::{art_to_binary_image, dex_to_binary_image, oat_to_binary_
 pub use dwarf::{
     DwarfInfo, DwoRef, EnumType, FunctionDebugInfo, LocalVariable, MacroDefinition, ParameterInfo,
     SimpleLocation, SourceLocation, StructField, StructType, UnionType, evaluate_simple_location,
-    import_dwarf,
+    import_dwarf, import_dwarf_with_sidecar,
 };
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;

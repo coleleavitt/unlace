@@ -117,6 +117,10 @@ fn arg_regs_for_func(func: &SsaFunction) -> &'static [(u64, u32)] {
     }
 }
 
+fn var_naming_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_VAR_NAMING_TRACE").is_some()
+}
+
 pub fn classify_variables(func: &SsaFunction) -> VarClassification {
     let mut roles: BTreeMap<SsaVarnode, VarRole> = BTreeMap::new();
     let mut arg_indices: BTreeMap<SsaVarnode, u32> = BTreeMap::new();
@@ -270,8 +274,22 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
             if *bid == func.function.entry && *idx < 8 {
                 for &(off, arg_idx) in arg_regs {
                     if src.offset == off {
-                        arg_indices.insert(*sv, arg_idx);
-                        record_role(&mut roles, *sv, argument_role_for_index(func, arg_idx));
+                        let param_count = func.inferred_params.len() as u32;
+                        if arg_idx < param_count {
+                            arg_indices.insert(*sv, arg_idx);
+                            record_role(&mut roles, *sv, argument_role_for_index(func, arg_idx));
+                            if var_naming_trace_enabled() {
+                                eprintln!(
+                                    "[unlace-var-naming] func={} Copy-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count}",
+                                    func.function.name
+                                );
+                            }
+                        } else if var_naming_trace_enabled() {
+                            eprintln!(
+                                "[unlace-var-naming] func={} SKIP Copy-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
+                                func.function.name
+                            );
+                        }
                         break;
                     }
                 }
@@ -298,8 +316,22 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                 };
                 for &(off, arg_idx) in arg_regs {
                     if input.offset == off {
-                        arg_indices.insert(*sv, arg_idx);
-                        record_role(&mut roles, *sv, argument_role_for_index(func, arg_idx));
+                        let param_count = func.inferred_params.len() as u32;
+                        if arg_idx < param_count {
+                            arg_indices.insert(*sv, arg_idx);
+                            record_role(&mut roles, *sv, argument_role_for_index(func, arg_idx));
+                            if var_naming_trace_enabled() {
+                                eprintln!(
+                                    "[unlace-var-naming] func={} direct-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count}",
+                                    func.function.name
+                                );
+                            }
+                        } else if var_naming_trace_enabled() {
+                            eprintln!(
+                                "[unlace-var-naming] func={} SKIP direct-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
+                                func.function.name
+                            );
+                        }
                         break;
                     }
                 }
@@ -315,9 +347,26 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
     // 2b. Whole-function live-in argument fallback. Optimized code can push
     // the first use of an ABI argument into a successor block; give those SSA
     // inputs argument roles too so body names stay aligned with signatures.
+    // Cap at `inferred_params.len()` to avoid naming compiler-generated loop
+    // counter registers (rdx/rcx/…) as phantom arguments `a3`/`a4` when
+    // the function only takes fewer real parameters.
+    let param_count = func.inferred_params.len() as u32;
     for (sv, arg_idx) in collect_live_in_argument_svs(func, arg_regs) {
-        arg_indices.insert(sv, arg_idx);
-        record_role(&mut roles, sv, argument_role_for_index(func, arg_idx));
+        if arg_idx < param_count {
+            arg_indices.insert(sv, arg_idx);
+            record_role(&mut roles, sv, argument_role_for_index(func, arg_idx));
+            if var_naming_trace_enabled() {
+                eprintln!(
+                    "[unlace-var-naming] func={} live-in-arg-role sv={sv:?} arg_idx={arg_idx} param_count={param_count}",
+                    func.function.name
+                );
+            }
+        } else if var_naming_trace_enabled() {
+            eprintln!(
+                "[unlace-var-naming] func={} SKIP live-in-arg-role sv={sv:?} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
+                func.function.name
+            );
+        }
     }
 
     // 2b. Return-value classification: find the last write to the return

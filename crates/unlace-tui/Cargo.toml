@@ -6,7 +6,7 @@ license.workspace = true
 description = "Terminal UI for unlace (ratatui + crossterm)"
 
 [dependencies]
-unlace-session = { path = "../unlace-session" }
+unlace-session = { workspace = true }
 unlace-ir.workspace = true
 unlace-loader.workspace = true
 anyhow.workspace = true

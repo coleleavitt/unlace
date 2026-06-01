@@ -5,7 +5,7 @@
 //! (per the calling convention) and then merge its inferred type into the
 //! callee's parameter slot in the [`FunctionSignatureRegistry`].
 //!
-//! Modelled after IDA's `apply_callee_tinfo` (`references/ida/idalib/all/`),
+//! Modelled after IDA's `apply_callee_tinfo` (`research/decompiled-references/ida/idalib/all/`),
 //! which fills in argument types from caller context when the callee body is
 //! ambiguous. The merge rule is the [`PrimitiveType::join`] lattice: `Unknown`
 //! is replaced by anything; equal types stay; conflicts collapse to `Unknown`.

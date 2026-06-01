@@ -1,0 +1,5 @@
+__int64 __fastcall __gnu_cxx::__normal_iterator<unsigned long const*,std::vector<unsigned long>>::base(__int64 a1)
+{
+  return a1;
+}
+

@@ -1,0 +1,52 @@
+void __fastcall sub_8FFDD0(_QWORD *a1)
+{
+  __int64 v2; // rdi
+  __int64 v3; // rsi
+  __int64 v4; // rdi
+  bool v5; // zf
+  __int64 v6; // rsi
+  __int64 v7; // rdi
+  __int64 v8; // rsi
+  __int64 v9; // rdi
+  __int64 v10; // rdi
+
+  *a1 = &off_1C6F4B8;
+  a1[4] = &off_1C4C318;
+  v2 = a1[70];
+  if ( v2 )
+    sub_186B220((void *)(v2 - 8));
+  v3 = a1[68];
+  if ( v3 )
+  {
+    v4 = a1[69];
+    v5 = (*(_DWORD *)(v3 + 8))-- == 1;
+    if ( v5 )
+      sub_15D7BC0(v4, v3);
+  }
+  v6 = a1[66];
+  if ( v6 )
+  {
+    v7 = a1[67];
+    v5 = (*(_DWORD *)(v6 + 8))-- == 1;
+    if ( v5 )
+      sub_15D7BC0(v7, v6);
+  }
+  v8 = a1[64];
+  if ( v8 )
+  {
+    v9 = a1[65];
+    v5 = (*(_DWORD *)(v8 + 8))-- == 1;
+    if ( v5 )
+      sub_15D7BC0(v9, v8);
+  }
+  a1[45] = &qword_1C637E8;
+  sub_15841B0(a1 + 45);
+  a1[25] = &qword_1C637E8;
+  sub_15841B0(a1 + 25);
+  v10 = a1[24];
+  if ( v10 )
+    sub_186B220((void *)(v10 - 8));
+  sub_15841B0(a1 + 4);
+  operator delete(a1, 0x250u);
+}
+

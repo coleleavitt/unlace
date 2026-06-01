@@ -1,0 +1,38 @@
+__int64 __fastcall sub_B1D870(__int64 **a1, char *a2, int a3, __int64 a4, __int64 a5, __int64 a6)
+{
+  unsigned int v6; // ebx
+  __int64 v7; // rcx
+  int v8; // eax
+  __int64 *v9; // rdi
+  __int64 v10; // rbp
+  __int64 v12[4]; // [rsp+8h] [rbp-20h] BYREF
+
+  if ( a3 )
+  {
+    v6 = 0;
+    v7 = (__int64)&a2[a3 - 1 + 1];
+    do
+    {
+      v8 = *a2++;
+      v6 = v8 + 10 * v6 - 48;
+    }
+    while ( (char *)v7 != a2 );
+  }
+  else
+  {
+    v6 = 0;
+  }
+  v9 = *a1;
+  v10 = *v9;
+  v9[10] += 4;
+  if ( v9[1] >= (unsigned __int64)(v10 + 4) && v10 )
+    *v9 = v10 + 4;
+  else
+    v10 = sub_962430((__int64)v9, 4, 4, 0, a5, a6);
+  v12[0] = v10;
+  if ( (unsigned __int8)sub_21F5450(v6, v12) )
+    return v10;
+  else
+    return 0;
+}
+

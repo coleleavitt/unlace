@@ -40,6 +40,8 @@ fn bench_full_binary_throughput(c: &mut Criterion) {
         timeout: Duration::from_secs(10),
         print_config: None,
         annotations: None,
+        flirt: pipeline::FlirtConfig::default(),
+        dwarf_sidecar: None,
     };
 
     let mut group = c.benchmark_group("hexrays_throughput");
@@ -87,6 +89,8 @@ fn bench_per_function_latency(c: &mut Criterion) {
         timeout: Duration::from_secs(10),
         print_config: None,
         annotations: None,
+        flirt: pipeline::FlirtConfig::default(),
+        dwarf_sidecar: None,
     };
 
     // Measure individual latencies for percentile analysis

@@ -18,8 +18,14 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture 2>&1 \
-    | grep -F '[score]' \
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+cargo_status=0
+cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture >"$tmp" 2>&1 \
+    || cargo_status=$?
+
+grep -F '[score]' "$tmp" \
     | awk '{ sum += $2; n++ }
            END {
                if (n == 0) {
@@ -28,3 +34,7 @@ cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture 2>&1 \
                }
                printf "Stylistic Fixture Parity: %.1f%%\n", sum / n
            }'
+
+if [ "$cargo_status" -ne 0 ]; then
+    echo "note: golden_fixtures exited $cargo_status; reported stylistic score from emitted [score] lines" >&2
+fi

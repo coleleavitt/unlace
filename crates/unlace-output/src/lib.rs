@@ -11,11 +11,11 @@ pub mod ir_dump;
 pub mod stream;
 
 pub use c_printer::{
-    FunctionHeaderInfo, PrintConfig, PrinterAnnotations, SsaStatementSlots,
+    FunctionHeaderInfo, PrintConfig, PrinterAnnotations, SsaStatementSlots, StackLvarAnnotation,
     compute_array_struct_indices, declare_pseudo_c_externals, dedupe_ida_typedefs,
     dedupe_rtti_hierarchy, emit_inferred_struct_preamble, print_c, print_c_full,
     print_c_with_annotations, print_c_with_dwarf, print_c_with_rtti, print_c_with_rtti_config,
-    strip_ida_typedefs,
+    stack_lvar_annotations_from_ssa, strip_ida_typedefs,
 };
 pub use cfg_dot::emit_cfg_dot;
 pub use cpp_class::annotate_cpp_class_info;

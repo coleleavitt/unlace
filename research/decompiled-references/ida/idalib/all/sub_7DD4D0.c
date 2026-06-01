@@ -1,0 +1,22 @@
+__int64 __fastcall sub_7DD4D0(__int64 a1, __int64 a2, unsigned int a3)
+{
+  __int64 v4; // rax
+  __int64 v5; // rbx
+  __int64 v6; // r12
+  _QWORD v8[6]; // [rsp+8h] [rbp-30h] BYREF
+
+  v8[0] = a1;
+  v4 = operator new(0x30u);
+  *(_BYTE *)(v4 + 8) = 41;
+  v5 = v4;
+  v6 = v4;
+  *(_QWORD *)v4 = &off_2B3BBF0;
+  *(_QWORD *)(v4 + 16) = 0;
+  *(_DWORD *)(v4 + 40) = 0;
+  *(_OWORD *)(v4 + 24) = 0;
+  if ( !a1 || (unsigned __int8)sub_7EDB20(v4, v8, a2, a3) )
+    return v6;
+  if ( v5 )
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)v5 + 8LL))(v5);
+  return 0;
+}

@@ -53,6 +53,9 @@ pub(crate) enum CvType {
     Pointer {
         underlying: u32,
     },
+    Modifier {
+        underlying: u32,
+    },
     Array {
         element: u32,
         len_bytes: u32,
@@ -61,19 +64,27 @@ pub(crate) enum CvType {
         name: String,
         size: u64,
         fields: Vec<CvField>,
+        field_list: Option<u32>,
         forward_ref: bool,
     },
     Union {
         name: String,
         size: u64,
         fields: Vec<CvField>,
+        field_list: Option<u32>,
         forward_ref: bool,
     },
     Enum {
         name: String,
         underlying: u32,
         variants: Vec<(String, i64)>,
+        field_list: Option<u32>,
         forward_ref: bool,
+    },
+    FieldList {
+        fields: Vec<CvField>,
+        variants: Vec<(String, i64)>,
+        continuation: Option<u32>,
     },
     Procedure {
         return_type: Option<u32>,
@@ -178,6 +189,69 @@ pub(crate) fn lower_cv_table(table: &BTreeMap<u32, CvType>) -> PdbTypes {
 
     out.refresh_hashes();
     out
+}
+
+fn materialize_field_lists(table: &mut BTreeMap<u32, CvType>) {
+    let snapshot = table.clone();
+    for cv in table.values_mut() {
+        match cv {
+            CvType::Struct {
+                fields,
+                field_list: Some(field_list),
+                ..
+            }
+            | CvType::Union {
+                fields,
+                field_list: Some(field_list),
+                ..
+            } => {
+                let (resolved_fields, _) =
+                    collect_cv_field_list(&snapshot, *field_list, &mut BTreeSet::new());
+                if !resolved_fields.is_empty() {
+                    *fields = resolved_fields;
+                }
+            }
+            CvType::Enum {
+                variants,
+                field_list: Some(field_list),
+                ..
+            } => {
+                let (_, resolved_variants) =
+                    collect_cv_field_list(&snapshot, *field_list, &mut BTreeSet::new());
+                if !resolved_variants.is_empty() {
+                    *variants = resolved_variants;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_cv_field_list(
+    table: &BTreeMap<u32, CvType>,
+    idx: u32,
+    seen: &mut BTreeSet<u32>,
+) -> (Vec<CvField>, Vec<(String, i64)>) {
+    if !seen.insert(idx) {
+        return (Vec::new(), Vec::new());
+    }
+    let Some(CvType::FieldList {
+        fields,
+        variants,
+        continuation,
+    }) = table.get(&idx)
+    else {
+        return (Vec::new(), Vec::new());
+    };
+
+    let mut out_fields = fields.clone();
+    let mut out_variants = variants.clone();
+    if let Some(next) = continuation {
+        let (mut next_fields, mut next_variants) = collect_cv_field_list(table, *next, seen);
+        out_fields.append(&mut next_fields);
+        out_variants.append(&mut next_variants);
+    }
+    (out_fields, out_variants)
 }
 
 impl PdbTypes {
@@ -349,7 +423,7 @@ fn rewrite_type_struct_names(ty: &mut Type, hash_to_name: &BTreeMap<u64, String>
             rewrite_type_struct_names(key, hash_to_name);
             rewrite_type_struct_names(value, hash_to_name);
         }
-        Type::Primitive(_) | Type::Interface { .. } | Type::TypeParam { .. } => {}
+        Type::Primitive(_) | Type::Named(_) | Type::Interface { .. } | Type::TypeParam { .. } => {}
         Type::Union { fields, .. } => {
             for field in fields {
                 rewrite_type_struct_names(&mut field.ty, hash_to_name);
@@ -404,6 +478,10 @@ fn hash_type(ty: &Type, h: &mut StableHasher, depth: u8) {
         Type::Primitive(p) => {
             h.u8(0x01);
             h.str(&format!("{p:?}"));
+        }
+        Type::Named(name) => {
+            h.u8(0x0c);
+            h.str(name);
         }
         Type::Ptr(inner) => {
             h.u8(0x02);
@@ -498,6 +576,7 @@ fn lower_one(cv: &CvType, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type
             let inner = resolve(*underlying, table, out);
             Type::Ptr(Box::new(inner))
         }
+        CvType::Modifier { underlying } => resolve(*underlying, table, out),
         CvType::Array { element, len_bytes } => {
             let elem = resolve(*element, table, out);
             let elem_size = elem.size().map(|s| s as u32).unwrap_or(0);
@@ -539,17 +618,15 @@ fn lower_one(cv: &CvType, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type
             }
         }
         CvType::Union { name, fields, .. } => {
-            // Lower as a struct with all-zero offsets — sufficient for
-            // downstream consumers that just need name + member types.
             let fs = fields
                 .iter()
                 .map(|f| StructFieldType {
                     name: f.name.clone(),
                     ty: resolve(f.field_type, table, out),
-                    offset: 0,
+                    offset: f.offset,
                 })
                 .collect();
-            Type::Struct {
+            Type::Union {
                 name: name.clone(),
                 fields: fs,
             }
@@ -582,7 +659,16 @@ fn lower_one(cv: &CvType, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type
             }
         }
         CvType::ArgList { .. } => Type::Primitive(PrimitiveType::Unknown),
-        CvType::Bitfield { underlying, .. } => resolve(*underlying, table, out),
+        CvType::Bitfield {
+            underlying,
+            length,
+            position,
+        } => Type::Bitfield {
+            underlying: Box::new(resolve(*underlying, table, out)),
+            offset: u32::from(*position),
+            width: u32::from(*length),
+        },
+        CvType::FieldList { .. } => Type::Primitive(PrimitiveType::Unknown),
         CvType::Unknown => Type::Primitive(PrimitiveType::Unknown),
     }
 }
@@ -656,6 +742,7 @@ pub fn import_pdb_types(pdb_path: &Path) -> Result<PdbTypes, LoadError> {
         }
     }
 
+    materialize_field_lists(&mut table);
     let mut out = lower_cv_table(&table);
     collect_pdb_constants(&mut pdb, &mut out)?;
 
@@ -723,6 +810,9 @@ fn lower_typedata(td: &TypeData<'_>) -> Option<CvType> {
         TypeData::Pointer(p) => CvType::Pointer {
             underlying: ti_to_u32(p.underlying_type),
         },
+        TypeData::Modifier(m) => CvType::Modifier {
+            underlying: ti_to_u32(m.underlying_type),
+        },
         TypeData::Array(a) => CvType::Array {
             element: ti_to_u32(a.element_type),
             len_bytes: a.dimensions.last().copied().unwrap_or(0),
@@ -731,18 +821,21 @@ fn lower_typedata(td: &TypeData<'_>) -> Option<CvType> {
             name: c.name.to_string().to_string(),
             size: c.size,
             fields: Vec::new(),
+            field_list: c.fields.map(ti_to_u32),
             forward_ref: c.properties.forward_reference(),
         },
         TypeData::Union(u) => CvType::Union {
             name: u.name.to_string().to_string(),
             size: u.size,
             fields: Vec::new(),
+            field_list: Some(ti_to_u32(u.fields)),
             forward_ref: u.properties.forward_reference(),
         },
         TypeData::Enumeration(e) => CvType::Enum {
             name: e.name.to_string().to_string(),
             underlying: ti_to_u32(e.underlying_type),
             variants: Vec::new(),
+            field_list: Some(ti_to_u32(e.fields)),
             forward_ref: e.properties.forward_reference(),
         },
         TypeData::Procedure(p) => CvType::Procedure {
@@ -757,6 +850,30 @@ fn lower_typedata(td: &TypeData<'_>) -> Option<CvType> {
             length: b.length,
             position: b.position,
         },
+        TypeData::FieldList(fl) => {
+            let mut fields = Vec::new();
+            let mut variants = Vec::new();
+            for item in &fl.fields {
+                match item {
+                    TypeData::Member(m) => fields.push(CvField {
+                        name: m.name.to_string().to_string(),
+                        offset: m.offset,
+                        field_type: ti_to_u32(m.field_type),
+                    }),
+                    TypeData::Enumerate(e) => {
+                        if let Some(value) = variant_to_i64(e.value) {
+                            variants.push((e.name.to_string().to_string(), value));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            CvType::FieldList {
+                fields,
+                variants,
+                continuation: fl.continuation.map(ti_to_u32),
+            }
+        }
         _ => return None,
     })
 }
@@ -1815,6 +1932,7 @@ mod tests {
                         field_type: 0x1000,
                     },
                 ],
+                field_list: None,
                 forward_ref: false,
             },
         );
@@ -1844,6 +1962,7 @@ mod tests {
                 name: "Color".into(),
                 underlying: 0x2000,
                 variants: vec![("RED".into(), 0), ("GREEN".into(), 1), ("BLUE".into(), 2)],
+                field_list: None,
                 forward_ref: false,
             },
         );
@@ -1869,6 +1988,7 @@ mod tests {
                 name: "Node".into(),
                 size: 0,
                 fields: Vec::new(),
+                field_list: None,
                 forward_ref: true,
             },
         );
@@ -1883,6 +2003,7 @@ mod tests {
                     offset: 0,
                     field_type: 0x3000,
                 }],
+                field_list: None,
                 forward_ref: false,
             },
         );
@@ -1947,6 +2068,104 @@ mod tests {
             } => assert_eq!(**element, Type::int(4)),
             other => panic!("expected sized array, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn lowers_modifier_and_bitfield_shapes() {
+        let mut table: BTreeMap<u32, CvType> = BTreeMap::new();
+        table.insert(0x5100, primitive_int(4));
+        table.insert(0x5101, CvType::Modifier { underlying: 0x5100 });
+        table.insert(
+            0x5102,
+            CvType::Bitfield {
+                underlying: 0x5100,
+                length: 3,
+                position: 5,
+            },
+        );
+
+        let out = lower_cv_table(&table);
+        assert_eq!(out.by_index[&0x5101], Type::int(4));
+        let Type::Bitfield {
+            underlying,
+            offset,
+            width,
+        } = &out.by_index[&0x5102]
+        else {
+            panic!("expected bitfield");
+        };
+        assert_eq!(**underlying, Type::int(4));
+        assert_eq!(*offset, 5);
+        assert_eq!(*width, 3);
+    }
+
+    #[test]
+    fn materializes_field_lists_for_udts_and_enums() {
+        let mut table: BTreeMap<u32, CvType> = BTreeMap::new();
+        table.insert(0x5200, primitive_int(4));
+        table.insert(
+            0x5201,
+            CvType::FieldList {
+                fields: vec![CvField {
+                    name: "x".into(),
+                    offset: 0,
+                    field_type: 0x5200,
+                }],
+                variants: vec![("RED".into(), 0), ("GREEN".into(), 1)],
+                continuation: None,
+            },
+        );
+        table.insert(
+            0x5202,
+            CvType::Struct {
+                name: "Point".into(),
+                size: 4,
+                fields: Vec::new(),
+                field_list: Some(0x5201),
+                forward_ref: false,
+            },
+        );
+        table.insert(
+            0x5203,
+            CvType::Union {
+                name: "Number".into(),
+                size: 4,
+                fields: Vec::new(),
+                field_list: Some(0x5201),
+                forward_ref: false,
+            },
+        );
+        table.insert(
+            0x5204,
+            CvType::Enum {
+                name: "Color".into(),
+                underlying: 0x5200,
+                variants: Vec::new(),
+                field_list: Some(0x5201),
+                forward_ref: false,
+            },
+        );
+
+        materialize_field_lists(&mut table);
+        let out = lower_cv_table(&table);
+
+        let Type::Struct { fields, .. } = &out.by_index[&0x5202] else {
+            panic!("expected struct");
+        };
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].name, "x");
+        assert_eq!(fields[0].ty, Type::int(4));
+
+        let Type::Union { fields, .. } = &out.by_index[&0x5203] else {
+            panic!("expected union");
+        };
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].offset, 0);
+
+        assert_eq!(
+            out.enums.get("Color").cloned().unwrap_or_default(),
+            vec![("RED".to_string(), 0), ("GREEN".to_string(), 1)]
+        );
     }
 
     #[test]

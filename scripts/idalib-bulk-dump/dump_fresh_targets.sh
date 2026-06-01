@@ -4,7 +4,7 @@
 set -u
 
 IDA_DIR="/home/cole/Downloads/Software/IDAPro/ida-pro-9.3sp1"
-REFS_DIR="/home/cole/RustProjects/active/unlace/references/ida"
+REFS_DIR="/home/cole/RustProjects/active/unlace/research/decompiled-references/ida"
 SCRIPT="/tmp/dump_one_binary.py"
 
 export PYTHONPATH="$IDA_DIR/idalib/python"

@@ -1,7 +1,7 @@
 //! FLIRT signature → Session apply pass.
 //!
 //! Mirrors IDA's `plan_to_apply_idasgn` / `apply_idasgn_to` flow
-//! (`references/ida/idalib/all/apply_idasgn_to.c`):
+//! (`research/decompiled-references/ida/idalib/all/apply_idasgn_to.c`):
 //!
 //! 1. Load one or more `.sig` files into a [`SigFile`].
 //! 2. Build a fast lookup from the leading byte pattern of each
@@ -36,6 +36,14 @@ struct Sig {
 #[derive(Clone, Debug, Default)]
 pub struct FlirtMatcher {
     sigs: Vec<Sig>,
+}
+
+/// A single matched signature with confidence metadata.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlirtMatchDetail<'a> {
+    pub name: &'a str,
+    pub confidence: f32,
+    pub signature_id: usize,
 }
 
 /// Report of what an apply did.
@@ -96,9 +104,21 @@ impl FlirtMatcher {
     /// fingerprint; we slide it so its tail aligns with the function
     /// entry and compare with `0x00` as a wildcard.
     pub fn match_one(&self, func_bytes: &[u8]) -> Option<&str> {
-        for sig in &self.sigs {
+        self.match_one_detailed(func_bytes).map(|m| m.name)
+    }
+
+    /// Match a single function and return confidence metadata. IDASGN
+    /// prologue matches are exact/wildcard byte matches with no outbound
+    /// reference verifier in this crate, so successful matches are
+    /// treated as confidence 1.0.
+    pub fn match_one_detailed(&self, func_bytes: &[u8]) -> Option<FlirtMatchDetail<'_>> {
+        for (signature_id, sig) in self.sigs.iter().enumerate() {
             if pattern_matches(&sig.pattern, func_bytes) {
-                return Some(&sig.name);
+                return Some(FlirtMatchDetail {
+                    name: &sig.name,
+                    confidence: 1.0,
+                    signature_id,
+                });
             }
         }
         None
@@ -109,6 +129,17 @@ impl FlirtMatcher {
     /// already have a non-synthetic name (i.e. not `sub_*`) are skipped
     /// unless `force` is set, matching IDA's behavior.
     pub fn apply_to_session(&self, session: &Session, force: bool) -> FlirtApplyReport {
+        self.apply_to_session_with_min_confidence(session, force, 0)
+    }
+
+    /// Apply signatures with a confidence threshold expressed as an
+    /// integer percentage in the inclusive range 0..=100.
+    pub fn apply_to_session_with_min_confidence(
+        &self,
+        session: &Session,
+        force: bool,
+        min_confidence: u8,
+    ) -> FlirtApplyReport {
         let mut report = FlirtApplyReport::default();
         let candidates = session
             .with_binary(|img| {
@@ -136,13 +167,17 @@ impl FlirtMatcher {
             if !force && !is_synthetic_name(&current_name) {
                 continue;
             }
-            if let Some(name) = self.match_one(&bytes) {
+            if let Some(detail) = self.match_one_detailed(&bytes) {
+                let confidence = (detail.confidence * 100.0).round() as u8;
+                if confidence < min_confidence {
+                    continue;
+                }
                 session.rename(Rename {
                     ea: addr,
                     old_name: current_name,
-                    new_name: name.to_string(),
+                    new_name: detail.name.to_string(),
                 });
-                report.applied.push((addr, name.to_string()));
+                report.applied.push((addr, detail.name.to_string()));
                 report.renamed += 1;
             }
         }
@@ -201,6 +236,12 @@ mod tests {
             m.match_one(&[0x48, 0x89, 0xF8, 0x48, 0x89, 0xF1, 0xC3]),
             Some("memcpy")
         );
+        let detail = m
+            .match_one_detailed(&[0x48, 0x89, 0xF8, 0x48, 0x89, 0xF1, 0xC3])
+            .expect("detailed match");
+        assert_eq!(detail.name, "memcpy");
+        assert_eq!(detail.confidence, 1.0);
+        assert_eq!(detail.signature_id, 0);
     }
 
     #[test]
@@ -299,7 +340,7 @@ mod tests {
         session.set_binary(build_test_image("sub_1000", &prologue));
 
         let m = matcher_with("my_func", prologue.clone());
-        let report = m.apply_to_session(&session, false);
+        let report = m.apply_to_session_with_min_confidence(&session, false, 100);
         assert_eq!(report.renamed, 1);
         assert_eq!(report.applied, vec![(0x1000, "my_func".to_string())]);
         assert_eq!(

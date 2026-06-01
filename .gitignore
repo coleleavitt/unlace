@@ -5,8 +5,8 @@
 # and at hexrays/<ida-version>/*.so on disk (gitignored).
 hexrays/
 
-# References folder — large reference repos (gcc, ghidra, llvm-project,
-# retdec, rellic, ida-binary, idalib). Local-only.
+# Legacy reference scratch path. The tracked decompiled/reference corpus now
+# lives under research/decompiled-references/.
 references/
 
 # Iced ecosystem clones — local reference mirrors of iced + widget repos
@@ -33,6 +33,13 @@ research/iced-ecosystem/awesome-iced/
 research/gdb/
 research/windows-debug/
 research/ida-sig-til-samples/
+
+# Keep Windows dbgsrv reference dump directories visible to local tooling even
+# when a global gitignore has a broad "*.exe" rule.
+!research/decompiled-references/ida/dbgsrv/win32_remote32.exe/
+!research/decompiled-references/ida/dbgsrv/win32_remote32.exe/**
+!research/decompiled-references/ida/dbgsrv/win64_remote.exe/
+!research/decompiled-references/ida/dbgsrv/win64_remote.exe/**
 
 # perf / flamegraph raw capture — large + non-reproducible. The rendered
 # SVGs + the text top-N reports under docs/profiling/ ARE tracked; only

@@ -1,0 +1,40 @@
+void __fastcall sub_1FD9030(__int64 a1)
+{
+  int v2; // eax
+  char *v3; // rdi
+  int v4; // edx
+  __int64 v5; // r12
+  __int64 v6; // r14
+  _QWORD *v7; // rbx
+  __int64 v8; // rdi
+  __int64 v9; // r13
+
+  *(_QWORD *)a1 = off_2BE4A88;
+  v2 = *(_DWORD *)(a1 + 36);
+  v3 = *(char **)(a1 + 24);
+  if ( v2 )
+  {
+    v4 = *(_DWORD *)(a1 + 32);
+    if ( v4 )
+    {
+      v5 = 0;
+      v6 = 8LL * (unsigned int)(v4 - 1) + 8;
+      do
+      {
+        v7 = *(_QWORD **)&v3[v5];
+        if ( v7 != (_QWORD *)-8LL && v7 )
+        {
+          v8 = v7[1];
+          v9 = *v7 + 25LL;
+          if ( v8 )
+            (*(void (__fastcall **)(__int64))(*(_QWORD *)v8 + 8LL))(v8);
+          operator delete(v7, v9, 8);
+          v3 = *(char **)(a1 + 24);
+        }
+        v5 += 8;
+      }
+      while ( v6 != v5 );
+    }
+  }
+  free(v3);
+}

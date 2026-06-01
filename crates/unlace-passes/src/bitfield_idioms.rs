@@ -14,7 +14,7 @@
 //! ((x & 0x000000FF) << 24)
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
@@ -165,7 +165,14 @@ fn try_bswap32(
 ) -> Option<IrInsn> {
     // Flatten the OR-tree to collect leaf operands
     let mut leaves = Vec::new();
-    flatten_or(&insn.inputs[0], &insn.inputs[1], def_map, &mut leaves);
+    let mut visited = BTreeSet::new();
+    flatten_or(
+        &insn.inputs[0],
+        &insn.inputs[1],
+        def_map,
+        &mut leaves,
+        &mut visited,
+    );
     if leaves.len() != 4 {
         return None;
     }
@@ -267,18 +274,28 @@ fn flatten_or(
     b: &Varnode,
     def_map: &BTreeMap<Varnode, IrInsn>,
     leaves: &mut Vec<Varnode>,
+    visited: &mut BTreeSet<Varnode>,
 ) {
-    flatten_or_one(a, def_map, leaves);
-    flatten_or_one(b, def_map, leaves);
+    flatten_or_one(a, def_map, leaves, visited);
+    flatten_or_one(b, def_map, leaves, visited);
 }
 
-fn flatten_or_one(v: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>, leaves: &mut Vec<Varnode>) {
-    if let Some(def) = def_of(v, def_map)
+fn flatten_or_one(
+    v: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+    leaves: &mut Vec<Varnode>,
+    visited: &mut BTreeSet<Varnode>,
+) {
+    // Guard against def cycles (e.g. unoptimized `IntOr` chains that reference
+    // themselves through a memory round-trip): a varnode already on the
+    // recursion path is treated as a leaf instead of recursed into.
+    if visited.insert(*v)
+        && let Some(def) = def_of(v, def_map)
         && def.op == IrOp::IntOr
         && def.inputs.len() == 2
     {
-        flatten_or_one(&def.inputs[0], def_map, leaves);
-        flatten_or_one(&def.inputs[1], def_map, leaves);
+        flatten_or_one(&def.inputs[0], def_map, leaves, visited);
+        flatten_or_one(&def.inputs[1], def_map, leaves, visited);
         return;
     }
     leaves.push(*v);
@@ -330,6 +347,28 @@ mod tests {
 
     fn only_block_insns(ssa: &SsaFunction) -> &[IrInsn] {
         &ssa.function.blocks.values().next().unwrap().insns
+    }
+
+    /// A cyclic `IntOr` def-map (a varnode whose definition transitively
+    /// references itself, as can happen in unoptimized memory-round-trip IR)
+    /// must terminate instead of recursing forever. Regression test for the
+    /// `debug_medium.elf` `f_or` stack overflow.
+    #[test]
+    fn flatten_or_terminates_on_cyclic_def_map() {
+        let v = Varnode::unique(0, 4);
+        let mut def_map = BTreeMap::new();
+        // v = v | v  — a self-referential OR definition.
+        def_map.insert(
+            v,
+            IrInsn::with_output(IrOp::IntOr, v, smallvec![v, v], 0x1000),
+        );
+        let mut leaves = Vec::new();
+        let mut visited = BTreeSet::new();
+        // The point of the test is that this call *terminates* rather than
+        // recursing forever; the first visit recurses into both `v` inputs,
+        // each of which is now on the path and so pushed as a leaf.
+        flatten_or_one(&v, &def_map, &mut leaves, &mut visited);
+        assert_eq!(leaves, vec![v, v]);
     }
 
     /// 16-bit byte swap: `(x & 0xFF00) >> 8 | (x & 0xFF) << 8` → `__byte_swap16(x)`

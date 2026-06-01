@@ -36,12 +36,162 @@ fn find_function<'a>(report: &'a BinaryQuality, name: &str) -> &'a FunctionQuali
         .unwrap_or_else(|| panic!("{}: missing function {name}", report.binary))
 }
 
+#[derive(Debug, Clone, Copy)]
+struct FixtureQualityBudget {
+    fixture: &'static str,
+    max_gotos: usize,
+    max_labels: usize,
+    max_leaked_temps: usize,
+    max_raw_stack_ops: usize,
+    max_unknown_helpers: usize,
+    max_bad_types: usize,
+    max_semantic_failures: usize,
+}
+
+const QUALITY_BUDGETS: &[FixtureQualityBudget] = &[
+    budget("arc_features.elf", 0, 0, 0, 0, 0, 0),
+    budget("arm64_features.elf", 0, 0, 4, 0, 0, 0),
+    budget("branches.elf", 0, 0, 6, 0, 0, 7),
+    budget("calls.elf", 0, 0, 6, 0, 0, 6),
+    budget("cpp_exceptions.elf", 0, 0, 6, 0, 0, 7),
+    budget("cpp_rtti.elf", 0, 0, 10, 0, 0, 18),
+    budget("cpp_vtable.elf", 0, 0, 5, 0, 0, 5),
+    // -g -O0 debug companions for the gap fixtures. -O0 leaks more SSA temps
+    // and unknown-type facts than the -O2 originals; these budgets bound the
+    // current honest output measured by `unlace quality`.
+    budget("debug_branches.elf", 0, 0, 3, 0, 0, 17),
+    budget("debug_cpp_exceptions.elf", 0, 0, 6, 0, 0, 6),
+    budget("debug_cpp_rtti.elf", 1, 1, 17, 0, 0, 32),
+    budget("debug_cpp_vtable.elf", 1, 1, 9, 0, 0, 16),
+    budget("debug_loops.elf", 0, 0, 5, 0, 0, 23),
+    budget("debug_medium.elf", 12, 12, 37, 0, 0, 285),
+    budget("debug_switch_table.elf", 0, 0, 1, 0, 0, 41),
+    budget("debug_x87_math.elf", 0, 0, 11, 0, 0, 7),
+    budget("debug_calls.elf", 0, 0, 32, 0, 0, 19),
+    budget("debug_hello.elf", 0, 0, 4, 0, 0, 5),
+    budget("debug_structs.elf", 0, 0, 7, 0, 0, 7),
+    budget("debug_templates.elf", 0, 0, 8, 0, 0, 16),
+    budget("empty.elf", 0, 0, 4, 0, 0, 5),
+    budget("hello_world.elf", 0, 0, 4, 0, 0, 5),
+    budget("loops.elf", 0, 0, 7, 0, 0, 28),
+    budget("medium.elf", 77, 53, 53, 0, 0, 216),
+    budget("mips64_features.elf", 0, 0, 2, 0, 0, 1),
+    budget("ppc64_features.elf", 0, 0, 0, 0, 0, 0),
+    budget("riscv64_features.elf", 0, 0, 2, 0, 0, 1),
+    budget("stripped.elf", 77, 53, 54, 0, 0, 217),
+    budget("switch_table.elf", 0, 0, 7, 0, 0, 8),
+    budget("type_stack_o2.elf", 0, 0, 10, 0, 0, 13),
+    budget("v850_features.elf", 0, 0, 1, 0, 0, 0),
+    budget("x87_math.elf", 0, 0, 9, 0, 0, 8),
+];
+
+const fn budget(
+    fixture: &'static str,
+    max_gotos: usize,
+    max_labels: usize,
+    max_leaked_temps: usize,
+    max_raw_stack_ops: usize,
+    max_unknown_helpers: usize,
+    max_bad_types: usize,
+) -> FixtureQualityBudget {
+    FixtureQualityBudget {
+        fixture,
+        max_gotos,
+        max_labels,
+        max_leaked_temps,
+        max_raw_stack_ops,
+        max_unknown_helpers,
+        max_bad_types,
+        max_semantic_failures: 0,
+    }
+}
+
+fn quality_budget_for(fixture: &str) -> Option<&'static FixtureQualityBudget> {
+    QUALITY_BUDGETS
+        .iter()
+        .find(|budget| budget.fixture == fixture)
+}
+
+fn assert_within_quality_budget(name: &str, report: &BinaryQuality, budget: &FixtureQualityBudget) {
+    let t = &report.totals;
+    let unknown_helpers =
+        t.unimplemented_ops + t.callother_semantic_gap_ops + t.output_unimplemented_tokens;
+
+    assert!(
+        t.gotos_emitted <= budget.max_gotos,
+        "{name}: goto budget exceeded: got {}, max {}",
+        t.gotos_emitted,
+        budget.max_gotos,
+    );
+    assert!(
+        t.labels_emitted <= budget.max_labels,
+        "{name}: label budget exceeded: got {}, max {}",
+        t.labels_emitted,
+        budget.max_labels,
+    );
+    assert!(
+        t.output_leaked_temp_decls <= budget.max_leaked_temps,
+        "{name}: leaked temp budget exceeded: got {}, max {}",
+        t.output_leaked_temp_decls,
+        budget.max_leaked_temps,
+    );
+    assert!(
+        t.output_lost_frame_offset_sites <= budget.max_raw_stack_ops,
+        "{name}: raw stack-op budget exceeded: got {}, max {}",
+        t.output_lost_frame_offset_sites,
+        budget.max_raw_stack_ops,
+    );
+    assert!(
+        unknown_helpers <= budget.max_unknown_helpers,
+        "{name}: unknown-helper budget exceeded: got {unknown_helpers}, max {}",
+        budget.max_unknown_helpers,
+    );
+    assert!(
+        t.unknown_types <= budget.max_bad_types,
+        "{name}: bad/unknown type-fact budget exceeded: got {}, max {}",
+        t.unknown_types,
+        budget.max_bad_types,
+    );
+    assert_eq!(
+        budget.max_semantic_failures, 0,
+        "{name}: semantic failures must stay a zero budget; xtask semantic-report enforces the executable cases",
+    );
+}
+
 /// Fixtures excluded from the per-fixture smoke loop because they are large
 /// real-world binaries (thousands of functions) — running the full pass
 /// pipeline over them takes minutes, which is fine for an explicit CLI
 /// invocation but not for a unit test. The `quality` command itself is not
 /// restricted; only this test loop skips them.
 const SLOW_FIXTURES: &[&str] = &["go_hello.elf"];
+
+#[test]
+fn per_fixture_quality_budgets_cover_current_small_elf_fixtures() {
+    let dir = fixtures_dir();
+    let mut checked = 0usize;
+    for entry in std::fs::read_dir(&dir).expect("fixtures dir is readable") {
+        let path = entry.expect("readable dir entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("elf") {
+            continue;
+        }
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        if SLOW_FIXTURES.contains(&name.as_str()) {
+            continue;
+        }
+        let budget = quality_budget_for(&name)
+            .unwrap_or_else(|| panic!("{name}: missing per-fixture quality budget"));
+        assert_eq!(
+            budget.max_semantic_failures, 0,
+            "{name}: semantic failure budget must remain zero"
+        );
+        checked += 1;
+    }
+    assert_eq!(
+        checked,
+        QUALITY_BUDGETS.len(),
+        "budget table should match the current non-slow ELF fixture set"
+    );
+}
 
 /// Every (small) ELF fixture must analyse without panicking. A per-function
 /// failure is tolerated (it increments `functions_failed`); a panic or a hard
@@ -70,6 +220,9 @@ fn quality_runs_on_every_fixture_without_panic() {
                     report.functions_ok,
                     "{name}: functions vec length must match functions_ok",
                 );
+                let budget = quality_budget_for(&name)
+                    .unwrap_or_else(|| panic!("{name}: missing per-fixture quality budget"));
+                assert_within_quality_budget(&name, &report, budget);
             }
             Err(_) => { /* tolerated: loader rejected the binary */ }
         }
@@ -280,7 +433,7 @@ fn output_sanity_counters_are_reported() {
     let md = render_markdown(&report);
 
     assert!(
-        md.contains("| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm | nullderef | badret | badtok |"),
+        md.contains("| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm | nullderef | badret | badtok | leaktemp |"),
         "markdown table must include output-sanity columns"
     );
     assert!(
@@ -295,11 +448,17 @@ fn output_sanity_counters_are_reported() {
         md.contains("- stale `return result;`: 0"),
         "markdown must render aggregate stale-return count"
     );
+    assert!(
+        md.contains("- leaked temp declarations: 1"),
+        "markdown must render aggregate leaked-temp declaration count"
+    );
 
     let main = find_function(&report, "main");
     assert_eq!(main.output_null_deref_sites, 0);
     assert_eq!(main.output_stale_return_result, 0);
     assert_eq!(main.output_unimplemented_tokens, 0);
+    assert_eq!(main.output_leaked_temp_decls, 0);
     assert_eq!(report.totals.output_null_deref_sites, 0);
     assert_eq!(report.totals.output_stale_return_result, 0);
+    assert_eq!(report.totals.output_leaked_temp_decls, 1);
 }

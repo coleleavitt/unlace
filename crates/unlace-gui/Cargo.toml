@@ -6,7 +6,7 @@ license.workspace = true
 description = "Desktop GUI for unlace (iced + iced_aw)"
 
 [dependencies]
-unlace-session = { path = "../unlace-session" }
+unlace-session = { workspace = true }
 unlace-ir.workspace = true
 unlace-lift = { workspace = true }
 unlace-loader = { workspace = true }

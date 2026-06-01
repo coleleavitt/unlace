@@ -1,0 +1,8 @@
+__int64 __fastcall sub_1AE6560(__int64 a1, int a2, int a3)
+{
+  unsigned int v3; // eax
+
+  LOBYTE(v3) = a2 == 94;
+  LOBYTE(a3) = a2 == 36;
+  return a3 | v3;
+}

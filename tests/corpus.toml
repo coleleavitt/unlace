@@ -112,6 +112,82 @@ flags = "-g -O1"
 architecture = "x86_64"
 feature_tags = []
 
+# -g -O0 debug companions for the gap fixtures. Same sources as the stripped
+# -O2 binaries above; these carry real DWARF so the type-recovery scorer can
+# verify param/local/type-name recovery from a debug oracle (not source guessing).
+
+[[fixture]]
+name = "debug_branches"
+source_path = "fixtures/src/branches.c"
+binary_path = "fixtures/debug_branches.elf"
+compiler = "gcc"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = ["switches_jump_tables"]
+
+[[fixture]]
+name = "debug_loops"
+source_path = "fixtures/src/loops.c"
+binary_path = "fixtures/debug_loops.elf"
+compiler = "gcc"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = ["stack_vars"]
+
+[[fixture]]
+name = "debug_medium"
+source_path = "fixtures/src/medium.c"
+binary_path = "fixtures/debug_medium.elf"
+compiler = "gcc"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = ["stack_vars", "switches_jump_tables"]
+
+[[fixture]]
+name = "debug_switch_table"
+source_path = "fixtures/src/switch_table.c"
+binary_path = "fixtures/debug_switch_table.elf"
+compiler = "gcc"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = ["switches_jump_tables"]
+
+[[fixture]]
+name = "debug_x87_math"
+source_path = "fixtures/src/x87_math.c"
+binary_path = "fixtures/debug_x87_math.elf"
+compiler = "gcc"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = []
+
+[[fixture]]
+name = "debug_cpp_exceptions"
+source_path = "fixtures/src/cpp_exceptions.cpp"
+binary_path = "fixtures/debug_cpp_exceptions.elf"
+compiler = "g++"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = ["cpp_methods_vtables", "eh_landing_pads"]
+
+[[fixture]]
+name = "debug_cpp_rtti"
+source_path = "fixtures/src/cpp_rtti.cpp"
+binary_path = "fixtures/debug_cpp_rtti.elf"
+compiler = "g++"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = ["cpp_methods_vtables"]
+
+[[fixture]]
+name = "debug_cpp_vtable"
+source_path = "fixtures/src/cpp_vtable.cpp"
+binary_path = "fixtures/debug_cpp_vtable.elf"
+compiler = "g++"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = ["cpp_methods_vtables"]
+
 [[fixture]]
 name = "type_stack_o2"
 source_path = "fixtures/src/type_stack_o2.c"
@@ -210,9 +286,10 @@ feature_tags = ["multi_arch"]
 
 [[fixture]]
 name = "ppc64_features"
+source_path = "fixtures/src/ppc64_features.py"
 binary_path = "fixtures/ppc64_features.elf"
 compiler = "unknown"
-flags = "unknown"
+flags = "hand-assembled via python script"
 architecture = "ppc"
 feature_tags = ["multi_arch"]
 

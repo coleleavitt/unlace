@@ -1,0 +1,6 @@
+__int64 sub_135620()
+{
+  sub_135400(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF);
+  return 1;
+}
+

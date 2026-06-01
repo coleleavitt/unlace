@@ -11,7 +11,7 @@ crate-type = ["rlib"]
 [dependencies]
 unlace-ir.workspace = true
 unlace-loader.workspace = true
-unlace-session = { path = "../unlace-session" }
+unlace-session = { workspace = true }
 anyhow.workspace = true
 tracing.workspace = true
 pyo3 = { version = "0.24", features = ["auto-initialize"], optional = true }

@@ -165,6 +165,8 @@ impl ParallelEngine {
                         timeout,
                         print_config: pipeline_config.print_config.clone(),
                         annotations: pipeline_config.annotations.clone(),
+                        flirt: pipeline_config.flirt.clone(),
+                        dwarf_sidecar: None,
                     };
 
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

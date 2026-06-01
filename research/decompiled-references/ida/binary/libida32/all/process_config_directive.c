@@ -1,0 +1,5 @@
+__int64 __fastcall process_config_directive(__int64 a1, unsigned int a2)
+{
+  return sub_5E44D0(1, a1, a2);
+}
+

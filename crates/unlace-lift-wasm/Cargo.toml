@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 unlace-ir = { workspace = true }
-wasmparser = "0.225"
+wasmparser = { workspace = true }
 smallvec = { workspace = true }
 tracing = { workspace = true }
 

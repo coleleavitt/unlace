@@ -8,7 +8,7 @@
 //! are left untouched so downstream passes can still treat them as opaque.
 //!
 //! Mirrors the role of IDA's `apply_tinfo` driver
-//! (`references/ida/idalib/all/apply_tinfo.c`): once the call target is
+//! (`research/decompiled-references/ida/idalib/all/apply_tinfo.c`): once the call target is
 //! known concretely, the registry-resident signature flows in to refine
 //! caller-side argument and return-value types.
 

@@ -1,0 +1,5 @@
+__int64 sub_3281B0()
+{
+  sub_327F60(0xFFFFFFFF, 0xFFFFFFFFLL, 0xFFFFFFFF, 0xFFFFFFFF);
+  return 1;
+}

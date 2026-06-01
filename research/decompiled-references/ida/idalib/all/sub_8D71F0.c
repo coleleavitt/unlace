@@ -1,0 +1,33 @@
+void __fastcall sub_8D71F0(_QWORD *a1)
+{
+  char *v2; // rdx
+  __int64 v3; // r13
+  __int64 v4; // rbp
+  __int64 i; // rbx
+  void *v6; // rdi
+
+  v2 = (char *)a1[2];
+  *a1 = &off_2B3F358;
+  if ( v2 )
+  {
+    v3 = a1[3];
+    if ( v3 )
+    {
+      v4 = 0;
+      for ( i = 0; i != v3; ++i )
+      {
+        v6 = *(void **)&v2[v4];
+        if ( v6 )
+        {
+          *(_QWORD *)&v2[v4 + 8] = 0;
+          qfree(v6);
+          v2 = (char *)a1[2];
+        }
+        v4 += 56;
+      }
+    }
+    a1[3] = 0;
+    qfree(v2);
+  }
+  operator delete(a1, 0x28u);
+}

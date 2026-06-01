@@ -13,7 +13,7 @@
 //!    string and record the inferred type of each `%`-conversion slot in
 //!    [`SsaFunction::variadic_call_types`].
 //!
-//! Mirrors IDA's `dump_func_type_data` (`references/ida/idalib/all/`)
+//! Mirrors IDA's `dump_func_type_data` (`research/decompiled-references/ida/idalib/all/`)
 //! which also marks signatures as variadic and decorates printf call
 //! sites with per-slot types pulled from the format string.
 

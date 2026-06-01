@@ -13,7 +13,7 @@ use unlace_ir::ArchId;
 use unlace_ir::ssa::SsaFunction;
 use unlace_lift::get_lifter;
 use unlace_loader::{
-    BinaryImage, DwarfInfo, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf,
+    BinaryImage, DwarfInfo, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar,
 };
 
 use crate::args::EmitFormat;
@@ -32,6 +32,10 @@ pub struct BatchConfig {
     pub scope: Option<Regex>,
     /// Cap on interproc fixed-point iterations (0 = pass through to default).
     pub max_iterations: usize,
+    /// Shared FLIRT/SIG matching configuration.
+    pub flirt: pipeline::FlirtConfig,
+    /// Raw bytes of an external DWARF sidecar ELF (`--dwarf-sidecar`).
+    pub dwarf_sidecar: Option<Vec<u8>>,
 }
 
 /// Drop entries whose name doesn't match `re`. Errors if the filter empties the set.
@@ -175,7 +179,7 @@ pub fn run_batch(
         apply_scope_filter(&mut functions, re)?;
     }
 
-    let dwarf = match import_dwarf(&image) {
+    let dwarf = match import_dwarf_with_sidecar(&image, config.dwarf_sidecar.as_deref()) {
         Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
             tracing::info!(
                 functions = d.functions.len(),
@@ -249,6 +253,8 @@ fn decompile_all_parallel(
         timeout: std::time::Duration::from_secs(config.timeout_secs),
         print_config: None,
         annotations: None,
+        flirt: config.flirt.clone(),
+        dwarf_sidecar: None,
     };
 
     let mut indexed: BTreeMap<u64, &FunctionEntry> = BTreeMap::new();
@@ -310,6 +316,8 @@ fn decompile_interproc(
         timeout: std::time::Duration::from_secs(config.timeout_secs),
         print_config: None,
         annotations: None,
+        flirt: config.flirt.clone(),
+        dwarf_sidecar: None,
     };
     let mut indexed: BTreeMap<u64, &FunctionEntry> = BTreeMap::new();
     for entry in functions {
@@ -634,6 +642,8 @@ mod tests {
             all_functions: false,
             scope: None,
             max_iterations: 0,
+            flirt: pipeline::FlirtConfig::default(),
+            dwarf_sidecar: None,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -680,6 +690,8 @@ mod tests {
             all_functions: false,
             scope: None,
             max_iterations: 0,
+            flirt: pipeline::FlirtConfig::default(),
+            dwarf_sidecar: None,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -712,6 +724,8 @@ mod tests {
             all_functions: false,
             scope: None,
             max_iterations: 0,
+            flirt: pipeline::FlirtConfig::default(),
+            dwarf_sidecar: None,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -739,6 +753,8 @@ mod tests {
             all_functions: false,
             scope: None,
             max_iterations: 0,
+            flirt: pipeline::FlirtConfig::default(),
+            dwarf_sidecar: None,
         };
 
         let data = fs::read(fixture("hello_world.elf")).unwrap();
@@ -773,6 +789,8 @@ mod tests {
             all_functions: false,
             scope: None,
             max_iterations: 0,
+            flirt: pipeline::FlirtConfig::default(),
+            dwarf_sidecar: None,
         };
         let data = fs::read(fixture("medium.elf")).unwrap();
         let image = ElfLoader::load(&data).unwrap();

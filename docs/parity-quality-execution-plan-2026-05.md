@@ -7,14 +7,21 @@ is that "parity" is not a single number. unlace now tracks three axes:
    score. This is a regression watchdog only.
 2. **Semantic correctness** - source-known decompiled C recompiles and behaves
    like the original. Current coverage is `xtask semantic-report`, which passes
-   15 executable source-known cases, tracks 2 host/source-known semantic gaps
-   as XFAIL, and lists 3 non-host unsupported cases with reasons.
+   17 host executable source-known cases, tracks 0 host/source-known semantic
+   XFAILs, passes 4 qemu-user non-host executable rows, and includes 4 non-host
+   shape-only PASS rows.
 3. **Type/variable recovery accuracy** - recovered locals, types, structs, and
    arrays match source/DWARF ground truth. `xtask type-recovery-report` now
-   runs an exact textual DWARF/source scorer for C debug fixtures.
+   runs an exact textual scorer for DWARF-backed fixtures, parsed C/C++ source
+   fixtures, and source-defined non-host signature facts.
 
 `scripts/quality_axes.sh` reports these axes without pretending that an
 unmeasured axis is solved.
+
+Current stale/reframed claim reconciliation lives in
+`docs/current-parity-ledger-2026-05-30.md`. When this plan, golden triage, and
+status wording disagree, use that ledger to decide whether an item is stale,
+partially landed, or still active.
 
 ## Current Gates
 
@@ -22,39 +29,47 @@ Run these before claiming output-quality movement:
 
 ```bash
 RUSTC_WRAPPER= bash scripts/score_parity.sh
+RUSTC_WRAPPER= cargo run -p xtask -- golden-triage
 RUSTC_WRAPPER= cargo run -p xtask -- semantic-report
 RUSTC_WRAPPER= cargo run -p xtask -- type-recovery-report
 RUSTC_WRAPPER= bash scripts/quality_axes.sh
 RUSTC_WRAPPER= cargo run -p xtask -- validate-corpus-toml
 ```
 
+`quality_axes.sh` should print all three axes. `score_parity.sh` reports the
+style score from emitted `[score]` lines even though the exact-line golden test
+currently exits nonzero.
+
 Current known state:
 
-- Stylistic fixture parity: **86.8%** emitted by `scripts/score_parity.sh` on
+- Stylistic fixture parity: **84.9%** emitted by `scripts/score_parity.sh` on
   the current golden stream. The exact-line golden test still exits nonzero
-  because the checked-in goldens are stale.
+  because `xtask golden-triage` currently has 2 exact-pass fixture rows and
+  13 classified review rows: 3 producer-bug and 10 mixed. Do not use a
+  blanket rebaseline.
 - Semantic correctness: `xtask semantic-report` passes
   `hello_world.elf:main`, `branches.elf:main`, `loops.elf:main`,
   `calls.elf:main`, `empty.elf:main`, `debug_hello.elf:main`,
-  `debug_structs.elf:main`, `x87_math.elf:main`, and
+  `debug_structs.elf:main`, `x87_math.elf:main`,
   `cpp_vtable.elf:main`, `debug_calls.elf:main`, `type_stack_o2.elf:main`,
-  `switch_table.elf:dispatch`, `cpp_exceptions.elf:main`,
-  `cpp_rtti.elf:main`, and `debug_templates.elf:main`; `medium.elf:main` and
-  `stripped.elf:main` remain XFAIL because optimized main still loses
-  loop-carried lvar/phi plus x86 subregister state and the recompiled subset
-  times out. Three
-  non-host cases are explicitly unsupported with reasons.
+  `medium.elf:main`, `stripped.elf:main`, `switch_table.elf:dispatch`,
+  `cpp_exceptions.elf:main`, `cpp_rtti.elf:main`, and
+  `debug_templates.elf:main`. The AArch64, MIPS64, PPC64, and RISC-V non-host
+  executable rows also pass through qemu-user; the same four non-host cases
+  still pass shape-only checks, which are not executable equivalence.
 - Fidelity taxonomy counters: golden metrics currently total
   `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0 total=1059`.
 - Fixture optimization levels: recorded in `tests/corpus.toml`.
 - Type/variable recovery accuracy:
-  `fixtures=5 functions=23 c_functions=18 cpp_functions=5 recovered=148 expected=148 reported=355 recall=100.0% precision=41.7%`
-  with `source_known=20 source_only=15 dwarf_candidates=5 cpp_candidates=4
-  scored_cpp=1 optimized_scored=3 non_host_candidates=3`.
+  `fixtures=21 functions=64 c_functions=50 cpp_functions=14 recovered=207 expected=324 reported=1084 recall=63.9% precision=19.1% leaked_temp_decls=256`
+  with `source_known=21 source_only=16 source_parsed=16 dwarf_candidates=5
+  cpp_candidates=4 scored_cpp=4 optimized_scored=15 scored_source_only=16
+  non_host_candidates=4 scored_non_host=4`.
 
 ## Tier 0 - Claim Cleanup And Honest Reporting
 
-Status: mostly landed.
+Status: mostly landed; the current reconciliation ledger is
+`docs/current-parity-ledger-2026-05-30.md`.
 
 1. Rename the narrow score from aggregate parity to stylistic fixture parity.
 2. Add `scripts/quality_axes.sh` so CI and humans see semantic/type gaps next
@@ -64,14 +79,16 @@ Status: mostly landed.
 4. Validate fixture metadata through `cargo run -p xtask -- validate-corpus-toml`.
 5. Treat `docs/research-ida-parity-gaps-2026-05.md` as prioritization input,
    not proof of current behavior.
+Ledger rule: keep the stale/reframed ledger updated when metrics, DREAM
+quality, or golden status move.
 
 Acceptance: the public docs never present the style score as full IDA/Hex-Rays
 quality, and every gate reports what it actually measures.
 
 ## Tier 1 - Semantic Correctness
 
-Status: first-class report landed; only the optimized `medium`/`stripped`
-host cases remain XFAIL.
+Status: first-class report landed; the current host/source-known executable
+cases pass with no semantic XFAILs.
 
 6. Promote the current compileable-subset tests into a named semantic gate in
    CI. Landed locally as `cargo run -p xtask -- semantic-report`.
@@ -93,7 +110,8 @@ check or a documented blocker with a concrete next action.
 
 ## Tier 2 - Fidelity Taxonomy Counters
 
-Status: counters landed; per-fixture budgets still open.
+Status: counters and per-fixture budgets landed for the current non-slow ELF
+fixture set in `crates/unlace-cli/tests/quality_smoke.rs`.
 
 11. Turn the Dramko decompiler-fidelity taxonomy into explicit counters:
     control-flow divergence, expression artifacts, type artifacts,
@@ -103,7 +121,9 @@ Status: counters landed; per-fixture budgets still open.
     `if`/`for`/`while`/`goto`/var counts. Landed.
 13. Add per-fixture budgets for the bad artifacts that are already known:
     stale SSA temporaries, unresolved stack pushes, raw `rsp/rbp` arithmetic,
-    `CALLOTHER` leakage, and avoidable gotos.
+    `CALLOTHER` leakage, and avoidable gotos. Landed as fixture budgets for
+    gotos, labels, leaked temp declarations, raw stack-offset leaks, unknown
+    helpers, bad type facts, and zero semantic failures.
 14. Preserve the current exact-line golden diff as a stability gate, but do not
     use it as a quality metric.
 
@@ -112,23 +132,21 @@ requiring a human to infer the reason from a C diff.
 
 ## Tier 3 - Type And Variable Ground Truth
 
-Status: broadened DWARF/source scorer landed; source-only and non-host
-denominators remain explicit until source parsers or non-host debug fixtures
-exist.
+Status: broadened DWARF/source scorer landed; all source-known fixtures now
+feed exact type/variable metrics when their source defines scoreable facts.
 
 15. Add a DWARF/source-ground-truth extractor for source-known fixtures:
     function signatures, local names, parameter names, stack slots, struct
-    members, arrays, and pointer target types. Landed for C DWARF function
-    signatures, params, locals, structs, and fields through the
-    `type-recovery-report` textual scorer. C++ DWARF template functions are
-    now scored too.
+    members, arrays, and pointer target types. Landed for DWARF facts plus
+    parsed C/C++ source-only facts; C++ template DWARF and inline source
+    methods are scored too.
 16. Compare recovered C facts against ground truth using coverage, accuracy,
     and precision, matching the SURE'25-style metrics from the research doc.
     Recall and reported-fact precision are reported, with separate pointer,
     array, and struct-reference fact counters.
 17. Separate `-O0`, `-O1`, and `-O2` results; optimization level materially
     changes what can be recovered. Scored buckets are emitted for every
-    optimization level that has DWARF facts.
+    optimization level with source-known facts.
 18. Add at least one `-O2 -g -fno-omit-frame-pointer` type/stack fixture so the
     type harness does not only measure easy `-O0` cases. Landed as
     `type_stack_o2`.

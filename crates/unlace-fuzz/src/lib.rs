@@ -173,6 +173,8 @@ pub fn fuzz_iteration(bytes: &[u8]) -> FuzzResult {
         timeout: PER_FUNCTION_TIMEOUT,
         print_config: None,
         annotations: None,
+        flirt: unlace_cli::pipeline::FlirtConfig::default(),
+        dwarf_sidecar: None,
     };
 
     let mut decompiled = 0usize;

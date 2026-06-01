@@ -1,0 +1,27 @@
+_QWORD *__fastcall std::string::operator+=(_QWORD *a1, char a2)
+{
+  __int64 v2; // rbx
+  _QWORD *v3; // rax
+  unsigned __int64 v4; // r13
+  unsigned __int64 v5; // rdx
+  _QWORD *v6; // rax
+
+  v2 = a1[1];
+  v3 = (_QWORD *)*a1;
+  v4 = v2 + 1;
+  if ( (_QWORD *)*a1 == a1 + 2 )
+    v5 = 15;
+  else
+    v5 = a1[2];
+  if ( v4 > v5 )
+  {
+    std::string::_M_mutate((__int64)a1, a1[1], 0, nullptr, 1u);
+    v3 = (_QWORD *)*a1;
+  }
+  *((_BYTE *)v3 + v2) = a2;
+  v6 = (_QWORD *)*a1;
+  a1[1] = v4;
+  *((_BYTE *)v6 + v2 + 1) = 0;
+  return a1;
+}
+

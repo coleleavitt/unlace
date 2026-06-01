@@ -45,12 +45,15 @@ fn env_flag_enabled(name: &str) -> bool {
 }
 
 fn var_merge_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_VAR_MERGE_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
+    env_flag_enabled("UNLACE_VAR_MERGE_TRACE")
+        || env_flag_enabled("UNLACE_INTERFERENCE_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
 }
 
 fn var_merge_trace_filter() -> Option<String> {
     std::env::var("UNLACE_VAR_MERGE_TRACE_FILTER")
         .ok()
+        .or_else(|| std::env::var("UNLACE_INTERFERENCE_TRACE_FILTER").ok())
         .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -925,6 +928,63 @@ mod tests {
             u0_name, u4_name,
             "overlapping unique varnodes must NOT coalesce: {} vs {}",
             u0_name, u4_name,
+        );
+    }
+
+    /// Interference must be CFG-aware, not just same-basic-block-aware: `u0`
+    /// is defined before a branch and remains live into `bb1`, where `u4` is
+    /// defined and both are consumed by the same add.  Coalescing them would
+    /// make the rendered C use one name for two simultaneously-live values.
+    #[test]
+    fn test_no_coalesce_cross_block_interference() {
+        let u0 = Varnode::unique(0, 4);
+        let u4 = Varnode::unique(4, 4);
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let c1 = Varnode::constant(1, 4);
+        let c2 = Varnode::constant(2, 4);
+
+        let mut func = Function::new("cross_block_interference", BlockId(0), 0x3000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Copy, u0, smallvec![c1], 0x3000));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Cbranch, smallvec![], 0x3004));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns
+            .push(IrInsn::with_output(IrOp::Copy, u4, smallvec![c2], 0x3010));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r0,
+            smallvec![u0, u4],
+            0x3014,
+        ));
+        bb1.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r0], 0x3018));
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns
+            .push(IrInsn::with_output(IrOp::Copy, r8, smallvec![u0], 0x3020));
+        bb2.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r8], 0x3024));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let mut ssa = build_ssa(func);
+        VariableMergePass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+
+        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
+        let u4_name = name_of(&ssa, u4, 0).expect("u4 named");
+        assert_ne!(
+            u0_name, u4_name,
+            "cross-block live ranges that overlap in bb1 must not coalesce: {u0_name} vs {u4_name}",
         );
     }
 

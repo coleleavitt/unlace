@@ -29,6 +29,51 @@ const MSX64_ARG_REGS: &[u64] = &[RCX, RDX, R8, R9];
 const SYSV_ONLY_REGS: &[u64] = &[RDI, RSI];
 const AARCH64_ARG_REGS: &[u64] = &[0, 8, 16, 24, 32, 40, 48, 56];
 
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .map(|v| !v.is_empty() && v != "0")
+        .unwrap_or(false)
+}
+
+fn calling_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_CALLING_TRACE")
+        || env_flag_enabled("UNLACE_TYPE_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn calling_trace_verbose_enabled() -> bool {
+    env_flag_enabled("UNLACE_CALLING_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TYPE_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn calling_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_CALLING_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_TYPE_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .filter(|s| !s.is_empty())
+}
+
+fn calling_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
+    if !calling_trace_enabled() {
+        return;
+    }
+    if let Some(filter) = calling_trace_filter()
+        && !func.function.name.contains(&filter)
+    {
+        return;
+    }
+    eprintln!("[unlace calling] func={} {message}", func.function.name);
+}
+
+fn calling_trace_line_verbose(func: &SsaFunction, message: impl std::fmt::Display) {
+    if calling_trace_verbose_enabled() {
+        calling_trace_line(func, message);
+    }
+}
+
 pub struct CallingConventionDetectPass;
 
 impl Pass for CallingConventionDetectPass {
@@ -92,13 +137,25 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
 
     let base = score_convention_for_arch(func, &read_before_write);
     let result = refine_convention(func, base, &read_before_write);
+    calling_trace_line(
+        func,
+        format!(
+            "cc-detect entry={} defined={:?} read_before_write={:?} base={base:?} refined={result:?}",
+            entry.0, defined, read_before_write
+        ),
+    );
 
     // If entry-block-only analysis produced Unknown (common after SSA
     // optimisation pushes arg register reads into successor blocks or
     // propagates them away entirely), fall back to the architecture-implied
     // default calling convention.
     if result == CallingConvention::Unknown {
-        return arch_default_cc(func);
+        let fallback = arch_default_cc(func);
+        calling_trace_line(
+            func,
+            format!("cc-detect fallback-to-arch-default result={fallback:?}"),
+        );
+        return fallback;
     }
 
     result
@@ -147,14 +204,59 @@ fn input_register(
     input_idx: usize,
     input: &unlace_ir::Varnode,
 ) -> Option<(u64, u8)> {
+    if let Some(sv) = func
+        .var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+        && sv.base.space == SpaceId::Register
+    {
+        let primitive = func.var_types.get(sv).copied();
+        let size = narrowest_nonzero_width([
+            primitive.and_then(primitive_type_width),
+            (input.size > 0).then_some(input.size),
+            (sv.base.size > 0).then_some(sv.base.size),
+        ])
+        .unwrap_or(sv.base.size);
+        calling_trace_line_verbose(
+            func,
+            format!(
+                "input-register via=ssa bid={} insn={} input={} raw={:?} sv={:?} primitive={primitive:?} chosen_size={size}",
+                bid.0, insn_idx, input_idx, input, sv
+            ),
+        );
+        return Some((sv.base.offset, size));
+    }
     if input.space == SpaceId::Register {
+        calling_trace_line_verbose(
+            func,
+            format!(
+                "input-register via=raw bid={} insn={} input={} raw={:?} chosen_size={}",
+                bid.0, insn_idx, input_idx, input, input.size
+            ),
+        );
         return Some((input.offset, input.size));
     }
-    func.var_map
-        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
-        .and_then(|sv| {
-            (sv.base.space == SpaceId::Register).then_some((sv.base.offset, sv.base.size))
-        })
+    calling_trace_line_verbose(
+        func,
+        format!(
+            "input-register none bid={} insn={} input={} raw={:?}",
+            bid.0, insn_idx, input_idx, input
+        ),
+    );
+    None
+}
+
+fn narrowest_nonzero_width<const N: usize>(widths: [Option<u8>; N]) -> Option<u8> {
+    widths.into_iter().flatten().filter(|w| *w > 0).min()
+}
+
+fn primitive_type_width(ty: PrimitiveType) -> Option<u8> {
+    match ty {
+        PrimitiveType::Unknown => None,
+        PrimitiveType::Bool => Some(1),
+        PrimitiveType::Int(width) | PrimitiveType::UnsignedInt(width) => Some(width),
+        PrimitiveType::Float => Some(4),
+        PrimitiveType::Double | PrimitiveType::Ptr => Some(8),
+    }
 }
 
 /// Architecture-implied default calling convention. Used as a final fallback
@@ -502,6 +604,16 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
             break;
         }
         let ty = infer_param_type(reg_off, &reg_consumer_ops, &reg_input_sizes);
+        calling_trace_line_verbose(
+            func,
+            format!(
+                "param-candidate kind=int idx={} reg={} sizes={:?} ops={:?} ty={ty:?}",
+                param_idx,
+                reg_off,
+                reg_input_sizes.get(&reg_off),
+                reg_consumer_ops.get(&reg_off)
+            ),
+        );
         params.push((format!("a{}", param_idx), ty));
         param_idx += 1;
     }
@@ -511,9 +623,24 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         if !read_before_write.contains(&reg_off) {
             break;
         }
+        calling_trace_line_verbose(
+            func,
+            format!(
+                "param-candidate kind=float idx={} reg={} ty=Double",
+                param_idx, reg_off
+            ),
+        );
         params.push((format!("a{}", param_idx), PrimitiveType::Double));
         param_idx += 1;
     }
+
+    calling_trace_line(
+        func,
+        format!(
+            "param-infer cc={:?} entry_arg_reads={} reads={:?} input_sizes={:?} consumer_ops={:?} params={:?}",
+            cc, has_arg_reg_in_entry, read_before_write, reg_input_sizes, reg_consumer_ops, params
+        ),
+    );
 
     params
 }
@@ -525,6 +652,9 @@ fn collect_reg_consumer_ops_block(func: &SsaFunction, entry: BlockId) -> BTreeMa
     let mut map: BTreeMap<u64, Vec<IrOp>> = BTreeMap::new();
     for (insn_idx, insn) in block.insns.iter().enumerate() {
         for (input_idx, inp) in insn.inputs.iter().enumerate() {
+            if !input_role_can_imply_pointer(insn.op, input_idx) {
+                continue;
+            }
             if let Some((reg, _size)) = input_register(func, entry, insn_idx, input_idx, inp) {
                 map.entry(reg).or_default().push(insn.op);
             }
@@ -539,6 +669,9 @@ fn collect_reg_consumer_ops_all(func: &SsaFunction) -> BTreeMap<u64, Vec<IrOp>> 
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             for (input_idx, inp) in insn.inputs.iter().enumerate() {
+                if !input_role_can_imply_pointer(insn.op, input_idx) {
+                    continue;
+                }
                 if let Some((reg, _size)) = input_register(func, bid, insn_idx, input_idx, inp) {
                     map.entry(reg).or_default().push(insn.op);
                 }
@@ -546,6 +679,16 @@ fn collect_reg_consumer_ops_all(func: &SsaFunction) -> BTreeMap<u64, Vec<IrOp>> 
         }
     }
     map
+}
+
+fn input_role_can_imply_pointer(op: IrOp, input_idx: usize) -> bool {
+    match op {
+        // LOAD/STORE p-code inputs are `[space, address, value?]`. Only the
+        // address operand proves that a parameter is pointer-like; the value
+        // operand is just a scalar being spilled or stored.
+        IrOp::Load | IrOp::Store => input_idx == 1,
+        _ => true,
+    }
 }
 
 fn collect_reg_input_size_set_block(
@@ -558,7 +701,9 @@ fn collect_reg_input_size_set_block(
     let mut map: BTreeMap<u64, BTreeSet<u8>> = BTreeMap::new();
     for (insn_idx, insn) in block.insns.iter().enumerate() {
         for (input_idx, inp) in insn.inputs.iter().enumerate() {
-            if let Some((reg, size)) = input_register(func, entry, insn_idx, input_idx, inp) {
+            if let Some((reg, size)) =
+                parameter_input_size(func, entry, insn_idx, input_idx, inp, insn)
+            {
                 map.entry(reg).or_default().insert(size);
             }
         }
@@ -571,13 +716,48 @@ fn collect_reg_input_size_set_all(func: &SsaFunction) -> BTreeMap<u64, BTreeSet<
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             for (input_idx, inp) in insn.inputs.iter().enumerate() {
-                if let Some((reg, size)) = input_register(func, bid, insn_idx, input_idx, inp) {
+                if let Some((reg, size)) =
+                    parameter_input_size(func, bid, insn_idx, input_idx, inp, insn)
+                {
                     map.entry(reg).or_default().insert(size);
                 }
             }
         }
     }
     map
+}
+
+fn parameter_input_size(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+    input: &unlace_ir::Varnode,
+    insn: &unlace_ir::IrInsn,
+) -> Option<(u64, u8)> {
+    let (reg, mut size) = input_register(func, bid, insn_idx, input_idx, input)?;
+    let raw_size = size;
+
+    if insn.op == IrOp::Subpiece
+        && input_idx == 0
+        && insn.inputs.get(1).is_some_and(|offset| {
+            offset.space == SpaceId::Const && offset.offset == 0 && offset.size > 0
+        })
+        && let Some(output) = insn.output
+        && output.size > 0
+        && output.size < size
+    {
+        size = output.size;
+        calling_trace_line_verbose(
+            func,
+            format!(
+                "param-size-refine reg={reg} bid={} insn={} input={} raw_size={raw_size} refined_size={size} reason=subpiece-low-output",
+                bid.0, insn_idx, input_idx
+            ),
+        );
+    }
+
+    Some((reg, size))
 }
 
 // ---------------------------------------------------------------------------
@@ -610,7 +790,13 @@ fn infer_stack_params(func: &SsaFunction) -> BTreeSet<i64> {
         // Other CCs (AArch64, Thiscall, Stdcall, Unknown) are skipped:
         // their stack-arg shape isn't a flat positive RSP displacement
         // we can recognise cheaply here.
-        _ => return out,
+        _ => {
+            calling_trace_line_verbose(
+                func,
+                format!("stack-param skip cc={cc:?} reason=unsupported-flat-stack-shape"),
+            );
+            return out;
+        }
     };
 
     // Primary signal: the stack-frame-recovery pass already classified
@@ -622,6 +808,12 @@ fn infer_stack_params(func: &SsaFunction) -> BTreeSet<i64> {
             }
         }
         if !out.is_empty() {
+            calling_trace_line(
+                func,
+                format!(
+                    "stack-param source=stack-frame cc={cc:?} min_off={min_off} params={out:?}"
+                ),
+            );
             return out;
         }
     }
@@ -650,6 +842,10 @@ fn infer_stack_params(func: &SsaFunction) -> BTreeSet<i64> {
         }
     }
 
+    calling_trace_line_verbose(
+        func,
+        format!("stack-param source=entry-load-scan cc={cc:?} min_off={min_off} params={out:?}"),
+    );
     out
 }
 
@@ -714,7 +910,15 @@ fn detect_varargs(func: &SsaFunction) -> bool {
         xmm_spilled >= 4
     };
 
-    (reads_rax && all_int_args_read) || has_xmm_save_area()
+    let xmm_save_area = has_xmm_save_area();
+    let result = (reads_rax && all_int_args_read) || xmm_save_area;
+    calling_trace_line_verbose(
+        func,
+        format!(
+            "varargs reads_rax={reads_rax} all_int_args_read={all_int_args_read} xmm_save_area={xmm_save_area} result={result} reads={reads:?}"
+        ),
+    );
+    result
 }
 
 fn infer_param_type(
@@ -818,8 +1022,15 @@ fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
                         found_rax = true;
                         rax_size = out.size;
                         // Check what op produced the RAX value.
-                        let ret_ty = classify_return_op(prev_insn.op, &func.var_types, bid, func);
+                        let ret_ty = classify_return_value(prev_insn, &func.var_types, bid, func);
                         if ret_ty != PrimitiveType::Unknown {
+                            calling_trace_line(
+                                func,
+                                format!(
+                                    "return-infer producer={:?} out_size={} ty={ret_ty:?}",
+                                    prev_insn.op, out.size
+                                ),
+                            );
                             return ret_ty;
                         }
                         break;
@@ -844,18 +1055,25 @@ fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
     }
 
     if has_xmm0_at_return {
+        calling_trace_line(func, "return-infer xmm0-at-return ty=Double");
         return PrimitiveType::Double;
     }
 
     if has_rax_at_return {
-        return match rax_size {
+        let ty = match rax_size {
             1 => PrimitiveType::Bool,
             4 => PrimitiveType::Int(4),
             _ => PrimitiveType::Int(8),
         };
+        calling_trace_line(
+            func,
+            format!("return-infer rax-at-return size={rax_size} ty={ty:?}"),
+        );
+        return ty;
     }
 
     // RETURN exists but no RAX/XMM0 write found — likely void.
+    calling_trace_line(func, "return-infer no-return-register-write ty=Unknown");
     PrimitiveType::Unknown
 }
 
@@ -877,13 +1095,22 @@ fn constant_return_type(insn: &unlace_ir::IrInsn) -> Option<PrimitiveType> {
     })
 }
 
-fn classify_return_op(
-    op: IrOp,
+fn classify_return_value(
+    insn: &unlace_ir::IrInsn,
     _var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
     _bid: BlockId,
     _func: &SsaFunction,
 ) -> PrimitiveType {
-    match op {
+    match insn.op {
+        IrOp::IntZext | IrOp::IntSext => insn
+            .inputs
+            .first()
+            .map(|input| PrimitiveType::Int(input.size.min(8)))
+            .unwrap_or(PrimitiveType::Unknown),
+        IrOp::Subpiece => insn
+            .output
+            .map(|output| PrimitiveType::Int(output.size.min(8)))
+            .unwrap_or(PrimitiveType::Unknown),
         IrOp::FloatAdd
         | IrOp::FloatSub
         | IrOp::FloatMult
@@ -958,6 +1185,42 @@ mod tests {
             ],
             addr,
         )
+    }
+
+    #[test]
+    fn param_store_value_spill_does_not_force_pointer_type() {
+        let spill = store_reg_to_stack(RDI, 0x20, 0x1001);
+        let mut ssa = make_entry_block_ssa(vec![spill]);
+        ssa.calling_convention = CallingConvention::SystemV;
+
+        let params = infer_params(&ssa);
+        assert_eq!(
+            params.first(),
+            Some(&("a1".to_string(), PrimitiveType::Int(8))),
+            "stored scalar parameter value should not become a pointer: {params:?}",
+        );
+    }
+
+    #[test]
+    fn param_load_address_operand_still_forces_pointer_type() {
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::unique(0x2000, 8),
+            smallvec![
+                Varnode::constant(SpaceId::Ram as u64, 4),
+                Varnode::reg(RDI, 8),
+            ],
+            0x1001,
+        );
+        let mut ssa = make_entry_block_ssa(vec![load]);
+        ssa.calling_convention = CallingConvention::SystemV;
+
+        let params = infer_params(&ssa);
+        assert_eq!(
+            params.first(),
+            Some(&("a1".to_string(), PrimitiveType::Ptr)),
+            "load address operand should remain pointer evidence: {params:?}",
+        );
     }
 
     // -- Stack param detection ------------------------------------------------

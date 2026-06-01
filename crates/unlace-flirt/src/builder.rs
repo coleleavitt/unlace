@@ -12,7 +12,7 @@
 //! (not yet implemented — see Batch 30 follow-ups).
 //!
 //! Reference: research/ida-hexrays-docs/pdfs/usenix13-native-x86-decompilation-semantics.pdf
-//!            references/ida/plugins/makesig/all/ (250 decompiled fns)
+//!            research/decompiled-references/ida/plugins/makesig/all/ (250 decompiled fns)
 
 use std::collections::BTreeMap;
 use std::path::Path;

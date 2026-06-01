@@ -1,0 +1,10 @@
+__int64 sub_101F0(unsigned int a1, ...)
+{
+  gcc_va_list va; // [rsp+0h] [rbp-D8h] BYREF
+  unsigned __int64 v3; // [rsp+18h] [rbp-C0h]
+
+  va_start(va, a1);
+  v3 = __readfsqword(0x28u);
+  return ((__int64 (__fastcall *)(_QWORD, _QWORD, __va_list_tag *))invoke_callbacks)(0, a1, va);
+}
+

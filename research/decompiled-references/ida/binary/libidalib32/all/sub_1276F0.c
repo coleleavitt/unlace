@@ -1,0 +1,6 @@
+__int64 sub_1276F0()
+{
+  sub_144C80(0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL);
+  return 1;
+}
+

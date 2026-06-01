@@ -1,0 +1,13 @@
+const char *sub_6B3B0()
+{
+  __int64 *v0; // rbx
+  const char *result; // rax
+
+  v0 = (__int64 *)sub_1ADE90();
+  sub_6B2B0(v0);
+  result = s1;
+  if ( v0[1] )
+    return (const char *)*v0;
+  return result;
+}
+

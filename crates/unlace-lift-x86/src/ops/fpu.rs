@@ -18,6 +18,45 @@ use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use crate::lift::LiftCtx;
 use crate::register_file::st_reg;
 
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .map(|v| !v.is_empty() && v != "0")
+        .unwrap_or(false)
+}
+
+fn x87_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_X87_TRACE")
+        || env_flag_enabled("UNLACE_LIFT_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn x87_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_X87_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .filter(|s| !s.is_empty())
+}
+
+fn x87_trace_line(ctx: &LiftCtx, insn: &iced_x86::Instruction, message: impl std::fmt::Display) {
+    if !x87_trace_enabled() {
+        return;
+    }
+    let line = format!(
+        "{:#x}: {:?}/{:?} op_count={} {message}",
+        ctx.addr,
+        insn.mnemonic(),
+        insn.code(),
+        insn.op_count()
+    );
+    if let Some(filter) = x87_trace_filter()
+        && !line.contains(&filter)
+    {
+        return;
+    }
+    eprintln!("[unlace x87-lift] {line}");
+}
+
 /// Constant tags for x87 FPU Callother `inputs[0]`.
 ///
 /// Values chosen to sit above `bit_tag::TRAP` (`0x300`) and well below the
@@ -82,13 +121,39 @@ fn read_st_or_mem(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, idx: u32) -> 
             let reg = insn.op_register(idx);
             if (R::ST0..=R::ST7).contains(&reg) {
                 let i = (reg as u32 - R::ST0 as u32) as u64;
-                Some(st_reg(i))
+                let value = st_reg(i);
+                x87_trace_line(
+                    ctx,
+                    insn,
+                    format!("read operand idx={idx} kind=register reg={reg:?} value={value:?}"),
+                );
+                Some(value)
             } else {
+                x87_trace_line(
+                    ctx,
+                    insn,
+                    format!("read operand idx={idx} unsupported-register reg={reg:?}"),
+                );
                 None
             }
         }
-        OpKind::Memory => ctx.operand_read(insn, idx),
-        _ => None,
+        OpKind::Memory => {
+            let value = ctx.operand_read(insn, idx);
+            x87_trace_line(
+                ctx,
+                insn,
+                format!("read operand idx={idx} kind=memory value={value:?}"),
+            );
+            value
+        }
+        other => {
+            x87_trace_line(
+                ctx,
+                insn,
+                format!("read operand idx={idx} unsupported-kind={other:?}"),
+            );
+            None
+        }
     }
 }
 
@@ -111,13 +176,39 @@ fn write_st_or_mem(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, idx: u32) ->
             let reg = insn.op_register(idx);
             if (R::ST0..=R::ST7).contains(&reg) {
                 let i = (reg as u32 - R::ST0 as u32) as u64;
-                Some(FpuDst::Register(st_reg(i)))
+                let value = st_reg(i);
+                x87_trace_line(
+                    ctx,
+                    insn,
+                    format!("write operand idx={idx} kind=register reg={reg:?} value={value:?}"),
+                );
+                Some(FpuDst::Register(value))
             } else {
+                x87_trace_line(
+                    ctx,
+                    insn,
+                    format!("write operand idx={idx} unsupported-register reg={reg:?}"),
+                );
                 None
             }
         }
-        OpKind::Memory => ctx.memory_address(insn).map(FpuDst::Memory),
-        _ => None,
+        OpKind::Memory => {
+            let addr = ctx.memory_address(insn);
+            x87_trace_line(
+                ctx,
+                insn,
+                format!("write operand idx={idx} kind=memory addr={addr:?}"),
+            );
+            addr.map(FpuDst::Memory)
+        }
+        other => {
+            x87_trace_line(
+                ctx,
+                insn,
+                format!("write operand idx={idx} unsupported-kind={other:?}"),
+            );
+            None
+        }
     }
 }
 
@@ -126,12 +217,22 @@ fn write_st_or_mem(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, idx: u32) ->
 /// Operand 0 is the source (memory or ST(i)). Result lands in ST(0). When the
 /// source kind is unrecognised we fall back to `Unimplemented`.
 pub fn lift_fld(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    x87_trace_line(ctx, insn, "lift FLD start");
     let tag = Varnode::constant(fpu_tag::FLD, 8);
     let Some(src) = read_st_or_mem(ctx, insn, 0) else {
+        x87_trace_line(ctx, insn, "lift FLD fallback=unimplemented reason=source");
         ctx.emit_unimplemented();
         return;
     };
     let dst = st_reg(0);
+    x87_trace_line(
+        ctx,
+        insn,
+        format!(
+            "lift FLD emit tag={:#x} dst={dst:?} src={src:?}",
+            fpu_tag::FLD
+        ),
+    );
     ctx.emit(IrInsn::with_output(
         IrOp::Callother,
         dst,
@@ -145,11 +246,20 @@ pub fn lift_fld(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
 /// For memory destinations we emit a `Store`; for register destinations we
 /// emit a `Copy`. ST(0) is always the source.
 pub fn lift_fst(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    x87_trace_line(ctx, insn, "lift FST start");
     let tag = Varnode::constant(fpu_tag::FST, 8);
     let src = st_reg(0);
 
     match write_st_or_mem(ctx, insn, 0) {
         Some(FpuDst::Memory(addr)) => {
+            x87_trace_line(
+                ctx,
+                insn,
+                format!(
+                    "lift FST emit memory tag={:#x} addr={addr:?} src={src:?}",
+                    fpu_tag::FST
+                ),
+            );
             ctx.emit(IrInsn::without_output(
                 IrOp::Callother,
                 smallvec![tag, addr, src],
@@ -157,6 +267,14 @@ pub fn lift_fst(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
         }
         Some(FpuDst::Register(dst)) => {
+            x87_trace_line(
+                ctx,
+                insn,
+                format!(
+                    "lift FST emit register tag={:#x} dst={dst:?} src={src:?}",
+                    fpu_tag::FST
+                ),
+            );
             ctx.emit(IrInsn::with_output(
                 IrOp::Callother,
                 dst,
@@ -164,7 +282,14 @@ pub fn lift_fst(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
         }
-        None => ctx.emit_unimplemented(),
+        None => {
+            x87_trace_line(
+                ctx,
+                insn,
+                "lift FST fallback=unimplemented reason=destination",
+            );
+            ctx.emit_unimplemented();
+        }
     }
 }
 
@@ -172,11 +297,20 @@ pub fn lift_fst(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
 /// the implicit ST(0)→pop. The IR does not yet model the FPU stack pointer;
 /// the tag preserves the semantic distinction.
 pub fn lift_fstp(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    x87_trace_line(ctx, insn, "lift FSTP start");
     let tag = Varnode::constant(fpu_tag::FSTP, 8);
     let src = st_reg(0);
 
     match write_st_or_mem(ctx, insn, 0) {
         Some(FpuDst::Memory(addr)) => {
+            x87_trace_line(
+                ctx,
+                insn,
+                format!(
+                    "lift FSTP emit memory tag={:#x} addr={addr:?} src={src:?}",
+                    fpu_tag::FSTP
+                ),
+            );
             ctx.emit(IrInsn::without_output(
                 IrOp::Callother,
                 smallvec![tag, addr, src],
@@ -184,6 +318,14 @@ pub fn lift_fstp(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
         }
         Some(FpuDst::Register(dst)) => {
+            x87_trace_line(
+                ctx,
+                insn,
+                format!(
+                    "lift FSTP emit register tag={:#x} dst={dst:?} src={src:?}",
+                    fpu_tag::FSTP
+                ),
+            );
             ctx.emit(IrInsn::with_output(
                 IrOp::Callother,
                 dst,
@@ -191,7 +333,14 @@ pub fn lift_fstp(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
         }
-        None => ctx.emit_unimplemented(),
+        None => {
+            x87_trace_line(
+                ctx,
+                insn,
+                "lift FSTP fallback=unimplemented reason=destination",
+            );
+            ctx.emit_unimplemented();
+        }
     }
 }
 
@@ -217,6 +366,11 @@ pub fn lift_fpu_binop(
     callother_tag: u64,
     swap_operands: bool,
 ) {
+    x87_trace_line(
+        ctx,
+        insn,
+        format!("lift binop start tag={callother_tag:#x} swap={swap_operands}"),
+    );
     let tag = Varnode::constant(callother_tag, 8);
 
     let (dst, lhs, rhs) = match insn.op_count() {
@@ -227,6 +381,7 @@ pub fn lift_fpu_binop(
         1 => {
             // `FADD m32fp` form: dst = ST(0), lhs = ST(0), rhs = memory.
             let Some(rhs) = read_st_or_mem(ctx, insn, 0) else {
+                x87_trace_line(ctx, insn, "lift binop fallback=unimplemented reason=rhs");
                 ctx.emit_unimplemented();
                 return;
             };
@@ -235,14 +390,17 @@ pub fn lift_fpu_binop(
         _ => {
             // Two-operand: dst = op0, lhs = op0, rhs = op1.
             let Some(dst) = write_st_or_mem(ctx, insn, 0) else {
+                x87_trace_line(ctx, insn, "lift binop fallback=unimplemented reason=dst");
                 ctx.emit_unimplemented();
                 return;
             };
             let Some(lhs) = read_st_or_mem(ctx, insn, 0) else {
+                x87_trace_line(ctx, insn, "lift binop fallback=unimplemented reason=lhs");
                 ctx.emit_unimplemented();
                 return;
             };
             let Some(rhs) = read_st_or_mem(ctx, insn, 1) else {
+                x87_trace_line(ctx, insn, "lift binop fallback=unimplemented reason=rhs");
                 ctx.emit_unimplemented();
                 return;
             };
@@ -258,6 +416,13 @@ pub fn lift_fpu_binop(
 
     match dst {
         FpuDst::Register(dst_vn) => {
+            x87_trace_line(
+                ctx,
+                insn,
+                format!(
+                    "lift binop emit register tag={callother_tag:#x} dst={dst_vn:?} a={a:?} b={b:?}"
+                ),
+            );
             ctx.emit(IrInsn::with_output(
                 IrOp::Callother,
                 dst_vn,
@@ -266,6 +431,13 @@ pub fn lift_fpu_binop(
             ));
         }
         FpuDst::Memory(addr) => {
+            x87_trace_line(
+                ctx,
+                insn,
+                format!(
+                    "lift binop emit memory tag={callother_tag:#x} addr={addr:?} a={a:?} b={b:?}"
+                ),
+            );
             ctx.emit(IrInsn::without_output(
                 IrOp::Callother,
                 smallvec![tag, addr, a, b],
@@ -282,12 +454,14 @@ pub fn lift_fpu_binop(
 /// against ST(1). We emit the tagged Callother without an output; downstream
 /// passes can still recognise the comparison via the tag.
 pub fn lift_fcom(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    x87_trace_line(ctx, insn, format!("lift FCOM start tag={callother_tag:#x}"));
     let tag = Varnode::constant(callother_tag, 8);
 
     let (lhs, rhs) = match insn.op_count() {
         0 => (st_reg(0), st_reg(1)),
         1 => {
             let Some(rhs) = read_st_or_mem(ctx, insn, 0) else {
+                x87_trace_line(ctx, insn, "lift FCOM fallback=unimplemented reason=rhs");
                 ctx.emit_unimplemented();
                 return;
             };
@@ -295,10 +469,12 @@ pub fn lift_fcom(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag:
         }
         _ => {
             let Some(lhs) = read_st_or_mem(ctx, insn, 0) else {
+                x87_trace_line(ctx, insn, "lift FCOM fallback=unimplemented reason=lhs");
                 ctx.emit_unimplemented();
                 return;
             };
             let Some(rhs) = read_st_or_mem(ctx, insn, 1) else {
+                x87_trace_line(ctx, insn, "lift FCOM fallback=unimplemented reason=rhs");
                 ctx.emit_unimplemented();
                 return;
             };
@@ -306,6 +482,11 @@ pub fn lift_fcom(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag:
         }
     };
 
+    x87_trace_line(
+        ctx,
+        insn,
+        format!("lift FCOM emit tag={callother_tag:#x} lhs={lhs:?} rhs={rhs:?}"),
+    );
     ctx.emit(IrInsn::without_output(
         IrOp::Callother,
         smallvec![tag, lhs, rhs],
@@ -320,12 +501,14 @@ pub fn lift_fcom(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag:
 /// sequential Copies via a temp would be misleading because the IR does not
 /// model the FPU stack pointer.
 pub fn lift_fxch(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    x87_trace_line(ctx, insn, "lift FXCH start");
     let tag = Varnode::constant(fpu_tag::FXCH, 8);
 
     let (a, b) = match insn.op_count() {
         0 => (st_reg(0), st_reg(1)),
         1 => {
             let Some(other) = read_st_or_mem(ctx, insn, 0) else {
+                x87_trace_line(ctx, insn, "lift FXCH fallback=unimplemented reason=other");
                 ctx.emit_unimplemented();
                 return;
             };
@@ -333,10 +516,12 @@ pub fn lift_fxch(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         }
         _ => {
             let Some(a) = read_st_or_mem(ctx, insn, 0) else {
+                x87_trace_line(ctx, insn, "lift FXCH fallback=unimplemented reason=a");
                 ctx.emit_unimplemented();
                 return;
             };
             let Some(b) = read_st_or_mem(ctx, insn, 1) else {
+                x87_trace_line(ctx, insn, "lift FXCH fallback=unimplemented reason=b");
                 ctx.emit_unimplemented();
                 return;
             };
@@ -344,6 +529,7 @@ pub fn lift_fxch(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         }
     };
 
+    x87_trace_line(ctx, insn, format!("lift FXCH emit a={a:?} b={b:?}"));
     ctx.emit(IrInsn::without_output(
         IrOp::Callother,
         smallvec![tag, a, b],

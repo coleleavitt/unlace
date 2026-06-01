@@ -1,0 +1,9 @@
+__int64 __fastcall Clp_setUserPointer(__int64 *a1, __int64 a2)
+{
+  __int64 result; // rax
+
+  result = *a1;
+  *(_QWORD *)(*a1 + 280) = a2;
+  return result;
+}
+

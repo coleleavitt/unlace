@@ -2,10 +2,12 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
+mod cargo_bin;
 mod compare_corpus;
 mod compare_golden;
 mod dump_pipeline;
 mod fuzz;
+mod golden_triage;
 mod lift_trace;
 mod lifter_coverage;
 mod register_alias_report;
@@ -24,6 +26,13 @@ fn main() {
         Some("compare-golden") => {
             let root = workspace_root();
             compare_golden::run(&root);
+        }
+        Some("golden-triage") => {
+            let root = workspace_root();
+            let code = golden_triage::run(&root);
+            if code != 0 {
+                process::exit(code);
+            }
         }
         Some("compare-corpus") => {
             let root = workspace_root();
@@ -85,7 +94,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, dump-pipeline, sbom, fuzz"
             );
             process::exit(1);
         }

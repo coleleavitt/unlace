@@ -1,5 +1,7 @@
 //! Remove no-op conditional shells after structuring has settled.
 
+use std::sync::OnceLock;
+
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
@@ -11,11 +13,45 @@ pub fn cleanup_empty_ifs(func: &mut HirFunction) {
     // pipeline has a fixture-level cleanup budget, only run this where the
     // current corpus has known excess if-count headroom.
     if !func.name.contains("identify") {
+        if empty_if_trace_enabled() {
+            eprintln!(
+                "[unlace-empty-if] skip func={} reason=fixture-gated",
+                func.name
+            );
+        }
         return;
     }
 
+    if empty_if_trace_enabled() {
+        eprintln!(
+            "[unlace-empty-if] start func={} top_nodes={}",
+            func.name,
+            func.body.len()
+        );
+    }
     let mut synth = SynthBool::new();
     func.body = cleanup_scope(std::mem::take(&mut func.body), func, &mut synth);
+    if empty_if_trace_enabled() {
+        eprintln!(
+            "[unlace-empty-if] done func={} top_nodes={}",
+            func.name,
+            func.body.len()
+        );
+    }
+}
+
+fn empty_if_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        env_flag("UNLACE_EMPTY_IF_TRACE")
+            || env_flag("UNLACE_STRUCT_TRACE")
+            || env_flag("UNLACE_STRUCT_TRACE_VERBOSE")
+            || env_flag("UNLACE_HIR_TRACE_VERBOSE")
+    })
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name).map(|v| v != "0").unwrap_or(false)
 }
 
 struct SynthBool(u64);
@@ -148,6 +184,22 @@ fn emit_simplified_if(
         .as_deref()
         .map(has_no_non_label_nodes)
         .unwrap_or(true);
+
+    if empty_if_trace_enabled() {
+        let action = match (then_empty, else_empty, else_body.is_some()) {
+            (true, true, true) => "drop-shell-keep-labels",
+            (true, true, false) => "drop-empty-then",
+            (false, true, _) => "drop-empty-else",
+            (true, false, true) => "invert-empty-then",
+            (false, false, _) => "keep",
+            (true, false, false) => "unreachable",
+        };
+        eprintln!(
+            "[unlace-empty-if] cond={cond:?} then_len={} else_len={} then_empty={then_empty} else_empty={else_empty} action={action}",
+            then_body.len(),
+            else_body.as_ref().map_or(0, Vec::len)
+        );
+    }
 
     match (then_empty, else_empty, else_body) {
         (true, true, Some(else_body)) => {

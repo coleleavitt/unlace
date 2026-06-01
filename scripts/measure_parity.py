@@ -412,7 +412,7 @@ def main():
                         default=Path("hexrays/ida-9.1/hexx64.so"),
                         help="Binary to decompile (default: hexrays/ida-9.1/hexx64.so)")
     parser.add_argument("--refs", type=Path,
-                        default=Path("references/hexrays/ida_dump/hexx64/all"),
+                        default=Path("research/decompiled-references/hexrays/ida_dump/hexx64/all"),
                         help="IDA reference directory")
     parser.add_argument("--unlace", type=Path,
                         default=Path("target/release/unlace"),

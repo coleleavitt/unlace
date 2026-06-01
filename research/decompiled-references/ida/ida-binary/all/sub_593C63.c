@@ -1,0 +1,7 @@
+__int64 __fastcall sub_593C63(__int64 a1, __int64 a2, __int64 a3)
+{
+  __int64 v3; // rax
+
+  v3 = sub_59438C(a3);
+  return sub_5943B1(a1, a2, v3);
+}

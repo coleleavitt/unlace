@@ -1,0 +1,10 @@
+__int64 sub_379700()
+{
+  __int64 result; // rax
+
+  result = sub_186B270(0x10u);
+  *(_DWORD *)(result + 8) = 0;
+  *(_QWORD *)result = off_1C4D900;
+  return result;
+}
+

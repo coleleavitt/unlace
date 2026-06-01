@@ -233,7 +233,7 @@ impl Pass for StackVarRecoveryPass {
 /// covered by an inferred stack variable.
 ///
 /// Modelled after IDA's `calc_tinfo_gaps` /  `append_tinfo_covered`
-/// (`references/ida/idalib/all/`): the goal is to surface "holes" in the
+/// (`research/decompiled-references/ida/idalib/all/`): the goal is to surface "holes" in the
 /// stack frame that the user can later annotate as opaque buffers, while
 /// suppressing tiny ABI-driven alignment padding.
 fn detect_frame_gaps(func: &mut SsaFunction) {

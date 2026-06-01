@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x8D7ED8
+// Name:     _ZNK2QT7QPixmap11transformedERKNS_10QTransformENS_2Qt18TransformationModeE
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to _ZNK2QT7QPixmap11transformedERKNS_10QTransformENS_2Qt18TransformationModeE are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void _ZNK2QT7QPixmap11transformedERKNS_10QTransformENS_2Qt18TransformationModeE(/* see import library declaration */);
+

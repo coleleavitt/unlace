@@ -1,0 +1,7 @@
+__int64 __fastcall sub_281E20(__int64 a1)
+{
+  if ( *(_DWORD *)(a1 + 8) != 61 )
+    sub_27F090(a1);
+  return sub_255DF0(*(__int64 **)(a1 + 24));
+}
+

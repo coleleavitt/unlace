@@ -283,25 +283,29 @@ fn collect_stack(
             let flags = stack_flags(func, offset);
             let source = stack_source(func, offset);
             let lr = stack_live_range(func, offset, use_blocks, func_range);
+            let name = stack_lvar_name(func, offset, local.size);
             lvar_trace_line(&format!(
-                "emit-stack func={} offset={} size={} range={:?}->{:?} ty={:?} source={:?} flags={:?}",
+                "emit-stack func={} offset={} size={} name={} range={:?}->{:?} ty={:?} source={:?} flags={:?}",
                 func.function.name,
                 offset,
                 local.size,
+                name,
                 lr.start_block,
                 lr.end_block,
                 ty,
                 source,
                 flags
             ));
-            out.push(Lvar::new(
+            let mut lv = Lvar::new(
                 alloc_id(next_id),
                 LvarStorage::Stack { offset },
                 lr,
                 ty,
                 source,
                 flags,
-            ));
+            );
+            lv.name = Some(name);
+            out.push(lv);
             emitted.insert(offset);
         }
     }
@@ -313,18 +317,33 @@ fn collect_stack(
         let flags = stack_flags(func, offset);
         let source = stack_source(func, offset);
         let lr = stack_live_range(func, offset, use_blocks, func_range);
+        let name = stack_lvar_name(
+            func,
+            offset,
+            primitive_width(sv.ty).map(u64::from).unwrap_or(8),
+        );
         lvar_trace_line(&format!(
-            "emit-stack-legacy func={} offset={} range={:?}->{:?} ty={:?} source={:?} flags={:?}",
-            func.function.name, offset, lr.start_block, lr.end_block, ty, source, flags
+            "emit-stack-legacy func={} offset={} name={} raw_stack_var_name={} range={:?}->{:?} ty={:?} source={:?} flags={:?}",
+            func.function.name,
+            offset,
+            name,
+            sv.name,
+            lr.start_block,
+            lr.end_block,
+            ty,
+            source,
+            flags
         ));
-        out.push(Lvar::new(
+        let mut lv = Lvar::new(
             alloc_id(next_id),
             LvarStorage::Stack { offset },
             lr,
             ty,
             source,
             flags,
-        ));
+        );
+        lv.name = Some(name);
+        out.push(lv);
         emitted.insert(offset);
     }
 }
@@ -601,6 +620,32 @@ fn primitive_to_kind(pty: PrimitiveType) -> TypeKind {
     }
 }
 
+fn primitive_width(pty: PrimitiveType) -> Option<u8> {
+    match pty {
+        PrimitiveType::Unknown => None,
+        PrimitiveType::Bool => Some(1),
+        PrimitiveType::Int(width) | PrimitiveType::UnsignedInt(width) => Some(width),
+        PrimitiveType::Float => Some(4),
+        PrimitiveType::Double => Some(8),
+        PrimitiveType::Ptr => Some(8),
+    }
+}
+
+fn stack_lvar_name(func: &SsaFunction, offset: i64, size: u64) -> String {
+    if let Some(name) = func
+        .dwarf_local_names
+        .get(&offset)
+        .filter(|name| !name.trim().is_empty())
+    {
+        return name.clone();
+    }
+    if size > 8 {
+        format!("buf_{}", offset.unsigned_abs())
+    } else {
+        format!("v_{}", offset.unsigned_abs())
+    }
+}
+
 /// Best-effort type for a recovered stack-frame slot. Falls back to
 /// inferred primitive types from `stack_vars` and finally to `Void`.
 fn stack_local_typekind(func: &SsaFunction, offset: i64, _size: u64) -> TypeKind {
@@ -685,7 +730,7 @@ fn live_range_for_temp(
 mod tests {
     use super::*;
     use unlace_ir::lvar::LvarStorage;
-    use unlace_ir::ssa::{StackVar, VarnodeSlot, build_ssa};
+    use unlace_ir::ssa::{StackFrame, StackLocal, StackVar, VarnodeSlot, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
     /// Build a minimal one-block SSA function (no real IR; just enough
@@ -748,6 +793,74 @@ mod tests {
         // IDs must be dense from 0.
         assert_eq!(ssa.lvars[0].id, LvarId::new(0));
         assert_eq!(ssa.lvars[1].id, LvarId::new(1));
+        let names_by_offset: BTreeMap<i64, Option<&str>> = ssa
+            .lvars
+            .iter()
+            .filter_map(|lv| match lv.storage {
+                LvarStorage::Stack { offset } => Some((offset, lv.name.as_deref())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(names_by_offset.get(&-8).copied().flatten(), Some("v_8"));
+        assert_eq!(names_by_offset.get(&-16).copied().flatten(), Some("v_16"));
+    }
+
+    #[test]
+    fn stack_lvar_uses_debug_name_and_source() {
+        let mut ssa = empty_ssa("debug_stack");
+        ssa.dwarf_local_names.insert(-8, "counter".to_string());
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 4,
+                access_widths: vec![4],
+                kind: Default::default(),
+            },
+        );
+        ssa.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 4,
+            max_pos_offset: -4,
+            min_neg_offset: -8,
+        });
+
+        assert!(LvarCollectPass.run(&mut ssa).unwrap());
+        let slot = ssa
+            .lvars
+            .iter()
+            .find(|lv| matches!(lv.storage, LvarStorage::Stack { offset: -8 }))
+            .expect("stack lvar emitted");
+        assert_eq!(slot.name.as_deref(), Some("counter"));
+        assert_eq!(slot.source, LvarSource::FromDebug);
+        assert!(slot.flags.contains(LvarFlags::FROM_DEBUG));
+    }
+
+    #[test]
+    fn stack_lvar_names_wide_slots_as_buffers() {
+        let mut ssa = empty_ssa("wide_stack");
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -32,
+            StackLocal {
+                offset: -32,
+                size: 16,
+                access_widths: vec![1],
+                kind: Default::default(),
+            },
+        );
+        ssa.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 16,
+            max_pos_offset: -16,
+            min_neg_offset: -32,
+        });
+
+        assert!(LvarCollectPass.run(&mut ssa).unwrap());
+        let slot = &ssa.lvars[0];
+        assert!(matches!(slot.storage, LvarStorage::Stack { offset: -32 }));
+        assert_eq!(slot.name.as_deref(), Some("buf_32"));
     }
 
     #[test]

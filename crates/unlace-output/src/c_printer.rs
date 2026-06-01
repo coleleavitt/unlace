@@ -109,18 +109,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
+use unlace_ir::lvar::{LvarFlags, LvarSource, LvarStorage};
 use unlace_ir::reg_alias::aliases;
 use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode, TargetSet};
-use unlace_ir::types::Type;
+use unlace_ir::types::{Type, TypeKind};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::{DwarfInfo, FunctionDebugInfo};
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
 
 use crate::expr_ast::CExpr;
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 /// Metadata for the block comment emitted above each decompiled function.
 ///
@@ -394,6 +391,16 @@ pub struct SsaStatementSlots {
     pub inputs: BTreeMap<usize, SsaVarnode>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct StackLvarAnnotation {
+    pub name: String,
+    pub c_type: Option<String>,
+    pub ty: Option<TypeKind>,
+    pub size: u64,
+    pub is_buffer: bool,
+    pub from_debug: bool,
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct PrinterAnnotations {
     /// Prose to render immediately above the function header block.
@@ -435,6 +442,14 @@ pub struct PrinterAnnotations {
     /// Keyed by the `HirNode::Return(Some(_))` value and mapped to the
     /// normal-path value that should be printed/read for standalone C.
     pub return_value_aliases: BTreeMap<SsaVarnode, SsaVarnode>,
+    /// Stack lvar storage metadata recovered before HIR structuring.
+    ///
+    /// `HirFunction` keeps the physical `StackFrame`, but the lvar layer
+    /// owns user-facing names, source provenance, and type hints. The CLI
+    /// copies those facts through this map so stack declarations and
+    /// accesses use lvar storage metadata instead of re-deriving names in
+    /// the printer.
+    pub stack_lvars: BTreeMap<i64, StackLvarAnnotation>,
     /// PDB constant-pool reverse index (`value → names`) from
     /// [`unlace_loader::PdbTypes::constants_by_value`].
     pub pdb_constants_by_value: BTreeMap<i64, Vec<String>>,
@@ -597,6 +612,114 @@ pub struct PrinterAnnotations {
     pub recover_triangular_sum_loop: bool,
 }
 
+/// Convert final SSA lvar metadata into the stack-name side channel consumed
+/// by the C printer after HIR structuring.
+pub fn stack_lvar_annotations_from_ssa(func: &SsaFunction) -> BTreeMap<i64, StackLvarAnnotation> {
+    let mut out: BTreeMap<i64, StackLvarAnnotation> = BTreeMap::new();
+    for lv in &func.lvars {
+        let LvarStorage::Stack { offset } = &lv.storage else {
+            continue;
+        };
+        let offset = *offset;
+        let frame_size = func
+            .stack_frame
+            .as_ref()
+            .and_then(|frame| frame.locals.get(&offset))
+            .map(|local| local.size);
+        let stack_var_size = func
+            .stack_vars
+            .get(&offset)
+            .and_then(|sv| primitive_size_hint(sv.ty).map(u64::from));
+        let size = frame_size
+            .or(stack_var_size)
+            .or_else(|| type_kind_size_hint(lv.ty))
+            .unwrap_or(8);
+        let fallback_name = if size > 8 {
+            format!("buf_{}", offset.unsigned_abs())
+        } else {
+            format!("v_{}", offset.unsigned_abs())
+        };
+        let raw_name = lv.name.as_deref().unwrap_or(&fallback_name);
+        let name = crate::demangle::sanitize_for_c(raw_name);
+        let from_debug =
+            matches!(lv.source, LvarSource::FromDebug) || lv.flags.contains(LvarFlags::FROM_DEBUG);
+        let c_type = from_debug.then(|| stack_lvar_type_name(lv.ty)).flatten();
+        let ann = StackLvarAnnotation {
+            name,
+            c_type,
+            ty: Some(lv.ty),
+            size,
+            is_buffer: size > 8,
+            from_debug,
+        };
+        trace_stack_text(format_args!(
+            "lvar-export func={} offset={} name={} source={:?} flags={:?} ty={:?} c_type={:?} size={} buffer={} from_debug={}",
+            func.function.name,
+            offset,
+            ann.name,
+            lv.source,
+            lv.flags,
+            lv.ty,
+            ann.c_type,
+            ann.size,
+            ann.is_buffer,
+            ann.from_debug,
+        ));
+        out.entry(offset)
+            .and_modify(|existing| merge_stack_lvar_annotation(existing, &ann))
+            .or_insert(ann);
+    }
+    out
+}
+
+fn merge_stack_lvar_annotation(existing: &mut StackLvarAnnotation, incoming: &StackLvarAnnotation) {
+    existing.size = existing.size.max(incoming.size);
+    existing.is_buffer |= incoming.is_buffer;
+    if existing.c_type.is_none() {
+        existing.c_type = incoming.c_type.clone();
+    }
+    if incoming.from_debug && !existing.from_debug {
+        existing.name = incoming.name.clone();
+        existing.c_type = incoming.c_type.clone().or_else(|| existing.c_type.clone());
+        existing.from_debug = true;
+    } else if existing.name.is_empty() {
+        existing.name = incoming.name.clone();
+    }
+}
+
+fn primitive_size_hint(ty: PrimitiveType) -> Option<u8> {
+    match ty {
+        PrimitiveType::Unknown => None,
+        PrimitiveType::Bool => Some(1),
+        PrimitiveType::Int(width) | PrimitiveType::UnsignedInt(width) => Some(width),
+        PrimitiveType::Float => Some(4),
+        PrimitiveType::Double => Some(8),
+        PrimitiveType::Ptr => Some(8),
+    }
+}
+
+fn type_kind_size_hint(ty: TypeKind) -> Option<u64> {
+    match ty {
+        TypeKind::Void => None,
+        TypeKind::Int | TypeKind::UInt => Some(4),
+        TypeKind::Long
+        | TypeKind::ULong
+        | TypeKind::SizeT
+        | TypeKind::SSizeT
+        | TypeKind::OffT
+        | TypeKind::CharPtr
+        | TypeKind::ConstCharPtr
+        | TypeKind::CharPtrPtr
+        | TypeKind::VoidPtr
+        | TypeKind::ConstVoidPtr
+        | TypeKind::FilePtr => Some(8),
+    }
+}
+
+fn stack_lvar_type_name(ty: TypeKind) -> Option<String> {
+    (!matches!(ty, TypeKind::Void)).then(|| ty.c_name().to_string())
+}
+
 /// t260: per-function `__usercall` / `__userpurge` annotation payload.
 #[derive(Default, Debug, Clone)]
 pub struct UsercallSpec {
@@ -671,6 +794,7 @@ pub fn print_c_with_annotations(
         ctx.ssa_statement_slots = ann.ssa_statement_slots.clone();
         ctx.ssa_phi_uses = ann.ssa_phi_uses.clone();
         ctx.return_value_aliases = ann.return_value_aliases.clone();
+        ctx.stack_lvars = ann.stack_lvars.clone();
         ctx.pdb_constants_by_value = ann.pdb_constants_by_value.clone();
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
@@ -998,6 +1122,26 @@ pub fn print_c_with_annotations(
             let _ = write!(out, "{} *this", this_ty);
             param_idx = 1;
         }
+        let cpp_free_param_types = demangled
+            .as_ref()
+            .filter(|dr| {
+                dr.language == crate::demangle::SymbolLanguage::Cpp
+                    && dr.class_name.is_none()
+                    && !dr.param_types.is_empty()
+            })
+            .map(|dr| dr.param_types.as_slice());
+        if let Some(param_types) = cpp_free_param_types {
+            c_printer_trace_line(
+                &func.name,
+                format!(
+                    "header-param-source=cpp-demangle demangled={} param_types={param_types:?}",
+                    demangled
+                        .as_ref()
+                        .map(|dr| dr.full_signature.as_str())
+                        .unwrap_or("<none>")
+                ),
+            );
+        }
         // t230 — when finalize-signature has run, use its `params` list
         // (post-dead-drop, post-byte-mask-narrow) instead of the raw
         // `func.params`. This is how the dead-param drop becomes
@@ -1015,6 +1159,15 @@ pub fn print_c_with_annotations(
                     &ctx.byref_union_types,
                 ) {
                     out.push_str(&union_decl);
+                } else if let Some(decl) = cpp_demangled_param_decl(cpp_free_param_types, i, pname)
+                {
+                    c_printer_trace_line(
+                        &func.name,
+                        format!(
+                            "header-param idx={i} name={pname} source=cpp-demangle decl={decl}"
+                        ),
+                    );
+                    out.push_str(&decl);
                 } else {
                     let _ = write!(out, "{} {}", c_sig_type_for_type(pty), pname);
                     // t260: __usercall register-location suffix.
@@ -1042,6 +1195,15 @@ pub fn print_c_with_annotations(
                     &ctx.byref_union_types,
                 ) {
                     out.push_str(&union_decl);
+                } else if let Some(decl) = cpp_demangled_param_decl(cpp_free_param_types, i, pname)
+                {
+                    c_printer_trace_line(
+                        &func.name,
+                        format!(
+                            "header-param idx={i} name={pname} source=cpp-demangle decl={decl}"
+                        ),
+                    );
+                    out.push_str(&decl);
                 } else {
                     let _ = write!(out, "{} {}", c_sig_type(pty), pname);
                     // t260: __usercall register-location suffix.
@@ -1179,6 +1341,10 @@ pub fn print_c_with_annotations(
         .filter_map(|plan| ctx.stmt_outputs.get(&plan.stmt_idx).copied().flatten())
         .filter_map(|sv| ctx.var_names.get(&sv).map(String::as_str))
         .collect();
+    trace_temp_text(format_args!(
+        "decl-summary referenced={:?} hoisted={:?} stack={:?}",
+        referenced_names, hoisted_decl_names, stack_frame_names
+    ));
     let mut preferred_decl_types: BTreeMap<String, PrimitiveType> = BTreeMap::new();
     for (sv, name) in &ctx.var_names {
         if foldable_svs.contains(sv)
@@ -1200,21 +1366,43 @@ pub fn print_c_with_annotations(
     }
     for (sv, name) in &ctx.var_names {
         if foldable_svs.contains(sv) {
+            trace_temp_text(format_args!(
+                "top-decl-skip name={name} sv={sv:?} reason=foldable"
+            ));
             continue;
         }
         if post_dowhile_return_svs.contains(sv) {
+            trace_temp_text(format_args!(
+                "top-decl-skip name={name} sv={sv:?} reason=post-dowhile-return"
+            ));
             continue;
         }
         if !referenced_names.contains(name.as_str()) || should_suppress_var_decl(sv, &ctx) {
+            trace_temp_text(format_args!(
+                "top-decl-skip name={name} sv={sv:?} reason={} referenced={} suppress={}",
+                if referenced_names.contains(name.as_str()) {
+                    "suppress"
+                } else {
+                    "unreferenced"
+                },
+                referenced_names.contains(name.as_str()),
+                should_suppress_var_decl(sv, &ctx)
+            ));
             continue;
         }
         // Hoisted decls are emitted in the function body at the point of
         // first use; skip the function-top entry so we don't emit a
         // duplicate `int v3;` line.
         if hoisted_decl_names.contains(name.as_str()) {
+            trace_temp_text(format_args!(
+                "top-decl-skip name={name} sv={sv:?} reason=hoisted"
+            ));
             continue;
         }
         if !declared_names.insert(name.clone()) {
+            trace_temp_text(format_args!(
+                "top-decl-skip name={name} sv={sv:?} reason=already-declared"
+            ));
             continue;
         }
         let ty = preferred_decl_types
@@ -1222,6 +1410,10 @@ pub fn print_c_with_annotations(
             .copied()
             .or_else(|| ctx.var_types.get(sv).copied())
             .unwrap_or(PrimitiveType::Unknown);
+        trace_temp_text(format_args!(
+            "top-decl-emit name={name} sv={sv:?} ty={ty:?} base={:?}",
+            sv.base
+        ));
         let frame_size = header.map(|h| h.stack_frame);
         // t176 — Objective-C `__block` (byref) box: render
         // `__block T name;` and skip the generic BYREF marker (the
@@ -1288,6 +1480,12 @@ pub fn print_c_with_annotations(
         "dead-plain-assignments",
         output,
         prune_dead_plain_assignments,
+    );
+    let output = run_cleanup_stage(
+        func_label,
+        "fallthrough-gotos",
+        output,
+        prune_fallthrough_gotos,
     );
     let output = run_cleanup_stage(func_label, "unused-labels", output, prune_unused_labels);
     let output = run_cleanup_stage(
@@ -2218,6 +2416,9 @@ struct PrintCtx {
     /// render accesses inside wide buffers as `buf_N + delta` instead of
     /// falling through to raw pointer arithmetic.
     stack_frame_slots: BTreeMap<i64, StackSlotName>,
+    /// Stack lvar metadata keyed by recovered frame offset. This is the
+    /// printer-side copy of [`PrinterAnnotations::stack_lvars`].
+    stack_lvars: BTreeMap<i64, StackLvarAnnotation>,
     /// Names already declared at function scope. Hoisted declarations consult
     /// this set so block-local declarations do not collide with an existing
     /// function-scope temporary that prints with the same name.
@@ -2433,6 +2634,7 @@ impl PrintCtx {
             mmio_addrs: BTreeSet::new(),
             suppressed_stack_offsets: BTreeSet::new(),
             stack_frame_slots: BTreeMap::new(),
+            stack_lvars: BTreeMap::new(),
             top_declared_names: BTreeSet::new(),
             promoted_stack_buffers: BTreeMap::new(),
             synthetic_stack_scalars: BTreeMap::new(),
@@ -3776,6 +3978,9 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     ctx.name_of(&ret_sv);
                     ctx.cond_uses.push(ret_sv);
                     ctx.returned_svs.insert(ret_sv);
+                    ctx.stmt_depths.insert(ctx.next_stmt, ctx.collect_depth);
+                    ctx.stmt_scope_paths
+                        .insert(ctx.next_stmt, ctx.current_scope_path.clone());
                     ctx.cond_use_stmts.push((ret_sv, ctx.next_stmt));
                 }
             }
@@ -4100,14 +4305,15 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             continue;
         }
 
-        if insn.op == IrOp::Copy && copy_reads_call_output(stmt_idx, ctx) {
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op=Copy output={output_sv:?} decision=call-output-copy"
-                );
-            }
-            continue;
-        }
+        // NOTE: a single-use `Copy` reading a call output (e.g. `v8 = v11;`
+        // where `v11 = f();`) used to be blocked unconditionally here. That
+        // was over-broad: the call result is itself a materialised statement
+        // (`Call` is never-foldable), so substituting the copy into its sole
+        // consumer cannot duplicate the call. The genuine hazard — the call's
+        // result register being reused before the consumer — is caught
+        // precisely below by `copy_like_snapshot_source_redefined_before_consumer`.
+        // Removing the blanket guard lets `int v8 = v11;` fold into its use,
+        // eliminating a class of leaked single-use temps.
 
         let use_count = use_counts.get(&output_sv).copied().unwrap_or(0);
         if use_count != 1 {
@@ -5226,6 +5432,27 @@ fn detect_mmio_addrs(ctx: &mut PrintCtx) {
 /// Names that don't qualify fall through to the original function-top
 /// declaration block, preserving prior layout for cases this pass cannot
 /// reason about safely.
+fn stmt_visible_for_hoist_base(ctx: &PrintCtx, base: Varnode, stmt_idx: u32) -> bool {
+    let Some(insn) = ctx.stmt_insns.get(&stmt_idx) else {
+        // Synthetic condition/return anchors have no direct instruction but
+        // are still visible uses from the C emitter's perspective.
+        return true;
+    };
+    if ctx.foldable_stmts.contains(&stmt_idx)
+        || is_dead_zero_init(insn, stmt_idx, ctx)
+        || is_dead_suppressible_store(insn, stmt_idx, ctx)
+    {
+        return false;
+    }
+    if let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx)
+        && out_sv.base == base
+        && is_control_only_condition_assignment(stmt_idx, out_sv, insn, ctx)
+    {
+        return false;
+    }
+    true
+}
+
 fn compute_hoist_plan(ctx: &mut PrintCtx) {
     use std::collections::BTreeMap;
 
@@ -5248,21 +5475,90 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         use_stmts.entry(sv.base).or_default().push(s);
     }
 
-    let empty_path: Vec<u32> = Vec::new();
+    let mut visible_stmts_by_base: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
+    for (base, stmts) in &use_stmts {
+        let mut visible: Vec<u32> = stmts
+            .iter()
+            .copied()
+            .filter(|stmt_idx| stmt_visible_for_hoist_base(ctx, *base, *stmt_idx))
+            .collect();
+        visible.sort_unstable();
+        visible.dedup();
+        visible_stmts_by_base.insert(*base, visible);
+    }
 
-    for (base, mut stmts) in use_stmts {
+    let mut base_names_by_base: BTreeMap<Varnode, String> = BTreeMap::new();
+    let mut name_earliest_stmt: BTreeMap<String, u32> = BTreeMap::new();
+    for (base, stmts) in &visible_stmts_by_base {
+        let Some(name) = hoist_name_for_base(ctx, base, stmts) else {
+            continue;
+        };
+        let Some(first_stmt) = stmts.first().copied() else {
+            continue;
+        };
+        base_names_by_base.insert(*base, name.clone());
+        name_earliest_stmt
+            .entry(name)
+            .and_modify(|existing| *existing = (*existing).min(first_stmt))
+            .or_insert(first_stmt);
+    }
+
+    let empty_path: Vec<u32> = Vec::new();
+    let mut planned_names: BTreeSet<String> = BTreeSet::new();
+
+    for (base, raw_stmts) in use_stmts {
+        let mut stmts = visible_stmts_by_base
+            .get(&base)
+            .cloned()
+            .unwrap_or_default();
         if stmts.is_empty() {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} raw_stmts={raw_stmts:?} reason=no-visible-stmts"
+            ));
             continue;
         }
         stmts.sort_unstable();
         stmts.dedup();
+        let base_name = base_names_by_base.get(&base).cloned();
+        trace_hoist_text(format_args!(
+            "candidate base={base:?} name={:?} visible_stmts={:?} raw_stmts={:?}",
+            base_name, stmts, raw_stmts
+        ));
 
         // Skip BYREF — these are address-taken and must live at fn top.
         if ctx.byref_bases.contains(&base) {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={:?} reason=byref",
+                base_name
+            ));
             continue;
         }
-        // Skip vars whose name isn't even known yet (defensive).
-        if !ctx.base_names.contains_key(&base) {
+        // Skip vars whose name isn't even known yet (defensive).  This must
+        // consult `var_names` as well as `base_names`: coalesced/merged temps
+        // commonly never populate `base_names`, and those are exactly the
+        // generic declarations that otherwise leak into the function-top block.
+        let Some(base_name) = base_name else {
+            trace_hoist_text(format_args!("skip base={base:?} reason=no-known-name"));
+            continue;
+        };
+        if !is_temp_hoist_name(&base_name) {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} reason=non-temp-name"
+            ));
+            continue;
+        }
+        if planned_names.contains(&base_name) {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} reason=name-already-hoisted"
+            ));
+            continue;
+        }
+        if name_earliest_stmt.get(&base_name).copied() != stmts.first().copied() {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={} reason=name-earlier-touch earliest={:?}",
+                stmts[0],
+                name_earliest_stmt.get(&base_name)
+            ));
             continue;
         }
 
@@ -5281,6 +5577,9 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         // need to emit a bare decl above the construct enclosing the first
         // use — leave that case to the function-top fallback for now.
         if first_path != lca {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=scope-lca first_path={first_path:?} lca={lca:?}"
+            ));
             continue;
         }
 
@@ -5288,28 +5587,62 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         // it).  Reads-before-writes happen for parameter/live-in values
         // which must stay declared at fn top (or via the signature).
         let Some(Some(out_sv)) = ctx.stmt_outputs.get(&first_stmt).copied() else {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=first-not-output"
+            ));
             continue;
         };
         if out_sv.base != base {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} output={out_sv:?} reason=first-output-other-base"
+            ));
+            continue;
+        }
+        if let Some(inputs) = ctx.stmt_inputs.get(&first_stmt)
+            && inputs.iter().any(|input_sv| {
+                input_sv.base != base
+                    && base_names_by_base
+                        .get(&input_sv.base)
+                        .is_some_and(|input_name| input_name == &base_name)
+            })
+        {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=same-name-input-at-anchor"
+            ));
             continue;
         }
 
         // Skip statements that the emitter would suppress or rewrite into
         // a non-assignment shape.
         if ctx.foldable_stmts.contains(&first_stmt) {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=foldable"
+            ));
             continue;
         }
         let Some(insn) = ctx.stmt_insns.get(&first_stmt).cloned() else {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=no-insn"
+            ));
             continue;
         };
         if is_dead_zero_init(&insn, first_stmt, ctx) {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=dead-zero"
+            ));
             continue;
         }
         if is_dead_suppressible_store(&insn, first_stmt, ctx) {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=dead-suppressible"
+            ));
             continue;
         }
         if is_csel_callother(&insn) {
             // CSEL emits an `if (...) { lhs = ...; } else ...` — can't fold.
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=csel"
+            ));
             continue;
         }
 
@@ -5322,6 +5655,9 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             .iter()
             .any(|i| i.space != SpaceId::Const && Some(*i) == insn.output);
         if lhs_is_self_input {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=self-input"
+            ));
             continue;
         }
 
@@ -5334,6 +5670,9 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         if base.space == SpaceId::Register && base.offset == 0 {
             let reads = ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0);
             if reads <= 1 {
+                trace_hoist_text(format_args!(
+                    "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=return-merge reads={reads}"
+                ));
                 continue;
             }
         }
@@ -5348,6 +5687,9 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             }
         }
         if !all_dominated {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=not-dominated"
+            ));
             continue;
         }
 
@@ -5358,7 +5700,24 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
                 fold_into_assignment: true,
             },
         );
+        planned_names.insert(base_name.clone());
+        trace_hoist_text(format_args!(
+            "plan base={base:?} name={base_name} stmt={first_stmt} fold_into_assignment=true"
+        ));
     }
+}
+
+fn is_temp_hoist_name(name: &str) -> bool {
+    is_v_number_name(name) || is_coalesced_number_name(name) || is_cond_number_name(name)
+}
+
+fn hoist_name_for_base(ctx: &PrintCtx, base: &Varnode, visible_stmts: &[u32]) -> Option<String> {
+    visible_stmts
+        .iter()
+        .filter_map(|stmt_idx| ctx.stmt_outputs.get(stmt_idx).copied().flatten())
+        .find(|sv| sv.base == *base)
+        .and_then(|sv| known_name_of_sv(ctx, &sv))
+        .or_else(|| known_name_for_base(ctx, base))
 }
 
 /// Longest common prefix of the scope paths for every statement in `stmts`.
@@ -5463,18 +5822,33 @@ fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
         if !matches!(local.kind, FrameSlotKind::Local) {
             continue;
         }
-        let abs = local.offset.unsigned_abs();
-        let is_buffer = local.size > 8;
-        let name = if is_buffer {
-            format!("buf_{}", abs)
-        } else {
-            format!("v_{}", abs)
-        };
+        let ann = ctx.stack_lvars.get(&local.offset);
+        let size = ann
+            .map(|ann| ann.size.max(local.size))
+            .unwrap_or(local.size);
+        let is_buffer = ann.is_some_and(|ann| ann.is_buffer) || size > 8;
+        let mut name = ann
+            .and_then(|ann| (!ann.name.is_empty()).then(|| ann.name.clone()))
+            .unwrap_or_else(|| fallback_stack_name(local.offset, size, is_buffer));
+        if is_buffer && ann.is_none_or(|ann| !ann.from_debug) {
+            name = canonical_stack_buffer_name(func, &name);
+        }
+        trace_stack_text(format_args!(
+            "frame-name offset={} raw_size={} chosen_size={} name={} buffer={} ann_present={} ann_c_type={:?} ann_from_debug={}",
+            local.offset,
+            local.size,
+            size,
+            name,
+            is_buffer,
+            ann.is_some(),
+            ann.and_then(|ann| ann.c_type.as_deref()),
+            ann.is_some_and(|ann| ann.from_debug),
+        ));
         ctx.stack_frame_slots.insert(
             local.offset,
             StackSlotName {
                 name: name.clone(),
-                size: local.size,
+                size,
                 is_buffer,
             },
         );
@@ -5489,14 +5863,70 @@ fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
                 .entry(stk)
                 .or_insert_with(|| name.clone());
         }
-        if local.size > 8 {
+        if size > 8 {
             // Wide buffers may also be addressed at their declared size.
-            let stk = Varnode::stack(raw_offset, local.size.min(255) as u8);
+            let stk = Varnode::stack(raw_offset, size.min(255) as u8);
             ctx.name_overrides
                 .entry(stk)
                 .or_insert_with(|| name.clone());
         }
     }
+}
+
+fn fallback_stack_name(offset: i64, size: u64, is_buffer: bool) -> String {
+    if is_buffer || size > 8 {
+        format!("buf_{}", offset.unsigned_abs())
+    } else {
+        format!("v_{}", offset.unsigned_abs())
+    }
+}
+
+fn canonical_stack_buffer_name(func: &HirFunction, name: &str) -> String {
+    if name.starts_with("buf_") && visible_stack_buffer_count(func) == 1 {
+        "buf".to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+fn visible_stack_buffer_count(func: &HirFunction) -> usize {
+    use unlace_ir::ssa::FrameSlotKind;
+    func.stack_frame
+        .as_ref()
+        .map(|frame| {
+            frame
+                .locals
+                .values()
+                .filter(|local| matches!(local.kind, FrameSlotKind::Local) && local.size > 8)
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+fn inferred_stack_buffer_array_decl(
+    offset: i64,
+    size: u64,
+    ctx: &PrintCtx,
+) -> Option<(&'static str, u64)> {
+    if size < 16 || !size.is_multiple_of(4) {
+        return None;
+    }
+    let end = offset.saturating_add(size as i64);
+    let int_subslots = ctx
+        .stack_lvars
+        .iter()
+        .filter(|(slot, ann)| {
+            **slot > offset && **slot < end && matches!(ann.ty, Some(TypeKind::Int))
+        })
+        .count();
+    (int_subslots >= 2).then_some(("int", size / 4))
+}
+
+fn debug_stack_lvar_name(ctx: &PrintCtx, offset: i64) -> Option<String> {
+    ctx.stack_lvars
+        .get(&offset)
+        .filter(|ann| ann.from_debug && !ann.name.is_empty())
+        .map(|ann| ann.name.clone())
 }
 
 fn compute_suppressed_stack_offsets(func: &HirFunction, ctx: &mut PrintCtx) {
@@ -5611,14 +6041,22 @@ fn promote_stack_buffer(offset: i64, byte_len: u64, ctx: &mut PrintCtx) {
     if byte_len == 0 {
         return;
     }
-    let abs = offset.unsigned_abs();
-    let name = format!("buf_{}", abs);
+    let name = debug_stack_lvar_name(ctx, offset)
+        .unwrap_or_else(|| fallback_stack_name(offset, byte_len, true));
     let size = byte_len.max(
         ctx.stack_frame_slots
             .get(&offset)
             .map(|slot| slot.size)
             .unwrap_or(0),
     );
+    trace_stack_text(format_args!(
+        "promote-buffer offset={} requested={} chosen_size={} name={} debug_name={}",
+        offset,
+        byte_len,
+        size,
+        name,
+        debug_stack_lvar_name(ctx, offset).is_some(),
+    ));
     ctx.promoted_stack_buffers.insert(offset, size);
     ctx.stack_frame_slots.insert(
         offset,
@@ -5636,7 +6074,15 @@ fn synthesize_stack_scalar(offset: i64, size: u8, ctx: &mut PrintCtx) {
     if size == 0 {
         return;
     }
-    let name = format!("v_{}", offset.unsigned_abs());
+    let name = debug_stack_lvar_name(ctx, offset)
+        .unwrap_or_else(|| fallback_stack_name(offset, u64::from(size), false));
+    trace_stack_text(format_args!(
+        "synthesize-scalar offset={} size={} name={} debug_name={}",
+        offset,
+        size,
+        name,
+        debug_stack_lvar_name(ctx, offset).is_some(),
+    ));
     ctx.synthetic_stack_scalars
         .entry(offset)
         .and_modify(|old| *old = (*old).max(size))
@@ -6017,7 +6463,12 @@ fn emit_stack_frame_decls(
         if !stack_frame_offset_is_visible_local(func, offset) {
             continue;
         }
-        let name = format!("buf_{}", offset.unsigned_abs());
+        let name = debug_stack_lvar_name(ctx, offset)
+            .unwrap_or_else(|| fallback_stack_name(offset, size, true));
+        trace_stack_text(format_args!(
+            "emit-promoted-buffer-decl offset={} size={} name={}",
+            offset, size, name
+        ));
         let _ = writeln!(out, "    char {}[{}];", name, size);
         emitted.insert(name);
     }
@@ -6025,17 +6476,20 @@ fn emit_stack_frame_decls(
         if !stack_frame_offset_is_visible_local(func, offset) {
             continue;
         }
-        let name = format!("v_{}", offset.unsigned_abs());
+        let name = debug_stack_lvar_name(ctx, offset)
+            .unwrap_or_else(|| fallback_stack_name(offset, u64::from(size), false));
         if emitted.contains(&name) {
             continue;
         }
-        let ty = match size {
-            1 => "char",
-            2 => "__int16",
-            4 => "int",
-            8 => "__int64",
-            _ => "int",
-        };
+        let ty = ctx
+            .stack_lvars
+            .get(&offset)
+            .and_then(|ann| ann.c_type.as_deref())
+            .unwrap_or_else(|| scalar_stack_type(u64::from(size)));
+        trace_stack_text(format_args!(
+            "emit-synthetic-scalar-decl offset={} size={} name={} ty={}",
+            offset, size, name, ty
+        ));
         let _ = writeln!(out, "    {} {};", ty, name);
         emitted.insert(name);
     }
@@ -6049,37 +6503,94 @@ fn emit_stack_frame_decls(
         if !matches!(local.kind, FrameSlotKind::Local) {
             continue;
         }
-        let abs = local.offset.unsigned_abs();
         // t233: append `/* BYREF */` to slots whose address escapes.
         let byref_marker = if func.byref_locals.contains(&local.offset) {
             " /* BYREF */"
         } else {
             ""
         };
-        if local.size > 8 {
-            let name = format!("buf_{}", abs);
+        let ann = ctx.stack_lvars.get(&local.offset);
+        let size = ann
+            .map(|ann| ann.size.max(local.size))
+            .unwrap_or(local.size);
+        let is_buffer = ann.is_some_and(|ann| ann.is_buffer) || size > 8;
+        let mut name = ann
+            .and_then(|ann| (!ann.name.is_empty()).then(|| ann.name.clone()))
+            .unwrap_or_else(|| fallback_stack_name(local.offset, size, is_buffer));
+        if is_buffer && ann.is_none_or(|ann| !ann.from_debug) {
+            name = canonical_stack_buffer_name(func, &name);
+        }
+        if is_buffer {
             if emitted.contains(&name) {
                 continue;
             }
-            let _ = writeln!(out, "    char {}[{}]{};", name, local.size, byref_marker);
+            if ann.is_none_or(|ann| ann.c_type.is_none())
+                && let Some((elem_ty, elem_count)) =
+                    inferred_stack_buffer_array_decl(local.offset, size, ctx)
+            {
+                trace_stack_text(format_args!(
+                    "emit-frame-typed-buffer-decl offset={} raw_size={} chosen_size={} name={} elem_ty={} elem_count={} byref={} ann_present={}",
+                    local.offset,
+                    local.size,
+                    size,
+                    name,
+                    elem_ty,
+                    elem_count,
+                    !byref_marker.is_empty(),
+                    ann.is_some(),
+                ));
+                let _ = writeln!(
+                    out,
+                    "    char {}[{}]{}; // {} {}[{}]",
+                    name, size, byref_marker, elem_ty, name, elem_count
+                );
+                emitted.insert(name);
+                continue;
+            }
+            trace_stack_text(format_args!(
+                "emit-frame-buffer-decl offset={} raw_size={} chosen_size={} name={} byref={} ann_present={}",
+                local.offset,
+                local.size,
+                size,
+                name,
+                !byref_marker.is_empty(),
+                ann.is_some(),
+            ));
+            let _ = writeln!(out, "    char {}[{}]{};", name, size, byref_marker);
             emitted.insert(name);
         } else {
-            let ty = match local.size {
-                1 => "char",
-                2 => "__int16",
-                4 => "int",
-                8 => "__int64",
-                _ => "int",
-            };
-            let name = format!("v_{}", abs);
+            let ty = ann
+                .and_then(|ann| ann.c_type.as_deref())
+                .unwrap_or_else(|| scalar_stack_type(size));
             if emitted.contains(&name) {
                 continue;
             }
+            trace_stack_text(format_args!(
+                "emit-frame-scalar-decl offset={} raw_size={} chosen_size={} name={} ty={} byref={} ann_present={} ann_from_debug={}",
+                local.offset,
+                local.size,
+                size,
+                name,
+                ty,
+                !byref_marker.is_empty(),
+                ann.is_some(),
+                ann.is_some_and(|ann| ann.from_debug),
+            ));
             let _ = writeln!(out, "    {} {}{};", ty, name, byref_marker);
             emitted.insert(name);
         }
     }
     emitted
+}
+
+fn scalar_stack_type(size: u64) -> &'static str {
+    match size {
+        1 => "char",
+        2 => "__int16",
+        4 => "int",
+        8 => "__int64",
+        _ => "int",
+    }
 }
 
 fn stack_frame_offset_is_visible_local(func: &HirFunction, offset: i64) -> bool {
@@ -6401,6 +6912,10 @@ fn trace_dedupe_var_name(
 /// or another heuristic role) and must be preserved.
 fn apply_override(ctx: &mut PrintCtx, base: &Varnode, name: String) {
     if !is_synthetic_vn_name(ctx.base_names.get(base).map(String::as_str)) {
+        trace_name_text(format_args!(
+            "override-skip base={base:?} requested={name} existing={:?} reason=existing-non-synthetic",
+            ctx.base_names.get(base)
+        ));
         return;
     }
     ctx.name_overrides.insert(*base, name.clone());
@@ -6416,6 +6931,9 @@ fn apply_override(ctx: &mut PrintCtx, base: &Varnode, name: String) {
             }
         })
         .collect();
+    trace_name_text(format_args!(
+        "override-apply base={base:?} name={name} update_svs={to_update:?}"
+    ));
     for sv in to_update {
         ctx.var_names.insert(sv, name.clone());
     }
@@ -6423,8 +6941,16 @@ fn apply_override(ctx: &mut PrintCtx, base: &Varnode, name: String) {
 
 fn apply_ssa_override(ctx: &mut PrintCtx, sv: &SsaVarnode, name: String) {
     if !is_synthetic_vn_name(ctx.var_names.get(sv).map(String::as_str)) {
+        trace_name_text(format_args!(
+            "ssa-override-skip sv={sv:?} requested={name} existing={:?} reason=existing-non-synthetic",
+            ctx.var_names.get(sv)
+        ));
         return;
     }
+    trace_name_text(format_args!(
+        "ssa-override-apply sv={sv:?} name={name} previous={:?}",
+        ctx.var_names.get(sv)
+    ));
     ctx.var_names.insert(*sv, name);
 }
 
@@ -6858,7 +7384,10 @@ fn is_default_v_name(name: &str) -> bool {
 }
 
 fn is_generic_lvar_name(name: &str) -> bool {
-    is_default_v_name(name) || name.strip_prefix('c').is_some_and(is_v_number_suffix)
+    is_default_v_name(name)
+        || name.strip_prefix('c').is_some_and(is_v_number_suffix)
+        || is_arg_number_name(name)
+        || is_arg_versioned_name(name)
 }
 
 /// IDA-style signature type rendering for a [`unlace_ir::types::Type`].
@@ -6969,6 +7498,30 @@ fn dwarf_decl_to_c(dwarf_type: &str, name: &str) -> String {
     } else {
         format!("{ty} {name}{suffix}")
     }
+}
+
+fn cpp_demangled_param_decl(
+    param_types: Option<&[String]>,
+    idx: usize,
+    name: &str,
+) -> Option<String> {
+    let ty = param_types?.get(idx)?.trim();
+    if ty.is_empty() || ty == "void" {
+        return None;
+    }
+    let normalized = normalize_cpp_demangled_type(ty);
+    Some(dwarf_decl_to_c(&normalized, name))
+}
+
+fn normalize_cpp_demangled_type(ty: &str) -> String {
+    let mut normalized = ty
+        .trim()
+        .replace(" const", "")
+        .replace(" volatile", "")
+        .replace(" restrict", "")
+        .replace('&', "*");
+    normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
+    normalized
 }
 
 fn split_dwarf_array_suffix(dwarf_type: &str) -> (usize, String) {
@@ -7845,6 +8398,10 @@ fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) 
             if is_dead_zero_init(insn, stmt_idx, ctx) {
                 return false;
             }
+            if ctx.commented_stmts.contains(&stmt_idx) || ctx.line_comments.contains_key(&insn.addr)
+            {
+                return false;
+            }
             // Don't drop a hoisted variable's declaration into a `return`
             // shortcut — the variable is referenced elsewhere too.
             if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base)
@@ -7874,6 +8431,10 @@ fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) 
             if is_dead_zero_init(insn, stmt_idx, ctx) {
                 return false;
             }
+            if ctx.commented_stmts.contains(&stmt_idx) || ctx.line_comments.contains_key(&insn.addr)
+            {
+                return false;
+            }
             if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base)
                 && plan.stmt_idx == stmt_idx
             {
@@ -7897,7 +8458,8 @@ fn resolve_return_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
     if sv.base.space == SpaceId::Const && sv.base.offset == 0 {
         return "0".to_string();
     }
-    canonicalize_return_expr(resolve_sv_expr(sv, ctx))
+    let ret_sv = ctx.return_value_aliases.get(sv).copied().unwrap_or(*sv);
+    canonicalize_return_expr(resolve_sv_expr(&ret_sv, ctx))
 }
 
 fn canonicalize_return_expr(expr: String) -> String {
@@ -7928,11 +8490,6 @@ fn is_simple_integer_literal(expr: &str) -> bool {
 }
 
 fn resolve_sv_expr_inner(sv: &SsaVarnode, ctx: &mut PrintCtx, allow_covering: bool) -> String {
-    if let Some(alias) = ctx.return_value_aliases.get(sv).copied()
-        && alias != *sv
-    {
-        return resolve_sv_expr_inner(&alias, ctx, false);
-    }
     if sv.base.space == SpaceId::Const {
         if let Some(s) = ctx.string_table.get(&sv.base.offset) {
             return format!("\"{}\"", escape_c_string(s));
@@ -7968,10 +8525,131 @@ fn resolve_sv_expr_inner(sv: &SsaVarnode, ctx: &mut PrintCtx, allow_covering: bo
         ctx.resolving_exprs.remove(sv);
         return rendered;
     }
+    if (ctx.returned_svs.contains(sv) || ctx.return_value_aliases.contains_key(sv))
+        && ctx.sv_use_counts.get(sv).copied().unwrap_or(0) == 1
+        && let Some(def_stmt) = latest_output_stmt_for_sv(sv, ctx)
+        && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
+        && can_inline_return_value_output_stmt(sv, def_stmt, &def_insn, ctx)
+    {
+        if !ctx.resolving_exprs.insert(*sv) {
+            return ctx.name_of(sv);
+        }
+        let rendered = emit_expr(&def_insn, def_stmt, ctx);
+        ctx.resolving_exprs.remove(sv);
+        return rendered;
+    }
+    if let Some(alias) = ctx.return_value_aliases.get(sv).copied()
+        && alias != *sv
+    {
+        return resolve_sv_expr_inner(&alias, ctx, false);
+    }
     if allow_covering && let Some(covering_sv) = latest_covering_register_output(sv, ctx) {
         return ctx.name_of(&covering_sv);
     }
     ctx.name_of(sv)
+}
+
+fn latest_output_stmt_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<u32> {
+    ctx.stmt_outputs
+        .iter()
+        .rev()
+        .find_map(|(&stmt_idx, output)| {
+            output.filter(|candidate| candidate == sv).map(|_| stmt_idx)
+        })
+}
+
+fn can_inline_return_value_output_stmt(
+    sv: &SsaVarnode,
+    stmt_idx: u32,
+    insn: &IrInsn,
+    ctx: &PrintCtx,
+) -> bool {
+    if ctx.commented_stmts.contains(&stmt_idx) || ctx.line_comments.contains_key(&insn.addr) {
+        return false;
+    }
+    if is_never_foldable_op(insn.op)
+        || (insn.op == IrOp::Copy && copy_reads_call_output(stmt_idx, ctx))
+    {
+        return false;
+    }
+    if ctx
+        .stmt_outputs
+        .values()
+        .flatten()
+        .filter(|candidate| *candidate == sv)
+        .count()
+        > 1
+    {
+        return false;
+    }
+    let consumer_stmt = last_consumer_stmt_for_sv(sv, ctx);
+    if let Some(def_path) = ctx.stmt_scope_paths.get(&stmt_idx)
+        && !def_path.is_empty()
+    {
+        let Some(consumer_path) = consumer_stmt.and_then(|stmt| ctx.stmt_scope_paths.get(&stmt))
+        else {
+            return false;
+        };
+        if !path_starts_with(consumer_path, def_path) {
+            return false;
+        }
+    }
+    if has_sibling_base_definition(sv, stmt_idx, consumer_stmt, ctx) {
+        return false;
+    }
+    if let Some(consumer_stmt) = consumer_stmt
+        && (copy_like_snapshot_source_redefined_before_consumer(
+            sv,
+            insn,
+            stmt_idx,
+            consumer_stmt,
+            ctx,
+        ) || expression_inputs_aliased_redefined_before_consumer(
+            sv,
+            insn,
+            stmt_idx,
+            consumer_stmt,
+            ctx,
+        ))
+    {
+        return false;
+    }
+    true
+}
+
+fn has_sibling_base_definition(
+    sv: &SsaVarnode,
+    stmt_idx: u32,
+    consumer_stmt: Option<u32>,
+    ctx: &PrintCtx,
+) -> bool {
+    let Some(path) = ctx.stmt_scope_paths.get(&stmt_idx) else {
+        return false;
+    };
+    if path.is_empty() {
+        return false;
+    }
+    if let Some(consumer_path) = consumer_stmt.and_then(|stmt| ctx.stmt_scope_paths.get(&stmt))
+        && path_starts_with(consumer_path, path)
+    {
+        return false;
+    }
+    ctx.stmt_outputs
+        .iter()
+        .filter_map(|(&other_stmt, output)| output.map(|other_sv| (other_stmt, other_sv)))
+        .any(|(other_stmt, other_sv)| {
+            if other_stmt == stmt_idx || other_sv.base != sv.base {
+                return false;
+            }
+            let Some(other_path) = ctx.stmt_scope_paths.get(&other_stmt) else {
+                return false;
+            };
+            !path_starts_with(path, other_path) && !path_starts_with(other_path, path)
+        })
+}
+
+fn path_starts_with(path: &[u32], prefix: &[u32]) -> bool {
+    path.len() >= prefix.len() && path.iter().zip(prefix).all(|(a, b)| a == b)
 }
 
 fn latest_covering_register_output(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<SsaVarnode> {
@@ -8378,6 +9056,8 @@ fn split_top_level_comma(s: &str) -> Option<(&str, &str)> {
 
 fn c_printer_trace_enabled() -> bool {
     std::env::var_os("UNLACE_CPRINTER_TRACE").is_some()
+        || std::env::var_os("UNLACE_C_PRINTER_TRACE").is_some()
+        || std::env::var_os("UNLACE_TYPE_TRACE").is_some()
         || std::env::var_os("UNLACE_TRACE_ALL").is_some()
 }
 
@@ -8393,8 +9073,23 @@ fn c_printer_flow_trace_enabled() -> bool {
     std::env::var_os("UNLACE_CPRINTER_FLOW_TRACE").is_some() || c_printer_trace_enabled()
 }
 
+fn c_printer_hoist_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_HOIST_TRACE").is_some() || c_printer_trace_enabled()
+}
+
+fn c_printer_temp_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_TEMP_TRACE").is_some() || c_printer_trace_enabled()
+}
+
+fn c_printer_load_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_LOAD_TRACE").is_some() || c_printer_trace_enabled()
+}
+
 fn c_printer_trace_filter() -> Option<String> {
     std::env::var("UNLACE_CPRINTER_TRACE_FILTER")
+        .or_else(|_| std::env::var("UNLACE_C_PRINTER_TRACE_FILTER"))
+        .or_else(|_| std::env::var("UNLACE_TYPE_TRACE_FILTER"))
+        .or_else(|_| std::env::var("UNLACE_TRACE_FILTER"))
         .ok()
         .filter(|s| !s.is_empty())
 }
@@ -8405,6 +9100,16 @@ fn trace_text_matches_filter(text: &str) -> bool {
         .is_none_or(|filter| text.contains(filter))
 }
 
+fn c_printer_trace_line(func_name: &str, message: impl std::fmt::Display) {
+    if !c_printer_trace_enabled() {
+        return;
+    }
+    let text = format!("func={func_name} {message}");
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace c-printer] {text}");
+    }
+}
+
 fn trace_flow(message: impl std::fmt::Display) {
     if !c_printer_flow_trace_enabled() {
         return;
@@ -8412,6 +9117,56 @@ fn trace_flow(message: impl std::fmt::Display) {
     let text = message.to_string();
     if trace_text_matches_filter(&text) {
         eprintln!("[unlace-output] flow {text}");
+    }
+}
+
+fn trace_stack_text(message: impl std::fmt::Display) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] stack {text}");
+    }
+}
+
+fn trace_hoist_text(message: impl std::fmt::Display) {
+    if !c_printer_hoist_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] hoist {text}");
+    }
+}
+
+fn trace_temp_text(message: impl std::fmt::Display) {
+    if !c_printer_temp_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] temp {text}");
+    }
+}
+
+fn trace_load_text(message: impl std::fmt::Display) {
+    if !c_printer_load_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] load {text}");
+    }
+}
+
+fn trace_name_text(message: impl std::fmt::Display) {
+    if !c_printer_name_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] name {text}");
     }
 }
 
@@ -8451,6 +9206,25 @@ fn known_name_of_sv(ctx: &PrintCtx, sv: &SsaVarnode) -> Option<String> {
         .or_else(|| ctx.var_role_names.get(sv))
         .or_else(|| ctx.base_names.get(&sv.base))
         .cloned()
+}
+
+fn known_name_for_base(ctx: &PrintCtx, base: &Varnode) -> Option<String> {
+    ctx.name_overrides
+        .get(base)
+        .or_else(|| ctx.base_names.get(base))
+        .cloned()
+        .or_else(|| {
+            ctx.var_names
+                .iter()
+                .find(|(sv, _)| sv.base == *base)
+                .map(|(_, name)| name.clone())
+        })
+        .or_else(|| {
+            ctx.merged_names
+                .iter()
+                .find(|(sv, _)| sv.base == *base)
+                .map(|(_, name)| name.clone())
+        })
 }
 
 fn trace_name_decision(source: &str, sv: &SsaVarnode, name: &str, ctx: &PrintCtx) {
@@ -9201,6 +9975,13 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 && let Some(eb) = else_body
                 && !eb.is_empty()
             {
+                trace_flow(format_args!(
+                    "emit-if-empty-then-invert depth={depth} stmt={} cond={} else_len={} else_first={}",
+                    ctx.emit_stmt,
+                    cond_expr,
+                    eb.len(),
+                    eb.first().map_or("<none>", hir_node_trace_kind)
+                ));
                 indent(depth, ctx.config.tab_width, out);
                 let _ = writeln!(out, "if ({}) {{", negate_condition_expr(&cond_expr));
                 emit_nodes(eb, depth + 1, ctx, out);
@@ -9256,6 +10037,13 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 && let Some(eb) = else_body
                 && !eb.is_empty()
             {
+                trace_flow(format_args!(
+                    "emit-ifcmp-empty-then-invert depth={depth} stmt={} cond={} else_len={} else_first={}",
+                    ctx.emit_stmt,
+                    cond_expr,
+                    eb.len(),
+                    eb.first().map_or("<none>", hir_node_trace_kind)
+                ));
                 indent(depth, ctx.config.tab_width, out);
                 let _ = writeln!(out, "if ({}) {{", negate_condition_expr(&cond_expr));
                 emit_nodes(eb, depth + 1, ctx, out);
@@ -10696,6 +11484,12 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
         }
         return None;
     }
+    if ctx.commented_stmts.contains(&idx) || ctx.line_comments.contains_key(&insn.addr) {
+        if c_printer_trace_enabled() {
+            eprintln!("[unlace-output] inline stmt={idx} decision=defer-comment");
+        }
+        return None;
+    }
     if matches!(insn.op, IrOp::Call | IrOp::Callind)
         && (ctx.panic_sites.contains_key(&insn.addr) || cxa_call_annotation(insn, ctx).is_some())
     {
@@ -10986,6 +11780,9 @@ fn format_inline_assignment(
 fn hoisted_decl_for_stmt(idx: u32, sv: &SsaVarnode, ctx: &PrintCtx) -> Option<(String, String)> {
     let plan = ctx.hoist_decl_plan.get(&sv.base)?;
     if plan.stmt_idx != idx || !plan.fold_into_assignment {
+        trace_hoist_text(format_args!(
+            "stmt={idx} sv={sv:?} decision=skip-anchor plan={plan:?}"
+        ));
         return None;
     }
     if ctx
@@ -10993,6 +11790,10 @@ fn hoisted_decl_for_stmt(idx: u32, sv: &SsaVarnode, ctx: &PrintCtx) -> Option<(S
         .get(sv)
         .is_some_and(|name| ctx.top_declared_names.contains(name))
     {
+        trace_hoist_text(format_args!(
+            "stmt={idx} sv={sv:?} decision=skip-top-declared name={:?}",
+            ctx.var_names.get(sv)
+        ));
         return None;
     }
     let ty = ctx
@@ -11013,6 +11814,9 @@ fn hoisted_decl_for_stmt(idx: u32, sv: &SsaVarnode, ctx: &PrintCtx) -> Option<(S
         (None, false) => format!("; //{}", byref_suffix),
         (None, true) => ";".to_string(),
     };
+    trace_hoist_text(format_args!(
+        "stmt={idx} sv={sv:?} decision=emit prefix={prefix:?} terminator={terminator:?}"
+    ));
     Some((prefix, terminator))
 }
 
@@ -11362,7 +12166,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 // ---------------------------------------------------------------------------
 //
 // This mirrors Hex-Rays' off_4E0320 lookup table, ported via sub_25F3C0
-// (`references/hexrays/ida_dump/hexx64/all/sub_25F3C0.c`).  In IDA's scheme,
+// (`research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_25F3C0.c`).  In IDA's scheme,
 // a *lower* precedence value binds *tighter* — opposite of the textbook
 // "higher binds tighter" convention.  We adopt IDA's numbering so the
 // algorithm in `needs_parens` ports directly without sign flips.
@@ -11530,7 +12334,7 @@ impl ParentCtx {
 /// nested inside the context described by `parent`.
 ///
 /// Direct port of Hex-Rays' `sub_25F3C0`
-/// (`references/hexrays/ida_dump/hexx64/all/sub_25F3C0.c`).  See the file
+/// (`research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_25F3C0.c`).  See the file
 /// header for the level numbering convention.
 fn needs_parens(child_op: IrOp, parent: ParentCtx) -> bool {
     // No parent → never paren.
@@ -13612,16 +14416,137 @@ fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) 
     }
     let load_size = insn.output.map_or(8, |o| o.size);
     let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
-    addr_idx < insn.inputs.len()
-        && (try_stack_frame_access_name(
-            &insn.inputs[addr_idx],
-            Some(addr_idx),
-            stmt_idx,
-            load_size,
-            ctx,
-        )
-        .is_some()
-            || field_load_expr_is_stable(&insn.inputs[addr_idx], stmt_idx, ctx))
+    if addr_idx >= insn.inputs.len() {
+        trace_load_text(format_args!(
+            "stable-load stmt={stmt_idx} decision=false reason=missing-address"
+        ));
+        return false;
+    }
+    let addr = &insn.inputs[addr_idx];
+    if try_stack_frame_access_name(addr, Some(addr_idx), stmt_idx, load_size, ctx).is_some() {
+        trace_load_text(format_args!(
+            "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=stack-frame"
+        ));
+        return true;
+    }
+    if field_load_expr_is_stable(addr, stmt_idx, ctx) {
+        trace_load_text(format_args!(
+            "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=field"
+        ));
+        return true;
+    }
+    if single_use_static_load_expr_is_inlineable(insn, stmt_idx, addr_idx, load_size, ctx) {
+        trace_load_text(format_args!(
+            "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=single-use-static"
+        ));
+        return true;
+    }
+    trace_load_text(format_args!(
+        "stable-load stmt={stmt_idx} addr={addr:?} decision=false reason=unstable"
+    ));
+    false
+}
+
+fn single_use_static_load_expr_is_inlineable(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    addr_idx: usize,
+    load_size: u8,
+    ctx: &PrintCtx,
+) -> bool {
+    let Some(addr) = insn.inputs.get(addr_idx) else {
+        return false;
+    };
+    if try_global_var_name(addr, Some(addr_idx), stmt_idx, load_size, ctx).is_none() {
+        trace_load_text(format_args!(
+            "single-use-static-load stmt={stmt_idx} decision=false reason=not-static addr={addr:?}"
+        ));
+        return false;
+    }
+    let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
+        trace_load_text(format_args!(
+            "single-use-static-load stmt={stmt_idx} decision=false reason=missing-output"
+        ));
+        return false;
+    };
+    let use_count = ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0);
+    if use_count != 1 {
+        trace_load_text(format_args!(
+            "single-use-static-load stmt={stmt_idx} out={out_sv:?} uses={use_count} decision=false reason=not-single-use"
+        ));
+        return false;
+    }
+    let Some(consumer_stmt) = last_consumer_stmt_for_sv(&out_sv, ctx) else {
+        trace_load_text(format_args!(
+            "single-use-static-load stmt={stmt_idx} out={out_sv:?} decision=false reason=no-consumer"
+        ));
+        return false;
+    };
+    if consumer_stmt <= stmt_idx {
+        trace_load_text(format_args!(
+            "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=consumer-before-def"
+        ));
+        return false;
+    }
+    if consumer_uses_sv_as_indirect_call_target(&out_sv, consumer_stmt, ctx) {
+        trace_load_text(format_args!(
+            "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=call-target"
+        ));
+        return false;
+    }
+    let def_path = ctx
+        .stmt_scope_paths
+        .get(&stmt_idx)
+        .cloned()
+        .unwrap_or_default();
+    let consumer_path = ctx
+        .stmt_scope_paths
+        .get(&consumer_stmt)
+        .cloned()
+        .unwrap_or_default();
+    if !consumer_path.starts_with(&def_path) {
+        trace_load_text(format_args!(
+            "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=scope consumer_path={consumer_path:?} def_path={def_path:?}"
+        ));
+        return false;
+    }
+    let first_between = stmt_idx.saturating_add(1);
+    for (&between_stmt, between_insn) in ctx.stmt_insns.range(first_between..consumer_stmt) {
+        if instr_has_side_effects(between_insn) {
+            trace_load_text(format_args!(
+                "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=side-effect-between between={between_stmt} op={:?}",
+                between_insn.op
+            ));
+            return false;
+        }
+    }
+    trace_load_text(format_args!(
+        "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=true"
+    ));
+    true
+}
+
+fn consumer_uses_sv_as_indirect_call_target(
+    sv: &SsaVarnode,
+    consumer_stmt: u32,
+    ctx: &PrintCtx,
+) -> bool {
+    if !ctx
+        .stmt_insns
+        .get(&consumer_stmt)
+        .is_some_and(|insn| insn.op == IrOp::Callind)
+    {
+        return false;
+    }
+    ctx.stmt_input_slots
+        .get(&consumer_stmt)
+        .and_then(|slots| slots.get(&0))
+        .is_some_and(|target| target == sv)
+        || ctx
+            .stmt_inputs
+            .get(&consumer_stmt)
+            .and_then(|inputs| inputs.first())
+            .is_some_and(|target| target == sv)
 }
 
 fn field_load_expr_is_stable(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
@@ -14681,6 +15606,32 @@ fn indent(depth: usize, tab_width: usize, out: &mut String) {
 }
 
 fn prune_unused_plain_local_decls(output: String) -> String {
+    let max_passes = if output_has_cond_family_temp(&output) {
+        8
+    } else {
+        4
+    };
+    if prune_trace_enabled() {
+        eprintln!("[unlace-output] decl-prune begin max_passes={max_passes}");
+    }
+    let mut current = output;
+    for pass in 0..max_passes {
+        let next = prune_unused_plain_local_decls_once(&current, pass);
+        if next == current {
+            if prune_trace_enabled() {
+                eprintln!("[unlace-output] decl-prune fixpoint reached after pass={pass}");
+            }
+            return next;
+        }
+        current = next;
+    }
+    if prune_trace_enabled() {
+        eprintln!("[unlace-output] decl-prune hit {max_passes}-pass cap without fixpoint");
+    }
+    current
+}
+
+fn prune_unused_plain_local_decls_once(output: &str, pass: u32) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let mut remove = BTreeSet::new();
 
@@ -14722,14 +15673,58 @@ fn prune_unused_plain_local_decls(output: String) -> String {
                 remove.insert(line_idx);
             }
             if prune_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] decl-prune line={} name={name} block=[{}..{}) decision={}",
+                let text = format!(
+                    "decl-prune pass={pass} line={} name={name} block=[{}..{}) decision={}",
                     line_idx + 1,
                     body_start + 1,
                     body_end + 1,
                     if used_later { "keep" } else { "remove" }
                 );
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
             }
+        }
+    }
+
+    if remove.is_empty() {
+        return output.to_string();
+    }
+
+    let mut pruned = String::with_capacity(output.len());
+    for (idx, line) in lines.iter().enumerate() {
+        if remove.contains(&idx) {
+            continue;
+        }
+        pruned.push_str(line);
+        pruned.push('\n');
+    }
+    pruned
+}
+
+/// Drop an unconditional `goto L;` when the very next emitted statement is
+/// `L:`. The label itself is preserved here because other gotos may still
+/// target it; the following `unused-labels` stage removes it when this was the
+/// only reference.
+fn prune_fallthrough_gotos(output: String) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let mut remove = BTreeSet::new();
+
+    for idx in 0..lines.len().saturating_sub(1) {
+        let Some(target) = parse_goto_target(lines[idx]) else {
+            continue;
+        };
+        let Some(label) = parse_label_definition(lines[idx + 1]) else {
+            continue;
+        };
+        if target == label {
+            if prune_trace_enabled() {
+                eprintln!(
+                    "[unlace-output] fallthrough-goto-prune line={} target={target}",
+                    idx + 1
+                );
+            }
+            remove.insert(idx);
         }
     }
 
@@ -14804,6 +15799,13 @@ fn parse_label_definition(line: &str) -> Option<String> {
     Some(name.to_string())
 }
 
+fn parse_goto_target(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    let rest = trimmed.strip_prefix("goto ")?;
+    let target = rest.trim_end_matches(';').trim();
+    is_c_identifier(target).then_some(target.to_string())
+}
+
 fn brace_delta(line: &str) -> i32 {
     line.chars().fold(0, |depth, ch| match ch {
         '{' => depth + 1,
@@ -14826,6 +15828,7 @@ fn declare_missing_control_v_decls(output: String) -> String {
                 in_function = true;
                 pending_decls.clear();
                 declared.clear();
+                collect_function_header_param_names(line, &mut declared);
                 body_lines.clear();
                 out.push_str(line);
                 out.push('\n');
@@ -14839,10 +15842,15 @@ fn declare_missing_control_v_decls(output: String) -> String {
         if line == "}" {
             for name in &pending_decls {
                 if !declared.contains(name) {
-                    if c_printer_trace_enabled() {
-                        eprintln!("[unlace-output] post-declare control missing name={name}");
-                    }
+                    trace_temp_text(format_args!(
+                        "declare-control name={name} decision=insert declared={:?}",
+                        declared
+                    ));
                     let _ = writeln!(out, "    int {}; // temp", name);
+                } else {
+                    trace_temp_text(format_args!(
+                        "declare-control name={name} decision=skip-already-declared"
+                    ));
                 }
             }
             for body_line in &body_lines {
@@ -14857,9 +15865,21 @@ fn declare_missing_control_v_decls(output: String) -> String {
 
         if let Some(name) = parse_shadowing_local_decl_name(line) {
             declared.insert(name.to_string());
+            trace_temp_text(format_args!(
+                "declare-control line={:?} declared-name={name}",
+                line.trim()
+            ));
         }
         if is_control_line(line) {
+            let before = pending_decls.len();
             collect_v_number_names(line, &mut pending_decls);
+            if pending_decls.len() != before {
+                trace_temp_text(format_args!(
+                    "declare-control line={:?} pending={:?}",
+                    line.trim(),
+                    pending_decls
+                ));
+            }
         }
         body_lines.push(line);
     }
@@ -14888,6 +15908,7 @@ fn declare_missing_temp_v_decls(output: String) -> String {
                 in_function = true;
                 pending_decls.clear();
                 declared.clear();
+                collect_function_header_param_names(line, &mut declared);
                 body_lines.clear();
                 out.push_str(line);
                 out.push('\n');
@@ -14901,10 +15922,15 @@ fn declare_missing_temp_v_decls(output: String) -> String {
         if line == "}" {
             for name in &pending_decls {
                 if !declared.contains(name) {
-                    if c_printer_trace_enabled() {
-                        eprintln!("[unlace-output] post-declare temp missing name={name}");
-                    }
+                    trace_temp_text(format_args!(
+                        "declare-temp name={name} decision=insert declared={:?}",
+                        declared
+                    ));
                     let _ = writeln!(out, "    __int64 {}; // temp", name);
+                } else {
+                    trace_temp_text(format_args!(
+                        "declare-temp name={name} decision=skip-already-declared"
+                    ));
                 }
             }
             for body_line in &body_lines {
@@ -14919,8 +15945,20 @@ fn declare_missing_temp_v_decls(output: String) -> String {
 
         if let Some(name) = parse_shadowing_local_decl_name(line) {
             declared.insert(name.to_string());
+            trace_temp_text(format_args!(
+                "declare-temp line={:?} declared-name={name}",
+                line.trim()
+            ));
         }
+        let before = pending_decls.len();
         collect_v_number_names(line, &mut pending_decls);
+        if pending_decls.len() != before {
+            trace_temp_text(format_args!(
+                "declare-temp line={:?} pending={:?}",
+                line.trim(),
+                pending_decls
+            ));
+        }
         body_lines.push(line);
     }
 
@@ -15088,7 +16126,14 @@ fn collect_v_number_names(line: &str, names: &mut BTreeSet<String>) {
         let starts_arg_version = bytes[idx] == b'a'
             && bytes.get(idx + 1).is_some_and(|b| b.is_ascii_digit())
             && bytes.get(idx + 2) == Some(&b'_');
-        if !starts_temp && !starts_coalesced && !starts_cond && !starts_arg_version {
+        let starts_arg_number =
+            bytes[idx] == b'a' && bytes.get(idx + 1).is_some_and(|b| b.is_ascii_digit());
+        if !starts_temp
+            && !starts_coalesced
+            && !starts_cond
+            && !starts_arg_version
+            && !starts_arg_number
+        {
             idx += 1;
             continue;
         }
@@ -15129,6 +16174,42 @@ fn collect_v_number_names(line: &str, names: &mut BTreeSet<String>) {
         let after_ok = idx == bytes.len() || !is_ident_byte(bytes[idx]);
         if before_ok && after_ok {
             names.insert(line[start..idx].to_string());
+        }
+    }
+}
+
+fn collect_function_header_param_names(line: &str, names: &mut BTreeSet<String>) {
+    let trimmed = line.trim();
+    if !trimmed.ends_with('{') {
+        return;
+    }
+    let Some(open) = trimmed.find('(') else {
+        return;
+    };
+    let Some(close) = trimmed.rfind(')') else {
+        return;
+    };
+    if close <= open {
+        return;
+    }
+    let params = trimmed[open + 1..close].trim();
+    if params.is_empty() || params == "void" {
+        return;
+    }
+    for param in params.split(',') {
+        let param = param.trim();
+        if param.is_empty() || param == "..." || param == "void" {
+            continue;
+        }
+        let Some(raw_name) = param.split_whitespace().last() else {
+            continue;
+        };
+        let name = raw_name
+            .trim_start_matches('*')
+            .split_once('[')
+            .map_or(raw_name.trim_start_matches('*'), |(name, _)| name);
+        if is_c_identifier(name) {
+            names.insert(name.to_string());
         }
     }
 }
@@ -15220,6 +16301,11 @@ fn output_has_cond_family_temp(output: &str) -> bool {
 
 fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
     let lines: Vec<&str> = output.lines().collect();
+    let temp_decl_names: BTreeSet<String> = lines
+        .iter()
+        .filter(|line| line.contains("// temp"))
+        .filter_map(|line| parse_shadowing_local_decl_name(line).map(str::to_string))
+        .collect();
     let mut changed = false;
     let mut pruned_lines = Vec::with_capacity(lines.len());
 
@@ -15249,11 +16335,12 @@ fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
                 }
 
                 // A re-assignment to the same lhs counts as a genuine use ONLY
-                // for non-cond-family locals. For `cond`/`cond_N` flag temps the
-                // chain `cond = 0; … cond = a < b;` is pure dead scaffolding, so
-                // a re-write does NOT keep the earlier write alive. For real
-                // register values a re-write IS observable.
-                let treat_reassign_as_use = !is_cond_family;
+                // for non-cond-family locals that were not explicitly emitted
+                // as `// temp`. For `cond`/`cond_N` flag temps and synthetic
+                // `vN // temp` scaffolding, a later write does NOT keep an
+                // earlier write alive. Real register-commented values (`// r10d`,
+                // `// reg?`, etc.) keep the conservative live-out behavior.
+                let treat_reassign_as_use = !is_cond_family && !temp_decl_names.contains(lhs);
                 let is_real_use = |later: &str| {
                     if treat_reassign_as_use {
                         contains_identifier(later, lhs)
@@ -15793,14 +16880,14 @@ fn is_known_pure_macro_call(name: &str) -> bool {
 }
 
 fn is_prunable_synthetic_local(name: &str) -> bool {
-    matches!(name, "cond" | "result")
+    matches!(name, "cond" | "result" | "pfn")
         || is_v_number_name(name)
         || is_coalesced_number_name(name)
         || is_cond_number_name(name)
 }
 
 fn is_decl_synthetic_local(name: &str) -> bool {
-    is_prunable_synthetic_local(name) || is_arg_versioned_name(name)
+    is_prunable_synthetic_local(name) || is_arg_versioned_name(name) || is_arg_number_name(name)
 }
 
 fn is_v_number_name(name: &str) -> bool {
@@ -15845,6 +16932,13 @@ fn is_arg_versioned_name(name: &str) -> bool {
         && arg.bytes().all(|b| b.is_ascii_digit())
         && !version.is_empty()
         && version.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn is_arg_number_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('a') else {
+        return false;
+    };
+    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
 }
 
 fn contains_identifier(haystack: &str, needle: &str) -> bool {
@@ -16599,6 +17693,36 @@ mod tests {
     }
 
     #[test]
+    fn test_prune_fallthrough_gotos_preserves_shared_label() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    if (v1) {\n",
+            "        goto label_1;\n",
+            "    }\n",
+            "    goto label_1;\n",
+            "label_1:;\n",
+            "    return 0;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_unused_labels(super::prune_fallthrough_gotos(output));
+
+        assert!(
+            !pruned.contains("    goto label_1;\nlabel_1:;"),
+            "fallthrough goto should be removed: {pruned}"
+        );
+        assert!(
+            pruned.contains("        goto label_1;"),
+            "non-fallthrough goto should still target the preserved label: {pruned}"
+        );
+        assert!(
+            pruned.contains("label_1:;"),
+            "shared target label must remain: {pruned}"
+        );
+    }
+
+    #[test]
     fn test_prune_unused_labels_ignores_comments_and_strings() {
         // A label-looking token inside a comment or string literal must not be
         // treated as a definition (parse_label_definition requires the line to
@@ -16669,6 +17793,24 @@ mod tests {
     }
 
     #[test]
+    fn test_prune_unused_plain_local_decls_reaches_fixpoint() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    int v1 = a1; // temp\n",
+            "    int v2 = v1 + 1; // temp\n",
+            "    return 0;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_unused_plain_local_decls(output);
+
+        assert!(!pruned.contains("v1"), "{pruned}");
+        assert!(!pruned.contains("v2"), "{pruned}");
+        assert!(pruned.contains("return 0;"), "{pruned}");
+    }
+
+    #[test]
     fn test_dedupe_var_names_keeps_alias_param_versions_together() {
         let full = SsaVarnode {
             base: reg(16, 8),
@@ -16713,6 +17855,61 @@ mod tests {
 
         assert!(pruned.contains("a3_1 = 0xaLL;"), "{pruned}");
         assert!(pruned.contains("a4_1 = 0LL;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_prune_dead_plain_assignments_collapses_temp_rewrites() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    int v1; // temp\n",
+            "    v1 = 1;\n",
+            "    v1 = 2;\n",
+            "    return 0;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned =
+            super::prune_unused_plain_local_decls(super::prune_dead_plain_assignments(output));
+
+        assert!(!pruned.contains("v1 = 1;"), "{pruned}");
+        assert!(!pruned.contains("v1 = 2;"), "{pruned}");
+        assert!(!pruned.contains("int v1;"), "{pruned}");
+        assert!(pruned.contains("return 0;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_prune_unused_plain_local_decls_drops_dead_pfn_scaffold() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    _QWORD pfn; // temp\n",
+            "    return 0;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_unused_plain_local_decls(output);
+
+        assert!(!pruned.contains("pfn"), "{pruned}");
+        assert!(pruned.contains("return 0;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_prune_dead_plain_assignments_keeps_register_rewrite_liveout() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    int v1; // r10d\n",
+            "    v1 = 1;\n",
+            "    v1 = 2;\n",
+            "    return;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_dead_plain_assignments(output);
+
+        assert!(pruned.contains("v1 = 1;"), "{pruned}");
+        assert!(!pruned.contains("v1 = 2;"), "{pruned}");
     }
 
     #[test]
@@ -16870,6 +18067,23 @@ mod tests {
         assert!(declared.contains("__int64 a3_1; // temp"), "{declared}");
         assert!(declared.contains("__int64 a4_1; // temp"), "{declared}");
         assert_eq!(declared.matches("__int64 a4_13;").count(), 1, "{declared}");
+    }
+
+    #[test]
+    fn test_declare_missing_temp_decls_handles_bare_arg_temp() {
+        let output = concat!(
+            "int f(int a1) {\n",
+            "    a1 = a1 + 1LL;\n",
+            "    a5 = a1 + 2LL;\n",
+            "    return a5;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let declared = super::declare_missing_temp_v_decls(output);
+
+        assert!(declared.contains("__int64 a5; // temp"), "{declared}");
+        assert!(!declared.contains("__int64 a1; // temp"), "{declared}");
     }
 
     #[test]
@@ -17176,6 +18390,140 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_hoist_merged_temp_decl_from_var_names() {
+        // Regression for leaked-temp suppression: merged/coalesced names are
+        // stored in `ctx.var_names`, not always `ctx.base_names`.  The hoist
+        // planner must still fold the declaration into the first assignment
+        // instead of leaking `int v1;` at function top.
+        let u0 = Varnode::unique(0x100, 4);
+        let r8 = reg(8, 4);
+        let r16 = reg(16, 4);
+        let call_target = con(0x2000, 8);
+        let c2 = con(2, 4);
+        let c3 = con(3, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Call,
+                u0,
+                smallvec![call_target],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r8,
+                smallvec![u0, c2],
+                0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r16,
+                smallvec![u0, c3],
+                0x1008,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r16,
+                version: 0,
+            })),
+        ];
+
+        let mut func = make_func("hoist_merged", body);
+        func.merged_names.insert(
+            SsaVarnode {
+                base: u0,
+                version: 0,
+            },
+            "v1".to_string(),
+        );
+
+        let output = print_c(&func);
+
+        assert!(output.contains("int v1 = sub_2000();"), "{output}");
+        assert!(
+            !output.contains("\n    int v1;\n"),
+            "merged temp should not leak a function-top declaration: {output}",
+        );
+    }
+
+    #[test]
+    fn test_hoist_shared_merged_name_declares_once() {
+        // Two disjoint unique bases can share one merged name.  The first
+        // assignment may carry the declaration; later assignments to the same
+        // source-level name must remain plain assignments, not redeclarations.
+        let u0 = Varnode::unique(0x100, 4);
+        let u4 = Varnode::unique(0x104, 4);
+        let r8 = reg(8, 4);
+        let r16 = reg(16, 4);
+        let r24 = reg(24, 4);
+        let r32 = reg(32, 4);
+        let call_a = con(0x2000, 8);
+        let call_b = con(0x2004, 8);
+        let c2 = con(2, 4);
+        let c3 = con(3, 4);
+        let c5 = con(5, 4);
+        let c6 = con(6, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Call,
+                u0,
+                smallvec![call_a],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r8,
+                smallvec![u0, c2],
+                0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r16,
+                smallvec![u0, c3],
+                0x1008,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Call,
+                u4,
+                smallvec![call_b],
+                0x100c,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r24,
+                smallvec![u4, c5],
+                0x1010,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r32,
+                smallvec![u4, c6],
+                0x1014,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r32,
+                version: 0,
+            })),
+        ];
+
+        let mut func = make_func("hoist_shared", body);
+        for base in [u0, u4] {
+            func.merged_names
+                .insert(SsaVarnode { base, version: 0 }, "v1".to_string());
+        }
+
+        let output = print_c(&func);
+
+        assert_eq!(output.matches("int v1 = ").count(), 1, "{output}");
+        assert!(output.contains("int v1 = sub_2000();"), "{output}");
+        assert!(output.contains("v1 = sub_2004();"), "{output}");
+        assert!(
+            !output.contains("int v1 = sub_2004();"),
+            "shared merged name must not be redeclared: {output}",
+        );
+    }
+
     /// When `merged_names` is empty (pass not run) the printer still folds a
     /// trivial return temporary instead of forcing a synthetic result local.
     #[test]
@@ -17274,6 +18622,42 @@ mod tests {
         assert!(
             !function_body_text(&output, "role_cn").contains("c0"),
             "generic cN name leaked despite role name: {output}",
+        );
+    }
+
+    #[test]
+    fn t227_var_role_name_overrides_generic_argument_name() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r8, c1],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let mut func = make_func("role_arg", body);
+        let r8_sv = SsaVarnode {
+            base: r8,
+            version: 0,
+        };
+        func.merged_names.insert(r8_sv, "a1".to_string());
+        func.var_role_names.insert(r8_sv, "this".to_string());
+
+        let output = print_c(&func);
+        let body_text = function_body_text(&output, "role_arg");
+        assert!(
+            body_text.contains(" this "),
+            "role name should beat generic ABI argument name: {body_text}"
+        );
+        assert!(
+            !body_text.contains(" a1 "),
+            "generic argument name leaked despite stronger role name: {body_text}"
         );
     }
 
@@ -17593,18 +18977,23 @@ mod tests {
         let func = make_func("goto_test", body);
         let output = print_c(&func);
 
-        assert!(output.contains("goto label_0;"), "goto: {output}");
-        assert!(output.contains("label_0:;"), "label: {output}");
+        assert!(
+            !output.contains("goto label_0;"),
+            "fallthrough goto should be pruned: {output}"
+        );
+        assert!(
+            !output.contains("label_0:;"),
+            "now-unreferenced fallthrough label should be pruned: {output}"
+        );
     }
 
     #[test]
     fn test_print_goto_keeps_non_adjacent_later_label() {
         let body = vec![
             HirNode::Goto(LabelId(1)),
-            HirNode::Statement(IrInsn::with_output(
-                IrOp::Copy,
-                reg(0, 4),
-                smallvec![con(7, 4)],
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![con(0x1234, 8)],
                 0x1000,
             )),
             HirNode::Label(LabelId(1)),
@@ -23695,6 +25084,66 @@ mod tests {
     }
 
     #[test]
+    fn test_t232_single_int_stack_buffer_emits_int_array_buf() {
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        let mut func = make_func("t232_int_array_buf", vec![HirNode::Return(None)]);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            0,
+            StackLocal {
+                offset: 0,
+                size: 64,
+                access_widths: vec![4, 16],
+                kind: Default::default(),
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 64,
+            max_pos_offset: 64,
+            min_neg_offset: 0,
+        });
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.stack_lvars.insert(
+            0,
+            super::StackLvarAnnotation {
+                name: "buf_0".to_string(),
+                c_type: None,
+                ty: Some(unlace_ir::types::TypeKind::VoidPtr),
+                size: 64,
+                is_buffer: true,
+                from_debug: false,
+            },
+        );
+        for offset in [16, 32, 48] {
+            ann.stack_lvars.insert(
+                offset,
+                super::StackLvarAnnotation {
+                    name: format!("buf_{offset}"),
+                    c_type: None,
+                    ty: Some(unlace_ir::types::TypeKind::Int),
+                    size: 4,
+                    is_buffer: false,
+                    from_debug: false,
+                },
+            );
+        }
+
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+        assert!(
+            output.contains("char buf[64]; // int buf[16]"),
+            "64-byte stack storage should stay byte-addressed while surfacing `int buf[16]`: {output}",
+        );
+        assert!(
+            !output.contains("buf_0"),
+            "single stack buffer should use canonical `buf` name: {output}",
+        );
+    }
+
+    #[test]
     fn test_t232_stack_frame_access_uses_recovered_name() {
         // Access `*(rsp+offset)` after a recovered local at the same offset
         // should render as the local's name instead of the synthetic `vN`.
@@ -23802,6 +25251,76 @@ mod tests {
         assert!(
             !output.contains("*(int *)(0LL)") && !output.contains("*(_DWORD *)(0LL)"),
             "RSP-derived stack store must not fall back to a null deref: {output}",
+        );
+    }
+
+    #[test]
+    fn test_t232_stack_lvar_annotation_supplies_name_and_decl_type() {
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        let rsp = reg(32, 8);
+        let addr = Varnode::unique(0x100, 8);
+        let ram = con(1, 8);
+        let five = con(5, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSub,
+                addr,
+                smallvec![rsp, con(8, 8)],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![ram, addr, five],
+                0x1004,
+            )),
+            HirNode::Return(None),
+        ];
+        let mut func = make_func("t232_lvar_name", body);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 4,
+                access_widths: vec![4],
+                kind: Default::default(),
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 4,
+            max_pos_offset: -4,
+            min_neg_offset: -8,
+        });
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.stack_lvars.insert(
+            -8,
+            super::StackLvarAnnotation {
+                name: "counter".to_string(),
+                c_type: Some("int".to_string()),
+                ty: Some(unlace_ir::types::TypeKind::Int),
+                size: 4,
+                is_buffer: false,
+                from_debug: true,
+            },
+        );
+
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+        assert!(
+            output.contains("int counter;"),
+            "stack lvar annotation should drive declaration: {output}",
+        );
+        assert!(
+            output.contains("counter = 5;"),
+            "stack lvar annotation should drive stack access name: {output}",
+        );
+        assert!(
+            !output.contains("v_8"),
+            "printer should not fall back to synthetic stack name: {output}",
         );
     }
 
@@ -23938,7 +25457,7 @@ mod tests {
     #[test]
     fn test_t232_array_slot_renders_as_buf() {
         // A `StackLocal` whose size exceeds 8 bytes is rendered as a
-        // `char buf_<offset>[size];` declaration.
+        // `char buf[size];` declaration when it is the only visible buffer.
         use unlace_ir::ssa::{StackFrame, StackLocal};
 
         let mut func = make_func("t232_array", vec![HirNode::Return(None)]);
@@ -23961,8 +25480,8 @@ mod tests {
 
         let output = print_c(&func);
         assert!(
-            output.contains("char buf_32[16];"),
-            "expected `char buf_32[16];` decl, got:\n{output}",
+            output.contains("char buf[16];"),
+            "expected `char buf[16];` decl, got:\n{output}",
         );
     }
 
@@ -27851,6 +29370,82 @@ mod tests {
         assert!(
             !output.contains("MEMORY["),
             "known-section global must NOT render via MEMORY[…]: {output}"
+        );
+    }
+
+    #[test]
+    fn test_single_use_static_load_inlines_into_condition() {
+        let space = con(0, 8);
+        let addr = con(0x404000, 8);
+        let loaded = Varnode::unique(0x100, 8);
+        let cmp = Varnode::unique(0x200, 1);
+
+        let load = IrInsn::with_output(IrOp::Load, loaded, smallvec![space, addr], 0x1000);
+        let eq = IrInsn::with_output(IrOp::IntEqual, cmp, smallvec![loaded, con(0, 8)], 0x1004);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Statement(eq),
+            HirNode::If {
+                cond: SsaVarnode {
+                    base: cmp,
+                    version: 0,
+                },
+                then_body: vec![HirNode::Return(None)],
+                else_body: None,
+            },
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("single_use_static_load_cond", body);
+        let mut symbols = std::collections::BTreeMap::new();
+        symbols.insert(0x404000u64, "g_flag".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+        let body = function_body_text(&output, "single_use_static_load_cond");
+
+        assert!(
+            body.contains("if (g_flag == 0LL)"),
+            "condition should read the static symbol directly:\n{body}"
+        );
+        assert!(
+            !body.contains("= g_flag; // temp"),
+            "single-use static load must not leak as a temp decl:\n{body}"
+        );
+    }
+
+    #[test]
+    fn test_single_use_static_load_keeps_indirect_call_target_named() {
+        let space = con(0, 8);
+        let addr = con(0x404000, 8);
+        let loaded = Varnode::unique(0x100, 8);
+
+        let load = IrInsn::with_output(IrOp::Load, loaded, smallvec![space, addr], 0x1000);
+        let call = IrInsn::without_output(IrOp::Callind, smallvec![loaded], 0x1004);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Statement(call),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("single_use_static_load_call_target", body);
+        let mut symbols = std::collections::BTreeMap::new();
+        symbols.insert(0x404000u64, "g_funcptr".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+        let body = function_body_text(&output, "single_use_static_load_call_target");
+
+        assert!(
+            body.contains("pfn = g_funcptr;"),
+            "indirect-call target load should stay materialized as pfn:\n{body}"
+        );
+        assert!(
+            body.contains("((void (*)())pfn)();") || body.contains("((__int64 (*)())pfn)();"),
+            "CALLIND should use the named pfn target:\n{body}"
+        );
+        assert!(
+            !body.contains("((void (*)())g_funcptr)()")
+                && !body.contains("((__int64 (*)())g_funcptr)()"),
+            "static call target must not be inlined into the cast:\n{body}"
         );
     }
 

@@ -46,11 +46,11 @@ t.remove(id);
 
 - `research/ida-hexrays-docs/sdk/dbg/` — 87 SDK files showing IDA's
   debugger plugin interface.
-- `references/ida/plugins/linux_user/all/` — 610 decompiled functions
+- `research/decompiled-references/ida/plugins/linux_user/all/` — 610 decompiled functions
   of IDA's local Linux debugger (the reference for the Linux backend).
-- `references/ida/plugins/gdb_user/all/` — 984 decompiled functions of
+- `research/decompiled-references/ida/plugins/gdb_user/all/` — 984 decompiled functions of
   IDA's GDB-stub backend.
-- `references/ida/plugins/bochs_user/all/` — 946 decompiled functions
+- `research/decompiled-references/ida/plugins/bochs_user/all/` — 946 decompiled functions
   of IDA's Bochs integration.
 
 ## Roadmap

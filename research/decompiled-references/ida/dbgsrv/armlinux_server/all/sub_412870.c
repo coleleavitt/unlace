@@ -1,0 +1,12 @@
+/* Split from IDA decompile_many output for CodeGraph indexing. */
+// Name: sub_412870
+// Address: 0x0000000000412870
+
+//----- (0000000000412870) ----------------------------------------------------
+__int64 __fastcall sub_412870(__int64 a1, unsigned int a2, __off64_t a3, void *a4, int a5, unsigned __int8 a6)
+{
+  if ( *(_BYTE *)(a1 + 2053) || *(_DWORD *)(a1 + 2044) == -1 )
+    return 0;
+  else
+    return sub_412600(a1, a2, a3, a4, a5, a6);
+}

@@ -11,13 +11,13 @@ thread, so future work does not have to rediscover the same references.
 - `research/opencode-sessions/root-exports/session-ses_2175.md` records earlier
   examples where stack-pointer bookkeeping leaked into C output, including
   prologue instructions called out as "should not appear".
-- `references/hexrays/ida_dump/hexx64/all/sub_13B0F0.c` contains the
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_13B0F0.c` contains the
   `"resolve_stkvar_addresses result"` logging path, which confirms that stack
   variable recovery is an explicit frame-address resolution pass.
-- `references/hexrays/ida_dump/hexx64/all/sub_3EEC80.c` calls
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/sub_3EEC80.c` calls
   `calc_stkvar_struc_offset`, showing that operand dtype/width and decoded
   instruction context participate in stack offset recovery.
-- `references/hexrays/ida_dump/hexx64/all/.calc_stkvar_struc_offset.c`,
+- `research/decompiled-references/hexrays/ida_dump/hexx64/all/.calc_stkvar_struc_offset.c`,
   `.get_func_frame.c`, and `.func_has_stkframe_hole.c` are imported helper
   stubs for the same frame-model surface.
 

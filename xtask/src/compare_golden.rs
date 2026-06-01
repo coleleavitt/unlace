@@ -17,8 +17,10 @@
 //!
 //! This is a REPORTING tool — it always exits 0.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
+
+use crate::cargo_bin;
 
 /// Structural features extracted from C decompiler output.
 #[derive(Debug, Default, Clone)]
@@ -530,15 +532,15 @@ pub fn run(root: &Path) {
     // ── Phase 2: Decompile fixture ELFs ──
     println!("Phase 2: Decompiling x86_64 fixture ELFs...");
 
-    let unlace_bin = find_unlace_binary(root);
-    if unlace_bin.is_none() {
-        eprintln!("  ERROR: unlace binary not found.");
-        eprintln!("  Run `cargo build -p unlace-cli` first.");
-        println!();
-        println!("Cannot produce comparison — binary not built.");
-        return;
-    }
-    let unlace_bin = unlace_bin.unwrap();
+    let unlace_bin = match cargo_bin::build_unlace_bin(root) {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("  ERROR: {e}");
+            println!();
+            println!("Cannot produce comparison — binary not built.");
+            return;
+        }
+    };
 
     let x86_fixtures = [
         "branches",
@@ -757,25 +759,6 @@ pub fn run(root: &Path) {
     println!("  A high score means our output looks structurally similar to IDA's.");
     println!("  A low score is expected early in development — this is a tracking metric.");
     println!();
-}
-
-fn find_unlace_binary(root: &Path) -> Option<PathBuf> {
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| root.join("target"));
-
-    // Try debug first, then release
-    let debug_bin = target_dir.join("debug").join("unlace");
-    if debug_bin.exists() {
-        return Some(debug_bin);
-    }
-
-    let release_bin = target_dir.join("release").join("unlace");
-    if release_bin.exists() {
-        return Some(release_bin);
-    }
-
-    None
 }
 
 fn decompile_elf(unlace_bin: &Path, elf_path: &Path) -> Result<String, String> {

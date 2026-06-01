@@ -12,13 +12,13 @@ unlace-struct = { workspace = true }
 unlace-output = { workspace = true }
 unlace-plugin = { workspace = true }
 unlace-lumina = { workspace = true }
-unlace-session = { path = "../unlace-session" }
-unlace-emu = { path = "../unlace-emu" }
-unlace-debugger = { path = "../unlace-debugger" }
-unlace-gui = { path = "../unlace-gui" }
-unlace-flirt = { path = "../unlace-flirt" }
-unlace-idapython = { path = "../unlace-idapython" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
+unlace-session = { workspace = true }
+unlace-emu = { workspace = true }
+unlace-debugger = { workspace = true }
+unlace-gui = { workspace = true }
+unlace-flirt = { workspace = true }
+unlace-idapython = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
@@ -26,17 +26,17 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-flame = "0.2"
 smallvec = { workspace = true }
 rayon = { workspace = true }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 hex = "0.4"
 regex = "1"
 memmap2 = "0.9"
-sha2 = "0.10"
+sha2 = { workspace = true }
 iced-x86 = { workspace = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-tempfile = "3"
+tempfile = { workspace = true }
 
 [features]
 default = []

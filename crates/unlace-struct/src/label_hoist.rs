@@ -36,6 +36,7 @@ fn label_hoist_trace_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
         env_flag("UNLACE_LABEL_HOIST_TRACE")
+            || env_flag("UNLACE_STRUCT_TRACE")
             || env_flag("UNLACE_STRUCT_TRACE_VERBOSE")
             || env_flag("UNLACE_HIR_TRACE_VERBOSE")
     })
@@ -577,6 +578,37 @@ mod tests {
             &hir.body[..],
             [HirNode::If { then_body, .. }, HirNode::Label(LabelId(1)), HirNode::Break]
                 if then_body.is_empty()
+        ));
+    }
+
+    #[test]
+    fn guarded_empty_sibling_preserves_skip_when_join_tail_is_hoisted() {
+        let join = LabelId(7);
+        let mut hir = func(vec![HirNode::If {
+            cond: cond(),
+            then_body: vec![
+                HirNode::Label(LabelId(5)),
+                HirNode::Break,
+                HirNode::Label(join),
+                HirNode::Return(None),
+            ],
+            else_body: Some(vec![HirNode::Goto(join)]),
+        }]);
+
+        hoist_cross_branch_labels(&mut hir);
+
+        assert!(matches!(
+            &hir.body[..],
+            [
+                HirNode::If {
+                    then_body,
+                    else_body: Some(else_body),
+                    ..
+                },
+                HirNode::Label(LabelId(7)),
+                HirNode::Return(None),
+            ] if then_body == &vec![HirNode::Label(LabelId(5)), HirNode::Break]
+                && else_body == &vec![HirNode::Goto(LabelId(7))]
         ));
     }
 }

@@ -16,6 +16,8 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::cargo_bin;
+
 /// How a pattern's needle should be matched against source text.
 #[derive(Clone, Copy)]
 enum PatternKind {
@@ -305,21 +307,6 @@ fn collect_fixture_elfs(fixtures_dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn find_unlace_binary(root: &Path) -> Option<PathBuf> {
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| root.join("target"));
-    let release = target_dir.join("release").join("unlace");
-    if release.exists() {
-        return Some(release);
-    }
-    let debug = target_dir.join("debug").join("unlace");
-    if debug.exists() {
-        return Some(debug);
-    }
-    None
-}
-
 fn decompile_elf(unlace_bin: &Path, elf_path: &Path) -> Result<String, String> {
     let output = Command::new(unlace_bin)
         .args(["decompile", "--emit", "c", "--timeout", "30"])
@@ -410,11 +397,10 @@ pub fn run(root: &Path) {
         std::process::exit(1);
     }
 
-    let unlace_bin = match find_unlace_binary(root) {
-        Some(p) => p,
-        None => {
-            eprintln!("ERROR: unlace binary not found in target/{{release,debug}}/.");
-            eprintln!("Run `cargo build -p unlace-cli` first.");
+    let unlace_bin = match cargo_bin::build_unlace_bin(root) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("ERROR: {e}");
             std::process::exit(1);
         }
     };

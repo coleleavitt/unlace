@@ -37,6 +37,53 @@ const FPU_BASE: u64 = 0x300;
 const FPU_STRIDE: u64 = 16;
 const FPU_SLOTS: u64 = 8;
 
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name)
+        .map(|v| !v.is_empty() && v != "0")
+        .unwrap_or(false)
+}
+
+fn x87_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_X87_TRACE")
+        || env_flag_enabled("UNLACE_TYPE_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn x87_trace_verbose_enabled() -> bool {
+    env_flag_enabled("UNLACE_X87_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TYPE_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TRACE_VERBOSE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn x87_trace_filter() -> Option<String> {
+    std::env::var("UNLACE_X87_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_TYPE_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+        .filter(|s| !s.is_empty())
+}
+
+fn x87_trace_line(func_name: &str, message: impl std::fmt::Display) {
+    if !x87_trace_enabled() {
+        return;
+    }
+    let message = message.to_string();
+    if let Some(filter) = x87_trace_filter()
+        && !func_name.contains(&filter)
+        && !message.contains(&filter)
+    {
+        return;
+    }
+    eprintln!("[unlace x87-top] func={func_name} {message}");
+}
+
+fn x87_trace_line_verbose(func_name: &str, message: impl std::fmt::Display) {
+    if x87_trace_verbose_enabled() {
+        x87_trace_line(func_name, message);
+    }
+}
+
 /// Stack effect of an x87 op on TOP, keyed by the `Callother` tag constant in
 /// `inputs[0]` (mirrors `unlace-lift-x86::ops::fpu::fpu_tag`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -115,15 +162,21 @@ fn x87_tag(insn: &unlace_ir::IrInsn) -> Option<u64> {
 /// for straight-line code; it is intended to run once, before `build_ssa`.
 pub fn rewrite_x87_top(func: &mut Function) -> usize {
     // Cheap bail: skip functions with no x87 ops at all.
-    if !func
+    let x87_insns = func
         .blocks
         .values()
-        .any(|b| b.insns.iter().any(|i| x87_tag(i).is_some()))
-    {
+        .map(|b| b.insns.iter().filter(|i| x87_tag(i).is_some()).count())
+        .sum::<usize>();
+    if x87_insns == 0 {
+        x87_trace_line_verbose(&func.name, "skip reason=no-x87-callothers");
         return 0;
     }
 
     let block_ids: Vec<_> = func.blocks.keys().copied().collect();
+    x87_trace_line(
+        &func.name,
+        format!("start blocks={} x87_insns={x87_insns}", block_ids.len()),
+    );
 
     // Predecessor map from successors.
     let mut preds: BTreeMap<unlace_ir::BlockId, Vec<unlace_ir::BlockId>> = BTreeMap::new();
@@ -132,6 +185,7 @@ pub fn rewrite_x87_top(func: &mut Function) -> usize {
             preds.entry(succ).or_default().push(bid);
         }
     }
+    x87_trace_line_verbose(&func.name, format!("preds={preds:?}"));
 
     // Forward dataflow to a fixed point: entry-TOP and exit-TOP per block.
     // `None` = unknown / conflicting (leave that block's x87 refs untouched).
@@ -140,7 +194,7 @@ pub fn rewrite_x87_top(func: &mut Function) -> usize {
     entry_top.insert(func.entry, Some(0));
 
     // Bounded fixpoint: TOP lattice is tiny (8 values + unknown), converges fast.
-    for _ in 0..(block_ids.len() + 2) {
+    for iter in 0..(block_ids.len() + 2) {
         let mut changed = false;
         for &bid in &block_ids {
             // Reconcile entry TOP from predecessor exits.
@@ -160,8 +214,16 @@ pub fn rewrite_x87_top(func: &mut Function) -> usize {
                 exit_top.insert(bid, out);
                 changed = true;
             }
+            x87_trace_line_verbose(
+                &func.name,
+                format!(
+                    "dataflow iter={iter} block={} entry_top={in_top:?} exit_top={out:?}",
+                    bid.0
+                ),
+            );
         }
         if !changed {
+            x87_trace_line_verbose(&func.name, format!("dataflow converged iter={iter}"));
             break;
         }
     }
@@ -170,17 +232,33 @@ pub fn rewrite_x87_top(func: &mut Function) -> usize {
     let mut rewritten = 0usize;
     for &bid in &block_ids {
         let Some(top) = entry_top.get(&bid).copied().flatten() else {
+            x87_trace_line(
+                &func.name,
+                format!(
+                    "skip-block block={} reason=unknown-or-conflicting-top",
+                    bid.0
+                ),
+            );
             continue;
         };
         let block = func.blocks.get_mut(&bid).expect("block id from keys");
-        rewritten += rewrite_block_slots(block, top);
+        rewritten += rewrite_block_slots(&func.name, bid, block, top);
     }
+    x87_trace_line(
+        &func.name,
+        format!("done rewritten={rewritten} entry_top={entry_top:?} exit_top={exit_top:?}"),
+    );
     rewritten
 }
 
 /// Rewrite every x87 instruction in one block, threading TOP from `entry_top`.
 /// Returns the count of instructions whose ST operands were remapped.
-fn rewrite_block_slots(block: &mut unlace_ir::BasicBlock, entry_top: u8) -> usize {
+fn rewrite_block_slots(
+    func_name: &str,
+    bid: unlace_ir::BlockId,
+    block: &mut unlace_ir::BasicBlock,
+    entry_top: u8,
+) -> usize {
     let mut top = entry_top;
     let mut rewritten = 0usize;
     for insn in &mut block.insns {
@@ -195,10 +273,24 @@ fn rewrite_block_slots(block: &mut unlace_ir::BasicBlock, entry_top: u8) -> usiz
             StackEffect::Push => top.wrapping_sub(1) % 8,
             _ => top,
         };
-        if remap_insn_slots(insn, slot_top) {
+        x87_trace_line_verbose(
+            func_name,
+            format!(
+                "rewrite-insn block={} addr={:#x} tag={tag:#x} effect={effect:?} top_before={top} slot_top={slot_top}",
+                bid.0, insn.addr
+            ),
+        );
+        if remap_insn_slots(func_name, bid, insn, slot_top) {
             rewritten += 1;
         }
         top = apply_effect(top, effect);
+        x87_trace_line_verbose(
+            func_name,
+            format!(
+                "rewrite-insn-done block={} addr={:#x} tag={tag:#x} top_after={top}",
+                bid.0, insn.addr
+            ),
+        );
     }
     rewritten
 }
@@ -206,7 +298,12 @@ fn rewrite_block_slots(block: &mut unlace_ir::BasicBlock, entry_top: u8) -> usiz
 /// Remap every `ST(i)` operand (inputs after the tag, and the output) of one
 /// x87 insn to physical `R[(slot_top + i) mod 8]`. Returns true if anything
 /// changed.
-fn remap_insn_slots(insn: &mut unlace_ir::IrInsn, slot_top: u8) -> bool {
+fn remap_insn_slots(
+    func_name: &str,
+    bid: unlace_ir::BlockId,
+    insn: &mut unlace_ir::IrInsn,
+    slot_top: u8,
+) -> bool {
     let mut changed = false;
     if let Some(out) = insn.output.as_mut()
         && let Some(i) = st_slot_index(out)
@@ -214,6 +311,13 @@ fn remap_insn_slots(insn: &mut unlace_ir::IrInsn, slot_top: u8) -> bool {
         let phys = (slot_top as u64 + i) % FPU_SLOTS;
         let new = phys_slot(phys, out.size);
         if *out != new {
+            x87_trace_line_verbose(
+                func_name,
+                format!(
+                    "remap-output block={} addr={:#x} st={} old={:?} new={:?}",
+                    bid.0, insn.addr, i, out, new
+                ),
+            );
             *out = new;
             changed = true;
         }
@@ -224,6 +328,13 @@ fn remap_insn_slots(insn: &mut unlace_ir::IrInsn, slot_top: u8) -> bool {
             let phys = (slot_top as u64 + i) % FPU_SLOTS;
             let new = phys_slot(phys, inp.size);
             if *inp != new {
+                x87_trace_line_verbose(
+                    func_name,
+                    format!(
+                        "remap-input block={} addr={:#x} st={} old={:?} new={:?}",
+                        bid.0, insn.addr, i, inp, new
+                    ),
+                );
                 *inp = new;
                 changed = true;
             }

@@ -1,0 +1,35 @@
+int __fastcall std::string::compare(_QWORD *a1, unsigned __int64 a2, size_t a3, const char *a4)
+{
+  unsigned __int64 v4; // rbx
+  size_t v5; // rbx
+  size_t v7; // rax
+  size_t v8; // rdx
+  size_t v9; // r12
+  __int64 v10; // rbx
+  int result; // eax
+
+  v4 = a1[1];
+  if ( a2 > v4 )
+    std::__throw_out_of_range_fmt("%s: __pos (which is %zu) > this->size() (which is %zu)");
+  v5 = v4 - a2;
+  if ( v5 > a3 )
+    v5 = a3;
+  v7 = strlen(a4);
+  v8 = v5;
+  v9 = v7;
+  if ( v7 <= v5 )
+    v8 = v7;
+  if ( !v8 || (result = memcmp((const void *)(a2 + *a1), a4, v8)) == 0 )
+  {
+    v10 = v5 - v9;
+    result = 0x7FFFFFFF;
+    if ( v10 <= 0x7FFFFFFF )
+    {
+      result = 0x80000000;
+      if ( v10 >= (__int64)0xFFFFFFFF80000000LL )
+        return v10;
+    }
+  }
+  return result;
+}
+

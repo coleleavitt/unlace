@@ -9,7 +9,7 @@ description = "IR-level interpreter / emulator for unlace"
 unlace-ir.workspace = true
 unlace-loader.workspace = true
 unlace-lift.workspace = true
-unlace-session = { path = "../unlace-session" }
+unlace-session = { workspace = true }
 smallvec.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true

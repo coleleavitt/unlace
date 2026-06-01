@@ -1,0 +1,6 @@
+void __fastcall sub_424E30(void *a1)
+{
+  if ( a1 )
+    operator delete(a1, 0x58u);
+}
+

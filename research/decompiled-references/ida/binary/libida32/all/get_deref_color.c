@@ -1,0 +1,19 @@
+__int64 __fastcall get_deref_color(__int64 a1)
+{
+  __int64 v1; // rax
+  char v2; // dl
+  __int64 result; // rax
+
+  v1 = sub_4EE820(*(_QWORD *)(qword_2CA1698 + 1480) + 1552LL, a1);
+  if ( !v1 )
+    return 12;
+  v2 = *(_BYTE *)(v1 + 22);
+  if ( (v2 & 2) == 0 || (result = 14, (v2 & 1) == 0) )
+  {
+    result = 5;
+    if ( (v2 & 1) == 0 )
+      return (v2 & 2) == 0 ? 31 : 15;
+  }
+  return result;
+}
+

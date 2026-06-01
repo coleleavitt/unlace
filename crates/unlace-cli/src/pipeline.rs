@@ -50,6 +50,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -1932,17 +1933,68 @@ fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
         return;
     }
     let header = format!(
-        "func={func_name} stage={stage} detail var_types={} merged_names={} foldable={} stack_vars={} lvars={} params={} return_type={}",
+        "func={func_name} stage={stage} detail var_types={} merged_names={} foldable={} stack_vars={} stack_accesses={} stack_resolved={} stack_lost={} stack_frame_locals={} lvars={} params={} return_type={}",
         ssa.var_types.len(),
         ssa.merged_names.len(),
         ssa.foldable_exprs.len(),
         ssa.stack_vars.len(),
+        ssa.stack_accesses.len(),
+        ssa.stack_accesses
+            .iter()
+            .filter(|acc| acc.resolved_slot.is_some())
+            .count(),
+        ssa.stack_accesses
+            .iter()
+            .filter(|acc| acc.lost_provenance)
+            .count(),
+        ssa.stack_frame
+            .as_ref()
+            .map(|frame| frame.locals.len())
+            .unwrap_or(0),
         ssa.lvars.len(),
         ssa.inferred_params.len(),
         ssa.inferred_return_type,
     );
     if pipeline_trace_matches(&header) {
         eprintln!("[unlace pipeline] {header}");
+    }
+    for acc in &ssa.stack_accesses {
+        let line = format!(
+            "func={func_name} stage={stage} stack-access addr={:#x} base={} delta={} width={} store={} resolved={:?} lost={}",
+            acc.source_addr,
+            acc.base_register,
+            acc.delta,
+            acc.width,
+            acc.is_store,
+            acc.resolved_slot,
+            acc.lost_provenance,
+        );
+        if pipeline_trace_matches(&line) {
+            eprintln!("[unlace pipeline] {line}");
+        }
+    }
+    if let Some(frame) = &ssa.stack_frame {
+        for local in frame.locals.values() {
+            let line = format!(
+                "func={func_name} stage={stage} stack-frame offset={} size={} widths={:?} kind={:?}",
+                local.offset, local.size, local.access_widths, local.kind,
+            );
+            if pipeline_trace_matches(&line) {
+                eprintln!("[unlace pipeline] {line}");
+            }
+        }
+    }
+    for lv in &ssa.lvars {
+        if !matches!(lv.storage, unlace_ir::lvar::LvarStorage::Stack { .. }) {
+            continue;
+        }
+        let line = format!(
+            "func={func_name} stage={stage} stack-lvar id={} storage={:?} name={:?} ty={:?} source={:?} flags={:?}",
+            lv.id, lv.storage, lv.name, lv.ty, lv.source, lv.flags,
+        );
+        if pipeline_trace_matches(&line) {
+            eprintln!("[unlace pipeline] {line}");
+        }
     }
     for (block, phis) in &ssa.phi_map {
         for phi in phis {
@@ -2103,6 +2155,7 @@ fn pipeline_stage_structural(ssa: &mut SsaFunction) -> Result<(), unlace_passes:
     run_instrumented(&StackPointerTrackingPass, ssa)?;
     run_instrumented(&StackVarRecoveryPass, ssa)?;
     ssa.stack_frame = Some(recover_stack_frame(ssa));
+    run_instrumented(&StackPointerTrackingPass, ssa)?;
     Ok(())
 }
 
@@ -2460,6 +2513,13 @@ pub struct PipelineConfig {
     /// User-authored annotations (function comments, custom names, …) loaded
     /// from a sidecar JSON file.  `None` when no sidecar was found.
     pub annotations: Option<crate::annotations::AnnotationDb>,
+    /// FLIRT/SIG matching configuration shared by decompile, batch, and
+    /// quality paths.
+    pub flirt: FlirtConfig,
+    /// Raw bytes of an external DWARF sidecar ELF (`--dwarf-sidecar`). When
+    /// present, its debug info is merged into whatever the primary image
+    /// yields, letting a stripped binary recover names/types.
+    pub dwarf_sidecar: Option<Vec<u8>>,
 }
 
 impl Default for PipelineConfig {
@@ -2468,8 +2528,119 @@ impl Default for PipelineConfig {
             timeout: Duration::from_secs(30),
             print_config: None,
             annotations: None,
+            flirt: FlirtConfig::default(),
+            dwarf_sidecar: None,
         }
     }
+}
+
+/// User-facing FLIRT controls. Matching is enabled by default with the
+/// bundled signature database. The default threshold preserves legacy
+/// bundled matches, including weak reference-resolution hits at 50%.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FlirtOptions {
+    pub enabled: bool,
+    pub sig_paths: Vec<PathBuf>,
+    pub sig_dirs: Vec<PathBuf>,
+    pub min_confidence: u8,
+}
+
+impl Default for FlirtOptions {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            sig_paths: Vec::new(),
+            sig_dirs: Vec::new(),
+            min_confidence: 50,
+        }
+    }
+}
+
+/// Loaded FLIRT state ready for hot-path matching. External `.sig` files
+/// are parsed once when the command starts; bundled signatures remain the
+/// process-wide loader DB.
+#[derive(Clone, Debug)]
+pub struct FlirtConfig {
+    options: FlirtOptions,
+    explicit: Arc<unlace_flirt::FlirtMatcher>,
+}
+
+impl Default for FlirtConfig {
+    fn default() -> Self {
+        Self {
+            options: FlirtOptions::default(),
+            explicit: Arc::new(unlace_flirt::FlirtMatcher::default()),
+        }
+    }
+}
+
+impl FlirtConfig {
+    pub fn from_options(options: FlirtOptions) -> Result<Self> {
+        if !options.enabled {
+            return Ok(Self {
+                options,
+                explicit: Arc::new(unlace_flirt::FlirtMatcher::default()),
+            });
+        }
+
+        let sig_paths = collect_sig_paths(&options)?;
+        let mut matcher = unlace_flirt::FlirtMatcher::default();
+        for path in sig_paths {
+            let sig = unlace_flirt::sig::SigFile::load(&path)
+                .with_context(|| format!("loading FLIRT signature {}", path.display()))?;
+            matcher.extend_from_sig(&sig);
+        }
+
+        Ok(Self {
+            options,
+            explicit: Arc::new(matcher),
+        })
+    }
+
+    pub fn options(&self) -> &FlirtOptions {
+        &self.options
+    }
+
+    fn enabled(&self) -> bool {
+        self.options.enabled
+    }
+
+    fn min_confidence_f32(&self) -> f32 {
+        (self.options.min_confidence as f32) / 100.0
+    }
+
+    fn explicit_match(&self, bytes: &[u8]) -> Option<FlirtConfidence> {
+        self.explicit.match_one_detailed(bytes).and_then(|m| {
+            (m.confidence >= self.min_confidence_f32()).then(|| FlirtConfidence {
+                name: m.name.to_string(),
+                confidence: m.confidence,
+                signature_id: m.signature_id,
+            })
+        })
+    }
+}
+
+fn collect_sig_paths(options: &FlirtOptions) -> Result<Vec<PathBuf>> {
+    let mut paths = BTreeSet::new();
+    for path in &options.sig_paths {
+        if !path.is_file() {
+            bail!("FLIRT signature path is not a file: {}", path.display());
+        }
+        paths.insert(path.clone());
+    }
+    for dir in &options.sig_dirs {
+        if !dir.is_dir() {
+            bail!("FLIRT signature dir is not a directory: {}", dir.display());
+        }
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .with_context(|| format!("reading FLIRT signature dir {}", dir.display()))?
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .filter(|path| path.extension().is_some_and(|ext| ext == "sig"))
+            .collect();
+        entries.sort();
+        paths.extend(entries);
+    }
+    Ok(paths.into_iter().collect())
 }
 
 #[allow(dead_code)]
@@ -2494,6 +2665,15 @@ pub fn build_symbol_table_and_flirt_with_functions(
     image: &BinaryImage,
     discovered: &[FunctionEntry],
 ) -> (BTreeMap<u64, String>, BTreeMap<u64, FlirtConfidence>) {
+    let config = FlirtConfig::default();
+    build_symbol_table_and_flirt_with_config(image, discovered, &config)
+}
+
+pub fn build_symbol_table_and_flirt_with_config(
+    image: &BinaryImage,
+    discovered: &[FunctionEntry],
+    flirt_config: &FlirtConfig,
+) -> (BTreeMap<u64, String>, BTreeMap<u64, FlirtConfidence>) {
     let mut table = BTreeMap::new();
     let mut flirt = BTreeMap::new();
     for entry in discovered {
@@ -2517,13 +2697,15 @@ pub fn build_symbol_table_and_flirt_with_functions(
     // §5.5: collect the full `FlirtConfidence` per entry address so
     // downstream printer annotations and quality counters can see the
     // confidence + signature_id without re-running the matcher.
-    for entry in discovered {
-        if !is_flirt_eligible_name(&entry.name) {
-            continue;
-        }
-        if let Some(fc) = flirt_match_detailed(image, entry) {
-            table.insert(entry.addr, fc.name.clone());
-            flirt.insert(entry.addr, fc);
+    if flirt_config.enabled() {
+        for entry in discovered {
+            if !is_flirt_eligible_name(&entry.name) {
+                continue;
+            }
+            if let Some(fc) = flirt_match_detailed_with_config(image, entry, flirt_config) {
+                table.insert(entry.addr, fc.name.clone());
+                flirt.insert(entry.addr, fc);
+            }
         }
     }
     (table, flirt)
@@ -2572,7 +2754,7 @@ pub fn lift_and_run_passes(
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;
 
-    let symbols = build_symbol_table_with_functions(image, discovered);
+    let (symbols, _) = build_symbol_table_and_flirt_with_config(image, discovered, &config.flirt);
     let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
@@ -2721,7 +2903,8 @@ pub fn emit_function_interproc(
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Result<String> {
     let _span = tracing::debug_span!("emit_function_interproc", func = %entry.name).entered();
-    let (symbols, flirt_map) = build_symbol_table_and_flirt_with_functions(image, discovered);
+    let (symbols, flirt_map) =
+        build_symbol_table_and_flirt_with_config(image, discovered, &config.flirt);
     let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
@@ -2883,6 +3066,8 @@ pub fn decompile_one_function_cached(
         timeout: Duration::from_secs(30),
         print_config: None,
         annotations: None,
+        flirt: FlirtConfig::default(),
+        dwarf_sidecar: None,
     };
     let rendered = decompile_function(image, lifter.as_ref(), entry, emit, &config, None)?;
 
@@ -2939,23 +3124,40 @@ pub struct FlirtConfidence {
 /// Like [`flirt_match`] but returns the confidence score and the
 /// canonical name as a structured pair.
 pub fn flirt_match_detailed(image: &BinaryImage, entry: &FunctionEntry) -> Option<FlirtConfidence> {
-    let resolved = flirt_resolved_names(image);
-    flirt_match_detailed_with_resolved(image, entry, &resolved)
+    let config = FlirtConfig::default();
+    flirt_match_detailed_with_config(image, entry, &config)
+}
+
+pub fn flirt_match_detailed_with_config(
+    image: &BinaryImage,
+    entry: &FunctionEntry,
+    config: &FlirtConfig,
+) -> Option<FlirtConfidence> {
+    if !config.enabled() {
+        return None;
+    }
+    let resolved = flirt_resolved_names_with_config(image, config);
+    flirt_match_detailed_with_resolved(image, entry, &resolved, config)
 }
 
 fn flirt_match_with_resolved(
     image: &BinaryImage,
     entry: &FunctionEntry,
     resolved: &BTreeMap<u64, String>,
+    config: &FlirtConfig,
 ) -> Option<String> {
-    flirt_match_detailed_with_resolved(image, entry, resolved).map(|m| m.name)
+    flirt_match_detailed_with_resolved(image, entry, resolved, config).map(|m| m.name)
 }
 
 fn flirt_match_detailed_with_resolved(
     image: &BinaryImage,
     entry: &FunctionEntry,
     resolved: &BTreeMap<u64, String>,
+    config: &FlirtConfig,
 ) -> Option<FlirtConfidence> {
+    if !config.enabled() {
+        return None;
+    }
     if !is_flirt_eligible_name(&entry.name) {
         return None;
     }
@@ -2970,17 +3172,32 @@ fn flirt_match_detailed_with_resolved(
         return None;
     }
     let bytes = &text.data[off_start..off_end];
-    flirt_db()
+    let explicit = config.explicit_match(bytes);
+    let bundled = flirt_db()
         .match_function_with_refs(bytes, resolved)
-        .map(|m| FlirtConfidence {
-            name: m.name.to_string(),
-            confidence: m.confidence,
-            signature_id: m.signature_id,
-        })
+        .and_then(|m| {
+            (m.confidence >= config.min_confidence_f32()).then(|| FlirtConfidence {
+                name: m.name.to_string(),
+                confidence: m.confidence,
+                signature_id: m.signature_id,
+            })
+        });
+    match (explicit, bundled) {
+        (Some(a), Some(b)) if b.confidence > a.confidence => Some(b),
+        (Some(a), _) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
 }
 
-fn flirt_resolved_names(image: &BinaryImage) -> BTreeMap<u64, String> {
+fn flirt_resolved_names_with_config(
+    image: &BinaryImage,
+    config: &FlirtConfig,
+) -> BTreeMap<u64, String> {
     let mut resolved = BTreeMap::new();
+    if !config.enabled() {
+        return resolved;
+    }
     for (&addr, sym) in &image.symbols {
         if sym.kind == SymbolKind::Function && !is_flirt_eligible_name(&sym.name) {
             resolved.insert(addr, sym.name.clone());
@@ -3007,7 +3224,8 @@ fn flirt_resolved_names(image: &BinaryImage) -> BTreeMap<u64, String> {
                     addr: sym.addr,
                     size: sym.size,
                 };
-                flirt_match_with_resolved(image, &entry, &resolved).map(|name| (sym.addr, name))
+                flirt_match_with_resolved(image, &entry, &resolved, config)
+                    .map(|name| (sym.addr, name))
             })
             .collect();
         candidates.sort_by_key(|(addr, _)| *addr);
@@ -3070,7 +3288,8 @@ pub fn decompile_function_with_symbols(
     }
 
     if matches!(emit, EmitFormat::C)
-        && let Some(canonical) = flirt_match(image, entry)
+        && let Some(canonical) =
+            flirt_match_detailed_with_config(image, entry, &config.flirt).map(|m| m.name)
     {
         tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
         return Ok(render_flirt_stub(&canonical, entry));
@@ -3181,7 +3400,8 @@ pub fn decompile_function_with_symbols(
     // also reused as the resolver backing store.
     let t_pre_pass = Instant::now();
     pipeline_trace_start(&entry.name, "pre-pass-analysis");
-    let (symbols, flirt_map) = build_symbol_table_and_flirt_with_functions(image, discovered);
+    let (symbols, flirt_map) =
+        build_symbol_table_and_flirt_with_config(image, discovered, &config.flirt);
     let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
@@ -3539,7 +3759,7 @@ fn collect_readonly_scalars(image: &BinaryImage) -> BTreeMap<(u64, u8), u64> {
     out
 }
 
-fn collect_ssa_statement_slots(
+pub(crate) fn collect_ssa_statement_slots(
     ssa: &SsaFunction,
 ) -> BTreeMap<(u64, IrOp), Vec<unlace_output::SsaStatementSlots>> {
     let mut out: BTreeMap<(u64, IrOp), Vec<unlace_output::SsaStatementSlots>> = BTreeMap::new();
@@ -3563,7 +3783,7 @@ fn collect_ssa_statement_slots(
     out
 }
 
-fn collect_ssa_phi_uses(ssa: &SsaFunction) -> Vec<SsaVarnode> {
+pub(crate) fn collect_ssa_phi_uses(ssa: &SsaFunction) -> Vec<SsaVarnode> {
     let mut out = Vec::new();
     for phis in ssa.phi_map.values() {
         for phi in phis {
@@ -3573,7 +3793,7 @@ fn collect_ssa_phi_uses(ssa: &SsaFunction) -> Vec<SsaVarnode> {
     out
 }
 
-fn collect_return_value_aliases(
+pub(crate) fn collect_return_value_aliases(
     ssa: &SsaFunction,
     symbols: &BTreeMap<u64, String>,
 ) -> BTreeMap<SsaVarnode, SsaVarnode> {
@@ -4229,22 +4449,44 @@ pub fn emit_output(
             trace_hir_pipeline("eliminate_forward_gotos1", &hir);
             unlace_struct::hoist_cross_branch_labels(&mut hir);
             trace_hir_pipeline("hoist_cross_branch_labels", &hir);
+            unlace_struct::coalesce_goto_chains(&mut hir);
+            trace_hir_pipeline("coalesce_goto_chains1", &hir);
+            unlace_struct::collapse_label_fallthroughs(&mut hir);
+            trace_hir_pipeline("collapse_label_fallthroughs1", &hir);
             unlace_struct::duplicate_goto_conditions(&mut hir);
             trace_hir_pipeline("duplicate_goto_conditions", &hir);
+            unlace_struct::duplicate_simple_label_tails(&mut hir);
+            trace_hir_pipeline("duplicate_simple_label_tails1", &hir);
             unlace_struct::normalize_conditions(&mut hir);
             trace_hir_pipeline("normalize_conditions2", &hir);
             unlace_struct::detect_continue_break(&mut hir.body);
             trace_hir_pipeline("detect_continue_break2", &hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
             trace_hir_pipeline("eliminate_forward_gotos2", &hir);
+            unlace_struct::coalesce_goto_chains(&mut hir);
+            trace_hir_pipeline("coalesce_goto_chains2", &hir);
+            unlace_struct::collapse_label_fallthroughs(&mut hir);
+            trace_hir_pipeline("collapse_label_fallthroughs2", &hir);
             unlace_struct::cleanup_unreachable_labels(&mut hir);
             trace_hir_pipeline("cleanup_unreachable_labels", &hir);
             unlace_struct::return_merge(&mut hir);
             trace_hir_pipeline("return_merge", &hir);
+            unlace_struct::duplicate_simple_label_tails(&mut hir);
+            trace_hir_pipeline("duplicate_simple_label_tails2", &hir);
             unlace_struct::detect_continue_break(&mut hir.body);
             trace_hir_pipeline("detect_continue_break3", &hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
             trace_hir_pipeline("eliminate_forward_gotos3", &hir);
+            unlace_struct::coalesce_goto_chains(&mut hir);
+            trace_hir_pipeline("coalesce_goto_chains3", &hir);
+            unlace_struct::collapse_label_fallthroughs(&mut hir);
+            trace_hir_pipeline("collapse_label_fallthroughs3", &hir);
+            unlace_struct::cleanup_unreachable_labels(&mut hir);
+            trace_hir_pipeline("cleanup_unreachable_labels_final", &hir);
+            unlace_struct::eliminate_forward_gotos(&mut hir);
+            trace_hir_pipeline("eliminate_forward_gotos4", &hir);
+            unlace_struct::cleanup_unreachable_labels(&mut hir);
+            trace_hir_pipeline("cleanup_unreachable_labels_final2", &hir);
             unlace_struct::recover_guarded_whiles(&mut hir);
             trace_hir_pipeline("recover_guarded_whiles", &hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
@@ -4284,6 +4526,7 @@ pub fn emit_output(
             ann_clone.ssa_statement_slots = collect_ssa_statement_slots(ssa);
             ann_clone.ssa_phi_uses = collect_ssa_phi_uses(ssa);
             ann_clone.return_value_aliases = collect_return_value_aliases(ssa, symbols);
+            ann_clone.stack_lvars = unlace_output::stack_lvar_annotations_from_ssa(ssa);
             let ann_owned = Some(ann_clone);
             let ann_ref = ann_owned.as_ref();
 
@@ -5585,6 +5828,42 @@ mod tests {
             symbols.get(&base).map(String::as_str),
             Some("memcpy"),
             "FLIRT canonical name must replace `sub_XXXX` in the symbol table",
+        );
+    }
+
+    #[test]
+    fn build_symbol_table_respects_no_flirt_config() {
+        let memcpy_bytes: Vec<u8> = vec![
+            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
+        ];
+        let base: u64 = 0x1000;
+        let image = make_text_image(memcpy_bytes.clone(), base);
+        let entry = FunctionEntry {
+            name: "sub_1000".into(),
+            addr: base,
+            size: memcpy_bytes.len() as u64,
+        };
+        let flirt_config = super::FlirtConfig::from_options(super::FlirtOptions {
+            enabled: false,
+            ..Default::default()
+        })
+        .expect("disabled FLIRT config");
+
+        let (symbols, flirt) =
+            super::build_symbol_table_and_flirt_with_config(&image, &[entry], &flirt_config);
+        assert_eq!(symbols.get(&base).map(String::as_str), Some("sub_1000"));
+        assert!(flirt.is_empty());
+        assert!(
+            super::flirt_match_detailed_with_config(
+                &image,
+                &FunctionEntry {
+                    name: "sub_1000".into(),
+                    addr: base,
+                    size: memcpy_bytes.len() as u64,
+                },
+                &flirt_config,
+            )
+            .is_none()
         );
     }
 

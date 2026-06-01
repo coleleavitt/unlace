@@ -1,0 +1,6 @@
+__int64 sub_13B0C0()
+{
+  sub_146450(0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL);
+  return 1;
+}
+

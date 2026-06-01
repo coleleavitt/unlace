@@ -47,6 +47,11 @@ use crate::image::BinaryImage;
 
 type R<'a> = EndianSlice<'a, RunTimeEndian>;
 
+/// Shared DWARF location resolver used by normal DWARF import, split-DWARF
+/// merge, and location-list evaluation.
+#[derive(Debug, Clone, Default)]
+pub struct DebugLocationResolver;
+
 #[derive(Debug, Clone, Default)]
 pub struct DwarfInfo {
     pub functions: BTreeMap<u64, FunctionDebugInfo>,
@@ -169,6 +174,30 @@ pub struct UnionType {
 }
 
 pub fn import_dwarf(image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
+    import_dwarf_with_resolver(image, &DebugLocationResolver)
+}
+
+/// Import DWARF from `image`, then fold in debug info from an optional external
+/// sidecar (a separate ELF carrying `.debug_*` sections, e.g. produced by
+/// `objcopy --only-keep-debug`). This is how a stripped binary recovers
+/// parameter/local/type names: the stripped image yields an empty `DwarfInfo`
+/// and the sidecar supplies everything. The primary image always wins on key
+/// collisions, mirroring [`DwarfInfo::merge_split_dwarf`].
+pub fn import_dwarf_with_sidecar(
+    image: &BinaryImage,
+    sidecar: Option<&[u8]>,
+) -> Result<DwarfInfo, LoadError> {
+    let mut info = import_dwarf(image)?;
+    if let Some(bytes) = sidecar {
+        info.merge_split_dwarf(bytes)?;
+    }
+    Ok(info)
+}
+
+pub fn import_dwarf_with_resolver(
+    image: &BinaryImage,
+    resolver: &DebugLocationResolver,
+) -> Result<DwarfInfo, LoadError> {
     let endian = match image.endian {
         crate::image::Endian::Little => RunTimeEndian::Little,
         crate::image::Endian::Big => RunTimeEndian::Big,
@@ -185,7 +214,7 @@ pub fn import_dwarf(image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
     let dwarf: gimli::Dwarf<R<'_>> =
         dwarf_sections.borrow(|section| EndianSlice::new(section.as_ref(), endian));
 
-    let functions = extract_functions(&dwarf)?;
+    let functions = extract_functions(&dwarf, resolver)?;
     let source_map = build_source_map(&dwarf)?;
     let (structs, enums, unions) = extract_composite_types(&dwarf)?;
     let macros = extract_macros(&dwarf)?;
@@ -281,26 +310,98 @@ impl DwarfInfo {
     /// underlying `BTreeMap::entry` semantics so the skeleton always
     /// wins when both define the same key.
     pub fn merge_split_dwarf(&mut self, dwo_bytes: &[u8]) -> Result<(), crate::LoadError> {
+        DebugLocationResolver.merge_split_dwarf(self, dwo_bytes)
+    }
+}
+
+impl DebugLocationResolver {
+    pub fn import(&self, image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
+        import_dwarf_with_resolver(image, self)
+    }
+
+    pub fn merge_split_dwarf(
+        &self,
+        info: &mut DwarfInfo,
+        dwo_bytes: &[u8],
+    ) -> Result<(), crate::LoadError> {
         use crate::Loader as _;
         let image = crate::elf::ElfLoader::load(dwo_bytes)?;
-        let dwo_info = import_dwarf(&image)?;
+        let dwo_info = self.import(&image)?;
         for (k, v) in dwo_info.functions {
-            self.functions.entry(k).or_insert(v);
+            info.functions.entry(k).or_insert(v);
         }
         for (k, v) in dwo_info.source_map {
-            self.source_map.entry(k).or_insert(v);
+            info.source_map.entry(k).or_insert(v);
         }
         for (k, v) in dwo_info.structs {
-            self.structs.entry(k).or_insert(v);
+            info.structs.entry(k).or_insert(v);
         }
         for (k, v) in dwo_info.enums {
-            self.enums.entry(k).or_insert(v);
+            info.enums.entry(k).or_insert(v);
         }
         for (k, v) in dwo_info.unions {
-            self.unions.entry(k).or_insert(v);
+            info.unions.entry(k).or_insert(v);
         }
-        self.macros.extend(dwo_info.macros);
+        info.macros.extend(dwo_info.macros);
+        info.dwo_references.extend(dwo_info.dwo_references);
         Ok(())
+    }
+
+    /// Evaluate raw DWARF expression bytes into the conservative location
+    /// summary understood by the loader.
+    pub fn evaluate_expression(bytes: &[u8]) -> Option<SimpleLocation> {
+        evaluate_simple_location_bytes(bytes)
+    }
+
+    /// Evaluate a `DW_AT_location` attribute when it carries an inline
+    /// expression block.
+    pub fn evaluate_attribute(&self, value: AttributeValue<R<'_>>) -> Option<SimpleLocation> {
+        let bytes: &[u8] = match value {
+            AttributeValue::Block(b) | AttributeValue::Exprloc(gimli::Expression(b)) => b.slice(),
+            _ => return None,
+        };
+        Self::evaluate_expression(bytes)
+    }
+
+    pub fn frame_offset(&self, value: AttributeValue<R<'_>>) -> Option<i64> {
+        match self.evaluate_attribute(value)? {
+            SimpleLocation::FrameOffset(off) => Some(off),
+            _ => None,
+        }
+    }
+
+    fn location_ranges<'a>(
+        &self,
+        dwarf: &gimli::Dwarf<R<'a>>,
+        unit: &gimli::Unit<R<'a>>,
+        value: AttributeValue<R<'a>>,
+    ) -> Result<Vec<gimli::Range>, gimli::Error> {
+        let mut ranges = Vec::new();
+        if let Some(mut locations) = dwarf.attr_locations(unit, value)? {
+            while let Some(location) = locations.next()? {
+                ranges.push(location.range);
+            }
+        }
+        Ok(ranges)
+    }
+
+    fn loclist_entries<'a>(
+        &self,
+        dwarf: &gimli::Dwarf<R<'a>>,
+        unit: &gimli::Unit<R<'a>>,
+        value: AttributeValue<R<'a>>,
+    ) -> Result<Vec<(gimli::Range, SimpleLocation)>, gimli::Error> {
+        let Some(mut locations) = dwarf.attr_locations(unit, value)? else {
+            return Ok(Vec::new());
+        };
+        let mut out = Vec::new();
+        while let Some(location) = locations.next()? {
+            let bytes = location.data.0.slice();
+            if let Some(loc) = Self::evaluate_expression(bytes) {
+                out.push((location.range, loc));
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -417,13 +518,14 @@ fn resolve_macro_file_name(
 
 fn extract_functions(
     dwarf: &gimli::Dwarf<R<'_>>,
+    resolver: &DebugLocationResolver,
 ) -> Result<BTreeMap<u64, FunctionDebugInfo>, gimli::Error> {
     let mut functions = BTreeMap::new();
     let mut units = dwarf.units();
 
     while let Some(header) = units.next()? {
         let unit = dwarf.unit(header)?;
-        extract_functions_from_unit(dwarf, &unit, &mut functions)?;
+        extract_functions_from_unit(dwarf, &unit, resolver, &mut functions)?;
     }
 
     Ok(functions)
@@ -432,6 +534,7 @@ fn extract_functions(
 fn extract_functions_from_unit(
     dwarf: &gimli::Dwarf<R<'_>>,
     unit: &gimli::Unit<R<'_>>,
+    resolver: &DebugLocationResolver,
     functions: &mut BTreeMap<u64, FunctionDebugInfo>,
 ) -> Result<(), gimli::Error> {
     let mut tree = unit.entries_tree(None)?;
@@ -482,7 +585,7 @@ fn extract_functions_from_unit(
         };
 
         let decl = extract_decl_location(dwarf, unit, entry)?;
-        let (params, locals) = extract_params_and_locals(dwarf, unit, child)?;
+        let (params, locals) = extract_params_and_locals(dwarf, unit, resolver, child)?;
 
         functions.insert(
             low_pc,
@@ -742,6 +845,7 @@ fn resolve_type_size(
 fn extract_params_and_locals(
     dwarf: &gimli::Dwarf<R<'_>>,
     unit: &gimli::Unit<R<'_>>,
+    resolver: &DebugLocationResolver,
     func_node: gimli::EntriesTreeNode<'_, '_, R<'_>>,
 ) -> Result<(Vec<ParameterInfo>, Vec<LocalVariable>), gimli::Error> {
     let mut params = Vec::new();
@@ -769,13 +873,13 @@ fn extract_params_and_locals(
                 None => None,
             };
             let location_attr = entry.attr_value(DW_AT_location);
-            let frame_offset = location_attr.and_then(decode_fbreg_offset);
+            let frame_offset = location_attr.and_then(|value| resolver.frame_offset(value));
             let locations = match location_attr {
-                Some(value) => extract_location_ranges(dwarf, unit, value)?,
+                Some(value) => resolver.location_ranges(dwarf, unit, value)?,
                 None => Vec::new(),
             };
             let locations_dwarf_v5 = match location_attr {
-                Some(value) => extract_loclist_v5_entries(dwarf, unit, value)?,
+                Some(value) => resolver.loclist_entries(dwarf, unit, value)?,
                 None => Vec::new(),
             };
             locals.push(LocalVariable {
@@ -789,22 +893,6 @@ fn extract_params_and_locals(
     }
 
     Ok((params, locals))
-}
-
-/// Decode a `DW_AT_location` value as a single `DW_OP_fbreg <sleb>` opcode.
-///
-/// Returns `Some(offset)` when the location is exactly a `DW_OP_fbreg`
-/// expression and `None` otherwise. The opcode constant is `0x91` and the
-/// operand is an SLEB128. Compilers commonly emit this single-opcode form
-/// for stack-allocated locals.
-///
-/// Wraps the more general [`evaluate_simple_location`] but keeps the
-/// historical single-shape entrypoint stable for existing callers.
-fn decode_fbreg_offset(value: AttributeValue<R<'_>>) -> Option<i64> {
-    match evaluate_simple_location(value)? {
-        SimpleLocation::FrameOffset(off) => Some(off),
-        _ => None,
-    }
 }
 
 /// Result of a single-opcode-stream evaluation against a `DW_AT_location`.
@@ -867,11 +955,7 @@ pub enum SimpleLocation {
 /// and `<base> DW_OP_deref` extensions land cleanly without dragging the
 /// full evaluator into the loader.
 pub fn evaluate_simple_location(value: AttributeValue<R<'_>>) -> Option<SimpleLocation> {
-    let bytes: &[u8] = match value {
-        AttributeValue::Block(b) | AttributeValue::Exprloc(gimli::Expression(b)) => b.slice(),
-        _ => return None,
-    };
-    evaluate_simple_location_bytes(bytes)
+    DebugLocationResolver.evaluate_attribute(value)
 }
 
 /// Apply `DW_OP_plus_uconst <k>` to the base location, folding the
@@ -1104,48 +1188,6 @@ fn extract_die_ranges<'a>(
         ranges.push(range);
     }
     Ok(ranges)
-}
-
-fn extract_location_ranges<'a>(
-    dwarf: &gimli::Dwarf<R<'a>>,
-    unit: &gimli::Unit<R<'a>>,
-    value: AttributeValue<R<'a>>,
-) -> Result<Vec<gimli::Range>, gimli::Error> {
-    let mut ranges = Vec::new();
-    if let Some(mut locations) = dwarf.attr_locations(unit, value)? {
-        while let Some(location) = locations.next()? {
-            ranges.push(location.range);
-        }
-    }
-    Ok(ranges)
-}
-
-/// Decode a `.debug_loclists` reference into `(pc_range, expression)`
-/// pairs. Returns an empty vector when the attribute is a direct
-/// expression (not a loclists reference), matching the dominant v4
-/// shape where `frame_offset` is the only relevant projection.
-fn extract_loclist_v5_entries<'a>(
-    dwarf: &gimli::Dwarf<R<'a>>,
-    unit: &gimli::Unit<R<'a>>,
-    value: AttributeValue<R<'a>>,
-) -> Result<Vec<(gimli::Range, SimpleLocation)>, gimli::Error> {
-    // `attr_locations` returns None for direct expressions (which the
-    // simple-location evaluator handles) and Some(iter) for loclists.
-    let Some(mut locations) = dwarf.attr_locations(unit, value)? else {
-        return Ok(Vec::new());
-    };
-    let mut out = Vec::new();
-    while let Some(location) = locations.next()? {
-        // Evaluate the expression bytes for this entry using the
-        // existing single-shot evaluator. If the expression can't be
-        // summarised, skip the entry — callers fall back to the
-        // simpler `locations` (range-only) view.
-        let bytes = location.data.0.slice();
-        if let Some(loc) = evaluate_simple_location_bytes(bytes) {
-            out.push((location.range, loc));
-        }
-    }
-    Ok(out)
 }
 
 fn resolve_type_name(
@@ -1433,6 +1475,10 @@ mod tests {
             evaluate_simple_location_bytes(&bytes),
             Some(SimpleLocation::FrameOffset(-8)),
         );
+        assert_eq!(
+            DebugLocationResolver::evaluate_expression(&bytes),
+            Some(SimpleLocation::FrameOffset(-8)),
+        );
     }
 
     /// `DW_OP_addr 0xdeadbeef` (LE 8-byte) → absolute target.
@@ -1548,15 +1594,15 @@ mod tests {
         }
     }
 
-    /// `decode_fbreg_offset` is still a thin shim and must return the same
-    /// answer for the canonical fbreg shape.
+    /// The shared resolver must return the same answer for the canonical
+    /// fbreg shape as the lower-level evaluator.
     #[test]
-    fn decode_fbreg_matches_evaluator_for_fbreg_only() {
-        // We can't construct an AttributeValue easily without a real DWARF
-        // unit; instead, exercise the helper directly.
+    fn debug_location_resolver_matches_evaluator_for_fbreg_only() {
         let bytes = [0x91, 0x78];
         let via_eval = evaluate_simple_location_bytes(&bytes);
+        let via_resolver = DebugLocationResolver::evaluate_expression(&bytes);
         assert_eq!(via_eval, Some(SimpleLocation::FrameOffset(-8)));
+        assert_eq!(via_resolver, via_eval);
     }
 
     fn load_debug_fixture() -> BinaryImage {
@@ -1712,6 +1758,39 @@ mod tests {
         assert!(
             info.functions.is_empty(),
             "stripped binary should have no DWARF functions"
+        );
+    }
+
+    #[test]
+    fn import_dwarf_accepts_explicit_location_resolver() {
+        let img = load_debug_fixture();
+        let resolver = DebugLocationResolver;
+        let info = import_dwarf_with_resolver(&img, &resolver).expect("should parse DWARF");
+        assert!(!info.functions.is_empty());
+    }
+
+    #[test]
+    fn sidecar_recovers_dwarf_from_external_file() {
+        // The primary image is stripped (no DWARF); all debug info must come
+        // from the external sidecar ELF passed via `--dwarf-sidecar`.
+        let stripped =
+            std::fs::read("../../fixtures/stripped.elf").expect("fixture stripped.elf must exist");
+        let stripped_img = ElfLoader::load(&stripped).expect("should parse stripped.elf");
+        let sidecar = std::fs::read("../../fixtures/debug_calls.elf")
+            .expect("fixture debug_calls.elf must exist");
+
+        let without = import_dwarf_with_sidecar(&stripped_img, None)
+            .expect("import without sidecar should succeed");
+        assert!(
+            without.functions.is_empty(),
+            "stripped image alone must yield no DWARF functions"
+        );
+
+        let with = import_dwarf_with_sidecar(&stripped_img, Some(&sidecar))
+            .expect("import with sidecar should succeed");
+        assert!(
+            !with.functions.is_empty(),
+            "sidecar must inject DWARF functions the stripped image lacks"
         );
     }
 

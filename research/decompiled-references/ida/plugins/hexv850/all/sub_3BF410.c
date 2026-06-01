@@ -1,0 +1,35 @@
+__int64 __fastcall sub_3BF410(__int64 a1, const char *a2, int a3, char a4, double a5)
+{
+  unsigned __int64 v6; // rbx
+  int v7; // eax
+
+  v6 = a3;
+  v7 = sub_3BF0F0(a2);
+  if ( v7 < 0 )
+  {
+    if ( v7 != -1 )
+    {
+      if ( !under_debugger )
+        sub_37CFE0(0xC925u, a5);
+      BUG();
+    }
+    return 1;
+  }
+  if ( (unsigned int)v7 <= 7 && *(_BYTE *)(a1 + 40LL * v7 + 41) )
+  {
+    if ( get_dtype_size() >= v6 )
+      return 1;
+    if ( a4 )
+      return 0;
+    sub_2AFAB0((__int64)"AUTOHIDE NONE\nIncorrect size of operand '%s'\n", a2);
+    return 0;
+  }
+  else
+  {
+    if ( a4 )
+      return 0;
+    sub_2AFAB0((__int64)"AUTOHIDE NONE\nNo operand '%s' in instruction", a2);
+    return 0;
+  }
+}
+

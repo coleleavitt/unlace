@@ -102,5 +102,5 @@ The unlace pipeline detects:
   the public C++ SDK header (`typeinf.hpp` in
   `research/ida-hexrays-docs/sdk/include/`) documents the underlying
   `tinfo_t` shape that `.until` mirrors.
-- `references/ida/plugins/idaclang/all/` (303 decompiled functions)
+- `research/decompiled-references/ida/plugins/idaclang/all/` (303 decompiled functions)
   shows IDA's actual header-to-TIL pipeline using libclang.

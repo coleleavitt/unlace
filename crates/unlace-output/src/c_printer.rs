@@ -2909,6 +2909,50 @@ struct ArraySubscript {
     index: String,
 }
 
+/// Parenthesise a base expression for use as the array operand of a `[...]`
+/// subscript when it is not a postfix-atomic expression. The subscript operator
+/// `[]` binds tighter than a prefix cast/deref, so `*(_QWORD *)(p)[i]` parses as
+/// `*( ((_QWORD*)p)[i] )` — i.e. the cast applies to `p[i]`, not the indexed
+/// value. A base such as `*(_QWORD *)(buf + 8)` must therefore be wrapped:
+/// `(*(_QWORD *)(buf + 8))[i]`. A bare identifier, an already-parenthesised
+/// expression, or a postfix chain (ends with `]`/`)` and starts atomically) is
+/// left as-is.
+fn paren_if_non_atomic_base(base: &str) -> String {
+    let b = base.trim();
+    // Bare identifier (incl. `a1`, `v3`, `buf`, dotted/`->` chains, postfix
+    // `x[...]`/`x(...)`): atomic enough that `b[i]` binds correctly.
+    let is_ident_char = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let atomic_ident = !b.is_empty()
+        && b.chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && b.chars().all(is_ident_char);
+    // Already fully wrapped in one pair of parens.
+    let fully_parenthesised = b.starts_with('(') && b.ends_with(')') && {
+        // Verify the leading '(' matches the trailing ')'.
+        let mut depth = 0i32;
+        let mut matched_at_end = true;
+        for (i, c) in b.char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 && i != b.len() - 1 {
+                        matched_at_end = false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        matched_at_end && depth == 0
+    };
+    if atomic_ident || fully_parenthesised {
+        base.to_string()
+    } else {
+        format!("({base})")
+    }
+}
+
 /// Try to recognise an array subscript pattern in the address computation of a
 /// LOAD or STORE instruction.
 ///
@@ -3000,7 +3044,7 @@ fn try_array_subscript(
                 }
 
                 return Some(ArraySubscript {
-                    base: base_expr,
+                    base: paren_if_non_atomic_base(&base_expr),
                     index: idx_expr,
                 });
             }
@@ -3035,7 +3079,7 @@ fn try_array_subscript(
                 return None;
             }
             Some(ArraySubscript {
-                base: base_expr,
+                base: paren_if_non_atomic_base(&base_expr),
                 index: format!("{}", computed_idx),
             })
         }
@@ -3052,7 +3096,7 @@ fn try_array_subscript(
             }
             let idx_expr = emit_operand_resolved(&def_insn.inputs[1], 1, def_stmt, ctx);
             Some(ArraySubscript {
-                base: base_expr,
+                base: paren_if_non_atomic_base(&base_expr),
                 index: idx_expr,
             })
         }
@@ -17201,6 +17245,36 @@ mod tests {
     use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
     use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
     use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
+
+    #[test]
+    fn paren_if_non_atomic_base_wraps_casts_and_derefs() {
+        use super::paren_if_non_atomic_base;
+        // Bare identifiers are left alone.
+        assert_eq!(paren_if_non_atomic_base("buf"), "buf");
+        assert_eq!(paren_if_non_atomic_base("a1"), "a1");
+        // Postfix chains containing `->`/`.` are conservatively wrapped (the
+        // extra parens are harmless; `(v3->field_0)[i]` == `v3->field_0[i]`).
+        assert_eq!(paren_if_non_atomic_base("v3->field_0"), "(v3->field_0)");
+        // Already fully wrapped in one matching paren pair: unchanged.
+        assert_eq!(paren_if_non_atomic_base("(buf + 8)"), "(buf + 8)");
+        // `(_QWORD *)(buf + 8)` is TWO paren groups (a cast applied to a paren),
+        // not one wrap — it must be wrapped so the subscript binds to the cast
+        // result, not `(buf + 8)[i]`.
+        assert_eq!(
+            paren_if_non_atomic_base("(_QWORD *)(buf + 8)"),
+            "((_QWORD *)(buf + 8))"
+        );
+        // A cast/deref base MUST be parenthesised so `base[i]` binds to the
+        // dereferenced value, not the pre-cast subexpression.
+        assert_eq!(
+            paren_if_non_atomic_base("*(_QWORD *)(buf + 8)"),
+            "(*(_QWORD *)(buf + 8))"
+        );
+        // `a + b` is non-atomic — `(a + b)[i]` keeps the add intact.
+        assert_eq!(paren_if_non_atomic_base("buf + 8"), "(buf + 8)");
+        // Two adjacent paren groups are NOT a single wrap — must be wrapped.
+        assert_eq!(paren_if_non_atomic_base("(a)(b)"), "((a)(b))");
+    }
 
     use super::{PrinterAnnotations, print_c, print_c_with_annotations};
 

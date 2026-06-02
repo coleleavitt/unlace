@@ -219,3 +219,36 @@ advance looks like arithmetic. Step 2 must first detect phi-carried pointer
 induction variables and keep them whole; only *genuinely disjoint* phases
 (distinct webs that never share a phi/induction cycle) may be split. This is
 the induction-aware part of CLAUDE.md #10 / t7 LVAR allocation.
+
+## Update 2026-06-01c: conclusion — use-site heuristic is fundamentally too coarse
+
+After exhausting the split-criterion design space (5 distinct heuristics, all
+reverted), the decisive conclusion: **no use-site (address-vs-arith) heuristic
+splits the r9 collision without also mis-firing on legitimate cases.**
+
+| criterion | outcome |
+| --- | --- |
+| pairwise address/arith conflict | severs a pointer cursor's induction cycle → infinite loop (gdb: medium.c:324) |
+| partition-gated (Mixed=keep cursor) | keeps rdx cursor whole + flags r9 correctly, but over-splits 9 registers → timeout |
+| collision-gated (split only on shared name) | still 9 collisions; renames a legitimate struct pointer → breaks `->` arrow path → cc fails |
+
+Root difficulty: the r9 scalar reaches the register via `ZEXT(SUBPIECE(arith))`,
+so any classifier broad enough to catch it also matches legitimate pointer
+cursors and struct pointers that incidentally touch arithmetic. A correct fix
+needs three precise analyses together, not a peephole:
+1. **per-program-point interference** (not the coarse min/max interval sweep),
+2. **loop-carried induction detection** (keep a phi-carried cursor whole even
+   though its advance is arithmetic),
+3. **struct-pointer awareness** (don't rename a base that feeds field access).
+
+That is real LVAR live-range allocation (CLAUDE.md #10 / t7), a multi-day,
+fresh, focused effort — not tunable in incremental attempts.
+
+**Reusable working sub-parts** (proven this session, to compose with the real
+split criterion): component 1 `collect_live_on_entry_reads`; component 2
+ZEXT/SEXT/Subpiece arith propagation in `classify_use_sites`; component 4
+`base_sv_declared_non_pointer` arrow/subscript guards; component 5B
+composite-`Ptr`→`func_var_types_ptr`→`_QWORD` decl width. The ONLY missing piece
+is the precise split criterion above. `partition_register_phases` (committed
+`3b533be95a`) is the correct starting primitive; it needs the three analyses
+layered on before it drives any renaming.

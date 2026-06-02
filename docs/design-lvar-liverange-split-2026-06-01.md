@@ -252,3 +252,19 @@ composite-`Ptr`→`func_var_types_ptr`→`_QWORD` decl width. The ONLY missing p
 is the precise split criterion above. `partition_register_phases` (committed
 `3b533be95a`) is the correct starting primitive; it needs the three analyses
 layered on before it drives any renaming.
+
+## Update 2026-06-01d: component 4 is NOT free-standing hardening
+
+Checked whether component 4 (`base_sv_declared_non_pointer` arrow/subscript
+guards) could land alone as defensive hardening. It is NOT byte-inert: on
+`debug_templates` (`make_array`, `sub_401187`) it changes
+`*(_QWORD *)(buf + 8)[1]` → `*(_OWORD *)(*(_QWORD *)(buf + 8) + 0x10LL)` — a
+different offset (8 vs 0x10) AND width (_QWORD vs _OWORD). `debug_templates:main`
+still passes semantic-report (exit 24), but `make_array`/`sub_401187` are not
+directly semantic-tested and the new form is not verified more-correct than the
+old. Per CLAUDE.md (don't change output without verifying it's better), component
+4 must NOT be landed standalone — it only belongs as part of the full t69 fix
+where the split makes the guard's bail-to-raw-deref the correct rendering.
+
+Net: none of the four t69 sub-parts are independently shippable. They are
+coupled to the (still-unbuilt) precise split criterion.

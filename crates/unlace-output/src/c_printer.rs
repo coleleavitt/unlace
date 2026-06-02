@@ -2972,6 +2972,32 @@ fn is_scalar_deref_base(base: &str) -> bool {
     base.trim_start().starts_with('*')
 }
 
+/// `true` when the subscript base resolves to a *named* `Load` output (a loaded
+/// scalar value, e.g. `v7 = *(_QWORD *)(v11)`). Such a value holds a pointer but
+/// is declared a scalar (`_QWORD v7`), so `v7[i]` is invalid C; returning `None`
+/// falls through to the always-valid raw `*(T *)(v7 + i*stride)` deref form.
+///
+/// Structural (no type aggregation): the defining instruction of the base SV is
+/// a `Load`. This is unambiguous and avoids the rsp type-inconsistency that
+/// defeats a declared-type guard. A genuine array/pointer local that was loaded
+/// would already be declared a pointer and rendered with a pointer cast
+/// upstream; the bail only removes the *uncompilable* `scalar[i]` form.
+fn base_vn_is_scalar_load_output(base_vn: &Varnode, def_stmt: u32, ctx: &PrintCtx) -> bool {
+    let Some(base_sv) = ctx
+        .stmt_inputs
+        .get(&def_stmt)
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_vn).copied())
+    else {
+        return false;
+    };
+    let Some(&base_def) = ctx.sv_defining_stmt.get(&base_sv) else {
+        return false;
+    };
+    ctx.stmt_insns
+        .get(&base_def)
+        .is_some_and(|insn| insn.op == IrOp::Load)
+}
+
 /// Try to recognise an array subscript pattern in the address computation of a
 /// LOAD or STORE instruction.
 ///
@@ -3061,7 +3087,10 @@ fn try_array_subscript(
                 if is_generic_address_expr(&base_expr) {
                     continue;
                 }
-                if is_scalar_deref_base(&base_expr) || is_x86_frame_base(base_vn) {
+                if is_scalar_deref_base(&base_expr)
+                    || is_x86_frame_base(base_vn)
+                    || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
+                {
                     return None;
                 }
 
@@ -3100,6 +3129,7 @@ fn try_array_subscript(
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
                 || is_x86_frame_base(base_vn)
+                || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
             {
                 return None;
             }
@@ -3119,6 +3149,7 @@ fn try_array_subscript(
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
                 || is_x86_frame_base(&def_insn.inputs[0])
+                || base_vn_is_scalar_load_output(&def_insn.inputs[0], def_stmt, ctx)
             {
                 return None;
             }

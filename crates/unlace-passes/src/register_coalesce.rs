@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{BlockId, SpaceId};
+use unlace_ir::{BlockId, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -392,6 +392,138 @@ fn classify_use_sites(func: &SsaFunction) -> UseSiteClasses {
         }
     }
     classes
+}
+
+/// The role a connected component of same-register SSA versions plays, derived
+/// from how its members are used (see [`partition_register_phases`]).
+///
+/// Staged analysis for the t69 live-range-split fix
+/// (docs/design-lvar-liverange-split-2026-06-01.md); unit-tested but not yet
+/// wired into the pass (the rename/retype step is the remaining work), so it is
+/// `dead_code` in non-test builds by design.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum RegisterPhase {
+    /// Some member is dereferenced as a Load/Store address; no member is a
+    /// pure-arithmetic output. A pointer cursor.
+    Pointer,
+    /// Some member is a pure-arithmetic output; no member is an address. A
+    /// computed scalar.
+    Scalar,
+    /// Some member is BOTH an address use and (elsewhere in the component) a
+    /// pure-arith output. The register holds two roles in one connected web —
+    /// splitting names is unsound here; the bug is upstream (lifter / SSA
+    /// construction). Callers should STOP rather than split a `Mixed` phase.
+    Mixed,
+    /// Neither an address use nor an arith output is observed (e.g. an opaque
+    /// copy of an argument). Not splittable, not dangerous.
+    Neither,
+}
+
+/// Partition the SSA versions of a single register base into connected
+/// components over MULTIEQUAL (phi) and COPY edges, and classify each component
+/// as a [`RegisterPhase`]. This is step 1 of the live-range-split fix
+/// (docs/design-lvar-liverange-split-2026-06-01.md): a register whose versions
+/// split into a disjoint pointer-phase and scalar-phase is the source of the
+/// `medium:main` pointer-deref-of-scalar bug, and can be safely given distinct
+/// lvars per component — *unless* a component is [`RegisterPhase::Mixed`].
+///
+/// Edges considered:
+///   * phi: `phi.output <-> each phi.input`,
+///   * copy: `copy.output <-> copy.input[0]` (register or unique source).
+///
+/// Only versions whose base is `reg_base` participate; cross-register copies are
+/// edges *into* the component but the foreign endpoint is not itself classified
+/// here (its role is attributed to the reg-base endpoint via the use sites).
+///
+/// Pure analysis — no mutation, no IR changes. Wired into nothing yet; the
+/// split itself (rename + retype) is the remaining implementation work.
+#[allow(dead_code)]
+fn partition_register_phases(
+    func: &SsaFunction,
+    reg_base: Varnode,
+    use_sites: &UseSiteClasses,
+) -> Vec<(BTreeSet<SsaVarnode>, RegisterPhase)> {
+    use unlace_ir::IrOp;
+
+    // Collect the register's SSA versions.
+    let mut nodes: BTreeSet<SsaVarnode> = BTreeSet::new();
+    for sv in func.var_map.values() {
+        if sv.base == reg_base {
+            nodes.insert(*sv);
+        }
+    }
+    for phis in func.phi_map.values() {
+        for phi in phis {
+            if phi.output.base == reg_base {
+                nodes.insert(phi.output);
+            }
+            for (_pred, input) in &phi.inputs {
+                if input.base == reg_base {
+                    nodes.insert(*input);
+                }
+            }
+        }
+    }
+    if nodes.is_empty() {
+        return Vec::new();
+    }
+
+    // Union-find over the register's own versions.
+    let mut uf = UnionFind::new(&nodes);
+    let link = |uf: &mut UnionFind, a: SsaVarnode, b: SsaVarnode| {
+        if nodes.contains(&a) && nodes.contains(&b) {
+            let ra = uf.find(a);
+            let rb = uf.find(b);
+            if ra != rb {
+                uf.union(ra, rb);
+            }
+        }
+    };
+
+    // Phi edges.
+    for phis in func.phi_map.values() {
+        for phi in phis {
+            for (_pred, input) in &phi.inputs {
+                link(&mut uf, phi.output, *input);
+            }
+        }
+    }
+    // Copy edges (output <-> input[0]) where both endpoints are this register.
+    for (&bid, block) in &func.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            if insn.op != IrOp::Copy {
+                continue;
+            }
+            let (Some(&out), Some(&src)) = (
+                func.var_map.get(&(bid, idx, VarnodeSlot::Output)),
+                func.var_map.get(&(bid, idx, VarnodeSlot::Input(0))),
+            ) else {
+                continue;
+            };
+            link(&mut uf, out, src);
+        }
+    }
+
+    // Gather components and classify.
+    let mut comps: BTreeMap<SsaVarnode, BTreeSet<SsaVarnode>> = BTreeMap::new();
+    for &n in &nodes {
+        comps.entry(uf.find(n)).or_default().insert(n);
+    }
+    comps
+        .into_values()
+        .map(|members| {
+            let has_addr = members.iter().any(|sv| use_sites.address_used.contains(sv));
+            let has_arith = members.iter().any(|sv| use_sites.arith_output.contains(sv));
+            let phase = match (has_addr, has_arith) {
+                (true, true) => RegisterPhase::Mixed,
+                (true, false) => RegisterPhase::Pointer,
+                (false, true) => RegisterPhase::Scalar,
+                (false, false) => RegisterPhase::Neither,
+            };
+            (members, phase)
+        })
+        .collect()
 }
 
 #[derive(Default)]
@@ -1239,5 +1371,142 @@ mod tests {
             ssa.merged_names.get(&ub),
             "address-used and arith-output versions must not share a name",
         );
+    }
+
+    // -- partition_register_phases (t69 step 1) ------------------------------
+
+    const R9: u64 = 72;
+
+    fn r9(version: u32) -> SsaVarnode {
+        SsaVarnode {
+            base: Varnode::reg(R9, 8),
+            version,
+        }
+    }
+
+    /// Two disjoint webs of one register — a pointer phase (used as a Load
+    /// address) and a scalar phase (a pure-arith output) with NO phi/copy edge
+    /// between them — must partition into two components, classified Pointer
+    /// and Scalar. This is the medium::main shape; it confirms the split is
+    /// applicable (CLAUDE.md #10 / t69).
+    #[test]
+    fn partition_separates_disjoint_pointer_and_scalar_phases() {
+        // BB0: r9#1 = COPY rsi ; LOAD [r9#1]      (pointer phase)
+        //      r9#2 = INT_MULT(c, c)               (scalar phase, disjoint)
+        let rsi = SsaVarnode {
+            base: Varnode::reg(48, 8),
+            version: 0,
+        };
+        let c2 = Varnode::constant(2, 8);
+
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            r9(1).base,
+            smallvec![rsi.base],
+            0x1000,
+        ));
+        let load_out = Varnode::unique(0x10, 8);
+        b0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![Varnode::constant(0, 4), r9(1).base],
+            0x1004,
+        ));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            r9(2).base,
+            smallvec![c2, c2],
+            0x1008,
+        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), r9(1));
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rsi);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), r9(1));
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Output), r9(2));
+
+        let ssa = make_ssa(vec![b0], var_map, BTreeMap::new());
+        let use_sites = classify_use_sites(&ssa);
+        let phases = partition_register_phases(&ssa, Varnode::reg(R9, 8), &use_sites);
+
+        assert_eq!(
+            phases.len(),
+            2,
+            "expected disjoint pointer + scalar webs: {phases:?}"
+        );
+        let kinds: BTreeSet<_> = phases.iter().map(|(_, p)| *p).collect();
+        assert!(kinds.contains(&RegisterPhase::Pointer), "{phases:?}");
+        assert!(kinds.contains(&RegisterPhase::Scalar), "{phases:?}");
+    }
+
+    /// When a phi joins the pointer-sourced and scalar-sourced versions into one
+    /// connected web, the component is Mixed — splitting names would be unsound;
+    /// the caller must STOP (the bug would be upstream).
+    #[test]
+    fn partition_flags_mixed_component_when_phi_joins_roles() {
+        // BB0: r9#1 = COPY rsi ; branch
+        // BB1: r9#2 = INT_MULT(c,c) ; branch
+        // BB2: r9#3 = phi(r9#1, r9#2) ; LOAD [r9#3]
+        let rsi = SsaVarnode {
+            base: Varnode::reg(48, 8),
+            version: 0,
+        };
+        let c2 = Varnode::constant(2, 8);
+
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            r9(1).base,
+            smallvec![rsi.base],
+            0x1000,
+        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1004));
+        b0.successors = smallvec![BlockId(1)];
+
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            r9(2).base,
+            smallvec![c2, c2],
+            0x1010,
+        ));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1014));
+        b1.successors = smallvec![BlockId(2)];
+
+        let mut b2 = BasicBlock::new(BlockId(2));
+        let load_out = Varnode::unique(0x10, 8);
+        b2.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![Varnode::constant(0, 4), r9(3).base],
+            0x1020,
+        ));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1024));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), r9(1));
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rsi);
+        var_map.insert((BlockId(1), 0, VarnodeSlot::Output), r9(2));
+        var_map.insert((BlockId(2), 0, VarnodeSlot::Input(1)), r9(3));
+
+        let phi = PhiNode {
+            output: r9(3),
+            inputs: vec![(BlockId(0), r9(1)), (BlockId(1), r9(2))],
+        };
+        let mut phi_map = BTreeMap::new();
+        phi_map.insert(BlockId(2), vec![phi]);
+
+        let ssa = make_ssa(vec![b0, b1, b2], var_map, phi_map);
+        let use_sites = classify_use_sites(&ssa);
+        let phases = partition_register_phases(&ssa, Varnode::reg(R9, 8), &use_sites);
+
+        assert_eq!(phases.len(), 1, "phi unifies the web: {phases:?}");
+        assert_eq!(phases[0].1, RegisterPhase::Mixed, "{phases:?}");
     }
 }

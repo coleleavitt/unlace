@@ -2786,7 +2786,14 @@ fn try_resolve_struct_field(
         }
         return None;
     }
-    Some(format!("{}->{}", base_expr, field_name))
+    // `->` is postfix (binds tighter than `-`/`+`), so a non-atomic base like
+    // `c0 - 32` must be parenthesised: `(c0 - 32)->field`, else it parses as
+    // `c0 - (32->field)`.
+    Some(format!(
+        "{}->{}",
+        paren_if_non_atomic_base(&base_expr),
+        field_name
+    ))
 }
 
 /// Resolve the printable name of a struct-access base varnode, falling back to
@@ -3182,8 +3189,10 @@ fn try_struct_field_access(
     // For a simple identifier base this renders byte-identically to
     // the legacy `format!("{}->{}", base, field)` form; for a more
     // complex base (e.g. a cast or deref produced by a future pass)
-    // the `Member` printer will insert parens as needed.
-    let member = CExpr::arrow(CExpr::Lit(base_expr), field_name);
+    // the `Member` printer will insert parens as needed. `CExpr::Lit` is
+    // treated as atomic, so a non-atomic base string is pre-parenthesised
+    // here (`->` is postfix and would otherwise bind tighter than `-`/`+`).
+    let member = CExpr::arrow(CExpr::Lit(paren_if_non_atomic_base(&base_expr)), field_name);
     Some(member.to_string())
 }
 

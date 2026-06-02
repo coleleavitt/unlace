@@ -2729,6 +2729,51 @@ fn build_field_offset_map(dwarf: Option<&DwarfInfo>) -> BTreeMap<u64, Vec<(Strin
     map
 }
 
+/// `true` when `vn` traces (through `Copy`/`IntAdd`/`IntSub` of constants) back
+/// to a stack/frame-pointer register. Such an address is a frame-relative access
+/// and must NOT be rendered as `base->field` (the frame pointer is a scalar, so
+/// `(c0 - 32)->field` is invalid C — "invalid type argument of '->'"); the
+/// caller should fall through to the raw `*(T *)(base + off)` deref form.
+/// Bounded depth; const-displacement chains only.
+fn traces_to_frame_base(
+    vn: &Varnode,
+    raw_idx: Option<usize>,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+    depth: u8,
+) -> bool {
+    if depth > 8 {
+        return false;
+    }
+    if is_frame_base_reg(vn) {
+        return true;
+    }
+    let Some(sv) = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx) else {
+        return false;
+    };
+    let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) else {
+        return false;
+    };
+    let Some(def) = ctx.stmt_insns.get(&def_stmt) else {
+        return false;
+    };
+    match def.op {
+        IrOp::Copy if !def.inputs.is_empty() => {
+            traces_to_frame_base(&def.inputs[0], Some(0), def_stmt, ctx, depth + 1)
+        }
+        IrOp::IntAdd | IrOp::IntSub if def.inputs.len() >= 2 => {
+            // A frame-relative displacement: one operand is the frame chain, the
+            // other a constant.
+            let (a, b) = (&def.inputs[0], &def.inputs[1]);
+            (b.space == SpaceId::Const
+                && traces_to_frame_base(a, Some(0), def_stmt, ctx, depth + 1))
+                || (a.space == SpaceId::Const
+                    && traces_to_frame_base(b, Some(1), def_stmt, ctx, depth + 1))
+        }
+        _ => false,
+    }
+}
+
 fn try_resolve_struct_field(
     addr_insn: &IrInsn,
     addr_stmt_idx: u32,
@@ -2749,6 +2794,12 @@ fn try_resolve_struct_field(
         return None;
     };
     if base_input.space == SpaceId::Const {
+        return None;
+    }
+    // A frame-relative access (`(frame - N)->field`) must render as a raw deref,
+    // not `base->field`: the frame pointer is a scalar, so the arrow is invalid
+    // C. Bail to let the caller fall through to `*(T *)(frame + off)`.
+    if traces_to_frame_base(base_input, None, addr_stmt_idx, ctx, 0) {
         return None;
     }
     let trace = std::env::var_os("UNLACE_TYPE_TRACE").is_some();
@@ -3089,6 +3140,7 @@ fn try_array_subscript(
                 }
                 if is_scalar_deref_base(&base_expr)
                     || is_subscript_unsafe_frame_base(base_vn)
+                    || traces_to_frame_base(base_vn, None, def_stmt, ctx, 0)
                     || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
                 {
                     return None;
@@ -3129,6 +3181,7 @@ fn try_array_subscript(
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
                 || is_subscript_unsafe_frame_base(base_vn)
+                || traces_to_frame_base(base_vn, None, def_stmt, ctx, 0)
                 || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
             {
                 return None;
@@ -3149,6 +3202,7 @@ fn try_array_subscript(
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
                 || is_subscript_unsafe_frame_base(&def_insn.inputs[0])
+                || traces_to_frame_base(&def_insn.inputs[0], None, def_stmt, ctx, 0)
                 || base_vn_is_scalar_load_output(&def_insn.inputs[0], def_stmt, ctx)
             {
                 return None;
@@ -3232,6 +3286,12 @@ fn try_struct_field_access(
         .map(|f| f.name.clone())
         .unwrap_or_else(|| format!("field_{:X}", const_offset));
 
+    // A frame-relative access (`(frame - N)->field`) must render as a raw deref,
+    // not `base->field` — the frame pointer is a scalar, so the arrow is invalid
+    // C ("invalid type argument of '->'"). Bail to the raw `*(T *)(addr)` form.
+    if traces_to_frame_base(base_vn, None, def_stmt, ctx, 0) {
+        return None;
+    }
     let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
     if is_generic_address_expr(&base_expr) {
         return None;
@@ -6501,6 +6561,20 @@ fn is_subscript_unsafe_frame_base(vn: &Varnode) -> bool {
         || (vn.space == SpaceId::Register
             && vn.size == 8
             && matches!(vn.offset, AARCH64_FP_REG_OFF | AARCH64_SP_REG_OFF))
+}
+
+/// Size-agnostic stack/frame-pointer register check (any access width). The
+/// frame pointer can be read at a sub-register width (e.g. MIPS `r29d`, a 4-byte
+/// view of `r29`), which `is_subscript_unsafe_frame_base` (8-byte-only) misses.
+/// Used by `traces_to_frame_base` for `->`/subscript frame-relative detection.
+/// Register offsets: x86 RSP=32/RBP=40, AArch64 FP=232/SP=248 (MIPS `r29`/`r30`
+/// alias the same 232/248 slots in this lifter's register file).
+fn is_frame_base_reg(vn: &Varnode) -> bool {
+    const RSP: u64 = 32;
+    const RBP: u64 = 40;
+    const FP_29: u64 = 232;
+    const SP_31: u64 = 248;
+    vn.space == SpaceId::Register && matches!(vn.offset, RSP | RBP | FP_29 | SP_31)
 }
 
 fn is_x86_frame_base_update(insn: &IrInsn, output: &Varnode) -> bool {
@@ -17358,6 +17432,25 @@ mod tests {
         assert!(!is_subscript_unsafe_frame_base(&reg(56))); // rdi
         assert!(!is_subscript_unsafe_frame_base(&reg(48))); // rsi
         assert!(!is_subscript_unsafe_frame_base(&reg(8))); // rcx
+    }
+
+    #[test]
+    fn frame_base_reg_is_size_agnostic() {
+        use super::is_frame_base_reg;
+        use unlace_ir::SpaceId;
+        let reg = |off, size| Varnode {
+            space: SpaceId::Register,
+            offset: off,
+            size,
+        };
+        // Frame regs at any access width (e.g. MIPS r29d is a 4-byte view).
+        assert!(is_frame_base_reg(&reg(32, 8))); // rsp
+        assert!(is_frame_base_reg(&reg(40, 8))); // rbp
+        assert!(is_frame_base_reg(&reg(232, 4))); // r29d (sub-register)
+        assert!(is_frame_base_reg(&reg(248, 8))); // sp
+        // Argument registers are never frame bases.
+        assert!(!is_frame_base_reg(&reg(56, 8))); // rdi
+        assert!(!is_frame_base_reg(&reg(16, 8))); // rdx
     }
 
     #[test]

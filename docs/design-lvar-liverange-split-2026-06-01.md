@@ -31,7 +31,7 @@ Trace evidence (`UNLACE_REG_COALESCE_TRACE` group/name dump on `medium:main`):
 - The clusters are **never coalesced**, so coalesce-time type/use guards can
   never fire (verified: 0 rejects).
 
-## Key finding (PARTIALLY VERIFIED): the phases LOOK separable in C output, but the interval trace disagrees — resolve first
+## Key finding (RESOLVED): the phases are separable at the SSA def-use level — the fix is in the back end, not the lifter
 
 Static read of the component-1-only output *suggests* the conflated values are
 sequential live ranges, e.g. for `c5` in `main`:
@@ -66,15 +66,34 @@ Two caveats on that data:
   range across all touch points (incl. phi edges), so it likely *overstates*
   overlap. The C output suggests the *dynamic* live ranges are disjoint.
 
-**Conclusion the implementer must resolve first:** do a **precise** interference
-check (per-program-point liveness, or SSA def→last-use, not the coarse min/max
-sweep) on the pointer-phase vs scalar-phase versions. IF they are genuinely
-disjoint at every point, splitting is sound (proceed below). IF they truly
-overlap at some point, the single register legitimately holds two live values
-simultaneously and the upstream lifting/SSA is wrong — splitting names alone
-would be unsound, and the fix moves further up (lifter / SSA construction).
-Do not assume separability; the earlier "they don't overlap" claim was inferred
-from C output and is contradicted by the interval trace.
+**RESOLVED (step-0 done — `ir-dump` def-use analysis on `main`):** the two
+phases ARE genuinely separable; the interval-sweep "overlap" was the coarse-sweep
+artifact. The SSA def-use webs of `v72` (r9) are **two completely disjoint
+MULTIEQUAL chains** that never mix:
+
+```
+POINTER web (used as a LOAD address at the deref site):
+  v72#6  = COPY v56#4            ; rsi (a pointer)
+  v72#11 = COPY v56#4            ; rsi
+  v72#7  = MULTIEQUAL(v72#6, v72#11)
+  v72#12 = MULTIEQUAL(v72#6, v72#11)
+  v72#1  = MULTIEQUAL(v72, v72#7)   -> v66162 = LOAD c1, v72#1   (the deref)
+
+SCALAR web (never used as an address):
+  v72#8  = INT_ZEXT(...)
+  v72#4  = INT_ZEXT(...)
+  v72#5  = MULTIEQUAL(v72#8, v72#4)
+```
+
+No MULTIEQUAL ever joins a pointer-sourced version with a scalar-sourced one.
+So the register genuinely carries two *independent* values whose SSA webs are
+already disjoint — the back end merely loses that distinction at the
+name-allocation layer. **Therefore: the fix IS at the back end (SSA/lvar split),
+NOT upstream in the lifter.** The earlier "non-overlapping" claim (inferred from
+C output) happens to be correct *for the SSA def-use webs*, even though the
+coarse linear interval sweep overstated overlap. Proceed with the split below;
+the precise check in step 0 should confirm disjointness via these def-use webs
+(SSA reachability), not the min/max interval sweep.
 
 ## Dead ends (do NOT repeat — all measured, all reverted)
 
@@ -95,13 +114,18 @@ cursor/condition desync. The split must happen *before* naming.
 Split at the SSA/lvar layer so the printer never sees one name with two types.
 This is CLAUDE.md item #10 / task t7 (live-range-aware LVAR allocation).
 
-0. **PREREQUISITE — precise interference check.** The coarse `compute_live_ranges`
-   min/max sweep shows the pointer-phase and scalar-phase r9 versions OVERLAP
-   (see correction above). Before any splitting, implement/borrow a precise
-   per-program-point liveness (or SSA def→last-use) and confirm the two phases
-   are disjoint at every point. If they are NOT disjoint, STOP — the register
-   genuinely holds two live values at once, the bug is upstream (lifter/SSA
-   construction), and name/lvar splitting is unsound. Only proceed if disjoint.
+0. **PREREQUISITE — confirm disjointness via SSA def-use webs (already done for
+   `main`, see RESOLVED above).** The coarse `compute_live_ranges` min/max sweep
+   *overstates* overlap; use the SSA def-use webs instead. For `main` the two
+   `v72` webs are provably disjoint (pointer chain via `COPY rsi`+MULTIEQUALs
+   feeding the LOAD; scalar chain via `INT_ZEXT`+MULTIEQUAL, never an address).
+   Generalise: partition a register's SSA versions by following MULTIEQUAL/COPY
+   edges into connected components; a component is the *pointer phase* if any
+   member is a Load/Store address, the *scalar phase* if any member is a
+   pure-arith output. If a single component contains BOTH an address use and a
+   pure-arith def, STOP — that component genuinely holds two roles at once and
+   the bug is upstream (lifter/SSA construction); splitting names is unsound.
+   For `main` no component mixes roles, so splitting is sound.
 
 1. **Detect a splittable register.** For each register base, compute its SSA
    live ranges (the coalescer already has `compute_live_ranges` +

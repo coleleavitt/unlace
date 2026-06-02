@@ -16,7 +16,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -81,6 +81,7 @@ impl Pass for RegisterCoalescePass {
         }
 
         let live = compute_live_ranges(func, &all_vars);
+        let use_sites = classify_use_sites(func);
         for (sv, interval) in &live.intervals {
             reg_coalesce_trace_line(&format!(
                 "interval func={} sv={:?} start={} end={}",
@@ -99,7 +100,15 @@ impl Pass for RegisterCoalescePass {
             for phi in phis {
                 let res = phi.output;
                 for (_pred, input) in &phi.inputs {
-                    try_coalesce_live_intervals(&func.function.name, &mut uf, &live, res, *input);
+                    try_coalesce_live_intervals(
+                        &func.function.name,
+                        &mut uf,
+                        &live,
+                        &func.var_types,
+                        &use_sites,
+                        res,
+                        *input,
+                    );
                 }
             }
         }
@@ -108,10 +117,89 @@ impl Pass for RegisterCoalescePass {
     }
 }
 
+/// Classify a varnode as pointer-typed vs scalar-arithmetic-typed for the
+/// purpose of coalescing. Coalescing a pointer live-range with a scalar
+/// live-range under one C variable is unsound even when the live ranges do not
+/// overlap: the merged variable is declared a single scalar, so a later
+/// pointer-deref of it (e.g. `*(_DWORD *)(c7)`) reads a stale scalar value at
+/// runtime. (Surfaced on medium::main once phantom params stopped isolating r9
+/// — a pointer cursor and a digit-extraction scalar both landed in r9.)
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CoalesceTypeClass {
+    Pointer,
+    Scalar,
+    Unknown,
+}
+
+fn coalesce_type_class(
+    var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
+    sv: SsaVarnode,
+) -> CoalesceTypeClass {
+    match var_types.get(&sv) {
+        Some(PrimitiveType::Ptr) => CoalesceTypeClass::Pointer,
+        Some(
+            PrimitiveType::Int(_)
+            | PrimitiveType::UnsignedInt(_)
+            | PrimitiveType::Bool
+            | PrimitiveType::Float
+            | PrimitiveType::Double,
+        ) => CoalesceTypeClass::Scalar,
+        Some(PrimitiveType::Unknown) | None => CoalesceTypeClass::Unknown,
+    }
+}
+
+/// `true` when merging groups containing `a`-class and `b`-class members would
+/// unify a pointer live-range with a scalar one. `Unknown` is permissive (only
+/// a definite Pointer↔Scalar conflict blocks the merge) so this never regresses
+/// well-typed coalescing.
+fn pointer_scalar_conflict(
+    var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
+    group_a: &BTreeSet<SsaVarnode>,
+    group_b: &BTreeSet<SsaVarnode>,
+) -> bool {
+    let class_of = |group: &BTreeSet<SsaVarnode>| {
+        let mut has_ptr = false;
+        let mut has_scalar = false;
+        for &sv in group {
+            match coalesce_type_class(var_types, sv) {
+                CoalesceTypeClass::Pointer => has_ptr = true,
+                CoalesceTypeClass::Scalar => has_scalar = true,
+                CoalesceTypeClass::Unknown => {}
+            }
+        }
+        (has_ptr, has_scalar)
+    };
+    let (a_ptr, a_scalar) = class_of(group_a);
+    let (b_ptr, b_scalar) = class_of(group_b);
+    (a_ptr && b_scalar) || (a_scalar && b_ptr)
+}
+
+/// `true` when merging the two groups would unify a varnode that is
+/// dereferenced as an address with one that is a pure-arithmetic scalar output.
+/// This is a use-site (structural) check, independent of `var_types`, so it
+/// catches the pointer/scalar hazard even when type inference left the relevant
+/// versions `Unknown` at coalesce time.
+fn address_arith_conflict(
+    use_sites: &UseSiteClasses,
+    group_a: &BTreeSet<SsaVarnode>,
+    group_b: &BTreeSet<SsaVarnode>,
+) -> bool {
+    let class_of = |group: &BTreeSet<SsaVarnode>| {
+        let has_addr = group.iter().any(|sv| use_sites.address_used.contains(sv));
+        let has_arith = group.iter().any(|sv| use_sites.arith_output.contains(sv));
+        (has_addr, has_arith)
+    };
+    let (a_addr, a_arith) = class_of(group_a);
+    let (b_addr, b_arith) = class_of(group_b);
+    (a_addr && b_arith) || (a_arith && b_addr)
+}
+
 fn try_coalesce_live_intervals(
     func_name: &str,
     uf: &mut UnionFind,
     live: &LiveSets,
+    var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
+    use_sites: &UseSiteClasses,
     a: SsaVarnode,
     b: SsaVarnode,
 ) -> bool {
@@ -168,6 +256,22 @@ fn try_coalesce_live_intervals(
         return false;
     }
 
+    if pointer_scalar_conflict(var_types, &group_a, &group_b) {
+        reg_coalesce_trace_line(&format!(
+            "try func={} a={:?} b={:?} decision=reject-pointer-scalar-conflict group_a={:?} group_b={:?}",
+            func_name, a, b, group_a, group_b
+        ));
+        return false;
+    }
+
+    if address_arith_conflict(use_sites, &group_a, &group_b) {
+        reg_coalesce_trace_line(&format!(
+            "try func={} a={:?} b={:?} decision=reject-address-arith-conflict group_a={:?} group_b={:?}",
+            func_name, a, b, group_a, group_b
+        ));
+        return false;
+    }
+
     uf.union(ra, rb);
     reg_coalesce_trace_line(&format!(
         "try func={} a={:?} b={:?} root_a={:?} root_b={:?} decision=merged group_a={:?} group_b={:?}",
@@ -203,6 +307,91 @@ fn collect_all_ssa_vars(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
         }
     }
     out
+}
+
+/// Structural (use-site) classification of SSA varnodes, independent of type
+/// inference. Used to block coalescing a varnode that is *dereferenced as an
+/// address* together with one that is the *output of pure integer arithmetic* —
+/// the runtime-unsound pointer/scalar merge that `var_types` misses when those
+/// versions are still typed `Unknown` at coalesce time.
+#[derive(Default)]
+struct UseSiteClasses {
+    /// Vars used as a Load/Store address operand (`input[1]`).
+    address_used: BTreeSet<SsaVarnode>,
+    /// Vars defined by pure integer arithmetic (mul/add/sub/shift on
+    /// non-address values) — i.e. computed scalars, never pointers.
+    arith_output: BTreeSet<SsaVarnode>,
+}
+
+fn classify_use_sites(func: &SsaFunction) -> UseSiteClasses {
+    use unlace_ir::IrOp;
+    let mut classes = UseSiteClasses::default();
+    for (&bid, block) in &func.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            // Load/Store address operand is input[1]: a var used there is
+            // dereferenced as a pointer.
+            if matches!(insn.op, IrOp::Load | IrOp::Store)
+                && let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(1)))
+            {
+                classes.address_used.insert(sv);
+            }
+            // Pure-scalar arithmetic outputs. IntMult / shifts / div / rem can
+            // never produce a valid pointer cursor; IntAdd is deliberately
+            // excluded because pointer arithmetic (`base + i`) is a legitimate
+            // IntAdd and we must not misclassify a pointer advance as a scalar.
+            if matches!(
+                insn.op,
+                IrOp::IntMult
+                    | IrOp::IntLeft
+                    | IrOp::IntRight
+                    | IrOp::IntSright
+                    | IrOp::IntDiv
+                    | IrOp::IntSdiv
+                    | IrOp::IntRem
+                    | IrOp::IntSrem
+                    | IrOp::IntAnd
+                    | IrOp::IntOr
+                    | IrOp::IntXor
+            ) && let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Output))
+            {
+                classes.arith_output.insert(sv);
+            }
+        }
+    }
+
+    // Propagate the scalar-arithmetic mark through `Copy` chains to a fixpoint:
+    // a register version assigned `Copy(arith_temp)` is itself a computed scalar
+    // (e.g. `r9 = Copy(unique)` where `unique = mul/shift(...)`). Optimized code
+    // funnels arithmetic results into registers via these copies, so without
+    // this the address/arith conflict on the register cluster is invisible.
+    let mut changed = true;
+    let mut guard = 0usize;
+    let max_iters = func.function.blocks.len().saturating_mul(4).max(16);
+    while changed && guard < max_iters {
+        changed = false;
+        guard += 1;
+        for (&bid, block) in &func.function.blocks {
+            use unlace_ir::IrOp;
+            for (idx, insn) in block.insns.iter().enumerate() {
+                if insn.op != IrOp::Copy {
+                    continue;
+                }
+                let Some(&out) = func.var_map.get(&(bid, idx, VarnodeSlot::Output)) else {
+                    continue;
+                };
+                if classes.arith_output.contains(&out) {
+                    continue;
+                }
+                if let Some(&src) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(0)))
+                    && classes.arith_output.contains(&src)
+                {
+                    classes.arith_output.insert(out);
+                    changed = true;
+                }
+            }
+        }
+    }
+    classes
 }
 
 #[derive(Default)]
@@ -878,5 +1067,177 @@ mod tests {
         let changed = RegisterCoalescePass.run(&mut ssa).expect("ok");
         assert!(changed);
         assert_eq!(ssa.merged_names.get(&ua), ssa.merged_names.get(&uphi));
+    }
+
+    /// A pointer-typed PHI operand must NOT coalesce with a scalar-typed one:
+    /// the merged variable would be declared a single scalar and a later
+    /// deref of the pointer value reads garbage. (Latent hazard surfaced on
+    /// medium::main once phantom params stopped isolating r9.)
+    #[test]
+    fn pointer_and_scalar_phi_operands_do_not_coalesce() {
+        let ua = SsaVarnode {
+            base: Varnode::unique(0, 8),
+            version: 0,
+        };
+        let ub = SsaVarnode {
+            base: Varnode::unique(8, 8),
+            version: 0,
+        };
+        let uphi = SsaVarnode {
+            base: Varnode::unique(16, 8),
+            version: 0,
+        };
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![c1, c1],
+            0x1000,
+        ));
+        b0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ua.base,
+            smallvec![c1],
+            0x1010,
+        ));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1014));
+        b1.successors = smallvec![BlockId(3)];
+
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ub.base,
+            smallvec![c2],
+            0x1020,
+        ));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1024));
+        b2.successors = smallvec![BlockId(3)];
+
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![uphi.base],
+            0x1030,
+        ));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(1), 0, VarnodeSlot::Output), ua);
+        var_map.insert((BlockId(2), 0, VarnodeSlot::Output), ub);
+        var_map.insert((BlockId(3), 0, VarnodeSlot::Input(0)), uphi);
+
+        let phi = PhiNode {
+            output: uphi,
+            inputs: vec![(BlockId(1), ua), (BlockId(2), ub)],
+        };
+        let mut phi_map = BTreeMap::new();
+        phi_map.insert(BlockId(3), vec![phi]);
+
+        let mut ssa = make_ssa(vec![b0, b1, b2, b3], var_map, phi_map);
+        // ua is a pointer, ub is a scalar — incompatible.
+        ssa.var_types.insert(ua, PrimitiveType::Ptr);
+        ssa.var_types.insert(ub, PrimitiveType::Int(8));
+
+        RegisterCoalescePass.run(&mut ssa).expect("ok");
+        assert_ne!(
+            ssa.merged_names.get(&ua),
+            ssa.merged_names.get(&ub),
+            "pointer and scalar versions must not share a coalesced name",
+        );
+    }
+
+    /// Use-site variant: even with both versions typed `Unknown`, a varnode
+    /// dereferenced as a Load/Store address must not coalesce with one that is
+    /// a pure-arithmetic (IntMult) output.
+    #[test]
+    fn address_used_and_arith_output_phi_operands_do_not_coalesce() {
+        let ua = SsaVarnode {
+            base: Varnode::unique(0, 8),
+            version: 0,
+        };
+        let ub = SsaVarnode {
+            base: Varnode::unique(8, 8),
+            version: 0,
+        };
+        let uphi = SsaVarnode {
+            base: Varnode::unique(16, 8),
+            version: 0,
+        };
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![c1, c1],
+            0x1000,
+        ));
+        b0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        // B1: ua = IntMult(c2, c2) — pure-arithmetic scalar output.
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            ua.base,
+            smallvec![c2, c2],
+            0x1010,
+        ));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1014));
+        b1.successors = smallvec![BlockId(3)];
+
+        // B2: ub = COPY c1; then LOAD [ub] — ub used as an address operand.
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ub.base,
+            smallvec![c1],
+            0x1020,
+        ));
+        let load_out = Varnode::unique(0x100, 8);
+        b2.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![Varnode::constant(0, 4), ub.base],
+            0x1024,
+        ));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1028));
+        b2.successors = smallvec![BlockId(3)];
+
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![uphi.base],
+            0x1030,
+        ));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(1), 0, VarnodeSlot::Output), ua);
+        var_map.insert((BlockId(2), 0, VarnodeSlot::Output), ub);
+        var_map.insert((BlockId(2), 1, VarnodeSlot::Input(1)), ub);
+        var_map.insert((BlockId(3), 0, VarnodeSlot::Input(0)), uphi);
+
+        let phi = PhiNode {
+            output: uphi,
+            inputs: vec![(BlockId(1), ua), (BlockId(2), ub)],
+        };
+        let mut phi_map = BTreeMap::new();
+        phi_map.insert(BlockId(3), vec![phi]);
+
+        let mut ssa = make_ssa(vec![b0, b1, b2, b3], var_map, phi_map);
+        // No var_types set — guard must fire on use-site classification alone.
+        RegisterCoalescePass.run(&mut ssa).expect("ok");
+        assert_ne!(
+            ssa.merged_names.get(&ua),
+            ssa.merged_names.get(&ub),
+            "address-used and arith-output versions must not share a name",
+        );
     }
 }

@@ -842,10 +842,26 @@ pub fn detect_sret(func: &SsaFunction) -> bool {
     let mut store_addr_uses = 0usize;
     let mut other_uses = 0usize;
     let mut returned_through_rax = false;
+    // -O0 diagnostic: at -O0 the hidden sret pointer is immediately spilled to
+    // a stack slot (`STORE stack_slot, rdi`) and thereafter accessed
+    // indirectly, so the direct-`Store(addr=rdi)` heuristic sees zero uses.
+    // Track the spill so the gap is visible in traces (see tasks t67/t68).
+    let mut spilled_to_stack = false;
 
     for block in func.function.blocks.values() {
         let mut first_arg_overwritten = false;
         for insn in &block.insns {
+            // Detect the -O0 spill: a STORE whose *value* operand (input[2] of
+            // Store(space, addr, value)) is the first arg register.
+            if insn.op == IrOp::Store
+                && !first_arg_overwritten
+                && let Some(value) = insn.inputs.get(2)
+                && value.space == SpaceId::Register
+                && value.offset == first_arg_reg
+            {
+                spilled_to_stack = true;
+            }
+
             // Track if the first arg register has been overwritten.
             if let Some(out) = insn.output {
                 if out.space == SpaceId::Register && out.offset == first_arg_reg {
@@ -903,9 +919,21 @@ pub fn detect_sret(func: &SsaFunction) -> bool {
     sig_trace_line_verbose(
         func,
         format!(
-            "sret first_arg_reg={first_arg_reg} ret_reg={ret_reg} first_param_is_ptr={first_param_is_ptr} store_addr_uses={store_addr_uses} other_uses={other_uses} returned_through_ret={returned_through_rax} predominantly_store={predominantly_store} result={result}"
+            "sret first_arg_reg={first_arg_reg} ret_reg={ret_reg} first_param_is_ptr={first_param_is_ptr} store_addr_uses={store_addr_uses} other_uses={other_uses} returned_through_ret={returned_through_rax} predominantly_store={predominantly_store} spilled_to_stack={spilled_to_stack} result={result}"
         ),
     );
+    if !result && spilled_to_stack && store_addr_uses == 0 {
+        // Visible even at non-verbose level: this is the -O0 sret-spill miss
+        // that leaks a phantom `a2` on struct-return functions like make_array.
+        sig_trace_line(
+            func,
+            format!(
+                "sret-miss reason=O0-spill first_arg_reg={first_arg_reg} \
+                 note=hidden sret pointer spilled to stack then accessed indirectly; \
+                 direct-store heuristic sees 0 uses (tasks t67/t68)"
+            ),
+        );
+    }
     result
 }
 

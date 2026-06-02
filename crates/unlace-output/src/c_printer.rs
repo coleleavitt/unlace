@@ -3061,7 +3061,7 @@ fn try_array_subscript(
                 if is_generic_address_expr(&base_expr) {
                     continue;
                 }
-                if is_scalar_deref_base(&base_expr) {
+                if is_scalar_deref_base(&base_expr) || is_x86_frame_base(base_vn) {
                     return None;
                 }
 
@@ -3097,7 +3097,10 @@ fn try_array_subscript(
             }
             let computed_idx = offset / stride;
             let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
-            if is_generic_address_expr(&base_expr) || is_scalar_deref_base(&base_expr) {
+            if is_generic_address_expr(&base_expr)
+                || is_scalar_deref_base(&base_expr)
+                || is_x86_frame_base(base_vn)
+            {
                 return None;
             }
             Some(ArraySubscript {
@@ -3113,7 +3116,10 @@ fn try_array_subscript(
                 return None;
             }
             let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
-            if is_generic_address_expr(&base_expr) || is_scalar_deref_base(&base_expr) {
+            if is_generic_address_expr(&base_expr)
+                || is_scalar_deref_base(&base_expr)
+                || is_x86_frame_base(&def_insn.inputs[0])
+            {
                 return None;
             }
             let idx_expr = emit_operand_resolved(&def_insn.inputs[1], 1, def_stmt, ctx);

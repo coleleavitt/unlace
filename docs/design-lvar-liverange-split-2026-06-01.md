@@ -31,10 +31,10 @@ Trace evidence (`UNLACE_REG_COALESCE_TRACE` group/name dump on `medium:main`):
 - The clusters are **never coalesced**, so coalesce-time type/use guards can
   never fire (verified: 0 rejects).
 
-## Key finding: the phases are SEPARABLE (not entangled)
+## Key finding (PARTIALLY VERIFIED): the phases LOOK separable in C output, but the interval trace disagrees — resolve first
 
-Static read of the component-1-only output proves the conflated values are
-**sequential, non-overlapping live ranges**, e.g. for `c5` in `main`:
+Static read of the component-1-only output *suggests* the conflated values are
+sequential live ranges, e.g. for `c5` in `main`:
 
 ```c
 do {                                  // pointer phase
@@ -46,9 +46,35 @@ do {                                  // pointer phase
 c5 = LODWORD((uintptr_t)(buf + 64) - (uintptr_t)(buf + 4)) & 4;  // scalar phase
 ```
 
-The pointer phase and the scalar phase do **not** overlap, so giving them
-distinct variables is semantically sound. This is what makes the fix tractable
-at all — but it must be done at the right layer (below).
+Reading the **C output** alone, the pointer phase and the scalar phase look
+sequential. **However — important correction (verify before implementing):**
+the coalescer's own live-interval trace does **NOT** confirm clean separation.
+Per-version min/max intervals for `r9` (offset 72), from
+`UNLACE_REG_COALESCE_TRACE` `interval` lines:
+
+```
+pointer cluster {0,1,2,3,8,15}:  v1:[103,1003]  v3:[885,1269]  v8:[859,884]  v15:[1283,1296]
+scalar  cluster {6,7,12}:        v6:[919,1282]  v7:[849,1296]  v12:[832,848]
+```
+
+These spans **overlap** (e.g. pointer `v3:[885,1269]` vs scalar `v6:[919,1282]`).
+Two caveats on that data:
+- The clusters are separate only because **no PHI links them** (the coalescer
+  only attempts PHI-operand pairs) — they were *not* tested-and-rejected for
+  interference. So "separate clusters" here does **not** imply "non-overlapping".
+- The interval model is a **coarse linear sweep** that extends each version's
+  range across all touch points (incl. phi edges), so it likely *overstates*
+  overlap. The C output suggests the *dynamic* live ranges are disjoint.
+
+**Conclusion the implementer must resolve first:** do a **precise** interference
+check (per-program-point liveness, or SSA def→last-use, not the coarse min/max
+sweep) on the pointer-phase vs scalar-phase versions. IF they are genuinely
+disjoint at every point, splitting is sound (proceed below). IF they truly
+overlap at some point, the single register legitimately holds two live values
+simultaneously and the upstream lifting/SSA is wrong — splitting names alone
+would be unsound, and the fix moves further up (lifter / SSA construction).
+Do not assume separability; the earlier "they don't overlap" claim was inferred
+from C output and is contradicted by the interval trace.
 
 ## Dead ends (do NOT repeat — all measured, all reverted)
 
@@ -69,6 +95,14 @@ cursor/condition desync. The split must happen *before* naming.
 Split at the SSA/lvar layer so the printer never sees one name with two types.
 This is CLAUDE.md item #10 / task t7 (live-range-aware LVAR allocation).
 
+0. **PREREQUISITE — precise interference check.** The coarse `compute_live_ranges`
+   min/max sweep shows the pointer-phase and scalar-phase r9 versions OVERLAP
+   (see correction above). Before any splitting, implement/borrow a precise
+   per-program-point liveness (or SSA def→last-use) and confirm the two phases
+   are disjoint at every point. If they are NOT disjoint, STOP — the register
+   genuinely holds two live values at once, the bug is upstream (lifter/SSA
+   construction), and name/lvar splitting is unsound. Only proceed if disjoint.
+
 1. **Detect a splittable register.** For each register base, compute its SSA
    live ranges (the coalescer already has `compute_live_ranges` +
    `classify_use_sites` with `address_used` / `arith_output`, including the
@@ -76,7 +110,7 @@ This is CLAUDE.md item #10 / task t7 (live-range-aware LVAR allocation).
    A register is splittable when its versions partition into a
    **pointer-phase** (members used as a Load/Store address operand) and a
    **disjoint scalar-phase** (members that are pure-arithmetic outputs), with
-   **non-overlapping** live intervals between the two phases.
+   **precisely-verified non-overlapping** live intervals between the two phases.
 
 2. **Allocate distinct lvars/varnodes per phase BEFORE naming.** Rename the
    pointer-phase SSA versions to one lvar and the scalar-phase versions to

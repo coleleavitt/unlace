@@ -3088,7 +3088,7 @@ fn try_array_subscript(
                     continue;
                 }
                 if is_scalar_deref_base(&base_expr)
-                    || is_x86_frame_base(base_vn)
+                    || is_subscript_unsafe_frame_base(base_vn)
                     || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
                 {
                     return None;
@@ -3128,7 +3128,7 @@ fn try_array_subscript(
             let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
-                || is_x86_frame_base(base_vn)
+                || is_subscript_unsafe_frame_base(base_vn)
                 || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
             {
                 return None;
@@ -3148,7 +3148,7 @@ fn try_array_subscript(
             let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
-                || is_x86_frame_base(&def_insn.inputs[0])
+                || is_subscript_unsafe_frame_base(&def_insn.inputs[0])
                 || base_vn_is_scalar_load_output(&def_insn.inputs[0], def_stmt, ctx)
             {
                 return None;
@@ -6483,6 +6483,24 @@ fn is_x86_frame_base(vn: &Varnode) -> bool {
     const RSP_REG_OFF: u64 = 32;
     const RBP_REG_OFF: u64 = 40;
     vn.space == SpaceId::Register && vn.size == 8 && matches!(vn.offset, RSP_REG_OFF | RBP_REG_OFF)
+}
+
+/// `true` when `vn` is a stack/frame-pointer register on any supported arch —
+/// the x86 RSP/RBP *or* the AArch64 SP (`r31`, reg offset 248) / FP (`x29`, reg
+/// offset 232). A stack/frame pointer is never a valid array-subscript base, so
+/// `frame[i]` must fall through to the raw `*(T *)(frame + off)` deref form.
+///
+/// Arch-agnostic by register offset: the offsets 232/248 are AArch64 FP/SP and
+/// are never argument registers on any supported arch (x86 arg regs are all
+/// low: rdi=56, rsi=48, rdx=16, rcx=8, r8=64, r9=72), so including them never
+/// suppresses a legitimate pointer-argument array access.
+fn is_subscript_unsafe_frame_base(vn: &Varnode) -> bool {
+    const AARCH64_FP_REG_OFF: u64 = 232; // x29
+    const AARCH64_SP_REG_OFF: u64 = 248; // r31/sp
+    is_x86_frame_base(vn)
+        || (vn.space == SpaceId::Register
+            && vn.size == 8
+            && matches!(vn.offset, AARCH64_FP_REG_OFF | AARCH64_SP_REG_OFF))
 }
 
 fn is_x86_frame_base_update(insn: &IrInsn, output: &Varnode) -> bool {
@@ -17318,6 +17336,28 @@ mod tests {
         assert!(!is_scalar_deref_base("v2"));
         assert!(!is_scalar_deref_base("(buf + 8)"));
         assert!(!is_scalar_deref_base("a1"));
+    }
+
+    #[test]
+    fn frame_base_subscript_guard_covers_x86_and_aarch64() {
+        use super::is_subscript_unsafe_frame_base;
+        use unlace_ir::SpaceId;
+        let reg = |off| Varnode {
+            space: SpaceId::Register,
+            offset: off,
+            size: 8,
+        };
+        // x86 RSP(32) / RBP(40).
+        assert!(is_subscript_unsafe_frame_base(&reg(32)));
+        assert!(is_subscript_unsafe_frame_base(&reg(40)));
+        // AArch64 FP x29(232) / SP r31(248).
+        assert!(is_subscript_unsafe_frame_base(&reg(232)));
+        assert!(is_subscript_unsafe_frame_base(&reg(248)));
+        // Argument registers (low offsets) are NOT frame bases — a genuine
+        // pointer-arg array access must still take the subscript path.
+        assert!(!is_subscript_unsafe_frame_base(&reg(56))); // rdi
+        assert!(!is_subscript_unsafe_frame_base(&reg(48))); // rsi
+        assert!(!is_subscript_unsafe_frame_base(&reg(8))); // rcx
     }
 
     #[test]

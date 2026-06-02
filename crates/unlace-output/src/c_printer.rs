@@ -2960,6 +2960,18 @@ fn paren_if_non_atomic_base(base: &str) -> String {
     }
 }
 
+/// `true` when the subscript base is a dereference expression (`*(_T *)(...)`).
+/// Such a base is a loaded scalar *value* (typed `_QWORD`/`_DWORD`, …), so
+/// `base[i]` is invalid C ("subscripted value is neither array nor pointer") —
+/// the printer cannot recover the correct pointer element type for a cast.
+/// Returning `None` from the subscript matcher in this case lets the caller fall
+/// through to the always-valid raw `*(T *)(addr)` deref rendering (the IR's
+/// literal form). Narrow: only `*`-prefixed (deref) bases are rejected; real
+/// array/pointer identifiers and `(addr)` forms still take the subscript path.
+fn is_scalar_deref_base(base: &str) -> bool {
+    base.trim_start().starts_with('*')
+}
+
 /// Try to recognise an array subscript pattern in the address computation of a
 /// LOAD or STORE instruction.
 ///
@@ -3049,6 +3061,9 @@ fn try_array_subscript(
                 if is_generic_address_expr(&base_expr) {
                     continue;
                 }
+                if is_scalar_deref_base(&base_expr) {
+                    return None;
+                }
 
                 return Some(ArraySubscript {
                     base: paren_if_non_atomic_base(&base_expr),
@@ -3082,7 +3097,7 @@ fn try_array_subscript(
             }
             let computed_idx = offset / stride;
             let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
-            if is_generic_address_expr(&base_expr) {
+            if is_generic_address_expr(&base_expr) || is_scalar_deref_base(&base_expr) {
                 return None;
             }
             Some(ArraySubscript {
@@ -3098,7 +3113,7 @@ fn try_array_subscript(
                 return None;
             }
             let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
-            if is_generic_address_expr(&base_expr) {
+            if is_generic_address_expr(&base_expr) || is_scalar_deref_base(&base_expr) {
                 return None;
             }
             let idx_expr = emit_operand_resolved(&def_insn.inputs[1], 1, def_stmt, ctx);
@@ -17254,6 +17269,19 @@ mod tests {
     use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
     use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
     use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
+
+    #[test]
+    fn is_scalar_deref_base_rejects_deref_expressions() {
+        use super::is_scalar_deref_base;
+        // Deref bases (loaded scalar values) cannot be subscripted.
+        assert!(is_scalar_deref_base("*(_QWORD *)(buf + 8)"));
+        assert!(is_scalar_deref_base("  *p"));
+        // Identifiers and parenthesised address forms can.
+        assert!(!is_scalar_deref_base("buf"));
+        assert!(!is_scalar_deref_base("v2"));
+        assert!(!is_scalar_deref_base("(buf + 8)"));
+        assert!(!is_scalar_deref_base("a1"));
+    }
 
     #[test]
     fn paren_if_non_atomic_base_wraps_casts_and_derefs() {

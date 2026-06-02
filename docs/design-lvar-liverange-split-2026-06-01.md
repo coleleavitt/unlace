@@ -268,3 +268,44 @@ where the split makes the guard's bail-to-raw-deref the correct rendering.
 
 Net: none of the four t69 sub-parts are independently shippable. They are
 coupled to the (still-unbuilt) precise split criterion.
+
+## Update 2026-06-02: output-layer guards CANNOT rescue an incorrect split (decisive)
+
+Approach #11 (the most thorough yet). Precondition that changed since #5: the
+t70 series shipped a family of "bail to IR-faithful raw deref" guards
+(`is_scalar_deref_base`, `is_subscript_unsafe_frame_base`,
+`base_vn_is_scalar_load_output`, `traces_to_frame_base`, and the
+`paren_if_non_atomic_base` precedence fix). Approach #5 had failed because a
+struct-pointer rename "broke the `->` path → cc fails" — a failure mode those
+guards now handle by falling through to `*(T *)(addr)`.
+
+Experiment: full coupled stack = component 1 (live-on-entry param) + component 2
+(ZEXT/SEXT/Subpiece arith propagation) + collision-gated phase split (#5) +
+ADDED scalar-base bails on BOTH the `->` path (`try_struct_field_access`) and
+the three `try_array_subscript` arms (via a real `base_sv_declared_non_pointer`
+helper aggregating the declared type by name).
+
+Result, measured:
+  - The guards worked exactly as hypothesised *for compilation*: `c5->field_4`
+    bailed → fell through to `try_array_subscript` → became `c5[1]` → that
+    bailed too → raw deref. `medium.c` went **cc-failed → compiles clean**.
+  - **But `medium:main` then TIMED OUT.** The over-split (9 phase-split
+    collisions on `main`) still desynchronises the pointer cursor's
+    def→use→advance induction at *runtime*.
+
+**Decisive conclusion:** output-layer guards can make an incorrect split's C
+*compilable* but never *runtime-correct*. The split criterion itself must be
+correct. Corollary: a *correct* split types the pointer-phase base as a pointer,
+so the scalar-base guards would be **inert** even then — i.e. those guards only
+ever change output in the BROKEN over-split state. They are t69 scaffolding, not
+shippable hardening; landing them byte-inert would mask the very failure signal
+(timeout) that the next session must see. **Do not land them.** (This supersedes
+the "Update d" framing: the t70-shipped guards address genuine *output* bugs
+that occur at baseline; the additional `base_sv_declared_non_pointer` arrow/
+subscript bails explored here are different — they only fire under the t69
+over-split and must stay unshipped.)
+
+The path forward is unchanged and singular: implement the precise
+interference + loop-carried-induction + struct-pointer-aware split (per the
+"Correct fix" section above) so the cursor stays one variable and the pointer
+base is pointer-typed. Nothing in the printer/naming/output layer is a shortcut.

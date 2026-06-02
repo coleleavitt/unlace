@@ -189,3 +189,33 @@ target/debug/unlace ir-dump --function main fixtures/medium.elf
 # the gate:
 RUSTC_WRAPPER= cargo run -q -p xtask -- semantic-report 2>&1 | grep passed=
 ```
+
+## Update 2026-06-01b: the timeout is loop-carried-induction desync (gdb-localized)
+
+A selective step-2 split (only the colliding pointer/scalar pair → fresh real
+`cN`; declared; pointer phase tagged `_QWORD`; printer arrow/subscript guards)
+makes `medium.c` **compile clean** but `medium:main` **times out**. gdb attach
+pins the hang at `medium.c:324`:
+
+```c
+        label_2:;
+            int v313 = LODWORD(c0); c0 = LODWORD(c0) + 1;   // c0 = scalar counter
+            c2 = c21 + 4LL;                                  // advance -> c2 (!)
+            ...
+            v30 = *(_DWORD *)(c21);                          // read c21 (never advanced)
+            if (v30 == 0xf) goto label_4;                    // loop on buf, never moves
+```
+
+The pointer cursor's **advance** (`c21 + 4`) was placed in a *different*
+variable (`c2`) than the cursor itself (`c21`), so `*(c21)` reads the same slot
+forever. The address/arith use-site split severed the cursor's
+**def → use → advance** induction cycle.
+
+**Decisive constraint for the real fix:** the split criterion (address-use vs
+pure-arith) is too coarse. A loop-carried pointer cursor — a phi/MULTIEQUAL
+whose output is advanced (`p = p + k`) and fed back to the phi input, and also
+dereferenced — is ONE live range and must **not** be split, even though its
+advance looks like arithmetic. Step 2 must first detect phi-carried pointer
+induction variables and keep them whole; only *genuinely disjoint* phases
+(distinct webs that never share a phi/induction cycle) may be split. This is
+the induction-aware part of CLAUDE.md #10 / t7 LVAR allocation.

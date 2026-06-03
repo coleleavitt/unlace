@@ -535,3 +535,36 @@ pointer-web evidence (alongside address_used), so the Pointer/Scalar
 classification catches rsi/rcx, and the collision-gate becomes "split whenever a
 register has BOTH a Pointer web and a Scalar web" (drop the exact-shared-name
 requirement). Per-register, IV-protected, value-correct.
+
+## Update 2026-06-03h: attempt #14 (unified criterion) — DISPROVES update-g; residual is the r9 split's value, not c5/c1
+
+Attempt #14 implemented the update-g unified criterion: partition_register_phases
+treats a composite_var_types Struct/Ptr/Array entry as Pointer-web evidence, and
+the gate splits whenever a register has a disjoint Pointer web + Scalar web
+(dropping the exact-shared-name requirement), IV-protected. Plus the #13 string
+guards. Measured, reverted (baseline 25/0).
+
+RESULT: uni-split STILL fired only 1× (the r9 deref collision) — it did NOT catch
+rsi/rcx. So update-g's mechanism is WRONG: rsi/rcx do NOT classify as a disjoint
+Pointer+Scalar partition even with composite-as-pointer evidence. Either (a)
+their composite_var_types struct entry is absent at the RegisterCoalesce stage
+(recover_structs may run/store elsewhere, or composite is keyed on a version not
+in the register's partition), or (b) their pointer-version and scalar-version sit
+in ONE phi-linked component → classified Mixed → correctly skipped.
+
+CRUCIAL: the behavior-mismatch persisted IDENTICALLY (exit 204/188 vs 33 — same
+class as #13's 60/108). Since uni-split == the #13 split (both 1× on r9), the
+runtime wrong-answer is caused by THE r9 SPLIT ITSELF (the c7/c9000 partition),
+NOT by an un-split c5/c1. The c5/c1 ->field was only ever a COMPILE issue (fixed
+by the string guard); it is NOT the runtime bug.
+
+CORRECTED NEXT STEP (bisected): the r9 split produces c7 (pointer=(uintptr_t)buf)
++ c9000 (scalar digit). One of these carries the WRONG VALUE at runtime — the
+split assigns versions to webs by use-site class, but a version that is BOTH
+read-as-pointer-once and computed-as-scalar may be mis-assigned, or the fresh
+c9000 name doesn't cover all scalar-version defs/uses (so c7 gets a scalar store
+or c9000 misses a def). Next session: dump the r9 partition's exact version→web
+assignment (UNLACE_REG_COALESCE_TRACE already logs the split) and trace each
+c7/c9000 def/use against the IR to find the mis-assigned version. This is a
+narrow per-version correctness check on ONE register's split, not a criterion
+redesign. The string guards + IV-protection + param fix all stay.

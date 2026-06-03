@@ -638,3 +638,38 @@ seeding fix — bounded, and directly testable: the r9 part dump must show
 
 All machinery (param fix, IV-protect, string guards, split mechanics) stays; only
 the per-version CLASSIFICATION/seeding is wrong. Baseline 25/0 (reverted).
+
+## Update 2026-06-03k: cause #1 FIXED+verified (arith taint); cause #2 (phi tangle) isolated
+
+Implemented the cause-#1 fix in classify_use_sites: after the arith-taint
+fixpoint, build a `pointer_def` set (address_used ∪ Load outputs ∪ COPY-of-
+pointer transitively ∪ phi-of-pointers) and `arith_output.retain(|sv| !pointer_def
+.contains(sv))`. VERIFIED via UNLACE_PART_DUMP on r9: component {6,7,12} (the
+rsi-copy pointers) flipped from `arith=true` (wrongly Scalar) to `arith=false` —
+the false taint is GONE. Cause #1 (arith over-propagation onto pointer copies) is
+fixed and confirmed at the partition level.
+
+BUT cause #2 remains and now dominates: the part dump still shows the components
+are the WRONG webs —
+  {6,7,12}: now addr=false arith=false = Neither (rsi pointers, but no longer
+    classed; not split).
+  {0,1,2,3,8,11,13,14,15}: addr=true = Pointer, but still TANGLES v72#8 (the
+    INT_ZEXT scalar digit) and v72#11 (rsi pointer) with the rsp/buf base.
+So the union-find merges versions across true value boundaries (phi
+v72#1=MULTIEQUAL(base, #7) and the loop phis link rsp-buf, rsi, AND the ZEXT
+digit into one component). With cause #1 fixed the gate moved from exit=204 to
+exit=-1 (segfault) — different wrong, because c7 still conflates digit+pointer.
+
+REMAINING (cause #2, isolated): partition_register_phases unions over ALL phi
+edges, but a phi that merges a pointer-version and a scalar-version is the very
+aliasing we must SPLIT, not union. The union step must NOT merge two versions of
+different value-class (pointer vs scalar) even when a phi links them; instead such
+a phi marks a true split point. Fix: when unioning phi output↔input, skip the
+union if the two endpoints have opposite definition-class (one pointer_def, one
+arith_output/ZEXT-scalar). Then {rsp-buf,...} stays Pointer, {ZEXT digits} stays
+Scalar, {rsi-copies} their own Pointer — three correct webs. Re-validate via part
+dump (each web single-value-class) then the gate.
+
+PROGRESS: cause #1 done+verified (keep the pointer_def retain fix). cause #2 is a
+one-edge union-skip rule, directly testable via the part dump. Baseline 25/0
+(reverted). All other machinery validated.

@@ -431,3 +431,39 @@ the base operand is actually an input of def_stmt vs a deeper nested def.
 So the full t61 fix = (validated) IV-protected split + arrow scalar-base guard +
 CORRECTED subscript scalar-base guard (resolve base SV at the right stmt) +
 re-validate 25/0. All pieces known; this is the remaining bounded work.
+
+## Update 2026-06-03e: attempt #13 — output now COMPILES + RUNS; residual is pure semantics
+
+Replaced the SV-keyed scalar-base guards with a STRING-BASED one
+(`rendered_base_is_scalar(base_str, ctx)`): reverse-looks-up the rendered base
+identifier against ctx.var_names and bails struct/subscript when the name's
+aggregated declared type is a definite non-pointer scalar. Applied at the arrow
+path (try_struct_field_access) + all 3 try_array_subscript arms. This SOLVED the
+c5[1]/c5->field residual — no uncompilable forms remain (the stmt-resolution bug
+that defeated the SV-keyed guard is sidestepped entirely).
+
+NEW FAILURE MODE (strictly closer): semantic-report 23/2 is now a BEHAVIOR
+MISMATCH, not cc-failed: medium:main compiles AND runs (exit=60 vs expected 33),
+stripped:main runs (exit=108 vs 33). So across attempts the failure has marched
+cc-crash → infinite-loop → timeout → cc-failed → RUNS-BUT-WRONG-ANSWER. The
+uncompilable-output AND the runtime-hang are both gone; the remaining gap is a
+PURE SEMANTIC correctness bug: the IV-protected split + param fix changed the
+program's computed result.
+
+LIKELY ROOT (next session): the split assigns the scalar phase a fresh cN
+(c9000) but the param fix also reshapes c5(rsi)/c1(rcx) loop vars; the rendered
+logic shows c5/c1 carrying (uintptr_t)(buf+N) pointer values in some branches
+and scalar digit/counter values in others — i.e. THOSE registers ALSO have a
+pointer/scalar aliasing (like r9) but were NOT split because their collision did
+not produce an identical cN name (the collision-gate only fires on exact name
+match). So the c5/c1 mismatch is the SAME class as r9 but the collision-gate
+missed it. The fix: the collision-gate (split when ptr+scalar phases share a
+name) needs to ALSO split when ptr+scalar phases of one register are distinct
+webs even if they got distinct names but one carries a stale value — OR the
+param fix should not have merged c5/c1's pointer and scalar lifetimes. Needs
+per-register dataflow validation (which value is live where). This is the
+genuine final-layer LVAR correctness work.
+
+STATUS: uncompilable output SOLVED (string guard, keep it). Runtime hang SOLVED
+(IV-protection, keep it). Remaining = semantic correctness of the c5/c1 (and
+possibly r9) value flow under the param fix — the true LVAR liveness problem.

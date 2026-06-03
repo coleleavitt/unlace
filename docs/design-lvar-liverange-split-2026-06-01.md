@@ -404,3 +404,30 @@ c5/c1 (also coalesced register clusters surfaced by the param fix) get a stale
 composite/struct type while declared scalar — likely the same root as r9 but for
 a struct-typed alias. (3) Re-validate 25/0 end-to-end. The IV-split core is sound
 and ready to keep; only the multi-path scalar-base output guard remains.
+
+## Update 2026-06-03d: refined hypothesis on the attempt-#12 c5[1] residual
+
+Static analysis of the emit paths (no rebuild) narrows WHY the subscript guard
+fired 0× on c5[1]. Load consumer order (c_printer.rs ~13205): try_array_struct_
+field_access → try_struct_field_access → try_array_subscript. In attempt #12 the
+arrow guard in try_struct_field_access correctly returned None for c5, so control
+fell to try_array_subscript, which produced `c5[1]`. The 3 ArraySubscript arms
+(3164/3204/3226) WERE guarded with base_vn_declared_non_pointer(base_vn, def_stmt)
+— but it fired 0×, so the base-SV resolution missed.
+
+LIKELY ROOT (for next session to confirm by re-running the instrumented stack):
+base_vn_declared_non_pointer resolves base_sv via ctx.stmt_inputs.get(&def_stmt)
+.find(sv.base==base_vn). For the constant-index arm (pattern 3,
+INT_ADD(base,const)), the base operand is defined at a PRIOR statement, so the
+correct lookup stmt for the BASE's SsaVarnode is not necessarily `def_stmt` (the
+subscript's own stmt). Need to resolve base_sv at the base's defining stmt (use
+ctx.sv_defining_stmt on the resolved input SV, mirroring base_vn_is_scalar_load_
+output which DOES chain through sv_defining_stmt). Fix: make base_vn_declared_non_
+pointer first resolve the input SV at def_stmt, and if found use it directly
+(base_sv IS that input SV) — the current code already does .find(sv.base==base_vn)
+which should work IF stmt_inputs for def_stmt contains the base operand; verify
+the base operand is actually an input of def_stmt vs a deeper nested def.
+
+So the full t61 fix = (validated) IV-protected split + arrow scalar-base guard +
+CORRECTED subscript scalar-base guard (resolve base SV at the right stmt) +
+re-validate 25/0. All pieces known; this is the remaining bounded work.

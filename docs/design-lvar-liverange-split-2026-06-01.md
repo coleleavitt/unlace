@@ -673,3 +673,39 @@ dump (each web single-value-class) then the gate.
 PROGRESS: cause #1 done+verified (keep the pointer_def retain fix). cause #2 is a
 one-edge union-skip rule, directly testable via the part dump. Baseline 25/0
 (reverted). All other machinery validated.
+
+## Update 2026-06-03l: cause #2 attempted — reveals a THREE-WAY entanglement (ZEXT not classed scalar)
+
+Implemented cause #2 (skip phi union when endpoints are opposite definition-class)
+together with cause #1. Part dump: components UNCHANGED — {6,7,12} and
+{0,1,2,3,8,11,13,14,15} with v72#8 (the ZEXT digit) STILL tangled in the pointer
+web. The phi-skip did not fire.
+
+ROOT OF THE NON-FIX: the ZEXT digit v72#8 (= INT_ZEXT) was NEVER in arith_output
+to begin with — classify_use_sites only marks IntMult/IntLeft/IntRight/IntDiv/
+IntRem/IntAnd/IntOr/IntXor as arith_output, NOT IntZext/IntSext/Subpiece. So #8
+is class-UNKNOWN, opposite_class(pointer, unknown)=false, and the phi-skip has
+nothing to act on. Meanwhile cause #1's pointer_def correctly excludes #8 (it's
+not a Load/COPY/phi-of-pointer), so #8 is neither pointer nor scalar.
+
+THE THREE-WAY ENTANGLEMENT (why this is genuinely multi-cycle):
+  (A) classify must MARK ZEXT/SUBPIECE-of-arith as scalar (so #8 is recognized).
+      [earlier "component 2" did this — but it also tainted the rsi pointer copies]
+  (B) cause #1 must REMOVE that scalar mark from pointer-by-definition versions
+      (so the rsi copies aren't mislabeled). [verified working in 03k]
+  (C) cause #2 phi-skip needs BOTH (A) and (B) correct to identify the real
+      split point (#8 scalar vs base pointer).
+The three interact: (A) adds marks, (B) removes some, (C) reads the result. They
+must be co-tuned: (A) marks ZEXT/SUBPIECE/arith-COPY as scalar; (B) pointer_def
+(address_used + Load + COPY-of-ptr + phi-of-ptr) OVERRIDES (A) — retain removes
+pointer_def from arith; (C) then sees #8=scalar (kept by A, not in pointer_def)
+and base=pointer → skips that phi → #8 splits into its own Scalar web.
+
+NEXT SESSION (precise co-tuned recipe): apply (A)+(B)+(C) together — strengthen
+classify_use_sites scalar marks (IntZext/IntSext/Subpiece + the existing arith),
+then pointer_def-retain, then the opposite_class phi-skip — and verify via part
+dump that r9 yields THREE webs: {rsp/buf base + #1..} Pointer, {rsi copies 6,7,
+11,12} Pointer, {ZEXT digits 8,4,5} Scalar. Only then will the split be correct
+and the gate reach 25/0. Baseline 25/0 (reverted). cause #1 fix (03k) + cause #2
+phi-skip (this turn) both BUILT and validated-mechanically; they need (A) added
+and the three co-tuned in one coupled validation pass.

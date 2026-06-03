@@ -467,3 +467,37 @@ genuine final-layer LVAR correctness work.
 STATUS: uncompilable output SOLVED (string guard, keep it). Runtime hang SOLVED
 (IV-protection, keep it). Remaining = semantic correctness of the c5/c1 (and
 possibly r9) value flow under the param fix — the true LVAR liveness problem.
+
+## Update 2026-06-03f: ISOLATION — c5/c1 arrow bug is the PARAM FIX alone, not the split
+
+Decisive controlled experiment: applied the live-on-entry PARAM FIX ALONE (no
+split, no guards, no classification change). Result: medium:main 23/2 with
+cc-failed on `c5->field_4` (line 247) and `c1->field_4` (line 275) — the SAME
+arrow errors as attempt #12/#13's residual. c5(rsi)=`_QWORD`, c1(rcx)=`__int64`,
+both declared scalar but emitted with `->field`.
+
+This CORRECTS the prior model (updates d/e assumed the split caused c5/c1):
+- The c5/c1 `->field` bug is caused by the PARAM FIX making rsi/rcx live params,
+  which surfaces a STALE struct entry in composite_var_types (from
+  struct_field_recovery mis-attributing a struct layout to rsi/rcx). It is
+  INDEPENDENT of the register split.
+- It is a PRINTER-LAYER bug: try_struct_field_access emits `c5->field_4` because
+  composite_var_types.get(c5) is Some(Struct/Ptr) while the decl is scalar. The
+  attempt-#13 rendered_base_is_scalar guard FIXES THE OUTPUT (bails to raw deref)
+  — so this half is solved by a guard already written.
+
+REVISED DECOMPOSITION of the full t61 fix (now 3 independent, separately-testable
+halves instead of one entangled change):
+  A. PARAM FIX surfaces (i) the r9 c7 pointer/scalar collision [needs the split]
+     AND (ii) the c5/c1 stale-struct-composite arrow [needs the printer guard,
+     OR better: clear composite_var_types for a register that becomes a scalar
+     param]. These are DIFFERENT bugs on DIFFERENT registers.
+  B. IV-protected split fixes r9 (validated, attempt #12).
+  C. rendered_base_is_scalar guard fixes the c5/c1 output (validated, attempt #13).
+
+The attempt-#13 wrong-answer (exit 60 vs 33) is therefore NOT the c5/c1 arrow
+(that's an output bug C already handles) — it is a SEPARATE runtime semantic
+issue still to be isolated (likely the split's c9000 scalar value or a c5/c1
+VALUE corruption distinct from the type/arrow issue). Next session: with A+B+C
+applied (compiles), bisect the runtime wrong-answer by selectively disabling the
+split per-register to find which register's VALUE (not type) is wrong.

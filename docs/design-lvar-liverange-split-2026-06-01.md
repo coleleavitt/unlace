@@ -786,3 +786,35 @@ address-taken-elsewhere signal), and (b) fix the v8 seed-application identity bu
 (INT_ZEXT output sv vs phi input sv). Then Pointer⊔Scalar=Conflict marks the true
 split points. Baseline 25/0 (reverted). This is the genuine remaining design: a
 correct value-class lattice WITH a pointer-cursor seed.
+
+## Update 2026-06-03o: cursor seed built — insufficient (the cursor is in rsi, not r9)
+
+Added a pointer-cursor seed to the lattice: for each basic-IV (detect_basic_ivs)
+whose register has any address use, seed its phi_output+init as Pointer. Lattice
+dump for r9 UNCHANGED (v6,7,12=Scalar, v8=Pointer still wrong).
+
+WHY: the actual pointer cursor lives in REGISTER rsi (v56), not r9. r9's v6 is
+`COPY rsi`. So:
+  - rsi's basic-IV would need the cursor seed, then v6=COPY(rsi) inherits it via
+    the cross-register COPY join. My seed only seeds the IV's OWN register and
+    the lattice COPY-join IS cross-register, so it SHOULD propagate — unless rsi
+    has no detected basic-IV, or rsi's IV register has no address use (rsi is
+    only compared+incremented, never a direct Load address → reg_addr_used=false
+    → seed skipped). THAT is the gap: the rsi cursor is a pointer that is NEVER
+    dereferenced through rsi itself (the deref happens through a COPY into another
+    reg / a different base), so `reg_addr_used` for rsi is false and the cursor
+    seed never fires.
+  - v8=Pointer (ZEXT, should be Scalar) is a SEPARATE bug: v72#8 is never a
+    Load/Store address, never a phi/copy output, yet shows Pointer. The Scalar
+    seed (IntZext output) must not be applying — a var_map (bid,idx,Output) key
+    vs phi-input SsaVarnode identity mismatch. Needs an instrumented per-seed
+    trace to confirm which sv the ZEXT output resolves to.
+
+REVISED CURSOR-SEED (next session): a basic IV is a POINTER CURSOR when its
+phi-carried value is ever (a) used as a Load/Store address in ANY register after
+a copy, OR (b) the IV's increment step matches a pointed-to element size and the
+base traces to a stack/heap allocation. Simplest robust rule: propagate the
+address-use Pointer class BACKWARD through COPY/phi (if X=COPY(Y) and X is later a
+pointer, Y is a pointer) — a backward pass complementing the forward join. Plus
+fix the v8 ZEXT-seed identity. Lattice architecture stays; it needs forward+
+backward pointer propagation + the v8 fix. Baseline 25/0 (reverted).

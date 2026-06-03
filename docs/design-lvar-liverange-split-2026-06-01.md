@@ -744,3 +744,45 @@ ad-hoc passes — a real design+implement task, not a one-turn edit. cause #1/#2
 mechanisms are understood and built; they cannot be naively composed. Baseline
 25/0 (reverted). All prior validated machinery (param, IV-protect, string guards,
 split, partition) stays; the per-version classification needs the lattice rewrite.
+
+## Update 2026-06-03n: unified lattice BUILT + validated — exposes the true ambiguity (pointer-cursor looks scalar)
+
+Implemented classify_value_lattice: a monotonic Unknown⊑{Pointer,Scalar}⊑Conflict
+fixpoint (order-independent, NOT circular — fixes the update-m problem). Hard
+seeds: Load/Store address operand → Pointer; mult/shift/div/rem/and/or/xor/zext/
+sext/subpiece output → Scalar; COPY/phi join inputs. Validated via UNLACE_LATTICE
+_DUMP on r9 (medium:main):
+  v0,1,2,3,11,13,14,15 = Pointer  (correct: rsp/buf base + some rsi)
+  v6,7,12 = Scalar    (WRONG — these are COPY rsi, pointers)
+  v8 = Pointer        (WRONG — v8 = INT_ZEXT, the scalar digit)
+
+The lattice mechanism WORKS (order-independent, no circularity), but two specific
+mis-classes reveal the TRUE underlying ambiguity:
+
+1. v6=COPY(rsi=v56#4): rsi is a BUFFER POINTER but is NEVER used as a Load/Store
+   address directly — it is only COMPARED (INT_SUB/INT_EQUAL/INT_SLESS) and
+   INCREMENTED (INT_ADD rsi,4). So the lattice has NO Pointer evidence for rsi
+   and classes it Scalar from... actually rsi has no Scalar seed either (operands
+   aren't seeded), so rsi=Unknown→ v6 should be Unknown not Scalar. The Scalar on
+   v6/7/12 must come from a phi/copy join with a genuinely-scalar sibling — i.e.
+   the SAME r9 name is reused for both rsi-cursor and the digit across versions,
+   and the join collapses them. THE POINTER CURSOR THAT IS ONLY COMPARED+
+   INCREMENTED IS INDISTINGUISHABLE FROM A SCALAR by use-site alone.
+2. v8=INT_ZEXT hard-seeded Scalar but shows Pointer → a phi back-edge joined
+   Pointer onto it AND the Scalar seed was lost; with proper join it should be
+   Conflict (= split point), not Pointer. Indicates the seed/join ordering still
+   drops the hard Scalar seed when a phi cycle reintroduces Pointer. (join is
+   monotonic so once Scalar it should go Scalar→Conflict, never back to Pointer —
+   so v8's Scalar seed is being OVERWRITTEN, a bump() bug: bump joins cur with c,
+   but the phi loop recomputes `joined` from scratch each round and bumps — that
+   is still monotonic... the v8=Pointer result means #8's seed never applied,
+   likely var_map output lookup for INT_ZEXT returns a DIFFERENT sv than the phi
+   input v72#8. Version-identity mismatch to check next session.)
+
+CONCLUSION: the lattice is the right ARCHITECTURE (built, order-independent) but
+needs (a) a pointer-cursor seed — a phi-carried value that is INT_ADD-incremented
+by a constant and COMPARED is a Pointer cursor (reuse detect_basic_ivs / the
+address-taken-elsewhere signal), and (b) fix the v8 seed-application identity bug
+(INT_ZEXT output sv vs phi input sv). Then Pointer⊔Scalar=Conflict marks the true
+split points. Baseline 25/0 (reverted). This is the genuine remaining design: a
+correct value-class lattice WITH a pointer-cursor seed.

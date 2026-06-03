@@ -369,3 +369,38 @@ none observed in medium:main, but guard defensively); and confirm the split
 still fires on r9 once the param fix is applied (the param fix is what surfaces
 the collision). Implement coupled, validate end-to-end (25/0, exit=33 not
 crash/timeout), revert if any regression.
+
+## Update 2026-06-03c: attempt #12 (IV-protected split) — CORE WORKS, new residual found
+
+Built the full coupled stack: param fix (component 1) + ZEXT classification
+(component 2) + IV-protected collision-gated split (collect_iv_protected_versions
+from find_natural_loops+detect_basic_ivs, forbidding any split of a component
+touching an IV) + arrow & subscript scalar-base bails. Measured, then reverted
+(baseline restored 25/0).
+
+WHAT WORKED (major, first time across 12 attempts):
+- The IV-protection fixed the over-split: iv-split fired exactly 1× (not 9× like
+  #4/#5), ONLY on the genuine r9 collision. The legit cursors were protected.
+- The r9 c7-collision RESOLVED: r9 split into c7 (pointer = (uintptr_t)buf,
+  deref'd) and c9000 (scalar digit = LODWORD(c0 + (c0<<2))). No more
+  pointer-deref-of-scalar. Result: cc-failed (compile error), NOT crash/timeout
+  — strictly closer than every prior attempt.
+
+THE NEW RESIDUAL (why it's still 23/2): two OTHER registers render
+`c5->field_4` / `c1->field_4` (c5/c1 declared scalar `_QWORD`/`__int64`).
+Adding base_sv_declared_non_pointer to try_struct_field_access's arrow path made
+those bail → but they fell through to `c5[1]` (subscripted scalar). Adding the
+guard to the 3 try_array_subscript arms did NOT catch it — UNLACE_SUBG_TRACE
+proved base_vn_declared_non_pointer fires 0× on c5[1]. So `c5[1]` is emitted by a
+DIFFERENT path: the array-of-struct pattern around c_printer.rs:3604
+(`arr{}[{}].field_{}`, try_array_struct_access / array_struct_layouts), not the
+3 guarded subscript arms.
+
+NEXT-SESSION TODO (precise): (1) keep the IV-protected split (it's correct — the
+core fix). (2) The c5/c1 `->field`/`[i]` are a SEPARATE scalar-base issue from a
+THIRD emit path (array-of-struct, ~line 3604 + the CExpr::index sites at 11959 /
+12345 / 13276). Apply base_sv_declared_non_pointer there too, OR better: find why
+c5/c1 (also coalesced register clusters surfaced by the param fix) get a stale
+composite/struct type while declared scalar — likely the same root as r9 but for
+a struct-typed alias. (3) Re-validate 25/0 end-to-end. The IV-split core is sound
+and ready to keep; only the multi-path scalar-base output guard remains.

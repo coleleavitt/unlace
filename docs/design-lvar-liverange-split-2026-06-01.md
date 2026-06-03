@@ -597,3 +597,44 @@ precise, narrow question to resolve; not a criterion redesign.
 
 Data gathered read-only; no rebuild. The split machinery (IV-protect, string
 guards, param fix) all stay validated.
+
+## Update 2026-06-03j: ROOT CAUSE FOUND — partition components are wrong webs (phi tangles + arith taint)
+
+Instrumented partition dump (UNLACE_PART_DUMP) of r9(v72) at the coalesce stage,
+cross-referenced with the IR. The split is INVERTED and the components are WRONG:
+
+  Component {6,7,12}: addr=false arith=true → classified SCALAR → c9000.
+    BUT IR: v72#6=COPY rsi(v56#4), v72#7/#12=MULTIEQUAL of rsi copies → these are
+    POINTERS, wrongly marked arith_output (rsi also feeds an INT_ADD, so the
+    arith taint propagated onto the rsi-copy versions).
+  Component {0,1,2,3,8,11,13,14,15}: addr=true arith=false → POINTER → c7.
+    BUT this lumps v72#8 (INT_ZEXT digit = SCALAR) AND v72#11 (COPY rsi = pointer)
+    together with the rsp/buf base — three different value-origins in one web.
+
+So the runtime wrong-answer (exit 204 vs 33) is because c9000 gets the rsi
+POINTER (mislabeled scalar) and c7 gets a mix of rsp-buf + rsi + the ZEXT digit.
+The split faithfully renders whatever the partition says; the partition itself is
+wrong.
+
+TWO COMPOUNDING ROOT CAUSES (both upstream of the split):
+1. arith_output TAINT over-propagation: rsi(v56#4) feeds both a pointer copy
+   (v72#6) AND an INT_ADD; the classify_use_sites propagation marks v72#6/#7/#12
+   as arith_output even though they carry a pointer. classify must NOT propagate
+   arith onto a version that is itself a pointer copy / phi of pointers.
+2. PHI TANGLING: the union-find merges versions across true value boundaries
+   because phis (v72#12=MULTIEQUAL(#6,#11)) link two rsi-copy versions that the
+   de-SSA'd C then conflates with the rsp-buf web. The components are NOT the
+   true single-value webs.
+
+THE REAL FIX (next session, narrow + precise): the partition must classify by
+the version's OWN definition (COPY of a pointer reg → Pointer; INT_ZEXT/arith →
+Scalar), NOT by use-site taint that leaks across the register. I.e. seed
+Pointer/Scalar from each version's defining op (COPY rsi/rsp/rbp/loaded-ptr =
+Pointer; INT_ZEXT/INT_MULT/SUBPIECE-of-arith = Scalar), then only union versions
+that share a value (phi of same-class), and leave the address_used/arith_output
+use-site marks as a SECONDARY signal. This is a classify_use_sites + partition
+seeding fix — bounded, and directly testable: the r9 part dump must show
+{rsi-copies}=Pointer and {ZEXT-digits}=Scalar as SEPARATE correctly-classed webs.
+
+All machinery (param fix, IV-protect, string guards, split mechanics) stays; only
+the per-version CLASSIFICATION/seeding is wrong. Baseline 25/0 (reverted).

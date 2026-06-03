@@ -610,6 +610,14 @@ pub struct PrinterAnnotations {
     /// reduction node yet, but the decision is analysis-gated rather than a
     /// translation-unit-wide string peephole.
     pub recover_triangular_sum_loop: bool,
+    /// Target architecture of the function being printed, when the caller knows
+    /// it (whole-program CLI path). Used to resolve the per-arch stack/frame
+    /// pointer register offsets via [`unlace_ir::stack::StackSpec::for_arch`] so
+    /// frame-relative `base->field` / `base[i]` accesses are recognised and
+    /// rendered as raw derefs on every architecture — not just the x86/AArch64
+    /// offsets the printer historically hard-coded. `None` (the default and the
+    /// value passed by unit tests) preserves the legacy hard-coded behaviour.
+    pub arch: Option<unlace_ir::ArchId>,
 }
 
 /// Convert final SSA lvar metadata into the stack-name side channel consumed
@@ -807,6 +815,7 @@ pub fn print_c_with_annotations(
         ctx.go_defer_sites = ann.go_defer_sites.clone();
         ctx.byref_union_types = ann.byref_union_types.clone();
         ctx.flirt_call_annotations = ann.flirt_call_annotations.clone();
+        ctx.stack_spec = ann.arch.and_then(unlace_ir::stack::StackSpec::for_arch);
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -2210,6 +2219,11 @@ struct PrintCtx {
     /// Populated from environment variables at [`PrintCtx::new`] time
     /// via [`PrintConfig::from_env`].
     config: PrintConfig,
+    /// Per-arch stack/frame-pointer register offsets, resolved from the
+    /// function's architecture when the caller supplied it (see
+    /// [`PrinterAnnotations::arch`]). `None` falls back to the legacy hard-coded
+    /// x86/AArch64 frame-base offsets.
+    stack_spec: Option<unlace_ir::stack::StackSpec>,
     next_var: u32,
     var_names: BTreeMap<SsaVarnode, String>,
     var_types: BTreeMap<SsaVarnode, PrimitiveType>,
@@ -2569,6 +2583,7 @@ impl PrintCtx {
         }
         Self {
             config: PrintConfig::from_env(),
+            stack_spec: None,
             next_var: start_next,
             var_names: BTreeMap::new(),
             var_types: BTreeMap::new(),
@@ -2745,7 +2760,7 @@ fn traces_to_frame_base(
     if depth > 8 {
         return false;
     }
-    if is_frame_base_reg(vn) {
+    if is_frame_base_reg_ctx(vn, ctx) {
         return true;
     }
     let Some(sv) = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx) else {
@@ -3139,7 +3154,7 @@ fn try_array_subscript(
                     continue;
                 }
                 if is_scalar_deref_base(&base_expr)
-                    || is_subscript_unsafe_frame_base(base_vn)
+                    || is_subscript_unsafe_frame_base_ctx(base_vn, ctx)
                     || traces_to_frame_base(base_vn, None, def_stmt, ctx, 0)
                     || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
                 {
@@ -3180,7 +3195,7 @@ fn try_array_subscript(
             let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
-                || is_subscript_unsafe_frame_base(base_vn)
+                || is_subscript_unsafe_frame_base_ctx(base_vn, ctx)
                 || traces_to_frame_base(base_vn, None, def_stmt, ctx, 0)
                 || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
             {
@@ -3201,7 +3216,7 @@ fn try_array_subscript(
             let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
-                || is_subscript_unsafe_frame_base(&def_insn.inputs[0])
+                || is_subscript_unsafe_frame_base_ctx(&def_insn.inputs[0], ctx)
                 || traces_to_frame_base(&def_insn.inputs[0], None, def_stmt, ctx, 0)
                 || base_vn_is_scalar_load_output(&def_insn.inputs[0], def_stmt, ctx)
             {
@@ -6563,6 +6578,25 @@ fn is_subscript_unsafe_frame_base(vn: &Varnode) -> bool {
             && matches!(vn.offset, AARCH64_FP_REG_OFF | AARCH64_SP_REG_OFF))
 }
 
+/// Arch-aware form of [`is_subscript_unsafe_frame_base`]: when the printer knows
+/// the function's architecture (`ctx.stack_spec`), the per-arch SP/FP register
+/// offsets are recognised as frame bases in addition to the legacy hard-coded
+/// x86/AArch64 set. Frame offsets that collide with x86 argument registers on
+/// other arches (e.g. RISC-V SP at offset 16 == x86 RDX) are only treated as
+/// frame bases when the arch actually matches — preventing x86 `rdx[i]` from
+/// being wrongly suppressed.
+fn is_subscript_unsafe_frame_base_ctx(vn: &Varnode, ctx: &PrintCtx) -> bool {
+    if is_subscript_unsafe_frame_base(vn) {
+        return true;
+    }
+    if let Some(spec) = ctx.stack_spec.as_ref()
+        && vn.space == SpaceId::Register
+    {
+        return spec.is_frame_base(vn);
+    }
+    false
+}
+
 /// Size-agnostic stack/frame-pointer register check (any access width). The
 /// frame pointer can be read at a sub-register width (e.g. MIPS `r29d`, a 4-byte
 /// view of `r29`), which `is_subscript_unsafe_frame_base` (8-byte-only) misses.
@@ -6575,6 +6609,31 @@ fn is_frame_base_reg(vn: &Varnode) -> bool {
     const FP_29: u64 = 232;
     const SP_31: u64 = 248;
     vn.space == SpaceId::Register && matches!(vn.offset, RSP | RBP | FP_29 | SP_31)
+}
+
+/// Arch-aware, size-agnostic frame-base register check. Adds the function's
+/// per-arch SP/FP offsets (from `ctx.stack_spec`) to the legacy hard-coded set,
+/// ignoring access width (the frame reg may be read as a sub-register, e.g. MIPS
+/// `r29d` / RISC-V `spd`). The per-arch offsets are only consulted when the arch
+/// is known, so cross-arch offset/argument-register collisions never mis-fire.
+fn is_frame_base_reg_ctx(vn: &Varnode, ctx: &PrintCtx) -> bool {
+    if is_frame_base_reg(vn) {
+        return true;
+    }
+    if vn.space != SpaceId::Register {
+        return false;
+    }
+    if let Some(spec) = ctx.stack_spec.as_ref() {
+        if spec.sp.offset == vn.offset {
+            return true;
+        }
+        if let Some(fp) = spec.fp.as_ref()
+            && fp.offset == vn.offset
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn is_x86_frame_base_update(insn: &IrInsn, output: &Varnode) -> bool {

@@ -1308,6 +1308,7 @@ fn analyze_function(
         ssa_phi_uses: pipeline::collect_ssa_phi_uses(&ssa),
         return_value_aliases: pipeline::collect_return_value_aliases(&ssa, &symbols),
         stack_lvars: unlace_output::stack_lvar_annotations_from_ssa(&ssa),
+        arch: Some(ssa.arch),
         ..Default::default()
     };
 

@@ -339,3 +339,33 @@ ZEXT(SUBPIECE(arith)) and is NOT a basic IV). Sequence with the live-on-entry
 param fix (component 1). Residual risk: struct-pointer false positive (#5) may
 still need a separate guard. Converts t61 from "multi-day from scratch" to
 "wire detect_basic_ivs into the split criterion + validate."
+
+## Update 2026-06-03b: IV-probe CONFIRMS the discrimination at the coalesce stage
+
+Added a temporary env-gated probe (UNLACE_IV_PROBE, reverted) that runs
+find_natural_loops + detect_basic_ivs inside RegisterCoalescePass::run on the
+function as the coalescer actually sees it (FinalCleanup stage, after IvElim).
+Result on medium:main — 14 loops, 5 basic IVs detected, ALL surviving intact:
+
+  - offset 0  (rax) v18, step=16   ← protected cursor
+  - offset 48 (rsi) v10, step=8    ← protected cursor
+  - offset 8  (rcx) v10, step=8    ← protected cursor
+  - offset 0  (rax) v28, step=16   ← protected cursor
+  - offset 56 (rdi) v6,  step=4    ← protected cursor
+
+CRITICAL DISCRIMINATION CONFIRMED: r9 (offset 72) — the pointer/scalar c7
+collision register — is NOT in the basic-IV list, so it stays SPLITTABLE; while
+the legitimate loop cursors (rax/rsi/rcx/rdi) ARE basic IVs and would be
+PROTECTED. This is exactly the separation the 11 failed approaches lacked: the
+IV-protection set shields the cursors the #3/#4 splits severed/over-split, while
+leaving the genuine r9 collision eligible for the split that fixes the c7 bug.
+
+This resolves the advisor's "does the IV structure survive to coalesce?" risk
+(it does) and the "does it discriminate r9 from the cursors?" question (it does,
+cleanly). Attempt #12 (IV-protected split, coupled with the live-on-entry param
+fix) is now empirically well-founded. Residual open risk for the implementation
+session: struct-pointer false-positive (a basic IV that is also a struct base —
+none observed in medium:main, but guard defensively); and confirm the split
+still fires on r9 once the param fix is applied (the param fix is what surfaces
+the collision). Implement coupled, validate end-to-end (25/0, exit=33 not
+crash/timeout), revert if any regression.

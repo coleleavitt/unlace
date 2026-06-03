@@ -568,3 +568,32 @@ assignment (UNLACE_REG_COALESCE_TRACE already logs the split) and trace each
 c7/c9000 def/use against the IR to find the mis-assigned version. This is a
 narrow per-version correctness check on ONE register's split, not a criterion
 redesign. The string guards + IV-protection + param fix all stay.
+
+## Update 2026-06-03i: r9 def-use web mapped (read-only) — for next-session value bisection
+
+Static IR trace of r9(v72) in medium:main (web is param-fix-independent):
+  Web A (POINTER, keeps c7): v72(base=COPY rsp/v32#1, L413; used INT_ADD+4/+8
+    L464/509; copied to v0#27 L1002, v16#21 L1079), v72#6(COPY rsi/v56#4 L1761),
+    v72#11(COPY rsi L2109), v72#7(MULTIEQUAL #6,#11 L1777), v72#1(MULTIEQUAL
+    base,#7 L1886; LOAD v72#1 L2030 → confirms pointer), v72#12(MULTIEQUAL #6,#11
+    L2135).
+  Web B (SCALAR → c9000): v72#8(INT_ZEXT v66131 L1688), v72#5(MULTIEQUAL #8,#4,#4
+    L1707), v72#4(INT_ZEXT v66191 L2063).
+  The two webs share NO phi/copy edge → genuinely disjoint (correct split).
+
+OBSERVATION: Web A mixes TWO distinct incoming pointers — v72(base) = rsp/buf,
+but v72#6/#11 = rsi. So c7 aggregates rsp-derived AND rsi-derived pointer values
+across versions. If buf(rsp) and the rsi pointer are DIFFERENT objects, naming
+them both c7 and relying on phi-merge is fine IN SSA, but the de-SSA'd C single
+`c7` variable conflates them at points where the original used distinct
+registers — a possible source of the runtime wrong-answer (c7 holds rsp-buf in
+one region, rsi in another, but C sees one variable). NEXT SESSION: run the
+instrumented split (UNLACE_REG_COALESCE_TRACE) to confirm the exact version→name
+map, then check whether any Web-A version that is rsi-derived is read where the
+rsp-buf value is expected (or vice versa). If so, the split is correct but the
+UNDERLYING coalescing already wrongly merged rsp and rsi into r9's web upstream —
+i.e. the bug is one layer deeper than the pointer/scalar split. This is the
+precise, narrow question to resolve; not a criterion redesign.
+
+Data gathered read-only; no rebuild. The split machinery (IV-protect, string
+guards, param fix) all stay validated.

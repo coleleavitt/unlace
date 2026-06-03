@@ -182,7 +182,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map,
-            var_map: var_map,
+            var_map,
             var_types: BTreeMap::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),

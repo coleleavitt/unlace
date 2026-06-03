@@ -853,3 +853,34 @@ The lattice (fwd+bwd, monotonic, order-independent) is COMPLETE as an
 architecture. The remaining issues are (1) re-validating whether the rsi split is
 even required, and (2) the v8 ZEXT-seed identity bug — both 1-build instrumented
 checks, not redesigns. Baseline 25/0 (reverted).
+
+## Update 2026-06-03q: v8 was a STALE-IR phantom — the lattice classification is likely CORRECT
+
+Seed trace (UNLACE_SEED_TRACE) revealed the decisive correction: there is NO
+INT_ZEXT producing v72#8 in the CURRENT SSA. The two r9 ZEXT instructions produce
+v72#12 (BlockId(40) idx=2) and v72#6 (BlockId(43) idx=33). The "[seed] bump
+v72#8" line NEVER fired — v72#8 is never seeded by any ZEXT.
+
+So my "v8 should be Scalar but shows Pointer = bug" premise (updates n/o/p) was
+based on STALE /tmp/ir.txt (baseline SSA, no param fix). In the real SSA:
+  - v72#6, v72#12 = ZEXT digits = Scalar  ← the lattice marks them Scalar. CORRECT.
+  - v72#8 = some pointer-chain value = Pointer ← likely CORRECT.
+So the LATTICE CLASSIFICATION IS PROBABLY RIGHT. v6/v12=Scalar is the digit; v8=
+Pointer is genuinely a pointer. The earlier "inversion" reading was an artifact
+of mapping current-SSA version numbers onto stale-IR definitions.
+
+MAJOR REFRAME: the lattice may already classify r9 correctly. If so, the runtime
+wrong-answer is NOT a classification bug — it is in the SPLIT MECHANICS or the
+param fix's interaction, OR the split is being driven by the OLD use_sites
+partition (which IS inverted) rather than the new lattice. The lattice was built
+but NEVER WIRED INTO partition_register_phases — the split still uses the old
+address_used/arith_output classification. THAT is why attempts #12-14 inverted:
+they split on the OLD (buggy) partition, not the lattice.
+
+NEXT SESSION (clear path): WIRE classify_value_lattice INTO the split — replace
+partition_register_phases's has_addr/has_arith classification with the lattice's
+per-version ValueClass (Pointer/Scalar/Conflict), union only same-class versions,
+split Pointer-web from Scalar-web. The lattice (fwd+bwd, validated) is the
+correct classifier; it just needs to REPLACE the old use-site classification in
+the partition, then drive the split. Re-validate part dump shows correct webs,
+then gate. Baseline 25/0 (reverted). This is the missing wiring, not new analysis.

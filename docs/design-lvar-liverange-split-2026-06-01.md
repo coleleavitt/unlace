@@ -309,3 +309,33 @@ The path forward is unchanged and singular: implement the precise
 interference + loop-carried-induction + struct-pointer-aware split (per the
 "Correct fix" section above) so the cursor stays one variable and the pointer
 base is pointer-typed. Nothing in the printer/naming/output layer is a shortcut.
+
+## Update 2026-06-03: t61 DE-RISKED — induction signal already exists + IR-confirmed
+
+Read-only investigation found the missing "induction-aware" split signal already
+exists in-crate, and confirmed it matches the actual cursors:
+
+- `iv_elim.rs::detect_basic_ivs(func, header, body) -> Vec<BasicIv>` (pub(crate))
+  identifies a loop-header phi whose back-edge value is `IntAdd(phi_output,
+  const_step)` — exactly a pointer cursor advanced by a constant.
+- `licm.rs::find_natural_loops(func) -> Vec<NaturalLoop{header, body}>` (pub,
+  re-exported lib.rs:284) enumerates the loops.
+- Both are in `unlace-passes` alongside `register_coalesce` → directly composable.
+
+IR CONFIRMATION (medium:main, ir-dump): the cursors ARE basic-IV-shaped —
+  - `v48#10 = MULTIEQUAL(...)` with `v65800#1 = INT_ADD v48#10, c4` (a +4 pointer
+    cursor, line 528/613),
+  - `v0#18 = MULTIEQUAL(...)` with `v65723#1 = INT_ADD v0#18, c0x10` (line 419/442).
+So `detect_basic_ivs` will fire on the very cursors the failed splits (#3 sever →
+infinite loop; #4/#5 over-split → timeout) lacked a signal to protect.
+
+REFRAMED PLAN (compose existing pieces): build an IV-protected SSA-version set
+(each BasicIv's phi_output + init_sv + the back-edge advance + the Copy/Cast
+chain between them, over every natural loop) and forbid `partition_register_phases`
+from splitting any component intersecting it (like the existing Mixed guard).
+This keeps the cursor's def→use→advance cycle whole while still splitting the
+genuinely-disjoint r9 c7 pointer/scalar webs (the scalar reaches r9 via
+ZEXT(SUBPIECE(arith)) and is NOT a basic IV). Sequence with the live-on-entry
+param fix (component 1). Residual risk: struct-pointer false positive (#5) may
+still need a separate guard. Converts t61 from "multi-day from scratch" to
+"wire detect_basic_ivs into the split criterion + validate."

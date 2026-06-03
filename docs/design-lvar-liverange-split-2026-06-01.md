@@ -818,3 +818,38 @@ address-use Pointer class BACKWARD through COPY/phi (if X=COPY(Y) and X is later
 pointer, Y is a pointer) — a backward pass complementing the forward join. Plus
 fix the v8 ZEXT-seed identity. Lattice architecture stays; it needs forward+
 backward pointer propagation + the v8 fix. Baseline 25/0 (reverted).
+
+## Update 2026-06-03p: forward+backward lattice — v6/v8 UNCHANGED; the gaps are not dataflow-reachable
+
+Added BACKWARD Pointer propagation (if X=COPY(Y)/phi and X is Pointer, Y is
+Pointer) to the lattice's monotonic fixpoint, complementing the forward join.
+r9 dump IDENTICAL: v6,7,12=Scalar, v8=Pointer still wrong.
+
+WHY backward didn't help: backward propagation needs a DOWNSTREAM Pointer to flow
+from. v6=COPY(rsi v56#4); for backward to mark rsi Pointer, v6 must be Pointer
+first — but v6 is Scalar (forward-joined from rsi which is Scalar). There is NO
+Pointer anywhere in the rsi→v6→v7→v12 web to seed the backward flow. rsi in this
+program is `buf + 64` style buffer-END arithmetic that is only COMPARED to the
+cursor and INCREMENTED — it is genuinely never used as a deref pointer in any
+statically-classifiable way.
+
+TWO REFRAMED CONCLUSIONS:
+1. v6/7/12 (rsi copies) may NOT actually need to split from r9's pointer web —
+   if rsi is buffer-bound arithmetic that the original C treats as one value with
+   the r9 pointer, the de-SSA conflation might be SEMANTICALLY FINE, and the
+   runtime wrong-answer comes from ELSEWHERE (v8). Re-examine whether the c7/
+   c9000 split is even needed, or whether ONLY v8's misclass drives the bug.
+2. v8=Pointer (ZEXT, hard-seeded Scalar) is the ONE provable anomaly: v72#8 is a
+   ZEXT output (Scalar seed), never a Load/Store address, never a phi/copy output
+   — by the lattice rules it MUST be Scalar, yet it's Pointer. This is a concrete
+   BUG (not ambiguity): the Scalar seed for the ZEXT output is being overwritten
+   or the var_map (bid,idx,Output) key resolves to a different SsaVarnode than the
+   phi-input v72#8. NEXT SESSION: add a per-seed eprintln in classify_value_
+   lattice ("seed v72#8 Scalar at bid/idx") to confirm whether the seed fires and
+   what sv it targets — this is a 1-build instrumented check that will pinpoint
+   the v8 identity mismatch, the last concrete defect.
+
+The lattice (fwd+bwd, monotonic, order-independent) is COMPLETE as an
+architecture. The remaining issues are (1) re-validating whether the rsi split is
+even required, and (2) the v8 ZEXT-seed identity bug — both 1-build instrumented
+checks, not redesigns. Baseline 25/0 (reverted).

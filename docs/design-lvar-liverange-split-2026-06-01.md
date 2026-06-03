@@ -501,3 +501,37 @@ issue still to be isolated (likely the split's c9000 scalar value or a c5/c1
 VALUE corruption distinct from the type/arrow issue). Next session: with A+B+C
 applied (compiles), bisect the runtime wrong-answer by selectively disabling the
 split per-register to find which register's VALUE (not type) is wrong.
+
+## Update 2026-06-03g: c5/c1 UNIFIES with r9 — same aliasing, surfaced via the struct path
+
+Read recover_structs (struct_field_recovery.rs:36): it records a
+composite_var_types[base_sv] struct layout ONLY for a Load/Store address base
+decomposed as base + iv*stride + offset (array-of-struct). So c5(rsi) gets a
+struct entry because rsi-version-X is used as an array-of-struct base
+(`c5->field_4`), while rsi-version-Y is a plain scalar (`c5 + 0x38e`, line 160).
+
+THIS CORRECTS update-f's "independent third layer" framing: the c5/c1 issue is
+NOT a separate producer bug — it is the SAME pointer/scalar register aliasing as
+r9, just surfaced through the STRUCT-base path (composite_var_types) instead of
+the LOAD-deref path. rsi and rcx each hold a pointer (struct base) in some SSA
+versions and a scalar in others, collapsed under one C name by the
+name-aggregating decl logic.
+
+UNIFIED MODEL (the real t61): MULTIPLE registers (r9, rsi, rcx, ...) have
+pointer-version/scalar-version aliasing surfaced by the param fix. The fix is
+ONE mechanism applied to all of them: split each register whose SSA versions
+partition into a disjoint Pointer web + Scalar web (not Mixed, not IV-protected),
+regardless of whether they currently share a name, so each web gets a name that
+carries ONLY its own value+type. The IV-protected split (attempt #12) already
+does this for the deref-path collision (r9); it must ALSO consult the struct
+path (composite_var_types presence = pointer-web evidence) so rsi/rcx split too.
+Then the c5/c1 arrow AND the #13 runtime wrong-answer both resolve from the same
+correct split — not from output guards. The rendered_base_is_scalar guard
+(attempt #13) becomes a belt-and-suspenders fallback, not the primary fix.
+
+So the remaining t61 work is ONE generalization: partition_register_phases /
+the split criterion must treat "has a composite_var_types struct/ptr entry" as
+pointer-web evidence (alongside address_used), so the Pointer/Scalar
+classification catches rsi/rcx, and the collision-gate becomes "split whenever a
+register has BOTH a Pointer web and a Scalar web" (drop the exact-shared-name
+requirement). Per-register, IV-protected, value-correct.

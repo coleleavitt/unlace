@@ -261,7 +261,7 @@ mod tests {
                 .filter(|i| i.op == IrOp::Copy)
                 .all(|i| {
                     i.output
-                        .map_or(true, |o| o.space == unlace_ir::SpaceId::Register)
+                        .is_none_or(|o| o.space == unlace_ir::SpaceId::Register)
                 })
         );
     }

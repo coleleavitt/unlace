@@ -1687,7 +1687,7 @@ mod tests {
             .collect();
         // #nzcv = 0b0100 → N=0, Z=1, C=0, V=0. The 1 must show up.
         assert!(
-            const_inputs.iter().any(|c| *c == 1),
+            const_inputs.contains(&1),
             "CCMP with #nzcv=4 must surface bit-2 (Z=1) as a 1-byte const, \
              got constants: {const_inputs:?}",
         );

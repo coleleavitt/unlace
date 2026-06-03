@@ -7733,10 +7733,10 @@ mod tests {
                         if let Some(s) = find_switch(then_body) {
                             return Some(s);
                         }
-                        if let Some(eb) = else_body {
-                            if let Some(s) = find_switch(eb) {
-                                return Some(s);
-                            }
+                        if let Some(eb) = else_body
+                            && let Some(s) = find_switch(eb)
+                        {
+                            return Some(s);
                         }
                     }
                     _ => {}

@@ -349,7 +349,7 @@ mod tests {
         let report = run_interproc_fixpoint(&mut funcs, 3, |ssa| {
             counter += 1;
             // Mutate something each call to keep the snapshot diff non-zero.
-            ssa.inferred_return_type = if counter % 2 == 0 {
+            ssa.inferred_return_type = if counter.is_multiple_of(2) {
                 PrimitiveType::Int(4)
             } else {
                 PrimitiveType::Ptr

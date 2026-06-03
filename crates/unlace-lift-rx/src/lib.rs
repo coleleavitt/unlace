@@ -211,7 +211,7 @@ mod tests {
 
         // No write into a GP register slot.
         let writes_gpr = cmp.ir_ops.iter().any(|i| {
-            i.output.map_or(false, |v| {
+            i.output.is_some_and(|v| {
                 v.space == unlace_ir::SpaceId::Register && v.offset < 16 * 8 && v.size == 4
             })
         });

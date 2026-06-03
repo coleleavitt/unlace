@@ -888,7 +888,7 @@ mod tests {
             counter: 7,
             calcrel_hash: [0xabu8; 32],
         };
-        let st = store.push_md(&s, &[rec.clone()]).await.unwrap();
+        let st = store.push_md(&s, std::slice::from_ref(&rec)).await.unwrap();
         assert_eq!(st, vec![0]);
 
         let pulled = store.pull_md(&s, &[[0xabu8; 32]]).await.unwrap();

@@ -186,12 +186,11 @@ fn lift_function(
                 block_starts.entry(next.addr).or_insert(0);
             }
             for ir_op in &rec.ir_ops {
-                if matches!(ir_op.op, IrOp::Branch | IrOp::Cbranch | IrOp::Call) {
-                    if let Some(target) = ir_op.inputs.first() {
-                        if target.space == unlace_ir::SpaceId::Const {
-                            block_starts.entry(target.offset).or_insert(0);
-                        }
-                    }
+                if matches!(ir_op.op, IrOp::Branch | IrOp::Cbranch | IrOp::Call)
+                    && let Some(target) = ir_op.inputs.first()
+                    && target.space == unlace_ir::SpaceId::Const
+                {
+                    block_starts.entry(target.offset).or_insert(0);
                 }
             }
         }
@@ -232,26 +231,24 @@ fn lift_function(
                 for ir_op in &rec.ir_ops {
                     match ir_op.op {
                         IrOp::Branch => {
-                            if let Some(target) = ir_op.inputs.first() {
-                                if target.space == unlace_ir::SpaceId::Const {
-                                    if let Some(&tid) = block_starts.get(&target.offset) {
-                                        let target_bid = BlockId(tid);
-                                        if !bb.successors.contains(&target_bid) {
-                                            bb.successors.push(target_bid);
-                                        }
-                                    }
+                            if let Some(target) = ir_op.inputs.first()
+                                && target.space == unlace_ir::SpaceId::Const
+                                && let Some(&tid) = block_starts.get(&target.offset)
+                            {
+                                let target_bid = BlockId(tid);
+                                if !bb.successors.contains(&target_bid) {
+                                    bb.successors.push(target_bid);
                                 }
                             }
                         }
                         IrOp::Cbranch => {
-                            if let Some(target) = ir_op.inputs.first() {
-                                if target.space == unlace_ir::SpaceId::Const {
-                                    if let Some(&tid) = block_starts.get(&target.offset) {
-                                        let target_bid = BlockId(tid);
-                                        if !bb.successors.contains(&target_bid) {
-                                            bb.successors.push(target_bid);
-                                        }
-                                    }
+                            if let Some(target) = ir_op.inputs.first()
+                                && target.space == unlace_ir::SpaceId::Const
+                                && let Some(&tid) = block_starts.get(&target.offset)
+                            {
+                                let target_bid = BlockId(tid);
+                                if !bb.successors.contains(&target_bid) {
+                                    bb.successors.push(target_bid);
                                 }
                             }
                         }

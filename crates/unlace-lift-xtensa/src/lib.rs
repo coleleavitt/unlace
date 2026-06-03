@@ -147,7 +147,7 @@ mod tests {
         let writes_a3 = add
             .ir_ops
             .iter()
-            .any(|i| i.output.map_or(false, |v| v.offset == 24 && v.size == 4));
+            .any(|i| i.output.is_some_and(|v| v.offset == 24 && v.size == 4));
         assert!(writes_a3, "ADD should write to a3");
     }
 
@@ -201,7 +201,7 @@ mod tests {
             call0
                 .ir_ops
                 .iter()
-                .any(|i| { i.op == IrOp::Copy && i.output.map_or(false, |v| v.offset == 0) })
+                .any(|i| { i.op == IrOp::Copy && i.output.is_some_and(|v| v.offset == 0) })
         );
 
         // CALLX0 a5: op0=0, op1=0, op2=0, r=0, s=5, t=0xC

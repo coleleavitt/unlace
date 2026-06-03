@@ -656,9 +656,7 @@ mod tests {
         let mut sorted: Vec<&BatchResult> = results.iter().collect();
         sorted.sort_by_key(|r| r.addr);
         for result in &sorted {
-            let sep: String = std::iter::repeat(SEPARATOR_CHAR)
-                .take(SEPARATOR_LEN)
-                .collect();
+            let sep: String = std::iter::repeat_n(SEPARATOR_CHAR, SEPARATOR_LEN).collect();
             output.push_str(&format!(
                 "// {} {} @ {:#x} {}\n",
                 sep, result.name, result.addr, sep

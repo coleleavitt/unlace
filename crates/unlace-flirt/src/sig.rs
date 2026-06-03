@@ -326,10 +326,10 @@ mod tests {
                 continue;
             }
             attempted += 1;
-            if let Ok(sig) = SigFile::load(&p) {
-                if !sig.functions.is_empty() {
-                    loaded += 1;
-                }
+            if let Ok(sig) = SigFile::load(&p)
+                && !sig.functions.is_empty()
+            {
+                loaded += 1;
             }
         }
         if attempted == 0 {

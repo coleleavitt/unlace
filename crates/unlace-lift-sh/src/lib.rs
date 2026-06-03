@@ -227,7 +227,7 @@ mod tests {
         // MACL is offset 168, size 4.
         assert!(lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Copy
-                && i.output.map_or(false, |v| {
+                && i.output.is_some_and(|v| {
                     v.space == unlace_ir::SpaceId::Register && v.offset == 168 && v.size == 4
                 })
         }));
@@ -240,7 +240,7 @@ mod tests {
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Load));
         assert!(
             lifted.ir_ops.iter().any(|i| i.op == IrOp::Copy
-                && i.output.map_or(false, |v| v.offset == 3 * 8 && v.size == 4))
+                && i.output.is_some_and(|v| v.offset == 3 * 8 && v.size == 4))
         );
         assert!(!lifted.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
     }
@@ -261,7 +261,7 @@ mod tests {
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
         assert!(
             lifted.ir_ops.iter().any(|i| i.op == IrOp::Copy
-                && i.output.map_or(false, |v| v.offset == 5 * 8 && v.size == 4))
+                && i.output.is_some_and(|v| v.offset == 5 * 8 && v.size == 4))
         );
     }
 
@@ -274,7 +274,7 @@ mod tests {
         let sub_idx = lifted
             .ir_ops
             .iter()
-            .position(|i| i.op == IrOp::Copy && i.output.map_or(false, |v| v.offset == 3 * 8))
+            .position(|i| i.op == IrOp::Copy && i.output.is_some_and(|v| v.offset == 3 * 8))
             .expect("R3 copy");
         let store_idx = lifted
             .ir_ops
@@ -334,7 +334,7 @@ mod tests {
             );
             assert!(
                 lifted.ir_ops.iter().any(|i| i.op == IrOp::Copy
-                    && i.output.map_or(false, |v| v.offset == 184 && v.size == 1)),
+                    && i.output.is_some_and(|v| v.offset == 184 && v.size == 1)),
                 "{hw:#06x}: T flag not written"
             );
         }
@@ -369,8 +369,8 @@ mod tests {
         let lifted = lift_bytes(0xB000, 0x2000);
         assert!(lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Copy
-                && i.output.map_or(false, |v| v.offset == 128 && v.size == 4)
-                && i.inputs.first().map_or(false, |c| c.offset == 0x2004)
+                && i.output.is_some_and(|v| v.offset == 128 && v.size == 4)
+                && i.inputs.first().is_some_and(|c| c.offset == 0x2004)
         }));
         let call = lifted
             .ir_ops
@@ -386,8 +386,8 @@ mod tests {
         let lifted = lift_bytes(0x450B, 0x3000);
         assert!(lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Copy
-                && i.output.map_or(false, |v| v.offset == 128)
-                && i.inputs.first().map_or(false, |c| c.offset == 0x3004)
+                && i.output.is_some_and(|v| v.offset == 128)
+                && i.inputs.first().is_some_and(|c| c.offset == 0x3004)
         }));
         let call = lifted
             .ir_ops

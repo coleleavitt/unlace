@@ -27183,10 +27183,10 @@ mod tests {
         // Comment must come before the statement, not after.
         let comment_pos = output
             .find("// from /tmp/source.c:42")
-            .expect(&format!("pre-comment missing in output:\n{output}"));
+            .unwrap_or_else(|| panic!("pre-comment missing in output:\n{output}"));
         let stmt_pos = output
             .find("= 5")
-            .expect(&format!("statement missing in output:\n{output}"));
+            .unwrap_or_else(|| panic!("statement missing in output:\n{output}"));
         assert!(
             comment_pos < stmt_pos,
             "pre-comment must precede the wrapped statement; got:\n{output}"
@@ -27213,10 +27213,10 @@ mod tests {
 
         let stmt_pos = output
             .find("= 7")
-            .expect(&format!("statement missing in output:\n{output}"));
+            .unwrap_or_else(|| panic!("statement missing in output:\n{output}"));
         let comment_pos = output
             .find("// end of init")
-            .expect(&format!("post-comment missing in output:\n{output}"));
+            .unwrap_or_else(|| panic!("post-comment missing in output:\n{output}"));
         assert!(
             stmt_pos < comment_pos,
             "post-comment must follow the wrapped statement; got:\n{output}"
@@ -27282,12 +27282,12 @@ mod tests {
         let func = make_func("commented_return", body);
         let output = print_c(&func);
 
-        let comment_pos = output.find("// return path A").expect(&format!(
-            "pre-comment on Return missing in output:\n{output}"
-        ));
+        let comment_pos = output
+            .find("// return path A")
+            .unwrap_or_else(|| panic!("pre-comment on Return missing in output:\n{output}"));
         let ret_pos = output
             .find("return 0;")
-            .expect(&format!("return missing in output:\n{output}"));
+            .unwrap_or_else(|| panic!("return missing in output:\n{output}"));
         assert!(
             comment_pos < ret_pos,
             "pre-comment must precede wrapped Return; got:\n{output}"

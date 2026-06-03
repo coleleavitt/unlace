@@ -222,14 +222,13 @@ mod tests {
             if sv.base != base {
                 continue;
             }
-            if matches!(slot, VarnodeSlot::Output) && best.map_or(true, |b| sv.version < b.version)
-            {
+            if matches!(slot, VarnodeSlot::Output) && best.is_none_or(|b| sv.version < b.version) {
                 best = Some(*sv);
             }
         }
         if best.is_none() {
             for sv in ssa.var_map.values() {
-                if sv.base == base && best.map_or(true, |b| sv.version < b.version) {
+                if sv.base == base && best.is_none_or(|b| sv.version < b.version) {
                     best = Some(*sv);
                 }
             }

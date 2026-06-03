@@ -233,7 +233,7 @@ mod tests {
         // CMP should NOT have a Copy to a register (result discarded)
         let has_reg_copy = lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Copy
-                && i.output.map_or(false, |v| {
+                && i.output.is_some_and(|v| {
                     v.space == unlace_ir::SpaceId::Register && v.offset < 256 && v.size == 4
                 })
         });
@@ -278,7 +278,7 @@ mod tests {
         // Should not write to a GP register
         let has_gp_write = lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Copy
-                && i.output.map_or(false, |v| {
+                && i.output.is_some_and(|v| {
                     v.space == unlace_ir::SpaceId::Register && v.offset < 256 && v.size == 4
                 })
         });
@@ -417,9 +417,8 @@ mod tests {
         // Link register should get return address
         assert!(lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Copy
-                && i.output.map_or(false, |v| {
-                    v.space == unlace_ir::SpaceId::Register && v.offset == 31 * 8
-                })
+                && i.output
+                    .is_some_and(|v| v.space == unlace_ir::SpaceId::Register && v.offset == 31 * 8)
         }));
     }
 
@@ -532,7 +531,7 @@ mod tests {
         let bytes = encode_format_i(0, 0b000000, 5);
         let lifted = lift_bytes(&bytes, 0x1000);
         let has_r0_write = lifted.ir_ops.iter().any(|i| {
-            i.output.map_or(false, |v| {
+            i.output.is_some_and(|v| {
                 v.space == unlace_ir::SpaceId::Register && v.offset == 0 && v.size == 4
             })
         });
@@ -570,9 +569,9 @@ mod tests {
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Callother));
         let has_satadd_tag = lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Callother
-                && i.inputs.first().map_or(false, |v| {
-                    v.space == unlace_ir::SpaceId::Const && v.offset == 0x800
-                })
+                && i.inputs
+                    .first()
+                    .is_some_and(|v| v.space == unlace_ir::SpaceId::Const && v.offset == 0x800)
         });
         assert!(
             has_satadd_tag,
@@ -588,9 +587,9 @@ mod tests {
         let lifted = lift_bytes(&bytes, 0x1000);
         let has_satsub_tag = lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Callother
-                && i.inputs.first().map_or(false, |v| {
-                    v.space == unlace_ir::SpaceId::Const && v.offset == 0x801
-                })
+                && i.inputs
+                    .first()
+                    .is_some_and(|v| v.space == unlace_ir::SpaceId::Const && v.offset == 0x801)
         });
         assert!(
             has_satsub_tag,
@@ -666,17 +665,16 @@ mod tests {
         assert_eq!(lifted.len, 4);
         let has_bsw_tag = lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Callother
-                && i.inputs.first().map_or(false, |v| {
-                    v.space == unlace_ir::SpaceId::Const && v.offset == 0x803
-                })
+                && i.inputs
+                    .first()
+                    .is_some_and(|v| v.space == unlace_ir::SpaceId::Const && v.offset == 0x803)
         });
         assert!(has_bsw_tag, "BSW should emit Callother(tag=0x803, src)");
         // Result should be copied into reg3 (offset 56).
         let writes_reg3 = lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::Copy
-                && i.output.map_or(false, |v| {
-                    v.space == unlace_ir::SpaceId::Register && v.offset == 7 * 8
-                })
+                && i.output
+                    .is_some_and(|v| v.space == unlace_ir::SpaceId::Register && v.offset == 7 * 8)
         });
         assert!(writes_reg3, "BSW should write to reg3");
     }

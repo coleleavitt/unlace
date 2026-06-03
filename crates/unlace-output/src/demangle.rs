@@ -850,7 +850,7 @@ mod tests {
         assert!(
             r.namespaces
                 .last()
-                .map_or(false, |s| s.starts_with("vector<")),
+                .is_some_and(|s| s.starts_with("vector<")),
             "last ns segment should be templated vector<…>, got: {:?}",
             r.namespaces
         );
@@ -926,7 +926,7 @@ mod tests {
         assert_eq!(r.class_name.as_deref(), Some("map"));
         // Top-level template comma must NOT split the namespace.
         assert!(
-            r.namespaces.last().map_or(false, |s| s.contains(',')),
+            r.namespaces.last().is_some_and(|s| s.contains(',')),
             "vector ns should retain top-level commas inside <>, got: {:?}",
             r.namespaces
         );

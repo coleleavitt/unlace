@@ -2662,7 +2662,7 @@ mod tests {
         // numeric leaf: offset 0 (raw u16 < 0x8000 is taken literally)
         fl_payload.extend_from_slice(&0u16.to_le_bytes());
         fl_payload.extend_from_slice(b"x\0");
-        while fl_payload.len() % 4 != 0 {
+        while !fl_payload.len().is_multiple_of(4) {
             fl_payload.push(0xF0); // pad
         }
 
@@ -2672,7 +2672,7 @@ mod tests {
         fl_payload.extend_from_slice(&0x00000075u32.to_le_bytes());
         fl_payload.extend_from_slice(&4u16.to_le_bytes()); // offset = 4
         fl_payload.extend_from_slice(b"y\0");
-        while fl_payload.len() % 4 != 0 {
+        while !fl_payload.len().is_multiple_of(4) {
             fl_payload.push(0xF0);
         }
 
@@ -2688,7 +2688,7 @@ mod tests {
         // size = 8 numeric leaf
         s_payload.extend_from_slice(&8u16.to_le_bytes());
         s_payload.extend_from_slice(b"Point\0");
-        while s_payload.len() % 4 != 0 {
+        while !s_payload.len().is_multiple_of(4) {
             s_payload.push(0xF0);
         }
         write_record(&mut stream, LF_STRUCTURE, &s_payload);

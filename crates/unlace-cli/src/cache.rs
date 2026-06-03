@@ -126,6 +126,32 @@ impl DiskCache {
     }
 }
 
+/// Compute the SHA-256 hex digest of `bytes`. Used by callers that need
+/// to populate `CacheKey::binary_sha256`.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let out = hasher.finalize();
+    let mut hex = String::with_capacity(out.len() * 2);
+    for b in out.iter() {
+        hex.push_str(&format!("{b:02x}"));
+    }
+    hex
+}
+
+/// Default on-disk cache root: `$XDG_CACHE_HOME/unlace/` when set,
+/// otherwise `$HOME/.cache/unlace/`, falling back to `/tmp/unlace/`.
+pub fn default_cache_root() -> std::path::PathBuf {
+    if let Some(xdg) = std::env::var_os("XDG_CACHE_HOME") {
+        return std::path::PathBuf::from(xdg).join("unlace");
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        return std::path::PathBuf::from(home).join(".cache").join("unlace");
+    }
+    std::path::PathBuf::from("/tmp/unlace")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,30 +265,4 @@ mod tests {
         let s = p.to_string_lossy();
         assert!(s.contains("unlace"), "expected 'unlace' in path: {s}");
     }
-}
-
-/// Compute the SHA-256 hex digest of `bytes`. Used by callers that need
-/// to populate `CacheKey::binary_sha256`.
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    let out = hasher.finalize();
-    let mut hex = String::with_capacity(out.len() * 2);
-    for b in out.iter() {
-        hex.push_str(&format!("{b:02x}"));
-    }
-    hex
-}
-
-/// Default on-disk cache root: `$XDG_CACHE_HOME/unlace/` when set,
-/// otherwise `$HOME/.cache/unlace/`, falling back to `/tmp/unlace/`.
-pub fn default_cache_root() -> std::path::PathBuf {
-    if let Some(xdg) = std::env::var_os("XDG_CACHE_HOME") {
-        return std::path::PathBuf::from(xdg).join("unlace");
-    }
-    if let Some(home) = std::env::var_os("HOME") {
-        return std::path::PathBuf::from(home).join(".cache").join("unlace");
-    }
-    std::path::PathBuf::from("/tmp/unlace")
 }

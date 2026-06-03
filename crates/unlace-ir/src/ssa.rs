@@ -2050,7 +2050,7 @@ mod tests {
 
         let ssa = build_ssa(func);
 
-        for (_bid, phis) in &ssa.phi_map {
+        for phis in ssa.phi_map.values() {
             assert!(phis.is_empty(), "no phis expected in straight-line code");
         }
     }
@@ -2155,10 +2155,10 @@ mod tests {
 
         let mut versions: Vec<u32> = Vec::new();
         for i in 0..3 {
-            if let Some(sv) = ssa.var_map.get(&(BlockId(0), i, VarnodeSlot::Output)) {
-                if sv.base == r0 {
-                    versions.push(sv.version);
-                }
+            if let Some(sv) = ssa.var_map.get(&(BlockId(0), i, VarnodeSlot::Output))
+                && sv.base == r0
+            {
+                versions.push(sv.version);
             }
         }
 

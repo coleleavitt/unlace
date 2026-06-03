@@ -614,13 +614,13 @@ mod tests {
             .expect("should decode");
         // Should NOT have a Copy to $zero register
         for op in &result.ir_ops {
-            if op.op == IrOp::Copy {
-                if let Some(output) = &op.output {
-                    assert!(
-                        !(output.space == SpaceId::Register && output.offset == 0),
-                        "should not write to $zero register"
-                    );
-                }
+            if op.op == IrOp::Copy
+                && let Some(output) = &op.output
+            {
+                assert!(
+                    !(output.space == SpaceId::Register && output.offset == 0),
+                    "should not write to $zero register"
+                );
             }
         }
     }

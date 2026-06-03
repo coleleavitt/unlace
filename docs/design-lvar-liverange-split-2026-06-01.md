@@ -709,3 +709,38 @@ dump that r9 yields THREE webs: {rsp/buf base + #1..} Pointer, {rsi copies 6,7,
 and the gate reach 25/0. Baseline 25/0 (reverted). cause #1 fix (03k) + cause #2
 phi-skip (this turn) both BUILT and validated-mechanically; they need (A) added
 and the three co-tuned in one coupled validation pass.
+
+## Update 2026-06-03m: A+B+C co-applied — does NOT converge; the rules are mutually circular
+
+Applied all three together: (A) classify IntZext/IntSext/Subpiece as arith;
+(B) pointer_def retain (override A for pointer-by-def); (C) phi-skip on opposite
+class. Part dump for r9 STILL shows only 2 wrong webs:
+  {6,7,12} arith=true   (rsi copies — (B) FAILED to clear their arith mark)
+  {0,1,2,3,8,11,13,14,15} addr=true (still tangles #8 ZEXT scalar with pointers)
+
+WHY IT DOESN'T CONVERGE (the core difficulty, now demonstrated): the three rules
+are MUTUALLY CIRCULAR within one classify pass:
+  - (A) marks more versions arith (incl. the COPY-arith propagation at the
+    existing fixpoint, which now propagates the NEW ZEXT marks through copies onto
+    the rsi pointer copies → {6,7,12} arith=true).
+  - (B) pointer_def is computed from address_used+Load+COPY-of-pointer, but the
+    rsi source v56#4 is a MULTIEQUAL (not itself pointer_def unless ITS inputs
+    are), so the rsi copies don't get into pointer_def and (B) can't clear their
+    (A)-induced arith mark.
+  - (C) then sees {6,7,12}=arith and the base=pointer, but they're already in
+    separate components so the skip is moot; meanwhile #8 stays unioned because
+    its phi neighbors are also arith-or-unknown, not cleanly opposite.
+The marks depend on the COPY/phi propagation order, which depends on the marks —
+a genuine fixpoint-ordering problem. A correct solution must compute a SINGLE
+consistent per-version value-class (pointer vs scalar vs unknown) as ONE unified
+fixpoint where pointer-evidence and scalar-evidence are resolved with a priority
+rule (e.g. address-used/Load = hard pointer; ZEXT/mult = hard scalar; COPY/phi =
+join of inputs with conflict = SPLIT marker), NOT three separate passes that
+overwrite each other.
+
+CONCLUSION: this is the genuine multi-cycle LVAR work. The fix is a UNIFIED
+value-class lattice (Pointer ⊔ Scalar = Conflict→split), replacing the three
+ad-hoc passes — a real design+implement task, not a one-turn edit. cause #1/#2
+mechanisms are understood and built; they cannot be naively composed. Baseline
+25/0 (reverted). All prior validated machinery (param, IV-protect, string guards,
+split, partition) stays; the per-version classification needs the lattice rewrite.

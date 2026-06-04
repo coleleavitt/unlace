@@ -57,5 +57,24 @@ rust_out
 .worktrees/
 .claude/
 
+# Code / Codex local session artifacts. These contain transient terminal output,
+# agent transcripts, and user-message mirrors; they are useful while debugging a
+# local run but should not become source history.
+.code/
+
 # CodeGraph local index/cache (per-machine, not source)
 .codegraph/
+
+# Local crash/temp artifacts. Some are covered by developer global ignores, but
+# keep the project rule explicit so status stays quiet on new machines too.
+core
+core.*
+*.core
+*.log
+tmp/
+
+# Large local reference checkouts. Curated reference outputs under
+# research/decompiled-references/*/all remain trackable; full upstream source
+# mirrors cloned below these paths are local-only unless promoted deliberately.
+research/decompiled-references/iced/
+research/decompiled-references/gcc/gcc/

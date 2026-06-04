@@ -1,0 +1,12 @@
+# CodeGraph-only exclusions. These paths are useful research/reference material,
+# and some are intentionally tracked, but indexing them floods code search with
+# generated/decompiled symbols and makes explore/search slow.
+research/decompiled-references/
+research/lumina/
+research/ida-hexrays-docs/
+
+# Local agent/session/cache directories.
+.agents/
+.cargo/
+.claude/
+.codex/

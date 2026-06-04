@@ -128,6 +128,30 @@ struct TypeScore {
     array_types: Counter,
     struct_ref_types: Counter,
     leaked_temp_decls: usize,
+    leaked_temp_sites: BTreeMap<TempLeakSite, usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct TempLeakSite {
+    fixture: String,
+    function: String,
+    ty: String,
+    name: String,
+}
+
+impl TypeScore {
+    fn record_leaked_temp(&mut self, fixture: &str, function: &str, ty: &str, name: &str) {
+        self.leaked_temp_decls += 1;
+        *self
+            .leaked_temp_sites
+            .entry(TempLeakSite {
+                fixture: fixture.to_string(),
+                function: function.to_string(),
+                ty: ty.to_string(),
+                name: name.to_string(),
+            })
+            .or_default() += 1;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -508,6 +532,9 @@ impl TypeScore {
         self.array_types.merge(other.array_types);
         self.struct_ref_types.merge(other.struct_ref_types);
         self.leaked_temp_decls += other.leaked_temp_decls;
+        for (site, count) in &other.leaked_temp_sites {
+            *self.leaked_temp_sites.entry(site.clone()).or_default() += count;
+        }
     }
 
     fn expected(&self) -> usize {
@@ -849,6 +876,7 @@ pub fn run(root: &Path) -> i32 {
     println!(
         "type-recovery-report: recoverable recall excludes exact source-only local/parameter names and field facts that GCC/G++ do not emit into optimized no-debug binaries; those facts stay visible as source_oracle_only and raw_recall"
     );
+    print_leaked_temp_summary(&total_score, 15);
 
     ledger.print_summary();
 
@@ -2596,7 +2624,7 @@ fn add_reported_function_facts(
         score.local_types.add_reported(1);
         score.local_names.add_reported(1);
         if is_generic_reported_lvar_name(&decl.name) {
-            score.leaked_temp_decls += 1;
+            score.record_leaked_temp(fixture, &function.name, &decl.ty, &decl.name);
             // Per-site visibility into the precision denominator: each generic
             // `vN`-style local counted as a leaked temp is reported with its
             // type+name so a precision regression can be pinned to a function.
@@ -3018,6 +3046,65 @@ fn println_score(label: &str, score: &TypeScore) {
     );
 }
 
+fn ranked_leaked_temp_sites(score: &TypeScore) -> Vec<(&TempLeakSite, usize)> {
+    let mut sites: Vec<(&TempLeakSite, usize)> = score
+        .leaked_temp_sites
+        .iter()
+        .map(|(site, count)| (site, *count))
+        .collect();
+    sites.sort_by(|(a_site, a_count), (b_site, b_count)| {
+        b_count
+            .cmp(a_count)
+            .then_with(|| a_site.fixture.cmp(&b_site.fixture))
+            .then_with(|| a_site.function.cmp(&b_site.function))
+            .then_with(|| a_site.name.cmp(&b_site.name))
+            .then_with(|| a_site.ty.cmp(&b_site.ty))
+    });
+    sites
+}
+
+fn print_leaked_temp_summary(score: &TypeScore, limit: usize) {
+    println!();
+    println!("type-recovery-report: leaked-temp declaration hot spots");
+    if score.leaked_temp_sites.is_empty() {
+        println!("  (none)");
+        return;
+    }
+    println!("  -- by function --");
+    for (fixture, function, count) in ranked_leaked_temp_functions(score).into_iter().take(limit) {
+        println!("  {count:>4} {fixture}::{function}");
+    }
+    println!("  -- by declaration --");
+    for (site, count) in ranked_leaked_temp_sites(score).into_iter().take(limit) {
+        println!(
+            "  {:>4} {}::{} type={} name={}",
+            count, site.fixture, site.function, site.ty, site.name
+        );
+    }
+}
+
+fn ranked_leaked_temp_functions(score: &TypeScore) -> Vec<(&str, &str, usize)> {
+    let mut counts: BTreeMap<(&str, &str), usize> = BTreeMap::new();
+    for (site, count) in &score.leaked_temp_sites {
+        *counts
+            .entry((site.fixture.as_str(), site.function.as_str()))
+            .or_default() += count;
+    }
+    let mut out: Vec<(&str, &str, usize)> = counts
+        .into_iter()
+        .map(|((fixture, function), count)| (fixture, function, count))
+        .collect();
+    out.sort_by(
+        |(a_fixture, a_function, a_count), (b_fixture, b_function, b_count)| {
+            b_count
+                .cmp(a_count)
+                .then_with(|| a_fixture.cmp(b_fixture))
+                .then_with(|| a_function.cmp(b_function))
+        },
+    );
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3113,6 +3200,33 @@ mod tests {
         assert!(facts.pointer);
         assert!(facts.array);
         assert!(facts.struct_ref);
+    }
+
+    #[test]
+    fn leaked_temp_sites_merge_and_rank_by_count() {
+        let mut left = TypeScore::default();
+        left.record_leaked_temp("medium", "main", "int", "v1");
+        left.record_leaked_temp("medium", "main", "int", "v1");
+
+        let mut right = TypeScore::default();
+        right.record_leaked_temp("debug_medium", "helper", "__int64", "v2");
+        right.record_leaked_temp("debug_medium", "helper", "__int64", "v2");
+        right.record_leaked_temp("debug_medium", "helper", "__int64", "v2");
+
+        left.merge(&right);
+
+        let ranked = ranked_leaked_temp_sites(&left);
+        assert_eq!(left.leaked_temp_decls, 5);
+        assert_eq!(ranked[0].0.fixture, "debug_medium");
+        assert_eq!(ranked[0].0.function, "helper");
+        assert_eq!(ranked[0].0.name, "v2");
+        assert_eq!(ranked[0].1, 3);
+        assert_eq!(ranked[1].0.fixture, "medium");
+        assert_eq!(ranked[1].1, 2);
+
+        let functions = ranked_leaked_temp_functions(&left);
+        assert_eq!(functions[0], ("debug_medium", "helper", 3));
+        assert_eq!(functions[1], ("medium", "main", 2));
     }
 
     #[test]

@@ -7,9 +7,9 @@ is that "parity" is not a single number. unlace now tracks three axes:
    score. This is a regression watchdog only.
 2. **Semantic correctness** - source-known decompiled C recompiles and behaves
    like the original. Current coverage is `xtask semantic-report`, which passes
-   17 host executable source-known cases, tracks 0 host/source-known semantic
-   XFAILs, passes 4 qemu-user non-host executable rows, and includes 4 non-host
-   shape-only PASS rows.
+   22 host executable source-known cases, tracks 0 host/source-known semantic
+   XFAILs, passes 4 qemu-user non-host executable rows, and includes 7
+   source-known shape-only PASS rows.
 3. **Type/variable recovery accuracy** - recovered locals, types, structs, and
    arrays match source/DWARF ground truth. `xtask type-recovery-report` now
    runs an exact textual scorer for DWARF-backed fixtures, parsed C/C++ source
@@ -42,10 +42,10 @@ currently exits nonzero.
 
 Current known state:
 
-- Stylistic fixture parity: **84.9%** emitted by `scripts/score_parity.sh` on
+- Stylistic fixture parity: **87.1%** emitted by `scripts/score_parity.sh` on
   the current golden stream. The exact-line golden test still exits nonzero
-  because `xtask golden-triage` currently has 2 exact-pass fixture rows and
-  13 classified review rows: 3 producer-bug and 10 mixed. Do not use a
+  because `xtask golden-triage` currently has 0 exact-pass fixture rows and
+  15 classified review rows: 3 producer-bug and 12 mixed. Do not use a
   blanket rebaseline.
 - Semantic correctness: `xtask semantic-report` passes
   `hello_world.elf:main`, `branches.elf:main`, `loops.elf:main`,
@@ -53,18 +53,22 @@ Current known state:
   `debug_structs.elf:main`, `x87_math.elf:main`,
   `cpp_vtable.elf:main`, `debug_calls.elf:main`, `type_stack_o2.elf:main`,
   `medium.elf:main`, `stripped.elf:main`, `switch_table.elf:dispatch`,
-  `cpp_exceptions.elf:main`, `cpp_rtti.elf:main`, and
-  `debug_templates.elf:main`. The AArch64, MIPS64, PPC64, and RISC-V non-host
-  executable rows also pass through qemu-user; the same four non-host cases
-  still pass shape-only checks, which are not executable equivalence.
+  `cpp_exceptions.elf:main`, `debug_cpp_exceptions.elf:main`,
+  `cpp_rtti.elf:main`, `debug_cpp_rtti.elf:main`,
+  `debug_cpp_vtable.elf:main`, and `debug_templates.elf:main`. The AArch64,
+  MIPS64, PPC64, and RISC-V non-host executable rows also pass through
+  qemu-user. `debug_x87_math.elf:main`, `debug_switch_table.elf:main`, and
+  `debug_medium.elf:main` are measured as shape-only PASS rows, alongside the
+  four non-host shape checks; shape checks are not executable equivalence.
 - Fidelity taxonomy counters: golden metrics currently total
   `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0 total=1059`.
 - Fixture optimization levels: recorded in `tests/corpus.toml`.
 - Type/variable recovery accuracy:
-  `fixtures=21 functions=64 c_functions=50 cpp_functions=14 recovered=207 expected=324 reported=1084 recall=63.9% precision=19.1% leaked_temp_decls=256`
-  with `source_known=21 source_only=16 source_parsed=16 dwarf_candidates=5
-  cpp_candidates=4 scored_cpp=4 optimized_scored=15 scored_source_only=16
-  non_host_candidates=4 scored_non_host=4`.
+  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=2678 recall=100.0% precision=35.8% leaked_temp_decls=386`
+  with `source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13
+  cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16
+  non_host_candidates=4 scored_non_host=4`. The missing ledger has 0
+  recoverable recovery gaps and 57 source-oracle-only facts.
 
 ## Tier 0 - Claim Cleanup And Honest Reporting
 

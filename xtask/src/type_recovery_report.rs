@@ -2889,6 +2889,7 @@ fn normalize_type(value: &str) -> String {
         .replace("volatile ", "")
         .replace("restrict ", "")
         .replace("typedef ", "")
+        .replace("_Noreturn ", "")
         .replace("__noreturn ", "")
         .replace("__aapcs ", "")
         .replace("__thiscall ", "")
@@ -3030,7 +3031,7 @@ mod tests {
     }
 
     #[test]
-    fn signature_return_matching_ignores_noreturn_annotation() {
+    fn signature_return_matching_ignores_noreturn_annotations() {
         let function = FunctionDebugInfo {
             name: "main".to_string(),
             linkage_name: None,
@@ -3044,6 +3045,11 @@ mod tests {
         };
         assert!(signature_return_matches(
             "int __noreturn main(void)",
+            &function,
+            "int"
+        ));
+        assert!(signature_return_matches(
+            "_Noreturn int main(void)",
             &function,
             "int"
         ));

@@ -1292,7 +1292,7 @@ pub fn print_c_with_annotations(
     {
         let _ = write!(
             out,
-            " // dropped {} param(s) (dead in body)",
+            " /* // dropped {} param(s) (dead in body) */",
             sig.dropped_param_count,
         );
     }
@@ -21081,6 +21081,10 @@ mod tests {
         assert!(
             output.contains("// dropped 2 param(s) (dead in body)"),
             "expected `// dropped N param(s) (dead in body)` format, got: {output}",
+        );
+        assert!(
+            output.contains(") /* // dropped 2 param(s) (dead in body) */ {"),
+            "dropped-param note must not comment out the opening brace: {output}",
         );
     }
 

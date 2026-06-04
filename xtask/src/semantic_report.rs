@@ -75,7 +75,17 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
         expected_failure: None,
     },
     SemanticCase {
+        fixture: "debug_branches",
+        function: "main",
+        expected_failure: None,
+    },
+    SemanticCase {
         fixture: "loops",
+        function: "main",
+        expected_failure: None,
+    },
+    SemanticCase {
+        fixture: "debug_loops",
         function: "main",
         expected_failure: None,
     },
@@ -110,6 +120,11 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
         expected_failure: None,
     },
     SemanticCase {
+        fixture: "debug_cpp_vtable",
+        function: "main",
+        expected_failure: None,
+    },
+    SemanticCase {
         fixture: "debug_calls",
         function: "main",
         expected_failure: None,
@@ -140,7 +155,17 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
         expected_failure: None,
     },
     SemanticCase {
+        fixture: "debug_cpp_exceptions",
+        function: "main",
+        expected_failure: None,
+    },
+    SemanticCase {
         fixture: "cpp_rtti",
+        function: "main",
+        expected_failure: None,
+    },
+    SemanticCase {
+        fixture: "debug_cpp_rtti",
         function: "main",
         expected_failure: None,
     },
@@ -152,6 +177,21 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
 ];
 
 const CROSS_ARCH_SHAPE_CASES: &[ShapeCase] = &[
+    ShapeCase {
+        fixture: "debug_x87_math",
+        function: "main",
+        required_fragments: &["sum_squares_x87", "mix_ops_x87", "compare_floats_x87"],
+    },
+    ShapeCase {
+        fixture: "debug_switch_table",
+        function: "main",
+        required_fragments: &["dispatch", "return"],
+    },
+    ShapeCase {
+        fixture: "debug_medium",
+        function: "main",
+        required_fragments: &["f_ackermann", "f_rec_fib", "f_multi_switch"],
+    },
     ShapeCase {
         fixture: "arm64_features",
         function: "_start",
@@ -925,7 +965,13 @@ fn c_subset_prelude(binary: &Path, helper_decls: &str) -> String {
     let mut out = String::from(
         "#include <stdarg.h>\n\
          #include <stdint.h>\n\
-         #include <stdio.h>\n\
+         typedef int __mbstate_t;\n\
+         typedef struct __unlace_semantic_io_lock _IO_lock_t;\n\
+         typedef struct __unlace_semantic_file FILE;\n\
+         extern FILE *stdout;\n\
+         int puts(const char *s);\n\
+         int printf(const char *format, ...);\n\
+         int vfprintf(FILE *stream, const char *format, va_list ap);\n\
          #define __stdcall\n\
          #define __fastcall\n\
          #define __aapcs\n\
@@ -978,8 +1024,14 @@ fn c_helper_source_path(root: &Path, fixture: &Fixture, function: &str) -> Optio
 
 fn generated_c_helper_decls(fixture: &Fixture, function: &str) -> String {
     match (fixture.name.as_str(), function) {
-        ("cpp_exceptions", "main") => "int safe_call(int x);\n".to_string(),
-        ("cpp_rtti", "main") => "long long identify(void *a);\n".to_string(),
+        ("cpp_exceptions" | "debug_cpp_exceptions", "main") => "int safe_call(int x);\n".to_string(),
+        ("cpp_rtti" | "debug_cpp_rtti", "main") => {
+            "long long identify(void *a);\nint Cat_Cat(void *self);\nint Dog_Dog(void *self);\n"
+                .to_string()
+        }
+        ("debug_cpp_vtable", "main") => {
+            "int use_base(void *b);\nint Derived_Derived(void *self);\n".to_string()
+        }
         ("debug_templates", "main") => {
             "long long make_box(int x);\nint use_box(int b);\nint call_add(int x);\nlong long make_array(long long *out);\n".to_string()
         }
@@ -1005,7 +1057,7 @@ fn fixture_call_alias_decls(fixture: &Fixture, function: &str) -> String {
 
 fn generated_c_helper_source(fixture: &Fixture, function: &str) -> Option<&'static str> {
     match (fixture.name.as_str(), function) {
-        ("cpp_exceptions", "main") => Some(
+        ("cpp_exceptions" | "debug_cpp_exceptions", "main") => Some(
             r#"#include <stdio.h>
 int safe_call(int x) {
     if (x < 0) {
@@ -1016,7 +1068,7 @@ int safe_call(int x) {
 }
 "#,
         ),
-        ("cpp_rtti", "main") => Some(
+        ("cpp_rtti" | "debug_cpp_rtti", "main") => Some(
             r#"#include <stdint.h>
 long long identify(void *a) {
     (void)a;
@@ -1024,6 +1076,17 @@ long long identify(void *a) {
     const char *value = (call_index++ == 0) ? "meow" : "woof";
     return (long long)(uintptr_t)value;
 }
+int Cat_Cat(void *self) { (void)self; return 0; }
+int Dog_Dog(void *self) { (void)self; return 0; }
+void __stack_chk_fail(void) {}
+"#,
+        ),
+        ("debug_cpp_vtable", "main") => Some(
+            r#"int use_base(void *b) {
+    (void)b;
+    return 42;
+}
+int Derived_Derived(void *self) { (void)self; return 0; }
 void __stack_chk_fail(void) {}
 "#,
         ),
@@ -1068,10 +1131,10 @@ fn helper_function_decls(source: &Path) -> String {
     let mut decls = BTreeSet::new();
     for line in text.lines() {
         let trimmed = line.trim();
-        if !trimmed.ends_with('{') {
+        let Some(open_brace) = trimmed.find('{') else {
             continue;
-        }
-        let header = trimmed.trim_end_matches('{').trim_end();
+        };
+        let header = trimmed[..open_brace].trim_end();
         let Some(open) = header.find('(') else {
             continue;
         };
@@ -1235,9 +1298,39 @@ mod tests {
             .collect();
         let shape: BTreeSet<_> = CROSS_ARCH_SHAPE_CASES
             .iter()
+            .filter(|case| !case.fixture.starts_with("debug_"))
             .map(|case| case.fixture)
             .collect();
         assert_eq!(exec, shape);
+    }
+
+    #[test]
+    fn semantic_subset_prelude_avoids_system_stdio_type_collisions() {
+        let prelude = c_subset_prelude(Path::new("/nonexistent"), "");
+
+        assert!(!prelude.contains("#include <stdio.h>"));
+        assert!(prelude.contains("typedef int __mbstate_t;"));
+        assert!(prelude.contains("typedef struct __unlace_semantic_io_lock _IO_lock_t;"));
+        assert!(prelude.contains("extern FILE *stdout;"));
+        assert!(prelude.contains("int puts(const char *s);"));
+        assert!(prelude.contains("int printf(const char *format, ...);"));
+        assert!(prelude.contains("int vfprintf(FILE *stream, const char *format, va_list ap);"));
+    }
+
+    #[test]
+    fn helper_function_decls_finds_same_line_function_bodies() {
+        let source =
+            std::env::temp_dir().join(format!("unlace-helper-decls-{}.c", std::process::id()));
+        std::fs::write(
+            &source,
+            "static int32_t f_add(int32_t a, int32_t b) { return a + b; }\n",
+        )
+        .expect("write helper source");
+
+        let decls = helper_function_decls(&source);
+        let _ = std::fs::remove_file(&source);
+
+        assert!(decls.contains("int f_add();"), "decls: {decls}");
     }
 
     #[test]

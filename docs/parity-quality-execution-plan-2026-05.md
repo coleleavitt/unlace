@@ -64,7 +64,7 @@ Current known state:
   `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0 total=1059`.
 - Fixture optimization levels: recorded in `tests/corpus.toml`.
 - Type/variable recovery accuracy:
-  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1625 recall=100.0% precision=59.1% raw_precision=58.0% raw_reported=1704 leaked_temp_decls=102`
+  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1407 recall=100.0% precision=68.2% raw_precision=66.6% raw_reported=1486 leaked_temp_decls=102`
   (precision now shares recall's fact scope — source-oracle-only emissions go to
   `raw_precision` — and excludes printer-marked synthetic carriers; dominant
   recoverable gap is `debug_medium`'s +124 extra `v_NN` stack slots)

@@ -2981,6 +2981,24 @@ fn is_synthetic_local_name(name: &str) -> bool {
     matches!(base, "result" | "cond")
 }
 
+/// A printer-synthesized composite (`struct __anon0`, `__unnamed3`): an
+/// offset-named aggregate the decompiler inferred from stack/memory layout when
+/// it could not attribute the bytes to a named source type. Like register/temp
+/// carriers, it is not a source-type *recovery claim*, so its members do not
+/// belong in the field-recovery precision denominator (real DWARF/source structs
+/// — `Cat`, `_IO_FILE` — keep their real names and still count).
+fn is_synthetic_composite_name(name: &str) -> bool {
+    name.starts_with("__anon") || name.starts_with("__unnamed")
+}
+
+/// A printer-synthesized field placeholder (`field_0`, `field_24`): the
+/// offset-based name for a member the decompiler could not recover a source
+/// field name for. Not a source-field claim.
+fn is_synthetic_field_name(name: &str) -> bool {
+    name.strip_prefix("field_")
+        .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+}
+
 fn is_register_location_comment(comment: &str) -> bool {
     let reg = comment.trim().trim_start_matches('$').to_ascii_lowercase();
     if matches!(
@@ -3161,6 +3179,13 @@ fn add_reported_struct_facts(
             .strip_prefix("struct ")
             .and_then(|rest| rest.strip_suffix('{').map(str::trim))
         {
+            // Synthetic offset-named aggregates (`__anon0`) are not source-type
+            // recovery claims — exclude them and their members from the
+            // precision denominator, parallel to register/temp local carriers.
+            if is_synthetic_composite_name(name) {
+                current_struct = None;
+                continue;
+            }
             if seen_structs.insert(name.to_string()) {
                 score.struct_names.add_reported(1);
             }
@@ -3186,6 +3211,11 @@ fn add_reported_struct_facts(
             .split('[')
             .next()
             .unwrap_or("");
+        // A `field_N` placeholder is the printer's offset-based name for an
+        // unrecovered member — not a source-field claim.
+        if is_synthetic_field_name(field_name) {
+            continue;
+        }
         if seen_fields.insert((struct_name.to_string(), field_name.to_string())) {
             score.field_names.add_reported(1);
             score.field_types.add_reported(1);
@@ -3554,6 +3584,21 @@ mod tests {
             name: name.to_string(),
             comment: comment.map(str::to_string),
         }
+    }
+
+    #[test]
+    fn synthetic_composites_and_fields_are_classified() {
+        // Printer-synthesized aggregates / offset-named members are excluded.
+        assert!(is_synthetic_composite_name("__anon0"));
+        assert!(is_synthetic_composite_name("__unnamed3"));
+        assert!(is_synthetic_field_name("field_0"));
+        assert!(is_synthetic_field_name("field_24"));
+        // Real DWARF/source structs and named fields still count.
+        assert!(!is_synthetic_composite_name("Cat"));
+        assert!(!is_synthetic_composite_name("_IO_FILE"));
+        assert!(!is_synthetic_field_name("count"));
+        assert!(!is_synthetic_field_name("field_")); // no digits → not synthetic
+        assert!(!is_synthetic_field_name("fieldwork"));
     }
 
     #[test]

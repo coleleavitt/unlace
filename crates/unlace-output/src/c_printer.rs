@@ -7381,6 +7381,9 @@ fn is_transient_x86_frame_base_update(insn: &IrInsn, stmt_idx: u32, ctx: &PrintC
     if output_sv.base.space != SpaceId::Unique {
         return false;
     }
+    if ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0) != 1 {
+        return false;
+    }
 
     ctx.stmt_inputs.iter().any(|(&use_stmt, inputs)| {
         use_stmt > stmt_idx
@@ -16287,6 +16290,7 @@ fn emit_operand_with_prec(
         if def_stmt < stmt_idx
             && !ctx.foldable_stmts.contains(&def_stmt)
             && is_control_condition_stmt(stmt_idx, ctx)
+            && materialized_def_must_name_in_condition(&def_insn, def_stmt, ctx)
         {
             let name = ctx.name_of(&sv);
             trace_sequence(format_args!(
@@ -16395,6 +16399,35 @@ fn emit_operand_with_prec(
         "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=name rendered={name:?}"
     ));
     name
+}
+
+fn materialized_def_must_name_in_condition(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if insn.op != IrOp::Load {
+        return true;
+    }
+    if load_output_is_suppressed_for_inline(insn, stmt_idx, ctx) {
+        return false;
+    }
+    true
+}
+
+fn load_output_is_suppressed_for_inline(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
+        return false;
+    };
+    let use_count = ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0);
+    if use_count > 1 {
+        return false;
+    }
+    if use_count == 0 {
+        return true;
+    }
+    let load_size = insn.output.map_or(8, |o| o.size);
+    let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
+    let readonly = insn.inputs.get(addr_idx).is_some_and(|addr| {
+        try_readonly_scalar_load(addr, Some(addr_idx), stmt_idx, load_size, ctx).is_some()
+    });
+    stable_load_expr_is_inlineable(insn, stmt_idx, ctx) || readonly
 }
 
 fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
@@ -27582,6 +27615,49 @@ mod tests {
     }
 
     #[test]
+    fn test_start_stack_alignment_temp_is_not_suppressed_as_frame_setup() {
+        use super::{PrintCtx, is_transient_x86_frame_base_update};
+
+        let rsp = reg(32, 8);
+        let align_tmp = Varnode::unique(0x100, 8);
+        let align_sv = SsaVarnode {
+            base: align_tmp,
+            version: 0,
+        };
+        let copy_back = IrInsn::with_output(IrOp::Copy, rsp, smallvec![align_tmp], 0x1052);
+        let mut ctx = PrintCtx::new(
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        ctx.stmt_outputs.insert(7, Some(align_sv));
+        ctx.stmt_insns.insert(8, copy_back.clone());
+        ctx.stmt_inputs.insert(8, vec![align_sv]);
+        ctx.sv_use_counts.insert(align_sv, 1);
+
+        let insn = IrInsn::with_output(IrOp::IntSub, align_tmp, smallvec![rsp, con(8, 8)], 0x1052);
+        assert!(
+            is_transient_x86_frame_base_update(&insn, 7, &ctx),
+            "single-use temp copied back to rsp is transient frame setup",
+        );
+
+        ctx.stmt_insns.insert(
+            9,
+            IrInsn::without_output(IrOp::Call, smallvec![con(0x400000, 8), align_tmp], 0x1053),
+        );
+        ctx.stmt_inputs.insert(9, vec![align_sv]);
+        ctx.sv_use_counts.insert(align_sv, 2);
+        assert!(
+            !is_transient_x86_frame_base_update(&insn, 7, &ctx),
+            "multi-use stack alignment temp must remain visible",
+        );
+    }
+
+    #[test]
     fn test_t232_stack_lvar_annotation_supplies_name_and_decl_type() {
         use unlace_ir::ssa::{StackFrame, StackLocal};
 
@@ -31811,6 +31887,136 @@ mod tests {
         assert!(
             !body.contains("= g_flag; // temp"),
             "single-use static load must not leak as a temp decl:\n{body}"
+        );
+    }
+
+    #[test]
+    fn test_materialized_static_load_snapshot_is_not_reloaded_in_condition() {
+        let space = con(0, 8);
+        let addr = con(0x404000, 8);
+        let loaded = Varnode::unique(0x100, 8);
+        let cmp = Varnode::unique(0x200, 1);
+        let sum = Varnode::unique(0x300, 8);
+
+        let load = IrInsn::with_output(IrOp::Load, loaded, smallvec![space, addr], 0x1000);
+        let use_loaded =
+            IrInsn::with_output(IrOp::IntAdd, sum, smallvec![loaded, con(1, 8)], 0x1004);
+        let store = IrInsn::without_output(IrOp::Store, smallvec![space, addr, con(7, 8)], 0x1008);
+        let eq = IrInsn::with_output(IrOp::IntEqual, cmp, smallvec![loaded, con(0, 8)], 0x100c);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Statement(use_loaded),
+            HirNode::Statement(store),
+            HirNode::Statement(eq),
+            HirNode::If {
+                cond: SsaVarnode {
+                    base: cmp,
+                    version: 0,
+                },
+                then_body: vec![HirNode::Return(None)],
+                else_body: None,
+            },
+            HirNode::Return(Some(SsaVarnode {
+                base: sum,
+                version: 0,
+            })),
+        ];
+
+        let func = make_func("materialized_static_load_snapshot_cond", body);
+        let mut symbols = std::collections::BTreeMap::new();
+        symbols.insert(0x404000u64, "g_flag".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+        let body = function_body_text(&output, "materialized_static_load_snapshot_cond");
+
+        assert!(
+            body.contains("v1 = g_flag;") || body.contains("v2 = g_flag;"),
+            "multi-use static load should be materialized as a snapshot:\n{body}"
+        );
+        assert!(
+            body.contains("g_flag = 7LL;"),
+            "test should include the intervening write to the global:\n{body}"
+        );
+        assert!(
+            body.contains("if (v1 == 0LL)") || body.contains("if (v2 == 0LL)"),
+            "condition must use the materialized snapshot, not reload g_flag:\n{body}"
+        );
+        assert!(
+            !body.contains("if (g_flag == 0LL)"),
+            "condition must not reload a global after an intervening store:\n{body}"
+        );
+    }
+
+    #[test]
+    fn test_materialized_stack_load_snapshot_is_not_reloaded_in_condition() {
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        let ram = con(1, 8);
+        let stack_slot = Varnode::stack(8, 8);
+        let loaded = Varnode::unique(0x100, 8);
+        let cmp = Varnode::unique(0x200, 1);
+        let sum = Varnode::unique(0x300, 8);
+
+        let load = IrInsn::with_output(IrOp::Load, loaded, smallvec![ram, stack_slot], 0x1000);
+        let use_loaded =
+            IrInsn::with_output(IrOp::IntAdd, sum, smallvec![loaded, con(1, 8)], 0x1004);
+        let store =
+            IrInsn::without_output(IrOp::Store, smallvec![ram, stack_slot, con(7, 8)], 0x1008);
+        let eq = IrInsn::with_output(IrOp::IntEqual, cmp, smallvec![loaded, con(0, 8)], 0x100c);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Statement(use_loaded),
+            HirNode::Statement(store),
+            HirNode::Statement(eq),
+            HirNode::If {
+                cond: SsaVarnode {
+                    base: cmp,
+                    version: 0,
+                },
+                then_body: vec![HirNode::Return(None)],
+                else_body: None,
+            },
+            HirNode::Return(Some(SsaVarnode {
+                base: sum,
+                version: 0,
+            })),
+        ];
+        let mut func = make_func("materialized_stack_load_snapshot_cond", body);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            8,
+            StackLocal {
+                offset: 8,
+                size: 8,
+                access_widths: vec![8],
+                kind: Default::default(),
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 8,
+            max_pos_offset: 16,
+            min_neg_offset: 0,
+        });
+
+        let output = print_c(&func);
+        let body = function_body_text(&output, "materialized_stack_load_snapshot_cond");
+
+        assert!(
+            body.contains("v1 = v_8;") || body.contains("v2 = v_8;"),
+            "multi-use stack load should be materialized as a snapshot:\n{body}"
+        );
+        assert!(
+            body.contains("v_8 = 7LL;"),
+            "test should include the intervening stack write:\n{body}"
+        );
+        assert!(
+            body.contains("if (v1 == 0LL)") || body.contains("if (v2 == 0LL)"),
+            "condition must use the materialized stack snapshot, not reload v_8:\n{body}"
+        );
+        assert!(
+            !body.contains("if (v_8 == 0LL)"),
+            "condition must not reload the stack slot after an intervening store:\n{body}"
         );
     }
 

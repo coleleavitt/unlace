@@ -26,6 +26,7 @@ pub use unlace_lift_xtensa::XtensaLifter;
 
 /// Construct a lifter for the given architecture.
 pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
+    lift_trace_lazy(|| format!("select arch={arch:?}"));
     match arch {
         ArchId::X86 | ArchId::X86_64 => Box::new(X86Lifter::new()),
         ArchId::Arm | ArchId::AArch64 => Box::new(ArmLifter::new()),
@@ -53,6 +54,33 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::TiC28x => Box::new(TiLifter::new_c28x()),
         _ => Box::new(StubLifter::new(arch)),
     }
+}
+
+fn lift_trace(message: &str) {
+    if std::env::var_os("UNLACE_LIFT_TRACE").is_none()
+        && std::env::var_os("UNLACE_TRACE_ALL").is_none()
+    {
+        return;
+    }
+    if let Ok(filter) =
+        std::env::var("UNLACE_LIFT_TRACE_FILTER").or_else(|_| std::env::var("UNLACE_TRACE_FILTER"))
+    {
+        let needle = filter.trim();
+        if !needle.is_empty() && !message.contains(needle) {
+            return;
+        }
+    }
+    eprintln!("[unlace lift] {message}");
+}
+
+fn lift_trace_lazy(make_message: impl FnOnce() -> String) {
+    if std::env::var_os("UNLACE_LIFT_TRACE").is_none()
+        && std::env::var_os("UNLACE_TRACE_ALL").is_none()
+    {
+        return;
+    }
+    let message = make_message();
+    lift_trace(&message);
 }
 
 /// Fallback lifter that emits [`IrOp::Unimplemented`] for unsupported architectures.

@@ -146,6 +146,17 @@ impl Lifter for PpcLifter {
             .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
         let mut ctx = LiftCtx::new(addr, self.mode.ptr_size());
+        trace_lift_lazy(addr, || {
+            format!(
+                "decode mode={:?} endian={:?} len={} bytes={} mnemonic={} operands={}",
+                self.mode,
+                self.endian,
+                insn.len(),
+                fmt_bytes(bytes.get(..insn.len()).unwrap_or(bytes)),
+                insn.mnemonic().unwrap_or(""),
+                insn.op_str().unwrap_or("")
+            )
+        });
         dispatch(&cs, &mut ctx, insn, &detail);
 
         Ok(LiftedInsn {
@@ -179,14 +190,17 @@ impl LiftCtx {
     pub fn alloc_unique(&mut self) -> u64 {
         let id = self.unique_counter;
         self.unique_counter += 1;
+        trace_lift_lazy(self.addr, || format!("alloc unique u{id}"));
         id
     }
 
     pub fn emit(&mut self, insn: IrInsn) {
+        trace_lift_lazy(self.addr, || format!("emit {insn}"));
         self.ops.push(insn);
     }
 
     pub fn emit_unimplemented(&mut self) {
+        trace_lift(self.addr, "emit unimplemented");
         self.ops.push(IrInsn::without_output(
             IrOp::Unimplemented,
             smallvec![],
@@ -213,10 +227,12 @@ fn ppc_operands(detail: &InsnDetail<'_>) -> Vec<PpcOperand> {
 }
 
 pub(crate) fn operand_reg(ctx: &LiftCtx, op: &PpcOperand) -> Option<Varnode> {
-    match op {
+    let mapped = match op {
         PpcOperand::Reg(id) => cs_reg_to_varnode_with_size(*id, ctx.ptr_size),
         _ => None,
-    }
+    };
+    trace_lift_lazy(ctx.addr, || format!("operand_reg op={op:?} -> {mapped:?}"));
+    mapped
 }
 
 pub(crate) fn operand_imm(op: &PpcOperand) -> Option<i64> {
@@ -227,7 +243,7 @@ pub(crate) fn operand_imm(op: &PpcOperand) -> Option<i64> {
 }
 
 pub(crate) fn operand_mem_addr(ctx: &mut LiftCtx, op: &PpcOperand) -> Option<Varnode> {
-    match op {
+    let mapped = match op {
         PpcOperand::Mem(mem) => {
             let base = cs_reg_to_varnode_with_size(mem.base(), ctx.ptr_size);
             let disp = mem.disp();
@@ -248,7 +264,9 @@ pub(crate) fn operand_mem_addr(ctx: &mut LiftCtx, op: &PpcOperand) -> Option<Var
             }
         }
         _ => None,
-    }
+    };
+    trace_lift_lazy(ctx.addr, || format!("operand_mem op={op:?} -> {mapped:?}"));
+    mapped
 }
 
 fn insn_id(insn: &Insn<'_>) -> PpcInsn {
@@ -258,6 +276,13 @@ fn insn_id(insn: &Insn<'_>) -> PpcInsn {
 fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDetail<'_>) {
     let ops = ppc_operands(detail);
     let id = insn_id(insn);
+    trace_lift_lazy(ctx.addr, || {
+        format!(
+            "dispatch id={id:?} mnemonic={} op_str={} detail_ops={ops:?}",
+            insn.mnemonic().unwrap_or(""),
+            insn.op_str().unwrap_or("")
+        )
+    });
 
     match id {
         // Arithmetic
@@ -351,4 +376,55 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
             }
         }
     }
+}
+
+pub(crate) fn trace_lift(addr: u64, message: &str) {
+    if !lift_trace_enabled() || !lift_trace_filter_matches(addr, message) {
+        return;
+    }
+    eprintln!("[unlace ppc-lift] {addr:#x}: {message}");
+}
+
+pub(crate) fn trace_lift_lazy(addr: u64, make_message: impl FnOnce() -> String) {
+    if !lift_trace_enabled() {
+        return;
+    }
+    let message = make_message();
+    if !lift_trace_filter_matches(addr, &message) {
+        return;
+    }
+    eprintln!("[unlace ppc-lift] {addr:#x}: {message}");
+}
+
+fn lift_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_PPC_LIFT_TRACE")
+        || env_flag_enabled("UNLACE_LIFT_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn lift_trace_filter_matches(addr: u64, message: &str) -> bool {
+    let Some(filter) = std::env::var("UNLACE_PPC_LIFT_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+    else {
+        return true;
+    };
+    let needle = filter.trim();
+    needle.is_empty()
+        || message.contains(needle)
+        || format!("{addr:#x}").contains(needle)
+        || format!("{addr:x}").contains(needle)
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name).is_some()
+}
+
+fn fmt_bytes(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }

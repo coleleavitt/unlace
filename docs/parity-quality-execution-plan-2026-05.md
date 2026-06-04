@@ -7,8 +7,8 @@ is that "parity" is not a single number. unlace now tracks three axes:
    score. This is a regression watchdog only.
 2. **Semantic correctness** - source-known decompiled C recompiles and behaves
    like the original. Current coverage is `xtask semantic-report`, which passes
-   22 host executable source-known cases, tracks 0 host/source-known semantic
-   XFAILs, passes 4 qemu-user non-host executable rows, and includes 7
+   20 host executable source-known cases, tracks 0 host/source-known semantic
+   XFAILs, passes 4 qemu-user non-host executable rows, and includes 9
    source-known shape-only PASS rows.
 3. **Type/variable recovery accuracy** - recovered locals, types, structs, and
    arrays match source/DWARF ground truth. `xtask type-recovery-report` now
@@ -54,17 +54,17 @@ Current known state:
   `cpp_vtable.elf:main`, `debug_calls.elf:main`, `type_stack_o2.elf:main`,
   `medium.elf:main`, `stripped.elf:main`, `switch_table.elf:dispatch`,
   `cpp_exceptions.elf:main`, `debug_cpp_exceptions.elf:main`,
-  `cpp_rtti.elf:main`, `debug_cpp_rtti.elf:main`,
-  `debug_cpp_vtable.elf:main`, and `debug_templates.elf:main`. The AArch64,
+  `cpp_rtti.elf:main`, and `debug_templates.elf:main`. The AArch64,
   MIPS64, PPC64, and RISC-V non-host executable rows also pass through
   qemu-user. `debug_x87_math.elf:main`, `debug_switch_table.elf:main`, and
-  `debug_medium.elf:main` are measured as shape-only PASS rows, alongside the
-  four non-host shape checks; shape checks are not executable equivalence.
+  `debug_medium.elf:main` are measured as shape-only PASS rows, alongside
+  `debug_cpp_rtti.elf:main`, `debug_cpp_vtable.elf:main`, and the four non-host
+  shape checks; shape checks are not executable equivalence.
 - Fidelity taxonomy counters: golden metrics currently total
   `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0 total=1059`.
 - Fixture optimization levels: recorded in `tests/corpus.toml`.
 - Type/variable recovery accuracy:
-  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=2678 recall=100.0% precision=35.8% leaked_temp_decls=386`
+  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=2660 recall=100.0% precision=36.1% leaked_temp_decls=377`
   with `source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13
   cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16
   non_host_candidates=4 scored_non_host=4`. The missing ledger has 0

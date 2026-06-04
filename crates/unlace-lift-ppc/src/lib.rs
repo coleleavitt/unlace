@@ -252,6 +252,91 @@ mod tests {
             .lift_insn(&[0x7c, 0x03, 0x20, 0x00], 0x1000_0000)
             .expect("should decode CMPW");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSless));
+        assert!(result.ir_ops.iter().any(|i| {
+            i.op == IrOp::Copy
+                && i.output.is_some_and(|out| {
+                    out.space == unlace_ir::SpaceId::Register && out.offset == 256 && out.size == 1
+                })
+        }));
+    }
+
+    #[test]
+    fn test_cmpw_explicit_non_cr0_is_not_misrepresented_as_cr0_eq() {
+        // 7d 03 20 00 = cmpw cr1, r3, r4. Only CR0.EQ is modeled today.
+        let result = lifter()
+            .lift_insn(&[0x7d, 0x03, 0x20, 0x00], 0x1000_0000)
+            .expect("should decode CMPW cr1");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(!result.ir_ops.iter().any(|i| {
+            i.output.is_some_and(|out| {
+                out.space == unlace_ir::SpaceId::Register && out.offset == 256 && out.size == 1
+            })
+        }));
+    }
+
+    #[test]
+    fn test_beq_uses_cr_eq_predicate() {
+        // 41 82 00 08 = beq +8 (BO=12, BI=2)
+        let result = lifter()
+            .lift_insn(&[0x41, 0x82, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode BEQ");
+        let branch = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Cbranch)
+            .expect("beq should lift to CBRANCH");
+        assert_eq!(branch.inputs.len(), 2);
+        assert_eq!(branch.inputs[1].space, unlace_ir::SpaceId::Register);
+        assert_eq!(branch.inputs[1].offset, 256);
+        assert_eq!(branch.inputs[1].size, 1);
+    }
+
+    #[test]
+    fn test_bne_inverts_cr_eq_predicate() {
+        // 40 82 00 08 = bne +8 (BO=4, BI=2)
+        let result = lifter()
+            .lift_insn(&[0x40, 0x82, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode BNE");
+        let negate = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::BoolNegate)
+            .expect("bne should invert CR.EQ");
+        assert_eq!(negate.inputs.len(), 1);
+        assert_eq!(negate.inputs[0].space, unlace_ir::SpaceId::Register);
+        assert_eq!(negate.inputs[0].offset, 256);
+        assert_eq!(negate.inputs[0].size, 1);
+
+        let branch = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Cbranch)
+            .expect("bne should lift to CBRANCH");
+        assert_eq!(branch.inputs[1].space, unlace_ir::SpaceId::Unique);
+        assert_eq!(branch.inputs[1].size, 1);
+    }
+
+    #[test]
+    fn test_blt_is_not_misrepresented_as_eq_predicate() {
+        // 41 80 00 08 = blt +8 (BO=12, BI=0). The PPC lifter currently only
+        // models CR0.EQ, so non-EQ condition branches must stay unimplemented
+        // rather than silently becoming equality tests.
+        let result = lifter()
+            .lift_insn(&[0x41, 0x80, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode BLT");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
+    }
+
+    #[test]
+    fn test_explicit_cr1_beq_is_not_misrepresented_as_cr0_eq() {
+        // 41 86 00 08 = bc 12,6,+8 (CR1.EQ). The CR0.EQ pseudo-register must
+        // not be used for explicit non-CR0 fields.
+        let result = lifter()
+            .lift_insn(&[0x41, 0x86, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode explicit CR1 branch");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
     }
 
     #[test]

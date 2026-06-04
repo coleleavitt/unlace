@@ -120,11 +120,6 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
         expected_failure: None,
     },
     SemanticCase {
-        fixture: "debug_cpp_vtable",
-        function: "main",
-        expected_failure: None,
-    },
-    SemanticCase {
         fixture: "debug_calls",
         function: "main",
         expected_failure: None,
@@ -165,11 +160,6 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
         expected_failure: None,
     },
     SemanticCase {
-        fixture: "debug_cpp_rtti",
-        function: "main",
-        expected_failure: None,
-    },
-    SemanticCase {
         fixture: "debug_templates",
         function: "main",
         expected_failure: None,
@@ -191,6 +181,16 @@ const CROSS_ARCH_SHAPE_CASES: &[ShapeCase] = &[
         fixture: "debug_medium",
         function: "main",
         required_fragments: &["f_ackermann", "f_rec_fib", "f_multi_switch"],
+    },
+    ShapeCase {
+        fixture: "debug_cpp_rtti",
+        function: "main",
+        required_fragments: &["// DWARF locals", "Dog d;", "Cat c;", "identify(("],
+    },
+    ShapeCase {
+        fixture: "debug_cpp_vtable",
+        function: "main",
+        required_fragments: &["// DWARF locals", "Derived d;", "use_base(&"],
     },
     ShapeCase {
         fixture: "arm64_features",
@@ -1025,12 +1025,9 @@ fn c_helper_source_path(root: &Path, fixture: &Fixture, function: &str) -> Optio
 fn generated_c_helper_decls(fixture: &Fixture, function: &str) -> String {
     match (fixture.name.as_str(), function) {
         ("cpp_exceptions" | "debug_cpp_exceptions", "main") => "int safe_call(int x);\n".to_string(),
-        ("cpp_rtti" | "debug_cpp_rtti", "main") => {
+        ("cpp_rtti", "main") => {
             "long long identify(void *a);\nint Cat_Cat(void *self);\nint Dog_Dog(void *self);\n"
                 .to_string()
-        }
-        ("debug_cpp_vtable", "main") => {
-            "int use_base(void *b);\nint Derived_Derived(void *self);\n".to_string()
         }
         ("debug_templates", "main") => {
             "long long make_box(int x);\nint use_box(int b);\nint call_add(int x);\nlong long make_array(long long *out);\n".to_string()
@@ -1068,7 +1065,7 @@ int safe_call(int x) {
 }
 "#,
         ),
-        ("cpp_rtti" | "debug_cpp_rtti", "main") => Some(
+        ("cpp_rtti", "main") => Some(
             r#"#include <stdint.h>
 long long identify(void *a) {
     (void)a;
@@ -1078,15 +1075,6 @@ long long identify(void *a) {
 }
 int Cat_Cat(void *self) { (void)self; return 0; }
 int Dog_Dog(void *self) { (void)self; return 0; }
-void __stack_chk_fail(void) {}
-"#,
-        ),
-        ("debug_cpp_vtable", "main") => Some(
-            r#"int use_base(void *b) {
-    (void)b;
-    return 42;
-}
-int Derived_Derived(void *self) { (void)self; return 0; }
 void __stack_chk_fail(void) {}
 "#,
         ),
@@ -1302,6 +1290,26 @@ mod tests {
             .map(|case| case.fixture)
             .collect();
         assert_eq!(exec, shape);
+    }
+
+    #[test]
+    fn debug_cpp_rows_without_behavioral_helpers_are_not_executable_equivalence() {
+        for fixture in ["debug_cpp_rtti", "debug_cpp_vtable"] {
+            assert!(
+                !SEMANTIC_CASES
+                    .iter()
+                    .any(|case| case.fixture == fixture && case.function == "main"),
+                "{fixture}:main needs a behavioral helper before it can be an executable semantic case"
+            );
+            let fixture = Fixture {
+                name: fixture.to_string(),
+                source_path: None,
+                binary_path: "fixture.elf".to_string(),
+                architecture: Some("x86_64".to_string()),
+            };
+            assert!(generated_c_helper_decls(&fixture, "main").is_empty());
+            assert!(generated_c_helper_source(&fixture, "main").is_none());
+        }
     }
 
     #[test]

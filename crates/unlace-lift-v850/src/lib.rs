@@ -76,6 +76,15 @@ impl Lifter for V850Lifter {
         }
 
         let decoded = decode::decode(bytes, addr).ok_or(LiftError::ShortBuffer)?;
+        lift::trace_lift_lazy(addr, || {
+            format!(
+                "input len={} bytes={} decoded_len={} op={:?}",
+                bytes.len(),
+                fmt_bytes(bytes.get(..decoded.len).unwrap_or(bytes)),
+                decoded.len,
+                decoded.op
+            )
+        });
 
         let ctx = lift::lift(&decoded, addr);
 
@@ -88,6 +97,14 @@ impl Lifter for V850Lifter {
     fn register_file(&self) -> &RegisterFile {
         &self.register_file
     }
+}
+
+fn fmt_bytes(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[cfg(test)]

@@ -19,10 +19,18 @@ impl Pass for ConstantFoldPass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut changed = false;
+        let trace = const_fold_trace_enabled();
+        let func_name = func.function.name.clone();
 
         for block in func.function.blocks.values_mut() {
             for insn in &mut block.insns {
                 if let Some(folded) = try_fold(insn) {
+                    if trace && const_fold_trace_filter_matches(&func_name, insn, &folded) {
+                        eprintln!(
+                            "[unlace const-fold] func={} addr={:#x} {} -> {}",
+                            func_name, insn.addr, insn, folded
+                        );
+                    }
                     *insn = folded;
                     changed = true;
                 }
@@ -31,6 +39,33 @@ impl Pass for ConstantFoldPass {
 
         Ok(changed)
     }
+}
+
+fn const_fold_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_CONST_FOLD_TRACE")
+        || env_flag_enabled("UNLACE_LIFT_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn const_fold_trace_filter_matches(func_name: &str, before: &IrInsn, after: &IrInsn) -> bool {
+    let Some(filter) = std::env::var("UNLACE_CONST_FOLD_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+    else {
+        return true;
+    };
+    let needle = filter.trim();
+    needle.is_empty()
+        || func_name.contains(needle)
+        || before.to_string().contains(needle)
+        || after.to_string().contains(needle)
+        || format!("{:#x}", before.addr).contains(needle)
+        || format!("{:x}", before.addr).contains(needle)
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name).is_some()
 }
 
 fn try_fold(insn: &IrInsn) -> Option<IrInsn> {

@@ -48,14 +48,18 @@ impl LiftCtx {
     pub fn alloc_unique(&mut self, size: u8) -> Varnode {
         let id = self.unique_counter;
         self.unique_counter += 1;
-        Varnode::unique(id, size)
+        let vn = Varnode::unique(id, size);
+        trace_lift_lazy(self.addr, || format!("alloc unique {vn:?}"));
+        vn
     }
 
     pub fn emit(&mut self, insn: IrInsn) {
+        trace_lift_lazy(self.addr, || format!("emit {insn}"));
         self.ops.push(insn);
     }
 
     pub fn emit_unimplemented(&mut self) {
+        trace_lift(self.addr, "emit unimplemented");
         self.emit(IrInsn::without_output(
             IrOp::Unimplemented,
             smallvec![],
@@ -64,36 +68,50 @@ impl LiftCtx {
     }
 
     fn reg_read(&self, r: u8) -> Varnode {
-        if r == 0 {
+        let vn = if r == 0 {
             Varnode::constant(0, REG_SIZE)
         } else {
             Varnode::reg(reg_offset(r), REG_SIZE)
-        }
+        };
+        trace_lift_lazy(self.addr, || format!("reg_read r{r} -> {vn:?}"));
+        vn
     }
 
     fn reg_write(&self, r: u8) -> Option<Varnode> {
-        if r == 0 {
+        let vn = if r == 0 {
             None // writes to r0 are discarded
         } else {
             Some(Varnode::reg(reg_offset(r), REG_SIZE))
-        }
+        };
+        trace_lift_lazy(self.addr, || format!("reg_write r{r} -> {vn:?}"));
+        vn
     }
 
     fn zf(&self) -> Varnode {
-        Varnode::reg(ZF, 1)
+        let vn = Varnode::reg(ZF, 1);
+        trace_lift_lazy(self.addr, || format!("flag ZF -> {vn:?}"));
+        vn
     }
     fn sf(&self) -> Varnode {
-        Varnode::reg(SF, 1)
+        let vn = Varnode::reg(SF, 1);
+        trace_lift_lazy(self.addr, || format!("flag SF -> {vn:?}"));
+        vn
     }
     fn ovf(&self) -> Varnode {
-        Varnode::reg(OVF, 1)
+        let vn = Varnode::reg(OVF, 1);
+        trace_lift_lazy(self.addr, || format!("flag OVF -> {vn:?}"));
+        vn
     }
     fn cyf(&self) -> Varnode {
-        Varnode::reg(CYF, 1)
+        let vn = Varnode::reg(CYF, 1);
+        trace_lift_lazy(self.addr, || format!("flag CYF -> {vn:?}"));
+        vn
     }
     #[allow(dead_code)]
     fn satf(&self) -> Varnode {
-        Varnode::reg(SATF, 1)
+        let vn = Varnode::reg(SATF, 1);
+        trace_lift_lazy(self.addr, || format!("flag SATF -> {vn:?}"));
+        vn
     }
 
     fn emit_result_flags(&mut self, result: Varnode) {
@@ -183,11 +201,13 @@ impl LiftCtx {
 
 pub fn lift(insn: &V850Insn, addr: u64) -> LiftCtx {
     let mut ctx = LiftCtx::new(addr);
+    trace_lift_lazy(addr, || format!("decode len={} op={:?}", insn.len, insn.op));
     dispatch(&mut ctx, &insn.op);
     ctx
 }
 
 fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
+    trace_lift_lazy(ctx.addr, || format!("dispatch op={op:?}"));
     match op {
         // -- NOP --
         V850Op::Nop => {
@@ -375,6 +395,9 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
         V850Op::Cmp { reg1, reg2 } => {
             let a = ctx.reg_read(*reg2);
             let b = ctx.reg_read(*reg1);
+            trace_lift_lazy(ctx.addr, || {
+                format!("cmp reg1=r{reg1} reg2=r{reg2} a={a:?} b={b:?}")
+            });
             let result = ctx.alloc_unique(REG_SIZE);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSub,
@@ -387,6 +410,9 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
         V850Op::CmpImm5 { reg2, imm } => {
             let a = ctx.reg_read(*reg2);
             let b = Varnode::constant(*imm as u32 as u64, REG_SIZE);
+            trace_lift_lazy(ctx.addr, || {
+                format!("cmp imm reg2=r{reg2} imm={imm} a={a:?} b={b:?}")
+            });
             let result = ctx.alloc_unique(REG_SIZE);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSub,
@@ -653,6 +679,9 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
         }
         V850Op::Bcond { cond, offset } => {
             let target = Varnode::constant(ctx.addr.wrapping_add(*offset as u64), REG_SIZE);
+            trace_lift_lazy(ctx.addr, || {
+                format!("bcond cond={cond:?} offset={offset} target={target:?}")
+            });
 
             if *cond == BranchCond::R {
                 // BR (unconditional short branch)
@@ -665,6 +694,9 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
             }
 
             let cond_vn = build_condition(ctx, *cond);
+            trace_lift_lazy(ctx.addr, || {
+                format!("bcond cond={cond:?} built={cond_vn:?}")
+            });
             match cond_vn {
                 Some(c) => {
                     ctx.emit(IrInsn::without_output(
@@ -679,6 +711,49 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
 
         V850Op::Unknown { .. } => ctx.emit_unimplemented(),
     }
+}
+
+pub(crate) fn trace_lift(addr: u64, message: &str) {
+    if !lift_trace_enabled() || !lift_trace_filter_matches(addr, message) {
+        return;
+    }
+    eprintln!("[unlace v850-lift] {addr:#x}: {message}");
+}
+
+pub(crate) fn trace_lift_lazy(addr: u64, make_message: impl FnOnce() -> String) {
+    if !lift_trace_enabled() {
+        return;
+    }
+    let message = make_message();
+    if !lift_trace_filter_matches(addr, &message) {
+        return;
+    }
+    eprintln!("[unlace v850-lift] {addr:#x}: {message}");
+}
+
+fn lift_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_V850_LIFT_TRACE")
+        || env_flag_enabled("UNLACE_LIFT_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn lift_trace_filter_matches(addr: u64, message: &str) -> bool {
+    let Some(filter) = std::env::var("UNLACE_V850_LIFT_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+    else {
+        return true;
+    };
+    let needle = filter.trim();
+    needle.is_empty()
+        || message.contains(needle)
+        || format!("{addr:#x}").contains(needle)
+        || format!("{addr:x}").contains(needle)
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name).is_some()
 }
 
 fn lift_binop(ctx: &mut LiftCtx, dst: u8, src: u8, op: IrOp, set_flags: bool) {

@@ -21,6 +21,7 @@ pub const fn gpr_offset(n: u64) -> u64 {
 
 pub const CR_OFFSET: u64 = 256;
 pub const CR_SIZE: u8 = 4;
+pub const CR_EQ_SIZE: u8 = 1;
 pub const LR_OFFSET: u64 = 264;
 pub const PPC32_PTR_SIZE: u8 = 4;
 pub const PPC64_PTR_SIZE: u8 = 8;
@@ -86,6 +87,17 @@ pub fn gpr(n: u64) -> Varnode {
 #[inline]
 pub fn cr() -> Varnode {
     Varnode::new(SpaceId::Register, CR_OFFSET, CR_SIZE)
+}
+
+/// Boolean predicate representing CR0.EQ.
+///
+/// The full 32-bit CR bitfield is not modelled yet. Branch lifting consumes
+/// this one-byte predicate for common `beq`/`bne` style branches so CFG
+/// structuring keeps the compare data-dependent instead of leaking a generic
+/// condition temp.
+#[inline]
+pub fn cr_eq() -> Varnode {
+    Varnode::new(SpaceId::Register, CR_OFFSET, CR_EQ_SIZE)
 }
 
 #[inline]

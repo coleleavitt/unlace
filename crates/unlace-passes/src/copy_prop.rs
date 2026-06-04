@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::reg_alias::aliases;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{IrOp, SpaceId, Varnode};
+use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -291,6 +291,8 @@ fn record_copy_equiv(
 
 fn apply_input_rewrites(func: &mut SsaFunction, rewrites: Vec<InputRewrite>) -> bool {
     let mut changed = false;
+    let trace = copy_prop_trace_enabled();
+    let func_name = func.function.name.clone();
 
     for rw in rewrites {
         let Some(block) = func.function.blocks.get_mut(&rw.block) else {
@@ -299,11 +301,18 @@ fn apply_input_rewrites(func: &mut SsaFunction, rewrites: Vec<InputRewrite>) -> 
         let Some(insn) = block.insns.get_mut(rw.insn_idx) else {
             continue;
         };
+        let before = insn.clone();
         let Some(input) = insn.inputs.get_mut(rw.input_idx) else {
             continue;
         };
         if *input != rw.new_input {
             *input = rw.new_input;
+            if trace && copy_prop_trace_filter_matches(&func_name, &before, Some(insn)) {
+                eprintln!(
+                    "[unlace copy-prop] func={} addr={:#x} block={:?} insn={} input={} {} -> {}",
+                    func_name, before.addr, rw.block, rw.insn_idx, rw.input_idx, before, insn
+                );
+            }
             changed = true;
         }
 
@@ -322,6 +331,37 @@ fn apply_input_rewrites(func: &mut SsaFunction, rewrites: Vec<InputRewrite>) -> 
     }
 
     changed
+}
+
+fn copy_prop_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_COPY_PROP_TRACE")
+        || env_flag_enabled("UNLACE_LIFT_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn copy_prop_trace_filter_matches(
+    func_name: &str,
+    before: &IrInsn,
+    after: Option<&IrInsn>,
+) -> bool {
+    let Some(filter) = std::env::var("UNLACE_COPY_PROP_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+    else {
+        return true;
+    };
+    let needle = filter.trim();
+    needle.is_empty()
+        || func_name.contains(needle)
+        || before.to_string().contains(needle)
+        || after.is_some_and(|insn| insn.to_string().contains(needle))
+        || format!("{:#x}", before.addr).contains(needle)
+        || format!("{:x}", before.addr).contains(needle)
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name).is_some()
 }
 
 #[cfg(test)]

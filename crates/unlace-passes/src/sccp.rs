@@ -928,6 +928,8 @@ fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
 
 fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
     let mut changed = false;
+    let trace = sccp_trace_enabled();
+    let func_name = func.function.name.clone();
 
     // Collect SSA varnodes that feed Callother inputs — these carry semantic
     // information (e.g. CMOVcc condition flags) that must not be folded away.
@@ -973,12 +975,24 @@ fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
             match results.get_value(&sv) {
                 LatticeValue::Constant { value, size } => {
                     let const_vn = Varnode::constant(value, size);
-                    *insn = IrInsn::with_output(
+                    let before = insn.clone();
+                    let after = IrInsn::with_output(
                         IrOp::Copy,
                         out,
                         smallvec::smallvec![const_vn],
                         insn.addr,
                     );
+                    if trace && sccp_trace_filter_matches(&func_name, &before, Some(&after)) {
+                        eprintln!(
+                            "[unlace sccp] func={} addr={:#x} rewrite {} -> {} lattice={:?}",
+                            func_name,
+                            before.addr,
+                            before,
+                            after,
+                            LatticeValue::Constant { value, size }
+                        );
+                    }
+                    *insn = after;
                     changed = true;
                 }
                 LatticeValue::Top => {}
@@ -988,6 +1002,33 @@ fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
     }
 
     changed
+}
+
+fn sccp_trace_enabled() -> bool {
+    env_flag_enabled("UNLACE_SCCP_TRACE")
+        || env_flag_enabled("UNLACE_LIFT_TRACE")
+        || env_flag_enabled("UNLACE_TRACE_ALL")
+}
+
+fn sccp_trace_filter_matches(func_name: &str, before: &IrInsn, after: Option<&IrInsn>) -> bool {
+    let Some(filter) = std::env::var("UNLACE_SCCP_TRACE_FILTER")
+        .ok()
+        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
+        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
+    else {
+        return true;
+    };
+    let needle = filter.trim();
+    needle.is_empty()
+        || func_name.contains(needle)
+        || before.to_string().contains(needle)
+        || after.is_some_and(|insn| insn.to_string().contains(needle))
+        || format!("{:#x}", before.addr).contains(needle)
+        || format!("{:x}", before.addr).contains(needle)
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var_os(name).is_some()
 }
 
 // ---------------------------------------------------------------------------

@@ -17,8 +17,8 @@
 > **2026-05-30 update.** The source-known semantic gate is green with
 > `xtask semantic-report` at 33 pass rows, 0 XFAIL, 0 failed, and 0
 > unsupported with the configured qemu-user runners available. Of those rows,
-> 22 are host/source-known executable equivalence, 4 are qemu-user non-host
-> executable observations, and 7 are source-known shape checks. The
+> 20 are host/source-known executable equivalence, 4 are qemu-user non-host
+> executable observations, and 9 are source-known shape checks. The
 > `quality_smoke` fixture loop now enforces per-fixture
 > budgets for gotos, labels, leaked temp declarations, raw stack-offset leaks,
 > unknown helpers, bad type facts, and zero semantic failures.
@@ -156,8 +156,8 @@ The old "aggregate parity" wording is retired. The current gates are:
 | axis | gate | current state | caveat |
 |------|------|---------------|--------|
 | Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 87.1%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. `cargo run -p xtask -- golden-triage` currently has 0 exact-pass rows and 15 exact-line fixture rows for review, so do not blanket-refresh expected C. |
-| Semantic correctness | `cargo run -p xtask -- semantic-report` | 22 host/source-known executable equivalence cases pass; 0 host/source-known cases are tracked as XFAIL; 4 qemu-user non-host executable rows pass; 7 source-known cases also pass shape-only checks; unsupported source-known rows are 0 | Not full-corpus semantic correctness yet; qemu-user execution currently covers AArch64, MIPS64, PPC64, and RISC-V fixture behavior only, and shape checks are not executable equivalence. |
-| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=2678 recall=100.0% precision=35.8% leaked_temp_decls=386 source_oracle_only_recovered=29 source_oracle_only_expected=86 raw_recovered=989 raw_expected=1046 raw_recall=94.6% source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13 cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16 non_host_candidates=4 scored_non_host=4` | Exact textual scorer now includes DWARF facts, parsed C/C++ source-only facts, inline C++ source methods, per-opt/per-arch buckets, non-host source-defined signature facts, positional parameter type scoring, leaked-temp declaration counting, and pointer/array/struct-reference counters. Precision remains the main measured type-quality gap. |
+| Semantic correctness | `cargo run -p xtask -- semantic-report` | 20 host/source-known executable equivalence cases pass; 0 host/source-known cases are tracked as XFAIL; 4 qemu-user non-host executable rows pass; 9 source-known cases also pass shape-only checks; unsupported source-known rows are 0 | Not full-corpus semantic correctness yet; qemu-user execution currently covers AArch64, MIPS64, PPC64, and RISC-V fixture behavior only, and shape checks are not executable equivalence. `debug_cpp_rtti` and `debug_cpp_vtable` are shape-only until behavioral helpers can preserve RTTI/vtable semantics. |
+| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=2660 recall=100.0% precision=36.1% leaked_temp_decls=377 source_oracle_only_recovered=29 source_oracle_only_expected=86 raw_recovered=989 raw_expected=1046 raw_recall=94.6% source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13 cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16 non_host_candidates=4 scored_non_host=4` | Exact textual scorer now includes DWARF facts, parsed C/C++ source-only facts, inline C++ source methods, per-opt/per-arch buckets, non-host source-defined signature facts, positional parameter type scoring, leaked-temp declaration counting, and pointer/array/struct-reference counters. Precision remains the main measured type-quality gap. |
 
 `bash scripts/quality_axes.sh` runs all three reports without treating a
 skipped axis as solved. `scripts/score_parity.sh` reports the stylistic score
@@ -178,8 +178,8 @@ production form. Tracked so the README doesn't overclaim:
 - LSP/TUI/Web UI front-ends.
 - Reproducible signed releases + SBOM publishing.
 - Full semantic recompile-and-compare across the source-known fixture corpus.
-  The current report covers 22 passing host executable cases, 0 known failing
-  host cases, 4 passing qemu-user non-host executable rows, and 7 source-known
+  The current report covers 20 passing host executable cases, 0 known failing
+  host cases, 4 passing qemu-user non-host executable rows, and 9 source-known
   shape-only rows.
 Adding any of these moves the related row in the matrices above; do not promote
 items until the evidence exists.

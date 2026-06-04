@@ -6336,10 +6336,10 @@ fn lca_scope_path(stmts: &[u32], paths: &BTreeMap<u32, Vec<u32>>, fallback: &Vec
     lca
 }
 
-fn lca_paths(paths: &[Vec<u32>], fallback: &Vec<u32>) -> Vec<u32> {
+fn lca_paths(paths: &[Vec<u32>], fallback: &[u32]) -> Vec<u32> {
     let mut iter = paths.iter();
     let Some(first) = iter.next() else {
-        return fallback.clone();
+        return fallback.to_vec();
     };
     let mut lca = first.clone();
     for path in iter {

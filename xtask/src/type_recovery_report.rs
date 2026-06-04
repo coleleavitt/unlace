@@ -46,6 +46,13 @@ struct Counter {
     reported: usize,
     source_oracle_only_expected: usize,
     source_oracle_only_recovered: usize,
+    /// Emitted facts whose *recovery is source-oracle-only* for this fixture
+    /// (e.g. exact local names in optimized/no-DWARF binaries). The recall
+    /// denominator already excludes these via `source_oracle_only_expected`, so
+    /// the recoverable precision denominator must exclude the corresponding
+    /// emissions too — otherwise precision and recall use inconsistent scopes.
+    /// They remain visible through `raw_*` precision.
+    source_oracle_only_reported: usize,
 }
 
 impl Counter {
@@ -73,10 +80,21 @@ impl Counter {
         self.reported += other.reported;
         self.source_oracle_only_expected += other.source_oracle_only_expected;
         self.source_oracle_only_recovered += other.source_oracle_only_recovered;
+        self.source_oracle_only_reported += other.source_oracle_only_reported;
     }
 
+    /// Recoverable-scope precision denominator: emitted facts that purport to be
+    /// recoverable source-entity claims. Source-oracle-only emissions are routed
+    /// out to `source_oracle_only_reported` so precision shares recall's scope.
     fn precision_denominator(&self) -> usize {
         self.reported.max(self.recovered)
+    }
+
+    /// Raw (all-scope) precision denominator — includes source-oracle-only
+    /// emissions, so the strict number is always visible alongside the
+    /// recoverable one and nothing is hidden by the scope split.
+    fn raw_precision_denominator(&self) -> usize {
+        (self.reported + self.source_oracle_only_reported).max(self.raw_recovered())
     }
 
     fn raw_expected(&self) -> usize {
@@ -99,6 +117,15 @@ impl FactScope {
         match self {
             FactScope::Recoverable => counter.add_expected(recovered),
             FactScope::SourceOracleOnly(_) => counter.add_source_oracle_only(recovered),
+        }
+    }
+
+    /// Routes a reported (emitted) fact into the same scope its recovery uses,
+    /// keeping the precision denominator consistent with the recall denominator.
+    fn add_reported(self, counter: &mut Counter) {
+        match self {
+            FactScope::Recoverable => counter.reported += 1,
+            FactScope::SourceOracleOnly(_) => counter.source_oracle_only_reported += 1,
         }
     }
 
@@ -129,6 +156,54 @@ struct TypeScore {
     struct_ref_types: Counter,
     leaked_temp_decls: usize,
     leaked_temp_sites: BTreeMap<TempLeakSite, usize>,
+    /// Every local decl counted into the precision denominator, retained so the
+    /// precision gap can be classified by name pattern + printer comment tag
+    /// (measure, don't guess). Generic `vN` leaks are also in `leaked_temp_*`;
+    /// this captures the non-generic excess (`v_NN` stack slots, named locals)
+    /// that the leaked-temp ledger does not.
+    reported_local_sites: Vec<ReportedLocalSite>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReportedLocalSite {
+    fixture: String,
+    function: String,
+    ty: String,
+    name: String,
+    comment: Option<String>,
+}
+
+impl ReportedLocalSite {
+    /// Coarse name-pattern class for the precision ledger.
+    fn name_class(&self) -> &'static str {
+        if is_generic_reported_lvar_name(&self.name) {
+            "generic(vN/cN/aN)"
+        } else if self
+            .name
+            .strip_prefix("v_")
+            .or_else(|| self.name.strip_prefix("a_"))
+            .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+        {
+            "stack-offset(v_NN)"
+        } else if self.name.starts_with("saved_") {
+            "saved-register"
+        } else if self.name.len() <= 2 {
+            "short(<=2 chars)"
+        } else {
+            "named"
+        }
+    }
+
+    /// Coarse printer-comment class for the precision ledger.
+    fn comment_class(&self) -> &'static str {
+        match self.comment.as_deref().map(str::trim) {
+            None | Some("") => "no-comment",
+            Some("temp") => "// temp",
+            Some(c) if is_register_location_comment(c) => "// <register>",
+            Some(c) if is_cpu_flag_comment(c) => "// <flag>",
+            Some(_) => "// other",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -186,6 +261,15 @@ struct ScoringPolicy<'a> {
 }
 
 impl<'a> ScoringPolicy<'a> {
+    #[cfg(test)]
+    fn for_test(truth_kind: TruthKind, trace: &'a TypeTrace) -> Self {
+        Self {
+            truth_kind,
+            binary_evidence: BinaryEvidence::default(),
+            trace,
+        }
+    }
+
     fn new(root: &Path, fixture: &Fixture, truth_kind: TruthKind, trace: &'a TypeTrace) -> Self {
         Self {
             truth_kind,
@@ -271,6 +355,16 @@ struct TypeTrace {
 }
 
 impl TypeTrace {
+    #[cfg(test)]
+    fn disabled() -> Self {
+        Self {
+            enabled: false,
+            verbose: false,
+            filter: None,
+            fixture_filter: None,
+        }
+    }
+
     fn from_env() -> Self {
         Self {
             enabled: env_flag_enabled("UNLACE_TYPE_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL"),
@@ -535,6 +629,8 @@ impl TypeScore {
         for (site, count) in &other.leaked_temp_sites {
             *self.leaked_temp_sites.entry(site.clone()).or_default() += count;
         }
+        self.reported_local_sites
+            .extend(other.reported_local_sites.iter().cloned());
     }
 
     fn expected(&self) -> usize {
@@ -622,17 +718,49 @@ impl TypeScore {
     }
 
     fn reported(&self) -> usize {
-        self.return_types.precision_denominator()
-            + self.param_names.precision_denominator()
-            + self.param_types.precision_denominator()
-            + self.local_names.precision_denominator()
-            + self.local_types.precision_denominator()
-            + self.struct_names.precision_denominator()
-            + self.field_names.precision_denominator()
-            + self.field_types.precision_denominator()
-            + self.pointer_types.precision_denominator()
-            + self.array_types.precision_denominator()
-            + self.struct_ref_types.precision_denominator()
+        self.categories()
+            .iter()
+            .map(|(_, counter)| counter.precision_denominator())
+            .sum()
+    }
+
+    /// All-scope reported total (recoverable + source-oracle-only emissions).
+    fn raw_reported(&self) -> usize {
+        self.categories()
+            .iter()
+            .map(|(_, counter)| counter.raw_precision_denominator())
+            .sum()
+    }
+
+    /// Raw precision: correct facts over ALL emitted facts, including the
+    /// source-oracle-only scope. This is the strict, nothing-excluded number.
+    fn raw_precision(&self) -> f64 {
+        let reported = self.raw_reported();
+        if reported == 0 {
+            0.0
+        } else {
+            self.raw_recovered() as f64 * 100.0 / reported as f64
+        }
+    }
+
+    /// All scored fact categories in a stable order, for precision-ledger
+    /// reporting. The precision denominator is the sum of each category's
+    /// `precision_denominator()`, so the per-category excess
+    /// (`reported - recovered`) explains exactly where precision is lost.
+    fn categories(&self) -> [(&'static str, &Counter); 11] {
+        [
+            ("return_types", &self.return_types),
+            ("param_names", &self.param_names),
+            ("param_types", &self.param_types),
+            ("local_names", &self.local_names),
+            ("local_types", &self.local_types),
+            ("struct_names", &self.struct_names),
+            ("field_names", &self.field_names),
+            ("field_types", &self.field_types),
+            ("pointer_types", &self.pointer_types),
+            ("array_types", &self.array_types),
+            ("struct_ref_types", &self.struct_ref_types),
+        ]
     }
 
     fn percent(&self) -> f64 {
@@ -846,7 +974,7 @@ pub fn run(root: &Path) -> i32 {
     println!();
     println_score("TOTAL", &total_score);
     println!(
-        "Type/Variable Recovery: MEASURED fixtures={} functions={} c_functions={} cpp_functions={} recovered={} expected={} reported={} recall={:.1}% precision={:.1}% leaked_temp_decls={} source_oracle_only_recovered={} source_oracle_only_expected={} raw_recovered={} raw_expected={} raw_recall={:.1}% source_known={} source_only={} source_parsed={} dwarf_candidates={} cpp_candidates={} scored_cpp={} optimized_scored={} scored_source_only={} non_host_candidates={} scored_non_host={}",
+        "Type/Variable Recovery: MEASURED fixtures={} functions={} c_functions={} cpp_functions={} recovered={} expected={} reported={} recall={:.1}% precision={:.1}% raw_precision={:.1}% raw_reported={} leaked_temp_decls={} source_oracle_only_recovered={} source_oracle_only_expected={} raw_recovered={} raw_expected={} raw_recall={:.1}% source_known={} source_only={} source_parsed={} dwarf_candidates={} cpp_candidates={} scored_cpp={} optimized_scored={} scored_source_only={} non_host_candidates={} scored_non_host={}",
         total_score.fixtures,
         total_score.functions,
         total_score.c_functions,
@@ -856,6 +984,8 @@ pub fn run(root: &Path) -> i32 {
         total_score.reported(),
         total_score.percent(),
         total_score.precision(),
+        total_score.raw_precision(),
+        total_score.raw_reported(),
         total_score.leaked_temp_decls,
         total_score.source_oracle_only_recovered(),
         total_score.source_oracle_only_expected(),
@@ -876,6 +1006,8 @@ pub fn run(root: &Path) -> i32 {
     println!(
         "type-recovery-report: recoverable recall excludes exact source-only local/parameter names and field facts that GCC/G++ do not emit into optimized no-debug binaries; those facts stay visible as source_oracle_only and raw_recall"
     );
+    print_precision_ledger(&total_score);
+    print_reported_local_ledger(&total_score);
     print_leaked_temp_summary(&total_score, 15);
 
     ledger.print_summary();
@@ -1917,6 +2049,7 @@ fn score_function(
         signature.as_deref(),
         composite_names,
         score,
+        policy,
         trace,
     );
     if let Some(return_type) = function.return_type.as_deref() {
@@ -2557,15 +2690,24 @@ fn add_reported_type_shapes(
     type_name: &str,
     composite_names: &BTreeSet<String>,
 ) {
+    add_reported_type_shapes_scoped(score, type_name, composite_names, FactScope::Recoverable);
+}
+
+fn add_reported_type_shapes_scoped(
+    score: &mut TypeScore,
+    type_name: &str,
+    composite_names: &BTreeSet<String>,
+    scope: FactScope,
+) {
     let facts = classify_type_facts(type_name, composite_names);
     if facts.pointer {
-        score.pointer_types.add_reported(1);
+        scope.add_reported(&mut score.pointer_types);
     }
     if facts.array {
-        score.array_types.add_reported(1);
+        scope.add_reported(&mut score.array_types);
     }
     if facts.struct_ref {
-        score.struct_ref_types.add_reported(1);
+        scope.add_reported(&mut score.struct_ref_types);
     }
 }
 
@@ -2604,6 +2746,7 @@ fn add_reported_function_facts(
     signature: Option<&str>,
     composite_names: &BTreeSet<String>,
     score: &mut TypeScore,
+    policy: &ScoringPolicy<'_>,
     trace: &TypeTrace,
 ) {
     if let Some(signature) = signature {
@@ -2614,19 +2757,41 @@ fn add_reported_function_facts(
         for param in reported_params(signature, function) {
             score.param_types.add_reported(1);
             add_reported_type_shapes(score, &param.ty, composite_names);
-            if param.name.is_some() {
-                score.param_names.add_reported(1);
+            if let Some(name) = &param.name {
+                // Exact param names are source-oracle-only in optimized no-debug
+                // builds; route the emission into the same scope recall uses.
+                policy
+                    .exact_param_name_scope(function, name)
+                    .add_reported(&mut score.param_names);
             }
         }
     }
 
+    let name_scope = policy.local_name_scope();
+    let type_scope = policy.local_type_scope();
     for decl in reported_local_decls(text, signature) {
-        if decl.is_synthetic_register_temp() {
+        // Output-cleanliness debt axis (leaked_temp_decls) is unchanged: every
+        // generic `vN`/`cN`/`aN` that is not a pure register temp stays counted
+        // and traced, so the producer debt these carriers represent is never
+        // hidden by the precision-scope decision below.
+        if is_generic_reported_lvar_name(&decl.name) && !decl.is_synthetic_register_temp() {
+            score.record_leaked_temp(fixture, &function.name, &decl.ty, &decl.name);
+            trace.line(
+                Some(fixture),
+                Some(&function.name),
+                format!("leaked_temp_decl type={} name={}", decl.ty, decl.name),
+            );
+        }
+        // Source-recovery precision denominator: a synthetic machine carrier
+        // (register/flag/temp/saved-reg) is not a source-variable claim, so it
+        // does not belong in the denominator. It remains visible above and in
+        // the reported-local class ledger trace.
+        if decl.is_non_source_carrier() {
             trace.line(
                 Some(fixture),
                 Some(&function.name),
                 format!(
-                    "synthetic_register_temp_skipped type={} name={} comment={}",
+                    "non_source_carrier_skipped type={} name={} comment={}",
                     decl.ty,
                     decl.name,
                     decl.comment.as_deref().unwrap_or("")
@@ -2634,20 +2799,16 @@ fn add_reported_function_facts(
             );
             continue;
         }
-        score.local_types.add_reported(1);
-        score.local_names.add_reported(1);
-        if is_generic_reported_lvar_name(&decl.name) {
-            score.record_leaked_temp(fixture, &function.name, &decl.ty, &decl.name);
-            // Per-site visibility into the precision denominator: each generic
-            // `vN`-style local counted as a leaked temp is reported with its
-            // type+name so a precision regression can be pinned to a function.
-            trace.line(
-                Some(fixture),
-                Some(&function.name),
-                format!("leaked_temp_decl type={} name={}", decl.ty, decl.name),
-            );
-        }
-        add_reported_type_shapes(score, &decl.ty, composite_names);
+        name_scope.add_reported(&mut score.local_names);
+        type_scope.add_reported(&mut score.local_types);
+        score.reported_local_sites.push(ReportedLocalSite {
+            fixture: fixture.to_string(),
+            function: function.name.clone(),
+            ty: decl.ty.clone(),
+            name: decl.name.clone(),
+            comment: decl.comment.clone(),
+        });
+        add_reported_type_shapes_scoped(score, &decl.ty, composite_names, type_scope);
     }
 }
 
@@ -2765,6 +2926,59 @@ impl ReportedDecl {
                 .as_deref()
                 .is_some_and(is_register_location_comment)
     }
+
+    /// True when the decl is a synthetic carrier (raw machine location / printer
+    /// temporary) rather than a recovered source-variable claim, so it does not
+    /// belong in the source-recovery precision denominator. The printer's own
+    /// annotation is the signal:
+    ///
+    /// - `// temp` is emitted only for `SpaceId::Unique` temporaries and `cond`/
+    ///   `vN` scaffolding — never for a DWARF/stack source local — so it marks a
+    ///   synthetic temporary regardless of name.
+    /// - a register (`// rax`) or CPU-flag (`// ZF`) location hint on a
+    ///   *synthetic* name (`vN`/`cN`/`aN`, `saved_<reg>`, `result`, `cond`).
+    ///
+    /// A real recovered local that carries a register hint (`counter // rax`)
+    /// is NOT a carrier — the synthetic-name requirement preserves it. Carriers
+    /// stay fully visible in the leaked-temp ledger; they are only removed from
+    /// the precision denominator.
+    fn is_non_source_carrier(&self) -> bool {
+        let comment = self.comment.as_deref().map(str::trim);
+        // `// temp` is universally a synthetic temporary marker.
+        if comment == Some("temp") {
+            return true;
+        }
+        let synthetic_name = is_synthetic_local_name(&self.name);
+        match comment {
+            Some(c) if is_cpu_flag_comment(c) => synthetic_name,
+            Some(c) => {
+                let reg = c.trim_end_matches(|ch: char| ch == '_' || ch.is_ascii_digit());
+                synthetic_name
+                    && (is_register_location_comment(c) || is_register_location_comment(reg))
+            }
+            None => false,
+        }
+    }
+}
+
+fn is_cpu_flag_comment(comment: &str) -> bool {
+    matches!(
+        comment.trim().to_ascii_uppercase().as_str(),
+        "ZF" | "SF" | "CF" | "OF" | "PF" | "AF" | "DF" | "TF" | "IF"
+    )
+}
+
+/// Names the printer generates for non-source entities: generic SSA temps
+/// (`vN`/`cN`/`aN`), callee-saved spill slots (`saved_<reg>`), and the
+/// return-value/condition placeholders (`result`, `result_N`, `cond`,
+/// `cond_N`). None of these appear as source local names in the corpus, so a
+/// register/flag hint on them denotes a raw machine carrier, not a recovery.
+fn is_synthetic_local_name(name: &str) -> bool {
+    if is_generic_reported_lvar_name(name) || name.starts_with("saved_") {
+        return true;
+    }
+    let base = name.trim_end_matches(|ch: char| ch == '_' || ch.is_ascii_digit());
+    matches!(base, "result" | "cond")
 }
 
 fn is_register_location_comment(comment: &str) -> bool {
@@ -3159,6 +3373,80 @@ fn println_score(label: &str, score: &TypeScore) {
         score.struct_ref_types.recovered,
         score.struct_ref_types.expected,
     );
+    let excess: Vec<String> = score
+        .categories()
+        .iter()
+        .filter_map(|(name, counter)| {
+            let rep = counter.precision_denominator();
+            let over = rep.saturating_sub(counter.recovered);
+            (over > 0).then(|| format!("{name}=+{over}(rec={},rep={rep})", counter.recovered))
+        })
+        .collect();
+    if !excess.is_empty() {
+        println!("[type-recovery] EXCESS {label} {}", excess.join(" "));
+    }
+}
+
+/// Per-category precision-excess ledger. Precision = recovered / reported, and
+/// recall is ~100%, so the entire precision gap is `reported - recovered`
+/// summed across categories. This pins which fact category dominates the gap so
+/// cleanup targets real causes instead of guessing.
+fn print_precision_ledger(score: &TypeScore) {
+    println!();
+    println!("type-recovery-report: precision excess ledger (reported - recovered, sorted)");
+    let mut cats: Vec<(&str, usize, usize, usize)> = score
+        .categories()
+        .iter()
+        .map(|(name, counter)| {
+            let rep = counter.precision_denominator();
+            (
+                *name,
+                counter.recovered,
+                rep,
+                rep.saturating_sub(counter.recovered),
+            )
+        })
+        .collect();
+    cats.sort_by(|a, b| b.3.cmp(&a.3).then_with(|| a.0.cmp(b.0)));
+    let total_excess: usize = cats.iter().map(|(_, _, _, e)| e).sum();
+    for (name, rec, rep, excess) in &cats {
+        if *rep == 0 {
+            continue;
+        }
+        println!("  {excess:>5} excess  {name:<16} recovered={rec} reported={rep}");
+    }
+    println!("  {total_excess:>5} excess  TOTAL");
+}
+
+/// Classifies every counted local decl by (name pattern × printer comment tag)
+/// so the local-decl precision excess (~76% of the gap) is split into concrete,
+/// actionable buckets: synthetic carriers the printer marks (`// temp`,
+/// `// <flag>`), stack-offset slots (`v_NN`), and genuinely-named locals.
+fn print_reported_local_ledger(score: &TypeScore) {
+    println!();
+    println!("type-recovery-report: reported local-decl classes (precision denominator)");
+    let mut by_class: BTreeMap<(&str, &str), (usize, Vec<String>)> = BTreeMap::new();
+    for site in &score.reported_local_sites {
+        let entry = by_class
+            .entry((site.name_class(), site.comment_class()))
+            .or_default();
+        entry.0 += 1;
+        if entry.1.len() < 6 {
+            entry
+                .1
+                .push(format!("{}::{}={}", site.fixture, site.function, site.name));
+        }
+    }
+    let mut rows: Vec<_> = by_class.into_iter().collect();
+    rows.sort_by_key(|row| std::cmp::Reverse(row.1.0));
+    for ((name_class, comment_class), (count, samples)) in &rows {
+        println!("  {count:>5}  name={name_class:<18} comment={comment_class:<14}");
+        println!("         e.g. {}", samples.join(", "));
+    }
+    println!(
+        "  {:>5}  TOTAL counted local decls",
+        score.reported_local_sites.len()
+    );
 }
 
 fn ranked_leaked_temp_sites(score: &TypeScore) -> Vec<(&TempLeakSite, usize)> {
@@ -3258,6 +3546,98 @@ mod tests {
             }
             .is_synthetic_register_temp()
         );
+    }
+
+    fn decl(ty: &str, name: &str, comment: Option<&str>) -> ReportedDecl {
+        ReportedDecl {
+            ty: ty.to_string(),
+            name: name.to_string(),
+            comment: comment.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn non_source_carriers_cover_register_flag_temp_and_saved_slots() {
+        // Register/flag hints on synthetic names are carriers.
+        assert!(decl("__int64", "v50", Some("rax")).is_non_source_carrier());
+        assert!(decl("char", "c8", Some("ZF")).is_non_source_carrier());
+        assert!(decl("char", "c6", Some("CF")).is_non_source_carrier());
+        // `// temp` is synthetic regardless of name (no source local is so named).
+        assert!(decl("int", "v9", Some("temp")).is_non_source_carrier());
+        assert!(decl("__int64", "result", Some("temp")).is_non_source_carrier());
+        assert!(decl("int", "cond_6", Some("temp")).is_non_source_carrier());
+        // Callee-saved spill slots and the synthetic return-value placeholder.
+        assert!(decl("__int64", "saved_rbx", Some("rbx")).is_non_source_carrier());
+        assert!(decl("__int64", "saved_rbx_1", Some("rbx")).is_non_source_carrier());
+        assert!(decl("__int64", "result", Some("rax")).is_non_source_carrier());
+    }
+
+    #[test]
+    fn non_source_carriers_preserve_real_recovered_locals() {
+        // A real recovered local with a register hint must still count.
+        assert!(!decl("int", "counter", Some("rax")).is_non_source_carrier());
+        assert!(!decl("int", "steps", None).is_non_source_carrier());
+        // Stack-offset slots are recovery claims, not carriers (no synthetic
+        // comment) — they count, and producer work must reduce them.
+        assert!(!decl("__int64", "v_84", None).is_non_source_carrier());
+        // An unknown comment is not a synthetic marker.
+        assert!(!decl("int", "buf", Some("array")).is_non_source_carrier());
+    }
+
+    #[test]
+    fn reported_facts_route_source_oracle_only_out_of_recoverable_precision() {
+        let function = FunctionDebugInfo {
+            name: "f".to_string(),
+            linkage_name: None,
+            low_pc: 0,
+            high_pc: None,
+            ranges: Vec::new(),
+            params: Vec::new(),
+            return_type: None,
+            decl: None,
+            locals: Vec::new(),
+        };
+        let composite = BTreeSet::new();
+        let trace = TypeTrace::disabled();
+        let text = "void f() {\n    __int64 v_8;\n    __int64 v50; // rax\n    char c8; // ZF\n}\n";
+
+        // DWARF: exact local names are recoverable, so the `v_8` claim counts in
+        // the recoverable denominator; the register/flag carriers do not.
+        let dwarf = ScoringPolicy::for_test(TruthKind::Dwarf, &trace);
+        let mut dwarf_score = TypeScore::default();
+        add_reported_function_facts(
+            "fx",
+            &function,
+            text,
+            Some("void f()"),
+            &composite,
+            &mut dwarf_score,
+            &dwarf,
+            &trace,
+        );
+        assert_eq!(
+            dwarf_score.local_names.reported, 1,
+            "v_8 counts under DWARF"
+        );
+        assert_eq!(dwarf_score.local_names.source_oracle_only_reported, 0);
+
+        // Optimized no-debug: exact local names are source-oracle-only, so the
+        // `v_8` emission routes out of the recoverable denominator — consistent
+        // with how recall scopes the same fact.
+        let parsed = ScoringPolicy::for_test(TruthKind::ParsedSource, &trace);
+        let mut parsed_score = TypeScore::default();
+        add_reported_function_facts(
+            "fx",
+            &function,
+            text,
+            Some("void f()"),
+            &composite,
+            &mut parsed_score,
+            &parsed,
+            &trace,
+        );
+        assert_eq!(parsed_score.local_names.reported, 0, "source-oracle-only");
+        assert_eq!(parsed_score.local_names.source_oracle_only_reported, 1);
     }
 
     #[test]

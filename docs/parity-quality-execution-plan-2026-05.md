@@ -64,7 +64,10 @@ Current known state:
   `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0 total=1059`.
 - Fixture optimization levels: recorded in `tests/corpus.toml`.
 - Type/variable recovery accuracy:
-  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=2660 recall=100.0% precision=36.1% leaked_temp_decls=377`
+  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1625 recall=100.0% precision=59.1% raw_precision=58.0% raw_reported=1704 leaked_temp_decls=102`
+  (precision now shares recall's fact scope — source-oracle-only emissions go to
+  `raw_precision` — and excludes printer-marked synthetic carriers; dominant
+  recoverable gap is `debug_medium`'s +124 extra `v_NN` stack slots)
   with `source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13
   cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16
   non_host_candidates=4 scored_non_host=4`. The missing ledger has 0

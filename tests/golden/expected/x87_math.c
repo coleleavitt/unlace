@@ -1,3 +1,9 @@
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wtype-limits"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#endif
 typedef unsigned char _BYTE;
 typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef unsigned long long _QWORD;
 typedef unsigned __int128 _OWORD; typedef signed short __int16; typedef signed long long __int64;
@@ -47,7 +53,7 @@ _QWORD qword_3FF8;
 _QWORD qword_4008;
 __int64 sub_1030();
 __int64 sub_10a0();
-__int64 sub_10e0(void);
+__int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */;
 void sub_1070(void);
 void sub_1120(void);
 
@@ -61,72 +67,72 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     __int64 v_0;
-    v_8 = (uintptr_t)&v_0;
-    _QWORD pfn = qword_3FD8; // temp
+    _QWORD pfn; // temp
+        v_8 = (uintptr_t)&v_0; pfn = qword_3FD8;
     ((__int64 (*)())pfn)(); __builtin_trap(); return;
 }
 /* Function:   sum_squares_x87 | Address: 0x1129 | Size: 0x14 (20 bytes) | Convention: System V AMD64 | Stack frame: 0x1a (26 bytes) | Xrefs from: unknown */
-void sum_squares_x87(void) {
+long double sum_squares_x87(long double a1, long double a2) {
     int v2; // rsp
-    int c0; // reg?
-    int c1; // reg?
-    _DWORD v6; // temp
-    v6 = *(_QWORD *)(v2 + 0x18LL); c1 = __fld(v6); v6 = *(_QWORD *)(v2 + 8LL);
-    c0 = __fld(v6); c0 = __fmul(c0, c0); __fxch(c0, c1);
-    c0 = __fmul(c0, c0); c1 = __faddp(c1, c0); return;
+    _DWORD v6 = *(_QWORD *)(v2 + 0x18LL); // temp
+    int c1 = __fld(v6); // reg?
+    v6 = *(_QWORD *)(v2 + 8LL);
+    int c0 = __fld(v6); // reg?
+    c0 = __fmul(c0, c0); __fxch(c0, c1); c0 = __fmul(c0, c0);
+    c1 = __faddp(c1, c0); return 0;
 }
 /* Function:   compare_floats_x87 | Address: 0x113e | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0x1a (26 bytes) | Xrefs from: unknown */
-void compare_floats_x87(void) {
-    __int64 c0; // temp
+int compare_floats_x87(long double a1, long double a2) {
+    int c0; // rax
     int v2; // rsp
     int v3; // CF
     int v4; // ZF
-    int c1; // reg?
-    int c2; // reg?
-    _DWORD v8; // temp
-    v8 = *(_QWORD *)(v2 + 8LL); c2 = __fld(v8); v8 = *(_QWORD *)(v2 + 0x18LL);
-    c1 = __fld(v8); c0 = 0xffffffffLL; __fcom(c1, c2);
-    if (!v3 && !v4) {
+    _BOOL cond; // temp
+    _DWORD v8 = *(_QWORD *)(v2 + 8LL); // temp
+    int c2 = __fld(v8); // reg?
+    v8 = *(_QWORD *)(v2 + 0x18LL);
+    int c1 = __fld(v8); // reg?
+    c0 = 0xffffffffLL; __fcom(c1, c2); cond = !v3;
+    _BOOL cond_1 = !v4; // temp
+    if (cond && cond_1) {
         c1 = __fstp(c1); c2 = __fstp(c2);
     } else {
         __fxch(c1, c2); __fcomp(c1, c2); c2 = __fstp(c2);
+        c0 = (_QWORD)(0xffffff00LL | (_QWORD)(cond && cond_1));
     }
-    return;
+    return c0;
 }
 /* Function:   mix_ops_x87 | Address: 0x1166 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x2a (42 bytes) | Xrefs from: unknown */
-void mix_ops_x87(void) {
+long double mix_ops_x87(long double a1, long double a2, long double a3) {
     int v2; // rsp
-    int v3; // reg?
-    int c0; // reg?
-    int v5; // reg?
-    int c1; // reg?
-    _DWORD v8; // temp
-    v8 = *(_QWORD *)(v2 + 8LL); c1 = __fld(v8); v8 = *(_QWORD *)(v2 + 0x18LL);
-    v5 = __fld(v8); c0 = __fld(v5); c0 = __fadd(c0, v5);
-    v8 = v2[4]; v3 = __fld(v8); c0 = __fmulp(c0, v3);
-    c1 = __fsubrp(c0, c1); c1 = __fdivp(c1, v5); return;
+    _DWORD v8 = *(_QWORD *)(v2 + 8LL); // temp
+    int c1 = __fld(v8); // reg?
+    v8 = *(_QWORD *)(v2 + 0x18LL);
+    int v5 = __fld(v8); // reg?
+    int c0 = __fld(v5); // reg?
+    c0 = __fadd(c0, v5); v8 = *(_QWORD *)(v2 + 0x28LL);
+    int v3 = __fld(v8); // reg?
+    c0 = __fmulp(c0, v3); c1 = __fsubrp(c0, c1); c1 = __fdivp(c1, v5);
+    return 0;
 }
 /* Function:   main | Address: 0x1181 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 int main(void) {
     return 1;
 }
 /* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
-__int64 sub_10e0(void) {
+__int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 v_0;
     __int64 result; // rax
-    _BYTE v8; // temp
-    _QWORD v11; // temp
-    _QWORD v13; // temp
-    v8 = byte_4010;
-    if (v8 != '\0') {
+    if (byte_4010 != '\0') {
         return result;
     } else {
-        v11 = qword_3FF8;
-        if (v11 != 0LL) {
-            v13 = qword_4008;
+        if (qword_3FF8 != 0LL) {
+            _QWORD v13 = qword_4008; // temp
+            __int64 c3 = v13; // rdi
             result = sub_1030();
         }
-        result = sub_1070(); byte_4010 = 1; return result;
+        result = sub_1070(); byte_4010 = 1;
+                        return result;
     }
 }
 /* Function:   sub_1120 | Address: 0x1120 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
@@ -136,12 +142,10 @@ void sub_1120(void) {
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
     int v7; // reg?
-    _QWORD v3; // temp
     if (v7) {
         return;
     } else {
-        v3 = qword_3FE0;
-        if (v3 == 0LL) {
+        if (qword_3FE0 == 0LL) {
             return;
         }
     }

@@ -5,8 +5,7 @@ use unlace_ir::{IrInsn, IrOp, Varnode};
 use crate::lift::{LiftCtx, operand_reg, trace_lift_lazy};
 use crate::register_file::cr_eq;
 
-/// CMPW: signed 32-bit compare → set CR field.
-/// Emits IntSless(a, b) → CR (simplified: full CR field encoding deferred).
+/// CMPW: signed 32-bit compare -> set CR0.EQ.
 pub fn lift_cmpw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     let (ra, rb) = match extract_cmp_operands(ctx, ops) {
         Some(pair) => pair,
@@ -19,18 +18,19 @@ pub fn lift_cmpw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     trace_lift_lazy(ctx.addr, || {
         format!("cmpw operands={ops:?} ra={ra:?} rb={rb:?} cr_eq={cr_vn:?}")
     });
+    let (ra_word, rb_word) = truncate_compare_operands_to_word(ctx, ra, rb);
     let result = Varnode::unique(ctx.alloc_unique(), 1);
     ctx.emit(IrInsn::with_output(
         IrOp::IntSless,
         result,
-        smallvec![ra, rb],
+        smallvec![ra_word, rb_word],
         ctx.addr,
     ));
     let eq_result = Varnode::unique(ctx.alloc_unique(), 1);
     ctx.emit(IrInsn::with_output(
         IrOp::IntEqual,
         eq_result,
-        smallvec![ra, rb],
+        smallvec![ra_word, rb_word],
         ctx.addr,
     ));
     ctx.emit(IrInsn::with_output(
@@ -54,18 +54,19 @@ pub fn lift_cmplw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     trace_lift_lazy(ctx.addr, || {
         format!("cmplw operands={ops:?} ra={ra:?} rb={rb:?} cr_eq={cr_vn:?}")
     });
+    let (ra_word, rb_word) = truncate_compare_operands_to_word(ctx, ra, rb);
     let result = Varnode::unique(ctx.alloc_unique(), 1);
     ctx.emit(IrInsn::with_output(
         IrOp::IntLess,
         result,
-        smallvec![ra, rb],
+        smallvec![ra_word, rb_word],
         ctx.addr,
     ));
     let eq_result = Varnode::unique(ctx.alloc_unique(), 1);
     ctx.emit(IrInsn::with_output(
         IrOp::IntEqual,
         eq_result,
-        smallvec![ra, rb],
+        smallvec![ra_word, rb_word],
         ctx.addr,
     ));
     ctx.emit(IrInsn::with_output(
@@ -74,6 +75,28 @@ pub fn lift_cmplw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
         smallvec![eq_result],
         ctx.addr,
     ));
+}
+
+fn truncate_compare_operands_to_word(
+    ctx: &mut LiftCtx,
+    lhs: Varnode,
+    rhs: Varnode,
+) -> (Varnode, Varnode) {
+    (truncate_to_word(ctx, lhs), truncate_to_word(ctx, rhs))
+}
+
+fn truncate_to_word(ctx: &mut LiftCtx, value: Varnode) -> Varnode {
+    if value.size == 4 {
+        return value;
+    }
+    let truncated = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Subpiece,
+        truncated,
+        smallvec![value, Varnode::constant(0, 1)],
+        ctx.addr,
+    ));
+    truncated
 }
 
 fn extract_cmp_operands(ctx: &LiftCtx, ops: &[PpcOperand]) -> Option<(Varnode, Varnode)> {

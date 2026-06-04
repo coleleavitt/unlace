@@ -252,6 +252,13 @@ mod tests {
             .lift_insn(&[0x7c, 0x03, 0x20, 0x00], 0x1000_0000)
             .expect("should decode CMPW");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSless));
+        let eq = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntEqual)
+            .expect("cmpw should compute CR0.EQ");
+        assert_eq!(eq.inputs.len(), 2);
+        assert!(eq.inputs.iter().all(|input| input.size == 4));
         assert!(result.ir_ops.iter().any(|i| {
             i.op == IrOp::Copy
                 && i.output.is_some_and(|out| {
@@ -346,6 +353,13 @@ mod tests {
             .lift_insn(&[0x7c, 0x03, 0x20, 0x40], 0x1000_0000)
             .expect("should decode CMPLW");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
+        let eq = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntEqual)
+            .expect("cmplw should compute CR0.EQ");
+        assert_eq!(eq.inputs.len(), 2);
+        assert!(eq.inputs.iter().all(|input| input.size == 4));
     }
 
     #[test]

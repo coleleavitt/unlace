@@ -1,6 +1,12 @@
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wtype-limits"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#endif
 typedef unsigned char _BYTE;
 typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef unsigned long long _QWORD;
-typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD; typedef signed short __int16; typedef signed long long __int64;
+typedef unsigned __int128 _OWORD; typedef signed short __int16; typedef signed long long __int64;
 #define LOBYTE(x)  ((_BYTE)(x))
 #define BYTE1(x)   ((_BYTE)((x) >> 8))
 #define BYTE2(x)   ((_BYTE)((x) >> 16))
@@ -23,6 +29,15 @@ _DWORD __readfsdword(unsigned int offset);
 #ifndef INFINITY
 #define INFINITY __builtin_inff()
 #endif
+// Minimal executable semantics for the SSE vector helpers emitted below.
+static inline unsigned int __unlace_vec_u32(unsigned __int128 v, unsigned int lane) { return (unsigned int)(v >> (lane * 32)); }
+static inline unsigned long long __unlace_vec_u64(unsigned __int128 v, unsigned int lane) { return (unsigned long long)(v >> (lane * 64)); }
+static inline unsigned __int128 _mm_add_epi32(unsigned __int128 a, unsigned __int128 b) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)(__unlace_vec_u32(a, i) + __unlace_vec_u32(b, i)) << (i * 32); return out; }
+static inline unsigned __int128 _mm_mul_epu32(unsigned __int128 a, unsigned __int128 b) { unsigned long long lo = (unsigned long long)__unlace_vec_u32(a, 0) * __unlace_vec_u32(b, 0); unsigned long long hi = (unsigned long long)__unlace_vec_u32(a, 2) * __unlace_vec_u32(b, 2); return (unsigned __int128)lo | ((unsigned __int128)hi << 64); }
+static inline unsigned __int128 _mm_shuffle_epi32(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)__unlace_vec_u32(a, (imm >> (i * 2)) & 3u) << (i * 32); return out; }
+static inline unsigned __int128 __unlace_psrldq(unsigned __int128 a, unsigned int imm) { return imm >= 16 ? 0 : a >> (imm * 8); }
+static inline unsigned __int128 __unlace_psrlq(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 2; i++) { unsigned long long lane = __unlace_vec_u64(a, i); lane = imm >= 64 ? 0 : lane >> imm; out |= (unsigned __int128)lane << (i * 64); } return out; }
+static inline unsigned __int128 __unlace_punpckldq(unsigned __int128 a, unsigned __int128 b) { return (unsigned __int128)__unlace_vec_u32(a, 0) | ((unsigned __int128)__unlace_vec_u32(b, 0) << 32) | ((unsigned __int128)__unlace_vec_u32(a, 1) << 64) | ((unsigned __int128)__unlace_vec_u32(b, 1) << 96); }
 // Minimal C11 atomic declarations used by recovered AArch64 atomics.
 typedef enum { memory_order_relaxed, memory_order_consume, memory_order_acquire, memory_order_release, memory_order_acq_rel, memory_order_seq_cst } memory_order;
 #define _Atomic
@@ -31,28 +46,18 @@ void atomic_store_explicit(_Atomic unsigned long long *obj, unsigned long long d
 unsigned long long atomic_fetch_add_explicit(_Atomic unsigned long long *obj, unsigned long long arg, memory_order order);
 unsigned long long atomic_exchange_explicit(_Atomic unsigned long long *obj, unsigned long long desired, memory_order order);
 _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, unsigned long long *expected, unsigned long long desired, memory_order success, memory_order failure);
-/* Function:   _start | Address: 0x400100 | Size: 0xc (12 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   bitfield_test, csel_test, mul_test | Xrefs from: unknown */
+/* Function:   _start | Address: 0x400100 | Size: 0x18 (24 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   bitfield_test, csel_test, mul_test | Xrefs from: unknown */
 void __aapcs _start(void) {
     mul_test(); csel_test(); bitfield_test();
-    return;
+    /* CALLOTHER tag=1079 */ 0; return;
 }
 /* Function:   mul_test | Address: 0x400118 | Size: 0x4 (4 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void __aapcs mul_test(void) {
     return;
 }
-/* Function:   csel_test | Address: 0x400128 | Size: 0x20 (32 bytes) | Convention: Microsoft x64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void __fastcall csel_test(__int64 a1) {
-    int v1; // rax
-    int a4; // rcx
-    __int64 v6; // rbp
-    __int64 c0; // rsi
-    _BOOL cond;
-    _BOOL cond = v1 == a4; // reg?
-    if (cond) { v6 = v1; } else { v6 = a4; }
-    __csinv__(LOBYTE(v1 < a4) ^ __OFSUB__(v1, a4), v1, a4, 2);
-    __csneg__(cond, v1, a4, 0xb);
-    if (v1 == a4) {
-        __unlace_int_add(v1, a4); __unlace_copy(c1);
+/* Function:   csel_test | Address: 0x400128 | Size: 0x20 (32 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void __aapcs csel_test(__int64 a1, __int64 a2) {
+            if (a1 != a2) {
     }
     return;
 }
@@ -60,14 +65,22 @@ void __fastcall csel_test(__int64 a1) {
 struct __anon0 {
     void * field_0;
     void * field_8;
-    void * field_16;
+};
+struct __anon1 {
+    void * field_0;
+    void * field_8;
 };
 
-/* Function:   bitfield_test | Address: 0x400148 | Size: 0x1c (28 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x18 (24 bytes) | Xrefs from: unknown */
+/* Function:   bitfield_test | Address: 0x400148 | Size: 0x1c (28 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x28 (40 bytes) | Xrefs from: unknown */
 void __aapcs bitfield_test(void) {
-    __int64 v_8;
+    __int64 v1; // temp
+    __int64 v8; // temp
+    __int64 v_24;
+    __int64 v_16;
     __int64 v_0;
-    v2->field_FFFFFFFFFFFFFFF8 = v7;
-    _QWORD v7 = v2->field_8; // temp
+    int v4; // r31
+    _QWORD v5; // temp
+    *(_QWORD *)(v4 - 16) = v5; *(_QWORD *)(v4 - 24) = v8;
+    __int64 v7 = __isb__(v1, 4LL, 8LL); // temp
     __dmb__(); return;
 }

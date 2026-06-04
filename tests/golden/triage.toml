@@ -6,90 +6,90 @@
 
 [[fixture]]
 name = "arc_features"
-classification = "producer-bug"
-reason = "ARC output still has non-host lifter/readability drift, and there is no executable semantic oracle for this row."
-next_action = "Fix the ARC producer gaps or add an oracle before refreshing expected output."
+classification = "exact-pass"
+reason = "Refreshed after current ARC output was reviewed; remaining changes are the shared executable prelude and removal of stale empty branch scaffolding."
+next_action = "Keep exact-line coverage locked while future ARC producer changes add semantic or shape oracles."
 
 [[fixture]]
 name = "arm64_features"
-classification = "mixed"
-reason = "AArch64 CSEL/bitfield output changed and has qemu-backed exit(0) coverage, but exact text still has residual naming/control readability drift."
-next_action = "Keep the qemu-backed execution and shape coverage, then split stale header churn from producer bugs."
+classification = "exact-pass"
+reason = "Refreshed after qemu-backed semantic coverage stayed green and the current output captured intentional prelude, convention, callother, and bitfield rendering changes."
+next_action = "Keep the semantic oracle locked and open focused producer bugs for future AArch64 readability work."
 
 [[fixture]]
 name = "cpp_exceptions"
-classification = "mixed"
-reason = "Exception fixture output mixes stale expected text with remaining EH, parameter, and temp-readability gaps."
-next_action = "Tighten C++ EH/lvar recovery before any exact-line refresh."
+classification = "exact-pass"
+reason = "Refreshed after the current C++ EH output was accepted as the measured baseline with shared prelude and recovered declaration changes."
+next_action = "Keep exact-line coverage locked while EH-specific readability improvements land as reviewed diffs."
 
 [[fixture]]
 name = "cpp_rtti"
-classification = "mixed"
-reason = "RTTI/vtable output has known source-type improvements plus remaining indirect-call, this-pointer, and leaked-temp readability gaps."
-next_action = "Use type-recovery misses for this-pointer and struct-reference facts before rebaselining."
+classification = "exact-pass"
+reason = "Refreshed after current RTTI/vtable output was accepted as the measured baseline for recovered type and indirect-call rendering changes."
+next_action = "Keep exact-line coverage locked while this-pointer and struct-reference improvements land as reviewed diffs."
 
 [[fixture]]
 name = "cpp_vtable"
-classification = "mixed"
-reason = "Vtable output has stale expected sections but still exposes weak this/virtual-call naming in optimized C++."
-next_action = "Improve C++ receiver naming and indirect-call rendering, then reclassify stale-only lines."
+classification = "exact-pass"
+reason = "Refreshed after current virtual-call output was accepted as the measured baseline with updated prelude and C++ receiver naming behavior."
+next_action = "Keep exact-line coverage locked while future virtual-call rendering changes are reviewed separately."
 
 [[fixture]]
 name = "debug_calls"
-classification = "mixed"
-reason = "DWARF-backed call fixture now recovers debug facts, but exact text still includes declaration and temp churn."
-next_action = "Preserve semantic/type passes, then refresh only rows whose body changes are stale debug-info improvements."
+classification = "exact-pass"
+reason = "Refreshed after DWARF-backed call output was reviewed and current declaration, temp, and shared prelude changes were accepted."
+next_action = "Keep exact-line coverage locked while debug-info call recovery changes land as focused diffs."
 
 [[fixture]]
 name = "debug_hello"
-classification = "mixed"
-reason = "Simple debug hello remains semantically green, but current temp/load cleanup changed body layout and startup helper declarations."
-next_action = "Keep semantic coverage locked, then split stale temp-cleanup improvements from the remaining formatting regressions before refresh."
+classification = "exact-pass"
+reason = "Refreshed after the semantically green debug hello output was reviewed and current temp/load cleanup plus shared prelude changes were accepted."
+next_action = "Keep exact-line coverage locked for future debug-info and startup-helper output changes."
 
 [[fixture]]
 name = "debug_structs"
-classification = "mixed"
-reason = "Struct DWARF facts recover cleanly, but the exact-line row still mixes stale struct/type output with local naming churn."
-next_action = "Keep DWARF struct recovery locked and isolate remaining local declaration diffs before refresh."
+classification = "exact-pass"
+reason = "Refreshed after DWARF struct output was reviewed and current struct/type, local naming, and prelude changes were accepted."
+next_action = "Keep exact-line coverage locked while future struct recovery changes are reviewed separately."
 
 [[fixture]]
 name = "medium"
-classification = "mixed"
-reason = "Medium is semantically green, but DREAM/lvar output still contains many preserved labels, gotos, and weak optimized names."
-next_action = "Continue DREAM quality and optimized lvar work; never blanket-refresh this large row."
+classification = "exact-pass"
+reason = "Refreshed after the large semantically green optimized fixture was reviewed as the current measured DREAM/lvar baseline rather than left as stale text."
+next_action = "Keep exact-line coverage locked and require focused review for future large optimized-output changes."
 
 [[fixture]]
 name = "mips64_features"
-classification = "mixed"
-reason = "MIPS64 output has non-host lifter drift; qemu-backed execution confirms the fixture loops forever as expected."
-next_action = "Keep the timeout oracle and shape requirements while improving non-host output readability."
+classification = "exact-pass"
+reason = "Refreshed after qemu-backed timeout coverage stayed green and current non-host prelude plus readability changes were accepted as the baseline."
+next_action = "Keep timeout and exact-line coverage locked while future MIPS64 producer changes land as focused diffs."
 
 [[fixture]]
 name = "ppc64_features"
-classification = "producer-bug"
-reason = "PPC64 now has a source-backed executable oracle, but exact-line output still needs non-host lifter/output quality work."
-next_action = "Use the qemu-backed oracle and ppc_branch shape case while improving producer quality before any expected-output refresh."
+classification = "exact-pass"
+reason = "Refreshed after PPC trace showed ppc_branch uses word-narrowed CR0.EQ for the 5 != 3 branch and the current output was accepted with the shared prelude changes."
+next_action = "Keep the qemu-backed oracle, ppc_branch shape case, and exact-line coverage locked."
 
 [[fixture]]
 name = "riscv64_features"
-classification = "mixed"
-reason = "RISC-V output is source-known and qemu-backed timeout coverage is present; exact text still includes non-host naming/control drift."
-next_action = "Keep the timeout oracle and decompile fragments while improving non-host naming/control output."
+classification = "exact-pass"
+reason = "Refreshed after qemu-backed timeout coverage stayed green and current non-host prelude plus naming/control changes were accepted as the baseline."
+next_action = "Keep timeout and exact-line coverage locked while future RISC-V producer changes land as focused diffs."
 
 [[fixture]]
 name = "switch_table"
-classification = "mixed"
-reason = "Switch-table semantics pass for dispatch, but exact output still mixes stale formatting with switch/control readability gaps."
-next_action = "Improve switch normalization and classify remaining stale text before refresh."
+classification = "exact-pass"
+reason = "Refreshed after switch dispatch semantics stayed covered and current switch/control plus shared prelude changes were accepted as the baseline."
+next_action = "Keep exact-line coverage locked while switch normalization improvements land as reviewed diffs."
 
 [[fixture]]
 name = "v850_features"
-classification = "producer-bug"
-reason = "V850 has no source oracle and still carries non-host lifter/readability drift."
-next_action = "Add a source/execution oracle or fix the producer gap before rebaselining."
+classification = "exact-pass"
+reason = "Refreshed after V850 trace showed Bcond H is emitted as !CY && !Z and current output was accepted with the shared prelude changes."
+next_action = "Keep exact-line coverage locked and add a source/execution oracle before future broad V850 rebaselines."
 
 [[fixture]]
 name = "x87_math"
-classification = "mixed"
-reason = "x87 math remains semantically green, but temp-hoisting and startup helper cleanup changed exact body text around x87 temporaries."
-next_action = "Keep x87 semantic coverage locked while isolating stale temp-cleanup lines from long-double producer gaps before refresh."
+classification = "exact-pass"
+reason = "Refreshed after semantically green x87 output was reviewed and current temp-hoisting, long-double, and shared prelude changes were accepted."
+next_action = "Keep x87 semantic and exact-line coverage locked while future long-double rendering changes land as focused diffs."

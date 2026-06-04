@@ -1,6 +1,12 @@
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wtype-limits"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#endif
 typedef unsigned char _BYTE;
 typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef unsigned long long _QWORD;
-typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD; typedef signed short __int16; typedef signed long long __int64;
+typedef unsigned __int128 _OWORD; typedef signed short __int16; typedef signed long long __int64;
 #define LOBYTE(x)  ((_BYTE)(x))
 #define BYTE1(x)   ((_BYTE)((x) >> 8))
 #define BYTE2(x)   ((_BYTE)((x) >> 16))
@@ -23,6 +29,15 @@ _DWORD __readfsdword(unsigned int offset);
 #ifndef INFINITY
 #define INFINITY __builtin_inff()
 #endif
+// Minimal executable semantics for the SSE vector helpers emitted below.
+static inline unsigned int __unlace_vec_u32(unsigned __int128 v, unsigned int lane) { return (unsigned int)(v >> (lane * 32)); }
+static inline unsigned long long __unlace_vec_u64(unsigned __int128 v, unsigned int lane) { return (unsigned long long)(v >> (lane * 64)); }
+static inline unsigned __int128 _mm_add_epi32(unsigned __int128 a, unsigned __int128 b) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)(__unlace_vec_u32(a, i) + __unlace_vec_u32(b, i)) << (i * 32); return out; }
+static inline unsigned __int128 _mm_mul_epu32(unsigned __int128 a, unsigned __int128 b) { unsigned long long lo = (unsigned long long)__unlace_vec_u32(a, 0) * __unlace_vec_u32(b, 0); unsigned long long hi = (unsigned long long)__unlace_vec_u32(a, 2) * __unlace_vec_u32(b, 2); return (unsigned __int128)lo | ((unsigned __int128)hi << 64); }
+static inline unsigned __int128 _mm_shuffle_epi32(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)__unlace_vec_u32(a, (imm >> (i * 2)) & 3u) << (i * 32); return out; }
+static inline unsigned __int128 __unlace_psrldq(unsigned __int128 a, unsigned int imm) { return imm >= 16 ? 0 : a >> (imm * 8); }
+static inline unsigned __int128 __unlace_psrlq(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 2; i++) { unsigned long long lane = __unlace_vec_u64(a, i); lane = imm >= 64 ? 0 : lane >> imm; out |= (unsigned __int128)lane << (i * 64); } return out; }
+static inline unsigned __int128 __unlace_punpckldq(unsigned __int128 a, unsigned __int128 b) { return (unsigned __int128)__unlace_vec_u32(a, 0) | ((unsigned __int128)__unlace_vec_u32(b, 0) << 32) | ((unsigned __int128)__unlace_vec_u32(a, 1) << 64) | ((unsigned __int128)__unlace_vec_u32(b, 1) << 96); }
 // Minimal C11 atomic declarations used by recovered AArch64 atomics.
 typedef enum { memory_order_relaxed, memory_order_consume, memory_order_acquire, memory_order_release, memory_order_acq_rel, memory_order_seq_cst } memory_order;
 #define _Atomic
@@ -31,67 +46,69 @@ void atomic_store_explicit(_Atomic unsigned long long *obj, unsigned long long d
 unsigned long long atomic_fetch_add_explicit(_Atomic unsigned long long *obj, unsigned long long arg, memory_order order);
 unsigned long long atomic_exchange_explicit(_Atomic unsigned long long *obj, unsigned long long desired, memory_order order);
 _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, unsigned long long *expected, unsigned long long desired, memory_order success, memory_order failure);
-_BYTE byte_4008;
 _BYTE byte_4010;
+_QWORD qword_3FD8;
 _QWORD qword_3FE0;
+_QWORD qword_3FE8;
 _QWORD qword_4008;
 __int64 sub_1040();
 __int64 sub_10f0();
+__int64 sub_1130(void) /* // dropped 1 param(s) (dead in body) */;
 void sub_10c0(void);
-void sub_1130(void);
 void sub_1170(void);
 
 /* Function:   main | Address: 0x1060 | Size: 0x26 (38 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   __printf_chk | Xrefs from: unknown */
 int main(void) {
-    printf(0x2004LL, 0x2a); return 0;
+        printf(0x2004LL, 0x2aLL); return 0;
 }
-/* Function:   _start | Address: 0x1090 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs from: unknown */
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+};
+
+/* Function:   _start | Address: 0x1090 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
 void _start(void) {
+    __int64 v_8;
     __int64 v_0;
-    __int64 v1; // rsp
-    __int64 v3; // temp
-    __int64 pfn = v1 + 8LL; // temp
-    v3 = (pfn & 0xfffffffffffffff0ULL) - 8LL - 8LL; *(_QWORD *)(v3) = v3;
-    pfn = qword_3FE0; ((void (*)())pfn)(); return;
+    _QWORD pfn; // temp
+        v_8 = (uintptr_t)&v_0; pfn = qword_3FE0;
+    ((__int64 (*)())pfn)(); __builtin_trap(); return;
 }
 /* Function:   use_base(Base*) | Address: 0x1180 | Size: 0x7 (7 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // use_base(Base*)
-void use_base(void * a1) {
-    int a1; // rdi
-    _QWORD v2; // temp
-    v2 = *(_QWORD *)(a1); v2 = *(_QWORD *)(v2); return this->__vftable->method_0();
+int use_base(Base * a1) {
+    return this->__vftable->method_0();
 }
-/* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
-void sub_1130(void) {
-    __int64 v2; // temp
-    _QWORD v7; // temp
-    _BYTE v3 = byte_4010; // temp
-    if (v3 != '\0') {
-        v2 = v2 - 8LL; *(_QWORD *)(v2) = v2;
-        if (v7 == 0LL) {
-            v7 = qword_4008;
-            __int64 v9 = v7; // rdi
-            sub_1040();
-        }
-        sub_10c0(); byte_4008 = 1; return;
+/* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
+__int64 sub_1130(void) /* // dropped 1 param(s) (dead in body) */ {
+    __int64 v_0;
+    __int64 result; // rax
+    if (byte_4010 != '\0') {
+        return result;
     } else {
-        return;
+        if (qword_3FD8 != 0LL) {
+            _QWORD v13 = qword_4008; // temp
+            __int64 c3 = v13; // rdi
+            result = sub_1040();
+        }
+        result = sub_10c0(); byte_4010 = 1;
+                        return result;
     }
 }
 /* Function:   sub_1170 | Address: 0x1170 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1170(void) {
     sub_10f0();
 }
-/* Function:   sub_10c0 | Address: 0x10c0 | Size: 0x5b (91 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_10c0 | Address: 0x10c0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10c0(void) {
-    int v4; // temp
-    int v1; // reg?
-    if (v1) {
-        if (v4 != 0LL) {
+    int v7; // reg?
+    if (v7) {
+        return;
+    } else {
+        if (qword_3FE8 == 0LL) {
             return;
         }
-    } else {
-        return;
     }
     return;
 }

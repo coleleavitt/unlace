@@ -1,6 +1,12 @@
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wtype-limits"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#endif
 typedef unsigned char _BYTE;
 typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef unsigned long long _QWORD;
-typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD; typedef signed short __int16; typedef signed long long __int64;
+typedef unsigned __int128 _OWORD; typedef signed short __int16; typedef signed long long __int64;
 #define LOBYTE(x)  ((_BYTE)(x))
 #define BYTE1(x)   ((_BYTE)((x) >> 8))
 #define BYTE2(x)   ((_BYTE)((x) >> 16))
@@ -23,6 +29,15 @@ _DWORD __readfsdword(unsigned int offset);
 #ifndef INFINITY
 #define INFINITY __builtin_inff()
 #endif
+// Minimal executable semantics for the SSE vector helpers emitted below.
+static inline unsigned int __unlace_vec_u32(unsigned __int128 v, unsigned int lane) { return (unsigned int)(v >> (lane * 32)); }
+static inline unsigned long long __unlace_vec_u64(unsigned __int128 v, unsigned int lane) { return (unsigned long long)(v >> (lane * 64)); }
+static inline unsigned __int128 _mm_add_epi32(unsigned __int128 a, unsigned __int128 b) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)(__unlace_vec_u32(a, i) + __unlace_vec_u32(b, i)) << (i * 32); return out; }
+static inline unsigned __int128 _mm_mul_epu32(unsigned __int128 a, unsigned __int128 b) { unsigned long long lo = (unsigned long long)__unlace_vec_u32(a, 0) * __unlace_vec_u32(b, 0); unsigned long long hi = (unsigned long long)__unlace_vec_u32(a, 2) * __unlace_vec_u32(b, 2); return (unsigned __int128)lo | ((unsigned __int128)hi << 64); }
+static inline unsigned __int128 _mm_shuffle_epi32(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)__unlace_vec_u32(a, (imm >> (i * 2)) & 3u) << (i * 32); return out; }
+static inline unsigned __int128 __unlace_psrldq(unsigned __int128 a, unsigned int imm) { return imm >= 16 ? 0 : a >> (imm * 8); }
+static inline unsigned __int128 __unlace_psrlq(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 2; i++) { unsigned long long lane = __unlace_vec_u64(a, i); lane = imm >= 64 ? 0 : lane >> imm; out |= (unsigned __int128)lane << (i * 64); } return out; }
+static inline unsigned __int128 __unlace_punpckldq(unsigned __int128 a, unsigned __int128 b) { return (unsigned __int128)__unlace_vec_u32(a, 0) | ((unsigned __int128)__unlace_vec_u32(b, 0) << 32) | ((unsigned __int128)__unlace_vec_u32(a, 1) << 64) | ((unsigned __int128)__unlace_vec_u32(b, 1) << 96); }
 // Minimal C11 atomic declarations used by recovered AArch64 atomics.
 typedef enum { memory_order_relaxed, memory_order_consume, memory_order_acquire, memory_order_release, memory_order_acq_rel, memory_order_seq_cst } memory_order;
 #define _Atomic
@@ -40,19 +55,34 @@ void _start(void) {
 void arithmetic_test(void) {
     return;
 }
-/* Function:   logic_test | Address: 0x120000140 | Size: 0x28 (40 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   logic_test | Address: 0x120000140 | Size: 0xc (12 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void logic_test(void) {
     int v3; // reg?
     if (v3) {
     }
     return;
 }
-/* Function:   memory_test | Address: 0x120000170 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs from: unknown */
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    void * field_0;
+    int field_8;
+};
+struct __anon1 {
+    void * field_0;
+    void * field_8;
+};
+
+/* Function:   memory_test | Address: 0x120000170 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x28 (40 bytes) | Xrefs from: unknown */
 void memory_test(void) {
-    __int64 v_32;
-    _DWORD v3; // temp
-    *(_DWORD *)(v4) = LODWORD(0x42LL); v3 = *(_DWORD *)(v4);
-    if ((_QWORD)(v3 < 0x64LL) != 0LL) {
+    int v_8;
+    int v_0;
+    int c0; // r29d
+    _QWORD v5; // temp
+    _QWORD v12; // temp
+    c0 = c0 - 32; *(_DWORD *)(c0 - 32 + 0x18LL) = v12; v5 = c0 + 0x10LL;
+    *(_DWORD *)(c0 + 0x10LL) = v5; *(_DWORD *)(c0) = LODWORD(0x42LL);
+    _DWORD v7 = *(_DWORD *)(c0); // temp
+    if ((_QWORD)(v7 < 0x64LL) == 0LL) {
     }
     return;
 }

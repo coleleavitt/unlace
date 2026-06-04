@@ -1,0 +1,1813 @@
+
+    603 +        .expect("failed to run unlace");
+    604 +    assert!(
+    605 +        output.status.success(),
+    606 +        "stderr: {}",
+    607 +        String::from_utf8_lossy(&output.stderr)
+    608 +    );
+    609 +
+    610 +    let mut entries = std::fs::read_dir(capture_root.path())
+    611 +        .expect("read capture root")
+    612 +        .map(|entry| entry.expect("capture entry").path())
+    613 +        .collect::<Vec<_>>();
+    614 +    entries.sort();
+    615 +    assert_eq!(entries.len(), 1, "expected one capture run directory");
+    616 +
+    617 +    let run_dir = &entries[0];
+    618 +    let dirname = run_dir
+    619 +        .file_name()
+    620 +        .and_then(|name| name.to_str())
+    621 +        .expect("capture directory name");
+    622 +    let (timestamp, rest) = dirname
+    623 +        .split_once("-hello_world-main-")
+    624 +        .expect("capture dir should include timestamp, binary, function, and uuid");
+    625 +    assert!(
+    626 +        timestamp.chars().all(|ch| ch.is_ascii_digit()),
+    627 +        "capture timestamp should be numeric: {dirname}"
+    628 +    );
+    629 +    assert_eq!(
+    630 +        rest.len(),
+    631 +        36,
+    632 +        "capture suffix should be UUID-shaped: {dirname}"
+    633 +    );
+    634 +
+    635 +    let captured_output = std::fs::read(run_dir.join("output.c")).expect("capture output")
+         ;
+    636 +    assert_eq!(
+    637 +        captured_output, output.stdout,
+    638 +        "capture should match normal stdout byte-for-byte"
+    639 +    );
+    640 +
+    641 +    let manifest: serde_json::Value = serde_json::from_slice(
+    642 +        &std::fs::read(run_dir.join("manifest.json")).expect("capture manifest"),
+    643 +    )
+    644 +    .expect("manifest json");
+    645 +    assert_eq!(manifest["schema"], "unlace-decompile-capture-v1");
+    646 +    assert_eq!(manifest["emit"], "C");
+    647 +    assert_eq!(manifest["function_filter"], "main");
+    648 +    assert_eq!(manifest["captured_output_file"], "output.c");
+    649 +    assert_eq!(
+    650 +        manifest["captured_output_bytes"].as_u64(),
+    651 +        Some(output.stdout.len() as u64)
+    652 +    );
+    653 +}
+    654 +
+    655 +#[test]
+    656  fn stripped_binary_discovers_functions_via_prologue_scan() {
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The capture test is in place. I’m formatting and running the focused CLI tests now; this should
+  catch both the new snapshot behavior and any accidental stdout/stderr change.
+
+• Ran cargo fmt -p unlace-cli
+  └ (no output)
+
+• Ran env RUSTC_WRAPPER= cargo test -q -p unlace-cli
+  │ decompile_capture_dir_writes_timestamped_snapshot
+  └
+    running 0 tests
+    … +51 lines (ctrl + t to view transcript)
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The new integration test passes. I’m doing the final quick check and pulling the exact file/line
+  references for the close-out.
+
+• Explored
+  └ Search capture_dir|write_decompile_capture|decompile_capture_dir_writes_timestamped_snapshot|
+           UNLACE_DECOMPILE_CAPTURE_DIR in args.rs
+
+• Ran env RUSTC_WRAPPER= cargo check -q -p unlace-cli
+  └ (no output)
+
+• Ran git diff --stat -- crates/unlace-cli/src/args.rs crates/unlace-cli/src/main.rs crates/
+  │ unlace-cli/tests/cli_smoke.rs crates/unlace-passes/src/register_coalesce.rs
+  └ (no output)
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The final check is clean. The capture change is now covered by a CLI smoke test, and the diff for
+  this feature is only args.rs, main.rs, and cli_smoke.rs.
+
+• Updated Plan
+  └ ✔ Remove failed register-name split experiment
+    ✔ Find decompile CLI output path
+    ✔ Add timestamp/UUID capture snapshots
+    ✔ Verify behavior and summarize usage
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Implemented decompile capture tracking.
+
+  Best shape: I made it opt-in per run, plus an env var for “capture every decompile,” so normal
+  tests/scripts don’t start spraying files unless you ask for it.
+
+  Use one run:
+
+  unlace decompile --emit c --function main --capture-dir /tmp/unlace-captures fixtures/
+  hello_world.elf
+
+  Or enable it for every decompile in a shell:
+
+  export UNLACE_DECOMPILE_CAPTURE_DIR=/tmp/unlace-captures
+
+  Each run creates a directory like:
+
+  1780532033710-hello_world-main-0a7628cd-9191-4629-a05c-3acba6f84d61/
+    output.c
+    manifest.json
+
+  For other emit modes it writes output.ir or output.dot. The manifest records argv, binary SHA256,
+  output SHA256, arch, entry, function filter, output path, byte count, timestamp, and UUID.
+
+  Changed:
+
+  - Added --capture-dir in crates/unlace-cli/src/args.rs:46
+  - Wrote capture snapshot + manifest logic in crates/unlace-cli/src/main.rs:1404
+  - Added CLI smoke coverage in crates/unlace-cli/tests/cli_smoke.rs:589
+
+  Verified:
+
+  - cargo fmt -p unlace-cli
+  - RUSTC_WRAPPER= cargo check -q -p unlace-cli
+  - RUSTC_WRAPPER= cargo test -q -p unlace-cli decompile_capture_dir_writes_timestamped_snapshot
+  - RUSTC_WRAPPER= cargo test -q -p unlace-passes register_coalesce
+
+  Normal stdout remains byte-for-byte unchanged; the capture path is only reported on stderr.
+
+─ Worked for 33m 57s ──────────────────────────────────────────────────────────────────────────────
+
+
+› alright continue where we left off
+
+
+• I’ll pick back up on the underlying decompiler work: re-establish the exact dirty state, read the
+  lvar/live-range notes, then chase the remaining conflation path before re-landing the staged
+  param/prune fixes.
+
+• Updated Plan
+  └ □ Re-establish current repo and failing targets
+    □ Read lvar/live-range notes and relevant code paths
+    □ Locate real pointer/scalar conflation source
+    □ Implement principled fix plus staged param/prune wiring
+    □ Run focused and full verification gates
+
+• Called
+  └ codegraph.codegraph_context({"task":"Understand remaining unlace decompiler bugs around lvar
+        live-range splitting, register coalescing, parameter live-on-entry fix, dead plain
+        assignment pruning, and pointer/scalar conflation in decompiled C output. Need entry points
+        and relevant symbols for implementing upstream fix.","maxNodes":20,"includeCode":false})
+    Error: tool call error: tool call failed for `codegraph/codegraph_context`
+        Caused by:
+            timed out awaiting tools/call after 120s
+        Stack backtrace:
+           0: <unknown>
+           1: <unknown>
+           2: <unknown>
+           3: <unknown>
+           4: <unknown>
+           5: <unknown>
+           6: <unknown>
+           7: <unknown>
+           8: <unknown>
+           9: <unknown>
+          10: <unknown>
+          11: <unknown>
+          12: <unknown>
+          13: <unknown>
+          14: <unknown>
+          15: <unknown>
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• CodeGraph timed out on the broad context query, so I’m narrowing with direct repo reads instead
+  of waiting on the index. I’ll still use structural lookup again once I have specific symbol
+  names.
+
+• Explored
+  └ Search update-[rst]|conflation|live-range|lvar|param fix|prune|loop-carried|v8#10|ptr|scalar in
+           docs
+    List docs
+    Search lvar|live|ssa|out|pdf|txt|design
+
+• Ran git diff --stat
+  └  .jfc/audit/runtime.jsonl                       |  613 ++++++++++++
+     .jfc/highlight-heights.json                    |    2 +-
+    … +8 lines (ctrl + t to view transcript)
+     research/decompiled-references/gcc/gcc         |    0
+     11 files changed, 2190 insertions(+), 534 deletions(-)
+
+• Ran git status --short
+  └  M .jfc/audit/runtime.jsonl
+     M .jfc/highlight-heights.json
+    … +14 lines (ctrl + t to view transcript)
+    ?? ideas
+    ?? research/lvar/
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The current tree already has the earlier pass/printer/doc edits plus the new capture hook. I’m
+  going to establish whether the remaining target is still failing in this dirty state before
+  changing anything else.
+
+• Explored
+  └ Read design-lvar-liverange-split-2026-06-01.md, README.md
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The notes confirm the useful part from the prior work: IV protection made the split fire on the
+  real r9 collision instead of loop cursors; the remaining failure was a value-flow/name allocation
+  issue across multiple registers, not a printer-only problem. The semantic gate is still running,
+  so I’m reading the tail of the design doc while it finishes.
+
+• Explored
+  └ Read design-lvar-liverange-split-2026-06-01.md
+    Search partition_register_phases|collect_iv_protected|iv_protected|existing_group_name|
+           classify_use_sites|compute_live_ranges|UNLACE_REG_COALESCE_TRACE|merged_names in
+           register_coalesce.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The doc tail is explicit: the prior name-layer split was ruled out after r9-only still changed
+  semantics. The next useful target is not another split; it’s the upstream SSA/value-flow merge
+  that makes the r9 pointer web carry both rsp/buf and rsi-derived values, plus the prune back-edge
+  behavior that the trace already exposed.
+
+• Explored
+  └ Read design-lvar-liverange-split-2026-06-01.md, register_coalesce.rs
+
+• Ran git diff -- crates/unlace-passes/src/calling_convention.rs crates/unlace-output/src/
+  │ c_printer.rs | sed -n '1,260p'
+  └ crates/unlace-output/src/c_printer.rs --- 1/13 --- Text (1.1 MiB exceeded DFT_BYTE_LIMIT)
+     1561     input: String,                  1561     input: String,
+    … +256 lines (ctrl + t to view transcript)
+     9430  9596     match node {
+
+
+• Ran env RUSTC_WRAPPER= cargo run -q -p xtask -- semantic-report
+  └ semantic-report: source-known executable equivalence
+
+    … +42 lines (ctrl + t to view transcript)
+
+    semantic-report: passed=23 xfailed=0 failed=2 unsupported=8
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Current dirty state is 23/2: only medium:main and stripped:main are behavior mismatches. That
+  matches the doc’s last known failure, so I’m going after the upstream value-flow/SSA issue rather
+  than another printer workaround.
+
+• Updated Plan
+  └ ✔ Re-establish current repo and failing targets
+    □ Read lvar/live-range notes and relevant code paths
+    □ Locate real pointer/scalar conflation source
+    □ Implement principled fix plus staged param/prune wiring
+    □ Run focused and full verification gates
+
+• Called
+  └ codegraph.codegraph_search({"query":"phi","projectPath":"/home/cole/RustProjects/active/
+        unlace","limit":20})
+    ## Search Results (20 found)
+
+    ### phi (method)
+    crates/unlace-passes/src/variable_merge.rs:90
+    `(block: BlockId) -> Self`
+
+    ### phi (method)
+    research/decompiled-references/gcc/gcc/gcc/rtl-ssa/accesses.h:317
+
+    ### Phi (enum_member)
+    crates/unlace-ir/src/memory_ssa.rs:123
+
+    ### PHI (enum_member)
+    research/decompiled-references/gcc/gcc/gcc/rtl-ssa/accesses.h:105
+
+    ### phi (variable)
+    research/decompiled-references/gcc/gcc/gcc/testsuite/gcc.dg/tree-ssa/loadpre8.c:91
+
+    ### PHI ...
+
+• Called
+  └ codegraph.codegraph_search({"query":"lower","projectPath":"/home/cole/RustProjects/active/
+        unlace","limit":30})
+    ## Search Results (30 found)
+
+    ### lower (function)
+    research/decompiled-references/gcc/gcc/gcc/testsuite/g++.dg/opt/stack1.C:73
+
+    ### lower (function)
+    research/decompiled-references/gcc/gcc/gcc/genmatch.cc:2362
+
+    ### lower (method)
+    research/decompiled-references/gcc/gcc/gcc/go/gofrontend/expressions.h:992
+
+    ### lower (method)
+    research/decompiled-references/gcc/gcc/gcc/go/gofrontend/statements.h:265
+
+    ### lower (method)
+    research/decompiled-references/ghidra/Ghidra/Debu...
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• CodeGraph works for narrow searches but the repo index includes the large research trees, so I’m
+  using focused file reads for the hot Rust paths. Next I’m tracing how SSA phis become names/HIR,
+  because the failing evidence points at de-SSA/value-flow rather than C syntax.
+
+• Explored
+  └ Search HirFunction|lower.*ssa|ssa.*hir|hir.*ssa|phi_map|MULTIEQUAL|PhiNode|merged_names
+  in unlace-
+           cli
+
+• Ran git diff -- crates/unlace-passes/src/calling_convention.rs | sed -n '1,260p'
+  └ crates/unlace-passes/src/calling_convention.rs --- 1/2 --- Rust
+    197 197     reads
+    … +147 lines (ctrl + t to view transcript)
+    589     }                                709     }
+
+
+• Ran git diff -- crates/unlace-output/src/c_printer.rs | rg -n "dead|plain|loop_carried|
+  │ used_later|rendered_base|prune|base_name|is_loop" -C 4
+  └ 51-crates/unlace-output/src/c_printer.rs --- 2/13 --- Text (1.1 MiB exceeded DFT_BYTE_LIMIT)
+    52- 3154  3164                     continue;
+    … +165 lines (ctrl + t to view transcript)
+    391-..... 16966             // A non-loop enclosing block (`if`/`else`/`switch`/function body):
+    392-..... 16967             // keep climbing for an outer loop that may enclose both.
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The stale comment in calling_convention.rs still says “NOT wired,” but the diff shows it is
+  wired: the fallback now uses live-on-entry reads. The current failures are therefore the coupled
+  state: true-param inference plus scalar-base guard plus loop-carried prune.
+
+• Ran env RUSTC_WRAPPER= cargo run -q -p unlace-cli -- ir-dump --function main fixtures/medium.elf
+  └ func main @ 0x1060 {
+    BB_0 [entry]:
+    … +2645 lines (ctrl + t to view transcript)
+      BRANCH
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_DECOMPILE_CAPTURE_DIR=/tmp/unlace-captures-current cargo run -q -p
+  │ unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ typedef unsigned char _BYTE;
+    typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef
+    … +452 lines (ctrl + t to view transcript)
+    unlace decompile capture: /tmp/
+    unlace-captures-current/1780532556372-medium-main-d6018cd7-0075-4d95-886d-89d1cee66edd
+
+• Ran env RUSTC_WRAPPER= UNLACE_REG_COALESCE_TRACE=1 UNLACE_REG_COALESCE_TRACE_FILTER="offset: 72"
+  │ cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace reg-coalesce] touch-phi-output func=main block=BlockId(3) point=81 output=SsaVarnode
+    { base: Varnode { space: Unique, offset: 72, size: 1 }, version: 0 }
+    … +1060 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The generated medium C now keeps the loop-carried c7 = a1 reset, so the previous segfault path is
+  gone. The remaining mismatch is more subtle: the output is valid and runs, but some scalar
+  accumulator/path value differs. I’m going to compare against the source-known fixture and trace
+  the failing variable around the final return.
+
+• Explored
+  └ List fixtures
+    Search medium|stripped
+    Search output.c in unlace-captures-current
+    Search medium|stripped|exit=33|33 in fixtures
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• There is a source-known fixtures/src/medium.c and a golden C snapshot. I’m comparing the final
+  arithmetic region rather than the whole function first, because the semantic mismatch only
+  changes the final exit code.
+
+• Explored
+  └ Read medium.c
+    Search return|ackermann|rec_fib|prime|buf|0xabe0c|1218664206|0x12d|label_20|c3 = in output.c
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The original main is a straight composition of helper returns ending in f_mod(r, 256). The
+  generated output’s return region corresponds to f_map_sum, f_chain, recursive calls, and the
+  final mod, so I’m going to instrument the generated C at those checkpoints to see which component
+  first diverges.
+
+• Explored
+  └ Read medium.c, output.c, pipeline.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The single-function capture calls helper symbols, so a naïve standalone compile is not the same
+  as the semantic gate. I’m checking the semantic harness now so any instrumentation uses the same
+  link/run path as the failing gate.
+
+• Explored
+  └ Search semantic-report|semantic|recompiled|source-known|compile|cc|Command::new in xtask
+    Search fn semantic|struct Semantic|medium|fixtures in xtask
+    List xtask
+    Search semantic|xtask|report
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The harness preserves temp dirs when UNLACE_SEMANTIC_KEEP_TEMPS=1, which is useful here. I’m
+  going to rerun just the semantic report with temps kept/traced so I can inspect the exact
+  generated source and binary the gate used, then add minimal temporary probes outside the repo if
+  needed.
+
+• Explored
+  └ Read semantic_report.rs
+
+• Ran env RUSTC_WRAPPER= UNLACE_SEMANTIC_KEEP_TEMPS=1 UNLACE_SEMANTIC_TRACE=1 cargo run -q -p xtask
+  │ -- semantic-report
+  └ semantic-report: source-known executable equivalence
+
+    … +247 lines (ctrl + t to view transcript)
+
+    semantic-report: passed=23 xfailed=0 failed=2 unsupported=8
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The kept semantic temp dir is /tmp/unlace-semantic-2-medium; that gives us the exact source,
+  helper object, and binary from the failing run. I’m adding temporary fprintf(stderr, ...) probes
+  there only, then recompiling that temp file manually.
+
+• Explored
+  └ Read medium.c
+
+• Ran python3 -c 'import ctypes
+  │
+  │ def i32(x): return ctypes.c_int32(x).value
+  │ … +86 lines
+  └ sum_range 190 190
+    factorial 720 910
+    … +26 lines (ctrl + t to view transcript)
+    ternary 1 -1217944619
+    ret 213 r -1217944619
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The quick Python mirror is not enough because C signed overflow/remainder details matter here, so
+  I’m using the actual compiled subset as the oracle for checkpoints. The probe points are after
+  hash, after reduce, after map/chain/multi-call, and at the final modulo lowering.
+
+• Edited /tmp/unlace-semantic-2-medium/medium.c (+9 -3)
+    401              c8 = LODWORD(c0 + c9 - 1218664206);
+    402 +            fprintf(stderr, "P_HASH c0=%lld c9=%llu c8=%llu a2=%llu c1=%lld c2=%lld\n", (l
+         ong long)c0, (unsigned long long)c9, (unsigned long long)c8, (unsigned long long)a2, (long
+          long)c1, (long long)c2);
+    403              while (1) {
+        ⋮
+    469              c2 = LODWORD(c8 + a2); c12 = 1;
+    470 +            fprintf(stderr, "P_REDUCE c8=%llu a2=%llu c2=%lld c0=%llu c1=%lld a1=%lld c7=%
+         lld\n", (unsigned long long)c8, (unsigned long long)a2, (long long)c2, (unsigned long long
+         )c0, (long long)c1, (long long)a1, (long long)c7);
+    471              c13 = LOBYTE(0); c10 = 0; c14 = 0;
+        ⋮
+    506              a2 = LODWORD(c2 + c1 + 0x12dLL); c1 = 0x24LL;
+    507 +            fprintf(stderr, "P_MAP_CHAIN c2=%lld c1_before_set? a2=%llu c0=%llu\n", (long
+         long)c2, (unsigned long long)a2, (unsigned long long)c0);
+    508              c0 = LODWORD(0x30LL) / c1; c2 = LODWORD(0x30LL) % c1;
+        ⋮
+    514          label_20:;
+    512 -            c3 = LODWORD(a2 + c1 + 3LL); v770 = f_rec_fib(8LL);
+    513 -            c8 = LODWORD(v770 + c3); v771 = f_rec_power_constprop_0(8LL); a2 = 3LL;
+    515 +            fprintf(stderr, "P_PRE_MULTI a2=%llu c1=%lld c2=%lld a1=%lld\n", (unsigned lon
+         g long)a2, (long long)c1, (long long)c2, (long long)a1);
+    516 +            c3 = LODWORD(a2 + c1 + 3LL); fprintf(stderr, "P_MULTI c3=%llu\n", (unsigned lo
+         ng long)c3); v770 = f_rec_fib(8LL);
+    517 +            c8 = LODWORD(v770 + c3); fprintf(stderr, "P_FIB v770=%lld c8=%llu\n", (long lo
+         ng)v770, (unsigned long long)c8); v771 = f_rec_power_constprop_0(8LL); a2 = 3LL;
+    518              a1 = 2LL;
+    515 -            c8 = c8 + LODWORD(v771); v772 = f_ackermann(a1, a2);
+    519 +            c8 = c8 + LODWORD(v771); fprintf(stderr, "P_POWER v771=%lld c8=%llu\n", (long
+         long)v771, (unsigned long long)c8); v772 = f_ackermann(a1, a2);
+    520              int v690 = LODWORD(c8 + v772 + 0xabe0cLL); // temp
+    521 +            fprintf(stderr, "P_ACK_FINAL v772=%lld v690=%d c8=%llu\n", (long long)v772, v6
+         90, (unsigned long long)c8);
+    522              c2 = v690 >> 0x1f;
+        ⋮
+    524              c0 = LODWORD((_QWORD)(LOBYTE(v690 + c2))) - c2;
+    525 +            fprintf(stderr, "P_RET c2=%lld c0=%llu\n", (long long)c2, (unsigned long long)
+         c0);
+    526              return c0;
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The probes are in the temp copy. I’m rebuilding and running only that temp binary now, then I’ll
+  compare the checkpoint values against a tiny source-side checkpoint build.
+
+• Ran cp fixtures/src/medium.c /tmp/medium_src_probe.c
+  └ (no output)
+
+• Ran cc -std=c99 -Wall -Werror -Wno-error=unused-variable -Wno-error=unused-but-set-variable
+  │ -Wno-error=uninitialized -Wno-error=maybe-uninitialized /tmp/unlace-semantic-2-medium/
+  │ medium.c /tmp/unlace-semantic-2-medium/medium_helpers.o -o /tmp/unlace-semantic-2-medium/
+  │ … +1 lines
+  └ /tmp/unlace-semantic-2-medium/medium.c: In function ‘main’:
+    /tmp/unlace-semantic-2-medium/medium.c:303:17: warning: unused variable
+    … +14 lines (ctrl + t to view transcript)
+      145 |     char c13 = LOBYTE(0); // SF
+          |          ^~~
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The instrumented generated subset rebuilt cleanly. I’m adding matching source-side checkpoints
+  now so the numbers line up by semantic component, not by guessed variable names.
+
+• Edited /tmp/medium_src_probe.c (+12 -1)
+    317      r = f_add(r, (int32_t)f_hash_mix(42));
+    318 +    fprintf(stderr, "S_HASH r=%d hash=%d\n", r, (int32_t)f_hash_mix(42));
+    319      r = f_add(r, f_reduce(buf, 16));
+    320 +    fprintf(stderr, "S_REDUCE r=%d reduce=%d\n", r, f_reduce(buf, 16));
+    321      r = f_add(r, f_map_sum(20));
+    322 +    fprintf(stderr, "S_MAP r=%d map=%d\n", r, f_map_sum(20));
+    323      r = f_add(r, f_chain(100));
+    324 +    fprintf(stderr, "S_CHAIN r=%d chain=%d\n", r, f_chain(100));
+    325      r = f_add(r, f_multi_call(48, 36));
+    326 +    fprintf(stderr, "S_MULTI r=%d multi=%d\n", r, f_multi_call(48, 36));
+    327      r = f_add(r, f_rec_fib(8));
+    328 +    fprintf(stderr, "S_FIB r=%d fib=%d\n", r, f_rec_fib(8));
+    329      r = f_add(r, f_rec_power(2, 8));
+    330 +    fprintf(stderr, "S_POWER r=%d power=%d\n", r, f_rec_power(2, 8));
+    331      r = f_add(r, f_ackermann(2, 3));
+    332 +    fprintf(stderr, "S_ACK r=%d ack=%d\n", r, f_ackermann(2, 3));
+    333      r = f_add(r, f_multi_switch(42));
+        ⋮
+    336      r = f_add(r, f_ternary_chain(3, 1, 2));
+    337 +    fprintf(stderr, "S_FINAL_R r=%d\n", r);
+    338
+        ⋮
+    340
+    332 -    return f_mod(r, 256);
+    341 +    int32_t ret = f_mod(r, 256);
+    342 +    fprintf(stderr, "S_RET ret=%d\n", ret);
+    343 +    return ret;
+    344  }
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Source-side probes are in the temp source. I’m compiling/running both probes side by side now.
+
+• Ran /tmp/unlace-semantic-2-medium/medium_probe
+  └ P_HASH c0=36 c9=4087475774 c8=2868811604 a2=0 c1=0 c2=0
+    P_REDUCE c8=2868811604 a2=357 c2=2868811961 c0=0 c1=0 a1=140728690926544 c7=140728690926544
+    … +5 lines (ctrl + t to view transcript)
+    P_ACK_FINAL v772=9 v690=-1425450511 c8=2868812764
+    P_RET c2=255 c0=18446744073709551601
+
+• Ran /tmp/unlace-semantic-2-medium/medium
+  └ (no output)
+
+• Ran cc -std=c99 -O0 /tmp/medium_src_probe.c -o /tmp/medium_src_probe
+  └ /tmp/medium_src_probe.c: In function ‘main’:
+    /tmp/medium_src_probe.c:318:5: error: implicit declaration of function
+    … +16 lines (ctrl + t to view transcript)
+    /tmp/medium_src_probe.c:318:13: note: each undeclared identifier is reported only once for each
+    function it appears in
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The generated probe shows the divergence before the recursive calls: after hash+reduce+map+chain
+  it is carrying 2868812472, while source should be the same r value at that component boundary. I
+  need the source probe compiled with stdio.h to get exact expected values.
+
+• Edited /tmp/medium_src_probe.c (+1 -0)
+    4  #include <stdint.h>
+    5 +#include <stdio.h>
+    6
+
+• Context compacted
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• I’ll pick up from the failing semantic gate and make the next step empirical: compare the source-
+  side late accumulator values against the generated C, then trace the first divergent register/
+  name back through the pipeline.
+
+• Ran cc -std=c99 -O0 /tmp/medium_src_probe.c -o /tmp/medium_src_probe && /tmp/medium_src_probe
+  └ S_HASH r=-1218649980 hash=-1218664206
+    S_REDUCE r=-1218649623 reduce=357
+    … +6 lines (ctrl + t to view transcript)
+    S_FINAL_R r=-1217944799
+    S_RET ret=-223
+
+• Calling
+  └ codegraph.codegraph_context({"task":"Understand how calling convention inferred parameters feed
+        C printer variable naming and how to separate true live-on-entry function parameters from
+        internal upward-exposed register values used only for de-SSA
+        naming.","maxNodes":12,"includeCode":false})
+
+• Ran git status --short
+  └  M .jfc/audit/runtime.jsonl
+     M .jfc/highlight-heights.json
+    … +14 lines (ctrl + t to view transcript)
+    ?? ideas
+    ?? research/lvar/
+
+• Called
+  └ codegraph.codegraph_context({"task":"Understand how calling convention inferred parameters feed
+        C printer variable naming and how to separate true live-on-entry function parameters from
+        internal upward-exposed register values used only for de-SSA
+        naming.","maxNodes":12,"includeCode":false})
+    Error: tool call error: tool call failed for `codegraph/codegraph_context`
+        Caused by:
+            timed out awaiting tools/call after 120s
+        Stack backtrace:
+           0: <unknown>
+           1: <unknown>
+           2: <unknown>
+           3: <unknown>
+           4: <unknown>
+           5: <unknown>
+           6: <unknown>
+           7: <unknown>
+           8: <unknown>
+           9: <unknown>
+          10: <unknown>
+          11: <unknown>
+          12: <unknown>
+          13: <unknown>
+          14: <unknown>
+          15: <unknown>
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The source probe gives the target: just before f_hash_mix(42), the accumulator should be 14226
+  (14190 + lcm(12,18)=36). Generated C has c0=36 but c9=4087475774, so the first real divergence is
+  the pre-hash accumulator name/value, not the reduce loop.
+
+• Explored
+  └ Search c9 =|P_HASH|label_7|label_9|v433|1218664206 in medium.c
+    Read medium.c
+
+• Called codegraph.codegraph_search({"query":"collect_live_on_entry_reads","limit":10})
+  └ No results found for "collect_live_on_entry_reads"
+
+• Called codegraph.codegraph_search({"query":"inferred_params","limit":20})
+  └ ## Search Results (7 found)
+
+    ### infer_param_nullability (function)
+    crates/unlace-passes/src/nullability.rs:48
+    `(func: &SsaFunction) -> BTreeMap<u32, Nullability>`
+
+    ### run_whole_prog_cc (function)
+    crates/unlace-passes/src/whole_prog_cc.rs:95
+    `(
+        funcs: &mut BTreeMap<u64, SsaFunction>,
+        cap: usize,
+    ) -> WholeProgramCcReport`
+
+    ### matching_param_name (function)
+    crates/unlace-output/src/instruction_annotations.rs:243
+    `(
+        func: &SsaFunction,
+        tainted: &B...
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The suspicious path is now narrow: c9 starts with a pointer-difference residue, later gets
+  overwritten in several branches, and the accumulator update at label_9 uses whatever c9 survived
+  to that point. I’m going to instrument only that region to see which branch leaves c9 poisoned.
+
+• Explored
+  └ Read medium.c
+    Search S_HASH|r = f_add\(r, f_hash_mix|f_nth_prime|f_lcm|f_factorial|f_gcd in medium.c
+    Search fn collect|collect_.*reads|live_on_entry|inferred_params|param in calling_convention.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• I’m adding temporary probes in /tmp only, around the nth-prime/lcm accumulator handoff. This will
+  tell us whether the wrong value enters at the index-search loop, the prime loop, or the lcm step.
+
+• Edited /tmp/unlace-semantic-2-medium/medium.c (+5 -0)
+    335              c9 = LODWORD(c0 + c1 + 0x581LL); c1 = 2LL;
+    336 +            fprintf(stderr, "P_BEFORE_PRIME c0=%llu c1=%lld c8=%llu a2=%llu c9=%llu\n", (u
+         nsigned long long)c0, (long long)c1, (unsigned long long)c8, (unsigned long long)a2, (unsi
+         gned long long)c9);
+    337              c12 = LODWORD(2LL) == 3;
+        ⋮
+    375              c8 = c8 + 1;
+    376 +            fprintf(stderr, "P_PRIME_COUNT c8=%llu a2=%llu c1=%lld c9=%llu\n", (unsigned l
+         ong long)c8, (unsigned long long)a2, (long long)c1, (unsigned long long)c9);
+    377              c12 = c8 == 0xa;
+        ⋮
+    385          label_9:;
+    386 +            fprintf(stderr, "P_AT_LABEL9 before c9=%llu a2=%llu c8=%llu c1=%lld\n", (unsig
+         ned long long)c9, (unsigned long long)a2, (unsigned long long)c8, (long long)c1);
+    387              c12 = c9 + a2 == 0;
+        ⋮
+    389              c11 = !(__builtin_popcount(LOBYTE(c9 + a2)) & 1); c9 = c9 + a2; c1 = 0x12LL;
+    390 +            fprintf(stderr, "P_AFTER_NTH c9=%llu a2=%llu c8=%llu c1=%lld\n", (unsigned lon
+         g long)c9, (unsigned long long)a2, (unsigned long long)c8, (long long)c1);
+    391              c3 = 0xcLL;
+        ⋮
+    404              c0 = LODWORD(0xd8LL) / v433; c2 = LODWORD(0xd8LL) % v433;
+    405 +            fprintf(stderr, "P_AFTER_LCM v433=%d c0=%llu c2=%lld c9=%llu\n", v433, (unsign
+         ed long long)c0, (long long)c2, (unsigned long long)c9);
+    406              c8 = LODWORD(c0 + c9 - 1218664206);
+
+• Ran cc -std=c99 -Wall -Werror -Wno-error=unused-variable -Wno-error=unused-but-set-variable
+  │ -Wno-error=uninitialized -Wno-error=maybe-uninitialized /tmp/unlace-semantic-2-medium/
+  │ medium.c /tmp/unlace-semantic-2-medium/medium_helpers.o -o /tmp/unlace-semantic-2-medium/
+  │ … +1 lines
+  └ /tmp/unlace-semantic-2-medium/medium.c: In function ‘main’:
+    /tmp/unlace-semantic-2-medium/medium.c:303:17: warning: unused variable
+    … +36 lines (ctrl + t to view transcript)
+    P_ACK_FINAL v772=9 v690=-964860239 c8=3329403036
+    P_RET c2=255 c0=18446744073709551537
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The poison is earlier than nth-prime: the generated prime loop itself returns 29 correctly and
+  lcm returns 36 correctly, but c9 before adding nth-prime is already a stack-derived value. The
+  culprit expression is c9 = LODWORD(c0 + c1 + 0x581), where c1 is supposed to be an integer
+  accumulator but is still a pointer from a prior buffer loop.
+
+• Explored
+  └ Read medium.c, medium_src_probe.c
+    Search c1 = c1|c1 = .*buf|c1 = \*|c1 = LODWORD|c9 = LODWORD\(c0 \+ c1 in medium.c
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The source structure lines up with the expression: after dot_product, the generated code folds
+  linear_search + power + sum_of_squares into c0 + c1 + 0x581. The bad piece is c1: it was
+  overwritten by the array-min pointer walk and never restored to the accumulator before that fold.
+
+• Explored
+  └ Read medium.c
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_PIPELINE=1 UNLACE_CPRINTER_TRACE_FILTER=c1 cargo run -q -p
+  │ unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] pipe emit-load stmt=422 size=4 form=raw-deref addr="c1"
+    [unlace-output] pipe emit-load stmt=441 size=4 form=raw-deref addr="c1 + 4LL"
+    … +837 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• This is more specific than the earlier “pointer/scalar conflation” label: the dot-product
+  reduction lands in v2 (ecx), but the next accumulator expression reads c1, whose current runtime
+  value is the array-min cursor pointer. So the missing piece is either an assignment from the
+  extracted SIMD result into the rcx name, or a live-range split that keeps the dot-product result
+  and cursor separate.
+
+• Explored
+  └ Search pipe|trace|prune-decision|emit-.*stmt|post in c_printer.rs
+
+• Calling codegraph.codegraph_search({"query":"register_coalesce","limit":20})
+
+• Ran env RUSTC_WRAPPER= cargo run -q -p unlace-cli -- ir-dump --function main fixtures/medium.elf
+  │ | rg -n "v2:|v2#|c17|MULTIEQUAL|LOAD|COPY|SUBPIECE|INT_ADD"
+  └ 4:  v32:i64 = COPY v65537:i64
+    6:  v16:i64 = COPY c0xa:i64
+    … +1937 lines (ctrl + t to view transcript)
+    2635:  v260#106:i8 = COPY v66422#1:i8
+    2638:  v66423#1:i8 = SUBPIECE v66420#1:i32, c0:i8
+
+• Called codegraph.codegraph_search({"query":"register_coalesce","limit":20})
+  └ ## Search Results (3 found)
+
+    ### register_coalesce (import)
+    crates/unlace-passes/src/lib.rs:326
+    `pub use register_coalesce::RegisterCoalescePass;`
+
+    ### register_coalesce.rs (file)
+    crates/unlace-passes/src/register_coalesce.rs:1
+
+    ### is_coalesced_register_cluster (function)
+    crates/unlace-passes/src/variable_merge.rs:636
+    `(members: &[SsaVarnode]) -> bool`
+
+
+• Called codegraph.codegraph_search({"query":"lvar_collect","limit":20})
+  └ ## Search Results (5 found)
+
+    ### lvar_collect (import)
+    crates/unlace-passes/src/lib.rs:286
+    `pub use lvar_collect::LvarCollectPass;`
+
+    ### lvar_collect.rs (file)
+    crates/unlace-passes/src/lvar_collect.rs:1
+
+    ### lvar_collect_smoke.rs (file)
+    crates/unlace-cli/tests/lvar_collect_smoke.rs:1
+
+    ### dump_lvar_suppressions (function)
+    crates/unlace-passes/src/lvar_collect.rs:491
+    `(func: &SsaFunction) -> String`
+
+    ### crate (import)
+    crates/unlace-passes/src/var_naming.rs:870
+    `u...
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The IR confirms this is not merely textual cleanup: there is a real SSA value for the SIMD
+  reduction, and the generated C introduces it as a temp, but the accumulator expression is reading
+  a different rcx live range. Next I’m going to look at the naming/lvar path that decides when a
+  register SSA value becomes a cN versus a temporary.
+
+• Explored
+  └ Read c_printer.rs
+
+• Ran env RUSTC_WRAPPER= cargo run -q -p unlace-cli -- ir-dump --function main fixtures/medium.elf
+  │ | rg -n -C 8 "v1024#8|v65748|v65751|v8#6|v8#7|v8#8|v8#9|v16#12|v16#13|v65736|v56#3"
+  └ 318-  v256#18:i8 = COPY c0:i8
+    319-  v261#18:i8 = COPY c0:i8
+    … +212 lines (ctrl + t to view transcript)
+    1892-  v66121:i8 = MULTIEQUAL v66121:i8(BB_37), v66121#2:i8(BB_42)
+    1893-  v66122:i32 = MULTIEQUAL v66122:i32(BB_37), v66122#2:i32(BB_42)
+
+• Explored
+  └ Read lvar_collect.rs
+
+• Ran env RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/
+  │ medium.elf | nl -ba | sed -n '250,330p'
+  └    250                }
+       251                v30 = *(_DWORD *)(c2); c12 = v30 == 0xf;
+    … +77 lines (ctrl + t to view transcript)
+       329                while (1) {
+       330                    _DWORD v508 = *(_DWORD *)(c7); // temp
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• There’s a concrete bad SSA handoff now: IR stmt 475 defines the low 32-bit dot-product result,
+  stmt 476 adds that result to the accumulator, but later C uses the cursor name. I’m using the
+  printer’s name trace around those exact statements to see whether the wrong SSA value is resolved
+  or the right one is assigned the wrong lvar name.
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='v16' cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] name source=merged-default name=v160 sv=SsaVarnode { base: Varnode { space:
+    Unique, offset: 195, size: 1 }, version: 1 } base=Varnode { space: Unique, offset: 195, size:
+    … +793 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='stmt=476' cargo
+  │ run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] collect-input-annotated stmt=476 addr=0x1213 op=BoolNegate raw_idx=0
+    raw=Varnode { space: Unique, offset: 385, size: 1 } sv=SsaVarnode { base: Varnode { space:
+    … +463 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='stmt=721' cargo
+  │ run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] collect-input-annotated stmt=721 addr=0x12fa op=IntZext raw_idx=0 raw=Varnode
+    { space: Unique, offset: 544, size: 4 } sv=SsaVarnode { base: Varnode { space: Unique, offset:
+    … +474 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='stmt=475' cargo
+  │ run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] collect-input-annotated stmt=475 addr=0x1213 op=IntAnd raw_idx=0 raw=Varnode
+    { space: Unique, offset: 384, size: 1 } sv=SsaVarnode { base: Varnode { space: Unique, offset:
+    … +475 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='0x12fa' cargo
+  │ run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] collect-input-annotated stmt=708 addr=0x12fa op=Copy raw_idx=0 raw=Varnode
+    { space: Unique, offset: 544, size: 4 } sv=SsaVarnode { base: Varnode { space: Register,
+    … +494 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_LVAR_TRACE=1 cargo run -q -p unlace-cli -- decompile --emit c
+  │ --function main fixtures/medium.elf
+  └ [unlace lvar] start func=main existing_lvars=0 merged_names=4168 stack_vars=7 params=2
+    return_type=unknown
+    … +5339 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='v65748' cargo
+  │ run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ typedef unsigned char _BYTE;
+    typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef
+    … +450 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='offset: 544'
+  │ cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] collect-input-annotated stmt=326 addr=0x11c3 op=Copy raw_idx=0 raw=Varnode
+    { space: Unique, offset: 544, size: 4 } sv=SsaVarnode { base: Varnode { space: Register,
+    … +744 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Explored
+  └ Search fn collect_statement|stmt_outputs|stmt_inputs|ssa_statement_slots|var_map|
+           input_or_latest_sv_for_operand|latest-output in c_printer.rs
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='v2' cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] name source=merged-default name=v23 sv=SsaVarnode { base: Varnode { space:
+    Unique, offset: 1, size: 8 }, version: 0 } base=Varnode { space: Unique, offset: 1, size: 8 }
+    … +3549 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+• Ran env RUSTC_WRAPPER= UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='c17' cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf
+  └ [unlace-output] name source=merged-default name=c17 sv=SsaVarnode { base: Varnode { space:
+    Register, offset: 1152, size: 16 }, version: 0 } base=Varnode { space: Register, offset: 1152,
+    … +550 lines (ctrl + t to view transcript)
+    label_23:;
+    }
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The trace around c17 shows the vector reduction itself is named consistently. The bad part is
+  below it: the low-lane extraction becomes a temp declaration, but later SSA input resolution
+  still picks the latest rcx base name for the accumulator update. I’m going to fix this at the
+  SSA-slot/lvar handoff rather than patching emitted text.
+
+• Explored
+  └ Read c_printer.rs, pipeline.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The printer is already honoring annotated SSA slots when it has them. The remaining failure is
+  that a raw operand in the HIR expression no longer identifies the extracted SSA value; it falls
+  back to “latest value for this base register,” which is stale after the cursor loop. I need to
+  see whether the annotations are missing that raw slot, or whether the HIR has been rewritten to a
+  raw register where the slot cannot match.
+
+• Explored
+  └ Search SsaStatementSlots|ssa_statement_slots|statement_slots|var_map|slot in unlace-cli
+
+• Called codegraph.codegraph_search({"query":"SsaStatementSlots","limit":20})
+  └ ## Search Results (5 found)
+
+    ### SsaStatementSlots (struct)
+    crates/unlace-output/src/c_printer.rs:392
+
+    ### collect_ssa_statement_slots (function)
+    crates/unlace-cli/src/pipeline.rs:3704
+    `(
+        ssa: &SsaFunction,
+    ) -> BTreeMap<(u64, IrOp), Vec<unlace_output::SsaStatementSlots>>`
+
+    ### take_annotated_slots_for_insn (function)
+    crates/unlace-output/src/c_printer.rs:3602
+    `(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<SsaStatementSlots>`
+
+    ### statement_slots_match_insn (...
+
+• Called codegraph.codegraph_search({"query":"ssa_statement_slots","limit":20})
+  └ ## Search Results (1 found)
+
+    ### collect_ssa_statement_slots (function)
+    crates/unlace-cli/src/pipeline.rs:3704
+    `(
+        ssa: &SsaFunction,
+    ) -> BTreeMap<(u64, IrOp), Vec<unlace_output::SsaStatementSlots>>`
+
+
+• Called codegraph.codegraph_search({"query":"var_map","limit":20})
+  └ ## Search Results (20 found)
+
+    ### var_map (struct)
+    research/decompiled-references/gcc/gcc/gcc/tree-ssa-live.h:45
+
+    ### var_map_base_fini (function)
+    research/decompiled-references/gcc/gcc/gcc/tree-ssa-live.cc:67
+
+    ### verify_var_map (function)
+    crates/unlace-ir/src/verify.rs:183
+    `(func: &SsaFunction) -> Result<(), VerifyError>`
+
+    ### rejects_stale_var_map_instruction (function)
+    crates/unlace-ir/src/verify.rs:255
+    `()`
+
+    ### delete_var_map (function)
+    research/decompiled-...
+
+• Context compacted
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• I’ll pick up at the current semantic failure: the medium/stripped mismatch now points at the SSA-
+  slot handoff around the dot-product accumulator, not the earlier pointer/scalar phi theory. I’m
+  going to inspect the slot-collection path first, then trace the exact generated statement that
+  reads stale c1.
+
+• Called
+  └ codegraph.codegraph_context({"task":"Understand how SSA statement slots are collected and
+        passed into the C printer, especially collect_ssa_statement_slots, statement slot matching,
+        annotated input slots, and how C printer falls back to latest base-register values when
+        slots are missing.","maxNodes":20,"includeCode":true})
+    Error: tool call error: tool call failed for `codegraph/codegraph_context`
+        Caused by:
+            timed out awaiting tools/call after 120s
+        Stack backtrace:
+           0: <unknown>
+           1: <unknown>
+           2: <unknown>
+           3: <unknown>
+           4: <unknown>
+           5: <unknown>
+           6: <unknown>
+           7: <unknown>
+           8: <unknown>
+           9: <unknown>
+          10: <unknown>
+          11: <unknown>
+          12: <unknown>
+          13: <unknown>
+          14: <unknown>
+          15: <unknown>
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• CodeGraph timed out on the broad context request, so I’ll narrow this down to symbol/file-level
+  reads instead of burning more time on a large graph query. The next step is still the same:
+  inspect the slot collector and the printer lookup path side by side.
+
+• Explored
+  └ Search collect_ssa_statement_slots|statement_slots_match_insn|take_annotated_slots_for_insn|
+           input_or_latest_sv_for_operand|ssa_statement_slots|stmt_input_slots|stmt_inputs
+           in unlace-
+           cli
+
+• Ran git status --short
+  └  M .jfc/audit/runtime.jsonl
+     M .jfc/highlight-heights.json
+    … +14 lines (ctrl + t to view transcript)
+    ?? ideas
+    ?? research/lvar/
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The dirty set matches the prior state, so I’ll leave unrelated files alone. I found the key
+  functions; now I’m reading the collector and the printer matcher/fallbacks around the failing
+  statement path.
+
+• Explored
+  └ Read pipeline.rs, c_printer.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The collector keys annotations by (address, op) and then consumes candidates in order, with a
+  fallback match that ignores inputs. That is a plausible failure mode when several transformed
+  statements share the same address/op, so I’m going to trace the 0x126d/0x127x cluster and see
+  exactly which slots the bad accumulator statement received.
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='0x126' RUSTC_WRAPPER= cargo run -q
+  │ -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_trace_0x126.c
+  └ [unlace-output] collect-input-annotated stmt=525 addr=0x1260 op=Copy raw_idx=0 raw=Varnode
+    { space: Register, offset: 1152, size: 16 } sv=SsaVarnode { base: Varnode { space: Register,
+    … +24 lines (ctrl + t to view transcript)
+    { space: Register, offset: 8, size: 4 }, version: 0 } lhs=v2 inputs=[0:SsaVarnode { base:
+    Varnode { space: Unique, offset: 414, size: 4 }, version: 0 }:Some("v51")]
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='0x127' RUSTC_WRAPPER= cargo run -q
+  │ -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_trace_0x127.c
+  └ [unlace-output] collect-input-annotated stmt=530 addr=0x1271 op=IntAdd raw_idx=0 raw=Varnode
+    { space: Unique, offset: 776, size: 4 } sv=SsaVarnode { base: Varnode { space: Register,
+    … +14 lines (ctrl + t to view transcript)
+    [unlace-output] collect-output stmt=532 addr=0x1273 op=Copy output=SsaVarnode { base: Varnode
+    { space: Register, offset: 16, size: 8 }, version: 21 } name=Some("c2")
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The trace found the bad site: statement 530 at 0x1271 is an IntAdd whose raw operands are two
+  Unique temporaries, but its annotation maps them to 64-bit register SSA values rcx#12 and rdx#20.
+  That explains why the printer has no chance to reference the extracted v2: the slot annotation
+  for that transformed add is already pointing at the wrong width/base.
+
+• Explored
+  └ Read unlace_medium_trace_0x127.c
+    Search ir-dump|dump-ir|--emit ir|ssa in unlace-cli
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The generated C confirms the bad expression survived into output as c9 = LODWORD(c0 + c1 +
+  0x581LL). I’m going to compare the final SSA dump against the printer trace around 0x126d-0x1273;
+  the goal is to see whether the final SSA itself says “use rcx#12” or whether annotation matching
+  drifted during structuring/printing.
+
+• Ran RUSTC_WRAPPER= cargo run -q -p unlace-cli -- ir-dump --function main fixtures/medium.elf >/
+  │ tmp/unlace_medium_ir_dump.txt
+  └ (no output)
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The IR dump is saved locally now. I’m querying the exact unique temporaries from the printer
+  trace (Unique 776, 865, 417, 414) so we can tie the printed bad expression back to the final SSA
+  def-use chain instead of guessing from C text.
+
+• Explored
+  └ Search v65748|v65751|v16#12|v16#13|v8#12|v8#13|v65829|offset: 776|offset: 865|offset: 417|
+  offset:
+           414|0x126d|0x1271|0x1273 in unlace_medium_ir_dump.txt
+    Search BB_|v16#12|v16#13|v8#12|v8#13|v65748|v65751|v65829 in unlace_medium_ir_dump.txt
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The final SSA dump shows the dot-product add is correct at the IR level: v65751 = INT_ADD
+  v16#12:i32, v8#6:i32, then v16#13 = INT_ZEXT v65751. The printer trace instead assigned statement
+  530 to v8#12/v16#20, which are from a different later block, so this is annotation candidate
+  drift, not a bad SSA program.
+
+• Explored
+  └ Read unlace_medium_ir_dump.txt
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='stmt=530' RUSTC_WRAPPER= cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_stmt530.c
+  └ [unlace-output] collect-input-annotated stmt=530 addr=0x1271 op=IntAdd raw_idx=0 raw=Varnode
+    { space: Unique, offset: 776, size: 4 } sv=SsaVarnode { base: Varnode { space: Register,
+    … +27 lines (ctrl + t to view transcript)
+    4 } sv=SsaVarnode { base: Varnode { space: Unique, offset: 417, size: 4 }, version: 0 }
+    def_stmt=530 op=IntAdd decision=inline rendered=c1 + c2 + v31
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The mismatch is now narrower: the first-pass strict match fails because HIR uses Unique
+  expression temps while the SSA slots carry register-base inputs; the second-pass relaxed match
+  then grabs a later same-address/same-op candidate. I need to inspect the definitions of those
+  Unique inputs, because the printer may already have the correct SSA values on the raw def chain
+  and should prefer that over a relaxed, mismatched candidate.
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='offset: 865' RUSTC_WRAPPER= cargo
+  │ run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_offset_865.c
+  └ [unlace-output] collect-input-annotated stmt=49 addr=0x10c6 op=Copy raw_idx=0 raw=Varnode
+    { space: Unique, offset: 865, size: 4 } sv=SsaVarnode { base: Varnode { space: Register,
+    … +1566 lines (ctrl + t to view transcript)
+    Unique, offset: 865, size: 4 } sv=Some(SsaVarnode { base: Varnode { space: Register, offset:
+    16, size: 8 }, version: 46 }) known_name=Some("c2")
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='offset: 776' RUSTC_WRAPPER= cargo
+  │ run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_offset_776.c
+  └ [unlace-output] collect-input-annotated stmt=39 addr=0x10c2 op=Copy raw_idx=0 raw=Varnode
+    { space: Unique, offset: 776, size: 4 } sv=SsaVarnode { base: Varnode { space: Register,
+    … +697 lines (ctrl + t to view transcript)
+    { space: Unique, offset: 776, size: 4 }, version: 3 } lhs=v658 inputs=[0:SsaVarnode { base:
+    Varnode { space: Register, offset: 16, size: 8 }, version: 49 }:Some("c2")]
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='offset: 417' RUSTC_WRAPPER= cargo
+  │ run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_offset_417.c
+  └ [unlace-output] name source=merged-default name=v30 sv=SsaVarnode { base: Varnode { space:
+    Unique, offset: 417, size: 4 }, version: 0 } base=Varnode { space: Unique, offset: 417, size:
+    … +22 lines (ctrl + t to view transcript)
+    4 } sv=SsaVarnode { base: Varnode { space: Unique, offset: 417, size: 4 }, version: 0 }
+    def_stmt=530 op=IntAdd decision=inline rendered=c1 + c2 + v31
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The Unique offsets are reused all over the function, so falling back to raw temp versions is not
+  reliable. The cleaner fix is to make the annotation object remember the original raw input/output
+  varnodes too; then the printer can match candidates by exact raw p-code shape before it falls
+  back to loose address/op ordering.
+
+• Explored
+  └ Read c_printer.rs
+    Search SsaStatementSlots in unlace-output
+    Read c_printer.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The trace also shows stmt=530 is inlining one raw input through stmt=489, so the visible bad line
+  is a composed expression, not a single isolated wrong name. I’m going to pull the nearby
+  collected/emitted statements to see the local def chain the printer is using.
+
+• Ran UNLACE_CPRINTER_PIPELINE=1 RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c
+  │ --function main fixtures/medium.elf 2>&1 >/tmp/unlace_medium_pipeline_full.c | rg
+  │ "stmt=(48[0-9]|49[0-9]|50[0-9]|51[0-9]|52[0-9]|53[0-9])"
+  └ [unlace-output] pipe emit-load stmt=492 size=16 form=raw-deref addr="c0"
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The pipeline trace is too sparse for this section, so I’m switching back to name/operand tracing
+  for the specific def statements feeding stmt=530.
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='stmt=529' RUSTC_WRAPPER= cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_stmt529.c
+  └ [unlace-output] collect-input-annotated stmt=529 addr=0x126d op=Copy raw_idx=0 raw=Varnode
+    { space: Unique, offset: 414, size: 4 } sv=SsaVarnode { base: Varnode { space: Unique, offset:
+    … +16 lines (ctrl + t to view transcript)
+    4 } sv=SsaVarnode { base: Varnode { space: Unique, offset: 414, size: 4 }, version: 0 }
+    def_stmt=528 op=Subpiece decision=inline rendered=LODWORD(c17)
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='stmt=489' RUSTC_WRAPPER= cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_stmt489.c
+  └ [unlace-output] collect-input-annotated stmt=489 addr=0x1218 op=IntZext raw_idx=0 raw=Varnode
+    { space: Unique, offset: 389, size: 4 } sv=SsaVarnode { base: Varnode { space: Unique, offset:
+    … +19 lines (ctrl + t to view transcript)
+    4 } sv=SsaVarnode { base: Varnode { space: Register, offset: 16, size: 8 }, version: 20 }
+    def_stmt=489 op=IntZext decision=inline rendered=c2 + v31
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='stmt=488' RUSTC_WRAPPER= cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_stmt488.c
+  └ [unlace-output] collect-input-annotated stmt=488 addr=0x1218 op=BoolNegate raw_idx=0
+    raw=Varnode { space: Unique, offset: 394, size: 1 } sv=SsaVarnode { base: Varnode { space:
+    … +13 lines (ctrl + t to view transcript)
+    1 } sv=SsaVarnode { base: Varnode { space: Unique, offset: 394, size: 1 }, version: 0 }
+    def_stmt=487 op=IntAnd decision=inline rendered=(__builtin_popcount(LOBYTE(c2 + v31)) & 1)
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The local expression chain is partly correct: stmt=489 is the prior accumulator (c2 + v31). The
+  single wrong piece is stmt=530 raw input 0: it should be the dot-product low lane from stmt=529,
+  but the slot annotation resolves it to an unrelated c1 live range. I’m checking whether that
+  wrong value is already in the final SSA slot map or introduced by the printer’s candidate
+  selection.
+
+• Explored
+  └ Read unlace_medium_ir_dump.txt
+    Search v8#6|v16#12|v16#13|v8#12|v16#20|v8:i32 = COPY|v16:i32 = COPY in
+    unlace_medium_ir_dump.txt
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• This changes the diagnosis: the final SSA dump is not correct after all. At 0x126d it defines the
+  dot-product low lane as a 32-bit register value, but the following add at 0x1271 reads the older
+  64-bit register SSA value instead of that new 32-bit def. That is an overlapped-register SSA/
+  update bug: a 32-bit write is not being made visible to the next 32-bit/64-bit alias read.
+
+• Called
+  └ codegraph.codegraph_context({"task":"Find SSA construction and var_map logic for register
+        varnodes and overlapped/subregister alias handling, especially how 32-bit register writes
+        update 64-bit register reads on x86 and where VarnodeSlot input/output mappings are
+        built.","maxNodes":20,"includeCode":true})
+    Error: tool call error: tool call failed for `codegraph/codegraph_context`
+        Caused by:
+            timed out awaiting tools/call after 120s
+        Stack backtrace:
+           0: <unknown>
+           1: <unknown>
+           2: <unknown>
+           3: <unknown>
+           4: <unknown>
+           5: <unknown>
+           6: <unknown>
+           7: <unknown>
+           8: <unknown>
+           9: <unknown>
+          10: <unknown>
+          11: <unknown>
+          12: <unknown>
+          13: <unknown>
+          14: <unknown>
+          15: <unknown>
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• CodeGraph is timing out again on the broad structural query, so I’ll use focused text search in
+  the SSA crate. I’m looking specifically for var_map writes, register canonicalization, and any
+  existing partial-register helper before editing.
+
+• Explored
+  └ Search var_map|VarnodeSlot|subregister|overlap|alias|canonical|Register|partial|zero[-_ ]?
+  extend|
+           x86 in unlace-ir
+    Search build_ssa|struct SsaFunction|current_version|next_version|version in ssa.rs
+    Search overlap|partial|subregister|canon|alias in unlace-ir
+    Read ssa.rs, reg_alias.rs, varnode.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The SSA builder has a reg_alias module with exactly the relation we need, and its header
+  explicitly says it is not wired into build_ssa yet. The bad value likely comes from copy
+  propagation across lifter temps before/after that unmodeled partial-register write, so I’m
+  checking the copy-prop/GVN var-map rewrites before touching the SSA core.
+
+• Explored
+  └ Search var_map\.(insert|get|remove)|VarnodeSlot::Input|canonical_sv|source\.ssa|aliases\( in
+           copy_prop.rs
+    Read global_copy_prop.rs, copy_prop.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The global pass already kills active copy equivalences on overlapping register writes; the local
+  pass does not. This failure is within a straight-line instruction cluster, so I’m going to patch
+  local copy propagation to use the same reg_alias::aliases invalidation instead of exact-base
+  invalidation.
+
+• Explored
+  └ Read copy_prop.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The fix is small and principled: local copy-prop should use the same alias invalidation as global
+  copy-prop. I’ll add a regression test that models “64-bit register copy-propagated through a
+  temp, then a 32-bit subregister write, then temp use”; after the patch, the stale source must not
+  propagate past the subregister write.
+
+• Explored
+  └ Read copy_prop.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• I’m editing copy_prop.rs now: import the existing alias predicate, switch the local kill to
+  alias-aware invalidation, and add the partial-register regression.
+
+• Edited crates/unlace-passes/src/copy_prop.rs (+45 -1)
+     14
+     15 +use unlace_ir::reg_alias::aliases;
+     16  use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+        ⋮
+    236      active.retain(|key, source| {
+    236 -        key.base != def && source.raw != def && source.ssa.is_none_or(|ssa| ssa.base != de
+         f)
+    237 +        !aliases(key.base, def)
+    238 +            && !aliases(source.raw, def)
+    239 +            && source.ssa.is_none_or(|ssa| !aliases(ssa.base, def))
+    240      });
+        ⋮
+    563      #[test]
+    564 +    fn test_copy_prop_kills_stale_source_on_partial_register_write() {
+    565 +        let rcx = Varnode::reg(8, 8);
+    566 +        let ecx = Varnode::reg(8, 4);
+    567 +        let tmp = Varnode::unique(0, 4);
+    568 +        let low_lane = Varnode::unique(4, 4);
+    569 +        let sum = Varnode::unique(8, 4);
+    570 +
+    571 +        let mut ssa = make_single_block_ssa(vec![
+    572 +            IrInsn::with_output(IrOp::Copy, tmp, smallvec![rcx], 0x1000),
+    573 +            IrInsn::with_output(IrOp::Copy, ecx, smallvec![low_lane], 0x1004),
+    574 +            IrInsn::with_output(
+    575 +                IrOp::IntAdd,
+    576 +                sum,
+    577 +                smallvec![tmp, Varnode::constant(1, 4)],
+    578 +                0x1008,
+    579 +            ),
+    580 +        ]);
+    581 +        ssa.arch = unlace_ir::ArchId::X86_64;
+    582 +
+    583 +        let changed = CopyPropagationPass
+    584 +            .run(&mut ssa)
+    585 +            .expect("pass should succeed");
+    586 +        assert!(
+    587 +            !changed,
+    588 +            "a 32-bit write to ECX must kill stale RCX-derived temp equivalences"
+    589 +        );
+    590 +
+    591 +        let add_insn = &ssa
+    592 +            .function
+    593 +            .blocks
+    594 +            .values()
+    595 +            .next()
+    596 +            .expect("has block")
+    597 +            .insns[2];
+    598 +        assert_eq!(
+    599 +            add_insn.inputs[0], tmp,
+    600 +            "stale RCX source must not propagate across an ECX write"
+    601 +        );
+    602 +    }
+    603 +
+    604 +    #[test]
+    605      fn test_copy_prop_no_change() {
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The patch is in. I’m running the new targeted test first, then I’ll regenerate the medium
+  decompile trace to confirm stmt=530 no longer reads stale c1.
+
+• Ran RUSTC_WRAPPER= cargo test -p unlace-passes
+  │ copy_prop_kills_stale_source_on_partial_register_write
+  └    Compiling unlace-passes v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-passes)
+    Finishedding [=========================> ] 81/82: unlace_passes(test)         
+    … +7 lines (ctrl + t to view transcript)
+    0.00s
+
+
+• Ran RUSTC_WRAPPER= cargo check -p unlace-passes
+  └     Blocking waiting for file lock on build directory
+        Checking unlace-passes v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-passes)
+    Finishedding [=========================> ] 66/67: unlace-passes               
+    `dev` profile [unoptimized + debuginfo] target(s) in 25.64s
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The targeted regression passes and the crate still checks. Now I’m checking the real medium site
+  to see whether the generated accumulator line has switched from c1 + ... to the dot-product lane.
+
+• Ran RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/
+  │ medium.elf | nl -ba | sed -n '246,268p'
+  └    246                c12 = LODWORD(c0) + 1 == 0x10;
+       247                c13 = LOBYTE(LODWORD(c0) + 1 < 0x10); c10 = (_DWORD)LODWORD(c0) + 1 <
+    … +21 lines (ctrl + t to view transcript)
+       267                c11 = !(__builtin_popcount(LOBYTE(LODWORD(2LL) - 3)) & 1);
+       268                if (!(LODWORD(2LL) != 3 && 3 <= LODWORD(2LL))) {
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='stmt=530' RUSTC_WRAPPER= cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_after_copyprop.c
+  └ [unlace-output] collect-output stmt=530 addr=0x1255 op=Copy output=SsaVarnode { base: Varnode
+    { space: Register, offset: 0, size: 8 }, version: 30 } name=Some("c0")
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The local copy-prop patch did not move the real output yet; the bad line is still present, and
+  statement numbering shifted. I’m going one level earlier now: find the new 0x1271 trace and
+  confirm whether local copy-prop still rewrites that temp or whether a later pass reintroduces it.
+
+• Ran RUSTC_WRAPPER= cargo run -q -p unlace-cli -- ir-dump --function main fixtures/medium.elf >/
+  │ tmp/unlace_medium_ir_after_copyprop.txt
+  └ (no output)
+
+• Ran UNLACE_CPRINTER_NAME_TRACE=1 UNLACE_CPRINTER_TRACE_FILTER='0x1271' RUSTC_WRAPPER= cargo run
+  │ -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_medium_after_0x1271.c
+  └ [unlace-output] collect-input-annotated stmt=538 addr=0x1271 op=IntAdd raw_idx=0 raw=Varnode
+    { space: Unique, offset: 776, size: 4 } sv=SsaVarnode { base: Varnode { space: Register,
+    … +9 lines (ctrl + t to view transcript)
+    [unlace-output] collect-output stmt=539 addr=0x1271 op=IntZext output=SsaVarnode { base:
+    Varnode { space: Register, offset: 8, size: 8 }, version: 13 } name=Some("c1")
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The real site still has the stale rcx#12 slot after the patch, so the stale mapping is not only
+  local copy-prop. I’m going to use the maturity dump snapshots around the pipeline to identify
+  which stage first changes 0x1271 from the raw temp/dot-lane relationship into the stale register
+  mapping.
+
+• Explored
+  └ Search MATURITY_DUMP|maturity_snapshot|PIPELINE|TRACE|pass trace|instrumented in pipeline.rs
+    Search 0x1271|v65751|v8#12|v16#20|v16#12|v8#6|v16:i32 = COPY in
+    unlace_medium_ir_after_copyprop.txt
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The final dump confirms the bad mapping exists before final printing: line v65751 = INT_ADD
+  v16#12, v8#6 still ignores the immediately preceding v16:i32 = COPY .... I’m dumping maturity
+  snapshots now so we can see whether this is present immediately after SSA construction or
+  introduced by a later optimization pass.
+
+• Ran d=/tmp/unlace-maturity-$(date +%s); mkdir -p "$d"; UNLACE_MATURITY_DUMP="$d" RUSTC_WRAPPER=
+  │ cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf >/tmp/
+  │ unlace_maturity_run.c; printf '%s\n' "$d"; ls "$d" | sort
+  └ /tmp/unlace-maturity-1780533808
+    main-M_CALLS-iter0.txt
+    … +15 lines (ctrl + t to view transcript)
+    main-M_PREOPTIMIZED-iter2.txt
+    main-M_ZERO-iter0.txt
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The snapshots are in /tmp/unlace-maturity-1780533808. I’m scanning the same dot-lane/add pattern
+  across stages to identify the first bad snapshot.
+
+• Ran for f in /tmp/unlace-maturity-1780533808/main-*.txt; do printf '\n=== %s ===\n' "$(basename
+  │ "$f")"; rg -n "v65748|v16:i32 = COPY|v65751|0x1271|v8#6|v16#12" "$f" | head -20; done
+  └
+    === main-M_CALLS-iter0.txt ===
+    … +184 lines (ctrl + t to view transcript)
+    608:  v65754:i8 = SUBPIECE v65751:i32, c0:i8
+    612:  v16#13:i64 = INT_ZEXT v65751:i32
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The first bad snapshot is M_ZERO, so this predates copy-prop and all optimization stages. The
+  lifter/SSA form has v16:i32 = COPY dot_lane followed by a read of SUBPIECE(v16#12:i64), where
+  v16#12 is the previous 64-bit value. The correct fix has to make x86 32-bit GPR writes define the
+  64-bit alias, either at lift canonicalization or in SSA alias handling.
+
+• Explored
+  └ Search IntZext|ZEXT|zero|32-bit|32 bit|subregister|write_kills|reg_alias|SixtyFourBit|demote|
+           promote|partial in unlace-ir
+    Search v16:i32|Register.*size: 4|size == 4|output.*size in unlace-lift*
+    List crates
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• There is already x86 lifter support and tests for 32-bit GPR writes zero-extending into the 64-
+  bit parent, so this is likely an uncovered instruction class rather than a brand-new SSA design.
+  I’m reading the x86 lifter helpers around 32-bit write canonicalization and the SIMD scalar-
+  extract path that emits the movd/low-lane copy.
+
+• Explored
+  └ Read lib.rs
+    Search zero.*extend|IntZext|canonical.*64|gpr|GPR|write.*64|full.*parent|movd|pextr|extract|
+           Callother|InstructionInfo|used_registers|op_register|RegisterFile|reg\( in unlace-lift-
+           x86
+    Search struct X86|impl Lifter|fn lift|lift_.*insn|Instruction in unlace-lift-x86
+    Read lift.rs, sse.rs, data_move.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The SIMD lane-extract path is the uncovered case. write_register() already handles x86 GPR
+  partial writes, but lift_sse_extract() emits a Callother directly to the register destination and
+  bypasses that helper. I’m going to stage the Callother into a temp when the destination is a
+  partial GPR, then call write_operand_insn() so it emits the canonical zero-extension/preserve-
+  high-bits sequence.
+
+• Explored
+  └ Read lib.rs
+    Search Movd|Pextrd|Pextrb|Pextrw|Movq|0F 7E|6E in lib.rs
+    Read lib.rs, lift.rs, sse.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The concrete failing instruction is MOVD through lift_vector_generic, not only PEXTR*: the vector
+  move path also emits a direct Copy to ECX and bypasses write_register(). I’m adding a small
+  lifter helper for staged partial-GPR outputs and using it in both vector moves and SSE extract
+  outputs.
+
+• Ran objdump -d -M intel fixtures/medium.elf | sed -n '/0000000000001260/,/0000000000001280/p'
+  └ (no output)
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The address-filtered objdump snippet didn’t print in that form, but the lifter trace already
+  identifies the pattern. I’m patching the helper and tests directly against movd ecx, xmm0/pextrd
+  eax, xmm0, imm.
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The helper patch missed exact context, so I’m reopening the nearby lines and applying it with
+  tighter anchors.
+
+• Explored
+  └ Read lift.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• I’m inserting the helper between the existing vector zero-extension helper and the register write
+  fixup predicate.
+
+• Edited crates/unlace-lift-x86/src/lift.rs (+27 -0)
+    351
+    352 +    pub fn prepare_partial_gpr_output(
+    353 +        &mut self,
+    354 +        insn: &Instruction,
+    355 +        idx: u32,
+    356 +        dst: Varnode,
+    357 +    ) -> (Varnode, Option<Varnode>) {
+    358 +        if insn.op_kind(idx) == OpKind::Register
+    359 +            && self.register_write_needs_fixup(insn.op_register(idx))
+    360 +        {
+    361 +            (Varnode::unique(self.alloc_unique(), dst.size), Some(dst))
+    362 +        } else {
+    363 +            (dst, None)
+    364 +        }
+    365 +    }
+    366 +
+    367      pub fn finish_zero_extending_vector_output(
+        ⋮
+    387
+    388 +    pub fn finish_partial_gpr_output(
+    389 +        &mut self,
+    390 +        insn: &Instruction,
+    391 +        idx: u32,
+    392 +        dst: Option<Varnode>,
+    393 +        value: Varnode,
+    394 +    ) {
+    395 +        if let Some(dst) = dst {
+    396 +            self.write_operand_insn(insn, idx, dst, value);
+    397 +        }
+    398 +    }
+    399 +
+    400      pub fn register_write_needs_fixup(&self, reg: iced_x86::Register) -> bool {
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The helper is in LiftCtx. Now I’m wiring it into the SSE move/extract paths so partial GPR
+  destinations go through write_register() semantics.
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• One hunk matched old assumptions about the exact code shape. I’m reopening the affected SSE
+  sections and applying smaller patches.
+
+• Explored
+  └ Read sse.rs
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The affected code is straightforward: one move branch, one generic Callother branch, and one
+  extract branch. I’m applying those three edits now.
+
+• Edited crates/unlace-lift-x86/src/ops/sse.rs (+4 -0)
+    527          let (copy_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, d
+         st);
+    528 +        let (copy_dst, partial_gpr_dst) = ctx.prepare_partial_gpr_output(insn, 0, copy_dst
+         );
+    529          let src = ctx.resize_value(src, copy_dst.size);
+        ⋮
+    536          ctx.finish_zero_extending_vector_output(zero_ext_reg, copy_dst);
+    537 +        ctx.finish_partial_gpr_output(insn, 0, partial_gpr_dst, copy_dst);
+    538          return;
+        ⋮
+    568      let (call_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
+    569 +    let (call_dst, partial_gpr_dst) = ctx.prepare_partial_gpr_output(insn, 0, call_dst);
+    570      ctx.emit(IrInsn::with_output(
+        ⋮
+    576      ctx.finish_zero_extending_vector_output(zero_ext_reg, call_dst);
+    577 +    ctx.finish_partial_gpr_output(insn, 0, partial_gpr_dst, call_dst);
+    578  }
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The vector move and generic vector Callother paths now stage partial GPR outputs. I’m patching
+  the SSE extract path the same way.
+
+• Edited crates/unlace-lift-x86/src/ops/sse.rs (+3 -1)
+    454      };
+    455 +    let (call_dst, partial_gpr_dst) = ctx.prepare_partial_gpr_output(insn, 0, dst);
+    456      ctx.emit(IrInsn::with_output(
+    457          IrOp::Callother,
+    457 -        dst,
+    458 +        call_dst,
+    459          smallvec![tag_vn, src, imm],
+        ⋮
+    461      ));
+    462 +    ctx.finish_partial_gpr_output(insn, 0, partial_gpr_dst, call_dst);
+    463  }
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The code change alters the expected IR shape for partial-GPR SSE extracts: the Callother now
+  writes a temp, then an IntZext writes the canonical 64-bit register. I’m updating the existing
+  SSE tests and adding a movd ecx, xmm0 regression.
+
+• Edited crates/unlace-lift-x86/src/lib.rs (+35 -2)
+    1215              dst.space,
+    1216 -            unlace_ir::SpaceId::Register,
+    1217 -            "PEXTRB GP dest lives in the register space"
+    1216 +            unlace_ir::SpaceId::Unique,
+    1217 +            "PEXTRB GP dest is staged before the canonical GPR write"
+    1218 +        );
+    1219 +        assert!(
+    1220 +            result.ir_ops.iter().any(|i| {
+    1221 +                i.op == IrOp::IntZext
+    1222 +                    && i.output == Some(Varnode::reg(RAX, 8))
+    1223 +                    && i.inputs.first() == Some(&dst)
+    1224 +            }),
+    1225 +            "PEXTRB into EAX must zero-extend into canonical RAX: {:?}",
+    1226 +            result.ir_ops
+    1227 +        );
+    1228 +    }
+    1229 +
+    1230 +    #[test]
+    1231 +    fn test_movd_xmm_to_ecx_zero_extends_canonical_rcx() {
+    1232 +        // 66 0F 7E C1 = movd ecx, xmm0
+    1233 +        let result = lifter()
+    1234 +            .lift_insn(&[0x66, 0x0F, 0x7E, 0xC1], 0x1000)
+    1235 +            .expect("movd ecx, xmm0 decodes");
+    1236 +        assert!(
+    1237 +            result.ir_ops.iter().any(|i| {
+    1238 +                i.op == IrOp::IntZext
+    1239 +                    && i.output == Some(Varnode::reg(RCX, 8))
+    1240 +                    && i.inputs.first().is_some_and(|input| input.size == 4)
+    1241 +            }),
+    1242 +            "MOVD into ECX must zero-extend into canonical RCX: {:?}",
+    1243 +            result.ir_ops
+    1244 +        );
+    1245 +        assert!(
+    1246 +            !result
+    1247 +                .ir_ops
+    1248 +                .iter()
+    1249 +                .any(|i| i.output == Some(Varnode::reg(RCX, 4))),
+    1250 +            "MOVD into ECX must not leave an independent 32-bit RCX destination"
+    1251          );
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The lifter tests now encode the intended contract. I’m running the targeted x86 lifter tests and
+  the medium trace again to see whether the M_ZERO pattern changes at 0x126d/0x1271.
+
+• Ran RUSTC_WRAPPER= cargo test -p unlace-lift-x86 movd_xmm_to_ecx_zero_extends_canonical_rcx
+  │ pextrb_t185
+  └ error: unexpected argument 'pextrb_t185' found
+
+    Usage: cargo test [OPTIONS] [TESTNAME] [-- [ARGS]...]
+
+    For more information, try '--help'.
+
+• Ran RUSTC_WRAPPER= cargo check -p unlace-lift-x86
+    Checkingding [=======================>   ] 32/36: indexmap                    
+    petgraph v0.8.3
+    … +4 lines (ctrl + t to view transcript)
+    Finishedding [=========================> ] 35/36: unlace-lift-x86             
+    `dev` profile [unoptimized + debuginfo] target(s) in 2.14s
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• cargo test only accepts one name filter, so I’ll run the two targeted lifter tests separately.
+  The crate still type-checks.
+
+• Ran RUSTC_WRAPPER= cargo test -p unlace-lift-x86 movd_xmm_to_ecx_zero_extends_canonical_rcx
+  └     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.95s
+         Running unittests src/lib.rs (target/debug/deps/unlace_lift_x86-68b2b2135df9e506)
+    … +4 lines (ctrl + t to view transcript)
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 0.00s
+
+
+• Ran RUSTC_WRAPPER= cargo test -p unlace-lift-x86 pextrb_t185
+  └     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.89s
+         Running unittests src/lib.rs (target/debug/deps/unlace_lift_x86-68b2b2135df9e506)
+    … +4 lines (ctrl + t to view transcript)
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 0.00s
+
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The new lifter regressions pass. I’m regenerating medium IR and C now; if the lifter fix hits the
+  real case, the MOVD should become IntZext -> RCX, and the accumulator should stop using the stale
+  pointer value.
+
+• Ran RUSTC_WRAPPER= cargo run -q -p unlace-cli -- ir-dump --function main fixtures/medium.elf >/
+  │ tmp/unlace_medium_ir_after_lifter.txt
+  └ (no output)
+
+• Ran RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/
+  │ medium.elf | nl -ba | sed -n '250,270p'
+  └    250                v28 = *(_DWORD *)(c2); c12 = v28 == 0xf;
+       251                c13 = LOBYTE(v28 < 0xf);
+    … +17 lines (ctrl + t to view transcript)
+       269                c0 = a2;
+       270                while (1) {
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The C output is still bad, so either the real instruction is not the path I patched or a later
+  simplification folds it back incorrectly. I’m inspecting the regenerated IR around the dot-
+  product lane and the vector-move instruction shape.
+
+• Explored
+  └ Search v65748|v16:i32 = COPY|INT_ZEXT v65748|v65751|v16#12|v8#6|MOVD|PEXTR|Callother|c0x in
+           unlace_medium_ir_after_lifter.txt
+    Read unlace_medium_ir_after_lifter.txt
+
+• Ran UNLACE_LIFT_TRACE=1 RUSTC_WRAPPER= cargo run -q -p unlace-cli -- ir-dump --function main
+  │ fixtures/medium.elf >/tmp/unlace_medium_lift_trace_ir.txt
+  └ [unlace-lift-x86] 0x1060: decode Endbr64 code=Endbr64 len=4 bytes=[f3, 0f, 1e, fa]
+    [unlace-lift-x86] 0x1060: alloc unique[0]
+    … +1257 lines (ctrl + t to view transcript)
+    guard: None, category: None }
+    [unlace-lift-x86] 0x146d: lift summary ops=1
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The regenerated IR is now correct at the dot-product site: v16#13 = INT_ZEXT(dot_lane) and the
+  add uses v16#13 + v8#6. The C snippet still prints c1, so the remaining issue is either naming/
+  printing or a later runtime value; I’m checking the surrounding generated C and the semantic gate
+  before assuming it is still wrong.
+
+• Ran RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/
+  │ medium.elf | nl -ba | sed -n '226,265p'
+  └    226                    c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf + 64) - v299)) &
+    1);
+    … +39 lines (ctrl + t to view transcript)
+       264                c11 = !(__builtin_popcount(LOBYTE(LODWORD(2LL) - 3)) & 1);
+       265                if (!(LODWORD(2LL) != 3 && 3 <= LODWORD(2LL))) {
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The generated C now has the correct accumulator assignment just above the label: c1 =
+  LODWORD(c17) + c2 + v29, and the later c9 = c0 + c1 + 0x581 is using that updated accumulator.
+  I’m waiting for the semantic gate result now.
+
+• Ran RUSTC_WRAPPER= cargo run -q -p xtask -- semantic-report 2>&1 | rg "semantic-report|
+  │ medium:main|stripped:main|failed"
+  └ semantic-report: source-known executable equivalence
+    [semantic] FAIL medium:main - cc failed (source=/tmp/unlace-semantic-3-medium/medium.c): /tmp/
+    … +7 lines (ctrl + t to view transcript)
+    yet
+    semantic-report: passed=21 xfailed=0 failed=4 unsupported=8
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The behavior mismatch moved to compile failures: medium and stripped no longer fail by output
+  behavior; their regenerated C does not compile. I need the compiler diagnostics from /tmp/unlace-
+  semantic-3-* next.
+
+• Explored
+  └ List unlace-semantic-3-medium
+
+• Ran cc -std=c99 -Wall -Wextra -O0 /tmp/unlace-semantic-3-medium/medium.c -o /tmp/
+  │ unlace-semantic-3-medium/medium.recheck 2>&1 | sed -n '1,80p'
+  └ /tmp/unlace-semantic-3-medium/medium.c: In function ‘main’:
+    /tmp/unlace-semantic-3-medium/medium.c:160:32: warning: comparison of integer expressions of
+    … +81 lines (ctrl + t to view transcript)
+    /tmp/unlace-semantic-3-medium/medium.c:77:29: note: in definition of macro ‘LOBYTE’
+       77 | #define LOBYTE(x)  ((_BYTE)(x))
+
+• Ran cc -std=c99 -Wall -Wextra -O0 /tmp/unlace-semantic-3-stripped/stripped.c -o /tmp/
+  │ unlace-semantic-3-stripped/stripped.recheck 2>&1 | sed -n '1,80p'
+  └ /tmp/unlace-semantic-3-stripped/stripped.c: In function ‘main’:
+    /tmp/unlace-semantic-3-stripped/stripped.c:166:32: warning: comparison of integer expressions
+    … +81 lines (ctrl + t to view transcript)
+    /tmp/unlace-semantic-3-stripped/stripped.c:79:29: note: in definition of macro ‘LOBYTE’
+       79 | #define LOBYTE(x)  ((_BYTE)(x))

@@ -1,0 +1,1661 @@
+crates/unlace-emu/src/lib.rs:11://! for the canonical IR-opcode semantics.
+crates/unlace-lift-arc/src/lib.rs:432:            // (real ISA splits ADD/SUB/ASL here based on bits)
+crates/unlace-lift-arc/src/lib.rs:601:            // Emit as a Copy of zero to a discarded temp (semantically a no-op)
+crates/unlace-cli/benches/decompile_medium.rs:20:    p.push("fixtures/medium.elf");
+crates/unlace-cli/benches/decompile_medium.rs:25:    let data = fs::read(fixture_path()).expect("failed to read medium.elf");
+crates/unlace-cli/benches/decompile_medium.rs:26:    assert!(ElfLoader::can_load(&data), "medium.elf is not a valid ELF");
+crates/unlace-cli/benches/decompile_medium.rs:27:    ElfLoader::load(&data).expect("failed to parse medium.elf")
+crates/unlace-cli/benches/decompile_medium.rs:342:    let data = fs::read(fixture_path()).expect("failed to read medium.elf");
+crates/unlace-cli/benches/decompile_medium.rs:469:    let data = fs::read(fixture_path()).expect("failed to read medium.elf");
+crates/unlace-cli/benches/decompile_medium.rs:471:    c.bench_function("decompile_medium_e2e", |b| {
+crates/unlace-debugger/src/gdb_rsp.rs:37:    let stripped = packet.strip_prefix('$').ok_or(GdbRspError::MissingDollar)?;
+crates/unlace-debugger/src/gdb_rsp.rs:38:    let (payload, csum_hex) = stripped.split_once('#').ok_or(GdbRspError::MissingHash)?;
+docs/design-lvar-liverange-split-2026-06-01.md:1:# Design: LVAR live-range splitting for pointer/scalar register aliasing (t69)
+docs/design-lvar-liverange-split-2026-06-01.md:4:`7b194920ea` is clean (semantic-report 25/0). This doc captures the hard-won
+docs/design-lvar-liverange-split-2026-06-01.md:16:scalar (uncompilable / wrong runtime) on `medium:main` and `stripped:main`
+docs/design-lvar-liverange-split-2026-06-01.md:17:(semantic-report 25 → 23).
+docs/design-lvar-liverange-split-2026-06-01.md:21:Trace evidence (`UNLACE_REG_COALESCE_TRACE` group/name dump on `medium:main`):
+docs/design-lvar-liverange-split-2026-06-01.md:37:sequential live ranges, e.g. for `c5` in `main`:
+docs/design-lvar-liverange-split-2026-06-01.md:67:  overlap. The C output suggests the *dynamic* live ranges are disjoint.
+docs/design-lvar-liverange-split-2026-06-01.md:91:name-allocation layer. **Therefore: the fix IS at the back end (SSA/lvar split),
+docs/design-lvar-liverange-split-2026-06-01.md:94:coarse linear interval sweep overstated overlap. Proceed with the split below;
+docs/design-lvar-liverange-split-2026-06-01.md:103:| Blanket name-injectivity in `existing_group_name` | Fires 235× on `medium:main`; most cross-cluster name reuse is **legitimate and load-bearing**; regresses semantic-report 25 → 23. |
+docs/design-lvar-liverange-split-2026-06-01.md:104:| Type-gated name split (`cluster_address_scalar_conflict`) + ZEXT/SUBPIECE/scalar-IntAdd classification propagation | Split fires correctly (7×) and the arrow/subscript/scalar-deref output is fixed; **but** the fresh split var declared `int c18; // rax` → `int-to-pointer-cast` error. |
+docs/design-lvar-liverange-split-2026-06-01.md:105:| + split-var width via `func.var_types[sv]=Ptr` | The printer's `ctx.var_types` starts empty and is populated only by its own `infer_type_from_insn` — it **never reads `func.var_types`**, and `HirFunction` has **no `var_types` field** at all (only `composite_var_types` + `merged_names` survive SSA→HIR lowering). The tag is invisible. |
+docs/design-lvar-liverange-split-2026-06-01.md:106:| + route the tag through `composite_var_types` as `Type::Ptr` + printer `func_var_types_ptr` set + `_QWORD` decl width | Makes `medium.c` **compile clean**, but `medium:main` then **times out at runtime** — the name-layer split desynchronised a loop's cursor advance from its termination test. This is a bug in *where/how* the split was applied, not proof the split is wrong. |
+docs/design-lvar-liverange-split-2026-06-01.md:110:cursor/condition desync. The split must happen *before* naming.
+docs/design-lvar-liverange-split-2026-06-01.md:112:## Correct fix (next session): SSA/lvar-layer live-range splitting
+docs/design-lvar-liverange-split-2026-06-01.md:114:Split at the SSA/lvar layer so the printer never sees one name with two types.
+docs/design-lvar-liverange-split-2026-06-01.md:115:This is CLAUDE.md item #10 / task t7 (live-range-aware LVAR allocation).
+docs/design-lvar-liverange-split-2026-06-01.md:127:   the bug is upstream (lifter/SSA construction); splitting names is unsound.
+docs/design-lvar-liverange-split-2026-06-01.md:128:   For `main` no component mixes roles, so splitting is sound.
+docs/design-lvar-liverange-split-2026-06-01.md:130:1. **Detect a splittable register.** For each register base, compute its SSA
+docs/design-lvar-liverange-split-2026-06-01.md:131:   live ranges (the coalescer already has `compute_live_ranges` +
+docs/design-lvar-liverange-split-2026-06-01.md:134:   A register is splittable when its versions partition into a
+docs/design-lvar-liverange-split-2026-06-01.md:139:2. **Allocate distinct lvars/varnodes per phase BEFORE naming.** Rename the
+docs/design-lvar-liverange-split-2026-06-01.md:140:   pointer-phase SSA versions to one lvar and the scalar-phase versions to
+docs/design-lvar-liverange-split-2026-06-01.md:142:   name-layer split got wrong — it renamed occurrences inconsistently and broke
+docs/design-lvar-liverange-split-2026-06-01.md:145:   (`while (... != c5)`) must reference the *same* split lvar.
+docs/design-lvar-liverange-split-2026-06-01.md:147:3. **Type each split lvar from its phase.** Pointer-phase lvar → pointer/8-byte;
+docs/design-lvar-liverange-split-2026-06-01.md:148:   scalar-phase lvar → its arithmetic width. Do this on the SSA function so it
+docs/design-lvar-liverange-split-2026-06-01.md:151:   per-lvar type map or encode the pointer phase through `composite_var_types`,
+docs/design-lvar-liverange-split-2026-06-01.md:155:   (component 1) only together with this splitter; alone it re-regresses.
+docs/design-lvar-liverange-split-2026-06-01.md:159:- `semantic-report` = 25/0 (medium:main + stripped:main **exit=33**, not crash,
+docs/design-lvar-liverange-split-2026-06-01.md:166:t68 (sret hidden-pointer) atop the fixed splitter and re-verify each at 25/0.
+docs/design-lvar-liverange-split-2026-06-01.md:182:target/debug/unlace decompile --emit c --function main fixtures/medium.elf
+docs/design-lvar-liverange-split-2026-06-01.md:185:  target/debug/unlace decompile --emit c --function main fixtures/medium.elf 2>&1 >/dev/null \
+docs/design-lvar-liverange-split-2026-06-01.md:188:target/debug/unlace ir-dump --function main fixtures/medium.elf
+docs/design-lvar-liverange-split-2026-06-01.md:190:RUSTC_WRAPPER= cargo run -q -p xtask -- semantic-report 2>&1 | grep passed=
+docs/design-lvar-liverange-split-2026-06-01.md:195:A selective step-2 split (only the colliding pointer/scalar pair → fresh real
+docs/design-lvar-liverange-split-2026-06-01.md:197:makes `medium.c` **compile clean** but `medium:main` **times out**. gdb attach
+docs/design-lvar-liverange-split-2026-06-01.md:198:pins the hang at `medium.c:324`:
+docs/design-lvar-liverange-split-2026-06-01.md:211:forever. The address/arith use-site split severed the cursor's
+docs/design-lvar-liverange-split-2026-06-01.md:214:**Decisive constraint for the real fix:** the split criterion (address-use vs
+docs/design-lvar-liverange-split-2026-06-01.md:217:dereferenced — is ONE live range and must **not** be split, even though its
+docs/design-lvar-liverange-split-2026-06-01.md:220:(distinct webs that never share a phi/induction cycle) may be split. This is
+docs/design-lvar-liverange-split-2026-06-01.md:225:After exhausting the split-criterion design space (5 distinct heuristics, all
+docs/design-lvar-liverange-split-2026-06-01.md:227:splits the r9 collision without also mis-firing on legitimate cases.**
+docs/design-lvar-liverange-split-2026-06-01.md:231:| pairwise address/arith conflict | severs a pointer cursor's induction cycle → infinite loop (gdb: medium.c:324) |
+docs/design-lvar-liverange-split-2026-06-01.md:232:| partition-gated (Mixed=keep cursor) | keeps rdx cursor whole + flags r9 correctly, but over-splits 9 registers → timeout |
+docs/design-lvar-liverange-split-2026-06-01.md:233:| collision-gated (split only on shared name) | still 9 collisions; renames a legitimate struct pointer → breaks `->` arrow path → cc fails |
+docs/design-lvar-liverange-split-2026-06-01.md:244:That is real LVAR live-range allocation (CLAUDE.md #10 / t7), a multi-day,
+docs/design-lvar-liverange-split-2026-06-01.md:248:split criterion): component 1 `collect_live_on_entry_reads`; component 2
+docs/design-lvar-liverange-split-2026-06-01.md:252:is the precise split criterion above. `partition_register_phases` (committed
+docs/design-lvar-liverange-split-2026-06-01.md:263:still passes semantic-report (exit 24), but `make_array`/`sub_401187` are not
+docs/design-lvar-liverange-split-2026-06-01.md:264:directly semantic-tested and the new form is not verified more-correct than the
+docs/design-lvar-liverange-split-2026-06-01.md:267:where the split makes the guard's bail-to-raw-deref the correct rendering.
+docs/design-lvar-liverange-split-2026-06-01.md:270:coupled to the (still-unbuilt) precise split criterion.
+docs/design-lvar-liverange-split-2026-06-01.md:272:## Update 2026-06-02: output-layer guards CANNOT rescue an incorrect split (decisive)
+docs/design-lvar-liverange-split-2026-06-01.md:283:(ZEXT/SEXT/Subpiece arith propagation) + collision-gated phase split (#5) +
+docs/design-lvar-liverange-split-2026-06-01.md:291:    bailed too → raw deref. `medium.c` went **cc-failed → compiles clean**.
+docs/design-lvar-liverange-split-2026-06-01.md:292:  - **But `medium:main` then TIMED OUT.** The over-split (9 phase-split
+docs/design-lvar-liverange-split-2026-06-01.md:296:**Decisive conclusion:** output-layer guards can make an incorrect split's C
+docs/design-lvar-liverange-split-2026-06-01.md:297:*compilable* but never *runtime-correct*. The split criterion itself must be
+docs/design-lvar-liverange-split-2026-06-01.md:298:correct. Corollary: a *correct* split types the pointer-phase base as a pointer,
+docs/design-lvar-liverange-split-2026-06-01.md:300:ever change output in the BROKEN over-split state. They are t69 scaffolding, not
+docs/design-lvar-liverange-split-2026-06-01.md:306:over-split and must stay unshipped.)
+docs/design-lvar-liverange-split-2026-06-01.md:309:interference + loop-carried-induction + struct-pointer-aware split (per the
+docs/design-lvar-liverange-split-2026-06-01.md:315:Read-only investigation found the missing "induction-aware" split signal already
+docs/design-lvar-liverange-split-2026-06-01.md:325:IR CONFIRMATION (medium:main, ir-dump): the cursors ARE basic-IV-shaped —
+docs/design-lvar-liverange-split-2026-06-01.md:329:So `detect_basic_ivs` will fire on the very cursors the failed splits (#3 sever →
+docs/design-lvar-liverange-split-2026-06-01.md:330:infinite loop; #4/#5 over-split → timeout) lacked a signal to protect.
+docs/design-lvar-liverange-split-2026-06-01.md:335:from splitting any component intersecting it (like the existing Mixed guard).
+docs/design-lvar-liverange-split-2026-06-01.md:336:This keeps the cursor's def→use→advance cycle whole while still splitting the
+docs/design-lvar-liverange-split-2026-06-01.md:341:"wire detect_basic_ivs into the split criterion + validate."
+docs/design-lvar-liverange-split-2026-06-01.md:348:Result on medium:main — 14 loops, 5 basic IVs detected, ALL surviving intact:
+docs/design-lvar-liverange-split-2026-06-01.md:360:IV-protection set shields the cursors the #3/#4 splits severed/over-split, while
+docs/design-lvar-liverange-split-2026-06-01.md:361:leaving the genuine r9 collision eligible for the split that fixes the c7 bug.
+docs/design-lvar-liverange-split-2026-06-01.md:365:cleanly). Attempt #12 (IV-protected split, coupled with the live-on-entry param
+docs/design-lvar-liverange-split-2026-06-01.md:368:none observed in medium:main, but guard defensively); and confirm the split
+docs/design-lvar-liverange-split-2026-06-01.md:373:## Update 2026-06-03c: attempt #12 (IV-protected split) — CORE WORKS, new residual found
+docs/design-lvar-liverange-split-2026-06-01.md:376:(component 2) + IV-protected collision-gated split (collect_iv_protected_versions
+docs/design-lvar-liverange-split-2026-06-01.md:377:from find_natural_loops+detect_basic_ivs, forbidding any split of a component
+docs/design-lvar-liverange-split-2026-06-01.md:382:- The IV-protection fixed the over-split: iv-split fired exactly 1× (not 9× like
+docs/design-lvar-liverange-split-2026-06-01.md:384:- The r9 c7-collision RESOLVED: r9 split into c7 (pointer = (uintptr_t)buf,
+docs/design-lvar-liverange-split-2026-06-01.md:395:DIFFERENT path: the array-of-struct pattern around c_printer.rs:3604
+docs/design-lvar-liverange-split-2026-06-01.md:399:NEXT-SESSION TODO (precise): (1) keep the IV-protected split (it's correct — the
+docs/design-lvar-liverange-split-2026-06-01.md:405:a struct-typed alias. (3) Re-validate 25/0 end-to-end. The IV-split core is sound
+docs/design-lvar-liverange-split-2026-06-01.md:411:fired 0× on c5[1]. Load consumer order (c_printer.rs ~13205): try_array_struct_
+docs/design-lvar-liverange-split-2026-06-01.md:431:So the full t61 fix = (validated) IV-protected split + arrow scalar-base guard +
+docs/design-lvar-liverange-split-2026-06-01.md:435:## Update 2026-06-03e: attempt #13 — output now COMPILES + RUNS; residual is pure semantics
+docs/design-lvar-liverange-split-2026-06-01.md:445:NEW FAILURE MODE (strictly closer): semantic-report 23/2 is now a BEHAVIOR
+docs/design-lvar-liverange-split-2026-06-01.md:446:MISMATCH, not cc-failed: medium:main compiles AND runs (exit=60 vs expected 33),
+docs/design-lvar-liverange-split-2026-06-01.md:447:stripped:main runs (exit=108 vs 33). So across attempts the failure has marched
+docs/design-lvar-liverange-split-2026-06-01.md:450:PURE SEMANTIC correctness bug: the IV-protected split + param fix changed the
+docs/design-lvar-liverange-split-2026-06-01.md:453:LIKELY ROOT (next session): the split assigns the scalar phase a fresh cN
+docs/design-lvar-liverange-split-2026-06-01.md:457:pointer/scalar aliasing (like r9) but were NOT split because their collision did
+docs/design-lvar-liverange-split-2026-06-01.md:460:missed it. The fix: the collision-gate (split when ptr+scalar phases share a
+docs/design-lvar-liverange-split-2026-06-01.md:461:name) needs to ALSO split when ptr+scalar phases of one register are distinct
+docs/design-lvar-liverange-split-2026-06-01.md:468:(IV-protection, keep it). Remaining = semantic correctness of the c5/c1 (and
+docs/design-lvar-liverange-split-2026-06-01.md:471:## Update 2026-06-03f: ISOLATION — c5/c1 arrow bug is the PARAM FIX alone, not the split
+docs/design-lvar-liverange-split-2026-06-01.md:474:split, no guards, no classification change). Result: medium:main 23/2 with
+docs/design-lvar-liverange-split-2026-06-01.md:479:This CORRECTS the prior model (updates d/e assumed the split caused c5/c1):
+docs/design-lvar-liverange-split-2026-06-01.md:483:  INDEPENDENT of the register split.
+docs/design-lvar-liverange-split-2026-06-01.md:491:  A. PARAM FIX surfaces (i) the r9 c7 pointer/scalar collision [needs the split]
+docs/design-lvar-liverange-split-2026-06-01.md:495:  B. IV-protected split fixes r9 (validated, attempt #12).
+docs/design-lvar-liverange-split-2026-06-01.md:499:(that's an output bug C already handles) — it is a SEPARATE runtime semantic
+docs/design-lvar-liverange-split-2026-06-01.md:500:issue still to be isolated (likely the split's c9000 scalar value or a c5/c1
+docs/design-lvar-liverange-split-2026-06-01.md:503:split per-register to find which register's VALUE (not type) is wrong.
+docs/design-lvar-liverange-split-2026-06-01.md:522:ONE mechanism applied to all of them: split each register whose SSA versions
+docs/design-lvar-liverange-split-2026-06-01.md:525:carries ONLY its own value+type. The IV-protected split (attempt #12) already
+docs/design-lvar-liverange-split-2026-06-01.md:527:path (composite_var_types presence = pointer-web evidence) so rsi/rcx split too.
+docs/design-lvar-liverange-split-2026-06-01.md:529:correct split — not from output guards. The rendered_base_is_scalar guard
+docs/design-lvar-liverange-split-2026-06-01.md:533:the split criterion must treat "has a composite_var_types struct/ptr entry" as
+docs/design-lvar-liverange-split-2026-06-01.md:535:classification catches rsi/rcx, and the collision-gate becomes "split whenever a
+docs/design-lvar-liverange-split-2026-06-01.md:539:## Update 2026-06-03h: attempt #14 (unified criterion) — DISPROVES update-g; residual is the r9 split's value, not c5/c1
+docs/design-lvar-liverange-split-2026-06-01.md:543:the gate splits whenever a register has a disjoint Pointer web + Scalar web
+docs/design-lvar-liverange-split-2026-06-01.md:547:RESULT: uni-split STILL fired only 1× (the r9 deref collision) — it did NOT catch
+docs/design-lvar-liverange-split-2026-06-01.md:556:class as #13's 60/108). Since uni-split == the #13 split (both 1× on r9), the
+docs/design-lvar-liverange-split-2026-06-01.md:558:NOT by an un-split c5/c1. The c5/c1 ->field was only ever a COMPILE issue (fixed
+docs/design-lvar-liverange-split-2026-06-01.md:561:CORRECTED NEXT STEP (bisected): the r9 split produces c7 (pointer=(uintptr_t)buf)
+docs/design-lvar-liverange-split-2026-06-01.md:563:split assigns versions to webs by use-site class, but a version that is BOTH
+docs/design-lvar-liverange-split-2026-06-01.md:567:assignment (UNLACE_REG_COALESCE_TRACE already logs the split) and trace each
+docs/design-lvar-liverange-split-2026-06-01.md:569:narrow per-version correctness check on ONE register's split, not a criterion
+docs/design-lvar-liverange-split-2026-06-01.md:574:Static IR trace of r9(v72) in medium:main (web is param-fix-independent):
+docs/design-lvar-liverange-split-2026-06-01.md:582:  The two webs share NO phi/copy edge → genuinely disjoint (correct split).
+docs/design-lvar-liverange-split-2026-06-01.md:591:instrumented split (UNLACE_REG_COALESCE_TRACE) to confirm the exact version→name
+docs/design-lvar-liverange-split-2026-06-01.md:593:rsp-buf value is expected (or vice versa). If so, the split is correct but the
+docs/design-lvar-liverange-split-2026-06-01.md:595:i.e. the bug is one layer deeper than the pointer/scalar split. This is the
+docs/design-lvar-liverange-split-2026-06-01.md:598:Data gathered read-only; no rebuild. The split machinery (IV-protect, string
+docs/design-lvar-liverange-split-2026-06-01.md:604:cross-referenced with the IR. The split is INVERTED and the components are WRONG:
+docs/design-lvar-liverange-split-2026-06-01.md:616:The split faithfully renders whatever the partition says; the partition itself is
+docs/design-lvar-liverange-split-2026-06-01.md:619:TWO COMPOUNDING ROOT CAUSES (both upstream of the split):
+docs/design-lvar-liverange-split-2026-06-01.md:639:All machinery (param fix, IV-protect, string guards, split mechanics) stays; only
+docs/design-lvar-liverange-split-2026-06-01.md:655:    classed; not split).
+docs/design-lvar-liverange-split-2026-06-01.md:667:a phi marks a true split point. Fix: when unioning phi output↔input, skip the
+docs/design-lvar-liverange-split-2026-06-01.md:697:      split point (#8 scalar vs base pointer).
+docs/design-lvar-liverange-split-2026-06-01.md:702:and base=pointer → skips that phi → #8 splits into its own Scalar web.
+docs/design-lvar-liverange-split-2026-06-01.md:708:11,12} Pointer, {ZEXT digits 8,4,5} Scalar. Only then will the split be correct
+docs/design-lvar-liverange-split-2026-06-01.md:742:value-class lattice (Pointer ⊔ Scalar = Conflict→split), replacing the three
+docs/design-lvar-liverange-split-2026-06-01.md:746:split, partition) stays; the per-version classification needs the lattice rewrite.
+docs/design-lvar-liverange-split-2026-06-01.md:754:_DUMP on r9 (medium:main):
+docs/design-lvar-liverange-split-2026-06-01.md:773:   Conflict (= split point), not Pointer. Indicates the seed/join ordering still
+docs/design-lvar-liverange-split-2026-06-01.md:787:split points. Baseline 25/0 (reverted). This is the genuine remaining design: a
+docs/design-lvar-liverange-split-2026-06-01.md:837:1. v6/7/12 (rsi copies) may NOT actually need to split from r9's pointer web —
+docs/design-lvar-liverange-split-2026-06-01.md:841:   c9000 split is even needed, or whether ONLY v8's misclass drives the bug.
+docs/design-lvar-liverange-split-2026-06-01.md:853:architecture. The remaining issues are (1) re-validating whether the rsi split is
+docs/design-lvar-liverange-split-2026-06-01.md:874:param fix's interaction, OR the split is being driven by the OLD use_sites
+docs/design-lvar-liverange-split-2026-06-01.md:876:but NEVER WIRED INTO partition_register_phases — the split still uses the old
+docs/design-lvar-liverange-split-2026-06-01.md:878:they split on the OLD (buggy) partition, not the lattice.
+docs/design-lvar-liverange-split-2026-06-01.md:880:NEXT SESSION (clear path): WIRE classify_value_lattice INTO the split — replace
+docs/design-lvar-liverange-split-2026-06-01.md:883:split Pointer-web from Scalar-web. The lattice (fwd+bwd, validated) is the
+docs/design-lvar-liverange-split-2026-06-01.md:885:the partition, then drive the split. Re-validate part dump shows correct webs,
+docs/design-lvar-liverange-split-2026-06-01.md:888:## Update 2026-06-03r: update-q WIRED + DRIVEN to completion — DISPROVED. Name-layer split cannot fix this (decisive bisection)
+docs/design-lvar-liverange-split-2026-06-01.md:893:split application in `emit_merged_names` (rename each disjoint Scalar web to a fresh
+docs/design-lvar-liverange-split-2026-06-01.md:898:`UNLACE_REG_COALESCE_TRACE` `t61-split` lines, `UNLACE_SCALAR_BASE_TRACE`,
+docs/design-lvar-liverange-split-2026-06-01.md:908:- **Split ALL** (the lattice fires 28× on medium:main — rax/rcx/rsi/rdi/r9, NOT 1×
+docs/design-lvar-liverange-split-2026-06-01.md:910:  scratch register's many disjoint arith uses become split candidates) → medium AND
+docs/design-lvar-liverange-split-2026-06-01.md:911:  stripped **TIMEOUT** (over-split severs a cursor cycle even WITH IV-protection).
+docs/design-lvar-liverange-split-2026-06-01.md:913:  medium exit=108, stripped exit=236 vs expected **33**.
+docs/design-lvar-liverange-split-2026-06-01.md:915:The r9-only wrong-answer is the decisive datum: the split is driven by the *correct*
+docs/design-lvar-liverange-split-2026-06-01.md:916:lattice classification and is still semantically wrong. So the failure is NOT
+docs/design-lvar-liverange-split-2026-06-01.md:917:classification (lattice is right) and NOT the split mechanism (it renames consistently)
+docs/design-lvar-liverange-split-2026-06-01.md:920:and the pointer web are **SSA-def-use-disjoint but NOT value-flow-disjoint**: splitting
+docs/design-lvar-liverange-split-2026-06-01.md:926:splits — rax/rcx/rsi **genuinely** reuse the register as a dereferenced pointer AND a
+docs/design-lvar-liverange-split-2026-06-01.md:931:name-layer pointer/scalar split is **ruled out** — over-split → timeout, minimal split
+docs/design-lvar-liverange-split-2026-06-01.md:937:distinct lvars from the start. The param fix (`collect_live_on_entry_reads`) remains
+docs/design-lvar-liverange-split-2026-06-01.md:939:upstream fix, never with a name-layer split.
+docs/design-lvar-liverange-split-2026-06-01.md:942:driven split + hard gates + `base_name_is_scalar` guard + `UNLACE_T61_SPLIT_ONLY`
+docs/design-lvar-liverange-split-2026-06-01.md:943:bisection harness. Do NOT re-attempt the name-layer split; start from the upstream
+docs/design-lvar-liverange-split-2026-06-01.md:947:## Update 2026-06-03s: minimal experiment settles it — ONE upstream ptr⊕scalar phi; split was the wrong layer; prune back-edge bug FIXED
+docs/design-lvar-liverange-split-2026-06-01.md:950:NO split**. Reconstructed `collect_live_on_entry_reads` (backward register
+docs/design-lvar-liverange-split-2026-06-01.md:954:which is semantically identical). Measured each half against the exact gate compile.
+docs/design-lvar-liverange-split-2026-06-01.md:958:- **medium**: SIGSEGV. gdb pins `*(_DWORD *)(c7)` (r9) dereferencing a scalar.
+docs/design-lvar-liverange-split-2026-06-01.md:959:- **stripped**: nondeterministic exit. ASLR-off → deterministic; valgrind finds NO
+docs/design-lvar-liverange-split-2026-06-01.md:983:   temps they reference (unlace does not yet FOLD them), busting the `debug_medium`
+docs/design-lvar-liverange-split-2026-06-01.md:989:   medium "pass" in ONE gate run — a 1-run fluke; medium under wholesale-disable is
+docs/design-lvar-liverange-split-2026-06-01.md:990:   ALSO ASLR-dependent, i.e. medium is *also* the root-#2 address leak.
+docs/design-lvar-liverange-split-2026-06-01.md:993:   `ir-dump` of rcx (`v8`) in stripped:
+docs/design-lvar-liverange-split-2026-06-01.md:1001:   used as a LOAD address (r9 in medium is the same shape, cf. update-i). This is
+docs/design-lvar-liverange-split-2026-06-01.md:1002:   why a name-layer split is **provably impossible** (definitively confirms
+docs/design-lvar-liverange-split-2026-06-01.md:1007:   LVAR allocation must keep the value-distinct lifetimes in distinct lvars. Both
+docs/design-lvar-liverange-split-2026-06-01.md:1008:   `medium` and `stripped` are the SAME bug (one address-leak conflation); there is
+docs/design-lvar-liverange-split-2026-06-01.md:1029:split, a loop-carried pointer reset would still be wrongly deleted by the
+docs/design-lvar-liverange-split-2026-06-01.md:1035:genuine register reuse needing live-range splitting in SSA before naming. `ir-dump`
+docs/design-lvar-liverange-split-2026-06-01.md:1052:WHAT WE ARE MISSING (digest of `research/lvar/liverange/` — Boissinot 2009 out-of-SSA,
+docs/design-lvar-liverange-split-2026-06-01.md:1058:equality**. The principled fix (reconciles with "name-layer split is impossible"):
+docs/design-lvar-liverange-split-2026-06-01.md:1064:   is now a distinct nameable variable. Requires **critical-edge splitting** (reuse
+docs/design-lvar-liverange-split-2026-06-01.md:1065:   `unlace-struct/node_split.rs`).
+docs/design-lvar-liverange-split-2026-06-01.md:1079:`emit_merged_names` shape. Gate `UNLACE_OOSSA`; verify each stage at `semantic-report` 25/0
+docs/design-lvar-liverange-split-2026-06-01.md:1083:ALSO MISSING (papers flag, doc never considered): critical-edge splitting / lost-copy
+docs/design-lvar-liverange-split-2026-06-01.md:1084:correctness; parallel-copy semantics; coalescing order + shrinking-interference recheck
+crates/unlace-cli/tests/struct_subscript_regression.rs:222:        "medium.elf",
+docs/current-parity-ledger-2026-05-30.md:13:| Stylistic fixture score | `bash scripts/score_parity.sh` reports `Stylistic Fixture Parity: 84.9%` on the current golden stream. | Keep it as a regression watchdog only. It is not semantic correctness or type parity. |
+docs/current-parity-ledger-2026-05-30.md:14:| Semantic report | `xtask semantic-report` has 17 passing host/source-known executable cases, 0 host/source-known XFAILs, 4 passing qemu-user non-host executable rows, and 4 non-host shape PASS rows. | Keep the optimized branch/label-hoist regression covered, broaden executable argument cases, and add equivalent runners before promoting more non-host shape rows into executable semantic pass/fail. |
+docs/current-parity-ledger-2026-05-30.md:17:| DREAM structuring | DREAM is default-on for accepted regions; `UNLACE_DREAM_STRUCT=0` is the rollback path. The multi-entry cyclic frontier is implemented as dispatch-free labelled abnormal-entry control. `medium` accepts the 68-block `f_ackermann` candidate without a synthetic dispatcher. Initial label-tail duplication, final dead-tail cleanup, and post-emission fallthrough-goto pruning reduce the measured `medium` emitted `goto label_*` / label counts from 81/57 to 75/51 while keeping `xtask semantic-report` green. | Continue reducing preserved irreducible labels/gotos through real tail duplication, trace scheduling, or stronger abnormal-entry structuring while keeping the no-dispatch rule. |
+docs/current-parity-ledger-2026-05-30.md:19:| Lvar quality and naming | Coalescing, coalesced-temp clusters, fact-derived names (`this`, `len`, `i`, `buf`, `result`), and role-over-generic handling for ABI argument names are partly wired. | Finish the real misses exposed by semantic/type metrics: loop-carried lvar loss, weak optimized params, stack-slot provenance, subregister aliases, and leaked temps. |
+docs/current-parity-ledger-2026-05-30.md:26:| Lvar quality is wholly missing. | Reframed. Naming/coalescing work landed, and the prior `type_stack_o2` / `medium` / `stripped` semantic XFAILs now pass, but type precision and golden readability still show real lvar-quality gaps. |
+docs/current-parity-ledger-2026-05-30.md:28:| The real DREAM frontier is missing for `f_ackermann`. | Stale. The frontier is implemented with real labels/gotos and no synthetic dispatcher. The remaining work is quality: reduce preserved abnormal-entry labels/gotos without changing semantics. |
+docs/current-parity-ledger-2026-05-30.md:35:2. Keep the now-green host semantic gate covered with focused regressions for
+docs/current-parity-ledger-2026-05-30.md:36:   optimized stack/lvar recovery and empty-branch label-hoist control flow.
+docs/current-parity-ledger-2026-05-30.md:41:   stack ops, unknown helpers, bad type facts, and semantic failures.
+docs/current-parity-ledger-2026-05-30.md:47:7. Keep the non-host semantic execution path enabled and extend qemu-user or
+docs/current-parity-ledger-2026-05-30.md:51:   split DWARF and full DW_OP location lists, PDB TPI/IPI breadth,
+docs/current-parity-ledger-2026-05-30.md:62:RUSTC_WRAPPER= cargo run -p xtask -- semantic-report
+crates/unlace-ir/src/lib.rs:20:pub mod lvar;
+crates/unlace-cli/tests/scope_and_iterations.rs:6://! `medium.elf`.
+crates/unlace-cli/tests/scope_and_iterations.rs:34:            fixture("medium.elf").to_str().unwrap(),
+crates/unlace-cli/tests/scope_and_iterations.rs:70:            fixture("medium.elf").to_str().unwrap(),
+crates/unlace-cli/tests/quality_smoke.rs:5://!    fixture in `fixtures/`, including `empty.elf` and `stripped.elf`.
+crates/unlace-cli/tests/quality_smoke.rs:48:    max_semantic_failures: usize,
+crates/unlace-cli/tests/quality_smoke.rs:67:    budget("debug_medium.elf", 12, 12, 37, 0, 0, 285),
+crates/unlace-cli/tests/quality_smoke.rs:77:    budget("medium.elf", 77, 53, 53, 0, 0, 216),
+crates/unlace-cli/tests/quality_smoke.rs:81:    budget("stripped.elf", 77, 53, 54, 0, 0, 217),
+crates/unlace-cli/tests/quality_smoke.rs:83:    budget("type_stack_o2.elf", 0, 0, 10, 0, 0, 13),
+crates/unlace-cli/tests/quality_smoke.rs:105:        max_semantic_failures: 0,
+crates/unlace-cli/tests/quality_smoke.rs:118:        t.unimplemented_ops + t.callother_semantic_gap_ops + t.output_unimplemented_tokens;
+crates/unlace-cli/tests/quality_smoke.rs:156:        budget.max_semantic_failures, 0,
+crates/unlace-cli/tests/quality_smoke.rs:157:        "{name}: semantic failures must stay a zero budget; xtask semantic-report enforces the executable cases",
+crates/unlace-cli/tests/quality_smoke.rs:184:            budget.max_semantic_failures, 0,
+crates/unlace-cli/tests/quality_smoke.rs:185:            "{name}: semantic failure budget must remain zero"
+crates/unlace-cli/tests/quality_smoke.rs:266:        t.callother_semantic_gap_ops, 0,
+crates/unlace-cli/tests/quality_smoke.rs:267:        "hello_world: no unknown Callother semantic gaps"
+crates/unlace-cli/tests/quality_smoke.rs:311:/// stopped zeroing first-use register inputs, and Callother accounting split
+crates/unlace-cli/tests/quality_smoke.rs:312:/// terminal startup traps from real unknown semantic gaps.
+crates/unlace-cli/tests/quality_smoke.rs:326:        t.callother_semantic_gap_ops, 0,
+crates/unlace-cli/tests/quality_smoke.rs:327:        "branches: no unknown Callother semantic gaps"
+crates/unlace-cli/tests/quality_smoke.rs:363:/// `medium.elf` is the chosen anchor because it calls `__stack_chk_fail`
+crates/unlace-cli/tests/quality_smoke.rs:372:    let medium = analyze("medium.elf");
+crates/unlace-cli/tests/quality_smoke.rs:374:        medium.noreturn_functions > 0,
+crates/unlace-cli/tests/quality_smoke.rs:375:        "medium.elf must report >0 noreturn functions (got {}); \
+crates/unlace-cli/tests/quality_smoke.rs:379:        medium.noreturn_functions,
+crates/unlace-ir/src/verify.rs:4://! pass must keep valid without asserting stronger semantic facts that later
+docs/dream-default-rollout-tasks.md:22:- Default-on reaches residual candidates in `medium`:
+docs/dream-default-rollout-tasks.md:27:  are duplicated at goto sites, newly exposed dead tails are stripped after
+docs/dream-default-rollout-tasks.md:30:- Rollback `UNLACE_DREAM_STRUCT=0` keeps the old `medium` baseline at 29 gotos:
+docs/dream-default-rollout-tasks.md:35:- Default DREAM still preserves residual labelled control in `medium`, but the
+docs/dream-default-rollout-tasks.md:53:can express with ordinary `break` / `continue`. The large `medium` frontier is
+docs/dream-default-rollout-tasks.md:221:- DREAM-enabled output reduces at least one `medium` function goto count once
+docs/dream-default-rollout-tasks.md:223:- No new undeclared variables in `medium` output.
+docs/dream-default-rollout-tasks.md:233:target/debug/unlace decompile --emit c fixtures/medium.elf > /tmp/medium_dream.c
+docs/dream-default-rollout-tasks.md:234:rg -n '\bgoto\b' /tmp/medium_dream.c
+crates/unlace-cli/tests/lvar_collect_smoke.rs:2://! in `medium.elf` must have a non-empty `lvars` candidate list after
+crates/unlace-cli/tests/lvar_collect_smoke.rs:6://! and the C printer ignores `lvars` in this slice.
+crates/unlace-cli/tests/lvar_collect_smoke.rs:22:fn medium_elf_collects_lvars_for_every_function() {
+crates/unlace-cli/tests/lvar_collect_smoke.rs:23:    let data = std::fs::read(fixture("medium.elf")).expect("read fixture");
+crates/unlace-cli/tests/lvar_collect_smoke.rs:29:    let mut total_lvars = 0usize;
+crates/unlace-cli/tests/lvar_collect_smoke.rs:44:        if ssa.lvars.is_empty() {
+crates/unlace-cli/tests/lvar_collect_smoke.rs:47:        total_lvars += ssa.lvars.len();
+crates/unlace-cli/tests/lvar_collect_smoke.rs:48:        for lv in &ssa.lvars {
+crates/unlace-cli/tests/lvar_collect_smoke.rs:56:        "expected lvars.len() > 0 for every analyzed function, but {} functions \
+crates/unlace-cli/tests/lvar_collect_smoke.rs:57:         emitted zero lvars: {:?}",
+crates/unlace-cli/tests/lvar_collect_smoke.rs:62:        "medium.elf: {} functions analyzed, {} total lvars, breakdown: {:?}",
+crates/unlace-cli/tests/lvar_collect_smoke.rs:63:        analyzed, total_lvars, class_counts,
+crates/unlace-cli/tests/printf_format_parse_wiring.rs:17://! ...)` call sites — one in `safe_call(int)` and one in its cold split
+crates/unlace-cli/tests/printf_format_parse_wiring.rs:74:        .rsplit(':')
+docs/dream-step-4-cyclic-plan.md:82:- `medium.elf` measurement:
+docs/dream-step-4-cyclic-plan.md:106:  header blocks emitted before the first predicate use) unblocked medium's small
+docs/dream-step-4-cyclic-plan.md:111:`medium`'s f_ackermann (and similar recursion-as-state-machine code) lifts to a
+docs/dream-step-4-cyclic-plan.md:125:quality, not correctness: default `medium` now accepts `f_ackermann`, but the
+crates/unlace-cli/src/quality.rs:4://! recovery systems (stack vars, lvar allocation, type inference, …) we need
+crates/unlace-cli/src/quality.rs:17://!   an unknown semantic tag, or recovery did not run.
+crates/unlace-cli/src/quality.rs:66:/// frame-relative access should render as a named lvar instead. Note this
+crates/unlace-cli/src/quality.rs:100:    /// semantic gaps so startup epilogues do not fail the opaque-intrinsic
+crates/unlace-cli/src/quality.rs:104:    /// still deserve volume tracking, but they are not "unknown semantics".
+crates/unlace-cli/src/quality.rs:107:    pub callother_semantic_gap_ops: usize,
+crates/unlace-cli/src/quality.rs:163:    /// naming/coalescing, not semantic correctness.
+crates/unlace-cli/src/quality.rs:288:    /// Total [`unlace_ir::lvar::Lvar`] candidates emitted by
+crates/unlace-cli/src/quality.rs:291:    /// denominator for `lvars_with_nonempty_range`.
+crates/unlace-cli/src/quality.rs:292:    pub lvars_total: usize,
+crates/unlace-cli/src/quality.rs:293:    /// Number of lvars whose `live_range` covers more than a single
+crates/unlace-cli/src/quality.rs:297:    /// branch. Single-block lvars are still "non-empty" structurally,
+crates/unlace-cli/src/quality.rs:300:    pub lvars_with_nonempty_range: usize,
+crates/unlace-cli/src/quality.rs:345:                            CallotherClass::SemanticGap => q.callother_semantic_gap_ops += 1,
+crates/unlace-cli/src/quality.rs:459:        // --- Batch 3 slice 2: lvar liveness coverage ---
+crates/unlace-cli/src/quality.rs:460:        // `lvars_total` is the candidate-collector output; non-empty
+crates/unlace-cli/src/quality.rs:464:        q.lvars_total = ssa.lvars.len();
+crates/unlace-cli/src/quality.rs:465:        q.lvars_with_nonempty_range = ssa
+crates/unlace-cli/src/quality.rs:466:            .lvars
+crates/unlace-cli/src/quality.rs:473:        // (block splitting at target addresses) which is an open follow-up.
+crates/unlace-cli/src/quality.rs:509:            .split_once("//")
+crates/unlace-cli/src/quality.rs:516:            .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+crates/unlace-cli/src/quality.rs:959:    pub callother_semantic_gap_ops: usize,
+crates/unlace-cli/src/quality.rs:1016:    /// Sum of [`FunctionQuality::lvars_total`] across the binary.
+crates/unlace-cli/src/quality.rs:1017:    pub lvars_total: usize,
+crates/unlace-cli/src/quality.rs:1018:    /// Sum of [`FunctionQuality::lvars_with_nonempty_range`] across
+crates/unlace-cli/src/quality.rs:1020:    pub lvars_with_nonempty_range: usize,
+crates/unlace-cli/src/quality.rs:1040:        self.callother_semantic_gap_ops += q.callother_semantic_gap_ops;
+crates/unlace-cli/src/quality.rs:1094:        self.lvars_total += q.lvars_total;
+crates/unlace-cli/src/quality.rs:1095:        self.lvars_with_nonempty_range += q.lvars_with_nonempty_range;
+crates/unlace-cli/src/quality.rs:1209:    unlace_struct::split_irreducible_entries(&mut ir_func);
+crates/unlace-cli/src/quality.rs:1310:        stack_lvars: unlace_output::stack_lvar_annotations_from_ssa(&ssa),
+crates/unlace-cli/src/quality.rs:1425:         - Callother total / trap-padding / known-intrinsic / semantic-gap: {co} / {cot} / {cok} / {cog}\n\
+crates/unlace-cli/src/quality.rs:1430:         - lvars total: {lt}\n\
+crates/unlace-cli/src/quality.rs:1431:         - lvars with non-empty live_range (multi-block): {lne}\n\
+crates/unlace-cli/src/quality.rs:1442:        cog = t.callother_semantic_gap_ops,
+crates/unlace-cli/src/quality.rs:1447:        lt = t.lvars_total,
+crates/unlace-cli/src/quality.rs:1448:        lne = t.lvars_with_nonempty_range,
+crates/unlace-cli/src/quality.rs:1543:        "- **not wired** (handler exists but an unknown semantic tag leaked opaque): {} semantic-gap `Callother` op(s) ({} total: {} trap/padding, {} known intrinsic)",
+crates/unlace-cli/src/quality.rs:1544:        t.callother_semantic_gap_ops,
+crates/unlace-cli/src/quality.rs:1588:    fn callother_classifier_splits_traps_known_intrinsics_and_gaps() {
+crates/unlace-cli/src/quality.rs:1650:    fn stale_return_counter_ignores_assigned_result_lvar() {
+crates/unlace-cli/src/quality.rs:1670:    fn stale_return_counter_counts_uninitialized_result_lvar() {
+docs/dream-step-3c-plan.md:24:In `structurer.rs`, AFTER `node_split::split_irreducible_entries` has run and a
+docs/dream-step-3c-plan.md:56:- the function has a residual irreducible region after node_split, AND
+docs/dream-step-3c-plan.md:71:2. **default-on measurement**: DREAM-enabled `medium` — record per-fn
+crates/unlace-cli/tests/interproc_smoke.rs:10://! interproc into the per-function pipeline by default requires splitting
+crates/unlace-cli/tests/interproc_smoke.rs:82:fn interproc_runs_on_medium_without_panic() {
+crates/unlace-cli/tests/interproc_smoke.rs:83:    // `medium.elf` is the larger multi-function fixture (8 user
+crates/unlace-cli/tests/interproc_smoke.rs:86:    let mut funcs = build_ssa_map("medium.elf");
+crates/unlace-cli/tests/interproc_smoke.rs:94:        .expect("interproc fixed-point should succeed on medium.elf");
+crates/unlace-cli/src/cache.rs:82:    /// — splitting on a 2-char prefix keeps any single directory from
+crates/unlace-lift-mips/src/ops/msa.rs:43:/// visible to later analyses without incorrectly modelling lane semantics as a
+crates/unlace-lift-mips/src/ops/msa.rs:180:    let suffix = mnemonic.rsplit_once('.')?.1;
+crates/unlace-cli/tests/cli_smoke.rs:269:        ("medium.elf", "main"),
+crates/unlace-cli/tests/cli_smoke.rs:310:/// BATCH15 semantic gate: `cpp_vtable.elf:main` is the C++/vtable fixture
+crates/unlace-cli/tests/cli_smoke.rs:355:/// BATCH15 semantic gate: `debug_structs.elf:main` is the struct fixture
+crates/unlace-cli/tests/cli_smoke.rs:397:/// BATCH15 semantic gate: `cpp_exceptions.elf:main` is the C++ exception
+crates/unlace-cli/tests/cli_smoke.rs:429:/// BATCH15 semantic gate: `switch_table.elf:dispatch` is the switch /
+crates/unlace-cli/tests/cli_smoke.rs:458:/// BATCH15 semantic gate: `arm64_features.elf:_start` is the ARM64 /
+crates/unlace-cli/tests/cli_smoke.rs:623:        .split_once("-hello_world-main-")
+crates/unlace-cli/tests/cli_smoke.rs:656:fn stripped_binary_discovers_functions_via_prologue_scan() {
+crates/unlace-cli/tests/cli_smoke.rs:659:        .arg(fixture("stripped.elf"))
+crates/unlace-cli/tests/cli_smoke.rs:733:        "stripped",
+crates/unlace-cli/tests/cli_smoke.rs:734:        "medium",
+crates/unlace-cli/tests/cli_smoke.rs:856:        .arg(fixture("medium.elf"))
+crates/unlace-cli/tests/cli_smoke.rs:878:        .arg(fixture("medium.elf"))
+crates/unlace-cli/tests/cli_smoke.rs:922:        .arg(fixture("medium.elf"))
+docs/design-structurer-irreducible-2026-05-29.md:3:Design-first analysis for the residual `medium` gotos (the deeply-nested
+docs/design-structurer-irreducible-2026-05-29.md:10:`medium`'s recursive functions (f_ackermann, f_rec_fib) lift to a **single
+docs/design-structurer-irreducible-2026-05-29.md:11:giant irreducible CFG region**. Trace of `node_split` on f_ackermann:
+docs/design-structurer-irreducible-2026-05-29.md:14:node_split skipped non-shrinking candidate entry=BlockId(1)  current_body=68 remaining_largest_body=68
+docs/design-structurer-irreducible-2026-05-29.md:15:node_split skipped non-shrinking candidate entry=BlockId(24) current_body=68 remaining_largest_body=68
+docs/design-structurer-irreducible-2026-05-29.md:19:So the region is **68 blocks with 20+ entries**, and *every* split candidate is
+docs/design-structurer-irreducible-2026-05-29.md:24:- `node_split::split_irreducible_entries` — entry duplication to reducify ✓
+docs/design-structurer-irreducible-2026-05-29.md:28:The gotos remain because **node-splitting cannot economically reducify a
+docs/design-structurer-irreducible-2026-05-29.md:29:68-block / 20-entry region**: every split duplicates the whole body without
+docs/design-structurer-irreducible-2026-05-29.md:30:shrinking the largest sub-region, so `node_split` correctly bails (splitting
+docs/design-structurer-irreducible-2026-05-29.md:38:node-splitting is **DREAM-style condition-based refinement** (NDSS 2015,
+docs/design-structurer-irreducible-2026-05-29.md:47:- gated behind a fall-back (only invoked when node-split leaves a residual
+docs/design-structurer-irreducible-2026-05-29.md:62:3. **Conservative invocation.** In the structurer, *after* node_split, if a
+docs/design-structurer-irreducible-2026-05-29.md:77:DREAM work and remains the rollback path. The measured `medium` candidates are
+docs/design-structurer-irreducible-2026-05-29.md:81:**Crucially: even fully done, this likely does NOT flip `medium` green** — that
+docs/design-structurer-irreducible-2026-05-29.md:83:earlier). The value is *correct structured output*, not golden match. The medium
+docs/design-structurer-irreducible-2026-05-29.md:94:- `medium`: 29 gotos (f_ackermann 16, f_rec_fib 8, main 4, f_rec_power 1),
+docs/design-structurer-irreducible-2026-05-29.md:112:  `medium` total gotos < 29 with no semantic regression
+crates/unlace-ir/src/insn.rs:33:    /// the barrier semantics applied to `Mmio` / `Volatile`.
+docs/x87-top-tracking-research.md:17:   2008). Documents x87/IA32 80-bit-internal vs 64-bit semantics and why abstract
+crates/unlace-ir/src/op.rs:139:    /// Atomic load with memory ordering semantics.
+crates/unlace-ir/src/op.rs:142:    /// Atomic store with memory ordering semantics.
+docs/golden-triage-2026-05-29.md:58:signed-flag recognizer — the dominant medium.elf driver).
+docs/golden-triage-2026-05-29.md:74:3. **Flag-condition recovery** (medium, x86). Raw `__OFSUB__`/XOR flag dataflow
+docs/golden-triage-2026-05-29.md:75:   not simplified to `v <= 1`; drives `medium`'s residual line count
+docs/golden-triage-2026-05-29.md:80:   same fold/lvar gaps; tracked by the env-gated tracing in CLAUDE.md.
+docs/golden-triage-2026-05-29.md:121:- **x87 FPU** (x87_math): duplicate FLD, incomplete FCOM flag semantics — x87
+docs/golden-triage-2026-05-29.md:126:  (debug_*, medium, switch_table): recursive-descent over-read + residual
+docs/golden-triage-2026-05-29.md:127:  cross-statement folding; medium already 2610→1134 from prior work.
+docs/golden-triage-2026-05-29.md:152:  `cN` as a generic allocator name: it is preserved when no semantic role exists
+docs/golden-triage-2026-05-29.md:155:- **t51 leaked-temp folding**: medium v706/v707/v708 are single-use but SEQUENTIAL
+docs/golden-triage-2026-05-29.md:157:  Printer's conservative call-output policy is correct. medium/switch goldens are
+docs/golden-triage-2026-05-29.md:208:c_printer names), I wrote the pass after the agent hit its budget.
+crates/unlace-cli/src/main.rs:432:/// (eager-return splitting, etc.), then dumps the resulting IR.
+crates/unlace-cli/src/main.rs:438:    /// Batch 18: emit the lvar audit table instead of raw SSA.
+crates/unlace-cli/src/main.rs:449:        "lvars" => Ok(IrDumpPhase::Lvars),
+crates/unlace-cli/src/main.rs:452:            "unknown --phase '{other}' (expected: lift, post-passes, post-structuring, lvars, types)"
+crates/unlace-cli/src/main.rs:521:            IrDumpPhase::Lvars => out.push_str(&unlace_output::dump_lvars(&ssa)),
+crates/unlace-ir/src/alias.rs:35:/// barrier semantics.
+crates/unlace-tui/src/cmd.rs:31:    let mut parts = line.split_whitespace();
+docs/parity-quality-execution-plan-2026-05.md:9:   like the original. Current coverage is `xtask semantic-report`, which passes
+docs/parity-quality-execution-plan-2026-05.md:10:   17 host executable source-known cases, tracks 0 host/source-known semantic
+docs/parity-quality-execution-plan-2026-05.md:33:RUSTC_WRAPPER= cargo run -p xtask -- semantic-report
+docs/parity-quality-execution-plan-2026-05.md:50:- Semantic correctness: `xtask semantic-report` passes
+docs/parity-quality-execution-plan-2026-05.md:54:  `cpp_vtable.elf:main`, `debug_calls.elf:main`, `type_stack_o2.elf:main`,
+docs/parity-quality-execution-plan-2026-05.md:55:  `medium.elf:main`, `stripped.elf:main`, `switch_table.elf:dispatch`,
+docs/parity-quality-execution-plan-2026-05.md:75:2. Add `scripts/quality_axes.sh` so CI and humans see semantic/type gaps next
+docs/parity-quality-execution-plan-2026-05.md:91:cases pass with no semantic XFAILs.
+docs/parity-quality-execution-plan-2026-05.md:93:6. Promote the current compileable-subset tests into a named semantic gate in
+docs/parity-quality-execution-plan-2026-05.md:94:   CI. Landed locally as `cargo run -p xtask -- semantic-report`.
+docs/parity-quality-execution-plan-2026-05.md:98:8. Split shape-only semantic checks from executable checks so rodata address
+docs/parity-quality-execution-plan-2026-05.md:104:10. Add a semantic regression report that lists unsupported fixtures with a
+docs/parity-quality-execution-plan-2026-05.md:126:    helpers, bad type facts, and zero semantic failures.
+docs/parity-quality-execution-plan-2026-05.md:152:    `type_stack_o2`.
+docs/parity-quality-execution-plan-2026-05.md:153:19. Use failures to drive producer-side recovery: lvar coalescing, stack-frame
+docs/parity-quality-execution-plan-2026-05.md:156:    can be stylistically acceptable while still being semantically weak.
+docs/parity-quality-execution-plan-2026-05.md:174:  lvar clustering, and fact-derived names (`this`, `len`, `i`, `buf`,
+docs/parity-quality-execution-plan-2026-05.md:183:review, and at least one semantic or type-ground-truth check when applicable.
+crates/unlace-cli/src/args.rs:77:        /// sections, e.g. from `objcopy --only-keep-debug`). Lets a stripped
+crates/unlace-cli/src/args.rs:164:        /// sections, e.g. from `objcopy --only-keep-debug`). Lets a stripped
+crates/unlace-ir/src/reg_alias.rs:60:/// 8-byte enclosing register, so writing `EAX` semantically defines
+crates/unlace-lift-rx/src/lift.rs:73:    /// IntSborrow semantics.
+docs/research-ida-parity-gaps-2026-05.md:21:the single biggest gap: we have no semantic-correctness or ground-truth type
+docs/research-ida-parity-gaps-2026-05.md:76:  *stripped* binaries; uses a probabilistic constraint model over access
+docs/research-ida-parity-gaps-2026-05.md:78:- **TyGr** (Zhu et al., USENIX'24) — GNN-based type inference on stripped
+docs/research-ida-parity-gaps-2026-05.md:84:  symbols from stripped binaries; pairs symbol recovery with type recovery.
+docs/research-ida-parity-gaps-2026-05.md:105:  Key idea: don't rely on a fixed schema (if/while templates) — use a semantics-
+docs/research-ida-parity-gaps-2026-05.md:120:- **Phoenix** (Schwartz et al.) — semantics-preserving structural analysis; the
+docs/research-ida-parity-gaps-2026-05.md:139:- **Liu & Wang** (ISSTA'20) — recompile-and-compare semantic-equivalence testing.
+docs/research-ida-parity-gaps-2026-05.md:142:- **Cao et al.** (ISSTA'24) — semantic consistency + readability; notes decompiled
+docs/research-ida-parity-gaps-2026-05.md:163:  runtime functions in stripped binaries. We have `unlace-flirt`; the gap is
+docs/research-ida-parity-gaps-2026-05.md:172:1. **Add a semantic-correctness gate** (recompile-and-run, à la Liu & Wang).
+docs/research-ida-parity-gaps-2026-05.md:211:`medium`/`stripped` fixture convergence and broader output quality.
+docs/research-ida-parity-gaps-2026-05.md:212:`debug_templates`, `medium`, and `stripped` have since moved from XFAIL to PASS
+docs/research-ida-parity-gaps-2026-05.md:213:in `xtask semantic-report`; the remaining value of this section is quality and
+docs/research-ida-parity-gaps-2026-05.md:220:CFGs that don't match any simple while/for template. The semantic blocker is now
+docs/research-ida-parity-gaps-2026-05.md:255:  semantically-equivalent tails (e.g. multiple `return -1;`) into one block +
+docs/research-ida-parity-gaps-2026-05.md:431:The definitive paper on probabilistic struct recovery from stripped binaries.
+docs/research-ida-parity-gaps-2026-05.md:448:significantly outperforms IDA/Ghidra on struct identification in stripped
+docs/research-ida-parity-gaps-2026-05.md:468:### Summary: semantic XFAIL status
+docs/research-ida-parity-gaps-2026-05.md:472:| medium | fixed: `xtask semantic-report` now recompiles and behavior-matches `main`; the final blocker was empty-branch label-hoist control flow around the optimized nth-prime loop. | Keep the guarded-empty-sibling regression covered and continue reducing labels/gotos as quality work. |
+docs/research-ida-parity-gaps-2026-05.md:473:| stripped | fixed: same optimized `main` behavior now matches under stripped symbols. | Keep stripped-symbol helper aliases covered by `xtask semantic-report`. |
+docs/research-ida-parity-gaps-2026-05.md:474:| debug_templates | fixed: C++ template helper subset now recompiles and behavior-matches. | Keep semantic PASS covered by `xtask semantic-report`. |
+docs/research-ida-parity-gaps-2026-05.md:491:## Part 3: Register aliasing, partial-register SSA, and lvar recovery (2026-05-27)
+docs/research-ida-parity-gaps-2026-05.md:497:variable, so `rax:8` and `eax:4` become separate SSA names with no semantic
+docs/research-ida-parity-gaps-2026-05.md:511:def-use chain, no data flow. This is semantically wrong on x86-64 where
+docs/research-ida-parity-gaps-2026-05.md:579:### Hex-Rays lvar model (from indexed SDK)
+docs/research-ida-parity-gaps-2026-05.md:582:- `lvar_ref_t` only exists after `MMAT_LVARS` maturity
+docs/research-ida-parity-gaps-2026-05.md:583:- It carries `mba` (microcode block array) + `idx` (lvar index) + `off` (byte
+docs/research-ida-parity-gaps-2026-05.md:584:  offset within the lvar)
+docs/research-ida-parity-gaps-2026-05.md:589:  offset within the lvar — our approach tries to version sub-pieces independently
+docs/research-ida-parity-gaps-2026-05.md:630:- Directly applicable to decompiler lvar allocation: instead of allocating
+docs/research-ida-parity-gaps-2026-05.md:631:  registers, we're allocating variable names to overlapping live ranges
+docs/research-ida-parity-gaps-2026-05.md:730:- Hex-Rays SDK: hexrays.hpp lvar_ref_t (MMAT_LVARS model)
+docs/research-ida-parity-gaps-2026-05.md:739:- **Van Emmerik / Ghidra / iced** are directly relevant to lifter semantics.
+docs/research-ida-parity-gaps-2026-05.md:740:- **LLVM / GCC** are compiler back-end models for live ranges, lanes, modes, and
+docs/research-ida-parity-gaps-2026-05.md:743:  later lvar allocator, not the first fix for decompiler SSA.
+docs/research-ida-parity-gaps-2026-05.md:760:and static variables. That makes the paper excellent for stack/lvar/type scoring,
+docs/research-ida-parity-gaps-2026-05.md:763:1. Soni-style DWARF/type/lvar scoring for stack locals, structs, arrays, pointers.
+docs/research-ida-parity-gaps-2026-05.md:764:2. ISA-specific semantic fixtures for register aliasing, flags, SIMD lanes, calls,
+docs/research-ida-parity-gaps-2026-05.md:814:incorrect split before SSA. The tradeoff is delayed recovery of the rare
+docs/research-ida-parity-gaps-2026-05.md:815:independent `al`/`ah` local-variable case; that belongs in the later lvar
+docs/research-ida-parity-gaps-2026-05.md:816:allocator as lane splitting, not in the raw lifter.
+docs/research-ida-parity-gaps-2026-05.md:862:- Vector zeroing semantics are not solved by the GPR-only `X86RegView`.
+docs/research-ida-parity-gaps-2026-05.md:878:- `INT_ZEXT` for 32-bit-to-64-bit GPR write semantics.
+docs/research-ida-parity-gaps-2026-05.md:881:unlace now uses equivalent semantics for GPRs with existing IR ops:
+docs/research-ida-parity-gaps-2026-05.md:888:LLVM's `RegisterCoalescer` is the right reference for later lvar/lane allocation:
+docs/research-ida-parity-gaps-2026-05.md:892:- `mergeSubRangeInto()` and `joinSubRegRanges()` split and join subregister live
+docs/research-ida-parity-gaps-2026-05.md:898:SSA values can become one user-visible lvar or whether a wide register should be
+docs/research-ida-parity-gaps-2026-05.md:899:split into lane variables.
+docs/research-ida-parity-gaps-2026-05.md:912:### Puzzle Solving and Colibri: lvar coalescing, not lifter semantics
+docs/research-ida-parity-gaps-2026-05.md:917:allocation algorithm over live ranges.
+docs/research-ida-parity-gaps-2026-05.md:922:  families having fewer split levels.
+docs/research-ida-parity-gaps-2026-05.md:927:For unlace, these papers are the design source for a later **lvar allocator**:
+docs/research-ida-parity-gaps-2026-05.md:936:coalescing cannot reliably recover semantics already lost by exact-width SSA.
+docs/research-ida-parity-gaps-2026-05.md:956:4. Add lvar lane splitting/coalescing after SSA optimization, borrowing LLVM lane
+docs/research-ida-parity-gaps-2026-05.md:958:5. Extend the Soni-style evaluator with a separate register-alias semantic suite,
+crates/unlace-ir/src/ssa.rs:169:/// locally plausible and a witness value can distinguish their semantics.
+crates/unlace-ir/src/ssa.rs:178:    /// Concrete bit-vector value that exercises a semantic difference.
+crates/unlace-ir/src/ssa.rs:700:    /// for ObjC `objc_msgSend`). See [`TargetSet`] for variant semantics.
+crates/unlace-ir/src/ssa.rs:748:    /// by the printer/lvar layer to render named locals without re-deriving
+crates/unlace-ir/src/ssa.rs:851:    /// [`unlace_passes::lvar_collect::LvarCollectPass`] after
+crates/unlace-ir/src/ssa.rs:853:    /// [`crate::lvar::LvarId`] (dense from 0) so iteration is
+crates/unlace-ir/src/ssa.rs:858:    /// behaviour does not consult `lvars` yet.
+crates/unlace-ir/src/ssa.rs:859:    pub lvars: Vec<crate::lvar::Lvar>,
+crates/unlace-ir/src/ssa.rs:976:/// C++20 coroutines compile into a "split" ABI:
+crates/unlace-ir/src/ssa.rs:1178:/// `SP/BP + const` (or an aliased frame register). Future printer/lvar
+crates/unlace-ir/src/ssa.rs:1629:        lvars: Vec::new(),
+crates/unlace-ir/src/lvar.rs:9://! (see `unlace_passes::lvar_collect`). Interference-graph construction,
+crates/unlace-ir/src/lvar.rs:25:/// deterministic by id so callers iterating `SsaFunction::lvars` see a
+crates/unlace-ir/src/lvar.rs:49:/// fold overlapping classes (e.g. a `Temp` whose live-range turns out to
+crates/unlace-ir/src/lvar.rs:85:/// Inclusive `[start_block, end_block]` live-range bracket. For the
+crates/unlace-ir/src/lvar.rs:204:    /// Where the lvar physically lives.
+crates/unlace-ir/src/lvar.rs:206:    /// Coarse block-granular live range.
+crates/unlace-ir/src/lvar.rs:213:    /// Where the lvar came from (analysis vs DWARF vs user).
+crates/unlace-ir/src/lvar.rs:220:    /// Construct a minimally-populated lvar — used by the collector pass.
+crates/unlace-ir/src/lvar.rs:241:/// Render `lvars` as a markdown table for the Batch 18 audit report.
+crates/unlace-ir/src/lvar.rs:243:/// Columns: id, storage class+detail, live range, ty, address-taken/volatile/synthetic/param flags, chosen name, source.
+crates/unlace-ir/src/lvar.rs:245:/// runs. Empty `lvars` produces the header-only table.
+crates/unlace-ir/src/lvar.rs:246:pub fn dump_lvars(lvars: &[Lvar]) -> String {
+crates/unlace-ir/src/lvar.rs:251:    for lv in lvars {
+crates/unlace-ir/src/lvar.rs:310:    fn lvar_id_display_and_accessors() {
+crates/unlace-ir/src/lvar.rs:317:    fn lvar_flags_bitops() {
+crates/unlace-ir/src/lvar.rs:363:    fn lvar_new_populates_defaults() {
+crates/unlace-ir/src/lvar.rs:378:    /// Batch 18 audit: `dump_lvars` produces a stable markdown table
+crates/unlace-ir/src/lvar.rs:382:    fn dump_lvars_renders_stable_table() {
+crates/unlace-ir/src/lvar.rs:406:        let table = dump_lvars(&[a, b_lv]);
+crates/unlace-ir/src/lvar.rs:421:    fn dump_lvars_empty_slice_yields_header_only() {
+crates/unlace-ir/src/lvar.rs:422:        let table = dump_lvars(&[]);
+crates/unlace-cli/src/lsp.rs:807:        // explicit range, mirroring what the c_printer produces from
+crates/unlace-cli/src/lib.rs:6://! end-to-end load → lift → SSA → passes → c_printer pipeline without
+crates/unlace-cli/src/lib.rs:27:/// override semantics, and Rust will not let a library module reach
+crates/unlace-lift-arm/src/lib.rs:755:        // scope — Callother semantics deliberately leave the success bit
+crates/unlace-lift-arm/src/lib.rs:1363:    // RdLo, RdHi, Rn, Rm; semantics RdHi:RdLo += Rn * Rm.
+crates/unlace-lift-arm/src/lib.rs:1673:        // the operands (CCMP semantics). Verify the IntSub is present.
+crates/unlace-lift-arm/src/lib.rs:2270:    /// downstream analyses can recognise lock semantics. We exercise both
+docs/profiling.md:109:`strip = "symbols"` and `split-debuginfo = "unpacked"` for release —
+crates/unlace-lift-arm/src/lift.rs:293:        // this keeps writeback semantics + per-register Load/Store
+crates/unlace-lift-arm/src/lift.rs:1349:/// UMULL/SMULL Rdlo, Rdhi, Rn, Rm — 64-bit multiply with the result split
+crates/unlace-lift-arm/src/lift.rs:1606:/// (tag 0x352) so analyses that care about lock/atomic semantics can find it.
+crates/unlace-struct/src/return_merge.rs:492:        // The Label+Return pair should have been stripped since no gotos remain.
+crates/unlace-struct/src/return_merge.rs:494:        assert!(!has_label, "consumed label should be stripped");
+crates/unlace-struct/src/return_merge.rs:595:        // Label+Return should be stripped.
+crates/unlace-struct/src/return_merge.rs:597:        assert!(!has_label, "all gotos replaced → label should be stripped");
+docs/emulator.md:70:  — the canonical IR opcode semantics (matches unlace's `IrInsn`).
+crates/unlace-flirt/src/sig.rs:152:/// to identify libc functions in a stripped binary even if the full
+crates/unlace-lumina/src/wire.rs:184:// -------------------------------------------------------------- u64 split --
+crates/unlace-lumina/src/wire.rs:189:pub fn write_u64_split(out: &mut Vec<u8>, value: u64) {
+crates/unlace-lumina/src/wire.rs:194:/// Decode the inverse of [`write_u64_split`].
+crates/unlace-lumina/src/wire.rs:195:pub fn read_u64_split(buf: &[u8], pos: &mut usize) -> io::Result<u64> {
+crates/unlace-lumina/src/wire.rs:355:    fn u64_split_roundtrips() {
+crates/unlace-lumina/src/wire.rs:371:            write_u64_split(&mut buf, v);
+crates/unlace-lumina/src/wire.rs:373:            let got = read_u64_split(&buf, &mut pos).expect("decode u64");
+docs/idapython-compat.md:8:- ✅ **Supported** — function exists and matches IDA semantics for the
+docs/unldb-format.md:55:The `format_version` field uses semantic increments:
+crates/unlace-flirt/src/builder.rs:3://! Takes a stripped or symbolized library file (.so / .dll / .dylib /
+crates/unlace-flirt/src/builder.rs:14://! Reference: research/ida-hexrays-docs/pdfs/usenix13-native-x86-decompilation-semantics.pdf
+crates/unlace-lift-arm/src/ops/control_flow.rs:319:    // a Varnode without distinguishing here — the tag carries semantics.
+crates/unlace-lumina/src/server.rs:30:    DEFAULT_MAX_PAYLOAD, Frame, read_cstring, read_frame, read_raw_bytes, read_u64_split,
+crates/unlace-lumina/src/server.rs:31:    read_vuint32, write_cstring, write_frame, write_raw_bytes, write_u64_split, write_vuint32,
+crates/unlace-lumina/src/server.rs:471:    let (mut r, mut w) = tokio::io::split(stream);
+crates/unlace-lumina/src/server.rs:694:    //     u64      size (split)
+crates/unlace-lumina/src/server.rs:704:                write_u64_split(&mut out, r.size);
+crates/unlace-lumina/src/server.rs:724:        let size = read_u64_split(buf, &mut pos)?;
+crates/unlace-lumina/src/server.rs:779:        write_u64_split(&mut out, p.id);
+crates/unlace-lumina/src/server.rs:916:        write_u64_split(&mut out, row.id);
+crates/unlace-lumina/src/server.rs:917:        write_u64_split(&mut out, row.timestamp);
+crates/unlace-lumina/src/server.rs:919:        write_u64_split(&mut out, row.payload_len);
+crates/unlace-lumina/src/server.rs:1038:    write_u64_split(&mut out, s.funcs);
+crates/unlace-lumina/src/server.rs:1039:    write_u64_split(&mut out, s.pushes);
+crates/unlace-lumina/src/server.rs:1040:    write_u64_split(&mut out, s.history);
+crates/unlace-lumina/src/server.rs:1041:    write_u64_split(&mut out, s.idbs);
+crates/unlace-lumina/src/server.rs:1042:    write_u64_split(&mut out, s.inputs);
+crates/unlace-lumina/src/server.rs:1169:    let last_active = read_u64_split(buf, pos)?;
+crates/unlace-lumina/src/server.rs:1186:    write_u64_split(out, user.last_active);
+crates/unlace-lumina/src/server.rs:1224:    write_u64_split(out, row.size);
+crates/unlace-lumina/src/server.rs:1231:    write_u64_split(out, row.id);
+crates/unlace-lumina/src/server.rs:1232:    write_u64_split(out, row.timestamp);
+crates/unlace-lumina/src/server.rs:1238:    write_u64_split(out, row.id);
+crates/unlace-lumina/src/server.rs:1239:    write_u64_split(out, row.timestamp);
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:43:| Architectures lifted | 34 (semantics vary widely; see `docs/status.md`) |
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:142:X86CallingConv.td) defines precise semantics for every opcode, flag effect,
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:146:**Decompiler reverse needed**: The lifter must be semantically correct for
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:170:**Trap**: "34 architectures" is a vanity metric. Fix x86_64 semantics
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:199:4. **Overlap resolution**: Multiple accesses to overlapping ranges → split or
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:245:    args: Vec<ArgLocation>,       // reg, stack-offset, or split
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:280:- FLIRT/SIG matcher for stripped binaries.
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:302:coalescing, one lvar candidate per coalesced temp cluster, and factual
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:307:1. **Live range computation**: For each SSA value, compute its live range
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:309:2. **Interference graph**: Two values interfere if their live ranges overlap.
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:325:- IDA: `sub_1F8DC0` (lvar allocation), `sub_21B2A0` (interference/coalesce)
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:337:semantic nodes.
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:339:**Missing semantic nodes** (from Clang Sema/CodeGen read):
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:345:| Short-circuit `&&` `\|\|` | CFG-recovered but fragile | Semantic `LogicalBinop` with guaranteed short-circuit semantics |
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:379:**Trap**: Adding semantic nodes requires touching the printer and all
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:676:| 6 | Lvar allocation strengthening (live ranges, interference, coalescing, `a1`/`v1`/`result` naming) | Readable variable names |
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:704:        │       └── 6 (lvar allocation)
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:712:11 (semantic AST nodes)
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:713:└── 12 (printer semantics)
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:745:5. **"34 architectures"** — Broad lifter lists hide shallow semantics. Make
+docs/FULL_GAP_ANALYSIS_2026-05-18.md:777:- **Items 4–6** (stack + lvar): ~4–6 weeks
+crates/unlace-loader/src/dyld_cache.rs:16://!   fix-ups, slid linkedit, stripped __OBJC_RO) is a follow-up.
+crates/unlace-loader/src/dyld_cache.rs:401:/// macOS 12+ caches split across `dyld_shared_cache_arm64e` (primary)
+crates/unlace-loader/src/dyld_cache.rs:1504:/// global pointers and to model auth-stripped runtime behaviour without
+crates/unlace-flirt/src/library.rs:252://! language runtimes that show up most often in stripped binaries.  The files
+crates/unlace-cli/src/pipeline.rs:473:        let split = addr.saturating_add(4);
+crates/unlace-cli/src/pipeline.rs:474:        if end.saturating_sub(split) >= 4 && known.insert(split) {
+crates/unlace-cli/src/pipeline.rs:476:                name: format!("sub_{split:x}"),
+crates/unlace-cli/src/pipeline.rs:477:                addr: split,
+crates/unlace-cli/src/pipeline.rs:478:                size: end - split,
+crates/unlace-cli/src/pipeline.rs:1266:/// inside the loop intentionally stops before lvar/final presentation stages:
+crates/unlace-cli/src/pipeline.rs:1269:/// lvars/final signatures after this helper has converged.
+crates/unlace-cli/src/pipeline.rs:1274:/// require splitting the per-function pipeline into "lift+passes" and
+crates/unlace-cli/src/pipeline.rs:1413:    /// Number of functions whose lvar/final signature metadata changed when
+crates/unlace-cli/src/pipeline.rs:1496:        let before_lvars = ssa.lvars.clone();
+crates/unlace-cli/src/pipeline.rs:1504:                "[unlace interproc] quality-lvar-start name={} maturity={:?}",
+crates/unlace-cli/src/pipeline.rs:1508:        pipeline_stage_lvar(ssa).context("whole-program lvar refresh failed")?;
+crates/unlace-cli/src/pipeline.rs:1518:        if ssa.lvars != before_lvars
+crates/unlace-cli/src/pipeline.rs:1718:    // Stage 6: M_LVARS — post-loop one-shots + lvar allocation
+crates/unlace-cli/src/pipeline.rs:1727:    pipeline_stage_lvar(ssa)?;
+crates/unlace-cli/src/pipeline.rs:1936:        "func={func_name} stage={stage} detail var_types={} merged_names={} foldable={} stack_vars={} stack_accesses={} stack_resolved={} stack_lost={} stack_frame_locals={} lvars={} params={} return_type={}",
+crates/unlace-cli/src/pipeline.rs:1954:        ssa.lvars.len(),
+crates/unlace-cli/src/pipeline.rs:1987:    for lv in &ssa.lvars {
+crates/unlace-cli/src/pipeline.rs:1988:        if !matches!(lv.storage, unlace_ir::lvar::LvarStorage::Stack { .. }) {
+crates/unlace-cli/src/pipeline.rs:1992:            "func={func_name} stage={stage} stack-lvar id={} storage={:?} name={:?} ty={:?} source={:?} flags={:?}",
+crates/unlace-cli/src/pipeline.rs:2236:/// Stage 6b (M_LVARS): lvar allocation and variable merging.
+crates/unlace-cli/src/pipeline.rs:2237:fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+crates/unlace-cli/src/pipeline.rs:2243:            "[unlace interproc] lvar-pass-start name={} pass=ExpressionTreePass",
+crates/unlace-cli/src/pipeline.rs:2250:            "[unlace interproc] lvar-pass-done name={} pass=ExpressionTreePass",
+crates/unlace-cli/src/pipeline.rs:2254:            "[unlace interproc] lvar-pass-start name={} pass=VariableMergePass",
+crates/unlace-cli/src/pipeline.rs:2261:            "[unlace interproc] lvar-pass-done name={} pass=VariableMergePass",
+crates/unlace-cli/src/pipeline.rs:2265:            "[unlace interproc] lvar-pass-start name={} pass=LvarCollectPass",
+crates/unlace-cli/src/pipeline.rs:2272:            "[unlace interproc] lvar-pass-done name={} pass=LvarCollectPass",
+crates/unlace-cli/src/pipeline.rs:2276:            "[unlace interproc] lvar-pass-start name={} pass=RegisterCoalescePass",
+crates/unlace-cli/src/pipeline.rs:2283:            "[unlace interproc] lvar-pass-done name={} pass=RegisterCoalescePass",
+crates/unlace-cli/src/pipeline.rs:2434:    let base_name = base_name.split_whitespace().collect::<Vec<_>>().join(" ");
+crates/unlace-cli/src/pipeline.rs:2521:    /// yields, letting a stripped binary recover names/types.
+crates/unlace-cli/src/pipeline.rs:2693:    // the recognised name rather than the stripped-binary placeholder.
+crates/unlace-cli/src/pipeline.rs:2694:    // We only overwrite names that look like stripped-binary stubs;
+crates/unlace-cli/src/pipeline.rs:2738:    unlace_struct::split_irreducible_entries(&mut ir_func);
+crates/unlace-cli/src/pipeline.rs:3094:/// looks like a stripped-binary stub (`sub_XXXX`, empty / synthesised, or
+crates/unlace-cli/src/pipeline.rs:3242:/// Whether `name` looks like a stripped-binary placeholder that FLIRT is
+crates/unlace-cli/src/pipeline.rs:3334:    pipeline_trace_start(&entry.name, "split-irreducible");
+crates/unlace-cli/src/pipeline.rs:3335:    let splits = unlace_struct::split_irreducible_entries(&mut ir_func);
+crates/unlace-cli/src/pipeline.rs:3336:    pipeline_trace_ir(&entry.name, "split-irreducible", t, deadline, &ir_func);
+crates/unlace-cli/src/pipeline.rs:3339:        splits,
+crates/unlace-cli/src/pipeline.rs:3340:        "split_irreducible_entries done"
+crates/unlace-cli/src/pipeline.rs:4529:            ann_clone.stack_lvars = unlace_output::stack_lvar_annotations_from_ssa(ssa);
+crates/unlace-cli/src/pipeline.rs:5709:        //     lives in `unlace-output`'s c_printer tests
+crates/unlace-cli/src/pipeline.rs:5787:    /// stripped `sub_XXXX` placeholder.
+crates/unlace-struct/src/condition_refinement.rs:1224:    // with refined conditional groups. We split into: leading True-nodes, then
+crates/unlace-lift-x86/src/lib.rs:2687:    // alias layout AVX2 lifting relies on for clobber semantics.
+crates/unlace-lift-x86/src/lib.rs:2862:        // The Callother stays semantically 256-bit; the architectural
+crates/unlace-lumina/src/legacy_json.rs:50:    /// Discriminator for the payload semantics.
+crates/unlace-lumina/src/legacy_json.rs:287:            .split_once('/')
+crates/unlace-lumina/src/legacy_json.rs:311:        let split = buf
+crates/unlace-lumina/src/legacy_json.rs:315:        let header = std::str::from_utf8(&buf[..split])
+crates/unlace-lumina/src/legacy_json.rs:317:        let body = buf[split + 4..].to_vec();
+crates/unlace-lumina/src/legacy_json.rs:321:            .split_whitespace()
+crates/unlace-cli/src/batch.rs:72:/// `SsaFunction` map stays under ~2 GiB on the project's medium and
+crates/unlace-cli/src/batch.rs:625:        let data = fs::read(fixture("medium.elf")).unwrap();
+crates/unlace-cli/src/batch.rs:630:            "medium.elf should have >=5 functions, found {}",
+crates/unlace-cli/src/batch.rs:649:        let data = fs::read(fixture("medium.elf")).unwrap();
+crates/unlace-cli/src/batch.rs:695:        let data = fs::read(fixture("medium.elf")).unwrap();
+crates/unlace-cli/src/batch.rs:729:        let data = fs::read(fixture("medium.elf")).unwrap();
+crates/unlace-cli/src/batch.rs:793:        let data = fs::read(fixture("medium.elf")).unwrap();
+crates/unlace-flirt/src/generator.rs:357:    if let Some(stripped) = member_name.strip_suffix(".o") {
+crates/unlace-flirt/src/generator.rs:358:        Cow::Owned(stripped.to_string())
+crates/unlace-flirt/src/generator.rs:359:    } else if let Some(stripped) = member_name.strip_suffix(".obj") {
+crates/unlace-flirt/src/generator.rs:360:        Cow::Owned(stripped.to_string())
+crates/unlace-flirt/src/generator.rs:845:    if let Some(stripped) = member_name.strip_suffix(".o") {
+crates/unlace-flirt/src/generator.rs:846:        Cow::Owned(stripped.to_string())
+crates/unlace-flirt/src/generator.rs:847:    } else if let Some(stripped) = member_name.strip_suffix(".obj") {
+crates/unlace-flirt/src/generator.rs:848:        Cow::Owned(stripped.to_string())
+crates/unlace-flirt/src/generator.rs:1251:    if let Some(stripped) = member_name.strip_suffix(".o") {
+crates/unlace-flirt/src/generator.rs:1252:        Cow::Owned(stripped.to_string())
+crates/unlace-flirt/src/generator.rs:1253:    } else if let Some(stripped) = member_name.strip_suffix(".obj") {
+crates/unlace-flirt/src/generator.rs:1254:        Cow::Owned(stripped.to_string())
+crates/unlace-lumina/src/client.rs:14:    DEFAULT_MAX_PAYLOAD, Frame, read_cstring, read_frame, read_raw_bytes, read_u64_split,
+crates/unlace-lumina/src/client.rs:15:    read_vuint32, write_cstring, write_frame, write_raw_bytes, write_u64_split, write_vuint32,
+crates/unlace-lumina/src/client.rs:27:/// Lumina client backed by an owned `TcpStream` split into halves.
+crates/unlace-lumina/src/client.rs:38:        let (r, w) = tokio::io::split(sock);
+crates/unlace-lumina/src/client.rs:126:                let size = read_u64_split(buf, &mut pos)?;
+crates/unlace-lumina/src/client.rs:149:            write_u64_split(&mut payload, r.size);
+crates/unlace-loader/src/lldb_bridge.rs:47:        if let Some((name, value)) = trimmed.split_once('=') {
+crates/unlace-lift-x86/src/lift.rs:846:        // string-compare semantics.
+crates/unlace-struct/src/hir.rs:394:    /// no semantic equivalent (privileged x86 ops, rare FPU paths, opaque
+crates/unlace-struct/src/hir.rs:487:    /// Borrow the unwrapped, comment-stripped node (recursing through nested
+crates/unlace-struct/src/hir.rs:551:    /// with disjoint live ranges — to share one source-level name like
+crates/unlace-plugin/src/registry.rs:27:        let parts: Vec<&str> = s.split('.').collect();
+crates/unlace-loader/src/gdb_mi.rs:55:            let class = line[1..].split(',').next().unwrap_or(&line[1..]).to_string();
+crates/unlace-loader/src/gdb_mi.rs:59:            let class = line[1..].split(',').next().unwrap_or(&line[1..]).to_string();
+crates/unlace-loader/src/gdb_mi.rs:63:            let class = line[1..].split(',').next().unwrap_or(&line[1..]).to_string();
+crates/unlace-loader/src/gdb_mi.rs:76:                let class = rest[1..].split(',').next().unwrap_or(&rest[1..]).to_string();
+crates/unlace-plugin/src/lua_bridge.rs:88:            let parts: Vec<&str> = rest.splitn(3, ':').collect();
+docs/LLVM_DECOMPILER_GAP_ANALYSIS.md:81:| CallSiteSplitting | Splits call sites for constrained arguments | Detect split call sites; restore original | LOW |
+crates/unlace-lift-avr/src/lib.rs:431:        // semantics. Output is still Rd so dataflow tracking sees it.
+crates/unlace-lift-avr/src/lib.rs:477:            // Callother so the IO-port semantics survive.
+crates/unlace-lift-x86/src/ops/fpu.rs:113:/// ST(i) register varnode. Falls back to `Unimplemented` semantics by way of
+crates/unlace-lift-x86/src/ops/fpu.rs:298:/// the tag preserves the semantic distinction.
+crates/unlace-struct/src/node_split.rs:1://! Controlled node splitting to break irreducible regions.
+crates/unlace-struct/src/node_split.rs:20://! After splitting, the structurer sees a single-entry loop and emits
+crates/unlace-struct/src/node_split.rs:44:pub fn split_irreducible_entries(func: &mut Function) -> usize {
+crates/unlace-struct/src/node_split.rs:54:                "[unlace:split] func={} round={round} blocks={} irreducible_regions={}",
+crates/unlace-struct/src/node_split.rs:61:                    "[unlace:split]   region#{i} entries={:?} body_blocks={}",
+crates/unlace-struct/src/node_split.rs:70:                    "[unlace:split] func={} CONVERGED (reducible) after {round} rounds, {total} splits, blocks={}",
+crates/unlace-struct/src/node_split.rs:77:        let split_now = split_one_round(func, &regions);
+crates/unlace-struct/src/node_split.rs:80:                "[unlace:split] func={} round={round} split_now={split_now}",
+crates/unlace-struct/src/node_split.rs:84:        if split_now == 0 {
+crates/unlace-struct/src/node_split.rs:87:                    "[unlace:split] func={} STUCK (irreducible, no productive split) after {round} rounds, blocks={}",
+crates/unlace-struct/src/node_split.rs:94:        total += split_now;
+crates/unlace-struct/src/node_split.rs:98:            "[unlace:split] func={} HIT MAX_SPLIT_ROUNDS={MAX_SPLIT_ROUNDS}, blocks={}, total_splits={total}",
+crates/unlace-struct/src/node_split.rs:106:fn split_one_round(func: &mut Function, regions: &[IrreducibleRegion]) -> usize {
+crates/unlace-struct/src/node_split.rs:108:    let mut splits = 0;
+crates/unlace-struct/src/node_split.rs:111:        let Some((entry, external)) = pick_split_target(func, region) else {
+crates/unlace-struct/src/node_split.rs:120:            "node_split selected entry"
+crates/unlace-struct/src/node_split.rs:137:        splits += 1;
+crates/unlace-struct/src/node_split.rs:140:    splits
+crates/unlace-struct/src/node_split.rs:143:/// Choose one entry per region by simulating each split and minimizing the
+crates/unlace-struct/src/node_split.rs:149:/// essential for convergence: simultaneous splitting creates new copy nodes
+crates/unlace-struct/src/node_split.rs:151:fn pick_split_target(
+crates/unlace-struct/src/node_split.rs:171:        let score = simulate_post_split_score(func, region, entry, external);
+crates/unlace-struct/src/node_split.rs:177:                "node_split skipped non-shrinking candidate"
+crates/unlace-struct/src/node_split.rs:194:            "node_split scored candidate"
+crates/unlace-struct/src/node_split.rs:240:fn simulate_post_split_score(
+crates/unlace-struct/src/node_split.rs:243:    split_entry: BlockId,
+crates/unlace-struct/src/node_split.rs:247:    let Some(orig) = trial.blocks.get(&split_entry).cloned() else {
+crates/unlace-struct/src/node_split.rs:264:        redirect_successors(&mut trial, ext, split_entry, copy_id);
+crates/unlace-struct/src/node_split.rs:419:    fn splitting_makes_irreducible_cfg_reducible() {
+crates/unlace-struct/src/node_split.rs:429:        let splits = split_irreducible_entries(&mut func);
+crates/unlace-struct/src/node_split.rs:430:        assert!(splits > 0, "expected at least one split");
+crates/unlace-struct/src/node_split.rs:434:            "splitting should add blocks: before={blocks_before}, after={}",
+crates/unlace-struct/src/node_split.rs:442:            "post-split CFG should be reducible, got {regions_after:?}"
+crates/unlace-struct/src/node_split.rs:451:        let splits = split_irreducible_entries(&mut func);
+crates/unlace-struct/src/node_split.rs:452:        assert_eq!(splits, 0);
+crates/unlace-struct/src/node_split.rs:459:        split_irreducible_entries(&mut func);
+crates/unlace-loader/src/til.rs:298:    /// downstream layout passes don't conflate offset semantics.
+crates/unlace-test-harness/tests/golden_fixtures.rs:9://! `medium.elf`, `debug_structs.elf`, `debug_calls.elf`, `debug_hello.elf`,
+crates/unlace-test-harness/tests/golden_fixtures.rs:40://! This does not measure semantic equivalence or type/variable recovery.
+crates/unlace-test-harness/tests/golden_fixtures.rs:336:    let Some((prefix, _)) = line.split_once('{') else {
+crates/unlace-test-harness/tests/golden_fixtures.rs:492:            .split_once('=')
+crates/unlace-test-harness/tests/golden_fixtures.rs:573:fn golden_medium() {
+crates/unlace-test-harness/tests/golden_fixtures.rs:574:    run_golden("medium");
+crates/unlace-test-harness/tests/golden_fixtures.rs:650:        "medium",
+crates/unlace-test-harness/tests/golden_fixtures.rs:886:[medium]
+crates/unlace-test-harness/tests/golden_fixtures.rs:902:    let medium = table.get("medium").expect("medium present");
+crates/unlace-test-harness/tests/golden_fixtures.rs:903:    assert_eq!(medium.if_count, 60);
+crates/unlace-test-harness/tests/golden_fixtures.rs:904:    assert_eq!(medium.for_count, 5);
+crates/unlace-test-harness/tests/golden_fixtures.rs:905:    assert_eq!(medium.return_count, 8);
+crates/unlace-test-harness/tests/golden_fixtures.rs:906:    assert_eq!(medium.variable_count, 30);
+crates/unlace-test-harness/tests/golden_fixtures.rs:907:    assert_eq!(medium.lines, 500);
+crates/unlace-test-harness/tests/golden_fixtures.rs:930:        "medium",
+crates/unlace-lift-x86/src/ops/sse.rs:127:    /// Generic vector op coverage tags for instructions that are semantically
+docs/LLVM_PASSES_CATALOG.md:99:- **Priority**: LOW - Affects performance but not semantics
+docs/LLVM_PASSES_CATALOG.md:112:- **Compiler**: Sinks instructions out of loops to reduce live ranges
+docs/LLVM_PASSES_CATALOG.md:124:- **Priority**: LOW - Affects optimization but not core semantics
+docs/LLVM_PASSES_CATALOG.md:128:- **Decompiler Reverse**: Detect split loops; restore original bounds
+docs/LLVM_PASSES_CATALOG.md:139:- **Priority**: LOW - Performance optimization, not semantic
+docs/LLVM_PASSES_CATALOG.md:266:- **Decompiler Reverse**: Detect split call sites; restore original call
+docs/LLVM_PASSES_CATALOG.md:279:- **Priority**: MEDIUM - Affects concurrency semantics
+docs/LLVM_PASSES_CATALOG.md:339:- **Compiler**: Sinks instructions to later blocks to reduce live ranges
+docs/LLVM_PASSES_CATALOG.md:371:- **Priority**: LOW - Affects GC semantics
+docs/LLVM_PASSES_CATALOG.md:376:- **Priority**: LOW - Affects GC semantics
+docs/LLVM_PASSES_CATALOG.md:551:- **Priority**: LOW - Affects CFI semantics
+docs/LLVM_PASSES_CATALOG.md:595:- **Decompiler Reverse**: Detect split paths; restore original function
+docs/LLVM_PASSES_CATALOG.md:675:- **Decompiler Reverse**: Detect split globals; restore original
+docs/LLVM_PASSES_CATALOG.md:924:19. RewriteStatepointsForGC - GC semantics
+docs/LLVM_PASSES_CATALOG.md:925:20. PlaceSafepoints - GC semantics
+docs/LLVM_PASSES_CATALOG.md:947:42. GlobalSplit - Global splitting
+crates/unlace-test-harness/tests/golden_x86_64.rs:14://!    on each fixture ELF (hello_world, branches, loops, calls, medium, stripped,
+crates/unlace-test-harness/tests/golden_x86_64.rs:787:fn e2e_medium_all_functions_parse_as_c() {
+crates/unlace-test-harness/tests/golden_x86_64.rs:788:    let c_output = decompile_fixture("medium");
+crates/unlace-test-harness/tests/golden_x86_64.rs:789:    assert!(!c_output.is_empty(), "medium produced empty output");
+crates/unlace-test-harness/tests/golden_x86_64.rs:790:    // medium.elf has multiple functions; each should parse
+crates/unlace-test-harness/tests/golden_x86_64.rs:791:    assert_parses_as_c(&c_output, "medium/all");
+crates/unlace-test-harness/tests/golden_x86_64.rs:795:fn e2e_stripped_all_functions_parse_as_c() {
+crates/unlace-test-harness/tests/golden_x86_64.rs:796:    let c_output = decompile_fixture("stripped");
+crates/unlace-test-harness/tests/golden_x86_64.rs:797:    assert!(!c_output.is_empty(), "stripped produced empty output");
+crates/unlace-test-harness/tests/golden_x86_64.rs:798:    // stripped uses prologue scan; output should still parse
+crates/unlace-test-harness/tests/golden_x86_64.rs:799:    assert_parses_as_c(&c_output, "stripped/all");
+docs/LLVM_ANALYSIS_INDEX.md:316:- All 10 medium-priority analyses listed
+crates/unlace-struct/src/label_tail_dup.rs:22:/// - labels are stripped from duplicated copies so C label names stay unique;
+crates/unlace-struct/src/compound_assign.rs:147:    // Constants make no sense as assignment targets, and RAM would need Load semantics.
+crates/unlace-struct/src/compound_assign.rs:168:/// semantics.
+crates/unlace-loader/src/rr_trace.rs:46:        let parts: Vec<&str> = line.split_whitespace().collect();
+crates/unlace-loader/src/rr_trace.rs:53:        if let Some((start_str, end_str)) = addr_range.split_once('-') {
+crates/unlace-struct/src/lib.rs:32:pub mod node_split;
+crates/unlace-struct/src/lib.rs:73:pub use node_split::split_irreducible_entries;
+crates/unlace-fuzz/corpus/README.md:10:| `seed_hello_world.elf` | loader → lift → SSA → passes → c_printer over a single named function (`main`) |
+docs/historical-sessions.md:31:docs/release polish batch) split the picture:
+docs/historical-sessions.md:38:The split is preserved by the same workflow: when a session claim is verified
+crates/unlace-loader/src/ios_img4.rs:142:        let (head, tail) = self.buf.split_at(n);
+crates/unlace-loader/src/rtti.rs:4://! C++ class hierarchies and virtual method tables from stripped or
+crates/unlace-loader/src/rtti.rs:5://! partially-stripped binaries.
+crates/unlace-loader/src/rtti.rs:1077:        // class's `_ZTI`. This is the key invariant the c_printer
+crates/unlace-lift-x86/src/ops/tsx.rs:36:    /// status — the c_printer surfaces this via `_xbegin()`'s scalar
+crates/unlace-lift-x86/src/ops/tsx.rs:67:/// flow is not modeled here; the c_printer's `_xbegin` intrinsic
+crates/unlace-struct/src/block_merge.rs:15://!      their semantics rely on `A` ending with a terminator.
+crates/unlace-struct/src/block_merge.rs:230:            "the trailing BRANCH must be stripped and BB1's IntAdd+Return appended",
+crates/unlace-struct/src/block_merge.rs:297:    /// A has multiple successors semantically (the second is implied by the
+docs/status.md:17:> **2026-05-30 update.** The source-known semantic gate is green with
+docs/status.md:18:> `xtask semantic-report` at 25 pass rows, 0 XFAIL, 0 failed, and 0
+docs/status.md:22:> unknown helpers, bad type facts, and zero semantic failures.
+docs/status.md:33:- `docs/parity-quality-execution-plan-2026-05.md` (quality-axis split).
+docs/status.md:156:| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 84.9%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. `cargo run -p xtask -- golden-triage` currently has 2 exact-pass rows and 13 exact-line fixture rows for review, so do not blanket-refresh expected C. |
+docs/status.md:157:| Semantic correctness | `cargo run -p xtask -- semantic-report` | 17 host/source-known executable equivalence cases pass; 0 host/source-known cases are tracked as XFAIL; 4 qemu-user non-host executable rows pass; 4 non-host cases also pass shape-only checks | Not full-corpus semantic correctness yet; qemu-user execution currently covers AArch64, MIPS64, PPC64, and RISC-V fixture behavior only. |
+docs/status.md:171:- DWARF v5 split-DWARF (`.dwo`/`.dwp`) evaluator and full DW_OP location lists.
+docs/status.md:178:- Full semantic recompile-and-compare across the source-known fixture corpus.
+crates/unlace-lift-x86/src/ops/perfmon.rs:4://! and returns the 64-bit value split across EDX:EAX. We model this as a
+crates/unlace-lift-x86/src/ops/perfmon.rs:34:/// split-result architectural convention visible to downstream SSA / printers.
+crates/unlace-fuzz/src/lib.rs:4://! c_printer`) from an attacker-controlled byte slice, catches panics,
+crates/unlace-fuzz/src/lib.rs:29://! 3. **Lift → SSA → passes → c_printer** — per function, via
+crates/unlace-fuzz/src/lib.rs:111:    // class). This split shows up in coverage reports as a much
+crates/unlace-struct/src/while_to_for.rs:216:            let rest = nodes.split_off(i + 2);
+crates/unlace-loader/src/msvc_rtti.rs:211:/// the surrounding scan — bad RTTI is common in stripped/obfuscated PEs.
+docs/handoffs/BATCH27_HANDOFF.md:6:measurement split:
+docs/handoffs/BATCH27_HANDOFF.md:9:- semantic correctness,
+docs/handoffs/BATCH27_HANDOFF.md:20:- `xtask semantic-report` captures original-binary stdout/stderr/exit status,
+docs/handoffs/BATCH27_HANDOFF.md:34:- Added `type_stack_o2` (`-O2 -g -fno-omit-frame-pointer`) so type/stack
+docs/handoffs/BATCH27_HANDOFF.md:36:- `scripts/quality_axes.sh` runs the style score, semantic report, and
+docs/handoffs/BATCH27_HANDOFF.md:40:  not semantic or type parity.
+docs/handoffs/BATCH27_HANDOFF.md:44:1. Convert the remaining semantic XFAIL rows into PASS rows. The current
+docs/handoffs/BATCH27_HANDOFF.md:45:   host/source-known XFAILs are `type_stack_o2`, `medium`, and `stripped`;
+docs/handoffs/BATCH27_HANDOFF.md:46:   `type_stack_o2` returns a stale optimized stack initializer instead of the
+docs/handoffs/BATCH27_HANDOFF.md:47:   call-result sum, while `medium`/`stripped` time out because optimized `main`
+docs/handoffs/BATCH27_HANDOFF.md:48:   still loses loop-carried lvar/phi and x86 subregister state.
+docs/handoffs/BATCH27_HANDOFF.md:49:2. Keep non-host semantic rows shape-only until an emulator or architecture
+docs/handoffs/BATCH27_HANDOFF.md:59:   `xtask semantic-report` as the broader quality gate.
+docs/handoffs/BATCH27_HANDOFF.md:66:RUSTC_WRAPPER= cargo run -p xtask -- semantic-report
+docs/handoffs/BATCH27_HANDOFF.md:81:  output and should not be treated as a semantic-quality claim until each row
+crates/unlace-lift-x86/src/ops/amx.rs:5://! style outer products into a destination tile. The semantics (tile
+crates/unlace-lift-x86/src/ops/amx.rs:10://! corresponding `_tile_*` intrinsics (see `c_printer::callother_intrinsic_name`).
+crates/unlace-lift-x86/src/ops/amx.rs:31:/// `unlace-output/src/c_printer.rs::callother_intrinsic_name`.
+crates/unlace-lift-x86/src/ops/crypto.rs:4://! The intrinsic C name is recoverable via the c_printer's
+crates/unlace-struct/src/structurer.rs:618:    let split_idx = nodes
+crates/unlace-struct/src/structurer.rs:622:    let Some(idx) = split_idx else {
+crates/unlace-struct/src/structurer.rs:629:    let (try_nodes, catch_and_rest) = nodes.split_at(idx);
+crates/unlace-struct/src/structurer.rs:630:    let split_landing_pad = catch_and_rest
+crates/unlace-struct/src/structurer.rs:646:    } else if split_landing_pad.is_some_and(|lp| func.eh_cleanup_landing_pads.contains(&lp)) {
+crates/unlace-struct/src/structurer.rs:654:            catch_arms: catch_arms_for_landing_pad(func, split_landing_pad, catch_body),
+crates/unlace-struct/src/structurer.rs:4404:    // predicate would alter program semantics).
+crates/unlace-struct/src/structurer.rs:4869:        // Take the If node and split it into IfCmp.
+crates/unlace-struct/src/structurer.rs:5069:            let after_i = nodes.split_off(i + 2);
+crates/unlace-loader/src/pdb_types.rs:1784:        // Char family — CodeView splits signed/unsigned char from
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:240:   - wrong-semantics
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:546:- Validate lifted semantics against debugger traces.
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:550:- Drive quality dashboard with semantic equivalence checks.
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:563:- Start with small validated semantics, not broad inaccurate coverage.
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:594:- Full DWARF v5 split-DWARF `.dwo`/`.dwp`.
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:655:Faithful binary semantics.
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:705:unlace ir-dump sample.elf --function main --format llvm-semantic
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:712:unlace export-llvm sample.elf --function main --mode semantic -o main.ll
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:713:unlace export-llvm sample.elf --all --mode semantic --out-dir llvm/
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:732:2. Start with semantic mode for integer-only straight-line functions.
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:751:- LLVM poison/undef semantics can make lifted binary code wrong. Avoid
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:753:- Recovered mode must not be sold as exact semantics.
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:888:- LLVM semantic IR export works for production-tier fixture functions.
+docs/handoffs/COMPETITIVE_PARITY_HANDOFF.md:947:- `docs/emulator.md`: semantics coverage.
+docs/handoffs/COMPLETION_08_STUB_LIFTERS.md:96:semantics don't fit basic IntAdd/Sub.
+crates/unlace-loader/src/go_types.rs:104:    /// is split out into [`Self::Func::variadic`] and `out_count` only
+crates/unlace-loader/src/go_types.rs:1080:    /// variadic; the decoder must split it out and decode every pointer in
+crates/unlace-lift-superh/src/decode.rs:444:// can assert decoder coverage without forcing full flag semantics.
+crates/unlace-loader/src/image.rs:192:/// CET shadow stacks, CFG, and stripped Authenticode signatures.
+crates/unlace-loader/src/image.rs:482:    /// `None` for non-Go binaries (or stripped Go binaries where neither
+docs/handoffs/COMPLETION_07_LOADER_BREADTH.md:128:2. TE-image (`TE\0\0` magic) loader — a stripped PE used in early-stage
+crates/unlace-lift-amdgpu/src/lib.rs:39:/// Callother tags reserved by this lifter for AMDGPU-specific semantics.
+docs/handoffs/COMPLETION_06_DWARF_V5.md:10:- `.dwo`/`.dwp` split-DWARF files referenced by `DW_AT_GNU_dwo_name`.
+docs/handoffs/COMPLETION_06_DWARF_V5.md:30:(packaged) split-DWARF artifact. The loader needs to:
+docs/handoffs/COMPLETION_06_DWARF_V5.md:36:3. Add `pub fn merge_split_dwarf(&mut self, dwo_bytes: &[u8])` that
+docs/handoffs/COMPLETION_06_DWARF_V5.md:57:- `merge_split_dwarf_imports_dwo_functions` — feed a .dwo blob, assert
+docs/handoffs/COMPLETION_06_DWARF_V5.md:130:  fixture (when rebuilt with `-gsplit-dwarf`); when absent, empty.
+docs/handoffs/COMPLETION_06_DWARF_V5.md:132:- `docs/status.md` ELF row mentions DWARF v5 split-DWARF support.
+crates/unlace-lift-lua/src/decode.rs:109:    /// Whether the B field refers to a constant (RK(B) semantics in 5.1-5.3).
+crates/unlace-lift-lua/src/decode.rs:115:    /// Whether the C field refers to a constant (RK(C) semantics in 5.1-5.3).
+crates/unlace-loader/src/eh_frame.rs:192:        let img = load_fixture("medium.elf");
+crates/unlace-loader/src/eh_frame.rs:197:            "medium.elf should have FDEs; got 0 extents",
+crates/unlace-loader/src/eh_frame.rs:215:        let img = load_fixture("medium.elf");
+crates/unlace-loader/src/eh_frame.rs:227:            "medium.elf should have function symbols",
+crates/unlace-loader/src/eh_frame.rs:345:        let img = load_fixture("medium.elf");
+crates/unlace-loader/src/eh_frame.rs:361:            "medium.elf",
+crates/unlace-loader/src/eh_frame.rs:362:            "stripped.elf",
+crates/unlace-loader/src/elf.rs:401:            "not-stripped binary should have symbols"
+crates/unlace-loader/src/elf.rs:438:    fn test_stripped_binary_has_few_symbols() {
+crates/unlace-loader/src/elf.rs:440:            std::fs::read("../../fixtures/stripped.elf").expect("fixture stripped.elf must exist");
+crates/unlace-loader/src/elf.rs:441:        let img = ElfLoader::load(&data).expect("should parse stripped binary");
+crates/unlace-loader/src/elf.rs:443:        // A stripped binary might still have dynamic symbols, but far fewer
+crates/unlace-loader/src/elf.rs:444:        // than the non-stripped version.
+crates/unlace-loader/src/elf.rs:445:        let non_stripped =
+crates/unlace-loader/src/elf.rs:446:            std::fs::read("../../fixtures/medium.elf").expect("fixture medium.elf must exist");
+crates/unlace-loader/src/elf.rs:447:        let full_img = ElfLoader::load(&non_stripped).expect("should parse medium binary");
+crates/unlace-loader/src/elf.rs:450:            "stripped binary should have fewer symbols than non-stripped"
+crates/unlace-loader/src/elf.rs:506:    /// Batch 12 slice 1: `medium.elf` is built with stack protector so it
+crates/unlace-loader/src/elf.rs:511:    fn test_plt_resolution_medium() {
+crates/unlace-loader/src/elf.rs:513:            std::fs::read("../../fixtures/medium.elf").expect("fixture medium.elf must exist");
+crates/unlace-loader/src/elf.rs:514:        let img = ElfLoader::load(&data).expect("should parse medium.elf");
+crates/unlace-loader/src/elf.rs:518:            "medium.elf should expose at least one PLT import"
+crates/unlace-loader/src/elf.rs:522:            "medium.elf PLT should include __stack_chk_fail; got {:?}",
+docs/handoffs/COMPLETION_05_REMAINING.md:105:## §5.6 — DWARF v5 split-DWARF (2 weeks)
+crates/unlace-struct/src/label_hoist.rs:294:        let suffix = label_scope.split_off(plan.label_index);
+crates/unlace-struct/src/label_hoist.rs:298:                "[unlace-label-hoist] split label_scope={} remaining={} suffix_len={} suffix={}",
+crates/unlace-lift-sh/src/decode.rs:7://! a single 16-bit halfword `[15:12 | 11:8 | 7:4 | 3:0]` is split into
+crates/unlace-loader/src/wasm_wit.rs:78:            if let Some((ns_name, version)) = rest.split_once('@') {
+crates/unlace-loader/src/wasm_wit.rs:80:                if let Some((ns, name)) = ns_name.split_once(':') {
+crates/unlace-loader/src/wasm_wit.rs:84:            } else if let Some((ns, name)) = rest.split_once(':') {
+docs/handoffs/COMPLETION_04_COT.md:63:  cross-reference back to lvar tables; not rendered.)
+docs/rebaseline-2026-05-17.md:39:- `medium.elf:main`
+docs/handoffs/BATCH09_HANDOFF.md:17:- Current loop-helper output still needs guard shaping, lvar splitting, and safe
+crates/unlace-lift-sh/src/lift.rs:323:        // Rm = Rm + post_inc  (skip if Rm == Rn, matching SH semantics where
+docs/BATCH10_HANDOFF.md:37:   13. sub_1FAB30(mba, 6, 0)      -- M_LVARS: lvar allocation
+docs/BATCH10_HANDOFF.md:210:    run_lvar_passes(ssa, resolver)?;
+docs/BATCH10_HANDOFF.md:263:/// Lvars: expression tree, variable merge, lvar collect, coalesce, naming
+docs/BATCH10_HANDOFF.md:264:fn run_lvar_passes(ssa: &mut SsaFunction, resolver: ...) -> Result<()> { ... }
+docs/BATCH10_HANDOFF.md:331:        // don't split it into separate paths.
+docs/BATCH10_HANDOFF.md:400:**DO Steps A→D first as a single commit.** The compiler will enforce correctness. Only after the split is stable and all tests pass, add the maturity-advancement and downgrade logic in Steps C/E.
+docs/BATCH10_HANDOFF.md:420:| 250 | `sub_1FAB30(mba, 6, 0)` | `run_lvar_passes()` |
+docs/handoffs/BATCH08_HANDOFF.md:17:  rendering for real-world stripped binaries.
+crates/unlace-loader/src/sbpf_evm.rs:5://! bytecode containers (raw deploy code + runtime code split).
+crates/unlace-loader/src/sbpf_evm.rs:48:/// Parse EVM bytecode, splitting into deploy and runtime portions.
+crates/unlace-loader/src/sbpf_evm.rs:60:    let split_point = data
+crates/unlace-loader/src/sbpf_evm.rs:66:    if split_point == 0 || split_point >= data.len() {
+crates/unlace-loader/src/sbpf_evm.rs:76:        deploy_code: data[..split_point].to_vec(),
+crates/unlace-loader/src/sbpf_evm.rs:77:        runtime_code: data[split_point..].to_vec(),
+docs/handoffs/BATCH03_HANDOFF.md:21:- `crates/unlace-ir/src/lvar.rs`
+docs/handoffs/BATCH03_HANDOFF.md:22:- `crates/unlace-passes/src/lvar_collect.rs`
+docs/handoffs/BATCH03_HANDOFF.md:24:- `crates/unlace-output/src/c_printer.rs`
+docs/handoffs/BATCH03_HANDOFF.md:25:- `crates/unlace-cli/tests/lvar_collect_smoke.rs`
+docs/handoffs/BATCH03_HANDOFF.md:30:- Add explainable lvar dumps before broad merge-rule changes.
+docs/handoffs/BATCH03_HANDOFF.md:35:- `RUSTC_WRAPPER= cargo test -p unlace-cli --test lvar_collect_smoke`
+docs/handoffs/BATCH03_HANDOFF.md:36:- `RUSTC_WRAPPER= cargo test -p unlace-passes lvar`
+docs/handoffs/BATCH03_HANDOFF.md:41:Lvar names, merges, and suppressed declarations can be explained from lvar data,
+docs/handoffs/BATCH07_HANDOFF.md:23:- `crates/unlace-output/src/c_printer.rs`
+docs/handoffs/BATCH19_HANDOFF.md:16:  HIR/lvar/type facts improve.
+docs/handoffs/BATCH19_HANDOFF.md:22:- `crates/unlace-output/src/c_printer.rs`
+docs/handoffs/BATCH19_HANDOFF.md:34:   comments, xrefs, source-line provenance, and semantic tokens.
+crates/unlace-struct/src/switch_cleanup.rs:35://! printer (see `crates/unlace-output/src/c_printer.rs` switch emit path),
+docs/tutorial/README.md:19:4. [Stripped Binaries](./04-stripped-binaries.md) — working without symbols,
+docs/tutorial/README.md:26:   annotation server, team workflows, and merge semantics
+docs/handoffs/BATCH18_HANDOFF.md:9:Verify lvar allocation, merging, and naming decisions instead of assuming they
+docs/handoffs/BATCH18_HANDOFF.md:10:are correct because lvar objects exist.
+docs/handoffs/BATCH18_HANDOFF.md:14:- Historical lvar collection and naming exist.
+docs/handoffs/BATCH18_HANDOFF.md:16:  should become lvar-layer behavior.
+docs/handoffs/BATCH18_HANDOFF.md:17:- The plan calls for lvar dumps, interference tests, naming priority tests, and
+docs/handoffs/BATCH18_HANDOFF.md:22:- `crates/unlace-ir/src/lvar.rs`
+docs/handoffs/BATCH18_HANDOFF.md:23:- `crates/unlace-passes/src/lvar_collect.rs`
+docs/handoffs/BATCH18_HANDOFF.md:25:- `crates/unlace-output/src/c_printer.rs`
+docs/handoffs/BATCH18_HANDOFF.md:26:- `crates/unlace-cli/tests/lvar_collect_smoke.rs`
+docs/handoffs/BATCH18_HANDOFF.md:30:1. Add lvar dump output with storage class, live range, type, address-taken
+docs/handoffs/BATCH18_HANDOFF.md:38:   lvar allocation.
+docs/handoffs/BATCH18_HANDOFF.md:44:- `RUSTC_WRAPPER= cargo test -p unlace-cli --test lvar_collect_smoke`
+docs/handoffs/BATCH18_HANDOFF.md:45:- `RUSTC_WRAPPER= cargo test -p unlace-passes lvar`
+docs/handoffs/BATCH18_HANDOFF.md:52:lvar merge decisions are explainable from a dump.
+docs/handoffs/README.md:18:4. `BATCH18_HANDOFF.md` - lvar allocation, merge safety, and naming.
+docs/handoffs/README.md:24:8. `BATCH27_HANDOFF.md` - quality-axis split: stylistic score, semantic
+docs/handoffs/README.md:49:| 18 | `BATCH18_HANDOFF.md` | `dump_lvars` audit + naming/storage tests landed |
+docs/handoffs/README.md:58:| 27 | `BATCH27_HANDOFF.md` | Quality-axis report, semantic PASS/XFAIL report, first DWARF/source type score, and fidelity counters wired; semantic XFAIL/type breadth still open |
+docs/handoffs/README.md:71:- `COMPLETION_06_DWARF_V5.md` — DWARF v5 split-DWARF + loclists/rnglists.
+docs/handoffs/README.md:96:- Golden C output is reviewed for semantic plausibility, not only token count.
+docs/handoffs/BATCH02_HANDOFF.md:17:  preservation through SSA, lvar allocation, and final printing.
+docs/handoffs/BATCH02_HANDOFF.md:24:- `crates/unlace-ir/src/lvar.rs`
+docs/handoffs/BATCH02_HANDOFF.md:25:- `crates/unlace-output/src/c_printer.rs`
+docs/handoffs/BATCH02_HANDOFF.md:31:  frame facts into storage/lvar provenance.
+docs/tutorial/05-type-recovery.md:14:function assigns preliminary types based on instruction semantics (loads from
+crates/unlace-struct/src/label_fallthrough.rs:1://! Collapse fallthrough goto/label pairs that are semantically redundant.
+crates/unlace-struct/src/label_fallthrough.rs:14://! stripped via the usual unused-label removal.
+docs/handoffs/BATCH11_HANDOFF.md:17:  facts down into HIR/lvar/type layers where possible.
+docs/handoffs/BATCH11_HANDOFF.md:21:- `crates/unlace-output/src/c_printer.rs`
+docs/handoffs/COMPLETION_PLAN.md:398:After macOS 12, dyld split the cache into a primary + N
+docs/handoffs/COMPLETION_PLAN.md:613:3. Lift to the simplest `IrOp` that captures the semantics:
+docs/handoffs/COMPLETION_PLAN.md:700:arithmetic, but the *semantics* differ (NaN, infinities). IDA encodes
+docs/tutorial/04-stripped-binaries.md:6:always stripped. Without symbols, unlace must discover function boundaries
+docs/tutorial/04-stripped-binaries.md:13:$ strip --strip-all -o hello-stripped hello
+docs/tutorial/04-stripped-binaries.md:14:$ unlace decompile ./hello-stripped --function 0x401136
+docs/tutorial/04-stripped-binaries.md:47:$ unlace decompile ./hello-stripped --flirt-db /usr/share/unlace/sigs/glibc-2.31-amd64.sig
+docs/tutorial/04-stripped-binaries.md:51:`puts`, and the decompilation reads almost identically to the non-stripped
+docs/handoffs/BATCH17_HANDOFF.md:19:- Prologue/SP passes detect split-block callee-saved stores and suppress
+docs/handoffs/BATCH17_HANDOFF.md:25:- Remaining work is to move printer fallbacks into lvar/storage provenance and
+docs/handoffs/BATCH17_HANDOFF.md:26:  finish loop-helper guard shaping, lvar splitting, and for-loop promotion.
+docs/handoffs/BATCH17_HANDOFF.md:33:- `crates/unlace-passes/src/lvar_collect.rs`
+docs/handoffs/BATCH17_HANDOFF.md:34:- `crates/unlace-ir/src/lvar.rs`
+docs/handoffs/BATCH17_HANDOFF.md:35:- `crates/unlace-output/src/c_printer.rs`
+docs/handoffs/BATCH17_HANDOFF.md:44:2. Carry those records into lvar/storage objects so final printing can render
+docs/handoffs/BATCH17_HANDOFF.md:50:5. Finish optimized loop-helper cleanup from analysis facts: split loop counter
+docs/handoffs/BATCH17_HANDOFF.md:51:   lvars, shape guards, and promote safe induction-variable loops to `for`.
+docs/handoffs/BATCH17_HANDOFF.md:64:Stack variables in debug and stripped fixtures render as stable locals or args
+docs/handoffs/BATCH17_HANDOFF.md:65:from provenance-backed lvars, and loop-helper C is structured without
+docs/handoffs/BATCH16_HANDOFF.md:33:   optimization, stack recovery, call recovery, global optimization, lvars, and
+docs/handoffs/BATCH16_HANDOFF.md:37:4. Add regression tests proving rerunning stack, lvar, type, and output passes
+crates/unlace-loader/src/go_moduledata.rs:64://! `runtime.firstmoduledata`. If absent (stripped binary), it scans
+docs/handoffs/BATCH15_HANDOFF.md:9:Prove final emitted C is semantically plausible, not only token-similar to an
+docs/handoffs/BATCH15_HANDOFF.md:39:5. Review emitted C for semantic plausibility before accepting snapshots.
+docs/handoffs/BATCH15_HANDOFF.md:50:Every major fixture family has at least one semantic final-C check, and simple
+docs/tutorial/03-understanding-output.md:64:→ Next: [Stripped Binaries](./04-stripped-binaries.md)
+docs/handoffs/BATCH26_HANDOFF.md:16:- The plan calls for support-tier docs, split roadmap docs, reproducible
+crates/unlace-struct/src/switch_recovery.rs:1761:    /// configured base, mirroring DenseWithOffset semantics.
+docs/handoffs/BATCH24_HANDOFF.md:52:- Do not start with UI before persistence semantics are real.
+crates/unlace-loader/src/flirt/mod.rs:3://! When a stripped binary's `strcpy` looks like the leading bytes of glibc's
+docs/tutorial/01-installation.md:21:workspace's careful crate splitting.
+docs/tutorial/01-installation.md:47:the full decompilation pipeline due to differences in `dlopen` semantics that
+docs/handoffs/BATCH20_HANDOFF.md:36:4. Deepen DWARF support for v5 loclists/rnglists, split DWARF, DW_OP variable
+docs/handoffs/BATCH20_HANDOFF.md:52:Debug binaries render meaningful names and prototypes, and stripped libc-using
+docs/handoffs/BATCH22_HANDOFF.md:29:1. Define a scorecard with decoder coverage, lift semantics coverage, ABI
+docs/handoffs/BATCH22_HANDOFF.md:34:4. Expand x86, AArch64, ARM32, MIPS, PPC, and RISC-V high-value semantics.
+crates/unlace-struct/src/irreducible.rs:9://! This pass identifies those regions so a follow-up [`node_split`] pass can
+crates/unlace-struct/src/irreducible.rs:29://! [`node_split`]: crate::node_split
+crates/unlace-struct/src/irreducible.rs:57:/// Used by pre-SSA passes like [`crate::node_split`] that operate on the raw
+crates/unlace-lift-v850/src/lib.rs:600:    /// MUL Format XI emits a 64-bit IntMult split into low/high subpieces.
+crates/unlace-lift-v850/src/lib.rs:613:        // Should sign-extend operands (signed MUL) and split with Subpiece.
+crates/unlace-loader/src/split_dwarf.rs:3://! In GCC -gsplit-dwarf mode, the main object holds a "skeleton" CU referring
+crates/unlace-loader/src/split_dwarf.rs:82:    fn test_split_dwarf_extract_skeleton_simple() {
+crates/unlace-loader/src/split_dwarf.rs:98:    fn test_split_dwarf_missing_id() {
+crates/unlace-loader/src/split_dwarf.rs:104:    fn test_split_dwarf_missing_name() {
+crates/unlace-loader/src/split_dwarf.rs:110:    fn test_split_dwarf_with_addr_base() {
+crates/unlace-loader/src/split_dwarf.rs:121:    fn test_split_dwarf_resolve_path() {
+crates/unlace-loader/src/split_dwarf.rs:127:    fn test_split_dwarf_resolve_no_parent() {
+crates/unlace-loader/src/archive.rs:57:    if let Some(stripped) = name_field.strip_prefix("#1/")
+crates/unlace-loader/src/archive.rs:58:        && let Ok(name_len) = stripped.parse::<usize>()
+crates/unlace-loader/src/archive.rs:68:    if let Some(stripped) = name_field.strip_prefix('/')
+crates/unlace-loader/src/archive.rs:69:        && let Ok(idx) = stripped.parse::<usize>()
+crates/unlace-struct/src/hir_cse.rs:234:                // a node whose semantics we can't easily inspect. Be
+crates/unlace-loader/src/flirt/generator.rs:97:            // inventing filesystem-relative semantics in a library helper.
+crates/unlace-lift-v850/src/lift.rs:819:/// Inputs are read as (dst, src) per V850 semantics: reg2 = sat(reg2 op reg1).
+crates/unlace-lift-v850/src/lift.rs:863:/// Computed as 64-bit multiply, then Subpiece-split.
+crates/unlace-struct/src/cross_jump_revert.rs:5://! them, creating irreducible control flow. This pass splits them back.
+crates/unlace-struct/src/cross_jump_revert.rs:40:    let mut splits: Vec<(BlockId, BlockId, usize)> = Vec::new();
+crates/unlace-struct/src/cross_jump_revert.rs:56:                    splits.push((a, b, shared_len));
+crates/unlace-struct/src/cross_jump_revert.rs:62:    if splits.is_empty() {
+crates/unlace-struct/src/cross_jump_revert.rs:66:    for (a_bid, b_bid, tail_len) in splits {
+crates/unlace-struct/src/cross_jump_revert.rs:174:    fn test_cross_jump_split() {
+crates/unlace-loader/src/gcc_except_table.rs:847:        // actionOffset field, matching libcxxabi/GCC unwinder semantics.
+crates/unlace-loader/src/lib.rs:30:pub mod split_dwarf;
+docs/PARITY_PLAN.md:7:- 75-opcode IR frozen (v1.0); new instruction semantics via reserved `Callother(intrinsic_id, …)` tags
+docs/PARITY_PLAN.md:95:FLIRT is what makes IDA recognize libc and stdlib functions instantly even on stripped binaries. It's a sophisticated pattern-matching system.
+docs/PARITY_PLAN.md:117:### Wave 34 — DWARF v5 / split-DWARF / DWP
+docs/PARITY_PLAN.md:287:- **t388** GCC `__builtin_unreachable` → `__assume(0)` / `unreachable()` semantics.
+docs/PARITY_PLAN.md:455:| ELF | 80% | 100% | DT_GNU_HASH edge cases, .dynamic split-DWARF |
+crates/unlace-struct/src/loop_classify.rs:9://! and it does not reorder, merge, or split loops. When a `While` loop's shape
+crates/unlace-struct/src/loop_classify.rs:143:/// Walk an arbitrary HIR slice and produce per-form counts. Same semantics as
+docs/determinism.md:74:- Force `LANG=C` / `LC_ALL=C` semantics — no locale-dependent formatting.
+crates/unlace-struct/src/tail_duplication.rs:32://! [`crate::split_irreducible_entries`] so that:
+crates/unlace-struct/src/tail_duplication.rs:34://! - The irreducible splitter sees a cleaner CFG with fewer multi-entry points.
+crates/unlace-struct/src/goto_coalesce.rs:20://! After coalescing, `L1` becomes unused and is stripped by the existing
+crates/unlace-struct/src/goto_coalesce.rs:35:/// This is safe because a label has no semantic effect of its own: jumping
+crates/unlace-lift-riscv/src/rvc.rs:5://! semantics. Quadrant 11 (low bits = 11) is non-compressed and rejected here.
+docs/ir-spec.md:166:   (byte-addressable). This simplifies LOAD/STORE semantics; the rare
+docs/ir-spec.md:176:All other Ghidra opcode names, arities, and semantics are preserved
+docs/ir-spec.md:314:- **Inputs / Output**: arity and semantic role of each Varnode.
+docs/ir-spec.md:434:semantics). Equation: `output = signed(input0) / signed(input1)`.
+docs/ir-spec.md:456:(C99 semantics). Equation:
+docs/ir-spec.md:634:`input0`, output is zero (matches LLVM `shl` semantics, distinct from
+docs/ir-spec.md:887:"unordered or unequal" semantic of C `!=` use `BOOL_NEGATE
+docs/ir-spec.md:937:fall-through. Same p-code-relative semantics for Const-space `input0`.
+docs/ir-spec.md:983:**Inputs:** 1 + [N] — `input0` (return-target Varnode; semantically
+docs/ir-spec.md:1160:**Semantics:** Pseudo-operation for instructions whose semantics are
+docs/ir-spec.md:1477:The opcode set, semantics, and most prose are derived from the Ghidra
+crates/unlace-loader/src/dwarf.rs:29://! `debug_structs.elf`, `hello_world.elf`, and `stripped.elf` exercise
+crates/unlace-loader/src/dwarf.rs:50:/// Shared DWARF location resolver used by normal DWARF import, split-DWARF
+crates/unlace-loader/src/dwarf.rs:65:    /// (if present) so a follow-up call to [`DwarfInfo::merge_split_dwarf`]
+crates/unlace-loader/src/dwarf.rs:66:    /// can fold the external unit back in. Empty for non-split DWARF.
+crates/unlace-loader/src/dwarf.rs:75:    /// File path / name of the external split-DWARF artifact.
+crates/unlace-loader/src/dwarf.rs:182:/// `objcopy --only-keep-debug`). This is how a stripped binary recovers
+crates/unlace-loader/src/dwarf.rs:183:/// parameter/local/type names: the stripped image yields an empty `DwarfInfo`
+crates/unlace-loader/src/dwarf.rs:185:/// collisions, mirroring [`DwarfInfo::merge_split_dwarf`].
+crates/unlace-loader/src/dwarf.rs:192:        info.merge_split_dwarf(bytes)?;
+crates/unlace-loader/src/dwarf.rs:237:/// [`DwarfInfo::merge_split_dwarf`] consumes when caller supplies the
+crates/unlace-loader/src/dwarf.rs:310:    /// underlying `BTreeMap::entry` semantics so the skeleton always
+crates/unlace-loader/src/dwarf.rs:312:    pub fn merge_split_dwarf(&mut self, dwo_bytes: &[u8]) -> Result<(), crate::LoadError> {
+crates/unlace-loader/src/dwarf.rs:313:        DebugLocationResolver.merge_split_dwarf(self, dwo_bytes)
+crates/unlace-loader/src/dwarf.rs:322:    pub fn merge_split_dwarf(
+crates/unlace-loader/src/dwarf.rs:494:    let split_at = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+crates/unlace-loader/src/dwarf.rs:495:    let (name, rest) = trimmed.split_at(split_at);
+crates/unlace-loader/src/dwarf.rs:1754:            std::fs::read("../../fixtures/stripped.elf").expect("fixture stripped.elf must exist");
+crates/unlace-loader/src/dwarf.rs:1755:        let img = ElfLoader::load(&data).expect("should parse stripped.elf");
+crates/unlace-loader/src/dwarf.rs:1760:            "stripped binary should have no DWARF functions"
+crates/unlace-loader/src/dwarf.rs:1774:        // The primary image is stripped (no DWARF); all debug info must come
+crates/unlace-loader/src/dwarf.rs:1776:        let stripped =
+crates/unlace-loader/src/dwarf.rs:1777:            std::fs::read("../../fixtures/stripped.elf").expect("fixture stripped.elf must exist");
+crates/unlace-loader/src/dwarf.rs:1778:        let stripped_img = ElfLoader::load(&stripped).expect("should parse stripped.elf");
+crates/unlace-loader/src/dwarf.rs:1782:        let without = import_dwarf_with_sidecar(&stripped_img, None)
+crates/unlace-loader/src/dwarf.rs:1786:            "stripped image alone must yield no DWARF functions"
+crates/unlace-loader/src/dwarf.rs:1789:        let with = import_dwarf_with_sidecar(&stripped_img, Some(&sidecar))
+crates/unlace-loader/src/dwarf.rs:1793:            "sidecar must inject DWARF functions the stripped image lacks"
+crates/unlace-loader/src/dwarf.rs:2024:    fn macro_parser_splits_name_value_and_location() {
+crates/unlace-loader/src/dwarf.rs:2178:            "location-list backed locals should record live ranges"
+crates/unlace-loader/src/dwarf.rs:2195:        // in each branch) so that basic-block-section splitting produces
+crates/unlace-loader/src/dwarf.rs:2202:int split_logic(int x) {
+crates/unlace-loader/src/dwarf.rs:2220:    return split_logic(42) + split_logic(150);
+crates/unlace-loader/src/dwarf.rs:2224:        let src = temp.path().join("split.c");
+crates/unlace-loader/src/dwarf.rs:2225:        let elf = temp.path().join("split.elf");
+crates/unlace-loader/src/dwarf.rs:2240:        let img = ElfLoader::load(&data).expect("parse split ELF");
+crates/unlace-loader/src/dwarf.rs:2250:            .find(|f| f.name == "split_logic")
+crates/unlace-loader/src/dwarf.rs:2251:            .expect("find split_logic");
+crates/unlace-loader/src/dwarf.rs:2255:            "split_logic should have at least 2 range entries from .debug_rnglists, got {}: {:?}",
+crates/unlace-loader/src/dwarf.rs:2333:    /// variable's `DW_AT_location` is split into two PC ranges (e.g.
+crates/unlace-loader/src/dwarf.rs:2341:        let src = temp.path().join("loclists_split.c");
+crates/unlace-loader/src/dwarf.rs:2342:        let elf = temp.path().join("loclists_split.elf");
+crates/unlace-loader/src/dwarf.rs:2346:int split(int x) {
+crates/unlace-loader/src/dwarf.rs:2355:int main(void) { return split(2) + split(-1); }
+crates/unlace-loader/src/dwarf.rs:2378:        // collapsed the live range (often happens at -O3 or when the
+crates/unlace-loader/src/dwarf.rs:2399:    /// translation unit with `-gsplit-dwarf`. When supported, the
+crates/unlace-loader/src/dwarf.rs:2419:            .arg("-gsplit-dwarf")
+crates/unlace-loader/src/dwarf.rs:2442:        // If the toolchain emitted split-DWARF, dwo_references must be
+crates/unlace-loader/src/dwarf.rs:2444:        // attribute even with `-gsplit-dwarf`; skip the assertion in
+crates/unlace-loader/src/dwarf.rs:2452:            "dwo_name should look like a split-DWARF filename, got {:?}",
+crates/unlace-loader/src/dwarf.rs:2457:    /// `merge_split_dwarf_imports_dwo_functions` — feed an ELF blob as a
+crates/unlace-loader/src/dwarf.rs:2464:    fn merge_split_dwarf_imports_dwo_functions() {
+crates/unlace-loader/src/dwarf.rs:2478:            .merge_split_dwarf(&dwo_bytes)
+crates/unlace-loader/src/uefi_module.rs:222:/// Parsed TE-image header. TE is a stripped PE32+ used during early
+crates/unlace-loader/src/uefi_module.rs:246:    pub stripped_size: u16,
+crates/unlace-loader/src/uefi_module.rs:275:    let stripped_size = u16::from_le_bytes(bytes[6..8].try_into().ok()?);
+crates/unlace-loader/src/uefi_module.rs:310:        stripped_size,
+crates/unlace-loader/src/uefi_module.rs:320:/// `stripped_size`-adjusted raw-offset semantics: TE images embed a
+crates/unlace-loader/src/uefi_module.rs:321:/// `stripped_size` byte count of removed PE headers, so on-disk
+crates/unlace-loader/src/uefi_module.rs:323:/// `40 - stripped_size as usize` to translate. Sections whose
+crates/unlace-loader/src/uefi_module.rs:329:    let stripped = te.stripped_size as i64 - 40i64;
+crates/unlace-loader/src/uefi_module.rs:334:            let adj_off = sec.raw_offset as i64 - stripped;
+crates/unlace-loader/src/uefi_module.rs:579:        // (40 stripped header bytes + 30 fake-PE pad = exactly the
+crates/unlace-loader/src/uefi_module.rs:580:        // location the parser will land at after stripped_size
+crates/unlace-loader/src/uefi_module.rs:588:        // raw_offset such that adj_off = raw_offset - (stripped_size - 40) = header_size:
+crates/unlace-loader/src/uefi_module.rs:589:        //   raw_offset = header_size + (stripped_size - 40) = 80 + 60 = 140.
+crates/unlace-loader/src/macho.rs:246:    let _split_info = parse_segment_split_info::<Mach>(&file, data);
+crates/unlace-loader/src/macho.rs:928:/// when slicing the shared cache (or `kxld`'s split-segment relocations on
+crates/unlace-loader/src/macho.rs:930:/// "kind" byte (DYLD_CACHE_ADJ_V2_* / older split-info codes) followed by
+crates/unlace-loader/src/macho.rs:938:    /// First byte of the payload — the split-info "kind" tag.
+crates/unlace-loader/src/macho.rs:950:fn parse_segment_split_info<Mach>(
+crates/unlace-loader/src/macho.rs:3289:    /// payload starts with kind byte 0x7F (the dyld v2 split-info marker)
+crates/unlace-loader/src/macho.rs:3291:    fn macho64_with_segment_split_info() -> Vec<u8> {
+crates/unlace-loader/src/macho.rs:3295:        let split_cmdsize: u32 = 16;
+crates/unlace-loader/src/macho.rs:3296:        let sizeofcmds: u32 = seg_cmdsize + split_cmdsize;
+crates/unlace-loader/src/macho.rs:3297:        let split_dataoff: u32 = 0x180;
+crates/unlace-loader/src/macho.rs:3298:        let split_datasize: u32 = 5; // kind + 3 deltas + terminator
+crates/unlace-loader/src/macho.rs:3326:        let split_cmd = seg + seg_cmdsize as usize;
+crates/unlace-loader/src/macho.rs:3327:        buf[split_cmd..split_cmd + 4].copy_from_slice(&macho::LC_SEGMENT_SPLIT_INFO.to_le_bytes());
+crates/unlace-loader/src/macho.rs:3328:        buf[split_cmd + 4..split_cmd + 8].copy_from_slice(&split_cmdsize.to_le_bytes());
+crates/unlace-loader/src/macho.rs:3329:        buf[split_cmd + 8..split_cmd + 12].copy_from_slice(&split_dataoff.to_le_bytes());
+crates/unlace-loader/src/macho.rs:3330:        buf[split_cmd + 12..split_cmd + 16].copy_from_slice(&split_datasize.to_le_bytes());
+crates/unlace-loader/src/macho.rs:3334:        let payload = split_dataoff as usize;
+crates/unlace-loader/src/macho.rs:3345:    fn parse_segment_split_info_header() {
+crates/unlace-loader/src/macho.rs:3346:        let bin = macho64_with_segment_split_info();
+crates/unlace-loader/src/macho.rs:3350:        let hdr = parse_segment_split_info::<object::macho::MachHeader64<object::Endianness>>(
+crates/unlace-loader/src/macho.rs:3366:            parse_segment_split_info::<object::macho::MachHeader64<object::Endianness>>(
+crates/unlace-lift-riscv/src/lib.rs:125:    // varnode and put mask semantics in the callother identifier/metadata.
+crates/unlace-lift-riscv/src/lib.rs:584:        // IR storage convention; exact SEW/LMUL/VL semantics are carried by the
+crates/unlace-output/src/lib.rs:3:pub mod c_printer;
+crates/unlace-output/src/lib.rs:13:pub use c_printer::{
+crates/unlace-output/src/lib.rs:18:    stack_lvar_annotations_from_ssa, strip_ida_typedefs,
+crates/unlace-output/src/lib.rs:33:pub use ir_dump::{dump_ir, dump_lvars, dump_type_audit};
+crates/unlace-loader/src/pe.rs:2855:    /// slots must surface in `plt_symbols` regardless of forwarder semantics.
+crates/unlace-output/src/COVERAGE.md:6:`c_printer.rs`; this file is the at-a-glance grep target for future
+crates/unlace-output/src/COVERAGE.md:155:| `FloatBinary` | 2 | 4 | no | `cot_fadd`/`fsub`/`fmul`/`fdiv` — token shape matches `Binary` but distinct for semantics. |
+crates/unlace-output/src/stream.rs:4://! of [`Token`]s that carry semantic metadata (variable IDs, addresses,
+crates/unlace-output/src/stream.rs:66:/// A single semantic token in the output stream.
+crates/unlace-output/src/instruction_annotations.rs:3://! Surfaces semantic hints discovered by the SSA / loop / type pipeline
+crates/unlace-passes/src/protobuf_recognize.rs:20://!   semantically).
+crates/unlace-passes/src/protobuf_recognize.rs:62:    match name.rsplit_once("::") {
+crates/unlace-passes/src/sroa_plan.rs:28:    fn plans_split_for_multi_fragment_slot() {
+crates/unlace-output/src/semantic_diff.rs:4://! diff format, highlighting semantic changes (not just textual diffs).
+crates/unlace-output/src/semantic_diff.rs:17:/// Result of a semantic diff between two C outputs.
+crates/unlace-output/src/semantic_diff.rs:27:/// Compute a semantic diff between two C source strings.
+crates/unlace-output/src/semantic_diff.rs:30:pub fn semantic_diff(old: &str, new: &str, old_label: &str, new_label: &str) -> SemanticDiff {
+crates/unlace-output/src/semantic_diff.rs:100:    s.split_whitespace().collect::<Vec<_>>().join(" ")
+crates/unlace-output/src/semantic_diff.rs:140:        let d = semantic_diff(src, src, "old", "new");
+crates/unlace-output/src/semantic_diff.rs:150:        let d = semantic_diff(old, new, "old", "new");
+crates/unlace-output/src/semantic_diff.rs:159:        let d = semantic_diff(old, new, "old", "new");
+crates/unlace-output/src/semantic_diff.rs:167:        let d = semantic_diff(old, new, "old.c", "new.c");
+crates/unlace-output/src/ir_dump.rs:19:/// Render the Batch 18 lvar audit table for `func` as a stable markdown
+crates/unlace-output/src/ir_dump.rs:20:/// block. Wraps [`unlace_ir::lvar::dump_lvars`] with a header so callers
+crates/unlace-output/src/ir_dump.rs:22:/// header alone when `func.lvars` is empty.
+crates/unlace-output/src/ir_dump.rs:23:pub fn dump_lvars(func: &SsaFunction) -> String {
+crates/unlace-output/src/ir_dump.rs:28:        "## lvars for {} @ 0x{:x}\n",
+crates/unlace-output/src/ir_dump.rs:31:    out.push_str(&unlace_ir::lvar::dump_lvars(&func.lvars));
+crates/unlace-output/src/ir_dump.rs:487:            lvars: Vec::new(),
+crates/unlace-output/src/cpp_stl.rs:256:    let args = split_top_level_commas(inside);
+crates/unlace-output/src/cpp_stl.rs:261:fn split_top_level_commas(s: &str) -> Vec<String> {
+crates/unlace-output/src/cpp_stl.rs:338:/// (`0,16,24`) field splits because different field detectors may either
+crates/unlace-output/src/cpp_stl.rs:576:    fn function_sbo_layout_matches_split_buffer() {
+crates/unlace-output/src/demangle.rs:47:    /// `namespaces` element with template arguments stripped.
+crates/unlace-output/src/demangle.rs:98:    let final_component = short_name.rsplit("::").next().unwrap_or(&short_name);
+crates/unlace-output/src/demangle.rs:263:/// segments rather than splitting inside the template comma.
+crates/unlace-output/src/demangle.rs:265:    let (before_paren, params_section) = split_at_top_level_paren(full);
+crates/unlace-output/src/demangle.rs:270:    let segments = split_top_level_scope(leading);
+crates/unlace-output/src/demangle.rs:285:        Some(inside) => split_top_level_commas(inside)
+crates/unlace-output/src/demangle.rs:301:fn split_at_top_level_paren(s: &str) -> (&str, Option<&str>) {
+crates/unlace-output/src/demangle.rs:383:fn split_top_level_scope(s: &str) -> Vec<String> {
+crates/unlace-output/src/demangle.rs:421:fn split_top_level_commas(s: &str) -> Vec<String> {
+crates/unlace-output/src/demangle.rs:462:    let stripped = name.strip_prefix("__").unwrap_or(name);
+crates/unlace-output/src/demangle.rs:463:    let body = match stripped.strip_prefix("_Z") {
+crates/unlace-output/src/demangle.rs:579:    // Use depth-aware paren splitting so a `(` inside template arguments —
+crates/unlace-output/src/demangle.rs:583:    let (before_paren, _params) = split_at_top_level_paren(full);
+crates/unlace-output/src/demangle.rs:914:        let final_component = r.short_name.rsplit("::").next().expect("non-empty");
+crates/unlace-output/src/demangle.rs:927:        // Top-level template comma must NOT split the namespace.
+crates/unlace-output/src/demangle.rs:947:        let final_component = r.short_name.rsplit("::").next().expect("non-empty");
+crates/unlace-output/src/demangle.rs:956:    /// return type and must be stripped, leaving `foo<int>` as the
+crates/unlace-output/src/demangle.rs:959:    fn template_function_return_type_stripped() {
+crates/unlace-output/src/demangle.rs:963:            "expected return type stripped and template args preserved",
+crates/unlace-output/src/demangle.rs:976:    fn template_function_no_args_return_type_stripped() {
+crates/unlace-output/src/demangle.rs:1012:    fn type_recovery_template_comma_does_not_split_namespace() {
+crates/unlace-output/src/demangle.rs:1013:        let segs = split_top_level_scope("std::map<int, std::string>::find");
+crates/unlace-output/src/demangle.rs:1032:            let final_component = r.short_name.rsplit("::").next().unwrap();
+crates/unlace-output/src/demangle.rs:1044:            let final_component = r.short_name.rsplit("::").next().unwrap();
+crates/unlace-passes/src/cxx_eh.rs:65:    let mut s = name.rsplit('!').next().unwrap_or(name);
+crates/unlace-passes/src/cxx_eh.rs:68:    if let Some((base, suffix)) = s.rsplit_once('@')
+crates/unlace-passes/src/register_coalesce.rs:11://! - A live-range overlap (interference edge) blocks coalescing
+crates/unlace-passes/src/register_coalesce.rs:121:/// purpose of coalescing. Coalescing a pointer live-range with a scalar
+crates/unlace-passes/src/register_coalesce.rs:122:/// live-range under one C variable is unsound even when the live ranges do not
+crates/unlace-passes/src/register_coalesce.rs:125:/// runtime. (Surfaced on medium::main once phantom params stopped isolating r9
+crates/unlace-passes/src/register_coalesce.rs:152:/// unify a pointer live-range with a scalar one. `Unknown` is permissive (only
+crates/unlace-passes/src/register_coalesce.rs:400:/// Staged analysis for the t69 live-range-split fix
+crates/unlace-passes/src/register_coalesce.rs:401:/// (docs/design-lvar-liverange-split-2026-06-01.md); unit-tested but not yet
+crates/unlace-passes/src/register_coalesce.rs:415:    /// splitting names is unsound here; the bug is upstream (lifter / SSA
+crates/unlace-passes/src/register_coalesce.rs:416:    /// construction). Callers should STOP rather than split a `Mixed` phase.
+crates/unlace-passes/src/register_coalesce.rs:419:    /// copy of an argument). Not splittable, not dangerous.
+crates/unlace-passes/src/register_coalesce.rs:425:/// as a [`RegisterPhase`]. This is step 1 of the live-range-split fix
+crates/unlace-passes/src/register_coalesce.rs:426:/// (docs/design-lvar-liverange-split-2026-06-01.md): a register whose versions
+crates/unlace-passes/src/register_coalesce.rs:427:/// split into a disjoint pointer-phase and scalar-phase is the source of the
+crates/unlace-passes/src/register_coalesce.rs:428:/// `medium:main` pointer-deref-of-scalar bug, and can be safely given distinct
+crates/unlace-passes/src/register_coalesce.rs:429:/// lvars per component — *unless* a component is [`RegisterPhase::Mixed`].
+crates/unlace-passes/src/register_coalesce.rs:440:/// split itself (rename + retype) is the remaining implementation work.
+crates/unlace-passes/src/register_coalesce.rs:828:            lvars: Vec::new(),
+crates/unlace-passes/src/register_coalesce.rs:1067:    /// when their live ranges happen not to overlap.
+crates/unlace-passes/src/register_coalesce.rs:1207:    /// medium::main once phantom params stopped isolating r9.)
+crates/unlace-passes/src/register_coalesce.rs:1390:    /// and Scalar. This is the medium::main shape; it confirms the split is
+crates/unlace-passes/src/register_coalesce.rs:1446:    /// connected web, the component is Mixed — splitting names would be unsound;
+crates/unlace-passes/src/nday_correlate.rs:40:/// in matching, since stripped binaries usually don't have symbol names
+crates/unlace-passes/src/nday_correlate.rs:53:/// has a human-readable handle even when the binary itself is stripped.
+crates/unlace-output/src/expr_ast.rs:174:    /// inside `c_printer`. IDA `cot_insn`/`cot_block` equivalent.
+crates/unlace-output/src/expr_ast.rs:199:    /// lvar id for cross-reference; only `name` is rendered.
+crates/unlace-output/src/expr_ast.rs:232:    /// distinct for float semantics (NaN, infinity, rounding).
+crates/unlace-output/src/expr_ast.rs:636:            notes: "Function id literal `name@0xADDR`. Re-uses `cot_fnum` slot semantics (function-pointer literal); rendered distinctly.",
+crates/unlace-output/src/expr_ast.rs:714:            notes: "Float arithmetic (`cot_fadd`/`fsub`/`fmul`/`fdiv`); same tokens as Binary, distinct for semantics.",
+crates/unlace-passes/src/var_naming.rs:18:use unlace_ir::lvar::LvarStorage;
+crates/unlace-passes/src/var_naming.rs:761:        sync_lvar_names_from_roles(func, &names);
+crates/unlace-passes/src/var_naming.rs:775:fn is_generic_lvar_name(name: &str) -> bool {
+crates/unlace-passes/src/var_naming.rs:781:fn semantic_name_priority(name: &str) -> u8 {
+crates/unlace-passes/src/var_naming.rs:811:        if !is_generic_lvar_name(cluster) {
+crates/unlace-passes/src/var_naming.rs:814:        let candidate = (semantic_name_priority(name), name.clone());
+crates/unlace-passes/src/var_naming.rs:826:        if !is_generic_lvar_name(cluster) || names.contains_key(sv) {
+crates/unlace-passes/src/var_naming.rs:841:        && !is_generic_lvar_name(name)
+crates/unlace-passes/src/var_naming.rs:856:        let candidate = (semantic_name_priority(name), name.clone());
+crates/unlace-passes/src/var_naming.rs:879:fn lvar_name_can_be_overridden(name: Option<&str>) -> bool {
+crates/unlace-passes/src/var_naming.rs:882:        Some(name) => is_generic_lvar_name(name) || is_argument_name(name),
+crates/unlace-passes/src/var_naming.rs:886:fn sync_lvar_names_from_roles(func: &mut SsaFunction, names: &BTreeMap<SsaVarnode, String>) {
+crates/unlace-passes/src/var_naming.rs:888:    for lv in &mut func.lvars {
+crates/unlace-passes/src/var_naming.rs:894:                if !name.is_empty() && lvar_name_can_be_overridden(lv.name.as_deref()) {
+crates/unlace-passes/src/var_naming.rs:902:                if lvar_name_can_be_overridden(lv.name.as_deref()) {
+crates/unlace-passes/src/var_naming.rs:907:                if lvar_name_can_be_overridden(lv.name.as_deref()) {
+crates/unlace-passes/src/var_naming.rs:919:    use crate::lvar_collect::LvarCollectPass;
+crates/unlace-passes/src/var_naming.rs:921:    use unlace_ir::lvar::LvarStorage;
+crates/unlace-passes/src/var_naming.rs:1152:        LvarCollectPass.run(&mut func).expect("lvar collect");
+crates/unlace-passes/src/var_naming.rs:1163:            func.lvars.iter().any(|lv| matches!(
+crates/unlace-passes/src/var_naming.rs:1167:            "expected collected param lvar to be renamed to `this`: {:?}",
+crates/unlace-passes/src/var_naming.rs:1168:            func.lvars
+crates/unlace-passes/src/lib.rs:105:pub mod lvar_collect;
+crates/unlace-passes/src/lib.rs:106:pub mod lvar_lanes;
+crates/unlace-passes/src/lib.rs:286:pub use lvar_collect::LvarCollectPass;
+crates/unlace-passes/src/lib.rs:287:pub use lvar_lanes::{
+crates/unlace-passes/src/lvar_collect.rs:19://! The pass writes only [`SsaFunction::lvars`] — no other IR field is
+crates/unlace-passes/src/lvar_collect.rs:26:use unlace_ir::lvar::{LiveRange, Lvar, LvarFlags, LvarId, LvarSource, LvarStorage};
+crates/unlace-passes/src/lvar_collect.rs:53:fn lvar_trace_enabled() -> bool {
+crates/unlace-passes/src/lvar_collect.rs:57:fn lvar_trace_filter() -> Option<String> {
+crates/unlace-passes/src/lvar_collect.rs:65:fn lvar_trace_line(line: &str) {
+crates/unlace-passes/src/lvar_collect.rs:66:    if !lvar_trace_enabled() {
+crates/unlace-passes/src/lvar_collect.rs:69:    if let Some(filter) = lvar_trace_filter()
+crates/unlace-passes/src/lvar_collect.rs:74:    eprintln!("[unlace lvar] {line}");
+crates/unlace-passes/src/lvar_collect.rs:78:/// that the lvar collector dropped instead of emitting as an [`Lvar`].
+crates/unlace-passes/src/lvar_collect.rs:109:/// Decide whether the candidate `Temp` lvar backed by `sv` must be
+crates/unlace-passes/src/lvar_collect.rs:114:/// one-shot suppression moves from the C printer into the lvar layer.
+crates/unlace-passes/src/lvar_collect.rs:139:/// lvar appear in `var_map` (def or use). Stack/Param/Return lvars
+crates/unlace-passes/src/lvar_collect.rs:146:        "lvar-collect"
+crates/unlace-passes/src/lvar_collect.rs:156:        lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:157:            "start func={} existing_lvars={} merged_names={} stack_vars={} params={} return_type={}",
+crates/unlace-passes/src/lvar_collect.rs:159:            func.lvars.len(),
+crates/unlace-passes/src/lvar_collect.rs:165:        let new_lvars = collect(func);
+crates/unlace-passes/src/lvar_collect.rs:166:        if new_lvars == func.lvars {
+crates/unlace-passes/src/lvar_collect.rs:167:            lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:168:                "done func={} changed=false lvars={}",
+crates/unlace-passes/src/lvar_collect.rs:170:                new_lvars.len(),
+crates/unlace-passes/src/lvar_collect.rs:174:        lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:175:            "done func={} changed=true old_lvars={} new_lvars={}",
+crates/unlace-passes/src/lvar_collect.rs:177:            func.lvars.len(),
+crates/unlace-passes/src/lvar_collect.rs:178:            new_lvars.len(),
+crates/unlace-passes/src/lvar_collect.rs:180:        func.lvars = new_lvars;
+crates/unlace-passes/src/lvar_collect.rs:213:    lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:214:        "after-stack func={} lvars={} use_blocks={}",
+crates/unlace-passes/src/lvar_collect.rs:221:        lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:235:    lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:236:        "after-temps func={} lvars={}",
+crates/unlace-passes/src/lvar_collect.rs:241:    lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:242:        "after-params func={} lvars={}",
+crates/unlace-passes/src/lvar_collect.rs:247:    lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:248:        "after-return func={} lvars={}",
+crates/unlace-passes/src/lvar_collect.rs:286:            let name = stack_lvar_name(func, offset, local.size);
+crates/unlace-passes/src/lvar_collect.rs:287:            lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:320:        let name = stack_lvar_name(
+crates/unlace-passes/src/lvar_collect.rs:325:        lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:351:/// Compute a stack-slot's live range by unioning the per-block ranges
+crates/unlace-passes/src/lvar_collect.rs:390:/// versions with the same emitted name. Emit one `Temp` lvar per visible
+crates/unlace-passes/src/lvar_collect.rs:391:/// merged-name cluster, with a unioned coarse live range, so the lvar metadata
+crates/unlace-passes/src/lvar_collect.rs:418:                    lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:455:        lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:502:/// Render a markdown trace of every `merged_names` entry the lvar
+crates/unlace-passes/src/lvar_collect.rs:504:/// one-shot-temp). Pairs with [`dump_lvars`](unlace_ir::lvar::dump_lvars)
+crates/unlace-passes/src/lvar_collect.rs:510:pub fn dump_lvar_suppressions(func: &SsaFunction) -> String {
+crates/unlace-passes/src/lvar_collect.rs:566:        lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:587:        lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:605:/// Map a [`PrimitiveType`] to the closest [`TypeKind`] for lvar metadata.
+crates/unlace-passes/src/lvar_collect.rs:634:fn stack_lvar_name(func: &SsaFunction, offset: i64, size: u64) -> String {
+crates/unlace-passes/src/lvar_collect.rs:660:/// local, and always set `SYNTHETIC` since the lvar wasn't named by the
+crates/unlace-passes/src/lvar_collect.rs:687:/// Used to compute coarse live ranges.
+crates/unlace-passes/src/lvar_collect.rs:704:        lvar_trace_line(&format!(
+crates/unlace-passes/src/lvar_collect.rs:732:    use unlace_ir::lvar::LvarStorage;
+crates/unlace-passes/src/lvar_collect.rs:755:    fn empty_function_emits_no_lvars() {
+crates/unlace-passes/src/lvar_collect.rs:757:        // First run leaves lvars empty (nothing to emit) → returns false
+crates/unlace-passes/src/lvar_collect.rs:758:        // because new_lvars == func.lvars (both empty).
+crates/unlace-passes/src/lvar_collect.rs:762:            ssa.lvars.is_empty(),
+crates/unlace-passes/src/lvar_collect.rs:763:            "empty SSA produced lvars: {:?}",
+crates/unlace-passes/src/lvar_collect.rs:764:            ssa.lvars
+crates/unlace-passes/src/lvar_collect.rs:790:        assert_eq!(ssa.lvars.len(), 2);
+crates/unlace-passes/src/lvar_collect.rs:791:        let classes: Vec<_> = ssa.lvars.iter().map(|l| l.storage.class()).collect();
+crates/unlace-passes/src/lvar_collect.rs:794:        assert_eq!(ssa.lvars[0].id, LvarId::new(0));
+crates/unlace-passes/src/lvar_collect.rs:795:        assert_eq!(ssa.lvars[1].id, LvarId::new(1));
+crates/unlace-passes/src/lvar_collect.rs:797:            .lvars
+crates/unlace-passes/src/lvar_collect.rs:809:    fn stack_lvar_uses_debug_name_and_source() {
+crates/unlace-passes/src/lvar_collect.rs:831:            .lvars
+crates/unlace-passes/src/lvar_collect.rs:834:            .expect("stack lvar emitted");
+crates/unlace-passes/src/lvar_collect.rs:841:    fn stack_lvar_names_wide_slots_as_buffers() {
+crates/unlace-passes/src/lvar_collect.rs:861:        let slot = &ssa.lvars[0];
+crates/unlace-passes/src/lvar_collect.rs:875:        assert_eq!(ssa.lvars.len(), 3); // 2 params + 1 return
+crates/unlace-passes/src/lvar_collect.rs:877:            ssa.lvars[0].storage,
+crates/unlace-passes/src/lvar_collect.rs:881:            ssa.lvars[1].storage,
+crates/unlace-passes/src/lvar_collect.rs:884:        assert!(matches!(ssa.lvars[2].storage, LvarStorage::Return));
+crates/unlace-passes/src/lvar_collect.rs:885:        assert_eq!(ssa.lvars[0].name.as_deref(), Some("a1"));
+crates/unlace-passes/src/lvar_collect.rs:886:        assert!(ssa.lvars[0].flags.contains(LvarFlags::IS_PARAM));
+crates/unlace-passes/src/lvar_collect.rs:887:        assert!(ssa.lvars[2].flags.contains(LvarFlags::IS_RETURN));
+crates/unlace-passes/src/lvar_collect.rs:896:            ssa.lvars
+crates/unlace-passes/src/lvar_collect.rs:899:            "void function should not emit a return lvar"
+crates/unlace-passes/src/lvar_collect.rs:917:        assert_eq!(ssa.lvars.len(), 1);
+crates/unlace-passes/src/lvar_collect.rs:918:        assert!(matches!(ssa.lvars[0].storage, LvarStorage::Temp { .. }));
+crates/unlace-passes/src/lvar_collect.rs:922:    fn coalesced_temp_names_emit_one_lvar() {
+crates/unlace-passes/src/lvar_collect.rs:946:            .lvars
+crates/unlace-passes/src/lvar_collect.rs:950:        assert_eq!(temps.len(), 1, "coalesced temp cluster should be one lvar");
+crates/unlace-passes/src/lvar_collect.rs:954:    /// (Batch 3 slice 2, case a) A `Temp` lvar whose SSA varnode is
+crates/unlace-passes/src/lvar_collect.rs:970:        // `var_map` directly, so the live-range comes from the
+crates/unlace-passes/src/lvar_collect.rs:979:            .lvars
+crates/unlace-passes/src/lvar_collect.rs:982:            .expect("temp lvar emitted");
+crates/unlace-passes/src/lvar_collect.rs:987:    /// (Batch 3 slice 2, case b) A stack lvar whose backing
+crates/unlace-passes/src/lvar_collect.rs:1020:            .lvars
+crates/unlace-passes/src/lvar_collect.rs:1023:            .expect("stack lvar emitted");
+crates/unlace-passes/src/lvar_collect.rs:1046:        let slot = &ssa.lvars[0];
+crates/unlace-passes/src/lvar_collect.rs:1067:        let first: Vec<_> = ssa.lvars.iter().map(|l| l.id).collect();
+crates/unlace-passes/src/lvar_collect.rs:1070:        let second: Vec<_> = ssa.lvars.iter().map(|l| l.id).collect();
+crates/unlace-passes/src/lvar_collect.rs:1075:    /// user-visible Temp lvar. The audit-side `dump_lvar_suppressions`
+crates/unlace-passes/src/lvar_collect.rs:1078:    fn lvar_flag_register_temp_is_suppressed() {
+crates/unlace-passes/src/lvar_collect.rs:1098:            ssa.lvars
+crates/unlace-passes/src/lvar_collect.rs:1102:            ssa.lvars,
+crates/unlace-passes/src/lvar_collect.rs:1105:        let trace = dump_lvar_suppressions(&ssa);
+crates/unlace-passes/src/lvar_collect.rs:1112:    /// Batch 18 — instruction-pointer alias is dropped from the lvar set
+crates/unlace-passes/src/lvar_collect.rs:1115:    fn lvar_instruction_pointer_temp_is_suppressed() {
+crates/unlace-passes/src/lvar_collect.rs:1133:            ssa.lvars
+crates/unlace-passes/src/lvar_collect.rs:1138:        let trace = dump_lvar_suppressions(&ssa);
+crates/unlace-passes/src/lvar_collect.rs:1143:    /// point is a one-shot and must not survive into the lvar set. A
+crates/unlace-passes/src/lvar_collect.rs:1147:    fn lvar_one_shot_unique_temp_is_suppressed() {
+crates/unlace-passes/src/lvar_collect.rs:1180:            .lvars
+crates/unlace-passes/src/lvar_collect.rs:1192:        let trace = dump_lvar_suppressions(&ssa);
+crates/unlace-passes/src/lvar_collect.rs:1255:    /// Batch 18 — `dump_lvar_suppressions` always emits the header row
+crates/unlace-passes/src/lvar_collect.rs:1258:    fn dump_lvar_suppressions_emits_header_for_empty() {
+crates/unlace-passes/src/lvar_collect.rs:1260:        let trace = dump_lvar_suppressions(&ssa);
+crates/unlace-passes/src/licm.rs:189:    // state. Leave those loops intact until LICM can split latch/body state.
+crates/unlace-passes/src/string_hash_switch.rs:35://! follow-up — see `c_printer.rs` switch emission.
+crates/unlace-passes/src/sccp.rs:932:    // Collect SSA varnodes that feed Callother inputs — these carry semantic
+crates/unlace-passes/src/bsim_db.rs:28:/// LSH / ANN index, but the cosine-ranked semantics remain the contract.
+crates/unlace-passes/src/struct_field_recovery.rs:20://!     offset)` by recursively splitting `IntAdd` / `IntMult` chains.
+crates/unlace-passes/src/struct_field_recovery.rs:142:/// `pub` so the c_printer (t231) can re-use the same shape detector when
+crates/unlace-passes/src/cpp_variant.rs:340:            lvars: Vec::new(),
+crates/unlace-passes/src/dse_global.rs:578:            lvars: Vec::new(),
+crates/unlace-passes/src/dse_global.rs:834:    fn test_dse_global_type_stack_o2_adjacent_initializers_kept() {
+crates/unlace-passes/src/crypto_lib_recognize.rs:9://! semantic checks (argument shapes, GMP/EVP context layouts, etc.) are
+crates/unlace-passes/src/tail_duplication.rs:206:            lvars: Vec::new(),
+crates/unlace-passes/src/rust_enum.rs:284:            lvars: Vec::new(),
+crates/unlace-passes/src/prologue_elim.rs:68:        detect_split_prologues(func, &mut marked);
+crates/unlace-passes/src/prologue_elim.rs:134:fn detect_split_prologues(
+crates/unlace-passes/src/prologue_elim.rs:145:        while let Some((end, _stored_reg)) = split_push_range(insns, i) {
+crates/unlace-passes/src/prologue_elim.rs:194:fn split_push_range(insns: &[unlace_ir::IrInsn], start: usize) -> Option<(usize, u64)> {
+crates/unlace-passes/src/prologue_elim.rs:972:    fn test_split_guard_block_push_rbp_detected() {
+crates/unlace-passes/src/prologue_elim.rs:974:        let mut func = Function::new("split_guard", BlockId(0), 0x1000);
+crates/unlace-passes/src/prologue_elim.rs:1036:                "split prologue instruction {idx} should be marked, got {:?}",
+crates/unlace-passes/src/prologue_elim.rs:1042:            "intervening guard work in split block must not be marked"
+crates/unlace-passes/src/cpp_coroutine.rs:3://! C++20 coroutines compile down to a "split" ABI:
+crates/unlace-passes/src/pipeline_parser.rs:11:            .split(',')
+crates/unlace-passes/src/objc_byref.rs:180:/// want the c_printer's `__block T name;` rendering should invoke
+crates/unlace-passes/src/copy_prop.rs:622:    /// the rewrite is semantically equivalent here, leaving the COPY in
+crates/unlace-passes/src/cpp_vtable.rs:50:                // -O2). Both are virtual dispatches semantically.
+crates/unlace-passes/src/noreturn.rs:355:            lvars: Vec::new(),
+crates/unlace-passes/src/cpp_stl.rs:6://! from the binary's struct layout (libcxx's `__split_buffer<T, A>` /
+crates/unlace-passes/src/cpp_stl.rs:11://! demangled `class_name` (already with template args stripped) plus the
+crates/unlace-passes/src/cpp_stl.rs:41:///   args stripped, e.g. `"vector"`.
+crates/unlace-passes/src/cpp_stl.rs:381:    fn top_level_args_does_not_split_inside_brackets() {
+crates/unlace-passes/src/redundant_flag_elim.rs:222:            lvars: Vec::new(),
+crates/unlace-passes/src/source_sink.rs:169:    fn symbol_decorations_are_stripped() {
+crates/unlace-passes/src/call_boundary_copyprop.rs:17://! that the call boundary split.
+crates/unlace-passes/src/call_boundary_copyprop.rs:279:            lvars: Vec::new(),
+crates/unlace-passes/src/opaque_pred.rs:26://! The truthiness convention follows P-code semantics: a condition is
+crates/unlace-passes/src/opaque_pred.rs:82:    // resolve. Walk backwards so the *latest* def wins (P-code semantics
+crates/unlace-passes/src/call_args.rs:455:    Some(params.split(',').count())
+crates/unlace-passes/src/boost_recognize.rs:5://! still show up in stripped binaries (legacy code that pre-dates C++11, or
+crates/unlace-passes/src/boost_recognize.rs:15://! recogniser, callers don't need to pre-split namespaces because Boost
+crates/unlace-passes/src/boost_recognize.rs:51:    /// function type, so we further split the return type from the
+crates/unlace-passes/src/boost_recognize.rs:96:        return Some(BoostType::Variant(split_top_level_commas(inner)));
+crates/unlace-passes/src/boost_recognize.rs:144:fn split_top_level_commas(s: &str) -> Vec<String> {
+crates/unlace-passes/src/boost_recognize.rs:195:        split_top_level_commas(args_str)
+crates/unlace-passes/src/alias_categorize.rs:120:        // pass; today the lvar model doesn't expose `volatile` on every
+crates/unlace-passes/src/lvar_lanes.rs:3://! This is the first measurable slice toward a real lane-aware lvar
+crates/unlace-passes/src/lvar_lanes.rs:125:    fn lane_analysis_splits_disjoint_al_ah_lanes() {
+crates/unlace-passes/src/mips_delay_slot.rs:4://! before the branch takes effect. Source semantics treat the delay slot as
+crates/unlace-passes/src/libc_idioms.rs:34:/// allocator vs. deallocator, format string consumer) are split out.
+crates/unlace-passes/src/sysv_eightbyte.rs:4://! aggregate types are split into 8-byte chunks, each classified as one of
+crates/unlace-passes/src/calling_convention.rs:218:/// is phi-merged before a deref — e.g. stripped `v8#10 = MULTIEQUAL(ptr v8#7,
+crates/unlace-passes/src/calling_convention.rs:222:/// `docs/design-lvar-liverange-split-2026-06-01.md`.
+crates/unlace-passes/src/cpp_method.rs:98:        // Same loop also feeds the printer's semantic-rendering channel:
+crates/unlace-passes/src/cpp_method.rs:177:        let (seg, after_seg) = after_len.split_at(len);
+crates/unlace-passes/src/cpp_method.rs:254:    let (digits, rest) = s.split_at(end);
+crates/unlace-passes/src/dead_store_elim.rs:657:            lvars: Vec::new(),
+crates/unlace-passes/src/dead_store_elim.rs:1305:    fn test_dse_type_stack_o2_adjacent_stack_initializers_kept() {
+crates/unlace-passes/src/bitfield_idioms.rs:355:    /// `debug_medium.elf` `f_or` stack overflow.
+crates/unlace-passes/src/rust_result.rs:306:            lvars: Vec::new(),
+crates/unlace-passes/src/rust_panic.rs:166:            lvars: Vec::new(),
+crates/unlace-passes/src/builtin_recognize.rs:35://! [`SsaFunction::noreturn`] semantics or — for the call-graph case —
+crates/unlace-passes/src/builtin_recognize.rs:272:            lvars: Vec::new(),
+crates/unlace-passes/src/reanalysis.rs:6://! types and post-call live ranges were computed against the *old* B.
+crates/unlace-passes/src/dce.rs:274:            lvars: Vec::new(),
+crates/unlace-passes/src/dead_flag_elim.rs:203:            lvars: Vec::new(),
+crates/unlace-passes/src/dead_flag_elim.rs:386:    fn test_dead_flag_elim_preserves_semantics() {
+crates/unlace-passes/src/stack_pointer_tracking.rs:560:/// Real binaries can split prologue work after an early guard branch; scanning
+crates/unlace-passes/src/stack_pointer_tracking.rs:936:        let mut func = Function::new("split_prologue", BlockId(0), 0x1000);
+crates/unlace-passes/src/stack_pointer_tracking.rs:967:            "split prologue saved rbp slot should be classified, got {:?}",
+crates/unlace-passes/src/idiom_recognition.rs:2://! and replace them with semantic equivalents.
+crates/unlace-passes/src/idiom_recognition.rs:84:/// semantic equivalents (typically `COPY`).
+crates/unlace-passes/src/pass.rs:424:    // can shuffle without semantic change).
+crates/unlace-passes/src/pass.rs:1227:            Box::new(crate::lvar_collect::LvarCollectPass),
+crates/unlace-passes/src/variable_merge.rs:12://! 2. **Compute live ranges** for each SSA varnode using a backward dataflow
+crates/unlace-passes/src/variable_merge.rs:22://!    SSA varnode into an existing cluster whose live range does not overlap.
+crates/unlace-passes/src/variable_merge.rs:23://!    Two live ranges interfere if they share a program point.
+crates/unlace-passes/src/variable_merge.rs:26://! The pass is conservative: when in doubt (e.g. unknown live range, missing
+crates/unlace-passes/src/variable_merge.rs:143:/// inferred type can collapse together when their live ranges are disjoint.
+crates/unlace-passes/src/variable_merge.rs:154:/// with disjoint live ranges into a single C variable, mirroring how IDA's
+crates/unlace-passes/src/variable_merge.rs:191:        // 2. Compute live ranges via standard backward dataflow.
+crates/unlace-passes/src/variable_merge.rs:499:/// their unioned live ranges do not interfere.
+crates/unlace-passes/src/variable_merge.rs:538:///    type) and whose unioned live ranges do not interfere are merged
+crates/unlace-passes/src/variable_merge.rs:866:    /// Two unique-space varnodes with disjoint live ranges and the same size
+crates/unlace-passes/src/variable_merge.rs:902:    /// Overlapping live ranges between two unique varnodes MUST keep them
+crates/unlace-passes/src/variable_merge.rs:987:            "cross-block live ranges that overlap in bb1 must not coalesce: {u0_name} vs {u4_name}",
+crates/unlace-passes/src/variable_merge.rs:1052:             even with disjoint live ranges: {} vs {}",
+crates/unlace-passes/src/variable_merge.rs:1114:        // uniques with disjoint live ranges.
+crates/unlace-passes/src/variable_merge.rs:1144:    /// — sanity-check the live-range path through an instruction.
+crates/unlace-passes/src/qt_recognize.rs:10://! Recognising the MOC surface in a stripped binary is valuable because:
+crates/unlace-passes/src/qt_recognize.rs:123:/// quirks (template brackets, calling-convention suffixes) are stripped,
+crates/unlace-passes/src/qt_recognize.rs:126:/// stripped a parenthesised parameter list will still match correctly.
+crates/unlace-passes/src/qt_recognize.rs:130:    let stripped = match symbol_name.find('(') {
+crates/unlace-passes/src/qt_recognize.rs:134:    let stripped = stripped.trim();
+crates/unlace-passes/src/qt_recognize.rs:135:    if stripped.is_empty() {
+crates/unlace-passes/src/qt_recognize.rs:141:    let (qualifier, tail) = match stripped.rfind("::") {
+crates/unlace-passes/src/qt_recognize.rs:142:        Some(idx) => (&stripped[..idx], &stripped[idx + 2..]),
+crates/unlace-passes/src/qt_recognize.rs:143:        None => ("", stripped),
+crates/unlace-passes/src/instrument.rs:43://! Both knobs are observation-only: pass semantics are not affected and
+crates/unlace-passes/src/instrument.rs:298:        .split(',')
+crates/unlace-passes/src/instrument.rs:522:            "[unlace pass] func={} pass={} phase={:?} start maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={} foldable={} lvars={}",
+crates/unlace-passes/src/instrument.rs:533:            func.lvars.len(),
+crates/unlace-passes/src/instrument.rs:588:                "[unlace pass] func={func_name} pass={} done changed={} maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={} foldable={} lvars={}",
+crates/unlace-passes/src/instrument.rs:598:                func.lvars.len(),
+crates/unlace-output/src/c_printer.rs:63://!   on the same statement; the resulting C is semantically identical for
+crates/unlace-output/src/c_printer.rs:112:use unlace_ir::lvar::{LvarFlags, LvarSource, LvarStorage};
+crates/unlace-output/src/c_printer.rs:261:    let (head, tail) = output.split_at(first + IDA_TYPEDEFS.len());
+crates/unlace-output/src/c_printer.rs:445:    /// Stack lvar storage metadata recovered before HIR structuring.
+crates/unlace-output/src/c_printer.rs:447:    /// `HirFunction` keeps the physical `StackFrame`, but the lvar layer
+crates/unlace-output/src/c_printer.rs:450:    /// accesses use lvar storage metadata instead of re-deriving names in
+crates/unlace-output/src/c_printer.rs:452:    pub stack_lvars: BTreeMap<i64, StackLvarAnnotation>,
+crates/unlace-output/src/c_printer.rs:623:/// Convert final SSA lvar metadata into the stack-name side channel consumed
+crates/unlace-output/src/c_printer.rs:625:pub fn stack_lvar_annotations_from_ssa(func: &SsaFunction) -> BTreeMap<i64, StackLvarAnnotation> {
+crates/unlace-output/src/c_printer.rs:627:    for lv in &func.lvars {
+crates/unlace-output/src/c_printer.rs:654:        let c_type = from_debug.then(|| stack_lvar_type_name(lv.ty)).flatten();
+crates/unlace-output/src/c_printer.rs:664:            "lvar-export func={} offset={} name={} source={:?} flags={:?} ty={:?} c_type={:?} size={} buffer={} from_debug={}",
+crates/unlace-output/src/c_printer.rs:677:            .and_modify(|existing| merge_stack_lvar_annotation(existing, &ann))
+crates/unlace-output/src/c_printer.rs:683:fn merge_stack_lvar_annotation(existing: &mut StackLvarAnnotation, incoming: &StackLvarAnnotation) {
+crates/unlace-output/src/c_printer.rs:727:fn stack_lvar_type_name(ty: TypeKind) -> Option<String> {
+crates/unlace-output/src/c_printer.rs:805:        ctx.stack_lvars = ann.stack_lvars.clone();
+crates/unlace-output/src/c_printer.rs:1124:        // emitted (e.g. exception-disabled or stripped C++ binaries).
+crates/unlace-output/src/c_printer.rs:1148:            c_printer_trace_line(
+crates/unlace-output/src/c_printer.rs:1178:                    c_printer_trace_line(
+crates/unlace-output/src/c_printer.rs:1214:                    c_printer_trace_line(
+crates/unlace-output/src/c_printer.rs:1570:    let want_diff = c_printer_pipeline_trace_enabled();
+crates/unlace-output/src/c_printer.rs:1970:        // leave a blank line where stripped duplicates used to live.
+crates/unlace-output/src/c_printer.rs:2370:    /// loses to a coalescer name that already carries semantic content
+crates/unlace-output/src/c_printer.rs:2458:    /// Stack lvar metadata keyed by recovered frame offset. This is the
+crates/unlace-output/src/c_printer.rs:2459:    /// printer-side copy of [`PrinterAnnotations::stack_lvars`].
+crates/unlace-output/src/c_printer.rs:2460:    stack_lvars: BTreeMap<i64, StackLvarAnnotation>,
+crates/unlace-output/src/c_printer.rs:2679:            stack_lvars: BTreeMap::new(),
+crates/unlace-output/src/c_printer.rs:2699:            .filter(|n| !is_generic_lvar_name(n))
+crates/unlace-output/src/c_printer.rs:2702:            // *semantic* content (not just a generic `vN`/`cN` placeholder).
+crates/unlace-output/src/c_printer.rs:2715:            // co-named even without semantic information.
+crates/unlace-output/src/c_printer.rs:3352:    // Batch 11 slice 1: route this one emit path through the semantic
+crates/unlace-output/src/c_printer.rs:3838:/// Distinct-type counting uses set semantics on the primitive type, so a
+crates/unlace-output/src/c_printer.rs:3914:            if sv.base != *input && c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:3928:        if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:3983:    if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4004:    if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4485:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4510:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4520:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4533:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4557:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4576:                if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4586:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4598:        if c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:4613:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4631:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4649:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4660:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4737:                if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4810:    if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:4826:            if redefined && c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5018:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5028:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5036:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5047:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5056:    if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5075:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5088:                if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5150:                if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5201:    if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:5523:    if !c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:6348:        let ann = ctx.stack_lvars.get(&local.offset);
+crates/unlace-output/src/c_printer.rs:6439:        .stack_lvars
+crates/unlace-output/src/c_printer.rs:6448:fn debug_stack_lvar_name(ctx: &PrintCtx, offset: i64) -> Option<String> {
+crates/unlace-output/src/c_printer.rs:6449:    ctx.stack_lvars
+crates/unlace-output/src/c_printer.rs:6655:    let name = debug_stack_lvar_name(ctx, offset)
+crates/unlace-output/src/c_printer.rs:6669:        debug_stack_lvar_name(ctx, offset).is_some(),
+crates/unlace-output/src/c_printer.rs:6688:    let name = debug_stack_lvar_name(ctx, offset)
+crates/unlace-output/src/c_printer.rs:6695:        debug_stack_lvar_name(ctx, offset).is_some(),
+crates/unlace-output/src/c_printer.rs:7033:        if sv.base != *vn && c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:7265:        let name = debug_stack_lvar_name(ctx, offset)
+crates/unlace-output/src/c_printer.rs:7275:        let name = debug_stack_lvar_name(ctx, offset)
+crates/unlace-output/src/c_printer.rs:7292:            .stack_lvars
+crates/unlace-output/src/c_printer.rs:7329:        let ann = ctx.stack_lvars.get(&local.offset);
+crates/unlace-output/src/c_printer.rs:7559:/// Roles a variable can play in the source HIR, used to derive a semantic name
+crates/unlace-output/src/c_printer.rs:7726:    if !c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:7972:/// `_Bool`-typed via Phase 4 inference, but the source semantics could still
+crates/unlace-output/src/c_printer.rs:8288:/// semantic content. Used by the name-lookup chain (t227) to decide
+crates/unlace-output/src/c_printer.rs:8300:fn is_generic_lvar_name(name: &str) -> bool {
+crates/unlace-output/src/c_printer.rs:8370:    let (base_type, _) = split_dwarf_array_suffix(dwarf_type);
+crates/unlace-output/src/c_printer.rs:8382:    let normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
+crates/unlace-output/src/c_printer.rs:8407:    let (base_end, suffix) = split_dwarf_array_suffix(dwarf_type);
+crates/unlace-output/src/c_printer.rs:8437:    normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
+crates/unlace-output/src/c_printer.rs:8441:fn split_dwarf_array_suffix(dwarf_type: &str) -> (usize, String) {
+crates/unlace-output/src/c_printer.rs:9202:/// statement is absent: the printer's liveness analysis stripped the
+crates/unlace-output/src/c_printer.rs:9380:    if let Some(stripped) = strip_return_integer_suffix(&expr) {
+crates/unlace-output/src/c_printer.rs:9381:        return stripped;
+crates/unlace-output/src/c_printer.rs:9763:    if !c_printer_sequence_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:9885:    if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:9920:        if let Some(stripped) = strip_return_integer_suffix(inner) {
+crates/unlace-output/src/c_printer.rs:9921:            return stripped;
+crates/unlace-output/src/c_printer.rs:9934:    if let Some((lhs, op, rhs)) = split_top_level_comparison(expr) {
+crates/unlace-output/src/c_printer.rs:9966:/// then die in the dead-assignment pass — the dominant source of medium.elf's
+crates/unlace-output/src/c_printer.rs:10016:    let (sf_a, sf_op, sf_b) = split_top_level_comparison(sf_inner)?;
+crates/unlace-output/src/c_printer.rs:10026:    let (of_a, of_b) = split_top_level_comma(of_inner)?;
+crates/unlace-output/src/c_printer.rs:10039:    if let Some(stripped) = head.strip_suffix(&eq_prefix) {
+crates/unlace-output/src/c_printer.rs:10041:        return Some(format!("{stripped}{replacement}{}", &line[idiom_end..]));
+crates/unlace-output/src/c_printer.rs:10045:    if let Some(stripped) = head.strip_suffix(&eq_prefix_paren)
+crates/unlace-output/src/c_printer.rs:10049:        return Some(format!("{stripped}{replacement}{}", &line[idiom_end + 1..]));
+crates/unlace-output/src/c_printer.rs:10082:fn split_top_level_comma(s: &str) -> Option<(&str, &str)> {
+crates/unlace-output/src/c_printer.rs:10103:fn c_printer_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10110:fn c_printer_name_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10111:    std::env::var_os("UNLACE_CPRINTER_NAME_TRACE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10114:fn c_printer_stack_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10115:    std::env::var_os("UNLACE_CPRINTER_STACK_TRACE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10118:fn c_printer_flow_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10119:    std::env::var_os("UNLACE_CPRINTER_FLOW_TRACE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10122:fn c_printer_hoist_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10123:    std::env::var_os("UNLACE_CPRINTER_HOIST_TRACE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10126:fn c_printer_temp_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10127:    std::env::var_os("UNLACE_CPRINTER_TEMP_TRACE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10130:fn c_printer_load_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10131:    std::env::var_os("UNLACE_CPRINTER_LOAD_TRACE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10134:fn c_printer_decision_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10135:    std::env::var_os("UNLACE_CPRINTER_DECISION_TRACE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10138:fn c_printer_sequence_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10140:        || c_printer_decision_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10149:fn c_printer_pipeline_trace_enabled() -> bool {
+crates/unlace-output/src/c_printer.rs:10150:    std::env::var_os("UNLACE_CPRINTER_PIPELINE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:10153:fn c_printer_trace_filter() -> Option<String> {
+crates/unlace-output/src/c_printer.rs:10163:    c_printer_trace_filter()
+crates/unlace-output/src/c_printer.rs:10168:fn c_printer_trace_line(func_name: &str, message: impl std::fmt::Display) {
+crates/unlace-output/src/c_printer.rs:10169:    if !c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10179:    if !c_printer_flow_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10189:    if !c_printer_stack_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10199:    if !c_printer_hoist_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10209:    if !c_printer_temp_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10219:    if !c_printer_load_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10229:    if !c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10239:    if !c_printer_pipeline_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10349:    if !c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10372:    if !c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10394:    if !c_printer_stack_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10425:    if !c_printer_stack_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10445:    if !c_printer_stack_trace_enabled() && !c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10459:    if !c_printer_decision_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10469:    if !c_printer_sequence_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10479:    if !c_printer_sequence_trace_enabled() && !c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10496:    if !c_printer_trace_enabled() && !c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10525:    if !c_printer_stack_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10575:    if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10641:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10649:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10711:    if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10725:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10748:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:10829:    if let Some((lhs, op, rhs)) = split_top_level_comparison(expr) {
+crates/unlace-output/src/c_printer.rs:10851:/// store. That store is a dead assignment removed only by the c_printer's
+crates/unlace-output/src/c_printer.rs:10858:/// guard is semantically free and matches the golden `if (v) {}` form.
+crates/unlace-output/src/c_printer.rs:10867:///   * Only a single balanced outer `!(...)` is stripped. `if (!(a) && b)` is
+crates/unlace-output/src/c_printer.rs:10964:    // change semantics.
+crates/unlace-output/src/c_printer.rs:10976:fn split_top_level_comparison(expr: &str) -> Option<(&str, &str, &str)> {
+crates/unlace-output/src/c_printer.rs:11868:/// strings (containing `\n`) are split into one `// `-prefixed line
+crates/unlace-output/src/c_printer.rs:11871:    for line in text.split('\n') {
+crates/unlace-output/src/c_printer.rs:12247:    // render a semantically meaningful form instead of the raw IDA-style
+crates/unlace-output/src/c_printer.rs:12363:        if !matched && c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12553:        let split = body
+crates/unlace-output/src/c_printer.rs:12556:        let (count, inner) = body.split_at(split);
+crates/unlace-output/src/c_printer.rs:12563:        && let Some(name) = body.split('=').next()
+crates/unlace-output/src/c_printer.rs:12570:        && let Some(name) = body.split('=').next()
+crates/unlace-output/src/c_printer.rs:12680:/// The c_printer's `try_array_struct_field_access` (t231) consumes this
+crates/unlace-output/src/c_printer.rs:12805:    if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12814:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12820:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12863:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12871:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12877:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12910:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12916:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12923:                if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12930:                if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:12938:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:13067:                if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:13258:        if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:13698:        // `a != (b < c)`. Keep generated C warning-clean under the semantic
+crates/unlace-output/src/c_printer.rs:14183:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15732:        if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15748:            if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15766:            if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15782:            if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15788:            if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15803:            if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15823:            if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15836:            if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15849:        if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15867:            if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15880:        if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:15893:    if c_printer_name_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:17591:        .and_then(|line| line.split_once(" = "))
+crates/unlace-output/src/c_printer.rs:17601:        && rhs.split_whitespace().any(is_v_number_name)
+crates/unlace-output/src/c_printer.rs:17693:    for param in params.split(',') {
+crates/unlace-output/src/c_printer.rs:17698:        let Some(raw_name) = param.split_whitespace().last() else {
+crates/unlace-output/src/c_printer.rs:17703:            .split_once('[')
+crates/unlace-output/src/c_printer.rs:17720:    // statement reads it. The single-pass `contains_identifier` semantics (any
+crates/unlace-output/src/c_printer.rs:17807:        let Some((indent, segments)) = split_plain_statement_segments(line) else {
+crates/unlace-output/src/c_printer.rs:17820:                // `contains_identifier` semantics — its last store is live-out
+crates/unlace-output/src/c_printer.rs:17869:                if c_printer_pipeline_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:18054:    std::env::var_os("UNLACE_CPRINTER_PRUNE_TRACE").is_some() || c_printer_trace_enabled()
+crates/unlace-output/src/c_printer.rs:18178:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:18207:        if c_printer_trace_enabled() {
+crates/unlace-output/src/c_printer.rs:18244:fn split_plain_statement_segments(line: &str) -> Option<(&str, Vec<&str>)> {
+crates/unlace-output/src/c_printer.rs:18258:    for segment in rest.split_inclusive(';') {
+crates/unlace-output/src/c_printer.rs:18269:    let (lhs, rhs) = stmt.split_once(" = ")?;
+crates/unlace-output/src/c_printer.rs:18292:    let (lhs, rhs) = OPS.iter().find_map(|op| stmt.split_once(op))?;
+crates/unlace-output/src/c_printer.rs:18328:    let decl = if let Some((decl, init)) = stmt.split_once(" = ") {
+crates/unlace-output/src/c_printer.rs:18353:    let first = decl.split_whitespace().next()?;
+crates/unlace-output/src/c_printer.rs:18372:    let name = decl.split_whitespace().last()?.trim_start_matches('*');
+crates/unlace-output/src/c_printer.rs:18482:    let Some((head, tail)) = rest.split_once('_') else {
+crates/unlace-output/src/c_printer.rs:18509:    let Some((arg, version)) = rest.split_once('_') else {
+crates/unlace-output/src/c_printer.rs:18594:///   change semantics if we dropped a sign- vs zero-extending cast).
+crates/unlace-output/src/c_printer.rs:18687:        // Mixed signedness — same width is purely cosmetic in C semantics for
+crates/unlace-output/src/c_printer.rs:18763:// Minimal executable semantics for the SSE vector helpers emitted below.
+crates/unlace-output/src/c_printer.rs:19276:        // so stripping it would change semantics. Leave it.
+crates/unlace-output/src/c_printer.rs:20362:    /// `vN`, not semantic names. A factual role such as `i` should win.
+crates/unlace-output/src/c_printer.rs:20608:    /// the variable-merge coalescer already picked a semantic name we
+crates/unlace-output/src/c_printer.rs:20631:        // VariableMergePass picked the semantic name `counter_total`.
+crates/unlace-output/src/c_printer.rs:21843:            .rsplit_once("unsigned_cast")
+crates/unlace-output/src/c_printer.rs:21864:            .rsplit_once("same_size_widen")
+crates/unlace-output/src/c_printer.rs:21952:            .rsplit_once("ushort_zext_elided")
+crates/unlace-output/src/c_printer.rs:26893:        ann.stack_lvars.insert(
+crates/unlace-output/src/c_printer.rs:26905:            ann.stack_lvars.insert(
+crates/unlace-output/src/c_printer.rs:27042:    fn test_t232_stack_lvar_annotation_supplies_name_and_decl_type() {
+crates/unlace-output/src/c_printer.rs:27064:        let mut func = make_func("t232_lvar_name", body);
+crates/unlace-output/src/c_printer.rs:27083:        ann.stack_lvars.insert(
+crates/unlace-output/src/c_printer.rs:27099:            "stack lvar annotation should drive declaration: {output}",
+crates/unlace-output/src/c_printer.rs:27103:            "stack lvar annotation should drive stack access name: {output}",
+crates/unlace-output/src/c_printer.rs:28729:    /// Multi-line comment strings (containing `\n`) must be split into
+crates/unlace-output/src/c_printer.rs:28908:            "inline namespace should be stripped from signature line, got:\n{sig_line}",
+crates/unlace-output/src/c_printer.rs:29401:        let out = crate::c_printer::print_c_with_rtti_config(
+crates/unlace-output/src/c_printer.rs:29547:        // under -Wparentheses. The semantic gate compiles generated C with
+crates/unlace-output/src/c_printer.rs:30216:    fn c_printer_renders_hash_case_with_string_comment() {
+crates/unlace-output/src/c_printer.rs:30229:    fn c_printer_renders_unknown_hash_case_normally() {
+crates/unlace-output/src/c_printer.rs:30246:    fn c_printer_escapes_special_chars_in_string_comment() {
+crates/unlace-output/src/c_printer.rs:30259:    fn c_printer_renders_pdb_constant_comment_for_switch_case() {
+crates/unlace-output/src/c_printer.rs:30729:    // (the c_printer side of t213's struct-field recovery):
+crates/unlace-output/src/c_printer.rs:30756:    /// `extra_const_add` parameter splits the offset application off

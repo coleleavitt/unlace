@@ -1,0 +1,20 @@
+{"id":"t1","subject":"Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)","status":"completed","created_at_ms":1779807119110,"archived_at_ms":1780417751197}
+{"id":"t2","subject":"Step 1: Encapsulate var_map behind VarMap wrapper API","status":"completed","created_at_ms":1779807119111,"archived_at_ms":1780417751197}
+{"id":"t1","subject":"Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)","status":"completed","created_at_ms":1779807119110,"archived_at_ms":1780450195193}
+{"id":"t2","subject":"Step 1: Encapsulate var_map behind VarMap wrapper API","status":"completed","created_at_ms":1779807119111,"archived_at_ms":1780450195193}
+{"id":"t1","subject":"Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)","status":"completed","created_at_ms":1779807119110,"archived_at_ms":1780454237387}
+{"id":"t2","subject":"Step 1: Encapsulate var_map behind VarMap wrapper API","status":"completed","created_at_ms":1779807119111,"archived_at_ms":1780454237387}
+{"id":"t1","subject":"Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)","status":"completed","created_at_ms":1779807119110,"archived_at_ms":1780454278130}
+{"id":"t2","subject":"Step 1: Encapsulate var_map behind VarMap wrapper API","status":"completed","created_at_ms":1779807119111,"archived_at_ms":1780454278130}
+{"id":"t1","subject":"Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)","status":"completed","created_at_ms":1779807119110,"archived_at_ms":1780454303753}
+{"id":"t2","subject":"Step 1: Encapsulate var_map behind VarMap wrapper API","status":"completed","created_at_ms":1779807119111,"archived_at_ms":1780454303753}
+{"id":"t1","subject":"Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)","status":"completed","created_at_ms":1779807119110,"archived_at_ms":1780454312986}
+{"id":"t2","subject":"Step 1: Encapsulate var_map behind VarMap wrapper API","status":"completed","created_at_ms":1779807119111,"archived_at_ms":1780454312986}
+{"id":"t1","subject":"Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)","status":"completed","created_at_ms":1779807119110,"archived_at_ms":1780454696994}
+{"id":"t2","subject":"Step 1: Encapsulate var_map behind VarMap wrapper API","status":"completed","created_at_ms":1779807119111,"archived_at_ms":1780454696994}
+{"id":"t3","subject":"Deep research: register aliasing, lvar recovery, partial-register SSA","status":"completed","created_at_ms":1779890024978,"archived_at_ms":1780519472007}
+{"id":"t4","subject":"Implement x86 vector upper-lane canonicalization","status":"completed","created_at_ms":1779891200000,"archived_at_ms":1780519472007}
+{"id":"t5","subject":"Add collector-like call snapshots","status":"completed","created_at_ms":1779891200001,"archived_at_ms":1780519472007}
+{"id":"t6","subject":"Model full vs partial ABI call clobbers","status":"completed","created_at_ms":1779891200002,"archived_at_ms":1780519472007}
+{"id":"t7","subject":"Add post-SSA lvar lane split/coalesce diagnostics","status":"completed","created_at_ms":1779891200003,"archived_at_ms":1780519472007}
+{"id":"t8","subject":"Add register-alias semantic suite beside DWARF scoring","status":"completed","created_at_ms":1779891200004,"archived_at_ms":1780519472007}

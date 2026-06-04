@@ -884,3 +884,278 @@ split Pointer-web from Scalar-web. The lattice (fwd+bwd, validated) is the
 correct classifier; it just needs to REPLACE the old use-site classification in
 the partition, then drive the split. Re-validate part dump shows correct webs,
 then gate. Baseline 25/0 (reverted). This is the missing wiring, not new analysis.
+
+## Update 2026-06-03r: update-q WIRED + DRIVEN to completion — DISPROVED. Name-layer split cannot fix this (decisive bisection)
+
+Executed update-q's "clear path" end-to-end (attempt #15): wired `classify_value_lattice`
+into `partition_register_phases` (lattice ValueClass replaces has_addr/has_arith;
+opposite-class phi/COPY edges skipped) AND **built the missing step c** — the actual
+split application in `emit_merged_names` (rename each disjoint Scalar web to a fresh
+`cN`, IV-protected, collision-gated, hard-gated on a real Load/Store-address deref in
+the pointer web + a real arith/zext/subpiece seed in the scalar web). Plus the
+`base_name_is_scalar` printer guard on the arrow path AND all three
+`try_array_subscript` arms. Measured every step (`UNLACE_PART_DUMP`,
+`UNLACE_REG_COALESCE_TRACE` `t61-split` lines, `UNLACE_SCALAR_BASE_TRACE`,
+`UNLACE_T61_SPLIT_ONLY=<offsets>` bisection). Reverted to baseline 25/0.
+
+CONFIRMED (update-q was right about classification): the lattice classifies r9
+correctly — part dump shows `{6,7,12}=Scalar` (the ZEXT digits) and the rest Pointer.
+No inversion. The `base_name_is_scalar` guard cleanly fixes the c5/c1 compile (both
+`c5->field` AND the fall-through `c5[1]` bail to raw deref; trace fires 2×+2× on
+c5/c1). Compilation goes cc-failed → clean.
+
+DISPROVED (update-q was WRONG that wiring is sufficient). Two decisive measurements:
+- **Split ALL** (the lattice fires 28× on medium:main — rax/rcx/rsi/rdi/r9, NOT 1×
+  like #14, because the lattice marks *every* arith/zext output Scalar so each
+  scratch register's many disjoint arith uses become split candidates) → medium AND
+  stripped **TIMEOUT** (over-split severs a cursor cycle even WITH IV-protection).
+- **Split ONLY r9** (`UNLACE_T61_SPLIT_ONLY=72`) → compiles + runs but **WRONG ANSWER**:
+  medium exit=108, stripped exit=236 vs expected **33**.
+
+The r9-only wrong-answer is the decisive datum: the split is driven by the *correct*
+lattice classification and is still semantically wrong. So the failure is NOT
+classification (lattice is right) and NOT the split mechanism (it renames consistently)
+— it is that **r9's pointer web itself conflates two distinct pointers** (rsp/buf base
+AND rsi, SSA-phi-merged into one web; see update-i). The scalar digit web `{6,7,12}`
+and the pointer web are **SSA-def-use-disjoint but NOT value-flow-disjoint**: splitting
+the digits off `c7` changes the program's computed result. A name-layer rename cannot
+repair an upstream SSA web that already merged value-distinct lifetimes.
+
+HARD GATES DON'T HELP: adding "pointer web must contain a real `address_used` deref" +
+"scalar web must contain a real arith/zext seed" + collision-gate only trimmed 31→28
+splits — rax/rcx/rsi **genuinely** reuse the register as a dereferenced pointer AND a
+computed scalar across disjoint webs, *structurally identical to r9*. There is no
+structural discriminator between the harmful r9 collision and benign scratch reuse.
+
+DEFINITIVE CONCLUSION (supersedes the "missing wiring" framing of updates n–q): the
+name-layer pointer/scalar split is **ruled out** — over-split → timeout, minimal split
+→ wrong answer, and the two cannot be separated structurally. The remaining fix is NOT
+in `register_coalesce`/the printer at all. It must be **upstream at the SSA/value-flow
+layer**: either (a) stop the copy-propagation/phi step that merges rsp/buf and rsi into
+one r9 web in the first place (so the back end never sees a conflated web), or (b) true
+per-program-point-liveness LVAR allocation that keeps value-distinct lifetimes in
+distinct lvars from the start. The param fix (`collect_live_on_entry_reads`) remains
+correct-but-coupled (alone it cc-fails c5/c1); it only ships *with* a value-correct
+upstream fix, never with a name-layer split.
+
+REUSABLE FROM THIS SESSION (in commit history / this doc, reverted from tree): the
+driven split + hard gates + `base_name_is_scalar` guard + `UNLACE_T61_SPLIT_ONLY`
+bisection harness. Do NOT re-attempt the name-layer split; start from the upstream
+rsp/rsi-conflation question (UNLACE ir-dump on r9's web; find the COPY/phi that unifies
+the rsp base and the rsi copies). Baseline 25/0 (reverted).
+
+## Update 2026-06-03s: minimal experiment settles it — ONE upstream ptr⊕scalar phi; split was the wrong layer; prune back-edge bug FIXED
+
+Ran the experiment updates n–r never cleanly ran: the **param fix + printer guard,
+NO split**. Reconstructed `collect_live_on_entry_reads` (backward register
+liveness → `main(void)`, drops 14 phantom `aN`; reproduces the documented 23/2
+with cc-fails ONLY on the `c5/c1 ->field` symptom) + a `rendered_base_is_scalar`
+printer guard (bails `scalar->field` / `scalar[i]` to the raw `*(T*)(addr)` deref,
+which is semantically identical). Measured each half against the exact gate compile.
+
+RESULT — the "minimal fix is sufficient" hypothesis is DISPROVED, but informatively:
+param-fix + guard **compiles and runs**, yet:
+- **medium**: SIGSEGV. gdb pins `*(_DWORD *)(c7)` (r9) dereferencing a scalar.
+- **stripped**: nondeterministic exit. ASLR-off → deterministic; valgrind finds NO
+  uninitialised reads ⇒ an **address leak**, not uninit memory. At `label_20`,
+  `c3 = a2 + c1 + 3` uses `c1 = (uintptr_t)(buf+4)` (a pointer) where baseline used
+  a scalar `a4`; the address flows `c3→c8→v690→c0→return c0`.
+
+TWO root causes, BOTH *exposed* (not caused) by the param-fix's `a6→c7` / `…→c1`
+renaming. Baseline's phantom-param names (`a6`/`a4`) happened to keep the scalar
+phase in a separate C variable; removing the phantom param collapses it into the
+register's coalesced `cN`, on top of the pointer phase.
+
+1. **Prune back-edge bug — DIAGNOSED + fix designed, NOT wired into behavior.**
+   The post-emission `dead-plain-assignments` stage deletes the loop-carried
+   pointer reset `c7 = a1` because its `used_later` check is a FORWARD-ONLY textual
+   scan: the textually-last reset's only use is `*(c7)` at the loop *top* (above
+   it), reached via the back-edge the textual pass cannot see. Both `c7=a1` stores
+   have identical cond_family/is_temp/reassign flags — only `used_later` differs
+   (the pipeline trace makes this self-evident). Baseline's `a6` name happened to
+   have an occurrence below, so it survived. The fix `is_loop_carried_use_above`
+   (brace-match out to the innermost enclosing loop; keep the store iff `lhs` is
+   **loop-live-in** — its first occurrence scanning the body from the top is a
+   READ, not a write) is implemented and EXERCISED BY THE DIAGNOSTIC TRACE
+   (`loop_carried_candidate`), but is **not** wired into the prune's `remove`.
+   Two reasons: (a) the bug only manifests as a CRASH under the param fix
+   (reverted), and (b) at baseline, keeping the loop-carried stores re-leaks the
+   temps they reference (unlace does not yet FOLD them), busting the `debug_medium`
+   leaked-temp budget (37 → 57) — a quality regression that must not be tuned away.
+   Re-land the keep together with the param fix AND a temp-folding companion. (An
+   earlier "loose" version — keep on *any* rvalue read above — was worse: it kept
+   dead single-use temps the loop rewrites at the top; the loop-live-in refinement
+   fixed that, but the fold gap remains.) NOTE: wholesale-disabling the stage made
+   medium "pass" in ONE gate run — a 1-run fluke; medium under wholesale-disable is
+   ALSO ASLR-dependent, i.e. medium is *also* the root-#2 address leak.
+
+2. **The ptr⊕scalar conflation — the real keystone, IR-confirmed, upstream-only.**
+   `ir-dump` of rcx (`v8`) in stripped:
+   ```
+   v8#7  = COPY v56#3            ; POINTER (rdi-derived)
+   v8#9  = COPY v65869           ; SCALAR  (from a min/max SELECT)
+   v8#10 = MULTIEQUAL(v8#7, v8#9, v8#11)   ; phi MERGES pointer v8#7 + scalar v8#9
+   v65877 = LOAD c1, v8#10       ; v8#10 dereferenced as a pointer
+   ```
+   A `MULTIEQUAL` (phi) **directly merges a pointer and a scalar** into the version
+   used as a LOAD address (r9 in medium is the same shape, cf. update-i). This is
+   why a name-layer split is **provably impossible** (definitively confirms
+   update-r): you cannot give `v8#9` and `v8#10` distinct C names because
+   `v8#10 = phi(…, v8#9, …)` — the de-SSA would still flow the scalar into the
+   pointer variable. The fix must be UPSTREAM: the scalar must not feed the
+   pointer phi (SSA construction / structuring), or true per-program-point-liveness
+   LVAR allocation must keep the value-distinct lifetimes in distinct lvars. Both
+   `medium` and `stripped` are the SAME bug (one address-leak conflation); there is
+   no second independent defect.
+
+SHIPPED this session (gate stays 25/0; output --lib 579/579, passes --lib 1161/1161,
+cli_smoke 29/29, quality_smoke 7/7, goldens unchanged, clippy -D warnings + fmt +
+lint-determinism clean):
+- `UNLACE_CPRINTER_PIPELINE` per-statement pipeline trace (stage-diff with exact
+  removed/added lines; `prune-decision` with the forward-only back-edge blind spot
+  named explicitly via `loop_carried_candidate`; `emit-load` deref-form). Honors
+  `UNLACE_CPRINTER_TRACE_FILTER` (`=c7` follows one variable end-to-end). This is
+  what made both bugs visible.
+- The `rendered_base_is_scalar` printer guard (defensive: never emit `scalar->field`
+  / `scalar[i]`; golden- and quality-safe; inert at baseline, needed by the param
+  fix path).
+- `is_loop_carried_use_above` (the prune fix) is present and exercised by the trace
+  but deliberately NOT wired into behavior — see root #1 above.
+
+REVERTED (blocked on the conflation): the `collect_live_on_entry_reads` param fix
+is correct + validated but cannot ship until the upstream phi conflation is fixed
+(it is preserved `#[allow(dead_code)]` in `calling_convention.rs` with a wire-in
+note). The prune fix is still needed once it re-lands: even after the conflation is
+split, a loop-carried pointer reset would still be wrongly deleted by the
+forward-only prune.
+
+NEXT (the keystone, upstream): stop the phi from merging the scalar `v8#9` into the
+pointer-LOAD web `v8#10`. Investigate whether the `v8#9` phi-edge is a structuring
+over-approximation (the scalar BB never actually reaches the LOAD at runtime) or a
+genuine register reuse needing live-range splitting in SSA before naming. `ir-dump`
+the block structure around `v8#10`'s predecessors (BB_17/BB_19/BB_20) and the
+guard on the LOAD.
+
+## Update 2026-06-03t: research-grounded answer — we are missing the OUT-OF-SSA layer (CSSA + value-based coalescing). Plus a correction to update-s.
+
+CORRECTION to update-s (measure, don't assume — I assumed an operand): `v8#10` is **NOT**
+a ptr⊕scalar phi. `ir-dump` line-by-line: `v8#9 = COPY v65869` and `v65869 = INT_ADD
+v56#3, c4` = **rdi+4, a POINTER**. The min/max `SELECT` (v65868) feeds `v16#15`, not
+`v8#9`. So `v8#10 = MULTIEQUAL(v8#7=rdi, v8#9=rdi+4, v8#11=cursor+8)` is an **all-pointer**
+phi — no conflation there. The ACTUAL shape (from `UNLACE_REG_COALESCE_TRACE`, offset 8):
+rcx's scalar-ZEXT versions and pointer-rdi versions form **disjoint union-find groups**,
+and `register_coalesce::existing_group_name` reuses the SAME name `c1` across *all* of
+them. The printer's de-SSA then collapses by phi congruence derived from `phi_map`
+*independently of* `merged_names`. So the conflation is real but its exact merge point is
+a phi/copy chain into the post-loop `{v13..v35}` group, not `v8#10`.
+
+WHAT WE ARE MISSING (digest of `research/lvar/liverange/` — Boissinot 2009 out-of-SSA,
+Sreedhar 1999 CSSA, Briggs 1998, Budimlic 2002, the SSA book ch.21, fast-liveness 2007,
+van Emmerik 2007, DIVINE/VSA): **unlace has no out-of-SSA pass at all.** `register_coalesce`
+is a *name-merger* over SSA-with-phis; nothing inserts copies or eliminates phis. The
+15-attempt lattice (updates j–r) failed because it approximated the WRONG predicate —
+type/use-site proxies instead of the literature's interference = **liveness + value-
+equality**. The principled fix (reconciles with "name-layer split is impossible"):
+
+1. **CSSA conversion (Sreedhar Method I).** Insert copies at every phi input (end of each
+   pred, parallel-copy) AND at the phi def (Briggs lost-copy/swap fix), then the phi ranges
+   over fresh short-lived `a_i'`. The original long-lived versions become plain COPY
+   operands. THE PHI IS GONE → the impossibility proof no longer applies; the scalar copy
+   is now a distinct nameable variable. Requires **critical-edge splitting** (reuse
+   `unlace-struct/node_split.rs`).
+2. **Value-numbering `V(x)`** by dominance-based copy folding (one dom-tree walk: `b=COPY a
+   ⇒ V(b)=V(a)`). Free, replaces the whole broken classify/arith-taint lattice.
+3. **Value-based interference**: `a`,`b` interfere iff `live(a)∩live(b)≠∅ ∧ V(a)≠V(b)`
+   (dominance reduces it to `def(a)∈live(b) ∨ def(b)∈live(a)`). Replaces the coarse
+   `[min,max]` `LiveSets::overlaps` + `pointer_scalar_conflict`/`address_arith_conflict`.
+   Use fast-liveness-checking-2007 for O(1) queries (or block dataflow first).
+4. **Weighted coalescing** (inner-loop-first; recheck against the live union-find class) +
+   **parallel-copy sequentialization** with cycle-breaking (Boissinot §III-C).
+
+New pass `crates/unlace-passes/src/out_of_ssa.rs`, phase FinalCleanup, BEFORE
+`RegisterCoalescePass`; the structurer/printer de-SSA must consume the post-CSSA classes
+(rewrite `phi_map`/`var_map`, or expose `coalesce_classes` the de-SSA reads instead of
+`phi_map`). Replace `register_coalesce`'s interference core; keep `UnionFind` +
+`emit_merged_names` shape. Gate `UNLACE_OOSSA`; verify each stage at `semantic-report` 25/0
+with `ir-dump` + `UNLACE_CPRINTER_PIPELINE`. Re-apply the param fix + prune fix ONLY with
+this (doc: "alone it re-regresses").
+
+ALSO MISSING (papers flag, doc never considered): critical-edge splitting / lost-copy
+correctness; parallel-copy semantics; coalescing order + shrinking-interference recheck
+(Chaitin); fast liveness vs the coarse sweep; van Emmerik §3.7 overlapped sub-register
+aliasing (al/ax/eax/rax into a wider phi); and — if after CSSA two *different pointers*
+(rsp-buf vs rsi, update-i) still conflate — that is a VSA / a-loc problem (DIVINE, WYSINWYX,
+Balakrishnan-Reps), NOT out-of-SSA. Type evidence (TIE/OSPREY/Caballero) is advisory for
+tie-breaking `V`, never a rename command.
+
+This is a multi-day compiler-pass build, now fully specified. It is the genuine fix for
+t61/t69; the name-layer era (updates 1–s) is closed.
+
+## Update 2026-06-03u: current state after C-printer semantic tracing pass
+
+The C-printer has more diagnostic coverage now, but this does **not** mean the
+lvar/out-of-SSA problem is fixed. Current split of responsibilities:
+
+- **Fixed in the C-printer:** stack-canary spill/reload artifacts are detected as
+  canary-owned stack slots and suppressed. This removes the bogus epilogue reload
+  assignment observed in `medium:main` (`c2 = v_72;`) and is covered by
+  `canary_stack_spill_reload_is_suppressed`.
+- **Still not fixed:** `medium:main` / `stripped:main` runtime semantics remain
+  blocked on the value/lvar problem described in update-t. The C-printer can now
+  expose wrong materialization and cleanup choices, but it cannot repair the
+  missing out-of-SSA/CSSA/value-based coalescing layer by itself.
+- **New local C-printer suspicion found:** after the canary fix, `medium:main`
+  still had an exit mismatch caused by a loop-condition/materialization issue in
+  the map-sum loop. Widening the materialized-source substitution fixed the local
+  off-by-one shape but caused `medium`/`stripped` to time out, so that helper is
+  intentionally suspicious until the full trace identifies the over-broad hit.
+
+New trace knobs for debugging the whole C printer:
+
+```bash
+# Big hammer: enables name/stack/flow/hoist/temp/load/decision/sequence/pipeline/full traces.
+UNLACE_CPRINTER_TRACE=1 \
+UNLACE_CPRINTER_TRACE_FILTER='c0' \
+RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf \
+  >/tmp/unlace_medium_trace.c 2>/tmp/unlace_medium_trace.log
+
+# Full setup/expression/operand call sequence without enabling every older trace family.
+UNLACE_CPRINTER_FULL_TRACE=1 \
+UNLACE_CPRINTER_TRACE_FILTER='stmt=1030' \
+RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf \
+  >/tmp/unlace_medium_full_trace.c 2>/tmp/unlace_medium_full_trace.log
+
+# Materialized-source scanner: every candidate, skip reason, range, and hit.
+UNLACE_CPRINTER_SEQUENCE_TRACE=1 \
+UNLACE_CPRINTER_NAME_TRACE=1 \
+UNLACE_CPRINTER_TRACE_FILTER='materialized-source' \
+RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf \
+  >/tmp/unlace_medium_materialized_trace.c 2>/tmp/unlace_medium_materialized_trace.log
+
+# Loop/condition skeleton: while/for/do-while statement ranges and rendered conditions.
+UNLACE_CPRINTER_SEQUENCE_TRACE=1 \
+UNLACE_CPRINTER_TRACE_FILTER='emit-while' \
+RUSTC_WRAPPER= cargo run -q -p unlace-cli -- decompile --emit c --function main fixtures/medium.elf \
+  >/tmp/unlace_medium_loop_trace.c 2>/tmp/unlace_medium_loop_trace.log
+```
+
+What the new traces emit:
+
+- `full ctx-snapshot stage=...`: C-printer context counters after each setup pass
+  (`collect_varnodes`, `compute_foldable`, `compute_hoist_plan`, MMIO detection,
+  canary suppression, etc.).
+- `full emit-expr-*`, `full emit-operand-*`, `full memory-addr-*`: expression and
+  operand call sequence, including constants, stack-frame address shortcuts,
+  readonly values, inline decisions, stable-load inline decisions, and final names.
+- `sequence materialized-source ...`: every materialized-source scan and rejection
+  reason. For the known map-loop site, the trace shows stmt `1030` scanning
+  candidate statements down to `1029` and choosing `c0` for consumer `1042`.
+- `sequence emit-while-*`, `emit-for-*`, `emit-dowhile-*`, `control-cond-*`,
+  `post-body-cond-*`: control-flow condition resolution and loop body ranges.
+- `pipe stage-diff`: exact post-emission cleanup stage removals/additions.
+
+Next debugging target before changing semantics again: use `UNLACE_CPRINTER_TRACE=1`
+with a narrow filter (`stmt=1030`, `consumer=1042`, `materialized-source`, `emit-while`,
+or a concrete variable such as `c0`) to find the first over-broad substitution or
+cleanup deletion that creates the timeout. Do not treat the C-printer helper as the
+lvar fix; the out-of-SSA pass in update-t remains the architectural repair.

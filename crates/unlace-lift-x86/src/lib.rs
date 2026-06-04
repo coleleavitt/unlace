@@ -1213,8 +1213,41 @@ mod tests {
         let dst = co.output.expect("PEXTRB writes GP destination");
         assert_eq!(
             dst.space,
-            unlace_ir::SpaceId::Register,
-            "PEXTRB GP dest lives in the register space"
+            unlace_ir::SpaceId::Unique,
+            "PEXTRB GP dest is staged before the canonical GPR write"
+        );
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntZext
+                    && i.output == Some(Varnode::reg(RAX, 8))
+                    && i.inputs.first() == Some(&dst)
+            }),
+            "PEXTRB into EAX must zero-extend into canonical RAX: {:?}",
+            result.ir_ops
+        );
+    }
+
+    #[test]
+    fn test_movd_xmm_to_ecx_zero_extends_canonical_rcx() {
+        // 66 0F 7E C1 = movd ecx, xmm0
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x7E, 0xC1], 0x1000)
+            .expect("movd ecx, xmm0 decodes");
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntZext
+                    && i.output == Some(Varnode::reg(RCX, 8))
+                    && i.inputs.first().is_some_and(|input| input.size == 4)
+            }),
+            "MOVD into ECX must zero-extend into canonical RCX: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| i.output == Some(Varnode::reg(RCX, 4))),
+            "MOVD into ECX must not leave an independent 32-bit RCX destination"
         );
     }
 

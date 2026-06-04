@@ -12,6 +12,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use unlace_ir::reg_alias::aliases;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{IrOp, SpaceId, Varnode};
 
@@ -233,7 +234,9 @@ fn kill_active_for_def(active: &mut BTreeMap<SsaVarnode, CopySource>, def: Varno
         return;
     }
     active.retain(|key, source| {
-        key.base != def && source.raw != def && source.ssa.is_none_or(|ssa| ssa.base != def)
+        !aliases(key.base, def)
+            && !aliases(source.raw, def)
+            && source.ssa.is_none_or(|ssa| !aliases(ssa.base, def))
     });
 }
 
@@ -554,6 +557,47 @@ mod tests {
             ssa.var_map
                 .contains_key(&(BlockId(0), 4, VarnodeSlot::Input(0))),
             "unrewritten frame-register uses keep their SSA metadata"
+        );
+    }
+
+    #[test]
+    fn test_copy_prop_kills_stale_source_on_partial_register_write() {
+        let rcx = Varnode::reg(8, 8);
+        let ecx = Varnode::reg(8, 4);
+        let tmp = Varnode::unique(0, 4);
+        let low_lane = Varnode::unique(4, 4);
+        let sum = Varnode::unique(8, 4);
+
+        let mut ssa = make_single_block_ssa(vec![
+            IrInsn::with_output(IrOp::Copy, tmp, smallvec![rcx], 0x1000),
+            IrInsn::with_output(IrOp::Copy, ecx, smallvec![low_lane], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                sum,
+                smallvec![tmp, Varnode::constant(1, 4)],
+                0x1008,
+            ),
+        ]);
+        ssa.arch = unlace_ir::ArchId::X86_64;
+
+        let changed = CopyPropagationPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(
+            !changed,
+            "a 32-bit write to ECX must kill stale RCX-derived temp equivalences"
+        );
+
+        let add_insn = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[2];
+        assert_eq!(
+            add_insn.inputs[0], tmp,
+            "stale RCX source must not propagate across an ECX write"
         );
     }
 

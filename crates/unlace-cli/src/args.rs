@@ -42,6 +42,11 @@ pub enum Cmd {
         #[arg(long, short)]
         output: Option<PathBuf>,
 
+        /// Also snapshot this run under DIR/<timestamp>-<uuid>/ for diffing.
+        /// Can also be set with UNLACE_DECOMPILE_CAPTURE_DIR.
+        #[arg(long)]
+        capture_dir: Option<PathBuf>,
+
         /// Decompile all functions (default behavior).
         #[arg(long)]
         all: bool,

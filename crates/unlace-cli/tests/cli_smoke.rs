@@ -586,6 +586,73 @@ fn decompile_output_to_file() {
 }
 
 #[test]
+fn decompile_capture_dir_writes_timestamped_snapshot() {
+    let capture_root = tempfile::tempdir().expect("tempdir");
+    let output = unlace_bin()
+        .args([
+            "decompile",
+            "--emit",
+            "c",
+            "--function",
+            "main",
+            "--capture-dir",
+        ])
+        .arg(capture_root.path())
+        .arg(fixture("hello_world.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let mut entries = std::fs::read_dir(capture_root.path())
+        .expect("read capture root")
+        .map(|entry| entry.expect("capture entry").path())
+        .collect::<Vec<_>>();
+    entries.sort();
+    assert_eq!(entries.len(), 1, "expected one capture run directory");
+
+    let run_dir = &entries[0];
+    let dirname = run_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("capture directory name");
+    let (timestamp, rest) = dirname
+        .split_once("-hello_world-main-")
+        .expect("capture dir should include timestamp, binary, function, and uuid");
+    assert!(
+        timestamp.chars().all(|ch| ch.is_ascii_digit()),
+        "capture timestamp should be numeric: {dirname}"
+    );
+    assert_eq!(
+        rest.len(),
+        36,
+        "capture suffix should be UUID-shaped: {dirname}"
+    );
+
+    let captured_output = std::fs::read(run_dir.join("output.c")).expect("capture output");
+    assert_eq!(
+        captured_output, output.stdout,
+        "capture should match normal stdout byte-for-byte"
+    );
+
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(run_dir.join("manifest.json")).expect("capture manifest"),
+    )
+    .expect("manifest json");
+    assert_eq!(manifest["schema"], "unlace-decompile-capture-v1");
+    assert_eq!(manifest["emit"], "C");
+    assert_eq!(manifest["function_filter"], "main");
+    assert_eq!(manifest["captured_output_file"], "output.c");
+    assert_eq!(
+        manifest["captured_output_bytes"].as_u64(),
+        Some(output.stdout.len() as u64)
+    );
+}
+
+#[test]
 fn stripped_binary_discovers_functions_via_prologue_scan() {
     let output = unlace_bin()
         .args(["decompile", "--emit", "c"])

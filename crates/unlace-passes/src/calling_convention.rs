@@ -197,6 +197,127 @@ fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
     reads
 }
 
+/// Collect machine registers that are **live-on-entry** to the function, i.e.
+/// some path from the entry block reaches a use before any def. This is the
+/// principled parameter test: a true parameter must be read before it is
+/// written along at least one path from entry.
+///
+/// `collect_whole_function_reads` is a coarse over-approximation — it counts a
+/// register as "read" whenever it is read-before-write in *any single block*,
+/// even when that block is dominated by a def of the register (e.g. `main`'s
+/// outgoing-call-argument setups, where the register was loaded earlier). That
+/// produces phantom `aN` parameters. Proper backward liveness eliminates them:
+/// a register defined before its use along every path is not live-on-entry.
+///
+/// t61 (NOT wired in): this is the principled param fix — replacing the
+/// `collect_whole_function_reads` fallback in `infer_params` with this makes
+/// `main` → `main(void)` and drops the 14 phantom `aN`. It is correct and
+/// validated (reproduces the documented 23/2 with cc-fails ONLY on the
+/// `c5/c1 ->field` printer symptom), but it SURFACES a latent upstream SSA
+/// pointer⊕scalar phi conflation (a register reused for a pointer and a scalar
+/// is phi-merged before a deref — e.g. stripped `v8#10 = MULTIEQUAL(ptr v8#7,
+/// scalar v8#9, ...)` is then `LOAD`ed). That conflation leaks an address into
+/// the result and cannot be repaired at the name/printer layer. Re-wire this
+/// only together with the upstream fix. See
+/// `docs/design-lvar-liverange-split-2026-06-01.md`.
+#[allow(dead_code)]
+fn collect_live_on_entry_reads(func: &SsaFunction) -> BTreeSet<u64> {
+    // Per-block upward-exposed uses (`use`) and definitions (`def`) over machine
+    // register offsets. Phi outputs define their register at the block header;
+    // phi inputs are uses on the corresponding predecessor edge (recorded
+    // separately as that predecessor's live-out contribution).
+    let mut use_set: BTreeMap<BlockId, BTreeSet<u64>> = BTreeMap::new();
+    let mut def_set: BTreeMap<BlockId, BTreeSet<u64>> = BTreeMap::new();
+    let mut phi_pred_uses: BTreeMap<BlockId, BTreeSet<u64>> = BTreeMap::new();
+
+    for (&bid, block) in &func.function.blocks {
+        let mut defined: BTreeSet<u64> = BTreeSet::new();
+        let mut used: BTreeSet<u64> = BTreeSet::new();
+        if let Some(phis) = func.phi_map.get(&bid) {
+            for phi in phis {
+                if phi.output.base.space == SpaceId::Register {
+                    defined.insert(phi.output.base.offset);
+                }
+            }
+        }
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            match insn.op {
+                IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
+                _ => {}
+            }
+            for (input_idx, inp) in insn.inputs.iter().enumerate() {
+                if let Some((reg, _size)) = input_register(func, bid, insn_idx, input_idx, inp)
+                    && !defined.contains(&reg)
+                {
+                    used.insert(reg);
+                }
+            }
+            if let Some(output) = insn.output
+                && output.space == SpaceId::Register
+            {
+                defined.insert(output.offset);
+            }
+        }
+        use_set.insert(bid, used);
+        def_set.insert(bid, defined);
+    }
+
+    // Phi inputs flow from a specific predecessor: record each as that
+    // predecessor's live-out contribution (killed there if the predecessor
+    // redefines the register before the edge).
+    for phis in func.phi_map.values() {
+        for phi in phis {
+            if phi.output.base.space != SpaceId::Register {
+                continue;
+            }
+            for (pred, input) in &phi.inputs {
+                if input.base.space == SpaceId::Register {
+                    phi_pred_uses
+                        .entry(*pred)
+                        .or_default()
+                        .insert(input.base.offset);
+                }
+            }
+        }
+    }
+
+    // Backward liveness fixpoint. live_in[B] = use[B] ∪ (live_out[B] − def[B]);
+    // live_out[B] = ⋃ live_in[succ] ∪ phi-input-uses contributed by B.
+    let mut live_in: BTreeMap<BlockId, BTreeSet<u64>> = func
+        .function
+        .blocks
+        .keys()
+        .map(|&bid| (bid, BTreeSet::new()))
+        .collect();
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for (&bid, block) in &func.function.blocks {
+            let mut live_out: BTreeSet<u64> = BTreeSet::new();
+            for &succ in &block.successors {
+                if let Some(s) = live_in.get(&succ) {
+                    live_out.extend(s.iter().copied());
+                }
+            }
+            if let Some(pu) = phi_pred_uses.get(&bid) {
+                live_out.extend(pu.iter().copied());
+            }
+            let def = &def_set[&bid];
+            let mut new_in = use_set[&bid].clone();
+            new_in.extend(live_out.into_iter().filter(|r| !def.contains(r)));
+            if new_in != live_in[&bid] {
+                live_in.insert(bid, new_in);
+                changed = true;
+            }
+        }
+    }
+
+    live_in
+        .get(&func.function.entry)
+        .cloned()
+        .unwrap_or_default()
+}
+
 fn input_register(
     func: &SsaFunction,
     bid: BlockId,
@@ -577,13 +698,12 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         .any(|r| read_before_write.contains(r));
 
     if !has_arg_reg_in_entry {
-        read_before_write = collect_whole_function_reads(func);
+        read_before_write = collect_live_on_entry_reads(func);
         calling_trace_line(
             func,
             format!(
-                "param-fallback reason=no-arg-reg-in-entry scan=whole-function whole_fn_reads={read_before_write:?} \
-                 note=registers read-before-write in ANY block (may include outgoing-call-arg setups, \
-                 risking phantom params on functions like main)"
+                "param-fallback reason=no-arg-reg-in-entry scan=live-on-entry live_on_entry_reads={read_before_write:?} \
+                 note=backward liveness from entry; excludes outgoing-call-arg setups dominated by defs"
             ),
         );
     }

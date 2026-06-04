@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -33,6 +33,7 @@ fn main() {
             emit,
             arch,
             output,
+            capture_dir,
             all: _,
             verbose,
             timeout,
@@ -86,6 +87,7 @@ fn main() {
                             emit,
                             arch.as_deref(),
                             output.as_deref(),
+                            capture_dir.as_deref(),
                             &config,
                             &mgr,
                             stats,
@@ -1262,6 +1264,7 @@ fn run_decompile(
     emit: args::EmitFormat,
     arch_override: Option<&str>,
     output_path: Option<&std::path::Path>,
+    capture_dir: Option<&std::path::Path>,
     config: &PipelineConfig,
     _plugin_mgr: &PluginManager,
     stats: bool,
@@ -1398,6 +1401,21 @@ fn run_decompile(
     sw.phase("post-process", t_post.elapsed());
     sw.set_output_size(all_output.len() as u64);
 
+    if let Some(capture_root) = resolve_decompile_capture_dir(capture_dir) {
+        let capture_path = write_decompile_capture(
+            &capture_root,
+            binary_path,
+            &data,
+            &image,
+            function_filter,
+            emit,
+            output_path,
+            functions.len(),
+            &all_output,
+        )?;
+        eprintln!("unlace decompile capture: {}", capture_path.display());
+    }
+
     if let Some(path) = output_path {
         let mut file = fs::File::create(path)
             .with_context(|| format!("failed to create '{}'", path.display()))?;
@@ -1409,6 +1427,184 @@ fn run_decompile(
 
     sw.emit_summary(binary_path);
     Ok(())
+}
+
+fn resolve_decompile_capture_dir(cli_dir: Option<&std::path::Path>) -> Option<std::path::PathBuf> {
+    cli_dir.map(std::path::Path::to_path_buf).or_else(|| {
+        std::env::var_os("UNLACE_DECOMPILE_CAPTURE_DIR")
+            .filter(|v| !v.is_empty())
+            .map(std::path::PathBuf::from)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_decompile_capture(
+    capture_root: &std::path::Path,
+    binary_path: &std::path::Path,
+    binary_bytes: &[u8],
+    image: &BinaryImage,
+    function_filter: Option<&str>,
+    emit: args::EmitFormat,
+    output_path: Option<&std::path::Path>,
+    function_count: usize,
+    output: &str,
+) -> Result<std::path::PathBuf> {
+    fs::create_dir_all(capture_root).with_context(|| {
+        format!(
+            "failed to create decompile capture root '{}'",
+            capture_root.display()
+        )
+    })?;
+
+    let unix_ms = current_unix_millis();
+    let binary_stem = binary_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(sanitize_path_component)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "binary".to_string());
+    let function_part = function_filter
+        .map(sanitize_path_component)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "all".to_string());
+
+    let mut run_dir = None;
+    let mut run_uuid = String::new();
+    for _ in 0..16 {
+        let uuid = generate_uuid_v4();
+        let candidate =
+            capture_root.join(format!("{unix_ms}-{binary_stem}-{function_part}-{uuid}"));
+        match fs::create_dir(&candidate) {
+            Ok(()) => {
+                run_uuid = uuid;
+                run_dir = Some(candidate);
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "failed to create decompile capture directory '{}'",
+                        candidate.display()
+                    )
+                });
+            }
+        }
+    }
+    let run_dir = run_dir.with_context(|| {
+        format!(
+            "failed to allocate a unique decompile capture directory under '{}'",
+            capture_root.display()
+        )
+    })?;
+
+    let output_file = capture_output_filename(emit);
+    let output_path_in_capture = run_dir.join(output_file);
+    fs::write(&output_path_in_capture, output).with_context(|| {
+        format!(
+            "failed to write decompile capture output '{}'",
+            output_path_in_capture.display()
+        )
+    })?;
+
+    let manifest = serde_json::json!({
+        "schema": "unlace-decompile-capture-v1",
+        "run_id": run_uuid,
+        "timestamp_unix_ms": unix_ms,
+        "argv": std::env::args_os()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect::<Vec<_>>(),
+        "binary": binary_path.display().to_string(),
+        "binary_sha256": unlace_cli::cache::sha256_hex(binary_bytes),
+        "binary_size": binary_bytes.len(),
+        "arch": image.arch.to_string(),
+        "entry": format!("{:#x}", image.entry),
+        "emit": format!("{emit:?}"),
+        "function_filter": function_filter,
+        "function_count": function_count,
+        "requested_output_path": output_path.map(|p| p.display().to_string()),
+        "captured_output_file": output_file,
+        "captured_output_bytes": output.len(),
+        "captured_output_sha256": unlace_cli::cache::sha256_hex(output.as_bytes()),
+    });
+    let manifest_path = run_dir.join("manifest.json");
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest)?;
+    fs::write(&manifest_path, manifest_bytes).with_context(|| {
+        format!(
+            "failed to write decompile capture manifest '{}'",
+            manifest_path.display()
+        )
+    })?;
+
+    Ok(run_dir)
+}
+
+fn capture_output_filename(emit: args::EmitFormat) -> &'static str {
+    match emit {
+        args::EmitFormat::C => "output.c",
+        args::EmitFormat::Ir => "output.ir",
+        args::EmitFormat::CfgDot => "output.dot",
+    }
+}
+
+fn current_unix_millis() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+fn sanitize_path_component(input: &str) -> String {
+    let mut out = String::with_capacity(input.len().min(80));
+    for ch in input.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+        if out.len() >= 80 {
+            break;
+        }
+    }
+    out.trim_matches('_').to_string()
+}
+
+fn generate_uuid_v4() -> String {
+    let mut bytes = [0u8; 16];
+    if fs::File::open("/dev/urandom")
+        .and_then(|mut f| f.read_exact(&mut bytes))
+        .is_err()
+    {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(current_unix_millis().to_le_bytes());
+        hasher.update(std::process::id().to_le_bytes());
+        hasher.update(format!("{:?}", std::thread::current().id()).as_bytes());
+        let digest = hasher.finalize();
+        bytes.copy_from_slice(&digest[..16]);
+    }
+
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        bytes[0],
+        bytes[1],
+        bytes[2],
+        bytes[3],
+        bytes[4],
+        bytes[5],
+        bytes[6],
+        bytes[7],
+        bytes[8],
+        bytes[9],
+        bytes[10],
+        bytes[11],
+        bytes[12],
+        bytes[13],
+        bytes[14],
+        bytes[15]
+    )
 }
 
 // ============================================================================

@@ -681,6 +681,7 @@ pub fn stack_lvar_annotations_from_ssa(func: &SsaFunction) -> BTreeMap<i64, Stac
 }
 
 fn merge_stack_lvar_annotation(existing: &mut StackLvarAnnotation, incoming: &StackLvarAnnotation) {
+    let before = existing.clone();
     existing.size = existing.size.max(incoming.size);
     existing.is_buffer |= incoming.is_buffer;
     if existing.c_type.is_none() {
@@ -693,6 +694,9 @@ fn merge_stack_lvar_annotation(existing: &mut StackLvarAnnotation, incoming: &St
     } else if existing.name.is_empty() {
         existing.name = incoming.name.clone();
     }
+    trace_stack_text(format_args!(
+        "lvar-merge existing_before={before:?} incoming={incoming:?} merged={existing:?}"
+    ));
 }
 
 fn primitive_size_hint(ty: PrimitiveType) -> Option<u8> {
@@ -825,27 +829,59 @@ pub fn print_c_with_annotations(
     ctx.byref_boxes = func.byref_boxes.clone();
     ctx.go_defer_sites = func.go_defer_sites.clone();
     ctx.vtable_call_targets = func.vtable_call_targets.clone();
+    trace_stack_lvar_inventory("annotations", &ctx.stack_lvars);
+    trace_full(format_args!(
+        "print-enter func={} body_len={} annotations={} dwarf={} header={} symbols={} strings={} rtti={}",
+        func.name,
+        func.body.len(),
+        annotations.is_some(),
+        dwarf.is_some(),
+        header.is_some(),
+        ctx.symbols.len(),
+        ctx.string_table.len(),
+        rtti.is_some()
+    ));
+    trace_ctx_snapshot("init", &ctx);
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     ctx.parent_returns_void = function_body_returns_void(func, dwarf_func);
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
+    trace_ctx_snapshot("dwarf-locals", &ctx);
     compute_suppressed_stack_offsets(func, &mut ctx);
+    trace_ctx_snapshot("suppressed-stack", &ctx);
     // t232: register recovered stack-frame slots as named locals
     // (`v_<offset>` for scalars, `buf_<offset>` for arrays). DWARF
     // locals take priority and have already been registered above; this
     // call only fills in slots DWARF did not name.
     compute_stack_frame_names(func, &mut ctx);
+    trace_stack_frame_inventory("after-stack-frame-names", func);
+    trace_stack_slot_inventory("after-stack-frame-names", &ctx);
+    trace_stack_lvar_slot_crosscheck("after-stack-frame-names", &ctx);
+    trace_ctx_snapshot("stack-frame-names", &ctx);
     compute_loop_counter_names(&func.body, 0, &mut ctx);
+    trace_ctx_snapshot("loop-counter-names", &ctx);
     compute_param_register_names(func, dwarf_func, header, &mut ctx);
+    trace_ctx_snapshot("param-register-names", &ctx);
     collect_varnodes(&func.body, &mut ctx);
+    trace_ctx_snapshot("collect-varnodes", &ctx);
+    compute_canary_stack_offsets(&mut ctx);
+    trace_ctx_snapshot("canary-stack-offsets", &ctx);
     promote_stack_address_call_arrays(&func.body, &mut ctx);
+    trace_ctx_snapshot("promote-stack-address-call-arrays", &ctx);
     compute_foldable(&mut ctx);
+    trace_ctx_snapshot("foldable", &ctx);
     propagate_dead_chains(&mut ctx);
+    trace_ctx_snapshot("dead-chains", &ctx);
     compute_byref_bases(&mut ctx);
+    trace_ctx_snapshot("byref-bases", &ctx);
     compute_heuristic_names(&func.body, &mut ctx);
+    trace_ctx_snapshot("heuristic-names", &ctx);
     dedupe_var_names(&mut ctx);
+    trace_ctx_snapshot("dedupe-var-names", &ctx);
     compute_hoist_plan(&mut ctx);
+    trace_ctx_snapshot("hoist-plan", &ctx);
     detect_mmio_addrs(&mut ctx);
+    trace_ctx_snapshot("mmio-addrs", &ctx);
     let merged_return_stmts = merged_assign_return_stmt_indices(&func.body, &ctx);
     let mut merged_return_svs: BTreeSet<SsaVarnode> = merged_return_stmts
         .iter()
@@ -853,6 +889,13 @@ pub fn print_c_with_annotations(
         .collect();
     merged_return_svs.extend(merged_call_return_svs(&func.body, &ctx));
     let post_dowhile_return_svs = post_dowhile_recovered_return_svs(&func.body, &ctx);
+    trace_full(format_args!(
+        "return-precompute func={} merged_return_stmts={} merged_return_svs={} post_dowhile_return_svs={}",
+        func.name,
+        merged_return_stmts.len(),
+        merged_return_svs.len(),
+        post_dowhile_return_svs.len()
+    ));
 
     let mut out = String::with_capacity(1024);
 
@@ -1056,7 +1099,11 @@ pub fn print_c_with_annotations(
     }
 
     let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
-    let noreturn_mod = if func.noreturn { " __noreturn" } else { "" };
+    let noreturn_prefix = if func.noreturn && emit_name != "main" {
+        "_Noreturn "
+    } else {
+        ""
+    };
     // t260: per-function __usercall / __userpurge spec from annotations.
     // When present, this wins over the generic `__cdecl`/`__fastcall`
     // annotation since IDA only emits one calling-convention sigil per
@@ -1078,16 +1125,16 @@ pub fn print_c_with_annotations(
         let _ = write!(
             out,
             "{}{} {} {}{}(",
-            return_type_str, noreturn_mod, kind, emit_name, ret_suffix
+            noreturn_prefix, return_type_str, kind, emit_name, ret_suffix
         );
     } else if let Some(conv) = conv_annotation {
         let _ = write!(
             out,
             "{}{} {} {}(",
-            return_type_str, noreturn_mod, conv, emit_name
+            noreturn_prefix, return_type_str, conv, emit_name
         );
     } else {
-        let _ = write!(out, "{}{} {}(", return_type_str, noreturn_mod, emit_name);
+        let _ = write!(out, "{}{} {}(", noreturn_prefix, return_type_str, emit_name);
     }
 
     let force_void_main_params =
@@ -1561,7 +1608,9 @@ fn run_cleanup_stage(
     input: String,
     stage_fn: impl FnOnce(String) -> String,
 ) -> String {
-    if std::env::var_os("UNLACE_CPRINTER_STAGE_TRACE").is_none() {
+    let want_counts = std::env::var_os("UNLACE_CPRINTER_STAGE_TRACE").is_some();
+    let want_diff = c_printer_pipeline_trace_enabled();
+    if !want_counts && !want_diff {
         return stage_fn(input);
     }
     let before_lines = input.lines().count();
@@ -1569,10 +1618,18 @@ fn run_cleanup_stage(
     let output = stage_fn(input);
     let after_lines = output.lines().count();
     let changed = output != before;
-    eprintln!(
-        "[unlace-output] stage func={func_name} name={stage} changed={changed} lines={before_lines}->{after_lines} delta={}",
-        after_lines as isize - before_lines as isize
-    );
+    if want_counts {
+        eprintln!(
+            "[unlace-output] stage func={func_name} name={stage} changed={changed} lines={before_lines}->{after_lines} delta={}",
+            after_lines as isize - before_lines as isize
+        );
+    }
+    // Pipeline trace: show the EXACT statements this stage removed/added, so a
+    // dropped statement is attributed to the precise stage (and its text) — the
+    // count-only line above can only say "8 lines vanished somewhere".
+    if want_diff && changed {
+        trace_pipeline_stage_diff(func_name, stage, &before, &output);
+    }
     output
 }
 
@@ -2280,6 +2337,12 @@ struct PrintCtx {
     /// to compute the LCA scope of a declared name when deciding whether to
     /// hoist its declaration to the point of first use.
     cond_use_stmts: Vec<(SsaVarnode, u32)>,
+    /// Lexical scope path for each condition read recorded in
+    /// `cond_use_stmts`. Conditions such as `do { ... } while (v)` are printed
+    /// outside the loop body even though their anchor statement is inside it,
+    /// so reusing the anchor statement's scope would make block-local
+    /// declarations escape their C scope.
+    cond_use_scope_paths: Vec<(SsaVarnode, Vec<u32>)>,
     collect_depth: u32,
     stmt_depths: BTreeMap<u32, u32>,
     /// Lexical scope path of each statement, recorded during
@@ -2426,6 +2489,10 @@ struct PrintCtx {
     /// Stack-frame offsets that should not be rendered as source locals or raw
     /// memory stores, such as saved-register slots and ABI-owned stack areas.
     suppressed_stack_offsets: BTreeSet<i64>,
+    /// Stack-frame offsets used only for compiler-inserted stack canary spills.
+    /// These are also suppressed, but kept distinct so canary compare pruning
+    /// can recognize epilogue reloads from the saved guard slot.
+    canary_stack_offsets: BTreeSet<i64>,
     /// User-visible stack slots keyed by their recovered start offset. Used to
     /// render accesses inside wide buffers as `buf_N + delta` instead of
     /// falling through to raw pointer arithmetic.
@@ -2605,6 +2672,7 @@ impl PrintCtx {
             returned_svs: BTreeSet::new(),
             commented_stmts: BTreeSet::new(),
             cond_use_stmts: Vec::new(),
+            cond_use_scope_paths: Vec::new(),
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
             stmt_scope_paths: BTreeMap::new(),
@@ -2648,6 +2716,7 @@ impl PrintCtx {
             byref_union_types: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
             suppressed_stack_offsets: BTreeSet::new(),
+            canary_stack_offsets: BTreeSet::new(),
             stack_frame_slots: BTreeMap::new(),
             stack_lvars: BTreeMap::new(),
             top_declared_names: BTreeSet::new(),
@@ -3154,6 +3223,7 @@ fn try_array_subscript(
                     continue;
                 }
                 if is_scalar_deref_base(&base_expr)
+                    || rendered_base_is_scalar(&base_expr, ctx)
                     || is_subscript_unsafe_frame_base_ctx(base_vn, ctx)
                     || traces_to_frame_base(base_vn, None, def_stmt, ctx, 0)
                     || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
@@ -3195,6 +3265,7 @@ fn try_array_subscript(
             let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
+                || rendered_base_is_scalar(&base_expr, ctx)
                 || is_subscript_unsafe_frame_base_ctx(base_vn, ctx)
                 || traces_to_frame_base(base_vn, None, def_stmt, ctx, 0)
                 || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
@@ -3216,6 +3287,7 @@ fn try_array_subscript(
             let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
             if is_generic_address_expr(&base_expr)
                 || is_scalar_deref_base(&base_expr)
+                || rendered_base_is_scalar(&base_expr, ctx)
                 || is_subscript_unsafe_frame_base_ctx(&def_insn.inputs[0], ctx)
                 || traces_to_frame_base(&def_insn.inputs[0], None, def_stmt, ctx, 0)
                 || base_vn_is_scalar_load_output(&def_insn.inputs[0], def_stmt, ctx)
@@ -3294,6 +3366,14 @@ fn try_struct_field_access(
         },
         _ => return None,
     };
+
+    // The composite `Struct` entry can be stale relative to the base's actual
+    // declaration. When the base is declared as a non-pointer scalar (e.g. a
+    // coalesced register `_QWORD c5`), `c5->field` is "invalid type argument of
+    // '->'"; bail so the caller emits the equivalent raw `*(T *)(base + off)`.
+    if base_name_decl_is_scalar(&base_sv, ctx) {
+        return None;
+    }
 
     let field_name = struct_fields
         .iter()
@@ -4055,6 +4135,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 // Anchor the cond read at the next-allocated stmt so the
                 // hoist pass treats it as a use at the enclosing scope.
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
+                ctx.cond_use_scope_paths
+                    .push((*cond, ctx.current_scope_path.clone()));
                 ctx.collect_depth += 1;
                 let then_scope = ctx.next_scope_id;
                 ctx.next_scope_id += 1;
@@ -4076,6 +4158,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.cond_uses.push(*cond);
                 ctx.control_cond_uses.push(*cond);
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
+                ctx.cond_use_scope_paths
+                    .push((*cond, ctx.current_scope_path.clone()));
                 ctx.collect_depth += 1;
                 let body_scope = ctx.next_scope_id;
                 ctx.next_scope_id += 1;
@@ -4100,6 +4184,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 // last-allocated stmt index inside the loop body.
                 ctx.cond_use_stmts
                     .push((*cond, ctx.next_stmt.saturating_sub(1)));
+                ctx.cond_use_scope_paths
+                    .push((*cond, ctx.current_scope_path.clone()));
             }
 
             HirNode::For {
@@ -4115,6 +4201,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.cond_uses.push(*cond);
                 ctx.control_cond_uses.push(*cond);
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
+                ctx.cond_use_scope_paths
+                    .push((*cond, ctx.current_scope_path.clone()));
                 ctx.collect_depth += 1;
                 let body_scope = ctx.next_scope_id;
                 ctx.next_scope_id += 1;
@@ -4134,6 +4222,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
+                ctx.cond_use_scope_paths
+                    .push((*cond, ctx.current_scope_path.clone()));
                 ctx.collect_depth += 1;
                 for (_case, body, _) in cases {
                     let case_scope = ctx.next_scope_id;
@@ -4162,6 +4252,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     ctx.stmt_scope_paths
                         .insert(ctx.next_stmt, ctx.current_scope_path.clone());
                     ctx.cond_use_stmts.push((ret_sv, ctx.next_stmt));
+                    ctx.cond_use_scope_paths
+                        .push((ret_sv, ctx.current_scope_path.clone()));
                 }
             }
 
@@ -4176,6 +4268,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.control_cond_uses.push(*cond);
 
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
+                ctx.cond_use_scope_paths
+                    .push((*cond, ctx.current_scope_path.clone()));
 
                 collect_insn_as_stmt(then_insn, ctx);
                 collect_insn_as_stmt(else_insn, ctx);
@@ -4266,6 +4360,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     ctx.name_of(&sv);
                     ctx.cond_uses.push(sv);
                     ctx.cond_use_stmts.push((sv, ctx.next_stmt));
+                    ctx.cond_use_scope_paths
+                        .push((sv, ctx.current_scope_path.clone()));
                 }
                 ctx.collect_depth += 1;
                 let then_scope = ctx.next_scope_id;
@@ -4605,7 +4701,7 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
         if c_printer_trace_enabled() {
             eprintln!(
-                "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=fold",
+                "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} consumer={consumer_stmt:?} def_depth={def_depth} consumer_depth={consumer_depth} decision=fold",
                 insn.op
             );
         }
@@ -4788,6 +4884,215 @@ fn copy_like_snapshot_source_redefined_before_consumer(
         &source_sv,
         ctx,
     )
+}
+
+fn latest_materialized_value_for_same_source(
+    output_sv: &SsaVarnode,
+    insn: &IrInsn,
+    stmt_idx: u32,
+    consumer_stmt: u32,
+    ctx: &PrintCtx,
+) -> Option<SsaVarnode> {
+    trace_materialized_source_scan(format_args!(
+        "enter stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} op={:?} inputs={:?}",
+        insn.op, insn.inputs
+    ));
+    if consumer_stmt <= stmt_idx + 1 {
+        trace_materialized_source_scan(format_args!(
+            "skip stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} reason=adjacent-or-reversed"
+        ));
+        return None;
+    }
+    if !matches!(
+        insn.op,
+        IrOp::Copy | IrOp::Subpiece | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
+    ) {
+        trace_materialized_source_scan(format_args!(
+            "skip stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} reason=op op={:?}",
+            insn.op
+        ));
+        return None;
+    }
+    let Some(source) = insn.inputs.first() else {
+        trace_materialized_source_scan(format_args!(
+            "skip stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} reason=no-source-input"
+        ));
+        return None;
+    };
+    if source.space == SpaceId::Const {
+        trace_materialized_source_scan(format_args!(
+            "skip stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source:?} reason=const-source"
+        ));
+        return None;
+    }
+    let Some(source_sv) = input_or_latest_sv_for_operand(source, Some(0), stmt_idx, ctx) else {
+        trace_materialized_source_scan(format_args!(
+            "skip stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source:?} reason=no-source-ssa"
+        ));
+        return None;
+    };
+    let Some(source_def_stmt) = defining_stmt_for_sv(&source_sv, ctx) else {
+        trace_materialized_source_scan(format_args!(
+            "skip stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source:?} source_sv={source_sv:?} reason=no-source-def"
+        ));
+        return None;
+    };
+    if consumer_stmt <= source_def_stmt + 1 {
+        trace_materialized_source_scan(format_args!(
+            "skip stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source:?} source_sv={source_sv:?} source_def={source_def_stmt} reason=source-def-after-or-adjacent-consumer"
+        ));
+        return None;
+    }
+    trace_materialized_source_scan(format_args!(
+        "scan stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source:?} source_sv={source_sv:?} source_def={source_def_stmt} range={}..{}",
+        source_def_stmt + 1,
+        consumer_stmt
+    ));
+
+    ctx.stmt_outputs
+        .range((source_def_stmt + 1)..consumer_stmt)
+        .rev()
+        .find_map(|(&candidate_stmt, output)| {
+            trace_materialized_source_scan(format_args!(
+                "candidate stmt={stmt_idx} consumer={consumer_stmt} source_def={source_def_stmt} candidate_stmt={candidate_stmt} raw_output={output:?}"
+            ));
+            if candidate_stmt == stmt_idx {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} reason=self"
+                ));
+                return None;
+            }
+            let Some(candidate_sv) = *output else {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} reason=no-output"
+                ));
+                return None;
+            };
+            if candidate_sv == *output_sv
+            {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=same-output"
+                ));
+                return None;
+            }
+            if candidate_sv == source_sv {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=same-source"
+                ));
+                return None;
+            }
+            if is_suppressible_storage(&candidate_sv.base, ctx)
+            {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=suppressible-storage"
+                ));
+                return None;
+            }
+            let Some(candidate_insn) = ctx.stmt_insns.get(&candidate_stmt) else {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=no-insn"
+                ));
+                return None;
+            };
+            if !matches!(
+                candidate_insn.op,
+                IrOp::Copy | IrOp::Subpiece | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
+            ) {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=op op={:?} inputs={:?}",
+                    candidate_insn.op, candidate_insn.inputs
+                ));
+                return None;
+            }
+            let Some(candidate_source) = candidate_insn.inputs.first() else {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=no-candidate-source op={:?}",
+                    candidate_insn.op
+                ));
+                return None;
+            };
+            if candidate_source != source
+            {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=source-mismatch expected={source:?} actual={candidate_source:?} op={:?}",
+                    candidate_insn.op
+                ));
+                return None;
+            }
+            if ctx.foldable_stmts.contains(&candidate_stmt) {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=foldable op={:?}",
+                    candidate_insn.op
+                ));
+                return None;
+            }
+            if let Some((redef_stmt, redef_sv)) = materialized_candidate_redefined_before_consumer(
+                candidate_sv,
+                candidate_stmt,
+                consumer_stmt,
+                ctx,
+            ) {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=redefined-before-consumer redef_stmt={redef_stmt} redef={redef_sv:?} op={:?}",
+                    candidate_insn.op
+                ));
+                return None;
+            }
+            if is_dead_zero_init(candidate_insn, candidate_stmt, ctx) {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=dead-zero-init op={:?}",
+                    candidate_insn.op
+                ));
+                return None;
+            }
+            if is_dead_suppressible_store(candidate_insn, candidate_stmt, ctx) {
+                trace_materialized_source_scan(format_args!(
+                    "candidate-skip stmt={stmt_idx} consumer={consumer_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} reason=dead-suppressible-store op={:?}",
+                    candidate_insn.op
+                ));
+                return None;
+            }
+            trace_materialized_source_scan(format_args!(
+                "hit stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source:?} source_sv={source_sv:?} source_def={source_def_stmt} candidate_stmt={candidate_stmt} candidate={candidate_sv:?} op={:?} addr=0x{:x}",
+                candidate_insn.op,
+                candidate_insn.addr
+            ));
+            Some(candidate_sv)
+        })
+}
+
+fn materialized_candidate_redefined_before_consumer(
+    candidate_sv: SsaVarnode,
+    candidate_stmt: u32,
+    consumer_stmt: u32,
+    ctx: &PrintCtx,
+) -> Option<(u32, SsaVarnode)> {
+    if consumer_stmt <= candidate_stmt + 1 {
+        trace_materialized_source_scan(format_args!(
+            "candidate-live-check candidate_stmt={candidate_stmt} consumer={consumer_stmt} candidate={candidate_sv:?} decision=stable reason=adjacent-or-reversed"
+        ));
+        return None;
+    }
+    let found = ctx
+        .stmt_outputs
+        .range((candidate_stmt + 1)..consumer_stmt)
+        .find_map(|(&redef_stmt, output)| {
+            let redef_sv = (*output)?;
+            if redef_sv == candidate_sv {
+                return None;
+            }
+            (redef_sv.base == candidate_sv.base || aliases(redef_sv.base, candidate_sv.base))
+                .then_some((redef_stmt, redef_sv))
+        });
+    match found {
+        Some((redef_stmt, redef_sv)) => trace_materialized_source_scan(format_args!(
+            "candidate-live-check candidate_stmt={candidate_stmt} consumer={consumer_stmt} candidate={candidate_sv:?} decision=stale redef_stmt={redef_stmt} redef={redef_sv:?}"
+        )),
+        None => trace_materialized_source_scan(format_args!(
+            "candidate-live-check candidate_stmt={candidate_stmt} consumer={consumer_stmt} candidate={candidate_sv:?} decision=stable"
+        )),
+    }
+    found
 }
 
 fn snapshot_source_expression_input_redefined_before_consumer(
@@ -5009,6 +5314,18 @@ fn expr_tree_has_fs_canary_load(
     if insn_is_fs_canary_load(insn) {
         return true;
     }
+    if insn.op == IrOp::Load && insn.inputs.len() >= 2 {
+        let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
+        if resolve_stack_offset_for_addr(&insn.inputs[addr_idx], Some(addr_idx), stmt_idx, ctx, 0)
+            .is_some_and(|offset| ctx.canary_stack_offsets.contains(&offset))
+        {
+            trace_decision(format_args!(
+                "canary-stack-load stmt={stmt_idx} decision=artifact addr={:?}",
+                insn.inputs[addr_idx]
+            ));
+            return true;
+        }
+    }
     for (input_idx, input) in insn.inputs.iter().enumerate() {
         if input.space == SpaceId::Const {
             continue;
@@ -5030,6 +5347,29 @@ fn expr_tree_has_fs_canary_load(
         }
     }
     false
+}
+
+fn operand_tree_has_fs_canary_load(
+    operand: &Varnode,
+    raw_idx: Option<usize>,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> bool {
+    if operand.space == SpaceId::Const {
+        return false;
+    }
+    let Some(sv) = input_or_latest_sv_for_operand(operand, raw_idx, stmt_idx, ctx) else {
+        return false;
+    };
+    let Some(def_stmt) = defining_stmt_for_sv(&sv, ctx) else {
+        return false;
+    };
+    let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
+        return false;
+    };
+    let mut seen = BTreeSet::new();
+    seen.insert(sv);
+    expr_tree_has_fs_canary_load(def_insn, def_stmt, ctx, &mut seen, 0)
 }
 
 fn insn_is_fs_canary_load(insn: &IrInsn) -> bool {
@@ -5638,14 +5978,44 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
 
     // For each base varnode, gather every statement index that touches it.
     let mut use_stmts: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
+    let mut base_scope_paths: BTreeMap<Varnode, Vec<Vec<u32>>> = BTreeMap::new();
+    let mut name_scope_paths: BTreeMap<String, Vec<Vec<u32>>> = BTreeMap::new();
     for (&stmt_idx, inputs) in &ctx.stmt_inputs {
         for sv in inputs {
             use_stmts.entry(sv.base).or_default().push(stmt_idx);
+            base_scope_paths.entry(sv.base).or_default().push(
+                ctx.stmt_scope_paths
+                    .get(&stmt_idx)
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            if let Some(name) = known_name_of_sv(ctx, sv) {
+                name_scope_paths.entry(name).or_default().push(
+                    ctx.stmt_scope_paths
+                        .get(&stmt_idx)
+                        .cloned()
+                        .unwrap_or_default(),
+                );
+            }
         }
     }
     for (&stmt_idx, output_sv_opt) in &ctx.stmt_outputs {
         if let Some(sv) = output_sv_opt {
             use_stmts.entry(sv.base).or_default().push(stmt_idx);
+            base_scope_paths.entry(sv.base).or_default().push(
+                ctx.stmt_scope_paths
+                    .get(&stmt_idx)
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            if let Some(name) = known_name_of_sv(ctx, sv) {
+                name_scope_paths.entry(name).or_default().push(
+                    ctx.stmt_scope_paths
+                        .get(&stmt_idx)
+                        .cloned()
+                        .unwrap_or_default(),
+                );
+            }
         }
     }
     for (sv, anchor_stmt) in &ctx.cond_use_stmts {
@@ -5653,6 +6023,45 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         // value) when the recorded anchor is past the end of the stmt list.
         let s = (*anchor_stmt).min(ctx.next_stmt.saturating_sub(1));
         use_stmts.entry(sv.base).or_default().push(s);
+    }
+    for (sv, path) in &ctx.cond_use_scope_paths {
+        base_scope_paths
+            .entry(sv.base)
+            .or_default()
+            .push(path.clone());
+        if let Some(name) = known_name_of_sv(ctx, sv) {
+            name_scope_paths.entry(name).or_default().push(path.clone());
+        }
+    }
+    for ((cond_sv, anchor_stmt), (scope_sv, path)) in ctx
+        .cond_use_stmts
+        .iter()
+        .zip(ctx.cond_use_scope_paths.iter())
+    {
+        if cond_sv != scope_sv {
+            continue;
+        }
+        let s = (*anchor_stmt).min(ctx.next_stmt.saturating_sub(1));
+        let Some(inputs) = ctx.stmt_inputs.get(&s) else {
+            continue;
+        };
+        for input_sv in inputs {
+            base_scope_paths
+                .entry(input_sv.base)
+                .or_default()
+                .push(path.clone());
+            if let Some(name) = known_name_of_sv(ctx, input_sv) {
+                name_scope_paths.entry(name).or_default().push(path.clone());
+            }
+        }
+    }
+    for paths in base_scope_paths.values_mut() {
+        paths.sort();
+        paths.dedup();
+    }
+    for paths in name_scope_paths.values_mut() {
+        paths.sort();
+        paths.dedup();
     }
 
     let mut visible_stmts_by_base: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
@@ -5744,6 +6153,14 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
 
         // Compute LCA of all use paths.
         let lca = lca_scope_path(&stmts, &ctx.stmt_scope_paths, &empty_path);
+        let base_lca = base_scope_paths
+            .get(&base)
+            .map(|paths| lca_paths(paths, &empty_path))
+            .unwrap_or_else(|| lca.clone());
+        let name_lca = name_scope_paths
+            .get(&base_name)
+            .map(|paths| lca_paths(paths, &empty_path))
+            .unwrap_or_else(|| lca.clone());
 
         let first_stmt = stmts[0];
         let first_path = ctx
@@ -5756,9 +6173,9 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         // is deeper, sibling-scope uses would not be dominated and we'd
         // need to emit a bare decl above the construct enclosing the first
         // use — leave that case to the function-top fallback for now.
-        if first_path != lca {
+        if first_path != lca || first_path != base_lca || first_path != name_lca {
             trace_hoist_text(format_args!(
-                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=scope-lca first_path={first_path:?} lca={lca:?}"
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=scope-lca first_path={first_path:?} lca={lca:?} base_lca={base_lca:?} name_lca={name_lca:?}"
             ));
             continue;
         }
@@ -5919,6 +6336,26 @@ fn lca_scope_path(stmts: &[u32], paths: &BTreeMap<u32, Vec<u32>>, fallback: &Vec
     lca
 }
 
+fn lca_paths(paths: &[Vec<u32>], fallback: &Vec<u32>) -> Vec<u32> {
+    let mut iter = paths.iter();
+    let Some(first) = iter.next() else {
+        return fallback.clone();
+    };
+    let mut lca = first.clone();
+    for path in iter {
+        let common = lca
+            .iter()
+            .zip(path.iter())
+            .take_while(|(a, b)| a == b)
+            .count();
+        lca.truncate(common);
+        if lca.is_empty() {
+            break;
+        }
+    }
+    lca
+}
+
 /// Map DWARF local variable names onto stack-backed Varnode bases.
 ///
 /// For each `LocalVariable` with a known `frame_offset`, derive the
@@ -5996,17 +6433,28 @@ fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
         Some(f) => f,
         None => return,
     };
+    let absorbed_offsets = absorbed_stack_offsets_by_buffers(func, ctx);
     for local in frame.locals.values() {
         // Only name user-visible locals — saved registers, return addresses,
         // and stack arguments are suppressed from the output.
         if !matches!(local.kind, FrameSlotKind::Local) {
             continue;
         }
+        if absorbed_offsets.contains(&local.offset) {
+            trace_stack_text(format_args!(
+                "frame-name-skip offset={} raw_size={} reason=absorbed-by-buffer",
+                local.offset, local.size
+            ));
+            continue;
+        }
         let ann = ctx.stack_lvars.get(&local.offset);
-        let size = ann
+        let mut size = ann
             .map(|ann| ann.size.max(local.size))
             .unwrap_or(local.size);
         let is_buffer = ann.is_some_and(|ann| ann.is_buffer) || size > 8;
+        if is_buffer {
+            size = effective_stack_buffer_size(func, local.offset, size, ctx);
+        }
         let mut name = ann
             .and_then(|ann| (!ann.name.is_empty()).then(|| ann.name.clone()))
             .unwrap_or_else(|| fallback_stack_name(local.offset, size, is_buffer));
@@ -6051,6 +6499,93 @@ fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
                 .or_insert_with(|| name.clone());
         }
     }
+}
+
+fn absorbed_stack_offsets_by_buffers(func: &HirFunction, ctx: &PrintCtx) -> BTreeSet<i64> {
+    use unlace_ir::ssa::FrameSlotKind;
+    let Some(frame) = func.stack_frame.as_ref() else {
+        return BTreeSet::new();
+    };
+    let mut absorbed = BTreeSet::new();
+    for local in frame.locals.values() {
+        if !matches!(local.kind, FrameSlotKind::Local) {
+            continue;
+        }
+        let ann = ctx.stack_lvars.get(&local.offset);
+        let size = ann
+            .map(|ann| ann.size.max(local.size))
+            .unwrap_or(local.size);
+        let is_buffer = ann.is_some_and(|ann| ann.is_buffer) || size > 8;
+        if !is_buffer {
+            continue;
+        }
+        let mut end = match local.offset.checked_add(size as i64) {
+            Some(end) => end,
+            None => continue,
+        };
+        while let Some(next) = frame.locals.get(&end) {
+            if !matches!(next.kind, FrameSlotKind::Local) || next.size > 8 {
+                break;
+            }
+            if ctx
+                .stack_lvars
+                .get(&next.offset)
+                .is_some_and(|ann| ann.from_debug)
+            {
+                break;
+            }
+            trace_stack_text(format_args!(
+                "frame-buffer-absorb buffer_offset={} absorbed_offset={} absorbed_size={} absorbed_kind={:?}",
+                local.offset, next.offset, next.size, next.kind
+            ));
+            absorbed.insert(next.offset);
+            let Some(next_end) = next.offset.checked_add(next.size as i64) else {
+                break;
+            };
+            end = next_end;
+        }
+    }
+    absorbed
+}
+
+fn effective_stack_buffer_size(
+    func: &HirFunction,
+    offset: i64,
+    base_size: u64,
+    ctx: &PrintCtx,
+) -> u64 {
+    use unlace_ir::ssa::FrameSlotKind;
+    let Some(frame) = func.stack_frame.as_ref() else {
+        return base_size;
+    };
+    let mut size = base_size;
+    let mut end = match offset.checked_add(size as i64) {
+        Some(end) => end,
+        None => return size,
+    };
+    while let Some(next) = frame.locals.get(&end) {
+        if !matches!(next.kind, FrameSlotKind::Local) || next.size > 8 {
+            break;
+        }
+        if ctx
+            .stack_lvars
+            .get(&next.offset)
+            .is_some_and(|ann| ann.from_debug)
+        {
+            break;
+        }
+        size = size.saturating_add(next.size);
+        let Some(next_end) = next.offset.checked_add(next.size as i64) else {
+            break;
+        };
+        end = next_end;
+    }
+    if size != base_size {
+        trace_stack_text(format_args!(
+            "frame-buffer-extend offset={offset} base_size={base_size} effective_size={size}"
+        ));
+    }
+    size
 }
 
 fn fallback_stack_name(offset: i64, size: u64, is_buffer: bool) -> String {
@@ -6121,6 +6656,50 @@ fn compute_suppressed_stack_offsets(func: &HirFunction, ctx: &mut PrintCtx) {
     }
 }
 
+fn compute_canary_stack_offsets(ctx: &mut PrintCtx) {
+    if !ctx
+        .stmt_insns
+        .values()
+        .any(|candidate| insn_calls_symbol(candidate, "__stack_chk_fail", ctx))
+    {
+        return;
+    }
+
+    let candidates: Vec<(u32, IrInsn)> = ctx
+        .stmt_insns
+        .iter()
+        .filter_map(|(&stmt_idx, insn)| {
+            (insn.op == IrOp::Store).then_some((stmt_idx, insn.clone()))
+        })
+        .collect();
+    for (stmt_idx, insn) in candidates {
+        if insn.inputs.len() < 3 {
+            continue;
+        }
+        let Some(offset) =
+            resolve_stack_offset_for_addr(&insn.inputs[1], Some(1), stmt_idx, ctx, 0)
+        else {
+            trace_decision(format_args!(
+                "canary-stack-slot stmt={stmt_idx} decision=skip reason=no-stack-offset"
+            ));
+            continue;
+        };
+        if !operand_tree_has_fs_canary_load(&insn.inputs[2], Some(2), stmt_idx, ctx) {
+            trace_decision(format_args!(
+                "canary-stack-slot stmt={stmt_idx} offset={offset} decision=skip reason=value-not-canary"
+            ));
+            continue;
+        }
+
+        ctx.canary_stack_offsets.insert(offset);
+        ctx.suppressed_stack_offsets.insert(offset);
+        trace_decision(format_args!(
+            "canary-stack-slot stmt={stmt_idx} offset={offset} size={} decision=suppress",
+            insn.inputs[2].size.max(1)
+        ));
+    }
+}
+
 fn promote_stack_address_call_arrays(nodes: &[HirNode], ctx: &mut PrintCtx) {
     fn walk(nodes: &[HirNode], ctx: &mut PrintCtx) {
         for node in nodes {
@@ -6164,16 +6743,26 @@ fn promote_stack_address_call_arrays(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 }
                 HirNode::Statement(insn) if matches!(insn.op, IrOp::Call | IrOp::Callind) => {
                     let Some(stmt_idx) = stmt_idx_for_insn(insn, ctx) else {
+                        trace_decision(format_args!(
+                            "stack-promote call addr=0x{:x} decision=skip reason=no-stmt-idx",
+                            insn.addr
+                        ));
                         continue;
                     };
                     for arg_idx in 1..insn.inputs.len() {
                         let ptr = &insn.inputs[arg_idx];
                         if ptr.space == SpaceId::Const {
+                            trace_decision(format_args!(
+                                "stack-promote call stmt={stmt_idx} arg={arg_idx} ptr={ptr:?} decision=skip reason=const"
+                            ));
                             continue;
                         }
                         let Some(offset) =
                             resolve_stack_offset_for_addr(ptr, Some(arg_idx), stmt_idx, ctx, 0)
                         else {
+                            trace_decision(format_args!(
+                                "stack-promote call stmt={stmt_idx} arg={arg_idx} ptr={ptr:?} decision=skip reason=no-stack-offset"
+                            ));
                             continue;
                         };
                         if let Some(count) = insn.inputs.get(arg_idx + 1)
@@ -6182,24 +6771,58 @@ fn promote_stack_address_call_arrays(nodes: &[HirNode], ctx: &mut PrintCtx) {
                             && count.offset <= 1024
                         {
                             let byte_len = count.offset.saturating_mul(4);
+                            trace_decision(format_args!(
+                                "stack-promote call stmt={stmt_idx} arg={arg_idx} ptr={ptr:?} offset={offset} count={} decision=promote-buffer bytes={byte_len}",
+                                count.offset
+                            ));
                             promote_stack_buffer(offset, byte_len, ctx);
                         } else if stack_slot_for_offset(offset, ptr.size.max(1), ctx).is_none() {
+                            trace_decision(format_args!(
+                                "stack-promote call stmt={stmt_idx} arg={arg_idx} ptr={ptr:?} offset={offset} size={} decision=synthesize-scalar reason=no-slot",
+                                ptr.size.max(1)
+                            ));
                             synthesize_stack_scalar(offset, ptr.size.max(1), ctx);
+                        } else {
+                            trace_decision(format_args!(
+                                "stack-promote call stmt={stmt_idx} arg={arg_idx} ptr={ptr:?} offset={offset} size={} decision=skip reason=slot-exists",
+                                ptr.size.max(1)
+                            ));
                         }
                     }
                 }
                 HirNode::Statement(insn) if insn.op == IrOp::Store && insn.inputs.len() >= 3 => {
                     let Some(stmt_idx) = stmt_idx_for_insn(insn, ctx) else {
+                        trace_decision(format_args!(
+                            "stack-promote store addr=0x{:x} decision=skip reason=no-stmt-idx",
+                            insn.addr
+                        ));
                         continue;
                     };
                     let Some(offset) =
                         resolve_stack_offset_for_addr(&insn.inputs[1], Some(1), stmt_idx, ctx, 0)
                     else {
+                        trace_decision(format_args!(
+                            "stack-promote store stmt={stmt_idx} addr={:?} decision=skip reason=no-stack-offset",
+                            insn.inputs.get(1)
+                        ));
                         continue;
                     };
                     let size = insn.inputs[2].size.max(1);
+                    if ctx.suppressed_stack_offsets.contains(&offset) {
+                        trace_decision(format_args!(
+                            "stack-promote store stmt={stmt_idx} offset={offset} size={size} decision=skip reason=suppressed-offset"
+                        ));
+                        continue;
+                    }
                     if stack_slot_for_offset(offset, size, ctx).is_none() {
+                        trace_decision(format_args!(
+                            "stack-promote store stmt={stmt_idx} offset={offset} size={size} decision=synthesize-scalar reason=no-slot"
+                        ));
                         synthesize_stack_scalar(offset, size, ctx);
+                    } else {
+                        trace_decision(format_args!(
+                            "stack-promote store stmt={stmt_idx} offset={offset} size={size} decision=skip reason=slot-exists"
+                        ));
                     }
                 }
                 HirNode::Commented { inner, .. } => walk(std::slice::from_ref(inner), ctx),
@@ -6265,15 +6888,44 @@ fn synthesize_stack_scalar(offset: i64, size: u8, ctx: &mut PrintCtx) {
     ));
     ctx.synthetic_stack_scalars
         .entry(offset)
-        .and_modify(|old| *old = (*old).max(size))
+        .and_modify(|old| {
+            let before = *old;
+            *old = (*old).max(size);
+            trace_stack_text(format_args!(
+                "synthesize-scalar-merge offset={} requested_size={} old_size={} new_size={} name={}",
+                offset, size, before, *old, name
+            ));
+        })
         .or_insert(size);
-    ctx.stack_frame_slots
-        .entry(offset)
-        .or_insert(StackSlotName {
-            name: name.clone(),
-            size: u64::from(size),
-            is_buffer: false,
-        });
+    match ctx.stack_frame_slots.entry(offset) {
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            trace_stack_text(format_args!(
+                "synthesize-scalar-slot-insert offset={} size={} name={}",
+                offset, size, name
+            ));
+            entry.insert(StackSlotName {
+                name: name.clone(),
+                size: u64::from(size),
+                is_buffer: false,
+            });
+        }
+        std::collections::btree_map::Entry::Occupied(entry) => {
+            let existing = entry.get();
+            trace_stack_text(format_args!(
+                "synthesize-scalar-slot-keep offset={} requested_size={} requested_name={} existing_name={} existing_size={} existing_kind={}",
+                offset,
+                size,
+                name,
+                existing.name,
+                existing.size,
+                if existing.is_buffer {
+                    "buffer"
+                } else {
+                    "scalar"
+                },
+            ));
+        }
+    }
     for width in [size, 8, 4, 2, 1] {
         if width == 0 {
             continue;
@@ -6300,13 +6952,16 @@ fn try_stack_frame_access_name(
         let addr = stack_slot_address_expr(&slot);
         format!("*({cast_prim} *){addr}")
     } else {
-        slot.name
+        slot.name.clone()
     };
     trace_stack_resolution(
         "access",
         stmt_idx,
         addr_raw_idx,
         addr_vn,
+        Some(offset),
+        Some(access_size),
+        Some(&slot),
         Some(rendered.as_str()),
     );
     Some(rendered)
@@ -6332,6 +6987,9 @@ fn try_stack_frame_address_expr(
         stmt_idx,
         addr_raw_idx,
         addr_vn,
+        Some(offset),
+        None,
+        Some(&slot),
         Some(rendered.as_str()),
     );
     Some(rendered)
@@ -6453,23 +7111,74 @@ fn resolve_stack_offset_for_addr(
 ) -> Option<i64> {
     const MAX_DEPTH: u8 = 16;
     if depth > MAX_DEPTH {
+        trace_stack_offset_step(
+            "depth-limit",
+            stmt_idx,
+            raw_idx,
+            vn,
+            depth,
+            None,
+            None,
+            None,
+        );
         return None;
     }
     if vn.space == SpaceId::Stack {
-        return Some(vn.offset as i64);
+        let offset = vn.offset as i64;
+        trace_stack_offset_step(
+            "direct-stack",
+            stmt_idx,
+            raw_idx,
+            vn,
+            depth,
+            None,
+            None,
+            Some(offset),
+        );
+        return Some(offset);
     }
     if is_x86_frame_base(vn) {
+        trace_stack_offset_step(
+            "frame-base",
+            stmt_idx,
+            raw_idx,
+            vn,
+            depth,
+            None,
+            None,
+            Some(0),
+        );
         return Some(0);
     }
     if vn.space == SpaceId::Const {
+        trace_stack_offset_step(
+            "const-not-stack",
+            stmt_idx,
+            raw_idx,
+            vn,
+            depth,
+            None,
+            None,
+            None,
+        );
         return None;
     }
 
     let sv = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx)?;
     let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
     let def = ctx.stmt_insns.get(&def_stmt)?;
+    trace_stack_offset_step(
+        "follow-ssa",
+        stmt_idx,
+        raw_idx,
+        vn,
+        depth,
+        Some(&sv),
+        Some((def_stmt, def.op)),
+        None,
+    );
 
-    match def.op {
+    let resolved = match def.op {
         IrOp::Copy if !def.inputs.is_empty() => {
             resolve_stack_offset_for_addr(&def.inputs[0], Some(0), def_stmt, ctx, depth + 1)
         }
@@ -6487,7 +7196,18 @@ fn resolve_stack_offset_for_addr(
             }
         }
         _ => None,
-    }
+    };
+    trace_stack_offset_step(
+        "resolved-via-def",
+        stmt_idx,
+        raw_idx,
+        vn,
+        depth,
+        Some(&sv),
+        Some((def_stmt, def.op)),
+        resolved,
+    );
+    resolved
 }
 
 fn input_or_latest_sv_for_operand(
@@ -6529,11 +7249,20 @@ fn input_or_latest_sv_for_operand(
 
 fn defining_stmt_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<u32> {
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(sv) {
+        trace_decision(format_args!(
+            "defining-stmt sv={sv:?} source=map stmt={def_stmt} op={:?}",
+            ctx.stmt_insns.get(&def_stmt).map(|insn| insn.op)
+        ));
         return Some(def_stmt);
     }
-    ctx.stmt_outputs.iter().find_map(|(&stmt_idx, output)| {
+    let found = ctx.stmt_outputs.iter().find_map(|(&stmt_idx, output)| {
         output.filter(|output_sv| output_sv == sv).map(|_| stmt_idx)
-    })
+    });
+    trace_decision(format_args!(
+        "defining-stmt sv={sv:?} source=fallback-scan stmt={found:?} op={:?}",
+        found.and_then(|stmt| ctx.stmt_insns.get(&stmt).map(|insn| insn.op))
+    ));
+    found
 }
 
 fn resolve_stack_offset_add(
@@ -6671,7 +7400,13 @@ fn emit_memory_address_operand(
     stmt_idx: u32,
     ctx: &mut PrintCtx,
 ) -> String {
+    trace_full(format_args!(
+        "memory-addr-enter stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?}"
+    ));
     if let Some(addr) = try_stack_frame_address_expr(vn, Some(raw_idx), stmt_idx, ctx) {
+        trace_full(format_args!(
+            "memory-addr-result stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} source=stack-frame rendered={addr:?}"
+        ));
         return addr;
     }
     let rendered = emit_operand_resolved(vn, raw_idx, stmt_idx, ctx);
@@ -6682,8 +7417,15 @@ fn emit_memory_address_operand(
             .get(&stmt_idx)
             .and_then(|inputs| inputs.iter().find(|sv| sv.base == *vn).copied())
     {
-        return ctx.name_of(&sv);
+        let name = ctx.name_of(&sv);
+        trace_full(format_args!(
+            "memory-addr-result stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} source=zero-address-name sv={sv:?} rendered={name:?}"
+        ));
+        return name;
     }
+    trace_full(format_args!(
+        "memory-addr-result stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} source=operand rendered={rendered:?}"
+    ));
     rendered
 }
 
@@ -6717,6 +7459,12 @@ fn emit_stack_frame_decls(
     let mut emitted = std::collections::BTreeSet::new();
     for (&offset, &size) in &ctx.promoted_stack_buffers {
         if !stack_frame_offset_is_visible_local(func, offset) {
+            trace_stack_text(format_args!(
+                "emit-promoted-buffer-skip offset={} size={} reason=not-visible-local frame_kind={:?}",
+                offset,
+                size,
+                stack_frame_slot_kind(func, offset),
+            ));
             continue;
         }
         let name = debug_stack_lvar_name(ctx, offset)
@@ -6729,12 +7477,20 @@ fn emit_stack_frame_decls(
         emitted.insert(name);
     }
     for (&offset, &size) in &ctx.synthetic_stack_scalars {
-        if !stack_frame_offset_is_visible_local(func, offset) {
-            continue;
-        }
         let name = debug_stack_lvar_name(ctx, offset)
             .unwrap_or_else(|| fallback_stack_name(offset, u64::from(size), false));
+        if ctx.suppressed_stack_offsets.contains(&offset) {
+            trace_stack_text(format_args!(
+                "emit-synthetic-scalar-skip offset={} size={} name={} reason=suppressed-offset",
+                offset, size, name
+            ));
+            continue;
+        }
         if emitted.contains(&name) {
+            trace_stack_text(format_args!(
+                "emit-synthetic-scalar-skip offset={} size={} name={} reason=already-emitted",
+                offset, size, name
+            ));
             continue;
         }
         let ty = ctx
@@ -6751,12 +7507,30 @@ fn emit_stack_frame_decls(
     }
     let frame = match func.stack_frame.as_ref() {
         Some(f) => f,
-        None => return emitted,
+        None => {
+            trace_stack_text(format_args!(
+                "emit-frame-decls-skip reason=no-stack-frame emitted={:?}",
+                emitted
+            ));
+            return emitted;
+        }
     };
+    let absorbed_offsets = absorbed_stack_offsets_by_buffers(func, ctx);
     for local in frame.locals.values() {
         // Suppress saved-register slots, return-address slots, and stack
         // arguments — only emit user-visible local variables.
         if !matches!(local.kind, FrameSlotKind::Local) {
+            trace_stack_text(format_args!(
+                "emit-frame-slot-skip offset={} size={} kind={:?} reason=not-user-local",
+                local.offset, local.size, local.kind
+            ));
+            continue;
+        }
+        if absorbed_offsets.contains(&local.offset) {
+            trace_stack_text(format_args!(
+                "emit-frame-slot-skip offset={} size={} reason=absorbed-by-buffer",
+                local.offset, local.size
+            ));
             continue;
         }
         // t233: append `/* BYREF */` to slots whose address escapes.
@@ -6766,10 +7540,13 @@ fn emit_stack_frame_decls(
             ""
         };
         let ann = ctx.stack_lvars.get(&local.offset);
-        let size = ann
+        let mut size = ann
             .map(|ann| ann.size.max(local.size))
             .unwrap_or(local.size);
         let is_buffer = ann.is_some_and(|ann| ann.is_buffer) || size > 8;
+        if is_buffer {
+            size = effective_stack_buffer_size(func, local.offset, size, ctx);
+        }
         let mut name = ann
             .and_then(|ann| (!ann.name.is_empty()).then(|| ann.name.clone()))
             .unwrap_or_else(|| fallback_stack_name(local.offset, size, is_buffer));
@@ -6778,6 +7555,10 @@ fn emit_stack_frame_decls(
         }
         if is_buffer {
             if emitted.contains(&name) {
+                trace_stack_text(format_args!(
+                    "emit-frame-buffer-skip offset={} raw_size={} chosen_size={} name={} reason=already-emitted",
+                    local.offset, local.size, size, name
+                ));
                 continue;
             }
             if ann.is_none_or(|ann| ann.c_type.is_none())
@@ -6819,6 +7600,10 @@ fn emit_stack_frame_decls(
                 .and_then(|ann| ann.c_type.as_deref())
                 .unwrap_or_else(|| scalar_stack_type(size));
             if emitted.contains(&name) {
+                trace_stack_text(format_args!(
+                    "emit-frame-scalar-skip offset={} raw_size={} chosen_size={} name={} ty={} reason=already-emitted",
+                    local.offset, local.size, size, name, ty
+                ));
                 continue;
             }
             trace_stack_text(format_args!(
@@ -6856,6 +7641,13 @@ fn stack_frame_offset_is_visible_local(func: &HirFunction, offset: i64) -> bool 
         .as_ref()
         .and_then(|frame| frame.locals.get(&offset))
         .is_none_or(|local| matches!(local.kind, FrameSlotKind::Local))
+}
+
+fn stack_frame_slot_kind(func: &HirFunction, offset: i64) -> Option<unlace_ir::ssa::FrameSlotKind> {
+    func.stack_frame
+        .as_ref()
+        .and_then(|frame| frame.locals.get(&offset))
+        .map(|local| local.kind)
 }
 
 fn dwarf_function_for_func<'a>(
@@ -7615,6 +8407,88 @@ fn prefer_decl_type(existing: PrimitiveType, candidate: PrimitiveType) -> Primit
         (Bool, other) => other,
         (other, Bool) => other,
     }
+}
+
+/// Aggregate the declared [`PrimitiveType`] for a printed variable NAME,
+/// joining every `SsaVarnode` that shares the name via [`prefer_decl_type`].
+/// Mirrors the `preferred_decl_types` aggregation at decl-emission time: the
+/// printer declares ONE variable per name. Returns `None` when a DWARF local
+/// type is present for any contributing varnode (the decl trusts the DWARF
+/// type, which may be a real struct pointer) or when no variable matches.
+fn aggregated_decl_type_for_name(name: &str, ctx: &PrintCtx) -> Option<PrimitiveType> {
+    let mut aggregated: Option<PrimitiveType> = None;
+    let mut matched = false;
+    for (sv, n) in &ctx.var_names {
+        if n != name {
+            continue;
+        }
+        if ctx.dwarf_local_types.contains_key(&sv.base) {
+            return None;
+        }
+        matched = true;
+        let ty = ctx
+            .var_types
+            .get(sv)
+            .copied()
+            .unwrap_or(PrimitiveType::Unknown);
+        aggregated = Some(match aggregated {
+            Some(existing) => prefer_decl_type(existing, ty),
+            None => ty,
+        });
+    }
+    matched.then_some(aggregated).flatten()
+}
+
+/// `true` for a declared type on which `base->field` / `base[i]` is invalid C
+/// ("invalid type argument of '->'" / "subscripted value is neither array nor
+/// pointer"). A non-pointer scalar declaration cannot be dereferenced as an
+/// aggregate; the caller must fall through to the always-valid raw
+/// `*(T *)(base + off)` form. Pointers (`prefer_decl_type` makes `Ptr` dominate
+/// the join) and `Unknown` are left alone.
+fn decl_type_is_nonpointer_scalar(ty: PrimitiveType) -> bool {
+    matches!(
+        ty,
+        PrimitiveType::Int(_)
+            | PrimitiveType::UnsignedInt(_)
+            | PrimitiveType::Bool
+            | PrimitiveType::Float
+            | PrimitiveType::Double
+    )
+}
+
+/// `true` when the variable `base_sv` is printed as will be **declared** with a
+/// non-pointer scalar type, so a `base->field` arrow is invalid C. Used by
+/// `try_struct_field_access`: a `composite_var_types` `Struct` entry can be
+/// stale relative to the actual declaration (a coalesced register `c5`/`c1`
+/// declared `_QWORD`/`__int64`); the declaration wins.
+fn base_name_decl_is_scalar(base_sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
+    ctx.var_names
+        .get(base_sv)
+        .and_then(|name| aggregated_decl_type_for_name(name, ctx))
+        .is_some_and(decl_type_is_nonpointer_scalar)
+}
+
+/// String-keyed counterpart for the subscript paths, which have already
+/// rendered the base as an expression. When the rendered base is a plain
+/// identifier naming a scalar-declared variable, `base[i]` is invalid C; bail
+/// to the raw deref. Works on the rendered string (sidestepping emit-site SV
+/// re-resolution), matching the validated guard from the t61 investigation.
+fn rendered_base_is_scalar(base_expr: &str, ctx: &PrintCtx) -> bool {
+    let name = base_expr.trim();
+    let name = name
+        .strip_prefix('(')
+        .and_then(|s| s.strip_suffix(')'))
+        .unwrap_or(name)
+        .trim();
+    let mut chars = name.chars();
+    let plain_identifier = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !plain_identifier {
+        return false;
+    }
+    aggregated_decl_type_for_name(name, ctx).is_some_and(decl_type_is_nonpointer_scalar)
 }
 
 #[allow(dead_code)]
@@ -8746,18 +9620,37 @@ fn is_simple_integer_literal(expr: &str) -> bool {
 }
 
 fn resolve_sv_expr_inner(sv: &SsaVarnode, ctx: &mut PrintCtx, allow_covering: bool) -> String {
+    trace_sequence(format_args!(
+        "resolve-sv-enter sv={sv:?} allow_covering={allow_covering}"
+    ));
     if sv.base.space == SpaceId::Const {
         if let Some(s) = ctx.string_table.get(&sv.base.offset) {
-            return format!("\"{}\"", escape_c_string(s));
+            let rendered = format!("\"{}\"", escape_c_string(s));
+            trace_sequence(format_args!(
+                "resolve-sv-result sv={sv:?} source=string rendered={rendered:?}"
+            ));
+            return rendered;
         }
-        return format_constant_ctx(sv.base.offset, sv.base.size, ConstContext::Signed);
+        let rendered = format_constant_ctx(sv.base.offset, sv.base.size, ConstContext::Signed);
+        trace_sequence(format_args!(
+            "resolve-sv-result sv={sv:?} source=const rendered={rendered:?}"
+        ));
+        return rendered;
     }
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(sv)
         && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
     {
         if !ctx.resolving_exprs.insert(*sv) {
-            return ctx.name_of(sv);
+            let rendered = ctx.name_of(sv);
+            trace_sequence(format_args!(
+                "resolve-sv-result sv={sv:?} source=recursion def_stmt={def_stmt} rendered={rendered:?}"
+            ));
+            return rendered;
         }
+        trace_sequence(format_args!(
+            "resolve-sv-def sv={sv:?} def_stmt={def_stmt} addr=0x{:x} op={:?} inputs={:?} output={:?}",
+            def_insn.addr, def_insn.op, def_insn.inputs, def_insn.output
+        ));
         if def_insn.op == IrOp::Multiequal {
             for (input_idx, input) in def_insn.inputs.iter().enumerate() {
                 if let Some(input_sv) = ctx
@@ -8768,17 +9661,26 @@ fn resolve_sv_expr_inner(sv: &SsaVarnode, ctx: &mut PrintCtx, allow_covering: bo
                 {
                     let rendered = resolve_sv_expr_inner(&input_sv, ctx, allow_covering);
                     ctx.resolving_exprs.remove(sv);
+                    trace_sequence(format_args!(
+                        "resolve-sv-result sv={sv:?} source=multiequal-input def_stmt={def_stmt} input_idx={input_idx} input_sv={input_sv:?} rendered={rendered:?}"
+                    ));
                     return rendered;
                 }
                 if input.space != SpaceId::Const {
                     let rendered = emit_operand_resolved(input, input_idx, def_stmt, ctx);
                     ctx.resolving_exprs.remove(sv);
+                    trace_sequence(format_args!(
+                        "resolve-sv-result sv={sv:?} source=multiequal-raw def_stmt={def_stmt} input_idx={input_idx} input={input:?} rendered={rendered:?}"
+                    ));
                     return rendered;
                 }
             }
         }
         let rendered = emit_expr(&def_insn, def_stmt, ctx);
         ctx.resolving_exprs.remove(sv);
+        trace_sequence(format_args!(
+            "resolve-sv-result sv={sv:?} source=emit-expr def_stmt={def_stmt} rendered={rendered:?}"
+        ));
         return rendered;
     }
     if (ctx.returned_svs.contains(sv) || ctx.return_value_aliases.contains_key(sv))
@@ -8788,21 +9690,40 @@ fn resolve_sv_expr_inner(sv: &SsaVarnode, ctx: &mut PrintCtx, allow_covering: bo
         && can_inline_return_value_output_stmt(sv, def_stmt, &def_insn, ctx)
     {
         if !ctx.resolving_exprs.insert(*sv) {
-            return ctx.name_of(sv);
+            let rendered = ctx.name_of(sv);
+            trace_sequence(format_args!(
+                "resolve-sv-result sv={sv:?} source=return-recursion rendered={rendered:?}"
+            ));
+            return rendered;
         }
         let rendered = emit_expr(&def_insn, def_stmt, ctx);
         ctx.resolving_exprs.remove(sv);
+        trace_sequence(format_args!(
+            "resolve-sv-result sv={sv:?} source=return-inline def_stmt={def_stmt} rendered={rendered:?}"
+        ));
         return rendered;
     }
     if let Some(alias) = ctx.return_value_aliases.get(sv).copied()
         && alias != *sv
     {
-        return resolve_sv_expr_inner(&alias, ctx, false);
+        let rendered = resolve_sv_expr_inner(&alias, ctx, false);
+        trace_sequence(format_args!(
+            "resolve-sv-result sv={sv:?} source=return-alias alias={alias:?} rendered={rendered:?}"
+        ));
+        return rendered;
     }
     if allow_covering && let Some(covering_sv) = latest_covering_register_output(sv, ctx) {
-        return ctx.name_of(&covering_sv);
+        let rendered = ctx.name_of(&covering_sv);
+        trace_sequence(format_args!(
+            "resolve-sv-result sv={sv:?} source=covering covering_sv={covering_sv:?} rendered={rendered:?}"
+        ));
+        return rendered;
     }
-    ctx.name_of(sv)
+    let rendered = ctx.name_of(sv);
+    trace_sequence(format_args!(
+        "resolve-sv-result sv={sv:?} source=name rendered={rendered:?}"
+    ));
+    rendered
 }
 
 fn latest_output_stmt_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<u32> {
@@ -9015,17 +9936,67 @@ fn latest_output_for_base_in_range(
 }
 
 fn resolve_control_cond_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
+    trace_sequence(format_args!(
+        "control-cond-enter cond_sv={sv:?} emit_stmt={}",
+        ctx.emit_stmt
+    ));
     if let Some(def_stmt) = inlineable_condition_def_stmt(sv, ctx)
         && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
     {
-        return emit_expr(&def_insn, def_stmt, ctx);
+        trace_condition_inputs(sv, def_stmt, &def_insn, "exact-def", ctx);
+        let rendered = emit_expr(&def_insn, def_stmt, ctx);
+        trace_sequence(format_args!(
+            "control-cond-result cond_sv={sv:?} source=exact-def def_stmt={def_stmt} addr=0x{:x} op={:?} rendered={rendered:?}",
+            def_insn.addr, def_insn.op
+        ));
+        return rendered;
     }
     if let Some(def_stmt) = latest_inlineable_condition_def_stmt_for_base(sv, ctx)
         && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
     {
-        return emit_expr(&def_insn, def_stmt, ctx);
+        trace_condition_inputs(sv, def_stmt, &def_insn, "latest-base", ctx);
+        let rendered = emit_expr(&def_insn, def_stmt, ctx);
+        trace_sequence(format_args!(
+            "control-cond-result cond_sv={sv:?} source=latest-base def_stmt={def_stmt} addr=0x{:x} op={:?} rendered={rendered:?}",
+            def_insn.addr, def_insn.op
+        ));
+        return rendered;
     }
-    resolve_sv_expr(sv, ctx)
+    let rendered = resolve_sv_expr(sv, ctx);
+    trace_sequence(format_args!(
+        "control-cond-result cond_sv={sv:?} source=resolve-sv rendered={rendered:?}"
+    ));
+    rendered
+}
+
+fn trace_condition_inputs(
+    cond_sv: &SsaVarnode,
+    def_stmt: u32,
+    def_insn: &IrInsn,
+    source: &str,
+    ctx: &mut PrintCtx,
+) {
+    if !c_printer_sequence_trace_enabled() {
+        return;
+    }
+    for (raw_idx, input) in def_insn.inputs.iter().enumerate() {
+        let input_sv = input_or_latest_sv_for_operand(input, Some(raw_idx), def_stmt, ctx);
+        let input_def = input_sv.and_then(|sv| defining_stmt_for_sv(&sv, ctx));
+        let input_def_op = input_def.and_then(|stmt| ctx.stmt_insns.get(&stmt).map(|insn| insn.op));
+        let known = input_sv.and_then(|sv| known_name_of_sv(ctx, &sv));
+        let rendered = emit_operand_with_prec(
+            input,
+            raw_idx,
+            def_stmt,
+            ConstContext::Signed,
+            ParentCtx::top(),
+            ctx,
+        );
+        trace_sequence(format_args!(
+            "control-cond-input cond_sv={cond_sv:?} source={source} def_stmt={def_stmt} raw_idx={raw_idx} input={input:?} input_sv={input_sv:?} input_def={input_def:?} input_def_op={input_def_op:?} known={known:?} rendered={rendered:?} emit_stmt={}",
+            ctx.emit_stmt
+        ));
+    }
 }
 
 #[derive(Debug)]
@@ -9043,21 +10014,39 @@ fn resolve_post_body_control_cond_expr(
     end_stmt: u32,
     ctx: &mut PrintCtx,
 ) -> Option<String> {
+    trace_sequence(format_args!(
+        "post-body-cond-enter cond_sv={sv:?} range={start_stmt}..{end_stmt}"
+    ));
     let def_stmt = inlineable_condition_def_stmt(sv, ctx)
         .or_else(|| latest_inlineable_condition_def_stmt_for_base(sv, ctx))?;
     let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
     let op = comparison_symbol(def_insn.op)?;
     if def_insn.inputs.len() != 2 {
+        trace_sequence(format_args!(
+            "post-body-cond-skip cond_sv={sv:?} def_stmt={def_stmt} op={:?} reason=input-count inputs={}",
+            def_insn.op,
+            def_insn.inputs.len()
+        ));
         return None;
     }
+    trace_sequence(format_args!(
+        "post-body-cond-def cond_sv={sv:?} def_stmt={def_stmt} addr=0x{:x} op={:?} cmp_op={} inputs={:?} output={:?}",
+        def_insn.addr, def_insn.op, op, def_insn.inputs, def_insn.output
+    ));
 
     let mut lhs =
         rebase_cond_operand_after_body(&def_insn.inputs[0], 0, def_stmt, start_stmt, end_stmt, ctx);
     let mut rhs =
         rebase_cond_operand_after_body(&def_insn.inputs[1], 1, def_stmt, start_stmt, end_stmt, ctx);
+    trace_sequence(format_args!(
+        "post-body-cond-rebased def_stmt={def_stmt} lhs={lhs:?} rhs={rhs:?}"
+    ));
 
     if let Some(delta) = lhs.delta {
         let (value, size) = rhs.const_value?;
+        trace_sequence(format_args!(
+            "post-body-cond-adjust def_stmt={def_stmt} side=rhs value=0x{value:x} size={size} delta={delta}"
+        ));
         rhs.text = format_constant_ctx(
             adjust_constant_for_delta(value, size, delta),
             size,
@@ -9067,6 +10056,9 @@ fn resolve_post_body_control_cond_expr(
     }
     if let Some(delta) = rhs.delta {
         let (value, size) = lhs.const_value?;
+        trace_sequence(format_args!(
+            "post-body-cond-adjust def_stmt={def_stmt} side=lhs value=0x{value:x} size={size} delta={delta}"
+        ));
         lhs.text = format_constant_ctx(
             adjust_constant_for_delta(value, size, delta),
             size,
@@ -9100,6 +10092,9 @@ fn resolve_post_body_control_cond_expr(
         }
     }
     if lhs.text == rhs.text {
+        trace_sequence(format_args!(
+            "post-body-cond-skip def_stmt={def_stmt} reason=same-text lhs={lhs:?} rhs={rhs:?}"
+        ));
         return None;
     }
 
@@ -9110,14 +10105,25 @@ fn resolve_post_body_control_cond_expr(
         );
     }
 
-    (lhs.changed || rhs.changed).then(|| {
-        format!(
+    let changed = lhs.changed || rhs.changed;
+    let rendered = changed.then(|| {
+        let rendered = format!(
             "{} {} {}",
             simplify_condition_operand_text(&lhs.text),
             op,
             simplify_condition_operand_text(&rhs.text)
-        )
-    })
+        );
+        trace_sequence(format_args!(
+            "post-body-cond-result def_stmt={def_stmt} changed={changed} rendered={rendered:?} lhs={lhs:?} rhs={rhs:?}"
+        ));
+        rendered
+    });
+    if rendered.is_none() {
+        trace_sequence(format_args!(
+            "post-body-cond-skip def_stmt={def_stmt} reason=unchanged lhs={lhs:?} rhs={rhs:?}"
+        ));
+    }
+    rendered
 }
 
 fn simplify_condition_operand_text(text: &str) -> String {
@@ -9341,6 +10347,31 @@ fn c_printer_load_trace_enabled() -> bool {
     std::env::var_os("UNLACE_CPRINTER_LOAD_TRACE").is_some() || c_printer_trace_enabled()
 }
 
+fn c_printer_decision_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_DECISION_TRACE").is_some() || c_printer_trace_enabled()
+}
+
+fn c_printer_sequence_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_SEQUENCE_TRACE").is_some()
+        || c_printer_decision_trace_enabled()
+}
+
+/// Unified "pipeline control-flow" trace gate. Set `UNLACE_CPRINTER_PIPELINE=1`
+/// to watch each statement travel through emission and every post-emission
+/// cleanup stage — which deref form was chosen at emit time, and the EXACT
+/// statements each cleanup stage removed/changed (and why). Combine with
+/// `UNLACE_CPRINTER_TRACE_FILTER=<name>` to follow one variable end-to-end
+/// (e.g. `=c7` to see exactly which stage deletes `c7 = a1`).
+fn c_printer_pipeline_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_PIPELINE").is_some() || c_printer_trace_enabled()
+}
+
+fn c_printer_full_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_CPRINTER_FULL_TRACE").is_some()
+        || c_printer_trace_enabled()
+        || std::env::var_os("UNLACE_TRACE_ALL").is_some()
+}
+
 fn c_printer_trace_filter() -> Option<String> {
     std::env::var("UNLACE_CPRINTER_TRACE_FILTER")
         .or_else(|_| std::env::var("UNLACE_C_PRINTER_TRACE_FILTER"))
@@ -9386,6 +10417,161 @@ fn trace_stack_text(message: impl std::fmt::Display) {
     }
 }
 
+fn trace_stack_lvar_inventory(stage: &str, lvars: &BTreeMap<i64, StackLvarAnnotation>) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    trace_stack_text(format_args!(
+        "lvar-inventory stage={stage} count={}",
+        lvars.len()
+    ));
+    for (offset, ann) in lvars {
+        trace_stack_text(format_args!(
+            "lvar stage={stage} offset={offset} name={} size={} buffer={} from_debug={} c_type={:?} ty={:?}",
+            ann.name, ann.size, ann.is_buffer, ann.from_debug, ann.c_type, ann.ty
+        ));
+    }
+    trace_stack_lvar_overlaps(stage, lvars);
+}
+
+fn trace_stack_lvar_overlaps(stage: &str, lvars: &BTreeMap<i64, StackLvarAnnotation>) {
+    let items: Vec<(i64, &StackLvarAnnotation)> = lvars.iter().map(|(o, ann)| (*o, ann)).collect();
+    for window in items.windows(2) {
+        let (prev_offset, prev) = window[0];
+        let (next_offset, next) = window[1];
+        let Some(prev_end) = prev_offset.checked_add(prev.size as i64) else {
+            continue;
+        };
+        if prev_end > next_offset {
+            trace_stack_text(format_args!(
+                "lvar-overlap stage={stage} first_offset={prev_offset} first_name={} first_size={} first_end={} second_offset={next_offset} second_name={} second_size={} overlap_bytes={}",
+                prev.name,
+                prev.size,
+                prev_end,
+                next.name,
+                next.size,
+                prev_end - next_offset,
+            ));
+        }
+    }
+}
+
+fn trace_stack_frame_inventory(stage: &str, func: &HirFunction) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    let Some(frame) = func.stack_frame.as_ref() else {
+        trace_stack_text(format_args!(
+            "frame-inventory stage={stage} count=0 reason=no-frame"
+        ));
+        return;
+    };
+    trace_stack_text(format_args!(
+        "frame-inventory stage={stage} count={} frame_size={} min_neg={} max_pos={}",
+        frame.locals.len(),
+        frame.frame_size,
+        frame.min_neg_offset,
+        frame.max_pos_offset
+    ));
+    for local in frame.locals.values() {
+        trace_stack_text(format_args!(
+            "frame-local stage={stage} offset={} size={} access_widths={:?} kind={:?}",
+            local.offset, local.size, local.access_widths, local.kind
+        ));
+    }
+    trace_stack_frame_lvar_coverage(stage, func);
+}
+
+fn trace_stack_frame_lvar_coverage(stage: &str, func: &HirFunction) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    let Some(frame) = func.stack_frame.as_ref() else {
+        return;
+    };
+    for local in frame.locals.values() {
+        let local_start = local.offset;
+        let Some(local_end) = local.offset.checked_add(local.size as i64) else {
+            continue;
+        };
+        for other in frame.locals.values() {
+            if other.offset == local.offset {
+                continue;
+            }
+            let other_start = other.offset;
+            let Some(other_end) = other.offset.checked_add(other.size as i64) else {
+                continue;
+            };
+            if local_start <= other_start && other_end <= local_end {
+                trace_stack_text(format_args!(
+                    "frame-slot-covered stage={stage} outer_offset={local_start} outer_size={} outer_end={local_end} inner_offset={other_start} inner_size={} inner_end={other_end} inner_kind={:?}",
+                    local.size, other.size, other.kind,
+                ));
+            }
+        }
+    }
+}
+
+fn trace_stack_slot_inventory(stage: &str, ctx: &PrintCtx) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    trace_stack_text(format_args!(
+        "slot-inventory stage={stage} count={} promoted={} synthetic={} suppressed={} canary={}",
+        ctx.stack_frame_slots.len(),
+        ctx.promoted_stack_buffers.len(),
+        ctx.synthetic_stack_scalars.len(),
+        ctx.suppressed_stack_offsets.len(),
+        ctx.canary_stack_offsets.len()
+    ));
+    for (offset, slot) in &ctx.stack_frame_slots {
+        trace_stack_text(format_args!(
+            "slot stage={stage} offset={offset} name={} size={} buffer={}",
+            slot.name, slot.size, slot.is_buffer
+        ));
+    }
+    for (offset, size) in &ctx.promoted_stack_buffers {
+        trace_stack_text(format_args!(
+            "promoted-buffer stage={stage} offset={offset} size={size}"
+        ));
+    }
+    for (offset, size) in &ctx.synthetic_stack_scalars {
+        trace_stack_text(format_args!(
+            "synthetic-scalar stage={stage} offset={offset} size={size}"
+        ));
+    }
+}
+
+fn trace_stack_lvar_slot_crosscheck(stage: &str, ctx: &PrintCtx) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    for (offset, ann) in &ctx.stack_lvars {
+        if ctx.stack_frame_slots.contains_key(offset) {
+            continue;
+        }
+        let covering = ctx
+            .stack_frame_slots
+            .range(..=*offset)
+            .rev()
+            .find_map(|(start, slot)| {
+                let end = start.checked_add(slot.size as i64)?;
+                (*offset >= *start && *offset < end).then_some((*start, end, slot))
+            });
+        if let Some((slot_start, slot_end, slot)) = covering {
+            trace_stack_text(format_args!(
+                "lvar-covered-by-slot stage={stage} lvar_offset={offset} lvar_name={} lvar_size={} slot_offset={slot_start} slot_end={slot_end} slot_name={} slot_size={} slot_buffer={}",
+                ann.name, ann.size, slot.name, slot.size, slot.is_buffer,
+            ));
+        } else {
+            trace_stack_text(format_args!(
+                "lvar-without-slot stage={stage} lvar_offset={offset} lvar_name={} lvar_size={} buffer={} from_debug={} c_type={:?} ty={:?}",
+                ann.name, ann.size, ann.is_buffer, ann.from_debug, ann.c_type, ann.ty,
+            ));
+        }
+    }
+}
+
 fn trace_hoist_text(message: impl std::fmt::Display) {
     if !c_printer_hoist_trace_enabled() {
         return;
@@ -9423,6 +10609,98 @@ fn trace_name_text(message: impl std::fmt::Display) {
     let text = message.to_string();
     if trace_text_matches_filter(&text) {
         eprintln!("[unlace-output] name {text}");
+    }
+}
+
+fn trace_pipeline(message: impl std::fmt::Display) {
+    if !c_printer_pipeline_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] pipe {text}");
+    }
+}
+
+fn trace_full(message: impl std::fmt::Display) {
+    if !c_printer_full_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] full {text}");
+    }
+}
+
+fn trace_ctx_snapshot(stage: &str, ctx: &PrintCtx) {
+    trace_full(format_args!(
+        "ctx-snapshot stage={stage} next_stmt={} emit_stmt={} vars={} merged={} roles={} types={} foldable={} sv_defs={} use_counts={} stmt_insns={} stmt_outputs={} stmt_inputs={} cond_uses={} control_conds={} stack_lvars={} stack_slots={} suppressed_stack={} canary_stack={} mmio={} hoist_sites={} byref_bases={} returned={} comments={}",
+        ctx.next_stmt,
+        ctx.emit_stmt,
+        ctx.var_names.len(),
+        ctx.merged_names.len(),
+        ctx.var_role_names.len(),
+        ctx.var_types.len(),
+        ctx.foldable_stmts.len(),
+        ctx.sv_defining_stmt.len(),
+        ctx.sv_use_counts.len(),
+        ctx.stmt_insns.len(),
+        ctx.stmt_outputs.len(),
+        ctx.stmt_inputs.len(),
+        ctx.cond_uses.len(),
+        ctx.control_cond_uses.len(),
+        ctx.stack_lvars.len(),
+        ctx.stack_frame_slots.len(),
+        ctx.suppressed_stack_offsets.len(),
+        ctx.canary_stack_offsets.len(),
+        ctx.mmio_addrs.len(),
+        ctx.hoist_decl_plan.len(),
+        ctx.byref_bases.len(),
+        ctx.returned_svs.len(),
+        ctx.commented_stmts.len(),
+    ));
+}
+
+/// Emit a per-statement multiset diff of a post-emission cleanup stage: the
+/// lines `stage_fn` removed (and any it added), trimmed and capped, so a
+/// vanished statement is attributed to the exact stage that dropped it (with
+/// its text), not merely to a line-count delta. Honors the shared FILTER, so
+/// `FILTER=c7` shows only the stage that touched `c7`.
+fn trace_pipeline_stage_diff(func_name: &str, stage: &str, before: &str, after: &str) {
+    use std::collections::BTreeMap;
+    let mut counts: BTreeMap<&str, i64> = BTreeMap::new();
+    for l in before.lines() {
+        *counts.entry(l.trim()).or_insert(0) += 1;
+    }
+    for l in after.lines() {
+        *counts.entry(l.trim()).or_insert(0) -= 1;
+    }
+    let mut removed = 0usize;
+    let mut added = 0usize;
+    for (line, &delta) in &counts {
+        if line.is_empty() {
+            continue;
+        }
+        if delta > 0 {
+            for _ in 0..delta.min(40) {
+                trace_pipeline(format!(
+                    "stage func={func_name} name={stage} op=removed line={line:?}"
+                ));
+            }
+            removed += delta as usize;
+        } else if delta < 0 {
+            for _ in 0..(-delta).min(40) {
+                trace_pipeline(format!(
+                    "stage func={func_name} name={stage} op=added line={line:?}"
+                ));
+            }
+            added += (-delta) as usize;
+        }
+    }
+    if removed > 40 || added > 40 {
+        trace_pipeline(format!(
+            "stage func={func_name} name={stage} note=diff-capped total_removed={removed} total_added={added}"
+        ));
     }
 }
 
@@ -9524,13 +10802,135 @@ fn trace_stack_resolution(
     stmt_idx: u32,
     raw_idx: Option<usize>,
     vn: &Varnode,
+    offset: Option<i64>,
+    access_size: Option<u8>,
+    slot: Option<&StackSlotRef>,
     result: Option<&str>,
 ) {
     if !c_printer_stack_trace_enabled() {
         return;
     }
+    let slot_text = slot
+        .map(|slot| {
+            format!(
+                "name={} delta={} kind={}",
+                slot.name,
+                slot.delta,
+                if slot.is_buffer { "buffer" } else { "scalar" }
+            )
+        })
+        .unwrap_or_else(|| "none".to_string());
     let text = format!(
-        "stack source={source} stmt={stmt_idx} raw_idx={raw_idx:?} raw={vn:?} result={result:?}"
+        "stack source={source} stmt={stmt_idx} raw_idx={raw_idx:?} raw={vn:?} offset={offset:?} access_size={access_size:?} slot={slot_text} result={result:?}"
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
+}
+
+fn trace_stack_offset_step(
+    source: &str,
+    stmt_idx: u32,
+    raw_idx: Option<usize>,
+    vn: &Varnode,
+    depth: u8,
+    sv: Option<&SsaVarnode>,
+    def: Option<(u32, IrOp)>,
+    result: Option<i64>,
+) {
+    if !c_printer_stack_trace_enabled() {
+        return;
+    }
+    let text = format!(
+        "stack-offset source={source} stmt={stmt_idx} raw_idx={raw_idx:?} depth={depth} raw={vn:?} sv={sv:?} def={def:?} result={result:?}"
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
+}
+
+fn trace_load_render(
+    source: &str,
+    stmt_idx: u32,
+    insn: &IrInsn,
+    addr_idx: usize,
+    load_size: u8,
+    is_mmio: Option<bool>,
+    result: Option<&str>,
+) {
+    if !c_printer_stack_trace_enabled() && !c_printer_trace_enabled() {
+        return;
+    }
+    let addr = insn.inputs.get(addr_idx);
+    let text = format!(
+        "load-render source={source} stmt={stmt_idx} addr=0x{:x} output={:?} addr_idx={addr_idx} addr={addr:?} size={load_size} mmio={is_mmio:?} result={result:?}",
+        insn.addr, insn.output,
+    );
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] {text}");
+    }
+}
+
+fn trace_decision(message: impl std::fmt::Display) {
+    if !c_printer_decision_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] decision {text}");
+    }
+}
+
+fn trace_sequence(message: impl std::fmt::Display) {
+    if !c_printer_sequence_trace_enabled() {
+        return;
+    }
+    let text = message.to_string();
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] sequence {text}");
+    }
+}
+
+fn trace_materialized_source_scan(message: impl std::fmt::Display) {
+    if !c_printer_sequence_trace_enabled() && !c_printer_name_trace_enabled() {
+        return;
+    }
+    let text = format!("materialized-source {message}");
+    if trace_text_matches_filter(&text) {
+        eprintln!("[unlace-output] sequence {text}");
+    }
+}
+
+fn trace_assignment_render(
+    stmt_idx: u32,
+    insn: &IrInsn,
+    sv: &SsaVarnode,
+    lhs: &str,
+    rhs: &str,
+    ctx: &PrintCtx,
+) {
+    if !c_printer_trace_enabled() && !c_printer_name_trace_enabled() {
+        return;
+    }
+    let inputs = ctx
+        .stmt_input_slots
+        .get(&stmt_idx)
+        .map(|slots| {
+            slots
+                .iter()
+                .map(|(raw_idx, input_sv)| {
+                    format!(
+                        "{raw_idx}:{input_sv:?}:{:?}",
+                        known_name_of_sv(ctx, input_sv)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_default();
+    let text = format!(
+        "assign-render stmt={stmt_idx} addr=0x{:x} op={:?} output={sv:?} lhs={lhs:?} rhs={rhs:?} inputs=[{}]",
+        insn.addr, insn.op, inputs
     );
     if trace_text_matches_filter(&text) {
         eprintln!("[unlace-output] {text}");
@@ -9559,6 +10959,9 @@ fn rebase_cond_operand_after_body(
 ) -> RebasedCondOperand {
     if vn.space == SpaceId::Const {
         let text = format_constant_ctx(vn.offset, vn.size, ConstContext::Signed);
+        trace_sequence(format_args!(
+            "rebase-cond-operand-const stmt={stmt_idx} raw_idx={raw_idx} range={start_stmt}..{end_stmt} vn={vn:?} text={text:?}"
+        ));
         return RebasedCondOperand {
             original_text: text.clone(),
             text,
@@ -9582,6 +10985,9 @@ fn rebase_cond_operand_after_body(
         ParentCtx::top(),
         ctx,
     );
+    trace_sequence(format_args!(
+        "rebase-cond-operand-enter stmt={stmt_idx} raw_idx={raw_idx} range={start_stmt}..{end_stmt} vn={vn:?} sv={sv:?} original={original_text:?}"
+    ));
     if c_printer_trace_enabled() {
         eprintln!(
             "[unlace-output] rebase-cond operand stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} sv={sv:?} original={original_text}"
@@ -9589,12 +10995,19 @@ fn rebase_cond_operand_after_body(
     }
 
     let candidate_bases = condition_rebase_candidate_bases(&sv, ctx);
+    trace_sequence(format_args!(
+        "rebase-cond-candidates stmt={stmt_idx} raw_idx={raw_idx} sv={sv:?} bases={candidate_bases:?}"
+    ));
     for candidate_base in &candidate_bases {
         if let Some(alias_sv) =
             latest_visible_copy_from_base_in_range(candidate_base, start_stmt, end_stmt, ctx)
         {
+            let text = ctx.name_of(&alias_sv);
+            trace_sequence(format_args!(
+                "rebase-cond-alias-hit stmt={stmt_idx} raw_idx={raw_idx} base={candidate_base:?} alias_sv={alias_sv:?} text={text:?}"
+            ));
             return RebasedCondOperand {
-                text: ctx.name_of(&alias_sv),
+                text,
                 original_text,
                 changed: true,
                 delta: None,
@@ -9607,8 +11020,12 @@ fn rebase_cond_operand_after_body(
         if let Some((alias_sv, delta)) =
             latest_linear_update_copy_for_base_in_range(candidate_base, start_stmt, end_stmt, ctx)
         {
+            let text = ctx.name_of(&alias_sv);
+            trace_sequence(format_args!(
+                "rebase-cond-linear-hit stmt={stmt_idx} raw_idx={raw_idx} base={candidate_base:?} alias_sv={alias_sv:?} delta={delta} text={text:?}"
+            ));
             return RebasedCondOperand {
-                text: ctx.name_of(&alias_sv),
+                text,
                 original_text,
                 changed: true,
                 delta: Some(delta),
@@ -9617,6 +11034,9 @@ fn rebase_cond_operand_after_body(
         }
     }
 
+    trace_sequence(format_args!(
+        "rebase-cond-miss stmt={stmt_idx} raw_idx={raw_idx} sv={sv:?} original={original_text:?}"
+    ));
     RebasedCondOperand {
         text: original_text.clone(),
         original_text,
@@ -10070,6 +11490,13 @@ fn is_control_only_condition_use_or_base(sv: &SsaVarnode, ctx: &PrintCtx) -> boo
     is_control_only_condition_use(sv, ctx)
 }
 
+fn is_control_condition_stmt(stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    ctx.stmt_outputs
+        .get(&stmt_idx)
+        .and_then(|output| *output)
+        .is_some_and(|sv| ctx.control_cond_uses.contains(&sv))
+}
+
 fn is_control_only_condition_assignment(
     stmt_idx: u32,
     sv: &SsaVarnode,
@@ -10226,7 +11653,17 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 }
             }
 
+            trace_sequence(format_args!(
+                "emit-if-enter depth={depth} stmt={} cond_sv={cond:?} then_len={} else_len={}",
+                ctx.emit_stmt,
+                then_body.len(),
+                else_body.as_ref().map_or(0, |body| body.len())
+            ));
             let cond_expr = resolve_control_cond_expr(cond, ctx);
+            trace_sequence(format_args!(
+                "emit-if-cond depth={depth} stmt={} cond_sv={cond:?} cond={cond_expr:?}",
+                ctx.emit_stmt
+            ));
             if then_body.is_empty()
                 && let Some(eb) = else_body
                 && !eb.is_empty()
@@ -10320,7 +11757,16 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         }
 
         HirNode::While { cond, body } => {
+            trace_sequence(format_args!(
+                "emit-while-enter depth={depth} stmt={} cond_sv={cond:?} body_len={}",
+                ctx.emit_stmt,
+                body.len()
+            ));
             let cond_expr = resolve_control_cond_expr(cond, ctx);
+            trace_sequence(format_args!(
+                "emit-while-cond depth={depth} stmt={} cond_sv={cond:?} cond={cond_expr:?}",
+                ctx.emit_stmt
+            ));
             trace_flow(format_args!(
                 "emit-while depth={depth} stmt={} cond={cond_expr:?} body_len={}",
                 ctx.emit_stmt,
@@ -10328,24 +11774,56 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             ));
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "while ({}) {{", cond_expr);
+            let body_start_stmt = ctx.emit_stmt;
             emit_nodes(body, depth + 1, ctx, out);
+            let body_end_stmt = ctx.emit_stmt;
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
+            trace_sequence(format_args!(
+                "emit-while-exit depth={depth} range={body_start_stmt}..{body_end_stmt} cond={cond_expr:?}"
+            ));
         }
 
         HirNode::DoWhile { body, cond } => {
+            trace_sequence(format_args!(
+                "emit-dowhile-enter depth={depth} stmt={} cond_sv={cond:?} body_len={}",
+                ctx.emit_stmt,
+                body.len()
+            ));
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "do {{");
             let body_start_stmt = ctx.emit_stmt;
             emit_nodes(body, depth + 1, ctx, out);
             let body_end_stmt = ctx.emit_stmt;
-            let cond_expr =
-                resolve_post_body_control_cond_expr(cond, body_start_stmt, body_end_stmt, ctx)
-                    .unwrap_or_else(|| {
-                        simplify_condition_expr_text(&resolve_control_cond_expr(cond, ctx))
-                    });
+            trace_sequence(format_args!(
+                "emit-dowhile-body-done depth={depth} range={body_start_stmt}..{body_end_stmt} cond_sv={cond:?}"
+            ));
+            let cond_expr = match resolve_post_body_control_cond_expr(
+                cond,
+                body_start_stmt,
+                body_end_stmt,
+                ctx,
+            ) {
+                Some(expr) => {
+                    trace_sequence(format_args!(
+                        "emit-dowhile-cond-post-body depth={depth} range={body_start_stmt}..{body_end_stmt} cond={expr:?}"
+                    ));
+                    expr
+                }
+                None => {
+                    let raw = resolve_control_cond_expr(cond, ctx);
+                    let simplified = simplify_condition_expr_text(&raw);
+                    trace_sequence(format_args!(
+                        "emit-dowhile-cond-fallback depth={depth} range={body_start_stmt}..{body_end_stmt} raw={raw:?} simplified={simplified:?}"
+                    ));
+                    simplified
+                }
+            };
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}} while ({});", cond_expr);
+            trace_sequence(format_args!(
+                "emit-dowhile-exit depth={depth} range={body_start_stmt}..{body_end_stmt} cond={cond_expr:?}"
+            ));
         }
 
         HirNode::For {
@@ -10362,10 +11840,21 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 String::new()
             };
 
+            trace_sequence(format_args!(
+                "emit-for-cond-enter depth={depth} stmt={} cond_sv={cond:?} body_len={}",
+                ctx.emit_stmt,
+                body.len()
+            ));
             let cond_expr = resolve_control_cond_expr(cond, ctx);
+            trace_sequence(format_args!(
+                "emit-for-cond depth={depth} stmt={} cond_sv={cond:?} cond={cond_expr:?}",
+                ctx.emit_stmt
+            ));
 
             let mut body_buf = String::new();
+            let body_start_stmt = ctx.emit_stmt;
             emit_nodes(body, depth + 1, ctx, &mut body_buf);
+            let body_end_stmt = ctx.emit_stmt;
 
             let update_idx = ctx.emit_stmt;
             ctx.emit_stmt += 1;
@@ -10376,6 +11865,9 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             out.push_str(&body_buf);
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
+            trace_sequence(format_args!(
+                "emit-for-exit depth={depth} body_range={body_start_stmt}..{body_end_stmt} update_stmt={update_idx} init={init_str:?} cond={cond_expr:?} update={update_str:?}"
+            ));
         }
 
         HirNode::Switch {
@@ -12239,6 +13731,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             let _ = writeln!(out, "{};", short);
         } else {
             let rhs = emit_expr(insn, idx, ctx);
+            trace_assignment_render(idx, insn, &sv, &lhs, &rhs, ctx);
             // Hoist the variable's declaration into this assignment if the
             // pre-pass selected this stmt as the variable's declaration site.
             if let Some((decl_prefix, decl_trailer)) = hoisted_decl_for_stmt(idx, &sv, ctx) {
@@ -12981,7 +14474,16 @@ fn should_break_before(
 // ---------------------------------------------------------------------------
 
 fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
-    emit_expr_with_prec(insn, stmt_idx, ParentCtx::top(), ctx)
+    trace_full(format_args!(
+        "emit-expr-enter stmt={stmt_idx} addr=0x{:x} op={:?} inputs={:?} output={:?}",
+        insn.addr, insn.op, insn.inputs, insn.output
+    ));
+    let rendered = emit_expr_with_prec(insn, stmt_idx, ParentCtx::top(), ctx);
+    trace_full(format_args!(
+        "emit-expr-result stmt={stmt_idx} addr=0x{:x} op={:?} rendered={rendered:?}",
+        insn.addr, insn.op
+    ));
+    rendered
 }
 
 fn emit_expr_with_prec(
@@ -12990,7 +14492,11 @@ fn emit_expr_with_prec(
     parent: ParentCtx,
     ctx: &mut PrintCtx,
 ) -> String {
-    match insn.op {
+    trace_full(format_args!(
+        "emit-expr-prec-enter stmt={stmt_idx} addr=0x{:x} op={:?} parent={parent:?} inputs={:?} output={:?}",
+        insn.addr, insn.op, insn.inputs, insn.output
+    ));
+    let rendered = match insn.op {
         // -- Binary arithmetic/bitwise --
         IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, parent, ctx),
         IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, parent, ctx),
@@ -13154,10 +14660,29 @@ fn emit_expr_with_prec(
             let load_size = insn.output.map_or(8, |o| o.size);
             let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
             if addr_idx < insn.inputs.len() {
+                trace_load_render("enter", stmt_idx, insn, addr_idx, load_size, None, None);
                 if let Some(canary) = try_fs_canary_load(&insn.inputs[addr_idx], load_size) {
+                    trace_load_render(
+                        "fs-canary",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(canary.as_str()),
+                    );
                     return canary;
                 }
                 if let Some(canary) = try_macos_canary_load(&insn.inputs[addr_idx], ctx) {
+                    trace_load_render(
+                        "macos-canary",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(canary.as_str()),
+                    );
                     return canary;
                 }
                 if let Some(value) = try_readonly_scalar_load(
@@ -13167,6 +14692,15 @@ fn emit_expr_with_prec(
                     load_size,
                     ctx,
                 ) {
+                    trace_load_render(
+                        "readonly",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(value.as_str()),
+                    );
                     return value;
                 }
                 if let Some(local) = try_stack_frame_access_name(
@@ -13176,6 +14710,15 @@ fn emit_expr_with_prec(
                     load_size,
                     ctx,
                 ) {
+                    trace_load_render(
+                        "stack",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(local.as_str()),
+                    );
                     return local;
                 }
                 if let Some(global) = try_global_var_name(
@@ -13185,6 +14728,15 @@ fn emit_expr_with_prec(
                     load_size,
                     ctx,
                 ) {
+                    trace_load_render(
+                        "global",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(global.as_str()),
+                    );
                     return global;
                 }
                 if let Some(resolved) = try_resolve_field_from_addr(
@@ -13194,6 +14746,15 @@ fn emit_expr_with_prec(
                     load_size,
                     ctx,
                 ) {
+                    trace_load_render(
+                        "field-from-addr",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(resolved.as_str()),
+                    );
                     return resolved;
                 }
                 // t231: array-of-struct field access — runs before the
@@ -13204,18 +14765,54 @@ fn emit_expr_with_prec(
                 if let Some(field) =
                     try_array_struct_field_access(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
                 {
+                    trace_load_render(
+                        "array-struct-field",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(field.as_str()),
+                    );
                     return field;
                 }
                 if let Some(field) =
                     try_struct_field_access(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
                 {
+                    trace_pipeline(format!(
+                        "emit-load stmt={stmt_idx} size={load_size} form=struct-arrow text={field:?}"
+                    ));
+                    trace_load_render(
+                        "struct-field",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(field.as_str()),
+                    );
                     return field;
                 }
                 if let Some(sub) =
                     try_array_subscript(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
                 {
                     // Batch 11 slice 2: route subscript loads through CExpr.
-                    return CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index)).to_string();
+                    trace_pipeline(format!(
+                        "emit-load stmt={stmt_idx} size={load_size} form=subscript base={:?} index={:?}",
+                        sub.base, sub.index
+                    ));
+                    let rendered =
+                        CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index)).to_string();
+                    trace_load_render(
+                        "array-subscript",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(rendered.as_str()),
+                    );
+                    return rendered;
                 }
                 let is_mmio = insn.inputs[addr_idx].space == SpaceId::Const
                     && ctx.mmio_addrs.contains(&insn.inputs[addr_idx].offset);
@@ -13235,13 +14832,23 @@ fn emit_expr_with_prec(
                     // around already-postfix operands.
                     let cast = ida_ptr_type(load_size);
                     let cast_prim = cast.trim_end_matches(" *");
-                    return if load_size == 1 && !is_mmio {
+                    let rendered = if load_size == 1 && !is_mmio {
                         memory
                     } else if is_mmio {
                         format!("*(volatile {} *){}", cast_prim, memory)
                     } else {
                         format!("*({} *){}", cast_prim, memory)
                     };
+                    trace_load_render(
+                        "memory-annotation",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        Some(is_mmio),
+                        Some(rendered.as_str()),
+                    );
+                    return rendered;
                 }
                 let addr =
                     emit_memory_address_operand(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
@@ -13255,8 +14862,26 @@ fn emit_expr_with_prec(
                 } else {
                     cast.to_string()
                 };
-                CExpr::deref(CExpr::cast(cast_ty, CExpr::lit(addr))).to_string()
+                // Emit-time form trace: this is the raw `*(T *)(addr)` fallback —
+                // the form a conflated pointer/scalar base (`*(c7)`) renders as.
+                // Logging the base here shows exactly which value is being
+                // dereferenced as a pointer (cross-check against its decl type).
+                trace_pipeline(format!(
+                    "emit-load stmt={stmt_idx} size={load_size} form=raw-deref addr={addr:?}"
+                ));
+                let rendered = CExpr::deref(CExpr::cast(cast_ty, CExpr::lit(addr))).to_string();
+                trace_load_render(
+                    "raw-deref",
+                    stmt_idx,
+                    insn,
+                    addr_idx,
+                    load_size,
+                    Some(is_mmio),
+                    Some(rendered.as_str()),
+                );
+                rendered
             } else {
+                trace_load_render("bad-arity", stmt_idx, insn, addr_idx, load_size, None, None);
                 "/* LOAD (bad arity) */ 0".to_string()
             }
         }
@@ -13504,7 +15129,12 @@ fn emit_expr_with_prec(
         // input operands, so downstream passes / readers still see the
         // dataflow rather than a bare `0` placeholder.
         _ => emit_unsupported_op_helper(insn, stmt_idx, ctx),
-    }
+    };
+    trace_full(format_args!(
+        "emit-expr-prec-result stmt={stmt_idx} addr=0x{:x} op={:?} parent={parent:?} rendered={rendered:?}",
+        insn.addr, insn.op
+    ));
+    rendered
 }
 
 /// Render an unsupported opcode as `__unlace_<opname>(arg, arg, ...)`.
@@ -14416,18 +16046,25 @@ fn emit_unsigned_binop(
 
 fn emit_operand_resolved(
     vn: &unlace_ir::Varnode,
-    _raw_idx: usize,
+    raw_idx: usize,
     stmt_idx: u32,
     ctx: &mut PrintCtx,
 ) -> String {
-    emit_operand_with_prec(
+    trace_full(format_args!(
+        "emit-operand-resolved-enter stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?}"
+    ));
+    let rendered = emit_operand_with_prec(
         vn,
-        _raw_idx,
+        raw_idx,
         stmt_idx,
         ConstContext::Signed,
         ParentCtx::top(),
         ctx,
-    )
+    );
+    trace_full(format_args!(
+        "emit-operand-resolved-result stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} rendered={rendered:?}"
+    ));
+    rendered
 }
 
 /// Returns `Some(unsigned)` if the input varnode is typed as a single-byte
@@ -14515,11 +16152,22 @@ fn emit_operand_with_prec(
     parent: ParentCtx,
     ctx: &mut PrintCtx,
 ) -> String {
+    trace_full(format_args!(
+        "emit-operand-enter stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} const_ctx={const_ctx:?} parent={parent:?}"
+    ));
     if vn.space == SpaceId::Const {
         if let Some(s) = ctx.string_table.get(&vn.offset) {
-            return format!("\"{}\"", escape_c_string(s));
+            let rendered = format!("\"{}\"", escape_c_string(s));
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} decision=const-string rendered={rendered:?}"
+            ));
+            return rendered;
         }
-        return format_constant_ctx(vn.offset, vn.size, const_ctx);
+        let rendered = format_constant_ctx(vn.offset, vn.size, const_ctx);
+        trace_full(format_args!(
+            "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} decision=const rendered={rendered:?}"
+        ));
+        return rendered;
     }
 
     let sv =
@@ -14529,6 +16177,9 @@ fn emit_operand_with_prec(
         });
 
     if let Some(addr) = try_stack_frame_address_expr(vn, Some(raw_idx), stmt_idx, ctx) {
+        trace_full(format_args!(
+            "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=stack-frame-address rendered={addr:?}"
+        ));
         return addr;
     }
 
@@ -14541,6 +16192,9 @@ fn emit_operand_with_prec(
                 eprintln!("[unlace-output] {text}");
             }
         }
+        trace_full(format_args!(
+            "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=readonly rendered={value:?}"
+        ));
         return value;
     }
 
@@ -14557,6 +16211,32 @@ fn emit_operand_with_prec(
                     eprintln!("[unlace-output] {text}");
                 }
             }
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op=Load decision=unstable-load-name rendered={name:?}"
+            ));
+            return name;
+        }
+        if let Some(materialized_sv) =
+            latest_materialized_value_for_same_source(&sv, &def_insn, def_stmt, stmt_idx, ctx)
+        {
+            let name = ctx.name_of(&materialized_sv);
+            trace_sequence(format_args!(
+                "emit-operand-materialized-source stmt={stmt_idx} raw_idx={raw_idx} sv={sv:?} def_stmt={def_stmt} op={:?} materialized_sv={materialized_sv:?} name={name:?}",
+                def_insn.op
+            ));
+            if c_printer_name_trace_enabled() {
+                let text = format!(
+                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-source-name materialized={materialized_sv:?} name={name}",
+                    def_insn.op
+                );
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
+            }
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-source-name materialized={materialized_sv:?} rendered={name:?}",
+                def_insn.op
+            ));
             return name;
         }
         if !ctx.foldable_stmts.contains(&def_stmt)
@@ -14579,6 +16259,10 @@ fn emit_operand_with_prec(
                     eprintln!("[unlace-output] {text}");
                 }
             }
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=snapshot-name rendered={name:?}",
+                def_insn.op
+            ));
             return name;
         }
         if expression_inputs_aliased_redefined_before_consumer(
@@ -14594,6 +16278,34 @@ fn emit_operand_with_prec(
                     eprintln!("[unlace-output] {text}");
                 }
             }
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=expr-input-stale rendered={name:?}",
+                def_insn.op
+            ));
+            return name;
+        }
+        if def_stmt < stmt_idx
+            && !ctx.foldable_stmts.contains(&def_stmt)
+            && is_control_condition_stmt(stmt_idx, ctx)
+        {
+            let name = ctx.name_of(&sv);
+            trace_sequence(format_args!(
+                "emit-operand-materialized-cond stmt={stmt_idx} raw_idx={raw_idx} sv={sv:?} def_stmt={def_stmt} op={:?} name={name:?} reason=def-emitted-before-condition",
+                def_insn.op
+            ));
+            if c_printer_name_trace_enabled() {
+                let text = format!(
+                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-cond-name name={name}",
+                    def_insn.op
+                );
+                if trace_text_matches_filter(&text) {
+                    eprintln!("[unlace-output] {text}");
+                }
+            }
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-cond-name rendered={name:?}",
+                def_insn.op
+            ));
             return name;
         }
         if !ctx.resolving_exprs.insert(sv) {
@@ -14607,6 +16319,10 @@ fn emit_operand_with_prec(
                     eprintln!("[unlace-output] {text}");
                 }
             }
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=cycle rendered={name:?}",
+                def_insn.op
+            ));
             return name;
         }
         let rendered = emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
@@ -14620,6 +16336,10 @@ fn emit_operand_with_prec(
                 eprintln!("[unlace-output] {text}");
             }
         }
+        trace_full(format_args!(
+            "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=inline rendered={rendered:?}",
+            def_insn.op
+        ));
         return rendered;
     }
 
@@ -14638,6 +16358,10 @@ fn emit_operand_with_prec(
                     eprintln!("[unlace-output] {text}");
                 }
             }
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-cycle rendered={name:?}",
+                def_insn.op
+            ));
             return name;
         }
         let rendered = emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
@@ -14651,6 +16375,10 @@ fn emit_operand_with_prec(
                 eprintln!("[unlace-output] {text}");
             }
         }
+        trace_full(format_args!(
+            "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-inline rendered={rendered:?}",
+            def_insn.op
+        ));
         return rendered;
     }
 
@@ -14663,6 +16391,9 @@ fn emit_operand_with_prec(
             eprintln!("[unlace-output] {text}");
         }
     }
+    trace_full(format_args!(
+        "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=name rendered={name:?}"
+    ));
     name
 }
 
@@ -14679,9 +16410,12 @@ fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) 
         return false;
     }
     let addr = &insn.inputs[addr_idx];
-    if try_stack_frame_access_name(addr, Some(addr_idx), stmt_idx, load_size, ctx).is_some() {
+    if let Some(stack_expr) =
+        try_stack_frame_access_name(addr, Some(addr_idx), stmt_idx, load_size, ctx)
+    {
+        let offset = resolve_stack_offset_for_addr(addr, Some(addr_idx), stmt_idx, ctx, 0);
         trace_load_text(format_args!(
-            "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=stack-frame"
+            "stable-load stmt={stmt_idx} addr={addr:?} offset={offset:?} expr={stack_expr:?} decision=true reason=stack-frame"
         ));
         return true;
     }
@@ -16487,7 +18221,8 @@ fn prune_dead_plain_assignments(output: String) -> String {
     // cond-family temp. Register-only functions take exactly one pass, matching
     // the pre-1e3703d86 behaviour the v850/register goldens depend on.
     let trace = prune_trace_enabled();
-    let max_passes = if output_has_cond_family_temp(&output) {
+    let max_passes = if output_has_cond_family_temp(&output) || output_has_plain_temp_decl(&output)
+    {
         8
     } else {
         1
@@ -16555,6 +18290,13 @@ fn output_has_cond_family_temp(output: &str) -> bool {
     false
 }
 
+fn output_has_plain_temp_decl(output: &str) -> bool {
+    output.lines().any(|line| {
+        line.contains("// temp")
+            && parse_shadowing_local_decl_name(line).is_some_and(is_prunable_synthetic_local)
+    })
+}
+
 fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let temp_decl_names: BTreeSet<String> = lines
@@ -16583,7 +18325,8 @@ fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
                 // to the caller and must not be cascade-deleted after its lone
                 // reader was removed on an earlier pass. This is the precise
                 // boundary the v850 register goldens depend on (pre-1e3703d86).
-                if pass > 0 && !is_cond_family {
+                let is_temp = temp_decl_names.contains(lhs);
+                if pass > 0 && !is_cond_family && !is_temp {
                     trace_prune_plain_assignment_full(
                         pass, idx, lhs, segment, true, false, true, false,
                     );
@@ -16596,7 +18339,7 @@ fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
                 // `vN // temp` scaffolding, a later write does NOT keep an
                 // earlier write alive. Real register-commented values (`// r10d`,
                 // `// reg?`, etc.) keep the conservative live-out behavior.
-                let treat_reassign_as_use = !is_cond_family && !temp_decl_names.contains(lhs);
+                let treat_reassign_as_use = !is_cond_family && !is_temp;
                 let is_real_use = |later: &str| {
                     if treat_reassign_as_use {
                         contains_identifier(later, lhs)
@@ -16610,7 +18353,8 @@ fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
                     .any(|later| is_real_use(later));
                 let used_later = used_later_on_line
                     || lines.iter().skip(idx + 1).any(|later| is_real_use(later));
-                let remove = !used_later;
+                let loop_carried_live_in = is_loop_carried_use_above(&lines, idx, lhs);
+                let remove = !used_later && !loop_carried_live_in;
                 trace_prune_plain_assignment_full(
                     pass,
                     idx,
@@ -16621,6 +18365,25 @@ fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
                     used_later,
                     remove,
                 );
+                // Pipeline trace: `used_later` is a FORWARD-ONLY textual scan. A
+                // store whose lhs is read as an rvalue ABOVE it (used_above) but
+                // not below (used_later=false) is a loop-carried-store candidate:
+                // its real use is at the loop top, reached via the back-edge the
+                // forward scan cannot see. Flag that exact blind spot so a wrongly
+                // dropped reset (e.g. `c7 = a1`) is visible as it happens.
+                if c_printer_pipeline_trace_enabled() {
+                    // The cond_family / is_temp / reassign_is_use flags are what
+                    // the variable's NAME feeds into: they decide whether a later
+                    // re-write counts as a use — this is why the same store
+                    // survives as `a6 = a1` but is dropped as `c7 = a1`.
+                    trace_pipeline(format!(
+                        "prune-decision pass={pass} line={} lhs={lhs} scan=forward-only used_later={used_later} loop_carried_live_in={loop_carried_live_in} cond_family={is_cond_family} is_temp={} reassign_is_use={treat_reassign_as_use} decision={} segment={:?}",
+                        idx + 1,
+                        is_temp,
+                        if remove { "remove" } else { "keep" },
+                        segment.trim(),
+                    ));
+                }
                 remove
             });
             // Fallback: a dead compound assignment (`lhs OP= rhs`) to a
@@ -16718,6 +18481,73 @@ fn identifier_used_as_rvalue(text: &str, name: &str) -> bool {
             continue;
         }
         return true;
+    }
+    false
+}
+
+/// `true` when the plain assignment at `lines[idx]` is a **loop-carried store**:
+/// it sits inside a loop, and `lhs` is **live-on-entry to that loop** (a read of
+/// `lhs` reaches the loop header before any write). Such a store is live — its
+/// value is carried back to the loop-top read across the back-edge — even though
+/// the pruner's forward-only `used_later` scan, which only looks at lines BELOW
+/// the store, sees no use and would wrongly delete it.
+///
+/// The textual pruner has no CFG, so we recover just enough structure: brace-
+/// match outward from the store to the innermost enclosing loop header
+/// (`while`/`for`/`do`), then scan that loop body from the TOP for the first
+/// occurrence of `lhs`. If it is a READ (rvalue), `lhs` is loop-live-in and the
+/// back-edge carries this store to it → keep. If it is a WRITE, the loop
+/// redefines `lhs` before reading it, so a loop-bottom store of `lhs` is dead
+/// (overwritten before the next read) → do not keep. This precision matters:
+/// the looser "any read above" test retained dead single-use temps that the
+/// loop rewrites at the top, bloating the leaked-temp count.
+fn is_loop_carried_use_above(lines: &[&str], idx: usize, lhs: &str) -> bool {
+    // 1. Find the innermost enclosing loop header by brace-matching upward.
+    let mut depth: i32 = 0;
+    let mut i = idx;
+    let loop_header = loop {
+        if i == 0 {
+            return false;
+        }
+        i -= 1;
+        let line = lines[i];
+        // Scanning upward: a `}` closes a block nested below; a `{` that drives
+        // depth negative opens a block that ENCLOSES `idx`.
+        depth += line.matches('}').count() as i32;
+        depth -= line.matches('{').count() as i32;
+        if depth < 0 {
+            let trimmed = line.trim_start();
+            let is_loop_header = trimmed.starts_with("while")
+                || trimmed.starts_with("for ")
+                || trimmed.starts_with("for(")
+                || trimmed.starts_with("do ")
+                || trimmed.starts_with("do{")
+                || trimmed == "do";
+            if is_loop_header {
+                break i;
+            }
+            // A non-loop enclosing block (`if`/`else`/`switch`/function body):
+            // keep climbing for an outer loop that may enclose both.
+            depth = 0;
+        }
+    };
+
+    // 2. Is `lhs` live-on-entry to that loop? Scan the loop body from the top
+    //    until `lhs` first appears; bounded to the body by brace depth.
+    let mut body_depth: i32 = lines[loop_header].matches('{').count() as i32
+        - lines[loop_header].matches('}').count() as i32;
+    let mut j = loop_header + 1;
+    while j < lines.len() && body_depth > 0 {
+        let line = lines[j];
+        if identifier_used_as_rvalue(line, lhs) {
+            return true; // first occurrence is a read → loop-live-in
+        }
+        if contains_identifier(line, lhs) {
+            return false; // first occurrence is a pure write → kills live-in
+        }
+        body_depth += line.matches('{').count() as i32;
+        body_depth -= line.matches('}').count() as i32;
+        j += 1;
     }
     false
 }
@@ -17404,6 +19234,12 @@ fn calling_convention_annotation(convention: &str) -> Option<&'static str> {
 
 /// IDA-style typedefs emitted at the top of decompiled output.
 const IDA_TYPEDEFS: &str = "\
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic ignored \"-Wsign-compare\"
+#pragma GCC diagnostic ignored \"-Wtype-limits\"
+#pragma GCC diagnostic ignored \"-Wunused-variable\"
+#pragma GCC diagnostic ignored \"-Wunused-but-set-variable\"
+#endif
 typedef unsigned char _BYTE;
 typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef unsigned long long _QWORD;
 typedef unsigned __int128 _OWORD; typedef signed short __int16; typedef signed long long __int64;
@@ -18349,6 +20185,40 @@ mod tests {
     }
 
     #[test]
+    fn test_materialized_candidate_rejects_redefined_storage_before_consumer() {
+        // Collatz regression: a same-source materialized register (`c8`) was
+        // reused after a later `c8 = c8 & 1` parity assignment, turning
+        // `old_c8 >> 1` into `parity >> 1`. The materialized candidate is only
+        // valid until its visible storage is rewritten.
+        let mut ctx = super::PrintCtx::new(
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let old_c8 = SsaVarnode {
+            base: reg(80, 8),
+            version: 1,
+        };
+        let parity_c8 = SsaVarnode {
+            base: reg(80, 8),
+            version: 2,
+        };
+        ctx.stmt_outputs.insert(10, Some(old_c8));
+        ctx.stmt_outputs.insert(12, Some(parity_c8));
+
+        let stale = super::materialized_candidate_redefined_before_consumer(old_c8, 10, 20, &ctx);
+        assert_eq!(stale, Some((12, parity_c8)));
+
+        let still_valid =
+            super::materialized_candidate_redefined_before_consumer(old_c8, 10, 12, &ctx);
+        assert_eq!(still_valid, None);
+    }
+
+    #[test]
     fn test_prune_dead_plain_assignments_keeps_argument_register_repairs() {
         let output = concat!(
             "int f(void) {\n",
@@ -18861,6 +20731,105 @@ mod tests {
         assert!(
             !output.contains("int v1 = sub_2004();"),
             "shared merged name must not be redeclared: {output}",
+        );
+    }
+
+    #[test]
+    fn test_hoist_plan_rejects_loop_body_decl_read_by_do_while_condition() {
+        let u_cond = Varnode::unique(0x300, 4);
+        let u_cmp = Varnode::unique(0x301, 1);
+        let cond_sv = SsaVarnode {
+            base: u_cond,
+            version: 0,
+        };
+        let cmp_sv = SsaVarnode {
+            base: u_cmp,
+            version: 0,
+        };
+        let assign = IrInsn::with_output(IrOp::Copy, u_cond, smallvec![reg(0, 4)], 0x1000);
+        let cmp = IrInsn::with_output(
+            IrOp::IntNotequal,
+            u_cmp,
+            smallvec![u_cond, con(0, 4)],
+            0x1004,
+        );
+        let mut ctx = super::PrintCtx::new(
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+
+        ctx.var_names.insert(cond_sv, "v57".to_string());
+        ctx.var_names.insert(cmp_sv, "cond_9".to_string());
+        ctx.stmt_outputs.insert(10, Some(cond_sv));
+        ctx.stmt_outputs.insert(11, Some(cmp_sv));
+        ctx.stmt_inputs.insert(10, Vec::new());
+        ctx.stmt_inputs.insert(11, vec![cond_sv]);
+        ctx.stmt_insns.insert(10, assign);
+        ctx.stmt_insns.insert(11, cmp);
+        ctx.stmt_scope_paths.insert(10, vec![1]);
+        ctx.stmt_scope_paths.insert(11, vec![1]);
+        ctx.cond_use_stmts.push((cmp_sv, 11));
+        ctx.cond_use_scope_paths.push((cmp_sv, Vec::new()));
+        ctx.next_stmt = 12;
+
+        super::compute_hoist_plan(&mut ctx);
+
+        assert!(
+            !ctx.hoist_decl_plan.contains_key(&u_cond),
+            "do/while condition read outside the body must keep declaration at function scope"
+        );
+    }
+
+    #[test]
+    fn test_hoist_plan_rejects_shared_name_with_outer_scope_touch() {
+        let u_loop = Varnode::unique(0x310, 4);
+        let u_after = Varnode::unique(0x314, 4);
+        let loop_sv = SsaVarnode {
+            base: u_loop,
+            version: 0,
+        };
+        let after_sv = SsaVarnode {
+            base: u_after,
+            version: 0,
+        };
+        let mut ctx = super::PrintCtx::new(
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+
+        ctx.var_names.insert(loop_sv, "v29".to_string());
+        ctx.var_names.insert(after_sv, "v29".to_string());
+        ctx.stmt_outputs.insert(10, Some(loop_sv));
+        ctx.stmt_outputs.insert(11, Some(after_sv));
+        ctx.stmt_inputs.insert(10, Vec::new());
+        ctx.stmt_inputs.insert(11, Vec::new());
+        ctx.stmt_insns.insert(
+            10,
+            IrInsn::with_output(IrOp::Copy, u_loop, smallvec![reg(0, 4)], 0x1000),
+        );
+        ctx.stmt_insns.insert(
+            11,
+            IrInsn::with_output(IrOp::Copy, u_after, smallvec![reg(8, 4)], 0x1004),
+        );
+        ctx.stmt_scope_paths.insert(10, vec![1]);
+        ctx.stmt_scope_paths.insert(11, Vec::new());
+        ctx.next_stmt = 12;
+
+        super::compute_hoist_plan(&mut ctx);
+
+        assert!(
+            !ctx.hoist_decl_plan.contains_key(&u_loop),
+            "a shared source name touched at outer scope must not be declared inside an inner block"
         );
     }
 
@@ -20196,8 +22165,22 @@ mod tests {
 
         let output = super::print_c(&func);
         assert!(
-            output.contains("void __noreturn sub_f5300("),
-            "noreturn=true must emit '__noreturn' between return type and name: {output}",
+            output.contains("_Noreturn void sub_f5300("),
+            "noreturn=true must emit a standard C noreturn prefix: {output}",
+        );
+    }
+
+    #[test]
+    fn test_noreturn_annotation_suppressed_for_main() {
+        let mut func = make_func("main", vec![HirNode::Return(None)]);
+        func.noreturn = true;
+
+        let output = super::print_c(&func);
+
+        assert!(output.contains("int main(void)"), "{output}");
+        assert!(
+            !output.contains("_Noreturn int main"),
+            "main must not be declared noreturn under -Werror: {output}"
         );
     }
 
@@ -28492,6 +30475,80 @@ mod tests {
         assert!(
             output.contains("__readfsqword(0x28u)"),
             "expected Linux canary intrinsic: {output}"
+        );
+    }
+
+    #[test]
+    fn canary_stack_spill_reload_is_suppressed() {
+        use super::tests::{con, make_func, reg, sv};
+        let space = con(0, 8);
+        let fs_canary = con(0x28, 8);
+        let stack_slot = Varnode::stack(72, 8);
+        let guard = Varnode::unique(0x100, 8);
+        let saved = Varnode::unique(0x108, 8);
+        let current = Varnode::unique(0x110, 8);
+        let cmp = Varnode::unique(0x118, 1);
+        let ret = reg(0, 4);
+        let fail_addr = 0x401030;
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                guard,
+                smallvec![space, fs_canary],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![space, stack_slot, guard],
+                0x1001,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                ret,
+                smallvec![con(33, 4)],
+                0x1002,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                saved,
+                smallvec![space, stack_slot],
+                0x1003,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                current,
+                smallvec![space, fs_canary],
+                0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntNotequal,
+                cmp,
+                smallvec![saved, current],
+                0x1005,
+            )),
+            HirNode::If {
+                cond: sv(0x118, 1),
+                then_body: vec![HirNode::Statement(IrInsn::without_output(
+                    IrOp::Call,
+                    smallvec![con(fail_addr, 8)],
+                    0x1006,
+                ))],
+                else_body: None,
+            },
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("canary_slot", body);
+        let mut symbols = std::collections::BTreeMap::new();
+        symbols.insert(fail_addr, "__stack_chk_fail".to_string());
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+        assert!(output.contains("return 0x21;"), "missing return: {output}");
+        assert!(
+            !output.contains("v_72"),
+            "canary spill slot must not become a local: {output}"
+        );
+        assert!(
+            !output.contains("__stack_chk_fail"),
+            "canary fail branch should be suppressed: {output}"
         );
     }
 

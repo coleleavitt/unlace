@@ -349,6 +349,21 @@ impl LiftCtx {
         }
     }
 
+    pub fn prepare_partial_gpr_output(
+        &mut self,
+        insn: &Instruction,
+        idx: u32,
+        dst: Varnode,
+    ) -> (Varnode, Option<Varnode>) {
+        if insn.op_kind(idx) == OpKind::Register
+            && self.register_write_needs_fixup(insn.op_register(idx))
+        {
+            (Varnode::unique(self.alloc_unique(), dst.size), Some(dst))
+        } else {
+            (dst, None)
+        }
+    }
+
     pub fn finish_zero_extending_vector_output(
         &mut self,
         reg: Option<iced_x86::Register>,
@@ -368,6 +383,18 @@ impl LiftCtx {
             smallvec![value],
             self.addr,
         ));
+    }
+
+    pub fn finish_partial_gpr_output(
+        &mut self,
+        insn: &Instruction,
+        idx: u32,
+        dst: Option<Varnode>,
+        value: Varnode,
+    ) {
+        if let Some(dst) = dst {
+            self.write_operand_insn(insn, idx, dst, value);
+        }
     }
 
     pub fn register_write_needs_fixup(&self, reg: iced_x86::Register) -> bool {

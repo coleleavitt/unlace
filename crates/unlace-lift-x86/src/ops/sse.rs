@@ -452,12 +452,14 @@ pub fn lift_sse_extract(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, calloth
         ctx.emit_unimplemented();
         return;
     };
+    let (call_dst, partial_gpr_dst) = ctx.prepare_partial_gpr_output(insn, 0, dst);
     ctx.emit(IrInsn::with_output(
         IrOp::Callother,
-        dst,
+        call_dst,
         smallvec![tag_vn, src, imm],
         ctx.addr,
     ));
+    ctx.finish_partial_gpr_output(insn, 0, partial_gpr_dst, call_dst);
 }
 
 /// SSE4.2 packed string compare (PCMPESTRI / PCMPISTRI):
@@ -525,6 +527,7 @@ pub fn lift_vector_generic(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, call
             return;
         };
         let (copy_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
+        let (copy_dst, partial_gpr_dst) = ctx.prepare_partial_gpr_output(insn, 0, copy_dst);
         let src = ctx.resize_value(src, copy_dst.size);
         ctx.emit(IrInsn::with_output(
             IrOp::Copy,
@@ -533,6 +536,7 @@ pub fn lift_vector_generic(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, call
             ctx.addr,
         ));
         ctx.finish_zero_extending_vector_output(zero_ext_reg, copy_dst);
+        ctx.finish_partial_gpr_output(insn, 0, partial_gpr_dst, copy_dst);
         return;
     }
 
@@ -564,6 +568,7 @@ pub fn lift_vector_generic(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, call
         }
     }
     let (call_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
+    let (call_dst, partial_gpr_dst) = ctx.prepare_partial_gpr_output(insn, 0, call_dst);
     ctx.emit(IrInsn::with_output(
         IrOp::Callother,
         call_dst,
@@ -571,6 +576,7 @@ pub fn lift_vector_generic(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, call
         ctx.addr,
     ));
     ctx.finish_zero_extending_vector_output(zero_ext_reg, call_dst);
+    ctx.finish_partial_gpr_output(insn, 0, partial_gpr_dst, call_dst);
 }
 
 fn is_vector_move_tag(callother_tag: u64) -> bool {

@@ -1,0 +1,49 @@
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• I read the current docs. The authority order is: docs/current-parity-ledger-2026-05-30.md, then docs/status.md, then plan.md. Older parity docs are useful but stale in places.
+
+  What’s still missing, in practical order:
+
+  1. Quality/parity cleanup
+      - Style score is only ~84.9%, not real parity.
+      - Golden triage still has 13 review rows: 3 producer-bug, 10 mixed.
+      - No blanket golden refresh.
+
+  2. Type/lvar recovery
+      - Current type report is around 207/324, recall 63.9%, precision 19.1%, leaked temps 256.
+      - Main misses: optimized C/C++ params, locals, pointer targets, array bounds, struct refs, long-double/x87 types, and temp suppression.
+
+  3. DREAM/control-flow quality
+      - DREAM frontier is shipped; not missing.
+      - Remaining issue is quality: medium still has too many labels/gotos, currently around 75/51.
+      - Need real tail duplication / trace scheduling / abnormal-entry cleanup, no synthetic dispatcher.
+
+  4. Stack/frame provenance
+      - Stack access records exist, but loader/debug stack facts are not fully reconciled with heuristic stack recovery.
+      - Need better lvar-layer storage provenance instead of printer fallbacks.
+
+  5. FLIRT, debug types, symbol fluency
+      - FLIRT matcher pieces exist, but active CLI/library signature workflow is still not production.
+      - DWARF split .dwo/.dwp, v5 loclists/rnglists, full DW_OP location evaluation remain open.
+      - PDB is deeper than before, but full local/function metadata application is still not complete.
+
+  6. Loader/trust breadth
+      - ELF edge cases: relocations, IFUNC, TLS, GNU hash, compressed debug, core dumps, Android notes.
+      - PE: Authenticode/SHA-2 verification, resources, delay imports, CFG/CET, SEH depth.
+      - Mach-O/dyld mostly advanced, but per-subcache lookup/kernel-cache coverage still needs finishing.
+
+  7. Project/session/product model
+      - .unlace project core seems partially landed in code/docs, but public workflow is still not fully shipped.
+      - Missing: shared session API, xrefs, call graph, CFG graph, hex view APIs, SDK/plugin boundary, rename/comment/type workflows across CLI/UI.
+
+  8. User-facing surfaces
+      - IDAPython compatibility is fully open.
+      - TUI/GUI/Web are open.
+      - LSP has only skeleton-level pieces per the docs.
+
+  9. Release/ops
+      - SBOM exists, but reproducible xtask dist, signed artifacts, release manifest, public benchmark fixtures, and CI artifact flow are still open.
+
+  My read: the next best engineering slice is not more dumping. For decompiler parity, do Batch 17/18 work: stack provenance into lvars, interference/naming tests, leaked-temp suppression, then
+  use type-recovery-report to prove movement. For product parity, the keystone is the shared Session/project API because IDAPython, UI, LSP, web, debugger, and project persistence all depend on
+  it.

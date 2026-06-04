@@ -197,6 +197,33 @@ test. Rerun with appropriate approval/escalation.
 - Do not modify fixture binaries or fixture source unless the task explicitly is fixture generation.
 - Verify with focused crate tests first, then the relevant golden test, then workspace tests when the blast radius warrants it.
 
+### Measure, don't assume (decompiler-behavior changes)
+
+Decompiler behavior is emergent across many passes; static reading of one function
+routinely produces a *wrong* mental model (the `t61` design doc is a graveyard of
+~17 plausible-but-disproven hypotheses). Before changing producer/printer behavior,
+**instrument and measure** — do not act on an assumption about what the IR/SSA/names
+look like.
+
+- Reach for the env-gated traces first. The codebase is wired for this:
+  `UNLACE_REG_COALESCE_TRACE`(+`_FILTER`), `UNLACE_PART_DUMP`, `UNLACE_LATTICE_DUMP`,
+  `UNLACE_SEED_TRACE`, `UNLACE_VAR_NAMING_TRACE`, `UNLACE_TYPE_TRACE`,
+  `UNLACE_CALLING_TRACE`, `UNLACE_CFG_BUILD_TRACE`, `UNLACE_SPLIT_TRACE`,
+  `UNLACE_CPRINTER_STAGE_TRACE`/`_PRUNE_TRACE`/`_TRACE`, `UNLACE_LIFT_BOUNDS_TRACE`,
+  and `unlace ir-dump --function <f> <bin>`. Add a temporary `eprintln!`/env-gated
+  probe when no existing trace answers the question, measure, then act. Prefer a
+  permanent env-gated trace when the signal is reusable; revert one-off probes.
+- When stuck or behavior is surprising, add MORE tracing — confirm the actual
+  version→name map, lattice classes, partition webs, exit codes — rather than
+  reasoning forward from the C output (which lies about SSA structure).
+- Validate the real gate after every behavioral edit: `xtask semantic-report`
+  (exit-code parity), the focused crate tests, then whole-corpus byte-diff if output
+  could move. Treat a single-binary A/B env toggle (e.g. `UNLACE_T61_SPLIT_OFF`) as
+  the cheapest way to isolate a change's effect without a rebuild.
+- **Revert on any regression.** A measured no-win that returns to the clean baseline
+  (and a documented finding) beats a speculative edit that drops the gate. Never
+  land output that compiles-but-runs-wrong to make something "look" fixed.
+
 ## What Is Still Missing
 
 High-confidence backlog after reading the root docs, session dumps, and IDA

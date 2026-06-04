@@ -2621,6 +2621,19 @@ fn add_reported_function_facts(
     }
 
     for decl in reported_local_decls(text, signature) {
+        if decl.is_synthetic_register_temp() {
+            trace.line(
+                Some(fixture),
+                Some(&function.name),
+                format!(
+                    "synthetic_register_temp_skipped type={} name={} comment={}",
+                    decl.ty,
+                    decl.name,
+                    decl.comment.as_deref().unwrap_or("")
+                ),
+            );
+            continue;
+        }
         score.local_types.add_reported(1);
         score.local_names.add_reported(1);
         if is_generic_reported_lvar_name(&decl.name) {
@@ -2646,6 +2659,7 @@ struct ReportedParam {
 struct ReportedDecl {
     ty: String,
     name: String,
+    comment: Option<String>,
 }
 
 fn reported_return_type(signature: &str, function: &FunctionDebugInfo) -> Option<String> {
@@ -2722,7 +2736,12 @@ fn reported_local_decls(text: &str, signature: Option<&str>) -> Vec<ReportedDecl
 }
 
 fn parse_local_decl(line: &str) -> Option<ReportedDecl> {
-    let line = line.split_once("//").map_or(line, |(head, _)| head).trim();
+    let (line, comment) = line
+        .split_once("//")
+        .map_or((line, None), |(head, comment)| {
+            (head, Some(comment.trim().to_string()))
+        });
+    let line = line.trim();
     let line = line.strip_suffix(';')?.trim();
     if line.is_empty()
         || line.contains('=')
@@ -2735,7 +2754,103 @@ fn parse_local_decl(line: &str) -> Option<ReportedDecl> {
         return None;
     }
     let (ty, name) = split_type_and_name(line);
-    name.map(|name| ReportedDecl { ty, name })
+    name.map(|name| ReportedDecl { ty, name, comment })
+}
+
+impl ReportedDecl {
+    fn is_synthetic_register_temp(&self) -> bool {
+        is_generic_reported_lvar_name(&self.name)
+            && self
+                .comment
+                .as_deref()
+                .is_some_and(is_register_location_comment)
+    }
+}
+
+fn is_register_location_comment(comment: &str) -> bool {
+    let reg = comment.trim().trim_start_matches('$').to_ascii_lowercase();
+    if matches!(
+        reg.as_str(),
+        "ah" | "al"
+            | "ax"
+            | "bh"
+            | "bl"
+            | "bp"
+            | "bpl"
+            | "bx"
+            | "ch"
+            | "cl"
+            | "cs"
+            | "cx"
+            | "dh"
+            | "di"
+            | "dil"
+            | "dl"
+            | "ds"
+            | "dx"
+            | "eax"
+            | "ebp"
+            | "ebx"
+            | "ecx"
+            | "edi"
+            | "edx"
+            | "eip"
+            | "esi"
+            | "esp"
+            | "es"
+            | "fs"
+            | "gs"
+            | "ip"
+            | "pc"
+            | "rax"
+            | "rbp"
+            | "rbx"
+            | "rcx"
+            | "rdi"
+            | "rdx"
+            | "rip"
+            | "rsi"
+            | "rsp"
+            | "si"
+            | "sil"
+            | "sp"
+            | "spl"
+            | "ss"
+            | "lr"
+            | "ctr"
+            | "xer"
+            | "ca"
+            | "xzr"
+            | "wzr"
+    ) {
+        return true;
+    }
+    is_numbered_register(&reg)
+}
+
+fn is_numbered_register(reg: &str) -> bool {
+    for prefix in [
+        "xmm", "ymm", "zmm", "mm", "st", "cr", "dr", "r", "x", "w", "v", "q", "d", "s", "h", "b",
+        "f", "fr", "vr",
+    ] {
+        let Some(number) = reg.strip_prefix(prefix) else {
+            continue;
+        };
+        if !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()) {
+            return true;
+        }
+        if prefix == "r" {
+            for suffix in ["b", "w", "d"] {
+                let Some(number) = number.strip_suffix(suffix) else {
+                    continue;
+                };
+                if !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn is_generic_reported_lvar_name(name: &str) -> bool {
@@ -3108,6 +3223,42 @@ fn ranked_leaked_temp_functions(score: &TypeScore) -> Vec<(&str, &str, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn synthetic_register_temps_require_generic_name_and_register_comment() {
+        assert!(
+            ReportedDecl {
+                ty: "__int64".to_string(),
+                name: "v50".to_string(),
+                comment: Some("rax".to_string()),
+            }
+            .is_synthetic_register_temp()
+        );
+        assert!(
+            ReportedDecl {
+                ty: "int".to_string(),
+                name: "c3".to_string(),
+                comment: Some("r8d".to_string()),
+            }
+            .is_synthetic_register_temp()
+        );
+        assert!(
+            !ReportedDecl {
+                ty: "int".to_string(),
+                name: "v9".to_string(),
+                comment: Some("temp".to_string()),
+            }
+            .is_synthetic_register_temp()
+        );
+        assert!(
+            !ReportedDecl {
+                ty: "int".to_string(),
+                name: "counter".to_string(),
+                comment: Some("rax".to_string()),
+            }
+            .is_synthetic_register_temp()
+        );
+    }
 
     #[test]
     fn c_identifier_filter_rejects_demangled_cpp_names() {

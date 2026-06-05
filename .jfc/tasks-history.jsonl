@@ -18,3 +18,29 @@
 {"id":"t6","subject":"Model full vs partial ABI call clobbers","status":"completed","created_at_ms":1779891200002,"archived_at_ms":1780519472007}
 {"id":"t7","subject":"Add post-SSA lvar lane split/coalesce diagnostics","status":"completed","created_at_ms":1779891200003,"archived_at_ms":1780519472007}
 {"id":"t8","subject":"Add register-alias semantic suite beside DWARF scoring","status":"completed","created_at_ms":1779891200004,"archived_at_ms":1780519472007}
+{"id":"t10","subject":"Run verification gates","status":"completed","created_at_ms":1779939266775,"archived_at_ms":1780666364582}
+{"id":"t11","subject":"Fix cross-scope backedge deletion in label_cleanup","status":"completed","created_at_ms":1779939266775,"archived_at_ms":1780666364582}
+{"id":"t12","subject":"Add label_cleanup unit tests for outer-scope goto preservation","status":"completed","created_at_ms":1779939266776,"archived_at_ms":1780666364582}
+{"id":"t13","subject":"Run determinism lint (Gate 5)","status":"completed","created_at_ms":1779998892706,"archived_at_ms":1780666364582}
+{"id":"t14","subject":"Run workspace tests (Gate 3)","status":"completed","created_at_ms":1779998892706,"archived_at_ms":1780666364582}
+{"id":"t15","subject":"Run parity score (Gate 4)","status":"completed","created_at_ms":1779998892706,"archived_at_ms":1780666364582}
+{"id":"t16","subject":"Run unlace-struct lib tests (Gate 1)","status":"completed","created_at_ms":1779998892706,"archived_at_ms":1780666364582}
+{"id":"t17","subject":"Research irreducible-loop / goto cleanup academic context","status":"completed","created_at_ms":1779998892706,"archived_at_ms":1780666364582}
+{"id":"t18","subject":"Add unit tests for scope-aware backedge cleanup","status":"completed","created_at_ms":1779998892706,"archived_at_ms":1780666364582}
+{"id":"t19","subject":"Apply Phase 1 patch to remove_same_scope_backedges","status":"completed","created_at_ms":1779998892706,"archived_at_ms":1780666364582}
+{"id":"t20","subject":"Read label_cleanup.rs end-to-end","status":"completed","created_at_ms":1779998892706,"archived_at_ms":1780666364582}
+{"id":"t21","subject":"Mine prior codex/opencode sessions for label_cleanup / irreducible context","status":"completed","created_at_ms":1779998892707,"archived_at_ms":1780666364582}
+{"id":"t22","subject":"Run semantic-report (Gate 2)","status":"completed","created_at_ms":1779998892707,"archived_at_ms":1780666364582}
+{"id":"t23","subject":"Commit + push Phase 1 fix","status":"completed","created_at_ms":1779998892707,"archived_at_ms":1780666364582}
+{"id":"t24","subject":"Regenerate goldens if needed and update CLAUDE.md §15","status":"completed","created_at_ms":1779998892707,"archived_at_ms":1780666364582}
+{"id":"t25","subject":"Summarize assessment + still-missing list","status":"completed","created_at_ms":1780026622342,"archived_at_ms":1780666364582}
+{"id":"t26","subject":"Refresh OWORD/SSE-prelude-only goldens (12-14 fixtures)","status":"completed","created_at_ms":1780026622342,"archived_at_ms":1780666364582}
+{"id":"t27","subject":"Fix clippy -D warnings: &mut Vec → &mut [T] in goto_elim.rs","status":"completed","created_at_ms":1780026622343,"archived_at_ms":1780666364582}
+{"id":"t28","subject":"Diagnose medium.elf regression (2610 lines vs 460 expected)","status":"completed","created_at_ms":1780026622343,"archived_at_ms":1780666364582}
+{"id":"t29","subject":"Commit + push + final verification sweep","status":"completed","created_at_ms":1780056297618,"archived_at_ms":1780666364582}
+{"id":"t30","subject":"Update CLAUDE.md + docs/status.md + rebaseline doc with current verified state","status":"completed","created_at_ms":1780056297618,"archived_at_ms":1780666364582}
+{"id":"t31","subject":"Audit each of 14 \"prelude-only\" golden diffs body-equivalent","status":"completed","created_at_ms":1780056297618,"archived_at_ms":1780666364582}
+{"id":"t32","subject":"Fix baseline_branches/baseline_loops stale helper return counters","status":"completed","created_at_ms":1780056297618,"archived_at_ms":1780666364582}
+{"id":"t33","subject":"Diagnose + fix 20 c_printer unit test failures","status":"completed","created_at_ms":1780056297618,"archived_at_ms":1780666364582}
+{"id":"t34","subject":"Fix sum_for placeholder condition loop regression","status":"completed","created_at_ms":1780056297619,"archived_at_ms":1780666364582}
+{"id":"t35","subject":"Fix medium.elf 2610 vs 460 lvar blowup","status":"completed","created_at_ms":1780056297619,"archived_at_ms":1780666364582}

@@ -59,8 +59,10 @@ use iced_x86::{Decoder, DecoderOptions, FlowControl};
 
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::ssa::VarnodeSlot;
-use unlace_ir::ssa::{Maturity, PrimitiveType, SsaVarnode};
-use unlace_ir::types::{StructFieldType, Type};
+use unlace_ir::ssa::{Maturity, PendingDwarfLocal, PrimitiveType, SsaVarnode};
+#[cfg(test)]
+use unlace_ir::types::StructFieldType;
+use unlace_ir::types::Type;
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId, Varnode};
 use unlace_loader::{BinaryImage, DwarfInfo, Endian, FlirtDb, Section, SectionFlags, SymbolKind};
 use unlace_passes::{
@@ -2154,9 +2156,151 @@ fn pipeline_stage_structural(ssa: &mut SsaFunction) -> Result<(), unlace_passes:
     run_instrumented(&TailCallDetectPass, ssa)?;
     run_instrumented(&StackPointerTrackingPass, ssa)?;
     run_instrumented(&StackVarRecoveryPass, ssa)?;
+    // Calibrate the CFA-relative DWARF local/param offsets onto the real
+    // resolved stack slots now that `stack_offset_hints` / `stack_vars`
+    // expose the offsets the decompiler observes. This re-keys
+    // `dwarf_local_names` and seeds `composite_var_types` together so name
+    // and type land on the same slot (avoiding the historical desync).
+    calibrate_dwarf_offsets(ssa);
     ssa.stack_frame = Some(recover_stack_frame(ssa));
     run_instrumented(&StackPointerTrackingPass, ssa)?;
     Ok(())
+}
+
+/// Empirically pick the per-function CFA→resolved delta and re-key the staged
+/// DWARF local/param records onto the resolved stack slots.
+///
+/// The candidate set is `{0, cfa_to_rbp_delta}` where `cfa_to_rbp_delta` is
+/// the constant offset of the function's `CFA = RBP + offset` `.eh_frame`
+/// rule (only present for frame-pointer functions). The delta that lands the
+/// most DWARF offsets onto observed stack offsets wins, but a nonzero delta
+/// is only accepted when it corroborates at least two DWARF offsets AND
+/// strictly beats the zero-shift count — so no-frame-pointer / leaf functions
+/// (whose accesses don't corroborate `+16`) are never shifted. This is the
+/// measured equivalent of the `+16` for FP functions and `0` otherwise.
+fn calibrate_dwarf_offsets(ssa: &mut SsaFunction) {
+    if ssa.pending_dwarf_locals.is_empty() {
+        return;
+    }
+
+    // Observed offset universe: every resolved stack offset the decompiler
+    // tracked (LOAD/STORE hints + recovered stack vars).
+    let mut observed: BTreeSet<i64> = ssa.stack_offset_hints.values().copied().collect();
+    observed.extend(ssa.stack_vars.keys().copied());
+
+    // The single per-function candidate delta from CFI (if any).
+    let cfi_delta = ssa
+        .pending_dwarf_locals
+        .iter()
+        .find_map(|p| p.cfa_to_rbp_delta)
+        .filter(|d| *d != 0);
+
+    let raw_offsets: Vec<i64> = ssa
+        .pending_dwarf_locals
+        .iter()
+        .map(|p| p.frame_offset)
+        .collect();
+
+    let count_matches = |delta: i64| -> usize {
+        raw_offsets
+            .iter()
+            .filter(|&&off| observed.contains(&(off + delta)))
+            .count()
+    };
+
+    let zero_matches = count_matches(0);
+    let delta = match cfi_delta {
+        Some(d) => {
+            let d_matches = count_matches(d);
+            // Accept the CFI delta only when it is corroborated by ≥2 real
+            // accesses and strictly improves on leaving the offsets alone.
+            if d_matches >= 2 && d_matches > zero_matches {
+                d
+            } else {
+                0
+            }
+        }
+        None => 0,
+    };
+
+    let trace = dwarf_map_trace_enabled();
+    if trace {
+        eprintln!(
+            "[unlace dwarf-map] calibrate func={} cfi_delta={:?} zero_matches={} chosen_delta={} pending={}",
+            ssa.function.name,
+            cfi_delta,
+            zero_matches,
+            delta,
+            ssa.pending_dwarf_locals.len(),
+        );
+    }
+
+    if delta == 0 {
+        return;
+    }
+
+    // Re-key dwarf_local_names by the chosen delta. Build a fresh map so a
+    // shifted key cannot collide with an as-yet-unshifted one.
+    //
+    // Two record classes are deliberately NOT shifted onto resolved slots:
+    //
+    //   * Aggregate (struct/union/array) locals — naming them as scalars
+    //     de-fuses a coalesced byte buffer (e.g. `char p[36]`) into
+    //     mistyped scalars whose int-constant field stores fail to compile
+    //     or alter behavior (the `type_stack_o2` canary). We instead keep
+    //     their RAW (uncalibrated) entry so the downstream buffer fusion
+    //     behaves exactly as at baseline.
+    //
+    //   * Parameter home slots — a spilled-arg slot that shadows an incoming
+    //     register parameter must be suppressed, not declared as a local
+    //     (otherwise `int x; x = x;`). Their raw entry is also preserved to
+    //     match baseline.
+    let mut calibrated: BTreeMap<i64, String> = BTreeMap::new();
+    let mut aggregate_offsets: BTreeSet<i64> = BTreeSet::new();
+    for pending in &ssa.pending_dwarf_locals {
+        if pending.name.is_empty() {
+            continue;
+        }
+        // Parameter home slots are never added to dwarf_local_names (baseline
+        // seeded locals only); suppression of the duplicate home slot is
+        // handled separately.
+        if pending.is_param {
+            continue;
+        }
+        if pending.is_aggregate {
+            // Preserve the baseline raw seed so buffer fusion / phantom
+            // seeding is unchanged for these slots. Record the offset so the
+            // array-fusion guard allows aggregate-named slots to coalesce.
+            calibrated
+                .entry(pending.frame_offset)
+                .or_insert_with(|| pending.name.clone());
+            aggregate_offsets.insert(pending.frame_offset);
+            continue;
+        }
+        let key = pending.frame_offset + delta;
+        // Only relocate names that actually land on an observed slot; a
+        // record whose shifted offset is unobserved keeps out of the map so
+        // we never invent a name on an empty slot.
+        if observed.contains(&key) {
+            calibrated
+                .entry(key)
+                .or_insert_with(|| pending.name.clone());
+            if trace {
+                eprintln!(
+                    "[unlace dwarf-map]   name raw={} -> resolved={} name={}",
+                    pending.frame_offset, key, pending.name
+                );
+            }
+        }
+    }
+    ssa.dwarf_local_names = calibrated;
+    ssa.dwarf_aggregate_offsets = aggregate_offsets;
+}
+
+fn dwarf_map_trace_enabled() -> bool {
+    std::env::var_os("UNLACE_DWARF_MAP_TRACE")
+        .map(|v| v != "0")
+        .unwrap_or(false)
 }
 
 /// Stage 4 (M_CALLS): indirect call resolution + vtable detection.
@@ -2308,6 +2452,13 @@ fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, entry: &Function
         return;
     };
 
+    let cfa_delta = debug_func.cfa_to_rbp_delta;
+
+    // Seed the raw (uncalibrated) name map. Keys are CFA-relative; the
+    // structural-stage calibration step rewrites them onto the resolved
+    // stack slots using `cfa_delta` once real access offsets are known.
+    // We keep seeding here so any consumer that runs before calibration
+    // (and the no-frame-pointer / no-delta path) still sees the raw name.
     for local in &debug_func.locals {
         let Some(frame_offset) = local.frame_offset else {
             continue;
@@ -2316,18 +2467,65 @@ fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, entry: &Function
             .entry(frame_offset)
             .or_insert_with(|| local.name.clone());
 
-        let Some(type_name) = local.type_name.as_deref() else {
-            continue;
-        };
-        let Some(dwarf_type) = dwarf_type_to_ssa_type(type_name, dwarf) else {
-            continue;
-        };
-        for base in stack_bases_for_frame_offset(ssa, frame_offset) {
-            ssa.composite_var_types
-                .entry(base)
-                .or_insert_with(|| dwarf_type.clone());
-        }
+        let is_aggregate = local
+            .type_name
+            .as_deref()
+            .is_some_and(|tn| dwarf_type_is_aggregate(tn, dwarf));
+        ssa.pending_dwarf_locals.push(PendingDwarfLocal {
+            frame_offset,
+            name: local.name.clone(),
+            cfa_to_rbp_delta: cfa_delta,
+            is_aggregate,
+            is_param: false,
+        });
     }
+
+    // Stage spilled-parameter home slots so calibration can reason about
+    // them. We intentionally do NOT add the param name to
+    // `dwarf_local_names` here (that is gated below in calibration via
+    // `is_param`): a home-slot local that shadows an incoming register
+    // parameter must be SUPPRESSED, not declared (otherwise `int x; x = x;`).
+    for param in &debug_func.params {
+        let Some(frame_offset) = param.frame_offset else {
+            continue;
+        };
+        let is_aggregate = param
+            .type_name
+            .as_deref()
+            .is_some_and(|tn| dwarf_type_is_aggregate(tn, dwarf));
+        ssa.pending_dwarf_locals.push(PendingDwarfLocal {
+            frame_offset,
+            name: param.name.clone().unwrap_or_default(),
+            cfa_to_rbp_delta: cfa_delta,
+            is_aggregate,
+            is_param: true,
+        });
+    }
+}
+
+/// `true` when the DWARF `type_name` denotes a struct / union / array
+/// aggregate that the scalar decl + body-store emitter cannot yet render
+/// faithfully. Such locals are excluded from name calibration so a coalesced
+/// byte buffer is not de-fused into mistyped scalars (the `type_stack_o2`
+/// canary). Detected from array `[` syntax and known struct/union names.
+fn dwarf_type_is_aggregate(type_name: &str, dwarf: &DwarfInfo) -> bool {
+    let normalized = normalize_dwarf_type_name(type_name);
+    let trimmed = normalized.trim();
+    // Pointer to an aggregate is still a pointer-sized scalar slot — fine to
+    // name. Only bare aggregates (no `*`) are problematic.
+    if trimmed.contains('*') {
+        return false;
+    }
+    if trimmed.contains('[') {
+        return true;
+    }
+    let base = trimmed
+        .strip_prefix("struct ")
+        .or_else(|| trimmed.strip_prefix("union "))
+        .or_else(|| trimmed.strip_prefix("class "))
+        .unwrap_or(trimmed)
+        .trim();
+    dwarf.structs.contains_key(base) || dwarf.unions.contains_key(base)
 }
 
 fn dwarf_function_for_entry<'a>(
@@ -2427,18 +2625,6 @@ fn stack_offset_matches(raw_offset: u64, frame_offset: i64) -> bool {
     raw_offset as i64 == frame_offset || raw_offset == frame_offset.unsigned_abs()
 }
 
-fn dwarf_type_to_ssa_type(type_name: &str, dwarf: &DwarfInfo) -> Option<Type> {
-    let normalized = normalize_dwarf_type_name(type_name);
-    let pointer_depth = normalized.matches('*').count();
-    let base_name = normalized.replace('*', " ");
-    let base_name = base_name.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut ty = dwarf_base_type_to_ssa(&base_name, dwarf)?;
-    for _ in 0..pointer_depth {
-        ty = Type::Ptr(Box::new(ty));
-    }
-    Some(ty)
-}
-
 fn normalize_dwarf_type_name(type_name: &str) -> String {
     type_name
         .trim()
@@ -2446,47 +2632,6 @@ fn normalize_dwarf_type_name(type_name: &str) -> String {
         .replace("volatile ", "")
         .replace("restrict ", "")
         .replace("typedef ", "")
-}
-
-fn dwarf_base_type_to_ssa(base_name: &str, dwarf: &DwarfInfo) -> Option<Type> {
-    let struct_name = base_name.strip_prefix("struct ").unwrap_or(base_name);
-    if let Some(struct_type) = dwarf.structs.get(struct_name) {
-        return Some(Type::Struct {
-            name: struct_type.name.clone(),
-            fields: struct_type
-                .fields
-                .iter()
-                .filter_map(|field| {
-                    dwarf_type_to_ssa_type(&field.type_name, dwarf).map(|ty| StructFieldType {
-                        name: field.name.clone(),
-                        offset: field.offset,
-                        ty,
-                    })
-                })
-                .collect(),
-        });
-    }
-
-    let primitive = match base_name {
-        "_Bool" | "bool" => PrimitiveType::Bool,
-        "char" | "signed char" | "unsigned char" => PrimitiveType::Int(1),
-        "short" | "short int" | "signed short" | "signed short int" | "unsigned short"
-        | "unsigned short int" => PrimitiveType::Int(2),
-        "int" | "signed int" | "unsigned int" => PrimitiveType::Int(4),
-        "long" | "long int" | "signed long" | "signed long int" | "unsigned long"
-        | "unsigned long int" => PrimitiveType::Int(8),
-        "long long"
-        | "long long int"
-        | "signed long long"
-        | "signed long long int"
-        | "unsigned long long"
-        | "unsigned long long int" => PrimitiveType::Int(8),
-        "float" => PrimitiveType::Float,
-        "double" => PrimitiveType::Double,
-        "void" => return None,
-        _ => return None,
-    };
-    Some(Type::Primitive(primitive))
 }
 
 pub fn ir_node_count(ssa: &SsaFunction) -> usize {
@@ -6077,5 +6222,92 @@ mod tests {
             out.contains("int main") || out.contains("void main") || out.contains("main("),
             "lazy decompile must render the function header; got: {out}",
         );
+    }
+
+    fn ssa_with_pending(pending: Vec<PendingDwarfLocal>, observed: &[i64]) -> SsaFunction {
+        let mut func = Function::new("calib", BlockId(0), 0x1000);
+        func.insert_block(BasicBlock::new(BlockId(0)));
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+        ssa.pending_dwarf_locals = pending;
+        for (i, &off) in observed.iter().enumerate() {
+            ssa.stack_offset_hints.insert((BlockId(0), i), off);
+        }
+        ssa
+    }
+
+    fn pending(frame_offset: i64, name: &str, delta: Option<i64>, agg: bool) -> PendingDwarfLocal {
+        PendingDwarfLocal {
+            frame_offset,
+            name: name.to_string(),
+            cfa_to_rbp_delta: delta,
+            is_aggregate: agg,
+            is_param: false,
+        }
+    }
+
+    #[test]
+    fn calibrate_shifts_fp_function_by_cfi_delta() {
+        // Two locals at raw CFA offsets -20/-16; the real RBP slots (observed)
+        // are +16 away at -4/0. The CFI delta is +16 and corroborated by both,
+        // so calibration relocates the names onto the resolved slots.
+        let mut ssa = ssa_with_pending(
+            vec![
+                pending(-20, "a", Some(16), false),
+                pending(-16, "b", Some(16), false),
+            ],
+            &[-4, 0],
+        );
+        super::calibrate_dwarf_offsets(&mut ssa);
+        assert_eq!(
+            ssa.dwarf_local_names.get(&-4).map(String::as_str),
+            Some("a")
+        );
+        assert_eq!(ssa.dwarf_local_names.get(&0).map(String::as_str), Some("b"));
+        assert!(!ssa.dwarf_local_names.contains_key(&-20));
+    }
+
+    #[test]
+    fn calibrate_declines_uncorroborated_delta() {
+        // The CFI delta is +16 but only the raw offsets are observed (the
+        // shifted ones are not), so the shift is not corroborated → no shift.
+        let mut ssa = ssa_with_pending(
+            vec![
+                pending(-20, "a", Some(16), false),
+                pending(-16, "b", Some(16), false),
+            ],
+            &[-20, -16],
+        );
+        super::calibrate_dwarf_offsets(&mut ssa);
+        // delta=0 leaves the raw seed untouched.
+        assert!(ssa.dwarf_local_names.is_empty() || ssa.dwarf_local_names.contains_key(&-20));
+        assert!(!ssa.dwarf_local_names.contains_key(&-4));
+    }
+
+    #[test]
+    fn calibrate_keeps_aggregate_at_raw_offset() {
+        // An aggregate local must keep its RAW offset entry (so buffer fusion
+        // is unchanged) and be recorded in dwarf_aggregate_offsets, even when
+        // the function is otherwise shifted by the CFI delta.
+        let mut ssa = ssa_with_pending(
+            vec![
+                pending(-20, "a", Some(16), false),
+                pending(-16, "b", Some(16), false),
+                pending(-48, "p", Some(16), true),
+            ],
+            &[-4, 0],
+        );
+        super::calibrate_dwarf_offsets(&mut ssa);
+        assert_eq!(
+            ssa.dwarf_local_names.get(&-4).map(String::as_str),
+            Some("a")
+        );
+        assert_eq!(ssa.dwarf_local_names.get(&0).map(String::as_str), Some("b"));
+        // Aggregate keeps its RAW offset entry (buffer fusion unchanged).
+        assert_eq!(
+            ssa.dwarf_local_names.get(&-48).map(String::as_str),
+            Some("p")
+        );
+        assert!(ssa.dwarf_aggregate_offsets.contains(&-48));
     }
 }

@@ -135,6 +135,11 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
         expected_failure: None,
     },
     SemanticCase {
+        fixture: "debug_medium",
+        function: "main",
+        expected_failure: None,
+    },
+    SemanticCase {
         fixture: "stripped",
         function: "main",
         expected_failure: None,

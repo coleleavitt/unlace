@@ -318,6 +318,8 @@ mod tests {
             frame_setup_insns: BTreeSet::new(),
             stack_offset_hints: BTreeMap::new(),
             dwarf_local_names: BTreeMap::new(),
+            dwarf_aggregate_offsets: BTreeSet::new(),
+            pending_dwarf_locals: Vec::new(),
             inferred_structs: BTreeMap::new(),
             composite_var_types: BTreeMap::new(),
             array_strides: BTreeMap::new(),

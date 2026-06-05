@@ -1,5 +1,5 @@
 {
-  "next_id": 77,
+  "next_id": 80,
   "tasks": {
     "t57": {
       "id": "t57",
@@ -256,6 +256,15 @@
       "acceptance_criteria": "Every prioritized paper has either a direct PDF URL or an explicit note that no accessible PDF was found.",
       "risk": "low",
       "priority": 1
+    },
+    "t78": {
+      "id": "t78",
+      "subject": "Compile, then git diff/stage/commit/push",
+      "description": "cargo check workspace, review diff, commit and push",
+      "status": "pending",
+      "blocks": [],
+      "blockedBy": [],
+      "created_at_ms": 1780666495361
     },
     "t55": {
       "id": "t55",
@@ -521,6 +530,24 @@
         "deep"
       ],
       "effort": "high"
+    },
+    "t79": {
+      "id": "t79",
+      "subject": "Rsync changed Rust code over",
+      "description": "Copy remote changes into local tree with rsync",
+      "status": "completed",
+      "blocks": [],
+      "blockedBy": [],
+      "created_at_ms": 1780666495361
+    },
+    "t80": {
+      "id": "t80",
+      "subject": "Compare chat-aws:~/unlace Rust code vs local",
+      "description": "Dry-run rsync diff of remote rust sources against local working tree",
+      "status": "completed",
+      "blocks": [],
+      "blockedBy": [],
+      "created_at_ms": 1780666495362
     },
     "t49": {
       "id": "t49",

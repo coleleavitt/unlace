@@ -1148,6 +1148,7 @@ fn source_truth_from_function_names(names: BTreeSet<String>) -> DwarfInfo {
                 return_type: Some("void".to_string()),
                 decl: None,
                 locals: Vec::new(),
+                cfa_to_rbp_delta: None,
             },
         );
     }
@@ -1343,6 +1344,7 @@ fn parse_source_functions(
                     return_type: Some(return_type),
                     decl: None,
                     locals,
+                    cfa_to_rbp_delta: None,
                 },
             );
         }
@@ -1418,6 +1420,7 @@ fn parse_methods_in_struct_body(
                 ParameterInfo {
                     name: Some("this".to_string()),
                     type_name: Some(format!("{struct_name} *")),
+                    frame_offset: None,
                 },
             );
             let locals = parse_source_locals(&body[open + 1..close], composite_names);
@@ -1432,6 +1435,7 @@ fn parse_methods_in_struct_body(
                 return_type: Some(return_type),
                 decl: None,
                 locals,
+                cfa_to_rbp_delta: None,
             });
         }
         idx = close + 1;
@@ -1533,6 +1537,7 @@ fn parse_source_params(params_text: &str) -> Vec<ParameterInfo> {
             Some(ParameterInfo {
                 name,
                 type_name: Some(clean_source_type(&ty)),
+                frame_offset: None,
             })
         })
         .collect()
@@ -3641,6 +3646,7 @@ mod tests {
             return_type: None,
             decl: None,
             locals: Vec::new(),
+            cfa_to_rbp_delta: None,
         };
         let composite = BTreeSet::new();
         let trace = TypeTrace::disabled();
@@ -3705,6 +3711,7 @@ mod tests {
             return_type: Some("int".to_string()),
             decl: None,
             locals: Vec::new(),
+            cfa_to_rbp_delta: None,
         };
         assert!(signature_return_matches(
             "int __noreturn main(void)",
@@ -3730,6 +3737,7 @@ mod tests {
             return_type: Some("int".to_string()),
             decl: None,
             locals: Vec::new(),
+            cfa_to_rbp_delta: None,
         };
         let text = "int addT<int>(int a, int b) {";
         assert_eq!(
@@ -3750,15 +3758,18 @@ mod tests {
                 ParameterInfo {
                     name: Some("len".to_string()),
                     type_name: Some("int".to_string()),
+                    frame_offset: None,
                 },
                 ParameterInfo {
                     name: Some("values".to_string()),
                     type_name: Some("long *".to_string()),
+                    frame_offset: None,
                 },
             ],
             return_type: Some("int".to_string()),
             decl: None,
             locals: Vec::new(),
+            cfa_to_rbp_delta: None,
         };
 
         let signature = "int sum(int a1, __int64 *a2)";
@@ -3867,6 +3878,7 @@ mod tests {
             return_type: None,
             decl: None,
             locals: Vec::new(),
+            cfa_to_rbp_delta: None,
         };
         let free_function = FunctionDebugInfo {
             name: "use_base".to_string(),
@@ -3878,6 +3890,7 @@ mod tests {
             return_type: None,
             decl: None,
             locals: Vec::new(),
+            cfa_to_rbp_delta: None,
         };
 
         assert_eq!(

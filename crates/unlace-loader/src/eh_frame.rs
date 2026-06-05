@@ -26,6 +26,26 @@ pub struct FunctionExtent {
     pub end: u64,
 }
 
+/// The canonical-frame-address (CFA) rule observed in a function body,
+/// derived from the `.eh_frame` unwind table.
+///
+/// On x86-64 SysV a frame-pointer function settles to `CFA = RBP + 16`
+/// (register 6, offset 16) inside its body, while a no-frame-pointer /
+/// leaf function stays at the CIE default `CFA = RSP + 8` (register 7).
+/// Recording the raw `(register, offset)` lets the pipeline compute the
+/// per-function delta between DWARF `DW_OP_fbreg` offsets (which are
+/// CFA-relative because `DW_AT_frame_base = DW_OP_call_frame_cfa`) and the
+/// RBP/RSP-relative offsets the decompiler resolves stack accesses to,
+/// WITHOUT hardcoding a magic `+16`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CfaRuleInfo {
+    /// DWARF register number that the CFA is relative to (6 = RBP, 7 = RSP
+    /// on x86-64 SysV).
+    pub reg: u16,
+    /// Constant offset from the register's value to the CFA.
+    pub offset: i64,
+}
+
 /// An LSDA pointer associated with a function, indicating potential exception
 /// handling / landing pad data for that function range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -44,6 +64,11 @@ pub struct EhFrameInfo {
     pub function_extents: BTreeMap<u64, FunctionExtent>,
     /// LSDA entries for functions that have language-specific exception data.
     pub lsda_entries: Vec<LsdaEntry>,
+    /// Steady-state CFA rule observed inside each function body, keyed by the
+    /// function's start address. Populated from the unwind table at a PC past
+    /// the prologue. Absent when the rule could not be resolved (e.g. opaque
+    /// `DW_CFA_def_cfa_expression` thunks).
+    pub cfa_rules: BTreeMap<u64, CfaRuleInfo>,
 }
 
 impl EhFrameInfo {
@@ -52,6 +77,7 @@ impl EhFrameInfo {
         Self {
             function_extents: BTreeMap::new(),
             lsda_entries: Vec::new(),
+            cfa_rules: BTreeMap::new(),
         }
     }
 
@@ -107,9 +133,14 @@ fn parse_eh_frame_raw(
 ) -> Result<EhFrameInfo, LoadError> {
     let mut function_extents = BTreeMap::new();
     let mut lsda_entries = Vec::new();
+    let mut cfa_rules = BTreeMap::new();
 
     // CIE cache keyed by section offset (usize) since EhFrameOffset lacks Ord.
     let mut cie_cache: BTreeMap<usize, gimli::CommonInformationEntry<R<'_>>> = BTreeMap::new();
+
+    // Reused across all FDEs; the unwind context is heap-backed and is reset
+    // internally by each `unwind_info_for_address` call.
+    let mut unwind_ctx = gimli::UnwindContext::new();
 
     let mut entries = eh_frame.entries(bases);
     loop {
@@ -164,6 +195,19 @@ fn parse_eh_frame_raw(
                         function_start: start,
                     });
                 }
+
+                // Derive the steady-state CFA rule by walking every unwind
+                // table row for this FDE and preferring the frame-pointer
+                // (RBP, reg 6) rule when one appears anywhere in the body. A
+                // single probe PC is fragile: `high_pc - 1` lands in the
+                // epilogue after `pop rbp`, where the rule has been restored
+                // to RSP. Scanning rows captures the in-body
+                // `def_cfa_register rbp` rule for FP functions while leaving
+                // leaf / no-FP functions at the CIE default (RSP). Errors and
+                // opaque `DW_CFA_def_cfa_expression` rules are skipped.
+                if let Some(rule) = derive_cfa_rule(eh_frame, bases, &mut unwind_ctx, &fde) {
+                    cfa_rules.insert(start, rule);
+                }
             }
         }
     }
@@ -173,7 +217,44 @@ fn parse_eh_frame_raw(
     Ok(EhFrameInfo {
         function_extents,
         lsda_entries,
+        cfa_rules,
     })
+}
+
+/// DWARF register number of the frame pointer (RBP) on x86-64 SysV. Used to
+/// prefer the in-body frame-pointer CFA rule when scanning unwind rows.
+const X86_64_DWARF_RBP_REG: u16 = 6;
+
+/// Walk every unwind-table row for `fde` and translate the most
+/// representative CFA rule into a [`CfaRuleInfo`].
+///
+/// The frame-pointer (RBP) rule is preferred when any body row establishes
+/// it, since that is the steady-state rule a frame-pointer function uses to
+/// resolve `DW_OP_fbreg` slots. When no RBP rule appears, the last
+/// register-relative rule (the CIE default, typically `RSP + 8`) is returned.
+/// Returns `None` for opaque expression rules / unresolvable tables.
+fn derive_cfa_rule(
+    eh_frame: &gimli::EhFrame<R<'_>>,
+    bases: &BaseAddresses,
+    ctx: &mut gimli::UnwindContext<usize>,
+    fde: &gimli::FrameDescriptionEntry<R<'_>, usize>,
+) -> Option<CfaRuleInfo> {
+    let mut table = gimli::UnwindTable::new(eh_frame, bases, ctx, fde).ok()?;
+    let mut fallback: Option<CfaRuleInfo> = None;
+    while let Ok(Some(row)) = table.next_row() {
+        if let gimli::CfaRule::RegisterAndOffset { register, offset } = row.cfa() {
+            let info = CfaRuleInfo {
+                reg: register.0,
+                offset: *offset,
+            };
+            if register.0 == X86_64_DWARF_RBP_REG {
+                // Frame-pointer rule found — this is the body steady state.
+                return Some(info);
+            }
+            fallback = Some(info);
+        }
+    }
+    fallback
 }
 
 #[cfg(test)]
@@ -350,6 +431,45 @@ mod tests {
             assert!(
                 window[0] < window[1],
                 "function extents should be sorted by start address",
+            );
+        }
+    }
+
+    #[test]
+    fn test_cfa_rule_frame_pointer_function_is_rbp_plus_16() {
+        // debug_calls.elf:compute is a textbook x86-64 SysV frame-pointer
+        // function — its `.eh_frame` body rule is `CFA = RBP(reg 6) + 16`.
+        let path = "../../fixtures/debug_calls.elf";
+        let Ok(data) = std::fs::read(path) else {
+            return; // fixture optional in minimal checkouts
+        };
+        let img = ElfLoader::load(&data).expect("parse debug_calls.elf");
+        let info = parse_eh_frame(&img).expect("parse .eh_frame");
+        // compute() lives at 0x1238.
+        let rule = info
+            .cfa_rules
+            .get(&0x1238)
+            .expect("compute should have a CFA rule");
+        assert_eq!(rule.reg, 6, "compute is a frame-pointer function (RBP=6)");
+        assert_eq!(rule.offset, 16, "GCC body rule is CFA = RBP + 16");
+    }
+
+    #[test]
+    fn test_cfa_rule_leaf_function_stays_rsp() {
+        // type_stack_o2.elf:pair_score (0x11e0) has an all-nop FDE — the CFA
+        // stays at the CIE default `RSP(reg 7) + 8` throughout, so it must
+        // NOT be reported as an RBP rule (which would mis-shift its DWARF
+        // offsets).
+        let path = "../../fixtures/type_stack_o2.elf";
+        let Ok(data) = std::fs::read(path) else {
+            return;
+        };
+        let img = ElfLoader::load(&data).expect("parse type_stack_o2.elf");
+        let info = parse_eh_frame(&img).expect("parse .eh_frame");
+        if let Some(rule) = info.cfa_rules.get(&0x11e0) {
+            assert_ne!(
+                rule.reg, 6,
+                "pair_score has no frame pointer; must not report RBP"
             );
         }
     }

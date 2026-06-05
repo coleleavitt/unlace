@@ -401,6 +401,21 @@ pub struct StackLvarAnnotation {
     pub from_debug: bool,
 }
 
+/// A DWARF aggregate *array* local (e.g. `int32_t buf[16]`), parsed from the
+/// function's debug-info locals. Carries enough to materialize the array as a
+/// real stack declaration with its source name and dimensions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DwarfArrayLocal {
+    /// Source variable name (`buf`).
+    name: String,
+    /// The C element type spelling (`int`), for the declaration.
+    elem_c_type: String,
+    /// Element size in bytes (4 for `int`).
+    elem_size: u64,
+    /// Element count (16 for `int[16]`).
+    elem_count: u64,
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct PrinterAnnotations {
     /// Prose to render immediately above the function header block.
@@ -1297,7 +1312,12 @@ pub fn print_c_with_annotations(
         );
     }
     out.push_str(" {\n");
-    emit_dwarf_local_summary(dwarf_func, &mut out);
+    let materialized_dwarf_array_names: BTreeSet<String> = ctx
+        .dwarf_array_buffer_decls
+        .values()
+        .map(|arr| arr.name.clone())
+        .collect();
+    emit_dwarf_local_summary(dwarf_func, &materialized_dwarf_array_names, &mut out);
 
     let mut foldable_svs: BTreeSet<SsaVarnode> = ctx
         .foldable_stmts
@@ -2500,6 +2520,15 @@ struct PrintCtx {
     /// Stack lvar metadata keyed by recovered frame offset. This is the
     /// printer-side copy of [`PrinterAnnotations::stack_lvars`].
     stack_lvars: BTreeMap<i64, StackLvarAnnotation>,
+    /// DWARF aggregate *array* locals parsed from the function's debug info.
+    /// Used to give a recovered frame-base-relative indexed stack buffer its
+    /// real source name/type/size (e.g. `int buf[16]` rather than
+    /// `char buf_80[72]`).
+    dwarf_array_locals: Vec<DwarfArrayLocal>,
+    /// Stack offset → recovered DWARF array materialization. Drives a real
+    /// `int buf[16];` declaration and suppression of the redundant
+    /// `// DWARF locals` comment line for that array.
+    dwarf_array_buffer_decls: BTreeMap<i64, DwarfArrayLocal>,
     /// Names already declared at function scope. Hoisted declarations consult
     /// this set so block-local declarations do not collide with an existing
     /// function-scope temporary that prints with the same name.
@@ -2603,19 +2632,31 @@ fn emit_dwarf_struct_preamble(dwarf: &DwarfInfo) -> Option<String> {
     Some(out)
 }
 
-fn emit_dwarf_local_summary(dwarf_func: Option<&FunctionDebugInfo>, out: &mut String) {
+fn emit_dwarf_local_summary(
+    dwarf_func: Option<&FunctionDebugInfo>,
+    materialized_names: &std::collections::BTreeSet<String>,
+    out: &mut String,
+) {
     let Some(dwarf_func) = dwarf_func else {
         return;
     };
-    if dwarf_func.locals.is_empty() {
+    // Skip a local whose array was materialized as a real declaration (e.g.
+    // `int buf[16];`): the comment would otherwise double-count the same array
+    // type fact and stutter the recovered source variable.
+    let visible: Vec<_> = dwarf_func
+        .locals
+        .iter()
+        .filter(|local| {
+            !local.name.is_empty()
+                && !materialized_names.contains(&crate::demangle::sanitize_for_c(&local.name))
+        })
+        .collect();
+    if visible.is_empty() {
         return;
     }
 
     out.push_str("    // DWARF locals\n");
-    for local in &dwarf_func.locals {
-        if local.name.is_empty() {
-            continue;
-        }
+    for local in visible {
         let name = crate::demangle::sanitize_for_c(&local.name);
         if let Some(type_name) = local.type_name.as_deref() {
             let decl = dwarf_decl_to_c(type_name, &name);
@@ -2719,6 +2760,8 @@ impl PrintCtx {
             canary_stack_offsets: BTreeSet::new(),
             stack_frame_slots: BTreeMap::new(),
             stack_lvars: BTreeMap::new(),
+            dwarf_array_locals: Vec::new(),
+            dwarf_array_buffer_decls: BTreeMap::new(),
             top_declared_names: BTreeSet::new(),
             promoted_stack_buffers: BTreeMap::new(),
             synthetic_stack_scalars: BTreeMap::new(),
@@ -3144,6 +3187,246 @@ fn base_vn_is_scalar_load_output(base_vn: &Varnode, def_stmt: u32, ctx: &PrintCt
 ///
 /// Returns `None` if no pattern matches or if the stride doesn't match the
 /// access size (keeping the existing pointer dereference form).
+///
+/// Decomposition of an address SSA chain for a frame-base-relative,
+/// variable-indexed access. The address has the shape
+/// `frame_base (+/- const) + index*stride` in any associativity; this collects
+/// the accumulated constant displacement (relative to the frame base) and the
+/// single non-constant `index*stride` term. The frame base itself contributes
+/// `0` (it is the origin of `resolve_stack_offset_for_addr`).
+struct FrameIndexedDecomp {
+    /// Frame-relative byte offset of the array base (the recovered local lives
+    /// here). This is the sum of every constant displacement folded into the
+    /// address, plus the frame-base origin (0).
+    frame_offset: i64,
+    /// SSA varnode of the index operand (multiplied by `stride`).
+    index_vn: Varnode,
+    /// The statement in which `index_vn` is an operand (the INT_MULT/INT_LEFT
+    /// term), used to resolve the index expression to the right SSA version.
+    index_stmt: u32,
+    /// Raw operand position of `index_vn` in `index_stmt`, if known.
+    index_raw_idx: Option<usize>,
+    /// Element stride in bytes (the multiplier / `1 << shift`).
+    stride: u64,
+}
+
+/// Recursively decompose `vn` (an address operand of stmt `stmt_idx`) into a
+/// constant frame-relative displacement plus one variable `index*stride` term,
+/// rooted at the frame-base register. Returns `None` if the chain is not of that
+/// shape (e.g. no frame base, no single index term, two index terms, etc.).
+///
+/// Handles both outer associativities (`(frame+idx*s)+C` and `(frame+C)+idx*s`,
+/// and the `INT_SUB`-outer `(frame+idx*s)-C` form) and both index encodings
+/// (`INT_MULT(index, Const(stride))` and `INT_LEFT(index, Const(shift))`).
+fn decompose_frame_indexed(
+    vn: &Varnode,
+    raw_idx: Option<usize>,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+    depth: u8,
+) -> Option<FrameIndexedDecomp> {
+    const MAX_DEPTH: u8 = 12;
+    if depth > MAX_DEPTH {
+        return None;
+    }
+
+    // Reaching the frame base contributes a zero displacement and no index term;
+    // a higher frame must supply the index for this to be a valid array access.
+    if is_frame_base_reg_ctx(vn, ctx) || is_x86_frame_base(vn) {
+        return Some(FrameIndexedDecomp {
+            frame_offset: 0,
+            index_vn: *vn,
+            index_stmt: stmt_idx,
+            index_raw_idx: raw_idx,
+            stride: 0,
+        });
+    }
+    if vn.space == SpaceId::Const || vn.space == SpaceId::Stack {
+        return None;
+    }
+
+    let sv = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx)?;
+    let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
+    let def = ctx.stmt_insns.get(&def_stmt)?.clone();
+
+    match def.op {
+        IrOp::Copy if !def.inputs.is_empty() => {
+            decompose_frame_indexed(&def.inputs[0], Some(0), def_stmt, ctx, depth + 1)
+        }
+        IrOp::IntAdd | IrOp::IntSub if def.inputs.len() >= 2 => {
+            let (a, b) = (&def.inputs[0], &def.inputs[1]);
+            // Constant displacement folded in (INT_SUB negates the rhs const).
+            if b.space == SpaceId::Const {
+                let mut inner = decompose_frame_indexed(a, Some(0), def_stmt, ctx, depth + 1)?;
+                let c = signed_const_value(b);
+                inner.frame_offset = inner.frame_offset.wrapping_add(if def.op == IrOp::IntSub {
+                    c.wrapping_neg()
+                } else {
+                    c
+                });
+                return Some(inner);
+            }
+            if a.space == SpaceId::Const && def.op == IrOp::IntAdd {
+                let mut inner = decompose_frame_indexed(b, Some(1), def_stmt, ctx, depth + 1)?;
+                inner.frame_offset = inner.frame_offset.wrapping_add(signed_const_value(a));
+                return Some(inner);
+            }
+            // Neither operand is constant: one side must carry the frame base /
+            // accumulated offset and the other the single index*stride term.
+            for (frame_pos, idx_pos) in [(0, 1), (1, 0)] {
+                let frame_input = &def.inputs[frame_pos];
+                let idx_input = &def.inputs[idx_pos];
+                let Some(mut inner) =
+                    decompose_frame_indexed(frame_input, Some(frame_pos), def_stmt, ctx, depth + 1)
+                else {
+                    continue;
+                };
+                // The frame side must not itself already carry an index term.
+                if inner.stride != 0 {
+                    continue;
+                }
+                let Some((index_vn, index_stmt, index_raw_idx, stride)) =
+                    extract_index_term(idx_input, Some(idx_pos), def_stmt, ctx)
+                else {
+                    continue;
+                };
+                inner.index_vn = index_vn;
+                inner.index_stmt = index_stmt;
+                inner.index_raw_idx = index_raw_idx;
+                inner.stride = stride;
+                return Some(inner);
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Recognise an `index*stride` term: either `INT_MULT(index, Const(stride))` or
+/// `INT_LEFT(index, Const(shift))` (with `stride = 1 << shift`, a power of two).
+/// Returns the index varnode, the statement it is an operand of (for SSA
+/// resolution of the index expression), its operand position, and the byte
+/// stride.
+fn extract_index_term(
+    vn: &Varnode,
+    raw_idx: Option<usize>,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> Option<(Varnode, u32, Option<usize>, u64)> {
+    if vn.space == SpaceId::Const {
+        return None;
+    }
+    let sv = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx)?;
+    let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
+    let def = ctx.stmt_insns.get(&def_stmt)?.clone();
+    match def.op {
+        IrOp::Copy if !def.inputs.is_empty() => {
+            extract_index_term(&def.inputs[0], Some(0), def_stmt, ctx)
+        }
+        IrOp::IntMult if def.inputs.len() == 2 => {
+            let (idx_vn, stride) = if def.inputs[1].space == SpaceId::Const {
+                (&def.inputs[0], def.inputs[1].offset)
+            } else if def.inputs[0].space == SpaceId::Const {
+                (&def.inputs[1], def.inputs[0].offset)
+            } else {
+                return None;
+            };
+            if stride == 0 {
+                return None;
+            }
+            Some((*idx_vn, def_stmt, idx_index_in(&def, idx_vn), stride))
+        }
+        IrOp::IntLeft if def.inputs.len() == 2 && def.inputs[1].space == SpaceId::Const => {
+            let shift = def.inputs[1].offset;
+            if shift >= 63 {
+                return None;
+            }
+            let stride = 1u64 << shift;
+            let idx_vn = &def.inputs[0];
+            Some((*idx_vn, def_stmt, idx_index_in(&def, idx_vn), stride))
+        }
+        _ => None,
+    }
+}
+
+fn idx_index_in(def: &IrInsn, idx_vn: &Varnode) -> Option<usize> {
+    def.inputs.iter().position(|v| v == idx_vn)
+}
+
+/// Interpret a constant varnode's `offset` as a signed value at its bit width.
+fn signed_const_value(vn: &Varnode) -> i64 {
+    let bits = (vn.size as u32) * 8;
+    if bits == 0 || bits >= 64 {
+        return vn.offset as i64;
+    }
+    let mask = (1u64 << bits) - 1;
+    let v = vn.offset & mask;
+    let sign_bit = 1u64 << (bits - 1);
+    if v & sign_bit != 0 {
+        (v | !mask) as i64
+    } else {
+        v as i64
+    }
+}
+
+/// Rebase a frame-base-relative, variable-indexed access onto the recovered
+/// stack local at the resolved frame offset, rendering a real array subscript on
+/// that local's *address* (`((cast *)&v_N)[index]`). This is the single place
+/// that turns `buf[i]` (variable index) into a subscript instead of leaking the
+/// uninitialised frame-pointer register; the base it produces is the same
+/// `&v_N` the address-taken reads use, so the recompiled behaviour matches.
+fn try_frame_local_indexed_subscript(
+    addr_vn: &Varnode,
+    stmt_idx: u32,
+    access_size: u8,
+    ctx: &mut PrintCtx,
+) -> Option<ArraySubscript> {
+    let decomp = decompose_frame_indexed(addr_vn, Some(1), stmt_idx, ctx, 0)?;
+    // A genuine indexed array access needs a real index term.
+    if decomp.stride == 0 {
+        return None;
+    }
+    // Only handle the case where the element stride matches the access width;
+    // otherwise the subscript element type would not match the access and the
+    // raw deref form stays more faithful.
+    if decomp.stride != access_size as u64 {
+        return None;
+    }
+    let slot = stack_slot_for_address_offset(decomp.frame_offset, ctx)?;
+    // Render the index expression and the rebased base.
+    let idx_expr = emit_operand_resolved(
+        &decomp.index_vn,
+        decomp.index_raw_idx.unwrap_or(0),
+        decomp.index_stmt,
+        ctx,
+    );
+    if idx_expr.is_empty() {
+        return None;
+    }
+    let cast = ida_ptr_type(access_size);
+    // Build a pointer to the array's first element, then subscript it. The
+    // cast-of-pointer is non-atomic, so wrap it: `((_DWORD *)buf_80)[i]` (else
+    // the `[i]` binds before the cast). For a buffer slot the name is already an
+    // array (decays to a pointer); for a scalar slot we take its address. An
+    // interior `delta` adds a byte offset via a `char *` rebase.
+    let elem_ptr = if slot.is_buffer {
+        // Array name decays to `&name[0]`.
+        if slot.delta == 0 {
+            format!("({cast}){}", slot.name)
+        } else {
+            format!("({cast})((char *){} + {})", slot.name, slot.delta)
+        }
+    } else if slot.delta == 0 {
+        format!("({cast})&{}", slot.name)
+    } else {
+        format!("({cast})((char *)&{} + {})", slot.name, slot.delta)
+    };
+    Some(ArraySubscript {
+        base: paren_if_non_atomic_base(&elem_ptr),
+        index: idx_expr,
+    })
+}
+
 fn try_array_subscript(
     addr_vn: &Varnode,
     stmt_idx: u32,
@@ -3152,6 +3435,19 @@ fn try_array_subscript(
 ) -> Option<ArraySubscript> {
     if access_size == 0 || addr_vn.space == SpaceId::Const {
         return None;
+    }
+
+    // Frame-base-relative variable-indexed access:
+    //   addr = frame_base + index*stride (+/- const C)
+    // where the recovered stack frame has a local at the resolved offset. This
+    // is the `buf[i]` write whose address never resolves to a single constant
+    // stack slot (the index term defeats `resolve_stack_offset_for_addr`), so
+    // the legacy patterns below would either bail on the frame-base trace guard
+    // or leak the raw frame-pointer register through the deref fallback. Rebase
+    // it onto the recovered local's address so it renders as a real subscript on
+    // the same `&v_N` base the address-taken reads use.
+    if let Some(sub) = try_frame_local_indexed_subscript(addr_vn, stmt_idx, access_size, ctx) {
+        return Some(sub);
     }
 
     // Resolve the SSA varnode for the address operand.
@@ -5688,7 +5984,7 @@ fn is_redundant_inverted_control_compare(
     if insn.inputs.len() != 2 {
         return false;
     }
-    if !ctx.var_names.get(out_sv).is_some_and(|name| name == "cond") {
+    if ctx.var_names.get(out_sv).is_none_or(|name| name != "cond") {
         return false;
     }
 
@@ -6378,6 +6674,16 @@ fn compute_dwarf_locals(
     };
 
     for local in &dwarf_func.locals {
+        // Record array-typed aggregate locals so a recovered frame-base-relative
+        // indexed stack buffer can adopt this name/type/size instead of the
+        // synthetic `buf_<offset>` fallback.
+        if let Some(type_name) = local.type_name.as_deref()
+            && !local.name.is_empty()
+            && let Some(arr) = parse_dwarf_array_local(&local.name, type_name)
+            && !ctx.dwarf_array_locals.iter().any(|a| a.name == arr.name)
+        {
+            ctx.dwarf_array_locals.push(arr);
+        }
         let mut frame_offsets = Vec::new();
         if let Some(o) = local.frame_offset {
             frame_offsets.push(o);
@@ -6798,6 +7104,58 @@ fn promote_stack_address_call_arrays(nodes: &[HirNode], ctx: &mut PrintCtx) {
                         ));
                         continue;
                     };
+                    // Frame-base-relative *variable-indexed* store: the index
+                    // term defeats `resolve_stack_offset_for_addr` (it returns
+                    // None below), so promote the array slot here. The slot must
+                    // own enough space for the indexed access (and the matching
+                    // address-taken reads), otherwise the rebased
+                    // `((T *)&v_N)[i]` subscript / `&v_N` reads overrun an 8-byte
+                    // scalar into neighbouring locals.
+                    if let Some(decomp) =
+                        decompose_frame_indexed(&insn.inputs[1], Some(1), stmt_idx, ctx, 0)
+                        && decomp.stride != 0
+                        && !ctx.suppressed_stack_offsets.contains(&decomp.frame_offset)
+                    {
+                        let span =
+                            frame_indexed_buffer_size(decomp.frame_offset, decomp.stride, ctx);
+                        // Prefer the matching DWARF array local's real name/type/
+                        // size: exactly one array whose element size matches the
+                        // store stride and whose byte size fits the available span.
+                        // This yields a faithful, name-matched `int buf[16];` and
+                        // lets the redundant DWARF comment be suppressed, instead
+                        // of an unnamed `char buf_<off>[span]`.
+                        let dwarf_match =
+                            unique_dwarf_array_for_indexed_store(decomp.stride, span, ctx);
+                        if let Some(arr) = dwarf_match {
+                            let byte_len = arr.elem_size * arr.elem_count;
+                            trace_decision(format_args!(
+                                "stack-promote store stmt={stmt_idx} offset={} stride={} decision=promote-dwarf-array name={} bytes={byte_len}",
+                                decomp.frame_offset, decomp.stride, arr.name
+                            ));
+                            promote_stack_buffer(decomp.frame_offset, byte_len, ctx);
+                            // Re-key the slot under the DWARF name and record the
+                            // typed-array decl so emission renders `int buf[16];`.
+                            if let Some(slot) = ctx.stack_frame_slots.get_mut(&decomp.frame_offset)
+                            {
+                                slot.name = arr.name.clone();
+                            }
+                            for width in [1u8, 2, 4, 8] {
+                                let stk = Varnode::stack(decomp.frame_offset as u64, width);
+                                ctx.name_overrides.insert(stk, arr.name.clone());
+                            }
+                            ctx.dwarf_array_buffer_decls
+                                .insert(decomp.frame_offset, arr);
+                            continue;
+                        }
+                        if span > 8 {
+                            trace_decision(format_args!(
+                                "stack-promote store stmt={stmt_idx} offset={} stride={} decision=promote-indexed-buffer bytes={span}",
+                                decomp.frame_offset, decomp.stride
+                            ));
+                            promote_stack_buffer(decomp.frame_offset, span, ctx);
+                            continue;
+                        }
+                    }
                     let Some(offset) =
                         resolve_stack_offset_for_addr(&insn.inputs[1], Some(1), stmt_idx, ctx, 0)
                     else {
@@ -6838,6 +7196,62 @@ fn stmt_idx_for_insn(insn: &IrInsn, ctx: &PrintCtx) -> Option<u32> {
     ctx.stmt_insns
         .iter()
         .find_map(|(&idx, stmt)| (stmt.addr == insn.addr && stmt.op == insn.op).then_some(idx))
+}
+
+/// Find the single DWARF array local that should name a recovered indexed stack
+/// buffer: its element size matches the store `stride`, and its total byte size
+/// fits the available `span` (so materializing it cannot overrun into the next
+/// stack slot). Requires exactly one such candidate — ambiguity (two int arrays)
+/// keeps the synthetic fallback so we never misattribute a name.
+fn unique_dwarf_array_for_indexed_store(
+    stride: u64,
+    span: u64,
+    ctx: &PrintCtx,
+) -> Option<DwarfArrayLocal> {
+    let mut matches = ctx.dwarf_array_locals.iter().filter(|arr| {
+        arr.elem_size == stride
+            && arr.elem_count > 0
+            && arr.elem_size.saturating_mul(arr.elem_count) <= span
+            && !ctx
+                .dwarf_array_buffer_decls
+                .values()
+                .any(|used| used.name == arr.name)
+    });
+    let first = matches.next()?.clone();
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(first)
+}
+
+/// Choose the byte length for a stack buffer recovered from a frame-base-relative
+/// variable-indexed access at `offset` (element `stride`). The index is not
+/// statically bounded, so the buffer must own every byte up to — but not into —
+/// the next allocated stack slot above it. Spanning to the next slot is the
+/// faithful, clobber-free bound: the original array occupies exactly that gap,
+/// and the address-taken reads (`f(&v_N, count)`) operate over the same region.
+/// Clamped to a multiple of `stride` so the element count is whole.
+fn frame_indexed_buffer_size(offset: i64, stride: u64, ctx: &PrintCtx) -> u64 {
+    let next_above = ctx
+        .stack_frame_slots
+        .range((offset + 1)..)
+        .map(|(&start, _)| start)
+        .next();
+    let span = match next_above {
+        Some(next) => (next - offset).max(0) as u64,
+        // No slot above (unlikely given the saved-rbp/canary slots); fall back to
+        // the existing slot size or a single element.
+        None => ctx
+            .stack_frame_slots
+            .get(&offset)
+            .map(|slot| slot.size)
+            .unwrap_or(stride),
+    };
+    if stride == 0 {
+        return span;
+    }
+    // Whole number of elements, at least one.
+    (span / stride).max(1) * stride
 }
 
 fn promote_stack_buffer(offset: i64, byte_len: u64, ctx: &mut PrintCtx) {
@@ -7468,6 +7882,23 @@ fn emit_stack_frame_decls(
                 size,
                 stack_frame_slot_kind(func, offset),
             ));
+            continue;
+        }
+        // A frame-base-relative indexed buffer recovered onto a DWARF array local
+        // renders as the real `int buf[16];` declaration: faithful to source and
+        // name-matched to the expected type fact (the redundant `// DWARF locals`
+        // comment is suppressed in `emit_dwarf_local_summary`).
+        if let Some(arr) = ctx.dwarf_array_buffer_decls.get(&offset) {
+            trace_stack_text(format_args!(
+                "emit-promoted-dwarf-array-decl offset={} name={} elem={} count={}",
+                offset, arr.name, arr.elem_c_type, arr.elem_count
+            ));
+            let _ = writeln!(
+                out,
+                "    {} {}[{}];",
+                arr.elem_c_type, arr.name, arr.elem_count
+            );
+            emitted.insert(arr.name.clone());
             continue;
         }
         let name = debug_stack_lvar_name(ctx, offset)
@@ -8655,6 +9086,55 @@ fn normalize_cpp_demangled_type(ty: &str) -> String {
         .replace('&', "*");
     normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
     normalized
+}
+
+/// Parse a DWARF aggregate array local (`name`, `type_name` like `int32_t[16]`)
+/// into a [`DwarfArrayLocal`]. Returns `None` for non-array or multi-dimensional
+/// types (only single-dimension element arrays with a known element size are
+/// materialized; everything else keeps its existing rendering).
+fn parse_dwarf_array_local(name: &str, type_name: &str) -> Option<DwarfArrayLocal> {
+    let (base_end, suffix) = split_dwarf_array_suffix(type_name);
+    if suffix.is_empty() {
+        return None;
+    }
+    // Exactly one `[N]` dimension with a numeric extent.
+    let inner = suffix.strip_prefix('[')?.strip_suffix(']')?;
+    if inner.contains('[') || inner.contains(']') {
+        return None;
+    }
+    let elem_count: u64 = inner.trim().parse().ok()?;
+    if elem_count == 0 {
+        return None;
+    }
+    let base = type_name.get(..base_end).unwrap_or(type_name).trim();
+    if base.contains('*') {
+        // Pointer-element arrays render fine as raw derefs; skip.
+        return None;
+    }
+    let elem_c_type = dwarf_type_to_c(base);
+    let elem_size = c_primitive_type_size(&elem_c_type)?;
+    Some(DwarfArrayLocal {
+        name: name.to_string(),
+        elem_c_type,
+        elem_size,
+        elem_count,
+    })
+}
+
+/// Byte size of a scalar C primitive type spelling, for sizing recovered arrays.
+/// Returns `None` for non-scalar / unknown spellings (pointers, composites).
+/// Accepts both IDA spellings (`__int16`, `_DWORD`) and stdint typedefs
+/// (`int32_t`) — DWARF surfaces the latter.
+fn c_primitive_type_size(c_type: &str) -> Option<u64> {
+    match c_type.trim() {
+        "char" | "_BYTE" | "_BOOL" | "signed char" | "unsigned char" | "bool" | "int8_t"
+        | "uint8_t" => Some(1),
+        "__int16" | "_WORD" | "short" | "unsigned short" | "int16_t" | "uint16_t" => Some(2),
+        "int" | "unsigned int" | "_DWORD" | "float" | "int32_t" | "uint32_t" => Some(4),
+        "__int64" | "_QWORD" | "long" | "unsigned long" | "long long" | "unsigned long long"
+        | "double" | "size_t" | "int64_t" | "uint64_t" => Some(8),
+        _ => None,
+    }
 }
 
 fn split_dwarf_array_suffix(dwarf_type: &str) -> (usize, String) {
@@ -16554,10 +17034,10 @@ fn consumer_uses_sv_as_indirect_call_target(
     consumer_stmt: u32,
     ctx: &PrintCtx,
 ) -> bool {
-    if !ctx
+    if ctx
         .stmt_insns
         .get(&consumer_stmt)
-        .is_some_and(|insn| insn.op == IrOp::Callind)
+        .is_none_or(|insn| insn.op != IrOp::Callind)
     {
         return false;
     }
@@ -21964,6 +22444,7 @@ mod tests {
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
+                cfa_to_rbp_delta: None,
             },
         );
         let dwarf = DwarfInfo {
@@ -22017,15 +22498,18 @@ mod tests {
                     ParameterInfo {
                         name: Some("a".to_string()),
                         type_name: Some("int".to_string()),
+                        frame_offset: None,
                     },
                     ParameterInfo {
                         name: Some("b".to_string()),
                         type_name: Some("int".to_string()),
+                        frame_offset: None,
                     },
                 ],
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
+                cfa_to_rbp_delta: None,
             },
         );
         let dwarf = DwarfInfo {
@@ -22096,15 +22580,18 @@ mod tests {
                     ParameterInfo {
                         name: Some("count".to_string()),
                         type_name: Some("int".to_string()),
+                        frame_offset: None,
                     },
                     ParameterInfo {
                         name: Some("buf".to_string()),
                         type_name: Some("char *".to_string()),
+                        frame_offset: None,
                     },
                 ],
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
+                cfa_to_rbp_delta: None,
             },
         );
         let dwarf = DwarfInfo {
@@ -22149,6 +22636,7 @@ mod tests {
                 return_type: Some("long".to_string()),
                 decl: None,
                 locals: vec![],
+                cfa_to_rbp_delta: None,
             },
         );
         let dwarf = DwarfInfo {
@@ -27320,6 +27808,7 @@ mod tests {
                     locations: vec![],
                     locations_dwarf_v5: vec![],
                 }],
+                cfa_to_rbp_delta: None,
             },
         );
         let dwarf = DwarfInfo {
@@ -32429,6 +32918,99 @@ extern int __unlace_insert();
             "gcc rejected annotated-helper output:\n--- source ---\n{}\n--- stderr ---\n{}",
             full,
             String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    #[test]
+    fn frame_indexed_signed_const_value_sign_extends_at_width() {
+        use super::signed_const_value;
+        // The `-80` (0xffffffffffffffb0) displacement folded into the buf store
+        // address must read back as -80, not a huge positive u64.
+        assert_eq!(signed_const_value(&con(0xffffffffffffffb0, 8)), -80);
+        assert_eq!(signed_const_value(&con(0xb0, 1)), -80);
+        assert_eq!(signed_const_value(&con(0x10, 8)), 16);
+        assert_eq!(signed_const_value(&con(0xfffffffc, 4)), -4);
+    }
+
+    #[test]
+    fn parse_dwarf_array_local_recovers_name_type_and_dims() {
+        use super::parse_dwarf_array_local;
+        // The `int32_t buf[16]` DWARF aggregate maps to a 16-element int array.
+        let arr = parse_dwarf_array_local("buf", "int32_t[16]").expect("array parsed");
+        assert_eq!(arr.name, "buf");
+        assert_eq!(arr.elem_size, 4);
+        assert_eq!(arr.elem_count, 16);
+        assert_eq!(arr.elem_size * arr.elem_count, 64);
+
+        // Scalars and multi-dimensional / pointer-element arrays are not
+        // materialized (kept as their existing rendering).
+        assert!(parse_dwarf_array_local("r", "int32_t").is_none());
+        assert!(parse_dwarf_array_local("m", "int32_t[4][4]").is_none());
+        assert!(parse_dwarf_array_local("p", "int32_t *[8]").is_none());
+        assert!(parse_dwarf_array_local("z", "int32_t[0]").is_none());
+    }
+
+    #[test]
+    fn c_primitive_type_size_covers_ida_and_stdint_spellings() {
+        use super::c_primitive_type_size;
+        assert_eq!(c_primitive_type_size("int"), Some(4));
+        assert_eq!(c_primitive_type_size("int32_t"), Some(4));
+        assert_eq!(c_primitive_type_size("char"), Some(1));
+        assert_eq!(c_primitive_type_size("__int64"), Some(8));
+        assert_eq!(c_primitive_type_size("uint64_t"), Some(8));
+        assert_eq!(c_primitive_type_size("struct Foo"), None);
+    }
+
+    #[test]
+    fn dwarf_local_summary_suppresses_materialized_array_comment() {
+        use super::emit_dwarf_local_summary;
+        // Once the `int buf[16]` array is materialized as a real declaration, the
+        // `// DWARF locals` comment must not also list it (which would
+        // double-count the array type fact); other locals stay visible.
+        let df = unlace_loader::FunctionDebugInfo {
+            name: "main".to_string(),
+            linkage_name: None,
+            low_pc: 0,
+            high_pc: None,
+            ranges: Vec::new(),
+            params: Vec::new(),
+            return_type: None,
+            decl: None,
+            cfa_to_rbp_delta: Some(16),
+            locals: vec![
+                unlace_loader::LocalVariable {
+                    name: "buf".to_string(),
+                    type_name: Some("int32_t[16]".to_string()),
+                    frame_offset: Some(-96),
+                    locations: Vec::new(),
+                    locations_dwarf_v5: Vec::new(),
+                },
+                unlace_loader::LocalVariable {
+                    name: "r".to_string(),
+                    type_name: Some("int32_t".to_string()),
+                    frame_offset: Some(-100),
+                    locations: Vec::new(),
+                    locations_dwarf_v5: Vec::new(),
+                },
+            ],
+        };
+
+        let mut materialized = std::collections::BTreeSet::new();
+        materialized.insert("buf".to_string());
+        let mut out = String::new();
+        emit_dwarf_local_summary(Some(&df), &materialized, &mut out);
+        assert!(
+            !out.contains("buf[16]"),
+            "materialized array comment should be suppressed: {out:?}"
+        );
+        assert!(out.contains("r;"), "non-materialized local kept: {out:?}");
+
+        // With nothing materialized, the buf comment is present (baseline form).
+        let mut out2 = String::new();
+        emit_dwarf_local_summary(Some(&df), &std::collections::BTreeSet::new(), &mut out2);
+        assert!(
+            out2.contains("buf[16]"),
+            "baseline comment present: {out2:?}"
         );
     }
 }

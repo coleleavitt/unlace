@@ -94,12 +94,28 @@ pub struct FunctionDebugInfo {
     pub return_type: Option<String>,
     pub decl: Option<SourceLocation>,
     pub locals: Vec<LocalVariable>,
+    /// Delta to add to a DWARF `DW_OP_fbreg` (CFA-relative) offset to obtain
+    /// the RBP-relative slot the decompiler resolves stack accesses to.
+    ///
+    /// Derived from the function's `.eh_frame` CFA rule: for an x86-64 SysV
+    /// frame-pointer function the body settles to `CFA = RBP + offset`
+    /// (canonically `offset = 16`), so `fbreg(o)` names `CFA + o = RBP +
+    /// offset + o` and the RBP-relative slot is `o + offset`. `Some(offset)`
+    /// only when the CFA register is the frame pointer (RBP); `None` for
+    /// no-frame-pointer / leaf functions (CFA relative to RSP) and opaque
+    /// expression rules, where a uniform shift is invalid.
+    pub cfa_to_rbp_delta: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterInfo {
     pub name: Option<String>,
     pub type_name: Option<String>,
+    /// Signed CFA-relative frame offset when the parameter's `DW_AT_location`
+    /// is a single `DW_OP_fbreg` opcode (a spilled home slot in `-O0`
+    /// prologues). `None` for register-resident or location-list params.
+    /// Mirrors [`LocalVariable::frame_offset`].
+    pub frame_offset: Option<i64>,
 }
 
 /// A local variable extracted from `DW_TAG_variable` inside a subprogram.
@@ -214,7 +230,12 @@ pub fn import_dwarf_with_resolver(
     let dwarf: gimli::Dwarf<R<'_>> =
         dwarf_sections.borrow(|section| EndianSlice::new(section.as_ref(), endian));
 
-    let functions = extract_functions(&dwarf, resolver)?;
+    // Per-function CFA→RBP delta, derived from `.eh_frame` unwind rules. A
+    // best-effort parse: failures degrade to an empty map (no shift applied
+    // downstream, exactly as before this calibration existed).
+    let cfa_deltas = cfa_rbp_deltas(image);
+
+    let functions = extract_functions(&dwarf, resolver, &cfa_deltas)?;
     let source_map = build_source_map(&dwarf)?;
     let (structs, enums, unions) = extract_composite_types(&dwarf)?;
     let macros = extract_macros(&dwarf)?;
@@ -516,16 +537,44 @@ fn resolve_macro_file_name(
     }
 }
 
+/// DWARF register number of the frame pointer (RBP) on x86-64 SysV.
+const X86_64_DWARF_RBP: u16 = 6;
+
+/// Build a per-function `CFA → RBP` delta map from the binary's `.eh_frame`
+/// unwind rules. Only frame-pointer functions (CFA register == RBP) get an
+/// entry; the delta is the CFA rule's constant offset (canonically 16 for
+/// GCC `def_cfa_offset 16; def_cfa_register rbp`). No-frame-pointer / leaf
+/// functions (CFA relative to RSP) and opaque expression rules are absent,
+/// so the pipeline never shifts them.
+///
+/// Currently gated to x86-64 because the RBP register number and the
+/// "decompiler resolves accesses RBP-relative" assumption are arch-specific.
+fn cfa_rbp_deltas(image: &BinaryImage) -> BTreeMap<u64, i64> {
+    if !matches!(image.arch, crate::image::ArchId::X86_64) {
+        return BTreeMap::new();
+    }
+    let eh = match crate::eh_frame::parse_eh_frame(image) {
+        Ok(info) => info,
+        Err(_) => return BTreeMap::new(),
+    };
+    eh.cfa_rules
+        .iter()
+        .filter(|(_, rule)| rule.reg == X86_64_DWARF_RBP)
+        .map(|(&pc, rule)| (pc, rule.offset))
+        .collect()
+}
+
 fn extract_functions(
     dwarf: &gimli::Dwarf<R<'_>>,
     resolver: &DebugLocationResolver,
+    cfa_deltas: &BTreeMap<u64, i64>,
 ) -> Result<BTreeMap<u64, FunctionDebugInfo>, gimli::Error> {
     let mut functions = BTreeMap::new();
     let mut units = dwarf.units();
 
     while let Some(header) = units.next()? {
         let unit = dwarf.unit(header)?;
-        extract_functions_from_unit(dwarf, &unit, resolver, &mut functions)?;
+        extract_functions_from_unit(dwarf, &unit, resolver, cfa_deltas, &mut functions)?;
     }
 
     Ok(functions)
@@ -535,6 +584,7 @@ fn extract_functions_from_unit(
     dwarf: &gimli::Dwarf<R<'_>>,
     unit: &gimli::Unit<R<'_>>,
     resolver: &DebugLocationResolver,
+    cfa_deltas: &BTreeMap<u64, i64>,
     functions: &mut BTreeMap<u64, FunctionDebugInfo>,
 ) -> Result<(), gimli::Error> {
     let mut tree = unit.entries_tree(None)?;
@@ -586,6 +636,7 @@ fn extract_functions_from_unit(
 
         let decl = extract_decl_location(dwarf, unit, entry)?;
         let (params, locals) = extract_params_and_locals(dwarf, unit, resolver, child)?;
+        let cfa_to_rbp_delta = cfa_deltas.get(&low_pc).copied();
 
         functions.insert(
             low_pc,
@@ -599,6 +650,7 @@ fn extract_functions_from_unit(
                 return_type,
                 decl,
                 locals,
+                cfa_to_rbp_delta,
             },
         );
     }
@@ -862,7 +914,14 @@ fn extract_params_and_locals(
                 Some(val) => resolve_type_name(dwarf, unit, val)?,
                 None => None,
             };
-            params.push(ParameterInfo { name, type_name });
+            let frame_offset = entry
+                .attr_value(DW_AT_location)
+                .and_then(|value| resolver.frame_offset(value));
+            params.push(ParameterInfo {
+                name,
+                type_name,
+                frame_offset,
+            });
         } else if tag == DW_TAG_variable {
             let name = match attr_string(dwarf, unit, entry, DW_AT_name)? {
                 Some(n) => n,

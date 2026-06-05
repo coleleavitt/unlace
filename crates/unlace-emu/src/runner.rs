@@ -83,8 +83,12 @@ pub fn run_image(interp: &mut Interpreter, image: &BinaryImage, cfg: &RunConfig)
         if sec.data.is_empty() {
             continue;
         }
+        // Every mapped section is treated as readable regardless of its READ
+        // flag: loaded ELF sections are de facto readable (e.g. constants
+        // fetched from an exec-only .text), and refusing the read would fault
+        // emulation that the real loader permits. Write/exec use the real flags.
         let perms = (
-            sec.flags.contains(SectionFlags::READ) || true,
+            true,
             sec.flags.contains(SectionFlags::WRITE),
             sec.flags.contains(SectionFlags::EXEC),
         );

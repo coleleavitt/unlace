@@ -45,7 +45,7 @@
 pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<String> {
     // STL types live under `std::` (possibly with an inline namespace
     // immediately after).  Reject anything that doesn't start with `std`.
-    if !namespaces.first().is_some_and(|s| s == "std") {
+    if namespaces.first().is_none_or(|s| s != "std") {
         return None;
     }
 

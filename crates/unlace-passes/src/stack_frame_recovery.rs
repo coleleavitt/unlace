@@ -264,7 +264,11 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     // share the same `size` *and* are spaced by exactly that size we
     // collapse them into one slot whose `size` covers the whole span.
     // The surviving slot keeps every observed access width.
-    let array_groups = detect_arrays(&locals);
+    let array_groups = detect_arrays(
+        &locals,
+        &func.dwarf_local_names,
+        &func.dwarf_aggregate_offsets,
+    );
     for (start, span, widths) in array_groups {
         stack_frame_trace_line(
             func,
@@ -488,7 +492,18 @@ fn primitive_width(ty: PrimitiveType, spec: &StackSpec) -> Option<u8> {
 /// identical and whose spacing equals that size form an array. We bail
 /// out as soon as the pattern breaks (different size or non-stride gap),
 /// emitting the run we just closed if it had ≥3 elements.
-fn detect_arrays(locals: &BTreeMap<i64, StackLocal>) -> Vec<(i64, u64, Vec<u8>)> {
+///
+/// `dwarf_names` carries the calibrated DWARF local names keyed by resolved
+/// stack offset. A candidate run is rejected when it covers more than one
+/// distinct DWARF-named scalar: those are individually declared source
+/// variables (e.g. `int a, b, c, d, e;`), not array elements, so fusing
+/// them into one buffer is a regression. Runs with at most one named slot
+/// (genuine arrays, where DWARF names only the array head) still fuse.
+fn detect_arrays(
+    locals: &BTreeMap<i64, StackLocal>,
+    dwarf_names: &BTreeMap<i64, String>,
+    dwarf_aggregate_offsets: &BTreeSet<i64>,
+) -> Vec<(i64, u64, Vec<u8>)> {
     let mut out = Vec::new();
     let entries: Vec<(i64, u64, Vec<u8>)> = locals
         .iter()
@@ -519,6 +534,22 @@ fn detect_arrays(locals: &BTreeMap<i64, StackLocal>) -> Vec<(i64, u64, Vec<u8>)>
         }
         let count = j - i;
         if count >= 3 {
+            // Count distinct DWARF-named *scalar* slots in the run. More than
+            // one means these are separate source scalars that happen to be
+            // contiguous (e.g. `int a, b, c, d, e;`) — never an array, so do
+            // not fuse. Aggregate-typed names (struct / array locals) are
+            // excluded from this count: an aggregate legitimately spans a
+            // byte region and may share a fused buffer with a neighbour.
+            let distinct_named = entries[i..j]
+                .iter()
+                .filter(|(off, _, _)| !dwarf_aggregate_offsets.contains(off))
+                .filter_map(|(off, _, _)| dwarf_names.get(off))
+                .collect::<BTreeSet<_>>()
+                .len();
+            if distinct_named > 1 {
+                i += 1;
+                continue;
+            }
             let span = stride * count as u64;
             out.push((start_off, span, widths));
             i = j;
@@ -1310,5 +1341,74 @@ mod tests {
                 local.kind
             );
         }
+    }
+
+    fn stack_local(size: u64) -> StackLocal {
+        StackLocal {
+            offset: 0,
+            size,
+            access_widths: vec![size as u8],
+            kind: FrameSlotKind::Local,
+        }
+    }
+
+    /// The distinct-name fusion guard: a run of equal-stride slots that carry
+    /// more than one distinct DWARF *scalar* name (e.g. `int a, b, c, d, e;`)
+    /// must NOT be fused into a single array buffer.
+    #[test]
+    fn detect_arrays_bails_run_of_distinct_named_scalars() {
+        let mut locals = BTreeMap::new();
+        for off in [-20i64, -16, -12, -8, -4] {
+            locals.insert(off, stack_local(4));
+        }
+        let mut names = BTreeMap::new();
+        names.insert(-20i64, "a".to_string());
+        names.insert(-16, "b".to_string());
+        names.insert(-12, "c".to_string());
+        names.insert(-8, "d".to_string());
+        names.insert(-4, "e".to_string());
+
+        let groups = detect_arrays(&locals, &names, &BTreeSet::new());
+        assert!(
+            groups.is_empty(),
+            "distinct named scalars a,b,c,d,e must not fuse: {groups:?}"
+        );
+    }
+
+    /// An unnamed equal-stride run is a genuine array and still fuses.
+    #[test]
+    fn detect_arrays_fuses_unnamed_run() {
+        let mut locals = BTreeMap::new();
+        for off in [-20i64, -16, -12, -8, -4] {
+            locals.insert(off, stack_local(4));
+        }
+        let groups = detect_arrays(&locals, &BTreeMap::new(), &BTreeSet::new());
+        assert_eq!(groups.len(), 1, "unnamed equal-stride run should fuse");
+        assert_eq!(groups[0].0, -20);
+        assert_eq!(groups[0].1, 20);
+    }
+
+    /// Aggregate-named slots are excluded from the distinct-name count, so two
+    /// adjacent aggregates (struct + array sharing a region) may still fuse
+    /// into one buffer — preserving the `type_stack_o2` baseline behaviour.
+    #[test]
+    fn detect_arrays_allows_aggregate_named_run_to_fuse() {
+        let mut locals = BTreeMap::new();
+        for off in [-24i64, -16, -8] {
+            locals.insert(off, stack_local(8));
+        }
+        let mut names = BTreeMap::new();
+        names.insert(-24i64, "p".to_string());
+        names.insert(-16, "values".to_string());
+        let mut aggregates = BTreeSet::new();
+        aggregates.insert(-24i64);
+        aggregates.insert(-16);
+
+        let groups = detect_arrays(&locals, &names, &aggregates);
+        assert_eq!(
+            groups.len(),
+            1,
+            "aggregate-named slots must not block fusion: {groups:?}"
+        );
     }
 }

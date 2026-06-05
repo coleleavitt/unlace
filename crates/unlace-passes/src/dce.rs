@@ -286,6 +286,8 @@ mod tests {
             frame_setup_insns: std::collections::BTreeSet::new(),
             stack_offset_hints: std::collections::BTreeMap::new(),
             dwarf_local_names: std::collections::BTreeMap::new(),
+            dwarf_aggregate_offsets: std::collections::BTreeSet::new(),
+            pending_dwarf_locals: Vec::new(),
             inferred_structs: std::collections::BTreeMap::new(),
             composite_var_types: std::collections::BTreeMap::new(),
             array_strides: std::collections::BTreeMap::new(),

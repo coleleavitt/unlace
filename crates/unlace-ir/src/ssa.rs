@@ -281,6 +281,30 @@ pub struct StackVar {
     pub accesses: Vec<SsaVarnode>,
 }
 
+/// A raw DWARF local or parameter record staged before stack-offset
+/// calibration. Carries the CFA-relative `frame_offset` and the per-function
+/// `cfa_to_rbp_delta` derived from `.eh_frame` so the calibration step can
+/// land the name onto the resolved stack slot.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PendingDwarfLocal {
+    /// CFA-relative `DW_OP_fbreg` offset from the loader.
+    pub frame_offset: i64,
+    /// Source identifier for this local/parameter.
+    pub name: String,
+    /// Per-function CFA→RBP delta from `.eh_frame` (the constant offset of
+    /// the `CFA = RBP + offset` rule). `None` for no-frame-pointer / leaf
+    /// functions, where no uniform shift is valid.
+    pub cfa_to_rbp_delta: Option<i64>,
+    /// `true` when the DWARF type is a bare struct / union / array aggregate
+    /// the decl emitter cannot yet render faithfully — such slots are
+    /// excluded from name calibration so a coalesced buffer is not de-fused
+    /// into mistyped scalars (the `type_stack_o2` canary).
+    pub is_aggregate: bool,
+    /// `true` when this record is a spilled parameter home slot (consumed to
+    /// drive duplicate-local suppression downstream).
+    pub is_param: bool,
+}
+
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -587,6 +611,21 @@ pub struct SsaFunction {
     /// [`StackVarRecoveryPass`](https://docs.rs/unlace-passes) to override
     /// the synthesised `local_X` names.
     pub dwarf_local_names: BTreeMap<i64, String>,
+    /// Stack offsets (in the same calibrated space as `dwarf_local_names`)
+    /// whose DWARF type is a bare struct / union / array aggregate. The
+    /// array-fusion guard consults this so that two *aggregate*-named slots
+    /// may still coalesce into one byte buffer (e.g. a `struct` + array that
+    /// share a frame region), while two distinct *scalar*-named slots
+    /// (`int a, b, c, d, e;`) are kept separate.
+    pub dwarf_aggregate_offsets: BTreeSet<i64>,
+    /// Raw, *uncalibrated* DWARF local/parameter records staged by the
+    /// pipeline at SSA-build time and consumed by the structural-stage
+    /// calibration step once real stack-access offsets are known. The
+    /// `frame_offset` is the CFA-relative `DW_OP_fbreg` offset; calibration
+    /// applies the per-function `cfa_to_rbp_delta` (carried on each record)
+    /// to land the name/type on the resolved stack slot. Empty when no DWARF
+    /// info is present or after calibration has cleared it.
+    pub pending_dwarf_locals: Vec<PendingDwarfLocal>,
     /// Composite (struct/array/typed-pointer) types inferred from stack-slot
     /// layout or DWARF. Keyed by the starting RSP-relative offset of the
     /// composite. Populated by
@@ -1590,6 +1629,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         inferred_return_type: PrimitiveType::Unknown,
         frame_setup_insns: BTreeSet::new(),
         dwarf_local_names: BTreeMap::new(),
+        dwarf_aggregate_offsets: BTreeSet::new(),
+        pending_dwarf_locals: Vec::new(),
         inferred_structs: BTreeMap::new(),
         composite_var_types: BTreeMap::new(),
         array_strides: BTreeMap::new(),

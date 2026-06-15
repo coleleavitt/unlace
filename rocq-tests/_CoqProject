@@ -1,0 +1,9 @@
+-Q theories Unlace
+-arg -w -arg -deprecated-from-Coq
+-arg -w -arg -notation-overridden
+
+theories/Bitvector.v
+theories/ValueLattice.v
+theories/KnownBits.v
+theories/AlgebraicSimplify.v
+theories/TInfo.v

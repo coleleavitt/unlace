@@ -4,7 +4,9 @@
 # Axis 1 is the existing fixture-style score plus exact-line golden triage.
 # Axis 2 runs the source-known executable-equivalence report with
 # PASS/XFAIL/unsupported rows. Axis 3 runs the DWARF/source-ground-truth type
-# and variable recovery scorer.
+# and variable recovery scorer. Axis 4 is formal: it builds the Rocq proof
+# project and kernel-checks that the verified decompiler cores have zero
+# admits/axioms (skipped with a notice if Rocq is not installed).
 
 set -euo pipefail
 
@@ -26,3 +28,11 @@ echo "Semantic Correctness: report PASS (unexpected failures only; known gaps ar
 echo
 echo "== Type/variable recovery axis =="
 cargo run -p xtask -- type-recovery-report
+
+echo
+echo "== Formal verification axis (Rocq machine-checked cores) =="
+if command -v coqc >/dev/null 2>&1; then
+  bash scripts/verify_proofs.sh
+else
+  echo "Formal Verification: SKIPPED (Rocq/coqc not installed; see rocq-tests/README.md)"
+fi

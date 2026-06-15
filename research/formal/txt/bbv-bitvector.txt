@@ -1,0 +1,1234 @@
+BinSub: The Simple
+Essence of Polymorphic Type Inference for Machine Code
+Ian Smith[0009−0006−5584−9345]
+
+arXiv:2409.01841v1 [cs.PL] 3 Sep 2024
+
+Trail of Bits, New York, USA
+ian.smith@trailofbits.com
+
+Abstract. Recovering high-level type information in binaries is a key task in reverse
+engineering and binary analysis. Binaries contain very little explicit type information. The structure of binary code is incredibly flexible allowing for ad-hoc subtyping
+and polymorphism. Prior work has shown that precise type inference on binary code
+requires expressive subtyping and polymorphism.
+Implementations of these type system features in a binary type inference algorithm
+have thus-far been too inefficient to achieve widespread adoption. Recent advances
+in traditional type inference have achieved simple and efficient principal type inference
+in an ML like language with subtyping and polymorphism through the framework
+of algebraic subtyping. BinSub, a new binary type inference algorithm, recognizes
+the connection between algebraic subtyping and the type system features required to
+analyze binaries effectively. Using this connection, BinSub achieves simple, precise,
+and efficient binary type inference. We show that BinSub maintains a similar precision
+to prior work, while achieving a 63x improvement in average runtime for 1568 functions. We also present a formalization of BinSub and show that BinSub’s type system
+maintains the expressiveness of prior work.
+Keywords: Type inference · subtyping · algebra · reverse engineering · binary analysis.
+
+1 Introduction
+Binary reverse engineering has a variety of important security applications including binary
+hardening, vulnerability research, program understanding, and recompilation. Decompilers
+are widely used to aid in the reverse engineering process, providing high-level understandable
+representations to downstream applications. Type information drives the quality of decompilation. Types determine how pointer arithmetic is rewritten to field or array accesses, the form
+of function calls, and what casts are required [13,14]. The correctness of this type information
+has a direct effect on the decompilation’s usability for vulnerability assessment.
+While expensive and precise methods exist for type inference on binaries, widely used
+decompilers take simple approaches to recovering type information. Ghidra and IDA both
+by default provide type inference passes that directly propagate type equality from a called
+function to its callers through identified parameters’ reaching definitions [15,25,2]. This
+approach works well on binaries with significant type information, safely propagating known
+function types to callers. The approach is simple to understand and implement, and scales to
+large binaries with acceptable precision. This approach unfortunately has major shortcomings
+
+2
+
+Ian Smith
+
+when dealing with novel binaries that do not have type library information to bootstrap
+analysis. Even in binaries that use a significant number of well known libraries, new types
+created by the target application are left entirely to the reverse engineer to recover manually.
+Additionally, type inference based on equality between parameters will under refine a pointer
+that has capabilities (e.g., fields) that are only used by some callees of the function. Direct
+equality ignores complexities like width subtyping [18]. A fully stripped and novel binary
+confounds current analyses applied in these disassemblers [18,20].
+New work on type systems for binary type inference have attempted to address these
+limitations by adding features to the type system to cope with the flexibility of C and binary
+types. Early approaches applied a purely unification based type inference algorithm, lacking
+subtyping constraints between variables [6]. This approach can drastically over-refine type
+solutions for type variables by assuming type dataflow is symmetric. TIE refined this approach
+with subtyping both for atomic types and depth and width subtyping for records [18]. Retypd,
+achieved further precision improvements by adding polymorphism, contravariant stores, and
+recursive types [20].
+Unfortunately, these more expressive type systems that compensate for the flexibility of
+binary code have resulted in complex constraint simplification algorithms. Retypd’s simplification algorithm for recursively constrained polymorphic types translates type constraints to
+a weighted pushdown system that recognizes legal derivations between interesting variables.
+Derivations are then explored through a saturation procedure that is O(N 3) in the size of
+the type constraints [9]. The algorithm is inefficient on binaries containing large functions
+or functions with many callees (due to callsite instantiation). Furthermore, the algorithm
+contains significant subtleties, particularly related to width subtyping, cycle elimination and
+path exploration, and the extensions to weighted pushdown automata saturation [24]. The
+complexity of the analysis limits the application of the type system in more widely used
+binary analysis platforms.
+The contribution of this paper is to show that Retypd’s type system can be reformulated
+within the framework of algebraic subtyping, resulting in a 63x average speedup on an
+evaluation dataset of 1568 functions [11]. This reformulation leads to a simple type system
+that preserves the expressive features of Retypd: subtyping, contravariance of pointer stores,
+recursive types, and polymorphism. Placing binary type inference in the context of algebraic
+subtyping challenges the problem’s pretensions as a form of type inference outside of traditional type inference. Consequently we show that we are justified in demanding similar
+performance and advances for binary type inference as those seen in high-level programming
+language type systems. Specifically we:
+– demonstrate that Retypd’s type system features can be replicated simply and efficiently
+using the framework of algebraic subtyping
+– highlight a practical implementation of this type inference algorithm in the Angr binary
+analysis framework: BinSub
+– empirically evaluate BinSub against Retypd, demonstrating similar precision with marked
+performance improvements (63x reduction in average runtime on 1568 functions sampled
+from the ALLSTAR armel and amd64 categories [17])
+– present a formalization of BinSub and demonstrate a translation between Retypd constraints and BinSub constraints along with a preservation of subtyping judgement derivations
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+3
+
+2 Background
+2.1 Binary Type Inference
+Approaches to static type recovery can roughly be separated into two phases: constraint
+generation and constraint solving. Binary type inference algorithms typically take similar approaches to constraint generation. A model of a binary’s dataflow is built through a collection
+of static analyses that identify function boundaries, resolve function calls, determine function
+parameter locations based on the target application binary interface (ABI), and perform
+pointer analysis to propagate dataflow through loads and stores [18,6,13,20]. These analyses
+are often constructed as a static dataflow problem, using abstract interpretation frameworks
+such as value-set-analysis (VSA) [5]. Type constraints are then generated by visiting the
+program representation and generating a type constraint for each dataflow between program
+variables (i.e., registers, parameters, and recovered stack variables). Approaches then differ
+in the underlying type system features they support.
+We first motivate BinSub’s simplifications to Retypd’s type system by outlining the challenges the type system was designed to solve [20]. We identify four pillars of type inference
+in Retypd: subtyping, pointer covariance/contravariance, recursive types, and polymorphism.
+Subtyping: Retypd first addresses a problem highlighted in TIE [18]. Compilers erase types,
+allowing fortuitous reuse of variable locations for values of different types as long as the type
+is small enough to use the location. Retypd highlights cases where a value can be used both
+as an integer and as a pointer when passed to a function with the signature f(void*, int)
+xor eax, eax
+push eax
+push eax
+call f
+
+Fig. 1. A function call using a zeroed register both as a null pointer and an integer
+
+Figure 1 shows optimized compilation of the call f(NULL, 0). The compiler is able to
+reuse the zeroed value of eax for both parameters. Unifying the types of the two parameters
+based on their equality to eax would cause both parameters of f to have the imprecise type
+⊤ (assuming the supertype of int and void* is ⊤ and not a type error). This challenge
+extends to type punning on void* or union types. Binary type systems incorporate subtyping to avoid this imprecision. An assignment of the form a=b does not imply that the type of
+a is equal to that of b. Instead, for type variables α and β for program variables a and b,
+constraints contain directionality and are of the form β ≤α. Adding subtyping to a type system with type inference creates difficulties in presenting types to the user. Unification creates
+canonical types for each solved type. On the other hand, a type system based on subtyping collects a set of constraints for each type variable. Typically these constraints are simplified before
+presentation. Retypd performs simplification both by reducing constraint sets to relationships
+between interesting type variables and through automata minimization of type sketches.
+
+4
+
+Ian Smith
+
+Recursive Types: Retypd departs from TIE by handling recursive types in combination with
+subtyping. C-like languages often use recursive structure types to represent lists or trees. Type
+recovery algorithms targeting binaries have often struggled to construct these types [8].
+
+struct lst {
+int value;
+struct lst* next;
+};
+
+Fig. 2. A recursive linked list type in C
+
+Types like those presented in Figure 2 create problems for a naive type simplification
+algorithm. Specifically, constraints on a variable may reference the variable itself so naively
+applying typing rules to a fixed point will diverge. Retypd represents rules within an unconstrained pushdown system that is saturated to represent reachable derivations in the form
+of an automata. This process avoids diverging in the presence of recursive constraints. The
+automata may contain loops, indicating a recursive type. At this point the algorithm can cut
+loops by introducing a new type variable for strongly connected component (SCC) members
+(thus creating a recursive type at this new type variable).
+
+Pointer Representation: Subtyping between pointers presents further complications. Pointers can both be written to and read from. If a pointer is represented by a type constructor
+ptr(α) and that constructor is treated as covariant (as occurs in TIE) then a loss of type
+information occurs after a pointer has been copied from an old pointer p to a new pointer
+q, implying the constraint p≤q [18]. If a value is stored to q, then loading from p does not
+result in subtyping information being propagated between the store and the load due to the
+directionality of covariance on p and q [20]. The parameter of the pointer q is not a subtype of
+p because the parameter is covariant. On the other hand, if the pointer constructor is treated as
+contravariant then storing into the old pointer p will not be reflected in loads from q, because
+now the parameter of p is not a subtype of the parameter of q. Intuitively, we would like
+subtyping to be implied both in the first and second case. This problem is exactly analogous
+to mutable ref types in ML, where the typical treatment when adding subtyping is to make
+mutable references invariant in their type parameter [12]. Such a solution is unacceptable
+when using type inference to recover types in a binary. The natural solution is to treat store
+and load as separate type parameters, where the load parameter is covariant and the store
+parameter is contravariant [12]. Retypd takes a similar approach and adds the following typing
+rule to ensure propagation between load and store capabilities:
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+5
+
+Var α.load
+Var α.store
+α.store ≤ α.load
+Fig. 3. S-Pointer rule in retypd
+
+This rule creates the binding between the store and load capability for a type variable,
+allowing derivations that determine that a value stored to a pointer must be a subtype of the
+type loaded from that pointer. Unfortunately, this rule would result in an unbounded number
+of transitions in the unconstrained pushdown system if it were applied whenever it is possible
+to do so [20]. Instead this rule is instantiated lazily during saturation by recognizing when
+a load or store is in the reaching push set of a node and adding a shortcut edge to the implied
+target of the S-Pointer rule. Retyd takes advantage of the strategy applied to handle recursive
+types to also handle S-Pointer rule instantiations without diverging.
+Polymorphism: Finally, Retypd augments binary type inference with soundness in the presence of polymorphic functions. In C, void* types can be used to replicate polymorphsim,
+where a function performs an operation, agnostic to the underlying type of the parameter
+or return value. Standard heap allocation and free functions are examples of this behavior
+where there is no subtyping relationship between pointers returned from malloc or passed
+to free. If every type returned from malloc was placed in a subtyping relationship with
+α such that malloc is assigned the type size_t→α, every heap allocated pointer in the
+program would be over-refined with capabilities from every other heap pointer. To resolve
+this issue Retypd adds polymorphism to the type system, allowing malloc to be given the
+type ∀α.size_t → α, generalizing the return type and avoiding over-refined types where
+malloc is used. Retypd defines type sketches which represent the derived constraints on a type
+variable as an automaton. Type sketches form a lattice. This lattice structure allows for joining
+type constraints for all uses of a given function to collect the most general type implied by
+all callsites of the function. Type sketches can be instantiated as constraints in order to use
+the sketch as part of the constraint set at each callsite.
+Supporting type inference directly for a type system with the features highlighted in
+section 2.1 in Retypd resulted in a complex and difficult to analyze algorithm that relies
+on saturating a weighted pushdown system in order to produce a finite state transducer that
+recognizes legal derivations, a sketch inference algorithm, polymorphic schemes based on type
+sketches, and a type inference algorithm based on these components [20]. The algorithm is
+computationally expensive and difficult to implement. In the following sections we show that
+Retypd’s pillars of type inference can be captured in the framework of algebraic subtyping [23],
+leading directly to an efficient and simple type inference algorithm for machine code: BinSub.
+2.2 Algebraic Subtyping
+Algebraic subtyping, introduced in MLSub, formulates a subtyping lattice of ML types that
+has convenient algebraic properties that enable principal type inference of compact types in
+ML with depth and width subtyping for records [11]. Algebraic subtyping creates a distributive
+lattice through the use of intersection and union types. Type inference restricts the represented
+
+6
+
+Ian Smith
+
+types to polar types where intersection types only appear in negative positions (also referred to
+as input positions) and union types only appear in positive positions (also referred to as output
+positions). This syntactic restriction on types allows for a finite representation of types that
+suffices for principal type inference. Polar types also enable the construction of type automata
+used for type simplification. MLSub uses a modified version of Algorithm W: bi-unification,
+to produce polar types from subtyping constraints [11]. Bi-unification performs substitutions
+separately on positive and negative occurrences of variables, replacing a negative occurrence
+with a variable’s upper bounds and a positive occurrence with a variable’s lower bounds.
+Polar types allow bi-unification to eliminate subtyping constraints by aggregating bounds on
+a variable through intersection and union types.
+SimpleSub presents a simplified algorithm for bi-unification that is efficient [23]. The algorithm proceeds by first aggregating all implied subtyping constraints on a variable, and then
+coalescing the type of a variable by substituting negative and positive occurrences accordingly.
+
+3 Implementing BinSub
+BinSub’s core idea is that the type system features of ML with subtyping correlate closely
+with the features required for precise binary type inference. Algebraic subtyping type systems
+like MLSub naturally support subtyping, recursive types, and parametric polymorphism with
+principal types [20,12]. Consequently algebraic subtyping is a natural solution to binary type
+inference.
+3.1 Overview
+BinSub acts as the type inference algorithm within a decompiler or binary analysis framework,
+ingesting subtyping constraints of the form τ1 ≤τ2 and solving for C types that instantiate type
+variables of interest (e.g., function variables to recover function signatures). These subtyping
+constraints are generated by walking the intermediate representation (IR) of binary functions
+and producing type constraints implied by a given instruction.
+Function Lifting and Constraint Generation: Operating over a function’s lifted IR assumes
+that disassembly and control flow graph (CFG) recovery have already produced an analyzable
+CFG for each function [4,3]. While this process is similar to type constraint generation in
+a typical high-level language, there are additional unknowns that require analysis to derive.
+When generating constraints for IR statements: *(sp+4)=a;b=load (sp+4), constraint
+generation must record that sp+4 points to a stack variable s1 in order to aggregate type
+information for that variable. This aliasing information implies constraints a≤s1 and s1≤b
+and aggregates constraints on the stack variable s1.
+To encode this aliasing and variable information into type constraints, typically binary
+analyses first compute a memory access analysis such as VSA [6] to statically compute an
+over-approximation of pointers accessed at a given load or store and the offsets accessed from
+a given pointer before performing type recovery. These offsets are used to compute a set of
+non-overlapping stack variables and record field constraints on pointers. Alternative constraint
+generation analyses are possible, including using dynamic analysis to record memory access
+offsets at runtime [19]. In our implementation of BinSub, described in section 5.1, we use
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+7
+
+Angr’s fast variable recovery analysis to generate type constraints. This analysis resolves loads
+and stores that access stack variables by using a VSA-like domain to track values relative
+to the stack pointer and recording load and store offsets that are performed on those values
+[1]. These analyses allow subtyping constraints to operate over abstract variables rather than
+concrete registers and memory locations relative to the stack pointer. Figure 4 and 5 shows
+the translation from C code to an intermediate representation with recovered stack references.
+BinSub performs type inference on a representation similar to Figure 5; we use this function
+as a running example to demonstrate BinSub in Section 3.2.
+
+struct lst* x; // free var 1
+void* y; // free var 2
+struct lst* curr = x;
+struct lst* cpy = y
+while(curr != NULL) {
+cpy = curr;
+curr = cpy->next;
+cpy->value++;
+}
+... // use cpy here
+
+Fig. 4. Incrementing values in a linked list
+
+block_1:
+1: stack_slot_1 = x;
+2: stack_slot_2 = y;
+block_2:
+3: stack_slot_2 = stack_slot_1;
+4: t1 = load [stack_slot_2 + 4], 4;
+5: stack_slot_1 = t1;
+6: t2 = load [stack_slot_2], 4;
+7: t3 = t2 + 1
+8: store [stack_slot_2], t3
+
+Fig. 5. Intermediate representation of Figure 4 after
+variable recovery
+
+Type Inference: To start type inference, the IR displayed in 5 is translated into subtyping
+constraints. After constraint extraction, BinSub solves for C types for type variables in three
+steps: bi-unification, simplification, and lowering. Bi-unification aggregates constraints on a
+given variable and produces a finite BinSub type for that variable. These types are conservative
+in that the constraints on the variable are fully represented by intersection and union types,
+however, these types will have redundant intermediate type variables and overly complex
+structure [23]. Simplification applies subtyping rules to aggregate records, function types,
+and atoms by merging intersection and union types and removing redundant type variables.
+Finally, type lowering converts BinSub types to C types by selecting a representative C type
+for each component of a BinSub type. In the following section, we describe bi-unification,
+type simplification, and lowering within BinSub. In Section 4, we present BinSub’s subtyping
+rules and relate them to Retypd’s subtyping rules to demonstrate that this implementation
+preserves the expressive type system features of Retypd.
+Limitations: The approach outlined above restricts the domain of BinSub to inferring types
+for binaries where IR of the form shown in Figure 5 can be recovered. Type inference operates
+over this IR and its precision is bounded by the precision of the recovered IR. This IR
+corresponds to a low-level untyped C-like representation with abstract variables. Complex
+features of binaries are known to complicate code recovery, disassembly, and lifting. Indirect
+
+8
+
+Ian Smith
+
+jumps can prevent control flow recovery when using recursive descent disassembly, nonstandard application binary interfaces (ABIs) may prevent parameter or stack recovery, and
+self-modifying code may not be lifted all [22]. In order to apply type inference to functions
+that are not represented properly by a disassembler, a user may be required to make manual
+fixes (e.g., manually labeling control flow).
+Given that BinSub operates over a C-like representation and recovers C types, type system
+features such as generic or templated types, classes, and virtual functions are not represented
+in the type system. The IR is a monomorphic representation of functions with stores, loads,
+and basic expressions that correspond to the C language. The next section outlines the types
+that can be expressed in BinSub: records, functions, pointers and atomic types. While the
+algorithm itself is parameterized on an arbitrary atomic type lattice, we instantiate BinSub
+with a lattice available in Angr that contains basic primitive C integers in Section 5.1 [26].
+Finally, lowering a more expressive type system to C types for presentation requires heuristics [20]. BinSub can collect types that would typically be a type error: int16⊓ptr(α,β). As
+described in the following section this type would be the subtype of a 16 bit primitive integer
+and pointer, resulting in bottom (a type denoting that no subtype exists). BinSub can represent
+such a type directly whereas C types cannot. The heuristics in 3.3 describes how pointers are
+prioritized over atomic types when aggregating a type solution for a variable as a C type.
+3.2 Applying Algebraic Types to Binary Type Inference
+Figure 6 describes the syntax of BinSub types where nx are metavariables ranging over natural
+numbers.
+τ ::=
+{(n0 ,n1 ):τ,...(nm−1 ,nm ):τ}|(n0 :τ,...n p :τ)→(n p+1 :τ,...nr :τ)|ptr(τ,τ)|α|⊤|⊥|τ ⊔τ|τ ⊓τ|µα.τ|ρ
+ρ =int64|int|float|...
+Fig. 6. BinSub Types
+
+BinSub’s type system consists of records, functions, pointers, type variables, and atomic
+types. Records are partial functions of field capabilities to types. A field capability is a
+combination of an offset into the record (in bytes) and a size (in bits). Tracking field capabilities
+allows BinSub to define a lattice of record types in the presence of overlapping loads or stores
+to or from a record. Similarly, function types are flexible in the number of parameters and
+return values. Function types are represented as a partial function from parameter index to type
+and a partial function from return index to type. Departing from type systems like TIE [18],
+pointers are constructed from two types: a contravariant store type and a covariant load type.
+This separation of pointer types addresses unsoundness in mixing mutable references with
+subtyping and intersection types [10,12]. Atomic types, defined by the syntactic class ρ are
+any set of atoms equipped with a complete subtyping lattice. Throughout the text the atomic
+lattice is referred to as A and is equipped with standard lattice join and meet operations: ⊔A and
+⊓A as well as a top and bottom element: ⊤A and ⊥A. BinSub is parameterized over any lattice
+of atomic types. BinSub types also contain recursive types of the form µα.τ and type variables
+α. Viewed under SimpleSub’s formalization, recursive types can be understood as equivalent
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+9
+
+under some unrolling substitution of the recursive type for α [23]. Subtyping introduces
+some complication to the presentation by requiring hypothetical subtyping judgements to
+demonstrate subtyping judgements between recursive types that are not equivalent by unrolling.
+BinSub represents a collection of constraints on a type variable by aggregating constraints
+on the variable into an intersection (τ ⊓τ) or union (τ ⊔τ) type of its bounds.
+
+Polarity Restrictions: For ease of manipulation and to represent recursive types finitely,
+BinSub separates the syntax of types into negative and positive types [23,11]. Positive types
+represent outputs and negative types represent inputs. Constraints represent dataflow between
+positive and negative types in the form α + ≤ β −. The polarity of BinSub types matches
+SimpleSub and MLSub with function returns being positive positions, parameters being
+negative positions, and record fields being positive positions. Pointer types are negative in the
+store parameter and positive in the load parameter: ptr(τ −,τ +). Union types can only appear
+in positive positions, and intersection types can only appear in negative positions. These
+simplifying assumptions enable a translation from polar types to type automata, allowing for
+simplification of types through automata simplification [12]. Prior work has shown that type
+inference using polar types is complete for type-able expressions [11]. Throughout the rest
+of the paper we denote positive types as τ + and negative types as τ −.
+It is interesting to compare polarity to the construction of Retypd’s weighted pushdown
+system. Retypd maintains a similar distinction between a variable appearing in the left hand
+side of a constraint or right hand side of a constraint. Each interesting variable is tagged with
+an L or R when emitting rules. For an interesting variable x, xR collects lower bound on
+x, while xL collects upper bounds. In algebraic subtyping, variables are treated differently
+depending on if they appear positively or negatively in a constraint. A positive occurrence of
+x collects lower bounds on a variable corresponding to xR and a negative occurrence collects
+upper bounds on a variable corresponding to xL .
+
+Constraint Generation: Type inference operates over a set of constraints of the form
+τ + ≤τ −. Section 5.1 describes how these constraints are generated during Angr’s variable
+recovery analysis.
+
+10
+
+Ian Smith
+1: x≤stack_slot_1
+2: y≤stack_slot_2
+3: stack_slot_1≤stack_slot_2
+4 0 : stack_slot_2≤ptr (a , {(4 ,4) : b })∧a≤{(4 ,4) : b }
+4 1 : b≤t1
+5: t1≤stack_slot_1
+6 0 : stack_slot_2≤ptr (c , {(0 ,4) : d })∧c≤{(0 ,4) : d }
+6 1 : d≤t2
+7 0 : t2≤int32
+7 1 : int32≤t3
+8 0 : stack_slot_2≤ptr ({(0 ,4) : e } , f )∧{(0 ,4) : e }≤f
+8 1 : t3≤e
+Fig. 7. Constraints generated from Figure 5
+
+Figure 7 highlights constraints generated from the example linked list code. The subtyping
+constraints are for the most part straightforward, encoding the dataflow of the intermediate
+representation. When stack_slot_2 is used as a pointer, that capability is enforced by
+requiring that stack_slot_2 be a subtype of a pointer with fresh variables where applicable. Each instantiation of the ptr constructor also results in a side condition, enforcing
+subtyping between the store and load parameter (e.g, a ≤ (4,4): b).
+These constraints can now be solved through bi-unification. Bi-unification eliminates
+constraints and produces unconstrained types by representing constraints on variables as
+intersection and union types [12]. A collection of d
+lower bounds on a type can be represented
+F
+as ilbi and upper bounds can be represented as iubi.
+Bi-unification as Constraint Decomposition and Type Coalescing: MLSub uses biunification to produce unconstrained types from type constraints [12]. Bi-unification works
+by resolving all constraints to atomic constraints on variables and substituting atomic lower
+bounds for positive occurrences and atomic upper bounds for negative occurrences. SimpleSub presents a simple and efficient mutation based approach to bi-unification for producing
+unconstrained types [23]. The approach splits bi-unification into constraint decomposition
+and coalescing. BinSub takes this simplified approach to generating unconstrained types.
+Decomposition collects constraints on type variables ensuring that all constraints implied
+by the initial constraint τ + ≤τ − and the typing rules of BinSub are represented by a consistent
+constraint set on type variables. A constraint set consists of upper and lower bounds for each
+type variable (corresponding to its negative and positive instantiations). A constraint set is
+consistent if all lower bounds of a type variable are subtypes of its upper bounds. A consistent
+constraint set is built from a subtyping constraint by deriving all constraints on variables implied by the typing rules for constructors involved in the component types, and then enforcing
+consistency by recursively applying rules to constrain the lower or upper bounds of a variable
+whenever a bound is added. The algorithm for constraint decomposition is highlighted in
+Algorithm 1. This algorithm extends SimpleSub with the corresponding pointer, record, and
+function rules for BinSub types. Rules for functions and records are omitted due to space,
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+11
+
+but follow the same pattern as pointers where constrain is called recursively on matching
+parameters depending on the covariance or contravariance of those parameters.
+
+Algorithm 1 Recursively decompose a constraint τ0 ≤τ1 into constraint set C
+function CONSTRAIN(C,τ0 ,τ1 )
+if ptr(a,b)=τ0 & ptr(c,d)=τ1 then
+CONSTRAIN(C,c,a)
+CONSTRAIN(C,b,d)
+else if α =τ0 then
+CONCAT(C[α]ub ,τ1 )
+for all x∈C[α]lb do
+CONSTRAIN(C,x,τ1 )
+end for
+else if α =τ1 then
+CONCAT(C[α]lb ,τ0 )
+for all x∈C[α]ub do
+CONSTRAIN(C,τ0 ,x)
+end for
+end if
+end function
+
+Figure 8 shows interesting constraint decomposition calls on the example constraints from
+Figure 7. The algorithm maintains a lower and upper bound on each type variable. When a
+type is constrained to be a subtype of another type (e.g., constrain(t3,e)) the bounds are
+modified to maintain consistent bounds. The figure shows calls to constrain (including recursive calls) and shows modifications to the upper and lower bounds of a variable during the
+call. The call constrain(t3, e) demonstrates maintaining consistency between bounds.
+When e is installed as an upper bound on t3, a lower bound of int32 already exists on
+t3, so constrain must be called to apply the lower bound to e to maintain the requirement
+that all lower bounds are subtypes of upper bounds. This new call to constrain then results
+on further constraint propagation to the variables d and t2.
+Parreaux shows that this constraining process results in a consistent constraint set for the
+involved variables and that coalescing two types constrained by constrain result in two
+unconstrained types that are subtypes of one another [23]. This statement is the core lemma
+in proving the soundness of SimpleSub type inference. Coalescing a type τ uses polarity to
+produce a compact unconstrained representation of a type. The process of coalescing can
+be thought of as substituting a variable’s lower bounds for its positive occurrences and a
+variable’s upper bounds for its negative occurrences. This process is applied recursively to
+the bounds themselves with an occurrence check to capture recursive types. The rules for
+coalescing variables and pointers are highlighted in Algorithm 2.
+As an example, coalescing stack_slot_1 negatively begins by examining the upper
+bound stack_slot_2. Referring to the results in Figure 8, the occurs check does produce
+a recursive type, because stack_slot_2’s upper bound refers to b which refers to t1
+which refers to stack_slot_1. Therefore, the variable representing stack_slot_1: α
+becomes recursively bound. Coalescing then proceeds to stack_slot_2. At each variable,
+
+12
+
+Ian Smith
+; Assumes int32 is already in the lower bound of t3
+; and d is already in the upper bound of e
+; and t2 is in the upper bound of d
+constrain(t3, e)
+t3: {upper: [e], lower: [int32]}
+constrain(int32, e)
+e: {upper: [d], lower: [int32]}
+constrain(int32, d)
+d: {upper: [t2], lower: [int32]}
+constrain(int32, t2)
+t2: {upper: [int32], lower: [int32]}
+; Results
+stack_slot_1: {upper: [stack_slot_2})]
+lower: []}
+stack_slot_2: {upper: [ ptr(a, {(4,4): b}),
+ptr(c, {(0,4): d}),
+ptr({(0,4): e}, f)]})]
+lower: []}
+t1: {upper: [stack_slot_1], lower: []}
+
+Fig. 8. Interesting components of constraint decomposition on constraints from Figure 7
+
+the variable is coalesced with its upper bounds, using intersection types to take the least upper
+bound of all upper bounds. A negative position (e.g., store position) will cause the polarity
+to invert causing lower bounds to be aggregated by union types. The unsimplified coalesced
+type for stack_slot_1 is:
+µα.α ⊓stack_slot_2⊓ptr(a,{(4,4):b⊓(t1⊓α)})⊓
+ptr(c,{(0,4):d⊓(t2⊓int32)})⊓ptr({(0,4):e⊔int32, f )
+This coalesced type offers a finite representation of the constraint set for
+stack_slot_1, but contains redundancies. The following section shows how this type is
+optimized by representing coalesced types as a regular language [11]. Simplification takes
+advantage of this representation to build type automata and apply well known automata
+minimization techniques to optimize the represented type [21,16].
+Type Simplification: BinSub uses automata based simplification inspired by MLSub rather
+than the co-occurrence based simplification presented in SimpleSub [12,23]. It is unclear if
+the co-occurrence analyses presented capture the extent of desirable simplifications on type
+variables. Additionally, operating over recursive types directly instead of on automata leads to a
+complex recursive type merging procedure that must unroll recursive types until they align [23].
+Type automata optimization strategies can directly leverage standard algorithms for automata
+simplification [12]. Utilizing this construction does have a limitation. By merging function
+and record constructors this optimization technique assumes type equalities of the form a→
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+13
+
+Algorithm 2 Coalesce a type τ in the constraint context C and polarity p and recursive
+variables set R
+function COALESCE(C,τ,p,R)
+if ptr(a,b)=τ then
+return ptr(COALESCE(C,a,¬p,R), COALESCE(C,b,p,R) )
+else if α =τ then
+if α p ∈R then
+return a
+end if
+S←α
+bounds=C[α]if p then lb else ub
+rec= OCCURS(α p ,bounds)
+R′ =R∪{α p }
+for all x∈bounds do
+y= COALESCE(C,x,p,R′ )
+if p then
+S←S⊔y
+else
+S←S⊓y
+end if
+end for
+if rec then
+return µα.S
+else
+return S
+end if
+end if
+end function
+
+b⊓c→d =a⊔c→b⊓d. This typing rule is desirable to achieve compact types in BinSub, but
+other type systems may wish to forgo this rule, requiring changes to the optimization strategy.
+Type automata based optimization consists of three steps: automata construction, determinization, and minimization. Automata determinization and minimization are standard aside
+from the maintenance of a lattice element attached to each node. When determinization or
+minimization merges nodes, the lattice elements are merged according to their polarity. Below
+we highlight the automata construction and definition of the node lattice.
+Automata are constructed from coalesced polar types. A type automata is defined by
+a tuple < Q,q0,δ,H > where q0 ∈ Q and δ ∈ Σ. The alphabet Σ, contains labels for all
+type parameters of type constructors, that is Σ = {ε,FnIn(n),FnOut(n) ,RecLabel(n,m),
+StoreLabel,LoadLabel} where n,m∈N. The transition table is constructed by the rules:
+
+ε
+
+q(τ0 (⊓/⊔)τ1 ) −
+→ q(τ0 )
+ε
+q(τ0 (⊓/⊔)τ1 ) −
+→ q(τ1 )
+StoreLabel
+
+q(ptr(τ0 ,τ1 )) −−−−−−−→q(τ0 )
+LoadLabel
+
+q(ptr(τ0 ,τ1 )) −
+−−−−−−
+→q(τ1 )
+
+RecLabel(n,m)
+
+q({...(n,m):τ...}) −−−−−−−−−→q(τ)
+FnIn(n)
+
+q((...n:τ...)→(...)) −
+−−−−
+→q(τ)
+FnOut(n)
+
+q((...)→(...n:τ...)) −−−−−→q(τ)
+ε
+q(µα.τ) −
+→ q(τ)
+
+14
+
+Ian Smith
+
+Each state is labeled with a lattice element and polarity described by the function H. The
+function polarity describes the polarity of a type in the current context. V is the set of all
+type variables and A defines an atomic type lattice.
+H(τ)=(polarity(τ),E(τ))
+E :τ →L
+L:(T :P(V )×I :P(N)×O:P(N)×R:P(N×N)×P:P({p})×A)
+E(α)=({α},/0,/0,/0,/0,⊥A )
+E(ptr(τ0 ,τ1 ))=(/0,/0,/0,/0,{p},⊥A )
+E({...(n,m):τ...})=(/0,/0,/0,dom({...(n,m):τ...}),/0,⊥A )
+E((...n:τ,...)→(...m:τ,...))=(/0,dom((...n:τ,...)),dom((...m:τ,...)),/0,/0,⊥A )
+E(ρ)=(/0,/0,/0,/0,/0,ρ)
+
+BinSub extends L from prior work to incorporate lattices of in parameters (I), out parameters (O), record capabilities (R), and pointer capabilities (P) [11]. The elements of L form
+a product lattice of powerset lattices (excluding the atomic type lattice) so we define a meet
+and join operator accordingly (note the inverted direction of the lattice causing the join of two
+types to be a supertype of those types):
+α ⊔β =(..,αi ∩βi ,...,αρ ⊔A βρ )
+α ⊓β =(..,αi ∪βi ,...,αρ ⊓A βρ )
+
+From this lattice definition we define a commutative partial function for merging nodes:
+M((tt,l0 ),(tt,l1 ))=(tt,l0 ⊔l1 )
+M((ff,l0 ),(ff,l1 ))=(ff,l0 ⊓l1 )
+
+Type optimization occurs by performing subset determinization on the type automaton and then performing DFA minimization. M is used to merge node labels both during
+determinization and minimization. M is sufficient to handle merging node labels during determinization due to the construction of the automaton. By definition, nodes are only reachable
+by ε if the types labeling the nodes have the same polarity. Similarly, nodes reachable by
+the same constructor will have the same polarity because the edge label implies the polarity
+of a destination node with respect to the source node. During minimization, the initial state
+partition is determined both by the polarity and the constructors in the lattice element of the
+node, preventing merging nodes of different polarity during the application of Hopcroft’s
+minimization algorithm.
+Figure 9 shows the simplified automata for stack_slot_1. Importantly, determinization
+reduces redundancies in type variables. The variables d and t2 are merged into the same
+state due to epsilon edges between them in the original automata. The shown automata
+excludes load and store labels that only contain a single variable. This simplified type allows
+for a compact lowering.
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+15
+
+LoadLabel
+
+({α,t1,b,...},{p})−
+
+({(4,4)})−
+RecLabel(4,4)
+
+StoreLabel
+
+LoadLabel
+
+({(0,4)})−
+
+({(0,4)})+
+
+RecLabel(0,4)
+
+RecLabel(0,4)
+
+({d,t2},int32)−
+
+({e,d,t2},int32)+
+
+Fig. 9. Simplified automata for stack_slot_1
+
+β :({α,t1,b,...},{p})−
+
+StoreLabel
+
+RecLabel(0,4)
+
+({(4,4)})−
+
+RecLabel(4,4)
+
+LoadLabel
+
+({(0,4)})−
+
+({(0,4)})+
+
+({e,d,t2},int32)+
+
+LoadLabel
+
+β
+
+RecLabel(0,4)
+
+({d,t2},int32)−
+
+Fig. 10. Automata with loops broken
+
+3.3 Type Lowering
+Instead of decompiling automata back to BinSub types, BinSub produces C types from type
+automata. C types cannot represent type variables or intersection types so the lowering process
+is heuristic. There are two major algorithms required for building C types from type automata.
+The first algorithm selects how to break loops in the type automaton by creating named
+recursive types. This pass inserts synthetic named type nodes that consume internal strongly
+
+16
+
+Ian Smith
+
+connected component edges until loops are broken. BinSub uses a heuristic to first consume
+edges that reach a pointer node from a structure field as the recursive variable. In Figure 9,
+this heuristic results in a named node replacing the node ({α,t1,b,...},{p})− for the edge:
+RecLabel(4,4). During lowering, this name will refer to the resulting type for the named
+node. Figure 10 shows the acyclic version of the type automata, naming the pointer β.
+The second algorithm visits each node in the acyclic graph recursively and picks a type for
+that node. The type is selected from the lattice elements assigned to the node in a heuristically
+selected a-priori established priority: 1. record 2. pointer 3. function 4. atom. The selected
+constructor informs which outgoing edges will be used, and the polarity of the destination
+nodes informs whether to apply meet or join to repeated edges (with a caveat for pointers
+described below). In Figure 10, the root node receives the type pointer causing a meet on
+the targets of the load label resulting in {(0,4):int32}⊓{(4,4):β}. The store parameter is
+aggregated by performing a join of all store labels resulting in {(0,4) : int32}. C types do
+not represent a separate load and store type parameter for pointers or intersection types so
+BinSub must merge these types. BinSub applies the following identities to merge multiple
+record or pointer labels into a single type:
+(
+{(a,b):c⊓ f }
+a=d∧b=e
+{(a,b):c}⊓{(d,e): f }=
+{(a,b):c,(d,e): f } otherwise
+ptr(a,b)⊓ptr(c,d)=ptr((a⊔c)⊓(b⊓d),b⊓d)
+
+(a:b⊔ f )→(c:d⊔h)
+a=e∧c=g
+
+
+
+(a:b⊔ f )→(c:d,g:h) a=e∧c̸= g
+(a:b)→(c:d)⊓(e: f )→(g:h)=
+
+(a:b,e: f )→(c:d⊔h) a̸= e∧c=g
+
+
+
+(a:b,e: f )→(c:d,g:h) otherwise
+The pointer identity aggregates all load parameter types via a meet then performs a meet
+of the store parameters with the aggregate load parameter to enforce the constraint that store
+parameters are subtypes of load parameters for the ptr constructor. For the example type,
+the load parameters {(0,4):int32}⊓{(4,4):β} are aggregated to: {(0,4):int32,(4,4):β}
+using the record identity. Continuing the example, to compute the final pointer type, BinSub
+performs a meet of the store parameter with the aggregated load parameter, resulting in the
+named type: β = {(0,4) : int32,(4,4) : β}. This named type is the final type that can be
+rendered as the C type from Figure 2.
+The definition of the record identity implies the possibility of overlapping fields. For instance, the type {(0,4):τ1}⊓{(2,2):τ2} can be represented as {(0,4):τ1,(2,2):τ2}. BinSub’s
+type system itself is non-normative in how such overlapping fields should be rendered as a
+C type and simply records the possible offset and size accesses for a given record. Lowering
+could produce a union for overlapping fields to mantain a sound C type that allows accesses
+at all offsets recognized by BinSub. Instead, BinSub currently aggregates smaller fields into
+larger fields as a heuristic to produce succinct types.
+Polymorphism: Polymorphism has been ignored throughout the construction of the type inference and simplification algorithm. This focus on type inference and simplification internal
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+17
+
+to a function correlates with prior work [20]. The lack of higher order functions and internal
+polymorphic bindings in C means polymorphism can be achieved at function boundaries
+through function cloning, rather than generalization during type inference. These assumptions
+are simplifying assumptions; function pointers cannot be treated polymorphically with this
+solution. Using this simplifying assumption we define a compositional inter-procedural polymorphic type inference algorithm, using the above definition of intra-procedural type solving.
+
+Algorithm 3 Infer a type automaton for each function in a binary for a list of SCCs S
+function INFER(S)
+SORT _ BY(S,reverse_topo)
+A←{}
+R←{ f →⊥| f ∈(s∈S)}
+for all s∈S do
+for all (x,a)∈ INFER_AUTOMATA(s,A) do
+A←A∪{x→a}
+end for
+for all c∈callsites(s) do
+R[c.called_function]←R[c.called_function]⊔ INFER_AUTOMATA(c,A)
+end for
+end for
+return R
+end function
+
+Polymophism requires a procedure decompile_automata that produces a BinSub type
+τ from an automaton. This procedure follows from prior work and forms an intersection or
+union type of all a node’s type constructors, depending on the node’s polarity. Recursive types
+are inserted when a cycle is detected [11]. Using this procedure, global type inference proceeds
+backwards through the strongly connected components of the call graph. At function callsites,
+the type automata representing the function is decompiled to a BinSub type with fresh type
+variables, achieving polymorphism between callsites. After all functions’ type automata are
+inferred, function signatures can be refined by applying join to all of the callsite types for
+a function. Joining type automata can be defined in terms of the optimization procedure
+defined above and forming a union of the two automata with epsilon edges. We highlight
+inter-procedural inference with refinement in Algorithm 3, referring to infer_automata
+as the procedure for determining a type automaton for a function from its definition (by generating constraints) and type automata for callee functions. Strongly connected components
+of functions are treated together and are not polymorphic when called within an SCC.
+
+4 Formalization of BinSub
+Throughout the description of BinSub there are apparent similarities between the type system
+and Retypd. We now formalize this connection by describing a translation from Retypd
+constraints to BinSub constraints. We demonstrate that Retypd derived type variables can be
+interpreted by a BinSub typing judgement and that subtyping judgements derived between
+
+18
+
+Ian Smith
+
+Retypd type variables can equivalently be derived using BinSub’s rules. The correctness of
+BinSub type inference and Retypd type inference with respect to each type system’s subtyping
+rules demonstrates a correspondence between the type inference approaches. This correspondence along with the following empirical efficiency results demonstrate the value in BinSub’s
+simplified type system as an alternative view on Retypd type inference. We use the notation ≤R
+and ≤B, to distinguish between the subtyping judgement in Retypd and BinSub, respectively.
+
+Record
+Pointer-Load
+
+Pointer-Store
+
+x:ptr(a,b)
+a≤B b
+x.load:b
+
+x:{(k,N):τ}
+x.σN@k :τ
+
+Function In
+
+x:(L:τ)→()
+x.inL :τ
+
+Function Out
+
+x:()→(L:τ)
+x.outL :τ
+
+x:ptr(a,b)
+a≤B b
+x.store:a
+
+Fig. 11. Typing rules for Retypd derived type variables embedded in the typing judgement :
+
+Translation from Retypd types to BinSub type constraints is described by the rules in
+Figure 11. Using the rules in Figure 11, each Retypd constraint τr1 ≤R τr2 can be represented
+equivalently in BinSub by the constraint α ≤B β where τr1 : α and τr2 : β. Retypd types
+are represented by derived type variables where a type variable is followed by a list of capabilities in the form: α.capability. Consequently, Retypd contains an additional judgement
+Var(α.capability) to assert that α has the capability capability. Retypd has five capabilities:
+load, store, inL , outL , and σN@k. These capabilities correspond to pointer load, pointer
+store, in parameter, out parameter, and field capabilities. load, outL , and σN@k are covariant
+capabilities, while store and inL are contravariant capabilities [20]. Figure 11 shows the direct
+relationship between BinSub constructors and Retypd capabilities.
+
+Pointer-⊕-⊖
+
+◁Γ ⊢γ ≤B α
+◁Γ ⊢β ≤B δ
+Γ ⊢ptr(α,β)≤B ptr(γ,δ)
+Transitivity
+
+Function-⊕-⊖
+
+◁Γ ⊢γ ≤B α
+◁Γ ⊢β ≤B δ
+Γ ⊢(L:α)→(L:β)≤B (L:γ)→(L:δ)
+
+Γ ⊢α ≤B β
+Γ ⊢β ≤B δ
+Γ ⊢α ≤B δ
+
+Fig. 12. New typing rules for BinSub/Rules required for the proof sketch
+
+The rules for BinSub’s subtyping judgements are derived from Parreaux’s rules in SimpleSub [23]. In Figure 12, we highlight the new rules that are relevant for comparison with Retypd.
+These rules in combination with the simplification rules presented in Section 3.3 encompass
+the extensions to rules beyond prior work. Rules for recursive types, records, and intersection
+and union subtyping remain the same. We restrict the function rule to a single label for sim-
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+19
+
+plicity. The later modality ◁ introduced in the premises for the function and pointer constructor
+rules maintains the guardedness restriction required in SimpleSub’s hypothetical rules [23].
+Pointer Representation with Store and Load Variables: Using the rules from Figure 11 and
+12, we can demonstrate how BinSub arrives at derivations of subtyping relationships in both
+covariant and contravariant cases of pointer subtyping. We use the example sets of constraints
+from Retypd [20]: {q≤R p,x≤R p.store,q.load≤R y} and {q≤R p,x≤R q.store,p.load≤R y}.
+Proving that x≤R y in the first constraint set requires contravariance between the store parameter for p and store parameter for q. Proving x≤R y in the second constraint set requires covariance between the load parameter for q and the load parameter for p. First we show that we can
+derive x≤B y in the first constraint set using contravariance on store parameters, then we show
+a similar derivation for the second constraint set using covariance on load parameters. Applying the Pointer-Load rule from Figure 11 to q.load results in the type ptr(qs,ql ) and constraint
+qs ≤B ql and applying Pointer-Store to p.store results in the type ptr(ps,pl ) and constraint
+ps ≤B pl . Substituting these types into the constraint set yields the BinSub constraints (leaving
+x and y as type variables): {ps ≤B pl ,qs ≤B ql ,ptr(qs,ql ) ≤B ptr(ps,pl ),x ≤B ps,ql ≤B y}.
+We recognize that Pointer-⊕-⊖ from Figure 12 is invertible and thus when applied to
+ptr(qs, ql ) ≤B ptr(ps, pl ) implies the constraints: {ps ≤B qs, ql ≤B pl }. A pointer subtyping judgement of the form ptr(qs,ql )≤B ptr(ps,pl ) can only arise through this rule and
+transitivity and union and intersection types will preserve these constraints on parameters to
+the pointer constructor. This inversion lemma is derived in Dolan and Mycroft [12]. Combining the constraints x≤B ps, ps ≤B qs, qs ≤B ql , and ql ≤B y by transitivity yields the expected
+x ≤B y. In the covariant direction, the starting constraint set transforms into the BinSub set:
+{ps ≤B pl ,qs ≤B ql ,ptr(qs,ql ) ≤B ptr(ps,pl ),x ≤B qs,pl ≤ y}. Using the same pointer rule,
+we can use the covariant constraint: ql ≤B pl , and combine this constraint with the constraints
+x ≤B qs, qs ≤B ql , and pl ≤ y to derive x ≤ y. These derivations show BinSub can derive
+judgements with covariant loads and contravariant stores.
+
+S-Field⊕
+
+α ≤B β
+
+Var(β.l)
+α.l ≤B β.l
+
+<l >=⊕
+S-Trans
+
+S-Field⊖
+
+α ≤B β
+
+Var(β.l)
+β.l ≤B α.l
+
+<l >=⊖
+
+α ≤R β
+β ≤R γ
+α ≤R γ
+
+Fig. 13. Relevant Retypd subtyping rules for comparing Retypd to BinSub
+
+Relationship of Rules to Retypd: To describe the relationship between BinSub and Retypd
+subtyping rules we have included the relevant rules from Retypd in Figure 13. These rules and
+the S-Pointer rule shown in Figure 3 are the rules applied in a normal proof tree by Retypd [20].
+The rule S-Field⊕ applies to covariant capabilities while the rule S-Field⊖ applies to contravariant capabilities. The rules have the expected behavior of placing the types represented by the capability as a subtype of each other in the direction that corresponds to the capability’s variance.
+
+20
+
+Ian Smith
+
+The relationship highlighted in Section 4 can now be formalized in the claim that any
+Retypd derivation between two derived type variables can be represented by a BinSub derivation between the BinSub types: C ⊢ xR ≤R yR =⇒ ∀xB,yB.(xR : xB ∧yR : yB =⇒ C′ ⊢ xb ≤ yb)
+where C′ ={xB ≤B yB|xR : xB ∧yR : yB ∧xR ≤R yR ∈C} We now provide a sketch of the proof
+for this claim. We first rely on a lemma proved by Retypd: for any derivation in Retypd there
+exists a normal proof that does not use the rules: T-Prefix, T-Inherit, or S-Refl. Retypd also
+considers a constraint set closed under T-Left and T-Right [20]. Therefore we need only show
+corresponding derivations to proof trees that contain the rules S-Trans, S-Pointer, S-Field⊕,
+and S-Field⊖. For S-Trans, it can be shown that the corresponding transitivity rule shown in
+Figure 12 in BinSub applies for any pair of Retypd subtyping constraints related by S-Trans.
+The relationship between transitivity rules is direct. For covariant and contravariant labels,
+BinSub’s typing rules reify these rules directly into the rules for type constructors. To show
+the correspondence between BinSub and Retypd label rules, we consider a label in relation
+to it’s associated BinSub constructor. We take as an example a derivation with the label outL
+where C ⊢ α.outL ≤R β.outL by the covariant field rule for out. In such a case, α ≤R β and
+Var(β.outL ) are both in C. By the definition of : and C′ we then have a : x, b : y, x ≤B y and
+y = (...) → (L : τ1) in C′. From these premises we show that ∀τ2.(a.outL : τ2 =⇒ τ2 ≤B τ1),
+demonstrating a derivation that corresponds to Retypd’s covariant field rule for out fields. First
+by inversion of the typing rules defined by : (valid by the uniqueness of rules for constructors),
+it must be the case a:(...)→(T :τ)∧τ =τ2, so we can substitute this type for x and the corresponding type for y into x≤B y to get (...)→(T :τ2)≤(...)→(L:τ1). By the inversion lemma
+described above (used to prove type soundness in MLSub), we can invert the rule Function-⊕⊖ to derive τ2 ≤B τ1, proving the desired subtyping judgement. Symmetric reasoning suffices
+to prove this correspondence for the covariant field rule of load and records as well as the contravariant rules for inL and store. We now provide a sketch of the correspondence proof for the
+S-Pointer rule from Figure 3. Given that Var α.load and Var α.store are in C we must prove
+that ∀x,y.(α.store:x∧α.load :y =⇒ x≤B y). This lemma holds by the inversion of :. Inverting
+Pointer-Store from Figure 11 with respect to α.store:x gives α :ptr(x,y)∧x≤B y and inversion of Pointer-Load with respect to α.load :y gives the same type of α. From the premises of
+the rule we have x≤b y for α.store:x and α.load :y, proving the desired subtyping judgement.
+This correspondence between derivations in Retypd and BinSub demonstrates that type
+inference performed in BinSub can derive the same expressive subtyping judgements as
+Retypd. BinSub’s efficient type inference and simplification algorithm therefore provide a
+compelling alternative to Retypd’s weighted pushdown system.
+
+5
+
+Evaluation
+
+5.1 Implementation in Angr
+To empirically evaluate the efficiency and precision of BinSub, we implemented the type constraint decomposition, coalescing, simplification, and lowering algorithms of BinSub in Angr
+[26]. Angr contains an implementation of Retypd constraint generation in its variable recovery
+pass. Typehoon, Angr’s type inference algorithm, implements type simplification using the
+weighted pushdown system from Retypd. This combination of features makes comparison
+between BinSub and Retypd in Angr natural. We implemented a type inference algorithm that
+leverages BinSub to simplify Retypd constraints and produce lowered types. The BinSub type
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+21
+
+inference pass uses the rules defined in Figure 11 to derive BinSub constraints from Angr’s
+Retypd constraints. By maintaining identical interfaces, we can directly compare BinSub to
+Typehoon by running both passes as part of Angr’s decompilation process and comparing
+the resulting types to ground truth. Both Typehoon and BinSub are able to use the heuristics
+provided by Angr’s intermediate language brightening passes prior to constraint generation,
+and use the same atomic type lattice.
+5.2 Evaluation Setup
+To compare Typehoon (an implementation of Retypd) and BinSub, we ran both type simplification algorithms on a dataset sampled from the ALLSTAR reverse engineering dataset
+[17]. To construct our dataset, we start from 200 randomly selected binaries from the amd64
+and armel categories. During the evaluation, we perform type inference on sampled functions
+within a binary in sequence. We repeat each function benchmark 7 times with a 1 minute
+timeout. We run each binary for a global timeout of 2800 seconds and record samples for
+which all 7 benchmarks terminated without timing out, prior to the 2800 second binary-level
+timeout. For each function in a binary, we run both type inference algorithms as part of Angr’s
+Clinic pass (the collection of pre-decompilation analyses and optimizations) and record the
+inferred type signature for the function. These timeouts make evaluation tractable. The binarylevel timeout ensures that large binaries from the sample do not dominate the dataset, and
+the function-level timeout ensures we make progress within the 22 hour evaluation window.
+The total number of functions in the original set of binaries is 135646 with a median number
+of 114 functions per binary. On average each binary receives 7 comparable functions within
+the 2800 seconds spent per binary (400 seconds per microbenchmark). These comparable
+functions result in a dataset of 1,568 functions for which both BinSub and Typehoon terminate
+within the one minute function timeout (with only 43 function timeouts in BinSub and 161
+function timeouts in Typehoon with 19 overlapping failing functions)1. We name the new
+dataset of comparable functions ALLSTAR_1568. The constraint complexity of functions
+in these binaries is recorded in Table 5.2. The constraint complexity is proportional to the
+number of instructions for a function as constraint generation generates a constant number of
+constraints per instruction type. For these 1568 functions that successfully receive a signature
+from both BinSub and Typehoon, we record the time spent in the type recovery algorithm
+and the distance between the inferred signature and the ground truth signature from DWARF
+information [7]. The mean run time for all seven benchmarks is used as the overall time
+for that function. All data is presented with respect to comparable samples, because timing
+information is not available for functions that timed out.
+Type Distance Metric: The distance metric is inspired by TIE, but makes some simplifications to handle record padding and arbitrary numbers of return values [18]. The distance
+between function types is computed as the average of the distance between both the parameter
+types and return types. Any label for a parameter or return value that is not in both the ground
+1 The mean function byte size in the 19 overlapping failed functions is 1083 and the median byte
+
+size is 888. These statistics show a 518% increase in mean function size for failing functions when
+compared with the overall statistics for comparable functions in Table 5.2. This increase in average
+size indicates expected behavior where larger functions are reaching the timeout.
+
+22
+
+Ian Smith
+
+type and inferred type is assumed to be equal to the maximum distance in the type lattice.
+The distance for records is computed similarly as the average distance of all matching labeled
+types with any non-matching labels assumed to have the maximum lattice distance. There
+is a caveat for records: labeled fields in the inferred type that do not overlap with ground type
+fields are filtered prior to comparison. This filtering prevents considering recovered padding
+during comparison between the ground type and inferred type. Finally, atomic types’ distances
+are defined by the average distance of each atomic type to the lowest common ancestor of the
+atomic types in A. Any type that is incomparable is assumed to have a distance equal to the
+maximum distance in the subtyping lattice. This distance metric captures an intuitive measure
+of the precision of a subtyping-based binary type inference algorithm as the lattice distance
+between the ground and recovered type.
+Table 1. Complexity of Comparable Functions from ALLSTAR_1568
+Metric Value (Constraints)
+Max
+704
+Median
+18
+Mean
+35
+
+Metric Value (Bytes)
+Max
+3260
+Median
+96
+Mean
+175
+
+Variation in Benchmarks: To validate the precision of our micro-benchmarks we recorded
+timing benchmarks for 1000 functions of the comparable dataset and computed the standard
+deviation for the runtime of each sample as the percentage of the mean. The average mean
+standard deviation was 3% of the mean for that sample.
+5.3 Results
+Table 2 shows the average type distance and average runtime for type inference on the 1568
+comparable functions in the dataset. As expected, BinSub and Typehoon have similar precision, differing by .01 in type distance from the DWARF ground truth when measured by
+the TIE distance algorithm defined above in "Type Distance Metric" [18]. On the other hand,
+BinSub does not need to saturate a pushdown system and explore a constraint graph in order
+to infer types (the time intensive operations in Retypd) leading to a 63x reduction in mean
+runtime when comparing the average runtime per function between the two analyses. We
+also computed the percent reduction in time per function and computed a 95% confidence
+interval on the mean percentage improvement, arriving at the interval: (87%,88%), providing
+strong statistical evidence for BinSub’s efficiency. This confidence interval was computed
+by bootstrapping the distribution with an iteration count of 75,000. Empirical comparison
+is important for validating the performance of BinSub. While BinSub does not require path
+exploration of the constraint graph or the saturation algorithm from Retypd, the powerset
+construction used for determinization can create 2N DFA states. This empirical demonstration
+shows that, in practice, types in binaries result in NFAs where determinization is tractable.
+Figure 14 and 15 highlight the performance of each algorithm as the size of the constraint
+set grows. Retypd shows the expected rapid growth in runtime as the number of constraints
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+23
+
+Table 2. Evaluation Results on Comparable ALLSTAR_1568 Functions
+Algorithm Average Type Distance Average Runtime (seconds/function)
+BinSub
+1.67
+.024
+Typehoon
+1.68
+1.51
+
+Fig. 14. BinSub Time (1e8 ns) vs Size
+
+Fig. 15. Time (1e10ns) vs Size
+
+increases, while BinSub remains fast on functions with a large number of constraints. Figure
+14 presents a closer look (using a smaller time unit size of 1e8 ns) at BinSub’s performance
+against the number of constraints. The structure of some functions and types causes increases
+in constraining and optimization time, but on average BinSub shows marked improvement
+in performance over Retypd. BinSub’s simplicity lends itself to an efficient implementation
+that scales to complex functions.
+
+6 Conclusions and Future Work
+BinSub demonstrates that critical requirements for a type system for binary type inference can
+be captured elegantly with algebraic subtyping. Subtyping, polymorphism, recursive types, and
+contravariant stores with covariant loads can all be represented in the framework of algebraic
+subtyping without a weighted pushdown automata. The simplification of binary type inference
+to algebraic subtyping lends itself to a scalable implementation of precise type inference.
+Perhaps more importantly, this reduction to algebraic subtyping places binary type inference
+within a lineage of work in traditional type inference. BinSub unifies binary type inference
+with current work in type inference for high-level languages. BinSub can benefit from future
+work on principal type inference for ML with subtyping based on algebraic subtyping.
+BinSub’s implementation could benefit from further investigation along these lines. The
+type simplification strategy is modular and likely could be tailored to produce simpler C types
+from type automata by extending BinSub’s simplification rules with further equivalences.
+Additionally, the current type lowering heuristics do not leverage precise reasoning rules
+to distinguish pointers from integers at a given use site and simply prioritize pointer types
+over atomic types. Integration of Retypd’s pointer rules could increase BinSub’s precision in
+distinguishing pointers from integers during lowering [20]. BinSub’s initial implementation
+offers a baseline capability on top of which further incremental precision improvements can
+be made in type simplification and lowering.
+
+24
+
+Ian Smith
+
+Acknowledgments. This work was performed at Trail of Bits and we would like to thank the internal
+reviewers: Michael Brown, Artem Dinaburg, and Josiah Dykstra in providing feedback that greatly
+improved the paper’s presentation. Peter Goodman also provided invaluable questions that helped refine
+the ideas presented in type simplification. Additionally, we would like to thank the shepherd who helped
+refine this paper in a number of ways. We would also like to thank the anonymous reviewers for their
+invaluable time and thoughtful critique.
+
+References
+1. Angr Variable Recovery Fast AIL Engine, https://github.com/angr/angr/blob/master/
+angr/analyses/\variable_recovery/engine_base.py#L295
+2. Ghidra
+Decompile
+Parameter
+ID
+Implementation,
+https:
+//github.com/NationalSecurityAgency/ghidra/blob/
+\5e9cfe2419329094b6a83e9532f7a81f3e39126d/Ghidra/Features/Decompiler/
+src\/main/java/ghidra/app/cmd/function/DecompilerParameterIdCmd.java
+3. Anand, K., Smithson, M., Elwazeer, K., Kotha, A., Gruen, J., Giles, N., Barua, R.: A
+compiler-level intermediate representation based binary analysis and rewriting system. In:
+Proceedings of the 8th ACM European Conference on Computer Systems. p. 295–308.
+EuroSys ’13, Association for Computing Machinery, New York, NY, USA (2013). https:
+//doi.org/10.1145/2465351.2465380, https://doi.org/10.1145/2465351.2465380
+4. Andriesse, D., Chen, X., van der Veen, V., Slowinska, A., Bos, H.: An In-Depth analysis of
+disassembly on Full-Scale x86/x64 binaries. In: 25th USENIX Security Symposium (USENIX
+Security 16). pp. 583–600. USENIX Association, Austin, TX (Aug 2016), https://www.usenix.
+org/conference/usenixsecurity16/technical-sessions/presentation/andriesse
+5. Balakrishnan, G., Reps, T.: Analyzing memory accesses in x86 executables. In: International
+conference on compiler construction. pp. 5–23. Springer (2004)
+6. Balakrishnan, G., Reps, T.: Divine: Discovering variables in executables. In: Cook, B., Podelski,
+A. (eds.) Verification, Model Checking, and Abstract Interpretation. pp. 1–28. Springer Berlin
+Heidelberg, Berlin, Heidelberg (2007)
+7. Bastian, T., Kell, S., Zappa Nardelli, F.: Reliable and fast dwarf-based stack unwinding. Proceedings
+of the ACM on Programming Languages 3(OOPSLA), 1–24 (2019)
+8. Caballero, J., Lin, Z.: Type inference on executables. ACM Comput. Surv. 48(4) (may 2016).
+https://doi.org/10.1145/2896499, https://doi.org/10.1145/2896499
+9. Caucal, D.: On the regular structure of prefix rewriting. Theoretical Computer Science 106(1),
+61–86 (1992)
+10. Davies, R., Pfenning, F.: Intersection types and computational effects. In: Proceedings of the
+Fifth ACM SIGPLAN International Conference on Functional Programming. p. 198–208.
+ICFP ’00, Association for Computing Machinery, New York, NY, USA (2000). https:
+//doi.org/10.1145/351240.351259, https://doi.org/10.1145/351240.351259
+11. Dolan, S.: Algebraic Subtyping. BCS/CPHC distinguished dissertation award series, BCS Learning
+& Development Limited (2017), https://books.google.com/books?id=cBJdswEACAAJ
+12. Dolan, S., Mycroft, A.: Polymorphism, subtyping, and type inference in mlsub. In: Proceedings
+of the 44th ACM SIGPLAN Symposium on Principles of Programming Languages. p. 60–72.
+POPL ’17, Association for Computing Machinery, New York, NY, USA (2017). https:
+//doi.org/10.1145/3009837.3009882, https://doi.org/10.1145/3009837.3009882
+13. ElWazeer, K., Anand, K., Kotha, A., Smithson, M., Barua, R.: Scalable variable and data type
+detection in a binary rewriter. In: Proceedings of the 34th ACM SIGPLAN Conference on Programming Language Design and Implementation. p. 51–60. PLDI ’13, Association for Computing
+Machinery, New York, NY, USA (2013). https://doi.org/10.1145/2491956.2462165,
+https://doi.org/10.1145/2491956.2462165
+
+BinSub: The Simple Essence of Polymorphic Type Inference for Machine Code
+
+25
+
+14. Enders, S., Behner, E.M.C., Bergmann, N., Rybalka, M., Padilla, E., Hui, E.X., Low, H., Sim, N.:
+dewolf: Improving decompilation by leveraging user surveys. In: Proceedings 2023 Workshop on
+Binary Analysis Research. BAR 2023, Internet Society (2023). https://doi.org/10.14722/
+bar.2023.23001, http://dx.doi.org/10.14722/bar.2023.23001
+15. Guilfanov, I.: Simple type system for program reengineering. In: Proceedings
+Eighth Working Conference on Reverse Engineering. pp. 357–361 (2001). https:
+//doi.org/10.1109/WCRE.2001.957843
+16. Hopcroft, J.: An n log n algorithm for minimizing states in a finite automaton. In: Theory of
+machines and computations, pp. 189–196. Elsevier (1971)
+17. JHU/APL Staff: Assembled labeled library for static analysis research (allstar) dataset (Dec 2019),
+http://allstar.jhuapl.edu/
+18. Lee, J., Avgerinos, T., Brumley, D.: TIE: principled reverse engineering of types in
+binary programs. In: Proceedings of the Network and Distributed System Security
+Symposium, NDSS 2011, San Diego, California, USA, 6th February - 9th February
+2011. The Internet Society (2011), https://www.ndss-symposium.org/ndss2011/
+tie-principled-reverse-engineering-of-types-in-binary-programs
+19. Lin, Z., Zhang, X., Xu, D.: Automatic reverse engineering of data structures from binary execution.
+In: Proceedings of the 11th Annual Information Security Symposium. CERIAS ’10, CERIAS
+- Purdue University, West Lafayette, IN (2010)
+20. Noonan, M., Loginov, A., Cok, D.: Polymorphic type inference for machine code. In: Proceedings
+of the 37th ACM SIGPLAN Conference on Programming Language Design and Implementation.
+p. 27–41. PLDI ’16, Association for Computing Machinery, New York, NY, USA (2016). https:
+//doi.org/10.1145/2908080.2908119, https://doi.org/10.1145/2908080.2908119
+21. Noord, G.v.: Treatment of epsilon moves in subset construction. Computational Linguistics 26(1),
+61–76 (2000)
+22. Pang, C., Yu, R., Chen, Y., Koskinen, E., Portokalidis, G., Mao, B., Xu, J.: Sok:
+All you ever wanted to know about x86/x64 binary disassembly but were afraid to
+ask. In: 2021 IEEE Symposium on Security and Privacy (SP). pp. 833–851 (2021).
+https://doi.org/10.1109/SP40001.2021.00012
+23. Parreaux, L.: The simple essence of algebraic subtyping: principal type inference with
+subtyping made easy (functional pearl). Proc. ACM Program. Lang. 4(ICFP) (aug 2020).
+https://doi.org/10.1145/3409006, https://doi.org/10.1145/3409006
+24. Peter Aldous: Retypd Type Recovery Notes, https://github.com/GrammaTech/retypd/
+blob/master/reference/type-recovery.rst
+25. Skochinksy, I.: Igor’s tip of the week #74: Parameter identification and
+tracking (PIT) – Hex Rays (Jan 2022), https://hex-rays.com/blog/
+igors-tip-of-the-week-74-parameter-identification-and-tracking-pit/
+26. Wang, F., Shoshitaishvili, Y.: Angr-the next generation of binary analysis. In: 2017 IEEE
+Cybersecurity Development (SecDev). pp. 8–9. IEEE (2017)
+
+

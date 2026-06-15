@@ -1,0 +1,3772 @@
+arXiv:2108.11578v1 [math.ST] 26 Aug 2021
+
+A Unified Approach for Constructing Confidence
+Intervals and Hypothesis Tests Using h-function
+Weizhen Wang
+Department of Mathematics and Statistics
+Wright State University
+March 4, 2021
+
+Abstract
+We introduce a general method, named the h-function method, to unify the constructions of level-α exact test and 1 − α exact confidence interval. Using this method,
+any confidence interval is improved as follows: i) an approximate interval, including a
+point estimator, is modified to an exact interval; ii) an exact interval is refined to be
+an interval that is a subset of the previous one. Two real datasets are used to illustrate
+the method.
+
+Keywords: Admissible confidence interval; Difference of two proportions; Infimum coverage
+probability; Order; p-value.
+
+1
+
+1
+
+Introduction
+
+It is well known that there is a one-to-one mapping between a family of tests and a confidence
+set. If one of the two is given in advance, then the other can be derived as follows.
+Let Θ be the range of a parameter of interest θ and S be a sample space. For each
+θ0 ∈ Θ, let A(θ0 ) be the acceptance region of a level-α test of H0 : θ = θ0 . Then,
+C(x) = {θ0 ∈ Θ : x ∈ A(θ0 )}.
+
+(1)
+
+is a 1 − α confidence set. Conversely, let C(x) be a 1 − α confidence set. Define
+A(θ0 ) = {x ∈ S : θ0 ∈ C(x)}.
+
+(2)
+
+Then A(θ0 ) is the acceptance region of a level-α test of H0 : θ = θ0 .
+An interval is typically derived from the tests since tests are easier to construct. However, solving C(x) from A(θ0 ) as in (1) is a complicated process. The first goal of this paper
+is to simplify this process. This is different from the existing methods described in Casella
+and Berger (2002), where the test and interval are constructed separately.
+The key feature of a confidence interval is that its confidence coefficient, which is defined
+to be the infimum coverage probability (ICP) over the entire parameter space (Casella and
+Berger, 2002), should be no smaller than the nominal level 1 − α. To avoid ambiguity in the
+future discussion, a 1 − α exact confidence interval means that it has an ICP no less than
+1 − α; while a 1 − α confidence interval only means that the nominal level of the interval is
+set to be 1 − α but its ICP can be any number in [0, 1]. For example, a 95% Wald internal
+for a proportion is not necessarily a 95% exact interval. In fact, a 1 − α Wald interval is
+a zero exact interval for any sample size and any α in [0, 1] (Brown, Cai and DasGupta,
+2001; Agresti, 2013).
+The requirement of an ICP no smaller than 1−α is violated for an approximate interval.
+Thus, the major concern is whether an inferential conclusion drawn from the interval is
+2
+
+reliable as its ICP is seldom reported and can be much smaller than the nominal level
+1 − α. Huwang (1995) proved this for Wilson interval (1927) even for large samples. On
+the other hand, an approximate interval is attractive in practice since it is easy to derive.
+Therefore, it is of great interest to build an exact interval through a given approximate
+interval – the second goal of the paper. To the best of our knowledge, limited research has
+been conducted on this issue.
+One common way to obtain a 1 − α exact two-sided interval is to take the intersection of
+
+two one-sided 1 − α2 intervals, for example, Clopper-Pearson interval (1934). Such intervals
+
+may be conservative. Hence, it is also of great interest to shrink any given 1−α exact interval
+– the third goal of the paper. Casella (1986) and Wang (2014) refine exact confidence
+intervals for a single proportion. However, their methods cannot be applied to the general
+case when there exist nuisance parameters.
+We address the above three problems by introducing an h-function that is closely related
+to the p-value. The computation of p-values was originally done by Arbuthnot (1710)
+in a study of comparing the probabilities of male and female births. Laplace addressed
+the same problem later using binomial distributions (Stigler, 1986). The concept of the
+p-value was first formally introduced by Pearson (1900) and the use of the p-value in
+Statistics was popularized by Fisher (1925), where he proposed the level 0.05 as a limit
+for statistical significance. Now, the p-value method is a commonly used method for test
+construction, where the p-value is treated as a function over the random observation. In
+this paper, however, the p-value is also treated as a function over the parameter of interest
+for confidence interval construction. It can modify and/or refine any interval – a solution
+to the challenging problem of improving an interval when a nuisance parameter exists.
+The paper is organized as follows: In Section 2, we describe the h-function method that
+yields both level-α exact tests and 1 − α exact confidence intervals. Section 3 discusses how
+
+3
+
+to modify any two-sided confidence interval to an exact interval. Section 4 improves any
+exact two-sided interval. Section 5 modifies any one-sided interval to the smallest one. We
+provide discussions in Section 6. All proofs are given in the Appendix.
+
+2
+
+A general method
+
+Suppose X is observed from a distribution with joint cumulative distribution function
+(CDF) F(θ,η) (x) specified by a parameter vector (θ, η) in a parameter space H. Here θ is
+the parameter of interest and η is the nuisance parameter vector. The null hypothesis H0
+is one of the three forms: θ = θ0 , θ ≤ θ0 and θ ≥ θ0 , for a fixed value θ0 . Each form
+corresponds to two-sided, lower and upper one-sided intervals for θ, respectively. We next
+introduce the h-function method and illustrate its basic usage through two simple cases.
+
+2.1
+
+The h-function method
+
+A p-value p(X) is a statistic satisfying 0 ≤ p(x) ≤ 1 for every sample point x. A small p(x)
+provides evidence that H0 is false. Following Casella and Berger (2002), a p-value is valid
+if, for every 0 ≤ α ≤ 1,
+sup P(θ,η) (p(X) ≤ α) ≤ α.
+
+(3)
+
+θ∈H0
+
+For simplicity, we drop the subscript (θ, η) in the future discussion. In many cases, a valid
+p-value p(X) at x can be defined through a test statistic T (X) using, for example,
+p(x) = sup P (T (X) ≤ T (x)),
+
+(4)
+
+θ∈H0
+
+when a small value of T (X) is not in favor of H0 . This includes the case that T (X) is
+the likelihood ratio test statistic for H0 . For any p(X) satisfying (3), a level-α acceptance
+region for H0 is equal to {x : p(x) > α}.
+4
+
+Note that H0 is equal to a single point θ0 or a one-sided interval with the boundary
+point θ0 . The p-value p(X) indeed depends on both X and θ0 . This is the key fact for the
+future theoretical development. Thus, we rewrite the p-value as
+def
+
+h(X, θ0 ) = p(X)
+
+(5)
+
+and call the left hand side the h-function. We emphasis that the h-function closely relates to
+but is different from the p-value. The former is a function of both the random observation
+and parameter of interest, while the latter is typically treated as a function of the random
+observation. Based on this h(X, θ0 ), the level-α acceptance region for H0 and 1 − α exact
+confidence set for θ are given by
+A(θ0 ) = {x : h(x, θ0 ) > α} and C(x) = {θ0 : h(x, θ0 ) > α},
+
+(6)
+
+respectively. Both A(θ0 ) and C(x) are obtained by solving the same inequality h(x, θ0 ) > α
+but in terms of two different arguments x and θ0 , respectively. In this sense, the constructions of test and confidence set are unified. We do not obtain A(θ0 ) or C(x) from each
+other following (1) and (2). Instead, we use the intermediary h-function in (5) and name it
+the h-function method. In fact, Blaker (2000) used a special h in (6) to derive confidence
+intervals for four discrete distributions of a single parameter. Here, the h-function method
+is applied to a general case with or without nuisance parameters. In particular, Blaker
+interval (2000) can be uniformly shortened by this method as shown in Table 4.
+It is known that C(x) may not be an interval. So, we use C(x). Here, A denotes the
+smallest simply connected set containing set A. Therefore, C(x) is always an interval and
+its infimum coverage probability (ICP) over the entire parameter space H is at least 1 − α
+because C(x) contains C(x). i.e.,
+ICP (C(X)) =
+
+inf
+
+(θ,η)∈H
+
+P (θ ∈ C(X)) ≥
+
+inf
+
+(θ,η)∈H
+
+5
+
+P (θ ∈ C(X)) = ICP (C(X)) ≥ 1 − α.
+
+The ICP is also called the confidence coefficient (Casella and Berger, 2002). Throughout
+the paper, we use C(X) to denote C(X) and {θ0 : h(x, θ0 ) > α} if it causes no confusion.
+In general, a test statistic may also depend on θ0 , for example, the t-statistic, and thus
+has a form of T (X, θ0 ). When a small value of T (X, θ0 ) is in favor of HA , let K(x, θ0 ) =
+{y : T (y, θ0 ) ≤ T (x, θ0 )} be a subset of the sample space, then
+
+X
+
+
+f(θ,η) (y)
+sup
+
+
+ (θ,η)∈H0 y∈K(x,θ )
+0
+h(x, θ0 ) = sup P (K(x, θ0 )) =
+Z
+
+(θ,η)∈H0
+
+
+f(θ,η) (y)dy,
+
+ sup
+(θ,η)∈H0
+
+(7)
+
+K(x,θ0 )
+
+where f(θ,η) is either the joint probability mass function (PMF) or probability density
+function (PDF) of X.
+For illustration of the h-function method, we next consider two classic problems: i)
+estimating the proportion p based on a binomial observation X ∼ Bino(n, p); ii) estimating
+the difference of two proportions d = p1 − p2 based on two independent binomials X ∼
+Bino(n1 , p1 ) and Y ∼ Bino(n2 , p2 ). These are widely used in practice, including clinical
+trials. The two problems are still open since the best intervals for p and d have not been
+recognized yet. Let pB (x, n, p) and FB (x, n, p) denote the PMF and CDF of Bino(n, p).
+
+2.2
+
+Two-sided confidence intervals for a proportion
+
+For a fixed p0 ∈ [0, 1], consider the hypotheses H0 : p = p0 vs HA : p 6= p0 . Suppose
+Tp (x, p0 ) is a test statistic satisfying
+Tp (x, p0 ) = Tp (n − x, 1 − p0 ), ∀x ∈ [0, n],
+and a small value of Tp (x, p0 ) supports HA . Hence, the h-function based on Tp (x, p0 ) is
+hp (x, p0 ) =
+
+X
+
+{y∈[0,n]:Tp (y,p0 )≤Tp (x,p0 )}
+
+6
+
+pB (y, n, p0 ).
+
+(8)
+
+The acceptance region of level-α test for H0 and 1 − α exact confidence interval for p are
+Ap (p0 ) = {x : hp (x, p0 ) > α} and Cp (x) = {p0 : hp (x, p0 ) > α}.
+Now we state a fact that the upper limit Up (x) of interval Cp (x) can be obtained using the
+lower limit Lp (x) and vice versa. This simplifies interval construction by half.
+Proposition 1 For a test statistic Tp satisfying (8), we have
+Up (x) = 1 − Lp (n − x), ∀x ∈ [0, n].
+
+(9)
+
+Define the first h-function
+hp1 (x, p0 ) = min{2 min{Pp0 (X ≤ x), Pp0 (X ≥ x)}, 1}.
+This yields the two-sided Clopper-Pearson interval (1934) for p, denoted by Cp1 (X). The
+interval also satisfies (9) since hp1 (x, p0 ) = hp1 (n − x, 1 − p0 ).
+Define the second h-function based on a test statistic Tp2 (x, p0 ),
+hp2 (x, p0 ) =
+
+X
+
+pB (y, n, p0 ),
+
+{y∈[0,n]:Tp2 (y,p0 )≤Tp2 (x,p0 )}
+
+where Tp2 (x, p0 ) = min{Pp0 (X ≤ x), Pp0 (X ≥ x)}. This yields Blaker interval (2000),
+denoted by Cp2 (X), for p. Since Tp2 (x, p0 ) satisfies (8), interval Cp2 (X) satisfies (9). As
+discussed in Casella and Berger (2002) and Agresti (2013), Cp2 (X) has a nesting property:
+an interval Cp2 (X) with a higher confidence level always contains the one with a lower level.
+Also, Cp2 (X) is a subset of Cp1 (X). But Cp2 (X) can still be shortened uniformly as shown
+in Section 4.
+The third h-function based on the likelihood ratio test statistic Tp3 (x, p0 ) is
+hp3 (x, p0 ) =
+
+X
+
+{y∈[0,n]:Tp3 (y,p0 )≤Tp3 (x,p0 )}
+
+7
+
+pB (y, n, p0 ),
+
+0 n−x
+where Tp3 (x, p0 ) = ( pp̂0 )x ( 1−p
+for p̂ = x/n. This generates a confidence interval Cp3 (x).
+1−p̂ )
+
+The upper limit of Cp3 (x) can also be determined by its lower limit following (9) because
+Tp3 (x, p0 ) satisfies (8).
+We report in Table 1 the infimum coverage probability (ICP) and total interval length
+(TIL) over all n + 1 sample points for the above intervals Cpi for i = 1, 2, 3 when n is from
+16 to 100. Their ICPs are all no smaller than 0.95. Due to Wang (2007), the ICP of an
+interval C(X) for p with a nondecreasing lower confidence limit L(X) is achieved at one of
+the values (L(x))− for x = 1, ..., n, where a− denotes the left limit of y when y approaches
+a. Thus, the ICP of C(X) can be computed precisely. Interval Cp2 is the winner among
+the three due to its small TIL. In Section 4, we see that these three intervals are uniformly
+M . For comparison purpose,
+shorter, as shown in Table 4, than their modified intervals Cpi
+
+the interval Cp4 in Wang (2014) is also reported. This interval, derived by an iterative
+algorithm, is admissible and is shortest among the four intervals. Here, a 1 − α exact
+
+confidence interval C(X) is admissible if any interval C ′ (X), which is contained in but not
+equal to C(X), has an ICP less than 1 − α.
+
+2.3
+
+Confidence intervals for the difference of two proportions
+
+There are three commonly used measurements, the difference d = p1 − p2 , the relative risk
+and the odds ratio, for comparison of the two proportions. Here we focus on the difference.
+Consider the following hypotheses for any fixed d0 ∈ [−1, 1]: H0 : d = d0 vs HA : d 6= d0 .
+Under H0 , p1 = d0 + p2 for p2 ∈ D(d0 ), where
+
+
+[0, 1 − d0 ], if d0 ∈ [0, 1];
+D(d0 ) =
+
+[−d0 , 1], if d0 ∈ [−1, 0).
+Suppose Td (x, y, d0 ) is a test statistic satisfying
+
+Td (x, y, d0 ) = Td (n1 − x, n2 − y, −d0 ), ∀(x, y) ∈ Sd ,
+8
+
+(10)
+
+Table 1: The infimum coverage probability (ICP) and total interval length (TIL) of intervals
+M for i = 1
+over all sample points for eight exact confidence intervals for p: Cpi and Cpi
+
+(Clopper-Pearson), 2 (Blaker), 3 (Likelihood-ratio-test interval), 4 (Wang), when 1 − α =
+0.95 and n varies. The smallest TIL for each n is marked by ‘*’.
+n
+16
+
+Cp1
+
+30
+
+100
+
+ICP
+
+TIL
+
+0.9578
+
+6.9380
+
+Cp2
+
+0.9500
+
+6.5043
+
+Cp3
+
+0.9500
+
+6.6115
+
+Cp4
+
+0.9500
+
+6.4978*
+
+Cp1
+
+0.9505
+
+9.2705
+
+Cp2
+
+0.9500
+
+8.7814
+
+Cp3
+
+0.9500
+
+8.8742
+
+Cp4
+
+0.9500
+
+8.7726*
+
+Cp1
+
+0.9503
+
+16.3057
+
+Cp2
+
+0.9500
+
+15.8243
+
+Cp3
+
+0.9500
+
+15.8803
+
+Cp4
+
+0.9500
+
+15.8146*
+
+ICP
+
+TIL
+
+M
+Cp1
+
+0.9500
+
+6.4978*
+
+M
+Cp2
+M
+Cp3
+M
+Cp4
+M
+Cp1
+M
+Cp2
+M
+Cp3
+M
+Cp4
+M
+Cp1
+M
+Cp2
+M
+Cp3
+M
+Cp4
+
+0.9500
+
+6.4978*
+
+0.9500
+
+6.5342
+
+0.9500
+
+6.4978*
+
+0.9500
+
+8.7784
+
+0.9500
+
+8.7770
+
+0.9500
+
+8.8089
+
+0.9500
+
+8.7726*
+
+0.9500
+
+15.8214
+
+0.9500
+
+15.8176
+
+0.9500
+
+15.8402
+
+0.9500
+
+15.8146*
+
+for Sd = [0, n1 ] × [0, n2 ] and a small value of Td (x, y, d0 ) supports HA . The h-function based
+on Td (x, y, d0 ) is
+hd (x, y, d0 ) =
+
+sup
+
+X
+
+pB (u, n1 , p2 + d0 )pB (v, n2 , p2 ).
+
+(11)
+
+p2 ∈D(d0 ) {(u,v)∈S :T (u,v,d )≤T (x,y,d )}
+d
+
+d
+
+0
+
+d
+
+0
+
+The acceptance region of level-α test for H0 and 1 − α exact confidence interval for d are
+Ad (d0 ) = {(x, y) : hd (x, y, d0 ) > α} and Cd (x, y) = {d0 : hd (x, y, d0 ) > α}.
+
+(12)
+
+Similar to Proposition 1, we state a fact that determines the upper limit Ud (x, y) of Cd (x, y)
+9
+
+from its lower limit Ld (x, y) and vice versa. This again simplifies interval calculation.
+Proposition 2 For a test statistic Td satisfying (10), we have
+Ud (x, y) = −Ld (n1 − x, n2 − y), ∀(x, y) ∈ Sd .
+
+(13)
+
+First, introduce the likelihood ratio test statistic:
+Td1 (x, y, d0 ) = (
+
+p̂1d x 1 − p̂1d n1 −x p̂2d y 1 − p̂2d n2 −y
+) (
+)
+(
+) (
+)
+,
+p̂1
+1 − p̂1
+p̂2
+1 − p̂2
+
+where
+p̂2d (x, y, d0 ) = arg max pB (x, n1 , p2 + d0 )pB (y, n2 , p2 ),
+p2 ∈D(d0 )
+
+p̂1d (x, y, d0 ) = p̂2d (x, y, d0 ) + d0 , p̂1 = x/n1 , p̂2 = y/n2 .
+It can be shown that Td1 satisfies (10). The h-function hd1 (x, y, d0 ) based on Td1 follows
+(11). Then, the acceptance region of level-α test and 1 − α confidence interval for d are
+given in (12) and are denoted by Ad1 (d0 ) and Cd1 (x, y), respectively. The upper limit of
+Cd1 (x, y) is determined by the lower limit through (13).
+Secondly, the score test statistic, see Agresti and Min (2001) and Fay (2010), is
+Td2 (x, y, d0 ) = q
+
+−|p̂1 − p̂2 − d0 |
+
+p̂1d (x,y,d0 )(1−p̂1d (x,y,d0 ))
+2d (x,y,d0 ))
++ p̂2d (d0 )(1−p̂
+n1
+n2
+
+.
+
+When (x, y, d0 ) = (n1 , 0, 1) or (0, n2 , −1), the above ratio is 0/0. So it is defined to be 0.
+We obtain the h-function hd2 (x, y, d0 ) following (11) and then derive the acceptance region
+of level-α test Ad2 (d0 ) and 1 − α exact confidence interval Cd2 (x, y) following (12). Since
+Td2 satisfies (10), the upper limit of Cd2 (x, y) is determined by the lower limit through (13).
+Table 2 reports the ICP and TIL over all (n1 + 1)(n2 + 1) sample points in Sd for Cd1
+and Cd2 and other intervals to be discussed later when 1 − α = 0.95 and (n1 , n2 ) varies.
+The ICPs of Cd1 and Cd2 are at least 0.95. Each value is computed by a grid search: select
+2012 pairs of (p1 , p2 ), where both p1 and p2 are the multiples of 0.005; compute the coverage
+probability at each pair; use the minimum of these coverage probabilities as the ICP.
+10
+
+M,
+Table 2: The ICPs and TILs over all sample points in Sd for fifteen intervals (Cdi , Cdi
+M ∞ ) for i = 1 (LRT, exact), 2 (Score, exact), 3 (Wald, approximate), 4 (Maximum
+Cdi
+
+likelihood estimator (MLE) as an interval) and 5 (Wang, exact) when 1 − α = 0.95 and
+(n1 , n2 ) varies. The smallest TIL for exact intervals is marked by ‘*’ for each (n1 , n2 ).
+(n1 , n2 )
+(8,10)
+
+(10,15)
+
+(23,32)
+
+3
+
+ICP
+
+TIL
+
+ICP
+
+TIL
+
+ICP
+
+TIL
+
+Cd1
+
+0.9500
+
+77.2224
+
+M
+Cd1
+
+0.9500
+
+75.7339
+
+M∞
+Cd1
+
+0.9500
+
+74.9249
+
+Cd2
+
+0.9500
+
+73.3681
+
+M
+Cd2
+
+0.9500
+
+72.9133
+
+M∞
+Cd2
+
+0.9500
+
+72.6113
+
+M
+Cd3
+M
+Cd4
+M
+Cd5
+M
+Cd1
+M
+Cd2
+M
+Cd3
+M
+Cd4
+M
+Cd5
+M
+Cd1
+M
+Cd2
+M
+Cd3
+M
+Cd4
+M
+Cd5
+
+0.9503
+
+96.3142
+
+M∞
+Cd3
+
+0.9500
+
+83.2143
+
+0.9500
+
+76.8064
+
+M∞
+Cd4
+
+0.9500
+
+76.2304
+
+0.9500
+
+73.0494
+
+M∞
+Cd5
+
+0.9500
+
+72.4728*
+
+0.9500
+
+117.2285
+
+M∞
+Cd1
+
+0.9500
+
+115.6740
+
+0.9500
+
+112.1987
+
+M∞
+Cd2
+
+0.9500
+
+111.5613*
+
+0.9500
+
+148.7108
+
+M∞
+Cd3
+
+0.9500
+
+132.0608
+
+0.9500
+
+120.7789
+
+M∞
+Cd4
+
+0.9500
+
+120.7007
+
+0.9500
+
+112.6569
+
+M∞
+Cd5
+
+0.9500
+
+111.7894
+
+0.9500
+
+358.1373
+
+M∞
+Cd1
+
+0.9500
+
+355.8710
+
+0.9500
+
+344.3728
+
+M∞
+Cd2
+
+0.9500
+
+342.6230
+
+0.9500
+
+399.0738
+
+0.9500
+
+380.5928
+
+0.9500
+
+372.2596
+
+0.9500
+
+342.6516
+
+M∞
+Cd3
+M∞
+Cd4
+M∞
+Cd5
+
+Cd3
+
+0
+
+67.8756
+
+Cd4
+
+0
+
+0
+
+Cd5
+
+0.9515
+
+76.9506
+
+Cd1
+
+0.9500
+
+119.9192
+
+Cd2
+
+0.9500
+
+113.3737
+
+Cd3
+
+0
+
+106.2471
+
+Cd4
+
+0
+
+0
+
+Cd5
+
+0.9515
+
+116.8048
+
+Cd1
+
+0.9500
+
+361.8775
+
+Cd2
+
+0.9500
+
+346.4825
+
+Cd3
+
+0
+
+332.3962
+
+Cd4
+
+0
+
+0
+
+Cd5
+
+0.9503
+
+347.4601
+
+0.9500
+
+370.0785
+
+0.9500
+
+341.4697*
+
+Modifying any given two-sided confidence interval
+
+For convenience, we consider the closed interval C0 (X) = [L0 (X), U0 (X)] for θ if the confidence limits are not infinity. For a given value θ0 , consider
+H0 : θ = θ0 vs HA : θ 6= θ0 .
+
+(14)
+
+Define a test statistic through interval C0 (X)
+T2 (X, θ0 ) = min{θ0 − L0 (X), U0 (X) − θ0 }.
+
+(15)
+
+Clearly, a small T2 (x, θ0 ) provides strong evidence of establishing HA , and
+T2 (x, θ0 ) ≥ 0 if and only if θ0 ∈ C0 (x).
+11
+
+(16)
+
+The h-function based on T2 (x, θ0 ) is
+h2 (x, θ0 ) = sup P (T2 (X, θ0 ) ≤ T2 (x, θ0 )).
+
+(17)
+
+H0
+
+Following (6), the level-α acceptance region for H0 and 1 − α exact two-sided confidence
+interval for θ are
+A2 (θ0 ) = {x : h2 (x, θ0 ) > α} and C0M (x) = {θ0 : h2 (x, θ0 ) > α}.
+
+(18)
+
+In the rest of the paper, A denotes the smallest closed simply connected set that contains
+set A. The superscript “M” refers a modification. In general, C0M (x) 6= C0 (X). For a
+positive integer k, C0M k (x) is the resultant interval after the modification process of (15)
+through (18) is applied to C0 (X) for k consecutive times. For example, when k = 1,
+C0M 1 (x) = C0M (x), and when k = 2, C0M 2 (x) = (C0M )M (x).
+Theorem 1 For any given confidence interval C0 (X), consider the hypotheses (14).
+i) The h-function h2 (x, θ0 ) in (17) is a valid p-value for statistic T2 (X, θ0 ) in (15) at
+observation x.
+ii) Interval C0M (X) given in (18) is of level 1 − α. i.e., ICP (C0M ) ≥ 1 − α.
+The theorem modifies a confidence interval C0 (X) of any level, including a point estimator (a zero exact confidence interval), to a 1 − α exact confidence interval C0M (X). Also,
+when using C0M (X) to conduct a level-α test for H0 one simply rejects H0 if θ0 falls outside
+the interval but is unable to report a p-value. Now the p-value is given by h2 (x, θ0 ) in (17).
+The test of rejecting H0 if this p-value is no larger than α is an exact test of level α; On
+the contrary, the test of rejecting H0 if θ0 falls outside C0 (X) is not of level α if C0 (X) is
+not a 1 − α exact interval.
+Example 1. (more confidence intervals for a proportion) Interval estimation of p based
+on X ∼ Bino(n, p) is one of the basic inferential problems. Asymptotic intervals play an
+12
+
+important role but may not be reliable. We apply the modification process of (15) through
+(18) to several commonly used intervals to obtain exact intervals.
+Let zα denote the upper αth percentile of the standard normal distribution. It is known
+that Wald interval
+Cp5 (X) = [p̂ ∓ z α2
+
+r
+
+p̂(1 − p̂)
+]
+n
+
+has an ICP zero for any n and α ∈ (0, 1) because it shrinks to a point when X = 0 or n
+(Agresti, 2013). We now modify it to a 1 − α exact interval using the modification process.
+M (X), C M 22 (X) and others when n = 16. For example,
+Table 3 contains 95% Cp5 (X), Cp5
+p5
+
+Cp5 (X) has ICP = 0, T IL = 6.0559 and Cp5 (3) = [−0.0038, 0.3788]. In order to assure the
+computed ICP for an exact interval to be at least 1 − α, the lower limits for a confidence
+interval round down but the upper limits round up at the fourth decimal place. Although
+M (X) has a correct ICP 95%. In return, C M (X)
+Cp5 (X) has an zero ICP, its modification Cp5
+p5
+
+becomes wider and does not make the lower limits at x = 1, 2, 3 larger than zero. This is
+due to the negative values of the lower limits of Cp5 (X) at x = 1, 2, 3. We further apply the
+M (X) for more times. The 22nd modification C M 22 (X) has an
+modification process to Cp5
+p5
+M (X). It cannot be shortened by the modification process any
+ICP 95% and is a subset of Cp5
+
+further, however, can be shortened at x = 1, 2, 3 following Casella (1986) or Wang (2014).
+We also report, in Table 3, the result of modifying the 95% Wilson interval Cp6 (X)
+(1927). Huwang (1995) showed that its ICP is much lower than the nominal level 1 − α for
+M (X) has a correct ICP 95% and is admissible here. To see
+any n. However, the modified Cp6
+M (X) and find that
+the admissibility, we apply the refining approach in Wang (2014) to Cp6
+M (X) is equal to C M (X). Since Wang’s approach produces admissible
+the refinement of Cp6
+p6
+M (X) admissible when (n, 1 − α) = (16, 0.95).
+intervals, we conclude Cp6
+
+13
+
+M , the 22nd modification C M 22 ; 95%
+Table 3: 95% Wald interval Cp5 , the modification Cp5
+p5
+M ; the sample-proportion estimator C , C M ; another point estimaWilson interval Cp6 , Cp6
+p7
+p7
+M , C M 17 ; their ICPs and TILs when n = 16. For each interval, the first line is
+tor Cp8 , Cp8
+p8
+
+the lower limits and the second line is the upper limits.
+X
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+Cp5
+
+0.0000
+
+-0.0562
+
+-0.0371
+
+-0.0038
+
+0.0378
+
+0.0853
+
+0.1377
+
+0.1944
+
+0.2550
+
+ICP= 0%
+
+0.0000
+
+0.1812
+
+0.2871
+
+0.3788
+
+0.4622
+
+0.5397
+
+0.6123
+
+0.6806
+
+0.7450
+
+M
+Cp5
+
+0.0000
+
+0.0000
+
+0.0000
+
+0.0000
+
+0.0189
+
+0.0426
+
+0.0688
+
+0.0972
+
+0.1275
+
+ICP= 95%
+
+0.1709
+
+0.2674
+
+0.3522
+
+0.4295
+
+0.5000
+
+0.5805
+
+0.6626
+
+0.8403
+
+0.8725
+
+M 22 (= C M ∞ )
+Cp5
+p5
+
+0.0000
+
+0.0000
+
+0.0000
+
+0.0000
+
+0.0902
+
+0.1321
+
+0.1708
+
+0.1708
+
+0.1708
+
+ICP= 95%
+
+0.1709
+
+0.2674
+
+0.3522
+
+0.4295
+
+0.5000
+
+0.5706
+
+0.6479
+
+0.8292
+
+0.8292
+
+Cp6
+
+0.0000
+
+0.0111
+
+0.0349
+
+0.0659
+
+0.1018
+
+0.1416
+
+0.1848
+
+0.2309
+
+0.2799
+
+ICP=83.62%
+
+0.1937
+
+0.2833
+
+0.3603
+
+0.4301
+
+0.4950
+
+0.5560
+
+0.6136
+
+0.6683
+
+0.7201
+
+M (= C M ∞ )
+Cp6
+p6
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1777
+
+0.2122
+
+0.2719
+
+ICP=95%
+
+0.2123
+
+0.3076
+
+0.3734
+
+0.4371
+
+0.5000
+
+0.5630
+
+0.6267
+
+0.6925
+
+0.7281
+
+Cp7
+
+0.0000
+
+0.0625
+
+0.1250
+
+0.1875
+
+0.2500
+
+0.3125
+
+0.3750
+
+0.4375
+
+0.5000
+
+ICP=0%
+
+0.0000
+
+0.0625
+
+0.1250
+
+0.1875
+
+0.2500
+
+0.3125
+
+0.3750
+
+0.4375
+
+0.5000
+
+M (= C M ∞ )
+Cp7
+p7
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1777
+
+0.2187
+
+0.2719
+
+ICP=95%
+
+0.2188
+
+0.3125
+
+0.3750
+
+0.4375
+
+0.5000
+
+0.5625
+
+0.6250
+
+0.6875
+
+0.7281
+
+Cp8
+
+0.0000
+
+0.0500
+
+0.1250
+
+0.2000
+
+0.2500
+
+0.3125
+
+0.3750
+
+0.4375
+
+0.5000
+
+ICP=0%
+
+0.0000
+
+0.0500
+
+0.1250
+
+0.2000
+
+0.2500
+
+0.3125
+
+0.3750
+
+0.4375
+
+0.5000
+
+M
+Cp8
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1777
+
+0.2187
+
+0.2719
+
+ICP=95%
+
+0.2188
+
+0.3063
+
+0.3750
+
+0.4438
+
+0.5000
+
+0.5585
+
+0.6250
+
+0.6938
+
+0.7281
+
+M 17 (= C M ∞ )
+Cp8
+p8
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1777
+
+0.2187
+
+0.2719
+
+ICP=95%
+
+0.2188
+
+0.3063
+
+0.3750
+
+0.4416
+
+0.5000
+
+0.5585
+
+0.6250
+
+0.6938
+
+0.7281
+
+9
+
+10
+
+11
+
+12
+
+13
+
+14
+
+15
+
+16
+
+Cp5
+
+0.3194
+
+0.3877
+
+0.4603
+
+0.5378
+
+0.6212
+
+0.7129
+
+0.8188
+
+1.0000
+
+TIL=6.0559
+
+0.8056
+
+0.8623
+
+0.9147
+
+0.9622
+
+1.0038
+
+1.0371
+
+1.0562
+
+1.0000
+
+M
+Cp5
+
+0.1597
+
+0.3374
+
+0.4195
+
+0.5000
+
+0.5705
+
+0.6478
+
+0.7326
+
+0.8291
+
+TIL=7.8957
+
+0.9028
+
+0.9312
+
+0.9574
+
+0.9811
+
+1.0000
+
+1.0000
+
+1.0000
+
+1.0000
+
+M 22
+Cp5
+
+0.1708
+
+0.3521
+
+0.4294
+
+0.5000
+
+0.5705
+
+0.6478
+
+0.7326
+
+0.8291
+
+TIL=7.0650
+
+0.8292
+
+0.8292
+
+0.8679
+
+0.9098
+
+1.0000
+
+1.0000
+
+1.0000
+
+1.0000
+
+Cp6
+
+0.3317
+
+0.3864
+
+0.4440
+
+0.5050
+
+0.5699
+
+0.6397
+
+0.7167
+
+0.8063
+
+TIL=6.0974
+
+0.7691
+
+0.8152
+
+0.8584
+
+0.8982
+
+0.9341
+
+0.9651
+
+0.9889
+
+1.0000
+
+M
+Cp6
+
+0.3075
+
+0.3733
+
+0.4370
+
+0.5000
+
+0.5629
+
+0.6266
+
+0.6924
+
+0.7877
+
+TIL=6.4978
+
+0.7878
+
+0.8223
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+Cp7
+
+0.5625
+
+0.6250
+
+0.6875
+
+0.7500
+
+0.8125
+
+0.8750
+
+0.9375
+
+1.0000
+
+TIL=0
+
+0.5625
+
+0.6250
+
+0.6875
+
+0.7500
+
+0.8125
+
+0.8750
+
+0.9375
+
+1.0000
+
+M
+Cp7
+
+0.3125
+
+0.3750
+
+0.4375
+
+0.5000
+
+0.5625
+
+0.6250
+
+0.6875
+
+0.7812
+
+TIL=6.4978
+
+0.7813
+
+0.8223
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+Cp8
+
+0.5625
+
+0.6250
+
+0.6875
+
+0.7500
+
+0.8000
+
+0.8750
+
+0.9500
+
+1.0000
+
+TIL=0
+
+0.5625
+
+0.6250
+
+0.6875
+
+0.7500
+
+0.8000
+
+0.8750
+
+0.9500
+
+1.0000
+
+M
+Cp8
+
+0.3062
+
+0.3750
+
+0.4415
+
+0.5000
+
+0.5562
+
+0.6250
+
+0.6937
+
+0.7812
+
+TIL=6.5021
+
+0.7813
+
+0.8223
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+M 17
+Cp8
+
+0.3062
+
+0.3750
+
+0.4415
+
+0.5000
+
+0.5584
+
+0.6250
+
+0.6937
+
+0.7812
+
+TIL=6.4978
+
+0.7813
+
+0.8223
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+X
+
+14
+
+Here is an interesting part. Can we apply the modification process to a point estimator
+to obtain a 1 − α exact interval? The answer is yes. Table 3 reports the sample proportion
+
+M
+Cp7 (X) = X
+n (a zero-length interval estimator of level zero) and its modification Cp7 (X).
+
+The latter turns out to be admissible following the same argument in the previous paraM (X) from Wang’s approach is equal to C M (X). We try
+graph. i.e., the refinement of Cp7
+p7
+
+another (arbitrary) point estimator Cp8 (X), which satisfies (9) and has a nondecreasing
+M (X) has an ICP 95% and can be shortened
+confidence limits, see Table 3. The modified Cp8
+M 17 (X) is a subset of C M (X).
+further because Cp8
+p8
+
+Example 2. (more confidence intervals for the difference of two proportions) We now
+modify two approximate intervals for d = p1 − p2 based on two independent binomials X
+and Y in Section 2.3. The first is Wald interval for d:
+s
+p̂1 (1 − p̂1 ) p̂2 (1 − p̂2 )
++
+].
+Cd3 (X, Y ) = [p̂1 − p̂2 ∓ z α2
+n1
+n2
+This interval has a zero ICP for any n1 and n2 and α (Wang and Zhang, 2014). The second
+is the MLE of d that is treated as a confidence interval
+Cd4 (X, Y ) = [p̂1 − p̂2 ∓ 0].
+Clearly, this interval has a zero ICP and a zero length. Theorem 1 is applied to these
+M (X, Y ) and
+two approximate intervals to obtain two 1 − α exact confidence intervals Cd3
+M (X, Y ). The modified intervals have a larger TIL over all sample points than the origiCd4
+
+nal intervals because they have a correct ICP that is at least 1 − α. Table 2 contains several
+examples. Theorem 1 is also applied to three exact intervals, Cd1 (X, Y ) and Cd2 (X, Y ), discussed in Section 2.3 and the two-one-sided interval in Wang (2010), denoted by Cd5 (X, Y ).
+This time all TIL’s of modified intervals decrease rather than increase. See Table 2.
+Example 3 (the z-interval and its variants) In this example, we investigate the effect
+of choosing a point estimator on the modified confidence interval. Suppose {X1 , ..., Xn } is
+15
+
+a random sample from a normal population N (µ, σ 2 ) for known σ 2 . Confidence intervals
+for µ based on the minimum sufficient statistic X̄, including the z-interval, are of interest.
+Consider H0 : µ = µ0 vs HA : µ 6= µ0 . If µ is estimated by a point estimator aX̄ + b for
+two given constants a > 0 and b, then, following (15), define a test statistic
+Tzab (X̄, µ0 ) = min{µ0 − aX̄ − b, aX̄ + b − µ0 } = −|µ0 − aX̄ − b|
+for H0 . This includes Tz10 as a special case for (a, b) = (1, 0), where µ is estimated by the
+uniformly minimum variance unbiased estimator (UMVUE) X̄. The h-function is
+hzab (x̄, µ0 ) = P (Tzab (X̄, µ0 ) ≤ Tzab (x̄, µ0 )).
+Note X̄ = µ0 + √σn Z for Z ∼ N (0, 1) with a CDF FN (z). Then,
+σ
+hzab (x̄, µ0 ) = P (−|µ0 − a(µ0 + √ Z) − b| ≤ Tzab (x̄, µ0 ))
+n
+
+√
+√
+n (2 − a)µ0 − 2b − ax̄
+n
+
+
+1 − FN (
+[
+]) + FN (
+(x̄ − µ0 )), if µ0 ≥ ax̄ + b
+σ
+a
+σ
+=
+√
+√
+
+n
+n (2 − a)µ0 − 2b − ax̄
+
+1 − FN (
+(x̄ − µ0 )) + FN (
+[
+]), if µ0 ≤ ax̄ + b.
+σ
+σ
+a
+
+This function achieves its maximum 1 at µ0 = ax̄ + b. The 1 − α exact interval for µ is
+Czab (x̄) = {µ0 : hzab (x̄, µ0 ) > α}
+
+denoted by
+
+=
+
+[Lzab (x̄), Uzab (x̄)].
+
+i) If a > 2, Czab (x̄) = (−∞, +∞) since hzab (x̄, µ0 ) approaches 1 as µ0 goes to ±∞.
+ii) If a < 2, Czab (x̄) is a finite interval since hzab (x̄, µ0 ), as a function of µ0 for a fixed x̄,
+is unimodal with a mode at µ0 = ax̄+b and approaches 0 as µ0 goes to ±∞. The confidence
+limits Lzab (x̄) and Uzab (x̄) are the solutions of the equation hzab (x̄, µ0 ) = α on intervals
+(−∞, ax̄ + b] and [ax̄ + b, +∞), respectively. The two solutions can be found numerically.
+√
+
+√
+
+For the case of (a, b) = (1, 0), hz10 (x̄, µ0 ) = 1 − FN ( σn |µ0 − x̄|) + FN (− σn |µ0 − x̄|). Then,
+Lz10 (x̄) = x̄ − z α2 √σn and Uz10 (x̄) = x̄ + z α2 √σn . i.e., Cz10 (X̄) is the z-interval, which is the
+
+shortest (Casella and Berger, 2002).
+16
+
+iii) If a = 2, then
+
+√
+√
+n
+n
+
+
+1 − FN (−
+(b + x̄)) + FN (
+(x̄ − µ0 )), if µ0 ≥ 2x̄ + b
+σ√
+hz2b (x̄, µ0 ) =
+√σ
+
+n
+n
+
+1 − FN (
+(x̄ − µ0 )) + FN (−
+(b + x̄)), if µ0 ≤ 2x̄ + b.
+σ
+σ
+
+This, as a function of µ0 , is unimodal with a mode at µ0 = 2x̄ + b. Thus, Uz2b (x̄) and
+Lz2b (x̄) are the solutions of hz2b (x̄, µ0 ) = α on intervals [2x̄ + b, +∞) and (−∞, 2x̄ + b],
+respectively, if a solution exists. Algebraic calculations yield the following three results:
+iii-1) If x̄ > zα √σn − b, then
+
+√
+σ −1
+n
+(b + x̄))) and Uz2b (x̄) = +∞;
+Lz2b (x̄) = x̄ − √ FN (1 − α + FN (−
+σ
+n
+
+iii-2) If −zα √σn − b ≤ x̄ ≤ zα √σn − b, then
+Lz2b (x̄) = −∞ and Uz2b (x̄) = +∞;
+iii-3) If x̄ < −zα √σn − b, then
+
+√
+σ −1
+n
+Lz2b (x̄) = −∞ and Uz2b (x̄) = x̄ − √ FN (α − 1 + FN (−
+(b + x̄))).
+n
+σ
+
+The above discussion shows that the h-function method always generates an exact interval of level 1 − α; however, depending on whether an appropriate point estimator is picked,
+the resultant interval can be the shortest z-interval or the widest interval, (−∞, +∞).
+
+4
+
+Refining a 1 − α exact confidence interval
+
+When C0 (X) is a 1− α exact interval, what is the relationship between C0 (X) and C0M (X)?
+From Tables 1 and 2, we see that the TIL decreases when the modification process is applied
+to an exact interval. Table 3 even shows that the modification process shrinks the interval
+uniformly on all sample points. So, we show next that C0M (X) is a subset of C0 (X).
+17
+
+4.1
+
+Refining a 1 − α exact interval one time
+
+Theorem 2 For a 1 − α exact confidence interval C0 (X), interval C0M (x) given in (18)
+
+is contained in C0 (X). Therefore, for any level confidence interval C0 (X), C0M 2 (X) is a
+subset of C0M (X).
+Example 1 (continued). It is clear in Table 3 that the modification of any 95% exact
+
+interval is always a subset of the interval. We also apply Theorem 2 to the four exact
+intervals in Table 1: Clopper-Pearson interval Cp1 (1934), Blaker interval (2000) Cp2 , the
+exact likelihood-ratio-test interval Cp3 and Wang interval (2014) Cp4 . Table 4 contains
+the details. The improvements, as a proper subset, over Cp1 and Cp3 are noticeable. The
+improvement over Cp2 occurs at x = 6, 8, 10. No improvement over Cp4 can be found since
+it is admissible for any n. In this sense, Cp4 is the best among the exact intervals discussed
+M , CM , C ,
+here. In Tables 3 and 4, we provide five different admissible intervals for p, Cp1
+p4
+p2
+M , C M (= C M 17 ) with the same total interval length 6.4978. Four of them are generated
+Cp6
+p8
+p7
+
+by the newly proposed modification process.
+Example 3 (continued). Consider a variant of the z-interval for µ: C0 (X̄) = [X̄ −
+
+a √σn , X̄ + b √σn ] for two constants a, b ≥ z α2 , which is a 1 − α exact but conservative interval.
+We now compute C0M (X̄). Let
+σ
+σ
+T0 (X̄, µ0 ) = min{µ0 − X̄ + a √ , X̄ + b √ − µ0 }.
+n
+n
+
+18
+
+M ; Blaker interval C , the refineTable 4: Clopper-Pearson interval Cp1 , the refinement Cp1
+p2
+M ; the likelihood-ratio-test interval C , the refinement C M , the 22nd refinement
+ment Cp2
+p3
+p3
+M 22 ; Wang interval C ; and their ICPs and TILs when n = 16. For each interval, the
+Cp3
+p4
+
+first line is the lower limits and the second line is the upper limits.
+X
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+Cp1
+
+0.0000
+
+0.0015
+
+0.0155
+
+0.0404
+
+0.0726
+
+0.1101
+
+0.1519
+
+0.1975
+
+0.2465
+
+ICP=95.78%
+
+0.2060
+
+0.3024
+
+0.3835
+
+0.4565
+
+0.5238
+
+0.5867
+
+0.6457
+
+0.7013
+
+0.7535
+
+M (= C M ∞ )
+Cp1
+p1
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1777
+
+0.2017
+
+0.2719
+
+ICP=95%
+
+0.2018
+
+0.3006
+
+0.3690
+
+0.4350
+
+0.5000
+
+0.5651
+
+0.6311
+
+0.6995
+
+0.7281
+
+Cp2
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1746
+
+0.2011
+
+0.2717
+
+ICP=95%
+
+0.2012
+
+0.3005
+
+0.3683
+
+0.4345
+
+0.5000
+
+0.5656
+
+0.6318
+
+0.6996
+
+0.7283
+
+M = (C M ∞ )
+Cp2
+p2
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1777
+
+0.2011
+
+0.2719
+
+ICP=95%
+
+0.2012
+
+0.3005
+
+0.3683
+
+0.4345
+
+0.5000
+
+0.5656
+
+0.6318
+
+0.6996
+
+0.7281
+
+Cp3
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1205
+
+0.1462
+
+0.1727
+
+0.2592
+
+ICP=95%
+
+0.1738
+
+0.2885
+
+0.3614
+
+0.4312
+
+0.5000
+
+0.5689
+
+0.6387
+
+0.7116
+
+0.7408
+
+M
+Cp3
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1600
+
+0.1732
+
+0.2719
+
+ICP=95%
+
+0.1738
+
+0.2885
+
+0.3614
+
+0.4312
+
+0.5000
+
+0.5689
+
+0.6387
+
+0.7116
+
+0.7281
+
+M 22 (= C M ∞ )
+Cp3
+p3
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1737
+
+0.1737
+
+0.2719
+
+ICP=95%
+
+0.1738
+
+0.2885
+
+0.3614
+
+0.4312
+
+0.5000
+
+0.5689
+
+0.6387
+
+0.7116
+
+0.7281
+
+M ∞)
+Cp4 (= Cp4
+
+0.0000
+
+0.0032
+
+0.0226
+
+0.0531
+
+0.0902
+
+0.1321
+
+0.1777
+
+0.2059
+
+0.2719
+
+ICP=95%
+
+0.2060
+
+0.3024
+
+0.3835
+
+0.4416
+
+0.5000
+
+0.5585
+
+0.6166
+
+0.6977
+
+0.7281
+
+9
+
+10
+
+11
+
+12
+
+13
+
+14
+
+15
+
+16
+
+X
+Cp1
+
+0.2987
+
+0.3543
+
+0.4133
+
+0.4762
+
+0.5435
+
+0.6165
+
+0.6976
+
+0.7940
+
+TIL=6.9380
+
+0.8025
+
+0.8481
+
+0.8899
+
+0.9274
+
+0.9596
+
+0.9845
+
+0.9985
+
+1.0000
+
+M
+Cp1
+
+0.3005
+
+0.3689
+
+0.4349
+
+0.5000
+
+0.5650
+
+0.6310
+
+0.6994
+
+0.7982
+
+TIL=6.4978
+
+0.7983
+
+0.8223
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+Cp2
+
+0.3004
+
+0.3682
+
+0.4344
+
+0.5000
+
+0.5655
+
+0.6317
+
+0.6995
+
+0.7988
+
+TIL=6.5043
+
+0.7989
+
+0.8254
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+M
+Cp2
+
+0.3004
+
+0.3682
+
+0.4344
+
+0.5000
+
+0.5655
+
+0.6317
+
+0.6995
+
+0.7988
+
+TIL=6.4978
+
+0.7989
+
+0.8223
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+Cp3
+
+0.2884
+
+0.3613
+
+0.4311
+
+0.5000
+
+0.5688
+
+0.6386
+
+0.7115
+
+0.8262
+
+TIL=6.6115
+
+0.8273
+
+0.8538
+
+0.8795
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+M
+Cp3
+
+0.2884
+
+0.3613
+
+0.4311
+
+0.5000
+
+0.5688
+
+0.6386
+
+0.7115
+
+0.8262
+
+TIL=6.5343
+
+0.8268
+
+0.8400
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+M 22
+Cp3
+
+0.2884
+
+0.3613
+
+0.4311
+
+0.5000
+
+0.5688
+
+0.6386
+
+0.7115
+
+0.8262
+
+TIL=6.5058
+
+0.8263
+
+0.8263
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+Cp4
+
+0.3023
+
+0.3834
+
+0.4415
+
+0.5000
+
+0.5584
+
+0.6165
+
+0.6976
+
+0.7940
+
+TIL=6.4978
+
+0.7941
+
+0.8223
+
+0.8679
+
+0.9098
+
+0.9469
+
+0.9774
+
+0.9968
+
+1.0000
+
+For a fixed x̄, T0 (x̄, µ0 ) is unimodal in µ0 with the mode at µ0 = x̄+ √σn ( b−a
+2 ). Algebraic
+
+19
+
+calculation shows, for Z ∼ N (0, 1),
+
+√
+
+n
+h0 (x̄, µ0 ) = P (min{−Z + a, Z + b} ≤
+T0 (x̄, µ0 ))
+σ
+
+√
+a−b
+n
+a−b
+
+
+,−
+(µ0 − x̄)}) + P (Z < min{
+,
+P (Z > max{
+
+
+
+2
+σ
+2
+
+√
+
+
+
+σ b−a
+n
+
+
+a−b+
+(µ0 − x̄)}) if µ0 ≤ x̄ + √ (
+),
+
+σ
+n 2
+=
+√
+
+a−b n
+a−b
+
+
+P (Z > max{
+,
+(µ0 − x̄) + a − b}) + P (Z < min{
+,
+
+
+2 √σ
+2
+
+
+
+
+n
+σ b−a
+
+
+(µ0 − x̄)}) if µ0 > x̄ + √ (
+).
+−
+
+σ
+n 2
+
+This function is also unimodal in µ0 with the same mode of T0 (x̄, µ0 ). Note that h0 at the
+M
+model is equal to one and goes to zero as µ0 goes to infinity. Let LM
+0 (x̄) and U0 (x̄) be the
+
+two solutions of h0 (x̄, µ0 ) = α. The two solutions can be written as x̄ + ci (a, b) √σn for i = 1
+and 2, where c1 (a, b) = −zα1 and c2 (a, b) = zα2 for α1 + α2 = α. When a = b, then C0M is
+equal to the z-interval.
+
+4.2
+
+Refining a 1 − α exact interval multiple times
+
+The modification process can be applied to a 1 − α exact interval repeatedly, and in each
+time an interval which is a subset of the previous interval is generated. Next we determine
+the smallest 1 − α exact interval in the modification process.
+Theorem 3 For a 1 − α exact confidence interval C0 (X) for θ, which is rewritten as
+Mk
+C0M k (X) for k = 0, let C0M ∞ (x) = ∩+∞
+k=0 C0 (x) for any x. Then,
+
+i) interval C0M k (x), as a set of θ, is nonincreasing in k for k ≥ 0.
+
+ii) C0M ∞ (X), contained in C0M k (X) for any k, is a 1 − α exact confidence interval.
+
+iii) If C0M k (X) = C0 (X)M (k+1) for some k ≥ 0, then C0M ∞ (X) = C0M k (X).
+
+When applying Theorem 3, the smallest interval C M ∞ (X) is typically equal to C M k (X)
+20
+
+M ∞ = C M for k = 1, and in
+for a finite nonnegative integer k. For examples, in Table 3, Cp6
+p6
+M∞ = C
+Table 4, Cp4
+p4 for k = 0.
+
+Example 2 (continued). Following a series of works, originated by Buehler (1957),
+the construction of the smallest 1 − α one-sided confidence interval is an automatic process
+as long as an order on the sample space is prespecified. Therefore, a 1 − α exact twosided confidence interval can be easily obtained by taking the intersection of two lower
+and upper 1 − α2 one-sided intervals. When the sample space is discrete, the resultant
+interval may be conservative with an ICP higher than the nominal level 1 − α (Agresti,
+2013). Clopper-Pearson interval (1934) is such an example. There are successful efforts to
+improve this interval uniformly, see Casella (1986), Blaker (2000) and Wang (2014), since
+a single binomial distribution does not involve any nuisance parameter. When there exists
+a nuisance parameter, as in many applications including the inference about the difference
+d, it is challenging to improve the intersection of two 1 − α2 one-sided intervals. The main
+difficulty is that the method of finding an ICP in Wang (2007) fails. Theorem 2, however,
+provides a promising effort to shrink any exact interval C0 (X), including the intersection
+of two 1 − α2 one-sided intervals.
+
+To be precise, Cd5 (X, Y ) in Table 2 is the intersection of two 1 − α2 smallest one-
+
+sided intervals in Wang (2010). Its ICP and TIL are larger than those of Cd2 (X, Y ), but
+M ∞ (X, Y ) has the smallest TIL in general. The reason is that the confidence limits of
+Cd5
+
+Cd5 (X, Y ) do not have many ties due to an inductive order on the sample space. On the
+contrary, Cd4 (X, Y ), which is equal to the MLE estimator p̂1 − p̂2 , has many ties. For
+example, when (n1 , n2 ) = (8, 10), then Cd4 (0, 0) = Cd4 (4, 5) = Cd4 (8, 10) = 0. This results
+M ∞ (0, 0) = C M ∞ (4, 5) = C M ∞ (8, 10) = [−0.4375, 0.4375]. In
+in the tied intervals of Cd4
+d4
+d4
+M ∞ (X, Y ) is much longer than C M ∞ (X, Y ). Score interval C (X, Y ) also
+consequence, Cd4
+d2
+d5
+
+has a small TIL due to a small number of ties.
+
+21
+
+How to determine whether C0M k for an integer k is equal to C0M ∞ ? Since the intervals
+M (k+1)
+
+for d all have a finite length, the ratio of the TILs of two consecutive C0
+
+and C0M k
+
+is used. Due to part i) of Theorem 2, the ratio is less than or equal to one. If it is equal
+M ∞ = C M 20 and
+to one, then, by part iii) of Theorem 2, C0M k = C0M ∞ . For example, Cd2
+d2
+M ∞ = C M 17 . Here the ratio is accurate up to the seventh decimal place.
+Cd5
+d5
+
+Example 4. Consider a two-arm randomized trial in Essenberg (1952) for testing the
+effect of tobacco smoking on tumor development in mice. The smoking group had 23(= n1 )
+mice and tumors were observed on 21(= x) mice; (n2 , y) = (32, 19) in the control group.
+Let p1 and p2 be the tumor rates for the two groups. We use d to evaluate the smoking
+effect. The fifteen intervals in Table 2 at (x, y) = (21, 19) are reported in Table 5. The final
+M ∞ (x, y), is equal to [0.0968, 0.5037] and has the shortest
+refinement of Wang interval, Cd5
+
+length 0.4049, an ICP 0.95 and the shortest TIL 341.4697.
+M , C M ∞ ) for i = 1
+Table 5: Fifteen 95% confidence intervals at (x, y) = (21, 19): (Cdi , Cdi
+di
+
+(LRT, exact), 2 (Score, exact), 3 (Wald, approximate), 4 (MLE as an interval) and 5 (Wang,
+exact) and their lengths when (n1 , n2 ) = (23, 32). The smallest length of the exact intervals
+is marked by ‘*’.
+lower
+
+upper
+
+length
+
+Cd1
+
+0.0607
+
+0.5337
+
+0.4730
+
+Cd2
+
+0.0794
+
+0.5227
+
+0.4433
+
+Cd3
+
+0.1138
+
+0.5248
+
+0.4110
+
+Cd4
+
+0.3193
+
+0.3193
+
+0
+
+Cd5
+
+0.0947
+
+0.5126
+
+0.4179
+
+lower
+M
+Cd1
+M
+Cd2
+M
+Cd3
+M
+Cd4
+M
+Cd5
+
+upper
+
+length
+
+0.0610
+
+0.5337
+
+0.4727
+
+0.0794
+
+0.5222
+
+0.4428
+
+0.0569
+
+0.5485
+
+0.4916
+
+0.0523
+
+0.5442
+
+0.4919
+
+0.0968
+
+0.5080
+
+0.4112
+
+22
+
+M∞
+Cd1
+M∞
+Cd2
+M∞
+Cd3
+M∞
+Cd4
+M∞
+Cd5
+
+lower
+
+upper
+
+length
+
+0.0612
+
+0.5337
+
+0.4725
+
+0.0794
+
+0.5217
+
+0.4423
+
+0.1140
+
+0.5470
+
+0.4330
+
+0.0530
+
+0.5438
+
+0.4908
+
+0.0968
+
+0.5037
+
+0.4069*
+
+4.3
+
+Confidence intervals for the difference of two proportions in a matchedpair experiment
+
+Consider a 2×2 contingency table with two binary variables A (row) and B (column),
+where 1 is a success and 0 is a failure. We observe a random vector (N11 , N10 , N01 , N00 )
+that follows a multinomial distribution with n trials and probabilities (p11 , p10 , p01 , p00 ).
+For example, N10 is the number of subjects with (A, B) = (1, 0) in all n subjects in a study
+and p10 = P ((A, B) = (1, 0)). Similar to d in Section 2.3, the parameter of interest here is
+dm = P (A = 1) − P (B = 1) = p10 − p01 .
+Let T = N11 + N00 and pt = p11 + p00 . The conditional distribution of Nij ’s for given
+(N10 , T ) does not involve p10 and p01 , so the inferences about dm should be based on
+(N10 , T ) following the similar reasoning of the sufficiency principle. The reduced sample
+and parameter spaces are SM = {(n10 , t) : n10 + t ∈ [0, n]} and HM = {(dm , pt ) : dm ∈
+[−1, 1], pt ∈ [0, 1 − |dm |]}, respectively. The PMF for (N10 , T ), in terms of (dm , pt ), is
+pM (n10 , t, dm , pt ) =
+
+n!
+1 + dm − pt n10 t 1 − dm − pt t−n10
+(
+) pt (
+)
+.
+n10 !t!n01 !
+2
+2
+
+Wang (2012) proposed the smallest 1 − α lower and upper one-sided intervals for dm
+
+using an inductive order on SM . Then, the intersection of two smallest 1 − α2 lower and
+upper one-sided intervals for dm , denoted by Cdm 1 (N10 , T ) = [Ldm 1 (N10 , T ), Udm 1 (N10 , T )],
+is of level 1 − α. This interval can be computed by an R-package “ExactCIdiff” (Shan and
+Wang, 2013). It is now refined following the modification process. More precisely, let
+Tm1 (N10 , T ) = min{dm − Ldm 1 (N10 , T ), Udm 1 (N10 , T ) − dm }.
+
+(19)
+
+Define an h-function
+hm1 (n10 , t, dm ) =
+
+X
+
+sup
+
+pt ∈[0,1−|dm |] {(n′ ,t′ )∈S :T (n′ ,t′ )≤T (n ,t)}
+m1
+10
+M m1 10
+10
+
+23
+
+pM (n10 , t, dm , pt ).
+
+(20)
+
+Then, the interval generated by the modification process
+CdMm 1 (n10 , t) = {dm ∈ [−1, 1] : hm1 (n10 , t, dm ) > α}
+
+(21)
+
+is of level 1 − α and is a subset of Cdm 1 (n10 , t) following Theorem 2. We continue the
+
+modification process for k times so that no improvement can be found. i.e, CdMmk1 = CdMm∞
+1.
+
+There have been many efforts to derive approximate and exact confidence intervals for
+dm . Fagerland, Lydersen and Laake (2014) provided a good summary. Here are two main
+results: i) Tango (1998) recommended using his approximate score interval for large |dm |
+and two intervals in Newcombe (1998) that are based on the Wilson score interval or Jeffreys
+interval for the single proportion for small |dm |. The formula of the first interval, denoted by
+Cdm 2 , is given in Fagerland et al. (2014, equations 24, 25). The other two intervals depend
+on (N11 , N10 , N01 ) but not (N10 , T ). So, any of the two intervals assumes different intervalvalues on those sample points of (n11 , n10 , n01 ) with a fixed (n10 , t). In consequence, this
+may cause an interpretation problem of the intervals. The two intervals are not included in
+the comparison below. ii) Bonett and Price (2012) compared five intervals and concluded
+that the Wald interval with Bonett–Price adjustment, denoted by Cdm 3 (Fagerland et al.
+2014, equation 16), performs as well as or better than Cdm 2 . These two intervals are not of
+level 1 − α. However, following the similar process of (19), (20) and (21) for deriving CdMm 1
+
+and CdMm∞
+1 , the counterpart intervals for Cdm 2 and Cdm 3 are constructed. They are 1 − α
+
+exact intervals due to Theorems 2 and 3. Next, we present a limited numerical comparative
+study for Cdm 1 , Cdm 2 , Cdm 3 and their modifications in terms of ICP and TIL.
+Example 5. Bentur et al. (2009) measured airway hyper-responsiveness status: (Yes
+= 1, No = 0) in n(= 21) children before (A) and after (B) stem cell transplantation and
+observed (n11 , n10 , n01 , n00 ) = (1, 1, 7, 12) and t = 13. Then, the MLE estimate for dm is
+−0.2857. In Table 6, we report nine 95% confidence intervals at the observation for an
+individual performance and their ICPs and TILs for an overall performance.
+24
+
+As expected, Cdm 1 has the largest length and TIL. However, the small TILs for Cdm 2
+and Cdm 3 are due to their incorrect ICPs: 0.8376 and 0.9146. After the modification process is applied to the three intervals, the resultant intervals all have ICPs no less than
+M∞
+0.95; CdMm∞
+1 is the shortest at the observation and has a little larger TIL than Cdm 2 .
+
+One reason for the large TIL of CdMm∞
+3 is that Cdm 3 has ties in its confidence limits, especially when n10 is close to n or 0. For examples, the upper limits for Cdm 3 at (n10 , t) =
+(21, 0), (20, 0), (20, 1), (19, 0), (19, 1) and (19,2) are equal to 1. In order to obtain the final
+interval, the numbers of modification, k, for the three intervals are equal to 18, 19, and 20,
+respectively. When k goes large, the improvement in TIL is negligible. For example, when
+k = 5, CdMmk2 has a TIL of 146.2981, close to its final TIL 146.2317.
+In Table 6, we also report the p-values for testing H0 : dm = 0 that are associated with
+the modified intervals CdMm i and CdMm∞
+i at (n10 , t) = (1, 13) for i = 1, 2, 3. For example, the
+p-value corresponding to CdMm 1 is equal to hm1 (1, 13, 0) = 0.04125, where hm1 is given in
+(20). We reject H0 at level 0.05, which is consistent to the fact that interval CdMm 1 (1, 13)
+excludes zero; while CdMm 3 (1, 13) includes zero and fails to reject H0 with a p-value of 0.07835
+although Cdm 3 (1, 13) excludes zero.
+
+5
+
+Modifying one-sided intervals
+
+Assume the range of parameter θ is [A, B] for two known constants A and B. If one end
+is infinity, for example, B = +∞, then [A, B] = [A, +∞). For a lower one-sided confidence
+interval for θ, Cl (X) = [Ll (X), B] with Ll (X) ≥ A, consider the one-sided hypotheses
+H0 : θ ≤ θ0 vs HA : θ > θ0 .
+Let
+T1l (x, θ0 ) = θ0 − Ll (x).
+25
+
+(22)
+
+Table 6: Nine 95% confidence intervals: (Cdm i , CdMm i , CdMm∞
+i ) for i = 1 (Wang, exact), 2
+(Tango, approximate), 3 (Wald with Bonett and Price adjustment, approximate), their
+lengths at (n10 , t) = (1, 13), their ICPs and TILs when n = 21. The smallest length and
+TIL of the exact intervals are marked by ‘*’.
+Part I: The nine intervals at (n10 , t) = (1, 13)
+lower
+
+upper
+
+length
+
+lower
+
+upper
+
+length
+
+lower
+
+the p-value
+Cdm 1
+
+-0.5214
+
+-0.0126
+
+0.5088
+
+CdMm 1
+
+0.4913
+
+CdMm 2
+
+0.4951
+
+CdMm 3
+
+-0.5065
+
+-0.0155
+
+-0.5173
+
+-0.0260
+
+-0.5320
+
+-0.0182
+
+0.4910
+
+0.5138
+
+CdMm∞
+2
+
+0.5122
+
+CdMm∞
+3
+
+-0.4923
+
+-0.5084
+
+-0.0133
+
+-0.5000
+
+0.0122
+
+-0.0155
+
+0.4768*
+
+0.04393
+-0.5287
+
+0.04125
+Cdm 3
+
+length
+
+the p-value
+CdMm∞
+1
+
+0.04125
+Cdm 2
+
+upper
+
+-0.0182
+
+0.5105
+
+0.04215
+-0.4997
+
+0.07835
+
+0.0122
+
+0.5119
+
+0.07835
+
+Part II: The nine interval’s ICPs and TILs
+ICP
+Cdm 1
+
+0.9500
+
+ICP
+
+TIL
+
+TIL
+
+ICP
+
+TIL
+
+147.8739
+
+CdMm∞
+1
+
+0.9500
+
+146.8296
+
+0.9500
+
+146.2317*
+
+0.9500
+
+149.2308
+
+152.4780
+
+CdMm 1
+
+0.9500
+
+147.7267
+
+CdMm∞
+2
+
+0.9501
+
+152.3374
+
+CdMm∞
+3
+
+Cdm 2
+
+0.8376
+
+144.1614
+
+CdMm 2
+
+Cdm 3
+
+0.9146
+
+147.7201
+
+CdMm 3
+
+0.9500
+
+A small value of T1l gives strong evidence to establish HA , and
+T1l (x, θ0 ) ≥ 0 if and only if θ0 ≥ Ll (x) (i.e., θ0 ∈ Cl (x)).
+The h-function based on T1l (x, θ0 ) is
+h1l (x, θ0 ) = sup P (T1l (X, θ0 ) ≤ T1l (x, θ0 )) = sup P (Ll (x) ≤ Ll (X)).
+H0
+
+θ≤θ0
+
+26
+
+(23)
+
+Following (6), the level-α acceptance region for H0 and the 1 − α exact lower one-sided
+confidence interval for θ are
+A1l (θ0 ) = {x : h1l (x, θ0 ) > α} and ClM (X) = {θ0 : h1l (x, θ0 ) > α}.
+
+(24)
+
+As mentioned in Example 2 (continued), if an order is introduced on the sample space,
+then the smallest 1 − α one-sided confidence interval under this order can be automatically
+constructed. The order determines, between any two sample points, which point has a larger
+confidence limit and can be given by a function on the sample space. In the current case, the
+function is equal to Ll (X). More precisely, consider a 1 − α exact lower one-sided interval
+
+class Cl = {C(X) = [L(X), B] : L(x′ ) ≤ (=)L(x) if Ll (x′ ) ≤ (=)Ll (x), ∀ x′ and x}. We
+
+should find the smallest interval in Cl , which is contained in any interval in Cl . Different
+from the two-sided interval case, we have the following stronger result than Theorems 1,
+2 and 3. One time of the modification yields the smallest interval. This also establishes a
+connection between the h-function method and the construction of the smallest one-sided
+interval under an order.
+Theorem 4 For a lower one-sided confidence interval Cl (X) = [Ll (X), B] of any level,
+i) interval ClM (X) given in (24) is of level 1 − α;
+
+ii) ClM ∞ (X) = ClM (X);
+
+iii) ClM (X) = [LM
+l (X), B] is the smallest interval in Cl . i.e., for any interval C(X) in
+Cl , LM
+l (X) ≥ L(X).
+Example 7. (the stochastically nondecreasing distribution family with a single parameter) Suppose X has a CDF F (x, θ) and is stochastically nondecreasing in θ. i.e.,
+F (x, θ1 ) ≥ F (x, θ2 ) for any x and θ1 ≤ θ2 .
+
+(25)
+
+This family includes all important single-parameter distributions, such as binomial, hypergeometric, exponential, Poisson, etc. We are interested in finding the modified interval
+27
+
+ClM (X) for the one-sided confidence interval Cl (X) = [X, B]. Interval Cl (X) itself may be
+meaningless in terms of estimating θ. For example, when X ∼ Bino(n, p), no one would
+use [X, 1] to estimate p. However, a large value of X tends to associate with a large value of
+θ as seen in the monotone likelihood ratio distribution family, a special case of the stochastically nondecreasing distribution family. Therefore, the observation X is able to tell which
+sample point has a large lower limit. This is the only fact needed to derive ClM (X).
+To be precise, following (23),
+h1l (x, θ0 ) = max P (x ≤ X)
+
+due to (25)
+
+θ≤θ0
+
+=
+
+1 − F (x − 1, θ0 ).
+
+Note that F (x, θ) is nonincreasing in θ for any x. Then, LM
+l (x) = inf{θ0 : 1− F (x− 1, θ0 ) >
+α}. This interval is the smallest interval among 1 − α exact intervals of form [L(X), B] with
+a nondecreasing L.
+M
+For example, when X follows Bino(n, p), then LM
+l (x) = 0 for x = 0; and Ll (x) is the
+
+solution of 1 − FB (x − 1, n, p0 ) = α for x > 0. In fact, ClM (X) = [LM
+l (X), 1] is equal to the
+1 − α lower one-sided Clopper-Pearson interval.
+Example 8 (the one-sided t-interval). When estimating a normal mean µ with an
+unknown variance σ 2 , consider a lower one-sided interval, Cc (X̄, S) = [X̄ + c √Sn , +∞) for
+a given constant c and the sample standard deviation S. This is equal to the one-sided
+t-interval if c = −tα,n−1 , where tα,n−1 is the upper αth percentile a t-distribution with n − 1
+2
+
+σ
+degrees of freedom. Now we derive CcM (X̄, S). Note X̄ ∼ µ + √σn Z and S 2 ∼ n−1
+χ2n−1 .
+
+Following (23),
+√
+n(x̄ + c √sn − µ0 )
+Z
+√
+√
+h1l (x̄, s, µ0 ) = max P (
+≥
+− c)
+σ>0
+χn−1 / n − 1
+σχn−1 / n − 1
+
+s
+
+
+if µ0 > x̄ + c √ ;
+1
+n
+=
+s
+
+
+1 − FT (−c) if µ0 ≤ x̄ + c √ ,
+n
+28
+
+where FT is the CDF of t-distribution with n − 1 degrees of freedom. Thus,
+
+
+(−∞, +∞) if c > −tα,n−1 ;
+M
+Cc (x̄, s) = {µ0 : h1l (x̄, s, µ0 ) > α} =
+s
+
+[x̄ + c √ , +∞) if c ≤ −tα,n−1 ,
+n
+
+by (24). Furthermore, among all intervals CcM for different c’s, the one with c = −tα,n−1 is
+
+the smallest one.
+The above two examples show the importance of selecting a good order function on
+interval construction from both the positive and negative sides. In Example 7, Cl may not
+be a meaningful interval, but the good order by X still generates the smallest interval; in
+Example 8, the order by X̄ + c √Sn is not good, except the case of c = −tα,n−1 , and does
+not yield an optimal interval.
+We next describe a parallel result for an upper one-sided confidence interval Cu (X) =
+[A, U (X)]. Let
+T1u (x, θ0 ) = Uu (x) − θ0 .
+Then, the h-function based on T1u (x, θ0 ) is
+h1u (x, θ0 ) = sup P (T1u (X, θ0 ) ≤ T1u (x, θ0 )) = sup P (Ul (X) ≤ Ul (x)).
+H0
+
+(26)
+
+θ≥θ0
+
+Following (6), the level-α acceptance region for H0 and 1 − α exact upper one-sided confidence interval for θ are
+A1u (θ0 ) = {x : h1u (x, θ0 ) > α} and CuM (x) = {θ0 : h1u (x, θ0 ) > α}.
+
+(27)
+
+We have a similar result to Theorem 4 and skip the proof.
+Theorem 5 For an upper one-sided confidence interval Cu (X) = [A, Uu (X)] of any level,
+i) interval CuM (X) given in (27) is of level 1 − α;
+
+ii) CuM ∞ (X) = CuM (X).
+
+29
+
+iii) Define a 1 − α exact upper one-sided interval class Cu = {C(X) = [A, U (X)] :
+
+U (x′ ) ≤ U (x) if Uu (x′ ) ≤ Uu (x), ∀ x′ and x}. Then CuM (X) = [A, UuM (X)] is the
+smallest interval in Cu . i.e., for any interval C(X) in Cu , UuM (X) ≤ U (X).
+
+6
+
+Discussions
+
+A confidence interval can be obtained by converting a family of tests and vice versa. In
+this paper, however, we formally introduce a middle function, the h-function, with which
+both the confidence interval and test can be derived. Thus, we propose a simpler but more
+general approach. This idea was used by researchers, such as Spjotvoll (1983), Blakers
+(2000) and Agresti (2013, p. 609), but the process is not clearly defined in the general
+setting as in the current paper. Casella and Berger (2002) introduced seven methods to
+construct tests and confidence intervals in great detail. The proposed h-function method
+is a supplement or replacement for some of those methods.
+We show the effectiveness of the h-function method in Sections 2 through 5. The
+method is general and can be used in many applications, especially when a nuisance parameter exists. Theorem 1 is easy to follow and powerful in its ability to modify any
+confidence interval, including asymptotic intervals and point estimators, to exact intervals.
+A straightforward extension of the theorem is to modify a credible interval to a 1 − α exact
+interval because the credible interval can be treated as a confidence interval. This greatly
+enhances the reliability of these intervals when they are applied to a finite sample since
+an invalid inferential procedure is converted to be a valid one. More importantly, when
+nuisance parameters are presented, it is challenging to improve an existing exact confidence
+interval. Theorem 2 is a successful effort that delivers an exact interval which is a subset
+of the original interval, especially when the underlying distribution is discrete. Theorem 3
+provides the smallest interval that can be generated by the modification process. Example
+30
+
+6 illustrates how the process modifies a conservative interval to a short one with an appropriate ICP. Further, from a mathematical point of view, we establish a connection between
+the h-function method and the construction of the smallest one-sided intervals based on an
+order presented within Theorems 4 and 5.
+From a theoretical point of view, the interval construction now becomes an automatic
+process. However, this process is still computationally complex, particularly for precisely
+finding the globe maximum of a function, P (K(x, θ0 )) in (7), as a function of η, and solving
+the smallest and largest roots of the equation, h(x, θ0 ) − α > 0. To our best knowledge,
+there is no effective computing software that can accomplish the two tasks both quickly
+and accurately. It is worth mentioning that h(x, θ0 ) is not continuous in θ0 in general.
+Our best effort for global optimization is based on the combination of a grid search and a
+local optimization. This reduces down to a question of whether the resultant interval (e.g.,
+C0M ) is truly level 1 − α due to a grid search not being fine enough. We intend to select a
+large number of points for the search, which inevitably takes more computation time. For
+example, this number is between 200 and 2000 for a range of [−1, 1] when deriving intervals
+for d. Additionally, in each of the tables we also report the ICP to assure that each exact
+interval has a precise ICP. Due to the theorems, large numbers in grid search and ICP
+confirmations, we are confident in the numerical results presented in the paper.
+As shown in Example 1, the two-sided interval C0M ∞ may or may not be admissible.
+M ∞ in Table 3 is not
+An interesting question is when C0M ∞ is admissible. One can see Cp5
+∞
+M ∞ is
+admissible due to the tied values of LM
+p5 (x) = 0 for x = 0, 1, 2, 3 and others. If C0
+
+not admissible, it cannot be improved by the proposed modification process. We may have
+two options: i) Follow Casella (1986) or Wang (2014) to construct admissible intervals.
+However, the implementation is not clear if there exists a nuisance parameter. ii) Define an
+appropriate interval class so that C0M ∞ is admissible within the class. Class Cl introduced
+
+31
+
+before Theorem 4 is a successful example for the case of one-sided intervals. We conjecture
+that if C0M ∞ has no ties then C0M ∞ is admissible.
+Another research question is whether there exists a better choice than T2 in (15) so that
+C0M k converges to C0M ∞ faster.
+
+Appendix
+Proof of Proposition 1. Note (8) and pB (x, n, p0 ) = pB (n − x, n, 1 − p0 ). So,
+X
+
+hp (n − x, 1 − p0 ) =
+
+{n−y:Tp (n−y,p0 )≤Tp (x,p0 )}
+
+X
+
+=
+
+pB (n − y, n, p0 )
+
+pB (y ′ , n, p0 ) = hp (x, p0 ).
+
+{y ′ :Tp (y ′ ,p0 )≤Tp (x,p0 )}
+
+Therefore, hp (x, Up (x)) = hp (n − x, 1 − Up (x)), establishing (9).
+Proof of Proposition 2. Note (10), D(−d0 ) = 1 − D(d0 ) and pB (x, n, p) = pB (n −
+x, n, 1 − p). We have
+hd (n1 − x, n2 − y, −d0 )
+=
+
+X
+
+sup
+
+p2 ∈D(−d0 ) {(u,v)∈S :T (u,v,−d )≤T (n −x,n −y,−d )}
+d
+
+=
+
+0
+
+d
+
+sup
+
+X
+
+d
+
+1
+
+2
+
+=
+
+sup
+
+d
+
+0
+
+d
+
+X
+
+pB (n1 − u, n1 , 1 − p2 + d0 )
+
+0
+
+p′2 ∈D(d0 ) {(u′ ,v′ )∈S :T (u′ ,v′ ,d )≤T (x,y,d )}
+0
+0
+d d
+d
+
+= h(x, y, d0 ).
+
+0
+
+∗pB (v, n2 , p2 )
+
+p2 ∈D(−d0 ) {(u,v)∈S :T (u,v,−d )≤T (x,y,d )}
+d
+
+pB (u, n1 , p2 − d0 )
+
+∗pB (n2 − v, n2 , 1 − p2 )
+
+pB (u′ , n1 , p′2 + d0 )pB (v ′ , n2 , p′2 )
+
+Therefore, hd (x, y, U (x, y)) = hd (n1 − x, n2 − y, −U (x, y)), establishing (13).
+32
+
+Proof of Theorem 1. Due to the definition of h2 (x, θ0 ) in (17), it is clear that h2 (x, θ0 )
+is a valid p-value, see, for example, Casella and Berger (2002, p. 397). Thus, A2 (θ0 ) in (18)
+is the acceptance region of a level-α test. It implies that interval C0M (x) is of level 1 − α.
+
+Proof of Theorem 2. We only need to prove the first claim because the second
+claim follows Theorem 1 and the first claim. To prove the first claim, it suffices to show
+h2 (x, θ0 ) ≤ α for any θ0 6∈ C0 (x). Let CoverC0 (θ, η) be the coverage probability function of
+interval C0 (X) with an infimum at least 1 − α over the entire parameter space H.
+First consider the case of θ0 < L0 (x). For the null hypothesis H0 : θ = θ0 ,
+h2 (x, θ0 )
+
+=
+
+sup P (T2 (X, θ0 ) ≤ T2 (x, θ0 ))
+
+=
+
+sup P (T2 (X, θ0 ) ≤ min{θ0 − L0 (x), U0 (x) − θ0 })
+
+H0
+
+H0
+
+θ0 <L0 (x)
+
+≤
+
+sup P (T2 (X, θ0 ) < 0)
+
+=
+
+sup(1 − P (T2 (X, θ0 ) ≥ 0))
+
+H0
+
+H0
+
+(due to 16)
+
+=
+
+sup(1 − P (θ0 ∈ C0 (X)))
+
+=
+
+1 − inf CoverC0 (θ0 , η)
+
+≤
+
+1 − inf CoverC0 (θ, η) ≤ α.
+
+H0
+
+H0
+H
+
+When θ0 > U0 (x), we establish h2 (x, θ0 ) ≤ α similarly.
+Proof of Theorem 3. We only prove part ii) as the other claims are straightforward.
+Let CoverC (θ, η) be the coverage probability function for an interval C(X). Note that the
+indicator functions satisfy
+IC M ∞ (x) (θ) = lim IC M k (x) (θ), ∀x
+0
+
+k→+∞
+
+33
+
+0
+
+because C0M k (x) is nonincreasing and note that CoverC M k (θ, η) ≥ 1 − α for any (θ, η)
+0
+
+because each interval C0M k (X) is of level 1−α. Then, following the Dominated Convergence
+Theorem
+CoverC M ∞ (θ, η) = E(θ,η) [IC M ∞ (x) (θ)] = lim E(θ,η) [IC M k (x) (θ)]
+0
+
+0
+
+=
+
+k→+∞
+
+0
+
+lim CoverC M k (θ, η) ≥ 1 − α,
+
+k→+∞
+
+0
+
+which completes the proof.
+Proof of Theorem 4. Part i) is similar to the proof of Theorem 1. Part iii) is similar
+to the proof of Theorem 4 in Wang (2010) and is skipped. Part ii) follows part iii).
+
+References
+Agresti, A. (2013). Categorical Data Analysis, 3rd edition. John Wiley & Sons.
+Agresti, A. and Min, Y. (2001). “On Small-sample Confidence Intervals for Parameters in
+Discrete Distributions,” Biometrics 57, 963-971.
+Arbuthnot, J. (1710). “An Argument for Divine Providence, Taken from the Constant Regularity Observed in the Births of Both Sexes,” Philosophical Transactions of the Royal
+Society of London, 27 (325-336). 186-190.
+Bentur, L., Lapidot, M., Livnat, G., Hakim, F., Lidroneta-Katz, C., Porat, I., Vilozni, D., and
+Elhasid, R. (2009) “Airway Reactivity in Children Before and After Stem Cell Transplantation,” Pediatric Pulmonology, 44, 845-850.
+Blaker, H. (2000). “Confidence Curves and Improved Exact Confidence Intervals for Discrete
+Distributions,” Canadian Journal of Statistics, 28, 783-798.
+Bonett, D. G. and Price, R. M. (2012). “Adjusted Wald Confidence Interval for a Difference
+of Binomial Proportions Based on Paired Data,” Journal of Educational and Behavioral
+Statistics, 37(4), 479-488.
+
+34
+
+Brown, L. D., Cai, T. T. and DasGupta, A. (2001). “Interval Estimation for a Binomial
+Proportion,” Statistical Science, 16, 101-133.
+Buehler, R. J. (1957). “Confidence Intervals for the Product of Two Binomial Parameters,”
+Journal of the American Statistical Association, 52, 482-493.
+Casella, G. (1986), “Refining Binomial Confidence Intervals,” Canadian Journal of Statistics,
+14, 113-129.
+Casella, G., and Berger, R. L. (2002), Statistical Inference, 2nd ed. Duxbury Press, Pacific
+Grove, CA.
+Clopper, C. J., and Pearson, E. S. (1934). “The Use of Confidence or Fiducial Limits in the
+Case of the Binomial,” Biometrika, 26, 404-413.
+Essenberg, J. M. (1952). “Cigarette Smoke and the Incidence of Primary Neoplasm of the
+Lung in Albino Mice,” Science, 116, 561-562.
+Fagerland, M. W., Lydersenb, S. and Laakec, P. (2013). “Recommended Tests and Confidence
+Intervals for Paired Binomial Proportions,” Statistics in Medicine, 33(16), 2850-2875.
+Fay, M. P. (2010). “Two-sided Exact Tests and Matching Confidence Intervals for Discrete
+Data,” The R Journal, 2(1), 53-58.
+Fisher, R. (1925). Statistical Methods for Research Workers. Edinburgh, Scotland: Oliver &
+Boyd.
+Huwang, L. (1995). “A Note on the Accuracy of an Approximate Interval for the Binomial
+Parameter.” Statistics and Probability Letters, 24, 177-180.
+Pearson, K. (1900). “On the Criterion That a Given System of Deviations from the Probable in
+the Case of a Correlated System of Variables is Such That it can be Reasonably Supposed to
+Have Arisen from Random Sampling,” Philosophical Magazine Series 5, 50 (302), 157-175.
+Newcombe, R. G. (1998). “Improved Confidence Intervals for the Difference Between Binomial
+Proportions Based on Paired Data,” Statistics in Medicine 17, 2635-2650.
+
+35
+
+Shan, G. and Wang, W. (2013). “ExactCIdiff: An R Package for Computing Exact Confidence
+Intervals for the Difference of Two Proportions,” The R Journal, 5, 62-70.
+Spjotvoll, E. (1983). “Preference Functions,” In A Festschrift for Erich L. Lehmann, P. J.
+Bickel, K. Doksum, and J. L. Hodges Jr, (Eds.) 409-432.
+Stigler, S. M. (1986). The History of Statistics: The Measurement of Uncertainty Before 1900.
+Harvard University Press.
+Tango, T. (1998). “Equivalence Test and Confidence Interval for the Difference in Proportions
+for the Paired-sample Design,” Statistics in Medicine, 17, 891-908.
+Wang, H. (2007). “Exact Confidence Coefficients of Confidence Intervals for a Binomial Proportion,” Statistica Sinica, 17, 361-368.
+Wang, W. (2010). “On Construction of the Smallest One-sided Confidence Interval for the
+Difference of Two Proportions,” The Annals of Statistics, 38, 1227-1243.
+Wang, W. (2014). “An Iterative Construction of Confidence Interval for a Proportion,” Statistica Sinica, 24, 1389-1410.
+Wang, W. and Zhang, Z. (2014). “Asymptotic Infimum Coverage Probability for Interval
+Estimation of Proportions,” Metrika, 77, 635-646.
+Wang, W. (2018). “A ‘paradox’ in Confidence Interval Construction Using Sufficient Statistics,” The American Statistician, 72(4), 315-320.
+Wilson, E. B. (1927). “Probable Inference, the Law of Succession, and Statistical Inference,”
+Journal of the American Statistical Association, 22, 209-212.
+
+36
+
+

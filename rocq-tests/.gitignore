@@ -1,0 +1,18 @@
+# Rocq build artifacts (regenerate with `make` / `coq_makefile`)
+*.vo
+*.vok
+*.vos
+*.glob
+*.aux
+.*.aux
+*.cache
+.lia.cache
+.nia.cache
+.coqdeps.d
+.Makefile.d
+Makefile.conf
+
+# The Makefile is generated from _CoqProject via coq_makefile; keep it out of
+# git so it can't drift from _CoqProject. README documents how to regenerate.
+Makefile
+Makefile.bak

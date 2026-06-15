@@ -6,6 +6,16 @@ This file was distilled from the root session dumps, the user-level opencode
 session database, repo docs, and current verification. Treat it as the durable
 project memory. Do not rely on stale planning artifacts.
 
+Claude Code runtime shards live under `.claude/`:
+
+- `.claude/rules/*.md`: focused always-on rules
+- `.claude/commands/*.md`: reusable slash-command prompts
+- `.claude/agents/*.md`: custom subagent role prompts
+- `.claude/skills/*/SKILL.md`: larger repeatable workflows
+
+Those files are repo-level Claude Code runtime config; this root file remains
+the canonical project memory for repo-wide behavior.
+
 ## Project Shape
 
 `unlace` is a Rust workspace for a decompiler pipeline:
@@ -183,6 +193,14 @@ RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
 ```
 
+Formal-verification gate (Rocq 9.1 machine-checked decompiler cores; see
+`docs/formal-verification.md` and `rocq-tests/`):
+
+```bash
+bash scripts/verify_proofs.sh                                   # build + coqchk: zero admits/axioms
+RUSTC_WRAPPER= cargo test -p unlace-ir --test coq_conformance   # pin the Rust↔Coq mirror
+```
+
 If a command fails because of the sandbox, do not work around it by changing the
 test. Rerun with appropriate approval/escalation.
 
@@ -229,11 +247,15 @@ look like.
 High-confidence backlog after reading the root docs, session dumps, and IDA
 research sessions. This ignores stale Sisyphus task state.
 
-1. Determinism cleanup.
-   `cargo xtask lint-determinism` currently fails. Fix or justify the remaining `HashMap`/`HashSet` uses in output-affecting crates.
+1. Determinism policy maintenance.
+   Keep `cargo xtask lint-determinism` green. Fix or justify any new
+   `HashMap`/`HashSet` uses in output-affecting crates with
+   `// determinism:allow` and a concrete reason.
 
 2. Clippy and warning hygiene.
-   `-D warnings` fails in `unlace-ir/src/ssa.rs` and the workspace emits many warnings. This contradicts `CONTRIBUTING.md`.
+   Keep `RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings` clean.
+   Treat any warning regression as a real gate failure unless the user
+   explicitly asks for exploratory code.
 
 3. Honest parity measurement.
    The current fixture score counts a small set of features. Add metrics for switch, break/continue, loops, ternary, short-circuit, struct field access, array access, casts, compound assignments, function signatures, string/symbol resolution, comments, stack annotations, BYREF, SIMD, call quality, and type quality before claiming broader parity.
@@ -282,13 +304,18 @@ research sessions. This ignores stale Sisyphus task state.
    Add fixtures/metrics for patterns found in `tests/golden/x86_64`: `__fastcall`, `a1`/`v1`/`result` naming, stack comments, BYREF, register comments, `_QWORD` casts, function pointers, SIMD types, `__readfsqword`, `LOBYTE`/`HIDWORD`, labels/gotos, and pointer chains.
 
 18. Lifter breadth and wiring.
-   The workspace contains many lifter crates. The facade currently wires only a subset and falls back to `StubLifter` for the rest. Some lifters intentionally emit `IrOp::Unimplemented` for many opcodes. Also note duplicate workspace member entries in `Cargo.toml` for some lifter crates.
+   The workspace contains many lifter crates. Verify current facade wiring and
+   opcode coverage before assuming an architecture is complete; several lifters
+   are breadth scaffolds and may intentionally emit `IrOp::Unimplemented`.
 
 19. Architecture semantics.
    Historical notes identify incomplete delay slots, flags, condition-register decoding, HI/LO behavior, vector extensions, and arch-specific calling conventions.
 
 20. Release/docs/tooling.
-   Root `README.md` is absent. `xtask scaffold` is not implemented. Release signing and musl build support are not fully mature. Large ignored artifacts exist in the root, including core dumps and old worktrees; do not delete them unless explicitly asked.
+   Root `README.md` exists. Release signing, musl build support, and some
+   docs/tooling polish may still need work. Large ignored artifacts exist in
+   the root, including core dumps and old worktrees; do not delete them unless
+   explicitly asked.
 
 ## IDA/Hex-Rays Research From Sessions
 

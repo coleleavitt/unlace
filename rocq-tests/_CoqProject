@@ -7,3 +7,10 @@ theories/ValueLattice.v
 theories/KnownBits.v
 theories/AlgebraicSimplify.v
 theories/TInfo.v
+theories/Kildall.v
+theories/RecordLayout.v
+theories/ConstantRange.v
+theories/TypeInversion.v
+theories/CompilationInversion.v
+theories/PrincipalType.v
+theories/PrecisionPipeline.v

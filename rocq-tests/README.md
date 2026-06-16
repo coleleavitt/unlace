@@ -19,8 +19,21 @@ conformance harness pins the mirror so the two cannot silently diverge (see
 | `theories/Bitvector.v` | `unlace-ir/src/known_bits.rs` (width math) | fixed-width `u64` model over `Z`: `mask`/`wrap` bit characterization, idempotence, range, bit-extensionality, two's-complement double-negation. |
 | `theories/ValueLattice.v` | `unlace-ir/src/value_lattice.rs` | `join` commutativity/associativity/idempotence; partial-order laws; `join` is the least upper bound; `join`/`meet` concretization soundness (over/under-approximation); `join` monotonicity. |
 | `theories/KnownBits.v` | `unlace-ir/src/known_bits.rs` | abstract-domain soundness of `and`/`or`/`xor` vs concrete bitvector ops; `from_constant` exactness; `has_conflict ⇒ γ empty`. |
-| `theories/AlgebraicSimplify.v` | `unlace-passes/src/algebraic_simplify.rs` | Alive2-style peephole soundness: `x+0=x`, `x-0=x`, `x-x=0`, `x*1=x`, `x*0=0`, `x/1=x`, `x%1=0`, `x&0=0`, `x&MASK=x`, `x&x=x`, `x|0=x`, `x|MASK=MASK`, `x^0=x`, `x^x=0`, `x==x=1`, `x!=x=0`, `--x=x`, `~~x=x`. |
+| `theories/AlgebraicSimplify.v` | `unlace-passes/src/algebraic_simplify.rs` | Alive2-style peephole soundness (`x+0`, `x-x`, `x*1`, `x*0`, `x/1`, `x%1`, `x&0`, `x&MASK`, `x|MASK`, `x^x`, `x==x`, `--x`, `~~x`, …) + `add/mul` assoc/comm canonicalization. |
+| `theories/KnownBits.v` (shift+BAT) | `unlace-ir/src/known_bits.rs` | `kshl` left-shift soundness + known-bit preservation; **`kand` Best-Abstract-Transformer optimality** (records every logically-forced bit). |
+| `theories/ConstantRange.v` | `unlace-ir/src/known_bits.rs` | wrapping-interval domain: add/sub/join/meet/scale soundness + **precision-monotonicity**. |
+| `theories/Kildall.v` | `unlace-passes` dataflow | generic semilattice flow: monotonicity, **least-fixpoint uniqueness / order-independence (determinism)**, precision-monotone transfer refinement. |
+| `theories/RecordLayout.v` | `unlace-passes/src/abi_layout.rs` | greedy aligned field layout: every offset aligned, monotone, pairwise-disjoint, **greedy-minimal**. |
 | `theories/TInfo.v` | `unlace-ir/src/tinfo.rs` | `get_best_fit_member` soundness/tightest-fit/completeness; `calc_gaps` padding bytes are covered by no field. |
+
+### Novel theory modules (new results, not just mirrors)
+
+| File | Novel result |
+|------|--------------|
+| `theories/CompilationInversion.v` | **Decompilation as the upper adjoint of compilation** — a Galois connection between source and recovered types; recovery soundness (no false negatives) and *completeness ⇔ exact inversion*. |
+| `theories/PrincipalType.v` | **Principal-type uniqueness** for a meet-closed constraint engine, **no-false-negative** recovery, and **witness monotonicity** (alignment/range facts only sharpen). |
+| `theories/PrecisionPipeline.v` | **End-to-end precision monotonicity** of a pass pipeline (lifts local BAT-optimality to a whole-decompiler invariant). |
+| `theories/TypeInversion.v` | **Alignment-driven field exclusion** — alignment facts provably refute impossible struct-field candidates. |
 
 ## Build
 

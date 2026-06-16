@@ -19,27 +19,46 @@ Status legend:
 | 4 | `TInfo::get_best_fit_member` | `unlace-ir/src/tinfo.rs` | tightest containing field; sound/complete | **partial** (flat case proven; nested struct/union/array recursion TODO) | `TInfo.v` |
 | 5 | `TInfo::calc_gaps` | `unlace-ir/src/tinfo.rs` | gap bytes covered by no field | **partial** (uncovered-byte lemmas proven; full disjoint-cover partition TODO) | `TInfo.v` |
 | 6 | fixed-width wrap/mask math | `unlace-ir/src/known_bits.rs` (width_mask) | `wrap`/`mask` bit characterization, idempotence | **proven** | `Bitvector.v` |
-| 7 | `KnownBits::shl/lshr/ashr` | `unlace-ir/src/known_bits.rs` | shift transfer-function soundness | **unproven** | TODO `KnownBitsShift.v` |
+| 7 | `KnownBits::shl` | `unlace-ir/src/known_bits.rs` | left-shift transfer soundness + known-bit-preservation (precision) | **proven** | `KnownBits.v` (`kshl_sound`, `kshl_preserves_known_one/zero`) |
 | 8 | `KnownBits::add/sub` (carry) | `unlace-ir/src/known_bits.rs` | arithmetic transfer soundness w/ carry | **unproven** | TODO |
-| 9 | `ConstantRange` interval arithmetic | `unlace-ir/src/known_bits.rs` | interval add/sub/and soundness incl. wrap | **unproven** | TODO `ConstantRange.v` |
+| 9 | `ConstantRange` interval arithmetic | `unlace-ir/src/known_bits.rs` | interval add/sub/join/meet/scale soundness + precision-monotone | **proven** | `ConstantRange.v` |
 | 10 | `DominatorTree` / `idom` | `unlace-ir/src/ssa.rs` | dominance is a tree; idom well-defined | **unproven** | TODO `Dominance.v` |
 | 11 | SSA φ-placement well-formedness | `unlace-ir/src/ssa.rs`, `verify.rs` | every use dominated by its def | **unproven** | TODO `SsaWf.v` |
 | 12 | `compute_sccs` (call graph) | `unlace-ir/src/xref.rs` | SCC partition correctness | **unproven** | TODO |
 | 13 | `DataLayout::type_size/align` | `unlace-ir/src/data_layout.rs` | size/align monotonic, align divides size for arrays | **unproven** | TODO `DataLayout.v` |
-| 14 | `compute_record_layout` | `unlace-passes/src/abi_layout.rs` | field offsets non-overlapping, respect align | **unproven** | TODO `RecordLayout.v` |
+| 14 | `compute_record_layout` | `unlace-passes/src/abi_layout.rs` | field offsets aligned, non-overlapping, greedy-minimal | **proven** | `RecordLayout.v` |
 | 15 | `reg_alias::write_kills` / `aliases` | `unlace-ir/src/reg_alias.rs` | alias relation symmetric; write-kill sound | **unproven** | TODO `RegAlias.v` |
 | 16 | `MemoryLocation::must_alias/must_not_alias` | `unlace-ir/src/memory_ssa.rs` | must/no-alias are mutually exclusive & sound | **unproven** | TODO `MemorySSA.v` |
 | 17 | `alias_analysis::can_modref` | `unlace-passes/src/alias_analysis.rs` | mod/ref lattice soundness | **unproven** | TODO |
-| 18 | dataflow fixpoint iteration | `unlace-passes` (various) | Kildall: terminates, computes a fixpoint (needs (1)+monotonicity) | **unproven** | TODO `Kildall.v` |
+| 18 | dataflow fixpoint iteration | `unlace-passes` (various) | Kildall: monotone, fixpoint unique, order-independent | **proven** | `Kildall.v` |
+
+## Novel theory modules (beyond mirroring — new results)
+
+These prove properties not found in the CompCert/Verasco/Vellvm/Alive2/Retypd
+literature (per `research/formal/` synthesis). They target **precision and
+completeness** (not just soundness), which is the mathematical content of the
+"100% type recovery" goal.
+
+| Module | Novel result |
+|--------|--------------|
+| `KnownBits.v` (BAT) | `kand_optimal_one/zero`: `kand` is the **Best Abstract Transformer** — it records every bit logically forced by the inputs (loses no recoverable precision), via a constructive `Z.setbit` witness. |
+| `CompilationInversion.v` | **Decompilation as the upper adjoint of compilation**: a Galois connection between source and recovered types; recovery soundness (no false negatives), and *completeness ⇔ exact inversion* (the recovered type is principal exactly when `recover∘lower` matches the abstraction). |
+| `PrincipalType.v` | **Principal-type uniqueness** for a meet-closed constraint engine + **no-false-negative** recovery + **witness monotonicity** (adding an alignment/range fact only shrinks the candidate set / sharpens the type). |
+| `PrecisionPipeline.v` | **End-to-end precision monotonicity**: a pipeline of precision-monotone passes is precision-monotone, and monotone+reductive pipelines only sharpen — lifting local BAT-optimality to a whole-decompiler invariant. |
+| `TypeInversion.v` | **Alignment-driven field exclusion**: alignment facts (KnownBits trailing zeros) provably refute impossible struct-field candidates. |
 
 ## Summary
 
-- **Proven cores:** 3 fully (`ValueLattice`, `KnownBits` bitwise, `Bitvector`), 2 partially (`AlgebraicSimplify`, `TInfo`).
-- **Theorems kernel-checked:** see `coqchk` summary in `scripts/verify_proofs.sh` output (currently **Axioms: <none>** across all modules).
-- **Next highest-value targets** (precision/correctness leverage):
-  1. `Kildall.v` (#18) — depends on the already-proven `join` monotonicity (#1); proving the fixpoint engine sound certifies *every* dataflow pass at once.
-  2. `KnownBitsShift.v` + `add/sub` (#7, #8) — completes the LLVM-parity bit domain.
-  3. `RecordLayout.v` (#14) + nested `TInfo` (#4/#5) — directly targets the dominant struct-recovery precision gap.
+- **Proven cores:** `ValueLattice`, `KnownBits` (bitwise + shift + BAT-optimality),
+  `Bitvector`, `ConstantRange`, `Kildall`, `RecordLayout`; partial
+  `AlgebraicSimplify`, `TInfo`; **novel** `CompilationInversion`, `PrincipalType`,
+  `PrecisionPipeline`, `TypeInversion`.
+- **Theorems kernel-checked:** `scripts/verify_proofs.sh` reports
+  **Axioms: <none>** across all modules (coqchk).
+- **Next highest-value targets:** `add/sub` carry transfer (#8); SSA dominance
+  + φ-placement (#10/#11) tied to type propagation; nested `TInfo` recursion;
+  wiring `CompilationInversion`/`PrincipalType` to concrete unlace type-solver
+  instances.
 
 This ledger is the source of truth for "what is mathematically proven". Update
 the row when a TODO lands a `.v`, and add a conformance check in

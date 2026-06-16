@@ -342,3 +342,17 @@ Proof.
   - (* y [= join x' y *)
     apply vle_join_right.
 Qed.
+
+(** Monotonicity in BOTH arguments simultaneously: this is the form the Kildall
+    worklist needs (a node's new value is the join of MANY predecessor
+    contributions, each of which may rise). Proved by composing the single-arg
+    monotonicity through [vle_trans]. *)
+Theorem join_monotone_both : forall x x' y y',
+  x [= x' -> y [= y' -> join x y [= join x' y'.
+Proof.
+  intros x x' y y' Hx Hy.
+  apply (vle_trans (join x y) (join x' y) (join x' y')).
+  - apply join_monotone. exact Hx.
+  - rewrite (join_comm x' y), (join_comm x' y').
+    apply join_monotone. exact Hy.
+Qed.

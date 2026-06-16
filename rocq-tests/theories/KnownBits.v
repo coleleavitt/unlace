@@ -273,3 +273,223 @@ Proof.
   assert (Hx0 : Z.testbit x n = false) by (eapply gamma_kb_bit_zero; eauto).
   rewrite Hx1 in Hx0. discriminate.
 Qed.
+
+(* ================================================================== *)
+(** ** Soundness of left shift (kshl) — Target #7 *)
+(* ================================================================== *)
+
+(** [kshl]: mirrors [KnownBits::shl]. Shifts the zero and one masks left by [s]
+    bits, then forces the newly-vacated low [s] bits to be known-0 (via
+    [Z.ones s] in the zero mask). The result is masked to the width. This is
+    the abstract operation behind pointer/bitfield address arithmetic. *)
+Definition kshl (a : KB) (s : Z) : KB :=
+  let w := kb_width a in
+  mkKB (Z.land (Z.lor (Z.shiftl (kb_zero a) s) (Z.ones s)) (mask w))
+       (Z.land (Z.shiftl (kb_one a) s) (mask w))
+       w.
+
+Theorem kshl_sound : forall a x s,
+  0 <= s ->
+  0 <= kb_width a ->
+  gamma_kb a x ->
+  gamma_kb (kshl a s) (wrap (kb_width a) (Z.shiftl x s)).
+Proof.
+  intros a x s Hs Hw Ha.
+  unfold kshl; simpl.
+  assert (Hrange : in_range (kb_width a) (wrap (kb_width a) (Z.shiftl x s)))
+    by (apply wrap_range; lia).
+  apply gamma_kb_intro; simpl.
+  - exact Hrange.
+  - (* known-one bit of result => result value has that bit set *)
+    intros n Hn Hbit.
+    rewrite Z.land_spec in Hbit. apply andb_true_iff in Hbit as [Hshift Hmask].
+    assert (Hnw : n < kb_width a).
+    { destruct (Z.lt_ge_cases n (kb_width a)) as [Hlt | Hge]; [exact Hlt |].
+      rewrite mask_spec_high in Hmask by lia. discriminate. }
+    rewrite wrap_spec_low by lia.
+    destruct (Z.lt_ge_cases n s) as [Hlt_s | Hge_s].
+    + rewrite Z.shiftl_spec_low in Hshift by lia. discriminate.
+    + rewrite Z.shiftl_spec_high in Hshift by lia.
+      rewrite Z.shiftl_spec_high by lia.
+      eapply gamma_kb_bit_one; [exact Ha | exact Hshift].
+  - (* known-zero bit of result => result value has that bit clear *)
+    intros n Hn Hbit.
+    rewrite Z.land_spec in Hbit. apply andb_true_iff in Hbit as [Hlor Hmask].
+    assert (Hnw : n < kb_width a).
+    { destruct (Z.lt_ge_cases n (kb_width a)) as [Hlt | Hge]; [exact Hlt |].
+      rewrite mask_spec_high in Hmask by lia. discriminate. }
+    rewrite wrap_spec_low by lia.
+    rewrite Z.lor_spec in Hlor. apply orb_true_iff in Hlor as [Hshift | Hones].
+    + (* propagated known-zero from the source bit at n-s *)
+      destruct (Z.lt_ge_cases n s) as [Hlt_s | Hge_s].
+      * rewrite Z.shiftl_spec_low in Hshift by lia. discriminate.
+      * rewrite Z.shiftl_spec_high in Hshift by lia.
+        rewrite Z.shiftl_spec_high by lia.
+        eapply gamma_kb_bit_zero; [exact Ha | exact Hshift].
+    + (* freshly-vacated low bit: known-0 because shifted in *)
+      destruct (Z.lt_ge_cases n s) as [Hlt_s | Hge_s].
+      * rewrite Z.shiftl_spec_low by lia. reflexivity.
+      * rewrite Z.ones_spec_high in Hones by lia. discriminate.
+Qed.
+
+(** *** NOVEL: left-shift never loses known-one bits (precision preservation).
+
+    The key precision property the soundness theorem alone does not state: a bit
+    the abstract value KNOWS is one stays known-one after the shift (relocated
+    by [s]). Address-arithmetic masks therefore never collapse a known bit to
+    "unknown" — exactly the precision claim that keeps shifted struct offsets
+    from widening to Top. Stated bit-extensionally over the one-mask. *)
+Theorem kshl_preserves_known_one : forall a s n,
+  0 <= s -> 0 <= n -> n + s < kb_width a ->
+  Z.testbit (kb_one a) n = true ->
+  Z.testbit (kb_one (kshl a s)) (n + s) = true.
+Proof.
+  intros a s n Hs Hn Hnw Hbit.
+  unfold kshl; simpl.
+  rewrite Z.land_spec.
+  rewrite Z.shiftl_spec_high by lia.
+  replace (n + s - s) with n by lia.
+  rewrite Hbit, mask_spec_low by lia. reflexivity.
+Qed.
+
+(** Dually, a known-ZERO source bit stays known-zero after the shift. Together
+    these two say [kshl] is an injective relocation of known bits (it adds the
+    [s] freshly-known-zero low bits but never erases an existing fact). *)
+Theorem kshl_preserves_known_zero : forall a s n,
+  0 <= s -> 0 <= n -> n + s < kb_width a ->
+  Z.testbit (kb_zero a) n = true ->
+  Z.testbit (kb_zero (kshl a s)) (n + s) = true.
+Proof.
+  intros a s n Hs Hn Hnw Hbit.
+  unfold kshl; simpl.
+  rewrite Z.land_spec, Z.lor_spec.
+  rewrite (Z.shiftl_spec_high (kb_zero a) s (n + s)) by lia.
+  replace (n + s - s) with n by lia.
+  rewrite Hbit. simpl.
+  rewrite mask_spec_low by lia. reflexivity.
+Qed.
+
+(* ================================================================== *)
+(** ** Best Abstract Transformer (BAT) OPTIMALITY of [kand]
+
+    Soundness ([kand_sound]) says the abstraction never lies. It does NOT say
+    the abstraction is precise: the trivial "everything unknown" transformer is
+    sound too, yet recovers nothing. The property that underwrites *precision*
+    (and therefore type recovery) is OPTIMALITY — [kand] is the BEST abstract
+    transformer: it captures every bit that is logically forced by the inputs,
+    dropping no recoverable information.
+
+    We prove: if a result bit is forced to 1 (resp. 0) for EVERY pair of
+    concrete representatives of the inputs, then [kand] already KNOWS that bit
+    is 1 (resp. 0). Equivalently, [kand] introduces no avoidable "unknown".
+    The known-zero direction uses a constructive witness: we flip a candidate
+    bit ON in each operand's canonical representative and derive a contradiction
+    if [kand] had failed to record the forced zero. *)
+
+(** Well-formedness of a [KB]: nonneg width, no internal conflict, and both
+    masks confined to the width. Mirrors the Rust invariant maintained by every
+    [KnownBits] constructor. *)
+Definition wf_kb (a : KB) : Prop :=
+  0 <= kb_width a /\
+  Z.land (kb_one a) (kb_zero a) = 0 /\
+  Z.land (kb_one a) (mask (kb_width a)) = kb_one a /\
+  Z.land (kb_zero a) (mask (kb_width a)) = kb_zero a.
+
+(** Under well-formedness, the one-mask is itself a concrete representative:
+    [kb_one a ∈ gamma_kb a]. This is the canonical witness the optimality
+    proofs build on. *)
+Lemma kb_one_representative : forall a, wf_kb a -> gamma_kb a (kb_one a).
+Proof.
+  intros a (Hw & Hconf & Hone & _Hzero).
+  unfold gamma_kb. split; [| split].
+  - (* in_range: kb_one a = wrap w (kb_one a), which is in range *)
+    rewrite <- Hone. change (Z.land (kb_one a) (mask (kb_width a)))
+      with (wrap (kb_width a) (kb_one a)).
+    apply wrap_range; exact Hw.
+  - apply Z.land_diag.
+  - exact Hconf.
+Qed.
+
+(** Setting a within-width bit keeps a canonical value canonical. *)
+Lemma in_range_setbit : forall w x n,
+  0 <= w -> 0 <= n < w -> in_range w x -> in_range w (Z.setbit x n).
+Proof.
+  intros w x n Hw Hn Hx.
+  assert (Heq : wrap w (Z.setbit x n) = Z.setbit x n).
+  { apply same_bits_eq. intros m Hm.
+    destruct (Z.lt_ge_cases m w) as [Hlt | Hge].
+    - rewrite wrap_spec_low by lia. reflexivity.
+    - rewrite wrap_spec_high by lia.
+      rewrite Z.setbit_eqb by lia.
+      replace (n =? m) with false by (symmetry; apply Z.eqb_neq; lia).
+      simpl. rewrite <- (wrap_in_range w x Hw Hx). symmetry. apply wrap_spec_high; lia. }
+  rewrite <- Heq. apply wrap_range; exact Hw.
+Qed.
+
+(** OPTIMALITY (known-one): a result bit forced to 1 across all representatives
+    is recorded as known-1 by [kand]. *)
+Theorem kand_optimal_one : forall a b n,
+  wf_kb a -> wf_kb b -> kb_width a = kb_width b -> 0 <= n < kb_width a ->
+  (forall x y, gamma_kb a x -> gamma_kb b y -> Z.testbit (Z.land x y) n = true) ->
+  Z.testbit (kb_one (kand a b)) n = true.
+Proof.
+  intros a b n HwfA HwfB Hw Hn Hspec.
+  pose proof (kb_one_representative a HwfA) as HrepA.
+  pose proof (kb_one_representative b HwfB) as HrepB.
+  specialize (Hspec (kb_one a) (kb_one b) HrepA HrepB).
+  rewrite Z.land_spec in Hspec. simpl. rewrite Z.land_spec. exact Hspec.
+Qed.
+
+(** Constructive helper: the canonical representative with one extra bit [n]
+    forced ON is still a representative, provided that bit is not known-0. *)
+Lemma rep_setbit : forall a n,
+  wf_kb a -> 0 <= n < kb_width a ->
+  Z.testbit (kb_zero a) n = false ->
+  gamma_kb a (Z.setbit (kb_one a) n).
+Proof.
+  intros a n (Hw & Hconf & Hone & Hzero) Hn HzA.
+  set (x := Z.setbit (kb_one a) n).
+  assert (Hrep := kb_one_representative a (conj Hw (conj Hconf (conj Hone Hzero)))).
+  destruct Hrep as (Hr & _ & _).
+  unfold gamma_kb. split; [| split].
+  - apply in_range_setbit; [exact Hw | exact Hn | exact Hr].
+  - (* land x (kb_one a) = kb_one a *)
+    apply same_bits_eq. intros m Hm. unfold x.
+    rewrite Z.land_spec, Z.setbit_eqb by lia.
+    destruct (n =? m) eqn:E; simpl.
+    + apply Z.eqb_eq in E. subst m.
+      (* (true || one[n]) && one[n] = one[n] *)
+      destruct (Z.testbit (kb_one a) n); reflexivity.
+    + destruct (Z.testbit (kb_one a) m); reflexivity.
+  - (* land x (kb_zero a) = 0 *)
+    apply same_bits_eq. intros m Hm. unfold x.
+    rewrite Z.land_spec, Z.bits_0, Z.setbit_eqb by lia.
+    destruct (n =? m) eqn:E; simpl.
+    + apply Z.eqb_eq in E. subst m. exact HzA.
+    + (* one[m] && zero[m] = 0 from no-conflict *)
+      assert (Hc : Z.testbit (Z.land (kb_one a) (kb_zero a)) m = Z.testbit 0 m)
+        by (rewrite Hconf; reflexivity).
+      rewrite Z.land_spec, Z.bits_0 in Hc. exact Hc.
+Qed.
+
+(** OPTIMALITY (known-zero): a result bit forced to 0 across all representatives
+    is recorded as known-0 by [kand]. The proof is by contradiction — if [kand]
+    failed to record it, the witnesses with that bit forced ON would make the
+    AND's bit 1, contradicting the universal-zero hypothesis. *)
+Theorem kand_optimal_zero : forall a b n,
+  wf_kb a -> wf_kb b -> kb_width a = kb_width b -> 0 <= n < kb_width a ->
+  (forall x y, gamma_kb a x -> gamma_kb b y -> Z.testbit (Z.land x y) n = false) ->
+  Z.testbit (kb_zero (kand a b)) n = true.
+Proof.
+  intros a b n HwfA HwfB Hw Hn Hspec.
+  destruct (Z.testbit (kb_zero (kand a b)) n) eqn:Heq; [reflexivity |].
+  exfalso. simpl in Heq. rewrite Z.lor_spec in Heq.
+  apply orb_false_iff in Heq as [HzA HzB].
+  (* Build witnesses with bit n forced on in each operand. *)
+  pose proof (rep_setbit a n HwfA Hn HzA) as HrepA'.
+  assert (Hn' : 0 <= n < kb_width b) by (rewrite <- Hw; exact Hn).
+  pose proof (rep_setbit b n HwfB Hn' HzB) as HrepB'.
+  specialize (Hspec _ _ HrepA' HrepB').
+  rewrite Z.land_spec, !Z.setbit_eqb in Hspec by lia.
+  rewrite Z.eqb_refl in Hspec. simpl in Hspec. discriminate Hspec.
+Qed.

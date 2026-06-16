@@ -283,3 +283,41 @@ Proof.
   - rewrite (wrap_spec_high w) by lia.
     rewrite (eval_high_zero w rho x n) by lia. reflexivity.
 Qed.
+
+(* ================================================================== *)
+(** ** Canonicalization: associativity / commutativity of +, *
+
+    The decompiler canonicalizes expression trees before matching algebraic
+    rewrites (e.g. reordering operands of a commutative op, re-associating a
+    chain of adds). These restructurings must be SEMANTICS-PRESERVING under the
+    wrapping evaluation. The wrap-distribution lemmas in [Bitvector.v] are what
+    make this work: a sub-tree may be wrapped at every node, yet the whole tree
+    still evaluates equal to the un-restructured form. *)
+
+(** Commutativity of [+]: [x + y ≡ y + x]. *)
+Theorem add_comm : forall w rho x y, 0 <= w ->
+  eval w rho (EAdd x y) = eval w rho (EAdd y x).
+Proof. intros w rho x y Hw. simpl. rewrite Z.add_comm. reflexivity. Qed.
+
+(** Associativity of [+]: [(x + y) + z ≡ x + (y + z)]. *)
+Theorem add_assoc : forall w rho x y z, 0 <= w ->
+  eval w rho (EAdd (EAdd x y) z) = eval w rho (EAdd x (EAdd y z)).
+Proof.
+  intros w rho x y z Hw. simpl.
+  rewrite wrap_add_distr_l by lia. rewrite wrap_add_distr_r by lia.
+  rewrite Z.add_assoc. reflexivity.
+Qed.
+
+(** Commutativity of [*]: [x * y ≡ y * x]. *)
+Theorem mul_comm : forall w rho x y, 0 <= w ->
+  eval w rho (EMul x y) = eval w rho (EMul y x).
+Proof. intros w rho x y Hw. simpl. rewrite Z.mul_comm. reflexivity. Qed.
+
+(** Associativity of [*]: [(x * y) * z ≡ x * (y * z)]. *)
+Theorem mul_assoc : forall w rho x y z, 0 <= w ->
+  eval w rho (EMul (EMul x y) z) = eval w rho (EMul x (EMul y z)).
+Proof.
+  intros w rho x y z Hw. simpl.
+  rewrite wrap_mul_distr_l by lia. rewrite wrap_mul_distr_r by lia.
+  rewrite Z.mul_assoc. reflexivity.
+Qed.

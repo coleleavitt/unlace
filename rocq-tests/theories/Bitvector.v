@@ -133,3 +133,53 @@ Qed.
 (** Sanity: wrapping at width 0 yields 0. *)
 Example wrap_w0 : forall x, wrap 0 x = 0.
 Proof. intro x. unfold wrap, mask. change (Z.ones 0) with 0. apply Z.land_0_r. Qed.
+
+(** [wrap] distributes over the LEFT addend: re-wrapping an already-wrapped
+    left operand changes nothing. The algebraic core of why expression-tree
+    re-association is semantics-preserving under wrapping arithmetic. *)
+Lemma wrap_add_distr_l : forall w x y, 0 <= w ->
+  wrap w (wrap w x + y) = wrap w (x + y).
+Proof.
+  intros w x y Hw.
+  destruct (Z.eq_dec w 0) as [->|Hnz].
+  - rewrite !wrap_w0. reflexivity.
+  - rewrite !wrap_mod by lia.
+    assert (Hpow : 2 ^ w <> 0) by (apply Z.pow_nonzero; lia).
+    rewrite Z.add_mod by exact Hpow.
+    rewrite Z.mod_mod by exact Hpow.
+    rewrite <- Z.add_mod by exact Hpow.
+    reflexivity.
+Qed.
+
+(** [wrap] distributes over the RIGHT addend (by commutativity of [+]). *)
+Lemma wrap_add_distr_r : forall w x y, 0 <= w ->
+  wrap w (x + wrap w y) = wrap w (x + y).
+Proof.
+  intros w x y Hw.
+  rewrite Z.add_comm. rewrite wrap_add_distr_l by lia. rewrite Z.add_comm.
+  reflexivity.
+Qed.
+
+(** [wrap] distributes over the LEFT multiplicand. Same idea for products. *)
+Lemma wrap_mul_distr_l : forall w x y, 0 <= w ->
+  wrap w (wrap w x * y) = wrap w (x * y).
+Proof.
+  intros w x y Hw.
+  destruct (Z.eq_dec w 0) as [->|Hnz].
+  - rewrite !wrap_w0. reflexivity.
+  - rewrite !wrap_mod by lia.
+    assert (Hpow : 2 ^ w <> 0) by (apply Z.pow_nonzero; lia).
+    rewrite Z.mul_mod by exact Hpow.
+    rewrite Z.mod_mod by exact Hpow.
+    rewrite <- Z.mul_mod by exact Hpow.
+    reflexivity.
+Qed.
+
+(** [wrap] distributes over the RIGHT multiplicand. *)
+Lemma wrap_mul_distr_r : forall w x y, 0 <= w ->
+  wrap w (x * wrap w y) = wrap w (x * y).
+Proof.
+  intros w x y Hw.
+  rewrite Z.mul_comm. rewrite wrap_mul_distr_l by lia. rewrite Z.mul_comm.
+  reflexivity.
+Qed.

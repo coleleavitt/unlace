@@ -115,6 +115,36 @@ RUSTC_WRAPPER= cargo test -p unlace-ir --test coq_conformance   # pin the mirror
 
 Both are wired into `scripts/quality_axes.sh` as a fourth "formal" axis.
 
+## Novel results (beyond spec-mirroring)
+
+Most modules mirror a Rust core and prove its soundness. Four go further and
+prove results we believe are **not machine-checked in the existing
+verified-decompiler / abstract-interpretation literature** (CompCert, Verasco,
+Vellvm, Alive2, Retypd) — see `research/formal/` for the supporting survey.
+They target *precision and completeness*, which is the mathematical content of
+the "100% type recovery / precision" goal (soundness alone is satisfied by a
+useless always-Top analysis):
+
+- **Best Abstract Transformer optimality** (`KnownBits.v`): `kand` records every
+  bit logically forced by its inputs — it loses no recoverable precision.
+  Proved with a constructive `Z.setbit` witness.
+- **Decompilation as provable inversion** (`CompilationInversion.v`): frames the
+  decompiler as the *upper adjoint* of compilation lowering via a Galois
+  connection between source and recovered types; proves recovery soundness (no
+  false negatives) and *completeness ⇔ exact inversion*.
+- **Principal-type uniqueness** (`PrincipalType.v`): a meet-closed constraint
+  engine has a unique most-specific solution; recovery never excludes the truth;
+  adding a witness only sharpens.
+- **End-to-end precision monotonicity** (`PrecisionPipeline.v`): a pipeline of
+  precision-monotone passes is precision-monotone, lifting local optimality to a
+  whole-decompiler invariant.
+
+These are stated over abstract models (any lattice / monotone maps satisfying
+the stated laws) so they apply to every concrete unlace type domain by
+instantiation. The next step is wiring them to concrete instances (the
+KnownBits/ConstantRange/TInfo lattices) so the abstract theorems discharge
+properties of the actual Rust solver.
+
 ## Bibliography (what each proof draws on)
 
 See `research/formal/bibliography.md` for downloaded papers. Key references:

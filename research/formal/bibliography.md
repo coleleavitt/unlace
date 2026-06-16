@@ -18,6 +18,7 @@ not proof of current unlace behavior — the proofs themselves are in
 | Yakdan et al., *DREAM: No More Gotos* (NDSS'15) | `dream-ndss15.txt` | pattern-independent, goto-free structuring; condition-based semantics-preserving control | structuring correctness backlog |
 | Chen et al., *DIRTY: Augmenting Decompiler Output…* (2022) | `dirty-2022.txt` | joint retyping + renaming baseline; variable-name/type recovery framing | type/variable-recovery metric design (parity axis 3) |
 | (deep-research synthesis) | `deep-research-coq-verified-analysis.md` | replication blueprint: exact theorem statements + proof structure for lattices, KnownBits, peephole, SSA, Kildall | all of `rocq-tests/` |
+| Giacobazzi & Ranzato, *completeness in abstract interpretation* + Ranzato, *A Constructive Framework for Galois Connections* | `deep-research-novel-theorem-design.md` | the soundness-vs-completeness vocabulary and constructive Galois-connection tooling behind the novel modules | `CompilationInversion.v`, `PrincipalType.v`, `PrecisionPipeline.v` |
 
 ## How this maps to the proof roadmap
 

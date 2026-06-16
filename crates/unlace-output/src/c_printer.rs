@@ -18810,6 +18810,30 @@ fn output_has_plain_temp_decl(output: &str) -> bool {
     })
 }
 
+/// Does this `lhs = rhs` segment's right-hand side consist of a pure EFLAGS
+/// overflow macro (`__OFSUB__(...)` / `__OFADD__(...)`)? Such a store is a flag
+/// computation with no data semantics, so an overwrite-before-read makes it a
+/// dead store the pruner may drop (soundness: FlagReconstruct.v `of_elim_sound`).
+/// Conservative: requires the RHS to be EXACTLY one overflow macro call (no
+/// surrounding arithmetic / XOR consumer), so a flag value actually combined
+/// into a condition is never matched here.
+fn segment_rhs_is_overflow_flag_macro(segment: &str) -> bool {
+    let Some(eq) = segment.find('=') else {
+        return false;
+    };
+    let rhs = segment[eq + 1..].trim().trim_end_matches(';').trim();
+    for macro_name in ["__OFSUB__(", "__OFADD__("] {
+        if let Some(inner) = rhs.strip_prefix(macro_name) {
+            // The remainder must be the macro's argument list and nothing more:
+            // it ends at the matching close paren with no trailing operators.
+            if inner.ends_with(')') && !rhs[macro_name.len()..].contains(" ^ ") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let temp_decl_names: BTreeSet<String> = lines
@@ -18852,7 +18876,21 @@ fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
                 // `vN // temp` scaffolding, a later write does NOT keep an
                 // earlier write alive. Real register-commented values (`// r10d`,
                 // `// reg?`, etc.) keep the conservative live-out behavior.
-                let treat_reassign_as_use = !is_cond_family && !is_temp;
+                //
+                // EXCEPTION: a store whose RHS is a pure EFLAGS overflow macro
+                // (`__OFSUB__`/`__OFADD__`) is a flag computation, not data. When
+                // such a flag register is overwritten before any rvalue read, the
+                // intermediate value is never observed, so a later reassignment
+                // must NOT keep it alive — exactly the medium.elf `c14 =
+                // __OFSUB__(...)` dead-store pattern. Soundness is grounded in
+                // rocq-tests/theories/FlagReconstruct.v (`of_elim_sound`): the OF
+                // flag is reconstructible from SF and the recovered comparison,
+                // so dropping a never-read OF store preserves semantics. We only
+                // relax the reassign-keeps-alive rule (a genuine later rvalue
+                // read still pins the store), so this can never delete a live
+                // flag value.
+                let rhs_is_flag_macro = segment_rhs_is_overflow_flag_macro(segment);
+                let treat_reassign_as_use = !is_cond_family && !is_temp && !rhs_is_flag_macro;
                 let is_real_use = |later: &str| {
                     if treat_reassign_as_use {
                         contains_identifier(later, lhs)

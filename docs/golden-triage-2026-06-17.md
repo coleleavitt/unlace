@@ -149,7 +149,33 @@ lifetimes — is the documented next step, gated on not regressing
 
 ## Refresh actions taken
 
-**None.** No golden was refreshed: the 14 "refresh-safe" ones are already
-passing (nothing to do), and the 1 failing one is a real quality gap that a
-refresh would mask. This is the correct, evidence-backed outcome — not a blanket
-`UPDATE_GOLDEN`.
+- **debug_calls**: not refreshed; fixed at the producer (DWARF fbreg
+  over-shift). See the RESOLVED section above.
+- **medium**: refreshed (2026-06-17) — evidence-backed, after the
+  redundant-OF-store-elimination fix below. The refresh is **62 deletions, all
+  flag-store-only**: every changed line removes a dead `cN = __OFSUB__/__OFADD__(...)`
+  store while preserving the recovered comparison (`c10 = … < …`). Verified each
+  removed store is overwritten-before-read (genuinely dead), so the new output is
+  strictly better (medium.elf flag macros 87 → 25, a 71% reduction). Soundness is
+  proof-grounded by `rocq-tests/theories/FlagReconstruct.v` (`of_elim_sound`).
+  This is a verified-better refresh, not a blanket `UPDATE_GOLDEN`.
+
+## Redundant OF-store elimination (the medium.elf flag-macro fix)
+
+Measured root cause: at a `cmp a,b`, the lifter materializes three EFLAGS stores
+(`c13 = LOBYTE(a<b)`, `c10 = (a<b)`, `c14 = __OFSUB__(a,b)`). The comparison is
+already recovered in `c10`; `c14` is the explicit OF flag. These flag registers
+are reused across the function, and `prune_dead_plain_assignments` conservatively
+treated a *later reassignment* of `c14` as keeping the earlier store alive
+(`treat_reassign_as_use` for non-cond, non-temp register-commented locals) — so
+dead OF stores survived.
+
+Fix: when a store's RHS is a pure overflow macro (`segment_rhs_is_overflow_flag_macro`),
+a later reassignment no longer pins it (only a genuine rvalue read does). Grounded
+by `FlagReconstruct.of_elim_sound`: the OF flag is reconstructible from SF and the
+recovered comparison, so a never-read OF store is dead. The 25 remaining macros
+are cases where the flag IS read later (correctly kept).
+
+Measured: medium.elf `__OFSUB__/__OFADD__` macros **87 → 25**; harness **32/32**
+(medium golden refreshed); parity 83.0%; clippy clean; c_printer 591/591 units;
+38 proofs `Axioms:<none>`.

@@ -35,6 +35,17 @@ conformance harness pins the mirror so the two cannot silently diverge (see
 | `theories/PrecisionPipeline.v` | **End-to-end precision monotonicity** of a pass pipeline (lifts local BAT-optimality to a whole-decompiler invariant). |
 | `theories/TypeInversion.v` | **Alignment-driven field exclusion** — alignment facts provably refute impossible struct-field candidates. |
 
+### Concrete instantiations (framework → unlace's actual `ValueLattice`)
+
+The abstract frameworks are discharged on unlace's real value domain, so the
+guarantees hold for the actual lattice, not just an abstract model:
+
+| File | Concrete result |
+|------|-----------------|
+| `theories/KildallValueLattice.v` | unlace's value-propagation dataflow is monotone, fixpoint-**unique / order-independent** (deterministic). |
+| `theories/PrincipalTypeValueLattice.v` | value recovery has a **unique principal solution**, never excludes the truth, sharpens monotonically under witnesses. |
+| `theories/InversionInstances.v` | concrete `recovery_sound` + `recovery_complete` and **end-to-end precision monotonicity** of a real `join_with`-pass pipeline. |
+
 ## Build
 
 ```bash

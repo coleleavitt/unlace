@@ -14,3 +14,6 @@ theories/TypeInversion.v
 theories/CompilationInversion.v
 theories/PrincipalType.v
 theories/PrecisionPipeline.v
+theories/KildallValueLattice.v
+theories/PrincipalTypeValueLattice.v
+theories/InversionInstances.v

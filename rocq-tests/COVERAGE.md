@@ -47,6 +47,18 @@ completeness** (not just soundness), which is the mathematical content of the
 | `PrecisionPipeline.v` | **End-to-end precision monotonicity**: a pipeline of precision-monotone passes is precision-monotone, and monotone+reductive pipelines only sharpen — lifting local BAT-optimality to a whole-decompiler invariant. |
 | `TypeInversion.v` | **Alignment-driven field exclusion**: alignment facts (KnownBits trailing zeros) provably refute impossible struct-field candidates. |
 
+## Concrete instantiations (abstract framework → unlace's actual lattices)
+
+The novel frameworks above are stated over abstract models. These modules
+DISCHARGE the abstract hypotheses from the proven `ValueLattice` theorems,
+turning "provable in principle" into "proved for unlace's real value domain":
+
+| Module | What is now concrete |
+|--------|----------------------|
+| `KildallValueLattice.v` | unlace's real value-propagation dataflow (`ValueLattice` join/vle) is **monotone**, its fixpoint is **unique / worklist-order-independent** (determinism), and post-fixpoints bound iteration — by instantiating `Kildall`. |
+| `PrincipalTypeValueLattice.v` | value recovery over `ValueLattice` has a **unique principal solution**, **never excludes the truth**, and **sharpens monotonically** under added witnesses — by instantiating `PrincipalType` on the (correctly dualized) refinement order. |
+| `InversionInstances.v` | concrete `recovery_sound` + `recovery_complete` (the exact-inversion endpoint) for `ValueLattice`, and **end-to-end precision monotonicity** of a real pipeline of fact-incorporation (`join_with`) passes — instantiating `CompilationInversion` + `PrecisionPipeline`. |
+
 ## Summary
 
 - **Proven cores:** `ValueLattice`, `KnownBits` (bitwise + shift + BAT-optimality),

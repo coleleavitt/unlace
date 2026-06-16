@@ -47,6 +47,37 @@ concretization) on the top/bottom arms — `Overdefined` is γ=⊤ but
 the harness models `gamma` faithfully and documents the distinction. That kind
 of semantic gap is exactly what spec-mirroring must catch.
 
+## Binding-strength ledger: proven core → shipping Rust → how it's pinned
+
+"Did we convert the proofs into the decompiler?" The honest framing: the Rust
+decompiler **already ships and runs** — `unlace decompile <binary>` produces
+IDA-style C end-to-end today (verified on `fixtures/calls.elf`: demangled names,
+`__fastcall`, `_QWORD` casts, SSE intrinsics, recovered `main`). The Coq proofs
+**mirror that existing Rust**; nothing was waiting to be ported. The real work is
+*binding*: giving every proven core a machine-checked tie to its live Rust
+counterpart instead of a prose claim. This table is the status.
+
+| Proven Coq core | Shipping Rust (live in producer) | Binding strength |
+|-----------------|----------------------------------|------------------|
+| `KnownBits.kand/kor/kxor` | `known_bits.rs::{and,or,xor}` — used by `passes/known_bits_analysis.rs`, `known_bits_simplify.rs` | **extraction oracle** (Coq→OCaml, byte-diff) + conformance fuzz |
+| `KnownBits.kshl` / BAT optimality / `add_low_prefix` | `known_bits.rs::{shl,add,sub}` | conformance fuzz (`coq_conformance.rs`) |
+| `ValueLattice.join/meet` (+ laws, soundness) | `value_lattice.rs::{join,meet}` — SCCP/const-prop | conformance fuzz |
+| `AlgebraicSimplify` identities | `passes/algebraic_simplify.rs` | conformance fuzz |
+| `MemoryAlias` / `MemoryDataflow` must-not-alias | `memory_ssa.rs::must_not_alias`, `alias_analysis.rs`, `get_clobbering_access` | conformance fuzz (`fuzz_memory_must_not_alias_matches_coq_byte_range`) + mapping table below |
+| `TInfo.best_fit` / `calc_gaps` | `tinfo.rs::{get_best_fit_member,calc_gaps}` — struct recovery | **conformance** (`tinfo_conformance.rs`, 400K cases) |
+| `DominatorTree` poset/idom | `ssa.rs::DominatorTree` via `build_ssa` | **conformance** (`dominator_conformance.rs`, 4K random CFGs through the real pipeline) |
+| `DataLayout` size/align | `data_layout.rs::{type_size,type_align}` | **conformance** (`layout_conformance.rs`, 300K nested types) |
+| `RecordLayout` aligned/disjoint | (no separate shipping fn; the offset/align invariants are exercised via `DataLayout` above) | spec + DataLayout binding |
+| `Sccs` partition | `unlace-struct/src/irreducible.rs::tarjan_scc` (private; irreducible-loop structuring) + `passes/interproc_fixpoint.rs` | spec-only at the Rust boundary (routine is crate-private; partition proved in `Sccs.v`) |
+| `Kildall` / `InterProc` fixpoint | `passes/interproc_fixpoint.rs` worklist | spec-level (lattice laws bound via `ValueLattice`; the worklist driver is spec-only) |
+| `CompilationInversion` / `PrincipalType` / `PrecisionPipeline` | abstract frameworks (instantiated on `ValueLattice` in `*Instances.v`) | spec-only (no single Rust fn — they frame the whole engine) |
+
+Reading: cores that have a clean public Rust API are now **machine-bound**
+(extraction oracle or conformance fuzz); cores that are crate-private or
+whole-engine framings are honestly marked spec-only rather than given a fake
+binding. No producer pass was refactored to create a binding — every test is
+read-only and golden-neutral.
+
 ## The extraction differential oracle (deepest conformance layer)
 
 The conformance harness (`coq_conformance.rs`) restates each proven law by hand

@@ -63,6 +63,7 @@ guarantees hold for the actual lattice, not just an abstract model:
 | `theories/RegAlias.v` | sub-register aliasing laws + register write-kill frame (disjoint preserved, overlap clobbered). |
 | `theories/Sccs.v` | call-graph SCC partition: mutual reachability is an equivalence; classes are total + disjoint; SCC-DAG acyclic. |
 | `theories/DominatorTree.v` | dominance **constructed from CFG paths** — poset laws + entry-dominates-all + idom-uniqueness derived (discharges `SsaDominance`'s assumed order). |
+| `theories/MemoryDataflow.v` | **spatial→value bridge**: memory-aware `store_transfer` keeps `must_not_alias` locations exact, downgrades possible aliases to Top; frame + soundness + monotonicity + store-pipeline precision-monotonicity, tied to `MemoryAlias`. |
 
 The conformance harness (`crates/unlace-ir/tests/coq_conformance.rs`) also runs
 a deterministic property fuzzer (~14M checks) asserting the proven invariants in

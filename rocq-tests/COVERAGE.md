@@ -88,6 +88,7 @@ detects exactly where precision was lost rather than overclaiming.
 | `RegAlias.v` | sub-register (AL⊂AX⊂EAX⊂RAX) aliasing laws + the **register write-kill frame** — a write preserves disjoint registers, clobbers overlapping ones. Heap frame's register-file twin. |
 | `Sccs.v` | call-graph SCC decomposition: mutual reachability is an **equivalence**, SCCs **partition** the nodes (total + disjoint + class-equality), and the SCC-DAG is **acyclic** (the topological order `compute_sccs` uses is well-defined). |
 | `DominatorTree.v` | dominance **constructed from CFG paths** (`d` dominates `n` ⟺ every entry→n path contains `d`): reflexivity, transitivity, entry-dominates-all, and **immediate-dominator uniqueness** all DERIVED — discharging `SsaDominance`'s assumed order. |
+| `MemoryDataflow.v` | **the spatial→value bridge**: a memory-aware `store_transfer` that keeps `must_not_alias` locations exact and downgrades possible aliases to Top. Proves the frame (disjoint store preserves the exact lattice value), soundness (non-targets only rise), **monotonicity** (plugs into Kildall/PrecisionPipeline), a disjoint-store-chain frame, the byte-range oracle's soundness vs `MemoryAlias.must_not_alias`, and end-to-end **store-pipeline precision monotonicity**. Connects `MemoryAlias` ↔ `ValueLattice`. |
 
 ### Runtime conformance fuzzer
 

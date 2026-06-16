@@ -30,3 +30,4 @@ theories/DataLayout.v
 theories/RegAlias.v
 theories/Sccs.v
 theories/DominatorTree.v
+theories/MemoryDataflow.v

@@ -75,6 +75,7 @@ counterpart instead of a prose claim. This table is the status.
 | `StructFieldRecovery` 2-level tiling | `passes/struct_field_recovery.rs::struct_tile_address` (pure recompose helper) | **conformance** (`structfield_conformance.rs`: route/inject/contiguous-tile match `StructFieldRecovery.v`); SSA-threaded `decompose_address` *detection* is spec-only |
 | `Kildall` / `InterProc` fixpoint | `passes/interproc_fixpoint.rs` worklist | spec-level (lattice laws bound via `ValueLattice`; the worklist driver is spec-only) |
 | `AlgebraicSimplify` rewrite *algebra* | `passes/algebraic_simplify.rs::simplify_*` (private, SSA-state-bound) | **algebra value-bound** (`coq_conformance.rs::fuzz_algebraic_identities` pins `x+0`, `x-x`, `x*1`, `x^x`, `~~x`, assoc/comm over raw `u64`); the per-`IrInsn` rewrite plumbing is spec-only |
+| `FlagConditions` EFLAGS condition codes | `unlace-lift-x86/src/ops/data_move.rs::setcc_condition` (setl→`BoolXor(sf,of)`, setle→`BoolOr(zf,xor)`, setb→`cf`, …) | spec-only grounding — the proof certifies each flag combination the lifter emits IS the correct signed/unsigned comparison (the lifter constructs IR; no pure boolean-combination surface to fuzz) |
 | `CompilationInversion` / `PrincipalType` / `PrecisionPipeline` | abstract frameworks (instantiated on `ValueLattice` in `*Instances.v`) | spec-only (no single Rust fn — they frame the whole engine) |
 
 Reading: cores that have a clean public Rust API are now **machine-bound**

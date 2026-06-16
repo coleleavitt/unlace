@@ -35,3 +35,5 @@ theories/JumpTable.v
 theories/CallingConv.v
 theories/StackFrame.v
 theories/StructFieldRecovery.v
+theories/FlagConditions.v
+theories/LvarNaming.v

@@ -2212,9 +2212,29 @@ fn calibrate_dwarf_offsets(ssa: &mut SsaFunction) {
     let delta = match cfi_delta {
         Some(d) => {
             let d_matches = count_matches(d);
-            // Accept the CFI delta only when it is corroborated by ≥2 real
-            // accesses and strictly improves on leaving the offsets alone.
-            if d_matches >= 2 && d_matches > zero_matches {
+            // Prefer leaving offsets un-shifted (delta=0). The CFI
+            // CFA→rbp delta is only applied when it binds STRICTLY MORE names
+            // than delta=0 AND delta=0 fails to bind every pending local —
+            // i.e. only when the raw offsets genuinely do not land on observed
+            // slots. When delta=0 already accounts for all (or as many) locals,
+            // shifting by the CFA delta merely re-keys names onto DIFFERENT
+            // lifetimes (the `debug_calls` over-shift: a@-36 is the live copy
+            // slot, but +16 re-binds `a` onto the add-result slot). The
+            // canonicity proof (LvarNaming/AssignNames) requires the binding be
+            // a function of the value's own live range, not an offset shift that
+            // happens to hit *some* observed slot.
+            // Only apply the CFA shift when delta=0 binds NOTHING (the raw
+            // DWARF offsets genuinely live in a different coordinate system) and
+            // the shift recovers ≥2 corroborated slots. Otherwise prefer the raw
+            // offsets: when delta=0 already lands names on real observed slots,
+            // those are the variables' own live-range slots, and shifting merely
+            // re-keys names onto neighbouring (computed-result) lifetimes — the
+            // measured `debug_calls` over-shift, where a@-36 (the live copy
+            // slot) was wrongly moved to the add-result slot at -20. Grounded by
+            // LvarNaming/AssignNames canonicity: the binding must follow the
+            // value's own live range, not an offset shift that happens to hit
+            // some observed slot.
+            if zero_matches == 0 && d_matches >= 2 {
                 d
             } else {
                 0

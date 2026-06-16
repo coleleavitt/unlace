@@ -9,12 +9,45 @@ byte-diffs. This supersedes the stale "14 failing goldens" note in the root
 ## Headline
 
 The "14 failing goldens" premise is **stale** — intervening work fixed them. The
-current honest state:
+state was 31 pass / 1 fail (`golden_debug_calls`); the DWARF-offset calibration
+fix below closed that one too:
 
 ```
 cargo test -p unlace-test-harness --test golden_fixtures
-=> 31 passed; 1 failed   (only golden_debug_calls fails)
+=> 32 passed; 0 failed
 ```
+
+## RESOLVED: golden_debug_calls — DWARF fbreg over-shift in offset calibration
+
+Root-caused via `UNLACE_DWARF_MAP_TRACE` + a model-council diagnosis, then fixed
+and measured. `calibrate_dwarf_offsets` (pipeline.rs) chooses a frame-offset
+`delta` to re-key DWARF locals onto recovered slots. For `compute` it picked the
+CFI CFA→rbp delta (`+16`) because that bound more slots (`d_matches=4 >
+zero_matches=2`). But the +16 shift is an OVER-shift: `a@fbreg-36` is the live
+copy slot, and +16 re-keyed `a` onto the *add-result* slot (-20), cascading every
+name one lifetime late and leaking a `v_36` fallback. The golden binds at
+`delta=0`: `a` on the -36 copy slot, `e` on -20.
+
+**Fix:** apply the CFA shift only when `delta=0` binds NOTHING (`zero_matches == 0
+&& d_matches >= 2`) — i.e. only when the raw offsets genuinely live in a
+different coordinate system. Otherwise prefer the raw offsets, because slots that
+match at `delta=0` are the variables' OWN live-range slots; shifting merely
+re-keys names onto neighbouring computed-result lifetimes. This is exactly the
+canonicity principle proved in `LvarNaming.v` / `AssignNames.v` (the binding must
+follow the value's live range, not an offset shift that happens to hit some
+observed slot).
+
+**Measured:** `compute` body diff 25 → **0** (byte-identical); full harness
+**32/32** (was 31/1); `debug_hello` + `debug_structs` still pass; parity 83.0%;
+clippy clean; 37 proofs `Axioms:<none>`. New trace `UNLACE_DWARF_LOCAL_TRACE`
+not added (the existing `UNLACE_DWARF_MAP_TRACE` already covers the calibration).
+
+Two earlier hypotheses were measured and REVERTED before this one: removing the
+`rsp_off` candidate (made it worse, 28>25) and applying a `+16` override in
+`compute_dwarf_locals` (also 28 — double-binds the already-correct lvar slot).
+The fix is upstream in the calibration `delta` choice, not the printer override.
+
+### Stale note below (pre-fix triage, retained for history)
 
 The classifier reports 14 fixtures as "REFRESH-SAFE" — but every one of those is
 already **byte-identical** to its expected golden (`body_diffs=0`,

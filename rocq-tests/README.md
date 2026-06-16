@@ -59,6 +59,8 @@ guarantees hold for the actual lattice, not just an abstract model:
 | `theories/MemoryAlias.v` | must-not-alias ⇒ disjoint; Mod/Ref frame theorem (disjoint write preserves precision). |
 | `theories/TInfoNested.v` | recursive type tree: array-stride inversion, in-bounds detection, alignment composition. |
 | `theories/InterProc.v` | inter-procedural: context monotonicity + global fixpoint uniqueness, on `ValueLattice`. |
+| `theories/DataLayout.v` | type-layout invariants: size ≥ 0, alignment a positive power of two, array size = stride·len, struct size bounds every member. |
+| `theories/RegAlias.v` | sub-register aliasing laws + register write-kill frame (disjoint preserved, overlap clobbered). |
 
 The conformance harness (`crates/unlace-ir/tests/coq_conformance.rs`) also runs
 a deterministic property fuzzer (~14M checks) asserting the proven invariants in

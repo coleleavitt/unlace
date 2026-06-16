@@ -26,3 +26,5 @@ theories/PartialErasure.v
 theories/MemoryAlias.v
 theories/TInfoNested.v
 theories/InterProc.v
+theories/DataLayout.v
+theories/RegAlias.v

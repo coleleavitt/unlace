@@ -20,16 +20,16 @@ Status legend:
 | 5 | `TInfo::calc_gaps` | `unlace-ir/src/tinfo.rs` | gap bytes covered by no field | **partial** (uncovered-byte lemmas proven; full disjoint-cover partition TODO) | `TInfo.v` |
 | 6 | fixed-width wrap/mask math | `unlace-ir/src/known_bits.rs` (width_mask) | `wrap`/`mask` bit characterization, idempotence | **proven** | `Bitvector.v` |
 | 7 | `KnownBits::shl` | `unlace-ir/src/known_bits.rs` | left-shift transfer soundness + known-bit-preservation (precision) | **proven** | `KnownBits.v` (`kshl_sound`, `kshl_preserves_known_one/zero`) |
-| 8 | `KnownBits::add/sub` (carry) | `unlace-ir/src/known_bits.rs` | arithmetic transfer soundness w/ carry | **unproven** | TODO |
+| 8 | `KnownBits::add/sub` (carry) | `unlace-ir/src/known_bits.rs` | arithmetic transfer soundness w/ carry (known low prefix survives ±) | **proven** | `KnownBitsArith.v` (`add_low_prefix`, `sub_low_prefix`) |
 | 9 | `ConstantRange` interval arithmetic | `unlace-ir/src/known_bits.rs` | interval add/sub/join/meet/scale soundness + precision-monotone | **proven** | `ConstantRange.v` |
-| 10 | `DominatorTree` / `idom` | `unlace-ir/src/ssa.rs` | dominance is a tree; idom well-defined | **unproven** | TODO `Dominance.v` |
-| 11 | SSA φ-placement well-formedness | `unlace-ir/src/ssa.rs`, `verify.rs` | every use dominated by its def | **unproven** | TODO `SsaWf.v` |
+| 10 | `DominatorTree` / `idom` | `unlace-ir/src/ssa.rs` | dominance is a partial order (poset) | **proven** | `SsaDominance.v` (`dom_partial_order`) |
+| 11 | SSA φ-placement well-formedness + φ-join | `unlace-ir/src/ssa.rs`, `verify.rs` | every use dominated by its def; φ-join sound | **proven** | `SsaDominance.v` (`ssa_wf`, `phi_join_gamma_sound`) |
 | 12 | `compute_sccs` (call graph) | `unlace-ir/src/xref.rs` | SCC partition correctness | **unproven** | TODO |
-| 13 | `DataLayout::type_size/align` | `unlace-ir/src/data_layout.rs` | size/align monotonic, align divides size for arrays | **unproven** | TODO `DataLayout.v` |
+| 13 | `DataLayout::type_size/align` | `unlace-ir/src/data_layout.rs` | size >= 0; align is a positive power of two; array size = stride*len; struct size bounds every member | **proven** | `DataLayout.v` |
 | 14 | `compute_record_layout` | `unlace-passes/src/abi_layout.rs` | field offsets aligned, non-overlapping, greedy-minimal | **proven** | `RecordLayout.v` |
-| 15 | `reg_alias::write_kills` / `aliases` | `unlace-ir/src/reg_alias.rs` | alias relation symmetric; write-kill sound | **unproven** | TODO `RegAlias.v` |
-| 16 | `MemoryLocation::must_alias/must_not_alias` | `unlace-ir/src/memory_ssa.rs` | must/no-alias are mutually exclusive & sound | **unproven** | TODO `MemorySSA.v` |
-| 17 | `alias_analysis::can_modref` | `unlace-passes/src/alias_analysis.rs` | mod/ref lattice soundness | **unproven** | TODO |
+| 15 | `reg_alias::write_kills` / `aliases` | `unlace-ir/src/reg_alias.rs` | sub-register alias relation refl/symmetric; write-kill frame (disjoint preserved, overlap clobbered) | **proven** | `RegAlias.v` |
+| 16 | `MemoryLocation::must_alias/must_not_alias` | `unlace-ir/src/memory_ssa.rs` | must/no-alias are mutually exclusive & sound | **proven** | `MemoryAlias.v` (`must_not_alias_disjoint`, `must_not_alias_excludes_overlap`) |
+| 17 | `alias_analysis::can_modref` (frame) | `unlace-passes/src/alias_analysis.rs` | disjoint write preserves the other location (Mod/Ref frame) | **proven** | `MemoryAlias.v` (`write_preserves_disjoint`) |
 | 18 | dataflow fixpoint iteration | `unlace-passes` (various) | Kildall: monotone, fixpoint unique, order-independent | **proven** | `Kildall.v` |
 
 ## Novel theory modules (beyond mirroring — new results)
@@ -84,6 +84,8 @@ detects exactly where precision was lost rather than overclaiming.
 | `MemoryAlias.v` | must/may-alias soundness + the **Mod/Ref frame theorem**: a write that `must_not_alias` B leaves every byte of B unchanged, so B's recovered value is **not** forced to Top — proven non-aliasing preserves precision. |
 | `TInfoNested.v` | recursive type tree (scalar/array/struct): **array-stride inversion** (`index = o/stride`, `inner = o mod stride`, reconstructs `o`), in-bounds-iff characterization, and **alignment composition** across nesting. |
 | `InterProc.v` | inter-procedural lift: **context monotonicity** (refining an argument type sharpens the return type) and **global fixpoint uniqueness/determinism** for recursive (SCC) signatures, instantiated on `ValueLattice`. |
+| `DataLayout.v` | type-layout invariants: size ≥ 0, alignment is a positive power of two, array size = stride·len, struct size bounds every member. |
+| `RegAlias.v` | sub-register (AL⊂AX⊂EAX⊂RAX) aliasing laws + the **register write-kill frame** — a write preserves disjoint registers, clobbers overlapping ones. Heap frame's register-file twin. |
 
 ### Runtime conformance fuzzer
 

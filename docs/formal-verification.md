@@ -70,6 +70,7 @@ counterpart instead of a prose claim. This table is the status.
 | `RecordLayout` aligned/disjoint | (no separate shipping fn; the offset/align invariants are exercised via `DataLayout` above) | spec + DataLayout binding |
 | `Sccs` partition | `unlace-struct/src/irreducible.rs::tarjan_scc` (private; irreducible-loop structuring) + `passes/interproc_fixpoint.rs` | spec-only at the Rust boundary (routine is crate-private; partition proved in `Sccs.v`) |
 | `Kildall` / `InterProc` fixpoint | `passes/interproc_fixpoint.rs` worklist | spec-level (lattice laws bound via `ValueLattice`; the worklist driver is spec-only) |
+| `AlgebraicSimplify` rewrite *algebra* | `passes/algebraic_simplify.rs::simplify_*` (private, SSA-state-bound) | **algebra value-bound** (`coq_conformance.rs::fuzz_algebraic_identities` pins `x+0`, `x-x`, `x*1`, `x^x`, `~~x`, assoc/comm over raw `u64`); the per-`IrInsn` rewrite plumbing is spec-only |
 | `CompilationInversion` / `PrincipalType` / `PrecisionPipeline` | abstract frameworks (instantiated on `ValueLattice` in `*Instances.v`) | spec-only (no single Rust fn — they frame the whole engine) |
 
 Reading: cores that have a clean public Rust API are now **machine-bound**
@@ -77,6 +78,32 @@ Reading: cores that have a clean public Rust API are now **machine-bound**
 whole-engine framings are honestly marked spec-only rather than given a fake
 binding. No producer pass was refactored to create a binding — every test is
 read-only and golden-neutral.
+
+### Why the spec-only cores stop there (binding-boundary rationale)
+
+These are deliberate stops, not unfinished TODOs. A conformance binding is only
+meaningful when it pins the **shipping** Rust through a stable, side-effect-free
+boundary. The remaining cores fail that test for principled reasons:
+
+- **`tarjan_scc`** is a crate-private `fn` in `unlace-struct` (irreducible-loop
+  structuring). Binding it would require either making it `pub` (a producer API
+  change this round forbids) or re-implementing Tarjan inside the test — which
+  would bind a *test-local* SCC, not the shipping one. The partition property
+  itself is fully proven in `Sccs.v`; what's unbound is the specific Rust
+  routine, and faking that link would be worse than labeling it.
+- **`AlgebraicSimplify` rewrites** simplify `IrInsn`s against live SSA state via
+  private helpers; there is no pure per-op entry point. The *algebra* they rely
+  on (`x+0=x`, …) is already value-bound by `fuzz_algebraic_identities`, so the
+  only unbound part is IR plumbing that a value-level test cannot reach without
+  heavy, fragile SSA fixtures.
+- **`Kildall`/`InterProc`/`CompilationInversion`/`PrincipalType`/`PrecisionPipeline`**
+  are whole-engine framings, not single functions; their lattice obligations are
+  discharged on `ValueLattice` (bound by `coq_conformance.rs`), and the drivers
+  are orchestration with no algebraic surface to pin.
+
+The discrete way to bind any of these later is a *public, pure* Rust accessor
+(e.g. `pub fn scc_partition(cfg) -> Vec<BTreeSet<BlockId>>`), at which point a
+read-only conformance test drops in exactly like `dominator_conformance.rs`.
 
 ## The extraction differential oracle (deepest conformance layer)
 

@@ -522,3 +522,40 @@ fn fuzz_add_low_prefix() {
         );
     }
 }
+
+// ===================================================================
+// MemoryDataflow alias mapping — pins MemoryLocation::must_not_alias to the
+// Coq byte-range formula (MemoryDataflow.v `mloc_no_alias` / `must_not_alias`).
+// ===================================================================
+//
+// The proof's frame theorem ("a disjoint store preserves the value") only
+// transfers to the producer if the Rust `must_not_alias` decision matches the
+// Coq byte-range disjointness. This test mechanically pins that mapping for
+// same-space stack locations over the fuzz corpus.
+
+use unlace_ir::memory_ssa::MemoryLocation;
+
+#[test]
+fn fuzz_memory_must_not_alias_matches_coq_byte_range() {
+    let mut rng = XorShift64::new(0x3EA1_5ED0_0000_0007);
+    for _ in 0..FUZZ_ITERS {
+        // small signed offsets and positive sizes, same (stack) space
+        let off_a = (rng.next() % 64) as i64 - 32;
+        let off_b = (rng.next() % 64) as i64 - 32;
+        let size_a = 1 + (rng.next() % 8) as u32;
+        let size_b = 1 + (rng.next() % 8) as u32;
+        let a = MemoryLocation::stack(off_a, size_a);
+        let b = MemoryLocation::stack(off_b, size_b);
+
+        // Coq `must_not_alias` (MemoryDataflow.v): end_a <= off_b \/ end_b <= off_a
+        let end_a = off_a + size_a as i64;
+        let end_b = off_b + size_b as i64;
+        let coq_disjoint = end_a <= off_b || end_b <= off_a;
+
+        assert_eq!(
+            a.must_not_alias(&b),
+            coq_disjoint,
+            "must_not_alias disagrees with Coq byte-range: a=({off_a},{size_a}) b=({off_b},{size_b})"
+        );
+    }
+}

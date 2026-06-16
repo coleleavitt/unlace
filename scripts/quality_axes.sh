@@ -36,3 +36,11 @@ if command -v coqc >/dev/null 2>&1; then
 else
   echo "Formal Verification: SKIPPED (Rocq/coqc not installed; see rocq-tests/README.md)"
 fi
+
+echo
+echo "== Extraction differential oracle (Rust == extracted Coq proof) =="
+if command -v coqc >/dev/null 2>&1 && command -v dune >/dev/null 2>&1; then
+  bash scripts/extraction_oracle.sh
+else
+  echo "Extraction Oracle: SKIPPED (needs Rocq + OCaml/dune/zarith; the coq_conformance fuzzer still guards these laws)"
+fi

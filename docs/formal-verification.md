@@ -47,6 +47,64 @@ concretization) on the top/bottom arms — `Overdefined` is γ=⊤ but
 the harness models `gamma` faithfully and documents the distinction. That kind
 of semantic gap is exactly what spec-mirroring must catch.
 
+## The extraction differential oracle (deepest conformance layer)
+
+The conformance harness (`coq_conformance.rs`) restates each proven law by hand
+in Rust. A strictly deeper check is `scripts/extraction_oracle.sh`: it uses
+Rocq's **Extraction** to compile the verified `KnownBits` transfer cores
+(`rocq-tests/extraction/Extract.v`) directly to OCaml
+(`knownbits_oracle.ml`), runs that extracted code over a corpus, and a Rust test
+(`crates/unlace-ir/tests/extraction_oracle.rs`) recomputes each case with the
+shipped `KnownBits::{and,or,xor}` and asserts **byte-identical** results.
+
+The reference is therefore the *mechanically extracted proof itself*, not a
+human re-statement — so a divergence between the production Rust and the proved
+definition is caught directly (verified: corrupting one oracle vector makes the
+Rust test fail). The pipeline is:
+
+```
+coqc Extract.v  →  knownbits_oracle.ml   (Coq Extraction)
+dune build      →  oracle_driver.exe     (OCaml + zarith)
+oracle_driver   →  oracle_vectors.txt    (run the extracted proof)
+cargo test extraction_oracle             (Rust == extracted proof)
+```
+
+It runs as a fifth axis in `scripts/quality_axes.sh` and skips gracefully when
+the Rocq/OCaml toolchain is absent (the property fuzzer still guards the same
+laws unconditionally). Generated files (`*.ml`, `_build/`, `oracle_vectors.txt`)
+are gitignored — the source of truth is `Extract.v` + `oracle_driver.ml`.
+
+## MemoryDataflow ↔ producer: alias-semantics mapping (verified by reading)
+
+Before claiming the `MemoryDataflow.v` store-frame proof "applies to the
+producer," we checked that the Rust alias semantics actually match the Coq
+model (read-only; no producer code was changed). **Verdict: MATCH** — the
+proof's `must_not_alias` byte-range disjointness and the `store_transfer`
+keep-disjoint / downgrade-aliased rule are the same decisions the producer
+already makes.
+
+| `MemoryDataflow.v` (Coq) | Producer (Rust) | Match |
+|--------------------------|-----------------|-------|
+| `must_not_alias w l` := `m_base w + m_size w ≤ m_base l ∨ m_base l + m_size l ≤ m_base w` | `MemoryLocation::must_not_alias` (`memory_ssa.rs:66`): same-space test `end_a ≤ off_b ∨ end_b ≤ off_a` | **exact** (byte-range non-overlap) |
+| oracle `no_alias_irrefl` (a location never no-aliases itself) | `must_not_alias` returns `false` for equal/overlapping ranges; `is_unknown ⇒ false` (Top aliases everything) | **match** |
+| 3-way alias verdict drives the transfer | `AliasAnalysis::alias` (`alias_analysis.rs:43`): `must_alias→MustAlias`, `must_not_alias→NoAlias`, else `MayAlias` | **exact** 3-way split |
+| `store_transfer`: target←v, `must_not_alias`→**keep exact**, else→**Top** | `MemorySSAGraph::get_clobbering_access` (`memory_ssa.rs:374`): must-alias→clobber, **must_not_alias→skip (preserve)**, may-alias→conservative clobber | **same policy** |
+| (not modelled) | volatile/`is_volatile` = opaque barrier (always clobber); `AliasCategory::{Mmio,Volatile}` preservation | producer is a sound **refinement** (extra barriers ⇒ more Top, still sound) |
+
+Differences are all in the *conservative* direction (the producer adds
+space-kinds, volatile barriers, and an `Unknown`/Top location that aliases
+everything), so the producer is a sound instance of the proved transfer: every
+`must_not_alias` it acts on satisfies the Coq predicate, so the frame theorem's
+"disjoint store preserves the value" holds for exactly the stores the producer
+already skips in `get_clobbering_access`.
+
+**Smallest pin:** a conformance test that, for random `MemoryLocation` pairs,
+asserts `MemoryLocation::must_not_alias` agrees with the Coq byte-range formula
+(`mloc_no_alias`) would mechanically lock this mapping. It is *not* wired this
+round (no producer change), but it is the discrete next step if drift is a
+concern. No refactor of `dse_global`/`dead_store_elim`/`get_clobbering_access`
+is warranted — they already implement the proved policy.
+
 ## The gamma / soundness convention
 
 Abstract domains follow the gamma-only (Verasco-style) formulation:

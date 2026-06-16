@@ -18823,11 +18823,29 @@ fn segment_rhs_is_overflow_flag_macro(segment: &str) -> bool {
     };
     let rhs = segment[eq + 1..].trim().trim_end_matches(';').trim();
     for macro_name in ["__OFSUB__(", "__OFADD__("] {
-        if let Some(inner) = rhs.strip_prefix(macro_name) {
-            // The remainder must be the macro's argument list and nothing more:
-            // it ends at the matching close paren with no trailing operators.
-            if inner.ends_with(')') && !rhs[macro_name.len()..].contains(" ^ ") {
-                return true;
+        let Some(inner) = rhs.strip_prefix(macro_name) else {
+            continue;
+        };
+        // The macro call must consume the ENTIRE rhs: walk balanced parens from
+        // the opening `(` and require its matching close paren to be the final
+        // character. This rejects compound forms like
+        // `__OFSUB__(a,b) + __OFADD__(c,d)` or `__OFSUB__(a,b) ^ c13` where the
+        // flag value is combined into a larger (data- or condition-bearing)
+        // expression — only a bare, single overflow-macro store is a dead flag.
+        let mut depth = 1usize; // already inside the opening paren
+        let bytes = inner.as_bytes();
+        for (i, &b) in bytes.iter().enumerate() {
+            match b {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        // Matched the macro's close paren; pure iff it is the
+                        // last character of the rhs (nothing trails it).
+                        return i == bytes.len() - 1;
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -20582,6 +20600,32 @@ mod tests {
 
         assert!(pruned.contains("a3_1 = 0xaLL;"), "{pruned}");
         assert!(pruned.contains("a4_1 = 0LL;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_segment_rhs_is_overflow_flag_macro() {
+        // Pure single overflow-macro stores: these ARE flag computations.
+        assert!(super::segment_rhs_is_overflow_flag_macro("c14 = __OFSUB__(c2, 1)"));
+        assert!(super::segment_rhs_is_overflow_flag_macro("c14 = __OFADD__(a1, 4LL);"));
+        assert!(super::segment_rhs_is_overflow_flag_macro(
+            "c14 = __OFSUB__((uintptr_t)(buf + 64), a1)"
+        ));
+        // Compound RHS must NOT match (would wrongly drop a data-bearing store):
+        assert!(!super::segment_rhs_is_overflow_flag_macro(
+            "c14 = __OFSUB__(a, b) + __OFADD__(c, d)"
+        ));
+        // XOR consumer (signed-lt idiom) must NOT match — the flag feeds a cond:
+        assert!(!super::segment_rhs_is_overflow_flag_macro(
+            "cond = LOBYTE(a < b) ^ __OFSUB__(a, b)"
+        ));
+        assert!(!super::segment_rhs_is_overflow_flag_macro("c14 = __OFSUB__(a, b) ^ c13"));
+        // Trailing arithmetic after the macro must NOT match:
+        assert!(!super::segment_rhs_is_overflow_flag_macro("c14 = __OFSUB__(a, b) + 1"));
+        // Non-flag RHS: not a flag store.
+        assert!(!super::segment_rhs_is_overflow_flag_macro("c10 = (_DWORD)c2 < (_DWORD)1"));
+        assert!(!super::segment_rhs_is_overflow_flag_macro("v13 = add(x, 0xaLL)"));
+        // No '=' at all.
+        assert!(!super::segment_rhs_is_overflow_flag_macro("return c14"));
     }
 
     #[test]

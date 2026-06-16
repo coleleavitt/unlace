@@ -16,8 +16,8 @@ Status legend:
 | 1 | `ValueLattice::join/meet` | `unlace-ir/src/value_lattice.rs` | lattice laws, LUB, monotonicity, γ-soundness | **proven** | `ValueLattice.v` |
 | 2 | `KnownBits::and/or/xor`, `from_constant`, `has_conflict` | `unlace-ir/src/known_bits.rs` | abstract-domain soundness vs concrete bitvectors | **proven** | `KnownBits.v` |
 | 3 | `algebraic_simplify` rewrite rules | `unlace-passes/src/algebraic_simplify.rs` | each rewrite is semantics-preserving (Alive2-style) | **partial** (18 scalar identities proven; address-fold / subpiece-compose / phi-all-same not modeled) | `AlgebraicSimplify.v` |
-| 4 | `TInfo::get_best_fit_member` | `unlace-ir/src/tinfo.rs` | tightest containing field; sound/complete | **partial** (flat case proven; nested struct/union/array recursion TODO) | `TInfo.v` |
-| 5 | `TInfo::calc_gaps` | `unlace-ir/src/tinfo.rs` | gap bytes covered by no field | **partial** (uncovered-byte lemmas proven; full disjoint-cover partition TODO) | `TInfo.v` |
+| 4 | `TInfo::get_best_fit_member` | `unlace-ir/src/tinfo.rs` | tightest containing field; sound/complete | **proven (flat) + Rust-bound** — flat sound/tightest/complete in `TInfo.v`, machine-checked vs Rust in `tinfo_conformance.rs` (400K). Nested-descent *arithmetic* (array-stride routing, alignment composition) proven in `TInfoNested.v`; the recursive descent itself is not yet directly bound | `TInfo.v` + `TInfoNested.v` |
+| 5 | `TInfo::calc_gaps` | `unlace-ir/src/tinfo.rs` | gap bytes covered by no field | **proven + Rust-bound** (uncovered-byte lemmas in `TInfo.v`; pinned to Rust by `tinfo_conformance.rs`) | `TInfo.v` |
 | 6 | fixed-width wrap/mask math | `unlace-ir/src/known_bits.rs` (width_mask) | `wrap`/`mask` bit characterization, idempotence | **proven** | `Bitvector.v` |
 | 7 | `KnownBits::shl` | `unlace-ir/src/known_bits.rs` | left-shift transfer soundness + known-bit-preservation (precision) | **proven** | `KnownBits.v` (`kshl_sound`, `kshl_preserves_known_one/zero`) |
 | 8 | `KnownBits::add/sub` (carry) | `unlace-ir/src/known_bits.rs` | arithmetic transfer soundness w/ carry (known low prefix survives ±) | **proven** | `KnownBitsArith.v` (`add_low_prefix`, `sub_low_prefix`) |
@@ -90,15 +90,23 @@ detects exactly where precision was lost rather than overclaiming.
 | `DominatorTree.v` | dominance **constructed from CFG paths** (`d` dominates `n` ⟺ every entry→n path contains `d`): reflexivity, transitivity, entry-dominates-all, and **immediate-dominator uniqueness** all DERIVED — discharging `SsaDominance`'s assumed order. |
 | `MemoryDataflow.v` | **the spatial→value bridge**: a memory-aware `store_transfer` that keeps `must_not_alias` locations exact and downgrades possible aliases to Top. Proves the frame (disjoint store preserves the exact lattice value), soundness (non-targets only rise), **monotonicity** (plugs into Kildall/PrecisionPipeline), a disjoint-store-chain frame, the byte-range oracle's soundness vs `MemoryAlias.must_not_alias`, and end-to-end **store-pipeline precision monotonicity**. Connects `MemoryAlias` ↔ `ValueLattice`. |
 
-### Runtime conformance fuzzer
+### Rust↔Coq binding (machine-checked, not doc-only)
 
-`crates/unlace-ir/tests/coq_conformance.rs` now also runs a **property-based
-fuzzer** (deterministic xorshift, ~2M cases × 7 properties ≈ 14M checks): it
-hammers the exact Rocq-proven invariants — KnownBits and/or/xor soundness, kand
-BAT-optimality bound, kshl soundness, ValueLattice join laws + soundness,
-algebraic identities + assoc/comm, and the `add_low_prefix` carry law — in
-compiled Rust, so any Rust↔Coq drift is caught statistically as well as on the
-proof witnesses.
+The proofs mirror **shipping** Rust; the binding makes drift mechanically
+catchable. See the *binding-strength ledger* in `docs/formal-verification.md`
+for the full core→Rust-location→binding table. Layers:
+
+- **Extraction oracle** (`scripts/extraction_oracle.sh`, fail-closed): the
+  KnownBits `and/or/xor` cores are extracted Coq→OCaml from the proved
+  `KnownBits.v` and diffed byte-for-byte against the real Rust.
+- **Property fuzzer** (`crates/unlace-ir/tests/coq_conformance.rs`, 24 tests,
+  deterministic xorshift, millions of cases): KnownBits soundness + BAT bound +
+  kshl, ValueLattice join laws/soundness, algebraic identities + assoc/comm,
+  `add_low_prefix` carry, and `must_not_alias` ↔ Coq byte-range.
+- **Targeted conformance** (read-only, golden-neutral): `tinfo_conformance.rs`
+  (best_fit/calc_gaps, 400K), `dominator_conformance.rs` (DominatorTree poset
+  laws via real `build_ssa`, 4K CFGs), `layout_conformance.rs` (DataLayout
+  size/align, 300K types).
 
 ## Summary
 
@@ -110,13 +118,16 @@ proof witnesses.
   runtime conformance fuzzer.
 - **Theorems kernel-checked:** `scripts/verify_proofs.sh` reports
   **Axioms: <none>** across all modules (coqchk).
-- **Remaining frontier is now genuinely external** to the core algebra:
-  - partial-completeness rows (`AlgebraicSimplify` address/phi-plumbing,
-    `TInfo` nested recursion) extend coverage but the load-bearing math is done;
-  - the biggest open *integration* step is connecting these proofs to the Rust
-    producer end-to-end (extraction or a deeper conformance oracle) rather than
-    adding new core theorems.
+- **Bound to shipping Rust + runs end-to-end.** Every public proven core is now
+  tied to its live Rust counterpart by a machine-checked conformance test (see
+  the binding-strength ledger in `docs/formal-verification.md`), not just a
+  prose claim; crate-private routines (`tarjan_scc`) and whole-engine framings
+  are honestly marked spec-only. The decompiler itself ships and runs —
+  `unlace decompile <binary>` emits IDA-style C end-to-end.
+- **Remaining frontier** is the one remaining partial row
+  (`AlgebraicSimplify` address-fold / subpiece-compose / phi-all-same plumbing)
+  and binding the spec-only cores once a public Rust API exists for them.
 
 This ledger is the source of truth for "what is mathematically proven". Update
-the row when a TODO lands a `.v`, and add a conformance check in
-`crates/unlace-ir/tests/coq_conformance.rs`.
+the row when a TODO lands a `.v`, and add a conformance check under
+`crates/unlace-ir/tests/`.

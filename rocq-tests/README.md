@@ -65,9 +65,18 @@ guarantees hold for the actual lattice, not just an abstract model:
 | `theories/DominatorTree.v` | dominance **constructed from CFG paths** — poset laws + entry-dominates-all + idom-uniqueness derived (discharges `SsaDominance`'s assumed order). |
 | `theories/MemoryDataflow.v` | **spatial→value bridge**: memory-aware `store_transfer` keeps `must_not_alias` locations exact, downgrades possible aliases to Top; frame + soundness + monotonicity + store-pipeline precision-monotonicity, tied to `MemoryAlias`. |
 
-The conformance harness (`crates/unlace-ir/tests/coq_conformance.rs`) also runs
-a deterministic property fuzzer (~14M checks) asserting the proven invariants in
-compiled Rust.
+## Rust↔Coq binding
+
+The proofs mirror **shipping** Rust; these bind the two so drift is caught
+mechanically (see the binding-strength ledger in `docs/formal-verification.md`):
+
+- **Extraction oracle** — `scripts/extraction_oracle.sh` extracts the KnownBits
+  cores Coq→OCaml from the proved `KnownBits.v` and byte-diffs them against the
+  real Rust (fail-closed).
+- **Conformance tests** under `crates/unlace-ir/tests/`: `coq_conformance.rs`
+  (property fuzzer, millions of cases), `tinfo_conformance.rs`,
+  `dominator_conformance.rs`, `layout_conformance.rs` — each read-only and
+  golden-neutral.
 
 ## Build
 

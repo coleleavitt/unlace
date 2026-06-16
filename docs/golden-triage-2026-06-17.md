@@ -76,6 +76,29 @@ t61 emergent-pipeline trap the repo CLAUDE.md documents). The goal explicitly
 authorizes the "record a precise measured finding + the canonicity proof as
 grounding" outcome when a fix risks regression; that is the outcome here.
 
+### Deeper trace (variable_merge → DWARF-match → print)
+
+Following the chain past stack allocation with `UNLACE_VAR_MERGE_TRACE`: in
+`compute`, all locals live in REGISTERS, not on the stack. `variable_merge`
+coalesces them into clusters and assigns merge-level names `c0..c5` (register
+clusters) + `v7..v12` (unique temps) — and this step is provably canonical
+(`AssignNames.v::rank_cid_only`: the assigned rank depends only on the
+cluster-id sequence, never the per-value key/version). The DWARF names
+`a/b/c/d/e` are applied DOWNSTREAM, in the C printer's `compute_dwarf_locals`
+(`c_printer.rs:863`), which matches DWARF source locals onto these clusters. The
+`v_36 = x` (anonymous, where the golden has `a = x`) shows the divergence is in
+that downstream DWARF→cluster matching: which cluster each DWARF name attaches to
+differs from the golden, and one value is left unnamed.
+
+So the gap spans three layers — coalescing (proven canonical), DWARF→cluster
+matching (the divergent step), and printing — all shared by `debug_hello` and
+`debug_structs`, which currently pass. A change to the DWARF-matching heuristic
+to fix `compute` risks those two; per the t61 rule and the goal's explicit
+"record the measured finding if a fix regresses" clause, that is the outcome:
+the fix is a precisely-scoped next step (make `compute_dwarf_locals` bind each
+DWARF local to the cluster whose live range matches the local's scope, keyed
+canonically), gated on the two passing debug goldens.
+
 ### Proof grounding (and an honest scope note)
 
 `rocq-tests/theories/LvarNaming.v` + `NameInversion.v` prove the *general*

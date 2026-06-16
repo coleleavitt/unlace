@@ -20,3 +20,9 @@ theories/InversionInstances.v
 theories/LossyInversion.v
 theories/ConstantRangeInstances.v
 theories/TInfoInversion.v
+theories/KnownBitsArith.v
+theories/SsaDominance.v
+theories/PartialErasure.v
+theories/MemoryAlias.v
+theories/TInfoNested.v
+theories/InterProc.v

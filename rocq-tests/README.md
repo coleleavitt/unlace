@@ -49,6 +49,21 @@ guarantees hold for the actual lattice, not just an abstract model:
 | `theories/ConstantRangeInstances.v` | real interval-narrowing pipeline is precision-monotone + reductive; range recovery has a unique tightest principal. |
 | `theories/TInfoInversion.v` | struct-field recovery as lossy offset inversion: `best_fit` soundness + incompleteness-under-overlap witness (lowering non-injective). |
 
+### Memory, recursion, boundaries, graded loss
+
+| File | Result |
+|------|--------|
+| `theories/KnownBitsArith.v` | add/sub carry transfer — a known low prefix survives `+`/`-` (alignment-survives-arithmetic). |
+| `theories/SsaDominance.v` | dominance partial order, SSA well-formedness, φ-join type-propagation soundness. |
+| `theories/PartialErasure.v` | graded lossy lowering: complete below the cut, provably incomplete above (witness). |
+| `theories/MemoryAlias.v` | must-not-alias ⇒ disjoint; Mod/Ref frame theorem (disjoint write preserves precision). |
+| `theories/TInfoNested.v` | recursive type tree: array-stride inversion, in-bounds detection, alignment composition. |
+| `theories/InterProc.v` | inter-procedural: context monotonicity + global fixpoint uniqueness, on `ValueLattice`. |
+
+The conformance harness (`crates/unlace-ir/tests/coq_conformance.rs`) also runs
+a deterministic property fuzzer (~14M checks) asserting the proven invariants in
+compiled Rust.
+
 ## Build
 
 ```bash

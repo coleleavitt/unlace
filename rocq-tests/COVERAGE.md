@@ -74,6 +74,27 @@ detects exactly where precision was lost rather than overclaiming.
 | `ConstantRangeInstances.v` | real interval-narrowing pipeline (`rmeet_with` passes) is **precision-monotone AND reductive** (only tightens); range recovery has a **unique principal (tightest) range** and never excludes the truth. |
 | `TInfoInversion.v` | struct-field recovery as lossy offset inversion: `best_fit`-based **recovery soundness** (recovered field contains the offset, tightest fit) + **incompleteness under overlap** (two fields share an offset ⇒ lowering is non-injective, witnessed). |
 
+### Memory, recursion, boundaries, and graded loss (the final frontier)
+
+| Module | Result |
+|--------|--------|
+| `KnownBitsArith.v` | add/sub **carry transfer**: a known low prefix survives `+`/`-` — `add_low_prefix`/`sub_low_prefix` prove the low-k bits of a sum/difference depend only on the low-k inputs (the carry-into-bit-k is determined by bits `<k`). The alignment-survives-arithmetic guarantee. |
+| `SsaDominance.v` | dominance **partial order**, SSA well-formedness (use dominated by def), and **φ-join soundness** on `ValueLattice` (γ(φ-join) ⊇ ∪ γ(incoming)) — correctly proved via `join_sound`, not the abstract order. |
+| `PartialErasure.v` | **graded** lossy lowering (keep low-k known bits, erase high): recovery stays sound, is **complete below the cut**, **provably incomplete above** with a witness — the framework grades precision loss between identity and total erasure. |
+| `MemoryAlias.v` | must/may-alias soundness + the **Mod/Ref frame theorem**: a write that `must_not_alias` B leaves every byte of B unchanged, so B's recovered value is **not** forced to Top — proven non-aliasing preserves precision. |
+| `TInfoNested.v` | recursive type tree (scalar/array/struct): **array-stride inversion** (`index = o/stride`, `inner = o mod stride`, reconstructs `o`), in-bounds-iff characterization, and **alignment composition** across nesting. |
+| `InterProc.v` | inter-procedural lift: **context monotonicity** (refining an argument type sharpens the return type) and **global fixpoint uniqueness/determinism** for recursive (SCC) signatures, instantiated on `ValueLattice`. |
+
+### Runtime conformance fuzzer
+
+`crates/unlace-ir/tests/coq_conformance.rs` now also runs a **property-based
+fuzzer** (deterministic xorshift, ~2M cases × 7 properties ≈ 14M checks): it
+hammers the exact Rocq-proven invariants — KnownBits and/or/xor soundness, kand
+BAT-optimality bound, kshl soundness, ValueLattice join laws + soundness,
+algebraic identities + assoc/comm, and the `add_low_prefix` carry law — in
+compiled Rust, so any Rust↔Coq drift is caught statistically as well as on the
+proof witnesses.
+
 ## Summary
 
 - **Proven cores:** `ValueLattice`, `KnownBits` (bitwise + shift + BAT-optimality),

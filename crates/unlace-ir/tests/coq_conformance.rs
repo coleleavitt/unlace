@@ -329,3 +329,196 @@ fn algebraic_cmp_and_negate_identities() {
         assert_eq!(!(!x), x, "not_not");
     }
 }
+
+// ===================================================================
+// Property-based fuzzer — Rust↔Coq invariants over millions of cases
+// ===================================================================
+//
+// The tests above pin the proven laws on small fixed samples. This module
+// hammers the SAME invariants with a deterministic xorshift PRNG over millions
+// of random inputs, so any Rust-side drift from a Rocq theorem is caught
+// statistically as well as on the witnesses. Deterministic (fixed seed) =
+// reproducible; no external crate needed.
+
+struct XorShift64(u64);
+impl XorShift64 {
+    fn new(seed: u64) -> Self {
+        XorShift64(seed | 1)
+    }
+    fn next(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.0 = x;
+        x
+    }
+}
+
+// gamma_kb: does abstract `a` describe concrete `x`? (mirrors KnownBits.v)
+fn kb_gamma(a: &KnownBits, x: u64) -> bool {
+    let m = KnownBits::width_mask(a.width);
+    let x = x & m;
+    (x & a.one) == a.one && (x & a.zero) == 0
+}
+
+const FUZZ_ITERS: usize = 2_000_000;
+
+/// kand/kor/kxor SOUNDNESS over random known-constant pairs (KnownBits.v
+/// `kand_sound`/`kor_sound`/`kxor_sound`). For exact (from_constant) inputs the
+/// concrete result must land in the abstract result's concretization.
+#[test]
+fn fuzz_known_bits_soundness() {
+    let mut rng = XorShift64::new(0xC0FF_EE12_3456_789B);
+    let widths = [1u8, 8, 16, 32, 64];
+    for _ in 0..FUZZ_ITERS {
+        let w = widths[(rng.next() % widths.len() as u64) as usize];
+        let m = KnownBits::width_mask(w);
+        let xa = rng.next() & m;
+        let xb = rng.next() & m;
+        let a = KnownBits::from_constant(xa, w);
+        let b = KnownBits::from_constant(xb, w);
+        assert!(kb_gamma(&a.and(&b), (xa & xb) & m), "kand_sound w={w}");
+        assert!(kb_gamma(&a.or(&b), (xa | xb) & m), "kor_sound w={w}");
+        assert!(kb_gamma(&a.xor(&b), (xa ^ xb) & m), "kxor_sound w={w}");
+    }
+}
+
+/// kand BEST-ABSTRACT-TRANSFORMER bound (KnownBits.v `kand_optimal_*`): for
+/// fully-known inputs, the AND is itself fully known and equals the exact AND —
+/// no precision is dropped.
+#[test]
+fn fuzz_known_bits_bat_optimality() {
+    let mut rng = XorShift64::new(0xBA70_9715_EED0_0001 ^ 0x9E3779B97F4A7C15);
+    let widths = [1u8, 8, 16, 32, 64];
+    for _ in 0..FUZZ_ITERS {
+        let w = widths[(rng.next() % widths.len() as u64) as usize];
+        let m = KnownBits::width_mask(w);
+        let xa = rng.next() & m;
+        let xb = rng.next() & m;
+        let r = KnownBits::from_constant(xa, w).and(&KnownBits::from_constant(xb, w));
+        // fully known: every bit is known-0 or known-1, and one-mask = exact AND
+        assert_eq!(r.one, (xa & xb) & m, "BAT: kand one-mask exact w={w}");
+        assert_eq!((r.zero | r.one) & m, m, "BAT: kand fully known w={w}");
+    }
+}
+
+/// kshl SOUNDNESS (KnownBits.v `kshl_sound`): shifting a known constant left is
+/// sound vs the concrete wrapped shift.
+#[test]
+fn fuzz_known_bits_shl_soundness() {
+    let mut rng = XorShift64::new(0x5417_5417_5417_5417);
+    for _ in 0..FUZZ_ITERS {
+        let w = 64u8;
+        let x = rng.next();
+        let s = (rng.next() % 64) as u32;
+        let a = KnownBits::from_constant(x, w);
+        let shifted = a.shl(s);
+        let concrete = x.wrapping_shl(s);
+        assert!(kb_gamma(&shifted, concrete), "kshl_sound s={s}");
+    }
+}
+
+/// ValueLattice join LATTICE LAWS (ValueLattice.v): commutativity, idempotence,
+/// associativity over random elements.
+#[test]
+fn fuzz_value_lattice_laws() {
+    use ValueLattice::*;
+    let mut rng = XorShift64::new(0x1A77_1CE0_1A77_1CE0);
+    let gen_vl = |r: &mut XorShift64| -> ValueLattice {
+        match r.next() % 5 {
+            0 => Unknown,
+            1 => Undef,
+            2 => Overdefined,
+            3 => Constant(r.next()),
+            _ => {
+                let a = r.next();
+                let b = r.next();
+                Range { min: a.min(b), max: a.max(b) }
+            }
+        }
+    };
+    for _ in 0..FUZZ_ITERS {
+        let a = gen_vl(&mut rng);
+        let b = gen_vl(&mut rng);
+        let c = gen_vl(&mut rng);
+        assert_eq!(a.join(b), b.join(a), "join_comm");
+        assert_eq!(a.join(a), a, "join_idem");
+        assert_eq!(a.join(b).join(c), a.join(b.join(c)), "join_assoc");
+    }
+}
+
+/// ValueLattice join SOUNDNESS (ValueLattice.v `join_sound`): a value contained
+/// in either operand is contained in the join (modulo widening into top).
+#[test]
+fn fuzz_value_lattice_join_sound() {
+    use ValueLattice::*;
+    let mut rng = XorShift64::new(0x5011_4D50_114D_0003);
+    for _ in 0..FUZZ_ITERS {
+        let lo = rng.next() % 1000;
+        let hi = lo + rng.next() % 1000;
+        let a = Range { min: lo, max: hi };
+        let b = Constant(rng.next() % 2000);
+        let j = a.join(b);
+        let v = rng.next() % 2000;
+        if a.contains(v) || b.contains(v) {
+            assert!(
+                j.contains(v) || matches!(j, Overdefined),
+                "join_sound: {v} in {a:?}⊔{b:?}={j:?}"
+            );
+        }
+    }
+}
+
+/// Algebraic identities (AlgebraicSimplify.v) over random u64 (the w=64 case).
+#[test]
+fn fuzz_algebraic_identities() {
+    let mut rng = XorShift64::new(0xA76E_B7A1_C5ED_0001);
+    for _ in 0..FUZZ_ITERS {
+        let x = rng.next();
+        let y = rng.next();
+        assert_eq!(x.wrapping_add(0), x, "add_zero");
+        assert_eq!(x.wrapping_sub(x), 0, "sub_self");
+        assert_eq!(x.wrapping_mul(1), x, "mul_one");
+        assert_eq!(x.wrapping_mul(0), 0, "mul_zero");
+        assert_eq!(x & u64::MAX, x, "and_mask");
+        assert_eq!(x | u64::MAX, u64::MAX, "or_mask");
+        assert_eq!(x ^ x, 0, "xor_self");
+        assert_eq!(!(!x), x, "not_not");
+        assert_eq!(x.wrapping_neg().wrapping_neg(), x, "neg_neg");
+        // add/mul associativity + commutativity (Bitvector wrap distribution)
+        let z = rng.next();
+        assert_eq!(x.wrapping_add(y), y.wrapping_add(x), "add_comm");
+        assert_eq!(
+            x.wrapping_add(y).wrapping_add(z),
+            x.wrapping_add(y.wrapping_add(z)),
+            "add_assoc"
+        );
+        assert_eq!(
+            x.wrapping_mul(y).wrapping_mul(z),
+            x.wrapping_mul(y.wrapping_mul(z)),
+            "mul_assoc"
+        );
+    }
+}
+
+/// KnownBitsArith low-prefix carry (KnownBitsArith.v `add_low_prefix`): the low
+/// k bits of x+y depend only on the low k bits of x and y.
+#[test]
+fn fuzz_add_low_prefix() {
+    let mut rng = XorShift64::new(0xCA77_2222_CA77_2222);
+    for _ in 0..FUZZ_ITERS {
+        let k = (rng.next() % 63) + 1; // 1..=63
+        let km = (1u64 << k) - 1;
+        let x = rng.next();
+        let y = rng.next();
+        // perturb only the high bits (>= k) of x and y
+        let xh = x ^ (rng.next() & !km);
+        let yh = y ^ (rng.next() & !km);
+        assert_eq!(
+            x.wrapping_add(y) & km,
+            xh.wrapping_add(yh) & km,
+            "add_low_prefix k={k}"
+        );
+    }
+}

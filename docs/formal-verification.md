@@ -57,10 +57,15 @@ Rocq's **Extraction** to compile the verified `KnownBits` transfer cores
 (`crates/unlace-ir/tests/extraction_oracle.rs`) recomputes each case with the
 shipped `KnownBits::{and,or,xor}` and asserts **byte-identical** results.
 
-The reference is therefore the *mechanically extracted proof itself*, not a
-human re-statement — so a divergence between the production Rust and the proved
-definition is caught directly (verified: corrupting one oracle vector makes the
-Rust test fail). The pipeline is:
+`Extract.v` **imports the real `KnownBits.v`** (`coqc -Q ../theories Unlace`)
+and derives the scalar oracle cores from the actual `kand`/`kor`/`kxor`/
+`from_constant` by projecting the `KB` record — plus six `coqc`-checked
+`_equiv` lemmas — so a future change to `KnownBits.v` flows into the oracle and
+any drift fails at extraction time. The reference is therefore the *mechanically
+extracted proof itself*, not a human re-statement, and a divergence between the
+production Rust and the proved definition is caught directly (verified:
+corrupting one oracle vector makes the Rust test fail, and the script is
+**fail-closed** — it propagates the non-zero exit). The pipeline is:
 
 ```
 coqc Extract.v  →  knownbits_oracle.ml   (Coq Extraction)
@@ -98,11 +103,11 @@ everything), so the producer is a sound instance of the proved transfer: every
 "disjoint store preserves the value" holds for exactly the stores the producer
 already skips in `get_clobbering_access`.
 
-**Smallest pin:** a conformance test that, for random `MemoryLocation` pairs,
-asserts `MemoryLocation::must_not_alias` agrees with the Coq byte-range formula
-(`mloc_no_alias`) would mechanically lock this mapping. It is *not* wired this
-round (no producer change), but it is the discrete next step if drift is a
-concern. No refactor of `dse_global`/`dead_store_elim`/`get_clobbering_access`
+**The pin is wired.** `coq_conformance.rs::fuzz_memory_must_not_alias_matches_coq_byte_range`
+asserts, over the fuzz corpus, that `MemoryLocation::must_not_alias` agrees with
+the Coq byte-range formula (`mloc_no_alias`) — mechanically locking this mapping
+(part of the 24/24 conformance suite). It is a pure read-only check: no producer
+code changed. No refactor of `dse_global`/`dead_store_elim`/`get_clobbering_access`
 is warranted — they already implement the proved policy.
 
 ## The gamma / soundness convention

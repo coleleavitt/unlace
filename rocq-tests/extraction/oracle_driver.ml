@@ -48,9 +48,10 @@ let () =
     let ao = O.fc_one  (big_of_unsigned xa) bw in
     let bz = O.fc_zero (big_of_unsigned xb) bw in
     let bo = O.fc_one  (big_of_unsigned xb) bw in
-    (* transfers, straight from the extracted proof *)
-    let and_z = O.kand_zero az bz and and_o = O.kand_one ao bo in
-    let or_z  = O.kor_zero  az bz and or_o  = O.kor_one  ao bo in
+    (* transfers, straight from the extracted proof (cores derived from the
+       real KnownBits.kand/kor/kxor, projected to zero/one masks) *)
+    let and_z = O.kand_zero az ao bz bo bw and and_o = O.kand_one az ao bz bo bw in
+    let or_z  = O.kor_zero  az ao bz bo bw and or_o  = O.kor_one  az ao bz bo bw in
     let xor_z = O.kxor_zero az ao bz bo bw and xor_o = O.kxor_one az ao bz bo bw in
     Printf.fprintf oc "%d %Lu %Lu %s %s %s %s %s %s\n"
       w xa xb

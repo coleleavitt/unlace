@@ -47,12 +47,49 @@ returns. The divergence is which SSA temp receives each DWARF local name
 `b`).
 
 **Verdict: NEEDS-REVIEW → do NOT refresh.** This is not a stale golden; it
-exposes a pre-existing lvar-naming/allocation quality gap. The *expected* golden
-is arguably the better output (it preserves the clean DWARF names `a/b/d/e` on
-the natural slots; the current output scatters them and leaks an anonymous
-`v_36`). Mechanically refreshing would lock in the worse allocation and hide the
-gap — exactly what the repo rules forbid. Left failing as an honest signal; the
-fix is in lvar allocation / DWARF-name binding, not the golden.
+exposes a pre-existing lvar-allocation quality gap. The *expected* golden is the
+better output (it preserves the clean DWARF names `a/b/d/e` on the natural slots;
+the current output scatters them and leaks an anonymous `v_36`). Mechanically
+refreshing would lock in the worse allocation and hide the gap — exactly what the
+repo rules forbid. Left failing as an honest signal.
+
+### Root-cause trace (measured, not inferred)
+
+`UNLACE_VAR_NAMING_TRACE` + reading the binding code locates the divergence
+precisely — and it is **not** the DWARF-name binding:
+
+- `lvar_collect.rs::stack_lvar_name` binds a DWARF name to a slot purely by
+  **stack offset** (`dwarf_local_names.get(&offset)`). That step is already
+  canonical-by-offset: deterministic and order-independent (consistent with
+  `LvarNaming.canonical_name`). It is *not* where the scatter happens.
+- The divergence is **upstream, in stack-slot allocation**: which SSA value
+  lands at which stack offset. The DWARF names attach correctly to whatever
+  value occupies each offset; the values are allocated to different offsets than
+  the golden expects, so `a/b/d/e` end up on different lifetimes.
+
+### Why no producer fix this round (measured blast radius)
+
+`debug_hello` and `debug_structs` currently **pass** and exercise the same
+DWARF-driven stack-allocation path. A change to the allocator to match
+`debug_calls`'s expected offsets risks regressing those two passing goldens (the
+t61 emergent-pipeline trap the repo CLAUDE.md documents). The goal explicitly
+authorizes the "record a precise measured finding + the canonicity proof as
+grounding" outcome when a fix risks regression; that is the outcome here.
+
+### Proof grounding (and an honest scope note)
+
+`rocq-tests/theories/LvarNaming.v` + `NameInversion.v` prove the *general*
+principle this bug violates: recovered names should be a renaming-invariant
+function of the live-range structure (`canonical_name_perm_invariant`,
+`canonical_name_renumber_invariant`), and an allocation-order-dependent namer is
+provably **not** a section of name-erasure (`order_index_not_canonical`).
+Scope caveat: those theories model the *structural-rank* canonical scheme (name =
+rank of def-point); the shipping recovery additionally prefers actual DWARF
+source names where present, so the proof grounds the *invariance principle* the
+fix must satisfy, not the exact DWARF-preferring namer. The concrete fix —
+making stack-slot allocation offset-canonical so DWARF names land on stable
+lifetimes — is the documented next step, gated on not regressing
+`debug_hello`/`debug_structs`.
 
 ## Refresh actions taken
 

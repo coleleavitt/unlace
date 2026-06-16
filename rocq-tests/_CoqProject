@@ -37,3 +37,4 @@ theories/StackFrame.v
 theories/StructFieldRecovery.v
 theories/FlagConditions.v
 theories/LvarNaming.v
+theories/NameInversion.v

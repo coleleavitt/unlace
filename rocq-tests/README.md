@@ -61,6 +61,8 @@ guarantees hold for the actual lattice, not just an abstract model:
 | `theories/InterProc.v` | inter-procedural: context monotonicity + global fixpoint uniqueness, on `ValueLattice`. |
 | `theories/DataLayout.v` | type-layout invariants: size ≥ 0, alignment a positive power of two, array size = stride·len, struct size bounds every member. |
 | `theories/RegAlias.v` | sub-register aliasing laws + register write-kill frame (disjoint preserved, overlap clobbered). |
+| `theories/Sccs.v` | call-graph SCC partition: mutual reachability is an equivalence; classes are total + disjoint; SCC-DAG acyclic. |
+| `theories/DominatorTree.v` | dominance **constructed from CFG paths** — poset laws + entry-dominates-all + idom-uniqueness derived (discharges `SsaDominance`'s assumed order). |
 
 The conformance harness (`crates/unlace-ir/tests/coq_conformance.rs`) also runs
 a deterministic property fuzzer (~14M checks) asserting the proven invariants in

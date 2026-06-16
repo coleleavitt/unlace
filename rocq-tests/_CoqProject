@@ -28,3 +28,5 @@ theories/TInfoNested.v
 theories/InterProc.v
 theories/DataLayout.v
 theories/RegAlias.v
+theories/Sccs.v
+theories/DominatorTree.v

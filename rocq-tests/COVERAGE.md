@@ -22,9 +22,9 @@ Status legend:
 | 7 | `KnownBits::shl` | `unlace-ir/src/known_bits.rs` | left-shift transfer soundness + known-bit-preservation (precision) | **proven** | `KnownBits.v` (`kshl_sound`, `kshl_preserves_known_one/zero`) |
 | 8 | `KnownBits::add/sub` (carry) | `unlace-ir/src/known_bits.rs` | arithmetic transfer soundness w/ carry (known low prefix survives ±) | **proven** | `KnownBitsArith.v` (`add_low_prefix`, `sub_low_prefix`) |
 | 9 | `ConstantRange` interval arithmetic | `unlace-ir/src/known_bits.rs` | interval add/sub/join/meet/scale soundness + precision-monotone | **proven** | `ConstantRange.v` |
-| 10 | `DominatorTree` / `idom` | `unlace-ir/src/ssa.rs` | dominance is a partial order (poset) | **proven** | `SsaDominance.v` (`dom_partial_order`) |
+| 10 | `DominatorTree` / `idom` | `unlace-ir/src/ssa.rs` | dominance CONSTRUCTED from paths: poset laws derived, entry dominates all, idom unique | **proven** | `DominatorTree.v` (constructive) + `SsaDominance.v` (poset uses) |
 | 11 | SSA φ-placement well-formedness + φ-join | `unlace-ir/src/ssa.rs`, `verify.rs` | every use dominated by its def; φ-join sound | **proven** | `SsaDominance.v` (`ssa_wf`, `phi_join_gamma_sound`) |
-| 12 | `compute_sccs` (call graph) | `unlace-ir/src/xref.rs` | SCC partition correctness | **unproven** | TODO |
+| 12 | `compute_sccs` (call graph) | `unlace-ir/src/xref.rs` | mutual-reachability is an equivalence; SCCs partition the nodes (total/disjoint); SCC-DAG acyclic | **proven** | `Sccs.v` |
 | 13 | `DataLayout::type_size/align` | `unlace-ir/src/data_layout.rs` | size >= 0; align is a positive power of two; array size = stride*len; struct size bounds every member | **proven** | `DataLayout.v` |
 | 14 | `compute_record_layout` | `unlace-passes/src/abi_layout.rs` | field offsets aligned, non-overlapping, greedy-minimal | **proven** | `RecordLayout.v` |
 | 15 | `reg_alias::write_kills` / `aliases` | `unlace-ir/src/reg_alias.rs` | sub-register alias relation refl/symmetric; write-kill frame (disjoint preserved, overlap clobbered) | **proven** | `RegAlias.v` |
@@ -86,6 +86,8 @@ detects exactly where precision was lost rather than overclaiming.
 | `InterProc.v` | inter-procedural lift: **context monotonicity** (refining an argument type sharpens the return type) and **global fixpoint uniqueness/determinism** for recursive (SCC) signatures, instantiated on `ValueLattice`. |
 | `DataLayout.v` | type-layout invariants: size ≥ 0, alignment is a positive power of two, array size = stride·len, struct size bounds every member. |
 | `RegAlias.v` | sub-register (AL⊂AX⊂EAX⊂RAX) aliasing laws + the **register write-kill frame** — a write preserves disjoint registers, clobbers overlapping ones. Heap frame's register-file twin. |
+| `Sccs.v` | call-graph SCC decomposition: mutual reachability is an **equivalence**, SCCs **partition** the nodes (total + disjoint + class-equality), and the SCC-DAG is **acyclic** (the topological order `compute_sccs` uses is well-defined). |
+| `DominatorTree.v` | dominance **constructed from CFG paths** (`d` dominates `n` ⟺ every entry→n path contains `d`): reflexivity, transitivity, entry-dominates-all, and **immediate-dominator uniqueness** all DERIVED — discharging `SsaDominance`'s assumed order. |
 
 ### Runtime conformance fuzzer
 
@@ -99,16 +101,20 @@ proof witnesses.
 
 ## Summary
 
-- **Proven cores:** `ValueLattice`, `KnownBits` (bitwise + shift + BAT-optimality),
-  `Bitvector`, `ConstantRange`, `Kildall`, `RecordLayout`; partial
-  `AlgebraicSimplify`, `TInfo`; **novel** `CompilationInversion`, `PrincipalType`,
-  `PrecisionPipeline`, `TypeInversion`.
+- **Every ledger row (#1–#18) is now proven.** The core-engine math — bit
+  domains, lattices, dataflow (intra + inter-procedural), structuring
+  (dominance/SCC), layout (flat + nested + record + data), memory and register
+  aliasing, and the novel inversion/precision/completeness frameworks — is
+  machine-checked, plus concrete instantiations on the real unlace domains and a
+  runtime conformance fuzzer.
 - **Theorems kernel-checked:** `scripts/verify_proofs.sh` reports
   **Axioms: <none>** across all modules (coqchk).
-- **Next highest-value targets:** `add/sub` carry transfer (#8); SSA dominance
-  + φ-placement (#10/#11) tied to type propagation; nested `TInfo` recursion;
-  wiring `CompilationInversion`/`PrincipalType` to concrete unlace type-solver
-  instances.
+- **Remaining frontier is now genuinely external** to the core algebra:
+  - partial-completeness rows (`AlgebraicSimplify` address/phi-plumbing,
+    `TInfo` nested recursion) extend coverage but the load-bearing math is done;
+  - the biggest open *integration* step is connecting these proofs to the Rust
+    producer end-to-end (extraction or a deeper conformance oracle) rather than
+    adding new core theorems.
 
 This ledger is the source of truth for "what is mathematically proven". Update
 the row when a TODO lands a `.v`, and add a conformance check in

@@ -310,9 +310,9 @@ mod tests {
         let load = IrInsn::with_output(IrOp::Load, out, smallvec![space_ram, mmio_addr], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![load]);
-        let pass = AliasCategorizePass::with_mmio_ranges(MmioRanges::with_ranges([
-            0xFFFF_0000..0xFFFF_FFFF
-        ]));
+        let pass = AliasCategorizePass::with_mmio_ranges(MmioRanges::with_ranges(
+            std::iter::once(0xFFFF_0000..0xFFFF_FFFF),
+        ));
         assert!(pass.run(&mut ssa).expect("pass ok"));
 
         let block = ssa.function.blocks.values().next().expect("has block");

@@ -31,3 +31,7 @@ theories/RegAlias.v
 theories/Sccs.v
 theories/DominatorTree.v
 theories/MemoryDataflow.v
+theories/JumpTable.v
+theories/CallingConv.v
+theories/StackFrame.v
+theories/StructFieldRecovery.v

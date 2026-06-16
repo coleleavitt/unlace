@@ -31,6 +31,22 @@ use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 const MAX_RESOLVE_DEPTH: u32 = 16;
 
+/// Fusion-sweep decision: does a stack access at `offset` land *strictly inside*
+/// the previously-kept slot at `prev_off` of size `prev_size` (so it should be
+/// folded into that slot rather than starting a new one)?
+///
+/// This is the exact predicate the ascending fusion sweep in
+/// [`recover_stack_frame`] applies. It is factored out as a pure function so the
+/// formal-verification harness can pin it to the disjointness proof in
+/// `rocq-tests/theories/StackFrame.v` (`folds_into` / `keep_guard_disjoint`):
+/// under ascending offsets, the *negation* of this predicate guarantees the new
+/// slot begins at or after the previous slot's end, which is what makes the
+/// recovered locals pairwise byte-disjoint. Behavior is unchanged — the sweep
+/// calls this instead of an inline expression.
+pub fn stack_slot_folds_into(offset: i64, prev_off: i64, prev_size: i64) -> bool {
+    offset - prev_off < prev_size && offset > prev_off
+}
+
 /// Resolve the [`StackSpec`] this pass should consult for the function's
 /// architecture. Unknown / unsupported arches fall back to the x86_64 spec
 /// — the historical default — so unit-test fixtures that construct an
@@ -222,7 +238,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
         if let Some(prev_off) = last_kept {
             let prev = locals.get_mut(&prev_off).expect("kept slot present");
             let prev_max = prev.size as i64;
-            if offset - prev_off < prev_max && offset > prev_off {
+            if stack_slot_folds_into(offset, prev_off, prev_max) {
                 // Partial access *inside* the previous slot — fold widths.
                 for w in &widths {
                     if !prev.access_widths.contains(w) {

@@ -522,6 +522,18 @@ fn score_convention(read_before_write: &BTreeSet<u64>) -> CallingConvention {
     CallingConvention::Unknown
 }
 
+/// Classify a calling convention from the set of argument-register offsets read
+/// before being written (the `score_convention` decision procedure), exposed as
+/// a pure, side-effect-free function so the formal-verification harness can pin
+/// it to the proved spec in `rocq-tests/theories/CallingConv.v`
+/// (`score_convention` there mirrors this arm-for-arm: separating-witness
+/// classification over the aliased x86/AArch64 register-offset space). It does
+/// not change any classification behavior — it is the same `score_convention`,
+/// just callable from a conformance test.
+pub fn classify_calling_convention(read_offsets: &BTreeSet<u64>) -> CallingConvention {
+    score_convention(read_offsets)
+}
+
 fn score_convention_for_arch(
     func: &SsaFunction,
     read_before_write: &BTreeSet<u64>,

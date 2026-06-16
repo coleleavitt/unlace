@@ -110,6 +110,18 @@ pub fn recover_structs(func: &SsaFunction) -> BTreeMap<SsaVarnode, InferredStruc
         .collect()
 }
 
+/// Recompose an array-of-structs element-field byte address from its decomposed
+/// parts: `addr = base + stride*index + field_offset`. This is the inverse of
+/// the `addr = base + stride*iv + offset` factoring [`decompose_address`]
+/// detects, and the exact tiling map proved sound (injective / uniquely
+/// routable) in `rocq-tests/theories/StructFieldRecovery.v`. Exposed as a pure
+/// function so the conformance harness can pin the tiling arithmetic to that
+/// proof. Uses wrapping arithmetic to match the IR's modular address model.
+pub fn struct_tile_address(base: u64, stride: u64, index: u64, field_offset: u64) -> u64 {
+    base.wrapping_add(stride.wrapping_mul(index))
+        .wrapping_add(field_offset)
+}
+
 /// Decomposed address expression: `addr = base_sv + stride * iv + offset`.
 ///
 /// Returned by [`decompose_address`] when the access matches the

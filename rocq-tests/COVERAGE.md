@@ -59,6 +59,21 @@ turning "provable in principle" into "proved for unlace's real value domain":
 | `PrincipalTypeValueLattice.v` | value recovery over `ValueLattice` has a **unique principal solution**, **never excludes the truth**, and **sharpens monotonically** under added witnesses — by instantiating `PrincipalType` on the (correctly dualized) refinement order. |
 | `InversionInstances.v` | concrete `recovery_sound` + `recovery_complete` (the exact-inversion endpoint) for `ValueLattice`, and **end-to-end precision monotonicity** of a real pipeline of fact-incorporation (`join_with`) passes — instantiating `CompilationInversion` + `PrecisionPipeline`. |
 
+### Lossy compilation + multi-domain grounding
+
+The identity instance above is the *exact-recovery endpoint*. These modules
+close the honest frontier: a **genuinely lossy** lowering (real compilation
+erases information) and extension to the **KnownBits / ConstantRange / TInfo**
+domains. Crucially they prove *both* that soundness survives loss *and* that
+completeness provably fails — with a localized witness — so the framework
+detects exactly where precision was lost rather than overclaiming.
+
+| Module | What is proven on real lossy/​multi-domain code |
+|--------|--------------------------------------------------|
+| `LossyInversion.v` | KnownBits width-erasure lowering (keep width, drop all bits): recovery **stays sound** (`unknown` never lies) yet **completeness provably fails** at `from_constant 5 8`, with value `2` as the localized loss witness. |
+| `ConstantRangeInstances.v` | real interval-narrowing pipeline (`rmeet_with` passes) is **precision-monotone AND reductive** (only tightens); range recovery has a **unique principal (tightest) range** and never excludes the truth. |
+| `TInfoInversion.v` | struct-field recovery as lossy offset inversion: `best_fit`-based **recovery soundness** (recovered field contains the offset, tightest fit) + **incompleteness under overlap** (two fields share an offset ⇒ lowering is non-injective, witnessed). |
+
 ## Summary
 
 - **Proven cores:** `ValueLattice`, `KnownBits` (bitwise + shift + BAT-optimality),

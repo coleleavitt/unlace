@@ -45,6 +45,9 @@ guarantees hold for the actual lattice, not just an abstract model:
 | `theories/KildallValueLattice.v` | unlace's value-propagation dataflow is monotone, fixpoint-**unique / order-independent** (deterministic). |
 | `theories/PrincipalTypeValueLattice.v` | value recovery has a **unique principal solution**, never excludes the truth, sharpens monotonically under witnesses. |
 | `theories/InversionInstances.v` | concrete `recovery_sound` + `recovery_complete` and **end-to-end precision monotonicity** of a real `join_with`-pass pipeline. |
+| `theories/LossyInversion.v` | **genuinely lossy** KnownBits width-erasure: recovery stays sound, completeness provably fails, with a localized loss witness. |
+| `theories/ConstantRangeInstances.v` | real interval-narrowing pipeline is precision-monotone + reductive; range recovery has a unique tightest principal. |
+| `theories/TInfoInversion.v` | struct-field recovery as lossy offset inversion: `best_fit` soundness + incompleteness-under-overlap witness (lowering non-injective). |
 
 ## Build
 

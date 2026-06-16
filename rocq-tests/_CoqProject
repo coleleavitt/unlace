@@ -17,3 +17,6 @@ theories/PrecisionPipeline.v
 theories/KildallValueLattice.v
 theories/PrincipalTypeValueLattice.v
 theories/InversionInstances.v
+theories/LossyInversion.v
+theories/ConstantRangeInstances.v
+theories/TInfoInversion.v

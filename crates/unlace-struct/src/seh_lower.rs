@@ -459,10 +459,7 @@ mod tests {
                 // TryFinally to have been folded in.
                 let inner = try_body
                     .iter()
-                    .find_map(|n| match n {
-                        HirNode::TryFinally { .. } => Some(n),
-                        _ => None,
-                    })
+                    .find(|n| matches!(n, HirNode::TryFinally { .. }))
                     .expect("nested TryFinally should be lowered inside outer try_body");
                 if let HirNode::TryFinally {
                     try_body: itb,

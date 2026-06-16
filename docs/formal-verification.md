@@ -68,7 +68,7 @@ counterpart instead of a prose claim. This table is the status.
 | `DominatorTree` poset/idom | `ssa.rs::DominatorTree` via `build_ssa` | **conformance** (`dominator_conformance.rs`, 4K random CFGs through the real pipeline) |
 | `DataLayout` size/align | `data_layout.rs::{type_size,type_align}` | **conformance** (`layout_conformance.rs`, 300K nested types) |
 | `RecordLayout` aligned/disjoint | (no separate shipping fn; the offset/align invariants are exercised via `DataLayout` above) | spec + DataLayout binding |
-| `Sccs` partition | `unlace-struct/src/irreducible.rs::tarjan_scc` (private; irreducible-loop structuring) + `passes/interproc_fixpoint.rs` | spec-only at the Rust boundary (routine is crate-private; partition proved in `Sccs.v`) |
+| `Sccs` partition | `unlace-struct/src/irreducible.rs::scc_partition` (public accessor over the shipping `tarjan_scc`) | **conformance** (`scc_conformance.rs`, 3K random CFGs through `build_ssa`: total + disjoint + within-mutual + across-acyclic, independent BFS oracle) |
 | `Kildall` / `InterProc` fixpoint | `passes/interproc_fixpoint.rs` worklist | spec-level (lattice laws bound via `ValueLattice`; the worklist driver is spec-only) |
 | `AlgebraicSimplify` rewrite *algebra* | `passes/algebraic_simplify.rs::simplify_*` (private, SSA-state-bound) | **algebra value-bound** (`coq_conformance.rs::fuzz_algebraic_identities` pins `x+0`, `x-x`, `x*1`, `x^x`, `~~x`, assoc/comm over raw `u64`); the per-`IrInsn` rewrite plumbing is spec-only |
 | `CompilationInversion` / `PrincipalType` / `PrecisionPipeline` | abstract frameworks (instantiated on `ValueLattice` in `*Instances.v`) | spec-only (no single Rust fn — they frame the whole engine) |
@@ -85,17 +85,30 @@ These are deliberate stops, not unfinished TODOs. A conformance binding is only
 meaningful when it pins the **shipping** Rust through a stable, side-effect-free
 boundary. The remaining cores fail that test for principled reasons:
 
-- **`tarjan_scc`** is a crate-private `fn` in `unlace-struct` (irreducible-loop
-  structuring). Binding it would require either making it `pub` (a producer API
-  change this round forbids) or re-implementing Tarjan inside the test — which
-  would bind a *test-local* SCC, not the shipping one. The partition property
-  itself is fully proven in `Sccs.v`; what's unbound is the specific Rust
-  routine, and faking that link would be worse than labeling it.
+- **`tarjan_scc`** — now BOUND. A thin public accessor `scc_partition` was added
+  over the existing private `tarjan_scc` (no change to the structuring logic),
+  and `scc_conformance.rs` pins the shipping routine to `Sccs.v`'s partition laws
+  (total + disjoint + within-SCC mutual reachability + across-SCC acyclicity),
+  using an independent BFS reachability oracle so the test cannot be tautological.
+  This is the worked example of the "expose a pure accessor → drop in a
+  conformance test" path.
 - **`AlgebraicSimplify` rewrites** simplify `IrInsn`s against live SSA state via
-  private helpers; there is no pure per-op entry point. The *algebra* they rely
-  on (`x+0=x`, …) is already value-bound by `fuzz_algebraic_identities`, so the
-  only unbound part is IR plumbing that a value-level test cannot reach without
-  heavy, fragile SSA fixtures.
+  private helpers — *every* rule helper threads `(func: &SsaFunction, bid,
+  insn_idx, insn)` to emit a `Replacement` (which SSA input to copy from, with
+  version tracking). There is no pure `IrOp × const × const → result` surface;
+  the rule-firing decision is inseparable from the SSA varnode mapping.
+  Investigated (and rejected) the two candidate pure accessors:
+  (a) the *algebra* (`x+0=x`, `x-x=0`, `x*1=x`, `x^x=0`, `~~x=x`, assoc/comm) is
+  already value-bound by `coq_conformance.rs::fuzz_algebraic_identities`;
+  (b) the width-mask helper `mask_for_size` (used by the all-ones rules) is the
+  byte-indexed twin of `KnownBits::width_mask` — both are the Coq
+  `Bitvector.mask` — and `width_mask` is already conformance-bound, so binding
+  `mask_for_size` would be redundant ceremony, not new assurance.
+  Verdict: the only unbound part is IR plumbing that a value-level test cannot
+  reach without heavy, fragile SSA fixtures or a `try_simplify` refactor — both
+  out of scope. (For comparison, `tarjan_scc` *was* bindable because it exposes a
+  pure `CFG → partition` boundary; `scc_partition` + `scc_conformance.rs` now
+  pin it.)
 - **`Kildall`/`InterProc`/`CompilationInversion`/`PrincipalType`/`PrecisionPipeline`**
   are whole-engine framings, not single functions; their lattice obligations are
   discharged on `ValueLattice` (bound by `coq_conformance.rs`), and the drivers

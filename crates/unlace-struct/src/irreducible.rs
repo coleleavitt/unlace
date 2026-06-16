@@ -115,6 +115,22 @@ fn collect_entry_blocks(
 // Tarjan's SCC
 // ---------------------------------------------------------------------------
 
+/// Strongly-connected-component partition of a CFG's real (non-synthetic)
+/// blocks, computed by the shipping Tarjan routine.
+///
+/// This is a thin, side-effect-free accessor over [`tarjan_scc`] using the same
+/// skip set the structurer uses ({exit, unknown} sinks). It exists so the
+/// formal-verification conformance harness can pin the production SCC code to
+/// the partition properties proved in `rocq-tests/theories/Sccs.v`
+/// (mutual-reachability is an equivalence ⇒ the SCCs are a total, disjoint
+/// partition). It does not change any structuring behavior.
+pub fn scc_partition(cfg: &ControlFlowGraph) -> Vec<BTreeSet<BlockId>> {
+    let synthetic: BTreeSet<BlockId> = [cfg.exit_block(), cfg.unknown_block()]
+        .into_iter()
+        .collect();
+    tarjan_scc(cfg, &synthetic)
+}
+
 /// Tarjan's strongly-connected-components algorithm.
 ///
 /// Returns SCCs in reverse-topological order. Each SCC is a [`BTreeSet`] for

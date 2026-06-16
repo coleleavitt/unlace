@@ -24,7 +24,7 @@ Status legend:
 | 9 | `ConstantRange` interval arithmetic | `unlace-ir/src/known_bits.rs` | interval add/sub/join/meet/scale soundness + precision-monotone | **proven** | `ConstantRange.v` |
 | 10 | `DominatorTree` / `idom` | `unlace-ir/src/ssa.rs` | dominance CONSTRUCTED from paths: poset laws derived, entry dominates all, idom unique | **proven** | `DominatorTree.v` (constructive) + `SsaDominance.v` (poset uses) |
 | 11 | SSA φ-placement well-formedness + φ-join | `unlace-ir/src/ssa.rs`, `verify.rs` | every use dominated by its def; φ-join sound | **proven** | `SsaDominance.v` (`ssa_wf`, `phi_join_gamma_sound`) |
-| 12 | `compute_sccs` (call graph) | `unlace-ir/src/xref.rs` | mutual-reachability is an equivalence; SCCs partition the nodes (total/disjoint); SCC-DAG acyclic | **proven** | `Sccs.v` |
+| 12 | SCC partition | `unlace-struct/src/irreducible.rs::scc_partition` (shipping Tarjan) | mutual-reachability is an equivalence; SCCs partition the nodes (total/disjoint); SCC-DAG acyclic | **proven + Rust-bound** (`Sccs.v`; pinned by `scc_conformance.rs`) | `Sccs.v` |
 | 13 | `DataLayout::type_size/align` | `unlace-ir/src/data_layout.rs` | size >= 0; align is a positive power of two; array size = stride*len; struct size bounds every member | **proven** | `DataLayout.v` |
 | 14 | `compute_record_layout` | `unlace-passes/src/abi_layout.rs` | field offsets aligned, non-overlapping, greedy-minimal | **proven** | `RecordLayout.v` |
 | 15 | `reg_alias::write_kills` / `aliases` | `unlace-ir/src/reg_alias.rs` | sub-register alias relation refl/symmetric; write-kill frame (disjoint preserved, overlap clobbered) | **proven** | `RegAlias.v` |
@@ -121,7 +121,8 @@ for the full core→Rust-location→binding table. Layers:
 - **Bound to shipping Rust + runs end-to-end.** Every public proven core is now
   tied to its live Rust counterpart by a machine-checked conformance test (see
   the binding-strength ledger in `docs/formal-verification.md`), not just a
-  prose claim; crate-private routines (`tarjan_scc`) and whole-engine framings
+  prose claim (the shipping Tarjan SCC is now bound via `scc_partition` +
+  `scc_conformance.rs`); whole-engine framings
   are honestly marked spec-only. The decompiler itself ships and runs —
   `unlace decompile <binary>` emits IDA-style C end-to-end.
 - **Remaining frontier** is the one remaining partial row

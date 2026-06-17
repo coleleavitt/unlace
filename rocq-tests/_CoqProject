@@ -40,3 +40,4 @@ theories/LvarNaming.v
 theories/NameInversion.v
 theories/AssignNames.v
 theories/FlagReconstruct.v
+theories/CopyPropagation.v

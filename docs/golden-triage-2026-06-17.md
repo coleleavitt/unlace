@@ -179,3 +179,25 @@ are cases where the flag IS read later (correctly kept).
 Measured: medium.elf `__OFSUB__/__OFADD__` macros **87 → 25**; harness **32/32**
 (medium golden refreshed); parity 83.0%; clippy clean; c_printer 591/591 units;
 38 proofs `Axioms:<none>`.
+
+### Parity-flag (PF) dead-store elimination (follow-up)
+
+Same shape, extended to the parity flag. IDA emits PF as
+`c11 = !(__builtin_popcount(LOBYTE(x)) & 1)` per `cmp`/arithmetic op — pure junk
+unless a `jp`/`jnp` consumes it (which is rare). These are register-reused flag
+stores like OF: in `main`, every `c11` reference is a write or `c11 = c11`
+self-assignment (zero rvalue reads), so all PF stores there are dead.
+
+`segment_rhs_is_overflow_flag_macro` was generalized to
+`segment_rhs_is_pure_flag_store`, now also matching the
+`!(__builtin_popcount(<balanced>) & 1)` idiom (consuming the whole RHS; trailing
+consumers / popcount-as-value rejected). PF has no reconstruction theorem (it is
+not a comparison flag), so its soundness is purely standard dead-store
+elimination (overwrite-before-read).
+
+Measured: medium.elf PF `__builtin_popcount` **127 → 73** (−54), 37 fewer lines.
+medium.c golden refreshed — verified all 77 changed lines are dead PF-store
+deletions plus the dead-decl cascade (3 now-unused `// temp`/`// PF` decls whose
+sole use was a removed PF line); no data, comparison, or control flow lost. The
+remaining 73 PF stores are genuinely read later (correctly kept). Harness 32/32;
+parity 83.0%; clippy clean; c_printer 592/592 units.

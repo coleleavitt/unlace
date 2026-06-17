@@ -18811,17 +18811,56 @@ fn output_has_plain_temp_decl(output: &str) -> bool {
 }
 
 /// Does this `lhs = rhs` segment's right-hand side consist of a pure EFLAGS
-/// overflow macro (`__OFSUB__(...)` / `__OFADD__(...)`)? Such a store is a flag
-/// computation with no data semantics, so an overwrite-before-read makes it a
-/// dead store the pruner may drop (soundness: FlagReconstruct.v `of_elim_sound`).
-/// Conservative: requires the RHS to be EXACTLY one overflow macro call (no
-/// surrounding arithmetic / XOR consumer), so a flag value actually combined
-/// into a condition is never matched here.
-fn segment_rhs_is_overflow_flag_macro(segment: &str) -> bool {
+/// flag computation with no data semantics — either an overflow macro
+/// (`__OFSUB__(...)` / `__OFADD__(...)`) or the parity-flag idiom
+/// (`!(__builtin_popcount(...) & 1)`)? Such a store sets a single EFLAGS bit;
+/// when the flag register is overwritten before any rvalue read, the
+/// intermediate value is never observed, so the store is dead and the pruner may
+/// drop it.
+///
+/// Soundness: for both kinds the removal is justified by standard dead-store
+/// elimination — a side-effect-free store with no rvalue read before its
+/// overwrite is semantics-preserving. For the OF macros there is additionally a
+/// machine-checked reconstruction certificate (`FlagReconstruct.v`
+/// `of_elim_sound`: OF is recoverable from SF + the recovered comparison), which
+/// would license removal even WITH a consumer; the parity flag (PF) has no such
+/// reconstruction and rests purely on the no-consumer dead-store analysis. The
+/// pruner only relaxes the reassign-keeps-alive rule here (a genuine later
+/// rvalue read still pins the store), so this never deletes a live flag value.
+///
+/// Conservative: requires the RHS to be EXACTLY one flag expression (no
+/// surrounding arithmetic / XOR consumer), so a flag combined into a larger
+/// expression is never matched.
+fn segment_rhs_is_pure_flag_store(segment: &str) -> bool {
     let Some(eq) = segment.find('=') else {
         return false;
     };
     let rhs = segment[eq + 1..].trim().trim_end_matches(';').trim();
+
+    // Parity flag: `!(__builtin_popcount(<balanced>) & 1)` consuming the whole
+    // RHS. IDA emits this for PF; it is junk unless a `jp`/`jnp` consumes it.
+    if let Some(inner) = rhs.strip_prefix("!(__builtin_popcount(") {
+        // Find the close paren matching the popcount argument list, then require
+        // exactly ` & 1)` to follow and end the RHS.
+        let mut depth = 1usize;
+        let bytes = inner.as_bytes();
+        for (i, &b) in bytes.iter().enumerate() {
+            match b {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &inner[i + 1..] == " & 1)";
+                    }
+                }
+                _ => {}
+            }
+        }
+        return false;
+    }
+
+    // Overflow macros: `__OFSUB__(<balanced>)` / `__OFADD__(<balanced>)`
+    // consuming the whole RHS.
     for macro_name in ["__OFSUB__(", "__OFADD__("] {
         let Some(inner) = rhs.strip_prefix(macro_name) else {
             continue;
@@ -18895,19 +18934,20 @@ fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
                 // earlier write alive. Real register-commented values (`// r10d`,
                 // `// reg?`, etc.) keep the conservative live-out behavior.
                 //
-                // EXCEPTION: a store whose RHS is a pure EFLAGS overflow macro
-                // (`__OFSUB__`/`__OFADD__`) is a flag computation, not data. When
-                // such a flag register is overwritten before any rvalue read, the
-                // intermediate value is never observed, so a later reassignment
-                // must NOT keep it alive — exactly the medium.elf `c14 =
-                // __OFSUB__(...)` dead-store pattern. Soundness is grounded in
-                // rocq-tests/theories/FlagReconstruct.v (`of_elim_sound`): the OF
-                // flag is reconstructible from SF and the recovered comparison,
-                // so dropping a never-read OF store preserves semantics. We only
-                // relax the reassign-keeps-alive rule (a genuine later rvalue
-                // read still pins the store), so this can never delete a live
-                // flag value.
-                let rhs_is_flag_macro = segment_rhs_is_overflow_flag_macro(segment);
+                // EXCEPTION: a store whose RHS is a pure EFLAGS flag computation
+                // — an overflow macro (`__OFSUB__`/`__OFADD__`) or the parity
+                // idiom (`!(__builtin_popcount(...) & 1)`) — is flag, not data.
+                // When such a flag register is overwritten before any rvalue
+                // read, the intermediate value is never observed, so a later
+                // reassignment must NOT keep it alive — the medium.elf `c14 =
+                // __OFSUB__(...)` / `c11 = !(__builtin_popcount(...) & 1)`
+                // dead-store pattern. Soundness: standard dead-store elimination
+                // (no rvalue read before overwrite); the OF macros additionally
+                // carry the FlagReconstruct.v `of_elim_sound` certificate. We
+                // only relax the reassign-keeps-alive rule (a genuine later
+                // rvalue read still pins the store), so this can never delete a
+                // live flag value.
+                let rhs_is_flag_macro = segment_rhs_is_pure_flag_store(segment);
                 let treat_reassign_as_use = !is_cond_family && !is_temp && !rhs_is_flag_macro;
                 let is_real_use = |later: &str| {
                     if treat_reassign_as_use {
@@ -20603,29 +20643,42 @@ mod tests {
     }
 
     #[test]
-    fn test_segment_rhs_is_overflow_flag_macro() {
+    fn test_segment_rhs_is_pure_flag_store() {
         // Pure single overflow-macro stores: these ARE flag computations.
-        assert!(super::segment_rhs_is_overflow_flag_macro("c14 = __OFSUB__(c2, 1)"));
-        assert!(super::segment_rhs_is_overflow_flag_macro("c14 = __OFADD__(a1, 4LL);"));
-        assert!(super::segment_rhs_is_overflow_flag_macro(
+        assert!(super::segment_rhs_is_pure_flag_store("c14 = __OFSUB__(c2, 1)"));
+        assert!(super::segment_rhs_is_pure_flag_store("c14 = __OFADD__(a1, 4LL);"));
+        assert!(super::segment_rhs_is_pure_flag_store(
             "c14 = __OFSUB__((uintptr_t)(buf + 64), a1)"
         ));
+        // Parity-flag idiom (PF): these ARE flag computations too.
+        assert!(super::segment_rhs_is_pure_flag_store(
+            "c11 = !(__builtin_popcount(LOBYTE(c2 - 1)) & 1)"
+        ));
+        assert!(super::segment_rhs_is_pure_flag_store(
+            "c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf + 64) - v151)) & 1);"
+        ));
         // Compound RHS must NOT match (would wrongly drop a data-bearing store):
-        assert!(!super::segment_rhs_is_overflow_flag_macro(
+        assert!(!super::segment_rhs_is_pure_flag_store(
             "c14 = __OFSUB__(a, b) + __OFADD__(c, d)"
         ));
         // XOR consumer (signed-lt idiom) must NOT match — the flag feeds a cond:
-        assert!(!super::segment_rhs_is_overflow_flag_macro(
+        assert!(!super::segment_rhs_is_pure_flag_store(
             "cond = LOBYTE(a < b) ^ __OFSUB__(a, b)"
         ));
-        assert!(!super::segment_rhs_is_overflow_flag_macro("c14 = __OFSUB__(a, b) ^ c13"));
+        assert!(!super::segment_rhs_is_pure_flag_store("c14 = __OFSUB__(a, b) ^ c13"));
         // Trailing arithmetic after the macro must NOT match:
-        assert!(!super::segment_rhs_is_overflow_flag_macro("c14 = __OFSUB__(a, b) + 1"));
+        assert!(!super::segment_rhs_is_pure_flag_store("c14 = __OFSUB__(a, b) + 1"));
+        // Parity idiom with a trailing consumer must NOT match:
+        assert!(!super::segment_rhs_is_pure_flag_store(
+            "c11 = !(__builtin_popcount(LOBYTE(x)) & 1) ^ c13"
+        ));
+        // popcount used as a real value (not the parity idiom) must NOT match:
+        assert!(!super::segment_rhs_is_pure_flag_store("n = __builtin_popcount(x)"));
         // Non-flag RHS: not a flag store.
-        assert!(!super::segment_rhs_is_overflow_flag_macro("c10 = (_DWORD)c2 < (_DWORD)1"));
-        assert!(!super::segment_rhs_is_overflow_flag_macro("v13 = add(x, 0xaLL)"));
+        assert!(!super::segment_rhs_is_pure_flag_store("c10 = (_DWORD)c2 < (_DWORD)1"));
+        assert!(!super::segment_rhs_is_pure_flag_store("v13 = add(x, 0xaLL)"));
         // No '=' at all.
-        assert!(!super::segment_rhs_is_overflow_flag_macro("return c14"));
+        assert!(!super::segment_rhs_is_pure_flag_store("return c14"));
     }
 
     #[test]

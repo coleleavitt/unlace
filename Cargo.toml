@@ -20,6 +20,7 @@ object = "0.39"
 # Architecture decoders
 iced-x86 = "1.21"
 capstone = "0.14"
+capstone-sys = "0.18"
 # Debug info
 gimli = "0.33"
 addr2line = "0.26"
@@ -64,6 +65,7 @@ libloading = "0.8"
 unlace-ir = { path = "crates/unlace-ir" }
 unlace-loader = { path = "crates/unlace-loader" }
 unlace-lift = { path = "crates/unlace-lift" }
+unlace-capstone = { path = "crates/unlace-capstone" }
 unlace-lift-x86 = { path = "crates/unlace-lift-x86" }
 unlace-lift-arm = { path = "crates/unlace-lift-arm" }
 unlace-lift-riscv = { path = "crates/unlace-lift-riscv" }

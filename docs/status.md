@@ -26,6 +26,15 @@
 > rows; the remaining exact-line
 > failures are still not eligible for blanket refresh.
 
+> **2026-06-17 update.** Current live gates on this checkout: `xtask
+> semantic-report` reports 34 pass rows, 0 XFAIL, 0 failed, 0 unsupported;
+> `xtask golden-triage` reports 15 exact-pass rows and 0 review rows;
+> `scripts/score_parity.sh` reports `Stylistic Fixture Parity: 83.0%`; and
+> `xtask type-recovery-report` reports `recall=100.0% precision=93.1%`.
+> The type report now separates source-fact precision from output-local debt:
+> leaked temp declarations, stack/ABI carriers, ABI parameter carriers, and
+> duplicate DWARF/source local declarations stay visible in their own ledger.
+
 This file is the public source of truth for what works, what is experimental,
 and what is aspirational in unlace. It is derived from:
 
@@ -155,9 +164,9 @@ The old "aggregate parity" wording is retired. The current gates are:
 
 | axis | gate | current state | caveat |
 |------|------|---------------|--------|
-| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 87.1%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. `cargo run -p xtask -- golden-triage` currently has 0 exact-pass rows and 15 exact-line fixture rows for review, so do not blanket-refresh expected C. |
-| Semantic correctness | `cargo run -p xtask -- semantic-report` | 20 host/source-known executable equivalence cases pass; 0 host/source-known cases are tracked as XFAIL; 4 qemu-user non-host executable rows pass; 9 source-known cases also pass shape-only checks; unsupported source-known rows are 0 | Not full-corpus semantic correctness yet; qemu-user execution currently covers AArch64, MIPS64, PPC64, and RISC-V fixture behavior only, and shape checks are not executable equivalence. `debug_cpp_rtti` and `debug_cpp_vtable` are shape-only until behavioral helpers can preserve RTTI/vtable semantics. |
-| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1407 recall=100.0% precision=68.2% raw_precision=66.6% raw_reported=1486 leaked_temp_decls=102 source_oracle_only_recovered=29 source_oracle_only_expected=86 raw_recovered=989 raw_expected=1046 raw_recall=94.6% source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13 cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16 non_host_candidates=4 scored_non_host=4` | Precision measures *source-grounded* recovery: the denominator shares recall's fact scope (source-oracle-only emissions in optimized/no-DWARF binaries route to `raw_precision`) and excludes printer-marked synthetic carriers — register/flag/temp local carriers AND synthetic `__anon*` composites / `field_N` members (offset-named aggregates the decompiler couldn't attribute to a source type). Real DWARF structs (`Cat`, `_IO_FILE`) and named fields still count. Output-cleanliness debt stays visible via `leaked_temp_decls` + the `precision excess ledger` / `reported local-decl classes` sections. The dominant remaining recoverable gap is local decls (+412), mostly `debug_medium`'s extra `v_NN` stack slots / param home-slots — real lvar-recovery debt requiring a coordinated stack-frame change (offset reconciliation + fusion guard + struct-type + param decl-suppression). |
+| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 83.0%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. `cargo run -p xtask -- golden-triage` currently has 15 exact-pass rows and 0 review rows, so exact-line goldens are clean on this checkout. |
+| Semantic correctness | `cargo run -p xtask -- semantic-report` | 21 host/source-known executable equivalence cases pass; 0 host/source-known cases are tracked as XFAIL; 4 qemu-user non-host executable rows pass; 9 source-known cases also pass shape-only checks; unsupported source-known rows are 0 | Not full-corpus semantic correctness yet; qemu-user execution currently covers AArch64, MIPS64, PPC64, and RISC-V fixture behavior only, and shape checks are not executable equivalence. `debug_cpp_rtti` and `debug_cpp_vtable` are shape-only until behavioral helpers can preserve RTTI/vtable semantics. |
+| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1031 recall=100.0% precision=93.1% raw_precision=92.9% raw_reported=1065 leaked_temp_decls=98 stack_carrier_decls=184 abi_param_carriers=3 duplicate_source_local_decls=35 source_oracle_only_recovered=29 source_oracle_only_expected=86 raw_recovered=989 raw_expected=1046 raw_recall=94.6% source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13 cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16 non_host_candidates=4 scored_non_host=4` | Precision measures *source-grounded* recovery: non-source stack/ABI carriers, ABI parameter carriers, duplicate source-local declarations, leaked temps, and synthetic composite/member placeholders are tracked as output-local debt rather than source facts. Remaining source precision excess is now mostly real type-rendering debt (`local_types=+32`, array/pointer/field type/name excess) rather than missing recoverable facts. The missing ledger still has 0 recoverable recovery gaps and 57 source-oracle-only facts. |
 
 `bash scripts/quality_axes.sh` runs all three reports without treating a
 skipped axis as solved. `scripts/score_parity.sh` reports the stylistic score
@@ -171,7 +180,8 @@ production form. Tracked so the README doesn't overclaim:
 
 - FLIRT/SIG-driven library name recovery wired into the active CLI path.
 - DWARF v5 split-DWARF (`.dwo`/`.dwp`) evaluator and full DW_OP location lists.
-- PDB TPI/IPI breadth beyond the currently surfaced TPI slice.
+- PDB local location breadth beyond scoped `S_LOCAL` / `S_REGREL32` extraction;
+  defrange records are not exposed by the current `pdb` crate API.
 - dyld shared cache extraction and kernel-cache filesets.
 - Authenticode/SHA-2 signature verification on PE.
 - Persistent `.unlace` project format with rename/comment/type round-trip.

@@ -58,8 +58,8 @@ The main conclusion from the audit is:
   known non-void fallthrough helpers, so `sum_for` no longer ends with a bare
   `return;`. The remaining near-term output targets are final loop-counter/lvar
   splitting, guard shaping, and for-loop promotion for optimized loop helpers.
-- 2026-05-30 quality-axis reconciliation: the fixture score is explicitly named
-  `Stylistic Fixture Parity` and currently reports 84.5% on the current golden
+- 2026-06-17 quality-axis reconciliation: the fixture score is explicitly named
+  `Stylistic Fixture Parity` and currently reports 83.0% on the current golden
   stream. This remains useful, but it is not semantic correctness or
   type/variable recovery accuracy. The active metric plan is
   `docs/parity-quality-execution-plan-2026-05.md`, and the stale/reframed
@@ -67,14 +67,13 @@ The main conclusion from the audit is:
   runs the style score, `xtask semantic-report`, and
   `xtask type-recovery-report`; `score_parity.sh` reports the style score even
   though the exact-line golden test exits nonzero. Current semantic coverage is
-  14 executable
-  source-known PASS rows, 3 XFAIL host/source-known rows (`type_stack_o2`,
-  `medium`, `stripped`), 3 non-host shape-only PASS rows, and 0 unsupported
-  rows. The type axis reports:
-  `fixtures=20 functions=63 c_functions=49 cpp_functions=14 recovered=206 expected=323 reported=1115 recall=63.8% precision=18.5%`
-  with `source_known=20 source_only=15 source_parsed=15 dwarf_candidates=5
-  cpp_candidates=4 scored_cpp=4 optimized_scored=15 scored_source_only=15
-  non_host_candidates=3 scored_non_host=3`.
+  21 host/source-known executable PASS rows, 4 qemu-user non-host executable
+  PASS rows, 9 source-known shape PASS rows, 0 XFAIL, 0 failed, and 0
+  unsupported rows. The type axis reports:
+  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1031 recall=100.0% precision=93.1% raw_precision=92.9% raw_reported=1065 leaked_temp_decls=98 stack_carrier_decls=184 abi_param_carriers=3 duplicate_source_local_decls=35`
+  with `source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13
+  cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16
+  non_host_candidates=4 scored_non_host=4`.
 
 ## Source Inventory
 

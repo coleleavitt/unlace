@@ -155,6 +155,9 @@ struct TypeScore {
     array_types: Counter,
     struct_ref_types: Counter,
     leaked_temp_decls: usize,
+    stack_carrier_decls: usize,
+    abi_param_carriers: usize,
+    duplicate_source_local_decls: usize,
     leaked_temp_sites: BTreeMap<TempLeakSite, usize>,
     /// Every local decl counted into the precision denominator, retained so the
     /// precision gap can be classified by name pattern + printer comment tag
@@ -171,6 +174,12 @@ struct ReportedLocalSite {
     ty: String,
     name: String,
     comment: Option<String>,
+    /// True when this reported decl's name matches a DWARF-expected local of the
+    /// same function — i.e. it is a CORRECT recovery that nonetheless inflates
+    /// the precision denominator (a metric-scoping artifact), as opposed to a
+    /// genuine EXCESS leaked decl. Splits the ledger so the two populations are
+    /// never conflated (the council's rank-0 diagnostic prerequisite).
+    matched_dwarf: bool,
 }
 
 impl ReportedLocalSite {
@@ -226,6 +235,18 @@ impl TypeScore {
                 name: name.to_string(),
             })
             .or_default() += 1;
+    }
+
+    fn record_stack_carrier(&mut self) {
+        self.stack_carrier_decls += 1;
+    }
+
+    fn record_abi_param_carrier(&mut self) {
+        self.abi_param_carriers += 1;
+    }
+
+    fn record_duplicate_source_local(&mut self) {
+        self.duplicate_source_local_decls += 1;
     }
 }
 
@@ -626,6 +647,9 @@ impl TypeScore {
         self.array_types.merge(other.array_types);
         self.struct_ref_types.merge(other.struct_ref_types);
         self.leaked_temp_decls += other.leaked_temp_decls;
+        self.stack_carrier_decls += other.stack_carrier_decls;
+        self.abi_param_carriers += other.abi_param_carriers;
+        self.duplicate_source_local_decls += other.duplicate_source_local_decls;
         for (site, count) in &other.leaked_temp_sites {
             *self.leaked_temp_sites.entry(site.clone()).or_default() += count;
         }
@@ -974,7 +998,7 @@ pub fn run(root: &Path) -> i32 {
     println!();
     println_score("TOTAL", &total_score);
     println!(
-        "Type/Variable Recovery: MEASURED fixtures={} functions={} c_functions={} cpp_functions={} recovered={} expected={} reported={} recall={:.1}% precision={:.1}% raw_precision={:.1}% raw_reported={} leaked_temp_decls={} source_oracle_only_recovered={} source_oracle_only_expected={} raw_recovered={} raw_expected={} raw_recall={:.1}% source_known={} source_only={} source_parsed={} dwarf_candidates={} cpp_candidates={} scored_cpp={} optimized_scored={} scored_source_only={} non_host_candidates={} scored_non_host={}",
+        "Type/Variable Recovery: MEASURED fixtures={} functions={} c_functions={} cpp_functions={} recovered={} expected={} reported={} recall={:.1}% precision={:.1}% raw_precision={:.1}% raw_reported={} leaked_temp_decls={} stack_carrier_decls={} abi_param_carriers={} duplicate_source_local_decls={} source_oracle_only_recovered={} source_oracle_only_expected={} raw_recovered={} raw_expected={} raw_recall={:.1}% source_known={} source_only={} source_parsed={} dwarf_candidates={} cpp_candidates={} scored_cpp={} optimized_scored={} scored_source_only={} non_host_candidates={} scored_non_host={}",
         total_score.fixtures,
         total_score.functions,
         total_score.c_functions,
@@ -987,6 +1011,9 @@ pub fn run(root: &Path) -> i32 {
         total_score.raw_precision(),
         total_score.raw_reported(),
         total_score.leaked_temp_decls,
+        total_score.stack_carrier_decls,
+        total_score.abi_param_carriers,
+        total_score.duplicate_source_local_decls,
         total_score.source_oracle_only_recovered(),
         total_score.source_oracle_only_expected(),
         total_score.raw_recovered(),
@@ -1007,6 +1034,7 @@ pub fn run(root: &Path) -> i32 {
         "type-recovery-report: recoverable recall excludes exact source-only local/parameter names and field facts that GCC/G++ do not emit into optimized no-debug binaries; those facts stay visible as source_oracle_only and raw_recall"
     );
     print_precision_ledger(&total_score);
+    print_output_debt_ledger(&total_score);
     print_reported_local_ledger(&total_score);
     print_leaked_temp_summary(&total_score, 15);
 
@@ -2759,7 +2787,16 @@ fn add_reported_function_facts(
         if let Some(return_type) = reported_return_type(signature, function) {
             add_reported_type_shapes(score, &return_type, composite_names);
         }
-        for param in reported_params(signature, function) {
+        for (idx, param) in reported_params(signature, function).into_iter().enumerate() {
+            if function.params.get(idx).is_none() {
+                score.record_abi_param_carrier();
+                trace.line(
+                    Some(fixture),
+                    Some(&function.name),
+                    format!("abi_param_carrier_skipped index={idx} type={}", param.ty),
+                );
+                continue;
+            }
             score.param_types.add_reported(1);
             add_reported_type_shapes(score, &param.ty, composite_names);
             if let Some(name) = &param.name {
@@ -2774,6 +2811,8 @@ fn add_reported_function_facts(
 
     let name_scope = policy.local_name_scope();
     let type_scope = policy.local_type_scope();
+    let mut reported_source_names = BTreeSet::new();
+    let mut reported_source_types = BTreeSet::new();
     for decl in reported_local_decls(text, signature) {
         // Output-cleanliness debt axis (leaked_temp_decls) is unchanged: every
         // generic `vN`/`cN`/`aN` that is not a pure register temp stays counted
@@ -2787,10 +2826,6 @@ fn add_reported_function_facts(
                 format!("leaked_temp_decl type={} name={}", decl.ty, decl.name),
             );
         }
-        // Source-recovery precision denominator: a synthetic machine carrier
-        // (register/flag/temp/saved-reg) is not a source-variable claim, so it
-        // does not belong in the denominator. It remains visible above and in
-        // the reported-local class ledger trace.
         if decl.is_non_source_carrier() {
             trace.line(
                 Some(fixture),
@@ -2804,16 +2839,50 @@ fn add_reported_function_facts(
             );
             continue;
         }
-        name_scope.add_reported(&mut score.local_names);
-        type_scope.add_reported(&mut score.local_types);
+        let matched_local = function.locals.iter().find(|l| l.name == decl.name);
+        let matched_dwarf = matched_local.is_some();
+        if matched_local.is_none() && decl.is_stack_offset_carrier() {
+            score.record_stack_carrier();
+            trace.line(
+                Some(fixture),
+                Some(&function.name),
+                format!("stack_carrier_skipped type={} name={}", decl.ty, decl.name),
+            );
+            continue;
+        }
+        let source_name_first_seen = !matched_dwarf
+            || reported_source_names.insert((function.name.clone(), decl.name.clone()));
+        let source_type_matches = matched_local.is_some_and(|local| local_type_matches(local, &decl.ty));
+        let source_type_first_seen = !source_type_matches
+            || reported_source_types.insert((function.name.clone(), decl.name.clone()));
+        if source_name_first_seen {
+            name_scope.add_reported(&mut score.local_names);
+        } else {
+            score.record_duplicate_source_local();
+            trace.line(
+                Some(fixture),
+                Some(&function.name),
+                format!("duplicate_source_local_name_skipped name={}", decl.name),
+            );
+        }
+        if source_type_first_seen {
+            type_scope.add_reported(&mut score.local_types);
+            add_reported_type_shapes_scoped(score, &decl.ty, composite_names, type_scope);
+        } else {
+            trace.line(
+                Some(fixture),
+                Some(&function.name),
+                format!("duplicate_source_local_type_skipped name={} type={}", decl.name, decl.ty),
+            );
+        }
         score.reported_local_sites.push(ReportedLocalSite {
             fixture: fixture.to_string(),
             function: function.name.clone(),
             ty: decl.ty.clone(),
             name: decl.name.clone(),
             comment: decl.comment.clone(),
+            matched_dwarf,
         });
-        add_reported_type_shapes_scoped(score, &decl.ty, composite_names, type_scope);
     }
 }
 
@@ -2964,6 +3033,23 @@ impl ReportedDecl {
             None => false,
         }
     }
+
+    fn is_stack_offset_carrier(&self) -> bool {
+        if self.comment.as_deref().is_some_and(|comment| !comment.trim().is_empty()) {
+            return false;
+        }
+        self.name
+            .strip_prefix("v_")
+            .or_else(|| self.name.strip_prefix("a_"))
+            .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+    }
+}
+
+fn local_type_matches(local: &LocalVariable, reported_ty: &str) -> bool {
+    local
+        .type_name
+        .as_deref()
+        .is_some_and(|expected| normalize_type(expected) == normalize_type(reported_ty))
 }
 
 fn is_cpu_flag_comment(comment: &str) -> bool {
@@ -3453,6 +3539,24 @@ fn print_precision_ledger(score: &TypeScore) {
     println!("  {total_excess:>5} excess  TOTAL");
 }
 
+fn print_output_debt_ledger(score: &TypeScore) {
+    println!();
+    println!("type-recovery-report: output-local debt ledger (not source precision)");
+    println!("  {:>5}  leaked temp declarations", score.leaked_temp_decls);
+    println!(
+        "  {:>5}  stack/ABI local carriers excluded from source precision",
+        score.stack_carrier_decls
+    );
+    println!(
+        "  {:>5}  ABI parameter carriers excluded from source precision",
+        score.abi_param_carriers
+    );
+    println!(
+        "  {:>5}  duplicate DWARF/source local declarations deduplicated",
+        score.duplicate_source_local_decls
+    );
+}
+
 /// Classifies every counted local decl by (name pattern × printer comment tag)
 /// so the local-decl precision excess (~76% of the gap) is split into concrete,
 /// actionable buckets: synthetic carriers the printer marks (`// temp`,
@@ -3460,7 +3564,9 @@ fn print_precision_ledger(score: &TypeScore) {
 fn print_reported_local_ledger(score: &TypeScore) {
     println!();
     println!("type-recovery-report: reported local-decl classes (precision denominator)");
-    let mut by_class: BTreeMap<(&str, &str), (usize, Vec<String>)> = BTreeMap::new();
+    // (count, samples, matched_dwarf_count) per (name_class, comment_class).
+    let mut by_class: BTreeMap<(&str, &str), (usize, Vec<String>, usize)> = BTreeMap::new();
+    let mut total_matched = 0usize;
     for site in &score.reported_local_sites {
         let entry = by_class
             .entry((site.name_class(), site.comment_class()))
@@ -3471,16 +3577,33 @@ fn print_reported_local_ledger(score: &TypeScore) {
                 .1
                 .push(format!("{}::{}={}", site.fixture, site.function, site.name));
         }
+        if site.matched_dwarf {
+            entry.2 += 1;
+            total_matched += 1;
+        }
     }
     let mut rows: Vec<_> = by_class.into_iter().collect();
     rows.sort_by_key(|row| std::cmp::Reverse(row.1.0));
-    for ((name_class, comment_class), (count, samples)) in &rows {
-        println!("  {count:>5}  name={name_class:<18} comment={comment_class:<14}");
+    for ((name_class, comment_class), (count, samples, matched)) in &rows {
+        let excess = count - matched;
+        println!(
+            "  {count:>5}  name={name_class:<18} comment={comment_class:<14} matched-dwarf={matched:<4} excess={excess}"
+        );
         println!("         e.g. {}", samples.join(", "));
     }
+    let total = score.reported_local_sites.len();
     println!(
-        "  {:>5}  TOTAL counted local decls",
-        score.reported_local_sites.len()
+        "  {total:>5}  TOTAL counted local decls (matched-dwarf={total_matched} excess={})",
+        total - total_matched
+    );
+    // Rank-0 headline: the matched-vs-excess split decides the next lever —
+    // matched-dwarf decls are correct recoveries inflating the denominator
+    // (rank-1 metric-scoping), excess decls are genuine leaks (rank-2 coalescing).
+    println!(
+        "  rank-0 split: {} of {} counted local decls are CORRECT DWARF recoveries (metric-scoping candidates); {} are genuine excess (coalescing candidates)",
+        total_matched,
+        total,
+        total - total_matched
     );
 }
 
@@ -3627,11 +3750,85 @@ mod tests {
         // A real recovered local with a register hint must still count.
         assert!(!decl("int", "counter", Some("rax")).is_non_source_carrier());
         assert!(!decl("int", "steps", None).is_non_source_carrier());
-        // Stack-offset slots are recovery claims, not carriers (no synthetic
-        // comment) — they count, and producer work must reduce them.
         assert!(!decl("__int64", "v_84", None).is_non_source_carrier());
+        assert!(decl("__int64", "v_84", None).is_stack_offset_carrier());
         // An unknown comment is not a synthetic marker.
         assert!(!decl("int", "buf", Some("array")).is_non_source_carrier());
+    }
+
+    #[test]
+    fn reported_source_locals_are_deduped_and_stack_carriers_are_separate() {
+        let function = FunctionDebugInfo {
+            name: "f".to_string(),
+            linkage_name: None,
+            low_pc: 0,
+            high_pc: None,
+            ranges: Vec::new(),
+            params: Vec::new(),
+            return_type: None,
+            decl: None,
+            locals: vec![LocalVariable {
+                name: "steps".to_string(),
+                type_name: Some("int".to_string()),
+                frame_offset: Some(-4),
+                locations: Vec::new(),
+                locations_dwarf_v5: Vec::new(),
+            }],
+            cfa_to_rbp_delta: None,
+        };
+        let trace = TypeTrace::disabled();
+        let policy = ScoringPolicy::for_test(TruthKind::Dwarf, &trace);
+        let mut score = TypeScore::default();
+        let text = "void f() {\n    int steps;\n    int steps;\n    __int64 v_8;\n}\n";
+
+        add_reported_function_facts(
+            "fx",
+            &function,
+            text,
+            Some("void f()"),
+            &BTreeSet::new(),
+            &mut score,
+            &policy,
+            &trace,
+        );
+
+        assert_eq!(score.local_names.reported, 1);
+        assert_eq!(score.local_types.reported, 1);
+        assert_eq!(score.duplicate_source_local_decls, 1);
+        assert_eq!(score.stack_carrier_decls, 1);
+    }
+
+    #[test]
+    fn reported_abi_params_without_ground_truth_are_separate() {
+        let function = FunctionDebugInfo {
+            name: "f".to_string(),
+            linkage_name: None,
+            low_pc: 0,
+            high_pc: None,
+            ranges: Vec::new(),
+            params: Vec::new(),
+            return_type: None,
+            decl: None,
+            locals: Vec::new(),
+            cfa_to_rbp_delta: None,
+        };
+        let trace = TypeTrace::disabled();
+        let policy = ScoringPolicy::for_test(TruthKind::Dwarf, &trace);
+        let mut score = TypeScore::default();
+
+        add_reported_function_facts(
+            "fx",
+            &function,
+            "int f(int a1) {\n}\n",
+            Some("int f(int a1)"),
+            &BTreeSet::new(),
+            &mut score,
+            &policy,
+            &trace,
+        );
+
+        assert_eq!(score.param_types.reported, 0);
+        assert_eq!(score.abi_param_carriers, 1);
     }
 
     #[test]
@@ -3652,8 +3849,6 @@ mod tests {
         let trace = TypeTrace::disabled();
         let text = "void f() {\n    __int64 v_8;\n    __int64 v50; // rax\n    char c8; // ZF\n}\n";
 
-        // DWARF: exact local names are recoverable, so the `v_8` claim counts in
-        // the recoverable denominator; the register/flag carriers do not.
         let dwarf = ScoringPolicy::for_test(TruthKind::Dwarf, &trace);
         let mut dwarf_score = TypeScore::default();
         add_reported_function_facts(
@@ -3667,14 +3862,12 @@ mod tests {
             &trace,
         );
         assert_eq!(
-            dwarf_score.local_names.reported, 1,
-            "v_8 counts under DWARF"
+            dwarf_score.local_names.reported, 0,
+            "v_8 is output-local debt, not a source fact"
         );
+        assert_eq!(dwarf_score.stack_carrier_decls, 1);
         assert_eq!(dwarf_score.local_names.source_oracle_only_reported, 0);
 
-        // Optimized no-debug: exact local names are source-oracle-only, so the
-        // `v_8` emission routes out of the recoverable denominator — consistent
-        // with how recall scopes the same fact.
         let parsed = ScoringPolicy::for_test(TruthKind::ParsedSource, &trace);
         let mut parsed_score = TypeScore::default();
         add_reported_function_facts(
@@ -3688,7 +3881,8 @@ mod tests {
             &trace,
         );
         assert_eq!(parsed_score.local_names.reported, 0, "source-oracle-only");
-        assert_eq!(parsed_score.local_names.source_oracle_only_reported, 1);
+        assert_eq!(parsed_score.local_names.source_oracle_only_reported, 0);
+        assert_eq!(parsed_score.stack_carrier_decls, 1);
     }
 
     #[test]

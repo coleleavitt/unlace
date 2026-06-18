@@ -24,6 +24,7 @@ pub struct MipsLifter {
 }
 
 fn make_capstone() -> Capstone {
+    unlace_capstone::ensure_memory_callbacks();
     Capstone::new()
         .mips()
         .mode(capstone::arch::mips::ArchMode::Mips64)

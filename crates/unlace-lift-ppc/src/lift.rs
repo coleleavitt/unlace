@@ -63,6 +63,7 @@ pub struct PpcLifter {
 }
 
 fn make_capstone(mode: PpcMode, endian: PpcEndian) -> Capstone {
+    unlace_capstone::ensure_memory_callbacks();
     Capstone::new()
         .ppc()
         .mode(mode.capstone_mode())

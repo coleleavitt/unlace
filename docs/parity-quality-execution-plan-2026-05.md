@@ -42,11 +42,10 @@ currently exits nonzero.
 
 Current known state:
 
-- Stylistic fixture parity: **87.1%** emitted by `scripts/score_parity.sh` on
-  the current golden stream. The exact-line golden test still exits nonzero
-  because `xtask golden-triage` currently has 0 exact-pass fixture rows and
-  15 classified review rows: 3 producer-bug and 12 mixed. Do not use a
-  blanket rebaseline.
+- Stylistic fixture parity: **83.0%** emitted by `scripts/score_parity.sh` on
+  the current golden stream. `xtask golden-triage` currently has 15 exact-pass
+  fixture rows and 0 review rows; keep future expected-output changes
+  classified row-by-row.
 - Semantic correctness: `xtask semantic-report` passes
   `hello_world.elf:main`, `branches.elf:main`, `loops.elf:main`,
   `calls.elf:main`, `empty.elf:main`, `debug_hello.elf:main`,
@@ -64,10 +63,11 @@ Current known state:
   `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0 total=1059`.
 - Fixture optimization levels: recorded in `tests/corpus.toml`.
 - Type/variable recovery accuracy:
-  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1407 recall=100.0% precision=68.2% raw_precision=66.6% raw_reported=1486 leaked_temp_decls=102`
+  `fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1031 recall=100.0% precision=93.1% raw_precision=92.9% raw_reported=1065 leaked_temp_decls=98 stack_carrier_decls=184 abi_param_carriers=3 duplicate_source_local_decls=35`
   (precision now shares recall's fact scope — source-oracle-only emissions go to
-  `raw_precision` — and excludes printer-marked synthetic carriers; dominant
-  recoverable gap is `debug_medium`'s +124 extra `v_NN` stack slots)
+  `raw_precision` — and separates output-local debt from source facts; remaining
+  source precision excess is led by local type rendering, array/pointer facts,
+  and field type/name rendering)
   with `source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13
   cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16
   non_host_candidates=4 scored_non_host=4`. The missing ledger has 0

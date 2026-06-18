@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use fallible_iterator::FallibleIterator;
-use pdb::{PDB, Rva, SymbolData, TypeData, TypeIndex};
+use pdb::{PDB, Register, Rva, SymbolData, TypeData, TypeIndex};
 use unlace_ir::ssa::CallingConvention;
 
 use crate::error::LoadError;
@@ -61,6 +61,7 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
     let dbi = pdb.debug_information()?;
     let mut symbols = BTreeMap::new();
     let mut lines = BTreeMap::new();
+    let mut function_locals = BTreeMap::new();
     let calling_conventions = collect_type_calling_conventions(&mut pdb)?;
 
     collect_global_symbols(&mut pdb, &address_map, &mut symbols)?;
@@ -72,13 +73,14 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
             None => continue,
         };
 
-        collect_module_symbols(&module_info, &address_map, &mut symbols)?;
+        collect_module_symbols(&module_info, &address_map, &mut symbols, &mut function_locals)?;
         collect_line_info(&module_info, &address_map, &mut lines)?;
     }
 
     tracing::debug!(
         functions = symbols.len(),
         line_records = lines.len(),
+        local_functions = function_locals.len(),
         "PDB import complete"
     );
 
@@ -86,7 +88,7 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
         symbols,
         lines,
         calling_conventions,
-        function_locals: BTreeMap::new(),
+        function_locals,
     })
 }
 
@@ -167,15 +169,53 @@ fn collect_module_symbols(
     module_info: &pdb::ModuleInfo<'_>,
     address_map: &pdb::AddressMap,
     out: &mut BTreeMap<u64, Symbol>,
+    function_locals: &mut BTreeMap<u64, Vec<PdbLocal>>,
 ) -> Result<(), LoadError> {
     let mut iter = module_info.symbols()?;
+    let mut current_function = None;
+    let mut current_function_end = None;
+    let mut pending_local = None;
 
     while let Some(sym) = iter.next()? {
         if let Ok(data) = sym.parse() {
             match data {
                 SymbolData::Procedure(proc) => {
+                    flush_pending_local(current_function, &mut pending_local, function_locals);
                     if let Some(rva) = proc.offset.to_rva(address_map) {
+                        let addr = rva_to_u64(rva);
                         insert_symbol(out, rva, proc.name.to_string().to_string(), proc.len as u64);
+                        current_function = Some(addr);
+                        current_function_end = Some(proc.end);
+                        pending_local = None;
+                    }
+                }
+                SymbolData::ScopeEnd | SymbolData::ProcedureEnd => {
+                    flush_pending_local(current_function, &mut pending_local, function_locals);
+                    if current_function_end == Some(sym.index())
+                        || matches!(data, SymbolData::ProcedureEnd)
+                    {
+                        current_function = None;
+                        current_function_end = None;
+                    }
+                }
+                SymbolData::Local(local) => {
+                    flush_pending_local(current_function, &mut pending_local, function_locals);
+                    pending_local = current_function.map(|_| PdbLocal {
+                        name: local.name.to_string().to_string(),
+                        frame_offset: None,
+                        type_index: ti_to_u32(local.type_index),
+                    });
+                }
+                SymbolData::RegisterRelative(regrel) => {
+                    if let Some(func_rva) = current_function {
+                        let local = pending_local.take().unwrap_or_else(|| PdbLocal {
+                            name: regrel.name.to_string().to_string(),
+                            frame_offset: None,
+                            type_index: ti_to_u32(regrel.type_index),
+                        });
+                        let mut local = local;
+                        local.frame_offset = frame_offset_for_register(regrel.register, regrel.offset);
+                        function_locals.entry(func_rva).or_default().push(local);
                     }
                 }
                 SymbolData::Data(data_sym) if data_sym.global => {
@@ -189,6 +229,20 @@ fn collect_module_symbols(
     }
 
     Ok(())
+}
+
+fn flush_pending_local(
+    current_function: Option<u64>,
+    pending_local: &mut Option<PdbLocal>,
+    function_locals: &mut BTreeMap<u64, Vec<PdbLocal>>,
+) {
+    if let (Some(func_rva), Some(local)) = (current_function, pending_local.take()) {
+        function_locals.entry(func_rva).or_default().push(local);
+    }
+}
+
+fn frame_offset_for_register(register: Register, offset: i32) -> Option<i64> {
+    matches!(register.0, 22 | 334).then_some(i64::from(offset))
 }
 
 fn collect_line_info(
@@ -456,6 +510,13 @@ mod tests {
             Some(CallingConvention::Thiscall)
         );
         assert_eq!(map_pdb_calling_convention(0xff), None);
+    }
+
+    #[test]
+    fn frame_offset_only_for_frame_pointer_registers() {
+        assert_eq!(frame_offset_for_register(Register(22), -16), Some(-16));
+        assert_eq!(frame_offset_for_register(Register(334), -32), Some(-32));
+        assert_eq!(frame_offset_for_register(Register(18), -16), None);
     }
 
     #[test]

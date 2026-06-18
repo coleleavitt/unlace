@@ -1,0 +1,7 @@
+[package]
+name = "unlace-capstone"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+capstone-sys = { workspace = true }

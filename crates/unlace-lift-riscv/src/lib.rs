@@ -612,6 +612,7 @@ impl RiscVLifter {
             },
         ]);
 
+        unlace_capstone::ensure_memory_callbacks();
         let cs = Capstone::new()
             .riscv()
             .mode(arch::riscv::ArchMode::RiscV64)

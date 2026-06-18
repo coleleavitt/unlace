@@ -44,3 +44,47 @@
 {"id":"t33","subject":"Diagnose + fix 20 c_printer unit test failures","status":"completed","created_at_ms":1780056297618,"archived_at_ms":1780666364582}
 {"id":"t34","subject":"Fix sum_for placeholder condition loop regression","status":"completed","created_at_ms":1780056297619,"archived_at_ms":1780666364582}
 {"id":"t35","subject":"Fix medium.elf 2610 vs 460 lvar blowup","status":"completed","created_at_ms":1780056297619,"archived_at_ms":1780666364582}
+{"id":"t36","subject":"Final sweep: build/test/clippy/determinism + push all","status":"completed","created_at_ms":1780065831860,"archived_at_ms":1781669561154}
+{"id":"t37","subject":"Fix non-x86 stack-frame recovery (garbage v1[huge] indices)","status":"completed","created_at_ms":1780065831860,"archived_at_ms":1781669561154}
+{"id":"t38","subject":"Fix condition-polarity inversion (if(!(…)) empty-then) ","status":"completed","created_at_ms":1780065831861,"archived_at_ms":1781669561154}
+{"id":"t39","subject":"Flag-condition simplification (__OFSUB__/XOR → v <= 1)","status":"completed","created_at_ms":1780065831861,"archived_at_ms":1781669561154}
+{"id":"t40","subject":"[deep] Structurer empty-branch polarity (if(!c){} → if(c){})","status":"completed","created_at_ms":1780067374107,"archived_at_ms":1781669561154}
+{"id":"t41","subject":"[deep] Non-x86 stack-frame recovery (MIPS/RISC-V SP tracking)","status":"completed","created_at_ms":1780067374107,"archived_at_ms":1781669561154}
+{"id":"t42","subject":"[deep] SSA-layer signed-flag-compare recognizer (cross-statement)","status":"completed","created_at_ms":1780067374108,"archived_at_ms":1781669561154}
+{"id":"t43","subject":"Fix all 14 remaining golden_fixtures failures","status":"completed","created_at_ms":1780070449148,"archived_at_ms":1781669561154}
+{"id":"t44","subject":"Cluster A: RISC-arch fixtures (mips64/ppc64/riscv64/v850)","status":"completed","created_at_ms":1780070484933,"archived_at_ms":1781669561154}
+{"id":"t45","subject":"Cluster B: arm64_features + x87_math","status":"completed","created_at_ms":1780070484936,"archived_at_ms":1781669561154}
+{"id":"t46","subject":"Cluster E: switch_table + medium","status":"completed","created_at_ms":1780070508818,"archived_at_ms":1781669561154}
+{"id":"t47","subject":"Cluster D: C++ fixtures (cpp_vtable/cpp_rtti/cpp_exceptions)","status":"completed","created_at_ms":1780070508819,"archived_at_ms":1781669561154}
+{"id":"t48","subject":"Cluster C: debug_* fixtures (debug_hello/debug_calls/debug_structs)","status":"completed","created_at_ms":1780070508819,"archived_at_ms":1781669561154}
+{"id":"t49","subject":"[deep] PPC lifter: immediate mis-lifted as register read","status":"completed","created_at_ms":1780071849971,"archived_at_ms":1781669561154}
+{"id":"t50","subject":"[deep] Restore cN coalesced-register naming convention","status":"completed","created_at_ms":1780071849972,"archived_at_ms":1781669561154}
+{"id":"t51","subject":"[deep] Residual leaked-temp folding (medium/switch/debug)","status":"completed","created_at_ms":1780071867671,"archived_at_ms":1781669561154}
+{"id":"t52","subject":"[deep] arm64 CSEL/CSINV/CSNEG structuring + signed-flag predicates","status":"completed","created_at_ms":1780071867672,"archived_at_ms":1781669561154}
+{"id":"t53","subject":"[deep] String/symbol resolution in call args (printf %s)","status":"completed","created_at_ms":1780071867672,"archived_at_ms":1781669561154}
+{"id":"t54","subject":"[deep] x87 FPU stack modeling (duplicate FLD, FCOM flags)","status":"completed","created_at_ms":1780071867672,"archived_at_ms":1781669561154}
+{"id":"t55","subject":"[design-first] DREAM/SAILR structurer-core rewrite for irreducible loops","status":"completed","created_at_ms":1780081419112,"archived_at_ms":1781669561154}
+{"id":"t56","subject":"[investigation] f_ackermann residual gotos — VERIFIED genuinely irreducible (no CFG bug)","status":"completed","created_at_ms":1780093036383,"archived_at_ms":1781669561154,"tags":["cfg","structuring","design-first","investigation"]}
+{"id":"t57","subject":"Add always-on missing-facts ledger to type-recovery-report","status":"completed","created_at_ms":1780296812086,"archived_at_ms":1781669561154}
+{"id":"t58","subject":"Add DWARF sidecar loader (stripped binary + external .debug file)","status":"completed","created_at_ms":1780302075974,"archived_at_ms":1781669561154}
+{"id":"t59","subject":"Generate -g debug companion fixtures for the 10 gap fixtures","status":"completed","created_at_ms":1780302075974,"archived_at_ms":1781669561154}
+{"id":"t60","subject":"Fix phantom argument over-detection inflating precision denominator","status":"completed","created_at_ms":1780327064902,"archived_at_ms":1781669561154}
+{"id":"t61","subject":"[blocked-deep] SSA/lvar live-range split for pointer/scalar register aliasing","status":"completed","created_at_ms":1780455035877,"archived_at_ms":1781669561154,"tags":["lvar","register-aliasing","deep","design-first"]}
+{"id":"t62","subject":"[merged-into-t61] exclude outgoing call-argument operand reads from parameter liveness","status":"completed","created_at_ms":1780455059972,"archived_at_ms":1781669561154,"tags":["lvar","calling-convention","merged"]}
+{"id":"t63","subject":"[merged-into-t61] live-on-entry register-read collection","status":"completed","created_at_ms":1780455059972,"archived_at_ms":1781669561154,"tags":["lvar","calling-convention","merged"]}
+{"id":"t64","subject":"detect_sret: follow -O0 spilled hidden pointer (stack-slot aliasing)","status":"completed","created_at_ms":1780455091198,"archived_at_ms":1781669561154,"tags":["sret","calling-convention","deep"]}
+{"id":"t65","subject":"[superseded-by-t64] Cap inferred params by DWARF formal-parameter count","status":"completed","created_at_ms":1780455101325,"archived_at_ms":1781669561154,"tags":["dwarf","calling-convention","superseded"]}
+{"id":"t66","subject":"[DONE] Eliminate uncompilable struct/subscript-on-scalar output (corpus 5→0)","status":"completed","created_at_ms":1780455120695,"archived_at_ms":1781669561154,"tags":["c-printer","done"]}
+{"id":"t67","subject":"[DONE] Arch-aware frame-base detection in c_printer (riscv frame-relative ->)","status":"completed","created_at_ms":1780455139263,"archived_at_ms":1781669561154,"tags":["c-printer","arch","done"]}
+{"id":"t68","subject":"Wire classify_value_lattice into emit_merged_names + fix unit tests","status":"completed","created_at_ms":1780519832810,"archived_at_ms":1781669561154}
+{"id":"t69","subject":"Extract problem framing","status":"completed","created_at_ms":1780522560652,"archived_at_ms":1781669561154}
+{"id":"t70","subject":"Find academic search capability","status":"completed","created_at_ms":1780522560653,"archived_at_ms":1781669561154}
+{"id":"t71","subject":"Synthesize recommendations","status":"completed","created_at_ms":1780522560653,"archived_at_ms":1781669561154}
+{"id":"t72","subject":"Search academic literature","status":"completed","created_at_ms":1780522560654,"archived_at_ms":1781669561154}
+{"id":"t73","subject":"Verify downloads","status":"completed","created_at_ms":1780522809513,"archived_at_ms":1781669561154}
+{"id":"t74","subject":"Download papers","status":"completed","created_at_ms":1780522809514,"archived_at_ms":1781669561154}
+{"id":"t75","subject":"Write bibliography manifest","status":"completed","created_at_ms":1780522809515,"archived_at_ms":1781669561154}
+{"id":"t76","subject":"Check workspace state","status":"completed","created_at_ms":1780522809515,"archived_at_ms":1781669561154}
+{"id":"t77","subject":"Collect paper download URLs","status":"completed","created_at_ms":1780522809516,"archived_at_ms":1781669561154}
+{"id":"t79","subject":"Rsync changed Rust code over","status":"completed","created_at_ms":1780666495361,"archived_at_ms":1781669561154}
+{"id":"t80","subject":"Compare chat-aws:~/unlace Rust code vs local","status":"completed","created_at_ms":1780666495362,"archived_at_ms":1781669561154}

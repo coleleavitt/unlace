@@ -1096,11 +1096,6 @@ fn hex_nibble(b: u8) -> Option<u8> {
 fn init_tracing(
     verbose: u8,
 ) -> Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>> {
-    use tracing_flame::FlameLayer;
-    use tracing_subscriber::Layer;
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-
     let level = match verbose {
         0 => "warn",
         1 => "info",
@@ -1109,33 +1104,56 @@ fn init_tracing(
     };
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
 
-    // The fmt layer respects the user's verbosity / RUST_LOG filter.
+    // DEFAULT PATH (no UNLACE_FLAME): a single global fmt subscriber whose
+    // verbosity comes from a GLOBAL `EnvFilter`, not a per-layer `.with_filter()`.
+    //
+    // The per-layer `Filtered` machinery in tracing-subscriber 0.3.x keeps a
+    // thread-local `RefCell` filter state that double-borrows ("RefCell already
+    // borrowed") when spans are entered/evaluated re-entrantly across the rayon
+    // worker threads `unlace batch` spawns — a deterministic abort. A global
+    // env filter is evaluated directly in `enabled()` and never touches that
+    // per-layer RefCell, so the concurrent batch path is safe. (The work-stealing
+    // pool was never the cause; the per-layer fmt filter was.)
+    let Ok(path) = std::env::var("UNLACE_FLAME") else {
+        tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
+            .with_env_filter(env_filter)
+            .init();
+        return None;
+    };
+
+    // FLAME PATH (opt-in via UNLACE_FLAME): the flame layer must see TRACE-level
+    // pass spans independent of the user's verbosity, which requires per-layer
+    // filtering. This is single-shot profiling, not the concurrent batch path.
+    use tracing_flame::FlameLayer;
+    use tracing_subscriber::Layer;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    let (flame_layer, flame_guard) = match FlameLayer::with_file(&path) {
+        Ok((layer, guard)) => (
+            layer.with_filter(tracing_subscriber::filter::LevelFilter::TRACE),
+            guard,
+        ),
+        Err(e) => {
+            // Fall back to the safe global-filter default path.
+            eprintln!("warning: UNLACE_FLAME='{path}' could not open: {e}");
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .with_env_filter(env_filter)
+                .init();
+            return None;
+        }
+    };
+
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
         .with_filter(env_filter);
-
-    let (flame_layer, flame_guard) = if let Ok(path) = std::env::var("UNLACE_FLAME") {
-        match FlameLayer::with_file(&path) {
-            // The flame layer needs to see TRACE-level pass spans, so it
-            // gets its own filter independent of the user's RUST_LOG.
-            Ok((layer, guard)) => (
-                Some(layer.with_filter(tracing_subscriber::filter::LevelFilter::TRACE)),
-                Some(guard),
-            ),
-            Err(e) => {
-                eprintln!("warning: UNLACE_FLAME='{path}' could not open: {e}");
-                (None, None)
-            }
-        }
-    } else {
-        (None, None)
-    };
-
     tracing_subscriber::registry()
         .with(fmt_layer)
         .with(flame_layer)
         .init();
-    flame_guard
+    Some(flame_guard)
 }
 
 /// Resolve which annotation DB (if any) should be loaded for `binary`.

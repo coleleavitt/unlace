@@ -105,6 +105,7 @@ impl ArmLifter {
     }
 
     fn make_capstone() -> Capstone {
+        unlace_capstone::ensure_memory_callbacks();
         Capstone::new()
             .arm64()
             .mode(arch::arm64::ArchMode::Arm)
@@ -114,6 +115,7 @@ impl ArmLifter {
     }
 
     fn make_capstone_arm32() -> Capstone {
+        unlace_capstone::ensure_memory_callbacks();
         Capstone::new()
             .arm()
             .mode(arch::arm::ArchMode::Arm)
@@ -123,6 +125,7 @@ impl ArmLifter {
     }
 
     fn make_capstone_thumb() -> Capstone {
+        unlace_capstone::ensure_memory_callbacks();
         Capstone::new()
             .arm()
             .mode(arch::arm::ArchMode::Thumb)

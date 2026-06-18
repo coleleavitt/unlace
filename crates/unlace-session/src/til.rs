@@ -128,47 +128,28 @@ impl TilFile {
             let decompressed = zstd::decode_all(&payload[..])?;
             match section_name.as_str() {
                 "typedef_table" => {
-                    let (v, _): (BTreeMap<String, Typedef>, _) = bincode::serde::decode_from_slice(
-                        &decompressed,
-                        bincode::config::standard(),
-                    )?;
+                    let v: BTreeMap<String, Typedef> = postcard::from_bytes(&decompressed)?;
                     til.typedef_table = v;
                 }
                 "struct_table" => {
-                    let (v, _): (BTreeMap<String, Record>, _) = bincode::serde::decode_from_slice(
-                        &decompressed,
-                        bincode::config::standard(),
-                    )?;
+                    let v: BTreeMap<String, Record> = postcard::from_bytes(&decompressed)?;
                     til.struct_table = v;
                 }
                 "union_table" => {
-                    let (v, _): (BTreeMap<String, Record>, _) = bincode::serde::decode_from_slice(
-                        &decompressed,
-                        bincode::config::standard(),
-                    )?;
+                    let v: BTreeMap<String, Record> = postcard::from_bytes(&decompressed)?;
                     til.union_table = v;
                 }
                 "enum_table" => {
-                    let (v, _): (BTreeMap<String, Vec<(String, i64)>>, _) =
-                        bincode::serde::decode_from_slice(
-                            &decompressed,
-                            bincode::config::standard(),
-                        )?;
+                    let v: BTreeMap<String, Vec<(String, i64)>> =
+                        postcard::from_bytes(&decompressed)?;
                     til.enum_table = v;
                 }
                 "fn_prototype_table" => {
-                    let (v, _): (BTreeMap<String, FnPrototype>, _) =
-                        bincode::serde::decode_from_slice(
-                            &decompressed,
-                            bincode::config::standard(),
-                        )?;
+                    let v: BTreeMap<String, FnPrototype> = postcard::from_bytes(&decompressed)?;
                     til.fn_prototype_table = v;
                 }
                 "macro_table" => {
-                    let (v, _): (BTreeMap<String, String>, _) = bincode::serde::decode_from_slice(
-                        &decompressed,
-                        bincode::config::standard(),
-                    )?;
+                    let v: BTreeMap<String, String> = postcard::from_bytes(&decompressed)?;
                     til.macro_table = v;
                 }
                 _ => {
@@ -182,7 +163,7 @@ impl TilFile {
 
 fn write_section<T: Serialize>(file: &mut std::fs::File, name: &str, value: &T) -> Result<()> {
     use std::io::Write;
-    let encoded = bincode::serde::encode_to_vec(value, bincode::config::standard())?;
+    let encoded = postcard::to_allocvec(value)?;
     let compressed = zstd::encode_all(&encoded[..], 3)?;
     file.write_all(&(name.len() as u32).to_le_bytes())?;
     file.write_all(name.as_bytes())?;

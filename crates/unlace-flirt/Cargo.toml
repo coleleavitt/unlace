@@ -10,7 +10,7 @@ unlace-ir = { workspace = true }
 unlace-loader.workspace = true
 unlace-session = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-bincode.workspace = true
+postcard.workspace = true
 anyhow.workspace = true
 thiserror = { workspace = true }
 tracing = { workspace = true }

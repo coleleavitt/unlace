@@ -75,17 +75,16 @@ impl FlirtSignatureFile {
         self.signatures.insert(sig.name.clone(), sig);
     }
 
-    /// Serialize to compact bincode + zstd for on-disk storage.
+    /// Serialize to compact postcard + zstd for on-disk storage.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let encoded = bincode::serde::encode_to_vec(self, bincode::config::standard())?;
+        let encoded = postcard::to_allocvec(self)?;
         let compressed = zstd::encode_all(&encoded[..], 3)?;
         Ok(compressed)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let decompressed = zstd::decode_all(bytes)?;
-        let (val, _): (Self, _) =
-            bincode::serde::decode_from_slice(&decompressed, bincode::config::standard())?;
+        let val: Self = postcard::from_bytes(&decompressed)?;
         Ok(val)
     }
 

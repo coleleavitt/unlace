@@ -12,7 +12,7 @@
 //! <cache_dir>/<binary_hash:016x>/<func_addr:016x>.bin
 //! ```
 //!
-//! Each `.bin` file is a bincode-encoded [`SsaFunction`].
+//! Each `.bin` file is a postcard-encoded [`SsaFunction`].
 //!
 //! Reads are best-effort: any I/O or decode failure returns `None` rather
 //! than propagating an error, so a corrupt cache entry degrades gracefully
@@ -47,10 +47,7 @@ impl SsaCache {
     pub fn get(&self, binary_hash: u64, func_addr: u64) -> Option<SsaFunction> {
         let path = self.entry_path(binary_hash, func_addr);
         let bytes = fs::read(&path).ok()?;
-        let config = bincode::config::standard();
-        let (func, _len) =
-            bincode::serde::decode_from_slice::<SsaFunction, _>(&bytes, config).ok()?;
-        Some(func)
+        postcard::from_bytes::<SsaFunction>(&bytes).ok()
     }
 
     /// Store `func` under `(binary_hash, func_addr)`. Failures (e.g. the
@@ -65,8 +62,7 @@ impl SsaCache {
         if fs::create_dir_all(parent).is_err() {
             return;
         }
-        let config = bincode::config::standard();
-        let Ok(bytes) = bincode::serde::encode_to_vec(func, config) else {
+        let Ok(bytes) = postcard::to_allocvec(func) else {
             return;
         };
         let _ = fs::write(&path, bytes);
@@ -82,7 +78,7 @@ mod tests {
 
     /// Build a minimal `SsaFunction` for round-trip testing. The function
     /// has a single empty entry block; that's enough to exercise the
-    /// bincode round-trip without depending on a real lifter.
+    /// postcard round-trip without depending on a real lifter.
     fn sample_func(addr: u64) -> SsaFunction {
         let entry = BlockId(0);
         let mut func = Function::new(format!("fn_{addr:x}"), entry, addr);

@@ -14,7 +14,7 @@ unlace-loader.workspace = true
 unlace-session = { workspace = true }
 anyhow.workspace = true
 tracing.workspace = true
-pyo3 = { version = "0.24", features = ["auto-initialize"], optional = true }
+pyo3 = { version = "0.29", features = ["auto-initialize"], optional = true }
 
 [features]
 default = []

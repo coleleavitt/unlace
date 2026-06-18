@@ -5,7 +5,7 @@
       "id": "t78",
       "subject": "Compile, then git diff/stage/commit/push",
       "description": "cargo check workspace, review diff, commit and push",
-      "status": "pending",
+      "status": "completed",
       "blocks": [],
       "blockedBy": [],
       "created_at_ms": 1780666495361

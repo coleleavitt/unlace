@@ -16,7 +16,7 @@
 //! 4   name_len u32
 //! N   name bytes
 //! 8   payload_len u64 (compressed size)
-//! M   zstd-compressed bincode payload
+//! M   zstd-compressed postcard payload
 //! ```
 //!
 //! Sections defined so far:
@@ -193,13 +193,11 @@ fn parse(bytes: &[u8]) -> Result<DbContents> {
             .context("zstd decompression failed")?;
         match section.name.as_str() {
             "annotations" => {
-                let (val, _): (Annotations, _) =
-                    bincode::serde::decode_from_slice(&decompressed, bincode::config::standard())?;
+                let val: Annotations = postcard::from_bytes(&decompressed)?;
                 annotations = Some(val);
             }
             "selection" => {
-                let (val, _): (Selection, _) =
-                    bincode::serde::decode_from_slice(&decompressed, bincode::config::standard())?;
+                let val: Selection = postcard::from_bytes(&decompressed)?;
                 selection = Some(val);
             }
             _other => {
@@ -246,7 +244,7 @@ fn parse_section(bytes: &[u8]) -> Result<(DbSection, usize)> {
 }
 
 fn write_section<T: Serialize>(file: &mut File, name: &str, value: &T) -> Result<()> {
-    let encoded = bincode::serde::encode_to_vec(value, bincode::config::standard())?;
+    let encoded = postcard::to_allocvec(value)?;
     let compressed = zstd::encode_all(&encoded[..], 3)?;
     file.write_all(&(name.len() as u32).to_le_bytes())?;
     file.write_all(name.as_bytes())?;

@@ -140,3 +140,27 @@ pub fn lift_blr(ctx: &mut LiftCtx) {
         ctx.addr,
     ));
 }
+
+/// CALLOTHER intrinsic tags for PowerPC system instructions.
+///
+/// Mirrors the x86 lifter convention of tagging `CALLOTHER` ops with a
+/// stable intrinsic identifier so later passes can recover the original
+/// instruction semantics without re-decoding.
+pub mod ppc_tag {
+    /// `sc` — PowerPC system call (`0x44000002`, primary opcode 17).
+    pub const SYSCALL: u64 = 0x400;
+}
+
+/// Lift `sc` (system call, primary opcode 17, e.g. `0x44000002`).
+///
+/// PowerPC has no architecturally-defined target for `sc`; it traps into the
+/// supervisor. We model it the same way x86 `syscall` is modelled: as a
+/// `CALLOTHER` intrinsic tagged with [`ppc_tag::SYSCALL`].
+pub fn lift_sc(ctx: &mut LiftCtx) {
+    let tag_vn = Varnode::constant(ppc_tag::SYSCALL, 8);
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![tag_vn],
+        ctx.addr,
+    ));
+}

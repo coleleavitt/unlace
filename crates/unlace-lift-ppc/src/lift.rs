@@ -333,6 +333,9 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
             ops::control_flow::lift_blr(ctx);
         }
 
+        // System call (`sc`, primary opcode 17, e.g. 0x44000002)
+        PpcInsn::PPC_INS_SC => ops::control_flow::lift_sc(ctx),
+
         // Loads
         PpcInsn::PPC_INS_LWZ | PpcInsn::PPC_INS_LWZX => ops::data_move::lift_lwz(ctx, &ops),
         PpcInsn::PPC_INS_LD | PpcInsn::PPC_INS_LDX => ops::data_move::lift_ld(ctx, &ops),

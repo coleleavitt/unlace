@@ -246,6 +246,26 @@ mod tests {
     }
 
     #[test]
+    fn test_sc_syscall() {
+        // 44 00 00 02 = sc (system call, primary opcode 17).
+        // Regression for ROADMAP Phase C.5: must NOT emit Unimplemented.
+        let result = lifter()
+            .lift_insn(&[0x44, 0x00, 0x00, 0x02], 0x1000_0118)
+            .expect("should decode SC");
+        assert_eq!(result.len, 4);
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "sc must not lift to Unimplemented, got {:?}",
+            result.ir_ops
+        );
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
+            "sc should lift to a Callother (syscall) intrinsic, got {:?}",
+            result.ir_ops
+        );
+    }
+
+    #[test]
     fn test_cmpw() {
         // 7c 03 20 00 = cmpw cr0, r3, r4
         let result = lifter()

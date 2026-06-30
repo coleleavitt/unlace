@@ -10,7 +10,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Annotations, Bookmark, Comment, Patch, Rename, Selection, Session, TypeAnnotation, db, sha256,
+    Annotations, Bookmark, CallOverride, Comment, Patch, Rename, Selection, Session,
+    TypeAnnotation, VariableTypeOverride, db, sha256,
 };
 
 pub const MAGIC: &str = "UNLACE_PROJECT";
@@ -27,6 +28,12 @@ pub struct ProjectFile {
     pub type_overlays: BTreeMap<u64, TypeAnnotation>,
     pub bookmarks: BTreeMap<u64, Bookmark>,
     pub patches: BTreeMap<u64, Patch>,
+    /// User-forced variable type overrides, keyed by owning `function_ea`.
+    #[serde(default)]
+    pub variable_type_overrides: BTreeMap<u64, Vec<VariableTypeOverride>>,
+    /// User-forced call-site overrides, keyed by `call_ea`.
+    #[serde(default)]
+    pub call_overrides: BTreeMap<u64, CallOverride>,
     #[serde(default)]
     pub analysis_summary: Option<AnalysisSummary>,
 }
@@ -71,6 +78,8 @@ impl ProjectFile {
             type_overlays: BTreeMap::new(),
             bookmarks: BTreeMap::new(),
             patches: BTreeMap::new(),
+            variable_type_overrides: BTreeMap::new(),
+            call_overrides: BTreeMap::new(),
             analysis_summary: None,
         }
     }
@@ -88,6 +97,8 @@ impl ProjectFile {
         project.type_overlays = annotations.types;
         project.bookmarks = annotations.bookmarks;
         project.patches = annotations.patches;
+        project.variable_type_overrides = annotations.variable_type_overrides;
+        project.call_overrides = annotations.call_overrides;
         project.selection = session.selection();
         project.analysis_summary = session.with_binary(|image| AnalysisSummary {
             function_count: image.symbols.len() as u64,
@@ -104,6 +115,8 @@ impl ProjectFile {
             types: self.type_overlays.clone(),
             bookmarks: self.bookmarks.clone(),
             patches: self.patches.clone(),
+            variable_type_overrides: self.variable_type_overrides.clone(),
+            call_overrides: self.call_overrides.clone(),
         }
     }
 
@@ -221,6 +234,8 @@ impl LoadedProject {
                     type_overlays: annotations.types,
                     bookmarks: annotations.bookmarks,
                     patches: annotations.patches,
+                    variable_type_overrides: annotations.variable_type_overrides,
+                    call_overrides: annotations.call_overrides,
                     analysis_summary: None,
                 }
             }
@@ -293,6 +308,14 @@ fn apply_annotations(session: &Session, annotations: &Annotations, selection: Se
     for patch in annotations.patches.values() {
         session.add_patch(patch.clone());
     }
+    for overrides in annotations.variable_type_overrides.values() {
+        for override_ in overrides {
+            session.set_variable_type_override(override_.clone());
+        }
+    }
+    for call_override in annotations.call_overrides.values() {
+        session.set_call_override(call_override.clone());
+    }
     session.set_selection(selection);
 }
 
@@ -362,14 +385,34 @@ mod tests {
             comment: "nop".into(),
             source: PatchSource::UserHex,
         });
+        session.set_variable_type_override(VariableTypeOverride {
+            function_ea: 0x1000,
+            var_name: "v4".into(),
+            type_decl: "unsigned __int64".into(),
+        });
+        session.set_call_override(CallOverride {
+            call_ea: 0x100c,
+            forced_signature: Some("int strcmp(const char *, const char *)".into()),
+            forced_callee_ea: Some(0x2000),
+            opaque: true,
+        });
         session.set_selection(Selection {
             current_function: Some(0x1000),
             current_address: Some(0x1004),
         });
 
         let project = ProjectFile::from_session(&session).expect("project");
-        let json = serde_json::to_string(&project).expect("json");
-        let recovered: ProjectFile = serde_json::from_str(&json).expect("load");
+        let path = std::env::temp_dir().join(format!(
+            "unlace_project_round_trip_{}.unlace",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        project.save_to(&path).expect("save");
+        let recovered = ProjectFile::load_from(&path).expect("load");
+        let _ = std::fs::remove_file(&path);
+
+        // Byte-for-byte: the loaded project re-serializes identically.
+        assert_eq!(recovered, project);
 
         assert_eq!(recovered.magic, MAGIC);
         assert_eq!(recovered.binary.sha256, "11".repeat(32));
@@ -382,6 +425,26 @@ mod tests {
         assert_eq!(recovered.bookmarks[&0x1000].title, "start");
         assert_eq!(recovered.patches[&0x1008].bytes, vec![0x90, 0x90]);
         assert_eq!(recovered.selection.current_address, Some(0x1004));
+
+        // User override facts survive the round-trip value-equal.
+        let var_overrides = &recovered.variable_type_overrides[&0x1000];
+        assert_eq!(var_overrides.len(), 1);
+        assert_eq!(var_overrides[0].var_name, "v4");
+        assert_eq!(var_overrides[0].type_decl, "unsigned __int64");
+        let call_override = &recovered.call_overrides[&0x100c];
+        assert_eq!(
+            call_override.forced_signature.as_deref(),
+            Some("int strcmp(const char *, const char *)")
+        );
+        assert_eq!(call_override.forced_callee_ea, Some(0x2000));
+        assert!(call_override.opaque);
+
+        // The same facts reach a session when the project is applied.
+        let restored = synthetic_session();
+        project.apply_to(&restored).expect("apply");
+        let anns = restored.annotations();
+        assert_eq!(anns.variable_type_overrides[&0x1000][0].var_name, "v4");
+        assert!(anns.call_overrides[&0x100c].opaque);
     }
 
     #[test]

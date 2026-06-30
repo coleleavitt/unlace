@@ -48,6 +48,31 @@ pub struct TypeAnnotation {
     pub declaration: String,
 }
 
+/// A user-forced variable type override inside a decompiled function.
+///
+/// Lets the user force a local variable's type, overriding whatever the
+/// decompiler infers. Keyed in [`Annotations`] by the owning function's
+/// entry address (`function_ea`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VariableTypeOverride {
+    pub function_ea: u64,
+    pub var_name: String,
+    pub type_decl: String,
+}
+
+/// A user-forced override applied to a specific call site.
+///
+/// Lets the user force a call's signature, redirect its callee, and/or mark
+/// the call opaque (its effects unknown). Keyed in [`Annotations`] by the
+/// call instruction address (`call_ea`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallOverride {
+    pub call_ea: u64,
+    pub forced_signature: Option<String>,
+    pub forced_callee_ea: Option<u64>,
+    pub opaque: bool,
+}
+
 /// A user bookmark.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bookmark {
@@ -79,6 +104,12 @@ pub struct Annotations {
     pub types: BTreeMap<u64, TypeAnnotation>,
     pub bookmarks: BTreeMap<u64, Bookmark>,
     pub patches: BTreeMap<u64, Patch>,
+    /// User-forced variable type overrides, keyed by owning `function_ea`.
+    #[serde(default)]
+    pub variable_type_overrides: BTreeMap<u64, Vec<VariableTypeOverride>>,
+    /// User-forced call-site overrides, keyed by `call_ea`.
+    #[serde(default)]
+    pub call_overrides: BTreeMap<u64, CallOverride>,
 }
 
 impl Annotations {
@@ -103,6 +134,8 @@ pub enum SessionEvent {
     Typed(TypeAnnotation),
     Bookmarked(Bookmark),
     Patched(Patch),
+    VariableTypeOverridden(VariableTypeOverride),
+    CallOverridden(CallOverride),
     SelectionChanged(Selection),
     Saved { path: PathBuf },
 }
@@ -245,6 +278,37 @@ impl Session {
             g.annotations.patches.insert(p.ea, p.clone());
         }
         self.emit(SessionEvent::Patched(p));
+    }
+
+    /// Force a variable's type inside a function, overriding inference.
+    ///
+    /// Overrides are accumulated per `function_ea`; setting one for a
+    /// variable name already present replaces the existing entry so the
+    /// store stays deterministic and free of duplicates.
+    pub fn set_variable_type_override(&self, o: VariableTypeOverride) {
+        {
+            let mut g = self.inner.write();
+            let list = g
+                .annotations
+                .variable_type_overrides
+                .entry(o.function_ea)
+                .or_default();
+            if let Some(existing) = list.iter_mut().find(|e| e.var_name == o.var_name) {
+                *existing = o.clone();
+            } else {
+                list.push(o.clone());
+            }
+        }
+        self.emit(SessionEvent::VariableTypeOverridden(o));
+    }
+
+    /// Force a call site's signature / callee / opacity, overriding inference.
+    pub fn set_call_override(&self, o: CallOverride) {
+        {
+            let mut g = self.inner.write();
+            g.annotations.call_overrides.insert(o.call_ea, o.clone());
+        }
+        self.emit(SessionEvent::CallOverridden(o));
     }
 
     /// Subscribe a listener to all session events.

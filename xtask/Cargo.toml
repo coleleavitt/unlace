@@ -16,3 +16,4 @@ unlace-lift = { workspace = true }
 unlace-lift-x86 = { workspace = true }
 unlace-passes = { workspace = true }
 unlace-sbom = { workspace = true }
+unlace-session = { workspace = true }

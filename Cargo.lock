@@ -3547,6 +3547,7 @@ dependencies = [
  "unlace-loader",
  "unlace-passes",
  "unlace-sbom",
+ "unlace-session",
 ]
 
 [[package]]

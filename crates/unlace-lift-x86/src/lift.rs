@@ -948,6 +948,9 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Tdpbusd => amx::lift_tdpb(ctx, insn, amx::tag::TDPBUSD),
         M::Tdpbuud => amx::lift_tdpb(ctx, insn, amx::tag::TDPBUUD),
         M::Tdpbf16ps => amx::lift_tdpb(ctx, insn, amx::tag::TDPBF16PS),
+        M::Ldtilecfg => amx::lift_ldtilecfg(ctx, insn),
+        M::Sttilecfg => amx::lift_sttilecfg(ctx, insn),
+        M::Tilezero => amx::lift_tilezero(ctx, insn),
 
         // ── SSE/SSE2 scalar float arithmetic → proper FloatOps ──
         M::Addsd => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatAdd, 8),

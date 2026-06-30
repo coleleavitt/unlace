@@ -120,6 +120,43 @@ pub fn resolve_go_iface_calls(
     out
 }
 
+/// A recovered Go `runtime.itab` (interface→concrete-type method table),
+/// surfaced for whole-program devirtualization and type reporting (Phase B.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GoItabInfo {
+    /// Address of the itab record.
+    pub itab_addr: u64,
+    /// Interface type name, when resolvable from the parsed Go type table.
+    pub iface_name: Option<String>,
+    /// Concrete (implementing) type name, when resolvable.
+    pub concrete_type: Option<String>,
+    /// Method entry-point addresses (the itab's `fun[]` slots).
+    pub methods: Vec<u64>,
+}
+
+/// Recover every parsed Go itab into a [`GoItabInfo`], resolving interface /
+/// concrete type names from `type_names` (typically derived from
+/// `BinaryImage::go_types`, keyed by type-descriptor VA) when present.
+///
+/// Honest about coverage: this reflects only what the loader already parsed
+/// into `itabs`; if Go metadata was absent the result is empty, and type names
+/// stay `None` when the type-descriptor VA isn't in `type_names`. Deterministic
+/// (ordered by itab address).
+pub fn recover_go_itabs(
+    itabs: &BTreeMap<u64, GoItab>,
+    type_names: &BTreeMap<u64, String>,
+) -> Vec<GoItabInfo> {
+    itabs
+        .values()
+        .map(|it| GoItabInfo {
+            itab_addr: it.va,
+            iface_name: type_names.get(&it.inter_type_va).cloned(),
+            concrete_type: type_names.get(&it.concrete_type_va).cloned(),
+            methods: it.methods.clone(),
+        })
+        .collect()
+}
+
 fn try_resolve_call(
     func: &SsaFunction,
     defs: &DefIndex,
@@ -357,6 +394,33 @@ mod tests {
                 methods: vec![0x9000, 0x9010],
             },
         )])
+    }
+
+    #[test]
+    fn recover_go_itabs_surfaces_addr_methods_and_names() {
+        let itabs = sample_itabs();
+        let names = BTreeMap::from([
+            (0x6000u64, "io.Reader".to_string()),
+            (0x7000u64, "os.File".to_string()),
+        ]);
+        let recovered = recover_go_itabs(&itabs, &names);
+        assert_eq!(recovered.len(), 1);
+        let it = &recovered[0];
+        assert_eq!(it.itab_addr, 0x5000);
+        assert_eq!(it.iface_name.as_deref(), Some("io.Reader"));
+        assert_eq!(it.concrete_type.as_deref(), Some("os.File"));
+        assert_eq!(it.methods, vec![0x9000, 0x9010]);
+    }
+
+    #[test]
+    fn recover_go_itabs_honest_when_names_or_itabs_absent() {
+        // No type names → type fields stay None but addr/methods still surface.
+        let recovered = recover_go_itabs(&sample_itabs(), &BTreeMap::new());
+        assert_eq!(recovered.len(), 1);
+        assert!(recovered[0].iface_name.is_none());
+        assert!(recovered[0].concrete_type.is_none());
+        // No itabs → empty, never fabricated.
+        assert!(recover_go_itabs(&BTreeMap::new(), &BTreeMap::new()).is_empty());
     }
 
     #[test]

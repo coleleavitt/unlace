@@ -71,11 +71,19 @@ Operating rules for this run:
 | 46 | B.4 | Go itab/interface-type recovery (`recover_go_itabs` → addr/iface/concrete/methods) | `cargo test -p unlace-passes go_iface` (4 pass) | `5159af0085` |
 | 47 | C.1 | x86 AMX tile ops lifted as Callother (tmm tiles: ldtilecfg/tileload/tdpb*/tilezero) | `cargo test -p unlace-lift-x86` (258 pass) | `83abcf...` |
 | 48 | C.2 | AArch64 SME subset (smstart/smstop/zero/fmopa/addha) over ZA tile | `cargo test -p unlace-lift-arm` (236 pass) | `1d5b970d56` |
+| 49 | G.3 | conditional-breakpoint expression evaluator (`rax==0`/`rbx>0x10`/reg-vs-reg) + Breakpoint.condition | `cargo test -p unlace-debugger` (27 pass) | `97a8629a7c` |
+| 50 | C.5 | SuperH SH-4 FPU register file (fr0–15/dr/FPUL/FPSCR) + FP op lifting | `cargo test -p unlace-lift-superh` (6 pass) | `4e8c83ddb8` |
+| 51 | E.4.3 | API-hash resolver (ROR13/DJB2/CRC32 + 39-name roster) + hash-loop recognizer | `cargo test -p unlace-passes api_hash` (5 pass) | `b7c82f2d83` |
+| 52 | C.4 | RISC-V scalar-crypto Zk subset (aes64es/esm/ds/dsm/ks, sha512, clmul) as Callother | `cargo test -p unlace-lift-riscv` (85 pass) | `269231d731` |
 
 ## Status checkpoint
 
-48 roadmap-phase tickets landed on master, each gate-verified. Build clean,
-determinism lint OK, `cargo fmt --all --check` clean. Phases A–K all advanced. Build clean,
+52 roadmap-phase tickets landed on master, each gate-verified. Build clean,
+determinism lint OK, `cargo fmt --all --check` clean. Phases A–K all advanced.
+Architecture breadth: 38/39 named archs resolve to a real facade lifter, with
+deep SIMD/crypto/FP coverage added across x86 (AVX-512+AMX), AArch64
+(MTE/SVE/SME), ARM32 (VFP/NEON), RISC-V (Zbb/RVV/Zk), PPC (AltiVec), MIPS (MSA),
+m68k (FPU), and SuperH (FPU). Build clean,
 determinism lint OK, `cargo fmt --all --check` clean. Phases touched span all of
 A, B, C, D, E, F, G, H, I, J, K. Honest remaining deep work: D.3 symbolic exec
 (Z3), G.1 live WinAPI body, H.2 full ida_hexrays.decompile pipeline wiring,

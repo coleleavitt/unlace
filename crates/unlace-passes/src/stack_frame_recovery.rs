@@ -60,6 +60,7 @@ fn resolve_spec(func: &SsaFunction) -> StackSpec {
 type DefMap = BTreeMap<Varnode, Vec<(BlockId, usize)>>;
 type ResolveCache = BTreeMap<(Varnode, u32), Option<i64>>;
 type SsaResolveCache = BTreeMap<(unlace_ir::ssa::SsaVarnode, u32), Option<i64>>;
+type HeuristicStackAccessKey = (u64, i64, u8, bool);
 
 /// Recover the logical stack-frame layout of `func`.
 ///
@@ -93,7 +94,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     // First pass: collect every (offset, width) observation.
     // BTreeMap keeps offsets sorted for the later fusion sweep.
     let mut observations: BTreeMap<i64, Vec<u8>> = BTreeMap::new();
-    let mut heuristic_access_addrs: BTreeSet<u64> = BTreeSet::new();
+    let mut heuristic_stack_accesses: BTreeSet<HeuristicStackAccessKey> = BTreeSet::new();
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             if func.frame_setup_insns.contains(&(bid, insn_idx)) {
@@ -123,7 +124,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                         let width = insn.inputs[2].size;
                         if width > 0 {
                             record_observation(offset, width, &mut observations);
-                            heuristic_access_addrs.insert(insn.addr);
+                            heuristic_stack_accesses.insert((insn.addr, offset, width, true));
                             stack_frame_trace_line(
                                 func,
                                 format_args!(
@@ -161,7 +162,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                         let width = insn.output.map(|o| o.size).unwrap_or(0);
                         if width > 0 {
                             record_observation(offset, width, &mut observations);
-                            heuristic_access_addrs.insert(insn.addr);
+                            heuristic_stack_accesses.insert((insn.addr, offset, width, false));
                             stack_frame_trace_line(
                                 func,
                                 format_args!(
@@ -215,7 +216,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
             }
         }
     }
-    seed_recorded_stack_accesses(func, &heuristic_access_addrs, &mut observations);
+    seed_recorded_stack_accesses(func, &heuristic_stack_accesses, &mut observations);
     seed_debug_stack_locals(func, &spec, &mut observations);
     for (offset, widths) in &observations {
         stack_frame_trace_line(
@@ -239,21 +240,31 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
             let prev = locals.get_mut(&prev_off).expect("kept slot present");
             let prev_max = prev.size as i64;
             if stack_slot_folds_into(offset, prev_off, prev_max) {
-                // Partial access *inside* the previous slot — fold widths.
-                for w in &widths {
-                    if !prev.access_widths.contains(w) {
-                        prev.access_widths.push(*w);
+                if preserves_distinct_debug_scalar_slots(func, prev_off, offset) {
+                    stack_frame_trace_line(
+                        func,
+                        format_args!(
+                            "keep-distinct-debug-scalar offset={} prev={} prev_size={}",
+                            offset, prev_off, prev.size
+                        ),
+                    );
+                } else {
+                    // Partial access *inside* the previous slot — fold widths.
+                    for w in &widths {
+                        if !prev.access_widths.contains(w) {
+                            prev.access_widths.push(*w);
+                        }
                     }
+                    prev.size = prev.size.max(max_w as u64);
+                    stack_frame_trace_line(
+                        func,
+                        format_args!(
+                            "fuse-partial offset={} into={} prev_size={} widths={:?}",
+                            offset, prev_off, prev.size, prev.access_widths
+                        ),
+                    );
+                    continue;
                 }
-                prev.size = prev.size.max(max_w as u64);
-                stack_frame_trace_line(
-                    func,
-                    format_args!(
-                        "fuse-partial offset={} into={} prev_size={} widths={:?}",
-                        offset, prev_off, prev.size, prev.access_widths
-                    ),
-                );
-                continue;
             }
         }
 
@@ -379,9 +390,8 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
 ///
 /// * negative offsets → callee-local storage (default
 ///   [`FrameSlotKind::Local`])
-/// * offsets in `[0, ptr_size)` → the saved return-address slot. Not
-///   strictly part of the user-visible frame; we leave it as `Local` so
-///   the caller can still see it if recovery surfaced one.
+/// * offsets in `[0, ptr_size)` → the saved return-address slot, tagged as
+///   non-source control-flow storage.
 /// * offsets `>= ptr_size` → caller-pushed stack arguments
 ///   (SysV / cdecl) — tagged [`FrameSlotKind::StackArg`].
 /// * for Microsoft x64 the 32-byte shadow region at
@@ -415,10 +425,14 @@ fn classify_slot_kinds(
             slot.kind = FrameSlotKind::Local;
             continue;
         }
-        if offset < ptr {
-            // Saved return-address region — keep as Local so existing
-            // renderers don't suddenly grow a phantom "stack arg" entry
-            // for the return slot.
+        if offset < ptr
+            && slot.size <= ptr as u64
+            && slot.access_widths.iter().all(|w| i64::from(*w) <= ptr)
+        {
+            slot.kind = FrameSlotKind::ReturnAddress;
+            continue;
+        }
+        if offset == 0 {
             slot.kind = FrameSlotKind::Local;
             continue;
         }
@@ -442,11 +456,15 @@ fn record_observation(off: i64, width: u8, obs: &mut BTreeMap<i64, Vec<u8>>) {
 
 fn seed_recorded_stack_accesses(
     func: &SsaFunction,
-    heuristic_access_addrs: &BTreeSet<u64>,
+    heuristic_stack_accesses: &BTreeSet<HeuristicStackAccessKey>,
     obs: &mut BTreeMap<i64, Vec<u8>>,
 ) {
     for acc in &func.stack_accesses {
-        if heuristic_access_addrs.contains(&acc.source_addr) {
+        if heuristic_stack_accesses.iter().any(
+            |(source_addr, _heuristic_delta, _heuristic_width, heuristic_is_store)| {
+                *source_addr == acc.source_addr && *heuristic_is_store == acc.is_store
+            },
+        ) {
             stack_frame_trace_line(
                 func,
                 format_args!(
@@ -487,7 +505,51 @@ fn debug_local_width(func: &SsaFunction, offset: i64, spec: &StackSpec) -> u8 {
     {
         return width.max(1);
     }
+    if let Some(width) = pending_debug_local_width(func, offset) {
+        return width.max(1);
+    }
     spec.ptr_size.max(1)
+}
+
+fn pending_debug_local_width(func: &SsaFunction, offset: i64) -> Option<u8> {
+    let name = func.dwarf_local_names.get(&offset)?;
+    func.pending_dwarf_locals
+        .iter()
+        .find(|pending| {
+            !pending.is_param
+                && pending.name == *name
+                && (pending.frame_offset == offset
+                    || pending
+                        .cfa_to_rbp_delta
+                        .is_some_and(|delta| pending.frame_offset + delta == offset))
+        })
+        .and_then(|pending| pending.byte_size)
+        .and_then(|byte_size| u8::try_from(byte_size).ok())
+        .filter(|byte_size| *byte_size != 0)
+}
+
+fn preserves_distinct_debug_scalar_slots(
+    func: &SsaFunction,
+    prev_offset: i64,
+    offset: i64,
+) -> bool {
+    let Some(prev_name) = debug_scalar_name_at(func, prev_offset) else {
+        return false;
+    };
+    let Some(name) = debug_scalar_name_at(func, offset) else {
+        return false;
+    };
+    prev_name != name
+}
+
+fn debug_scalar_name_at(func: &SsaFunction, offset: i64) -> Option<&str> {
+    if func.dwarf_aggregate_offsets.contains(&offset) {
+        return None;
+    }
+    func.dwarf_local_names
+        .get(&offset)
+        .map(String::as_str)
+        .filter(|name| !name.trim().is_empty())
 }
 
 fn primitive_width(ty: PrimitiveType, spec: &StackSpec) -> Option<u8> {
@@ -510,11 +572,11 @@ fn primitive_width(ty: PrimitiveType, spec: &StackSpec) -> Option<u8> {
 /// emitting the run we just closed if it had ≥3 elements.
 ///
 /// `dwarf_names` carries the calibrated DWARF local names keyed by resolved
-/// stack offset. A candidate run is rejected when it covers more than one
-/// distinct DWARF-named scalar: those are individually declared source
-/// variables (e.g. `int a, b, c, d, e;`), not array elements, so fusing
-/// them into one buffer is a regression. Runs with at most one named slot
-/// (genuine arrays, where DWARF names only the array head) still fuse.
+/// stack offset. A candidate run is rejected when it covers any DWARF-named
+/// scalar: those are individually declared source variables (e.g. `int a, b,
+/// c, d, e;`), not array elements, so fusing them into one buffer is a
+/// regression. Aggregate-typed DWARF names still fuse because a source array or
+/// struct legitimately spans more than one observed slot.
 fn detect_arrays(
     locals: &BTreeMap<i64, StackLocal>,
     dwarf_names: &BTreeMap<i64, String>,
@@ -550,19 +612,19 @@ fn detect_arrays(
         }
         let count = j - i;
         if count >= 3 {
-            // Count distinct DWARF-named *scalar* slots in the run. More than
-            // one means these are separate source scalars that happen to be
-            // contiguous (e.g. `int a, b, c, d, e;`) — never an array, so do
-            // not fuse. Aggregate-typed names (struct / array locals) are
-            // excluded from this count: an aggregate legitimately spans a
-            // byte region and may share a fused buffer with a neighbour.
-            let distinct_named = entries[i..j]
+            // Count DWARF-named *scalar* slots in the run. Any scalar source
+            // name means this is not an inferred array: a run with one named
+            // scalar plus unnamed synthetic tail slots is still a scalar live
+            // range followed by compiler temporaries, not `name[N]`. Aggregate
+            // typed names are excluded: a true array/struct local legitimately
+            // spans a byte region and may share a fused buffer with a neighbour.
+            let scalar_named = entries[i..j]
                 .iter()
                 .filter(|(off, _, _)| !dwarf_aggregate_offsets.contains(off))
                 .filter_map(|(off, _, _)| dwarf_names.get(off))
                 .collect::<BTreeSet<_>>()
                 .len();
-            if distinct_named > 1 {
+            if scalar_named > 0 {
                 i += 1;
                 continue;
             }
@@ -1088,6 +1150,46 @@ mod tests {
     }
 
     #[test]
+    fn recorded_stack_access_same_addr_different_offset_is_kept() {
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(0, 4);
+        let c32 = Varnode::constant(32, 8);
+        let ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c32], 0x10c0),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, val], 0x10c9),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.stack_accesses.push(unlace_ir::ssa::StackAccess {
+            source_addr: 0x10c9,
+            base_register: "sp".to_string(),
+            delta: -40,
+            width: 8,
+            is_store: false,
+            resolved_slot: None,
+            lost_provenance: true,
+        });
+
+        let frame = recover_stack_frame(&ssa);
+
+        assert!(
+            frame.locals.contains_key(&-32),
+            "heuristic observation should remain present: {:?}",
+            frame.locals.keys().collect::<Vec<_>>()
+        );
+        let recorded = frame.locals.get(&-40).unwrap_or_else(|| {
+            panic!(
+                "recorded StackAccess at same address but different offset should be kept: {:?}",
+                frame.locals.keys().collect::<Vec<_>>()
+            )
+        });
+        assert_eq!(recorded.size, 8);
+        assert_eq!(recorded.access_widths, vec![8]);
+    }
+
+    #[test]
     fn t209_seeds_debug_local_names_without_heuristic_accesses() {
         let mut ssa = make_single_block_ssa(vec![]);
         ssa.dwarf_local_names.insert(-0x20, "counter".to_string());
@@ -1109,6 +1211,82 @@ mod tests {
             .expect("debug local frame offset should seed a frame slot");
         assert_eq!(local.size, 4);
         assert_eq!(local.kind, FrameSlotKind::Local);
+    }
+
+    #[test]
+    fn debug_local_seed_uses_dwarf_byte_size_without_stack_var() {
+        let mut ssa = make_single_block_ssa(vec![]);
+        ssa.dwarf_local_names.insert(-0x20, "counter".to_string());
+        ssa.pending_dwarf_locals
+            .push(unlace_ir::ssa::PendingDwarfLocal {
+                frame_offset: -0x20,
+                name: "counter".to_string(),
+                type_name: Some("int".to_string()),
+                byte_size: Some(4),
+                raw_span: None,
+                calibrated_span: None,
+                cfa_to_rbp_delta: Some(16),
+                is_aggregate: false,
+                is_param: false,
+            });
+
+        let frame = recover_stack_frame(&ssa);
+
+        let local = frame
+            .locals
+            .get(&-0x20)
+            .expect("DWARF-only int local should seed a frame slot");
+        assert_eq!(local.size, 4);
+        assert_eq!(local.access_widths, vec![4]);
+    }
+
+    #[test]
+    fn debug_calls_scalar_run_stays_separate_from_synthetic_slots() {
+        let mut ssa = make_single_block_ssa(vec![]);
+        for (offset, name) in [
+            (-36i64, "a"),
+            (-32, "b"),
+            (-28, "c"),
+            (-24, "d"),
+            (-20, "e"),
+        ] {
+            ssa.dwarf_local_names.insert(offset, name.to_string());
+            ssa.pending_dwarf_locals
+                .push(unlace_ir::ssa::PendingDwarfLocal {
+                    frame_offset: offset,
+                    name: name.to_string(),
+                    type_name: Some("int".to_string()),
+                    byte_size: Some(4),
+                    raw_span: None,
+                    calibrated_span: None,
+                    cfa_to_rbp_delta: Some(16),
+                    is_aggregate: false,
+                    is_param: false,
+                });
+        }
+        ssa.stack_accesses.push(unlace_ir::ssa::StackAccess {
+            source_addr: 0x123c,
+            base_register: "sp".to_string(),
+            delta: -16,
+            width: 8,
+            is_store: true,
+            resolved_slot: Some(-24),
+            lost_provenance: true,
+        });
+
+        let frame = recover_stack_frame(&ssa);
+
+        for offset in [-36i64, -32, -28, -24, -20] {
+            let local = frame
+                .locals
+                .get(&offset)
+                .unwrap_or_else(|| panic!("expected scalar slot at {offset}: {:?}", frame.locals));
+            assert_eq!(
+                local.size, 4,
+                "scalar slot {offset} must not become a buffer"
+            );
+        }
+        assert_eq!(frame.locals.get(&-16).map(|local| local.size), Some(8));
     }
 
     /// Test 2: pair of locals at -8 and -16.  Distinct slots, both 8-byte
@@ -1329,12 +1507,10 @@ mod tests {
         );
     }
 
-    /// Batch 2 slice 2: the return-address slot at offset `[0, ptr_size)`
-    /// must NOT classify as `StackArg` — keeping it tagged `Local`
-    /// preserves the legacy renderer's behaviour for the rare case where
-    /// recovery surfaces the return slot.
+    /// Batch 17: the return-address slot at offset `[0, ptr_size)` is ABI-owned
+    /// control-flow storage, not a source local or stack argument.
     #[test]
-    fn b2s2_return_address_slot_stays_local() {
+    fn batch17_return_address_slot_is_non_source_storage() {
         let ram = Varnode::constant(1, 8);
         let u0 = Varnode::unique(0, 8);
         let val = Varnode::reg(0, 8);
@@ -1352,11 +1528,72 @@ mod tests {
         if let Some(local) = frame.locals.get(&0) {
             assert_eq!(
                 local.kind,
-                FrameSlotKind::Local,
-                "return-addr slot [0, ptr_size) must stay Local, got {:?}",
+                FrameSlotKind::ReturnAddress,
+                "return-addr slot [0, ptr_size) must be non-source storage, got {:?}",
                 local.kind
             );
         }
+    }
+
+    #[test]
+    fn wide_zero_offset_stack_slot_is_local_storage() {
+        let ram = Varnode::constant(1, 8);
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(1024, 16);
+        let c0 = Varnode::constant(0, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, u0, smallvec![rsp(), c0], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, val], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+        let frame = recover_stack_frame(&ssa);
+
+        let local = frame.locals.get(&0).expect("wide offset-0 slot recovered");
+        assert_eq!(
+            local.kind,
+            FrameSlotKind::Local,
+            "wide offset-0 storage is a post-prologue local, not the pointer-sized return address"
+        );
+    }
+
+    #[test]
+    fn recorded_stack_access_from_same_instruction_does_not_seed_adjacent_slot() {
+        let ram = Varnode::constant(1, 8);
+        let addr = Varnode::unique(0, 8);
+        let value = Varnode::reg(24, 8);
+        let c8 = Varnode::constant(8, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, addr, smallvec![rsp(), c8], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, addr, value], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.stack_accesses.push(unlace_ir::ssa::StackAccess {
+            source_addr: 0x1004,
+            base_register: "sp".to_string(),
+            delta: -16,
+            width: 8,
+            is_store: true,
+            resolved_slot: None,
+            lost_provenance: true,
+        });
+
+        let frame = recover_stack_frame(&ssa);
+
+        assert!(
+            frame.locals.contains_key(&-8),
+            "heuristic stack observation should remain: {:?}",
+            frame.locals
+        );
+        assert!(
+            !frame.locals.contains_key(&-16),
+            "recorded StackAccess from the same Store must not invent an adjacent slot: {:?}",
+            frame.locals
+        );
     }
 
     fn stack_local(size: u64) -> StackLocal {
@@ -1389,6 +1626,19 @@ mod tests {
             groups.is_empty(),
             "distinct named scalars a,b,c,d,e must not fuse: {groups:?}"
         );
+    }
+
+    #[test]
+    fn detect_arrays_bails_single_named_scalar_with_synthetic_tail() {
+        let mut locals = BTreeMap::new();
+        for off in [-20i64, -16, -12] {
+            locals.insert(off, stack_local(4));
+        }
+        let mut names = BTreeMap::new();
+        names.insert(-20i64, "e".to_string());
+
+        let groups = detect_arrays(&locals, &names, &BTreeSet::new());
+        assert!(groups.is_empty(), "scalar e must not fuse with tail slots");
     }
 
     /// An unnamed equal-stride run is a genuine array and still fuses.

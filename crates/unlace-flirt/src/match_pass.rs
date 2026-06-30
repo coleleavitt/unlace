@@ -47,7 +47,7 @@ pub struct FlirtMatchDetail<'a> {
 }
 
 /// Report of what an apply did.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct FlirtApplyReport {
     /// Number of functions that received a name.
     pub renamed: usize,
@@ -55,6 +55,16 @@ pub struct FlirtApplyReport {
     pub inspected: usize,
     /// (address, name) pairs applied, sorted by address.
     pub applied: Vec<(u64, String)>,
+    /// Full confidence-bearing match records, sorted by address.
+    pub applied_details: Vec<FlirtAppliedMatch>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FlirtAppliedMatch {
+    pub addr: u64,
+    pub name: String,
+    pub confidence: f32,
+    pub signature_id: usize,
 }
 
 impl FlirtMatcher {
@@ -178,10 +188,17 @@ impl FlirtMatcher {
                     new_name: detail.name.to_string(),
                 });
                 report.applied.push((addr, detail.name.to_string()));
+                report.applied_details.push(FlirtAppliedMatch {
+                    addr,
+                    name: detail.name.to_string(),
+                    confidence: detail.confidence,
+                    signature_id: detail.signature_id,
+                });
                 report.renamed += 1;
             }
         }
         report.applied.sort_by_key(|(a, _)| *a);
+        report.applied_details.sort_by_key(|m| m.addr);
         report
     }
 }
@@ -343,6 +360,11 @@ mod tests {
         let report = m.apply_to_session_with_min_confidence(&session, false, 100);
         assert_eq!(report.renamed, 1);
         assert_eq!(report.applied, vec![(0x1000, "my_func".to_string())]);
+        assert_eq!(report.applied_details.len(), 1);
+        assert_eq!(report.applied_details[0].addr, 0x1000);
+        assert_eq!(report.applied_details[0].name, "my_func");
+        assert_eq!(report.applied_details[0].confidence, 1.0);
+        assert_eq!(report.applied_details[0].signature_id, 0);
         assert_eq!(
             session
                 .annotations()

@@ -73,6 +73,7 @@ where
 
     let arch = map_arch(&file);
     let entry = file.entry();
+    let image_base = file.nt_headers().optional_header().image_base();
     let sections = load_sections(&file);
     let mut symbols = load_coff_symbols(&file);
 
@@ -128,6 +129,8 @@ where
         dylibs: Vec::new(),
         rpaths: Vec::new(),
         pdb_types: None,
+        pdb_info: None,
+        image_base: Some(image_base),
         msvc_rtti: None,
         seh: None,
         go_module: None,
@@ -739,8 +742,8 @@ where
     let count = count.min(65536) as usize; // cap to prevent OOM
 
     let mut out = Vec::with_capacity(count);
-    for chunk in section_data.chunks_exact(4).take(count) {
-        let rva = u32::from_le_bytes(chunk.try_into().unwrap_or([0; 4]));
+    for chunk in section_data.as_chunks::<4>().0.iter().take(count) {
+        let rva = u32::from_le_bytes(*chunk);
         out.push(image_base + u64::from(rva));
     }
     out
@@ -847,7 +850,7 @@ where
 
     // Each RUNTIME_FUNCTION is 12 bytes: 3 × u32 (begin, end, unwind_info RVA).
     let mut out = Vec::new();
-    for chunk in dir_data.chunks_exact(12) {
+    for chunk in dir_data.as_chunks::<12>().0 {
         let begin_rva = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         let end_rva = u32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
         let unwind_rva = u32::from_le_bytes([chunk[8], chunk[9], chunk[10], chunk[11]]);
@@ -1117,7 +1120,7 @@ fn parse_rich_header(data: &[u8]) -> Option<RichHeader> {
 
     let record_data = &region[records_start..rich_pos];
     let mut records = Vec::new();
-    for chunk in record_data.chunks_exact(8) {
+    for chunk in record_data.as_chunks::<8>().0 {
         let raw_comp = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         let raw_count = u32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
         let comp_id = raw_comp ^ xor_key;
@@ -3077,6 +3080,8 @@ mod tests {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
             pdb_types: None,
+            pdb_info: None,
+            image_base: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,

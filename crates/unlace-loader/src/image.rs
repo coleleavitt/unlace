@@ -411,6 +411,12 @@ pub struct BinaryImage {
     pub endian: Endian,
     /// Entry point virtual address.
     pub entry: u64,
+    /// Preferred image base for formats whose debug info uses RVAs.
+    ///
+    /// PE PDB records key function-local data by RVA, while the decompile
+    /// pipeline works with absolutized VAs. `None` for formats that do not
+    /// expose a loader image base through this model.
+    pub image_base: Option<u64>,
     /// Loaded sections.
     pub sections: Vec<Section>,
     /// Symbols indexed by address (merged from all symbol tables).
@@ -472,6 +478,10 @@ pub struct BinaryImage {
     /// Consumed by the type-infer pipeline to seed function signatures and
     /// composite layouts. `None` for ELF/Mach-O or PEs without PDB.
     pub pdb_types: Option<crate::pdb_types::PdbTypes>,
+    /// PDB-derived symbols, lines, calling conventions, and function locals.
+    /// Function-local records remain keyed by RVA and are selected through
+    /// [`Self::image_base`] during decompilation.
+    pub pdb_info: Option<crate::pdb::PdbInfo>,
     /// MSVC RTTI hierarchy recovered from `.rdata` vtables (PE only).
     /// `None` for ELF/Mach-O or PEs without RTTI.
     pub msvc_rtti: Option<crate::msvc_rtti::MsvcRtti>,
@@ -584,6 +594,7 @@ impl BinaryImage {
             arch,
             endian,
             entry: 0,
+            image_base: None,
             sections: Vec::new(),
             symbols: BTreeMap::new(),
             plt_symbols: BTreeMap::new(),
@@ -604,6 +615,7 @@ impl BinaryImage {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
             pdb_types: None,
+            pdb_info: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -677,6 +689,7 @@ mod tests {
             arch: ArchId::Unknown(0),
             endian: Endian::Little,
             entry: 0,
+            image_base: None,
             sections: Vec::new(),
             symbols: BTreeMap::new(),
             plt_symbols: BTreeMap::new(),
@@ -697,6 +710,7 @@ mod tests {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
             pdb_types: None,
+            pdb_info: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,

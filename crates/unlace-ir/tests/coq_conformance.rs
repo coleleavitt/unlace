@@ -32,7 +32,14 @@ fn vl_samples() -> Vec<ValueLattice> {
     for c in [0u64, 1, 2, 5, 7, 42, u64::MAX] {
         v.push(Constant(c));
     }
-    for (lo, hi) in [(0u64, 0u64), (0, 10), (2, 5), (4, 12), (5, 7), (1, u64::MAX)] {
+    for (lo, hi) in [
+        (0u64, 0u64),
+        (0, 10),
+        (2, 5),
+        (4, 12),
+        (5, 7),
+        (1, u64::MAX),
+    ] {
         v.push(Range { min: lo, max: hi });
     }
     v
@@ -113,8 +120,14 @@ fn value_lattice_join_sound() {
     // gamma(a) ∪ gamma(b) ⊆ gamma(join a b), over the Coq concretization.
     for (a, b) in vl_pairs() {
         let j = a.join(b);
-        for &v in VL_PROBE.iter().filter(|&&v| vl_gamma(a, v) || vl_gamma(b, v)) {
-            assert!(vl_gamma(j, v), "join_sound violated: {v} ∈ {a:?}⊔{b:?}={j:?}");
+        for &v in VL_PROBE
+            .iter()
+            .filter(|&&v| vl_gamma(a, v) || vl_gamma(b, v))
+        {
+            assert!(
+                vl_gamma(j, v),
+                "join_sound violated: {v} ∈ {a:?}⊔{b:?}={j:?}"
+            );
         }
     }
 }
@@ -141,7 +154,10 @@ fn value_lattice_meet_complete() {
     for (a, b) in vl_pairs() {
         let m = a.meet(b);
         for &v in VL_PROBE.iter().filter(|&&v| a.contains(v) && b.contains(v)) {
-            assert!(m.contains(v), "meet_complete violated: {v} ∈ {a:?}⊓{b:?}={m:?}");
+            assert!(
+                m.contains(v),
+                "meet_complete violated: {v} ∈ {a:?}⊓{b:?}={m:?}"
+            );
         }
     }
 }
@@ -152,9 +168,8 @@ fn value_lattice_meet_complete() {
 fn value_lattice_meet_sound() {
     // theorem scoped to the Undef-free fragment (Undef is both join- and
     // meet-identity, so no single gamma is sound for it — see KnownBits.v note)
-    let undef_free = vl_pairs().filter(|(a, b)| {
-        !matches!(a, ValueLattice::Undef) && !matches!(b, ValueLattice::Undef)
-    });
+    let undef_free = vl_pairs()
+        .filter(|(a, b)| !matches!(a, ValueLattice::Undef) && !matches!(b, ValueLattice::Undef));
     for (a, b) in undef_free {
         let m = a.meet(b);
         for &v in VL_PROBE.iter().filter(|&&v| vl_gamma(m, v)) {
@@ -197,7 +212,10 @@ fn known_bits_from_constant_sound() {
     for w in kb_widths() {
         for v in kb_concrete(w) {
             let a = KnownBits::from_constant(v, w);
-            assert!(gamma_kb(&a, v), "from_constant_sound: {v:#x} ∉ γ(from_constant) w={w}");
+            assert!(
+                gamma_kb(&a, v),
+                "from_constant_sound: {v:#x} ∉ γ(from_constant) w={w}"
+            );
         }
     }
 }
@@ -208,7 +226,10 @@ fn known_bits_from_constant_no_conflict() {
     for w in kb_widths() {
         for v in kb_concrete(w) {
             let a = KnownBits::from_constant(v, w);
-            assert!(!a.has_conflict(), "from_constant_no_conflict: w={w} v={v:#x}");
+            assert!(
+                !a.has_conflict(),
+                "from_constant_no_conflict: w={w} v={v:#x}"
+            );
         }
     }
 }
@@ -271,7 +292,11 @@ fn known_bits_xor_sound() {
 #[test]
 fn known_bits_conflict_empty() {
     for w in kb_widths() {
-        let bad = KnownBits { zero: 1, one: 1, width: w };
+        let bad = KnownBits {
+            zero: 1,
+            one: 1,
+            width: w,
+        };
         assert!(bad.has_conflict());
         for x in 0u64..256 {
             assert!(!gamma_kb(&bad, x), "conflict_gamma_empty w={w} x={x}");
@@ -434,7 +459,10 @@ fn fuzz_value_lattice_laws() {
             _ => {
                 let a = r.next();
                 let b = r.next();
-                Range { min: a.min(b), max: a.max(b) }
+                Range {
+                    min: a.min(b),
+                    max: a.max(b),
+                }
             }
         }
     };

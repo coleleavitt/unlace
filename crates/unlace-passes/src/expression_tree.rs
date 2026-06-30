@@ -66,6 +66,13 @@ impl Pass for ExpressionTreePass {
             }
         }
 
+        let phi_inputs: BTreeSet<SsaVarnode> = func
+            .phi_map
+            .values()
+            .flat_map(|phis| phis.iter())
+            .flat_map(|phi| phi.inputs.iter().map(|&(_pred, sv)| sv))
+            .collect();
+
         let mut foldable = BTreeSet::new();
 
         for (&bid, block) in &func.function.blocks {
@@ -79,7 +86,9 @@ impl Pass for ExpressionTreePass {
                     None => continue,
                 };
 
-                if use_counts.get(&output_sv).copied().unwrap_or(0) == 1 {
+                if use_counts.get(&output_sv).copied().unwrap_or(0) == 1
+                    && !phi_inputs.contains(&output_sv)
+                {
                     foldable.insert(output_sv);
                 }
             }
@@ -95,7 +104,7 @@ impl Pass for ExpressionTreePass {
 mod tests {
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{VarnodeSlot, build_ssa};
+    use unlace_ir::ssa::{PhiNode, SsaVarnode, VarnodeSlot, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -228,6 +237,43 @@ mod tests {
         assert!(
             !ssa.foldable_exprs.contains(call_sv),
             "CALL should never be foldable"
+        );
+    }
+
+    #[test]
+    fn test_expr_tree_phi_input_kept() {
+        let acc = Varnode::reg(40, 8);
+        let init = IrInsn::with_output(IrOp::Copy, acc, smallvec![Varnode::constant(0, 8)], 0x1000);
+        let mut ssa = make_single_block_ssa(vec![init]);
+        let init_sv = *ssa
+            .var_map
+            .get(&(BlockId(0), 0, VarnodeSlot::Output))
+            .expect("init output");
+        ssa.phi_map.insert(
+            BlockId(1),
+            vec![PhiNode {
+                output: SsaVarnode {
+                    base: acc,
+                    version: init_sv.version + 1,
+                },
+                inputs: vec![(BlockId(0), init_sv)],
+            }],
+        );
+
+        let pass = ExpressionTreePass;
+        pass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(
+            ssa.phi_map
+                .values()
+                .flat_map(|phis| phis.iter())
+                .flat_map(|phi| phi.inputs.iter().map(|&(_pred, sv)| sv))
+                .any(|sv| sv == init_sv),
+            "test fixture must feed the initializer into a phi"
+        );
+        assert!(
+            !ssa.foldable_exprs.contains(&init_sv),
+            "phi-input initializer must remain materialized"
         );
     }
 }

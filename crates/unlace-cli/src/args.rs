@@ -278,17 +278,6 @@ pub enum Cmd {
         flirt_min_confidence: u8,
     },
 
-    /// Launch the iced-based desktop GUI.
-    ///
-    /// Loads a binary into a shared `Session`, then drives an iced 0.14
-    /// application with a left function list, center pseudocode/disasm/hex
-    /// tabs, and right xrefs/types/comments panel. Only available with
-    /// `--features render` on `unlace-gui`.
-    Gui {
-        /// Optional binary to load on startup.
-        binary: Option<PathBuf>,
-    },
-
     /// Run the IR-level interpreter on a binary, sandboxed.
     ///
     /// Loads sections into the emulator's MemoryMap, sets `rip` to the
@@ -396,6 +385,10 @@ pub enum Cmd {
         /// synthetic `sub_*` symbols).
         #[arg(long)]
         force: bool,
+
+        /// Minimum FLIRT confidence as an integer percentage when --apply is set.
+        #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u8).range(0..=100))]
+        flirt_min_confidence: u8,
     },
 
     /// Load and inspect an IDA `.til` type library.

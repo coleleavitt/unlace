@@ -57,14 +57,18 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use iced_x86::{Decoder, DecoderOptions, FlowControl};
 
+use unlace_ir::lvar::{LiveRange, Lvar, LvarFlags, LvarId, LvarSource, LvarStorage};
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::ssa::VarnodeSlot;
-use unlace_ir::ssa::{Maturity, PendingDwarfLocal, PrimitiveType, SsaVarnode};
+use unlace_ir::ssa::{DwarfStackLocalSpan, Maturity, PendingDwarfLocal, PrimitiveType, SsaVarnode};
 #[cfg(test)]
 use unlace_ir::types::StructFieldType;
-use unlace_ir::types::Type;
+use unlace_ir::types::{Type, TypeKind};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId, Varnode};
-use unlace_loader::{BinaryImage, DwarfInfo, Endian, FlirtDb, Section, SectionFlags, SymbolKind};
+use unlace_loader::pdb_types::{PdbTypes, primitive_ti_to_type};
+use unlace_loader::{
+    BinaryImage, DwarfInfo, Endian, FlirtDb, PdbInfo, PdbLocal, Section, SectionFlags, SymbolKind,
+};
 use unlace_passes::{
     AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
     BoolSimplifyPass, CallBoundaryCopyPropPass, CallingConvFinalizePass,
@@ -87,6 +91,8 @@ use unlace_passes::{
     run_instrumented, run_outer_fixedpoint, run_to_fixedpoint_with_context,
     validate_named_phase_monotonicity_with_exceptions,
 };
+
+mod hir_recovery;
 
 /// Once-per-process pipeline phase-monotonicity check.
 ///
@@ -2255,6 +2261,8 @@ fn calibrate_dwarf_offsets(ssa: &mut SsaFunction) {
         );
     }
 
+    record_dwarf_stack_local_annotations(ssa, delta, trace);
+
     if delta == 0 {
         return;
     }
@@ -2315,6 +2323,32 @@ fn calibrate_dwarf_offsets(ssa: &mut SsaFunction) {
     }
     ssa.dwarf_local_names = calibrated;
     ssa.dwarf_aggregate_offsets = aggregate_offsets;
+}
+
+fn record_dwarf_stack_local_annotations(ssa: &mut SsaFunction, delta: i64, trace: bool) {
+    for pending in &mut ssa.pending_dwarf_locals {
+        if !pending.is_aggregate || pending.name.is_empty() {
+            continue;
+        }
+        pending.raw_span = pending.byte_size.map(|byte_size| DwarfStackLocalSpan {
+            start: pending.frame_offset,
+            byte_size,
+        });
+        pending.calibrated_span = pending.byte_size.map(|byte_size| DwarfStackLocalSpan {
+            start: pending.frame_offset + delta,
+            byte_size,
+        });
+        if trace {
+            eprintln!(
+                "[unlace dwarf-map]   aggregate raw={} calibrated={} name={} type={:?} size={:?}",
+                pending.frame_offset,
+                pending.frame_offset + delta,
+                pending.name,
+                pending.type_name,
+                pending.byte_size
+            );
+        }
+    }
 }
 
 fn dwarf_map_trace_enabled() -> bool {
@@ -2494,6 +2528,13 @@ fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, entry: &Function
         ssa.pending_dwarf_locals.push(PendingDwarfLocal {
             frame_offset,
             name: local.name.clone(),
+            type_name: local.type_name.clone(),
+            byte_size: local
+                .type_name
+                .as_deref()
+                .and_then(|type_name| dwarf_type_byte_size(type_name, dwarf)),
+            raw_span: None,
+            calibrated_span: None,
             cfa_to_rbp_delta: cfa_delta,
             is_aggregate,
             is_param: false,
@@ -2516,6 +2557,13 @@ fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, entry: &Function
         ssa.pending_dwarf_locals.push(PendingDwarfLocal {
             frame_offset,
             name: param.name.clone().unwrap_or_default(),
+            type_name: param.type_name.clone(),
+            byte_size: param
+                .type_name
+                .as_deref()
+                .and_then(|type_name| dwarf_type_byte_size(type_name, dwarf)),
+            raw_span: None,
+            calibrated_span: None,
             cfa_to_rbp_delta: cfa_delta,
             is_aggregate,
             is_param: true,
@@ -2548,6 +2596,82 @@ fn dwarf_type_is_aggregate(type_name: &str, dwarf: &DwarfInfo) -> bool {
     dwarf.structs.contains_key(base) || dwarf.unions.contains_key(base)
 }
 
+fn dwarf_type_byte_size(type_name: &str, dwarf: &DwarfInfo) -> Option<u64> {
+    let normalized = normalize_dwarf_type_name(type_name);
+    let trimmed = normalized.trim();
+    if trimmed.contains('*') {
+        return None;
+    }
+    if let Some((element_type, dimensions)) = parse_dwarf_array_type(trimmed) {
+        let element_size = dwarf_non_array_type_byte_size(element_type, dwarf)?;
+        return dimensions
+            .into_iter()
+            .try_fold(element_size, |size, count| size.checked_mul(count?));
+    }
+    dwarf_non_array_type_byte_size(trimmed, dwarf)
+}
+
+fn dwarf_non_array_type_byte_size(type_name: &str, dwarf: &DwarfInfo) -> Option<u64> {
+    let base = type_name
+        .strip_prefix("struct ")
+        .or_else(|| type_name.strip_prefix("union "))
+        .or_else(|| type_name.strip_prefix("class "))
+        .unwrap_or(type_name)
+        .trim();
+    dwarf
+        .structs
+        .get(base)
+        .map(|ty| ty.size)
+        .or_else(|| dwarf.unions.get(base).map(|ty| ty.size))
+        .filter(|size| *size > 0)
+        .or_else(|| primitive_dwarf_type_byte_size(base))
+}
+
+fn parse_dwarf_array_type(type_name: &str) -> Option<(&str, Vec<Option<u64>>)> {
+    let first_bracket = type_name.find('[')?;
+    let element_type = type_name[..first_bracket].trim();
+    if element_type.is_empty() {
+        return None;
+    }
+    let mut dimensions = Vec::new();
+    let mut rest = &type_name[first_bracket..];
+    while let Some(after_open) = rest.strip_prefix('[') {
+        let close = after_open.find(']')?;
+        let dim_text = after_open[..close].trim();
+        let dim = if dim_text.is_empty() {
+            None
+        } else {
+            Some(dim_text.parse::<u64>().ok()?)
+        };
+        dimensions.push(dim);
+        rest = after_open[close + 1..].trim_start();
+    }
+    rest.is_empty().then_some((element_type, dimensions))
+}
+
+fn primitive_dwarf_type_byte_size(type_name: &str) -> Option<u64> {
+    match type_name {
+        "char" | "signed char" | "unsigned char" | "bool" | "_Bool" => Some(1),
+        "short" | "short int" | "signed short" | "signed short int" | "unsigned short"
+        | "unsigned short int" => Some(2),
+        "int" | "signed int" | "unsigned int" | "float" => Some(4),
+        "long"
+        | "long int"
+        | "signed long"
+        | "signed long int"
+        | "unsigned long"
+        | "unsigned long int"
+        | "long long"
+        | "long long int"
+        | "signed long long"
+        | "signed long long int"
+        | "unsigned long long"
+        | "unsigned long long int"
+        | "double" => Some(8),
+        _ => None,
+    }
+}
+
 fn dwarf_function_for_entry<'a>(
     dwarf: &'a DwarfInfo,
     entry: &FunctionEntry,
@@ -2557,6 +2681,148 @@ fn dwarf_function_for_entry<'a>(
         .values()
         .find(|func| func.name == entry.name)
         .or_else(|| dwarf.functions.get(&entry.addr))
+}
+
+/// PDB-local debug records selected for one function.
+///
+/// `function_rva` is the key used by [`PdbInfo::function_locals`].
+#[derive(Clone, Copy)]
+pub struct PdbFunctionLocalSource<'a> {
+    pub info: &'a PdbInfo,
+    pub types: Option<&'a PdbTypes>,
+    pub function_rva: u64,
+}
+
+/// Overlay PDB locals onto the same debug-name / lvar metadata consumed by the
+/// final C printer.
+pub fn apply_pdb_function_locals_to_ssa(ssa: &mut SsaFunction, source: PdbFunctionLocalSource<'_>) {
+    let Some(locals) = source.info.function_locals.get(&source.function_rva) else {
+        return;
+    };
+
+    for local in locals {
+        apply_pdb_local_to_ssa(ssa, local, source.types);
+    }
+}
+
+fn apply_pdb_local_to_ssa(ssa: &mut SsaFunction, local: &PdbLocal, types: Option<&PdbTypes>) {
+    let Some(frame_offset) = local.frame_offset else {
+        return;
+    };
+    if local.name.trim().is_empty() {
+        return;
+    }
+
+    ssa.dwarf_local_names
+        .entry(frame_offset)
+        .or_insert_with(|| local.name.clone());
+
+    let resolved = resolve_pdb_local_type(local.type_index, types);
+    if let Some(ty) = resolved.as_ref()
+        && ty.is_composite()
+    {
+        for base in stack_bases_for_frame_offset(ssa, frame_offset) {
+            ssa.composite_var_types
+                .entry(base)
+                .or_insert_with(|| ty.clone());
+        }
+    }
+
+    upsert_pdb_stack_lvar(ssa, frame_offset, &local.name, resolved.as_ref());
+}
+
+fn resolve_pdb_local_type(type_index: u32, types: Option<&PdbTypes>) -> Option<Type> {
+    types
+        .and_then(|pdb_types| pdb_types.by_index.get(&type_index).cloned())
+        .or_else(|| primitive_ti_to_type(type_index))
+}
+
+fn upsert_pdb_stack_lvar(ssa: &mut SsaFunction, offset: i64, name: &str, ty: Option<&Type>) {
+    let kind = ty.map(pdb_type_to_lvar_kind);
+    if let Some(existing) = ssa.lvars.iter_mut().find(
+        |lv| matches!(lv.storage, LvarStorage::Stack { offset: existing } if existing == offset),
+    ) {
+        if existing.source != LvarSource::FromDebug
+            || existing
+                .name
+                .as_deref()
+                .is_none_or(|existing_name| existing_name.trim().is_empty())
+        {
+            existing.name = Some(name.to_string());
+        }
+        if let Some(kind) = kind.filter(|kind| !matches!(kind, TypeKind::Void)) {
+            existing.ty = kind;
+        }
+        existing.source = LvarSource::FromDebug;
+        existing.flags.insert(LvarFlags::FROM_DEBUG);
+        return;
+    }
+
+    let next_id = ssa
+        .lvars
+        .iter()
+        .map(|lv| lv.id.as_u32())
+        .max()
+        .map_or(0, |id| id.saturating_add(1));
+    let mut lv = Lvar::new(
+        LvarId::new(next_id),
+        LvarStorage::Stack { offset },
+        LiveRange::point(ssa.function.entry),
+        kind.unwrap_or(TypeKind::Void),
+        LvarSource::FromDebug,
+        LvarFlags::FROM_DEBUG,
+    );
+    lv.name = Some(name.to_string());
+    ssa.lvars.push(lv);
+}
+
+fn pdb_type_to_lvar_kind(ty: &Type) -> TypeKind {
+    match ty {
+        Type::Primitive(primitive) => primitive_to_lvar_kind(*primitive),
+        Type::Ptr(inner) => match inner.as_ref() {
+            Type::Primitive(PrimitiveType::Int(1)) => TypeKind::CharPtr,
+            Type::Primitive(PrimitiveType::Unknown) => TypeKind::VoidPtr,
+            _ => TypeKind::VoidPtr,
+        },
+        _ => TypeKind::Void,
+    }
+}
+
+fn primitive_to_lvar_kind(primitive: PrimitiveType) -> TypeKind {
+    match primitive {
+        PrimitiveType::Unknown => TypeKind::Void,
+        PrimitiveType::Bool => TypeKind::Int,
+        PrimitiveType::Int(8) => TypeKind::Long,
+        PrimitiveType::Int(_) => TypeKind::Int,
+        PrimitiveType::UnsignedInt(8) => TypeKind::ULong,
+        PrimitiveType::UnsignedInt(_) => TypeKind::UInt,
+        PrimitiveType::Float => TypeKind::Int,
+        PrimitiveType::Double => TypeKind::Long,
+        PrimitiveType::Ptr => TypeKind::VoidPtr,
+    }
+}
+
+pub fn apply_pdb_debug_to_ssa(ssa: &mut SsaFunction, image: &BinaryImage, entry: &FunctionEntry) {
+    if let Some(source) = pdb_function_local_source_for_entry(image, entry) {
+        apply_pdb_function_locals_to_ssa(ssa, source);
+    }
+    apply_pdb_types_to_ssa(ssa, image);
+}
+
+fn pdb_function_local_source_for_entry<'a>(
+    image: &'a BinaryImage,
+    entry: &FunctionEntry,
+) -> Option<PdbFunctionLocalSource<'a>> {
+    let info = image.pdb_info.as_ref()?;
+    let image_base = image.image_base?;
+    let function_rva = entry.addr.checked_sub(image_base)?;
+    info.function_locals
+        .contains_key(&function_rva)
+        .then_some(PdbFunctionLocalSource {
+            info,
+            types: image.pdb_types.as_ref(),
+            function_rva,
+        })
 }
 
 /// Batch §1 Phase 4 — overlay PDB-recovered composite types onto SSA
@@ -2913,7 +3179,7 @@ pub fn lift_and_run_passes(
     if let Some(dwarf_info) = dwarf {
         apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
     }
-    apply_pdb_types_to_ssa(&mut ssa, image);
+    apply_pdb_debug_to_ssa(&mut ssa, image, entry);
 
     populate_eh_landing_pads(image, entry, &mut ssa, rtti);
     warn_if_large_ir(&entry.name, &ssa);
@@ -3162,7 +3428,7 @@ pub fn decompile_function(
 /// Lazy lifting entry point (Batch 25): decompile *one* function from a
 /// binary without driving the whole-binary pipeline.
 ///
-/// Useful for interactive scenarios (LSP / future TUI) where the caller
+/// Useful for interactive scenarios (LSP / editor integrations) where the caller
 /// only wants the C output for the function under the cursor. We still
 /// have to discover function boundaries (to satisfy callees and ABI
 /// recovery), but the body of every other function never gets lifted.
@@ -3543,7 +3809,7 @@ pub fn decompile_function_with_symbols(
     if let Some(dwarf_info) = dwarf {
         apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
     }
-    apply_pdb_types_to_ssa(&mut ssa, image);
+    apply_pdb_debug_to_ssa(&mut ssa, image, entry);
 
     populate_eh_landing_pads(image, entry, &mut ssa, rtti);
     pipeline_trace_ssa(&entry.name, "debug-info-overlay", t, deadline, &ssa);
@@ -4656,6 +4922,8 @@ pub fn emit_output(
             trace_hir_pipeline("recover_guarded_whiles", &hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
             trace_hir_pipeline("cleanup_empty_ifs", &hir);
+            hir_recovery::apply_expression_recovery(&mut hir);
+            trace_hir_pipeline("batch19_expression_recovery", &hir);
             // Batch 9 slice 2: collapse consecutive cases with equal
             // bodies and drop redundant `default:` arms so the printer
             // emits IDA-style stacked case labels.
@@ -4982,6 +5250,8 @@ mod tests {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
             pdb_types: None,
+            pdb_info: None,
+            image_base: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -6152,6 +6422,199 @@ mod tests {
         assert_eq!(ssa.composite_var_types.len(), before);
     }
 
+    #[test]
+    fn pdb_debug_overlay_selects_locals_by_entry_rva() {
+        use unlace_ir::ssa::SsaVarnode;
+        use unlace_ir::types::Type;
+        use unlace_loader::pdb_types::PdbTypes;
+        use unlace_loader::{PdbInfo, PdbLocal};
+
+        let image_base = 0x0040_0000;
+        let function_rva = 0x1000;
+        let entry_va = image_base + function_rva;
+        let mut image = make_text_image(vec![0xc3], entry_va);
+        image.image_base = Some(image_base);
+
+        let mut pdb_info = PdbInfo::default();
+        pdb_info.function_locals.insert(
+            function_rva,
+            vec![PdbLocal {
+                name: "sidecar_count".to_string(),
+                frame_offset: Some(-8),
+                type_index: 0x1000,
+            }],
+        );
+        image.pdb_info = Some(pdb_info);
+
+        let mut pdb_types = PdbTypes::default();
+        pdb_types.by_index.insert(0x1000, Type::uint(4));
+        image.pdb_types = Some(pdb_types);
+
+        let mut ir_func = Function::new("pdb_sidecar_func", BlockId(0), entry_va);
+        ir_func.insert_block(BasicBlock::new(BlockId(0)));
+        let mut ssa = build_ssa(ir_func);
+        ssa.arch = ArchId::X86_64;
+        let stack_var = SsaVarnode {
+            base: Varnode::stack(8, 4),
+            version: 1,
+        };
+        ssa.var_map
+            .insert((BlockId(0), 0, VarnodeSlot::Output), stack_var);
+
+        let entry = FunctionEntry {
+            name: "pdb_sidecar_func".to_string(),
+            addr: entry_va,
+            size: 1,
+        };
+        super::apply_pdb_debug_to_ssa(&mut ssa, &image, &entry);
+
+        assert_eq!(
+            ssa.dwarf_local_names.get(&-8).map(String::as_str),
+            Some("sidecar_count"),
+        );
+        let recovered = ssa
+            .lvars
+            .iter()
+            .find(|lvar| {
+                matches!(lvar.storage, LvarStorage::Stack { offset: -8 })
+                    && lvar.name.as_deref() == Some("sidecar_count")
+            })
+            .expect("production PDB overlay should install a debug stack lvar");
+        assert_eq!(recovered.source, LvarSource::FromDebug);
+        assert!(recovered.flags.contains(LvarFlags::FROM_DEBUG));
+    }
+
+    #[test]
+    fn pdb_locals_render_debug_stack_name_and_type() {
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+        use unlace_ir::types::Type;
+        use unlace_loader::pdb_types::PdbTypes;
+        use unlace_loader::{PdbInfo, PdbLocal};
+        use unlace_struct::{HirFunction, HirNode};
+
+        let mut ir_func = Function::new("pdb_local_sink", BlockId(0), 0x1000);
+        ir_func.insert_block(BasicBlock::new(BlockId(0)));
+        let mut ssa = build_ssa(ir_func);
+        ssa.arch = ArchId::X86_64;
+        ssa.var_map.insert(
+            (BlockId(0), 0, VarnodeSlot::Output),
+            SsaVarnode {
+                base: Varnode::stack(8, 4),
+                version: 1,
+            },
+        );
+        let mut ssa_locals = BTreeMap::new();
+        ssa_locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 4,
+                access_widths: vec![4],
+                kind: Default::default(),
+            },
+        );
+        ssa.stack_frame = Some(StackFrame {
+            locals: ssa_locals,
+            frame_size: 4,
+            max_pos_offset: -4,
+            min_neg_offset: -8,
+        });
+
+        let mut pdb_info = PdbInfo::default();
+        pdb_info.function_locals.insert(
+            0x1000,
+            vec![PdbLocal {
+                name: "pdb_count".to_string(),
+                frame_offset: Some(-8),
+                type_index: 0x1000,
+            }],
+        );
+        let mut pdb_types = PdbTypes::default();
+        pdb_types.by_index.insert(0x1000, Type::uint(4));
+
+        super::apply_pdb_function_locals_to_ssa(
+            &mut ssa,
+            super::PdbFunctionLocalSource {
+                info: &pdb_info,
+                types: Some(&pdb_types),
+                function_rva: 0x1000,
+            },
+        );
+
+        let mut annotations = unlace_output::PrinterAnnotations::default();
+        annotations.stack_lvars = unlace_output::stack_lvar_annotations_from_ssa(&ssa);
+
+        let rsp = Varnode::reg(32, 8);
+        let addr = Varnode::unique(0x100, 8);
+        let ram = Varnode::constant(1, 8);
+        let five = Varnode::constant(5, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSub,
+                addr,
+                smallvec![rsp, Varnode::constant(8, 8)],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![ram, addr, five],
+                0x1004,
+            )),
+            HirNode::Return(None),
+        ];
+        let hir = HirFunction {
+            name: "pdb_local_sink".to_string(),
+            params: vec![],
+            return_type: PrimitiveType::Int(4),
+            body,
+            addr: 0x1000,
+            foldable_exprs: BTreeSet::new(),
+            panic_sites: BTreeMap::new(),
+            go_defer_sites: Vec::new(),
+            noreturn: false,
+            composite_var_types: BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
+            indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
+            byref_params: BTreeSet::new(),
+            var_role_names: BTreeMap::new(),
+            finalized_signature: None,
+            byref_locals: BTreeSet::new(),
+            stack_frame: ssa.stack_frame.clone(),
+            cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
+        };
+
+        let output = unlace_output::print_c_with_annotations(
+            &hir,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&annotations),
+        );
+        assert!(
+            output.contains("unsigned int pdb_count;"),
+            "PDB local type/name should drive final declaration: {output}",
+        );
+        assert!(
+            output.contains("pdb_count = 5;"),
+            "PDB local name should replace synthetic stack access: {output}",
+        );
+        assert!(
+            !output.contains("v_8"),
+            "PDB local output should not fall back to synthetic stack names: {output}",
+        );
+    }
+
     /// §5.3: `decompile_one_function_cached` writes to the cache on
     /// miss and returns the cached body on a subsequent identical call
     /// (verified by overwriting the cache with a sentinel between calls
@@ -6260,6 +6723,10 @@ mod tests {
         PendingDwarfLocal {
             frame_offset,
             name: name.to_string(),
+            type_name: None,
+            byte_size: None,
+            raw_span: None,
+            calibrated_span: None,
             cfa_to_rbp_delta: delta,
             is_aggregate: agg,
             is_param: false,
@@ -6329,5 +6796,52 @@ mod tests {
             Some("p")
         );
         assert!(ssa.dwarf_aggregate_offsets.contains(&-48));
+    }
+
+    #[test]
+    fn calibrate_records_aggregate_type_size_and_spans_without_shifting_name() {
+        let mut ssa = ssa_with_pending(
+            vec![
+                pending(-20, "a", Some(16), false),
+                pending(-16, "b", Some(16), false),
+                PendingDwarfLocal {
+                    frame_offset: -48,
+                    name: "p".to_string(),
+                    cfa_to_rbp_delta: Some(16),
+                    type_name: Some("Pair".to_string()),
+                    byte_size: Some(8),
+                    raw_span: None,
+                    calibrated_span: None,
+                    is_aggregate: true,
+                    is_param: false,
+                },
+            ],
+            &[-4, 0],
+        );
+
+        super::calibrate_dwarf_offsets(&mut ssa);
+
+        let ann = ssa
+            .pending_dwarf_locals
+            .iter()
+            .find(|pending| pending.name == "p")
+            .expect("aggregate pending record retained");
+        assert_eq!(ann.name, "p");
+        assert_eq!(ann.type_name.as_deref(), Some("Pair"));
+        assert_eq!(ann.byte_size, Some(8));
+        assert_eq!(
+            ann.raw_span.map(|span| (span.start, span.byte_size)),
+            Some((-48, 8))
+        );
+        assert_eq!(
+            ann.calibrated_span.map(|span| (span.start, span.byte_size)),
+            Some((-32, 8))
+        );
+        assert_eq!(
+            ssa.dwarf_local_names.get(&-48).map(String::as_str),
+            Some("p"),
+            "aggregate name must remain at the raw offset for existing buffer fusion"
+        );
+        assert!(!ssa.dwarf_local_names.contains_key(&-32));
     }
 }

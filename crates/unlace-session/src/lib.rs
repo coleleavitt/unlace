@@ -1,9 +1,9 @@
-//! Shared session state for unlace UI surfaces.
+//! Shared session state for unlace command, script, plugin, and integration surfaces.
 //!
 //! A `Session` owns the loaded binary image, lazily-decompiled functions,
 //! and user annotations (renames, comments, types, bookmarks, patches).
-//! It is shared between the CLI, TUI, and GUI surfaces — all of them
-//! read and write through this single struct.
+//! It is shared by CLI, scripting, plugins, and integration layers so all of
+//! them read and write through this single struct.
 //!
 //! Persistence is implemented in `project.rs` for the public `.unlace`
 //! project format and in `db.rs` for legacy `.unldb` files.
@@ -87,14 +87,14 @@ impl Annotations {
     }
 }
 
-/// Current UI selection (function/address focus).
+/// Current analysis selection (function/address focus).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Selection {
     pub current_function: Option<u64>,
     pub current_address: Option<u64>,
 }
 
-/// Event emitted when the session changes — UI panes subscribe to refresh.
+/// Event emitted when the session changes; consumers may subscribe to refresh.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionEvent {
     Loaded { path: PathBuf },
@@ -109,9 +109,8 @@ pub enum SessionEvent {
 
 /// Shared, thread-safe session state.
 ///
-/// Wraps internal state in `Arc<RwLock<...>>` so the TUI render thread and
-/// the GUI iced runtime can both read concurrently and the CLI/scripts can
-/// mutate from a single writer.
+/// Wraps internal state in `Arc<RwLock<...>>` so read-side consumers can inspect
+/// concurrently and CLI/scripts can mutate from a single writer.
 #[derive(Clone)]
 pub struct Session {
     pub(crate) inner: Arc<RwLock<SessionInner>>,

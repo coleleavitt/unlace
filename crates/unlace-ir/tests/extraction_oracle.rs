@@ -21,8 +21,7 @@ use unlace_ir::known_bits::KnownBits;
 
 fn vectors_path() -> PathBuf {
     // crates/unlace-ir/ -> workspace root -> rocq-tests/extraction/...
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../rocq-tests/extraction/oracle_vectors.txt")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rocq-tests/extraction/oracle_vectors.txt")
 }
 
 #[test]
@@ -64,7 +63,12 @@ fn rust_matches_extracted_coq_oracle() {
 
         // Compare against the extracted-proof reference, masked to width (the
         // Coq fc_* / transfer cores operate on the width-masked representation).
-        assert_eq!(and.zero, exp_and_zero, "and.zero @ {}: {a:?}&{b:?}", lineno + 1);
+        assert_eq!(
+            and.zero,
+            exp_and_zero,
+            "and.zero @ {}: {a:?}&{b:?}",
+            lineno + 1
+        );
         assert_eq!(and.one, exp_and_one, "and.one @ {}", lineno + 1);
         assert_eq!(or.zero, exp_or_zero, "or.zero @ {}", lineno + 1);
         assert_eq!(or.one, exp_or_one, "or.one @ {}", lineno + 1);

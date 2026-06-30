@@ -1485,6 +1485,8 @@ mod tests {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
             pdb_types: None,
+            pdb_info: None,
+            image_base: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -1737,6 +1739,8 @@ mod tests {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
             pdb_types: None,
+            pdb_info: None,
+            image_base: None,
             msvc_rtti: None,
             seh: None,
             go_module: Some(GoModuleInfo {
@@ -1850,6 +1854,8 @@ mod tests {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
             pdb_types: None,
+            pdb_info: None,
+            image_base: None,
             msvc_rtti: None,
             seh: None,
             go_module: Some(GoModuleInfo {

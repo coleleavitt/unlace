@@ -277,4 +277,41 @@ mod tests {
         let tok = &s.tokens()[0];
         assert_eq!(tok.meta, TokenMeta::FunctionAddr(0x401050));
     }
+
+    #[test]
+    fn final_output_tokens_preserve_rendered_text_and_metadata() {
+        let mut s = TaggedStream::new();
+        s.push(Token::keyword("return"));
+        s.push(Token::space());
+        s.push_func("callee", 0x401050);
+        s.push(Token::op("("));
+        s.push_var("arg_4", 1, 0x38, 4);
+        s.push(Token::op(")"));
+        s.push(Token::op(";"));
+        s.push(Token::space());
+        s.push(Token::new(TokenKind::Comment, "// src/main.c:42"));
+        s.push(Token::newline());
+
+        assert_eq!(
+            s.to_string_lossy(),
+            "return callee(arg_4); // src/main.c:42\n"
+        );
+        assert_eq!(s.to_string(), s.to_string_lossy());
+        assert_eq!(s.current_line_width(), 0);
+
+        let tokens = s.tokens();
+        assert_eq!(tokens[0].kind, TokenKind::Keyword);
+        assert_eq!(tokens[2].meta, TokenMeta::FunctionAddr(0x401050));
+        assert_eq!(tokens[4].kind, TokenKind::Identifier);
+        assert_eq!(
+            tokens[4].meta,
+            TokenMeta::Varnode {
+                space: 1,
+                offset: 0x38,
+                version: 4,
+            }
+        );
+        assert_eq!(tokens[8].kind, TokenKind::Comment);
+        assert_eq!(tokens[9].kind, TokenKind::Newline);
+    }
 }

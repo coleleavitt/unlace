@@ -180,6 +180,67 @@ fn decompile_with_validate_pipeline_env_emits_explicit_backedge_summary() {
 }
 
 #[test]
+fn ir_dump_maturity_dump_emits_representative_phase_snapshots() {
+    let snapshot_dir = tempfile::tempdir().expect("tempdir");
+    let output = unlace_bin()
+        .env("UNLACE_MATURITY_DUMP", snapshot_dir.path())
+        .args(["ir-dump", "--function", "main"])
+        .arg(fixture("hello_world.elf"))
+        .output()
+        .expect("failed to run unlace ir-dump");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("func main"),
+        "ir-dump should dump main: {stdout}"
+    );
+
+    let mut snapshot_names: Vec<String> = std::fs::read_dir(snapshot_dir.path())
+        .expect("read maturity snapshot dir")
+        .map(|entry| {
+            entry
+                .expect("read maturity snapshot entry")
+                .file_name()
+                .into_string()
+                .expect("snapshot file name should be utf8")
+        })
+        .collect();
+    snapshot_names.sort();
+
+    for stage in [
+        "M_ZERO",
+        "M_GENERATED",
+        "M_PREOPTIMIZED",
+        "M_LOCOPT",
+        "M_CALLS",
+        "M_GLBOPT",
+        "M_LVARS",
+        "M_FINAL",
+    ] {
+        assert!(
+            snapshot_names.iter().any(|name| name.contains(stage)),
+            "missing {stage} maturity snapshot: {snapshot_names:#?}"
+        );
+    }
+    assert!(
+        snapshot_names.iter().all(|name| !name.contains("iter2")),
+        "hello_world.elf:main should converge before a third outer maturity iteration: {snapshot_names:#?}"
+    );
+
+    let final_snapshot = snapshot_dir.path().join("main-M_FINAL-iter0.txt");
+    let final_ir = std::fs::read_to_string(&final_snapshot)
+        .unwrap_or_else(|err| panic!("read {}: {err}", final_snapshot.display()));
+    assert!(
+        final_ir.contains("func main"),
+        "final maturity snapshot should contain main IR: {final_ir}"
+    );
+}
+
+#[test]
 fn decompiled_hello_world_compileable_subset_runs() {
     if !cc_available() {
         eprintln!("skipping compileable-subset check: cc is not available");

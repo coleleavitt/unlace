@@ -1789,6 +1789,39 @@ mod tests {
     }
 
     #[test]
+    fn cyclic_region_with_shared_external_exit_preserves_each_break_edge() {
+        let region = Region {
+            header: 0,
+            edges: vec![(0, 1, EdgeLabel::Always), (1, 2, t(1)), (2, 0, t(2))],
+        };
+
+        let tree = refine_cyclic_region_with_exits(&region, &[(1, f(1)), (2, f(2))]);
+
+        assert_eq!(tree.goto_count(), 0);
+        assert!(contains_loop(&tree), "expected Loop: {tree:?}");
+        assert!(contains_continue(&tree), "expected Continue: {tree:?}");
+        assert_eq!(
+            break_count(&tree),
+            2,
+            "expected one Break per shared-exit edge: {tree:?}"
+        );
+        assert!(
+            contains_if_on(&tree, 1),
+            "expected first exit guard p1: {tree:?}"
+        );
+        assert!(
+            contains_if_on(&tree, 2),
+            "expected second exit guard p2: {tree:?}"
+        );
+        for block in 0..=2 {
+            assert!(
+                mentions_block(&tree, block),
+                "missing block {block}: {tree:?}"
+            );
+        }
+    }
+
+    #[test]
     fn nested_cyclic_region_refines_inner_loop_before_outer_loop() {
         let region = Region {
             header: 0,
@@ -2048,6 +2081,22 @@ mod tests {
                     || default.as_ref().is_some_and(|d| contains_break(d))
             }
             _ => false,
+        }
+    }
+    fn break_count(node: &StructuredNode) -> usize {
+        match node {
+            StructuredNode::Break => 1,
+            StructuredNode::Loop { body } => break_count(body),
+            StructuredNode::Subtree(inner) => break_count(inner),
+            StructuredNode::Seq(v) => v.iter().map(break_count).sum(),
+            StructuredNode::If { then, els, .. } => {
+                break_count(then) + els.as_ref().map(|e| break_count(e)).unwrap_or(0)
+            }
+            StructuredNode::Switch { cases, default, .. } => {
+                cases.iter().map(|(_, n)| break_count(n)).sum::<usize>()
+                    + default.as_ref().map(|d| break_count(d)).unwrap_or(0)
+            }
+            _ => 0,
         }
     }
     fn find_switch(node: &StructuredNode) -> Option<&StructuredNode> {

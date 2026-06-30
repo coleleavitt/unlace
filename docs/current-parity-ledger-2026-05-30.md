@@ -2,9 +2,11 @@
 
 This ledger reconciles the stale/reframed parity notes across
 `docs/status.md`, `docs/golden-triage-2026-05-29.md`, the parity execution
-plan, DREAM rollout notes, and Batch 27 handoff. Use it as the current
-operator ledger when those documents disagree; `docs/status.md` remains the
-public support matrix and should mirror the measured facts here.
+plan, DREAM rollout notes, and Batch 27 handoff. The newer
+`docs/golden-triage-2026-06-17.md` supersedes the older mixed-failure triage
+details. Use this file as the current operator ledger when those documents
+disagree; `docs/status.md` remains the public support matrix and should mirror
+the measured facts here.
 
 ## Current Measured State
 

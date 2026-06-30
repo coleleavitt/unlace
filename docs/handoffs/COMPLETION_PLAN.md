@@ -14,7 +14,7 @@ signatures, and test names so the work is mechanical to execute.
 
 **Out of scope (do not touch):**
 
-- TUI / Web UI front-ends.
+- Frontend productization.
 - Reproducible signed releases + CI signing pipeline.
 
 ---

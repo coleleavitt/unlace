@@ -351,4 +351,27 @@ mod tests {
             other => panic!("expected Statement, got {other:?}"),
         }
     }
+
+    #[test]
+    fn duplicate_load_is_not_eliminated() {
+        let addr = Varnode::constant(0x4000, 8);
+        let t1 = Varnode::unique(0, 8);
+        let t2 = Varnode::unique(8, 8);
+
+        let mut body = vec![
+            stmt(IrOp::Load, t1, vec![addr], 0x1000),
+            stmt(IrOp::Load, t2, vec![addr], 0x1004),
+        ];
+
+        eliminate_common_subexpressions(&mut body);
+
+        match &body[1] {
+            HirNode::Statement(insn) => {
+                assert_eq!(insn.op, IrOp::Load, "loads must not be CSE'd");
+                assert_eq!(insn.output, Some(t2));
+                assert_eq!(insn.inputs.as_slice(), &[addr]);
+            }
+            other => panic!("expected Statement, got {other:?}"),
+        }
+    }
 }

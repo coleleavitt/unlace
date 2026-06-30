@@ -34,8 +34,10 @@ pub fn parse_tcg_coverage(data: &[u8]) -> Result<TcgCoverageTrace, QemuTcgError>
 
     let total_executions = (data.len() / 8) as u64;
     let mut addrs: Vec<u64> = data
-        .chunks_exact(8)
-        .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .map(|chunk| u64::from_le_bytes(*chunk))
         .collect();
     addrs.sort_unstable();
     addrs.dedup();

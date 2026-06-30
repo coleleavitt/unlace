@@ -154,4 +154,39 @@ mod tests {
             vec![(0, 1), (1, 1)]
         );
     }
+
+    #[test]
+    fn lane_analysis_splits_overlapping_rax_eax_aliases() {
+        let mut func = Function::new("overlapping_alias_lanes", BlockId(0), 0x2000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(RAX, 8),
+            smallvec![Varnode::constant(1, 8)],
+            0x2000,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(RAX, 4),
+            smallvec![Varnode::constant(2, 4)],
+            0x2004,
+        ));
+        func.insert_block(bb);
+
+        let ssa = build_ssa(func);
+        let groups = analyze_register_lanes(&ssa);
+        let rax = groups
+            .iter()
+            .find(|group| group.parent_offset == RAX)
+            .expect("RAX lane group");
+
+        assert_eq!(rax.decision, LaneDecision::SplitOverlapping);
+        assert_eq!(
+            rax.lanes
+                .iter()
+                .map(|lane| (lane.byte_offset, lane.size))
+                .collect::<Vec<_>>(),
+            vec![(0, 4), (0, 8)]
+        );
+    }
 }

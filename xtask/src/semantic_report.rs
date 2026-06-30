@@ -146,6 +146,11 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
     },
     SemanticCase {
         fixture: "switch_table",
+        function: "main",
+        expected_failure: None,
+    },
+    SemanticCase {
+        fixture: "switch_table",
         function: "dispatch",
         expected_failure: None,
     },
@@ -171,7 +176,7 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
     },
 ];
 
-const CROSS_ARCH_SHAPE_CASES: &[ShapeCase] = &[
+const SOURCE_KNOWN_SHAPE_CASES: &[ShapeCase] = &[
     ShapeCase {
         fixture: "debug_x87_math",
         function: "main",
@@ -181,6 +186,18 @@ const CROSS_ARCH_SHAPE_CASES: &[ShapeCase] = &[
         fixture: "debug_switch_table",
         function: "main",
         required_fragments: &["dispatch", "return"],
+    },
+    ShapeCase {
+        fixture: "debug_switch_table",
+        function: "dispatch",
+        required_fragments: &[
+            "fixtures/src/switch_table.c:6",
+            "0xaLL",
+            "fixtures/src/switch_table.c:13",
+            "0x57LL",
+            "fixtures/src/switch_table.c:14",
+            "0xffffffffLL",
+        ],
     },
     ShapeCase {
         fixture: "debug_medium",
@@ -398,8 +415,8 @@ pub fn run(root: &Path) -> i32 {
     }
 
     println!();
-    println!("semantic-report: source-known cross-arch decompile shape");
-    for case in CROSS_ARCH_SHAPE_CASES {
+    println!("semantic-report: source-known decompile shape");
+    for case in SOURCE_KNOWN_SHAPE_CASES {
         measured_names.insert(case.fixture);
         let Some(fixture) = fixtures.get(case.fixture) else {
             println!(
@@ -1289,12 +1306,35 @@ mod tests {
             .iter()
             .map(|case| case.fixture)
             .collect();
-        let shape: BTreeSet<_> = CROSS_ARCH_SHAPE_CASES
+        let shape: BTreeSet<_> = SOURCE_KNOWN_SHAPE_CASES
             .iter()
             .filter(|case| !case.fixture.starts_with("debug_"))
             .map(|case| case.fixture)
             .collect();
         assert_eq!(exec, shape);
+    }
+
+    #[test]
+    fn source_known_shape_cases_cover_switch_dispatch_body() {
+        let case = SOURCE_KNOWN_SHAPE_CASES
+            .iter()
+            .find(|case| case.fixture == "debug_switch_table" && case.function == "dispatch")
+            .expect("debug_switch_table:dispatch should be covered by semantic-report shape rows");
+
+        for fragment in [
+            "fixtures/src/switch_table.c:6",
+            "0xaLL",
+            "fixtures/src/switch_table.c:13",
+            "0x57LL",
+            "fixtures/src/switch_table.c:14",
+            "0xffffffffLL",
+        ] {
+            assert!(
+                case.required_fragments.contains(&fragment),
+                "switch dispatch shape row should require {fragment:?}; got {:?}",
+                case.required_fragments
+            );
+        }
     }
 
     #[test]

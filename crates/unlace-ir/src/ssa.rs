@@ -291,6 +291,18 @@ pub struct PendingDwarfLocal {
     pub frame_offset: i64,
     /// Source identifier for this local/parameter.
     pub name: String,
+    /// DWARF-rendered source type name, when present.
+    #[serde(default)]
+    pub type_name: Option<String>,
+    /// DWARF byte size for the source type, when cheaply recoverable.
+    #[serde(default)]
+    pub byte_size: Option<u64>,
+    /// Raw CFA-relative span from the loader, before calibration.
+    #[serde(default)]
+    pub raw_span: Option<DwarfStackLocalSpan>,
+    /// Span after applying the selected per-function calibration delta.
+    #[serde(default)]
+    pub calibrated_span: Option<DwarfStackLocalSpan>,
     /// Per-function CFA→RBP delta from `.eh_frame` (the constant offset of
     /// the `CFA = RBP + offset` rule). `None` for no-frame-pointer / leaf
     /// functions, where no uniform shift is valid.
@@ -303,6 +315,15 @@ pub struct PendingDwarfLocal {
     /// `true` when this record is a spilled parameter home slot (consumed to
     /// drive duplicate-local suppression downstream).
     pub is_param: bool,
+}
+
+/// A byte span from DWARF stack-local metadata.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct DwarfStackLocalSpan {
+    /// Inclusive start offset in the corresponding frame coordinate space.
+    pub start: i64,
+    /// Number of bytes covered by the source variable.
+    pub byte_size: u64,
 }
 
 #[derive(
@@ -1173,6 +1194,9 @@ pub enum FrameSlotKind {
     /// offset already present in [`SsaFunction::saved_register_slots`]).
     /// Rendered as `saved_rbx` etc. rather than `local_*`.
     SavedRegister,
+    /// Entry return-address carrier at `[entry_rsp, entry_rsp + ptr_size)`.
+    /// This is ABI-owned control-flow storage, not a source local.
+    ReturnAddress,
     /// Register spill slot — a local slot whose only stores are register
     /// writes followed by register reads of the same width. Reserved for
     /// a future refinement pass; currently unused by the classifier but

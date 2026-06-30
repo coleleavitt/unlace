@@ -232,6 +232,8 @@ impl Loader for WasmLoader {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
             pdb_types: None,
+            pdb_info: None,
+            image_base: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,

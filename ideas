@@ -34,16 +34,16 @@
 
   7. Project/session/product model
       - .unlace project core seems partially landed in code/docs, but public workflow is still not fully shipped.
-      - Missing: shared session API, xrefs, call graph, CFG graph, hex view APIs, SDK/plugin boundary, rename/comment/type workflows across CLI/UI.
+      - Missing: shared session API, xrefs, call graph, CFG graph, hex view APIs, SDK/plugin boundary, rename/comment/type workflows across CLI/scripts/plugins.
 
   8. User-facing surfaces
       - IDAPython compatibility is fully open.
-      - TUI/GUI/Web are open.
+      - Frontend/editor work is out of the current project surface.
       - LSP has only skeleton-level pieces per the docs.
 
   9. Release/ops
       - SBOM exists, but reproducible xtask dist, signed artifacts, release manifest, public benchmark fixtures, and CI artifact flow are still open.
 
   My read: the next best engineering slice is not more dumping. For decompiler parity, do Batch 17/18 work: stack provenance into lvars, interference/naming tests, leaked-temp suppression, then
-  use type-recovery-report to prove movement. For product parity, the keystone is the shared Session/project API because IDAPython, UI, LSP, web, debugger, and project persistence all depend on
+   use type-recovery-report to prove movement. For product parity, the keystone is the shared Session/project API because IDAPython, editor integration, debugger, and project persistence all depend on
   it.

@@ -95,9 +95,9 @@ pub use objc::{
 
 pub use android_image::{art_to_binary_image, dex_to_binary_image, oat_to_binary_image};
 pub use dwarf::{
-    DwarfInfo, DwoRef, EnumType, FunctionDebugInfo, LocalVariable, MacroDefinition, ParameterInfo,
-    SimpleLocation, SourceLocation, StructField, StructType, UnionType, evaluate_simple_location,
-    import_dwarf, import_dwarf_with_sidecar,
+    DebugLanguage, DwarfInfo, DwoRef, EnumType, FunctionDebugInfo, LocalVariable,
+    MacroDefinition, ParameterInfo, SimpleLocation, SourceLocation, StructField, StructType,
+    UnionType, evaluate_simple_location, import_dwarf, import_dwarf_with_sidecar,
 };
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;

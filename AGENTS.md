@@ -7,12 +7,21 @@ current caveats about stale plans, parity metrics, golden files, and verificatio
 commands. This file exists so tools that prefer `AGENTS.md` still land on the
 same rules.
 
+The current Rust architecture/style audit is
+`docs/architecture-audit-2026-06-21.md`. It says the crate split is already
+domain-shaped; prefer private module extraction inside owning crates before
+adding new crates.
+
 ## Core Rules
 
 - Use current code and commands as proof. Historical plans and session exports
   are useful leads, not evidence.
 - Prefer `codegraph` and `rg` to map behavior before editing.
 - Keep changes narrow and aligned with existing crate boundaries.
+- For Rust style or architecture decisions, load the global skills
+  `~/.claude/skills/rust-style/SKILL.md`,
+  `~/.claude/skills/rust-architecture/SKILL.md`, and, when historical Rust
+  rationale matters, `~/.claude/skills/rust-zulip-archaeology/SKILL.md`.
 - Do not change fixture binaries, fixture source, goldens, or metric baselines
   merely to make a gate pass.
 - In output-affecting crates, preserve deterministic output. Prefer `BTreeMap`
@@ -20,6 +29,12 @@ same rules.
   `// determinism:allow`.
 - For decompiler behavior changes, measure actual IR/SSA/output with existing
   traces before acting on a mental model.
+- Prefer domain-shaped Rust module trees, typed IDs/newtypes, explicit
+  phase/dialect names, and validator-backed invariants over flat helper files,
+  raw primitives, boolean phase flags, or prose-only rules.
+- Use `docs/architecture-audit-2026-06-21.md` as the current queue for
+  architecture cleanup: C printer, structurer, CLI pipeline, loader subdomains,
+  product-surface maturity, lifter coverage honesty, and type/output debt.
 
 ## Verification
 

@@ -65,7 +65,10 @@ fn tile_is_injective_like_coq() {
         let a1 = struct_tile_address(base, stride, i1, f1);
         let a2 = struct_tile_address(base, stride, i2, f2);
         if (i1, f1) != (i2, f2) {
-            assert_ne!(a1, a2, "tiling not injective: ({i1},{f1}) vs ({i2},{f2}) stride={stride}");
+            assert_ne!(
+                a1, a2,
+                "tiling not injective: ({i1},{f1}) vs ({i2},{f2}) stride={stride}"
+            );
         } else {
             assert_eq!(a1, a2);
         }
@@ -84,7 +87,11 @@ fn elements_tile_contiguously_like_coq() {
 
         let elem_start = struct_tile_address(base, stride, index, 0);
         let next_start = struct_tile_address(base, stride, index + 1, 0);
-        assert_eq!(elem_start + stride, next_start, "elements must tile contiguously");
+        assert_eq!(
+            elem_start + stride,
+            next_start,
+            "elements must tile contiguously"
+        );
 
         // a field within the element never reaches the next element
         let field = rng.next() % stride;

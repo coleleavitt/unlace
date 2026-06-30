@@ -1,49 +1,32 @@
 # Status Matrix (Batch 27)
 
-> **2026-05-29 update (commit `c07a9be2e`).** Toolchain gates (clippy
-> `-D warnings`, `lint-determinism`, `check`) are clean and every test target
-> is green **except** `unlace-test-harness --test golden_fixtures` (18 pass /
-> 14 fail). Those 14 exact-line failures are a mixed set, not a blanket-stale
-> bucket: some expose producer bugs, some checked-in goldens are stale/lossy
-> relative to more correct current output, and some need per-fixture
-> reclassification after recent producer fixes. Do not blanket-refresh them;
-> use `docs/current-parity-ledger-2026-05-30.md`,
-> `docs/golden-triage-2026-05-29.md`, and
-> `scripts/classify_golden_diffs.sh` for row-by-row policy.
-> `scripts/score_parity.sh` now reports `Stylistic Fixture Parity: 87.1%`; the
-> historical "100%" number measured a narrower counter set and is gone. Treat
-> the batch numbers below as intent.
-
-> **2026-05-30 update.** The source-known semantic gate is green with
-> `xtask semantic-report` at 33 pass rows, 0 XFAIL, 0 failed, and 0
-> unsupported with the configured qemu-user runners available. Of those rows,
-> 20 are host/source-known executable equivalence, 4 are qemu-user non-host
-> executable observations, and 9 are source-known shape checks. The
-> `quality_smoke` fixture loop now enforces per-fixture
-> budgets for gotos, labels, leaked temp declarations, raw stack-offset leaks,
-> unknown helpers, bad type facts, and zero semantic failures.
-> `xtask golden-triage` now has 0 exact-pass rows and 15 classified review
-> rows; the remaining exact-line
-> failures are still not eligible for blanket refresh.
-
-> **2026-06-17 update.** Current live gates on this checkout: `xtask
-> semantic-report` reports 34 pass rows, 0 XFAIL, 0 failed, 0 unsupported;
+> **2026-06-21 live verification.** `RUSTC_WRAPPER= bash
+> scripts/quality_axes.sh` reports `Stylistic Fixture Parity: 83.0%`;
 > `xtask golden-triage` reports 15 exact-pass rows and 0 review rows;
-> `scripts/score_parity.sh` reports `Stylistic Fixture Parity: 83.0%`; and
-> `xtask type-recovery-report` reports `recall=100.0% precision=93.1%`.
-> The type report now separates source-fact precision from output-local debt:
-> leaked temp declarations, stack/ABI carriers, ABI parameter carriers, and
-> duplicate DWARF/source local declarations stay visible in their own ledger.
+> `xtask semantic-report` reports 34 pass rows, 0 XFAIL, 0 failed, 0
+> unsupported; and `xtask type-recovery-report` reports `recall=100.0%
+> precision=93.1% raw_precision=92.9%`. The type report separates
+> source-fact precision from output-local debt: leaked temp declarations,
+> stack/ABI carriers, ABI parameter carriers, and duplicate DWARF/source local
+> declarations stay visible in their own ledger.
+>
+> Older May 2026 notes about 18 pass / 14 fail goldens, 0 exact-pass rows, or a
+> 87.1% fixture score are historical. Use the live gates above,
+> `docs/current-parity-ledger-2026-05-30.md`, and
+> `docs/golden-triage-2026-06-17.md` when reconciling stale plans.
 
 This file is the public source of truth for what works, what is experimental,
 and what is aspirational in unlace. It is derived from:
 
 - `crates/unlace-ir/src/arch_support.rs` (architecture tier classification).
 - `crates/unlace-cli/src/quality.rs` (output sanity gates).
-- `docs/rebaseline-2026-05-17.md` (current measured verification).
+- `scripts/quality_axes.sh` and the xtask reports it runs (current measured
+  quality-axis verification).
+- `docs/rebaseline-2026-05-17.md` (older full-gate snapshot; historical).
 - `docs/parity-quality-execution-plan-2026-05.md` (quality-axis split).
 - `docs/current-parity-ledger-2026-05-30.md` (current stale/reframed claim
   reconciliation).
+- `CLAUDE.md` (agent-facing current-state memory).
 - The per-batch handoffs under `docs/handoffs/`.
 
 Public claims in `README.md` must match what this file reports. When a batch
@@ -170,7 +153,7 @@ The old "aggregate parity" wording is retired. The current gates are:
 
 `bash scripts/quality_axes.sh` runs all three reports without treating a
 skipped axis as solved. `scripts/score_parity.sh` reports the stylistic score
-even though the exact-line golden test exits nonzero. See
+separately from exact-line golden triage. See
 `docs/parity-quality-execution-plan-2026-05.md` for the active metric plan.
 
 ## What is currently NOT shipped
@@ -178,17 +161,46 @@ even though the exact-line golden test exits nonzero. See
 Items called out by the long-form roadmap that have not yet landed in
 production form. Tracked so the README doesn't overclaim:
 
-- FLIRT/SIG-driven library name recovery wired into the active CLI path.
-- DWARF v5 split-DWARF (`.dwo`/`.dwp`) evaluator and full DW_OP location lists.
-- PDB local location breadth beyond scoped `S_LOCAL` / `S_REGREL32` extraction;
-  defrange records are not exposed by the current `pdb` crate API.
-- dyld shared cache extraction and kernel-cache filesets.
+- FLIRT/SIG library-quality coverage and confidence propagation beyond the
+  currently wired CLI matching path.
+- Full DW_OP/location-expression breadth and robust split-DWARF sidecar
+  discovery on real-world corpora. Initial DWO references, v5 loclists/rnglists,
+  and merge hooks exist.
+- PDB local-location breadth beyond scoped `S_LOCAL` / `S_REGREL32` /
+  defrange/IPI extraction. Basic TPI lowering is wired into the active
+  pipeline.
+- dyld kernel-cache/fileset support and broad real-world cache coverage.
+  Standalone Mach-O reassembly from dyld cache images exists.
 - Authenticode/SHA-2 signature verification on PE.
 - Persistent `.unlace` project format with rename/comment/type round-trip.
-- LSP/TUI/Web UI front-ends.
+- Stable Unlace SDK facade for project/session facts, analysis reads,
+  decompiler objects, validated mutations, plugin runtimes, and IDA-SDK-inspired
+  compatibility. See `docs/sdk.md`.
+- `unlace-mcp` CLI-first MCP server over the stable SDK. See `docs/mcp.md`.
+- Manual analysis facts: force/split/map variables, force call type, manual
+  switches, custom calling conventions, skippable instructions, injected
+  assertions, and propagation barriers.
+- Debugger production breadth beyond the current partial Linux ptrace backend:
+  Windows Debug API, macOS Mach, GDB/RSP remote, hardware/watch breakpoints,
+  trace/coverage export, robust unwinding, and analysis integration.
+- Emulator production breadth beyond the current starter opcode/syscall model.
+- IDAPython xrefs and `ida_hexrays::decompile` compatibility beyond the
+  current partial shim; `idaapi.decompile`, ctree/microcode hooks, and real
+  public-script compatibility tests are still missing.
+- Lumina decompile/backend integration and confidence-aware signature sharing
+  beyond placeholder or partial protocol behavior.
+- Corpus-scale parity automation against `research/decompiled-references/ida/`:
+  pattern counters, address-mapped output diffs, and support-tier scorecards.
+- Interactive/frontend productization is deferred until CLI, SDK, MCP,
+  persistence, and corpus evidence are stable.
+- SDK compatibility scoreboard for Rust plugins, WASM plugins, Python bindings,
+  IDAPython wrappers, loader samples, decompiler hooks, and debugger/trace
+  extensions.
+- MCP compatibility smoke tests for stdio tool listing, tool calls, resources,
+  prompts, read-only policy, and optional streamable HTTP.
 - Reproducible signed releases + SBOM publishing.
 - Full semantic recompile-and-compare across the source-known fixture corpus.
-  The current report covers 20 passing host executable cases, 0 known failing
+  The current report covers 21 passing host executable cases, 0 known failing
   host cases, 4 passing qemu-user non-host executable rows, and 9 source-known
   shape-only rows.
 Adding any of these moves the related row in the matrices above; do not promote

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Stratified golden corpus extraction — selects 250 functions across 7 archs."""
+"""Stratified golden corpus extraction from IDA Hex-Rays dumps."""
 
+import argparse
 import json
 import re
 import shutil
@@ -8,7 +9,7 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DUMP_BASE = PROJECT_ROOT / "references" / "hexrays" / "ida_dump"
+DEFAULT_DUMP_BASE = PROJECT_ROOT / "research" / "decompiled-references" / "hexrays" / "ida_dump"
 GOLDEN_BASE = PROJECT_ROOT / "tests" / "golden"
 
 ARCHS = [
@@ -129,18 +130,57 @@ def select_stratified(candidates: list[dict], target_count: int) -> list[dict]:
     return selected
 
 
-def main():
-    print("=== Stratified Golden Corpus Extraction ===\n")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Select a stratified golden corpus from IDA Hex-Rays dumps."
+    )
+    parser.add_argument(
+        "--dump-base",
+        type=Path,
+        default=DEFAULT_DUMP_BASE,
+        help="IDA dump root containing hexx64/hexarm/... subdirectories",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Analyze and print the selected corpus without rewriting tests/golden",
+    )
+    return parser.parse_args()
 
-    if GOLDEN_BASE.exists():
+
+def missing_source_dirs(dump_base: Path) -> list[Path]:
+    return [dump_base / source_dir / "all" for source_dir, _, _ in ARCHS
+            if not (dump_base / source_dir / "all").is_dir()]
+
+
+def main():
+    args = parse_args()
+    dump_base = args.dump_base.resolve()
+
+    print("=== Stratified Golden Corpus Extraction ===\n")
+    print(f"IDA dump root: {dump_base}")
+    if args.dry_run:
+        print("Mode: dry-run (tests/golden will not be rewritten)\n")
+    else:
+        print(f"Output: {GOLDEN_BASE}\n")
+
+    missing = missing_source_dirs(dump_base)
+    if missing:
+        print("Missing IDA dump source directories:", file=sys.stderr)
+        for path in missing:
+            print(f"  {path}", file=sys.stderr)
+        return 1
+
+    if not args.dry_run and GOLDEN_BASE.exists():
         shutil.rmtree(GOLDEN_BASE)
 
     manifest = []
 
     for source_dir, target_dir, target_count in ARCHS:
-        src_path = DUMP_BASE / source_dir / "all"
+        src_path = dump_base / source_dir / "all"
         dst_path = GOLDEN_BASE / target_dir
-        dst_path.mkdir(parents=True, exist_ok=True)
+        if not args.dry_run:
+            dst_path.mkdir(parents=True, exist_ok=True)
 
         print(f"Processing {source_dir} -> {target_dir} (target: {target_count})...")
 
@@ -166,7 +206,8 @@ def main():
         sel_dist = {}
         for entry in selected:
             src_file = Path(entry["filepath"])
-            shutil.copy2(src_file, dst_path / entry["filename"])
+            if not args.dry_run:
+                shutil.copy2(src_file, dst_path / entry["filename"])
 
             manifest.append({
                 "arch": target_dir,
@@ -182,11 +223,16 @@ def main():
     manifest.sort(key=lambda x: (x["arch"], x["function_name"]))
 
     manifest_path = GOLDEN_BASE / "manifest.json"
-    with open(manifest_path, 'w') as f:
-        json.dump(manifest, f, indent=2)
-        f.write('\n')
+    if not args.dry_run:
+        with open(manifest_path, 'w') as f:
+            json.dump(manifest, f, indent=2)
+            f.write('\n')
 
-    print(f"\nManifest written: {manifest_path}")
+    print()
+    if args.dry_run:
+        print(f"Manifest preview: {manifest_path}")
+    else:
+        print(f"Manifest written: {manifest_path}")
     print(f"Total entries: {len(manifest)}")
 
     print("\n=== Global Complexity Distribution ===")

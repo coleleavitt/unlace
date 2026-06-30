@@ -279,6 +279,14 @@ fn collect_stack(
     let mut emitted: std::collections::BTreeSet<i64> = std::collections::BTreeSet::new();
     if let Some(frame) = &func.stack_frame {
         for (&offset, local) in &frame.locals {
+            if !matches!(local.kind, unlace_ir::ssa::FrameSlotKind::Local) {
+                lvar_trace_line(&format!(
+                    "suppress-stack func={} offset={} size={} kind={:?} reason=non-source-storage",
+                    func.function.name, offset, local.size, local.kind
+                ));
+                emitted.insert(offset);
+                continue;
+            }
             let ty = stack_local_typekind(func, offset, local.size);
             let flags = stack_flags(func, offset);
             let source = stack_source(func, offset);
@@ -730,7 +738,7 @@ fn live_range_for_temp(
 mod tests {
     use super::*;
     use unlace_ir::lvar::LvarStorage;
-    use unlace_ir::ssa::{StackFrame, StackLocal, StackVar, VarnodeSlot, build_ssa};
+    use unlace_ir::ssa::{FrameSlotKind, StackFrame, StackLocal, StackVar, VarnodeSlot, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
     /// Build a minimal one-block SSA function (no real IR; just enough
@@ -861,6 +869,184 @@ mod tests {
         let slot = &ssa.lvars[0];
         assert!(matches!(slot.storage, LvarStorage::Stack { offset: -32 }));
         assert_eq!(slot.name.as_deref(), Some("buf_32"));
+    }
+
+    #[test]
+    fn overlapping_stack_ranges_keep_distinct_lvar_identity() {
+        let mut ssa = empty_ssa("overlapping_stack_lvars");
+        ssa.dwarf_local_names.insert(-48, "p".to_string());
+        ssa.dwarf_local_names.insert(-40, "values".to_string());
+
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -48,
+            StackLocal {
+                offset: -48,
+                size: 32,
+                access_widths: vec![8],
+                kind: FrameSlotKind::Local,
+            },
+        );
+        locals.insert(
+            -40,
+            StackLocal {
+                offset: -40,
+                size: 12,
+                access_widths: vec![4],
+                kind: FrameSlotKind::Local,
+            },
+        );
+        ssa.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 32,
+            max_pos_offset: -16,
+            min_neg_offset: -48,
+        });
+
+        assert!(LvarCollectPass.run(&mut ssa).unwrap());
+        let stack_lvars: BTreeMap<i64, &Lvar> = ssa
+            .lvars
+            .iter()
+            .filter_map(|lv| match lv.storage {
+                LvarStorage::Stack { offset } => Some((offset, lv)),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            stack_lvars.len(),
+            2,
+            "overlapping source ranges must not collapse into one lvar: {:?}",
+            ssa.lvars
+        );
+        let p = stack_lvars.get(&-48).expect("outer aggregate lvar");
+        let values = stack_lvars.get(&-40).expect("inner overlapping lvar");
+        assert_eq!(p.name.as_deref(), Some("p"));
+        assert_eq!(values.name.as_deref(), Some("values"));
+        assert_eq!(p.source, LvarSource::FromDebug);
+        assert_eq!(values.source, LvarSource::FromDebug);
+    }
+
+    #[test]
+    fn address_taken_stack_local_survives_as_byref_lvar() {
+        let rsp = Varnode::reg(32, 8);
+        let rdi = Varnode::reg(56, 8);
+        let addr = Varnode::unique(0, 8);
+        let c16 = Varnode::constant(16, 8);
+        let ram = Varnode::constant(1, 8);
+        let value = Varnode::reg(0, 8);
+        let callee = Varnode::constant(0x2000, 8);
+
+        let mut block = BasicBlock::new(BlockId(0));
+        block.insns = vec![
+            IrInsn::with_output(IrOp::IntSub, addr, smallvec::smallvec![rsp, c16], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec::smallvec![ram, addr, value], 0x1004),
+            IrInsn::with_output(IrOp::Copy, rdi, smallvec::smallvec![addr], 0x1008),
+            IrInsn::without_output(IrOp::Call, smallvec::smallvec![callee, rdi], 0x100c),
+            IrInsn::without_output(IrOp::Return, smallvec::smallvec![], 0x1010),
+        ];
+        let mut func = Function::new("byref_lvar", BlockId(0), 0x1000);
+        func.insert_block(block);
+        let mut ssa = build_ssa(func);
+        ssa.calling_convention = unlace_ir::ssa::CallingConvention::SystemV;
+        ssa.inferred_params = vec![("dst".to_string(), PrimitiveType::Ptr)];
+
+        ssa.stack_frame = Some(crate::stack_frame_recovery::recover_stack_frame(&ssa));
+        ssa.byref_info = Some(crate::byref_detect::detect_byref(&ssa));
+
+        assert!(
+            ssa.stack_frame
+                .as_ref()
+                .is_some_and(|frame| frame.locals.contains_key(&-16)),
+            "stack-frame producer should recover the local at -16: {:?}",
+            ssa.stack_frame
+        );
+        assert!(
+            ssa.byref_info
+                .as_ref()
+                .is_some_and(|info| info.byref_locals.contains(&-16)),
+            "BYREF detector should mark the local at -16: {:?}",
+            ssa.byref_info
+        );
+
+        assert!(LvarCollectPass.run(&mut ssa).unwrap());
+        let stack_lvars: Vec<_> = ssa
+            .lvars
+            .iter()
+            .filter(|lv| matches!(lv.storage, LvarStorage::Stack { offset: -16 }))
+            .collect();
+        assert_eq!(
+            stack_lvars.len(),
+            1,
+            "address-taken stack local should remain one distinct Lvar: {:?}",
+            ssa.lvars
+        );
+        let lvar = stack_lvars[0];
+        assert!(
+            lvar.flags.contains(LvarFlags::ADDRESS_TAKEN),
+            "BYREF stack local must carry ADDRESS_TAKEN: {lvar:?}"
+        );
+        assert_eq!(lvar.name.as_deref(), Some("v_16"));
+    }
+
+    #[test]
+    fn return_address_stack_slot_is_not_exported_as_lvar() {
+        let mut ssa = empty_ssa("return_addr_slot");
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            0,
+            StackLocal {
+                offset: 0,
+                size: 8,
+                access_widths: vec![8],
+                kind: FrameSlotKind::ReturnAddress,
+            },
+        );
+        ssa.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 8,
+            max_pos_offset: 8,
+            min_neg_offset: 0,
+        });
+
+        LvarCollectPass.run(&mut ssa).unwrap();
+        assert!(
+            ssa.lvars
+                .iter()
+                .all(|lv| !matches!(lv.storage, LvarStorage::Stack { offset: 0 })),
+            "return-address carrier must not surface as an Lvar: {:?}",
+            ssa.lvars
+        );
+    }
+
+    #[test]
+    fn stack_arg_stack_slot_is_not_exported_as_lvar() {
+        let mut ssa = empty_ssa("stack_arg_slot");
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            16,
+            StackLocal {
+                offset: 16,
+                size: 8,
+                access_widths: vec![8],
+                kind: FrameSlotKind::StackArg,
+            },
+        );
+        ssa.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 8,
+            max_pos_offset: 24,
+            min_neg_offset: 16,
+        });
+
+        LvarCollectPass.run(&mut ssa).unwrap();
+        assert!(
+            ssa.lvars
+                .iter()
+                .all(|lv| !matches!(lv.storage, LvarStorage::Stack { offset: 16 })),
+            "stack-arg carrier must not surface as a source Lvar: {:?}",
+            ssa.lvars
+        );
     }
 
     #[test]
@@ -1193,6 +1379,70 @@ mod tests {
         assert!(
             trace.contains("one-shot-temp"),
             "trace missing one-shot-temp: {trace}"
+        );
+    }
+
+    /// Batch 18 — suppression is per storage member, not per printed name.
+    /// A coalesced name that contains a suppressed flag plus a real GPR must
+    /// still emit the GPR-backed Lvar and report only the flag row in the
+    /// suppression dump.
+    #[test]
+    fn lvar_suppression_keeps_visible_member_in_mixed_name_cluster() {
+        let mut ssa = empty_ssa("mixed_cluster");
+        let flag = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 256,
+                size: 1,
+            },
+            version: 0,
+        };
+        let gpr = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 0,
+                size: 8,
+            },
+            version: 0,
+        };
+
+        ssa.merged_names.insert(flag, "v_mixed".to_string());
+        ssa.merged_names.insert(gpr, "v_mixed".to_string());
+        ssa.var_map
+            .insert((BlockId(0), 0, VarnodeSlot::Output), flag);
+        ssa.var_map
+            .insert((BlockId(0), 1, VarnodeSlot::Input(0)), flag);
+        ssa.var_map
+            .insert((BlockId(0), 2, VarnodeSlot::Output), gpr);
+        ssa.var_map
+            .insert((BlockId(0), 3, VarnodeSlot::Input(0)), gpr);
+
+        assert!(LvarCollectPass.run(&mut ssa).unwrap());
+        let temps: Vec<_> = ssa
+            .lvars
+            .iter()
+            .filter(|lv| lv.name.as_deref() == Some("v_mixed"))
+            .collect();
+        assert_eq!(
+            temps.len(),
+            1,
+            "mixed cluster should emit one lvar: {:?}",
+            ssa.lvars
+        );
+        assert!(
+            matches!(temps[0].storage, LvarStorage::Temp { ssa_var } if ssa_var == gpr),
+            "mixed cluster must keep the visible GPR-backed temp: {:?}",
+            temps[0]
+        );
+
+        let trace = dump_lvar_suppressions(&ssa);
+        assert!(
+            trace.contains("flag-reg"),
+            "trace missing flag-reg: {trace}"
+        );
+        assert!(
+            !trace.contains("Register@0x0#0"),
+            "visible GPR must not appear in suppression dump: {trace}"
         );
     }
 

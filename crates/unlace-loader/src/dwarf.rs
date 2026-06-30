@@ -11,6 +11,7 @@
 //!  * `DW_TAG_union_type`     → [`UnionType`] with member list.
 //!  * `DW_TAG_enumeration_type` → [`EnumType`] with `(name, value)`
 //!    variant list.
+//!  * `DW_AT_language` on compile-unit roots → [`DebugLanguage`].
 //!  * `DW_TAG_variable` (inside a subprogram) → [`LocalVariable`] with
 //!    optional `frame_offset` decoded from a single-op `DW_OP_fbreg`
 //!    location expression.
@@ -34,8 +35,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use gimli::{
     AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_count, DW_AT_data_member_location,
-    DW_AT_high_pc, DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type,
-    DW_AT_upper_bound, DW_TAG_array_type, DW_TAG_base_type, DW_TAG_const_type,
+    DW_AT_high_pc, DW_AT_language, DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name,
+    DW_AT_type, DW_AT_upper_bound, DW_TAG_array_type, DW_TAG_base_type, DW_TAG_const_type,
     DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter, DW_TAG_member,
     DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type, DW_TAG_subprogram,
     DW_TAG_subrange_type, DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type,
@@ -60,11 +61,92 @@ pub struct DwarfInfo {
     pub enums: BTreeMap<String, EnumType>,
     pub unions: BTreeMap<String, UnionType>,
     pub macros: Vec<MacroDefinition>,
+    pub languages: BTreeSet<DebugLanguage>,
     /// Split-DWARF (`.dwo` / `.dwp`) references discovered in skeleton
     /// units. Each entry captures the referenced file path + `dwo_id`
     /// (if present) so a follow-up call to [`DwarfInfo::merge_split_dwarf`]
     /// can fold the external unit back in. Empty for non-split DWARF.
     pub dwo_references: Vec<DwoRef>,
+}
+
+/// Source language metadata imported from compile-unit `DW_AT_language`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DebugLanguage {
+    C,
+    Cpp,
+    ObjectiveC,
+    ObjectiveCpp,
+    Rust,
+    Go,
+    Swift,
+    Zig,
+    Java,
+    Python,
+    D,
+    Haskell,
+    Kotlin,
+    Fortran,
+    Ada,
+}
+
+impl DebugLanguage {
+    pub fn from_dw_lang(lang: gimli::DwLang) -> Option<Self> {
+        match lang {
+            gimli::DW_LANG_C89
+            | gimli::DW_LANG_C
+            | gimli::DW_LANG_C99
+            | gimli::DW_LANG_C11
+            | gimli::DW_LANG_C17 => Some(Self::C),
+            gimli::DW_LANG_C_plus_plus
+            | gimli::DW_LANG_C_plus_plus_03
+            | gimli::DW_LANG_C_plus_plus_11
+            | gimli::DW_LANG_C_plus_plus_14
+            | gimli::DW_LANG_C_plus_plus_17
+            | gimli::DW_LANG_C_plus_plus_20 => Some(Self::Cpp),
+            gimli::DW_LANG_ObjC => Some(Self::ObjectiveC),
+            gimli::DW_LANG_ObjC_plus_plus => Some(Self::ObjectiveCpp),
+            gimli::DW_LANG_Rust => Some(Self::Rust),
+            gimli::DW_LANG_Go => Some(Self::Go),
+            gimli::DW_LANG_Swift => Some(Self::Swift),
+            gimli::DW_LANG_Zig => Some(Self::Zig),
+            gimli::DW_LANG_Java => Some(Self::Java),
+            gimli::DW_LANG_Python => Some(Self::Python),
+            gimli::DW_LANG_D => Some(Self::D),
+            gimli::DW_LANG_Haskell => Some(Self::Haskell),
+            gimli::DW_LANG_Kotlin => Some(Self::Kotlin),
+            gimli::DW_LANG_Fortran77
+            | gimli::DW_LANG_Fortran90
+            | gimli::DW_LANG_Fortran95
+            | gimli::DW_LANG_Fortran03
+            | gimli::DW_LANG_Fortran08
+            | gimli::DW_LANG_Fortran18 => Some(Self::Fortran),
+            gimli::DW_LANG_Ada83
+            | gimli::DW_LANG_Ada95
+            | gimli::DW_LANG_Ada2005
+            | gimli::DW_LANG_Ada2012 => Some(Self::Ada),
+            _ => None,
+        }
+    }
+
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::C => "C",
+            Self::Cpp => "C++",
+            Self::ObjectiveC => "Objective-C",
+            Self::ObjectiveCpp => "Objective-C++",
+            Self::Rust => "Rust",
+            Self::Go => "Go",
+            Self::Swift => "Swift",
+            Self::Zig => "Zig",
+            Self::Java => "Java",
+            Self::Python => "Python",
+            Self::D => "D",
+            Self::Haskell => "Haskell",
+            Self::Kotlin => "Kotlin",
+            Self::Fortran => "Fortran",
+            Self::Ada => "Ada",
+        }
+    }
 }
 
 /// One entry in [`DwarfInfo::dwo_references`] — a reference to an
@@ -239,6 +321,7 @@ pub fn import_dwarf_with_resolver(
     let source_map = build_source_map(&dwarf)?;
     let (structs, enums, unions) = extract_composite_types(&dwarf)?;
     let macros = extract_macros(&dwarf)?;
+    let languages = extract_languages(&dwarf)?;
     let dwo_references = extract_dwo_references(&dwarf)?;
 
     Ok(DwarfInfo {
@@ -248,8 +331,26 @@ pub fn import_dwarf_with_resolver(
         enums,
         unions,
         macros,
+        languages,
         dwo_references,
     })
+}
+
+fn extract_languages(dwarf: &gimli::Dwarf<R<'_>>) -> Result<BTreeSet<DebugLanguage>, gimli::Error> {
+    let mut languages = BTreeSet::new();
+    let mut units = dwarf.units();
+    while let Some(header) = units.next()? {
+        let unit = dwarf.unit(header)?;
+        let mut tree = unit.entries_tree(None)?;
+        let root = tree.root()?;
+        let entry = root.entry();
+        if let Some(AttributeValue::Language(lang)) = entry.attr_value(DW_AT_language)
+            && let Some(language) = DebugLanguage::from_dw_lang(lang)
+        {
+            languages.insert(language);
+        }
+    }
+    Ok(languages)
 }
 
 /// Walk every compile-unit root DIE and record any
@@ -364,6 +465,7 @@ impl DebugLocationResolver {
             info.unions.entry(k).or_insert(v);
         }
         info.macros.extend(dwo_info.macros);
+        info.languages.extend(dwo_info.languages);
         info.dwo_references.extend(dwo_info.dwo_references);
         Ok(())
     }
@@ -2023,6 +2125,8 @@ mod tests {
             dylibs: vec![],
             rpaths: vec![],
             pdb_types: None,
+            pdb_info: None,
+            image_base: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -2528,6 +2632,7 @@ int main(void) { return split(2) + split(-1); }
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: Vec::new(),
+            languages: BTreeSet::new(),
             dwo_references: Vec::new(),
         };
         // Reuse the debug_calls fixture as our "external partner".

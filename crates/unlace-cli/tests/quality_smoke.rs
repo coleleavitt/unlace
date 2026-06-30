@@ -158,6 +158,37 @@ fn assert_within_quality_budget(name: &str, report: &BinaryQuality, budget: &Fix
     );
 }
 
+fn assert_no_hard_negative_output(name: &str, t: &QualityTotals) {
+    assert_eq!(
+        t.callother_semantic_gap_ops, 0,
+        "{name}: unknown Callother helper spam must stay at zero"
+    );
+    assert_eq!(
+        t.output_null_deref_sites, 0,
+        "{name}: final C must not emit null-address dereferences"
+    );
+    assert_eq!(
+        t.output_stale_return_result, 0,
+        "{name}: final C must not emit stale `return result;` placeholders"
+    );
+    assert_eq!(
+        t.output_unimplemented_tokens, 0,
+        "{name}: final C must not leak `Unimplemented` tokens"
+    );
+    assert_eq!(
+        t.output_empty_bodies, 0,
+        "{name}: final C must not emit empty structured bodies"
+    );
+    assert_eq!(
+        t.output_impossible_lvalue_sites, 0,
+        "{name}: final C must not write through impossible small-immediate lvalues"
+    );
+    assert_eq!(
+        t.output_lost_frame_offset_sites, 0,
+        "{name}: final C must not leak raw frame-relative pointer arithmetic"
+    );
+}
+
 /// Fixtures excluded from the per-fixture smoke loop because they are large
 /// real-world binaries (thousands of functions) — running the full pass
 /// pipeline over them takes minutes, which is fine for an explicit CLI
@@ -390,6 +421,23 @@ fn noreturn_and_libc_counters_wired() {
     );
 }
 
+#[test]
+fn batch17_stack_provenance_negative_output_gates() {
+    for fixture in ["loops.elf", "type_stack_o2.elf"] {
+        let report = analyze_report(fixture);
+        let t = &report.totals;
+        assert_no_hard_negative_output(fixture, t);
+        assert_eq!(
+            t.stack_accesses_lost_provenance, 0,
+            "{fixture}: every recorded stack access must resolve to recovered provenance"
+        );
+        assert!(
+            t.stack_accesses_recorded > 0,
+            "{fixture}: provenance gate must exercise at least one recorded stack access"
+        );
+    }
+}
+
 /// Pinned baseline for `loops.elf`.
 #[test]
 fn baseline_loops() {
@@ -433,8 +481,8 @@ fn output_sanity_counters_are_reported() {
     let md = render_markdown(&report);
 
     assert!(
-        md.contains("| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm | nullderef | badret | badtok | leaktemp |"),
-        "markdown table must include output-sanity columns"
+        md.contains("| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | flirt_hc | goto | label | unktype | asm | nullderef | badret | badtok | leaktemp |"),
+        "markdown table must include output-sanity and FLIRT quality columns"
     );
     assert!(
         md.contains("### Output sanity"),
@@ -451,6 +499,10 @@ fn output_sanity_counters_are_reported() {
     assert!(
         md.contains("- leaked temp declarations: 1"),
         "markdown must render aggregate leaked-temp declaration count"
+    );
+    assert!(
+        md.contains("- flirt-matched calls (high confidence"),
+        "markdown must render aggregate FLIRT confidence count"
     );
 
     let main = find_function(&report, "main");

@@ -41,7 +41,9 @@ fn coq_next_cap(base: u64, next: u64, entry_size: u32) -> Option<u32> {
 fn coq_xref_cap(base: u64, xrefs: &[u64], entry_size: u32) -> Option<u32> {
     let mut max_slot: Option<u32> = None;
     for &x in xrefs {
-        let Some(delta) = x.checked_sub(base) else { continue };
+        let Some(delta) = x.checked_sub(base) else {
+            continue;
+        };
         if delta % entry_size as u64 != 0 {
             continue; // nonaligned_not_slot: rejected, exactly as JumpTable.v
         }
@@ -51,12 +53,7 @@ fn coq_xref_cap(base: u64, xrefs: &[u64], entry_size: u32) -> Option<u32> {
     max_slot.map(|m| m.saturating_add(1))
 }
 
-fn coq_combined(
-    base: u64,
-    next: Option<u64>,
-    xrefs: &[u64],
-    entry_size: u32,
-) -> Option<u32> {
+fn coq_combined(base: u64, next: Option<u64>, xrefs: &[u64], entry_size: u32) -> Option<u32> {
     if entry_size == 0 {
         return None;
     }

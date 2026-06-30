@@ -156,16 +156,34 @@ fn opt_bisect_counter() -> &'static AtomicUsize {
 /// Captured for every [`run_instrumented`] invocation when
 /// `UNLACE_SCHEDULE_AUDIT` is non-empty (the value is the destination
 /// file path). Holds the function name, pass name, declared phase, the
-/// pass's reported `changed` flag, and the per-(function, pass) iteration
-/// index so out-of-order invocations and oscillations are visible after
-/// the fact.
+/// scheduler decision, optional skip reason, pass-reported `changed` flag,
+/// and the per-(function, pass) iteration index so out-of-order invocations
+/// and oscillations are visible after the fact.
 #[derive(Clone, Debug)]
 struct ScheduleRow {
     function: String,
     pass: String,
     phase: PassPhase,
     iteration: u32,
+    decision: ScheduleDecision,
     changed: bool,
+    reason: &'static str,
+}
+
+/// Scheduler decision represented in the audit log.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScheduleDecision {
+    Run,
+    Skipped,
+}
+
+impl ScheduleDecision {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Run => "run",
+            Self::Skipped => "skipped",
+        }
+    }
 }
 
 fn schedule_log() -> &'static Mutex<Vec<ScheduleRow>> {
@@ -199,30 +217,61 @@ fn schedule_audit_enabled() -> bool {
     schedule_audit_path_cell().is_some()
 }
 
-/// Append one row to the schedule audit. Cheap when the env var is unset
-/// (a single atomic load), so callers don't need to gate.
-fn record_schedule_event(function: &str, pass: &str, phase: PassPhase, changed: bool) {
-    if !schedule_audit_enabled() {
-        return;
-    }
-    let iteration = {
-        let mut counts = schedule_iteration_counts()
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
-        let key = (function.to_string(), pass.to_string());
-        let entry = counts.entry(key).or_insert(0);
-        let idx = *entry;
-        *entry = entry.saturating_add(1);
-        idx
-    };
+fn next_schedule_iteration(function: &str, pass: &str) -> u32 {
+    let mut counts = schedule_iteration_counts()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    let key = (function.to_string(), pass.to_string());
+    let entry = counts.entry(key).or_insert(0);
+    let idx = *entry;
+    *entry = entry.saturating_add(1);
+    idx
+}
+
+fn push_schedule_row(
+    function: &str,
+    pass: &str,
+    phase: PassPhase,
+    decision: ScheduleDecision,
+    changed: bool,
+    reason: &'static str,
+) {
+    let iteration = next_schedule_iteration(function, pass);
     let mut log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
     log.push(ScheduleRow {
         function: function.to_string(),
         pass: pass.to_string(),
         phase,
         iteration,
+        decision,
         changed,
+        reason,
     });
+}
+
+/// Append one row to the schedule audit. Cheap when the env var is unset
+/// (a single atomic load), so callers don't need to gate.
+fn record_schedule_event(function: &str, pass: &str, phase: PassPhase, changed: bool) {
+    if !schedule_audit_enabled() {
+        return;
+    }
+    push_schedule_row(function, pass, phase, ScheduleDecision::Run, changed, "");
+}
+
+/// Append one scheduler skip row to the audit. The reason string is a
+/// stable diagnostic contract for consumers diffing missing pass rows.
+fn record_schedule_skip_event(function: &str, pass: &str, phase: PassPhase, reason: &'static str) {
+    if !schedule_audit_enabled() {
+        return;
+    }
+    push_schedule_row(
+        function,
+        pass,
+        phase,
+        ScheduleDecision::Skipped,
+        false,
+        reason,
+    );
 }
 
 /// Render the accumulated schedule audit as a CSV body, including the
@@ -234,15 +283,17 @@ pub fn dump_schedule_audit_csv() -> String {
         let log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
         log.clone()
     };
-    let mut out = String::from("function,pass,phase,iteration,changed\n");
+    let mut out = String::from("function,pass,phase,iteration,decision,changed,reason\n");
     for r in &rows {
         out.push_str(&format!(
-            "{},{},{:?},{},{}\n",
+            "{},{},{:?},{},{},{},{}\n",
             r.function,
             r.pass,
             r.phase,
             r.iteration,
+            r.decision.as_str(),
             if r.changed { 1 } else { 0 },
+            r.reason,
         ));
     }
     out
@@ -265,6 +316,8 @@ pub fn schedule_audit_oscillations() -> Vec<String> {
     for row in &rows {
         if let Some(p) = prev
             && p.function == row.function
+            && p.decision == ScheduleDecision::Run
+            && row.decision == ScheduleDecision::Run
             && row.phase.ordinal() < p.phase.ordinal()
             && row.iteration > 0
         {
@@ -493,7 +546,22 @@ pub fn dump_pass_timings_csv() -> String {
 /// `OnceLock` loads + the underlying [`Pass::run`] call — no allocation,
 /// no string formatting, no clock read.
 pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool, PassError> {
-    if pass_is_disabled(pass.name()) || !pass_allowed_by_opt_bisect() {
+    if pass_is_disabled(pass.name()) {
+        record_schedule_skip_event(
+            &func.function.name,
+            pass.name(),
+            pass.phase(),
+            "disabled by UNLACE_DISABLE_PASSES",
+        );
+        return Ok(false);
+    }
+    if !pass_allowed_by_opt_bisect() {
+        record_schedule_skip_event(
+            &func.function.name,
+            pass.name(),
+            pass.phase(),
+            "skipped by UNLACE_OPT_BISECT_LIMIT",
+        );
         return Ok(false);
     }
 
@@ -695,24 +763,24 @@ fn reset_timings_for_test() {
 /// mutating process-global env state.
 #[cfg(test)]
 fn record_schedule_event_for_test(function: &str, pass: &str, phase: PassPhase, changed: bool) {
-    let iteration = {
-        let mut counts = schedule_iteration_counts()
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
-        let key = (function.to_string(), pass.to_string());
-        let entry = counts.entry(key).or_insert(0);
-        let idx = *entry;
-        *entry = entry.saturating_add(1);
-        idx
-    };
-    let mut log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
-    log.push(ScheduleRow {
-        function: function.to_string(),
-        pass: pass.to_string(),
+    push_schedule_row(function, pass, phase, ScheduleDecision::Run, changed, "");
+}
+
+#[cfg(test)]
+fn record_schedule_skip_event_for_test(
+    function: &str,
+    pass: &str,
+    phase: PassPhase,
+    reason: &'static str,
+) {
+    push_schedule_row(
+        function,
+        pass,
         phase,
-        iteration,
-        changed,
-    });
+        ScheduleDecision::Skipped,
+        false,
+        reason,
+    );
 }
 
 /// **Test-only** direct write into the per-function accumulator,
@@ -903,12 +971,53 @@ main,cse,0,12.346
 
         let csv = dump_schedule_audit_csv();
         let expected = "\
-function,pass,phase,iteration,changed
-f,ConstantFoldPass,LocalOpt,0,1
-f,ConstantFoldPass,LocalOpt,1,0
-f,TypeInferPass,TypeRecovery,0,1
+function,pass,phase,iteration,decision,changed,reason
+f,ConstantFoldPass,LocalOpt,0,run,1,
+f,ConstantFoldPass,LocalOpt,1,run,0,
+f,TypeInferPass,TypeRecovery,0,run,1,
 ";
         assert_eq!(csv, expected);
+    }
+
+    #[test]
+    fn schedule_audit_records_skip_decision_reason() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        record_schedule_event_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, true);
+        record_schedule_skip_event_for_test(
+            "f",
+            "CopyPropagationPass",
+            PassPhase::LocalOpt,
+            "disabled by UNLACE_DISABLE_PASSES",
+        );
+
+        let csv = dump_schedule_audit_csv();
+        let expected = "\
+function,pass,phase,iteration,decision,changed,reason
+f,ConstantFoldPass,LocalOpt,0,run,1,
+f,CopyPropagationPass,LocalOpt,0,skipped,0,disabled by UNLACE_DISABLE_PASSES
+";
+        assert_eq!(csv, expected);
+    }
+
+    #[test]
+    fn schedule_audit_ignores_skips_for_oscillation_detection() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        record_schedule_event_for_test("g", "TypeInferPass", PassPhase::TypeRecovery, true);
+        record_schedule_skip_event_for_test(
+            "g",
+            "ConstantFoldPass",
+            PassPhase::LocalOpt,
+            "skipped by UNLACE_OPT_BISECT_LIMIT",
+        );
+
+        assert!(
+            schedule_audit_oscillations().is_empty(),
+            "a skipped earlier-phase pass explains a missing run, not a runtime oscillation"
+        );
     }
 
     #[test]
@@ -945,7 +1054,7 @@ f,TypeInferPass,TypeRecovery,0,1
         // the header so consumers can rely on a stable shape.
         assert_eq!(
             dump_schedule_audit_csv(),
-            "function,pass,phase,iteration,changed\n"
+            "function,pass,phase,iteration,decision,changed,reason\n"
         );
         assert!(schedule_audit_oscillations().is_empty());
     }

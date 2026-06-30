@@ -56,8 +56,7 @@ fn random_function(rng: &mut XorShift64, n: u32) -> Function {
             if rng.next().is_multiple_of(5) && i > 0 {
                 succs.push(BlockId((rng.next() % i as u64) as u32));
             }
-            bb.insns
-                .push(ctrl(IrOp::Cbranch, 0x1000 + i as u64 * 16));
+            bb.insns.push(ctrl(IrOp::Cbranch, 0x1000 + i as u64 * 16));
             bb.successors = succs;
         }
         func.insert_block(bb);
@@ -98,7 +97,10 @@ fn reachable_blocks(dom: &DominatorTree, n: u32) -> Vec<BlockId> {
 // also dominates the node.
 fn check_transitivity(dom: &DominatorTree, blocks: &[BlockId], b: BlockId, id: BlockId) {
     for &d in blocks.iter().filter(|&&d| dominates(dom, d, id)) {
-        assert!(dominates(dom, d, b), "dom_trans: {d:?} dom {id:?} dom {b:?}");
+        assert!(
+            dominates(dom, d, b),
+            "dom_trans: {d:?} dom {id:?} dom {b:?}"
+        );
     }
 }
 

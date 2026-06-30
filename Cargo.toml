@@ -104,8 +104,6 @@ unlace-test-harness = { path = "crates/unlace-test-harness" }
 unlace-lumina = { path = "crates/unlace-lumina" }
 unlace-session = { path = "crates/unlace-session" }
 unlace-idapython = { path = "crates/unlace-idapython" }
-unlace-tui = { path = "crates/unlace-tui" }
-unlace-gui = { path = "crates/unlace-gui" }
 unlace-debugger = { path = "crates/unlace-debugger" }
 unlace-emu = { path = "crates/unlace-emu" }
 

@@ -96,7 +96,10 @@ fn classify_matches_coq_score_convention() {
         }
         let rust = classify_calling_convention(&reads);
         let coq = coq_score(&reads);
-        assert_eq!(rust, coq, "classifier diverged from CallingConv.v on reads={reads:?}");
+        assert_eq!(
+            rust, coq,
+            "classifier diverged from CallingConv.v on reads={reads:?}"
+        );
     }
 }
 
@@ -126,13 +129,22 @@ fn classify_matches_coq_on_all_hazard_subsets() {
 #[test]
 fn witness_landmarks_match_coq() {
     let sysv: BTreeSet<u64> = [RDI].into_iter().collect();
-    assert_eq!(classify_calling_convention(&sysv), CallingConvention::SystemV);
+    assert_eq!(
+        classify_calling_convention(&sysv),
+        CallingConvention::SystemV
+    );
 
     let msx64: BTreeSet<u64> = [RCX].into_iter().collect();
-    assert_eq!(classify_calling_convention(&msx64), CallingConvention::MicrosoftX64);
+    assert_eq!(
+        classify_calling_convention(&msx64),
+        CallingConvention::MicrosoftX64
+    );
 
     let aarch64: BTreeSet<u64> = [RAX].into_iter().collect();
-    assert_eq!(classify_calling_convention(&aarch64), CallingConvention::AArch64);
+    assert_eq!(
+        classify_calling_convention(&aarch64),
+        CallingConvention::AArch64
+    );
 
     assert_eq!(
         classify_calling_convention(&BTreeSet::new()),

@@ -727,8 +727,12 @@ fn primitive_size(ty: PrimitiveType) -> u32 {
 mod tests {
     use smallvec::smallvec;
 
+    use unlace_ir::lvar::{LvarFlags, LvarSource, LvarStorage};
     use unlace_ir::ssa::{StackFrame, StackLocal, StackVar, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
+
+    use crate::lvar_collect::LvarCollectPass;
+    use crate::stack_frame_recovery::recover_stack_frame;
 
     use super::*;
 
@@ -796,6 +800,55 @@ mod tests {
 
         assert!(StackPointerTrackingPass.run(&mut ssa).unwrap());
         assert!(ssa.dynamic_sp, "alloca-shaped IR should set dynamic_sp");
+    }
+
+    #[test]
+    fn dynamic_alloca_does_not_synthesize_fixed_stack_lvar() {
+        let alloca_base = Varnode::unique(0, 8);
+        let dyn_size = Varnode::reg(0, 8);
+        let mut ssa = build(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                alloca_base,
+                smallvec![rsp(), dyn_size],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![alloca_base], 0x1004),
+        ]);
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+        assert!(
+            ssa.dynamic_sp,
+            "variable-sized SP update must be marked dynamic"
+        );
+        assert!(
+            ssa.stack_vars.is_empty(),
+            "dynamic alloca must not create legacy fixed stack vars: {:?}",
+            ssa.stack_vars
+        );
+        assert!(
+            ssa.stack_accesses.is_empty(),
+            "the SP adjustment itself is not a fixed stack memory access: {:?}",
+            ssa.stack_accesses
+        );
+
+        let frame = recover_stack_frame(&ssa);
+        assert!(
+            frame.locals.is_empty(),
+            "dynamic alloca adjustment must not synthesize fixed frame slots: {:?}",
+            frame.locals
+        );
+        ssa.stack_frame = Some(frame);
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+        LvarCollectPass.run(&mut ssa).unwrap();
+        assert!(
+            ssa.lvars
+                .iter()
+                .all(|lvar| !matches!(lvar.storage, LvarStorage::Stack { .. })),
+            "dynamic alloca adjustment must not surface as fixed stack lvars: {:?}",
+            ssa.lvars
+        );
     }
 
     #[test]
@@ -1196,5 +1249,131 @@ mod tests {
             .expect("store should be recorded");
         assert_eq!(acc.delta, -8);
         assert_eq!(acc.width, 4, "store width came from the value operand");
+    }
+
+    /// Batch 17: SysV leaf red-zone storage (`[rsp-8]` with no prologue
+    /// allocation) is callee-local source storage, not a caller stack arg or a
+    /// lost frame offset. This is characterization coverage: the current
+    /// recovery path already handles the shape, but no cross-layer test pinned
+    /// it from SP tracking through lvar collection.
+    #[test]
+    fn red_zone_store_without_prologue_recovers_source_local_lvar() {
+        let addr = Varnode::unique(0, 8);
+        let value = Varnode::reg(0, 8);
+        let mut ssa = build(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                addr,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x1000,
+            ),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![Varnode::constant(0, 8), addr, value],
+                0x1004,
+            ),
+        ]);
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        assert!(!ssa.dynamic_sp, "red-zone use is fixed-size stack storage");
+        assert!(
+            ssa.stack_holes.is_empty(),
+            "leaf red-zone use should not synthesize a prologue frame hole: {:?}",
+            ssa.stack_holes
+        );
+        let access = ssa
+            .stack_accesses
+            .iter()
+            .find(|access| access.source_addr == 0x1004)
+            .expect("red-zone store should be recorded as a stack access");
+        assert_eq!(access.delta, -8);
+        assert!(access.is_store);
+
+        let frame = recover_stack_frame(&ssa);
+        let slot = frame
+            .locals
+            .get(&-8)
+            .expect("red-zone store should recover a local frame slot");
+        assert_eq!(slot.kind, unlace_ir::ssa::FrameSlotKind::Local);
+        assert_eq!(slot.size, 8);
+
+        ssa.stack_frame = Some(frame);
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+        LvarCollectPass.run(&mut ssa).unwrap();
+
+        let red_zone_lvar = ssa
+            .lvars
+            .iter()
+            .find(|lvar| matches!(lvar.storage, LvarStorage::Stack { offset: -8 }))
+            .expect("red-zone slot should surface as a stack lvar");
+        assert_eq!(red_zone_lvar.name.as_deref(), Some("v_8"));
+    }
+
+    #[test]
+    fn fpo_rsp_derived_debug_local_survives_lvar_collection() {
+        let adjusted_rsp = Varnode::unique(0, 8);
+        let local_addr = Varnode::unique(8, 8);
+        let value = Varnode::reg(0, 4);
+        let mut ssa = build(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                adjusted_rsp,
+                smallvec![rsp(), Varnode::constant(32, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![adjusted_rsp], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                local_addr,
+                smallvec![rsp(), Varnode::constant(24, 8)],
+                0x1008,
+            ),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![Varnode::constant(0, 8), local_addr, value],
+                0x100c,
+            ),
+        ]);
+        ssa.dwarf_local_names.insert(-8, "counter".to_string());
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        let access = ssa
+            .stack_accesses
+            .iter()
+            .find(|access| access.source_addr == 0x100c)
+            .expect("FPO store should retain RSP-derived stack access metadata");
+        assert_eq!(access.delta, -8);
+        assert!(access.is_store);
+        assert_eq!(ssa.sp_delta_at.get(&(BlockId(0), 2)), Some(&-32));
+
+        let frame = recover_stack_frame(&ssa);
+        let slot = frame
+            .locals
+            .get(&-8)
+            .expect("RSP-derived FPO access should recover local slot -8");
+        assert_eq!(slot.kind, unlace_ir::ssa::FrameSlotKind::Local);
+        assert!(slot.access_widths.contains(&4));
+
+        ssa.stack_frame = Some(frame);
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+        let resolved_access = ssa
+            .stack_accesses
+            .iter()
+            .find(|access| access.source_addr == 0x100c)
+            .expect("FPO store should still retain stack access metadata");
+        assert_eq!(resolved_access.resolved_slot, Some(-8));
+        assert!(!resolved_access.lost_provenance);
+        LvarCollectPass.run(&mut ssa).unwrap();
+
+        let lvar = ssa
+            .lvars
+            .iter()
+            .find(|lvar| matches!(lvar.storage, LvarStorage::Stack { offset: -8 }))
+            .expect("FPO stack slot should survive as a stack lvar");
+        assert_eq!(lvar.name.as_deref(), Some("counter"));
+        assert_eq!(lvar.source, LvarSource::FromDebug);
+        assert!(lvar.flags.contains(LvarFlags::FROM_DEBUG));
     }
 }

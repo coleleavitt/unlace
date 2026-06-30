@@ -77,9 +77,8 @@ completion plan that targets the remaining honest "not landed" items:
   UI, debugger, emulator, LLVM IR export, platform/debug breadth, and
   real-binary quality dashboard.
 
-The plan intentionally skips full TUI/Web UI front-ends and signed
-release / CI infrastructure work; those are out-of-source-tree
-concerns.
+The plan intentionally skips frontend productization and signed release / CI
+infrastructure work; those are out-of-source-tree concerns.
 
 To execute: read `COMPLETION_PLAN.md`, then run each
 `COMPLETION_0?_*.md` in order. Each handoff is independently mergeable

@@ -97,7 +97,10 @@ fn sweep_yields_disjoint_slots_like_coq() {
         }
         // also: every kept slot offset is distinct (a partition, not a multiset)
         for w in slots.windows(2) {
-            assert!(w[1].0 < w[0].0, "slots must be strictly descending in offset");
+            assert!(
+                w[1].0 < w[0].0,
+                "slots must be strictly descending in offset"
+            );
         }
     }
 }

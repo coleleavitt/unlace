@@ -3,8 +3,8 @@
 The catch-all handoff for everything still open after §1–§4. Each
 sub-section is independently mergeable and ordered by tractability.
 
-**Out of scope (per direct user direction):** full TUI / Web UI
-front-ends; reproducible signed releases + CI signing pipeline.
+**Out of scope (per direct user direction):** frontend productization;
+reproducible signed releases + CI signing pipeline.
 
 ## §5.1 — Standalone variants for every IDA `cot_*` opcode (1 day)
 

@@ -73,7 +73,12 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
             None => continue,
         };
 
-        collect_module_symbols(&module_info, &address_map, &mut symbols, &mut function_locals)?;
+        collect_module_symbols(
+            &module_info,
+            &address_map,
+            &mut symbols,
+            &mut function_locals,
+        )?;
         collect_line_info(&module_info, &address_map, &mut lines)?;
     }
 
@@ -214,7 +219,8 @@ fn collect_module_symbols(
                             type_index: ti_to_u32(regrel.type_index),
                         });
                         let mut local = local;
-                        local.frame_offset = frame_offset_for_register(regrel.register, regrel.offset);
+                        local.frame_offset =
+                            frame_offset_for_register(regrel.register, regrel.offset);
                         function_locals.entry(func_rva).or_default().push(local);
                     }
                 }

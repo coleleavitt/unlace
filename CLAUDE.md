@@ -99,60 +99,58 @@ changes and verify the resulting output is actually better.
 
 ## Current Verified State
 
-Last verified on 2026-05-29 (commit `c07a9be2e`), after recovering the
-`964a5f7b` WIP baseline:
+Last verified on 2026-06-21 in this checkout with
+`RUSTC_WRAPPER= bash scripts/quality_axes.sh`:
 
-- `RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings` is clean.
-- `RUSTC_WRAPPER= cargo xtask lint-determinism` passes.
-- `RUSTC_WRAPPER= cargo check --workspace` passes.
-- `RUSTC_WRAPPER= cargo test --workspace` passes **except**
-  `unlace-test-harness --test golden_fixtures` (18 pass / 14 fail). Every
-  other crate's tests, including `unlace-output --lib` (541/541),
-  `unlace-cli --test cli_smoke` (29/29), and `--test quality_smoke` (6/6),
-  are green.
-- `RUSTC_WRAPPER= bash scripts/score_parity.sh` reports `Stylistic Fixture
-  Parity: 84.5%` (the script was renamed from "Aggregate Parity"; the old
-  100% number is gone — it measured a narrower counter set).
+- `scripts/score_parity.sh` reports `Stylistic Fixture Parity: 83.0%`.
+- `cargo run -p xtask -- golden-triage` reports 15 exact-pass rows and 0
+  review rows. The older "18 pass / 14 fail" and "0 exact-pass / 15 review"
+  notes are historical; do not use them as current evidence.
+- `cargo run -p xtask -- semantic-report` reports 34 pass rows, 0 XFAIL, 0
+  failed, and 0 unsupported. That is 21 host/source-known executable
+  equivalence rows, 4 qemu-user non-host executable rows, and 9 source-known
+  shape-only rows.
+- `cargo run -p xtask -- type-recovery-report` reports
+  `recall=100.0% precision=93.1% raw_precision=92.9%`.
+- The formal verification axis still reports Rocq 9.1.0 with 39 theories
+  compiled, kernel-checked, and zero admits/axioms; the Rust-vs-extracted-Coq
+  oracle matched 200000 vectors.
 
-### The 14 failing goldens are mixed; classify per fixture
+Current measured debt:
 
-`scripts/classify_golden_diffs.sh` (new) buckets each failing golden's diff
-into prelude / size / renum / struct and prints a refresh-vs-review verdict.
-Per-fixture git blame against the WIP parent (`4da39dbd6`) and the last-good
-WIP baseline (`7aa62dc0`) first established long-running drift, then the
-follow-up triage in `docs/golden-triage-2026-05-29.md` and
-`docs/current-parity-ledger-2026-05-30.md` refined the policy:
+- Source precision excess totals 71 facts: `local_types +32`,
+  `array_types +10`, `pointer_types +9`, `field_names +6`,
+  `field_types +6`, `local_names +6`, and `return_types +2`.
+- Output-local debt stays visible instead of being hidden in source precision:
+  98 leaked temp declarations, 184 stack/ABI local carriers, 3 ABI parameter
+  carriers, and 35 duplicate DWARF/source local declarations.
+- The current missing ledger has 0 recoverable recovery gaps and 57
+  source-oracle-only facts.
 
-- **14 of 15 goldens already diverged from actual output before the WIP
-  commit**, but the remaining exact-line failures are not one uniform stale
-  bucket. Some expose real producer bugs, some checked-in expected files are
-  stale/lossy relative to more correct current output, and some are mixed.
-  Blanket `UPDATE_GOLDEN=1` would lock in unreviewed drift, which this file
-  forbids. They need per-fixture classification against *intended* output, not
-  a mechanical refresh.
-- **Only `arc_features` was byte-clean at the parent** and was freshly
-  regressed by the WIP's recursive-descent rewrite (ARCompact `arc_branch`
-  truncated 24→16 bytes by an over-eager interior-padding early-stop). Fixed
-  in `65ecc42d2`; its golden was refreshed (verified body-identical,
-  prelude-only diff).
+Stale-plan reconciliation:
 
-### What the post-WIP recovery work changed (commits `520bee492`..`c07a9be2e`)
-
-- Restored `clippy -D warnings` clean (ptr_arg, print_literal).
-- Closed all 20 WIP-regressed `unlace-output` c_printer unit tests (returned-
-  branch-merge fold guard, commented/line-comment fold guards, for-loop
-  counter self-update detection, struct-field base fallback, fold-identity
-  test policy). Root cause was the WIP's aggressive expression folding.
-- Fixed `cli_smoke` (sum_for flag-temp leak) and `quality_smoke`
-  (stale-`return result` counter).
-- Fixed two of my OWN over-corrections found by WIP-baseline diffing: the
-  dead-assignment fixpoint deleting live-out register stores (v850), and the
-  DWARF source-map fold barrier defeating folding (debug_structs/debug_calls).
-- `medium.elf`: 2610 lines / 847 vars (WIP baseline) → 1224 / 116 — a ~7×
-  reduction in leaked SSA temps. Still scores 0.0 on its ancient 460-line
-  golden; the residual gap is the deep flag-condition-recovery work (raw
-  `__OFSUB__`/XOR flag dataflow not simplified to `v <= 1`), a long-standing
-  pre-WIP gap.
+- `docs/PARITY_PLAN.md` is a broad roadmap, not a current completion ledger.
+- `docs/golden-triage-2026-06-17.md` supersedes older mixed-failure golden
+  notes. Do not blanket-refresh goldens merely because an older plan says they
+  were failing.
+- CExpr completion plan section 4 has landed: `Empty`, `TypeRef`, `FloatNeg`,
+  `FloatBinary`, and `PtrDiff` are in the explicit expression AST.
+- PDB TPI lowering is wired into the active pipeline. The remaining PDB gap is
+  local-location breadth beyond the scoped `S_LOCAL` / `S_REGREL32` /
+  defrange/IPI slice, not basic TPI parsing.
+- DWARF v5 loclists/rnglists, DWO references, split-DWARF merging hooks, and
+  many DW_OP forms exist. The remaining gap is full location-expression
+  breadth and robust real-world sidecar discovery.
+- dyld cache plan/assemble/extract is implemented for standalone Mach-O
+  reassembly. The remaining gap is broad real-world cache coverage,
+  kernel-cache/fileset handling, and subcache edge cases.
+- `unlace-session`, `unlace-emu`, `unlace-debugger`, `unlace-lumina`, and
+  `unlace-idapython` crates exist. Treat platform UX as integration/API
+  maturity work, not absence of crates. IDAPython xrefs and
+  `ida_hexrays::decompile` are still partial.
+- Production architecture claims remain limited to x86, x86_64, and AArch64.
+  Several other lifters are beta/fixture breadth and may intentionally emit
+  `IrOp::Unimplemented` / `LiftError::Unsupported`.
 
 ### Debugging instrumentation (env-gated, all in `unlace-output`/`unlace-cli`)
 
@@ -175,9 +173,10 @@ Other durable facts:
 - `crates/unlace-output/src/COVERAGE.md` audits emitter support, not producer.
 
 There is no real "100% parity" number anymore. The honest current state is:
-toolchain gates green, all unit/integration suites green, and a golden corpus
-that is mostly stale and needs deliberate per-fixture rebaselining against
-verified-better output — not full IDA/Hex-Rays parity.
+the quality-axis gate is green, exact-line golden triage is clean on this
+checkout, and meaningful type/output debt remains visible in the ledgers. This
+is not full IDA/Hex-Rays parity. Rerun the full workspace gates before claiming
+a source-changing batch is green.
 
 ## Standard Commands
 
@@ -191,6 +190,25 @@ RUSTC_WRAPPER= bash scripts/score_parity.sh
 cargo xtask lint-determinism
 RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
+```
+
+Coverage and benchmarking tools are installed locally as of 2026-06-21:
+`cargo-llvm-cov 0.6.18`, `grcov 0.10.5`, `llvm-cov`, `cargo-nextest 0.9.132`,
+and `cargo-codspeed 4.7.0`.
+
+```bash
+# Coverage: LCOV for upload tools, or HTML for local inspection.
+RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
+RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
+
+# Criterion benches already wired through unlace-cli.
+RUSTC_WRAPPER= cargo bench -p unlace-cli --bench decompile_medium
+RUSTC_WRAPPER= cargo bench -p unlace-cli --bench spec_suite
+RUSTC_WRAPPER= cargo bench -p unlace-cli --bench hexrays_throughput
+
+# CodSpeed runner path for CI or local simulation/walltime runs.
+cargo codspeed build -p unlace-cli --bench decompile_medium --bench spec_suite --bench hexrays_throughput
+cargo codspeed run -p unlace-cli
 ```
 
 Formal-verification gate (Rocq 9.1 machine-checked decompiler cores; see
@@ -214,6 +232,78 @@ test. Rerun with appropriate approval/escalation.
 - Do not tune metrics or reference values to make a score pass.
 - Do not modify fixture binaries or fixture source unless the task explicitly is fixture generation.
 - Verify with focused crate tests first, then the relevant golden test, then workspace tests when the blast radius warrants it.
+
+## Rust Architecture and Style Skills
+
+When a task touches Rust code, module layout, crate boundaries, public API
+shape, or repo Claude setup, load the relevant global Claude skills first:
+
+- `~/.claude/skills/rust-style/SKILL.md`: idiomatic Rust API and type-system
+  style.
+- `~/.claude/skills/rust-architecture/SKILL.md`: module/crate boundaries and
+  rustc/stdlib-shaped layouts.
+- `~/.claude/skills/rust-zulip-archaeology/SKILL.md`: mining local Rust Zulip
+  transcripts for compiler-team rationale.
+- `~/.claude/skills/feature-architecture-initializer/SKILL.md`: refreshing
+  `CLAUDE.md`, `AGENTS.md`, `.claude/`, local memory, or an
+  architecture-first feature plan.
+
+Durable Rust rules from those skills:
+
+- Prefer domain-shaped module trees over flat file piles. A parent module owns
+  vocabulary and invariants; child modules own focused roles such as `fold`,
+  `visit`, `relate`, `decode`, `search`, `emit`, or `validate`.
+- Avoid `utils.rs`, `helpers.rs`, and broad root-level catchalls. If a helper
+  only makes sense under one concept, put it below that concept's module.
+- Split crates only for independent reuse/versioning, dependency-direction
+  enforcement, or meaningful compile-time isolation. Otherwise use modules
+  first.
+- Model semantic IDs and phase/dialect boundaries with newtypes, enums, marker
+  types, or associated types instead of raw primitives, strings, or boolean
+  flags. Use explicit upcasts when a narrow ID can become a broader one.
+- Prefer executable truth over prose-only rules: validators, lints, exhaustive
+  `match` arms, tests, and quality reports are the source of truth; docs explain
+  intent and evidence.
+- Use traits with associated types when there are real multiple
+  implementations or protocol families; split capabilities such as visit vs
+  fold when they require different powers.
+- Prefer enums over stringly-typed states, smart constructors for invariants,
+  sealed traits for crate-controlled extension points, and by-value `self` for
+  small `Copy` inherent receivers unless an existing trait/API requires a
+  borrow.
+- For architecture/style questions that are unclear, mine the readable Zulip
+  corpus first:
+  `~/VulnerabilityResearch/zulip/_readable_text/streams/t-compiler.txt`,
+  `~/VulnerabilityResearch/zulip/_readable_text/streams/t-types.txt`, and
+  `~/VulnerabilityResearch/zulip/_readable_text/index.tsv`. Quote or summarize
+  the stream, topic, and speaker when chat history is used as evidence, and
+  verify old rationale against current source before changing code.
+
+## Current Architecture Audit (2026-06-21)
+
+See `docs/architecture-audit-2026-06-21.md` for the current source-backed
+architecture/style audit. The important result is that the workspace crate split
+is already domain-shaped; the next cleanup is private module extraction inside
+owning crates, not new crates for file size alone.
+
+Current architecture queue:
+
+1. Split `crates/unlace-output/src/c_printer.rs` internally around trace,
+   cleanup/pruning, declarations, expression rendering/folding, statement
+   rendering, naming/local layout, and tests while preserving the public printer
+   API.
+2. Split `crates/unlace-struct/src/structurer.rs` internally around trace/count
+   helpers, landing-pad/EH wrapping, loop/switch postprocessing, arch-specific
+   folds, and test support before touching the core structuring algorithm.
+3. Split `crates/unlace-cli/src/pipeline.rs` internally around discovery, lift
+   bounds, pass orchestration, debug-info, signatures/symbols, jump tables, and
+   output assembly while preserving CLI behavior.
+4. Treat loader file size as format-domain pressure. Split Mach-O, dyld cache,
+   PE/PDB, and DWARF files by subdomain only when changing those behaviors.
+5. Product surfaces exist but remain maturity work: IDAPython xrefs and
+   `ida_hexrays::decompile`, Lumina placeholder responses, debugger platform
+   breadth, emulator breadth, and lifter coverage honesty all still need
+   focused work. Front-end productization is not part of the active workspace.
 
 ### Measure, don't assume (decompiler-behavior changes)
 

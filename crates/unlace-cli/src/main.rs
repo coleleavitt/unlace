@@ -9,7 +9,7 @@ use tracing_subscriber::EnvFilter;
 use unlace_ir::ArchId;
 use unlace_lift::get_lifter;
 use unlace_loader::{
-    BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar,
+    BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar, import_pdb,
     import_pdb_types,
 };
 use unlace_plugin::PluginManager;
@@ -181,10 +181,6 @@ fn main() {
             run_ir_dump(&binary, function.as_deref(), phase.as_deref())
         }
         Cmd::Lumina { action } => run_lumina(action),
-        Cmd::Gui { binary } => {
-            let _flame_guard = init_tracing(0);
-            run_gui(binary.as_deref())
-        }
         Cmd::Emu {
             binary,
             max_instructions,
@@ -236,9 +232,18 @@ fn main() {
             apply,
             binary,
             force,
+            flirt_min_confidence,
         } => {
             let _flame_guard = init_tracing(0);
-            run_sigload(&path, limit, json, apply, binary.as_deref(), force)
+            run_sigload(
+                &path,
+                limit,
+                json,
+                apply,
+                binary.as_deref(),
+                force,
+                flirt_min_confidence,
+            )
         }
         Cmd::Tilload {
             path,
@@ -545,29 +550,6 @@ fn run_quality(
     Ok(())
 }
 
-fn run_gui(binary: Option<&std::path::Path>) -> Result<()> {
-    let session = unlace_session::Session::new();
-    if let Some(p) = binary {
-        session
-            .load_binary(p)
-            .with_context(|| format!("loading {} into GUI session", p.display()))?;
-    }
-    #[cfg(feature = "gui-render")]
-    {
-        unlace_gui::app::run(session).map_err(|e| anyhow::anyhow!("iced runtime: {e}"))?;
-        Ok(())
-    }
-    #[cfg(not(feature = "gui-render"))]
-    {
-        drop(session);
-        bail!(
-            "unlace-cli was built without the `gui-render` feature; \
-             rebuild with `cargo build -p unlace-cli --features gui-render` \
-             to enable the iced desktop UI"
-        );
-    }
-}
-
 fn run_emu(binary: &std::path::Path, max_instructions: u64, trace: bool) -> Result<()> {
     let bytes = std::fs::read(binary).with_context(|| format!("reading {}", binary.display()))?;
     let image = dispatch_loader(&bytes)?;
@@ -696,6 +678,7 @@ fn run_sigload(
     apply: bool,
     binary: Option<&std::path::Path>,
     force: bool,
+    min_confidence: u8,
 ) -> Result<()> {
     let sig = unlace_flirt::sig::SigFile::load(path)
         .with_context(|| format!("parsing {}", path.display()))?;
@@ -707,29 +690,42 @@ fn run_sigload(
             .load_binary(bin)
             .with_context(|| format!("loading {}", bin.display()))?;
         let matcher = unlace_flirt::FlirtMatcher::from_sig(&sig);
-        let report = matcher.apply_to_session(&session, force);
+        let report = matcher.apply_to_session_with_min_confidence(&session, force, min_confidence);
         if json {
             let summary = serde_json::json!({
                 "sig_path": path,
                 "binary": bin,
                 "force": force,
+                "min_confidence": min_confidence,
                 "signatures_loaded": matcher.len(),
                 "functions_inspected": report.inspected,
                 "functions_renamed": report.renamed,
                 "applied": report.applied,
+                "applied_details": report.applied_details.iter()
+                    .map(|m| serde_json::json!({
+                        "addr": m.addr,
+                        "name": m.name,
+                        "confidence": m.confidence,
+                        "signature_id": m.signature_id,
+                    }))
+                    .collect::<Vec<_>>(),
             });
             println!("{}", serde_json::to_string_pretty(&summary)?);
         } else {
             println!(
-                "applied {} sigs from {} to {}: {} of {} functions renamed",
+                "applied {} sigs from {} to {}: {} of {} functions renamed (min confidence {}%)",
                 matcher.len(),
                 path.display(),
                 bin.display(),
                 report.renamed,
                 report.inspected,
+                min_confidence,
             );
-            for (addr, name) in report.applied.iter().take(limit) {
-                println!("  {:#010x} -> {}", addr, name);
+            for detail in report.applied_details.iter().take(limit) {
+                println!(
+                    "  {:#010x} -> {} (confidence {:.2}, sig #{})",
+                    detail.addr, detail.name, detail.confidence, detail.signature_id,
+                );
             }
         }
         return Ok(());
@@ -1201,9 +1197,8 @@ fn load_plugins(dir: Option<&std::path::Path>) -> Result<PluginManager> {
 }
 
 /// Look for a `.pdb` sidecar next to `binary_path` and, if one exists,
-/// parse its TPI stream into [`unlace_loader::pdb_types::PdbTypes`] and
-/// attach it to `image.pdb_types`. Downstream `apply_pdb_types_to_ssa`
-/// + the C printer's annotation overlay consume this field.
+/// parse debug metadata into `image.pdb_types` and `image.pdb_info`.
+/// Downstream debug overlays and the C printer consume these fields.
 ///
 /// Resolution order:
 /// 1. Any `DebugRecord.pdb_path` recorded by the PE CodeView parser,
@@ -1229,7 +1224,7 @@ fn read_dwarf_sidecar(path: Option<&std::path::Path>) -> Result<Option<Vec<u8>>>
 }
 
 fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
-    if image.pdb_types.is_some() {
+    if image.pdb_types.is_some() && image.pdb_info.is_some() {
         return;
     }
     let parent = binary_path
@@ -1254,23 +1249,49 @@ fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
         if !candidate.exists() {
             continue;
         }
-        match import_pdb_types(&candidate) {
-            Ok(types) => {
-                tracing::info!(
-                    pdb = %candidate.display(),
-                    structs = types.structs.len(),
-                    "loaded PDB type sidecar",
-                );
-                image.pdb_types = Some(types);
-                return;
+        let mut loaded_sidecar = false;
+        if image.pdb_types.is_none() {
+            match import_pdb_types(&candidate) {
+                Ok(types) => {
+                    tracing::info!(
+                        pdb = %candidate.display(),
+                        structs = types.structs.len(),
+                        "loaded PDB type sidecar",
+                    );
+                    image.pdb_types = Some(types);
+                    loaded_sidecar = true;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        pdb = %candidate.display(),
+                        err = %e,
+                        "PDB type sidecar import failed; continuing without it",
+                    );
+                }
             }
-            Err(e) => {
-                tracing::debug!(
-                    pdb = %candidate.display(),
-                    err = %e,
-                    "PDB sidecar import failed; continuing without it",
-                );
+        }
+        if image.pdb_info.is_none() {
+            match import_pdb(&candidate) {
+                Ok(info) => {
+                    tracing::info!(
+                        pdb = %candidate.display(),
+                        local_functions = info.function_locals.len(),
+                        "loaded PDB debug sidecar",
+                    );
+                    image.pdb_info = Some(info);
+                    loaded_sidecar = true;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        pdb = %candidate.display(),
+                        err = %e,
+                        "PDB debug sidecar import failed; continuing without it",
+                    );
+                }
             }
+        }
+        if loaded_sidecar {
+            return;
         }
     }
 }

@@ -18,7 +18,7 @@ verified end-to-end.
 | Loader support (ELF, PE/COFF, Mach-O, dyld cache, Intel HEX, …) | Per-format parser + symbol/debug-ingest matrix | [`docs/status.md`](docs/status.md) |
 | Expression printer (IDA `cot_*` coverage) | 36 explicit `CExpr` variants pinned by `cexpr_coverage_lists_every_variant`; remaining ~33 dispatch through `Binary` | [`crates/unlace-output/src/COVERAGE.md`](crates/unlace-output/src/COVERAGE.md) |
 | Output quality counters (`nullderef`, `badret`, `badtok`, `empty_bodies`, `impossible_lvalue`, `lost_frame_offsets`) | Pinned at 0 for `hello_world.elf`, `branches.elf`, `loops.elf` | [`docs/status.md`](docs/status.md) §"Output quality counters" |
-| Stylistic fixture score | `Stylistic Fixture Parity: 87.1%` from `bash scripts/score_parity.sh` on the current fixture metric | [`docs/status.md`](docs/status.md) §"Quality axes" |
+| Stylistic fixture score | `Stylistic Fixture Parity: 83.0%` from `bash scripts/score_parity.sh` on the current fixture metric | [`docs/status.md`](docs/status.md) §"Quality axes" |
 | Quality-axis report | `bash scripts/quality_axes.sh` reports stylistic score, `xtask semantic-report` executable equivalence status, and the DWARF/source-backed type/variable score | [`docs/parity-quality-execution-plan-2026-05.md`](docs/parity-quality-execution-plan-2026-05.md) |
 | Determinism in output-affecting crates | `cargo xtask lint-determinism` rejects `HashMap` / `HashSet` in `unlace-ir`, `unlace-passes`, `unlace-struct`, `unlace-output` (use `BTreeMap` / `BTreeSet` or `// determinism:allow`) | [`docs/determinism.md`](docs/determinism.md) |
 | Reproducible-build / SBOM tooling | `cargo xtask sbom` emits a CycloneDX 1.4 BOM from `Cargo.lock` | [`crates/unlace-sbom`](crates/unlace-sbom/) |
@@ -35,26 +35,48 @@ yet measured. These are the *next* things to land, not what you can rely on
 today.
 
 - ABI / calling-convention recovery beyond x86_64 / AArch64 / x86.
-- DWARF v5 split-DWARF (`.dwo` / `.dwp`) and full DW_OP location lists.
-- PDB TPI/IPI walker beyond the slice currently surfaced in
-  `composite_var_types`.
-- dyld shared cache extraction past plan/assemble of standalone Mach-O blobs.
+- Full DW_OP/location-expression breadth and robust split-DWARF sidecar
+  discovery on real-world corpora. Initial DWO references, v5 loclists/rnglists,
+  and merge hooks exist.
+- PDB local-location breadth beyond the scoped `S_LOCAL` / `S_REGREL32` /
+  defrange/IPI slice. Basic TPI lowering is wired into the active pipeline.
+- dyld kernel-cache/fileset support and broad real-world cache coverage.
+  Standalone Mach-O reassembly from dyld cache images exists.
+- FLIRT/SIG library-quality coverage and confidence propagation beyond the
+  currently wired CLI matching path.
+- IDAPython xrefs and `ida_hexrays::decompile` compatibility beyond the current
+  partial shim.
 - Switch / EH structuring on broad real-binary corpora.
 - Cross-statement expression folding and IDA-style helper macros
   (`LOBYTE`, `HIDWORD`, `COERCE_*`).
+- Packer/protector and obfuscator support beyond today’s preliminary detection:
+  UPX-family remnants, Scylla-rebuilt imports, damaged PE import sections,
+  nonstandard executable sections, control-flow flattening, opaque predicates,
+  string/API-hash decoding, and clear unsupported markers for protected samples.
+- Large dumped PE support: `.pdata`/TLS/import/Go metadata function discovery,
+  progress reporting, resumable per-function output, and AST/HIR/quality streams
+  for binaries where whole-image decompilation is not practical.
+- Initial-load packer diagnostics: deterministic JSON/Markdown handoff files for
+  packer/obfuscator evidence, unsupported recovery steps, and optional LLM/agent
+  planning without embedding provider secrets.
 
 ## What is aspirational
 
 Listed in [`docs/roadmap.md`](docs/roadmap.md). These items have **no shipped
 code** behind them yet:
 
-- FLIRT/SIG-driven library name recovery wired into the active CLI path.
 - Persistent `.unlace` project format with rename/comment/type round-trip.
-- LSP / TUI / Web UI front-ends.
+- Editor/front-end integrations.
 - Reproducible signed releases published to GitHub (the local
   [`docs/signed-releases.md`](docs/signed-releases.md) describes the intended
   layout; the workflow is not yet active).
 - Plugin SDK with Rust + WASM sandbox + Python bindings.
+- Opt-in LLM-assisted reverse engineering over CLI/SDK/MCP surfaces. Model
+  output should propose packer IDs, names, comments, and triage hypotheses with
+  provenance; deterministic evidence remains authoritative and secrets stay in
+  user runtime configuration, never in repo docs or project state.
+- IDA/Hex-Rays reference corpus ingestion from both headless `idat` batch dumps
+  and idalib resumable per-function dumps.
 
 If an item appears in `docs/roadmap.md` but not in `docs/status.md`, it has
 **not landed**. The status file is the only authority for "shipped".
@@ -99,7 +121,8 @@ cargo xtask sbom --out sbom.json
 
 ## Verification gates
 
-Run these locally — the rebaseline note records the last set of pass results.
+Run these locally. `docs/status.md` records the latest quality-axis snapshot;
+older rebaseline notes are historical once the status matrix has moved.
 
 ```bash
 RUSTC_WRAPPER= cargo check --workspace
@@ -114,16 +137,38 @@ RUSTC_WRAPPER= bash scripts/quality_axes.sh
 Disable `sccache` (`RUSTC_WRAPPER=`) — the workspace builds reliably without
 it, and the cached macro-expansion can stale on this codebase.
 
+## Coverage and benchmarks
+
+The checkout has Criterion benches wired through `unlace-cli`. Use
+`cargo-llvm-cov` for coverage and `cargo-codspeed` when a CodSpeed runner or
+local simulation/walltime run is desired.
+
+```bash
+# LCOV for upload tools, or HTML for local inspection.
+RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
+RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
+
+# Existing Criterion benches.
+RUSTC_WRAPPER= cargo bench -p unlace-cli --bench decompile_medium
+RUSTC_WRAPPER= cargo bench -p unlace-cli --bench spec_suite
+RUSTC_WRAPPER= cargo bench -p unlace-cli --bench hexrays_throughput
+
+# CodSpeed build/run path.
+cargo codspeed build -p unlace-cli --bench decompile_medium --bench spec_suite --bench hexrays_throughput
+cargo codspeed run -p unlace-cli
+```
+
 ## Documentation map
 
 | File | Purpose |
 |------|---------|
 | [`docs/status.md`](docs/status.md) | **Source of truth.** Architecture, loader, type/debug, and output support matrices. |
+| [`docs/architecture-audit-2026-06-21.md`](docs/architecture-audit-2026-06-21.md) | Current source-backed Rust architecture/style audit and next module-extraction queue. |
 | [`docs/current-parity-ledger-2026-05-30.md`](docs/current-parity-ledger-2026-05-30.md) | Current stale/reframed parity reconciliation across status, golden triage, DREAM, and handoff docs. |
 | [`docs/roadmap.md`](docs/roadmap.md) | Long-term parity direction. Bands, not schedule. |
 | [`docs/research-ideas.md`](docs/research-ideas.md) | Speculative / parking-lot items with no commitment. |
 | [`docs/historical-sessions.md`](docs/historical-sessions.md) | Older session-export claims, segregated from current status. |
-| [`docs/rebaseline-2026-05-17.md`](docs/rebaseline-2026-05-17.md) | Most recent verification snapshot. |
+| [`docs/rebaseline-2026-05-17.md`](docs/rebaseline-2026-05-17.md) | Older full-gate verification snapshot. Historical once `docs/status.md` has newer live evidence. |
 | [`docs/parity-quality-execution-plan-2026-05.md`](docs/parity-quality-execution-plan-2026-05.md) | Current plan for semantic correctness, fidelity taxonomy counters, and DWARF/type-variable accuracy gates. |
 | [`docs/handoffs/README.md`](docs/handoffs/README.md) | Per-batch handoffs and the active implementation backlog. |
 | [`docs/determinism.md`](docs/determinism.md) | Why output-affecting crates use ordered maps. |

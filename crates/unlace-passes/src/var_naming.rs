@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::lvar::LvarStorage;
 use unlace_ir::ssa::{CallingConvention, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::stack::StackSpec;
 use unlace_ir::{ArchId, BlockId, IrOp, SpaceId};
 
 use crate::licm::find_natural_loops;
@@ -265,6 +266,9 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
         if src.space != SpaceId::Register {
             continue;
         }
+        if is_frame_base_restore_copy(func, &sv.base, src) {
+            continue;
+        }
         if let Some(name) = callee_saved_x86_64(src.offset) {
             record_role(&mut roles, *sv, VarRole::SavedRegister(name));
         } else if let Some(name) = callee_saved_aarch64(src.offset) {
@@ -412,6 +416,15 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
     }
 
     VarClassification { roles, arg_indices }
+}
+
+fn is_frame_base_restore_copy(
+    func: &SsaFunction,
+    output: &unlace_ir::Varnode,
+    src: &unlace_ir::Varnode,
+) -> bool {
+    StackSpec::for_arch(func.arch)
+        .is_some_and(|spec| spec.is_frame_base(output) && spec.is_frame_base(src))
 }
 
 pub fn suggest_name(role: VarRole, idx: usize) -> String {
@@ -918,8 +931,8 @@ mod tests {
     use super::*;
     use crate::lvar_collect::LvarCollectPass;
     use smallvec::smallvec;
-    use unlace_ir::lvar::LvarStorage;
-    use unlace_ir::ssa::{CppKind, PrimitiveType, build_ssa};
+    use unlace_ir::lvar::{LvarSource, LvarStorage};
+    use unlace_ir::ssa::{CppKind, PrimitiveType, StackVar, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
     fn reg(off: u64, size: u8) -> Varnode {
@@ -1033,6 +1046,29 @@ mod tests {
         assert!(
             saved.is_some(),
             "expected SavedRegister(\"rbx\"), got {:?}",
+            cls.roles
+        );
+    }
+
+    #[test]
+    fn t211_frame_base_restore_is_not_saved_register_role() {
+        let rsp = reg(0x20, 8);
+        let rbp = reg(0x28, 8);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Copy, rsp, smallvec![rbp], 0x1000));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1001));
+
+        let mut func = build_func(vec![bb0]);
+        func.arch = ArchId::X86_64;
+        let cls = classify_variables(&func);
+
+        assert!(
+            !cls.roles
+                .values()
+                .any(|role| matches!(role, VarRole::SavedRegister("rbp"))),
+            "frame-base restore must not be named saved_rbp: {:?}",
             cls.roles
         );
     }
@@ -1167,6 +1203,118 @@ mod tests {
             "expected collected param lvar to be renamed to `this`: {:?}",
             func.lvars
         );
+    }
+
+    #[test]
+    fn naming_priority_syncs_lvars_with_storage_evidence() {
+        let this_reg = reg(RDI, 8);
+        let arg_reg = reg(RSI, 8);
+        let receiver_field = reg(0x200, 8);
+        let generic_tmp = reg(0x208, 8);
+        let ret = reg(0, 8);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            receiver_field,
+            smallvec![this_reg, con(8, 8)],
+            0x1000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            generic_tmp,
+            smallvec![arg_reg, con(1, 8)],
+            0x1004,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ret,
+            smallvec![generic_tmp],
+            0x1008,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![ret], 0x100c));
+
+        let mut func = build_func(vec![bb0]);
+        func.calling_convention = CallingConvention::SystemV;
+        func.cpp_kind = Some(CppKind::RegularMethod);
+        func.inferred_params = vec![
+            ("a1".to_string(), PrimitiveType::Ptr),
+            ("a2".to_string(), PrimitiveType::Int(8)),
+        ];
+        func.inferred_return_type = PrimitiveType::Int(8);
+        func.dwarf_local_names
+            .insert(-16, "debug_total".to_string());
+        func.stack_vars.insert(
+            -16,
+            StackVar {
+                offset: -16,
+                name: "local_10".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: vec![],
+            },
+        );
+
+        let this_sv = func
+            .var_map
+            .get(&(BlockId(0), 0, VarnodeSlot::Input(0)))
+            .copied()
+            .expect("this input sv");
+        let generic_sv = func
+            .var_map
+            .get(&(BlockId(0), 1, VarnodeSlot::Output))
+            .copied()
+            .expect("generic temp sv");
+        let ret_sv = func
+            .var_map
+            .get(&(BlockId(0), 2, VarnodeSlot::Output))
+            .copied()
+            .expect("return-value sv");
+
+        func.merged_names.insert(generic_sv, "v0".to_string());
+        func.merged_names.insert(ret_sv, "v1".to_string());
+
+        LvarCollectPass.run(&mut func).expect("lvar collect");
+        VarNamingPass.run(&mut func).expect("var naming");
+
+        assert_eq!(
+            func.var_role_names.get(&this_sv).map(String::as_str),
+            Some("this")
+        );
+        assert_eq!(
+            func.var_role_names.get(&ret_sv).map(String::as_str),
+            Some("result")
+        );
+        assert_eq!(func.inferred_params[0].0, "this");
+        assert_eq!(func.inferred_params[1].0, "a2");
+
+        let stack = func
+            .lvars
+            .iter()
+            .find(|lv| matches!(lv.storage, LvarStorage::Stack { offset: -16 }))
+            .expect("debug stack lvar");
+        assert_eq!(stack.name.as_deref(), Some("debug_total"));
+        assert_eq!(stack.source, LvarSource::FromDebug);
+
+        assert!(func.lvars.iter().any(|lv| matches!(
+            (&lv.storage, lv.name.as_deref()),
+            (LvarStorage::Param { idx: 0 }, Some("this"))
+        )));
+        assert!(func.lvars.iter().any(|lv| matches!(
+            (&lv.storage, lv.name.as_deref()),
+            (LvarStorage::Param { idx: 1 }, Some("a2"))
+        )));
+        assert!(func.lvars.iter().any(|lv| matches!(
+            (&lv.storage, lv.name.as_deref()),
+            (LvarStorage::Temp { ssa_var }, Some("v0")) if *ssa_var == generic_sv
+        )));
+        assert!(func.lvars.iter().any(|lv| matches!(
+            (&lv.storage, lv.name.as_deref()),
+            (LvarStorage::Return, Some("result"))
+        )));
+        assert!(semantic_name_priority("this") < semantic_name_priority("result"));
+        assert!(semantic_name_priority("result") < semantic_name_priority("a1"));
+        assert!(semantic_name_priority("a1") < semantic_name_priority("v0"));
     }
 
     #[test]

@@ -3,7 +3,7 @@ name = "unlace-session"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Shared session state for unlace TUI/GUI/CLI surfaces"
+description = "Shared session state for unlace CLI, scripts, plugins, and integrations"
 
 [dependencies]
 unlace-ir.workspace = true

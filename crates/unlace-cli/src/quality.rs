@@ -1475,16 +1475,16 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
     use std::fmt::Write;
     let _ = writeln!(
         s,
-        "| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm | nullderef | badret | badtok | leaktemp |"
+        "| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | flirt_hc | goto | label | unktype | asm | nullderef | badret | badtok | leaktemp |"
     );
     let _ = writeln!(
         s,
-        "|----------|------:|-------:|----------:|--------:|------:|-------:|-------:|--------:|-----:|------:|--------:|----:|----------:|-------:|-------:|---------:|"
+        "|----------|------:|-------:|----------:|--------:|------:|-------:|-------:|--------:|---------:|-----:|------:|--------:|----:|----------:|-------:|-------:|---------:|"
     );
     for q in &report.functions {
         let _ = writeln!(
             s,
-            "| `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            "| `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
             q.name,
             q.ir_insns,
             q.unimplemented_ops,
@@ -1494,6 +1494,7 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
             q.struct_fields_recovered,
             q.switch_statements,
             q.indirect_calls_resolved,
+            q.flirt_matched_calls_high_confidence,
             q.gotos_emitted,
             q.labels_emitted,
             q.unknown_types,
@@ -1507,7 +1508,7 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
     let t = &report.totals;
     let _ = writeln!(
         s,
-        "| **TOTAL** | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+        "| **TOTAL** | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
         t.ir_insns,
         t.unimplemented_ops,
         t.callother_ops,
@@ -1516,6 +1517,7 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
         t.struct_fields_recovered,
         t.switch_statements,
         t.indirect_calls_resolved,
+        t.flirt_matched_calls_high_confidence,
         t.gotos_emitted,
         t.labels_emitted,
         t.unknown_types,

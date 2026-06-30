@@ -212,7 +212,7 @@ mod tests {
     use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 
     use super::*;
-    use crate::hir::HirFunction;
+    use crate::hir::{HirFunction, SwitchCase};
 
     fn cond() -> SsaVarnode {
         SsaVarnode {
@@ -314,5 +314,43 @@ mod tests {
             }
             other => panic!("Expected While with unchanged goto, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn switch_cases_inside_loop_get_continue_and_break() {
+        let mut hir = func(vec![
+            HirNode::Label(LabelId(5)),
+            HirNode::While {
+                cond: cond(),
+                body: vec![HirNode::Switch {
+                    cond: cond(),
+                    cases: vec![
+                        (SwitchCase::Value(0), vec![HirNode::Goto(LabelId(5))], false),
+                        (
+                            SwitchCase::Value(1),
+                            vec![HirNode::Goto(LabelId(99))],
+                            false,
+                        ),
+                    ],
+                    default: Some(vec![HirNode::Goto(LabelId(9))]),
+                    jumptable_addr: None,
+                    jumptable_cases: None,
+                }],
+            },
+            HirNode::Label(LabelId(9)),
+        ]);
+
+        detect_continue_break(&mut hir.body);
+
+        let HirNode::While { body, .. } = &hir.body[1] else {
+            panic!("Expected While, got: {:?}", hir.body[1]);
+        };
+        let [HirNode::Switch { cases, default, .. }] = body.as_slice() else {
+            panic!("Expected Switch body, got: {body:?}");
+        };
+
+        assert_eq!(cases[0].1, vec![HirNode::Continue]);
+        assert_eq!(cases[1].1, vec![HirNode::Goto(LabelId(99))]);
+        assert_eq!(default.as_ref(), Some(&vec![HirNode::Break]));
     }
 }

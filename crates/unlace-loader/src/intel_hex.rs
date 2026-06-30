@@ -341,7 +341,7 @@ fn decode_hex(s: &str) -> Result<Vec<u8>, HexErr> {
     }
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len() / 2);
-    for chunk in bytes.chunks_exact(2) {
+    for chunk in bytes.as_chunks::<2>().0 {
         let hi = hex_nibble(chunk[0]).ok_or(HexErr::Bad)?;
         let lo = hex_nibble(chunk[1]).ok_or(HexErr::Bad)?;
         out.push((hi << 4) | lo);
@@ -419,6 +419,8 @@ pub fn intel_hex_to_binary_image(img: &IntelHexImage, arch: ArchId) -> BinaryIma
         dylibs: Vec::new(),
         rpaths: Vec::new(),
         pdb_types: None,
+        pdb_info: None,
+        image_base: None,
         msvc_rtti: None,
         seh: None,
         go_module: None,

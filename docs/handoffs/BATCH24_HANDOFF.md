@@ -33,7 +33,8 @@ Turn batch decompilation into a persistent reverse-engineering workflow.
 3. Stabilize Rust plugin, WASM sandbox, Python bindings, and sample plugins.
 4. Add Lumina-like shared annotations as opt-in only, with privacy and conflict
    rules.
-5. Add TUI/LSP/web UI tracks only after user edits survive reanalysis.
+5. Keep frontend/editor tracks out of this batch; user edits must survive
+   reanalysis through the project/session model first.
 
 ## Verification
 

@@ -1,6 +1,6 @@
 //! HIR-level loop-invariant code motion (LICM).
 //!
-//! Walks the HIR tree and, for each `While`/`DoWhile`/`For` loop, hoists
+//! Walks the HIR tree and, for each `While`/`For` loop, hoists
 //! statements that:
 //!
 //!   1. Are pure (no Load/Store/Call/Branch/Indirect/etc. — see
@@ -13,11 +13,13 @@
 //!      `for` step).
 //!
 //! Hoisted statements are emitted immediately before the loop, preserving
-//! source order. Nested loops are visited innermost-first so that an
-//! invariant outer-loop statement that becomes invariant only after an
-//! inner-loop hoist still has a chance to bubble out one level per
-//! invocation. Run the pass to fixed-point if multi-level hoisting is
-//! desired.
+//! source order. `DoWhile` bodies are still traversed for nested loops, but
+//! top-level statements are not extracted from a post-tested loop body because
+//! latch-condition copies there can be loop-carried. Nested loops are visited
+//! innermost-first so that an invariant outer-loop statement that becomes
+//! invariant only after an inner-loop hoist still has a chance to bubble out
+//! one level per invocation. Run the pass to fixed-point if multi-level
+//! hoisting is desired.
 //!
 //! The pass is intentionally conservative on the "what to hoist" axis:
 //!
@@ -32,14 +34,15 @@
 //! These restrictions can be relaxed later; the MVP focuses on the
 //! common shape `while (cond) { x = LOOP_INVARIANT_EXPR; … }`.
 
-use unlace_ir::{IrInsn, IrOp, Varnode};
+use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use std::collections::BTreeSet;
 
 use crate::hir::HirNode;
 
-/// Hoist loop-invariant statements out of `While`/`DoWhile`/`For` loops in
-/// `body` (in place). Nested loops are processed innermost-first.
+/// Hoist loop-invariant statements out of `While`/`For` loops in `body` (in
+/// place). `DoWhile` bodies are visited for nested loops, but their top-level
+/// statements are not extracted. Nested loops are processed innermost-first.
 pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
     // First recurse into all child constructs so that inner loops are
     // simplified before we evaluate the outer one's invariance.
@@ -61,17 +64,6 @@ pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
                 out.push(HirNode::While {
                     cond,
                     body: loop_body,
-                });
-            }
-            HirNode::DoWhile {
-                body: mut loop_body,
-                cond,
-            } => {
-                let hoisted = extract_invariants(&mut loop_body, None);
-                out.extend(hoisted);
-                out.push(HirNode::DoWhile {
-                    body: loop_body,
-                    cond,
                 });
             }
             HirNode::For {
@@ -376,6 +368,10 @@ fn is_hoistable(
         return false;
     }
 
+    if out.space != SpaceId::Unique {
+        return false;
+    }
+
     // Refuse if any input is modified inside the loop.
     for input in &insn.inputs {
         if modified.contains(input) {
@@ -528,6 +524,130 @@ mod tests {
                     other => panic!("expected Statement, got {other:?}"),
                 }
             }
+            other => panic!("expected While, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dowhile_top_level_invariant_stays_inside_but_nested_loop_is_processed() {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let top_out = Varnode::unique(0, 4);
+        let nested_out = Varnode::unique(8, 4);
+        let top_stmt = stmt(IrOp::IntAdd, top_out, vec![a, b], 0x1000);
+        let nested_stmt = stmt(IrOp::IntXor, nested_out, vec![a, b], 0x1004);
+        let nested_call = HirNode::Statement(IrInsn::without_output(
+            IrOp::Call,
+            vec![Varnode::constant(0x2000, 8), nested_out],
+            0x1008,
+        ));
+
+        let mut body = vec![HirNode::DoWhile {
+            body: vec![
+                top_stmt,
+                HirNode::While {
+                    cond: dummy_cond(),
+                    body: vec![nested_stmt, nested_call],
+                },
+            ],
+            cond: dummy_cond(),
+        }];
+
+        hoist_loop_invariants(&mut body);
+
+        assert_eq!(body.len(), 1, "DoWhile must not hoist into parent scope");
+        match &body[0] {
+            HirNode::DoWhile {
+                body: dowhile_body, ..
+            } => {
+                assert_eq!(
+                    dowhile_body.len(),
+                    3,
+                    "nested loop invariant should hoist only within the DoWhile body"
+                );
+                match &dowhile_body[0] {
+                    HirNode::Statement(insn) => assert_eq!(
+                        insn.output,
+                        Some(top_out),
+                        "top-level DoWhile candidate must stay first in DoWhile body"
+                    ),
+                    other => panic!("expected top-level DoWhile statement, got {other:?}"),
+                }
+                match &dowhile_body[1] {
+                    HirNode::Statement(insn) => assert_eq!(
+                        insn.output,
+                        Some(nested_out),
+                        "nested While invariant should still hoist inside DoWhile body"
+                    ),
+                    other => panic!("expected nested-loop hoist inside DoWhile, got {other:?}"),
+                }
+                match &dowhile_body[2] {
+                    HirNode::While { body: inner, .. } => {
+                        assert_eq!(inner.len(), 1, "nested loop call should stay in loop body");
+                        match &inner[0] {
+                            HirNode::Statement(insn) => assert_eq!(insn.op, IrOp::Call),
+                            other => panic!("expected nested loop call, got {other:?}"),
+                        }
+                    }
+                    other => panic!("expected nested While, got {other:?}"),
+                }
+            }
+            other => panic!("expected DoWhile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn register_output_stays_inside_loop_without_lvar_safety_proof() {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let out = Varnode::reg(16, 4);
+        let inv_stmt = stmt(IrOp::IntAdd, out, vec![a, b], 0x1000);
+
+        let mut body = vec![HirNode::While {
+            cond: dummy_cond(),
+            body: vec![inv_stmt],
+        }];
+
+        hoist_loop_invariants(&mut body);
+
+        assert_eq!(body.len(), 1, "register write must not be hoisted");
+        match &body[0] {
+            HirNode::While { body: inner, .. } => {
+                assert_eq!(inner.len(), 1);
+                match &inner[0] {
+                    HirNode::Statement(insn) => {
+                        assert_eq!(insn.op, IrOp::IntAdd);
+                        assert_eq!(insn.output, Some(out));
+                    }
+                    other => panic!("expected Statement, got {other:?}"),
+                }
+            }
+            other => panic!("expected While, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_stays_inside_loop_even_with_unique_output() {
+        let addr = Varnode::constant(0x4000, 8);
+        let out = Varnode::unique(0, 8);
+        let load_stmt = stmt(IrOp::Load, out, vec![addr], 0x1000);
+
+        let mut body = vec![HirNode::While {
+            cond: dummy_cond(),
+            body: vec![load_stmt],
+        }];
+
+        hoist_loop_invariants(&mut body);
+
+        assert_eq!(body.len(), 1, "load must not be hoisted");
+        match &body[0] {
+            HirNode::While { body: inner, .. } => match &inner[0] {
+                HirNode::Statement(insn) => {
+                    assert_eq!(insn.op, IrOp::Load);
+                    assert_eq!(insn.output, Some(out));
+                }
+                other => panic!("expected Statement, got {other:?}"),
+            },
             other => panic!("expected While, got {other:?}"),
         }
     }

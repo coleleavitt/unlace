@@ -101,9 +101,15 @@ fn check_partition(sccs: &[Scc], real_nodes: &BTreeSet<BlockId>) {
 // (2) WITHIN an SCC: every pair is mutually reachable (Sccs.v `within_scc_mutual`)
 // — verified with an independent BFS oracle, not derived from the SCC result.
 fn check_within(cfg: &ControlFlowGraph, sccs: &[Scc], skip: &BTreeSet<BlockId>) {
-    for pair in sccs.iter().flat_map(|s| s.iter().flat_map(move |&a| s.iter().map(move |&b| (a, b)))) {
+    for pair in sccs
+        .iter()
+        .flat_map(|s| s.iter().flat_map(move |&a| s.iter().map(move |&b| (a, b))))
+    {
         let (a, b) = pair;
-        assert!(reaches(cfg, a, b, skip), "within_scc_mutual: {a:?} !→ {b:?}");
+        assert!(
+            reaches(cfg, a, b, skip),
+            "within_scc_mutual: {a:?} !→ {b:?}"
+        );
     }
 }
 
@@ -129,8 +135,9 @@ fn scc_partition_matches_coq_partition_laws() {
         let n = 3 + (rng.next() % 8) as u32; // 3..=10 blocks
         let ssa = build_ssa(random_function(&mut rng, n));
         let cfg = &ssa.cfg;
-        let skip: BTreeSet<BlockId> =
-            [cfg.exit_block(), cfg.unknown_block()].into_iter().collect();
+        let skip: BTreeSet<BlockId> = [cfg.exit_block(), cfg.unknown_block()]
+            .into_iter()
+            .collect();
         let sccs = scc_partition(cfg);
         let real_nodes: BTreeSet<BlockId> = cfg
             .node_map()

@@ -383,16 +383,15 @@ We currently parse PDB symbols (function names, line numbers). The TPI stream (t
 - **t446** Conflict resolution UI for divergent annotations.
 - **t447** "Public DB" of annotations for OSS binaries (curated; high signal-to-noise).
 
-### Wave 68 — UI / interactive
-The big honest gap. We are CLI only. IDA's value is 50% the disassembly UI.
+### Wave 68 — editor integration and project workflow
+The big honest gap is still analyst workflow, but bundled frontends are no
+longer part of this workspace.
 
-- **t448** TUI (ratatui-based) interactive disassembly browser.
-- **t449** LSP server: integrate unlace into VS Code / Helix / Neovim as a "disasm + decompile" backend.
-- **t450** Web UI (axum + WASM frontend) for cloud / collaborative analysis.
-- **t451** Graph view (CFG, call-graph) — pick a layout engine (graphviz / elk / dagre).
-- **t452** Hex view + cross-references (the sine qua non).
-- **t453** Persistent project file format (.unlace) with all annotations / renames / type definitions.
-- **t454** Multi-user collaborative editing (Y.js / Automerge backend).
+- **t448** LSP server: integrate unlace into VS Code / Helix / Neovim as a "disasm + decompile" backend.
+- **t449** Graph export (CFG, call-graph) — support graphviz / elk / dagre consumers.
+- **t450** Hex view data and cross-reference APIs for external clients.
+- **t451** Persistent project file format (.unlace) with all annotations / renames / type definitions.
+- **t452** Multi-user collaborative editing protocol (Y.js / Automerge-compatible backend).
 
 ### Wave 69 — Performance / scale
 - **t455** Lazy lifting: on a 100MB binary, lift only functions the user navigates to.

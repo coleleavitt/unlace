@@ -31,7 +31,10 @@ impl XorShift64 {
 }
 
 fn int_ty(width: u8) -> TInfo {
-    TInfo::Int { width, signed: false }
+    TInfo::Int {
+        width,
+        signed: false,
+    }
 }
 
 // Build a random flat struct: ascending, possibly-gapped, possibly-overlapping

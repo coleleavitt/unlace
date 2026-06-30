@@ -2852,7 +2852,8 @@ fn add_reported_function_facts(
         }
         let source_name_first_seen = !matched_dwarf
             || reported_source_names.insert((function.name.clone(), decl.name.clone()));
-        let source_type_matches = matched_local.is_some_and(|local| local_type_matches(local, &decl.ty));
+        let source_type_matches =
+            matched_local.is_some_and(|local| local_type_matches(local, &decl.ty));
         let source_type_first_seen = !source_type_matches
             || reported_source_types.insert((function.name.clone(), decl.name.clone()));
         if source_name_first_seen {
@@ -2872,7 +2873,10 @@ fn add_reported_function_facts(
             trace.line(
                 Some(fixture),
                 Some(&function.name),
-                format!("duplicate_source_local_type_skipped name={} type={}", decl.name, decl.ty),
+                format!(
+                    "duplicate_source_local_type_skipped name={} type={}",
+                    decl.name, decl.ty
+                ),
             );
         }
         score.reported_local_sites.push(ReportedLocalSite {
@@ -3035,7 +3039,11 @@ impl ReportedDecl {
     }
 
     fn is_stack_offset_carrier(&self) -> bool {
-        if self.comment.as_deref().is_some_and(|comment| !comment.trim().is_empty()) {
+        if self
+            .comment
+            .as_deref()
+            .is_some_and(|comment| !comment.trim().is_empty())
+        {
             return false;
         }
         self.name

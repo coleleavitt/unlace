@@ -1095,11 +1095,12 @@ Tasks:
   - sample plugins
 - [ ] Add Lumina-like shared annotations as opt-in only, with privacy and
   conflict-resolution rules.
-- [~] Add TUI/LSP/web UI tracks only after project persistence is real.
+- [~] Add editor/LSP integration tracks only after project persistence is real.
   Minimal LSP skeleton landed:
   `unlace_cli::lsp::handle_request` answers `initialize`, `shutdown`,
   `textDocument/hover`, and `textDocument/documentSymbol` over JSON-RPC
-  bodies. Three tests pin the wiring. TUI/Web UI remain open.
+  bodies. Three tests pin the wiring. Frontend productization is no longer part
+  of this workspace.
 
 Acceptance:
 
@@ -1240,127 +1241,19 @@ Acceptance:
 - The shim crate uses BTreeMap-based storage in any output-affecting
   path; determinism lint stays clean.
 
-## Batch 28 - Interactive UI (TUI + Native Desktop)
+## Batch 28 - Frontend Productization Removed
 
-**Goal**: Replace the current CLI-only workflow with an interactive
-disassembly/pseudocode browser. Two surfaces ship together:
-
-1. **`unlace tui`** — a ratatui-based terminal UI. Works over SSH, runs
-   anywhere, no GPU required. The minimum-viable interactive surface.
-2. **`unlace gui`** — a native desktop app using **iced** (the ELM-
-   inspired cross-platform Rust GUI). Single-binary, no webview, no JS,
-   no Node toolchain. Same backing data as the TUI; both consume the
-   same `unlace_session::Session` API.
-
-### UI library decision: iced
-
-After reviewing iced, egui, slint, dioxus, tauri, and GPUI for the 2025
-desktop RE-tool use case, **iced wins** because:
-
-1. **The ELM message model fits RE workflows.** RE is "user clicks →
-   message → state mutation → re-render only what changed." Iced's
-   `update(state, msg) -> Task` is exactly this. egui's immediate-mode
-   redraws every frame; for an RE tool that's wasteful since user
-   actions are sparse and the data is huge.
-2. **iced_code_editor is production-ready.** The pseudocode pane is the
-   single largest UI surface in an RE tool. iced ships a working code
-   editor widget (`iced-code-editor` crate, mirrored at
-   `research/iced-ecosystem/iced-code-editor/`) with syntax highlight,
-   line numbers, selection, and keyboard nav.
-3. **Halloy and Sniffnet prove iced scales.** Both are production multi-
-   pane apps. Halloy in particular is a near-perfect layout reference
-   for unlace (left sidebar nav + center content + bottom status). Both
-   mirrored at `research/iced-ecosystem/{halloy,sniffnet}/`.
-4. **iced_aw widget set** ships tabs, modals, menus, drop-downs, color
-   pickers, split panes, spinners, and number inputs — every widget an
-   RE tool needs.
-5. **plotters-iced** gives us flamegraphs / heatmaps / CFG renders
-   without writing graphics code.
-6. **The COSMIC desktop environment uses iced**, which is the largest
-   active commercial consumer of iced. Anything blocking us in iced
-   blocks them too; we ride their stability floor.
-
-Rejected alternatives, with explicit reasons:
-
-- **egui** — immediate-mode redraw is wasteful for sparse-update RE
-  workflows. The code-editor widget is less polished than iced's.
-- **tauri** — pulls in webview + Node.js + HTML/CSS. Solo + AI-agent
-  team can't afford a TypeScript frontend. Webview RE tools are a
-  known anti-pattern (Binary Ninja chose Qt-native specifically because
-  webviews choke on huge functions).
-- **slint / dioxus** — smaller communities, younger ecosystems.
-- **GPUI** — Zed's internal framework, not generally available.
-
-Reference clones already in tree at `research/iced-ecosystem/`:
-
-| Repo | Purpose |
-|------|---------|
-| `iced/` | Core framework |
-| `iced_aw/` | Additional widgets (tabs, modals, etc.) |
-| `iced-code-editor/` | Pseudocode pane reference |
-| `iced_term/` | Terminal widget for embedded debug shell |
-| `frostbyte_terminal/` | High-perf text rendering reference |
-| `plotters-iced/` | Charts/graphs |
-| `cosmic-time/` | Animation toolkit |
-| `halloy/` | Multi-pane layout reference (IRC client) |
-| `sniffnet/` | High-row-count UI reference (network monitor) |
-| `cosmic-files/` | Tree-view + table reference (file manager) |
-| `Neothesia/` | High-FPS rendering reference (MIDI visualizer) |
-| `book/` + `cookbook/` | Official docs |
-
-TUI library decision: **ratatui** + crossterm. De-facto Rust TUI library
-(60k+ ⭐ when counting tui-rs lineage). Same data-model split as iced:
-the `Session` struct is the source of truth, ratatui renders snapshots.
-
-### Tasks
-
-- [ ] Create crate `crates/unlace-session/`. Defines a `Session` struct
-      that owns the loaded binary, the IR, the decompiled functions,
-      the user's renames/comments/types, and the analysis state. Both
-      TUI and GUI consume this same struct via shared API.
-- [ ] Add `unlace_session::SessionDb` for persistence (see Batch 29).
-- [ ] Create crate `crates/unlace-tui/`. Use `ratatui` + `crossterm`.
-      Panes:
-      - **Functions list** (left, ~30% width): scrollable, filterable
-        by name or address.
-      - **Disassembly view** (top right): syntax-highlighted asm with
-        cursor/selection.
-      - **Pseudocode view** (bottom right): the unlace C output for the
-        currently selected function.
-      - **Status bar**: function name, segment, cursor address.
-      - **Command palette** (`:`): goto address, rename, retype, run
-        script.
-      - Keybindings mirror IDA's where they make sense (G = jump to
-        address, N = rename, Y = set type, X = xrefs, ESC = back).
-- [ ] Create crate `crates/unlace-gui/`. Use `iced` (the App trait) +
-      `iced_aw` (additional widgets) + `iced-code-editor` (pseudocode
-      pane). Pane layout:
-      - **Left sidebar**: Functions list, Strings, Imports, Exports,
-        Bookmarks tabs (use `iced_aw::Tabs`).
-      - **Center**: Disassembly tab + Pseudocode tab + Hex tab
-        (`iced_aw::TabBar`); each tab shows the currently selected
-        function/region.
-      - **Right sidebar**: Xrefs, Type signature, Comments
-        (collapsible).
-      - **Bottom**: Output log + Command palette (toggleable via Ctrl-K).
-      - Use `iced::widget::pane_grid` for resizable split panes.
-- [ ] Use `plotters-iced` for the CFG view (Batch 35 detail).
-- [ ] Wire `unlace tui` and `unlace gui` CLI subcommands.
-- [ ] Add screenshot/asciicast fixtures for the docs.
-- [ ] Document the UI architecture in `docs/ui-architecture.md`.
+Frontend productization has been removed from this workspace. The deleted
+front-end crates and commands are no longer active roadmap items; product work
+continues through CLI, SDK/session, scripting, debugger/emulator, persistence,
+and corpus evidence.
 
 Acceptance:
 
-- `unlace tui fixtures/hello_world.elf` opens an interactive terminal
-  UI, shows the function list, lets the user select `main`, and renders
-  the decompiled pseudocode in the right pane.
-- `unlace gui fixtures/hello_world.elf` opens a native desktop window
-  with the iced-based pane layout.
-- Both surfaces share the `Session` crate; renaming a function in the
-  TUI persists if you reopen with the GUI on the same database.
-- Function list renders 50k+ entries without visible lag (use
-  `iced::widget::scrollable` with chunked virtualization or
-  `iced_aw::SelectionList`).
+- Workspace membership and CLI command surfaces do not depend on removed
+  front-end crates.
+- Project/session state remains usable from CLI, scripts, plugins, and future
+  integrations without a bundled frontend.
 
 ## Batch 29 - Database Persistence (.unldb format)
 
@@ -1391,8 +1284,7 @@ Format options reviewed and rejected:
       - Section: HIR/structured output cache.
       - All sections individually zstd-compressed.
 - [ ] Implement `Session::save_to(path)` and `Session::load_from(path)`.
-- [ ] Wire automatic save on TUI/GUI quit and explicit
-      `unlace save / unlace load`.
+- [ ] Wire explicit `unlace save / unlace load` commands.
 - [ ] Add migration support: when the format version is older than
       current, run a registered migration chain. Refuse newer-than-known
       versions with a clear error.
@@ -1404,10 +1296,10 @@ Acceptance:
 
 - `unlace decompile <binary> --save proj.unldb` produces a `.unldb`
   file.
-- `unlace tui proj.unldb` opens without re-running full analysis (cold
-  cache wall time ≥ 2x faster than from-scratch).
-- Renaming a function in the TUI, closing, and reopening preserves the
-  rename.
+- `unlace load proj.unldb` opens without re-running full analysis (cold cache
+  wall time ≥ 2x faster than from-scratch).
+- Renaming a function through CLI/script APIs, saving, and reopening preserves
+  the rename.
 - `unlace db inspect proj.unldb` verifies SHA against the original
   binary and reports OK.
 
@@ -1543,7 +1435,7 @@ Reference material:
       on entry, and gives a `(unlace-dbg)` interactive prompt with
       commands: `b <addr>`, `c`, `n`, `s`, `r`, `bt`, `info regs`, `x
       <addr>`, `q`.
-- [ ] Wire debugger panes into the TUI + GUI: Registers, Memory, Call
+- [ ] Expose debugger state through CLI/session APIs: Registers, Memory, Call
       Stack, Threads, Breakpoints, Locals.
 - [ ] Synchronize debugger PC with the decompiler view (highlight the
       current source line).
@@ -1555,9 +1447,8 @@ Acceptance:
 - `unlace dbg fixtures/hello_world.elf` runs hello_world under unlace
   control, hits an int3 in `main`, prints register state, single-steps,
   continues to exit cleanly.
-- A breakpoint set in the GUI on `main` triggers; the disassembly view
-  highlights the current instruction and registers update in the side
-  pane.
+- A breakpoint set on `main` triggers and register/memory state is visible via
+  the debugger/session API.
 - The GDB stub frontend can connect to `qemu-system-x86_64 -s -S` and
   control execution.
 
@@ -1579,7 +1470,7 @@ input binary references them but they aren't locally available.
       Spotlight's index on macOS, or fall back to network.
 - [ ] Settings: `unlace config set symcache.path <dir>` and
       `unlace config set symcache.timeout 30s`.
-- [ ] Show fetch progress in TUI/GUI status bar.
+- [ ] Show fetch progress in CLI/session status output.
 
 Acceptance:
 
@@ -1601,8 +1492,7 @@ exploit dev (injecting shellcode), and CTF (modifying win conditions).
       Session.
 - [ ] Add CLI `unlace patch <binary> --at <ea> --bytes <hex>` and
       `unlace patch <binary> --asm "nop; nop"`.
-- [ ] Add TUI/GUI keybinding `P` for patch-at-cursor, with an inline
-      asm/hex editor.
+- [ ] Add session/API patch actions for address-targeted asm/hex edits.
 - [ ] Implement `Session::apply_patches_to(<output-binary>)` that
       writes patches into the correct file offset (handling
       ELF/PE/Mach-O section-to-file-offset mapping).
@@ -1615,12 +1505,11 @@ Acceptance:
 - `unlace patch fixtures/hello_world.elf --at 0x401050 --bytes "9090"
   --output /tmp/patched.elf` produces a runnable patched binary where
   the two patched bytes are NOPs.
-- TUI patch action persists into the `.unldb` and applies on output.
+- Session patch actions persist into the `.unldb` and apply on output.
 
-## Batch 35 - Graph Views (CFG + Call Graph)
+## Batch 35 - Graph Exports (CFG + Call Graph)
 
-**Goal**: Render rendered graphs in the GUI (and ASCII art in the TUI)
-for CFG and call graph.
+**Goal**: Export CFG and call-graph artifacts for downstream tools.
 
 ### Tasks
 
@@ -1629,9 +1518,6 @@ for CFG and call graph.
       `petgraph` + a simple Sugiyama implementation.
 - [ ] Call graph renderer: nodes are functions, edges are calls. Folder
       grouping by module/segment.
-- [ ] In the GUI, use `egui_graphs` or hand-rolled with `egui::Painter`.
-- [ ] In the TUI, ASCII box-drawing (use `petgraph-dot` and parse the
-      output) or a "list of edges" textual fallback.
 - [ ] Add minimap (current viewport indicator in a small overview pane).
 - [ ] Add export to SVG / GraphViz dot.
 
@@ -1662,14 +1548,14 @@ harness simulation.
 - [ ] Wire `unlace emu <binary>` CLI subcommand that runs the binary
       under unlace's interpreter, printing trace events.
 - [ ] Wire into the debugger as `DebuggerKind::Emulator` so the same
-      breakpoint/step/registers UI works on emulated runs.
+      breakpoint/step/register APIs work on emulated runs.
 - [ ] Document architecture coverage in `docs/emulator.md`.
 
 Acceptance:
 
 - `unlace emu fixtures/hello_world.elf` prints "Hello, World!" to
   stdout and exits with code 0, all via the in-process interpreter.
-- Single-step in the debugger UI works against the emulator backend.
+- Single-step debugger APIs work against the emulator backend.
 
 ## Recommended Next Order
 
@@ -1699,26 +1585,21 @@ external reviewer's "what would make this a real tool" feedback):
 7. **Batch 27: IDAPython Compatibility Layer** (4-6 weeks). Single highest-
    leverage item for hobbyist/academic adoption. All reference material is
    already in `research/ida-hexrays-docs/scripting/` and `sdk/idapython-swig/`.
-8. **Batch 28: Interactive UI (TUI + egui Desktop)** (3-4 weeks). The CLI is
-   the bottleneck for "people will try it." Ratatui TUI for SSH workflows,
-   egui desktop GUI for primary RE work. iced/tauri/slint/dioxus reviewed and
-   rejected for this use case in Batch 28's rationale.
-9. **Batch 29: Database Persistence (.unldb)** (1-2 weeks). Without this,
+8. **Batch 29: Database Persistence (.unldb)** (1-2 weeks). Without this,
    every run is a from-scratch analysis. Bincode + zstd format.
-10. **Batch 30: FLIRT Signature Library Shipping** (1-2 weeks). The matcher
+9. **Batch 30: FLIRT Signature Library Shipping** (1-2 weeks). The matcher
     exists; the libraries don't. libc / MSVCRT / mingw / Go / Rust runtimes.
-11. **Batch 31: Type Library Imports** (2-3 weeks). win32, POSIX, libc,
+10. **Batch 31: Type Library Imports** (2-3 weeks). win32, POSIX, libc,
     OpenSSL, libcurl, sqlite. So pseudocode shows `HANDLE` not `_QWORD`.
-12. **Batch 32: Local Debugger (Linux + Windows MVP)** (8-12 weeks). The big
+11. **Batch 32: Local Debugger (Linux + Windows MVP)** (8-12 weeks). The big
     one. Half of professional RE is debugging. Linux ptrace + Windows DebugAPI
     first; GDB-stub frontend second for embedded/remote.
-13. **Batch 33: Symbol Server Integration** (1 week). MSFT symstore +
+12. **Batch 33: Symbol Server Integration** (1 week). MSFT symstore +
     debuginfod auto-fetch.
-14. **Batch 34: Binary Patching** (1 week). Modify and write back.
-15. **Batch 35: Graph Views** (2-3 weeks). CFG + call graph in the GUI.
-16. **Batch 36: Emulator / Interpreter on IR** (4-6 weeks). Sandboxed
-    execution. Pairs with Batch 32 (debugger UI works against emulator
-    backend too).
+13. **Batch 34: Binary Patching** (1 week). Modify and write back.
+14. **Batch 35: Graph Exports** (2-3 weeks). CFG + call graph artifacts.
+15. **Batch 36: Emulator / Interpreter on IR** (4-6 weeks). Sandboxed
+    execution. Pairs with Batch 32 through the debugger API.
 
 Total product-surface budget: ~6 months of focused work, matching the
 external reviewer's "6 months to take you seriously" timeline.

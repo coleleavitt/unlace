@@ -55,6 +55,20 @@ pub enum PackerKind {
     /// machine + licensing. Lays down `.enigma1` and `.enigma2`
     /// sections.
     EnigmaProtector,
+    /// VMProtect — Russian commercial code virtualiser. Leaves `.vmp0`,
+    /// `.vmp1`, … sections carrying the virtualised bytecode + stub.
+    VmProtect,
+    /// PEtite — a small PE compressor by Ian Luck. Uses a `.petite`
+    /// section.
+    Petite,
+    /// FSG — "Fast Small Good", a tiny PE compressor. The stub conventionally
+    /// lands in an `FSG!`-marked / `.FSG` section.
+    Fsg,
+    /// NsPack — a PE compressor by North Star. Sections `.nsp0`/`.nsp1`/`.nsp2`
+    /// (or `nsp0`…).
+    NsPack,
+    /// MEW — a tiny PE compressor. Uses a `MEW` / `.MEW` section.
+    Mew,
 }
 
 impl PackerKind {
@@ -66,6 +80,11 @@ impl PackerKind {
             Self::ThemidaStub => "Themida",
             Self::MpressStub => "MPRESS",
             Self::EnigmaProtector => "Enigma Protector",
+            Self::VmProtect => "VMProtect",
+            Self::Petite => "PEtite",
+            Self::Fsg => "FSG",
+            Self::NsPack => "NsPack",
+            Self::Mew => "MEW",
         }
     }
 }
@@ -115,6 +134,31 @@ pub fn detect_packer(image: &BinaryImage) -> Option<PackerKind> {
     // Enigma Protector.
     if has(".enigma1") || has(".enigma2") {
         return Some(PackerKind::EnigmaProtector);
+    }
+
+    // VMProtect: one or more `.vmpN` sections.
+    if has(".vmp0") || has(".vmp1") || has(".vmp2") {
+        return Some(PackerKind::VmProtect);
+    }
+
+    // PEtite.
+    if has(".petite") {
+        return Some(PackerKind::Petite);
+    }
+
+    // FSG.
+    if has(".FSG") || has("FSG!") {
+        return Some(PackerKind::Fsg);
+    }
+
+    // NsPack: `.nspN` or `nspN`.
+    if has(".nsp0") || has(".nsp1") || has(".nsp2") || has("nsp0") || has("nsp1") {
+        return Some(PackerKind::NsPack);
+    }
+
+    // MEW.
+    if has(".MEW") || has("MEW") {
+        return Some(PackerKind::Mew);
     }
 
     None
@@ -253,5 +297,33 @@ mod tests {
         assert_eq!(PackerKind::Upx.to_string(), "UPX");
         assert_eq!(PackerKind::Aspack.to_string(), "ASPack");
         assert_eq!(PackerKind::EnigmaProtector.to_string(), "Enigma Protector");
+    }
+
+    #[test]
+    fn detects_vmprotect() {
+        let mut img = empty_image();
+        img.sections.push(section(".text"));
+        img.sections.push(section(".vmp0"));
+        img.sections.push(section(".vmp1"));
+        assert_eq!(detect_packer(&img), Some(PackerKind::VmProtect));
+    }
+
+    #[test]
+    fn detects_petite_fsg_nspack_mew() {
+        let mut img = empty_image();
+        img.sections.push(section(".petite"));
+        assert_eq!(detect_packer(&img), Some(PackerKind::Petite));
+
+        let mut img = empty_image();
+        img.sections.push(section(".FSG"));
+        assert_eq!(detect_packer(&img), Some(PackerKind::Fsg));
+
+        let mut img = empty_image();
+        img.sections.push(section("nsp0"));
+        assert_eq!(detect_packer(&img), Some(PackerKind::NsPack));
+
+        let mut img = empty_image();
+        img.sections.push(section(".MEW"));
+        assert_eq!(detect_packer(&img), Some(PackerKind::Mew));
     }
 }

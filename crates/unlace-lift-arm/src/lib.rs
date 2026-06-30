@@ -3293,6 +3293,153 @@ mod tests {
         assert_eq!(p3.varnode.space, SpaceId::Register);
     }
 
+    // ── Phase C.2 — AArch64 SVE Callother end-to-end lifting tests ──────
+    // Canonical encodings verified with `llvm-mc -triple=aarch64
+    // -mattr=+sve --show-encoding`. Byte arrays are the raw little-endian
+    // instruction words as they appear in memory.
+
+    /// Find the first Callother in a lifted result, asserting it did not
+    /// fall through to Unimplemented.
+    fn sve_callother(bytes: &[u8]) -> unlace_ir::IrInsn {
+        let result = lifter().lift_insn(bytes, 0x1000).expect("should decode");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "SVE op must not fall through to Unimplemented"
+        );
+        result
+            .ir_ops
+            .into_iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("SVE op must emit a Callother")
+    }
+
+    #[test]
+    fn sve_add_unpred_lifts_to_callother() {
+        use crate::lift::CALLOTHER_SVE_ADD;
+        use crate::register_file::{SVE_Z_SIZE, sve_z_offset};
+        // add z0.d, z1.d, z2.d  → [0x20,0x00,0xe2,0x04]
+        let ir = sve_callother(&[0x20, 0x00, 0xe2, 0x04]);
+        assert_eq!(ir.inputs[0].space, SpaceId::Const);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SVE_ADD);
+        // pg = 0xFF sentinel (unpredicated).
+        assert_eq!(ir.inputs[1].offset, 0xFF);
+        // zd=z0, zn=z1, zm=z2.
+        assert_eq!(ir.inputs[2].offset, sve_z_offset(0));
+        assert_eq!(ir.inputs[2].size, SVE_Z_SIZE);
+        assert_eq!(ir.inputs[3].offset, sve_z_offset(1));
+        assert_eq!(ir.inputs[4].offset, sve_z_offset(2));
+    }
+
+    #[test]
+    fn sve_add_pred_lifts_to_callother() {
+        use crate::lift::CALLOTHER_SVE_ADD;
+        use crate::register_file::sve_z_offset;
+        // add z0.d, p0/m, z0.d, z2.d  → [0x40,0x00,0xc0,0x04]
+        let ir = sve_callother(&[0x40, 0x00, 0xc0, 0x04]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SVE_ADD);
+        // pg = 0 (P0).
+        assert_eq!(ir.inputs[1].offset, 0);
+        // destructive: zdn = z0 appears as both dest and first source.
+        assert_eq!(ir.inputs[2].offset, sve_z_offset(0));
+        assert_eq!(ir.inputs[3].offset, sve_z_offset(0));
+        assert_eq!(ir.inputs[4].offset, sve_z_offset(2));
+    }
+
+    #[test]
+    fn sve_sub_unpred_lifts_to_callother() {
+        use crate::lift::CALLOTHER_SVE_SUB;
+        // sub z0.s, z1.s, z2.s  → [0x20,0x04,0xa2,0x04]
+        let ir = sve_callother(&[0x20, 0x04, 0xa2, 0x04]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SVE_SUB);
+    }
+
+    #[test]
+    fn sve_mul_pred_lifts_to_callother() {
+        use crate::lift::CALLOTHER_SVE_MUL;
+        // mul z5.d, p2/m, z5.d, z6.d  → [0xc5,0x08,0xd0,0x04]
+        let ir = sve_callother(&[0xc5, 0x08, 0xd0, 0x04]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SVE_MUL);
+        assert_eq!(ir.inputs[1].offset, 2); // P2
+    }
+
+    #[test]
+    fn sve_logical_unpred_lifts_to_callother() {
+        use crate::lift::{CALLOTHER_SVE_AND_PRED, CALLOTHER_SVE_EOR_PRED, CALLOTHER_SVE_ORR_PRED};
+        // and z0.d, z1.d, z2.d → [0x20,0x30,0x22,0x04]
+        assert_eq!(
+            sve_callother(&[0x20, 0x30, 0x22, 0x04]).inputs[0].offset,
+            CALLOTHER_SVE_AND_PRED
+        );
+        // orr z0.d, z1.d, z2.d → [0x20,0x30,0x62,0x04]
+        assert_eq!(
+            sve_callother(&[0x20, 0x30, 0x62, 0x04]).inputs[0].offset,
+            CALLOTHER_SVE_ORR_PRED
+        );
+        // eor z0.d, z1.d, z2.d → [0x20,0x30,0xa2,0x04]
+        assert_eq!(
+            sve_callother(&[0x20, 0x30, 0xa2, 0x04]).inputs[0].offset,
+            CALLOTHER_SVE_EOR_PRED
+        );
+    }
+
+    #[test]
+    fn sve_ld1_st1_lift_to_callother() {
+        use crate::lift::{CALLOTHER_SVE_LD1, CALLOTHER_SVE_ST1};
+        use crate::register_file::sve_z_offset;
+        // ld1b { z0.b }, p0/z, [x0]  → [0x00,0xa0,0x00,0xa4]
+        let ld1b = sve_callother(&[0x00, 0xa0, 0x00, 0xa4]);
+        assert_eq!(ld1b.inputs[0].offset, CALLOTHER_SVE_LD1);
+        assert_eq!(ld1b.inputs[1].offset, 0); // Pg = P0
+        assert_eq!(ld1b.inputs[2].offset, sve_z_offset(0)); // Zt = z0
+        assert_eq!(ld1b.inputs[3].offset, 0); // base = X0
+        assert_eq!(ld1b.inputs[4].offset, 1); // element size = 1 byte (B)
+        // ld1d { z1.d }, p1/z, [x1]  → [0x21,0xa4,0xe0,0xa5]
+        let ld1d = sve_callother(&[0x21, 0xa4, 0xe0, 0xa5]);
+        assert_eq!(ld1d.inputs[0].offset, CALLOTHER_SVE_LD1);
+        assert_eq!(ld1d.inputs[1].offset, 1); // Pg = P1
+        assert_eq!(ld1d.inputs[4].offset, 8); // element size = 8 bytes (D)
+        // st1b { z0.b }, p0, [x0]  → [0x00,0xe0,0x00,0xe4]
+        let st1b = sve_callother(&[0x00, 0xe0, 0x00, 0xe4]);
+        assert_eq!(st1b.inputs[0].offset, CALLOTHER_SVE_ST1);
+        // st1d { z1.d }, p1, [x1]  → [0x21,0xe4,0xe0,0xe5]
+        let st1d = sve_callother(&[0x21, 0xe4, 0xe0, 0xe5]);
+        assert_eq!(st1d.inputs[0].offset, CALLOTHER_SVE_ST1);
+        assert_eq!(st1d.inputs[4].offset, 8);
+    }
+
+    #[test]
+    fn sve_ptrue_lifts_to_callother() {
+        use crate::lift::CALLOTHER_SVE_PTRUE;
+        use crate::register_file::sve_p_offset;
+        // ptrue p0.d  → [0xe0,0xe3,0xd8,0x25]
+        let ir = sve_callother(&[0xe0, 0xe3, 0xd8, 0x25]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SVE_PTRUE);
+        // pg = 0xFF (PTRUE is unpredicated / sets all lanes).
+        assert_eq!(ir.inputs[1].offset, 0xFF);
+        // Pd = P0, element size = 8 (D).
+        assert_eq!(ir.inputs[2].offset, sve_p_offset(0));
+        assert_eq!(ir.inputs[3].offset, 8);
+    }
+
+    #[test]
+    fn sve_whilelt_lifts_to_callother() {
+        use crate::lift::CALLOTHER_SVE_WHILELT;
+        use crate::register_file::sve_p_offset;
+        // whilelt p0.d, x0, x1  → [0x00,0x14,0xe1,0x25]
+        let ir = sve_callother(&[0x00, 0x14, 0xe1, 0x25]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SVE_WHILELT);
+        // Pd = P0, then Rn = X0 (offset 0), Rm = X1 (offset 8), esize=8.
+        assert_eq!(ir.inputs[2].offset, sve_p_offset(0));
+        assert_eq!(ir.inputs[3].offset, 0); // X0
+        assert_eq!(ir.inputs[4].offset, 8); // X1
+        assert_eq!(ir.inputs[5].offset, 8); // D element size
+        // whilelt p1.s, w0, w1  → [0x01,0x04,0xa1,0x25] (32-bit operands).
+        let ir32 = sve_callother(&[0x01, 0x04, 0xa1, 0x25]);
+        assert_eq!(ir32.inputs[0].offset, CALLOTHER_SVE_WHILELT);
+        assert_eq!(ir32.inputs[2].offset, sve_p_offset(1)); // Pd = P1
+        assert_eq!(ir32.inputs[5].offset, 4); // S element size
+    }
+
     // ── Phase C.2 — AArch64 MTE Callother lifting tests ────────────────
     // Canonical encodings verified with `llvm-mc -triple=aarch64
     // -mattr=+mte --show-encoding`. Little-endian byte arrays are the

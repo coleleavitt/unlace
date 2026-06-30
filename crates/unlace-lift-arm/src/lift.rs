@@ -22,7 +22,9 @@ use unlace_ir::{
 };
 
 use crate::ops::{arithmetic, bitwise, control_flow, data_move};
-use crate::register_file::{aarch64_register_file, reg_varnode};
+use crate::register_file::{
+    SVE_P_SIZE, SVE_Z_SIZE, aarch64_register_file, reg_varnode, sve_p_offset, sve_z_offset,
+};
 
 thread_local! {
     static ARM64_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
@@ -192,6 +194,19 @@ impl ArmLifter {
         if let Some(mte) = try_mte_callother(raw) {
             let mut ctx = LiftCtx::new(addr);
             emit_mte_callother(&mut ctx, &mte);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
+        // Phase C.2 — AArch64 SVE: lift a core subset (ADD/SUB/MUL, the
+        // bitwise AND/ORR/EOR z-forms, predicated LD1B/LD1D & ST1B/ST1D,
+        // PTRUE and WHILELT) to tagged Callother intrinsics before falling
+        // through to Capstone (which decodes them but our dispatcher would
+        // route to Unimplemented).
+        if let Some(sve) = try_sve_callother(raw) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_sve_decoded(&mut ctx, &sve);
             return Ok(LiftedInsn {
                 ir_ops: ctx.ops,
                 len: 4,
@@ -4058,6 +4073,222 @@ pub const CALLOTHER_SVE_ST1: u64 = 0x427;
 pub const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 /// SVE PTRUE — set predicate to all-true for element size.
 pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
+
+/// SVE predicate logical ORR (`orr zdn, pg/m, zdn, zm` / unpredicated `orr zd, zn, zm`).
+pub const CALLOTHER_SVE_ORR_PRED: u64 = 0x42A;
+/// SVE predicate logical EOR (`eor zdn, pg/m, zdn, zm` / unpredicated `eor zd, zn, zm`).
+pub const CALLOTHER_SVE_EOR_PRED: u64 = 0x42B;
+/// SVE `WHILELT` — generate a loop predicate from a scalar `< ` comparison.
+/// Inputs: `tag, pg=0xFF, pd_index_const, Rn, Rm, esize`.
+pub const CALLOTHER_SVE_WHILELT: u64 = 0x42C;
+
+/// Decoded SVE instruction shape (Phase C.2).
+///
+/// The `Callother` operand layout produced by [`emit_sve_decoded`] always
+/// begins `tag, pg` (handled by [`emit_sve_callother`]); the remaining
+/// operands are the `operands` vector built below per instruction class.
+/// `pg` is the governing predicate index (`0xFF` sentinel = unpredicated /
+/// all-lanes). `esize` records the element size in bytes (1=B, 2=H, 4=S,
+/// 8=D) so the byte/dword distinction for loads, stores, PTRUE and WHILELT
+/// is preserved in the IR even though Z registers are modeled at a fixed
+/// nominal width.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SveDecoded {
+    pub tag: u64,
+    pub pg: u8,
+    pub operands: smallvec::SmallVec<[Varnode; 4]>,
+}
+
+/// Element size (bytes) for an SVE `size` field (`bits[23:22]`).
+fn sve_esize(size: u32) -> u8 {
+    match size & 0b11 {
+        0 => 1, // B
+        1 => 2, // H
+        2 => 4, // S
+        _ => 8, // D
+    }
+}
+
+/// Build a nominal-width Z-register varnode for SVE operand index `n`.
+fn sve_z(n: u8) -> Varnode {
+    debug_assert!(n <= 31, "SVE Z index must be 0..=31, got {n}");
+    Varnode::new(SpaceId::Register, sve_z_offset(n), SVE_Z_SIZE)
+}
+
+/// Build a P-register varnode for SVE predicate index `n`.
+fn sve_p(n: u8) -> Varnode {
+    debug_assert!(n <= 15, "SVE P index must be 0..=15, got {n}");
+    Varnode::new(SpaceId::Register, sve_p_offset(n), SVE_P_SIZE)
+}
+
+/// Build a 64-bit base/GP register varnode for SVE addressing (index 31 is
+/// the stack pointer in load/store addressing contexts, which lives at the
+/// canonical `31 * 8 == SP` offset).
+fn sve_xreg(n: u8) -> Varnode {
+    debug_assert!(n <= 31, "SVE X index must be 0..=31, got {n}");
+    Varnode::new(SpaceId::Register, n as u64 * 8, 8)
+}
+
+/// If `insn` is one of the lifted SVE instructions, return its decoded
+/// shape; otherwise `None` so the caller falls through to the existing
+/// decode path. SVE occupies the `0b0000_0100..` (arith/logical) and
+/// `0b0010_0101..` (predicate) / `0b101x_010x..` (contiguous load-store)
+/// major encoding spaces. All encodings verified against
+/// `llvm-mc -triple=aarch64 -mattr=+sve --show-encoding`.
+pub fn try_sve_callother(insn: u32) -> Option<SveDecoded> {
+    let size = (insn >> 22) & 0b11;
+    let esize = sve_esize(size);
+    let zd = (insn & 0x1F) as u8; // Zd / Zdn / Zt
+    let zn = ((insn >> 5) & 0x1F) as u8; // Zn / Rn (base)
+    let zm = ((insn >> 16) & 0x1F) as u8; // Zm / Rm
+
+    // ── SVE integer binary, predicated (destructive): Zdn = op(Pg, Zdn, Zm).
+    // 0000_0100 sz 0 opc[20:16] 000 Pg[12:10] Zm[9:5] Zdn[4:0].
+    if (insn & 0xFF20_E000) == 0x0400_0000 {
+        let opc = (insn >> 16) & 0x1F;
+        let pg = ((insn >> 10) & 0x7) as u8;
+        let tag = match opc {
+            0b00000 => CALLOTHER_SVE_ADD,
+            0b00001 => CALLOTHER_SVE_SUB,
+            0b10000 => CALLOTHER_SVE_MUL,
+            0b11010 => CALLOTHER_SVE_AND_PRED,
+            0b11000 => CALLOTHER_SVE_ORR_PRED,
+            0b11001 => CALLOTHER_SVE_EOR_PRED,
+            _ => return None,
+        };
+        // In the predicated (destructive) form the second source register
+        // `Zm` is encoded at bits[9:5] (`zn` here); bits[20:16] hold the
+        // opcode, not a register.
+        return Some(SveDecoded {
+            tag,
+            pg,
+            // Zdn is both destination and first source in the destructive form.
+            operands: smallvec![
+                sve_z(zd),
+                sve_z(zd),
+                sve_z(zn),
+                Varnode::constant(esize as u64, 1)
+            ],
+        });
+    }
+
+    // ── SVE integer ADD/SUB, unpredicated: Zd = op(Zn, Zm).
+    // 0000_0100 sz 1 Zm[20:16] 000000(ADD)/000001(SUB) Zn[9:5] Zd[4:0].
+    if (insn & 0xFF20_FC00) == 0x0420_0000 {
+        return Some(SveDecoded {
+            tag: CALLOTHER_SVE_ADD,
+            pg: 0xFF,
+            operands: smallvec![
+                sve_z(zd),
+                sve_z(zn),
+                sve_z(zm),
+                Varnode::constant(esize as u64, 1)
+            ],
+        });
+    }
+    if (insn & 0xFF20_FC00) == 0x0420_0400 {
+        return Some(SveDecoded {
+            tag: CALLOTHER_SVE_SUB,
+            pg: 0xFF,
+            operands: smallvec![
+                sve_z(zd),
+                sve_z(zn),
+                sve_z(zm),
+                Varnode::constant(esize as u64, 1)
+            ],
+        });
+    }
+
+    // ── SVE bitwise logical, unpredicated: Zd = op(Zn, Zm).
+    // 0000_0100 op[23:22] 1 Zm[20:16] 001100 Zn[9:5] Zd[4:0].
+    // The size field selects AND(00)/ORR(01)/EOR(10)/BIC(11).
+    if (insn & 0xFC20_FC00) == 0x0420_3000 {
+        let tag = match size {
+            0b00 => CALLOTHER_SVE_AND_PRED,
+            0b01 => CALLOTHER_SVE_ORR_PRED,
+            0b10 => CALLOTHER_SVE_EOR_PRED,
+            _ => return None, // BIC — not in the lifted subset
+        };
+        return Some(SveDecoded {
+            tag,
+            pg: 0xFF,
+            // Logical ops are bit-exact; element size is meaningless, pass 0.
+            operands: smallvec![sve_z(zd), sve_z(zn), sve_z(zm), Varnode::constant(0, 1)],
+        });
+    }
+
+    // ── SVE contiguous load LD1B/LD1D (scalar + immediate, imm=0): Zt = load(Pg, [Rn]).
+    // 1010_0100 (LD1B) / 1010_0101 .. dtype 0 imm4 101 Pg[12:10] Rn[9:5] Zt[4:0].
+    // Match the two specific element widths in the lifted subset.
+    if (insn & 0xFFE0_E000) == 0xA400_A000 || (insn & 0xFFE0_E000) == 0xA5E0_A000 {
+        let pg = ((insn >> 10) & 0x7) as u8;
+        let el = if (insn & 0xFFE0_E000) == 0xA5E0_A000 {
+            8
+        } else {
+            1
+        };
+        return Some(SveDecoded {
+            tag: CALLOTHER_SVE_LD1,
+            pg,
+            operands: smallvec![sve_z(zd), sve_xreg(zn), Varnode::constant(el, 1)],
+        });
+    }
+
+    // ── SVE contiguous store ST1B/ST1D (scalar + immediate, imm=0): store(Pg, Zt, [Rn]).
+    // 1110_0100 (ST1B) / 1110_0101 .. 111 Pg[12:10] Rn[9:5] Zt[4:0].
+    if (insn & 0xFFE0_E000) == 0xE400_E000 || (insn & 0xFFE0_E000) == 0xE5E0_E000 {
+        let pg = ((insn >> 10) & 0x7) as u8;
+        let el = if (insn & 0xFFE0_E000) == 0xE5E0_E000 {
+            8
+        } else {
+            1
+        };
+        return Some(SveDecoded {
+            tag: CALLOTHER_SVE_ST1,
+            pg,
+            operands: smallvec![sve_z(zd), sve_xreg(zn), Varnode::constant(el, 1)],
+        });
+    }
+
+    // ── PTRUE Pd.<T> (predicate set all-true for element size, pattern=ALL).
+    // 0010_0101 sz 011000 1110 0011 11 Pd[3:0]. Size field at bits[23:22].
+    if (insn & 0xFF3F_FFF0) == 0x2518_E3E0 {
+        let pd = (insn & 0xF) as u8;
+        return Some(SveDecoded {
+            tag: CALLOTHER_SVE_PTRUE,
+            pg: 0xFF,
+            operands: smallvec![sve_p(pd), Varnode::constant(esize as u64, 1)],
+        });
+    }
+
+    // ── WHILELT Pd.<T>, Rn, Rm (signed less-than loop predicate).
+    // 0010_0101 sz 1 Rm[20:16] 000 sf 0 1 Rn[9:5] 0 Pd[3:0]. bit12=sf (X/W).
+    if (insn & 0xFF20_EC10) == 0x2520_0400 {
+        let pd = (insn & 0xF) as u8;
+        let rn = ((insn >> 5) & 0x1F) as u8;
+        let rm = ((insn >> 16) & 0x1F) as u8;
+        return Some(SveDecoded {
+            tag: CALLOTHER_SVE_WHILELT,
+            pg: 0xFF,
+            // Pd written; Rn/Rm are the scalar loop bounds, esize the lane size.
+            operands: smallvec![
+                sve_p(pd),
+                sve_xreg(rn),
+                sve_xreg(rm),
+                Varnode::constant(esize as u64, 1)
+            ],
+        });
+    }
+
+    None
+}
+
+/// Emit the `Callother` intrinsic for a decoded SVE instruction.
+///
+/// Delegates to [`emit_sve_callother`], which prepends `tag` and `pg`.
+fn emit_sve_decoded(ctx: &mut LiftCtx, sve: &SveDecoded) {
+    emit_sve_callother(ctx, sve.tag, sve.pg, &sve.operands);
+}
 
 /// Emit a generic SVE `Callother` intrinsic.
 ///

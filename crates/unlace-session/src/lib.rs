@@ -73,6 +73,35 @@ pub struct CallOverride {
     pub opaque: bool,
 }
 
+/// A user assertion injected at a microcode address.
+///
+/// Tells the decompiler to assume `expression` holds at instruction `ea`.
+/// Keyed in [`Annotations`] by the instruction address (`ea`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssertionInjection {
+    pub ea: u64,
+    pub expression: String,
+}
+
+/// A user request to delete (ignore) an instruction during decompilation.
+///
+/// Keyed in [`Annotations`] by the instruction address (`ea`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletedInsn {
+    pub ea: u64,
+}
+
+/// A user request to forbid propagation of a specific variable.
+///
+/// Prevents the microcode optimizer from propagating `var_name` inside the
+/// owning function. Keyed in [`Annotations`] by the owning function's entry
+/// address (`function_ea`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PropagationBlock {
+    pub function_ea: u64,
+    pub var_name: String,
+}
+
 /// A user bookmark.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bookmark {
@@ -110,6 +139,15 @@ pub struct Annotations {
     /// User-forced call-site overrides, keyed by `call_ea`.
     #[serde(default)]
     pub call_overrides: BTreeMap<u64, CallOverride>,
+    /// User-injected microcode assertions, keyed by instruction address (`ea`).
+    #[serde(default)]
+    pub assertion_injections: BTreeMap<u64, AssertionInjection>,
+    /// User-deleted (ignored) instructions, keyed by instruction address (`ea`).
+    #[serde(default)]
+    pub deleted_insns: BTreeMap<u64, DeletedInsn>,
+    /// User propagation blocks, keyed by owning `function_ea`.
+    #[serde(default)]
+    pub propagation_blocks: BTreeMap<u64, Vec<PropagationBlock>>,
 }
 
 impl Annotations {
@@ -136,6 +174,9 @@ pub enum SessionEvent {
     Patched(Patch),
     VariableTypeOverridden(VariableTypeOverride),
     CallOverridden(CallOverride),
+    AssertionInjected(AssertionInjection),
+    InsnDeleted(DeletedInsn),
+    PropagationBlocked(PropagationBlock),
     SelectionChanged(Selection),
     Saved { path: PathBuf },
 }
@@ -309,6 +350,46 @@ impl Session {
             g.annotations.call_overrides.insert(o.call_ea, o.clone());
         }
         self.emit(SessionEvent::CallOverridden(o));
+    }
+
+    /// Inject an assertion at a microcode address, assuming `expression` holds.
+    pub fn set_assertion_injection(&self, a: AssertionInjection) {
+        {
+            let mut g = self.inner.write();
+            g.annotations.assertion_injections.insert(a.ea, a.clone());
+        }
+        self.emit(SessionEvent::AssertionInjected(a));
+    }
+
+    /// Mark an instruction to be ignored (deleted) during decompilation.
+    pub fn set_deleted_insn(&self, d: DeletedInsn) {
+        {
+            let mut g = self.inner.write();
+            g.annotations.deleted_insns.insert(d.ea, d.clone());
+        }
+        self.emit(SessionEvent::InsnDeleted(d));
+    }
+
+    /// Forbid propagation of a specific variable inside a function.
+    ///
+    /// Blocks are accumulated per `function_ea`; setting one for a variable
+    /// name already present replaces the existing entry so the store stays
+    /// deterministic and free of duplicates.
+    pub fn set_propagation_block(&self, p: PropagationBlock) {
+        {
+            let mut g = self.inner.write();
+            let list = g
+                .annotations
+                .propagation_blocks
+                .entry(p.function_ea)
+                .or_default();
+            if let Some(existing) = list.iter_mut().find(|e| e.var_name == p.var_name) {
+                *existing = p.clone();
+            } else {
+                list.push(p.clone());
+            }
+        }
+        self.emit(SessionEvent::PropagationBlocked(p));
     }
 
     /// Subscribe a listener to all session events.

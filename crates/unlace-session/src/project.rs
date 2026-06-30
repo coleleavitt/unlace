@@ -10,8 +10,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Annotations, Bookmark, CallOverride, Comment, Patch, Rename, Selection, Session,
-    TypeAnnotation, VariableTypeOverride, db, sha256,
+    Annotations, AssertionInjection, Bookmark, CallOverride, Comment, DeletedInsn, Patch,
+    PropagationBlock, Rename, Selection, Session, TypeAnnotation, VariableTypeOverride, db, sha256,
 };
 
 pub const MAGIC: &str = "UNLACE_PROJECT";
@@ -34,6 +34,15 @@ pub struct ProjectFile {
     /// User-forced call-site overrides, keyed by `call_ea`.
     #[serde(default)]
     pub call_overrides: BTreeMap<u64, CallOverride>,
+    /// User-injected microcode assertions, keyed by instruction address (`ea`).
+    #[serde(default)]
+    pub assertion_injections: BTreeMap<u64, AssertionInjection>,
+    /// User-deleted (ignored) instructions, keyed by instruction address (`ea`).
+    #[serde(default)]
+    pub deleted_insns: BTreeMap<u64, DeletedInsn>,
+    /// User propagation blocks, keyed by owning `function_ea`.
+    #[serde(default)]
+    pub propagation_blocks: BTreeMap<u64, Vec<PropagationBlock>>,
     #[serde(default)]
     pub analysis_summary: Option<AnalysisSummary>,
 }
@@ -80,6 +89,9 @@ impl ProjectFile {
             patches: BTreeMap::new(),
             variable_type_overrides: BTreeMap::new(),
             call_overrides: BTreeMap::new(),
+            assertion_injections: BTreeMap::new(),
+            deleted_insns: BTreeMap::new(),
+            propagation_blocks: BTreeMap::new(),
             analysis_summary: None,
         }
     }
@@ -99,6 +111,9 @@ impl ProjectFile {
         project.patches = annotations.patches;
         project.variable_type_overrides = annotations.variable_type_overrides;
         project.call_overrides = annotations.call_overrides;
+        project.assertion_injections = annotations.assertion_injections;
+        project.deleted_insns = annotations.deleted_insns;
+        project.propagation_blocks = annotations.propagation_blocks;
         project.selection = session.selection();
         project.analysis_summary = session.with_binary(|image| AnalysisSummary {
             function_count: image.symbols.len() as u64,
@@ -117,6 +132,9 @@ impl ProjectFile {
             patches: self.patches.clone(),
             variable_type_overrides: self.variable_type_overrides.clone(),
             call_overrides: self.call_overrides.clone(),
+            assertion_injections: self.assertion_injections.clone(),
+            deleted_insns: self.deleted_insns.clone(),
+            propagation_blocks: self.propagation_blocks.clone(),
         }
     }
 
@@ -236,6 +254,9 @@ impl LoadedProject {
                     patches: annotations.patches,
                     variable_type_overrides: annotations.variable_type_overrides,
                     call_overrides: annotations.call_overrides,
+                    assertion_injections: annotations.assertion_injections,
+                    deleted_insns: annotations.deleted_insns,
+                    propagation_blocks: annotations.propagation_blocks,
                     analysis_summary: None,
                 }
             }
@@ -316,6 +337,17 @@ fn apply_annotations(session: &Session, annotations: &Annotations, selection: Se
     for call_override in annotations.call_overrides.values() {
         session.set_call_override(call_override.clone());
     }
+    for assertion in annotations.assertion_injections.values() {
+        session.set_assertion_injection(assertion.clone());
+    }
+    for deleted in annotations.deleted_insns.values() {
+        session.set_deleted_insn(deleted.clone());
+    }
+    for blocks in annotations.propagation_blocks.values() {
+        for block in blocks {
+            session.set_propagation_block(block.clone());
+        }
+    }
     session.set_selection(selection);
 }
 
@@ -342,7 +374,7 @@ fn temp_path_for(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PatchSource, SessionInner};
+    use crate::{AssertionInjection, DeletedInsn, PatchSource, PropagationBlock, SessionInner};
 
     fn synthetic_session() -> Session {
         let session = Session::new();
@@ -396,6 +428,15 @@ mod tests {
             forced_callee_ea: Some(0x2000),
             opaque: true,
         });
+        session.set_assertion_injection(AssertionInjection {
+            ea: 0x1010,
+            expression: "v4 != 0".into(),
+        });
+        session.set_deleted_insn(DeletedInsn { ea: 0x1014 });
+        session.set_propagation_block(PropagationBlock {
+            function_ea: 0x1000,
+            var_name: "v4".into(),
+        });
         session.set_selection(Selection {
             current_function: Some(0x1000),
             current_address: Some(0x1004),
@@ -439,12 +480,25 @@ mod tests {
         assert_eq!(call_override.forced_callee_ea, Some(0x2000));
         assert!(call_override.opaque);
 
+        // Microcode override facts survive the round-trip value-equal.
+        assert_eq!(
+            recovered.assertion_injections[&0x1010].expression,
+            "v4 != 0"
+        );
+        assert_eq!(recovered.deleted_insns[&0x1014].ea, 0x1014);
+        let prop_blocks = &recovered.propagation_blocks[&0x1000];
+        assert_eq!(prop_blocks.len(), 1);
+        assert_eq!(prop_blocks[0].var_name, "v4");
+
         // The same facts reach a session when the project is applied.
         let restored = synthetic_session();
         project.apply_to(&restored).expect("apply");
         let anns = restored.annotations();
         assert_eq!(anns.variable_type_overrides[&0x1000][0].var_name, "v4");
         assert!(anns.call_overrides[&0x100c].opaque);
+        assert_eq!(anns.assertion_injections[&0x1010].expression, "v4 != 0");
+        assert!(anns.deleted_insns.contains_key(&0x1014));
+        assert_eq!(anns.propagation_blocks[&0x1000][0].var_name, "v4");
     }
 
     #[test]

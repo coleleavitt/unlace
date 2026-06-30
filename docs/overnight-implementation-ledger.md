@@ -33,15 +33,28 @@ Operating rules for this run:
 | 9 | B.3 | DW_OP evaluator expansion: `call_frame_cfa`/`addr`/`implicit_value`/`deref`/`constu` | `cargo test -p unlace-loader dwarf_expr` (19 pass) | `d512ad6645` |
 | 10 | H.1 | IDAPython core API expansion: more `ida_funcs`/`ida_bytes`/`ida_name` over real Session | `cargo test -p unlace-idapython` (35 pass) | `62b3c921f8` |
 | 11 | K.2a | `unlace-plugin` `hello_plugin` example + SDK README guide | `cargo test -p unlace-plugin` (28 pass); `cargo build -p unlace-plugin --examples` | `fc10545ea6` |
+| 12 | J.3 | `xtask loader-scorecard` — per-format load smoke (32 ELF + 1 Mach-O load clean) | `cargo run -p xtask -- loader-scorecard` | `842f7ab3d3` |
+| 13 | C.5 | PowerPC AltiVec `vaddfp/vsubfp/vand/vor/vxor/vperm/vsel` + v0–v31 reg file (recovered from agent branch) | `cargo test -p unlace-lift-ppc` (45 pass) | `7086ec26a8` |
+| 14 | I.1/I.2 | session user-override facts (force var type / call) with `.unlace` round-trip | `cargo test -p unlace-session` (37 pass) | `497c648952` |
+| 15 | E.4.4 | packer diagnostic handoff: unsupported steps + suggested commands + LLM-ready prompt | `cargo test -p unlace-cli --lib identify_packer` (5 pass) | `1ba948d705` |
+| 16 | G.2 | `gdb_stub` TCP backend over RSP (mem/bp/cont/step/regs/stack), amd64 g-packet decode | `cargo test -p unlace-debugger --features gdb-stub` (24 pass, incl. mock-socket e2e) | `2abcecc259` |
+| 17 | C.2 | AArch64 MTE `IRG/ADDG/SUBG/STG/LDG/STGP` lifting (llvm-mc-verified encodings) | `cargo test -p unlace-lift-arm` (211 pass) | `9842468034` |
 
-### Outstanding (agents failed/thrashed — to redo, likely self-implement)
+### Agent reliability notes (updated)
 
-- B.1.1 AArch64 FLIRT bundled sigs (agent bailed at 2 tools).
-- C.2 AArch64 MTE op lifting (agent thrashed to 47 tools, leaked incomplete/broken
-  code into main tree referencing undefined helpers — reverted clean).
-- C.5 PowerPC AltiVec lifting (agent thrashed to 59 tools, never converged —
-  cancelled, leak reverted). Encoding-heavy lifter work is hard for agents; do
-  these directly.
+- Worktree agents commit to `worktree-agent-*` branches; I cherry-pick into master
+  after verifying. ~30% hit a premature-exit bug (worker terminates right after a
+  "let me now write X" message before any code — hit MCP, FLIRT, gdb-stub ×2).
+- Edit/Write tools resolve relative paths against the MAIN checkout, not the
+  worktree — instruct agents to edit via Bash to the worktree absolute path.
+- Encoding-heavy lifter tickets (MTE, AltiVec) eventually succeeded on retry with
+  the bash-write + llvm-mc-verify instructions; gdb-stub I self-implemented after
+  two premature exits.
+
+### Outstanding
+
+- B.1.1 AArch64 FLIRT bundled sigs (agent bailed; low priority — self-implement).
+- A.4.7 COERCE_* emission (output crate, golden-sensitive — self-implement w/ gates).
 
 ### Multi-agent run notes
 

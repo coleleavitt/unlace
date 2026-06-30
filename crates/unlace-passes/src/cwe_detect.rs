@@ -25,9 +25,13 @@
 //!   dominance check rules out the obvious false positive where the
 //!   free and load live in disjoint branches.
 //!
-//! The remaining two [`CweKind`] variants ([`Cwe119BufferOverflow`]
-//! and [`Cwe787OobWrite`]) are reserved for future detectors; today
-//! they are part of the public surface but never produced.
+//! - **[`Cwe119BufferOverflow`](CweKind::Cwe119BufferOverflow)** and
+//!   **[`Cwe787OobWrite`](CweKind::Cwe787OobWrite)** — a "dangerous
+//!   function" detector: a call annotated as an unbounded-copy
+//!   (`gets`/`strcpy`/`strcat`/`sprintf`, CWE-119) or unchecked-write
+//!   (`memcpy`/`memmove`/`memset`, CWE-787) libc function is flagged at
+//!   its call site. Like the leak detector this is a reviewable signal,
+//!   not a proof — a safely-bounded `memcpy` is still flagged.
 //!
 //! [`Cwe119BufferOverflow`]: CweKind::Cwe119BufferOverflow
 //! [`Cwe787OobWrite`]: CweKind::Cwe787OobWrite
@@ -197,7 +201,61 @@ pub fn detect_cwe(func: &SsaFunction) -> Vec<CweFinding> {
         }
     }
 
+    // -- CWE-119 / CWE-787: dangerous unbounded library calls. -----------
+    //
+    // Classic "dangerous function" detector: a call annotated as a known
+    // unbounded-copy / unchecked-write libc function is flagged at its call
+    // site. This is a review pointer (like the leak detector), not a proof —
+    // a bounds-checked use of `memcpy` with a constant size is still flagged,
+    // which is the expected over-approximation. `gets`/`strcpy`/`strcat`/
+    // `sprintf` write to a destination with no length bound (CWE-119); the
+    // `mem*` family copies an arbitrary length into the destination, the
+    // out-of-bounds-write hazard (CWE-787).
+    for (&bid, block) in &func.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            if insn.op != IrOp::Call {
+                continue;
+            }
+            let Some(annotation) = func.libc_call_annotations.get(&(bid, idx)) else {
+                continue;
+            };
+            if let Some((kind, desc)) = dangerous_call_weakness(annotation.as_str()) {
+                findings.insert(CweFinding {
+                    kind,
+                    location: (bid, idx),
+                    description: desc.to_string(),
+                });
+            }
+        }
+    }
+
     findings.into_iter().collect()
+}
+
+/// Classify a libc call name as an unbounded-copy (CWE-119) or
+/// unchecked-write (CWE-787) hazard, or `None` if it is not on the
+/// dangerous-function roster. Kept as an explicit match so the roster is
+/// auditable and deterministic.
+fn dangerous_call_weakness(name: &str) -> Option<(CweKind, &'static str)> {
+    match name {
+        "gets" => Some((
+            CweKind::Cwe119BufferOverflow,
+            "gets() performs an unbounded read into a fixed buffer",
+        )),
+        "strcpy" | "stpcpy" | "strcat" => Some((
+            CweKind::Cwe119BufferOverflow,
+            "unbounded string copy into destination with no length bound",
+        )),
+        "sprintf" | "vsprintf" => Some((
+            CweKind::Cwe119BufferOverflow,
+            "sprintf writes a formatted string with no destination size bound",
+        )),
+        "memcpy" | "memmove" | "memset" => Some((
+            CweKind::Cwe787OobWrite,
+            "fixed-destination write of a caller-supplied length (verify the bound)",
+        )),
+        _ => None,
+    }
 }
 
 /// Internal record for a recognised `malloc` site.
@@ -297,6 +355,50 @@ mod tests {
         assert_eq!(findings[0].kind, CweKind::Cwe415DoubleFree);
         // The *second* free is the reported site.
         assert_eq!(findings[0].location, (BlockId(0), 1));
+    }
+
+    #[test]
+    fn detects_dangerous_strcpy_as_buffer_overflow() {
+        // strcpy(dst, src);  RETURN
+        let mut func = Function::new("danger", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![c(0x2000), reg(7), reg(6)],
+            0x1000,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        annotate(&mut ssa, BlockId(0), 0, "strcpy");
+
+        let findings = detect_cwe(&ssa);
+        assert_eq!(findings.len(), 1, "got: {:?}", findings);
+        assert_eq!(findings[0].kind, CweKind::Cwe119BufferOverflow);
+        assert_eq!(findings[0].location, (BlockId(0), 0));
+    }
+
+    #[test]
+    fn detects_memcpy_as_oob_write_candidate() {
+        let mut func = Function::new("danger2", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![c(0x2000), reg(7), reg(6), reg(2)],
+            0x1000,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        annotate(&mut ssa, BlockId(0), 0, "memcpy");
+
+        let findings = detect_cwe(&ssa);
+        assert_eq!(findings.len(), 1, "got: {:?}", findings);
+        assert_eq!(findings[0].kind, CweKind::Cwe787OobWrite);
     }
 
     #[test]

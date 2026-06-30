@@ -90,6 +90,18 @@ pub const CALLOTHER_RVV_OPFVF: u64 = 0x5256_5625;
 pub const CALLOTHER_RVV_OPMVX: u64 = 0x5256_5626;
 pub const CALLOTHER_RVV_MASK_OP: u64 = 0x5256_5630;
 
+// Per-operation RVV arithmetic/logical intrinsics.  These give downstream
+// passes a stable, opcode-specific identity for the most common integer
+// vector ops without having to decode the funct6 metadata input.  The
+// generic OPIVV/OPMVV/OPIVX tags above remain the fallback for ops we do not
+// model individually.
+pub const CALLOTHER_RVV_VADD: u64 = 0x5256_5640;
+pub const CALLOTHER_RVV_VSUB: u64 = 0x5256_5641;
+pub const CALLOTHER_RVV_VAND: u64 = 0x5256_5642;
+pub const CALLOTHER_RVV_VOR: u64 = 0x5256_5643;
+pub const CALLOTHER_RVV_VXOR: u64 = 0x5256_5644;
+pub const CALLOTHER_RVV_VMUL: u64 = 0x5256_5645;
+
 /// Convert a capstone `RegId` to a register-space `Varnode`.
 /// Returns `None` for x0 (hardwired zero — callers should use `Varnode::constant(0, 8)`).
 fn cs_reg_to_varnode(reg: RegId) -> Option<Varnode> {
@@ -891,6 +903,35 @@ impl RvvMajor {
     fn is_scalar_or_imm(self) -> bool {
         matches!(self, Self::Opivi | Self::Opivx | Self::Opfvf | Self::Opmvx)
     }
+
+    /// True when an OPMVV/OPMVX funct6 produces a vector mask result rather
+    /// than an element-wise vector result.  In the RISC-V V spec these are the
+    /// `vm*` mask-logical ops (vmand/vmor/vmxor/...) occupying funct6
+    /// `0b011000..=0b011111`.  Other OPMVV ops (e.g. `vmul.vv`, the reductions)
+    /// write a normal vector register.
+    fn produces_mask(self, funct6: u32) -> bool {
+        matches!(self, Self::Opmvv) && (0b011000..=0b011111).contains(&funct6)
+    }
+
+    /// Map an integer arithmetic/logical funct6 to a stable per-operation
+    /// callother tag for the common ops we model individually.  Returns `None`
+    /// for ops that fall back to the generic format-level tag.
+    fn specific_tag(self, funct6: u32) -> Option<u64> {
+        match self {
+            // OPIVV / OPIVX / OPIVI integer arithmetic + logical.
+            Self::Opivv | Self::Opivx | Self::Opivi => match funct6 {
+                0b000000 => Some(CALLOTHER_RVV_VADD),
+                0b000010 => Some(CALLOTHER_RVV_VSUB),
+                0b001001 => Some(CALLOTHER_RVV_VAND),
+                0b001010 => Some(CALLOTHER_RVV_VOR),
+                0b001011 => Some(CALLOTHER_RVV_VXOR),
+                _ => None,
+            },
+            // OPMVV / OPMVX integer multiply.
+            Self::Opmvv | Self::Opmvx if funct6 == 0b100101 => Some(CALLOTHER_RVV_VMUL),
+            _ => None,
+        }
+    }
 }
 
 fn lift_rvv_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
@@ -1006,11 +1047,15 @@ fn lift_rvv_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
         // visibility while avoiding dependence on Capstone's RVV tables.
         0x57 => {
             let major = RvvMajor::from_funct3(funct3)?;
-            let is_mask_op = matches!(major, RvvMajor::Opmvv | RvvMajor::Opmvx);
-            let tag = if is_mask_op {
-                CALLOTHER_RVV_MASK_OP
-            } else {
-                major.tag()
+            // Only the `vm*` mask-logical OPMVV ops actually produce a mask
+            // result; other OPMVV ops (vmul.vv, reductions, ...) write a vector
+            // register.  Per-operation tags take precedence over the generic
+            // format-level (OPIVV/OPMVV/...) or mask tag.
+            let is_mask_op = major.produces_mask(funct6);
+            let tag = match major.specific_tag(funct6) {
+                Some(t) => t,
+                None if is_mask_op => CALLOTHER_RVV_MASK_OP,
+                None => major.tag(),
             };
             let mut inputs = vec![rvv_reg(rs2)];
             if major.is_scalar_or_imm() {
@@ -2395,7 +2440,9 @@ mod tests {
         let result = lifter()
             .lift_insn(&word.to_le_bytes(), 0x1000)
             .expect("should lift vector op");
-        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_OPIVV));
+        // vadd.vv now carries the per-operation tag rather than the generic
+        // OPIVV format tag.
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_VADD));
         let call = result
             .ir_ops
             .iter()
@@ -2406,6 +2453,70 @@ mod tests {
         assert!(call.inputs.contains(&rvv_reg(3)));
         assert!(call.inputs.contains(&Varnode::reg(VTYPE_OFFSET, 8)));
         assert!(call.inputs.contains(&Varnode::reg(VL_OFFSET, 8)));
+    }
+
+    /// Verified encodings (RISC-V V spec funct6 table + `.vv` format):
+    ///   vadd.vv v1,v2,v3 (vm=1) = 0x022180D7
+    ///   vsub.vv v1,v2,v3 (vm=1) = 0x0A2180D7
+    ///   vand.vv v1,v2,v3 (vm=1) = 0x262180D7
+    ///   vor.vv  v1,v2,v3 (vm=1) = 0x2A2180D7
+    ///   vxor.vv v1,v2,v3 (vm=1) = 0x2E2180D7
+    ///   vmul.vv v1,v2,v3 (vm=1) = 0x9621A0D7  (OPMVV, funct3=010)
+    #[test]
+    fn test_rvv_opivv_per_op_tags() {
+        let cases: [(u32, u64); 5] = [
+            (0x0221_80D7, CALLOTHER_RVV_VADD),
+            (0x0A21_80D7, CALLOTHER_RVV_VSUB),
+            (0x2621_80D7, CALLOTHER_RVV_VAND),
+            (0x2A21_80D7, CALLOTHER_RVV_VOR),
+            (0x2E21_80D7, CALLOTHER_RVV_VXOR),
+        ];
+        for (word, expected_tag) in cases {
+            let result = lifter()
+                .lift_insn(&word.to_le_bytes(), 0x1000)
+                .unwrap_or_else(|_| panic!("should lift {word:#010x}"));
+            assert_eq!(result.len, 4);
+            assert!(
+                !has_op(&result, IrOp::Unimplemented),
+                "{word:#010x} must not be Unimplemented"
+            );
+            assert_eq!(
+                rvv_tag(&result),
+                Some(expected_tag),
+                "wrong tag for {word:#010x}"
+            );
+            let call = result
+                .ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Callother)
+                .unwrap();
+            // vd=v1, vs2=v2, vs1=v3 -> element-wise vector result.
+            assert_eq!(call.output, Some(rvv_reg(1)));
+            assert!(call.inputs.contains(&rvv_reg(2)));
+            assert!(call.inputs.contains(&rvv_reg(3)));
+        }
+    }
+
+    #[test]
+    fn test_rvv_vmul_vv() {
+        // vmul.vv v1, v2, v3 (OPMVV funct6=0b100101) is arithmetic, NOT a mask
+        // op: it must carry the VMUL tag and write a vector register (not a
+        // mask register).
+        let word: u32 = 0x9621_A0D7;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vmul.vv");
+        assert_eq!(result.len, 4);
+        assert!(!has_op(&result, IrOp::Unimplemented));
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_VMUL));
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(call.output, Some(rvv_reg(1)));
+        assert!(call.inputs.contains(&rvv_reg(2)));
+        assert!(call.inputs.contains(&rvv_reg(3)));
     }
 
     #[test]

@@ -52,10 +52,14 @@ Operating rules for this run:
 | 27 | C | Register SPARC + WebAssembly lifters in the facade `get_lifter()` | `cargo test -p unlace-lift` (2 pass) | `9308d617d0` |
 | 28 | G.3 | `linux_ptrace` `stack_trace()` fp-walk + hardware breakpoints (DR0–DR3/DR7) | `cargo test -p unlace-debugger --features linux-ptrace` (36 pass) | `caaa666901` |
 | 29 | E.4.3 | anti-debug probe detector (IsDebuggerPresent/ptrace/rdtsc/OutputDebugString) | `cargo test -p unlace-passes anti_debug` (4 pass) | `16b3e4976a` |
+| 30 | C | Register 8 more lifters in facade (6502/8051/pic/rx/z80/stm8/spirv/appleagx) | `cargo test -p unlace-lift` (3 pass) | `1f81caf5c3` |
+| 31 | E.4.3 | VM-dispatch (virtualization) recognizer — dispatcher loop-head + many-handler fan-out | `cargo test -p unlace-passes vm_dispatch` (3 pass) | `8b7803e388` |
+| 32 | C.3 | ARM32 VFP register file (s0–s31/d0–d31/FPSCR) + scalar FP op lifting | `cargo test -p unlace-lift-arm` (218 pass) | `df42821cc2` |
+| 33 | C.1 | x86 AVX-512 EVEX subset lifted as Callother (zmm0–31 + k0–7) | `cargo test -p unlace-lift-x86` (255 pass) | `5d1647768b` |
 
 ## Status checkpoint
 
-29 roadmap-phase tickets landed on master, each gate-verified. Full workspace
+33 roadmap-phase tickets landed on master, each gate-verified. Full workspace
 build compiles, determinism lint OK, `cargo fmt --all --check` clean. Phases
 touched span A, B, C, D, E, F, G, H, I, J, K. This is steady progress against a
 multi-quarter roadmap — not "all phases complete". Notable bonus: the C.4 RVV

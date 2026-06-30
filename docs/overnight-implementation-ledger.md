@@ -39,6 +39,19 @@ Operating rules for this run:
 | 15 | E.4.4 | packer diagnostic handoff: unsupported steps + suggested commands + LLM-ready prompt | `cargo test -p unlace-cli --lib identify_packer` (5 pass) | `1ba948d705` |
 | 16 | G.2 | `gdb_stub` TCP backend over RSP (mem/bp/cont/step/regs/stack), amd64 g-packet decode | `cargo test -p unlace-debugger --features gdb-stub` (24 pass, incl. mock-socket e2e) | `2abcecc259` |
 | 17 | C.2 | AArch64 MTE `IRG/ADDG/SUBG/STG/LDG/STGP` lifting (llvm-mc-verified encodings) | `cargo test -p unlace-lift-arm` (211 pass) | `9842468034` |
+| 18 | K.2 | SDK support matrix (`docs/sdk/support-matrix.md`) grounded in real surfaces | n/a (doc) | `e1a1ef0b0f` |
+| 19 | F.2 | Lumina end-to-end client/server metadata round-trip test + README | `cargo test -p unlace-lumina` (66 pass) | `4d3f74f732` |
+| 20 | C.5 | MIPS MSA SIMD ops (`ADDV/SUBV/MULV/AND.V/OR.V/XOR.V/ILVR`) wired as Callother, operand-guarded so scalar ops untouched | `cargo test -p unlace-lift-mips` (25 pass) | `693f669faf` |
+
+## Status checkpoint
+
+20 roadmap-phase tickets landed on master, each gate-verified. Full workspace
+test build compiles (`cargo test --workspace --no-run` EXIT 0), determinism lint
+OK, `cargo fmt --all --check` clean. Phases touched span A, B, C, D, E, F, G, H,
+I, J, K. This is steady progress against a multi-quarter roadmap — not "all
+phases complete"; remaining work is the deeper, higher-risk items (full type
+inference D.1+, symbolic exec D.3, Windows/macOS debuggers G.1, ida_hexrays
+ctree H.2, A.4.7 COERCE_* output, broad lifter breadth, J.2 address-mapped diff).
 
 ### Agent reliability notes (updated)
 

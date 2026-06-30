@@ -112,8 +112,7 @@ fn count_gotos(text: &str) -> usize {
                 !ch.is_ascii_alphanumeric() && ch != b'_'
             };
             let after = pos + 4;
-            let after_ok = after < rest.len()
-                && rest.as_bytes()[after].is_ascii_whitespace();
+            let after_ok = after < rest.len() && rest.as_bytes()[after].is_ascii_whitespace();
             if before_ok && after_ok {
                 n += 1;
             }
@@ -131,9 +130,7 @@ fn count_labels(text: &str) -> usize {
             let t = line.trim();
             if let Some(name) = t.strip_suffix(':') {
                 !name.is_empty()
-                    && name
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+                    && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
                     && name.chars().next().is_some_and(|c| !c.is_ascii_digit())
             } else {
                 false

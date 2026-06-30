@@ -16,8 +16,21 @@ pub enum Location {
     Memory(i64),
     /// Frame-base relative offset (DW_OP_fbreg).
     FrameBase(i64),
+    /// CFA (call-frame address) relative offset (DW_OP_call_frame_cfa).
+    ///
+    /// Mirrors [`Location::FrameBase`]: the value is the offset applied to the
+    /// canonical frame address. A bare `DW_OP_call_frame_cfa` yields an offset
+    /// of `0`; subsequent arithmetic (e.g. `DW_OP_plus_uconst`) adjusts it.
+    Cfa(i64),
     /// A literal constant value.
     Constant(i64),
+    /// The literal bytes of the object itself (DW_OP_implicit_value).
+    ImplicitValue(Vec<u8>),
+    /// The object is found by dereferencing the computed value
+    /// (DW_OP_deref / DW_OP_deref_size). The inner location is the address
+    /// expression that was on the stack; `size` is the deref width in bytes
+    /// (`0` means a pointer-sized / unspecified deref).
+    Indirect { base: Box<Location>, size: u8 },
     /// Composite location (multiple pieces) — not yet enumerated.
     Composite,
     /// Could not evaluate.
@@ -48,12 +61,22 @@ const DW_OP_PIECE: u8 = 0x93;
 const DW_OP_PLUS_UCONST: u8 = 0x23;
 const DW_OP_PLUS: u8 = 0x22;
 const DW_OP_STACK_VALUE: u8 = 0x9F;
+const DW_OP_CONSTU: u8 = 0x10;
+const DW_OP_CONSTS: u8 = 0x11;
+const DW_OP_DEREF_SIZE: u8 = 0x94;
+const DW_OP_IMPLICIT_VALUE: u8 = 0x9E;
+const DW_OP_CALL_FRAME_CFA: u8 = 0x9C;
 
 /// Working state during evaluation.
 struct EvalState {
     stack: Vec<i64>,
     last_was_register: Option<u16>,
     last_was_fbreg: Option<i64>,
+    /// Set once `DW_OP_call_frame_cfa` is seen; later arithmetic adjusts the
+    /// stack top, so the final offset is read back from the stack.
+    is_cfa: bool,
+    /// Deref width recorded by `DW_OP_deref` (0) / `DW_OP_deref_size` (n).
+    deref_size: Option<u8>,
     has_piece: bool,
 }
 
@@ -63,6 +86,8 @@ impl EvalState {
             stack: Vec::new(),
             last_was_register: None,
             last_was_fbreg: None,
+            is_cfa: false,
+            deref_size: None,
             has_piece: false,
         }
     }
@@ -115,8 +140,13 @@ fn step_opcode(op: u8, bytes: &[u8], pos: &mut usize, st: &mut EvalState) -> Ste
         DW_OP_CONST2S => step_push_const(bytes, pos, 2, true, st),
         DW_OP_CONST4U => step_push_const(bytes, pos, 4, false, st),
         DW_OP_CONST4S => step_push_const(bytes, pos, 4, true, st),
-        DW_OP_CONST8U | DW_OP_ADDR => step_push_const(bytes, pos, 8, false, st),
+        DW_OP_CONST8U => step_push_const(bytes, pos, 8, false, st),
         DW_OP_CONST8S => step_push_const(bytes, pos, 8, true, st),
+        // DW_OP_addr pushes an absolute address; finalize resolves the
+        // stack top to an absolute Location::Memory.
+        DW_OP_ADDR => step_push_const(bytes, pos, 8, false, st),
+        DW_OP_CONSTU => step_constu(bytes, pos, st),
+        DW_OP_CONSTS => step_consts(bytes, pos, st),
         DW_OP_PLUS => {
             let b = st.stack.pop().unwrap_or(0);
             let a = st.stack.pop().unwrap_or(0);
@@ -124,7 +154,26 @@ fn step_opcode(op: u8, bytes: &[u8], pos: &mut usize, st: &mut EvalState) -> Ste
             StepResult::Continue
         }
         DW_OP_PLUS_UCONST => step_plus_uconst(bytes, pos, st),
-        DW_OP_DEREF => StepResult::Continue, // no-op at static time
+        DW_OP_DEREF => {
+            st.deref_size = Some(0);
+            StepResult::Continue
+        }
+        DW_OP_DEREF_SIZE => {
+            if *pos >= bytes.len() {
+                return StepResult::Halt(Location::Unknown);
+            }
+            st.deref_size = Some(bytes[*pos]);
+            *pos += 1;
+            StepResult::Continue
+        }
+        DW_OP_CALL_FRAME_CFA => {
+            st.is_cfa = true;
+            // Establish the CFA as the (offset-0) base for any following
+            // arithmetic, mirroring how a register/fbreg seeds the stack.
+            st.stack.push(0);
+            StepResult::Continue
+        }
+        DW_OP_IMPLICIT_VALUE => step_implicit_value(bytes, pos),
         DW_OP_STACK_VALUE => StepResult::Halt(Location::Constant(st.stack.pop().unwrap_or(0))),
         DW_OP_PIECE => step_piece(bytes, pos, st),
         _ => StepResult::Halt(Location::Unknown),
@@ -211,6 +260,43 @@ fn step_plus_uconst(bytes: &[u8], pos: &mut usize, st: &mut EvalState) -> StepRe
     StepResult::Continue
 }
 
+fn step_constu(bytes: &[u8], pos: &mut usize, st: &mut EvalState) -> StepResult {
+    match read_uleb128(&bytes[*pos..]) {
+        Some((v, consumed)) => {
+            *pos += consumed;
+            st.stack.push(v as i64);
+            StepResult::Continue
+        }
+        None => StepResult::Halt(Location::Unknown),
+    }
+}
+
+fn step_consts(bytes: &[u8], pos: &mut usize, st: &mut EvalState) -> StepResult {
+    match read_sleb128(&bytes[*pos..]) {
+        Some((v, consumed)) => {
+            *pos += consumed;
+            st.stack.push(v);
+            StepResult::Continue
+        }
+        None => StepResult::Halt(Location::Unknown),
+    }
+}
+
+fn step_implicit_value(bytes: &[u8], pos: &mut usize) -> StepResult {
+    // DW_OP_implicit_value: ULEB128 length followed by that many literal bytes.
+    let Some((len, consumed)) = read_uleb128(&bytes[*pos..]) else {
+        return StepResult::Halt(Location::Unknown);
+    };
+    *pos += consumed;
+    let len = len as usize;
+    if *pos + len > bytes.len() {
+        return StepResult::Halt(Location::Unknown);
+    }
+    let value = bytes[*pos..*pos + len].to_vec();
+    *pos += len;
+    StepResult::Halt(Location::ImplicitValue(value))
+}
+
 fn step_piece(bytes: &[u8], pos: &mut usize, st: &mut EvalState) -> StepResult {
     st.has_piece = true;
     if let Some((_size, consumed)) = read_uleb128(&bytes[*pos..]) {
@@ -223,13 +309,33 @@ fn finalize(st: &EvalState) -> Location {
     if st.has_piece {
         return Location::Composite;
     }
+    let base = base_location(st);
+    if let Some(size) = st.deref_size {
+        if base == Location::Unknown {
+            return Location::Unknown;
+        }
+        return Location::Indirect {
+            base: Box::new(base),
+            size,
+        };
+    }
+    base
+}
+
+/// Resolve the (pre-deref) location implied by the evaluator state.
+fn base_location(st: &EvalState) -> Location {
     if let Some(off) = st.last_was_fbreg {
         return Location::FrameBase(off);
+    }
+    if st.is_cfa {
+        // The stack top carries the running offset from the CFA.
+        return Location::Cfa(st.stack.last().copied().unwrap_or(0));
     }
     if let Some(reg) = st.last_was_register {
         return Location::Register(reg);
     }
     if let Some(top) = st.stack.last().copied() {
+        // DW_OP_addr / arithmetic both resolve to an absolute address.
         return Location::Memory(top);
     }
     Location::Unknown
@@ -353,5 +459,80 @@ mod tests {
         bytes.extend_from_slice(&0xFFFEu16.to_le_bytes());
         bytes.push(DW_OP_STACK_VALUE);
         assert_eq!(evaluate(&bytes), Location::Constant(0xFFFE));
+    }
+
+    #[test]
+    fn evaluator_decodes_call_frame_cfa() {
+        // Bare DW_OP_call_frame_cfa → CFA at offset 0.
+        let bytes = [DW_OP_CALL_FRAME_CFA];
+        assert_eq!(evaluate(&bytes), Location::Cfa(0));
+    }
+
+    #[test]
+    fn evaluator_decodes_call_frame_cfa_plus_uconst() {
+        // DW_OP_call_frame_cfa, DW_OP_plus_uconst 16 → CFA + 16.
+        let bytes = [DW_OP_CALL_FRAME_CFA, DW_OP_PLUS_UCONST, 16];
+        assert_eq!(evaluate(&bytes), Location::Cfa(16));
+    }
+
+    #[test]
+    fn evaluator_decodes_addr_as_memory() {
+        // DW_OP_addr <8-byte absolute> → Memory(addr).
+        let mut bytes = vec![DW_OP_ADDR];
+        bytes.extend_from_slice(&0xdead_beefu64.to_le_bytes());
+        assert_eq!(evaluate(&bytes), Location::Memory(0xdead_beef));
+    }
+
+    #[test]
+    fn evaluator_decodes_implicit_value() {
+        // DW_OP_implicit_value, len=4, bytes 0x12 0x34 0x56 0x78.
+        let bytes = [DW_OP_IMPLICIT_VALUE, 0x04, 0x12, 0x34, 0x56, 0x78];
+        assert_eq!(
+            evaluate(&bytes),
+            Location::ImplicitValue(vec![0x12, 0x34, 0x56, 0x78])
+        );
+    }
+
+    #[test]
+    fn evaluator_decodes_deref_of_breg() {
+        // DW_OP_breg0 +0, DW_OP_deref → Indirect over the register base.
+        let bytes = [DW_OP_BREG0, 0x00, DW_OP_DEREF];
+        assert_eq!(
+            evaluate(&bytes),
+            Location::Indirect {
+                base: Box::new(Location::Memory(0)),
+                size: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn evaluator_decodes_deref_size_of_addr() {
+        // DW_OP_addr <addr>, DW_OP_deref_size 4 → Indirect(Memory(addr), 4).
+        let mut bytes = vec![DW_OP_ADDR];
+        bytes.extend_from_slice(&0x1000u64.to_le_bytes());
+        bytes.push(DW_OP_DEREF_SIZE);
+        bytes.push(0x04);
+        assert_eq!(
+            evaluate(&bytes),
+            Location::Indirect {
+                base: Box::new(Location::Memory(0x1000)),
+                size: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn evaluator_pushes_constu() {
+        // DW_OP_constu 624485 (0x98765), DW_OP_stack_value → Constant(624485).
+        let bytes = [DW_OP_CONSTU, 0xE5, 0x8E, 0x26, DW_OP_STACK_VALUE];
+        assert_eq!(evaluate(&bytes), Location::Constant(624485));
+    }
+
+    #[test]
+    fn evaluator_pushes_consts_negative() {
+        // DW_OP_consts -2 (SLEB128 0x7E), DW_OP_stack_value → Constant(-2).
+        let bytes = [DW_OP_CONSTS, 0x7E, DW_OP_STACK_VALUE];
+        assert_eq!(evaluate(&bytes), Location::Constant(-2));
     }
 }

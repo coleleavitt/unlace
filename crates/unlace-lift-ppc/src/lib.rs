@@ -29,8 +29,8 @@ mod tests {
     fn test_register_file() {
         let l = lifter();
         let rf = l.register_file();
-        // r0–r31 + CR + LR + CTR + XER + PC = 37
-        assert_eq!(rf.registers.len(), 37);
+        // r0–r31 + CR + LR + CTR + XER + PC = 37, plus v0–v31 = 69
+        assert_eq!(rf.registers.len(), 69);
         assert_eq!(rf.registers[0].varnode.size, 4);
         assert_eq!(rf.registers[0].name, "r0");
         assert_eq!(rf.registers[31].name, "r31");
@@ -39,6 +39,10 @@ mod tests {
         assert_eq!(rf.registers[34].name, "CTR");
         assert_eq!(rf.registers[35].name, "XER");
         assert_eq!(rf.registers[36].name, "PC");
+        // AltiVec/VMX vector registers v0-v31, each 128-bit.
+        assert_eq!(rf.registers[37].name, "v0");
+        assert_eq!(rf.registers[37].varnode.size, 16);
+        assert_eq!(rf.registers[68].name, "v31");
     }
 
     // PPC is big-endian; all test bytes are BE-encoded PPC instructions.

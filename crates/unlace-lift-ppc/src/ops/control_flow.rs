@@ -149,6 +149,26 @@ pub fn lift_blr(ctx: &mut LiftCtx) {
 pub mod ppc_tag {
     /// `sc` — PowerPC system call (`0x44000002`, primary opcode 17).
     pub const SYSCALL: u64 = 0x400;
+
+    /// Base for AltiVec/VMX vector intrinsics (primary opcode 4). These
+    /// operations have no clean scalar IR mapping, so they are preserved as
+    /// `CALLOTHER` intrinsics tagged with a stable per-mnemonic identifier.
+    pub const VMX_BASE: u64 = 0x600;
+
+    /// `vaddfp` — vector add of 4 packed single-precision floats.
+    pub const VMX_VADDFP: u64 = VMX_BASE;
+    /// `vsubfp` — vector subtract of 4 packed single-precision floats.
+    pub const VMX_VSUBFP: u64 = VMX_BASE + 1;
+    /// `vand` — bitwise AND of two 128-bit vectors.
+    pub const VMX_VAND: u64 = VMX_BASE + 2;
+    /// `vor` — bitwise OR of two 128-bit vectors.
+    pub const VMX_VOR: u64 = VMX_BASE + 3;
+    /// `vxor` — bitwise XOR of two 128-bit vectors.
+    pub const VMX_VXOR: u64 = VMX_BASE + 4;
+    /// `vperm` — vector byte permute (vD = perm(vA, vB, vC)).
+    pub const VMX_VPERM: u64 = VMX_BASE + 5;
+    /// `vsel` — vector bitwise select (vD = (vB & vC) | (vA & ~vC)).
+    pub const VMX_VSEL: u64 = VMX_BASE + 6;
 }
 
 /// Lift `sc` (system call, primary opcode 17, e.g. `0x44000002`).

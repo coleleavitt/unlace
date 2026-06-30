@@ -1,6 +1,7 @@
 //! PowerPC register file layouts.
 //!
-//! r0–r31 as 32-bit or 64-bit GPRs, plus CR, LR, CTR, XER, and PC.
+//! r0–r31 as 32-bit or 64-bit GPRs, plus CR, LR, CTR, XER, PC, and the
+//! AltiVec/VMX vector registers v0–v31 (128-bit).
 
 use capstone::RegId;
 use unlace_ir::{RegisterDef, RegisterFile, SpaceId, Varnode};
@@ -33,14 +34,39 @@ pub const XER_SIZE: u8 = 4;
 pub const PC_OFFSET: u64 = 288;
 pub const PC_SIZE: u8 = PPC64_PTR_SIZE;
 
+/// AltiVec/VMX vector register file (v0–v31), each 128 bits (16 bytes).
+///
+/// Placed well above the scalar register/SPR offsets so the 512-byte vector
+/// block never aliases a GPR/CR/SPR varnode.
+pub const VR_BASE: u64 = 512;
+pub const VR_SIZE: u8 = 16;
+pub const VR_COUNT: u64 = 32;
+
+#[inline]
+pub const fn vr_offset(n: u64) -> u64 {
+    VR_BASE + n * (VR_SIZE as u64)
+}
+
+/// Helper: 128-bit AltiVec vector register varnode.
+#[inline]
+pub fn vr(n: u64) -> Varnode {
+    Varnode::new(SpaceId::Register, vr_offset(n), VR_SIZE)
+}
+
 const PPC_GPR_NAMES: [&str; 32] = [
     "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14",
     "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27",
     "r28", "r29", "r30", "r31",
 ];
 
+const PPC_VR_NAMES: [&str; 32] = [
+    "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14",
+    "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27",
+    "v28", "v29", "v30", "v31",
+];
+
 fn ppc_register_file(gpr_size: u8) -> RegisterFile {
-    let mut regs = Vec::with_capacity(37);
+    let mut regs = Vec::with_capacity(37 + PPC_VR_NAMES.len());
     for (i, name) in PPC_GPR_NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,
@@ -67,6 +93,12 @@ fn ppc_register_file(gpr_size: u8) -> RegisterFile {
         name: "PC",
         varnode: Varnode::reg(PC_OFFSET, gpr_size),
     });
+    for (i, name) in PPC_VR_NAMES.iter().enumerate() {
+        regs.push(RegisterDef {
+            name,
+            varnode: Varnode::reg(vr_offset(i as u64), VR_SIZE),
+        });
+    }
     RegisterFile { registers: regs }
 }
 
@@ -154,6 +186,21 @@ pub fn cs_reg_to_varnode_with_size(reg: RegId, ptr_size: u8) -> Option<Varnode> 
         3 => Some(ctr_with_size(ptr_size)),
         // CR0 = 12 ... CR7 = 19 — map to whole CR register for now
         12..=19 => Some(cr()),
+        // v0–v31 (capstone ids 151..=182) — 128-bit AltiVec vector registers.
+        // Width is fixed at 16 bytes regardless of the scalar GPR width.
+        v @ 151..=182 => Some(vr((v - CS_PPC_REG_V0) as u64)),
+        _ => None,
+    }
+}
+
+/// First capstone PPC_REG_V0 id (AltiVec vector register v0).
+const CS_PPC_REG_V0: u16 = 151;
+
+/// Map a capstone `RegId` to a 128-bit AltiVec vector register `Varnode`.
+/// Returns `None` for any register that is not v0–v31.
+pub fn cs_vr_to_varnode(reg: RegId) -> Option<Varnode> {
+    match reg.0 {
+        v @ 151..=182 => Some(vr((v - CS_PPC_REG_V0) as u64)),
         _ => None,
     }
 }

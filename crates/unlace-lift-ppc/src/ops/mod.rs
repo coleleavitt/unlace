@@ -1,3 +1,4 @@
+pub mod altivec;
 pub mod arithmetic;
 pub mod bitwise;
 pub mod compare;

@@ -336,6 +336,19 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
         // System call (`sc`, primary opcode 17, e.g. 0x44000002)
         PpcInsn::PPC_INS_SC => ops::control_flow::lift_sc(ctx),
 
+        // AltiVec / VMX vector instructions (primary opcode 4). These have no
+        // clean scalar IR mapping and are preserved as tagged CALLOTHER
+        // intrinsics (see ops::control_flow::ppc_tag::VMX_*).
+        PpcInsn::PPC_INS_VADDFP => ops::altivec::lift_vaddfp(ctx, &ops),
+        PpcInsn::PPC_INS_VSUBFP => ops::altivec::lift_vsubfp(ctx, &ops),
+        PpcInsn::PPC_INS_VAND => ops::altivec::lift_vand(ctx, &ops),
+        // `vor vD,vA,vB` is aliased to `vmr` by Capstone when vA == vB and is
+        // surfaced as PPC_INS_VMR; both are a 128-bit vector OR.
+        PpcInsn::PPC_INS_VOR | PpcInsn::PPC_INS_VMR => ops::altivec::lift_vor(ctx, &ops),
+        PpcInsn::PPC_INS_VXOR => ops::altivec::lift_vxor(ctx, &ops),
+        PpcInsn::PPC_INS_VPERM => ops::altivec::lift_vperm(ctx, &ops),
+        PpcInsn::PPC_INS_VSEL => ops::altivec::lift_vsel(ctx, &ops),
+
         // Loads
         PpcInsn::PPC_INS_LWZ | PpcInsn::PPC_INS_LWZX => ops::data_move::lift_lwz(ctx, &ops),
         PpcInsn::PPC_INS_LD | PpcInsn::PPC_INS_LDX => ops::data_move::lift_ld(ctx, &ops),

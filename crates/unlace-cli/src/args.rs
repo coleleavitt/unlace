@@ -278,6 +278,20 @@ pub enum Cmd {
         flirt_min_confidence: u8,
     },
 
+    /// Identify the packer/protector of a binary with ranked evidence.
+    ///
+    /// Combines section-name signatures (UPX/ASPack/Themida/MPRESS/Enigma)
+    /// with per-section entropy, entrypoint facts, and TLS-callback presence
+    /// to emit a ranked list of hypotheses plus the raw evidence. Read-only.
+    IdentifyPacker {
+        /// Path to the binary file.
+        binary: PathBuf,
+
+        /// Report format.
+        #[arg(long, default_value = "md")]
+        format: QualityFormat,
+    },
+
     /// Run the IR-level interpreter on a binary, sandboxed.
     ///
     /// Loads sections into the emulator's MemoryMap, sets `rip` to the

@@ -11,6 +11,7 @@ pub mod args;
 pub mod batch;
 pub mod binary_input;
 pub mod cache;
+pub mod identify_packer;
 pub mod lsp;
 pub mod pipeline;
 pub mod project;

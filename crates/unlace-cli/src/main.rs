@@ -171,6 +171,7 @@ fn main() {
             build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence)
                 .and_then(|flirt| run_quality(&binary, format, &flirt))
         }
+        Cmd::IdentifyPacker { binary, format } => run_identify_packer(&binary, format),
         Cmd::IrDump {
             binary,
             function,
@@ -542,6 +543,22 @@ fn run_quality(
     let rendered = match format {
         args::QualityFormat::Md => unlace_cli::quality::render_markdown(&report),
         args::QualityFormat::Json => unlace_cli::quality::render_json(&report)?,
+    };
+    print!("{rendered}");
+    if !rendered.ends_with('\n') {
+        println!();
+    }
+    Ok(())
+}
+
+fn run_identify_packer(binary_path: &std::path::Path, format: args::QualityFormat) -> Result<()> {
+    let bytes =
+        std::fs::read(binary_path).with_context(|| format!("reading {}", binary_path.display()))?;
+    let image = dispatch_loader(&bytes)?;
+    let report = unlace_cli::identify_packer::analyze(&image);
+    let rendered = match format {
+        args::QualityFormat::Md => unlace_cli::identify_packer::render_text(&report),
+        args::QualityFormat::Json => unlace_cli::identify_packer::render_json(&report)?,
     };
     print!("{rendered}");
     if !rendered.ends_with('\n') {

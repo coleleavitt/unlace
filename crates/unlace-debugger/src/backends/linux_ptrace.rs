@@ -765,7 +765,7 @@ mod tests {
         // Infinite strictly-ascending chain; bound to max_depth frames added.
         let mem = |addr: u64| -> Option<u64> {
             // [rbp] -> rbp + 0x100 (ascends), [rbp+8] -> nonzero ret.
-            if addr % 0x100 == 0 {
+            if addr.is_multiple_of(0x100) {
                 Some(addr + 0x100)
             } else {
                 Some(0xface)

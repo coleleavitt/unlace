@@ -275,6 +275,119 @@ impl LiftCtx {
         self.write_reg(rd, ext);
     }
 
+    // -- Zbb bit-manipulation helpers -------------------------------------
+
+    /// `andn`/`orn`: `rd = rs1 <op> ~rs2`. `op` is IntAnd or IntOr.
+    fn lift_alu_rr_notrhs(&mut self, op: IrOp, rd: RegId, rs1: RegId, rs2: RegId) {
+        let a = read_reg(rs1);
+        let b = read_reg(rs2);
+        let not_b = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntNegate,
+            not_b,
+            smallvec![b],
+            self.addr,
+        ));
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(op, tmp, smallvec![a, not_b], self.addr));
+        self.write_reg(rd, tmp);
+    }
+
+    /// `xnor`: `rd = ~(rs1 ^ rs2)`.
+    fn lift_xnor(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
+        let a = read_reg(rs1);
+        let b = read_reg(rs2);
+        let xored = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntXor,
+            xored,
+            smallvec![a, b],
+            self.addr,
+        ));
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntNegate,
+            tmp,
+            smallvec![xored],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
+    }
+
+    /// `min`/`minu`/`max`/`maxu`: branchless `rd = cond ? lhs : rhs` where
+    /// `cond = (rs1 <cmp_op> rs2)`. `cmp_op` is IntSless (signed) or IntLess
+    /// (unsigned); `pick_lhs_on_less` selects rs1 when the comparison holds
+    /// (min picks the smaller operand, max picks the larger).
+    fn lift_minmax(
+        &mut self,
+        cmp_op: IrOp,
+        pick_lhs_on_less: bool,
+        rd: RegId,
+        rs1: RegId,
+        rs2: RegId,
+    ) {
+        let a = read_reg(rs1);
+        let b = read_reg(rs2);
+        let cond = self.alloc_unique(1);
+        self.emit(IrInsn::with_output(
+            cmp_op,
+            cond,
+            smallvec![a, b],
+            self.addr,
+        ));
+        // SELECT(cond, true_val, false_val): when rs1 < rs2 is true, min wants
+        // rs1 and max wants rs2.
+        let (true_val, false_val) = if pick_lhs_on_less { (a, b) } else { (b, a) };
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::Select,
+            tmp,
+            smallvec![cond, true_val, false_val],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
+    }
+
+    /// `sext.b`/`sext.h`: sign-extend the low `bytes` of rs1 into the register.
+    fn lift_sext_low(&mut self, rd: RegId, rs1: RegId, bytes: u8) {
+        let a = read_reg(rs1);
+        let narrow = self.alloc_unique(bytes);
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            narrow,
+            smallvec![a, Varnode::constant(0, 4)],
+            self.addr,
+        ));
+        let ext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntSext,
+            ext,
+            smallvec![narrow],
+            self.addr,
+        ));
+        self.write_reg(rd, ext);
+    }
+
+    /// `zext.h`: zero-extend the low `bytes` of rs1 into the register.
+    fn lift_zext_low(&mut self, rd: RegId, rs1: RegId, bytes: u8) {
+        let a = read_reg(rs1);
+        let narrow = self.alloc_unique(bytes);
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            narrow,
+            smallvec![a, Varnode::constant(0, 4)],
+            self.addr,
+        ));
+        let ext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntZext,
+            ext,
+            smallvec![narrow],
+            self.addr,
+        ));
+        self.write_reg(rd, ext);
+    }
+
     // -- Comparison helpers (SLT/SLTU) ------------------------------------
 
     fn lift_slt(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
@@ -949,6 +1062,9 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
     if let Some(lifted) = lift_riscv_crypto_direct(word, addr) {
         return Some(lifted);
     }
+    if let Some(lifted) = lift_zbb_direct(word, addr) {
+        return Some(lifted);
+    }
     let opcode = word & 0x7f;
     let rd = (word >> 7) & 0x1f;
     let funct3 = (word >> 12) & 0x7;
@@ -1084,6 +1200,65 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
 // ---------------------------------------------------------------------------
 // Instruction dispatch
 // ---------------------------------------------------------------------------
+
+/// Lift the high-value subset of the RISC-V Zbb (basic bit-manipulation)
+/// extension that maps cleanly onto existing IR ops.
+///
+/// Covered:
+///  * Logic-with-complement: `andn` (`rs1 & ~rs2`), `orn` (`rs1 | ~rs2`),
+///    `xnor` (`~(rs1 ^ rs2)`).
+///  * Min/max: `min`/`minu`/`max`/`maxu`, lifted branchlessly with `SELECT`
+///    over a signed/unsigned `<` comparison.
+///  * Sign/zero extend: `sext.b`, `sext.h` (Subpiece + INT_SEXT) and `zext.h`
+///    (Subpiece + INT_ZEXT).
+///
+/// Deliberately NOT handled here: rotates (`rol`/`ror`/`rori`), count
+/// leading/trailing zeros and popcount (`clz`/`ctz`/`cpop`), byte-reverse
+/// (`rev8`), `orc.b`, etc. Those either need ops this decoder does not yet wire
+/// up cleanly or carry width-dependent semantics, so they remain unlifted
+/// rather than emitting incorrect IR.
+fn lift_zbb_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
+    let opcode = word & 0x7f;
+    let rd = rv_reg((word >> 7) & 0x1f);
+    let funct3 = (word >> 12) & 0x7;
+    let rs1 = rv_reg((word >> 15) & 0x1f);
+    let rs2_field = (word >> 20) & 0x1f;
+    let rs2 = rv_reg(rs2_field);
+    let funct7 = (word >> 25) & 0x7f;
+    let mut ctx = LiftCtx::new(addr);
+
+    match opcode {
+        // OP (register-register) Zbb instructions.
+        0x33 => match (funct7, funct3) {
+            // Logic with complemented rs2.
+            (0x20, 0x7) => ctx.lift_alu_rr_notrhs(IrOp::IntAnd, rd, rs1, rs2), // andn
+            (0x20, 0x6) => ctx.lift_alu_rr_notrhs(IrOp::IntOr, rd, rs1, rs2),  // orn
+            (0x20, 0x4) => ctx.lift_xnor(rd, rs1, rs2),                        // xnor
+            // Signed/unsigned min/max (funct7 = 0000101).
+            (0x05, 0x4) => ctx.lift_minmax(IrOp::IntSless, true, rd, rs1, rs2), // min
+            (0x05, 0x5) => ctx.lift_minmax(IrOp::IntLess, true, rd, rs1, rs2),  // minu
+            (0x05, 0x6) => ctx.lift_minmax(IrOp::IntSless, false, rd, rs1, rs2), // max
+            (0x05, 0x7) => ctx.lift_minmax(IrOp::IntLess, false, rd, rs1, rs2), // maxu
+            _ => return None,
+        },
+        // OP-IMM unary Zbb instructions (rs2 field acts as a sub-opcode).
+        0x13 if funct3 == 0x1 && funct7 == 0x30 => match rs2_field {
+            0x4 => ctx.lift_sext_low(rd, rs1, 1), // sext.b
+            0x5 => ctx.lift_sext_low(rd, rs1, 2), // sext.h
+            _ => return None,
+        },
+        // OP-32 zext.h (RV64 form): 0000100 00000 rs1 100 rd 0111011.
+        0x3b if funct3 == 0x4 && funct7 == 0x04 && rs2_field == 0x0 => {
+            ctx.lift_zext_low(rd, rs1, 2);
+        }
+        _ => return None,
+    }
+
+    Some(LiftedInsn {
+        ir_ops: ctx.ops,
+        len: 4,
+    })
+}
 
 fn lift_riscv_crypto_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
     let (funct7, rd, rs1, rs2, funct3) = decode_crypto_r_type(word)?;
@@ -2687,6 +2862,185 @@ mod tests {
             .expect("should decode EBREAK");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    // -- Zbb basic bit-manipulation (Phase C.4) -------------------------
+    //
+    // Operands throughout: rd=x1, rs1=x2, rs2=x3. A key correctness property
+    // is that none of these decode to Unimplemented and they produce the
+    // expected and/or/xor + complement (INT_NEGATE) structure.
+
+    fn has_op(result: &LiftedInsn, op: IrOp) -> bool {
+        result.ir_ops.iter().any(|i| i.op == op)
+    }
+
+    fn is_unimplemented(result: &LiftedInsn) -> bool {
+        has_op(result, IrOp::Unimplemented)
+    }
+
+    // andn x1, x2, x3  → 0x403170B3 : rd = rs1 & ~rs2
+    #[test]
+    fn test_zbb_andn() {
+        let bytes = 0x403170B3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode ANDN");
+        assert_eq!(result.len, 4);
+        assert!(!is_unimplemented(&result));
+        // ~rs2 then AND.
+        assert!(
+            has_op(&result, IrOp::IntNegate),
+            "expected INT_NEGATE (~rs2)"
+        );
+        assert!(has_op(&result, IrOp::IntAnd), "expected INT_AND");
+        // The AND must consume the complemented (unique) operand, not rs2 directly.
+        let and = result.ir_ops.iter().find(|i| i.op == IrOp::IntAnd).unwrap();
+        let neg = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntNegate)
+            .unwrap();
+        assert!(and.inputs.contains(&neg.output.unwrap()));
+        // Result is written back to x1 (offset 8).
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)) })
+        );
+    }
+
+    // orn x1, x2, x3  → 0x403160B3 : rd = rs1 | ~rs2
+    #[test]
+    fn test_zbb_orn() {
+        let bytes = 0x403160B3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode ORN");
+        assert_eq!(result.len, 4);
+        assert!(!is_unimplemented(&result));
+        assert!(
+            has_op(&result, IrOp::IntNegate),
+            "expected INT_NEGATE (~rs2)"
+        );
+        assert!(has_op(&result, IrOp::IntOr), "expected INT_OR");
+        let or = result.ir_ops.iter().find(|i| i.op == IrOp::IntOr).unwrap();
+        let neg = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntNegate)
+            .unwrap();
+        assert!(or.inputs.contains(&neg.output.unwrap()));
+    }
+
+    // xnor x1, x2, x3  → 0x403140B3 : rd = ~(rs1 ^ rs2)
+    #[test]
+    fn test_zbb_xnor() {
+        let bytes = 0x403140B3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode XNOR");
+        assert_eq!(result.len, 4);
+        assert!(!is_unimplemented(&result));
+        assert!(has_op(&result, IrOp::IntXor), "expected INT_XOR");
+        assert!(has_op(&result, IrOp::IntNegate), "expected INT_NEGATE (~)");
+        // The NEGATE must consume the XOR result (i.e. ~(rs1 ^ rs2)).
+        let xor = result.ir_ops.iter().find(|i| i.op == IrOp::IntXor).unwrap();
+        let neg = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntNegate)
+            .unwrap();
+        assert!(neg.inputs.contains(&xor.output.unwrap()));
+    }
+
+    // min/minu/max/maxu → branchless SELECT over a signed/unsigned compare.
+    // min  x1,x2,x3 → 0x0A3140B3 ; minu → 0x0A3150B3
+    // max  x1,x2,x3 → 0x0A3160B3 ; maxu → 0x0A3170B3
+    #[test]
+    fn test_zbb_min_signed() {
+        let bytes = 0x0A3140B3u32.to_le_bytes();
+        let result = lifter().lift_insn(&bytes, 0x1000).expect("decode MIN");
+        assert_eq!(result.len, 4);
+        assert!(!is_unimplemented(&result));
+        assert!(has_op(&result, IrOp::IntSless), "signed compare");
+        assert!(has_op(&result, IrOp::Select), "branchless select");
+    }
+
+    #[test]
+    fn test_zbb_minu_unsigned() {
+        let bytes = 0x0A3150B3u32.to_le_bytes();
+        let result = lifter().lift_insn(&bytes, 0x1000).expect("decode MINU");
+        assert!(!is_unimplemented(&result));
+        assert!(has_op(&result, IrOp::IntLess), "unsigned compare");
+        assert!(has_op(&result, IrOp::Select));
+    }
+
+    #[test]
+    fn test_zbb_max_signed() {
+        let bytes = 0x0A3160B3u32.to_le_bytes();
+        let result = lifter().lift_insn(&bytes, 0x1000).expect("decode MAX");
+        assert!(!is_unimplemented(&result));
+        assert!(has_op(&result, IrOp::IntSless));
+        assert!(has_op(&result, IrOp::Select));
+    }
+
+    #[test]
+    fn test_zbb_maxu_unsigned() {
+        let bytes = 0x0A3170B3u32.to_le_bytes();
+        let result = lifter().lift_insn(&bytes, 0x1000).expect("decode MAXU");
+        assert!(!is_unimplemented(&result));
+        assert!(has_op(&result, IrOp::IntLess));
+        assert!(has_op(&result, IrOp::Select));
+    }
+
+    // sext.b x1, x2 → 0x60411093 : sign-extend low byte.
+    #[test]
+    fn test_zbb_sext_b() {
+        let bytes = 0x60411093u32.to_le_bytes();
+        let result = lifter().lift_insn(&bytes, 0x1000).expect("decode SEXT.B");
+        assert_eq!(result.len, 4);
+        assert!(!is_unimplemented(&result));
+        assert!(has_op(&result, IrOp::Subpiece), "extract low byte");
+        assert!(has_op(&result, IrOp::IntSext), "sign-extend");
+        // The narrowed operand feeding INT_SEXT is one byte wide.
+        let sub = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Subpiece)
+            .unwrap();
+        assert_eq!(sub.output.unwrap().size, 1);
+    }
+
+    // sext.h x1, x2 → 0x60511093 : sign-extend low halfword.
+    #[test]
+    fn test_zbb_sext_h() {
+        let bytes = 0x60511093u32.to_le_bytes();
+        let result = lifter().lift_insn(&bytes, 0x1000).expect("decode SEXT.H");
+        assert!(!is_unimplemented(&result));
+        assert!(has_op(&result, IrOp::IntSext));
+        let sub = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Subpiece)
+            .unwrap();
+        assert_eq!(sub.output.unwrap().size, 2);
+    }
+
+    // zext.h x1, x2 → 0x080140BB : zero-extend low halfword (RV64 form).
+    #[test]
+    fn test_zbb_zext_h() {
+        let bytes = 0x080140BBu32.to_le_bytes();
+        let result = lifter().lift_insn(&bytes, 0x1000).expect("decode ZEXT.H");
+        assert_eq!(result.len, 4);
+        assert!(!is_unimplemented(&result));
+        assert!(has_op(&result, IrOp::IntZext), "zero-extend");
+        let sub = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Subpiece)
+            .unwrap();
+        assert_eq!(sub.output.unwrap().size, 2);
     }
 
     // -- SRET ------------------------------------------------------------

@@ -3439,4 +3439,176 @@ mod tests {
         // STGP is a store: no IR output.
         assert!(ir.output.is_none());
     }
+    // ── Phase C.3: scalar VFP floating-point lifting ───────────────────
+
+    #[test]
+    fn arm_vfp_vadd_f32_lifts_to_float_add() {
+        // VADD.F32 s0, s1, s2  →  0xEE300A81  (LE: 81 0A 30 EE)
+        // VFP data-processing: cond=1110, coproc=1010 (single-precision).
+        use crate::lift::vfp_s_offset;
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&[0x81, 0x0A, 0x30, 0xEE], 0x1000)
+            .expect("VADD.F32 decodes");
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "VADD.F32 must not be Unimplemented; got {:?}",
+            r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+        );
+        let add = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::FloatAdd)
+            .expect("VADD.F32 must emit FloatAdd");
+        // Dst = s0 (4-byte single), inputs s1, s2.
+        let out = add.output.expect("FloatAdd has output");
+        assert_eq!(out.space, SpaceId::Register);
+        assert_eq!(out.size, 4, "single-precision result is 4 bytes");
+        assert_eq!(out.offset, vfp_s_offset(0));
+        assert_eq!(add.inputs[0].offset, vfp_s_offset(1));
+        assert_eq!(add.inputs[0].size, 4);
+        assert_eq!(add.inputs[1].offset, vfp_s_offset(2));
+    }
+
+    #[test]
+    fn arm_vfp_vmul_f64_lifts_to_float_mult() {
+        // VMUL.F64 d0, d1, d2  →  0xEE210B02  (LE: 02 0B 21 EE)
+        // VFP data-processing: cond=1110, coproc=1011 (double-precision).
+        use crate::lift::vfp_d_offset;
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&[0x02, 0x0B, 0x21, 0xEE], 0x1000)
+            .expect("VMUL.F64 decodes");
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "VMUL.F64 must not be Unimplemented; got {:?}",
+            r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+        );
+        let mul = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::FloatMult)
+            .expect("VMUL.F64 must emit FloatMult");
+        // Dst = d0 (8-byte double), inputs d1, d2.
+        let out = mul.output.expect("FloatMult has output");
+        assert_eq!(out.space, SpaceId::Register);
+        assert_eq!(out.size, 8, "double-precision result is 8 bytes");
+        assert_eq!(out.offset, vfp_d_offset(0));
+        assert_eq!(mul.inputs[0].offset, vfp_d_offset(1));
+        assert_eq!(mul.inputs[0].size, 8);
+        assert_eq!(mul.inputs[1].offset, vfp_d_offset(2));
+    }
+
+    #[test]
+    fn arm_vfp_scalar_ops_not_unimplemented() {
+        // Verified VFP data-processing encodings (cond=1110, coproc=1010/1011).
+        let l = ArmLifter::new_arm32();
+        let cases: &[(&[u8], IrOp, &str)] = &[
+            // VSUB.F64 d0, d1, d2  →  0xEE310B42
+            (&[0x42, 0x0B, 0x31, 0xEE], IrOp::FloatSub, "VSUB.F64"),
+            // VDIV.F32 s0, s1, s2  →  0xEE800A81
+            (&[0x81, 0x0A, 0x80, 0xEE], IrOp::FloatDiv, "VDIV.F32"),
+            // VABS.F64 d0, d1      →  0xEEB00BC1
+            (&[0xC1, 0x0B, 0xB0, 0xEE], IrOp::FloatAbs, "VABS.F64"),
+            // VNEG.F32 s0, s1      →  0xEEB10A60
+            (&[0x60, 0x0A, 0xB1, 0xEE], IrOp::FloatNeg, "VNEG.F32"),
+            // VSQRT.F64 d0, d1     →  0xEEB10BC1
+            (&[0xC1, 0x0B, 0xB1, 0xEE], IrOp::FloatSqrt, "VSQRT.F64"),
+        ];
+        for (bytes, expected, name) in cases {
+            let r = l.lift_insn(bytes, 0x1000).expect("VFP op decodes");
+            assert!(
+                !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+                "{name} must not be Unimplemented; got {:?}",
+                r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+            );
+            assert!(
+                r.ir_ops.iter().any(|i| i.op == *expected),
+                "{name} should emit {expected:?}; got {:?}",
+                r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn arm_vfp_vmov_reg_lifts_to_copy() {
+        // VMOV.F32 s0, s1  →  0xEEB00A60  (LE: 60 0A B0 EE)
+        use crate::lift::vfp_s_offset;
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&[0x60, 0x0A, 0xB0, 0xEE], 0x1000)
+            .expect("VMOV.F32 reg decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let cp = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("VMOV s0,s1 must emit Copy");
+        assert_eq!(cp.output.expect("Copy out").offset, vfp_s_offset(0));
+        assert_eq!(cp.inputs[0].offset, vfp_s_offset(1));
+        assert_eq!(cp.inputs[0].size, 4);
+    }
+
+    #[test]
+    fn arm_vfp_vmov_imm_lifts_to_copy_const() {
+        // VMOV.F32 s0, #1.0  →  0xEEB70A00  (Capstone: FCONSTS)
+        use crate::lift::vfp_s_offset;
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&[0x00, 0x0A, 0xB7, 0xEE], 0x1000)
+            .expect("VMOV.F32 imm decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let cp = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("VMOV s0,#1.0 must emit Copy");
+        assert_eq!(cp.output.expect("Copy out").offset, vfp_s_offset(0));
+        // Immediate source: 1.0_f32 bit pattern, const space, 4 bytes.
+        let src = cp.inputs[0];
+        assert_eq!(src.space, SpaceId::Const);
+        assert_eq!(src.size, 4);
+        assert_eq!(src.offset, (1.0_f32).to_bits() as u64);
+    }
+
+    #[test]
+    fn arm_vfp_vcmp_f32_lifts_to_callother() {
+        // VCMP.F32 s0, s1  →  0xEEB40A60  (LE: 60 0A B4 EE)
+        use crate::lift::{CALLOTHER_ARM_VCMP, vfp_s_offset};
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&[0x60, 0x0A, 0xB4, 0xEE], 0x1000)
+            .expect("VCMP.F32 decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let cmp = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("VCMP must emit a Callother");
+        assert_eq!(cmp.inputs[0].space, SpaceId::Const);
+        assert_eq!(cmp.inputs[0].offset, CALLOTHER_ARM_VCMP);
+        assert_eq!(cmp.inputs[1].offset, vfp_s_offset(0));
+        assert_eq!(cmp.inputs[2].offset, vfp_s_offset(1));
+        // VCMP only sets flags — no IR output.
+        assert!(cmp.output.is_none());
+    }
+
+    #[test]
+    fn arm_vfp_register_file_has_s_d_overlap_and_fpscr() {
+        use crate::lift::{arm32_register_file, vfp_d_offset, vfp_s_offset};
+        let rf = arm32_register_file();
+        // D0 overlaps S0/S1; D15 overlaps S30/S31.
+        assert_eq!(vfp_d_offset(0), vfp_s_offset(0));
+        assert_eq!(vfp_d_offset(0) + 4, vfp_s_offset(1));
+        assert_eq!(vfp_d_offset(15), vfp_s_offset(30));
+        // S0..S31, D0..D31 and FPSCR are all present.
+        let names: Vec<&str> = rf.registers.iter().map(|r| r.name).collect();
+        for s in ["S0", "S31", "D0", "D15", "D16", "D31", "FPSCR"] {
+            assert!(names.contains(&s), "register file missing {s}");
+        }
+        let s0 = rf.registers.iter().find(|r| r.name == "S0").unwrap();
+        assert_eq!(s0.varnode.size, 4);
+        let d31 = rf.registers.iter().find(|r| r.name == "D31").unwrap();
+        assert_eq!(d31.varnode.size, 8);
+    }
 }

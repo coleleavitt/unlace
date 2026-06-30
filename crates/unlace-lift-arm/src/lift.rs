@@ -362,17 +362,69 @@ impl ArmLifter {
     }
 }
 
+// ── VFP scalar floating-point register file (Phase C.3) ────────────────
+//
+// AArch32 VFPv3-D32 models 32 single-precision (S0–S31, 4 bytes) and 32
+// double-precision (D0–D31, 8 bytes) registers in one shared 256-byte
+// bank. The single/double views overlap exactly as the architecture
+// defines: `Dn` aliases `S(2n)`/`S(2n+1)` for n < 16, while D16–D31 have
+// no single-precision aliases. We achieve that overlap by laying both
+// views over the same storage:
+//   * `Sn` lives at `VFP_BASE + n*4`, size 4   (n = 0..31)
+//   * `Dn` lives at `VFP_BASE + n*8`, size 8   (n = 0..31)
+// so e.g. D0 (offset 0, 8 bytes) covers S0 (offset 0) and S1 (offset 4),
+// and D15 (offset 120) covers S30/S31 (offsets 120/124). D16–D31 occupy
+// offsets 128..256 with no S-register aliases. This gives dataflow the
+// correct VFP single/double aliasing without any special-casing.
+//
+// The bank is placed at 0x100 — clear of the 0x00..0x44 GPR/APSR file and
+// well below the 0x500 NZCV flag varnodes (`ARM_NZCV_BASE`).
+pub const VFP_BASE: u64 = 0x100;
+/// Single-precision register `Sn` (0..32) → (offset, 4).
+pub const fn vfp_s_offset(n: u8) -> u64 {
+    VFP_BASE + (n as u64) * 4
+}
+/// Double-precision register `Dn` (0..32) → (offset, 8). Overlaps the two
+/// single-precision lanes `S(2n)`/`S(2n+1)` for n < 16.
+pub const fn vfp_d_offset(n: u8) -> u64 {
+    VFP_BASE + (n as u64) * 8
+}
+/// FPSCR (floating-point status & control register), 4 bytes, placed just
+/// past the 256-byte VFP bank.
+pub const VFP_FPSCR: u64 = VFP_BASE + 256;
+
+/// Varnode for single-precision register `Sn` (4 bytes).
+fn vfp_s_varnode(n: u8) -> Varnode {
+    Varnode::reg(vfp_s_offset(n), 4)
+}
+/// Varnode for double-precision register `Dn` (8 bytes).
+fn vfp_d_varnode(n: u8) -> Varnode {
+    Varnode::reg(vfp_d_offset(n), 8)
+}
+
 /// Minimal 32-bit ARM register file — r0..r15 (where r13=SP, r14=LR,
-/// r15=PC) plus an APSR slot for the condition flags. Mirrors the layout
-/// `expand_reg_list` produces (`u8` register numbers 0..15) so a `Varnode`
-/// can be derived as `Varnode::reg(reg_num * 4, 4)`.
+/// r15=PC) plus an APSR slot for the condition flags, the VFP scalar
+/// floating-point bank (S0–S31 / D0–D31, overlapping per VFPv3-D32), and
+/// FPSCR. Mirrors the layout `expand_reg_list` produces (`u8` register
+/// numbers 0..15) so a `Varnode` can be derived as
+/// `Varnode::reg(reg_num * 4, 4)`.
 pub fn arm32_register_file() -> RegisterFile {
     use unlace_ir::RegisterDef;
     const NAMES: [&str; 16] = [
         "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "SP",
         "LR", "PC",
     ];
-    let mut regs = Vec::with_capacity(17);
+    const S_NAMES: [&str; 32] = [
+        "S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13",
+        "S14", "S15", "S16", "S17", "S18", "S19", "S20", "S21", "S22", "S23", "S24", "S25", "S26",
+        "S27", "S28", "S29", "S30", "S31",
+    ];
+    const D_NAMES: [&str; 32] = [
+        "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13",
+        "D14", "D15", "D16", "D17", "D18", "D19", "D20", "D21", "D22", "D23", "D24", "D25", "D26",
+        "D27", "D28", "D29", "D30", "D31",
+    ];
+    let mut regs = Vec::with_capacity(17 + 64 + 1);
     for (i, name) in NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,
@@ -382,6 +434,24 @@ pub fn arm32_register_file() -> RegisterFile {
     regs.push(RegisterDef {
         name: "APSR",
         varnode: Varnode::reg(64, 4),
+    });
+    // VFP single-precision S0–S31 (4 bytes each).
+    for (i, name) in S_NAMES.iter().enumerate() {
+        regs.push(RegisterDef {
+            name,
+            varnode: vfp_s_varnode(i as u8),
+        });
+    }
+    // VFP double-precision D0–D31 (8 bytes each, overlapping the S-regs).
+    for (i, name) in D_NAMES.iter().enumerate() {
+        regs.push(RegisterDef {
+            name,
+            varnode: vfp_d_varnode(i as u8),
+        });
+    }
+    regs.push(RegisterDef {
+        name: "FPSCR",
+        varnode: Varnode::reg(VFP_FPSCR, 4),
     });
     RegisterFile { registers: regs }
 }
@@ -407,6 +477,36 @@ fn arm32_reg_index(reg: capstone::RegId) -> Option<u8> {
         ArmReg::ARM_REG_SP => Some(13),
         ArmReg::ARM_REG_LR => Some(14),
         ArmReg::ARM_REG_PC => Some(15),
+        _ => None,
+    }
+}
+
+/// Resolve a Capstone VFP register (`S0`–`S31` or `D0`–`D31`) to its
+/// register-bank `Varnode`. Returns `None` for non-VFP registers. The
+/// returned varnode's size encodes the precision (4 = single, 8 = double),
+/// and S/D views overlap exactly per VFPv3-D32 (see `VFP_BASE`).
+fn arm32_vfp_reg_varnode(reg: capstone::RegId) -> Option<Varnode> {
+    let raw = reg.0 as u32;
+    if (ArmReg::ARM_REG_S0..=ArmReg::ARM_REG_S31).contains(&raw) {
+        let n = (raw - ArmReg::ARM_REG_S0) as u8;
+        return Some(vfp_s_varnode(n));
+    }
+    if (ArmReg::ARM_REG_D0..=ArmReg::ARM_REG_D31).contains(&raw) {
+        let n = (raw - ArmReg::ARM_REG_D0) as u8;
+        return Some(vfp_d_varnode(n));
+    }
+    None
+}
+
+/// Resolve any VFP-op register operand to a `Varnode`, accepting both VFP
+/// (S/D) registers and the GPRs that VFP transfer forms reference. The
+/// size carries the operand's precision so float emitters can size their
+/// temporaries.
+fn arm32_vfp_operand_to_varnode(op_type: &ArmOperandType) -> Option<Varnode> {
+    match op_type {
+        ArmOperandType::Reg(reg) => {
+            arm32_vfp_reg_varnode(*reg).or_else(|| arm32_reg_index(*reg).map(arm32_reg_varnode))
+        }
         _ => None,
     }
 }
@@ -735,8 +835,157 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_USAT => emit_arm32_saturate(ctx, &ops, CALLOTHER_ARM_USAT),
         ArmInsn::ARM_INS_SSAT => emit_arm32_saturate(ctx, &ops, CALLOTHER_ARM_SSAT),
 
+        // ── Phase C.3: scalar VFP floating-point ──────────────────────
+        // Capstone reports the precision purely through the operand
+        // register class (S = single/4-byte, D = double/8-byte); the
+        // VADD/VSUB/... instruction id is the same for .F32 and .F64.
+        // The emitters size their result from the destination register.
+        ArmInsn::ARM_INS_VADD => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatAdd),
+        ArmInsn::ARM_INS_VSUB => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatSub),
+        ArmInsn::ARM_INS_VMUL => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatMult),
+        ArmInsn::ARM_INS_VDIV => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatDiv),
+        ArmInsn::ARM_INS_VABS => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatAbs),
+        ArmInsn::ARM_INS_VNEG => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatNeg),
+        ArmInsn::ARM_INS_VSQRT => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatSqrt),
+        ArmInsn::ARM_INS_VMOV => emit_arm32_vfp_mov(ctx, &ops),
+        // VMOV.Fxx Sd/Dd, #imm decodes as FCONSTS / FCONSTD in Capstone.
+        ArmInsn::ARM_INS_FCONSTS | ArmInsn::ARM_INS_FCONSTD => emit_arm32_vfp_mov_imm(ctx, &ops),
+        ArmInsn::ARM_INS_VCMP | ArmInsn::ARM_INS_VCMPE => emit_arm32_vfp_cmp(ctx, &ops),
+
         _ => ctx.emit_unimplemented(),
     }
+}
+
+/// Callother tag for a VFP compare (`VCMP`/`VCMPE`). VFP compares write
+/// the FPSCR condition flags (later transferred via `VMRS APSR_nzcv,
+/// FPSCR`), which we don't model as discrete varnodes yet, so the
+/// comparison is surfaced as a tagged side-effecting intrinsic that
+/// downstream passes can recognise. Numbered in a free slot just past the
+/// saturating-family tags (…0x35E) used above.
+pub const CALLOTHER_ARM_VCMP: u64 = 0x35F;
+
+/// `Vd = float_op(Vn, Vm)` for the VFP data-processing binops
+/// (VADD/VSUB/VMUL/VDIV). Operands may be single (S) or double (D)
+/// registers; the result is sized from the destination so the SSA value
+/// width matches the precision.
+fn emit_arm32_vfp_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = arm32_vfp_operand_to_varnode(&ops[0]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(lhs) = arm32_vfp_operand_to_varnode(&ops[1]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = arm32_vfp_operand_to_varnode(&ops[2]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![lhs, rhs], ctx.addr));
+}
+
+/// `Vd = float_op(Vm)` for the VFP unary data-processing ops
+/// (VABS/VNEG/VSQRT).
+fn emit_arm32_vfp_unop(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = arm32_vfp_operand_to_varnode(&ops[0]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = arm32_vfp_operand_to_varnode(&ops[1]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![src], ctx.addr));
+}
+
+/// `VMOV Vd, Vm` register-to-register copy (also handles the VFP↔GPR
+/// transfer forms `VMOV Sn, Rt` / `VMOV Rt, Sn`, which Capstone surfaces
+/// with the same two-register operand shape). Modeled as a plain Copy.
+fn emit_arm32_vfp_mov(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = arm32_vfp_operand_to_varnode(&ops[0]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = arm32_vfp_operand_to_varnode(&ops[1]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit_copy(dst, src);
+}
+
+/// `VMOV.Fxx Vd, #imm` — load a VFP immediate. Capstone decodes these as
+/// FCONSTS (single) / FCONSTD (double) with the value as an `Fp` operand;
+/// we materialise it as a sized float constant and copy it into the
+/// destination register.
+fn emit_arm32_vfp_mov_imm(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = arm32_vfp_operand_to_varnode(&ops[0]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let ArmOperandType::Fp(value) = ops[1] else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let imm = arm32_vfp_fp_const(value, dst.size);
+    ctx.emit_copy(dst, imm);
+}
+
+/// Build a float-constant `Varnode` of `size` bytes (4 or 8) from an
+/// `f64` immediate, encoding the bit pattern of the appropriate
+/// precision. Mirrors how AArch64 materialises FP immediates.
+fn arm32_vfp_fp_const(value: f64, size: u8) -> Varnode {
+    let bits = if size == 4 {
+        (value as f32).to_bits() as u64
+    } else {
+        value.to_bits()
+    };
+    Varnode::constant(bits, size)
+}
+
+/// `VCMP{E}.Fxx Vd, Vm` (or `Vd, #0.0`). VFP comparisons set the FPSCR
+/// flags, which aren't modeled as discrete varnodes; emit a tagged
+/// side-effecting Callother carrying both operands so downstream passes
+/// can recover the comparison.
+fn emit_arm32_vfp_cmp(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    if ops.is_empty() {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(lhs) = arm32_vfp_operand_to_varnode(&ops[0]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    // The second operand is either another VFP register or the implicit
+    // `#0.0` form (`VCMP Sd, #0`), which Capstone reports as an Fp(0.0)
+    // operand or omits entirely.
+    let rhs = match ops.get(1) {
+        Some(ArmOperandType::Fp(value)) => arm32_vfp_fp_const(*value, lhs.size),
+        Some(op) => {
+            arm32_vfp_operand_to_varnode(op).unwrap_or_else(|| Varnode::constant(0, lhs.size))
+        }
+        None => Varnode::constant(0, lhs.size),
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(CALLOTHER_ARM_VCMP, 8), lhs, rhs],
+        ctx.addr,
+    ));
 }
 
 /// t194: Callother tag identifiers for the ARM saturating + parallel-

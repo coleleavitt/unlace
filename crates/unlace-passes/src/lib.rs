@@ -8,6 +8,7 @@ pub mod alias_analysis;
 pub mod alias_categorize;
 pub mod analysis_context;
 pub mod anti_debug_detect;
+pub mod api_hash_resolve;
 pub mod arm_it_block;
 pub mod assumption_cache;
 pub mod attributor;

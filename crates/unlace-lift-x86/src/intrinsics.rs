@@ -37,6 +37,9 @@ pub enum IntrinsicCategory {
     /// AVX-512 (EVEX) packed arithmetic, 64-byte / ZMM output:
     /// VPADDQ_512, VPSUBQ_512, VPMULLQ_512, …
     Avx512Arith,
+    /// AVX-512 (EVEX) moves and opmask moves: VMOVDQA64_512,
+    /// VMOVDQU64_512, KMOVW_512, KMOVQ_512.
+    Avx512Move,
     /// x87 FPU instructions: FLD, FSTP, FADD, FMUL, etc.
     X87Fpu,
     /// Anything that doesn't fit the above.
@@ -315,6 +318,30 @@ impl Default for IntrinsicRegistry {
                 "VPMULLQ_512",
                 info("_mm512_mullo_epi64", 2, 64, Avx512Arith),
             ),
+            // ── AVX-512 EVEX core ops (Phase C.1) ───────────────────
+            //
+            // 512-bit / ZMM forms. Packed integer add, packed XOR (32-
+            // and 64-bit masking granularity), and packed float add.
+            ("VPADDD_512", info("_mm512_add_epi32", 2, 64, Avx512Arith)),
+            ("VPXORD_512", info("_mm512_xor_epi32", 2, 64, Avx512Arith)),
+            ("VPXORQ_512", info("_mm512_xor_epi64", 2, 64, Avx512Arith)),
+            ("VADDPS_512", info("_mm512_add_ps", 2, 64, Avx512Arith)),
+            ("VADDPD_512", info("_mm512_add_pd", 2, 64, Avx512Arith)),
+            // ── AVX-512 EVEX moves + opmask moves (Phase C.1) ───────
+            //
+            // VMOVDQA64/VMOVDQU64 are 64-byte ZMM moves. KMOVW/KMOVQ
+            // move 16-/64-bit opmask values; their output size tracks
+            // the mask width rather than a vector register.
+            (
+                "VMOVDQA64_512",
+                info("_mm512_load_si512", 1, 64, Avx512Move),
+            ),
+            (
+                "VMOVDQU64_512",
+                info("_mm512_loadu_si512", 1, 64, Avx512Move),
+            ),
+            ("KMOVW_512", info("_load_mask16", 1, 2, Avx512Move)),
+            ("KMOVQ_512", info("_load_mask64", 1, 8, Avx512Move)),
             // ── AVX packed float arithmetic ─────────────────────────
             ("VADDPS", info("_mm256_add_ps", 2, 32, AvxArith)),
             ("VSUBPS", info("_mm256_sub_ps", 2, 32, AvxArith)),

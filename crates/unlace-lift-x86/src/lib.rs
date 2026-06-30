@@ -2975,4 +2975,180 @@ mod tests {
         assert_eq!(src1.offset, crate::register_file::ZMM1);
         assert_eq!(src2.offset, crate::register_file::ZMM2);
     }
+
+    // ── Phase C.1: core AVX-512 EVEX lifting ────────────────────────
+    //
+    // EVEX byte strings (verified to decode under iced-x86 1.21):
+    //   62 F1 75 48 FE C2  vpaddd zmm0, zmm1, zmm2
+    //   62 F1 75 48 EF C2  vpxord zmm0, zmm1, zmm2
+    //   62 F1 F5 48 EF C2  vpxorq zmm0, zmm1, zmm2
+    //   62 F1 74 48 58 C2  vaddps zmm0, zmm1, zmm2
+    //   62 F1 F5 48 58 C2  vaddpd zmm0, zmm1, zmm2
+    //   62 F1 FE 48 6F C1  vmovdqu64 zmm0, zmm1
+    //   62 F1 FD 48 6F C1  vmovdqa64 zmm0, zmm1
+    //   C5 F8 90 CA        kmovw k1, k2
+
+    /// Phase C.1 — VPADDD zmm0, zmm1, zmm2 → `_mm512_add_epi32`.
+    #[test]
+    fn phase_c1_vpaddd_zmm_lift() {
+        assert_avx512_lift(&[0x62, 0xF1, 0x75, 0x48, 0xFE, 0xC2], sse_tag::VPADDD_512);
+    }
+
+    /// Phase C.1 — VPXORD zmm0, zmm1, zmm2 → `_mm512_xor_epi32`.
+    #[test]
+    fn phase_c1_vpxord_zmm_lift() {
+        assert_avx512_lift(&[0x62, 0xF1, 0x75, 0x48, 0xEF, 0xC2], sse_tag::VPXORD_512);
+    }
+
+    /// Phase C.1 — VPXORQ zmm0, zmm1, zmm2 → `_mm512_xor_epi64`.
+    #[test]
+    fn phase_c1_vpxorq_zmm_lift() {
+        assert_avx512_lift(&[0x62, 0xF1, 0xF5, 0x48, 0xEF, 0xC2], sse_tag::VPXORQ_512);
+    }
+
+    /// Phase C.1 — VADDPS zmm0, zmm1, zmm2 → `_mm512_add_ps`.
+    #[test]
+    fn phase_c1_vaddps_zmm_lift() {
+        assert_avx512_lift(&[0x62, 0xF1, 0x74, 0x48, 0x58, 0xC2], sse_tag::VADDPS_512);
+    }
+
+    /// Phase C.1 — VADDPD zmm0, zmm1, zmm2 → `_mm512_add_pd`.
+    #[test]
+    fn phase_c1_vaddpd_zmm_lift() {
+        assert_avx512_lift(&[0x62, 0xF1, 0xF5, 0x48, 0x58, 0xC2], sse_tag::VADDPD_512);
+    }
+
+    /// Phase C.1 — VPADDD zmm operand sanity: Callother reads two 64-byte
+    /// ZMM sources (op0 is pure dst under EVEX) and writes a 64-byte ZMM0.
+    #[test]
+    fn phase_c1_vpaddd_zmm_operands() {
+        let result = lifter()
+            .lift_insn(&[0x62, 0xF1, 0x75, 0x48, 0xFE, 0xC2], 0x1000)
+            .expect("vpaddd zmm should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("vpaddd zmm should emit Callother");
+        let dst = co.output.expect("vpaddd zmm should write a register");
+        assert_eq!(dst.offset, crate::register_file::ZMM0);
+        assert_eq!(dst.size, 64, "VPADDD.512 writes 512 bits / 64 bytes");
+        assert_eq!(co.inputs.len(), 3, "shape: (tag, src1, src2)");
+        let (src1, src2) = (&co.inputs[1], &co.inputs[2]);
+        assert_eq!(src1.size, 64);
+        assert_eq!(src2.size, 64);
+        assert_eq!(src1.offset, crate::register_file::ZMM1);
+        assert_eq!(src2.offset, crate::register_file::ZMM2);
+    }
+
+    /// Phase C.1 — the 256-bit VPADDD form keeps the 32-byte VPADDD tag,
+    /// while the 512-bit form uses the distinct VPADDD_512 tag. This
+    /// guards the `is_zmm_dst` split.
+    #[test]
+    fn phase_c1_vpaddd_width_split() {
+        // C5 FD FE C1 = vpaddd ymm0, ymm0, ymm1 (256-bit VEX form).
+        assert_callother_tag(&[0xC5, 0xFD, 0xFE, 0xC1], sse_tag::VPADDD);
+        // 62 F1 75 48 FE C2 = vpaddd zmm0, zmm1, zmm2 (512-bit EVEX form).
+        assert_callother_tag(&[0x62, 0xF1, 0x75, 0x48, 0xFE, 0xC2], sse_tag::VPADDD_512);
+    }
+
+    /// Phase C.1 — VMOVDQU64 zmm0, zmm1 lowers to a register Copy (the
+    /// established move convention) and must NOT emit Unimplemented.
+    #[test]
+    fn phase_c1_vmovdqu64_zmm_lift() {
+        let result = lifter()
+            .lift_insn(&[0x62, 0xF1, 0xFE, 0x48, 0x6F, 0xC1], 0x1000)
+            .expect("vmovdqu64 zmm should decode");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "vmovdqu64 zmm must not be Unimplemented",
+        );
+        let copy = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("vmovdqu64 reg-to-reg should lower to Copy");
+        let dst = copy.output.expect("copy should have an output");
+        assert_eq!(dst.offset, crate::register_file::ZMM0);
+        assert_eq!(dst.size, 64, "VMOVDQU64 writes a 64-byte ZMM");
+    }
+
+    /// Phase C.1 — VMOVDQA64 zmm0, zmm1 likewise lowers to a ZMM Copy
+    /// and must NOT emit Unimplemented.
+    #[test]
+    fn phase_c1_vmovdqa64_zmm_lift() {
+        let result = lifter()
+            .lift_insn(&[0x62, 0xF1, 0xFD, 0x48, 0x6F, 0xC1], 0x1000)
+            .expect("vmovdqa64 zmm should decode");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "vmovdqa64 zmm must not be Unimplemented",
+        );
+        let copy = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("vmovdqa64 reg-to-reg should lower to Copy");
+        assert_eq!(copy.output.unwrap().size, 64, "VMOVDQA64 writes a ZMM");
+    }
+
+    /// Phase C.1 — KMOVW k1, k2 is an opmask move. Reg-to-reg lowers to a
+    /// Copy over the 8-byte K-register slots and must NOT be Unimplemented.
+    #[test]
+    fn phase_c1_kmovw_mask_lift() {
+        let result = lifter()
+            .lift_insn(&[0xC5, 0xF8, 0x90, 0xCA], 0x1000)
+            .expect("kmovw k1,k2 should decode");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "kmovw must not be Unimplemented",
+        );
+        let copy = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("kmovw k,k should lower to Copy");
+        let dst = copy.output.expect("copy should have an output");
+        assert_eq!(dst.offset, crate::register_file::K1);
+        assert_eq!(dst.size, 8, "opmask register slot is 8 bytes");
+    }
+
+    /// Phase C.1 — KMOVQ k1, k2 (64-bit opmask move) must also lift
+    /// cleanly without an Unimplemented hole.
+    #[test]
+    fn phase_c1_kmovq_mask_lift() {
+        let result = lifter()
+            .lift_insn(&[0xC4, 0xE1, 0xF8, 0x90, 0xCA], 0x1000)
+            .expect("kmovq k1,k2 should decode");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "kmovq must not be Unimplemented",
+        );
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Copy),
+            "kmovq k,k should lower to Copy",
+        );
+    }
+
+    /// Phase C.1 — registry sanity: every new AVX-512 mnemonic resolves
+    /// to its `_mm512_*` C intrinsic so the recoverer can name the op.
+    #[test]
+    fn phase_c1_registry_entries() {
+        let reg = crate::intrinsics::IntrinsicRegistry::default();
+        for (mnemonic, c_name, size) in [
+            ("VPADDD_512", "_mm512_add_epi32", 64usize),
+            ("VPXORD_512", "_mm512_xor_epi32", 64),
+            ("VPXORQ_512", "_mm512_xor_epi64", 64),
+            ("VADDPS_512", "_mm512_add_ps", 64),
+            ("VADDPD_512", "_mm512_add_pd", 64),
+            ("VMOVDQA64_512", "_mm512_load_si512", 64),
+            ("VMOVDQU64_512", "_mm512_loadu_si512", 64),
+        ] {
+            let info = reg
+                .lookup(mnemonic)
+                .unwrap_or_else(|| panic!("{mnemonic} should be registered"));
+            assert_eq!(info.c_name, c_name, "{mnemonic} c_name");
+            assert_eq!(info.output_size, size, "{mnemonic} output size");
+        }
+    }
 }

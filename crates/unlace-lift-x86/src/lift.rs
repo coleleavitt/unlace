@@ -733,15 +733,31 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Movss => sse::lift_sse_mov_scalar(ctx, insn, sse::tag::MOVSS),
         M::Movd => sse::lift_vector_generic(ctx, insn, sse::tag::MOVD),
         M::Movq => sse::lift_vector_generic(ctx, insn, sse::tag::MOVQ),
+        // AVX-512 EVEX aligned move: 512-bit (zmm) form gets a distinct
+        // tag; the 128/256-bit EVEX and legacy VEX forms keep VMOVDQA.
+        // Both lower to a Copy/Store via `lift_vector_generic` (the
+        // tag is carried only for downstream identification).
+        M::Vmovdqa64 if sse::is_zmm_dst(insn) => {
+            sse::lift_vector_generic(ctx, insn, sse::tag::VMOVDQA64_512)
+        }
         M::Vmovdqa | M::Vmovdqa32 | M::Vmovdqa64 => {
             sse::lift_vector_generic(ctx, insn, sse::tag::VMOVDQA)
         }
         M::Vmovdqu => sse::lift_vector_generic(ctx, insn, sse::tag::VMOVDQU),
+        // AVX-512 EVEX unaligned move: 512-bit (zmm) form gets the
+        // distinct VMOVDQU64_512 tag; narrower EVEX forms keep VMOVDQU64.
+        M::Vmovdqu64 if sse::is_zmm_dst(insn) => {
+            sse::lift_vector_generic(ctx, insn, sse::tag::VMOVDQU64_512)
+        }
         M::Vmovdqu64 => sse::lift_vector_generic(ctx, insn, sse::tag::VMOVDQU64),
         M::Vmovntdq => sse::lift_vector_generic(ctx, insn, sse::tag::VMOVNTDQ),
         M::Kmovb => sse::lift_vector_generic(ctx, insn, sse::tag::KMOVB),
-        M::Kmovq => sse::lift_vector_generic(ctx, insn, sse::tag::KMOVQ),
-        M::Kmovw => sse::lift_vector_generic(ctx, insn, sse::tag::KMOVW),
+        // AVX-512 opmask moves. KMOVW/KMOVQ carry distinct AVX-512 tags;
+        // a register-to-register KMOV is a pure copy, so the generic
+        // mover lowers it to Copy (mem forms become Load/Store) while
+        // preserving the tag for downstream identification.
+        M::Kmovq => sse::lift_vector_generic(ctx, insn, sse::tag::KMOVQ_512),
+        M::Kmovw => sse::lift_vector_generic(ctx, insn, sse::tag::KMOVW_512),
 
         M::Paddb => sse::lift_sse_binop(ctx, insn, sse::tag::PADDB),
         M::Paddw => sse::lift_sse_binop(ctx, insn, sse::tag::PADDW),
@@ -856,6 +872,9 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         // `lift_avx_binop` helper differs from `lift_sse_binop` in
         // that op0 is treated as write-only — non-destructive AVX
         // doesn't read the destination.
+        // AVX-512 EVEX 32-bit-lane packed add: the zmm form gets the
+        // distinct VPADDD_512 tag; the 128/256-bit forms keep VPADDD.
+        M::Vpaddd if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VPADDD_512),
         M::Vpaddd => sse::lift_avx_binop(ctx, insn, sse::tag::VPADDD),
         M::Vpsubd => sse::lift_avx_binop(ctx, insn, sse::tag::VPSUBD),
         M::Vpmulld => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLD),
@@ -890,6 +909,20 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Vpaddq if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VPADDQ_512),
         M::Vpsubq if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VPSUBQ_512),
         M::Vpmullq => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLQ_512),
+
+        // ── AVX-512 EVEX core ops (Phase C.1) ───────────────────
+        //
+        // VPXORD/VPXORQ are EVEX-exclusive packed-XOR mnemonics
+        // (32-/64-bit masking granularity); VADDPS/VADDPD here are the
+        // EVEX/zmm packed-float forms. All four are non-destructive VEX-
+        // style 3-operand ops, so they lower through `lift_avx_binop`
+        // (op0 write-only, op1/op2 sources). We only claim the 512-bit
+        // (zmm) encodings; narrower EVEX forms are left for a sibling
+        // task rather than mislabelled with a 512-bit tag.
+        M::Vpxord if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VPXORD_512),
+        M::Vpxorq if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VPXORQ_512),
+        M::Vaddps if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VADDPS_512),
+        M::Vaddpd if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VADDPD_512),
 
         // ── AES-NI (t309) ───────────────────────────────────────
         M::Aesenc => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESENC),

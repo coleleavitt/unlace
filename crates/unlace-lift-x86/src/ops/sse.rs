@@ -203,6 +203,24 @@ pub mod tag {
     pub const VPSUBQ_512: u64 = 0x1D1;
     /// VPMULLQ (EVEX/ZMM form) — packed signed 64×64→low-64 multiply (512-bit).
     pub const VPMULLQ_512: u64 = 0x1D2;
+    /// VPADDD (EVEX/ZMM form) — packed add, 32-bit lanes (512-bit).
+    pub const VPADDD_512: u64 = 0x1D3;
+    /// VPXORD (EVEX/ZMM form) — packed bitwise XOR, 32-bit-lane masking (512-bit).
+    pub const VPXORD_512: u64 = 0x1D4;
+    /// VPXORQ (EVEX/ZMM form) — packed bitwise XOR, 64-bit-lane masking (512-bit).
+    pub const VPXORQ_512: u64 = 0x1D5;
+    /// VADDPS (EVEX/ZMM form) — packed single-precision add (512-bit).
+    pub const VADDPS_512: u64 = 0x1D6;
+    /// VADDPD (EVEX/ZMM form) — packed double-precision add (512-bit).
+    pub const VADDPD_512: u64 = 0x1D7;
+    /// VMOVDQA64 (EVEX/ZMM form) — aligned 64-bit-granular move (512-bit).
+    pub const VMOVDQA64_512: u64 = 0x1D8;
+    /// VMOVDQU64 (EVEX/ZMM form) — unaligned 64-bit-granular move (512-bit).
+    pub const VMOVDQU64_512: u64 = 0x1D9;
+    /// KMOVW (AVX-512 opmask move, 16-bit mask).
+    pub const KMOVW_512: u64 = 0x1DA;
+    /// KMOVQ (AVX-512 opmask move, 64-bit mask).
+    pub const KMOVQ_512: u64 = 0x1DB;
     // Reserved generic EVEX fallback tag — referenced once broad AVX-512
     // fallback lowering lands. Keep inside the EVEX block and away from
     // bitwise::TRAP (0x300).
@@ -587,10 +605,14 @@ fn is_vector_move_tag(callother_tag: u64) -> bool {
             | tag::KMOVB
             | tag::KMOVQ
             | tag::KMOVW
+            | tag::KMOVQ_512
+            | tag::KMOVW_512
             | tag::VMOVDQU
             | tag::VMOVDQU64
+            | tag::VMOVDQU64_512
             | tag::VMOVNTDQ
             | tag::VMOVDQA
+            | tag::VMOVDQA64_512
     )
 }
 

@@ -3586,6 +3586,140 @@ mod tests {
         // STGP is a store: no IR output.
         assert!(ir.output.is_none());
     }
+
+    // ── Phase C.2 — AArch64 SME Callother lifting tests ────────────────
+    // Canonical encodings verified with `llvm-mc -triple=aarch64
+    // -mattr=+sme,+sme-f64f64 --show-encoding`. Little-endian byte arrays
+    // are the raw instruction words as they appear in memory.
+
+    /// Find the first Callother in a lifted result, asserting it did not
+    /// fall through to Unimplemented.
+    fn sme_callother(bytes: &[u8]) -> unlace_ir::IrInsn {
+        let result = lifter().lift_insn(bytes, 0x1000).expect("should decode");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "SME op must not fall through to Unimplemented"
+        );
+        result
+            .ir_ops
+            .into_iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("SME op must emit a Callother")
+    }
+
+    #[test]
+    fn smstart_lifts_to_sme_callother() {
+        // SMSTART  →  0xD503477F  (LE: 7f 47 03 d5)
+        use crate::lift::CALLOTHER_SME_SMSTART;
+        let ir = sme_callother(&[0x7f, 0x47, 0x03, 0xd5]);
+        assert_eq!(ir.inputs[0].space, SpaceId::Const);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SME_SMSTART);
+        // mode 0 = both (SVCR).
+        assert_eq!(ir.inputs[1].space, SpaceId::Const);
+        assert_eq!(ir.inputs[1].offset, 0);
+        // SMSTART has no architectural data output.
+        assert!(ir.output.is_none());
+    }
+
+    #[test]
+    fn smstart_za_carries_mode_selector() {
+        // SMSTART za  →  0xD503457F  (LE: 7f 45 03 d5)
+        use crate::lift::CALLOTHER_SME_SMSTART;
+        let ir = sme_callother(&[0x7f, 0x45, 0x03, 0xd5]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SME_SMSTART);
+        assert_eq!(ir.inputs[1].offset, 2); // za
+    }
+
+    #[test]
+    fn smstop_lifts_to_sme_callother() {
+        // SMSTOP  →  0xD503467F  (LE: 7f 46 03 d5)
+        use crate::lift::CALLOTHER_SME_SMSTOP;
+        let ir = sme_callother(&[0x7f, 0x46, 0x03, 0xd5]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SME_SMSTOP);
+        assert_eq!(ir.inputs[1].offset, 0);
+        assert!(ir.output.is_none());
+    }
+
+    #[test]
+    fn zero_lifts_to_sme_callother_and_writes_za() {
+        // ZERO {za}  →  0xC00800FF  (LE: ff 00 08 c0)
+        use crate::lift::CALLOTHER_SME_ZERO;
+        use crate::register_file::{SME_ZA, SME_ZA_SIZE};
+        let ir = sme_callother(&[0xff, 0x00, 0x08, 0xc0]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SME_ZERO);
+        // imm8 tile mask = 0xFF.
+        assert_eq!(ir.inputs[1].space, SpaceId::Const);
+        assert_eq!(ir.inputs[1].offset, 0xFF);
+        // ZERO writes the ZA tile.
+        let out = ir.output.as_ref().expect("ZERO writes ZA");
+        assert_eq!(out.space, SpaceId::Register);
+        assert_eq!(out.offset, SME_ZA);
+        assert_eq!(out.size, SME_ZA_SIZE);
+    }
+
+    #[test]
+    fn fmopa_lifts_to_sme_callother_and_writes_za() {
+        // FMOPA za0.s, p0/m, p1/m, z0.s, z1.s  →  0x80812000 (LE: 00 20 81 80)
+        use crate::lift::CALLOTHER_SME_FMOPA;
+        use crate::register_file::{SME_ZA, sve_p_offset, sve_z_offset};
+        let ir = sme_callother(&[0x00, 0x20, 0x81, 0x80]);
+        assert_eq!(ir.inputs[0].space, SpaceId::Const);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SME_FMOPA);
+        // operands: #za, Pn, Pm, Zn, Zm, #esz
+        assert_eq!(ir.inputs[1].offset, 0); // ZAda tile 0
+        assert_eq!(ir.inputs[2].offset, sve_p_offset(0)); // Pn = p0
+        assert_eq!(ir.inputs[3].offset, sve_p_offset(1)); // Pm = p1
+        assert_eq!(ir.inputs[4].offset, sve_z_offset(0)); // Zn = z0
+        assert_eq!(ir.inputs[5].offset, sve_z_offset(1)); // Zm = z1
+        assert_eq!(ir.inputs[6].offset, 4); // .s → esize 4
+        let out = ir.output.as_ref().expect("FMOPA accumulates into ZA");
+        assert_eq!(out.offset, SME_ZA);
+    }
+
+    #[test]
+    fn fmopa_d_carries_double_element_size() {
+        // FMOPA za0.d, p0/m, p1/m, z0.d, z1.d  →  0x80C12000 (LE: 00 20 c1 80)
+        use crate::lift::CALLOTHER_SME_FMOPA;
+        let ir = sme_callother(&[0x00, 0x20, 0xc1, 0x80]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SME_FMOPA);
+        assert_eq!(ir.inputs[6].offset, 8); // .d → esize 8
+    }
+
+    #[test]
+    fn bfmopa_lifts_to_sme_callother() {
+        // BFMOPA za0.s, p0/m, p1/m, z0.h, z1.h  →  0x81812000 (LE: 00 20 81 81)
+        use crate::lift::CALLOTHER_SME_BFMOPA;
+        let ir = sme_callother(&[0x00, 0x20, 0x81, 0x81]);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SME_BFMOPA);
+        assert_eq!(ir.inputs[6].offset, 2); // .h sources → esize 2
+        assert!(ir.output.is_some());
+    }
+
+    #[test]
+    fn addha_addva_lift_to_sme_callother() {
+        // ADDHA za0.s, p0/m, p1/m, z0.s  →  0xC0902000 (LE: 00 20 90 c0)
+        // ADDVA za0.s, p0/m, p1/m, z0.s  →  0xC0912000 (LE: 00 20 91 c0)
+        use crate::lift::{CALLOTHER_SME_ADDHA, CALLOTHER_SME_ADDVA};
+        use crate::register_file::{SME_ZA, sve_p_offset, sve_z_offset};
+        let addha = sme_callother(&[0x00, 0x20, 0x90, 0xc0]);
+        assert_eq!(addha.inputs[0].offset, CALLOTHER_SME_ADDHA);
+        assert_eq!(addha.inputs[1].offset, 0); // ZAda tile 0
+        assert_eq!(addha.inputs[2].offset, sve_p_offset(0)); // Pn = p0
+        assert_eq!(addha.inputs[3].offset, sve_p_offset(1)); // Pm = p1
+        assert_eq!(addha.inputs[4].offset, sve_z_offset(0)); // Zn = z0
+        assert_eq!(addha.inputs[5].offset, 4); // .s → esize 4
+        assert_eq!(
+            addha.output.as_ref().expect("ADDHA writes ZA").offset,
+            SME_ZA
+        );
+
+        let addva = sme_callother(&[0x00, 0x20, 0x91, 0xc0]);
+        assert_eq!(addva.inputs[0].offset, CALLOTHER_SME_ADDVA);
+        assert_eq!(
+            addva.output.as_ref().expect("ADDVA writes ZA").offset,
+            SME_ZA
+        );
+    }
     // ── Phase C.3: scalar VFP floating-point lifting ───────────────────
 
     #[test]

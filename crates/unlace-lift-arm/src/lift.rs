@@ -23,7 +23,8 @@ use unlace_ir::{
 
 use crate::ops::{arithmetic, bitwise, control_flow, data_move};
 use crate::register_file::{
-    SVE_P_SIZE, SVE_Z_SIZE, aarch64_register_file, reg_varnode, sve_p_offset, sve_z_offset,
+    SME_ZA, SME_ZA_SIZE, SVE_P_SIZE, SVE_Z_SIZE, aarch64_register_file, reg_varnode, sve_p_offset,
+    sve_z_offset,
 };
 
 thread_local! {
@@ -207,6 +208,18 @@ impl ArmLifter {
         if let Some(sve) = try_sve_callother(raw) {
             let mut ctx = LiftCtx::new(addr);
             emit_sve_decoded(&mut ctx, &sve);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
+        // Phase C.2 — AArch64 SME: lift a core subset (SMSTART/SMSTOP,
+        // ZERO, FMOPA/BFMOPA outer-product accumulate, ADDHA/ADDVA) to
+        // tagged Callother intrinsics over the ZA tile before falling
+        // through to Capstone (which would route them to Unimplemented).
+        if let Some(sme) = try_sme_callother(raw) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_sme_decoded(&mut ctx, &sme);
             return Ok(LiftedInsn {
                 ir_ops: ctx.ops,
                 len: 4,
@@ -4505,5 +4518,231 @@ fn pac_auth_branch_rewrite(insn: u32) -> Option<u32> {
                 None
             }
         }
+    }
+}
+
+// ── SME (Scalable Matrix Extension) Callother tags (0x470..=0x476) ──────
+// Phase C.2 — AArch64 SME. We lift a core subset of SME instructions as
+// tagged `Callother` intrinsics over the ZA matrix tile (and the z/p
+// register file). ZA is modeled as the nominal 256-bit `SME_ZA` varnode
+// declared in `register_file.rs`; outer-product / reduction ops read and
+// write it as a single SSA value. The tag namespace begins at 0x470,
+// after the MTE block (0x440..=0x445) and clear of the SVE block
+// (0x420..=0x42C).
+//
+// All encodings verified with
+// `llvm-mc -triple=aarch64 -mattr=+sme,+sme-f64f64 --show-encoding`.
+//
+//   SMSTART {sm|za}     → Callother(tag, #mode)                (no output)
+//   SMSTOP  {sm|za}     → Callother(tag, #mode)                (no output)
+//   ZERO    {za…}       → Callother(tag, #imm8)         → ZA   (mask of tiles)
+//   FMOPA   ZAda,Pn,Pm,Zn,Zm → Callother(tag, #za, Pn, Pm, Zn, Zm, #esz) → ZA
+//   BFMOPA  ZAda,Pn,Pm,Zn,Zm → Callother(tag, #za, Pn, Pm, Zn, Zm, #esz) → ZA
+//   ADDHA   ZAda,Pn,Pm,Zn     → Callother(tag, #za, Pn, Pm, Zn, #esz)     → ZA
+//   ADDVA   ZAda,Pn,Pm,Zn     → Callother(tag, #za, Pn, Pm, Zn, #esz)     → ZA
+
+/// `Callother` tag for AArch64 `SMSTART {sm|za}` (enter streaming/ZA mode).
+/// Emitted as `Callother(tag, #mode)` with no IR output. `#mode` is a
+/// 1-byte selector: 0 = both (SVCR), 1 = SM (streaming), 2 = ZA.
+pub const CALLOTHER_SME_SMSTART: u64 = 0x470;
+/// `Callother` tag for AArch64 `SMSTOP {sm|za}` (exit streaming/ZA mode).
+/// Emitted as `Callother(tag, #mode)` with no IR output; `#mode` as above.
+pub const CALLOTHER_SME_SMSTOP: u64 = 0x471;
+/// `Callother` tag for AArch64 `ZERO {za…}` (zero ZA tile slices). Emitted
+/// as `Callother(tag, #imm8) → ZA`; `#imm8` is the architectural tile mask.
+pub const CALLOTHER_SME_ZERO: u64 = 0x472;
+/// `Callother` tag for AArch64 `FMOPA ZAda, Pn/m, Pm/m, Zn, Zm`
+/// (floating-point outer-product accumulate). Emitted as
+/// `Callother(tag, #za, Pn, Pm, Zn, Zm, #esz) → ZA`.
+pub const CALLOTHER_SME_FMOPA: u64 = 0x473;
+/// `Callother` tag for AArch64 `BFMOPA ZAda, Pn/m, Pm/m, Zn, Zm`
+/// (BFloat16 outer-product accumulate). Same operand layout as FMOPA.
+pub const CALLOTHER_SME_BFMOPA: u64 = 0x474;
+/// `Callother` tag for AArch64 `ADDHA ZAda, Pn/m, Pm/m, Zn` (add
+/// horizontally into ZA). Emitted as `Callother(tag, #za, Pn, Pm, Zn, #esz) → ZA`.
+pub const CALLOTHER_SME_ADDHA: u64 = 0x475;
+/// `Callother` tag for AArch64 `ADDVA ZAda, Pn/m, Pm/m, Zn` (add
+/// vertically into ZA). Same operand layout as ADDHA.
+pub const CALLOTHER_SME_ADDVA: u64 = 0x476;
+
+/// Decoded SME instruction shape (Phase C.2).
+///
+/// `operands` carries the per-instruction inputs already lowered to
+/// `Varnode`s (immediates, predicate registers, z registers). The ZA tile
+/// destination is implied by `has_output` and materialized by
+/// [`emit_sme_decoded`] as the `SME_ZA` varnode, so the ZA tile index lives
+/// in `operands` as a `Const` selector rather than a separate register.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmeDecoded {
+    pub tag: u64,
+    pub operands: smallvec::SmallVec<[Varnode; 6]>,
+    pub has_output: bool,
+}
+
+/// Build the nominal-width ZA tile varnode (destination/source of SME
+/// outer-product and reduction intrinsics).
+fn sme_za() -> Varnode {
+    Varnode::new(SpaceId::Register, SME_ZA, SME_ZA_SIZE)
+}
+
+/// Element size in bytes for an SME outer-product `size` bit
+/// (`bit[22]`: 0 = 32-bit/S, 1 = 64-bit/D).
+fn sme_op_esize(sz_d: bool) -> u8 {
+    if sz_d { 8 } else { 4 }
+}
+
+/// If `insn` is one of the lifted SME instructions, return its decoded
+/// shape; otherwise `None` so the caller falls through to the existing
+/// decode path. Encodings verified against
+/// `llvm-mc -triple=aarch64 -mattr=+sme,+sme-f64f64 --show-encoding`.
+pub fn try_sme_callother(insn: u32) -> Option<SmeDecoded> {
+    // ── SMSTART / SMSTOP (MSR immediate to SVCR/SVCRSM/SVCRZA).
+    // Encoded in the MSR-immediate (system) space `1101_0101_0000_0...`.
+    //   SMSTART      = 0xD503_477F   SMSTOP      = 0xD503_467F
+    //   SMSTART sm   = 0xD503_437F   SMSTOP sm   = 0xD503_427F
+    //   SMSTART za   = 0xD503_457F   SMSTOP za   = 0xD503_447F
+    // `#mode`: 0 = both, 1 = SM, 2 = ZA.
+    match insn {
+        0xD503_477F | 0xD503_437F | 0xD503_457F => {
+            let mode: u64 = match insn {
+                0xD503_437F => 1, // sm
+                0xD503_457F => 2, // za
+                _ => 0,           // both
+            };
+            return Some(SmeDecoded {
+                tag: CALLOTHER_SME_SMSTART,
+                operands: smallvec![Varnode::constant(mode, 1)],
+                has_output: false,
+            });
+        }
+        0xD503_467F | 0xD503_427F | 0xD503_447F => {
+            let mode: u64 = match insn {
+                0xD503_427F => 1, // sm
+                0xD503_447F => 2, // za
+                _ => 0,           // both
+            };
+            return Some(SmeDecoded {
+                tag: CALLOTHER_SME_SMSTOP,
+                operands: smallvec![Varnode::constant(mode, 1)],
+                has_output: false,
+            });
+        }
+        _ => {}
+    }
+
+    // ── ZERO {za…}: 1100_0000_0000_1000_0000_0000 imm8[7:0].
+    // Base 0xC008_0000; the 8-bit immediate is the architectural tile mask.
+    if (insn & 0xFFFF_FF00) == 0xC008_0000 {
+        let imm8 = (insn & 0xFF) as u64;
+        return Some(SmeDecoded {
+            tag: CALLOTHER_SME_ZERO,
+            operands: smallvec![Varnode::constant(imm8, 1)],
+            has_output: true,
+        });
+    }
+
+    // ── FMOPA / BFMOPA (outer-product accumulate, predicated):
+    //   FMOPA  za<d>.s = 1000_0000_1 Zm Pm Pn Zn 0 0 ZAda   (base 0x8080_0000)
+    //   FMOPA  za<d>.d = 1000_0000_11 Zm …                  (base 0x80C0_0000, bit22=1)
+    //   BFMOPA za<d>.s = 1000_0001_1 Zm …                   (base 0x8180_0000)
+    // The FMOPS/BFMOPS subtract variants set bit[4]=1 and are excluded by
+    // the fixed-bit mask (which holds bits[4:3] = 00).
+    // Mask excludes Zm/Pm/Pn/Zn/ZAda operand fields *and* bit[22] (the
+    // FMOPA element-size selector, decoded separately below).
+    let fmopa_mask = 0xFFA0_0018u32;
+    let za_da = (insn & 0x7) as u64; // ZAda tile index (bits[2:0])
+    let zn = ((insn >> 5) & 0x1F) as u8;
+    let pn = ((insn >> 10) & 0x7) as u8;
+    let pm = ((insn >> 13) & 0x7) as u8;
+    let zm = ((insn >> 16) & 0x1F) as u8;
+    if (insn & fmopa_mask) == 0x8080_0000 {
+        // FMOPA: bit[22] selects .s (0) vs .d (1).
+        let esz = sme_op_esize((insn & (1 << 22)) != 0);
+        return Some(SmeDecoded {
+            tag: CALLOTHER_SME_FMOPA,
+            operands: smallvec![
+                Varnode::constant(za_da, 1),
+                sve_p(pn),
+                sve_p(pm),
+                sve_z(zn),
+                sve_z(zm),
+                Varnode::constant(esz as u64, 1),
+            ],
+            has_output: true,
+        });
+    }
+    if (insn & fmopa_mask) == 0x8180_0000 {
+        // BFMOPA widening into .s tiles; sources are .h (esize 2).
+        return Some(SmeDecoded {
+            tag: CALLOTHER_SME_BFMOPA,
+            operands: smallvec![
+                Varnode::constant(za_da, 1),
+                sve_p(pn),
+                sve_p(pm),
+                sve_z(zn),
+                sve_z(zm),
+                Varnode::constant(2, 1),
+            ],
+            has_output: true,
+        });
+    }
+
+    // ── ADDHA / ADDVA (integer add horizontally/vertically into ZA):
+    //   ADDHA za<d>.s = 1100_0000_1001_0000 Pm Pn Zn 0 0 ZAda  (base 0xC090_0000)
+    //   ADDVA za<d>.s = 1100_0000_1001_0001 Pm Pn Zn 0 0 ZAda  (base 0xC091_0000)
+    // Single source (no Zm); the fixed-bit mask holds bits[20:16] and
+    // [4:3]. We lift only the 32-bit (.s) forms here.
+    let add_mask = 0xFFFF_0018u32;
+    if (insn & add_mask) == 0xC090_0000 {
+        return Some(SmeDecoded {
+            tag: CALLOTHER_SME_ADDHA,
+            operands: smallvec![
+                Varnode::constant(za_da, 1),
+                sve_p(pn),
+                sve_p(pm),
+                sve_z(zn),
+                Varnode::constant(4, 1),
+            ],
+            has_output: true,
+        });
+    }
+    if (insn & add_mask) == 0xC091_0000 {
+        return Some(SmeDecoded {
+            tag: CALLOTHER_SME_ADDVA,
+            operands: smallvec![
+                Varnode::constant(za_da, 1),
+                sve_p(pn),
+                sve_p(pm),
+                sve_z(zn),
+                Varnode::constant(4, 1),
+            ],
+            has_output: true,
+        });
+    }
+
+    // NOTE (TODO Phase C.2+): the 64-bit ADDHA/ADDVA (.d) forms, the
+    // signed/unsigned integer MOPA variants (SMOPA/UMOPA/USMOPA), and the
+    // ZA load/store (LDR/STR ZA) tile-slice moves are not yet lifted and
+    // still fall through to the Capstone/Unimplemented path.
+    None
+}
+
+/// Emit the `Callother` intrinsic for a decoded SME instruction.
+///
+/// Layout: `Callother(tag, operands…)`. Instructions with `has_output`
+/// (ZERO and the outer-product / reduction accumulators) write the
+/// `SME_ZA` tile varnode; SMSTART/SMSTOP have no output.
+fn emit_sme_decoded(ctx: &mut LiftCtx, sme: &SmeDecoded) {
+    let mut inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec![Varnode::constant(sme.tag, 8)];
+    inputs.extend_from_slice(&sme.operands);
+    if sme.has_output {
+        ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            sme_za(),
+            inputs,
+            ctx.addr,
+        ));
+    } else {
+        ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
     }
 }

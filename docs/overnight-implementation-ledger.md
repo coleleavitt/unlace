@@ -56,10 +56,14 @@ Operating rules for this run:
 | 31 | E.4.3 | VM-dispatch (virtualization) recognizer — dispatcher loop-head + many-handler fan-out | `cargo test -p unlace-passes vm_dispatch` (3 pass) | `8b7803e388` |
 | 32 | C.3 | ARM32 VFP register file (s0–s31/d0–d31/FPSCR) + scalar FP op lifting | `cargo test -p unlace-lift-arm` (218 pass) | `df42821cc2` |
 | 33 | C.1 | x86 AVX-512 EVEX subset lifted as Callother (zmm0–31 + k0–7) | `cargo test -p unlace-lift-x86` (255 pass) | `5d1647768b` |
+| 34 | J.3 | `xtask arch-scorecard` — facade registration view (38/39 archs non-stub) + shared `report_io` | `cargo run -p xtask -- arch-scorecard` | `c955fe63b6` |
+| 35 | B.4 | C++ Itanium RTTI/vtable recognizer (`_ZTV`/`_ZTI` → class name + method addrs) | `cargo test -p unlace-passes cxx_vtable` (4 pass) | `d36a0d28a2` |
+| 36 | C.5 | m68k 68881/68882 FPU register file + FADD/FSUB/FMUL/FDIV/FNEG/FABS/FSQRT/FMOVE/FCMP/FINT | `cargo test -p unlace-lift-m68k` (15 pass) | `7eae8499c7` |
+| 37 | C.2 | AArch64 SVE subset (add/sub/mul/logical/ld1/st1/ptrue/whilelt) over z0–31/p0–15 | `cargo test -p unlace-lift-arm` (226 pass) | `915debd263` |
 
 ## Status checkpoint
 
-33 roadmap-phase tickets landed on master, each gate-verified. Full workspace
+37 roadmap-phase tickets landed on master, each gate-verified. Full workspace
 build compiles, determinism lint OK, `cargo fmt --all --check` clean. Phases
 touched span A, B, C, D, E, F, G, H, I, J, K. This is steady progress against a
 multi-quarter roadmap — not "all phases complete". Notable bonus: the C.4 RVV

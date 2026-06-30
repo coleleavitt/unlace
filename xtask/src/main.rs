@@ -2,6 +2,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
+mod address_diff;
 mod arch_scorecard;
 mod cargo_bin;
 mod compare_corpus;
@@ -62,6 +63,12 @@ fn main() {
         Some("arch-scorecard") => {
             let root = workspace_root();
             arch_scorecard::run(&root);
+        }
+        Some("address-diff") => {
+            let code = address_diff::run(&args[1..]);
+            if code != 0 {
+                process::exit(code);
+            }
         }
         Some("project-roundtrip") => {
             let root = workspace_root();
@@ -129,7 +136,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, arch-scorecard, project-roundtrip, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, fuzz"
             );
             process::exit(1);
         }

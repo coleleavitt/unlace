@@ -18,6 +18,11 @@ pub struct Breakpoint {
     pub ea: u64,
     pub enabled: bool,
     pub kind: BreakpointKind,
+    /// Optional conditional-breakpoint predicate (Phase G.3). When set, the
+    /// backend's stop loop should resume unless
+    /// [`crate::condition::Condition::evaluate`] returns true for the current
+    /// register state. `None` is an unconditional breakpoint.
+    pub condition: Option<crate::condition::Condition>,
 }
 
 #[cfg(test)]
@@ -37,8 +42,22 @@ mod tests {
             ea: 0x401000,
             enabled: true,
             kind: BreakpointKind::Software,
+            condition: None,
         };
         assert_eq!(bp.ea, 0x401000);
         assert!(bp.enabled);
+    }
+
+    #[test]
+    fn conditional_breakpoint_carries_predicate() {
+        let cond = crate::condition::Condition::parse("rax == 0").unwrap();
+        let bp = Breakpoint {
+            id: 2,
+            ea: 0x401010,
+            enabled: true,
+            kind: BreakpointKind::Software,
+            condition: Some(cond),
+        };
+        assert!(bp.condition.is_some());
     }
 }

@@ -15,6 +15,7 @@
 
 pub mod backends;
 pub mod breakpoint;
+pub mod condition;
 pub mod gdb_rsp;
 pub mod regs;
 
@@ -97,6 +98,24 @@ impl BreakpointTable {
                 ea,
                 enabled: true,
                 kind: breakpoint::BreakpointKind::Software,
+                condition: None,
+            },
+        );
+        id
+    }
+
+    /// Add a conditional software breakpoint, returning its id.
+    pub fn add_conditional(&mut self, ea: u64, condition: condition::Condition) -> u32 {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.bps.insert(
+            id,
+            breakpoint::Breakpoint {
+                id,
+                ea,
+                enabled: true,
+                kind: breakpoint::BreakpointKind::Software,
+                condition: Some(condition),
             },
         );
         id

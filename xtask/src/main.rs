@@ -2,6 +2,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
+mod arch_scorecard;
 mod cargo_bin;
 mod compare_corpus;
 mod compare_golden;
@@ -14,6 +15,7 @@ mod lifter_coverage;
 mod loader_scorecard;
 mod project_roundtrip;
 mod register_alias_report;
+mod report_io;
 mod sbom;
 mod semantic_report;
 mod type_recovery_report;
@@ -56,6 +58,10 @@ fn main() {
         Some("loader-scorecard") => {
             let root = workspace_root();
             loader_scorecard::run(&root);
+        }
+        Some("arch-scorecard") => {
+            let root = workspace_root();
+            arch_scorecard::run(&root);
         }
         Some("project-roundtrip") => {
             let root = workspace_root();
@@ -123,7 +129,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, project-roundtrip, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, arch-scorecard, project-roundtrip, dump-pipeline, sbom, fuzz"
             );
             process::exit(1);
         }

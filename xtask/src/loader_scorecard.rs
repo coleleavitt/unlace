@@ -92,16 +92,7 @@ pub fn run(root: &Path) {
 
     print!("{out}");
 
-    let artifact = root.join("target").join("loader-scorecard.md");
-    if let Some(parent) = artifact.parent()
-        && let Err(e) = std::fs::create_dir_all(parent)
-    {
-        eprintln!("warning: could not create {}: {e}", parent.display());
-    }
-    match std::fs::write(&artifact, &out) {
-        Ok(()) => println!("wrote {}", artifact.display()),
-        Err(e) => eprintln!("warning: could not write {}: {e}", artifact.display()),
-    }
+    crate::report_io::write_artifact(&root.join("target").join("loader-scorecard.md"), &out);
 }
 
 fn record(

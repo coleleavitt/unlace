@@ -67,10 +67,15 @@ Operating rules for this run:
 | 42 | H.1 | `ida_xref` over relocation data (PLT→cref, others→dref; xrefs_to + legacy shims) | `cargo test -p unlace-idapython ida_xref` (3 pass) | `eaadff41c8` |
 | 43 | D.1 | pointer-arith struct-field layout inference (group offsets per base SSA pointer) | `cargo test -p unlace-passes ptr_struct` (2 pass) | `503c132ce3` |
 | 44 | C.3 | ARM32 NEON SIMD subset (VADD/VSUB/VMUL/VAND/VORR/VEOR/VDUP/VLD1/VST1) over q0–15 | `cargo test -p unlace-lift-arm` (228 pass) | `86feff7d3c` |
+| 45 | J.2 | `xtask address-diff` — address-mapped per-function better/equiv/worse structural diff | `cargo test -p xtask address_diff` (3 pass); self-diff over 150-file corpus | `9d7b91480c` |
+| 46 | B.4 | Go itab/interface-type recovery (`recover_go_itabs` → addr/iface/concrete/methods) | `cargo test -p unlace-passes go_iface` (4 pass) | `5159af0085` |
+| 47 | C.1 | x86 AMX tile ops lifted as Callother (tmm tiles: ldtilecfg/tileload/tdpb*/tilezero) | `cargo test -p unlace-lift-x86` (258 pass) | `83abcf...` |
+| 48 | C.2 | AArch64 SME subset (smstart/smstop/zero/fmopa/addha) over ZA tile | `cargo test -p unlace-lift-arm` (236 pass) | `1d5b970d56` |
 
 ## Status checkpoint
 
-44 roadmap-phase tickets landed on master, each gate-verified. Build clean,
+48 roadmap-phase tickets landed on master, each gate-verified. Build clean,
+determinism lint OK, `cargo fmt --all --check` clean. Phases A–K all advanced. Build clean,
 determinism lint OK, `cargo fmt --all --check` clean. Phases touched span all of
 A, B, C, D, E, F, G, H, I, J, K. Honest remaining deep work: D.3 symbolic exec
 (Z3), G.1 live WinAPI body, H.2 full ida_hexrays.decompile pipeline wiring,

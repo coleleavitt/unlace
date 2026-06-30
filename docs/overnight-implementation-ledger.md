@@ -63,12 +63,19 @@ Operating rules for this run:
 | 38 | E.4.1 | Expand packer roster: VMProtect/PEtite/FSG/NsPack/MEW section signatures | `cargo test -p unlace-loader packer_detect` (11 pass) | `1f6f6ba38a` |
 | 39 | E.4.3 | string-decode-stub recognizer (loop + Load + key transform + Store, key recovery) | `cargo test -p unlace-passes string_decode` (3 pass) | `c2f759fd87` |
 | 40 | H.2 | `ida_hexrays` ctree wrappers (citem_t/cexpr_t/cinsn_t analogs over HIR) | `cargo test -p unlace-idapython` (44 pass) | `9a8e6b39f5` |
+| 41 | G.1 | Windows DebugAPI backend scaffold (debug_event→StopReason + INT3 patch bookkeeping; live ops gated) | `cargo test -p unlace-debugger --features windows-debugapi` (26 pass) | `bb1c2f9f8f` |
+| 42 | H.1 | `ida_xref` over relocation data (PLT→cref, others→dref; xrefs_to + legacy shims) | `cargo test -p unlace-idapython ida_xref` (3 pass) | `eaadff41c8` |
+| 43 | D.1 | pointer-arith struct-field layout inference (group offsets per base SSA pointer) | `cargo test -p unlace-passes ptr_struct` (2 pass) | `503c132ce3` |
+| 44 | C.3 | ARM32 NEON SIMD subset (VADD/VSUB/VMUL/VAND/VORR/VEOR/VDUP/VLD1/VST1) over q0–15 | `cargo test -p unlace-lift-arm` (228 pass) | `86feff7d3c` |
 
 ## Status checkpoint
 
-40 roadmap-phase tickets landed on master, each gate-verified. Build clean,
+44 roadmap-phase tickets landed on master, each gate-verified. Build clean,
 determinism lint OK, `cargo fmt --all --check` clean. Phases touched span all of
-A, B, C, D, E, F, G, H, I, J, K. Full workspace
+A, B, C, D, E, F, G, H, I, J, K. Honest remaining deep work: D.3 symbolic exec
+(Z3), G.1 live WinAPI body, H.2 full ida_hexrays.decompile pipeline wiring,
+A.4.7 COERCE_* (golden-sensitive), J.2 address-mapped corpus diff, plus broader
+per-arch opcode breadth. Full workspace
 build compiles, determinism lint OK, `cargo fmt --all --check` clean. Phases
 touched span A, B, C, D, E, F, G, H, I, J, K. This is steady progress against a
 multi-quarter roadmap — not "all phases complete". Notable bonus: the C.4 RVV

@@ -2590,11 +2590,13 @@ dependencies = [
  "unlace-lift-riscv",
  "unlace-lift-sass",
  "unlace-lift-sharc",
+ "unlace-lift-sparc",
  "unlace-lift-stm8",
  "unlace-lift-superh",
  "unlace-lift-ti",
  "unlace-lift-tricore",
  "unlace-lift-v850",
+ "unlace-lift-wasm",
  "unlace-lift-x86",
  "unlace-lift-xtensa",
 ]

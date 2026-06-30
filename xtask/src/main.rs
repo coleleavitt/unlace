@@ -7,6 +7,7 @@ mod compare_corpus;
 mod compare_golden;
 mod dump_pipeline;
 mod fuzz;
+mod goto_count;
 mod golden_triage;
 mod lift_trace;
 mod lifter_coverage;
@@ -37,6 +38,13 @@ fn main() {
         Some("compare-corpus") => {
             let root = workspace_root();
             compare_corpus::run(&root);
+        }
+        Some("goto-count") => {
+            let root = workspace_root();
+            let code = goto_count::run(&root);
+            if code != 0 {
+                process::exit(code);
+            }
         }
         Some("lifter-coverage") => {
             let root = workspace_root();
@@ -94,7 +102,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, dump-pipeline, sbom, fuzz"
             );
             process::exit(1);
         }

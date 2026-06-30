@@ -400,6 +400,19 @@ pub fn decode(bytes: &[u8]) -> Option<ShInsn> {
             imm: low8 as i8,
             rn: nn,
         },
+        // SH-4 FPU opcodes occupy the 0xF000 space. The low nibble selects the
+        // arithmetic form (FADD..FCMP/GT use 0x0..=0x5; reg-reg FMOV is 0xC),
+        // while the single-operand ops share low nibble 0xD and are
+        // distinguished by the m field. Encodings verified against the Renesas
+        // SH-4 Software Manual (and corroborated by QEMU target/sh4/translate.c):
+        //   FADD 1111nnnnmmmm0000   FSUB 1111nnnnmmmm0001
+        //   FMUL 1111nnnnmmmm0010   FDIV 1111nnnnmmmm0011
+        //   FCMP/EQ 1111nnnnmmmm0100 FCMP/GT 1111nnnnmmmm0101
+        //   FMOV FRm,FRn 1111nnnnmmmm1100
+        //   FSTS 1111nnnn00001101   FLDS  1111mmmm00011101
+        //   FLOAT 1111nnnn00101101  FTRC  1111mmmm00111101
+        //   FNEG 1111nnnn01001101   FABS  1111nnnn01011101
+        //   FSQRT 1111nnnn01101101  FLDI0 1111nnnn10001101  FLDI1 1111nnnn10011101
         0xf => match low {
             0x0 => ShInsn::Fadd { fm: mm, fn_: nn },
             0x1 => ShInsn::Fsub { fm: mm, fn_: nn },
@@ -407,23 +420,17 @@ pub fn decode(bytes: &[u8]) -> Option<ShInsn> {
             0x3 => ShInsn::Fdiv { fm: mm, fn_: nn },
             0x4 => ShInsn::FcmpEq { fm: mm, fn_: nn },
             0x5 => ShInsn::FcmpGt { fm: mm, fn_: nn },
-            0x6 => ShInsn::Fmov { fm: mm, fn_: nn },
-            0x8 => ShInsn::Fldi0 { fn_: nn },
-            0x9 => ShInsn::Fldi1 { fn_: nn },
-            0xa => ShInsn::Float { fn_: nn },
-            0xb => ShInsn::Ftrc { fm: nn },
+            0xc => ShInsn::Fmov { fm: mm, fn_: nn },
             0xd => match mm {
                 0x0 => ShInsn::FstsFp { fpul_to_frn: nn },
                 0x1 => ShInsn::FldsFp { frm_to_fpul: nn },
-                _ => return None,
-            },
-            0xe => match mm {
-                0x0 => ShInsn::Fabs { fn_: nn },
-                0x1 => ShInsn::Fsqrt { fn_: nn },
-                _ => return None,
-            },
-            0xf => match mm {
-                0x0 => ShInsn::Fneg { fn_: nn },
+                0x2 => ShInsn::Float { fn_: nn },
+                0x3 => ShInsn::Ftrc { fm: nn },
+                0x4 => ShInsn::Fneg { fn_: nn },
+                0x5 => ShInsn::Fabs { fn_: nn },
+                0x6 => ShInsn::Fsqrt { fn_: nn },
+                0x8 => ShInsn::Fldi0 { fn_: nn },
+                0x9 => ShInsn::Fldi1 { fn_: nn },
                 _ => return None,
             },
             _ => return None,

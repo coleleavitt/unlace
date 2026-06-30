@@ -243,5 +243,81 @@ mod tests {
             fcmp.ir_ops[0].output.unwrap(),
             Varnode::reg(lift::T_OFFSET, 1)
         );
+
+        // FMUL FR2,FR1 => 1111 0001 0010 0010 = 0xF122
+        let fmul = lift_bytes([0xF1, 0x22], 0x1000);
+        assert_eq!(fmul.ir_ops[0].op, IrOp::FloatMult);
+        assert_eq!(
+            fmul.ir_ops[0].output.unwrap(),
+            Varnode::reg(lift::freg_offset(1), 4)
+        );
+        assert_eq!(
+            fmul.ir_ops[0].inputs[1],
+            Varnode::reg(lift::freg_offset(2), 4)
+        );
+
+        // FCMP/GT FR2,FR1 => 0xF125
+        let fcmp_gt = lift_bytes([0xF1, 0x25], 0x1000);
+        assert_eq!(fcmp_gt.ir_ops[0].op, IrOp::FloatLess);
+        assert_eq!(
+            fcmp_gt.ir_ops[0].output.unwrap(),
+            Varnode::reg(lift::T_OFFSET, 1)
+        );
+
+        // FMOV FR2,FR1 (reg-reg) => 1111 0001 0010 1100 = 0xF12C
+        let fmov = lift_bytes([0xF1, 0x2C], 0x1000);
+        assert_eq!(fmov.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(
+            fmov.ir_ops[0].output.unwrap(),
+            Varnode::reg(lift::freg_offset(1), 4)
+        );
+        assert_eq!(
+            fmov.ir_ops[0].inputs[0],
+            Varnode::reg(lift::freg_offset(2), 4)
+        );
+
+        // FNEG FR1 => 1111 0001 0100 1101 = 0xF14D (m field = 0x4)
+        let fneg = lift_bytes([0xF1, 0x4D], 0x1000);
+        assert_eq!(fneg.ir_ops[0].op, IrOp::FloatNeg);
+        assert_eq!(
+            fneg.ir_ops[0].output.unwrap(),
+            Varnode::reg(lift::freg_offset(1), 4)
+        );
+
+        // FABS FR1 => 0xF15D (m field = 0x5)
+        let fabs = lift_bytes([0xF1, 0x5D], 0x1000);
+        assert_eq!(fabs.ir_ops[0].op, IrOp::FloatAbs);
+
+        // FSQRT FR1 => 0xF16D (m field = 0x6)
+        let fsqrt = lift_bytes([0xF1, 0x6D], 0x1000);
+        assert_eq!(fsqrt.ir_ops[0].op, IrOp::FloatSqrt);
+
+        // FSUB FR2,FR1 => 0xF121
+        let fsub = lift_bytes([0xF1, 0x21], 0x1000);
+        assert_eq!(fsub.ir_ops[0].op, IrOp::FloatSub);
+
+        // FDIV FR2,FR1 => 0xF123
+        let fdiv = lift_bytes([0xF1, 0x23], 0x1000);
+        assert_eq!(fdiv.ir_ops[0].op, IrOp::FloatDiv);
+
+        // None of the lifted FPU ops should fall through to Unimplemented.
+        for bytes in [
+            [0xF1, 0x20],
+            [0xF1, 0x21],
+            [0xF1, 0x22],
+            [0xF1, 0x23],
+            [0xF1, 0x24],
+            [0xF1, 0x25],
+            [0xF1, 0x2C],
+            [0xF1, 0x4D],
+            [0xF1, 0x5D],
+            [0xF1, 0x6D],
+        ] {
+            let lifted = lift_bytes(bytes, 0x1000);
+            assert!(
+                lifted.ir_ops.iter().all(|i| i.op != IrOp::Unimplemented),
+                "FPU encoding {bytes:02X?} lifted to Unimplemented"
+            );
+        }
     }
 }

@@ -3618,6 +3618,60 @@ mod tests {
     }
 
     #[test]
+    fn arm_neon_vadd_i32_q_lifts_to_callother() {
+        // VADD.I32 q0, q1, q2  →  encoding [0x44,0x08,0x22,0xf2] (llvm-mc).
+        // NEON vector form (Q operands) of the shared VADD mnemonic.
+        use crate::lift::neon_tag;
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&[0x44, 0x08, 0x22, 0xf2], 0x1000)
+            .expect("VADD.I32 q decodes");
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "NEON VADD must not be Unimplemented; got {:?}",
+            r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+        );
+        let call = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("NEON VADD must emit Callother");
+        assert_eq!(call.inputs[0].offset, neon_tag::VADD);
+        // Destination is a 16-byte quadword vector register.
+        let out = call.output.expect("NEON VADD has a vector output");
+        assert_eq!(out.space, SpaceId::Register);
+        assert_eq!(out.size, 16, "Qd is a 128-bit register");
+    }
+
+    #[test]
+    fn arm_neon_veor_and_vand_lift_to_callother() {
+        use crate::lift::neon_tag;
+        let l = ArmLifter::new_arm32();
+        // VEOR q0, q1, q2 → [0x54,0x01,0x02,0xf3]
+        let veor = l
+            .lift_insn(&[0x54, 0x01, 0x02, 0xf3], 0x1000)
+            .expect("VEOR decodes");
+        let c = veor
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("VEOR emits Callother");
+        assert_eq!(c.inputs[0].offset, neon_tag::VEOR);
+
+        // VAND q0, q1, q2 → [0x54,0x01,0x02,0xf2]
+        let vand = l
+            .lift_insn(&[0x54, 0x01, 0x02, 0xf2], 0x1000)
+            .expect("VAND decodes");
+        let c = vand
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("VAND emits Callother");
+        assert_eq!(c.inputs[0].offset, neon_tag::VAND);
+        assert!(!vand.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
     fn arm_vfp_vmul_f64_lifts_to_float_mult() {
         // VMUL.F64 d0, d1, d2  →  0xEE210B02  (LE: 02 0B 21 EE)
         // VFP data-processing: cond=1110, coproc=1011 (double-precision).

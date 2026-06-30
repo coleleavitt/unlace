@@ -416,6 +416,14 @@ fn vfp_s_varnode(n: u8) -> Varnode {
 fn vfp_d_varnode(n: u8) -> Varnode {
     Varnode::reg(vfp_d_offset(n), 8)
 }
+/// NEON quadword register `Qn` (0..16) → 16-byte view over the D-register
+/// bank: `Qn` aliases `D(2n)`/`D(2n+1)`, i.e. it starts at the same offset
+/// as `D(2n)` (`VFP_BASE + 2n*8`) and spans 16 bytes. This reuses the
+/// existing 256-byte VFP/Advanced-SIMD bank so Q/D/S views all alias
+/// correctly without extra storage.
+fn neon_q_varnode(n: u8) -> Varnode {
+    Varnode::reg(vfp_d_offset(n * 2), 16)
+}
 
 /// Minimal 32-bit ARM register file — r0..r15 (where r13=SP, r14=LR,
 /// r15=PC) plus an APSR slot for the condition flags, the VFP scalar
@@ -510,7 +518,28 @@ fn arm32_vfp_reg_varnode(reg: capstone::RegId) -> Option<Varnode> {
         let n = (raw - ArmReg::ARM_REG_D0) as u8;
         return Some(vfp_d_varnode(n));
     }
+    if (ArmReg::ARM_REG_Q0..=ArmReg::ARM_REG_Q15).contains(&raw) {
+        let n = (raw - ArmReg::ARM_REG_Q0) as u8;
+        return Some(neon_q_varnode(n));
+    }
     None
+}
+
+/// True iff the operand is a NEON quadword (`Qn`) register — the marker
+/// that distinguishes a NEON vector form of a shared mnemonic (VADD/VMUL/
+/// VAND/…) from its scalar VFP form.
+fn is_neon_q_operand(op_type: &ArmOperandType) -> bool {
+    if let ArmOperandType::Reg(reg) = op_type {
+        let raw = reg.0 as u32;
+        (ArmReg::ARM_REG_Q0..=ArmReg::ARM_REG_Q15).contains(&raw)
+    } else {
+        false
+    }
+}
+
+/// True iff any operand references a NEON quadword register.
+fn has_neon_q_operand(ops: &[ArmOperandType]) -> bool {
+    ops.iter().any(is_neon_q_operand)
 }
 
 /// Resolve any VFP-op register operand to a `Varnode`, accepting both VFP
@@ -855,6 +884,17 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         // register class (S = single/4-byte, D = double/8-byte); the
         // VADD/VSUB/... instruction id is the same for .F32 and .F64.
         // The emitters size their result from the destination register.
+        // A NEON (quadword `Qn`) operand on the SAME mnemonic instead routes
+        // to the vector intrinsic emitter below.
+        ArmInsn::ARM_INS_VADD if has_neon_q_operand(&ops) => {
+            emit_arm32_neon_binop(ctx, &ops, neon_tag::VADD)
+        }
+        ArmInsn::ARM_INS_VSUB if has_neon_q_operand(&ops) => {
+            emit_arm32_neon_binop(ctx, &ops, neon_tag::VSUB)
+        }
+        ArmInsn::ARM_INS_VMUL if has_neon_q_operand(&ops) => {
+            emit_arm32_neon_binop(ctx, &ops, neon_tag::VMUL)
+        }
         ArmInsn::ARM_INS_VADD => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatAdd),
         ArmInsn::ARM_INS_VSUB => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatSub),
         ArmInsn::ARM_INS_VMUL => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatMult),
@@ -867,7 +907,119 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_FCONSTS | ArmInsn::ARM_INS_FCONSTD => emit_arm32_vfp_mov_imm(ctx, &ops),
         ArmInsn::ARM_INS_VCMP | ArmInsn::ARM_INS_VCMPE => emit_arm32_vfp_cmp(ctx, &ops),
 
+        // ── Phase C.3: NEON Advanced SIMD (vector forms) ──────────────
+        // These mnemonics are NEON-only (no scalar VFP form), so they route
+        // straight to the vector intrinsic emitter regardless of operand
+        // class. Modeled as tagged Callother over the q/d register bank.
+        ArmInsn::ARM_INS_VAND => emit_arm32_neon_binop(ctx, &ops, neon_tag::VAND),
+        ArmInsn::ARM_INS_VORR => emit_arm32_neon_binop(ctx, &ops, neon_tag::VORR),
+        ArmInsn::ARM_INS_VEOR => emit_arm32_neon_binop(ctx, &ops, neon_tag::VEOR),
+        ArmInsn::ARM_INS_VDUP => emit_arm32_neon_unop(ctx, &ops, neon_tag::VDUP),
+        ArmInsn::ARM_INS_VLD1 => emit_arm32_neon_mem(ctx, &ops, neon_tag::VLD1),
+        ArmInsn::ARM_INS_VST1 => emit_arm32_neon_mem(ctx, &ops, neon_tag::VST1),
+
         _ => ctx.emit_unimplemented(),
+    }
+}
+
+/// Callother tag identifiers for the ARM32 NEON Advanced-SIMD intrinsic
+/// family (Phase C.3). Numbered in a free block past the VFP `VCMP` tag
+/// (0x35F) and clear of the saturating/parallel-add tags around 0x354..0x364.
+pub mod neon_tag {
+    pub const VADD: u64 = 0x370;
+    pub const VSUB: u64 = 0x371;
+    pub const VMUL: u64 = 0x372;
+    pub const VAND: u64 = 0x373;
+    pub const VORR: u64 = 0x374;
+    pub const VEOR: u64 = 0x375;
+    pub const VDUP: u64 = 0x376;
+    pub const VLD1: u64 = 0x377;
+    pub const VST1: u64 = 0x378;
+}
+
+/// `Vd = neon_op(Vn, Vm)` — a NEON 3-register vector op, modeled as a
+/// tagged `Callother` writing the destination vector register. Operand
+/// register widths (Q = 16 bytes, D = 8) carry the lane layout.
+fn emit_arm32_neon_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let (Some(dst), Some(lhs), Some(rhs)) = (
+        arm32_vfp_operand_to_varnode(&ops[0]),
+        arm32_vfp_operand_to_varnode(&ops[1]),
+        arm32_vfp_operand_to_varnode(&ops[2]),
+    ) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(tag, 8), lhs, rhs],
+        ctx.addr,
+    ));
+}
+
+/// `Vd = neon_op(Vm)` — a NEON 2-operand vector op (e.g. `VDUP Qd, Rm` or
+/// `VDUP Qd, Dm[x]`). The source may be a GPR (scalar broadcast) or a
+/// vector register. Modeled as a tagged `Callother`.
+fn emit_arm32_neon_unop(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = arm32_vfp_operand_to_varnode(&ops[0]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    // Source: a vector reg, or a GPR for the scalar-broadcast form.
+    let src = arm32_vfp_operand_to_varnode(&ops[1])
+        .or_else(|| {
+            if let ArmOperandType::Reg(r) = ops[1] {
+                arm32_reg_index(r).map(arm32_reg_varnode)
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| Varnode::constant(0, 4));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(tag, 8), src],
+        ctx.addr,
+    ));
+}
+
+/// `VLD1`/`VST1 {Vd}, [Rn]` — a NEON load/store. Modeled as a tagged
+/// `Callother`: for a load the destination vector register is the output;
+/// for a store there is no output and the stored register is an input.
+fn emit_arm32_neon_mem(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(vreg) = arm32_vfp_operand_to_varnode(&ops[0]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(addr) = arm32_operand_to_varnode(ctx, &ops[1]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    if tag == neon_tag::VLD1 {
+        ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            vreg,
+            smallvec![Varnode::constant(tag, 8), addr],
+            ctx.addr,
+        ));
+    } else {
+        ctx.emit(IrInsn::without_output(
+            IrOp::Callother,
+            smallvec![Varnode::constant(tag, 8), addr, vreg],
+            ctx.addr,
+        ));
     }
 }
 

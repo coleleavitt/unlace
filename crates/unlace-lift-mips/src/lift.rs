@@ -8,7 +8,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, memory};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, memory, msa};
 use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
 
 // Capstone contains a raw `*mut c_void` handle to the C library.
@@ -85,8 +85,17 @@ impl Lifter for MipsLifter {
 
         let operands: Vec<MipsOperand> = mips_detail.operands().collect();
 
+        let mnemonic = insn.mnemonic().unwrap_or("");
+
         let mut ctx = LiftCtx::new(addr);
-        dispatch_insn(&mut ctx, insn.id(), &operands);
+        // MSA (MIPS SIMD Architecture) vector ops have no clean scalar IR
+        // mapping; route them to tagged Callother intrinsics before the scalar
+        // dispatcher. lift_if_msa only fires for instructions whose operands use
+        // the 128-bit $w0..$w31 vector registers (or MSA-only opcodes), so it
+        // does not shadow the scalar AND/OR/XOR/shift handlers.
+        if !msa::lift_if_msa(&mut ctx, insn.id().0, &operands, mnemonic) {
+            dispatch_insn(&mut ctx, insn.id(), &operands);
+        }
 
         Ok(LiftedInsn {
             ir_ops: ctx.ops,
@@ -675,5 +684,116 @@ mod tests {
             }
             Err(_) => {} // decode failure is also acceptable
         }
+    }
+
+    // MSA (MIPS SIMD Architecture) vector ops are lifted to tagged CALLOTHER
+    // intrinsics. Operands are the 128-bit $w0..$w31 vector registers.
+    // All encodings below were verified against capstone's MIPS64 (MSA) decoder.
+
+    // ADDV.B $w0, $w0, $w0 = 0x7800000E (big-endian)
+    // MSA major opcode 011110, 3R format, df=00 (byte), minor 001110.
+    #[test]
+    fn test_msa_addv_b_is_callother() {
+        use crate::ops::msa::CALLOTHER_MSA_ADDV;
+        let l = lifter();
+        let result = l
+            .lift_insn(&[0x78, 0x00, 0x00, 0x0E], 0x1000)
+            .expect("should decode ADDV.B");
+        assert_eq!(result.len, 4);
+        assert!(
+            !result.ir_ops.iter().any(|op| op.op == IrOp::Unimplemented),
+            "ADDV.B must not be Unimplemented: {:?}",
+            result.ir_ops
+        );
+        let callother = result
+            .ir_ops
+            .iter()
+            .find(|op| op.op == IrOp::Callother)
+            .expect("ADDV.B should emit Callother");
+        assert_eq!(
+            callother.inputs.first().map(|vn| vn.offset),
+            Some(CALLOTHER_MSA_ADDV),
+            "ADDV.B should carry the MSA ADDV tag: {:?}",
+            callother
+        );
+    }
+
+    // XOR.V $w0, $w0, $w0 = 0x7860001E (big-endian)
+    // MSA major opcode 011110, VEC format, operation 00011, minor 011110.
+    #[test]
+    fn test_msa_xor_v_is_callother() {
+        use crate::ops::msa::CALLOTHER_MSA_BITWISE;
+        let l = lifter();
+        let result = l
+            .lift_insn(&[0x78, 0x60, 0x00, 0x1E], 0x1000)
+            .expect("should decode XOR.V");
+        assert_eq!(result.len, 4);
+        assert!(
+            !result.ir_ops.iter().any(|op| op.op == IrOp::Unimplemented),
+            "XOR.V must not be Unimplemented: {:?}",
+            result.ir_ops
+        );
+        let callother = result
+            .ir_ops
+            .iter()
+            .find(|op| op.op == IrOp::Callother)
+            .expect("XOR.V should emit Callother");
+        assert_eq!(
+            callother.inputs.first().map(|vn| vn.offset),
+            Some(CALLOTHER_MSA_BITWISE),
+            "XOR.V should carry the MSA BITWISE tag: {:?}",
+            callother
+        );
+    }
+
+    // ILVR.B $w0, $w0, $w0 = 0x7A800014 (big-endian)
+    // MSA major opcode 011110, 3R format, operation 101, minor 010100.
+    #[test]
+    fn test_msa_ilvr_b_is_callother() {
+        use crate::ops::msa::CALLOTHER_MSA_PACK;
+        let l = lifter();
+        let result = l
+            .lift_insn(&[0x7A, 0x80, 0x00, 0x14], 0x1000)
+            .expect("should decode ILVR.B");
+        assert_eq!(result.len, 4);
+        assert!(
+            !result.ir_ops.iter().any(|op| op.op == IrOp::Unimplemented),
+            "ILVR.B must not be Unimplemented: {:?}",
+            result.ir_ops
+        );
+        let callother = result
+            .ir_ops
+            .iter()
+            .find(|op| op.op == IrOp::Callother)
+            .expect("ILVR.B should emit Callother");
+        assert_eq!(
+            callother.inputs.first().map(|vn| vn.offset),
+            Some(CALLOTHER_MSA_PACK),
+            "ILVR.B should carry the MSA PACK tag: {:?}",
+            callother
+        );
+    }
+
+    // Vector operands are modelled as the 128-bit $w registers, so the
+    // Callother output lands in the MSA register space, not a GPR.
+    #[test]
+    fn test_msa_operands_use_w_registers() {
+        use crate::register_file::MSA_W0;
+        let l = lifter();
+        // SUBV.B $w0, $w0, $w0 = 0x7880000E
+        let result = l
+            .lift_insn(&[0x78, 0x80, 0x00, 0x0E], 0x1000)
+            .expect("should decode SUBV.B");
+        let callother = result
+            .ir_ops
+            .iter()
+            .find(|op| op.op == IrOp::Callother)
+            .expect("SUBV.B should emit Callother");
+        let dst = callother.output.as_ref().expect("SUBV.B has a vector dst");
+        assert_eq!(
+            dst.offset, MSA_W0,
+            "dst should be $w0 in MSA register space"
+        );
+        assert_eq!(dst.size, 16, "MSA vector register is 128-bit (16 bytes)");
     }
 }

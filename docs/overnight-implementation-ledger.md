@@ -48,10 +48,14 @@ Operating rules for this run:
 | 23 | I.3 | session microcode override facts (assert/delete/forbid-propagation) + round-trip | `cargo test -p unlace-session` (37 pass) | `0e086975cc` |
 | 24 | H.2 | `ida_hexrays` microcode wrappers (mba_t/minsn_t analogs over SSA) | `cargo test -p unlace-idapython` (39 pass) | `eedd4bb52d` |
 | 25 | C.4 | RISC-V RVV per-op tags (vadd/vsub/vmul/vand/vor/vxor.vv) + vmul mask-classification fix | `cargo test -p unlace-lift-riscv` (80 pass) | `623e7fe2c5` |
+| 26 | K.1 | `xtask project-roundtrip` — `.unlace` save/load/validate/equality proof over every user-fact kind | `cargo run -p xtask -- project-roundtrip` | `a577037680` |
+| 27 | C | Register SPARC + WebAssembly lifters in the facade `get_lifter()` | `cargo test -p unlace-lift` (2 pass) | `9308d617d0` |
+| 28 | G.3 | `linux_ptrace` `stack_trace()` fp-walk + hardware breakpoints (DR0–DR3/DR7) | `cargo test -p unlace-debugger --features linux-ptrace` (36 pass) | `caaa666901` |
+| 29 | E.4.3 | anti-debug probe detector (IsDebuggerPresent/ptrace/rdtsc/OutputDebugString) | `cargo test -p unlace-passes anti_debug` (4 pass) | `16b3e4976a` |
 
 ## Status checkpoint
 
-25 roadmap-phase tickets landed on master, each gate-verified. Full workspace
+29 roadmap-phase tickets landed on master, each gate-verified. Full workspace
 build compiles, determinism lint OK, `cargo fmt --all --check` clean. Phases
 touched span A, B, C, D, E, F, G, H, I, J, K. This is steady progress against a
 multi-quarter roadmap — not "all phases complete". Notable bonus: the C.4 RVV

@@ -11,7 +11,13 @@ pub mod null;
 #[cfg(feature = "linux-ptrace")]
 pub mod linux_ptrace;
 
+#[cfg(feature = "gdb-stub")]
+pub mod gdb_stub;
+
 pub use null::NullDebugger;
 
 #[cfg(feature = "linux-ptrace")]
 pub use linux_ptrace::LinuxPtraceDebugger;
+
+#[cfg(feature = "gdb-stub")]
+pub use gdb_stub::GdbStubDebugger;

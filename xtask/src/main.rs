@@ -11,6 +11,7 @@ mod golden_triage;
 mod goto_count;
 mod lift_trace;
 mod lifter_coverage;
+mod loader_scorecard;
 mod register_alias_report;
 mod sbom;
 mod semantic_report;
@@ -50,6 +51,10 @@ fn main() {
         Some("lifter-coverage") => {
             let root = workspace_root();
             lifter_coverage::run(&root);
+        }
+        Some("loader-scorecard") => {
+            let root = workspace_root();
+            loader_scorecard::run(&root);
         }
         Some("lift-trace") => {
             let code = lift_trace::run(&args[1..]);
@@ -110,7 +115,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, dump-pipeline, sbom, fuzz"
             );
             process::exit(1);
         }

@@ -7,14 +7,15 @@ mod compare_corpus;
 mod compare_golden;
 mod dump_pipeline;
 mod fuzz;
-mod goto_count;
 mod golden_triage;
+mod goto_count;
 mod lift_trace;
 mod lifter_coverage;
 mod register_alias_report;
 mod sbom;
 mod semantic_report;
 mod type_recovery_report;
+mod unified_parity;
 mod validate_corpus;
 
 fn main() {
@@ -80,6 +81,13 @@ fn main() {
                 process::exit(code);
             }
         }
+        Some("unified-parity") => {
+            let root = workspace_root();
+            let code = unified_parity::run(&root);
+            if code != 0 {
+                process::exit(code);
+            }
+        }
         Some("dump-pipeline") => {
             dump_pipeline::run();
         }
@@ -102,7 +110,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, dump-pipeline, sbom, fuzz"
             );
             process::exit(1);
         }

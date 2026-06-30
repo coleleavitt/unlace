@@ -21,6 +21,14 @@ const REG_N: u64 = 73;
 const REG_Z: u64 = 74;
 const REG_V: u64 = 75;
 const REG_C: u64 = 76;
+// --- 68881/68882 FPU coprocessor register file ---
+// Each FPn holds an 80-bit extended-precision value; we model it as a
+// consistent 16-byte (128-bit) register slot for clean alignment/addressing.
+const FP_BASE: u64 = 80;
+const FP_SLOT: u64 = 16;
+const REG_FPCR: u64 = FP_BASE + 8 * FP_SLOT; // 208 — FP control register
+const REG_FPSR: u64 = REG_FPCR + 4; // 212 — FP status register
+const REG_FPIAR: u64 = REG_FPSR + 4; // 216 — FP instruction-address register
 const UNIQUE_BASE: u64 = 0x6800_0000;
 
 #[inline]
@@ -30,6 +38,12 @@ fn dreg(n: u8, size: u8) -> Varnode {
 #[inline]
 fn areg(n: u8) -> Varnode {
     Varnode::reg(A_BASE + (n as u64) * 4, 4)
+}
+#[inline]
+fn fpreg(n: u8) -> Varnode {
+    // 68881 FPn registers are 80-bit extended; modeled as a 10-byte view
+    // inside a 16-byte slot so adjacent registers never alias.
+    Varnode::reg(FP_BASE + (n as u64) * FP_SLOT, 10)
 }
 #[inline]
 fn reg(off: u64, size: u8) -> Varnode {
@@ -331,6 +345,87 @@ fn flags_result(ctx: &mut Ctx, result: Varnode, addr: u64) {
     );
 }
 
+/// Callother tags for 68881/68882 FPU operations that have no direct IR
+/// equivalent. Values sit in a dedicated m68k FPU block (`0x700..0x710`),
+/// chosen above the x86/ARM/vector tag ranges so they never collide.
+mod fpu_tag {
+    /// `FINT` — round-to-integer-in-FP (no dedicated IR float op).
+    pub const FINT: u64 = 0x700;
+}
+
+/// Decode the 68881/68882 general FPU instruction format (F-line,
+/// coprocessor id 1, first word `0xF2xx`) and lift the common arithmetic /
+/// move / compare subset.
+///
+/// First word:  `1111 001 0 00 MMM RRR` (`0xF200 | (mode<<3) | reg`).
+/// Extension word (general format, bits 15-13 = `000`):
+/// ```text
+///   15 14 13 | 12  | 11 10 9  | 8 7 6   | 5 4 3 2 1 0
+///    0  0  0 | R/M | src spec | dst reg | opmode(6:0)
+/// ```
+/// For register-to-register (`R/M = 0`) the source specifier is the source
+/// FP register number `FPm`; `dst reg` is the destination `FPn`. The 7-bit
+/// opmode (extension bits 6-0) selects the operation.
+fn lift_fpu(rd: &mut Reader<'_>, addr: u64, ctx: &mut Ctx) -> Result<LiftedInsn, LiftError> {
+    let ext = rd.u16()?;
+    // Only the "general" instruction format is handled here; the conditional
+    // (FBcc/FScc/FDBcc, bits 15-13 != 000) and FMOVEM/FSAVE forms are left to
+    // the caller's fallthrough.
+    if (ext & 0xe000) != 0 {
+        return Err(LiftError::Unsupported);
+    }
+    let rm = (ext >> 14) & 1;
+    let src_spec = ((ext >> 10) & 7) as u8;
+    let dst = ((ext >> 7) & 7) as u8;
+    let opmode = ext & 0x7f;
+
+    // Only register-to-register (R/M = 0) is lifted directly; memory/<ea>
+    // and immediate source forms fall through as Unsupported for now.
+    if rm != 0 {
+        return Err(LiftError::Unsupported);
+    }
+
+    let fpm = fpreg(src_spec);
+    let fpn = fpreg(dst);
+
+    // Map the opmode to a real Float IrOp where one exists, otherwise to a
+    // tagged Callother. Never emit Unimplemented for a recognized opmode.
+    match opmode {
+        0x00 => {
+            // FMOVE FPm,FPn — structurally a register copy.
+            ctx.unary(IrOp::Copy, fpn, fpm, addr);
+        }
+        0x22 => ctx.bin(IrOp::FloatAdd, fpn, fpn, fpm, addr), // FADD FPm,FPn
+        0x28 => ctx.bin(IrOp::FloatSub, fpn, fpn, fpm, addr), // FSUB FPm,FPn
+        0x23 => ctx.bin(IrOp::FloatMult, fpn, fpn, fpm, addr), // FMUL FPm,FPn
+        0x20 => ctx.bin(IrOp::FloatDiv, fpn, fpn, fpm, addr), // FDIV FPm,FPn
+        0x1a => ctx.unary(IrOp::FloatNeg, fpn, fpm, addr),    // FNEG FPm,FPn
+        0x18 => ctx.unary(IrOp::FloatAbs, fpn, fpm, addr),    // FABS FPm,FPn
+        0x04 => ctx.unary(IrOp::FloatSqrt, fpn, fpm, addr),   // FSQRT FPm,FPn
+        0x38 => {
+            // FCMP FPm,FPn — set the Z condition from FPn == FPm. The full
+            // FPSR condition-code byte is not modeled; we expose the equality
+            // predicate, which downstream consumers can refine.
+            ctx.bin(IrOp::FloatEqual, reg(REG_Z, 1), fpn, fpm, addr);
+        }
+        0x01 => {
+            // FINT — round to integral value; no dedicated IR op, tag it.
+            ctx.push(IrInsn::with_output(
+                IrOp::Callother,
+                fpn,
+                SmallVec::from_slice(&[cst(fpu_tag::FINT, 8), fpm]),
+                addr,
+            ));
+        }
+        _ => return Err(LiftError::Unsupported),
+    }
+
+    Ok(LiftedInsn {
+        ir_ops: std::mem::take(&mut ctx.ops),
+        len: rd.len(),
+    })
+}
+
 fn lift_branch(
     op: u16,
     rd: &mut Reader<'_>,
@@ -376,6 +471,12 @@ impl M68kLifter {
                 varnode: areg(i),
             });
         }
+        for i in 0..8 {
+            registers.push(RegisterDef {
+                name: Box::leak(format!("FP{i}").into_boxed_str()),
+                varnode: fpreg(i),
+            });
+        }
         registers.extend([
             RegisterDef {
                 name: "SP",
@@ -408,6 +509,18 @@ impl M68kLifter {
             RegisterDef {
                 name: "C",
                 varnode: reg(REG_C, 1),
+            },
+            RegisterDef {
+                name: "FPCR",
+                varnode: reg(REG_FPCR, 4),
+            },
+            RegisterDef {
+                name: "FPSR",
+                varnode: reg(REG_FPSR, 4),
+            },
+            RegisterDef {
+                name: "FPIAR",
+                varnode: reg(REG_FPIAR, 4),
             },
         ]);
         Self {
@@ -643,6 +756,14 @@ impl Lifter for M68kLifter {
                 len: rd.len(),
             });
         }
+        if (op & 0xfe00) == 0xf200 {
+            // F-line coprocessor id 1 (68881/68882 FPU). Try the general
+            // FPU format before falling through to Unsupported; recognized
+            // FP ops must never be reported as unimplemented.
+            if let Ok(lifted) = lift_fpu(&mut rd, addr, &mut ctx) {
+                return Ok(lifted);
+            }
+        }
         Err(LiftError::Unsupported)
     }
 }
@@ -740,5 +861,103 @@ mod tests {
             M68kLifter::new().lift_insn(&[0x60], 0),
             Err(LiftError::ShortBuffer)
         ));
+    }
+
+    // --- 68881/68882 FPU lifting ---
+    //
+    // Register-to-register general format. First word 0xF200 (cpid 1,
+    // EA mode/reg unused for R/M=0). Extension word layout:
+    //   bit12 = R/M (0 = source is FPm), bits 11-10..? src spec (bits 12-10),
+    //   dst reg (bits 9-7), opmode (bits 6-0).
+    // Encodings cross-checked against the Linux m68k math-emu jump table.
+
+    #[test]
+    fn fpu_registers_present() {
+        let l = M68kLifter::new();
+        let names: Vec<&str> = l.register_file().registers.iter().map(|r| r.name).collect();
+        for r in ["FP0", "FP1", "FP7", "FPCR", "FPSR", "FPIAR"] {
+            assert!(names.contains(&r), "missing FP reg {r}");
+        }
+    }
+
+    #[test]
+    fn fadd_fp1_fp0() {
+        // FADD FP1,FP0 -> word1=0xF200, word2=0x0422 (src=FP1, dst=FP0, opmode=0x22)
+        let r = lift(&[0xf2, 0x00, 0x04, 0x22]);
+        assert_eq!(r.len, 4);
+        let i = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op != IrOp::Copy)
+            .expect("an op was lifted");
+        assert_eq!(i.op, IrOp::FloatAdd);
+        assert_eq!(i.output, Some(fpreg(0)));
+        assert_eq!(i.inputs[0], fpreg(0));
+        assert_eq!(i.inputs[1], fpreg(1));
+        // Must not be reported as unsupported/unimplemented.
+        assert!(r.ir_ops.iter().all(|i| i.op != IrOp::Callother));
+    }
+
+    #[test]
+    fn fmul_fp2_fp3() {
+        // FMUL FP2,FP3 -> word2 = src=FP2(010), dst=FP3(011), opmode=0x23 => 0x09A3
+        let r = lift(&[0xf2, 0x00, 0x09, 0xa3]);
+        let i = &r.ir_ops[0];
+        assert_eq!(i.op, IrOp::FloatMult);
+        assert_eq!(i.output, Some(fpreg(3)));
+        assert_eq!(i.inputs[0], fpreg(3));
+        assert_eq!(i.inputs[1], fpreg(2));
+    }
+
+    #[test]
+    fn fsub_fneg_fsqrt_fmove_fcmp() {
+        // FSUB FP4,FP5 -> 0x12A8
+        assert_eq!(lift(&[0xf2, 0x00, 0x12, 0xa8]).ir_ops[0].op, IrOp::FloatSub);
+        // FNEG FP1,FP0 -> 0x041A (unary)
+        let neg = lift(&[0xf2, 0x00, 0x04, 0x1a]);
+        assert_eq!(neg.ir_ops[0].op, IrOp::FloatNeg);
+        assert_eq!(neg.ir_ops[0].inputs[0], fpreg(1));
+        // FSQRT FP1,FP0 -> 0x0404
+        assert_eq!(
+            lift(&[0xf2, 0x00, 0x04, 0x04]).ir_ops[0].op,
+            IrOp::FloatSqrt
+        );
+        // FMOVE FP1,FP0 -> 0x0400 (reg-reg => Copy)
+        let mv = lift(&[0xf2, 0x00, 0x04, 0x00]);
+        assert_eq!(mv.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(mv.ir_ops[0].output, Some(fpreg(0)));
+        assert_eq!(mv.ir_ops[0].inputs[0], fpreg(1));
+        // FCMP FP1,FP0 -> 0x0438 (FloatEqual into Z)
+        let cmp = lift(&[0xf2, 0x00, 0x04, 0x38]);
+        assert_eq!(cmp.ir_ops[0].op, IrOp::FloatEqual);
+        assert_eq!(cmp.ir_ops[0].output, Some(reg(REG_Z, 1)));
+    }
+
+    #[test]
+    fn fint_uses_tagged_callother() {
+        // FINT FP1,FP0 -> opmode 0x01 -> 0x0401. No dedicated IR op: tagged Callother.
+        let r = lift(&[0xf2, 0x00, 0x04, 0x01]);
+        let i = &r.ir_ops[0];
+        assert_eq!(i.op, IrOp::Callother);
+        assert_eq!(i.inputs[0], cst(fpu_tag::FINT, 8));
+        assert_eq!(i.inputs[1], fpreg(1));
+        assert_eq!(i.output, Some(fpreg(0)));
+    }
+
+    #[test]
+    fn fpu_never_unimplemented() {
+        // Every lifted core FP op decodes to a real op (no error path).
+        for enc in [
+            [0xf2, 0x00, 0x04, 0x22], // FADD
+            [0xf2, 0x00, 0x12, 0xa8], // FSUB
+            [0xf2, 0x00, 0x09, 0xa3], // FMUL
+            [0xf2, 0x00, 0x04, 0x00], // FMOVE
+            [0xf2, 0x00, 0x04, 0x38], // FCMP
+        ] {
+            assert!(
+                M68kLifter::new().lift_insn(&enc, 0x2000).is_ok(),
+                "encoding {enc:02x?} must lift, not fall through"
+            );
+        }
     }
 }

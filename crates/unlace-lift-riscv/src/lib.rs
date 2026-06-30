@@ -25,6 +25,16 @@ const TAG_RISCV_AES32ESI: u64 = 0x530;
 const TAG_RISCV_AES32ESMI: u64 = 0x531;
 const TAG_RISCV_AES32DSI: u64 = 0x532;
 const TAG_RISCV_AES32DSMI: u64 = 0x533;
+// AES-64 (RV64) round and key-schedule instructions (Zkne/Zknd).
+const TAG_RISCV_AES64ES: u64 = 0x540;
+const TAG_RISCV_AES64ESM: u64 = 0x541;
+const TAG_RISCV_AES64DS: u64 = 0x542;
+const TAG_RISCV_AES64DSM: u64 = 0x543;
+const TAG_RISCV_AES64KS1I: u64 = 0x544;
+const TAG_RISCV_AES64KS2: u64 = 0x545;
+// Carry-less multiply (Zbc/Zbkc).
+const TAG_RISCV_CLMUL: u64 = 0x550;
+const TAG_RISCV_CLMULH: u64 = 0x551;
 use smallvec::smallvec;
 use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile, SpaceId,
@@ -1306,6 +1316,52 @@ fn lift_zbb_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
 }
 
 fn lift_riscv_crypto_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
+    // aes64ks1i is the only Zk op in this set using the OP-IMM (I-type) form:
+    //   opcode 0x13, funct3=001, bits 31..24 = 0b0011000_1 (bit 24 set selects
+    //   aes64ks1i over aes64im), rnum in bits 23..20 (valid range 0..=10).
+    if bits(word, 0, 7) == 0x13 && bits(word, 12, 3) == 0b001 && bits(word, 24, 8) == 0b0011_0001 {
+        let rnum = bits(word, 20, 4);
+        if rnum <= 10 {
+            let rd = RegId(bits(word, 7, 5) as u16);
+            let rs1 = RegId(bits(word, 15, 5) as u16);
+            let mut ctx = LiftCtx::new(addr);
+            ctx.emit_crypto_callother(
+                TAG_RISCV_AES64KS1I,
+                rd,
+                read_reg(rs1),
+                Varnode::constant(rnum as u64, 8),
+            );
+            return Some(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
+    }
+
+    // sha512sig0/sha512sig1 (RV64) are I-type (opcode 0x13, funct3=001, funct7
+    // 0b0001000) with a fixed rs2-field selector per riscv-opcodes:
+    //   sha512sig0 = rs2-field 0b00110, sha512sig1 = rs2-field 0b00111.
+    // They were previously wired with fabricated R-type encodings that collided
+    // with the real Zbc clmul space; this corrects them to the spec encoding.
+    if bits(word, 0, 7) == 0x13 && bits(word, 12, 3) == 0b001 && bits(word, 25, 7) == 0b0001000 {
+        let sel = bits(word, 20, 5);
+        let tag = match sel {
+            0b00110 => Some(TAG_RISCV_SHA512SIG0),
+            0b00111 => Some(TAG_RISCV_SHA512SIG1),
+            _ => None,
+        };
+        if let Some(tag) = tag {
+            let rd = RegId(bits(word, 7, 5) as u16);
+            let rs1 = RegId(bits(word, 15, 5) as u16);
+            let mut ctx = LiftCtx::new(addr);
+            ctx.emit_crypto_callother(tag, rd, read_reg(rs1), Varnode::constant(0, 8));
+            return Some(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
+    }
+
     let (funct7, rd, rs1, rs2, funct3) = decode_crypto_r_type(word)?;
     let mut ctx = LiftCtx::new(addr);
     match (funct7, funct3) {
@@ -1320,12 +1376,6 @@ fn lift_riscv_crypto_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
         }
         (0b0001000, 0b100) => {
             ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM1, rd, read_reg(rs1), read_reg(rs2))
-        }
-        (0b0000101, 0b000) => {
-            ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG0, rd, read_reg(rs1), read_reg(rs2))
-        }
-        (0b0000101, 0b001) => {
-            ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG1, rd, read_reg(rs1), read_reg(rs2))
         }
         (0b0000100, 0b000) => {
             ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM0, rd, read_reg(rs1), read_reg(rs2))
@@ -1344,6 +1394,34 @@ fn lift_riscv_crypto_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
         }
         (0b0010111, 0b000) => {
             ctx.emit_crypto_callother(TAG_RISCV_AES32DSMI, rd, read_reg(rs1), read_reg(rs2))
+        }
+        // AES-64 (RV64) round/key-schedule, opcode OP, funct3=000.
+        // funct7 bit fields per riscv-opcodes (31..30 | 29..25):
+        //   aes64es  = 0|11001 = 0b0011001, aes64esm = 0|11011 = 0b0011011,
+        //   aes64ds  = 0|11101 = 0b0011101, aes64dsm = 0|11111 = 0b0011111,
+        //   aes64ks2 = 1|11111 = 0b1011111.
+        (0b0011001, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES64ES, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0011011, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES64ESM, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0011101, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES64DS, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0011111, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES64DSM, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b1011111, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES64KS2, rd, read_reg(rs1), read_reg(rs2))
+        }
+        // Carry-less multiply (Zbc/Zbkc), opcode OP, funct7=0b0000101.
+        //   clmul = funct3 001, clmulh = funct3 011.
+        (0b0000101, 0b001) => {
+            ctx.emit_crypto_callother(TAG_RISCV_CLMUL, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000101, 0b011) => {
+            ctx.emit_crypto_callother(TAG_RISCV_CLMULH, rd, read_reg(rs1), read_reg(rs2))
         }
         _ => return None,
     }
@@ -3376,6 +3454,104 @@ mod tests {
             .find(|i| i.op == IrOp::Callother)
             .expect("callother present");
         assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_AES32ESMI, 8));
+    }
+
+    // aes64es x1, x2, x3 → funct7=0b0011001, funct3=000, opcode 0x33 = 0x323100b3.
+    #[test]
+    fn test_aes64es_crypto_tag() {
+        let bytes = 0x323100b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode aes64es");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "aes64es must not be Unimplemented"
+        );
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_AES64ES, 8));
+    }
+
+    // aes64ks1i x1, x2, rnum=3 → opcode 0x13, funct3=001, top8=0b00110001 = 0x31311093.
+    #[test]
+    fn test_aes64ks1i_crypto_tag() {
+        let bytes = 0x31311093u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode aes64ks1i");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "aes64ks1i must not be Unimplemented"
+        );
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_AES64KS1I, 8));
+        // rnum immediate is carried as the second crypto operand.
+        assert_eq!(call.inputs[2], Varnode::constant(3, 8));
+    }
+
+    // clmul x1, x2, x3 → funct7=0b0000101, funct3=001, opcode 0x33 = 0x0a3110b3.
+    #[test]
+    fn test_clmul_crypto_tag() {
+        let bytes = 0x0a3110b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode clmul");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "clmul must not be Unimplemented"
+        );
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_CLMUL, 8));
+    }
+
+    // sha512sig0 x1, x2 → I-type opcode 0x13, funct3=001, funct7=0b0001000,
+    // rs2-selector 0b00110 = 0x10611093 (corrected spec encoding).
+    #[test]
+    fn test_sha512sig0_crypto_tag() {
+        let bytes = 0x10611093u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode sha512sig0");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "sha512sig0 must not be Unimplemented"
+        );
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_SHA512SIG0, 8));
+    }
+
+    // clmulh x1, x2, x3 → funct7=0b0000101, funct3=011, opcode 0x33 = 0x0a3130b3.
+    #[test]
+    fn test_clmulh_crypto_tag() {
+        let bytes = 0x0a3130b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode clmulh");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "clmulh must not be Unimplemented"
+        );
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_CLMULH, 8));
     }
 }
 

@@ -134,6 +134,7 @@ pub mod pipeline_parser;
 pub mod printf_type_infer;
 pub mod prologue_elim;
 pub mod protobuf_recognize;
+pub mod ptr_struct_infer;
 pub mod qemu_tcg;
 pub mod qt_recognize;
 pub mod reanalysis;
@@ -325,6 +326,7 @@ pub use path_sensitive::PathSensitivePass;
 pub use pgo_outlining::{OutlinedFragment, PgoOutliningPass};
 pub use pipeline_parser::{ParsedPipeline, parse_pipeline};
 pub use prologue_elim::PrologueElimPass;
+pub use ptr_struct_infer::{StructFieldCandidate, StructLayoutCandidate, infer_struct_layouts};
 pub use reanalysis::{
     DEFAULT_REANALYSIS_CAP, ReanalysisReport, SignatureSnapshot, bump_if_signature_changed,
     reanalysis_fixpoint,

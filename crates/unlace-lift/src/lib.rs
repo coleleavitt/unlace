@@ -17,10 +17,12 @@ pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_sass::SassLifter;
 pub use unlace_lift_sharc::SharcBlackfinLifter;
+pub use unlace_lift_sparc::SparcLifter;
 pub use unlace_lift_superh::SuperHLifter;
 pub use unlace_lift_ti::TiLifter;
 pub use unlace_lift_tricore::TriCoreLifter;
 pub use unlace_lift_v850::V850Lifter;
+pub use unlace_lift_wasm::WasmLifter;
 pub use unlace_lift_x86::X86Lifter;
 pub use unlace_lift_xtensa::XtensaLifter;
 
@@ -52,6 +54,8 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::SharcBlackfin | ArchId::Sharc => Box::new(SharcBlackfinLifter::new()),
         ArchId::TiC6x => Box::new(TiLifter::new_c6x()),
         ArchId::TiC28x => Box::new(TiLifter::new_c28x()),
+        ArchId::Sparc => Box::new(SparcLifter::new()),
+        ArchId::Wasm => Box::new(WasmLifter::new()),
         _ => Box::new(StubLifter::new(arch)),
     }
 }
@@ -126,6 +130,25 @@ impl Lifter for StubLifter {
 mod tests {
     use super::*;
     use unlace_ir::IrOp;
+
+    #[test]
+    fn test_sparc_and_wasm_lifters_are_registered() {
+        // The StubLifter has an empty register file; the real per-arch lifters
+        // populate one. Use that to assert a non-stub lifter was returned.
+        let sparc = get_lifter(ArchId::Sparc);
+        assert_eq!(sparc.arch(), ArchId::Sparc);
+        assert!(
+            !sparc.register_file().registers.is_empty(),
+            "SPARC should resolve to the real SparcLifter, not the stub"
+        );
+
+        let wasm = get_lifter(ArchId::Wasm);
+        assert_eq!(wasm.arch(), ArchId::Wasm);
+        assert!(
+            !wasm.register_file().registers.is_empty(),
+            "Wasm should resolve to the real WasmLifter, not the stub"
+        );
+    }
 
     #[test]
     fn test_stub_lifters_produce_unimplemented() {

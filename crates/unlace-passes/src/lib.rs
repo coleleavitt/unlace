@@ -179,6 +179,7 @@ pub mod union_recovery;
 pub mod var_naming;
 pub mod vararg_detect;
 pub mod variable_merge;
+pub mod vm_dispatch_recognize;
 pub mod whole_prog_cc;
 pub mod whole_prog_type_unify;
 pub mod x87_top;

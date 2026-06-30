@@ -14,6 +14,9 @@ pub mod linux_ptrace;
 #[cfg(feature = "gdb-stub")]
 pub mod gdb_stub;
 
+#[cfg(feature = "windows-debugapi")]
+pub mod windows;
+
 pub use null::NullDebugger;
 
 #[cfg(feature = "linux-ptrace")]
@@ -21,3 +24,6 @@ pub use linux_ptrace::LinuxPtraceDebugger;
 
 #[cfg(feature = "gdb-stub")]
 pub use gdb_stub::GdbStubDebugger;
+
+#[cfg(feature = "windows-debugapi")]
+pub use windows::WindowsDebugger;

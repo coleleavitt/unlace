@@ -2575,8 +2575,10 @@ dependencies = [
  "thiserror",
  "unlace-ir",
  "unlace-lift-6502",
+ "unlace-lift-8051",
  "unlace-lift-agx",
  "unlace-lift-amdgpu",
+ "unlace-lift-appleagx",
  "unlace-lift-arc",
  "unlace-lift-arm",
  "unlace-lift-avr",
@@ -2586,11 +2588,14 @@ dependencies = [
  "unlace-lift-m68k",
  "unlace-lift-mips",
  "unlace-lift-msp430",
+ "unlace-lift-pic",
  "unlace-lift-ppc",
  "unlace-lift-riscv",
+ "unlace-lift-rx",
  "unlace-lift-sass",
  "unlace-lift-sharc",
  "unlace-lift-sparc",
+ "unlace-lift-spirv",
  "unlace-lift-stm8",
  "unlace-lift-superh",
  "unlace-lift-ti",
@@ -2599,6 +2604,7 @@ dependencies = [
  "unlace-lift-wasm",
  "unlace-lift-x86",
  "unlace-lift-xtensa",
+ "unlace-lift-z80",
 ]
 
 [[package]]

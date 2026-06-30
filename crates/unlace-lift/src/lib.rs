@@ -2,8 +2,11 @@
 
 use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
+pub use unlace_lift_6502::M6502Lifter;
+pub use unlace_lift_8051::I8051Lifter;
 pub use unlace_lift_agx::AgxLifter;
 pub use unlace_lift_amdgpu::AmdGpuLifter;
+pub use unlace_lift_appleagx::AppleAgxLifter;
 pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
 pub use unlace_lift_avr::AvrLifter;
@@ -13,11 +16,15 @@ pub use unlace_lift_hexagon::HexagonLifter;
 pub use unlace_lift_m68k::M68kLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_msp430::Msp430Lifter;
+pub use unlace_lift_pic::Pic16Lifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
+pub use unlace_lift_rx::RxLifter;
 pub use unlace_lift_sass::SassLifter;
 pub use unlace_lift_sharc::SharcBlackfinLifter;
 pub use unlace_lift_sparc::SparcLifter;
+pub use unlace_lift_spirv::SpirVLifter;
+pub use unlace_lift_stm8::Stm8Lifter;
 pub use unlace_lift_superh::SuperHLifter;
 pub use unlace_lift_ti::TiLifter;
 pub use unlace_lift_tricore::TriCoreLifter;
@@ -25,6 +32,7 @@ pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_wasm::WasmLifter;
 pub use unlace_lift_x86::X86Lifter;
 pub use unlace_lift_xtensa::XtensaLifter;
+pub use unlace_lift_z80::Z80Lifter;
 
 /// Construct a lifter for the given architecture.
 pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
@@ -56,6 +64,14 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::TiC28x => Box::new(TiLifter::new_c28x()),
         ArchId::Sparc => Box::new(SparcLifter::new()),
         ArchId::Wasm => Box::new(WasmLifter::new()),
+        ArchId::Mos6502 => Box::new(M6502Lifter::new()),
+        ArchId::I8051 => Box::new(I8051Lifter::new()),
+        ArchId::Pic16 => Box::new(Pic16Lifter::new()),
+        ArchId::RxRenesas => Box::new(RxLifter::new()),
+        ArchId::Z80 => Box::new(Z80Lifter::new()),
+        ArchId::Stm8 => Box::new(Stm8Lifter::new()),
+        ArchId::SpirV => Box::new(SpirVLifter::new()),
+        ArchId::AppleAgx => Box::new(AppleAgxLifter::new()),
         _ => Box::new(StubLifter::new(arch)),
     }
 }
@@ -148,6 +164,30 @@ mod tests {
             !wasm.register_file().registers.is_empty(),
             "Wasm should resolve to the real WasmLifter, not the stub"
         );
+    }
+
+    #[test]
+    fn test_additional_lifters_are_registered() {
+        // Each of these per-arch lifters populates a register file; the stub
+        // does not. A non-empty register file proves dispatch reached the real
+        // lifter rather than the StubLifter fallback.
+        for arch in [
+            ArchId::Mos6502,
+            ArchId::I8051,
+            ArchId::Pic16,
+            ArchId::RxRenesas,
+            ArchId::Z80,
+            ArchId::Stm8,
+            ArchId::SpirV,
+            ArchId::AppleAgx,
+        ] {
+            let lifter = get_lifter(arch);
+            assert_eq!(lifter.arch(), arch);
+            assert!(
+                !lifter.register_file().registers.is_empty(),
+                "{arch:?} should resolve to its real lifter, not the stub"
+            );
+        }
     }
 
     #[test]

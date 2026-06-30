@@ -92,6 +92,11 @@ unlace-lift-ti = { path = "crates/unlace-lift-ti" }
 unlace-lift-evm = { path = "crates/unlace-lift-evm" }
 unlace-lift-lua = { path = "crates/unlace-lift-lua" }
 unlace-lift-6502 = { path = "crates/unlace-lift-6502" }
+unlace-lift-8051 = { path = "crates/unlace-lift-8051" }
+unlace-lift-pic = { path = "crates/unlace-lift-pic" }
+unlace-lift-z80 = { path = "crates/unlace-lift-z80" }
+unlace-lift-spirv = { path = "crates/unlace-lift-spirv" }
+unlace-lift-appleagx = { path = "crates/unlace-lift-appleagx" }
 unlace-lift-stm8 = { path = "crates/unlace-lift-stm8" }
 unlace-passes = { path = "crates/unlace-passes" }
 unlace-struct = { path = "crates/unlace-struct" }

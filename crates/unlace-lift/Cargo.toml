@@ -31,4 +31,10 @@ unlace-lift-wasm = { workspace = true }
 smallvec = { workspace = true }
 unlace-lift-6502 = { workspace = true }
 unlace-lift-stm8 = { workspace = true }
+unlace-lift-8051 = { workspace = true }
+unlace-lift-pic = { workspace = true }
+unlace-lift-rx = { workspace = true }
+unlace-lift-z80 = { workspace = true }
+unlace-lift-spirv = { workspace = true }
+unlace-lift-appleagx = { workspace = true }
 thiserror = { workspace = true }

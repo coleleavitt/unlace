@@ -3292,4 +3292,151 @@ mod tests {
         assert_eq!(p3.varnode.size, SVE_P_SIZE);
         assert_eq!(p3.varnode.space, SpaceId::Register);
     }
+
+    // ── Phase C.2 — AArch64 MTE Callother lifting tests ────────────────
+    // Canonical encodings verified with `llvm-mc -triple=aarch64
+    // -mattr=+mte --show-encoding`. Little-endian byte arrays are the
+    // raw instruction words as they appear in memory.
+
+    #[test]
+    fn irg_lifts_to_mte_callother() {
+        // IRG X0, X1, X2  →  0x9AC21020  (LE: 20 10 c2 9a)
+        use crate::lift::CALLOTHER_AARCH64_IRG;
+        let result = lifter()
+            .lift_insn(&[0x20, 0x10, 0xc2, 0x9a], 0x1000)
+            .expect("should decode");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "IRG must not fall through to Unimplemented"
+        );
+        let ir = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("IRG must emit a Callother");
+        assert_eq!(ir.inputs[0].space, SpaceId::Const);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_IRG);
+        // Xn = X1 (register offset 8), Xm = X2 (register offset 16).
+        assert_eq!(ir.inputs[1].space, SpaceId::Register);
+        assert_eq!(ir.inputs[1].offset, 8);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, 16);
+        // Writes Xd = X0 (offset 0).
+        let out = ir.output.as_ref().expect("IRG writes Xd");
+        assert_eq!(out.space, SpaceId::Register);
+        assert_eq!(out.offset, 0);
+    }
+
+    #[test]
+    fn irg_xzr_modifier_lifts_to_mte_callother() {
+        // IRG X0, X1  (Xm defaults to XZR)  →  0x9ADF1020 (LE: 20 10 df 9a)
+        use crate::lift::CALLOTHER_AARCH64_IRG;
+        let result = lifter()
+            .lift_insn(&[0x20, 0x10, 0xdf, 0x9a], 0x1000)
+            .expect("should decode");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let ir = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("IRG must emit a Callother");
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_IRG);
+        // XZR modifier collapses to constant 0.
+        assert_eq!(ir.inputs[2].space, SpaceId::Const);
+        assert_eq!(ir.inputs[2].offset, 0);
+    }
+
+    #[test]
+    fn stg_lifts_to_mte_callother() {
+        // STG X0, [X1]  →  0xD9200820  (LE: 20 08 20 d9)
+        use crate::lift::CALLOTHER_AARCH64_STG;
+        let result = lifter()
+            .lift_insn(&[0x20, 0x08, 0x20, 0xd9], 0x1000)
+            .expect("should decode");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "STG must not fall through to Unimplemented"
+        );
+        let ir = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("STG must emit a Callother");
+        assert_eq!(ir.inputs[0].space, SpaceId::Const);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_STG);
+        // Xt = X0 (offset 0), Xn = X1 (offset 8).
+        assert_eq!(ir.inputs[1].offset, 0);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, 8);
+        // STG is a store: no IR output.
+        assert!(ir.output.is_none(), "STG must not write a destination");
+    }
+
+    #[test]
+    fn addg_lifts_to_mte_callother() {
+        // ADDG X0, X1, #16, #2  →  0x91810820  (LE: 20 08 81 91)
+        use crate::lift::CALLOTHER_AARCH64_ADDG;
+        let result = lifter()
+            .lift_insn(&[0x20, 0x08, 0x81, 0x91], 0x1000)
+            .expect("should decode");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let ir = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("ADDG must emit a Callother");
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_ADDG);
+        // Xn = X1.
+        assert_eq!(ir.inputs[1].offset, 8);
+        // uimm6 immediate = 1 (encoded value; #16 == 1 granule).
+        assert_eq!(ir.inputs[2].space, SpaceId::Const);
+        assert_eq!(ir.inputs[2].offset, 1);
+        // tag offset uimm4 = 2.
+        assert_eq!(ir.inputs[3].offset, 2);
+        assert_eq!(ir.output.as_ref().unwrap().offset, 0);
+    }
+
+    #[test]
+    fn ldg_lifts_to_mte_callother() {
+        // LDG X0, [X1, #16]  →  0xD9601020  (LE: 20 10 60 d9)
+        use crate::lift::CALLOTHER_AARCH64_LDG;
+        let result = lifter()
+            .lift_insn(&[0x20, 0x10, 0x60, 0xd9], 0x1000)
+            .expect("should decode");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let ir = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("LDG must emit a Callother");
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_LDG);
+        // Xn = X1.
+        assert_eq!(ir.inputs[1].offset, 8);
+        // imm9=1, scaled by 16 → displacement 16.
+        assert_eq!(ir.inputs[2].offset, 16);
+        // LDG writes Xt = X0.
+        assert_eq!(ir.output.as_ref().unwrap().offset, 0);
+    }
+
+    #[test]
+    fn stgp_lifts_to_mte_callother() {
+        // STGP X0, X1, [X2]  →  0x69000440  (LE: 40 04 00 69)
+        use crate::lift::CALLOTHER_AARCH64_STGP;
+        let result = lifter()
+            .lift_insn(&[0x40, 0x04, 0x00, 0x69], 0x1000)
+            .expect("should decode");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let ir = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("STGP must emit a Callother");
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_STGP);
+        // Xt = X0, Xt2 = X1 (offset 8), Xn = X2 (offset 16).
+        assert_eq!(ir.inputs[1].offset, 0);
+        assert_eq!(ir.inputs[2].offset, 8);
+        assert_eq!(ir.inputs[3].offset, 16);
+        // STGP is a store: no IR output.
+        assert!(ir.output.is_none());
+    }
 }

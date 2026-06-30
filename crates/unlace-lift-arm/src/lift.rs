@@ -186,6 +186,17 @@ impl ArmLifter {
                 len: 4,
             });
         }
+        // Phase C.2 — AArch64 MTE: lift IRG/ADDG/SUBG/STG/LDG/STGP to tagged
+        // Callother intrinsics before falling through to the Capstone decode
+        // path (Capstone may not model the MTE tag operands).
+        if let Some(mte) = try_mte_callother(raw) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_mte_callother(&mut ctx, &mte);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
         if try_pac_bti_nop(raw) {
             return Ok(LiftedInsn {
                 ir_ops: Vec::new(),
@@ -3539,6 +3550,234 @@ fn emit_pac_callother(ctx: &mut LiftCtx, pac: &PacAuthDecoded) {
         smallvec![tag_vn, xd, modifier]
     };
     ctx.emit(IrInsn::with_output(IrOp::Callother, xd, inputs, ctx.addr));
+}
+
+// ── Phase C.2 — AArch64 Memory Tagging Extension (MTE) Callother tags ──
+//
+// The MTE instructions manipulate the 4-bit allocation/logical *tags*
+// carried in the top byte of pointers and in tag memory. None of them
+// have a clean data-flow lowering at the IR level (the tag arithmetic and
+// tag-memory side-effects are architectural state we don't model), so we
+// lift each to a dedicated `Callother` intrinsic that records which MTE
+// operation ran and what its register/immediate operands were. Tags
+// occupy a fresh namespace `0x440..=0x445`, picking up after the PAC
+// block (`0x40E..=0x413`) and clear of the NEON/SVE ranges.
+//
+//   IRG  Xd, Xn{, Xm}        → Callother(tag, Xn, Xm)            → Xd
+//   ADDG Xd, Xn, #imm, #tag  → Callother(tag, Xn, #imm, #tag4)   → Xd
+//   SUBG Xd, Xn, #imm, #tag  → Callother(tag, Xn, #imm, #tag4)   → Xd
+//   LDG  Xt, [Xn, #imm]      → Callother(tag, Xn, #imm)          → Xt
+//   STG  Xt, [Xn, #imm]      → Callother(tag, Xt, Xn, #imm)      (store, no output)
+//   STGP Xt, Xt2, [Xn, #imm] → Callother(tag, Xt, Xt2, Xn, #imm) (store, no output)
+
+/// `Callother` tag for AArch64 `IRG Xd, Xn{, Xm}` (insert random tag).
+/// Emitted as `Callother(tag, Xn, Xm) → Xd`.
+pub const CALLOTHER_AARCH64_IRG: u64 = 0x440;
+/// `Callother` tag for AArch64 `ADDG Xd, Xn, #uimm6, #uimm4` (add with tag).
+/// Emitted as `Callother(tag, Xn, #uimm6, #uimm4) → Xd`.
+pub const CALLOTHER_AARCH64_ADDG: u64 = 0x441;
+/// `Callother` tag for AArch64 `SUBG Xd, Xn, #uimm6, #uimm4` (subtract with tag).
+/// Emitted as `Callother(tag, Xn, #uimm6, #uimm4) → Xd`.
+pub const CALLOTHER_AARCH64_SUBG: u64 = 0x442;
+/// `Callother` tag for AArch64 `STG Xt, [Xn, #simm9]` (store allocation tag).
+/// Emitted as `Callother(tag, Xt, Xn, #simm9)` with no IR output.
+pub const CALLOTHER_AARCH64_STG: u64 = 0x443;
+/// `Callother` tag for AArch64 `LDG Xt, [Xn, #simm9]` (load allocation tag).
+/// Emitted as `Callother(tag, Xn, #simm9) → Xt`.
+pub const CALLOTHER_AARCH64_LDG: u64 = 0x444;
+/// `Callother` tag for AArch64 `STGP Xt, Xt2, [Xn, #simm7]` (store allocation
+/// tag and pair). Emitted as `Callother(tag, Xt, Xt2, Xn, #simm7)`, no output.
+pub const CALLOTHER_AARCH64_STGP: u64 = 0x445;
+
+/// Decoded MTE instruction shape (Phase C.2).
+///
+/// `rd` is the destination/first register; `rn` is the base/source register
+/// for the address-forming or tag-source operand. `rt2` is the second
+/// register for `STGP` (else `None`). `imm` carries the immediate field
+/// (uimm6 for ADDG/SUBG, sign-extended byte displacement for STG/LDG/STGP),
+/// and `imm2` the 4-bit tag immediate for ADDG/SUBG (else 0). `has_output`
+/// is `true` when the instruction writes `Xd`/`Xt`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MteDecoded {
+    pub tag: u64,
+    pub rd: u8,
+    pub rn: u8,
+    pub rt2: Option<u8>,
+    pub imm: i64,
+    pub imm2: u64,
+    pub has_output: bool,
+}
+
+/// If `insn` is one of the lifted MTE instructions (IRG/ADDG/SUBG/STG/LDG/
+/// STGP), return its decoded shape; otherwise `None` so the caller falls
+/// through to the existing decode path. Encodings verified against
+/// `llvm-mc -mattr=+mte`.
+pub fn try_mte_callother(insn: u32) -> Option<MteDecoded> {
+    let rd = (insn & 0x1F) as u8; // Rd / Rt
+    let rn = ((insn >> 5) & 0x1F) as u8; // Rn (base / source)
+
+    // IRG Xd, Xn{, Xm}: DP-2source, 1001 1010 110 Xm 0001 00 Xn Xd.
+    // mask bits[31:21] | bits[15:10].
+    if (insn & 0xFFE0_FC00) == 0x9AC0_1000 {
+        let rm = ((insn >> 16) & 0x1F) as u8;
+        return Some(MteDecoded {
+            tag: CALLOTHER_AARCH64_IRG,
+            rd,
+            rn,
+            rt2: None,
+            imm: rm as i64, // Xm register index (31 == XZR / no modifier)
+            imm2: 0,
+            has_output: true,
+        });
+    }
+
+    // ADDG / SUBG Xd, Xn, #uimm6, #uimm4: 1 op 01000110 uimm6 (00) uimm4 Xn Xd.
+    // bits[31:22] select the op (1001000110 = ADDG, 1101000110 = SUBG).
+    if (insn & 0xFFC0_0000) == 0x9180_0000 || (insn & 0xFFC0_0000) == 0xD180_0000 {
+        let uimm6 = ((insn >> 16) & 0x3F) as i64; // offset, in units of tag granule
+        let uimm4 = ((insn >> 10) & 0xF) as u64; // tag offset
+        let tag = if (insn & 0xFFC0_0000) == 0x9180_0000 {
+            CALLOTHER_AARCH64_ADDG
+        } else {
+            CALLOTHER_AARCH64_SUBG
+        };
+        return Some(MteDecoded {
+            tag,
+            rd,
+            rn,
+            rt2: None,
+            imm: uimm6,
+            imm2: uimm4,
+            has_output: true,
+        });
+    }
+
+    // STG / LDG: load/store memory tags group, 1101 1001 opc 1 imm9 op2 Xn Xt.
+    // STG opc=00 → bits[31:21]=11011001001 (base 0xD9200000).
+    // LDG opc=01 → bits[31:21]=11011001011 (base 0xD9600000).
+    if (insn & 0xFFE0_0000) == 0xD920_0000 || (insn & 0xFFE0_0000) == 0xD960_0000 {
+        let imm9 = (insn >> 12) & 0x1FF;
+        let simm = sign_extend(imm9, 9) * 16; // scaled by tag granule (16 bytes)
+        if (insn & 0xFFE0_0000) == 0xD960_0000 {
+            // LDG writes Xt from tag memory at [Xn, #simm].
+            return Some(MteDecoded {
+                tag: CALLOTHER_AARCH64_LDG,
+                rd,
+                rn,
+                rt2: None,
+                imm: simm,
+                imm2: 0,
+                has_output: true,
+            });
+        }
+        // STG stores the allocation tag of Xt to [Xn, #simm]; no output.
+        return Some(MteDecoded {
+            tag: CALLOTHER_AARCH64_STG,
+            rd,
+            rn,
+            rt2: None,
+            imm: simm,
+            imm2: 0,
+            has_output: false,
+        });
+    }
+
+    // STGP Xt, Xt2, [Xn, #simm7]: load/store-pair tag group.
+    // bits[31:25]=0110100, bit[22]=L=0 (store). index[24:23] varies by mode.
+    if (insn & 0xFE40_0000) == 0x6800_0000 {
+        let imm7 = (insn >> 15) & 0x7F;
+        let rt2 = ((insn >> 10) & 0x1F) as u8;
+        let simm = sign_extend(imm7, 7) * 16; // scaled by tag granule (16 bytes)
+        return Some(MteDecoded {
+            tag: CALLOTHER_AARCH64_STGP,
+            rd,
+            rn,
+            rt2: Some(rt2),
+            imm: simm,
+            imm2: 0,
+            has_output: false,
+        });
+    }
+
+    None
+}
+
+/// Sign-extend the low `bits` bits of `value` to a signed 64-bit integer.
+fn sign_extend(value: u32, bits: u32) -> i64 {
+    debug_assert!((1..=32).contains(&bits));
+    let shift = 32 - bits;
+    ((value << shift) as i32 >> shift) as i64
+}
+
+/// Build an `Xn` 64-bit register varnode for MTE operands, allowing index
+/// 31. In load/store-tag addressing contexts (`STG`/`LDG`/`STGP`/`IRG`),
+/// register 31 denotes the stack pointer, which lives at the same
+/// `Register`-space offset (`31 * 8 == SP`); for data operands it denotes
+/// `XZR`. Either way the canonical offset is `n * 8`.
+fn mte_xreg_varnode(n: u8) -> Varnode {
+    debug_assert!(n <= 31, "MTE register index must be 0..=31, got {n}");
+    Varnode::new(SpaceId::Register, n as u64 * 8, 8)
+}
+
+/// Emit the `Callother` intrinsic for a decoded MTE instruction.
+///
+/// Operand layout per tag is documented on the tag constants. Register
+/// operands become 64-bit `Register`-space varnodes; immediates become
+/// `Const` varnodes (the signed displacement is re-encoded as its two's
+/// complement 64-bit value). Instructions with `has_output` write `Xd`/`Xt`.
+fn emit_mte_callother(ctx: &mut LiftCtx, mte: &MteDecoded) {
+    let tag_vn = Varnode::constant(mte.tag, 8);
+    let xn = mte_xreg_varnode(mte.rn);
+
+    let inputs: smallvec::SmallVec<[Varnode; 3]> = match mte.tag {
+        CALLOTHER_AARCH64_IRG => {
+            // imm holds the Xm register index (31 == XZR ⇒ const-0 modifier).
+            let xm = if mte.imm == 31 {
+                Varnode::constant(0, 8)
+            } else {
+                mte_xreg_varnode(mte.imm as u8)
+            };
+            smallvec![tag_vn, xn, xm]
+        }
+        CALLOTHER_AARCH64_ADDG | CALLOTHER_AARCH64_SUBG => {
+            smallvec![
+                tag_vn,
+                xn,
+                Varnode::constant(mte.imm as u64, 8),
+                Varnode::constant(mte.imm2, 1),
+            ]
+        }
+        CALLOTHER_AARCH64_LDG => {
+            smallvec![tag_vn, xn, Varnode::constant(mte.imm as u64, 8)]
+        }
+        CALLOTHER_AARCH64_STG => {
+            // value tagged = Xt (rd), address base = Xn (rn).
+            smallvec![
+                tag_vn,
+                mte_xreg_varnode(mte.rd),
+                xn,
+                Varnode::constant(mte.imm as u64, 8),
+            ]
+        }
+        CALLOTHER_AARCH64_STGP => {
+            let xt2 = mte_xreg_varnode(mte.rt2.expect("STGP carries a second register"));
+            smallvec![
+                tag_vn,
+                mte_xreg_varnode(mte.rd),
+                xt2,
+                xn,
+                Varnode::constant(mte.imm as u64, 8),
+            ]
+        }
+        _ => smallvec![tag_vn, xn],
+    };
+
+    if mte.has_output {
+        let xd = mte_xreg_varnode(mte.rd);
+        ctx.emit(IrInsn::with_output(IrOp::Callother, xd, inputs, ctx.addr));
+    } else {
+        ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
+    }
 }
 
 /// Canonical AArch64 CSEL intrinsic tag. Emitted by `lift_csel` as

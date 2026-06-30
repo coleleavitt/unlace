@@ -1,0 +1,23 @@
+[package]
+name = "unlace-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CLI-first Model Context Protocol server exposing unlace's read-only decompiler capabilities over stdio."
+
+[dependencies]
+rmcp = { path = "/home/cole/RustProjects/forks/rust-sdk/crates/rmcp", version = "1.8", features = [
+    "server",
+    "macros",
+    "transport-io",
+] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std", "io-util", "process"] }
+anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+schemars = "1.0"
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[bin]]
+name = "unlace-mcp"
+path = "src/main.rs"

@@ -12,3 +12,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 smallvec = { workspace = true }
+
+[[example]]
+name = "hello_plugin"
+path = "examples/hello_plugin.rs"

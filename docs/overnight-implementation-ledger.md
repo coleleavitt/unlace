@@ -60,10 +60,15 @@ Operating rules for this run:
 | 35 | B.4 | C++ Itanium RTTI/vtable recognizer (`_ZTV`/`_ZTI` → class name + method addrs) | `cargo test -p unlace-passes cxx_vtable` (4 pass) | `d36a0d28a2` |
 | 36 | C.5 | m68k 68881/68882 FPU register file + FADD/FSUB/FMUL/FDIV/FNEG/FABS/FSQRT/FMOVE/FCMP/FINT | `cargo test -p unlace-lift-m68k` (15 pass) | `7eae8499c7` |
 | 37 | C.2 | AArch64 SVE subset (add/sub/mul/logical/ld1/st1/ptrue/whilelt) over z0–31/p0–15 | `cargo test -p unlace-lift-arm` (226 pass) | `915debd263` |
+| 38 | E.4.1 | Expand packer roster: VMProtect/PEtite/FSG/NsPack/MEW section signatures | `cargo test -p unlace-loader packer_detect` (11 pass) | `1f6f6ba38a` |
+| 39 | E.4.3 | string-decode-stub recognizer (loop + Load + key transform + Store, key recovery) | `cargo test -p unlace-passes string_decode` (3 pass) | `c2f759fd87` |
+| 40 | H.2 | `ida_hexrays` ctree wrappers (citem_t/cexpr_t/cinsn_t analogs over HIR) | `cargo test -p unlace-idapython` (44 pass) | `9a8e6b39f5` |
 
 ## Status checkpoint
 
-37 roadmap-phase tickets landed on master, each gate-verified. Full workspace
+40 roadmap-phase tickets landed on master, each gate-verified. Build clean,
+determinism lint OK, `cargo fmt --all --check` clean. Phases touched span all of
+A, B, C, D, E, F, G, H, I, J, K. Full workspace
 build compiles, determinism lint OK, `cargo fmt --all --check` clean. Phases
 touched span A, B, C, D, E, F, G, H, I, J, K. This is steady progress against a
 multi-quarter roadmap — not "all phases complete". Notable bonus: the C.4 RVV

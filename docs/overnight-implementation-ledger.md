@@ -30,6 +30,18 @@ Operating rules for this run:
 | 6 | B.6.1 | demangle corpus round-trip test (Rust/Swift/C++ Itanium + foreign-scheme rejection) | `cargo test -p unlace-loader --test demangle_corpus` (4 pass) | `0a1ba14592` |
 | 7 | C.4 | RISC-V Zbb `andn`/`orn`/`xnor` + `sext.b`/`sext.h`/`zext.h` lifting | `cargo test -p unlace-lift-riscv` (78 pass) | `f9e6822f78` |
 | 8 | D.2 | `dead_param_elim` inter-procedural analysis (conservative, BTreeMap, determinism-clean) | `cargo test -p unlace-passes dead_param_elim` (5 pass); `lint-determinism` OK | `eac41e31e7` |
+| 9 | B.3 | DW_OP evaluator expansion: `call_frame_cfa`/`addr`/`implicit_value`/`deref`/`constu` | `cargo test -p unlace-loader dwarf_expr` (19 pass) | `d512ad6645` |
+| 10 | H.1 | IDAPython core API expansion: more `ida_funcs`/`ida_bytes`/`ida_name` over real Session | `cargo test -p unlace-idapython` (35 pass) | `62b3c921f8` |
+| 11 | K.2a | `unlace-plugin` `hello_plugin` example + SDK README guide | `cargo test -p unlace-plugin` (28 pass); `cargo build -p unlace-plugin --examples` | `fc10545ea6` |
+
+### Outstanding (agents failed/thrashed — to redo, likely self-implement)
+
+- B.1.1 AArch64 FLIRT bundled sigs (agent bailed at 2 tools).
+- C.2 AArch64 MTE op lifting (agent thrashed to 47 tools, leaked incomplete/broken
+  code into main tree referencing undefined helpers — reverted clean).
+- C.5 PowerPC AltiVec lifting (agent thrashed to 59 tools, never converged —
+  cancelled, leak reverted). Encoding-heavy lifter work is hard for agents; do
+  these directly.
 
 ### Multi-agent run notes
 

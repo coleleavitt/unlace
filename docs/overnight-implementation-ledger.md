@@ -43,15 +43,23 @@ Operating rules for this run:
 | 19 | F.2 | Lumina end-to-end client/server metadata round-trip test + README | `cargo test -p unlace-lumina` (66 pass) | `4d3f74f732` |
 | 20 | C.5 | MIPS MSA SIMD ops (`ADDV/SUBV/MULV/AND.V/OR.V/XOR.V/ILVR`) wired as Callother, operand-guarded so scalar ops untouched | `cargo test -p unlace-lift-mips` (25 pass) | `693f669faf` |
 
+| 21 | K.2 | SDK support matrix doc grounded in real surfaces | n/a (doc) | `e1a1ef0b0f` |
+| 22 | D.4 | CWE-119/787 dangerous-function detector (gets/strcpy/sprintf, memcpy family) | `cargo test -p unlace-passes cwe_detect` (7 pass); determinism OK | `478023130e` |
+| 23 | I.3 | session microcode override facts (assert/delete/forbid-propagation) + round-trip | `cargo test -p unlace-session` (37 pass) | `0e086975cc` |
+| 24 | H.2 | `ida_hexrays` microcode wrappers (mba_t/minsn_t analogs over SSA) | `cargo test -p unlace-idapython` (39 pass) | `eedd4bb52d` |
+| 25 | C.4 | RISC-V RVV per-op tags (vadd/vsub/vmul/vand/vor/vxor.vv) + vmul mask-classification fix | `cargo test -p unlace-lift-riscv` (80 pass) | `623e7fe2c5` |
+
 ## Status checkpoint
 
-20 roadmap-phase tickets landed on master, each gate-verified. Full workspace
-test build compiles (`cargo test --workspace --no-run` EXIT 0), determinism lint
-OK, `cargo fmt --all --check` clean. Phases touched span A, B, C, D, E, F, G, H,
-I, J, K. This is steady progress against a multi-quarter roadmap — not "all
-phases complete"; remaining work is the deeper, higher-risk items (full type
-inference D.1+, symbolic exec D.3, Windows/macOS debuggers G.1, ida_hexrays
-ctree H.2, A.4.7 COERCE_* output, broad lifter breadth, J.2 address-mapped diff).
+25 roadmap-phase tickets landed on master, each gate-verified. Full workspace
+build compiles, determinism lint OK, `cargo fmt --all --check` clean. Phases
+touched span A, B, C, D, E, F, G, H, I, J, K. This is steady progress against a
+multi-quarter roadmap — not "all phases complete". Notable bonus: the C.4 RVV
+agent found and fixed a latent correctness bug (vmul.vv was mis-classified as a
+mask-producing op). Remaining deeper work: D.1 producer-side struct inference,
+D.3 symbolic exec (Z3), G.1 Windows/macOS debuggers, H.2 full ctree, A.4.7
+COERCE_* output (golden-sensitive), J.2 address-mapped diff, C facade lifter
+registration (sparc/wasm), C.2 AArch64 SVE/SME, C.3 ARM32 VFP/NEON.
 
 ### Agent reliability notes (updated)
 

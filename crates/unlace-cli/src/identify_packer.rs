@@ -48,6 +48,12 @@ pub struct PackerReport {
     pub sections: Vec<SectionEvidence>,
     /// Ranked hypotheses, most-likely first.
     pub hypotheses: Vec<String>,
+    /// Recovery steps unlace cannot perform automatically yet (E.4.4 handoff).
+    pub unsupported_steps: Vec<String>,
+    /// Suggested next commands for the analyst/agent (E.4.4 handoff).
+    pub suggested_commands: Vec<String>,
+    /// A self-contained, LLM-ready goal prompt summarizing goal + evidence.
+    pub llm_goal_prompt: String,
 }
 
 /// Analyze an already-loaded image. Pure function of the image so it is
@@ -97,6 +103,15 @@ pub fn analyze(image: &BinaryImage) -> PackerReport {
         image.tls_callbacks.len(),
     );
 
+    let (unsupported_steps, suggested_commands) =
+        recovery_handoff(detected.as_deref(), high_entropy_exec, entry_in_text);
+    let llm_goal_prompt = build_llm_prompt(
+        detected.as_deref(),
+        &format!("{:?}", image.arch),
+        &hypotheses,
+        &unsupported_steps,
+    );
+
     PackerReport {
         detected_signature: detected,
         arch: format!("{:?}", image.arch),
@@ -109,7 +124,86 @@ pub fn analyze(image: &BinaryImage) -> PackerReport {
         high_entropy_exec_sections: high_entropy_exec,
         sections,
         hypotheses,
+        unsupported_steps,
+        suggested_commands,
+        llm_goal_prompt,
     }
+}
+
+/// Build the recovery handoff: which steps unlace can't yet do automatically,
+/// and the concrete next commands to run. Deterministic.
+fn recovery_handoff(
+    detected: Option<&str>,
+    high_entropy_exec: usize,
+    entry_in_text: bool,
+) -> (Vec<String>, Vec<String>) {
+    let mut unsupported = Vec::new();
+    let mut commands = Vec::new();
+
+    if let Some(name) = detected {
+        unsupported.push(format!(
+            "Automated static unpacking of {name} is not implemented — the packed payload must be unpacked before full decompilation."
+        ));
+        match name {
+            "UPX" => commands.push("upx -d <binary> -o <binary>.unpacked   # UPX is self-unpacking".to_string()),
+            _ => commands.push(format!(
+                "# Unpack {name} dynamically (run under unlace emu / a sandbox), then dump the OEP image"
+            )),
+        }
+        commands.push(
+            "unlace emu <binary> --max-instructions 5000000   # observe unpack stub behaviour"
+                .to_string(),
+        );
+    }
+    if high_entropy_exec > 0 && detected.is_none() {
+        unsupported.push(
+            "High-entropy executable section(s) suggest an unknown packer/encrypter; behavioural unpacking is not automated."
+                .to_string(),
+        );
+    }
+    if !entry_in_text {
+        unsupported.push(
+            "Entrypoint outside .text suggests a dumped/rebuilt image; import-table reconstruction is not automated."
+                .to_string(),
+        );
+    }
+
+    commands.push(
+        "unlace identify-packer <binary> --format json   # machine-readable evidence".to_string(),
+    );
+    commands.push("unlace decompile <binary> --emit c   # attempt decompilation as-is".to_string());
+    (unsupported, commands)
+}
+
+/// Compose a self-contained prompt an analyst can hand to an LLM/agent.
+fn build_llm_prompt(
+    detected: Option<&str>,
+    arch: &str,
+    hypotheses: &[String],
+    unsupported: &[String],
+) -> String {
+    let packer = detected.unwrap_or("none detected (signature-based)");
+    let mut p = String::new();
+    p.push_str("You are assisting with reverse engineering a binary. ");
+    p.push_str(&format!(
+        "Architecture: {arch}. Packer signature: {packer}. "
+    ));
+    p.push_str("Deterministic evidence (ranked hypotheses): ");
+    for (i, h) in hypotheses.iter().enumerate() {
+        p.push_str(&format!("({}) {h}; ", i + 1));
+    }
+    if !unsupported.is_empty() {
+        p.push_str("unlace cannot automatically: ");
+        for u in unsupported {
+            p.push_str(u);
+            p.push(' ');
+        }
+    }
+    p.push_str(
+        "Goal: propose the next concrete steps to unpack/deobfuscate and recover readable C. ",
+    );
+    p.push_str("Do NOT execute the sample; reason only from the evidence and propose commands.");
+    p
 }
 
 fn rank_hypotheses(
@@ -207,6 +301,23 @@ pub fn render_text(r: &PackerReport) -> String {
         out.push_str(&format!("{}. {h}\n", i + 1));
     }
 
+    if !r.unsupported_steps.is_empty() {
+        out.push_str("\n## Unsupported recovery steps\n\n");
+        for s in &r.unsupported_steps {
+            out.push_str(&format!("- {s}\n"));
+        }
+    }
+
+    out.push_str("\n## Suggested next commands\n\n");
+    for c in &r.suggested_commands {
+        out.push_str(&format!("- `{c}`\n"));
+    }
+
+    out.push_str("\n## LLM-ready goal prompt\n\n");
+    out.push_str("> ");
+    out.push_str(&r.llm_goal_prompt);
+    out.push('\n');
+
     out.push_str("\n## Sections\n\n");
     out.push_str("| section | vaddr | size | entropy | r | w | x |\n");
     out.push_str("|---------|------:|-----:|--------:|:-:|:-:|:-:|\n");
@@ -262,5 +373,27 @@ mod tests {
         assert!(h[0].contains("UPX"));
         assert!(h.iter().any(|x| x.contains("not in a .text")));
         assert!(h.iter().any(|x| x.contains("high-entropy")));
+    }
+
+    #[test]
+    fn recovery_handoff_for_upx_suggests_unpacking() {
+        let (unsupported, commands) = recovery_handoff(Some("UPX"), 1, true);
+        assert!(unsupported.iter().any(|s| s.contains("UPX")));
+        assert!(commands.iter().any(|c| c.contains("upx -d")));
+        // Generic commands always present.
+        assert!(commands.iter().any(|c| c.contains("identify-packer")));
+    }
+
+    #[test]
+    fn llm_prompt_contains_goal_and_no_execute_guard() {
+        let prompt = build_llm_prompt(
+            Some("UPX"),
+            "X86_64",
+            &["Packed with UPX".to_string()],
+            &["unpacking not automated".to_string()],
+        );
+        assert!(prompt.contains("UPX"));
+        assert!(prompt.contains("Goal:"));
+        assert!(prompt.contains("Do NOT execute"));
     }
 }

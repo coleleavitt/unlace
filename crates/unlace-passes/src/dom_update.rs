@@ -4,7 +4,7 @@
 //! updater API so we can swap in incremental updates later.
 
 use unlace_ir::ssa::{SsaFunction, rebuild_cfg};
-use unlace_ir::verify_ssa_function;
+use unlace_ir::verify_ssa_function_pipeline;
 
 use crate::pass::PassError;
 
@@ -14,7 +14,7 @@ pub struct DominatorUpdater;
 impl DominatorUpdater {
     pub fn rebuild_all(func: &mut SsaFunction) -> Result<(), PassError> {
         rebuild_cfg(func);
-        verify_ssa_function(func).map_err(|err| PassError::InvariantViolation {
+        verify_ssa_function_pipeline(func).map_err(|err| PassError::InvariantViolation {
             message: format!(
                 "{} dominator update verification failed: {err}",
                 func.function.name

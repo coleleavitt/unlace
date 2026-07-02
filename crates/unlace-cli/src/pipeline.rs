@@ -4010,7 +4010,10 @@ pub fn decompile_function_with_symbols(
     let t_passes = Instant::now();
     pipeline_trace_start(&entry.name, "run-passes");
     if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
-        tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
+        tracing::warn!(
+            err = format!("{e:#}"),
+            "pass pipeline failed; emitting unoptimized"
+        );
         if pipeline_trace_enabled() {
             eprintln!(
                 "[unlace pipeline] func={} stage=run-passes error={e:#}",

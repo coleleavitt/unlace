@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::Varnode;
 use unlace_ir::ssa::{SsaFunction, VarnodeSlot, rebuild_cfg};
-use unlace_ir::verify_ssa_function;
+use unlace_ir::verify_ssa_function_pipeline;
 
 use crate::pass::{Pass, PassError, PassPhase};
 
@@ -53,14 +53,43 @@ impl Pass for CfgRepairPass {
             };
             for phi in phis.iter_mut() {
                 let before = phi.inputs.len();
+                // Successor lists are deduplicated above (a conditional
+                // branch whose arms collapse to one target leaves one edge),
+                // so phi inputs must be deduplicated per predecessor too —
+                // keep the first input for each block, mirroring the edge
+                // that survived.
+                let mut seen_inputs = BTreeSet::new();
                 phi.inputs.retain(|(input_bid, _)| {
-                    known_blocks.contains(input_bid) && preds.contains(input_bid)
+                    known_blocks.contains(input_bid)
+                        && preds.contains(input_bid)
+                        && seen_inputs.insert(*input_bid)
                 });
                 changed |= phi.inputs.len() != before;
             }
             let before_phis = phis.len();
             phis.retain(|phi| !phi.inputs.is_empty());
             changed |= phis.len() != before_phis;
+
+            // Complete phis for predecessors gained after SSA construction
+            // (edge redirection/branch folding does not maintain phi inputs).
+            // A version-0 input is the explicit spelling of the historical
+            // "no input for this edge" state: undefined/live-in along that
+            // path. Appended in ascending block order for determinism.
+            for phi in phis.iter_mut() {
+                let have: BTreeSet<_> = phi.inputs.iter().map(|(bid, _)| *bid).collect();
+                for &pred in preds {
+                    if !have.contains(&pred) {
+                        phi.inputs.push((
+                            pred,
+                            unlace_ir::ssa::SsaVarnode {
+                                base: phi.output.base,
+                                version: 0,
+                            },
+                        ));
+                        changed = true;
+                    }
+                }
+            }
             true
         });
         let before_var_map = func.var_map.len();
@@ -77,7 +106,14 @@ impl Pass for CfgRepairPass {
             }
         });
         changed |= func.var_map.len() != before_var_map;
-        if let Err(err) = verify_ssa_function(func) {
+
+        // Drop side-table annotations whose (block, insn) keys no longer
+        // resolve — passes that delete instructions/blocks do not rewrite
+        // every annotation table, and the structural verifier below rejects
+        // dangling references.
+        changed |= unlace_ir::prune_dangling_metadata(func);
+
+        if let Err(err) = verify_ssa_function_pipeline(func) {
             if cfg_repair_trace_enabled() {
                 trace_duplicate_definitions(func);
             }

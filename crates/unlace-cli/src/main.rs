@@ -516,7 +516,7 @@ fn run_ir_dump(
             | IrDumpPhase::Lvars
             | IrDumpPhase::Types => {
                 if let Err(e) = pipeline::run_passes(&mut ssa) {
-                    tracing::warn!(name = %entry.name, err = %e, "pass pipeline failed; dumping unoptimized");
+                    tracing::warn!(name = %entry.name, err = format!("{e:#}"), "pass pipeline failed; dumping unoptimized");
                 }
                 if matches!(phase, IrDumpPhase::PostStructuring)
                     && let Err(e) = unlace_struct::structure_preserve_returns(&mut ssa)

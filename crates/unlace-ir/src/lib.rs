@@ -47,4 +47,7 @@ pub use tinfo::{
 };
 pub use value_lattice::ValueLattice;
 pub use varnode::Varnode;
-pub use verify::{VerifyError, verify_ssa_function};
+pub use verify::{
+    VerifyError, prune_dangling_metadata, verify_ssa_function, verify_ssa_function_pipeline,
+    verify_ssa_function_structural,
+};

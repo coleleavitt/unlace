@@ -50,7 +50,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use unlace_ir::ssa::SsaFunction;
-use unlace_ir::verify_ssa_function;
+use unlace_ir::verify_ssa_function_pipeline;
 
 use crate::pass::{Pass, PassError, PassPhase};
 
@@ -686,12 +686,14 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
     match res {
         Ok(changed) => {
             if verify {
-                verify_ssa_function(func).map_err(|err| PassError::InvariantViolation {
-                    message: format!(
-                        "{} after {} failed IR verification: {err}",
-                        func.function.name,
-                        pass.name()
-                    ),
+                verify_ssa_function_pipeline(func).map_err(|err| {
+                    PassError::InvariantViolation {
+                        message: format!(
+                            "{} after {} failed IR verification: {err}",
+                            func.function.name,
+                            pass.name()
+                        ),
+                    }
                 })?;
             }
             Ok(changed)

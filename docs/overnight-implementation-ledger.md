@@ -75,6 +75,7 @@ Operating rules for this run:
 | 50 | C.5 | SuperH SH-4 FPU register file (fr0–15/dr/FPUL/FPSCR) + FP op lifting | `cargo test -p unlace-lift-superh` (6 pass) | `4e8c83ddb8` |
 | 51 | E.4.3 | API-hash resolver (ROR13/DJB2/CRC32 + 39-name roster) + hash-loop recognizer | `cargo test -p unlace-passes api_hash` (5 pass) | `b7c82f2d83` |
 | 52 | C.4 | RISC-V scalar-crypto Zk subset (aes64es/esm/ds/dsm/ks, sha512, clmul) as Callother | `cargo test -p unlace-lift-riscv` (85 pass) | `269231d731` |
+| 53 | B.1.1 | AArch64 glibc FLIRT bundled sigs (11 string routines from real sysdeps/aarch64 asm, llvm-mc assembled, Debian 2.41 arm64 verified) | `cargo test -p unlace-flirt` (36 pass) | `48b7d478c6` |
 
 ## Status checkpoint
 
@@ -111,7 +112,6 @@ registration (sparc/wasm), C.2 AArch64 SVE/SME, C.3 ARM32 VFP/NEON.
 
 ### Outstanding
 
-- B.1.1 AArch64 FLIRT bundled sigs (agent bailed; low priority — self-implement).
 - A.4.7 COERCE_* emission (output crate, golden-sensitive — self-implement w/ gates).
 
 ### Multi-agent run notes
@@ -122,7 +122,7 @@ registration (sparc/wasm), C.2 AArch64 SVE/SME, C.3 ARM32 VFP/NEON.
   those tickets directly. Some agents leak edits into the MAIN checkout instead of
   their worktree; reconcile (salvage if green, revert if broken) after each batch.
   The RISC-V C.4 work was salvaged this way (complete, 78 tests green).
-- Outstanding to redo: B.1.1 AArch64 FLIRT bundled sigs (agent bailed).
+- B.1.1 AArch64 FLIRT sigs: landed 2026-07-01 (ticket 53).
 
 ## In progress / queue (from parallel phase audits)
 

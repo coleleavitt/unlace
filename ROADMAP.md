@@ -61,18 +61,21 @@ A production-grade decompiler is:
   hard-float, AltiVec/VSX depth, and full SIMD/FPU/ABI coverage.
 
 ### 4. CLI-first adoption gaps
-- IDAPython has useful shims, but xrefs, `idaapi.decompile`,
-  `ida_hexrays.decompile`, real ctree/microcode access, and script corpus
-  compatibility are still incomplete.
-- Debugger substrate exists, including Linux ptrace, but production debugging
-  still needs Windows/macOS, GDB/RSP remote, hardware/watch breakpoints,
-  trace/coverage, and analysis integration.
+- IDAPython has real shims plus ctree/microcode wrapper types and
+  relocation-driven xrefs, but `ida_hexrays.decompile` is still a partial
+  session-text path, `hxe_*` event callbacks do not exist, and script corpus
+  compatibility (findcrypt/lazy_ida/class_informer) is untested.
+- Debugger: Linux ptrace (incl. hardware + conditional breakpoints,
+  fp-walk stack traces) and a GDB/RSP `gdb_stub` backend landed; the Windows
+  DebugAPI backend is a gated scaffold without a live-API body, macOS has no
+  backend at all, and watch expressions/coverage overlay remain open.
 - Lumina-equivalent APIs and plugin SDK boundaries exist but need stable
   protocol behavior, examples, compatibility tests, and confidence propagation.
-- There is no `unlace-mcp` crate yet. MCP should become the CLI-first agent
-  integration surface over the stable SDK.
-- Persistent `.unlace` project state is needed before annotations, scripts,
-  Lumina, debugger traces, and manual overrides can share one source of truth.
+- `crates/unlace-mcp` exists with a stdio server; remaining work is tool
+  breadth, resource URIs, read-only policy tests, and MCP-client fixtures.
+- Persistent `.unlace` project state exists (`unlace-session` with typed
+  user-override facts and an `xtask project-roundtrip` proof); remaining work
+  is merge/conflict handling and wiring every producer through it.
 
 ### 5. Measurement infrastructure
 - Golden fixtures cover 15 functions
@@ -116,7 +119,9 @@ A production-grade decompiler is:
 **Goal:** Produce C output that is *cleaner* than Hex-Rays for well-behaved functions.
 
 ### A.1 Goto Elimination
-Current: ~75 gotos per medium binary. Target: <10.
+Current (measured 2026-07-01, `xtask goto-count`): 75 gotos on `medium.elf`,
+75 on `stripped.elf`, 0 on all other fixtures. Target: <10.
+This is the largest single output-quality gap on the board.
 
 - Region-based structuring (Engel/Lerner algorithm)
 - Aggressive tail duplication for shared exits
@@ -173,6 +178,11 @@ Acceptance:
 - Function-prologue alignment
 - Reference-name resolution
 - Ship signatures for glibc, musl, MSVCRT, mingw
+
+Status 2026-07-01: `unlace-flirt` ships x86_64 bundles for glibc 2.34/2.39,
+musl 1.2.x, MSVCRT 14.x, mingw-w64, dietlibc, uclibc-ng, golang runtime, and
+rust-libcore. Missing: AArch64 bundles (B.1.1, agent bailed — self-implement)
+and a measured FLIRT recall number vs IDA on the corpus.
 
 Acceptance:
 - Stripped libc binary gets named functions
@@ -245,6 +255,13 @@ Acceptance:
 - SPARC, SuperH, M68k
 - Xtensa, Hexagon, TriCore
 
+Status 2026-07-01: breadth subsets landed as `Callother`-tagged lifts —
+x86 AVX-512 EVEX + AMX, AArch64 MTE/SVE/SME, ARM32 VFP/NEON, RISC-V
+Zbb/RVV/Zk crypto, PPC AltiVec, MIPS MSA, m68k 68881 FPU, SuperH SH-4 FPU.
+38/39 named archs resolve to a real facade lifter (`xtask arch-scorecard`).
+Remaining: real semantics beyond `Callother` for those subsets, per-arch
+calling-convention tests, and corpus-scale decode coverage proof.
+
 Acceptance:
 - Per-arch calling convention tests pass
 - Lifter coverage ≥95% on corpus
@@ -274,15 +291,26 @@ Acceptance:
 - Loop invariant inference
 - Constant-time violation detection
 
+Status 2026-07-01: unstarted. The only D-phase ticket with zero code.
+
 ### D.4 Security Analysis
 - Taint propagation
 - Source/sink registry
 - CWE pattern detection
 - Inter-procedural slicing
 
+### D.5 Microcode/SSA Internals
+- SSA/IR verifier after each pass (landed 2026-07-01: `unlace-ir/src/verify.rs`
+  checks op/type bindings, side maps, block/varnode metadata, lvars, SSA
+  dominance of uses, and stack accesses)
+- GVN (landed: `unlace-passes/src/gvn.rs`, dominance-safe)
+- Maturity-level exposure (MMAT_ZERO → FINAL analog) for scripting/debugging
+- Number-origins tracking (where did this constant come from?)
+
 Acceptance:
 - Recovery quality metrics exceed Ghidra baseline
 - Security analysis fixtures pass
+- Verifier runs clean across the corpus in a pass-pipeline debug mode
 
 ---
 
@@ -338,6 +366,14 @@ Acceptance:
   commands, and an LLM-ready goal prompt. This is the artifact a user can hand to
   Codex or another analyst/agent before attempting unpacking or deobfuscation.
 
+Status 2026-07-01: `unlace identify-packer` CLI + diagnostic handoff
+(unsupported steps, suggested commands, LLM-ready prompt), expanded packer
+roster (UPX/VMProtect/PEtite/FSG/NsPack/MEW), anti-debug probe detector,
+VM-dispatch recognizer, string-decode-stub recognizer (with key recovery),
+and API-hash resolver (ROR13/DJB2/CRC32, 39-name roster) all landed as
+passes/loader facts. Remaining: unpack/reconstruction workflows, CFG
+flattening/opaque-predicate analysis, and packed-PE corpus fixtures.
+
 Acceptance:
 - `unlace identify-packer <binary>` reports a ranked classifier result with
   evidence: section names, entropy, import anomalies, TLS/entrypoint facts, and
@@ -357,9 +393,19 @@ Acceptance:
 - rr trace ingestion
 - WinDbg TTD traces
 
+Status 2026-07-01 (E.1/E.2/E.3/E.5): loader-side substrate files exist for
+nearly every listed format — DEX/OAT/ART/VDEX, .NET CLR, Java class, Python
+pyc, Wasm component, EVM/Solidity, Lua bytecode, Intel HEX, ESP32/STM32
+blobs, UEFI modules, img4, Apple kernelcache, GDB MI, LLDB/Frida bridges,
+rr traces, WinDbg TTD, minidump, XCOFF. Per principle 8 ("substrate is not
+support") none of these count until they appear as measured rows in
+`xtask loader-scorecard` with explicit support tiers. Motorola S-record has
+no parser yet.
+
 Acceptance:
 - Format loaders pass corpus tests
 - Debugger integration fixtures pass
+- Every E-phase format has a loader-scorecard row with an honest support tier
 
 ---
 
@@ -396,6 +442,9 @@ CLI-first adoption depends on existing automation continuing to work:
 - compatibility fixtures from real public IDA scripts
 
 ### F.4 MCP Server
+
+Status 2026-07-01: `crates/unlace-mcp` exists (stdio server). Remaining:
+tool breadth, `unlace://` resources, read-only policy tests, client fixtures.
 
 `unlace-mcp` is the preferred agent/automation surface after the CLI and SDK.
 It should follow `docs/mcp.md` and use the local Rust MCP SDK reference at
@@ -499,6 +548,20 @@ Acceptance:
 - IDAPython compatibility matrix is generated from real scripts
 - CI produces signed artifacts
 
+### F.10 Export & Interop (new 2026-07-01)
+
+Absorbed from `docs/missing-from-roadmap.md` Tier 3 — previously absent here:
+
+- HTML pseudocode export with hyperlinked xrefs
+- BinDiff-style binary diffing (pair functions across two binaries)
+- Type-library export (portable `.til`-equivalent)
+- Coverage overlay export (dynamic hits annotated onto decompiler output;
+  pairs with G.4)
+
+Acceptance:
+- `unlace export html <binary>` produces navigable output for a fixture
+- A diff of two fixture builds buckets functions into same/changed/new
+
 ---
 
 ## Phase G — Debugger
@@ -527,6 +590,14 @@ Acceptance:
 - Bochs emulator integration (malware safe-analysis)
 - rr trace ingestion (time-travel debugging)
 - Coverage overlay (run + show hit blocks)
+
+Status 2026-07-01: Linux ptrace backend has sw/hw breakpoints (DR0–DR3),
+conditional-breakpoint expression eval, and fp-walk stack traces; `gdb_stub`
+TCP RSP backend landed (mem/bp/cont/step/regs/stack, amd64 g-packet).
+Missing entirely: macOS mach-ports backend (zero code), live Windows
+DebugAPI body (scaffold only, ops gated), watch expressions, Bochs
+integration, rr/TTD ingestion beyond loader-side trace parsing, and the
+coverage overlay.
 
 Acceptance:
 - Can debug local Linux x86_64 binary with breakpoints
@@ -562,6 +633,14 @@ Acceptance:
 - class_informer.py runs unmodified
 - IDArling basic functionality
 
+Status 2026-07-01: core modules expanded over real `Session` (44 tests),
+ctree wrappers (`citem_t`/`cexpr_t`/`cinsn_t` over HIR), microcode wrappers
+(`mba_t`/`minsn_t` over SSA), and relocation-driven `ida_xref` landed.
+Still zero coverage: `hxe_*` event callbacks (H.2), plugin manifest/hot-reload
+(H.3), and the real-script compat harness (H.4 — no findcrypt/lazy_ida/
+class_informer fixtures exist). `ida_hexrays.decompile` remains a partial
+staged-session-text path, not full pipeline wiring.
+
 Acceptance:
 - 90%+ of top-100 public IDA scripts run without modification
 - Custom deobfuscators using `hxe_*` events work
@@ -596,6 +675,12 @@ Acceptance:
 - User-defined calling conventions
 - Custom type mappings
 
+Status 2026-07-01: I.1/I.2 (force var type/call) and I.3 (microcode
+assert/delete/forbid-propagation) exist as typed `.unlace` session facts with
+round-trip tests. I.4 pattern control (manual switch idiom, user calling
+conventions, custom type mappings) has zero code. Remaining for I.1–I.3:
+end-to-end proof that a stored fact changes decompiler output.
+
 Acceptance:
 - Can force variable type and see output change
 - Can inject assertion and see propagation effect
@@ -628,6 +713,13 @@ truth, not one-off research notes.
 - Loader scorecards for ELF, PE, Mach-O, dyld cache, firmware, and managed
   formats
 - Explicit "fixture-only" and "beta" blockers before support-tier promotion
+
+Status 2026-07-01: `xtask unified-parity` (single-command aggregate),
+`xtask address-diff` (J.2, better/equiv/worse buckets over the 150-file
+corpus), `xtask loader-scorecard`, `xtask arch-scorecard`, and
+`xtask goto-count` all exist. Remaining: IDA-pattern counters at 320k-function
+corpus scale wired into the gate, trend artifacts, and support-tier promotion
+blockers driven by scorecard rows.
 
 Acceptance:
 - A single command emits a CLI-first parity report for the IDA corpus
@@ -698,7 +790,7 @@ remains deferred.
 
 ---
 
-## Current Metrics (2026-06-27)
+## Current Metrics (2026-07-01)
 
 These metrics measure actual decompilation quality, not similarity to IDA.
 
@@ -710,6 +802,8 @@ These metrics measure actual decompilation quality, not similarity to IDA.
 | Golden Exact-Pass | 15 | 50+ | No unintended output regressions |
 | Stylistic Score | 83% | 95%+ | Structural features present (loops, switches, etc.) |
 | Production Archs | 3 | 20+ | x86/x86_64/AArch64 fully supported |
+| Registered Lifters | 38/39 | 39/39 | Facade resolves a real lifter (breadth, not production) |
+| Gotos on `medium.elf` | 75 | <10 | Structuring quality (`xtask goto-count`) |
 
 **Note on the 83% stylistic score:** This measures "structural feature presence" — whether the output has loops, conditionals, proper declarations, etc. It does NOT measure "similarity to IDA." A function with 0 gotos and clean variable names scores high; a function with raw stack offsets and gotos scores low. IDA is not part of this measurement.
 

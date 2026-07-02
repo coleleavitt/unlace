@@ -27,6 +27,12 @@ pub struct CallGraph {
     indirect_call_count: usize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct InstructionXref {
+    pub from: u64,
+    pub to: u64,
+}
+
 /// Sentinel empty set returned by reference when a lookup misses.
 static EMPTY: BTreeSet<u64> = BTreeSet::new();
 
@@ -102,6 +108,28 @@ pub fn build_call_graph(functions: &BTreeMap<u64, Function>) -> CallGraph {
         callees,
         indirect_call_count,
     }
+}
+
+pub fn build_instruction_xrefs(functions: &BTreeMap<u64, Function>) -> Vec<InstructionXref> {
+    let mut out = Vec::new();
+    for func in functions.values() {
+        for block in func.blocks.values() {
+            for insn in &block.insns {
+                if matches!(insn.op, IrOp::Call | IrOp::Branch)
+                    && let Some(target_vn) = insn.inputs.first()
+                    && target_vn.space == SpaceId::Const
+                {
+                    out.push(InstructionXref {
+                        from: insn.addr,
+                        to: target_vn.offset,
+                    });
+                }
+            }
+        }
+    }
+    out.sort_by_key(|xref| (xref.from, xref.to));
+    out.dedup();
+    out
 }
 
 /// Compute Strongly Connected Components of the call graph using Tarjan's
@@ -206,7 +234,7 @@ mod tests {
 
     use crate::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
-    use super::build_call_graph;
+    use super::{build_call_graph, build_instruction_xrefs};
 
     /// Helper: create a function at `addr` that directly calls each target.
     fn make_caller(addr: u64, targets: &[u64]) -> Function {
@@ -280,6 +308,22 @@ mod tests {
         assert!(cg.callees_of(0x1000).contains(&0x2000));
         assert!(cg.callers_of(0x2000).contains(&0x1000));
         assert_eq!(cg.indirect_call_count(), 0);
+    }
+
+    #[test]
+    fn instruction_xrefs_preserve_callsite_address() {
+        let mut funcs = BTreeMap::new();
+        funcs.insert(0x1000, make_caller(0x1000, &[0x2000]));
+
+        let xrefs = build_instruction_xrefs(&funcs);
+
+        assert_eq!(
+            xrefs,
+            vec![super::InstructionXref {
+                from: 0x1000,
+                to: 0x2000
+            }]
+        );
     }
 
     #[test]

@@ -35,8 +35,8 @@ of unlace's domain types. This document tracks coverage.
 | `Functions`   | ✅     | Range filter supported             |
 | `Segments`    | ✅     |                                    |
 | `Heads`       | 🟡     | Yields every address in range      |
-| `XrefsTo`     | 🟡     | Empty until xref tables wired      |
-| `XrefsFrom`   | 🟡     | Empty until xref tables wired      |
+| `XrefsTo`     | 🟡     | Relocation-backed; flags ignored   |
+| `XrefsFrom`   | 🟡     | Staged direct instruction xrefs; flags ignored |
 
 ### `idaapi`
 
@@ -46,7 +46,7 @@ of unlace's domain types. This document tracks coverage.
 | `get_imagename`    | ✅     |                                    |
 | `next_addr`        | 🟡     | Returns ea+1; doesn't skip data    |
 | `prev_addr`        | 🟡     | Returns ea-1                       |
-| `decompile`        | 🟡     | Stub — full ctree in B27.6 follow-up |
+| `decompile`        | 🟡     | Staged pseudocode text; not ctree parity |
 
 ### `ida_bytes`
 
@@ -82,12 +82,13 @@ of unlace's domain types. This document tracks coverage.
 
 | API                       | Status |
 |---------------------------|--------|
-| `get_first_cref_to`       | ❌     |
-| `get_next_cref_to`        | ❌     |
-| `get_first_cref_from`     | ❌     |
-| `get_first_dref_to`       | ❌     |
+| `get_first_cref_to`       | 🟡     |
+| `get_next_cref_to`        | 🟡     |
+| `get_first_cref_from`     | 🟡     |
+| `get_first_dref_to`       | 🟡     |
 
-All stubbed until xref wiring lands.
+`*_to` helpers are relocation-backed. `*_from` helpers read the staged
+instruction-xref index populated by surfaces such as `unlace py --binary`.
 
 ### `ida_segment`
 
@@ -109,8 +110,12 @@ All stubbed until xref wiring lands.
 | API                       | Status |
 |---------------------------|--------|
 | `init_hexrays_plugin`     | ✅     |
-| `decompile`               | 🟡     | Full ctree pending |
-| `cfunc_t.as_text`         | ✅     |
+| `decompile`               | 🟡     | Rust shim returns text-backed `CFunc`; Python bridge returns text-backed `cfunc_t | None` |
+| `cfunc_t.as_text`         | 🟡     | Text-backed subset; no ctree parity |
+| `cfunc_t.__str__`         | 🟡     | Text-backed subset; no ctree parity |
+| `cfunc_t.entry_ea`        | 🟡     | Staged function entry only |
+| `cfunc_t.name`            | 🟡     | Staged function name only |
+| `cfunc_t.get_pseudocode`  | 🟡     | Returns staged pseudocode lines as `list[str]` |
 
 ## How to add an API
 

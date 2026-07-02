@@ -8,6 +8,7 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 use regex::Regex;
+use serde::Serialize;
 
 use unlace_ir::ArchId;
 use unlace_ir::ssa::SsaFunction;
@@ -61,6 +62,22 @@ pub struct BatchResult {
 
 const SEPARATOR_CHAR: char = '═';
 const SEPARATOR_LEN: usize = 60;
+const BATCH_MANIFEST_FILE: &str = "batch-manifest.json";
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct BatchManifestEntry {
+    addr: u64,
+    name: String,
+    file: String,
+    status: &'static str,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct BatchManifest {
+    version: u8,
+    written: Vec<BatchManifestEntry>,
+    skipped: Vec<BatchManifestEntry>,
+}
 
 /// Memory bound (in functions) for the interprocedural SSA map. When a
 /// batch exceeds this count, we emit a warning so operators running
@@ -178,6 +195,22 @@ pub fn run_batch(
     if let Some(re) = config.scope.as_ref() {
         apply_scope_filter(&mut functions, re)?;
     }
+    let mut skipped_outputs = Vec::new();
+    if let Some(dir) = output_dir {
+        skipped_outputs = prune_existing_outputs(dir, &mut functions)?;
+        if !skipped_outputs.is_empty() {
+            tracing::info!(
+                skipped = skipped_outputs.len(),
+                remaining = functions.len(),
+                "resuming batch from output directory"
+            );
+        }
+        if functions.is_empty() {
+            tracing::info!("batch output directory already contains every function output");
+            write_per_file_with_manifest(dir, &[], &skipped_outputs)?;
+            return Ok(());
+        }
+    }
 
     let dwarf = match import_dwarf_with_sidecar(&image, config.dwarf_sidecar.as_deref()) {
         Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
@@ -229,7 +262,7 @@ pub fn run_batch(
     };
 
     if let Some(dir) = output_dir {
-        write_per_file(dir, &results)?;
+        write_per_file_with_manifest(dir, &results, &skipped_outputs)?;
     } else {
         write_merged(&results);
     }
@@ -514,16 +547,26 @@ fn write_merged(results: &[BatchResult]) {
     print!("{buf}");
 }
 
-fn write_per_file(dir: &Path, results: &[BatchResult]) -> Result<()> {
+fn write_per_file_with_manifest(
+    dir: &Path,
+    results: &[BatchResult],
+    skipped: &[BatchManifestEntry],
+) -> Result<()> {
     fs::create_dir_all(dir)
         .with_context(|| format!("failed to create output directory '{}'", dir.display()))?;
 
     let mut sorted: Vec<&BatchResult> = results.iter().collect();
     sorted.sort_by_key(|r| r.addr);
+    let mut written = Vec::with_capacity(sorted.len());
 
     for result in sorted {
         let filename = sanitize_filename(&result.name, result.addr);
-        let path = dir.join(filename);
+        let path = dir.join(&filename);
+        let status = if result.output.is_ok() {
+            "ok"
+        } else {
+            "failed"
+        };
         let content = match &result.output {
             Ok(text) => text.clone(),
             Err(e) => format!("/* FAILED: {} \u{2014} {} */\n", result.name, e),
@@ -531,10 +574,56 @@ fn write_per_file(dir: &Path, results: &[BatchResult]) -> Result<()> {
         let mut file = fs::File::create(&path)
             .with_context(|| format!("failed to create '{}'", path.display()))?;
         file.write_all(content.as_bytes())?;
+        written.push(BatchManifestEntry {
+            addr: result.addr,
+            name: result.name.clone(),
+            file: filename,
+            status,
+        });
         tracing::debug!(path = %path.display(), "wrote function output");
     }
 
+    let mut skipped = skipped.to_vec();
+    skipped.sort_by_key(|entry| entry.addr);
+    let manifest = BatchManifest {
+        version: 1,
+        written,
+        skipped,
+    };
+    let manifest_path = dir.join(BATCH_MANIFEST_FILE);
+    let manifest_json = serde_json::to_string_pretty(&manifest)?;
+    fs::write(&manifest_path, manifest_json)
+        .with_context(|| format!("failed to write '{}'", manifest_path.display()))?;
+
     Ok(())
+}
+
+fn prune_existing_outputs(
+    dir: &Path,
+    functions: &mut Vec<FunctionEntry>,
+) -> Result<Vec<BatchManifestEntry>> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut skipped = Vec::new();
+    functions.retain(|function| {
+        let filename = sanitize_filename(&function.name, function.addr);
+        let path = dir.join(&filename);
+        let exists = path
+            .metadata()
+            .is_ok_and(|metadata| metadata.is_file() && metadata.len() > 0);
+        if exists {
+            skipped.push(BatchManifestEntry {
+                addr: function.addr,
+                name: function.name.clone(),
+                file: filename,
+                status: "skipped",
+            });
+        }
+        !exists
+    });
+    skipped.sort_by_key(|entry| entry.addr);
+    Ok(skipped)
 }
 
 fn sanitize_filename(name: &str, addr: u64) -> String {
@@ -697,7 +786,7 @@ mod tests {
         let functions = pipeline::discover_functions(&image, None).unwrap();
         let results = decompile_all_parallel(&image, &functions, &config, None, None);
 
-        write_per_file(tmp.path(), &results).unwrap();
+        write_per_file_with_manifest(tmp.path(), &results, &[]).unwrap();
 
         let c_files: Vec<_> = fs::read_dir(tmp.path())
             .unwrap()
@@ -710,6 +799,113 @@ mod tests {
             "output-dir should contain .c files, found {}",
             c_files.len()
         );
+    }
+
+    #[test]
+    fn test_batch_manifest_records_written_and_failed_outputs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let results = vec![
+            BatchResult {
+                addr: 0x1000,
+                name: "main".into(),
+                output: Ok("int main(void) { return 0; }\n".into()),
+            },
+            BatchResult {
+                addr: 0x1020,
+                name: "bad/name".into(),
+                output: Err(anyhow::anyhow!("boom")),
+            },
+        ];
+
+        write_per_file_with_manifest(tmp.path(), &results, &[]).unwrap();
+
+        let manifest = fs::read_to_string(tmp.path().join(BATCH_MANIFEST_FILE)).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&manifest).unwrap();
+        assert_eq!(json["version"], 1);
+        assert_eq!(json["written"][0]["addr"], 0x1000);
+        assert_eq!(json["written"][0]["name"], "main");
+        assert_eq!(json["written"][0]["file"], "main.c");
+        assert_eq!(json["written"][0]["status"], "ok");
+        assert_eq!(json["written"][1]["addr"], 0x1020);
+        assert_eq!(json["written"][1]["file"], "bad_name.c");
+        assert_eq!(json["written"][1]["status"], "failed");
+        assert!(json["skipped"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_batch_manifest_records_resume_skips() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut functions = vec![
+            FunctionEntry {
+                name: "main".into(),
+                addr: 0x1000,
+                size: 4,
+            },
+            FunctionEntry {
+                name: "helper".into(),
+                addr: 0x1020,
+                size: 4,
+            },
+        ];
+        fs::write(tmp.path().join("main.c"), "int main(void) { return 0; }\n").unwrap();
+
+        let skipped = prune_existing_outputs(tmp.path(), &mut functions).unwrap();
+        write_per_file_with_manifest(tmp.path(), &[], &skipped).unwrap();
+
+        let manifest = fs::read_to_string(tmp.path().join(BATCH_MANIFEST_FILE)).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&manifest).unwrap();
+        assert_eq!(
+            json["skipped"],
+            serde_json::json!([
+                {"addr": 0x1000, "name": "main", "file": "main.c", "status": "skipped"}
+            ])
+        );
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].name, "helper");
+    }
+
+    #[test]
+    fn test_batch_resume_skips_existing_nonempty_outputs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut functions = vec![
+            FunctionEntry {
+                name: "main".into(),
+                addr: 0x1000,
+                size: 4,
+            },
+            FunctionEntry {
+                name: "helper".into(),
+                addr: 0x1020,
+                size: 4,
+            },
+        ];
+        fs::write(tmp.path().join("main.c"), "int main(void) { return 0; }\n").unwrap();
+
+        let skipped = prune_existing_outputs(tmp.path(), &mut functions)
+            .unwrap()
+            .len();
+
+        assert_eq!(skipped, 1);
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].name, "helper");
+    }
+
+    #[test]
+    fn test_batch_resume_keeps_empty_outputs_for_retry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut functions = vec![FunctionEntry {
+            name: "main".into(),
+            addr: 0x1000,
+            size: 4,
+        }];
+        fs::write(tmp.path().join("main.c"), "").unwrap();
+
+        let skipped = prune_existing_outputs(tmp.path(), &mut functions)
+            .unwrap()
+            .len();
+
+        assert_eq!(skipped, 0);
+        assert_eq!(functions.len(), 1);
     }
 
     #[test]

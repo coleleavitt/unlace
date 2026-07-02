@@ -39,9 +39,11 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
     lift_trace_lazy(|| format!("select arch={arch:?}"));
     match arch {
         ArchId::X86 | ArchId::X86_64 => Box::new(X86Lifter::new()),
-        ArchId::Arm | ArchId::AArch64 => Box::new(ArmLifter::new()),
+        ArchId::Arm => Box::new(ArmLifter::new_arm32()),
+        ArchId::AArch64 => Box::new(ArmLifter::new_aarch64()),
         ArchId::RiscV64 => Box::new(RiscVLifter::new()),
-        ArchId::Mips | ArchId::Mips64 => Box::new(MipsLifter::new()),
+        ArchId::Mips => Box::new(MipsLifter::new_mips32()),
+        ArchId::Mips64 => Box::new(MipsLifter::new_mips64()),
         ArchId::Ppc => Box::new(PpcLifter::ppc32_be()),
         ArchId::Ppc64 => Box::new(PpcLifter::ppc64_be()),
         ArchId::V850 => Box::new(V850Lifter::new()),
@@ -59,7 +61,8 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Xtensa => Box::new(XtensaLifter::new()),
         ArchId::NvidiaSass => Box::new(SassLifter::new()),
         ArchId::Evm => Box::new(EvmLifter::new()),
-        ArchId::SharcBlackfin | ArchId::Sharc => Box::new(SharcBlackfinLifter::new()),
+        ArchId::SharcBlackfin => Box::new(SharcBlackfinLifter::blackfin()),
+        ArchId::Sharc => Box::new(SharcBlackfinLifter::sharc()),
         ArchId::TiC6x => Box::new(TiLifter::new_c6x()),
         ArchId::TiC28x => Box::new(TiLifter::new_c28x()),
         ArchId::Sparc => Box::new(SparcLifter::new()),
@@ -186,6 +189,25 @@ mod tests {
             assert!(
                 !lifter.register_file().registers.is_empty(),
                 "{arch:?} should resolve to its real lifter, not the stub"
+            );
+        }
+    }
+
+    #[test]
+    fn test_facade_preserves_arch_identity_for_modeful_lifters() {
+        for arch in [
+            ArchId::Arm,
+            ArchId::AArch64,
+            ArchId::Mips,
+            ArchId::Mips64,
+            ArchId::SharcBlackfin,
+            ArchId::Sharc,
+        ] {
+            let lifter = get_lifter(arch);
+            assert_eq!(lifter.arch(), arch, "facade must preserve {arch:?}");
+            assert!(
+                !lifter.register_file().registers.is_empty(),
+                "{arch:?} should expose a real register file"
             );
         }
     }

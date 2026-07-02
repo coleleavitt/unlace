@@ -71,12 +71,8 @@ pub fn func_contains(session: &Session, func_ea: u64, ea: u64) -> bool {
 /// `ida_funcs.get_next_func(ea)` — start EA of the first function strictly after ea.
 pub fn get_next_func(session: &Session, ea: u64) -> Option<u64> {
     coverage::mark_implemented("ida_funcs.get_next_func");
-    session.with_binary(|img| {
-        img.symbols
-            .range(ea.saturating_add(1)..)
-            .next()
-            .map(|(k, _)| *k)
-    })?
+    let next = ea.checked_add(1)?;
+    session.with_binary(|img| img.symbols.range(next..).next().map(|(k, _)| *k))?
 }
 
 /// `ida_funcs.get_prev_func(ea)` — start EA of the last function strictly before ea.
@@ -177,5 +173,23 @@ mod tests {
         assert_eq!(get_prev_func(&s, 0x1040), Some(0x1000));
         assert_eq!(get_prev_func(&s, 0x1050), Some(0x1040));
         assert_eq!(get_prev_func(&s, 0x1000), None);
+    }
+
+    #[test]
+    fn test_get_next_func_is_strict_at_max_address() {
+        let mut img = BinaryImage::empty(ArchId::X86_64, Endian::Little);
+        img.symbols.insert(
+            u64::MAX,
+            Symbol {
+                name: "max_func".into(),
+                addr: u64::MAX,
+                size: 0,
+                kind: SymbolKind::Function,
+            },
+        );
+        let s = Session::new();
+        s.set_binary(img);
+
+        assert_eq!(get_next_func(&s, u64::MAX), None);
     }
 }

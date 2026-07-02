@@ -201,6 +201,10 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         infer_arch_fixture_sizes(image, &mut funcs);
     }
 
+    add_pe_runtime_functions(image, &mut funcs);
+    add_pe_tls_callbacks(image, &mut funcs);
+    add_go_pclntab_functions(image, &mut funcs);
+
     if funcs.is_empty() && uses_x86_function_discovery(image.arch) {
         tracing::info!("no function symbols found; attempting prologue scan");
         funcs = scan_for_prologues(image);
@@ -240,6 +244,7 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     recover_libc_start_main_main_alias(image, &mut funcs);
     prune_invalid_function_starts(image, &mut funcs);
     prune_non_text_function_entries(image, &mut funcs);
+    prune_import_thunk_entries(image, &mut funcs);
     prune_padding_function_starts(image, &mut funcs);
 
     if let Some(filter) = filter {
@@ -286,18 +291,150 @@ fn add_macho_function_starts(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>
     infer_arch_fixture_sizes(image, funcs);
 }
 
-fn prune_non_text_function_entries(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
-    let Some(text) = text_section(image) else {
-        return;
-    };
-    let text_end = text.vaddr.saturating_add(text.data.len() as u64);
-    let has_text_func = funcs
-        .iter()
-        .any(|func| func.addr >= text.vaddr && func.addr < text_end);
-    if !has_text_func {
+fn add_pe_runtime_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    if image.runtime_functions.is_empty() {
         return;
     }
-    funcs.retain(|func| func.addr >= text.vaddr && func.addr < text_end);
+
+    for rf in &image.runtime_functions {
+        let addr = rf.begin_address;
+        let size = rf.end_address.saturating_sub(rf.begin_address);
+        if size == 0 || !is_executable_address(image, addr) {
+            continue;
+        }
+        upsert_discovered_function(
+            funcs,
+            FunctionEntry {
+                name: symbol_name_or(image, addr, || format!("sub_{addr:x}")),
+                addr,
+                size,
+            },
+            false,
+        );
+    }
+}
+
+fn add_pe_tls_callbacks(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    if image.tls_callbacks.is_empty() {
+        return;
+    }
+
+    for (idx, &addr) in image.tls_callbacks.iter().enumerate() {
+        if !is_executable_address(image, addr) {
+            continue;
+        }
+        let size = infer_synthetic_function_size(image, funcs, addr);
+        upsert_discovered_function(
+            funcs,
+            FunctionEntry {
+                name: symbol_name_or(image, addr, || format!("tls_callback_{idx}_{addr:x}")),
+                addr,
+                size,
+            },
+            false,
+        );
+    }
+}
+
+fn add_go_pclntab_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    let Some(section) = image
+        .section_by_name(".gopclntab")
+        .or_else(|| image.section_by_name("__gopclntab"))
+    else {
+        return;
+    };
+    let text_base = text_section(image)
+        .or_else(|| executable_section_containing(image, image.entry))
+        .map(|section| section.vaddr)
+        .unwrap_or(0);
+    let Some(info) = unlace_loader::gopclntab::parse_gopclntab(&section.data, text_base) else {
+        return;
+    };
+
+    let mut entries: Vec<_> = info.functions.iter().collect();
+    entries.sort_by_key(|func| func.addr);
+    let end = executable_section_containing(image, entries.last().map_or(image.entry, |f| f.addr))
+        .map(section_end)
+        .unwrap_or_else(|| section_end(section));
+    for (idx, func) in entries.iter().enumerate() {
+        if !is_executable_address(image, func.addr) {
+            continue;
+        }
+        let next = entries
+            .iter()
+            .skip(idx + 1)
+            .map(|next| next.addr)
+            .find(|next| *next > func.addr)
+            .unwrap_or(end);
+        upsert_discovered_function(
+            funcs,
+            FunctionEntry {
+                name: func.name.clone(),
+                addr: func.addr,
+                size: next.saturating_sub(func.addr),
+            },
+            false,
+        );
+    }
+}
+
+fn upsert_discovered_function(
+    funcs: &mut Vec<FunctionEntry>,
+    candidate: FunctionEntry,
+    overwrite_name: bool,
+) {
+    if let Some(existing) = funcs.iter_mut().find(|func| func.addr == candidate.addr) {
+        if overwrite_name || existing.name.starts_with("sub_") || existing.name == "entry" {
+            existing.name = candidate.name;
+        }
+        if candidate.size > existing.size {
+            existing.size = candidate.size;
+        }
+        return;
+    }
+    funcs.push(candidate);
+}
+
+fn symbol_name_or(image: &BinaryImage, addr: u64, default: impl FnOnce() -> String) -> String {
+    image
+        .symbols
+        .get(&addr)
+        .filter(|sym| !sym.name.is_empty())
+        .map(|sym| sym.name.clone())
+        .unwrap_or_else(default)
+}
+
+fn is_executable_address(image: &BinaryImage, addr: u64) -> bool {
+    executable_section_containing(image, addr).is_some()
+}
+
+fn executable_section_containing(image: &BinaryImage, addr: u64) -> Option<&Section> {
+    image.sections.iter().find(|section| {
+        section.flags.contains(SectionFlags::EXEC)
+            && (section.vaddr..section_end(section)).contains(&addr)
+    })
+}
+
+fn section_end(section: &Section) -> u64 {
+    let extent = section.size.max(section.data.len() as u64);
+    section.vaddr.saturating_add(extent)
+}
+
+fn prune_non_text_function_entries(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    let has_executable_func = funcs
+        .iter()
+        .any(|func| is_executable_address(image, func.addr));
+    if !has_executable_func {
+        return;
+    }
+    funcs.retain(|func| is_executable_address(image, func.addr));
+}
+
+fn prune_import_thunk_entries(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    if image.plt_symbols.is_empty() {
+        return;
+    }
+    funcs.retain(|func| !image.plt_symbols.contains_key(&func.addr));
 }
 
 fn uses_x86_function_discovery(arch: ArchId) -> bool {
@@ -5654,6 +5791,160 @@ mod tests {
             result.iter().all(|func| func.size > 0),
             "function-start entries should receive inferred sizes: {result:?}",
         );
+    }
+
+    #[test]
+    fn test_pe_runtime_functions_drive_discovery_without_symbols() {
+        let base: u64 = 0x1400_1000;
+        let mut code = vec![0xcc; 0x100];
+        code[0x20] = 0x55;
+        let mut image = make_text_image(code, base);
+        image
+            .runtime_functions
+            .push(unlace_loader::image::RuntimeFunction {
+                begin_address: base + 0x20,
+                end_address: base + 0x50,
+                unwind_info_address: base + 0x200,
+                unwind_info: None,
+            });
+
+        let result = discover_functions(&image, None).expect("discover");
+        let func = result
+            .iter()
+            .find(|func| func.addr == base + 0x20)
+            .expect(".pdata function must be discovered");
+
+        assert_eq!(func.name, format!("sub_{:x}", base + 0x20));
+        assert_eq!(func.size, 0x30);
+    }
+
+    #[test]
+    fn test_pe_tls_callbacks_drive_discovery_without_symbols() {
+        let base: u64 = 0x1400_1000;
+        let mut code = vec![0xcc; 0x100];
+        code[0x30] = 0x55;
+        let mut image = make_text_image(code, base);
+        image.tls_callbacks.push(base + 0x30);
+
+        let result = discover_functions(&image, None).expect("discover");
+        let func = result
+            .iter()
+            .find(|func| func.addr == base + 0x30)
+            .expect("TLS callback must be discovered");
+
+        assert_eq!(func.name, format!("tls_callback_0_{:x}", base + 0x30));
+        assert!(
+            func.size > 0,
+            "TLS callback receives an inferred size: {func:?}"
+        );
+    }
+
+    #[test]
+    fn test_import_thunks_are_not_user_functions() {
+        let base: u64 = 0x1000;
+        let mut code = vec![0xcc; 0x80];
+        code[0x00] = 0x55;
+        code[0x01] = 0x48;
+        code[0x02] = 0x89;
+        code[0x03] = 0xe5;
+        code[0x20] = 0x55;
+        code[0x21] = 0x48;
+        code[0x22] = 0x89;
+        code[0x23] = 0xe5;
+        let mut image = make_text_image(code, base);
+        image.plt_symbols.insert(base + 0x20, "puts".to_string());
+
+        let result = discover_functions(&image, None).expect("discover");
+        let addrs: BTreeSet<u64> = result.iter().map(|func| func.addr).collect();
+
+        assert!(
+            addrs.contains(&base),
+            "real function should remain: {addrs:?}"
+        );
+        assert!(
+            !addrs.contains(&(base + 0x20)),
+            "PLT/import thunk should not be decompiled as a user function: {addrs:?}"
+        );
+    }
+
+    #[test]
+    fn test_go_pclntab_drives_discovery_without_symbols() {
+        let text_base: u64 = 0x401000;
+        let mut code = vec![0xcc; 0x1200];
+        code[0] = 0x55;
+        code[0x100] = 0x55;
+        let mut image = make_text_image(code, text_base);
+        let pclntab = build_synthetic_gopclntab();
+        image.sections.push(Section {
+            name: ".gopclntab".to_string(),
+            vaddr: 0x500000,
+            size: pclntab.len() as u64,
+            data: pclntab,
+            flags: SectionFlags::READ,
+        });
+
+        let result = discover_functions(&image, None).expect("discover");
+        let names: BTreeMap<u64, String> = result
+            .iter()
+            .map(|func| (func.addr, func.name.clone()))
+            .collect();
+
+        assert_eq!(names.get(&0x401000).map(String::as_str), Some("main.main"));
+        assert_eq!(
+            names.get(&0x401100).map(String::as_str),
+            Some("main.helper")
+        );
+        let main = result
+            .iter()
+            .find(|func| func.addr == 0x401000)
+            .expect("main.main");
+        assert_eq!(main.size, 0x100);
+    }
+
+    fn build_synthetic_gopclntab() -> Vec<u8> {
+        let ptr_size: usize = 8;
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&[0xfa, 0xff, 0xff, 0xff]);
+        buf.extend_from_slice(&[0x00, 0x00]);
+        buf.push(1);
+        buf.push(8);
+        buf.extend_from_slice(&2u64.to_le_bytes());
+        buf.extend_from_slice(&1u64.to_le_bytes());
+
+        let header_size = 8 + 2 * ptr_size + 6 * ptr_size;
+        let funcnametab_start = header_size;
+        let name1 = b"main.main\0";
+        let name2 = b"main.helper\0";
+        let funcnametab_data: Vec<u8> = [name1.as_slice(), name2.as_slice()].concat();
+        let name1_off: u32 = 0;
+        let name2_off: u32 = name1.len() as u32;
+        let functab_start = funcnametab_start + funcnametab_data.len();
+        let functab_array_size = 3 * 2 * ptr_size;
+        let func1_struct_off = functab_array_size;
+        let func2_struct_off = func1_struct_off + 16;
+        let func1_addr: u64 = 0x401000;
+        let func2_addr: u64 = 0x401100;
+
+        buf.extend_from_slice(&(funcnametab_start as u64).to_le_bytes());
+        buf.extend_from_slice(&0u64.to_le_bytes());
+        buf.extend_from_slice(&0u64.to_le_bytes());
+        buf.extend_from_slice(&0u64.to_le_bytes());
+        buf.extend_from_slice(&0u64.to_le_bytes());
+        buf.extend_from_slice(&(functab_start as u64).to_le_bytes());
+        buf.extend_from_slice(&funcnametab_data);
+        buf.extend_from_slice(&func1_addr.to_le_bytes());
+        buf.extend_from_slice(&(func1_struct_off as u64).to_le_bytes());
+        buf.extend_from_slice(&func2_addr.to_le_bytes());
+        buf.extend_from_slice(&(func2_struct_off as u64).to_le_bytes());
+        buf.extend_from_slice(&0x402000u64.to_le_bytes());
+        buf.extend_from_slice(&0u64.to_le_bytes());
+        buf.extend_from_slice(&func1_addr.to_le_bytes());
+        buf.extend_from_slice(&name1_off.to_le_bytes());
+        buf.extend_from_slice(&[0u8; 4]);
+        buf.extend_from_slice(&func2_addr.to_le_bytes());
+        buf.extend_from_slice(&name2_off.to_le_bytes());
+        buf.extend_from_slice(&[0u8; 4]);
+        buf
     }
 
     #[test]

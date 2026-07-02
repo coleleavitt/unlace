@@ -55,8 +55,90 @@ const MIPS_REG_NAMES: [&str; 32] = [
     "$k0", "$k1", "$gp", "$sp", "$fp", "$ra",
 ];
 
-pub fn reg64(offset: u64) -> Varnode {
+pub fn reg32(offset: u64) -> Varnode {
     Varnode::new(SpaceId::Register, offset, 4)
+}
+
+pub fn reg_word(offset: u64, width: u8) -> Varnode {
+    Varnode::new(SpaceId::Register, offset, width)
+}
+
+pub fn mips32_register_file() -> RegisterFile {
+    let mut regs = Vec::with_capacity(78);
+    for (i, name) in MIPS_REG_NAMES.iter().enumerate() {
+        regs.push(RegisterDef {
+            name,
+            varnode: Varnode::reg((i as u64) * 8, 4),
+        });
+    }
+    regs.push(RegisterDef {
+        name: "HI",
+        varnode: reg32(HI),
+    });
+    regs.push(RegisterDef {
+        name: "LO",
+        varnode: reg32(LO),
+    });
+    regs.push(RegisterDef {
+        name: "PC",
+        varnode: reg32(PC),
+    });
+    regs.push(RegisterDef {
+        name: "DSPCARRY",
+        varnode: reg32(DSPCARRY),
+    });
+    regs.push(RegisterDef {
+        name: "DSPCCOND",
+        varnode: reg32(DSPCCOND),
+    });
+    regs.push(RegisterDef {
+        name: "DSPOUTFLAG",
+        varnode: reg32(DSPOUTFLAG),
+    });
+    regs.push(RegisterDef {
+        name: "DSPPOS",
+        varnode: reg32(DSPPOS),
+    });
+    regs.push(RegisterDef {
+        name: "DSPSCOUNT",
+        varnode: reg32(DSPSCOUNT),
+    });
+    regs.push(RegisterDef {
+        name: "AC0",
+        varnode: Varnode::reg(AC0, 16),
+    });
+    regs.push(RegisterDef {
+        name: "AC1",
+        varnode: Varnode::reg(AC1, 16),
+    });
+    regs.push(RegisterDef {
+        name: "AC2",
+        varnode: Varnode::reg(AC2, 16),
+    });
+    regs.push(RegisterDef {
+        name: "AC3",
+        varnode: Varnode::reg(AC3, 16),
+    });
+    static FPR_NAMES: [&str; 32] = [
+        "$f0", "$f1", "$f2", "$f3", "$f4", "$f5", "$f6", "$f7", "$f8", "$f9", "$f10", "$f11",
+        "$f12", "$f13", "$f14", "$f15", "$f16", "$f17", "$f18", "$f19", "$f20", "$f21", "$f22",
+        "$f23", "$f24", "$f25", "$f26", "$f27", "$f28", "$f29", "$f30", "$f31",
+    ];
+    for (i, name) in FPR_NAMES.iter().enumerate() {
+        regs.push(RegisterDef {
+            name,
+            varnode: Varnode::reg(FPR_BASE + (i as u64) * 8, 4),
+        });
+    }
+    regs.push(RegisterDef {
+        name: "FCC0",
+        varnode: Varnode::reg(FCC0, 1),
+    });
+    regs.push(RegisterDef {
+        name: "FCSR",
+        varnode: Varnode::reg(FCSR, 4),
+    });
+    RegisterFile { registers: regs }
 }
 
 pub fn mips64_register_file() -> RegisterFile {
@@ -69,35 +151,35 @@ pub fn mips64_register_file() -> RegisterFile {
     }
     regs.push(RegisterDef {
         name: "HI",
-        varnode: reg64(HI),
+        varnode: reg_word(HI, 8),
     });
     regs.push(RegisterDef {
         name: "LO",
-        varnode: reg64(LO),
+        varnode: reg_word(LO, 8),
     });
     regs.push(RegisterDef {
         name: "PC",
-        varnode: reg64(PC),
+        varnode: reg_word(PC, 8),
     });
     regs.push(RegisterDef {
         name: "DSPCARRY",
-        varnode: reg64(DSPCARRY),
+        varnode: reg32(DSPCARRY),
     });
     regs.push(RegisterDef {
         name: "DSPCCOND",
-        varnode: reg64(DSPCCOND),
+        varnode: reg32(DSPCCOND),
     });
     regs.push(RegisterDef {
         name: "DSPOUTFLAG",
-        varnode: reg64(DSPOUTFLAG),
+        varnode: reg32(DSPOUTFLAG),
     });
     regs.push(RegisterDef {
         name: "DSPPOS",
-        varnode: reg64(DSPPOS),
+        varnode: reg32(DSPPOS),
     });
     regs.push(RegisterDef {
         name: "DSPSCOUNT",
-        varnode: reg64(DSPSCOUNT),
+        varnode: reg32(DSPSCOUNT),
     });
     regs.push(RegisterDef {
         name: "AC0",

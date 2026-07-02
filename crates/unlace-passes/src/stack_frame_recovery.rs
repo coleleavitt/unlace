@@ -461,8 +461,12 @@ fn seed_recorded_stack_accesses(
 ) {
     for acc in &func.stack_accesses {
         if heuristic_stack_accesses.iter().any(
-            |(source_addr, _heuristic_delta, _heuristic_width, heuristic_is_store)| {
-                *source_addr == acc.source_addr && *heuristic_is_store == acc.is_store
+            |(source_addr, heuristic_delta, heuristic_width, heuristic_is_store)| {
+                *source_addr == acc.source_addr
+                    && *heuristic_width == acc.width
+                    && *heuristic_is_store == acc.is_store
+                    && (*heuristic_delta == acc.delta
+                        || heuristic_delta.is_negative() == acc.delta.is_negative())
             },
         ) {
             stack_frame_trace_line(

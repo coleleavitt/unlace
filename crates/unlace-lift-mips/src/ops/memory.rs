@@ -19,8 +19,8 @@ pub fn lift_load(ctx: &mut LiftCtx, ops: &[MipsOperand], size: u8) {
         (Some(dst), Some(addr_vn)) => {
             let loaded = ctx.alloc_unique(size);
             ctx.emit_load(loaded, addr_vn);
-            if size < 8 {
-                let extended = ctx.alloc_unique(8);
+            if size < ctx.word_size() {
+                let extended = ctx.alloc_word();
                 ctx.emit(IrInsn::with_output(
                     IrOp::IntZext,
                     extended,
@@ -43,7 +43,7 @@ pub fn lift_store_conditional(ctx: &mut LiftCtx, ops: &[MipsOperand], size: u8) 
         Some(MipsOperand::Reg(r)) => ctx.write_reg(*r),
         _ => None,
     } {
-        ctx.write_to_reg(dst, Varnode::constant(1, 8));
+        ctx.write_to_reg(dst, ctx.word_const(1));
     }
 }
 
@@ -80,14 +80,18 @@ pub fn lift_multi_load(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 let addr = add_offset(ctx, base_addr, offset);
                 let loaded = ctx.alloc_unique(4);
                 ctx.emit_load(loaded, addr);
-                let extended = ctx.alloc_unique(8);
-                ctx.emit(IrInsn::with_output(
-                    IrOp::IntZext,
-                    extended,
-                    smallvec![loaded],
-                    ctx.addr,
-                ));
-                ctx.write_to_reg(dst, extended);
+                if 4 < ctx.word_size() {
+                    let extended = ctx.alloc_word();
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::IntZext,
+                        extended,
+                        smallvec![loaded],
+                        ctx.addr,
+                    ));
+                    ctx.write_to_reg(dst, extended);
+                } else {
+                    ctx.write_to_reg(dst, loaded);
+                }
             }
             offset += 4;
         }
@@ -127,11 +131,11 @@ fn add_offset(ctx: &mut LiftCtx, base: Varnode, offset: u64) -> Varnode {
     if offset == 0 {
         base
     } else {
-        let addr = ctx.alloc_unique(8);
+        let addr = ctx.alloc_word();
         ctx.emit(IrInsn::with_output(
             IrOp::IntAdd,
             addr,
-            smallvec![base, Varnode::constant(offset, 8)],
+            smallvec![base, ctx.word_const(offset)],
             ctx.addr,
         ));
         addr
@@ -147,7 +151,7 @@ pub fn lift_store(ctx: &mut LiftCtx, ops: &[MipsOperand], size: u8) {
     let addr_vn = ctx.mem_addr(&ops[1]);
     match (src, addr_vn) {
         (Some(src), Some(addr_vn)) => {
-            if size < 8 {
+            if size < ctx.word_size() {
                 let truncated = ctx.alloc_unique(size);
                 ctx.emit(IrInsn::with_output(
                     IrOp::Subpiece,

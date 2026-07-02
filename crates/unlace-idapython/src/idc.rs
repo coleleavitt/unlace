@@ -8,7 +8,7 @@
 use anyhow::Result;
 use unlace_session::Session;
 
-use crate::coverage;
+use crate::{coverage, idaapi};
 
 /// `idc.get_func_name(ea)` — return the name of the function containing ea.
 pub fn get_func_name(session: &Session, ea: u64) -> Option<String> {
@@ -99,7 +99,7 @@ pub fn set_type(session: &Session, ea: u64, decl: &str) -> Result<()> {
 pub fn get_inf_attr(session: &Session, attr: &str) -> Option<u64> {
     coverage::mark_implemented("idc.get_inf_attr");
     session.with_binary(|img| match attr {
-        "INF_IMAGE_BASE" | "image_base" => Some(img.entry),
+        "INF_IMAGE_BASE" | "image_base" => idaapi::image_base_or_min_section(img),
         "INF_MIN_EA" | "min_ea" => img.sections.iter().map(|s| s.vaddr).min(),
         "INF_MAX_EA" | "max_ea" => img.sections.iter().map(|s| s.vaddr + s.size).max(),
         _ => None,
@@ -109,6 +109,7 @@ pub fn get_inf_attr(session: &Session, attr: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use unlace_loader::{ArchId, BinaryImage, Endian, Section, SectionFlags};
 
     #[test]
     fn test_idc_get_func_name_no_binary() {
@@ -138,6 +139,27 @@ mod tests {
         let s = Session::new();
         set_type(&s, 0x401000, "int main(int argc, char **argv)").unwrap();
         assert_eq!(s.annotations().types.len(), 1);
+    }
+
+    #[test]
+    fn test_get_inf_attr_image_base_uses_loader_base_not_entry() {
+        let mut image = BinaryImage::empty(ArchId::X86_64, Endian::Little);
+        image.entry = 0x401080;
+        image.image_base = Some(0x400000);
+        image.sections.push(Section {
+            name: ".text".into(),
+            vaddr: 0x401000,
+            size: 0x100,
+            data: vec![0; 0x100],
+            flags: SectionFlags::READ | SectionFlags::EXEC,
+        });
+        let session = Session::new();
+        session.set_binary(image);
+
+        assert_eq!(get_inf_attr(&session, "INF_IMAGE_BASE"), Some(0x400000));
+        assert_eq!(get_inf_attr(&session, "image_base"), Some(0x400000));
+        assert_eq!(get_inf_attr(&session, "min_ea"), Some(0x401000));
+        assert_eq!(get_inf_attr(&session, "max_ea"), Some(0x401100));
     }
 
     #[test]

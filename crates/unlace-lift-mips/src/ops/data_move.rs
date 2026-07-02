@@ -64,7 +64,7 @@ pub fn lift_lui(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     match (dst, imm) {
         (Some(dst), Some(imm)) => {
             let shift = Varnode::constant(16, 1);
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntLeft,
                 result,
@@ -88,7 +88,7 @@ pub fn lift_mfhi(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         _ => None,
     };
     if let Some(dst) = dst {
-        let hi = register_file::reg64(register_file::HI);
+        let hi = ctx.reg_at(register_file::HI);
         ctx.write_to_reg(dst, hi);
     }
 }
@@ -103,7 +103,7 @@ pub fn lift_mflo(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         _ => None,
     };
     if let Some(dst) = dst {
-        let lo = register_file::reg64(register_file::LO);
+        let lo = ctx.reg_at(register_file::LO);
         ctx.write_to_reg(dst, lo);
     }
 }

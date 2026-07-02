@@ -98,7 +98,10 @@ impl Default for SharcBlackfinLifter {
 
 impl Lifter for SharcBlackfinLifter {
     fn arch(&self) -> ArchId {
-        ArchId::SharcBlackfin
+        match self.family {
+            DspFamily::Sharc => ArchId::Sharc,
+            DspFamily::Auto | DspFamily::Blackfin => ArchId::SharcBlackfin,
+        }
     }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {

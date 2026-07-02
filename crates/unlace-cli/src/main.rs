@@ -19,6 +19,9 @@ use unlace_cli::args::{self, Args, Cmd, LuminaAction, ProjectAction};
 use unlace_cli::batch::{self, BatchConfig};
 use unlace_cli::pipeline::{self, PipelineConfig};
 
+#[cfg(feature = "python")]
+const DEFAULT_PY_DECOMPILE_STAGE_LIMIT: usize = 64;
+
 fn main() {
     let args = Args::parse();
 
@@ -672,11 +675,103 @@ fn run_py(script: &std::path::Path, binary: Option<&std::path::Path>) -> Result<
         session
             .load_binary(b)
             .with_context(|| format!("loading {}", b.display()))?;
+        if let Err(err) = populate_python_instruction_xrefs(&session) {
+            tracing::debug!(err = %err, "failed to stage instruction xrefs for python session");
+        }
+        if let Err(err) = populate_python_decompiled_functions(&session) {
+            tracing::debug!(err = %err, "failed to stage decompiled functions for python session");
+        }
     }
     let source =
         std::fs::read_to_string(script).with_context(|| format!("reading {}", script.display()))?;
     unlace_idapython::pybridge::run_script(session, &source)
         .map_err(|e| anyhow::anyhow!("python: {e}"))
+}
+
+#[cfg(feature = "python")]
+fn populate_python_instruction_xrefs(session: &unlace_session::Session) -> Result<usize> {
+    let xrefs = session
+        .with_binary(|image| -> Result<Vec<unlace_ir::xref::InstructionXref>> {
+            let functions = pipeline::discover_functions(image, None)?;
+            let lifter = get_lifter(image.arch);
+            let mut lifted = std::collections::BTreeMap::new();
+            for entry in &functions {
+                match pipeline::lift_function(image, lifter.as_ref(), entry) {
+                    Ok(function) => {
+                        lifted.insert(entry.addr, function);
+                    }
+                    Err(err) => {
+                        tracing::debug!(func = %entry.name, err = %err, "skipping xref lift failure");
+                    }
+                }
+            }
+            Ok(unlace_ir::xref::build_instruction_xrefs(&lifted))
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let count = xrefs.len();
+    session.add_instruction_xrefs(xrefs);
+    Ok(count)
+}
+
+#[cfg(feature = "python")]
+fn populate_python_decompiled_functions(session: &unlace_session::Session) -> Result<usize> {
+    populate_python_decompiled_functions_with_limit(session, python_decompile_stage_limit())
+}
+
+#[cfg(feature = "python")]
+fn populate_python_decompiled_functions_with_limit(
+    session: &unlace_session::Session,
+    limit: usize,
+) -> Result<usize> {
+    let staged = session
+        .with_binary(|image| -> Result<Vec<(u64, u64, String, String)>> {
+            let functions = pipeline::discover_functions(image, None)?;
+            let lifter = get_lifter(image.arch);
+            let config = PipelineConfig {
+                timeout: Duration::from_secs(30),
+                print_config: None,
+                annotations: None,
+                flirt: pipeline::FlirtConfig::default(),
+                dwarf_sidecar: None,
+            };
+            let rtti = unlace_loader::scan_rtti(image);
+            let rtti = (!rtti.is_empty()).then_some(&rtti);
+            let mut staged = Vec::new();
+            for entry in functions.iter().take(limit) {
+                match pipeline::decompile_function_with_symbols(
+                    image,
+                    lifter.as_ref(),
+                    entry,
+                    args::EmitFormat::C,
+                    &config,
+                    None,
+                    &functions,
+                    rtti,
+                ) {
+                    Ok(text) => staged.push((entry.addr, entry.size, entry.name.clone(), text)),
+                    Err(err) => {
+                        tracing::debug!(func = %entry.name, err = %err, "skipping python decompile staging failure");
+                    }
+                }
+            }
+            Ok(staged)
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let count = staged.len();
+    for (addr, size, name, text) in staged {
+        session.set_decompiled_function(addr, size, name, text);
+    }
+    Ok(count)
+}
+
+#[cfg(feature = "python")]
+fn python_decompile_stage_limit() -> usize {
+    std::env::var("UNLACE_PY_DECOMPILE_MAX")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(DEFAULT_PY_DECOMPILE_STAGE_LIMIT)
 }
 
 #[cfg(not(feature = "python"))]
@@ -2000,5 +2095,55 @@ mod tests {
             image.pdb_types.is_none(),
             "no real .pdb on disk → no panic, no spurious load",
         );
+    }
+
+    #[cfg(feature = "python")]
+    #[test]
+    fn populate_python_instruction_xrefs_stages_direct_edges() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let binary = std::path::PathBuf::from(format!("{manifest}/../../fixtures/hello_world.elf"));
+        let session = unlace_session::Session::new();
+        session.load_binary(&binary).expect("load fixture");
+
+        let staged = populate_python_instruction_xrefs(&session).expect("stage xrefs");
+
+        assert!(
+            staged > 0,
+            "hello_world should stage at least one direct xref"
+        );
+    }
+
+    #[cfg(feature = "python")]
+    #[test]
+    fn populate_python_decompiled_functions_stages_text() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let binary = std::path::PathBuf::from(format!("{manifest}/../../fixtures/hello_world.elf"));
+        let session = unlace_session::Session::new();
+        session.load_binary(&binary).expect("load fixture");
+
+        let staged = populate_python_decompiled_functions(&session).expect("stage pseudocode");
+
+        assert!(
+            staged > 0,
+            "hello_world should stage at least one decompile"
+        );
+        assert!(
+            session.decompiled_function(0x1060).is_some(),
+            "hello_world main should have staged pseudocode"
+        );
+    }
+
+    #[cfg(feature = "python")]
+    #[test]
+    fn populate_python_decompiled_functions_respects_limit() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let binary = std::path::PathBuf::from(format!("{manifest}/../../fixtures/hello_world.elf"));
+        let session = unlace_session::Session::new();
+        session.load_binary(&binary).expect("load fixture");
+
+        let staged = populate_python_decompiled_functions_with_limit(&session, 1)
+            .expect("stage bounded pseudocode");
+
+        assert_eq!(staged, 1);
     }
 }

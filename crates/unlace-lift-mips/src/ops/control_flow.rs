@@ -1,6 +1,6 @@
 use capstone::arch::mips::MipsOperand;
 use smallvec::smallvec;
-use unlace_ir::{IrInsn, IrOp, Varnode};
+use unlace_ir::{IrInsn, IrOp};
 
 use crate::lift::LiftCtx;
 use crate::register_file::{self, RA};
@@ -68,7 +68,7 @@ pub fn lift_bgez(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[1]);
     match (rs, target) {
         (Some(rs), Some(target)) => {
-            let zero = Varnode::constant(0, 8);
+            let zero = ctx.word_const(0);
             let sless = ctx.alloc_unique(1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSless,
@@ -102,7 +102,7 @@ pub fn lift_bltz(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[1]);
     match (rs, target) {
         (Some(rs), Some(target)) => {
-            let zero = Varnode::constant(0, 8);
+            let zero = ctx.word_const(0);
             let cond = ctx.alloc_unique(1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSless,
@@ -129,7 +129,7 @@ pub fn lift_bgtz(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[1]);
     match (rs, target) {
         (Some(rs), Some(target)) => {
-            let zero = Varnode::constant(0, 8);
+            let zero = ctx.word_const(0);
             let sleq = ctx.alloc_unique(1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSlessequal,
@@ -163,7 +163,7 @@ pub fn lift_blez(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[1]);
     match (rs, target) {
         (Some(rs), Some(target)) => {
-            let zero = Varnode::constant(0, 8);
+            let zero = ctx.word_const(0);
             let cond = ctx.alloc_unique(1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSlessequal,
@@ -190,7 +190,7 @@ pub fn lift_beqz(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[1]);
     match (rs, target) {
         (Some(rs), Some(target)) => {
-            let zero = Varnode::constant(0, 8);
+            let zero = ctx.word_const(0);
             let cond = ctx.alloc_unique(1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntEqual,
@@ -217,7 +217,7 @@ pub fn lift_bnez(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[1]);
     match (rs, target) {
         (Some(rs), Some(target)) => {
-            let zero = Varnode::constant(0, 8);
+            let zero = ctx.word_const(0);
             let cond = ctx.alloc_unique(1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntNotequal,
@@ -248,8 +248,8 @@ pub fn lift_bgezal(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         ctx.emit_unimplemented();
         return;
     }
-    let return_addr = Varnode::constant(ctx.addr.wrapping_add(8), 8);
-    let ra = register_file::reg64(RA);
+    let return_addr = ctx.word_const(ctx.addr.wrapping_add(8));
+    let ra = ctx.reg_at(RA);
     ctx.write_to_reg(ra, return_addr);
 
     lift_bgez(ctx, ops);
@@ -260,8 +260,8 @@ pub fn lift_bltzal(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         ctx.emit_unimplemented();
         return;
     }
-    let return_addr = Varnode::constant(ctx.addr.wrapping_add(8), 8);
-    let ra = register_file::reg64(RA);
+    let return_addr = ctx.word_const(ctx.addr.wrapping_add(8));
+    let ra = ctx.reg_at(RA);
     ctx.write_to_reg(ra, return_addr);
 
     lift_bltz(ctx, ops);
@@ -290,8 +290,8 @@ pub fn lift_jal(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         ctx.emit_unimplemented();
         return;
     }
-    let return_addr = Varnode::constant(ctx.addr.wrapping_add(8), 8);
-    let ra = register_file::reg64(RA);
+    let return_addr = ctx.word_const(ctx.addr.wrapping_add(8));
+    let ra = ctx.reg_at(RA);
     ctx.write_to_reg(ra, return_addr);
 
     let target = ctx.read_operand(&ops[0]);
@@ -341,7 +341,7 @@ pub fn lift_jalr(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         return;
     }
 
-    let return_addr = Varnode::constant(ctx.addr.wrapping_add(8), 8);
+    let return_addr = ctx.word_const(ctx.addr.wrapping_add(8));
 
     let (dst_reg, target_idx) = if ops.len() >= 2 {
         (
@@ -352,7 +352,7 @@ pub fn lift_jalr(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
             1,
         )
     } else {
-        (Some(register_file::reg64(RA)), 0)
+        (Some(ctx.reg_at(RA)), 0)
     };
 
     if let Some(dst) = dst_reg {

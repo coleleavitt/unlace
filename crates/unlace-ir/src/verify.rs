@@ -4,11 +4,12 @@
 //! pass must keep valid without asserting stronger semantic facts that later
 //! recovery passes are still allowed to refine.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use petgraph::visit::{EdgeRef, IntoEdgeReferences};
 
 use crate::BlockId;
+use crate::lvar::{LvarSource, LvarStorage};
 use crate::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -55,6 +56,18 @@ pub enum VerifyError {
         input_block: BlockId,
     },
 
+    #[error("phi in block {block} has duplicate input from predecessor {input_block}")]
+    PhiInputDuplicatePredecessor {
+        block: BlockId,
+        input_block: BlockId,
+    },
+
+    #[error("phi in block {block} is missing input from predecessor {predecessor}")]
+    PhiInputMissingPredecessor {
+        block: BlockId,
+        predecessor: BlockId,
+    },
+
     #[error("SSA definition appears more than once: {var:?}")]
     DuplicateDefinition { var: SsaVarnode },
 
@@ -76,12 +89,125 @@ pub enum VerifyError {
         input_idx: usize,
         input_count: usize,
     },
+
+    #[error("{table} binding references missing block {block}")]
+    OpBindingBlockMissing { table: &'static str, block: BlockId },
+
+    #[error("{table} binding references missing instruction {block}:{insn_idx}")]
+    OpBindingInsnMissing {
+        table: &'static str,
+        block: BlockId,
+        insn_idx: usize,
+    },
+
+    #[error(
+        "{table} binding input slot {input_idx} is out of range for instruction {block}:{insn_idx} with {input_count} inputs"
+    )]
+    OpBindingInputOutOfRange {
+        table: &'static str,
+        block: BlockId,
+        insn_idx: usize,
+        input_idx: usize,
+        input_count: usize,
+    },
+
+    #[error("{table} metadata references missing block {block}")]
+    SideMapBlockMissing { table: &'static str, block: BlockId },
+
+    #[error("{table} metadata references missing instruction {block}:{insn_idx}")]
+    SideMapInsnMissing {
+        table: &'static str,
+        block: BlockId,
+        insn_idx: usize,
+    },
+
+    #[error("{table} metadata references undefined SSA var {var:?}")]
+    MetadataVarUndefined {
+        table: &'static str,
+        var: SsaVarnode,
+    },
+
+    #[error(
+        "instruction {block}:{insn_idx} input {input_idx} references undefined SSA var {var:?}"
+    )]
+    UndefinedInput {
+        block: BlockId,
+        insn_idx: usize,
+        input_idx: usize,
+        var: SsaVarnode,
+    },
+
+    #[error(
+        "instruction {block}:{insn_idx} input {input_idx} references non-dominating SSA var {var:?}"
+    )]
+    NonDominatingInput {
+        block: BlockId,
+        insn_idx: usize,
+        input_idx: usize,
+        var: SsaVarnode,
+    },
+
+    #[error("phi in block {block} input {input_idx} references undefined SSA var {var:?}")]
+    UndefinedPhiInput {
+        block: BlockId,
+        input_idx: usize,
+        var: SsaVarnode,
+    },
+
+    #[error("phi in block {block} input {input_idx} references non-dominating SSA var {var:?}")]
+    NonDominatingPhiInput {
+        block: BlockId,
+        input_idx: usize,
+        var: SsaVarnode,
+    },
+
+    #[error("lvar id sequence expected lv{expected}, found {found}")]
+    LvarIdOutOfOrder { expected: u32, found: u32 },
+
+    #[error("lvar {id} has inverted live range {start}->{end}")]
+    LvarLiveRangeInverted {
+        id: u32,
+        start: BlockId,
+        end: BlockId,
+    },
+
+    #[error("lvar {id} live range references missing block {block}")]
+    LvarLiveRangeMissingBlock { id: u32, block: BlockId },
+
+    #[error("stack lvar {id} references missing frame slot {offset}")]
+    LvarStackStorageMissing { id: u32, offset: i64 },
+
+    #[error("temp lvar {id} references undefined SSA var {var:?}")]
+    LvarTempStorageMissing { id: u32, var: SsaVarnode },
+
+    #[error("param lvar {id} references param {idx}, but function has {param_count} params")]
+    LvarParamOutOfRange {
+        id: u32,
+        idx: u32,
+        param_count: usize,
+    },
+
+    #[error("return lvar {id} exists while inferred return type is unknown")]
+    LvarReturnWithoutType { id: u32 },
+
+    #[error("debug stack lvar {id} at {offset} has no debug-local name")]
+    LvarDebugSourceMissingName { id: u32, offset: i64 },
+
+    #[error("stack access at {source_addr:#x} resolved to missing slot {slot}")]
+    StackAccessResolvedSlotMissing { source_addr: u64, slot: i64 },
 }
 
 pub fn verify_ssa_function(func: &SsaFunction) -> Result<(), VerifyError> {
     verify_function_cfg_shape(func)?;
     verify_phis(func)?;
     verify_var_map(func)?;
+    verify_op_type_bindings(func)?;
+    verify_side_maps(func)?;
+    verify_block_metadata(func)?;
+    verify_varnode_metadata(func)?;
+    verify_ssa_uses(func)?;
+    verify_lvars(func)?;
+    verify_stack_accesses(func)?;
     Ok(())
 }
 
@@ -150,6 +276,7 @@ fn verify_function_cfg_shape(func: &SsaFunction) -> Result<(), VerifyError> {
 
 fn verify_phis(func: &SsaFunction) -> Result<(), VerifyError> {
     let mut definitions = BTreeSet::new();
+    let defs = SsaDefIndex::new(func);
 
     for (&block, phis) in &func.phi_map {
         if !func.function.blocks.contains_key(&block) {
@@ -160,12 +287,35 @@ fn verify_phis(func: &SsaFunction) -> Result<(), VerifyError> {
             if !definitions.insert(phi.output) {
                 return Err(VerifyError::DuplicateDefinition { var: phi.output });
             }
-            for &(input_block, _) in &phi.inputs {
+            let mut seen_predecessors = BTreeSet::new();
+            for (input_idx, &(input_block, input_var)) in phi.inputs.iter().enumerate() {
                 if !func.function.blocks.contains_key(&input_block) {
                     return Err(VerifyError::PhiInputMissingBlock { block, input_block });
                 }
                 if !predecessors.contains(&input_block) {
                     return Err(VerifyError::PhiInputNotPredecessor { block, input_block });
+                }
+                if !seen_predecessors.insert(input_block) {
+                    return Err(VerifyError::PhiInputDuplicatePredecessor { block, input_block });
+                }
+                if input_var.version != 0 && !ssa_var_defined(func, input_var) {
+                    return Err(VerifyError::UndefinedPhiInput {
+                        block,
+                        input_idx,
+                        var: input_var,
+                    });
+                }
+                if input_var.version != 0 && !defs.reaches_phi_edge(func, input_var, input_block) {
+                    return Err(VerifyError::NonDominatingPhiInput {
+                        block,
+                        input_idx,
+                        var: input_var,
+                    });
+                }
+            }
+            for &predecessor in &predecessors {
+                if !seen_predecessors.contains(&predecessor) {
+                    return Err(VerifyError::PhiInputMissingPredecessor { block, predecessor });
                 }
             }
         }
@@ -211,12 +361,524 @@ fn verify_var_map(func: &SsaFunction) -> Result<(), VerifyError> {
     Ok(())
 }
 
+fn verify_op_type_bindings(func: &SsaFunction) -> Result<(), VerifyError> {
+    for &(block, insn_idx, input_idx) in func.op_bindings.stroff.keys() {
+        verify_op_binding_key(func, "stroff", block, insn_idx, input_idx)?;
+    }
+    for &(block, insn_idx, input_idx) in func.op_bindings.enum_const.keys() {
+        verify_op_binding_key(func, "enum_const", block, insn_idx, input_idx)?;
+    }
+    Ok(())
+}
+
+fn verify_op_binding_key(
+    func: &SsaFunction,
+    table: &'static str,
+    block: BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+) -> Result<(), VerifyError> {
+    let Some(bb) = func.function.blocks.get(&block) else {
+        return Err(VerifyError::OpBindingBlockMissing { table, block });
+    };
+    let Some(insn) = bb.insns.get(insn_idx) else {
+        return Err(VerifyError::OpBindingInsnMissing {
+            table,
+            block,
+            insn_idx,
+        });
+    };
+    let input_count = insn.inputs.len();
+    if input_idx >= input_count {
+        return Err(VerifyError::OpBindingInputOutOfRange {
+            table,
+            block,
+            insn_idx,
+            input_idx,
+            input_count,
+        });
+    }
+    Ok(())
+}
+
+fn verify_side_maps(func: &SsaFunction) -> Result<(), VerifyError> {
+    for &(block, insn_idx) in func.stack_offset_hints.keys() {
+        verify_side_map_key(func, "stack_offset_hints", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.panic_sites.keys() {
+        verify_side_map_key(func, "panic_sites", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.vtable_calls.keys() {
+        verify_side_map_key(func, "vtable_calls", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.cpp_vtable_calls.keys() {
+        verify_side_map_key(func, "cpp_vtable_calls", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.objc_dispatch_calls.keys() {
+        verify_side_map_key(func, "objc_dispatch_calls", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.go_defer_recover_calls.keys() {
+        verify_side_map_key(func, "go_defer_recover_calls", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in &func.frame_setup_insns {
+        verify_side_map_key(func, "frame_setup_insns", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.array_strides.keys() {
+        verify_side_map_key(func, "array_strides", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.sp_delta_at.keys() {
+        verify_side_map_key(func, "sp_delta_at", block, insn_idx)?;
+    }
+    for discriminant in &func.cpp_variant_discriminants {
+        verify_side_map_key(
+            func,
+            "cpp_variant_discriminants.tag_load_loc",
+            discriminant.tag_load_loc.0,
+            discriminant.tag_load_loc.1,
+        )?;
+        for &(block, insn_idx) in &discriminant.comparison_locs {
+            verify_side_map_key(
+                func,
+                "cpp_variant_discriminants.comparison_locs",
+                block,
+                insn_idx,
+            )?;
+        }
+    }
+    if let Some(rust_async) = &func.rust_async {
+        for &(block, insn_idx) in &rust_async.poll_calls {
+            verify_side_map_key(func, "rust_async.poll_calls", block, insn_idx)?;
+        }
+    }
+    for &(block, insn_idx) in func.sizeof_type_map.keys() {
+        verify_side_map_key(func, "sizeof_type_map", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.alignof_type_map.keys() {
+        verify_side_map_key(func, "alignof_type_map", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.resolved_indirect_calls.keys() {
+        verify_side_map_key(func, "resolved_indirect_calls", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.indirect_call_targets.keys() {
+        verify_side_map_key(func, "indirect_call_targets", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.variadic_call_types.keys() {
+        verify_side_map_key(func, "variadic_call_types", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.libc_call_annotations.keys() {
+        verify_side_map_key(func, "libc_call_annotations", block, insn_idx)?;
+    }
+    for &(block, insn_idx) in func.libc_sig_annotations.keys() {
+        verify_side_map_key(func, "libc_sig_annotations", block, insn_idx)?;
+    }
+    for annotation in &func.crypto_annotations {
+        verify_side_map_key(
+            func,
+            "crypto_annotations.start_loc",
+            annotation.start_loc.0,
+            annotation.start_loc.1,
+        )?;
+        verify_side_map_key(
+            func,
+            "crypto_annotations.end_loc",
+            annotation.end_loc.0,
+            annotation.end_loc.1,
+        )?;
+    }
+    for site in &func.coroutine_sites {
+        for point in &site.suspension_points {
+            verify_side_map_key(
+                func,
+                "coroutine_sites.suspension_points.store_loc",
+                point.store_loc.0,
+                point.store_loc.1,
+            )?;
+        }
+    }
+    for byref_box in func.byref_boxes.values() {
+        verify_side_map_key(
+            func,
+            "byref_boxes.captured_store_loc",
+            byref_box.captured_store_loc.0,
+            byref_box.captured_store_loc.1,
+        )?;
+    }
+    for discriminant in &func.enum_discriminants {
+        verify_side_map_key(
+            func,
+            "enum_discriminants.load_loc",
+            discriminant.load_loc.0,
+            discriminant.load_loc.1,
+        )?;
+        for &(block, insn_idx) in &discriminant.comparison_locs {
+            verify_side_map_key(func, "enum_discriminants.comparison_locs", block, insn_idx)?;
+        }
+    }
+    for &(block, insn_idx) in &func.cpp_this_args {
+        verify_side_map_key(func, "cpp_this_args", block, insn_idx)?;
+    }
+    Ok(())
+}
+
+fn verify_side_map_key(
+    func: &SsaFunction,
+    table: &'static str,
+    block: BlockId,
+    insn_idx: usize,
+) -> Result<(), VerifyError> {
+    let Some(bb) = func.function.blocks.get(&block) else {
+        return Err(VerifyError::SideMapBlockMissing { table, block });
+    };
+    if bb.insns.get(insn_idx).is_none() {
+        return Err(VerifyError::SideMapInsnMissing {
+            table,
+            block,
+            insn_idx,
+        });
+    }
+    Ok(())
+}
+
+fn verify_block_metadata(func: &SsaFunction) -> Result<(), VerifyError> {
+    for &block in func.tail_call_map.keys() {
+        verify_metadata_block(func, "tail_call_map", block)?;
+    }
+    for &block in func.block_entry_sp_delta.keys() {
+        verify_metadata_block(func, "block_entry_sp_delta", block)?;
+    }
+    for site in &func.go_defer_sites {
+        verify_metadata_block(func, "go_defer_sites.defer_block", site.defer_block)?;
+    }
+    for region in &func.seh_regions {
+        for &block in &region.try_blocks {
+            verify_metadata_block(func, "seh_regions.try_blocks", block)?;
+        }
+        for &block in &region.handler_blocks {
+            verify_metadata_block(func, "seh_regions.handler_blocks", block)?;
+        }
+        for &block in &region.finally_blocks {
+            verify_metadata_block(func, "seh_regions.finally_blocks", block)?;
+        }
+    }
+    Ok(())
+}
+
+fn verify_metadata_block(
+    func: &SsaFunction,
+    table: &'static str,
+    block: BlockId,
+) -> Result<(), VerifyError> {
+    if !func.function.blocks.contains_key(&block) {
+        return Err(VerifyError::SideMapBlockMissing { table, block });
+    }
+    Ok(())
+}
+
+fn verify_varnode_metadata(func: &SsaFunction) -> Result<(), VerifyError> {
+    for &var in func.var_types.keys() {
+        verify_metadata_var(func, "var_types", var)?;
+    }
+    for counterexample in &func.type_counterexamples {
+        verify_metadata_var(func, "type_counterexamples.varnode", counterexample.varnode)?;
+    }
+    for &var in &func.foldable_exprs {
+        verify_metadata_var(func, "foldable_exprs", var)?;
+    }
+    for &var in func.merged_names.keys() {
+        verify_metadata_var(func, "merged_names", var)?;
+    }
+    for discriminant in &func.enum_discriminants {
+        verify_metadata_var(func, "enum_discriminants.load_sv", discriminant.load_sv)?;
+    }
+    for discriminant in &func.cpp_variant_discriminants {
+        verify_metadata_var(
+            func,
+            "cpp_variant_discriminants.tag_sv",
+            discriminant.tag_sv,
+        )?;
+    }
+    if let Some(rust_async) = &func.rust_async {
+        verify_metadata_var(func, "rust_async.future_base", rust_async.future_base)?;
+    }
+    for info in func.vtable_calls.values() {
+        verify_metadata_var(func, "vtable_calls.base_varnode", info.base_varnode)?;
+    }
+    for info in func.cpp_vtable_calls.values() {
+        verify_metadata_var(func, "cpp_vtable_calls.base_varnode", info.base_varnode)?;
+    }
+    for stack_var in func.stack_vars.values() {
+        for &var in &stack_var.accesses {
+            verify_metadata_var(func, "stack_vars.accesses", var)?;
+        }
+    }
+    for &var in func.composite_var_types.keys() {
+        verify_metadata_var(func, "composite_var_types", var)?;
+    }
+    for &var in func.array_struct_layouts.keys() {
+        verify_metadata_var(func, "array_struct_layouts", var)?;
+    }
+    for byref_box in func.byref_boxes.values() {
+        verify_metadata_var(
+            func,
+            "byref_boxes.captured_value_sv",
+            byref_box.captured_value_sv,
+        )?;
+    }
+    for &var in func.var_role_names.keys() {
+        verify_metadata_var(func, "var_role_names", var)?;
+    }
+    Ok(())
+}
+
+fn verify_metadata_var(
+    func: &SsaFunction,
+    table: &'static str,
+    var: SsaVarnode,
+) -> Result<(), VerifyError> {
+    if var.version != 0 && !ssa_var_defined(func, var) {
+        return Err(VerifyError::MetadataVarUndefined { table, var });
+    }
+    Ok(())
+}
+
+fn verify_lvars(func: &SsaFunction) -> Result<(), VerifyError> {
+    for (idx, lvar) in func.lvars.iter().enumerate() {
+        let id = lvar.id.as_u32();
+        if id != idx as u32 {
+            return Err(VerifyError::LvarIdOutOfOrder {
+                expected: idx as u32,
+                found: id,
+            });
+        }
+        if lvar.live_range.start_block > lvar.live_range.end_block {
+            return Err(VerifyError::LvarLiveRangeInverted {
+                id,
+                start: lvar.live_range.start_block,
+                end: lvar.live_range.end_block,
+            });
+        }
+        for block in [lvar.live_range.start_block, lvar.live_range.end_block] {
+            if !func.function.blocks.contains_key(&block) {
+                return Err(VerifyError::LvarLiveRangeMissingBlock { id, block });
+            }
+        }
+
+        match &lvar.storage {
+            LvarStorage::Stack { offset } => {
+                let in_stack_frame = func
+                    .stack_frame
+                    .as_ref()
+                    .is_some_and(|frame| frame.locals.contains_key(offset));
+                if !in_stack_frame && !func.stack_vars.contains_key(offset) {
+                    return Err(VerifyError::LvarStackStorageMissing {
+                        id,
+                        offset: *offset,
+                    });
+                }
+                if matches!(lvar.source, LvarSource::FromDebug)
+                    && !func.dwarf_local_names.contains_key(offset)
+                {
+                    return Err(VerifyError::LvarDebugSourceMissingName {
+                        id,
+                        offset: *offset,
+                    });
+                }
+            }
+            LvarStorage::Temp { ssa_var } => {
+                if !ssa_var_defined(func, *ssa_var) {
+                    return Err(VerifyError::LvarTempStorageMissing { id, var: *ssa_var });
+                }
+            }
+            LvarStorage::Param { idx } => {
+                if *idx as usize >= func.inferred_params.len() {
+                    return Err(VerifyError::LvarParamOutOfRange {
+                        id,
+                        idx: *idx,
+                        param_count: func.inferred_params.len(),
+                    });
+                }
+            }
+            LvarStorage::Return => {
+                if matches!(
+                    func.inferred_return_type,
+                    crate::ssa::PrimitiveType::Unknown
+                ) {
+                    return Err(VerifyError::LvarReturnWithoutType { id });
+                }
+            }
+            LvarStorage::Reg { .. } | LvarStorage::Spill { .. } => {}
+        }
+    }
+
+    Ok(())
+}
+
+fn ssa_var_defined(func: &SsaFunction, var: SsaVarnode) -> bool {
+    func.var_map
+        .iter()
+        .any(|((_, _, slot), &mapped)| matches!(slot, VarnodeSlot::Output) && mapped == var)
+        || func
+            .phi_map
+            .values()
+            .flat_map(|phis| phis.iter())
+            .any(|phi| phi.output == var)
+}
+
+fn verify_ssa_uses(func: &SsaFunction) -> Result<(), VerifyError> {
+    let defs = SsaDefIndex::new(func);
+    for (&(block, insn_idx, ref slot), &var) in &func.var_map {
+        let VarnodeSlot::Input(input_idx) = *slot else {
+            continue;
+        };
+        if var.version == 0 {
+            continue;
+        }
+        if !ssa_var_defined(func, var) {
+            return Err(VerifyError::UndefinedInput {
+                block,
+                insn_idx,
+                input_idx,
+                var,
+            });
+        }
+        if defs.dominates_instruction_use(func, var, block, insn_idx) {
+            continue;
+        }
+        return Err(VerifyError::NonDominatingInput {
+            block,
+            insn_idx,
+            input_idx,
+            var,
+        });
+    }
+    Ok(())
+}
+
+struct SsaDefIndex {
+    instruction_defs: BTreeMap<SsaVarnode, Vec<(BlockId, usize)>>,
+    phi_defs: BTreeMap<SsaVarnode, Vec<BlockId>>,
+}
+
+impl SsaDefIndex {
+    fn new(func: &SsaFunction) -> Self {
+        let mut instruction_defs: BTreeMap<SsaVarnode, Vec<(BlockId, usize)>> = BTreeMap::new();
+        let mut phi_defs: BTreeMap<SsaVarnode, Vec<BlockId>> = BTreeMap::new();
+        for (&(block, insn_idx, ref slot), &var) in &func.var_map {
+            if matches!(slot, VarnodeSlot::Output) {
+                instruction_defs
+                    .entry(var)
+                    .or_default()
+                    .push((block, insn_idx));
+            }
+        }
+        for (&block, phis) in &func.phi_map {
+            for phi in phis {
+                phi_defs.entry(phi.output).or_default().push(block);
+            }
+        }
+        Self {
+            instruction_defs,
+            phi_defs,
+        }
+    }
+
+    fn dominates_instruction_use(
+        &self,
+        func: &SsaFunction,
+        var: SsaVarnode,
+        use_block: BlockId,
+        use_idx: usize,
+    ) -> bool {
+        self.phi_defs.get(&var).is_some_and(|blocks| {
+            blocks
+                .iter()
+                .any(|&def_block| dominates(&func.dom_tree, def_block, use_block))
+        }) || self.instruction_defs.get(&var).is_some_and(|defs| {
+            defs.iter().any(|&(def_block, def_idx)| {
+                instruction_def_reaches_instruction_use(
+                    &func.dom_tree,
+                    def_block,
+                    def_idx,
+                    use_block,
+                    use_idx,
+                )
+            })
+        })
+    }
+
+    fn reaches_phi_edge(&self, func: &SsaFunction, var: SsaVarnode, predecessor: BlockId) -> bool {
+        self.phi_defs.get(&var).is_some_and(|blocks| {
+            blocks
+                .iter()
+                .any(|&def_block| dominates(&func.dom_tree, def_block, predecessor))
+        }) || self.instruction_defs.get(&var).is_some_and(|defs| {
+            defs.iter().any(|&(def_block, _)| {
+                def_block == predecessor || dominates(&func.dom_tree, def_block, predecessor)
+            })
+        })
+    }
+}
+
+fn instruction_def_reaches_instruction_use(
+    dom_tree: &crate::ssa::DominatorTree,
+    def_block: BlockId,
+    def_idx: usize,
+    use_block: BlockId,
+    use_idx: usize,
+) -> bool {
+    if def_block == use_block {
+        return def_idx < use_idx;
+    }
+    dominates(dom_tree, def_block, use_block)
+}
+
+fn dominates(dom_tree: &crate::ssa::DominatorTree, dominator: BlockId, block: BlockId) -> bool {
+    if dominator == block {
+        return true;
+    }
+    let mut current = block;
+    let mut seen = BTreeSet::new();
+    while let Some(parent) = dom_tree.idom(current) {
+        if parent == dominator {
+            return true;
+        }
+        if parent == current || !seen.insert(parent) {
+            return false;
+        }
+        current = parent;
+    }
+    false
+}
+
+fn verify_stack_accesses(func: &SsaFunction) -> Result<(), VerifyError> {
+    for access in &func.stack_accesses {
+        let Some(slot) = access.resolved_slot else {
+            continue;
+        };
+        let in_stack_frame = func
+            .stack_frame
+            .as_ref()
+            .is_some_and(|frame| frame.locals.contains_key(&slot));
+        if !in_stack_frame && !func.stack_vars.contains_key(&slot) {
+            return Err(VerifyError::StackAccessResolvedSlotMissing {
+                source_addr: access.source_addr,
+                slot,
+            });
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use smallvec::smallvec;
 
     use super::*;
-    use crate::ssa::build_ssa;
+    use crate::lvar::{LiveRange, Lvar, LvarFlags, LvarId};
+    use crate::ssa::{StackAccess, StackLocal, build_ssa};
+    use crate::types::TypeKind;
     use crate::{BasicBlock, Function, IrInsn, IrOp, Varnode};
 
     fn simple_ssa() -> SsaFunction {
@@ -243,6 +905,17 @@ mod tests {
         verify_ssa_function(&func).expect("fresh SSA should verify");
     }
 
+    fn sample_lvar(storage: LvarStorage) -> Lvar {
+        Lvar::new(
+            LvarId::new(0),
+            storage,
+            LiveRange::point(BlockId(0)),
+            TypeKind::Int,
+            LvarSource::Inferred,
+            LvarFlags::empty(),
+        )
+    }
+
     #[test]
     fn rejects_missing_entry() {
         let mut func = simple_ssa();
@@ -267,6 +940,415 @@ mod tests {
             VerifyError::VarMapInsnMissing {
                 block: BlockId(0),
                 insn_idx: 99
+            }
+        );
+    }
+
+    fn sample_stroff_binding() -> crate::ssa::StrOffBinding {
+        crate::ssa::StrOffBinding {
+            struct_type: crate::types::Type::Struct {
+                name: "Point".into(),
+                fields: vec![crate::types::StructFieldType {
+                    name: "x".into(),
+                    ty: crate::types::Type::int(4),
+                    offset: 0,
+                }],
+            },
+            field_path: vec!["x".into()],
+        }
+    }
+
+    fn sample_enum_binding() -> crate::ssa::EnumConstBinding {
+        crate::ssa::EnumConstBinding {
+            enum_name: "Color".into(),
+            variant: "Red".into(),
+        }
+    }
+
+    #[test]
+    fn rejects_op_binding_missing_block() {
+        let mut func = simple_ssa();
+        func.op_bindings
+            .stroff
+            .insert((BlockId(99), 0, 0), sample_stroff_binding());
+
+        let err = verify_ssa_function(&func).expect_err("missing binding block should fail");
+        assert_eq!(
+            err,
+            VerifyError::OpBindingBlockMissing {
+                table: "stroff",
+                block: BlockId(99),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_op_binding_missing_instruction() {
+        let mut func = simple_ssa();
+        func.op_bindings
+            .enum_const
+            .insert((BlockId(0), 99, 0), sample_enum_binding());
+
+        let err = verify_ssa_function(&func).expect_err("missing binding insn should fail");
+        assert_eq!(
+            err,
+            VerifyError::OpBindingInsnMissing {
+                table: "enum_const",
+                block: BlockId(0),
+                insn_idx: 99,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_op_binding_input_out_of_range() {
+        let mut func = simple_ssa();
+        func.op_bindings
+            .stroff
+            .insert((BlockId(0), 0, 3), sample_stroff_binding());
+
+        let err = verify_ssa_function(&func).expect_err("out-of-range binding input should fail");
+        assert_eq!(
+            err,
+            VerifyError::OpBindingInputOutOfRange {
+                table: "stroff",
+                block: BlockId(0),
+                insn_idx: 0,
+                input_idx: 3,
+                input_count: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_side_map_missing_block() {
+        let mut func = simple_ssa();
+        func.sizeof_type_map
+            .insert((BlockId(99), 0), crate::types::Type::int(4));
+
+        let err = verify_ssa_function(&func).expect_err("missing side-map block should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapBlockMissing {
+                table: "sizeof_type_map",
+                block: BlockId(99),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_side_map_missing_instruction() {
+        let mut func = simple_ssa();
+        func.resolved_indirect_calls
+            .insert((BlockId(0), 99), 0x2000);
+
+        let err = verify_ssa_function(&func).expect_err("missing side-map insn should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapInsnMissing {
+                table: "resolved_indirect_calls",
+                block: BlockId(0),
+                insn_idx: 99,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_remaining_metadata_missing_block() {
+        let mut func = simple_ssa();
+        func.stack_offset_hints.insert((BlockId(99), 0), -8);
+
+        let err = verify_ssa_function(&func).expect_err("missing metadata block should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapBlockMissing {
+                table: "stack_offset_hints",
+                block: BlockId(99),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_remaining_metadata_missing_instruction() {
+        let mut func = simple_ssa();
+        func.cpp_this_args.insert((BlockId(0), 99));
+
+        let err = verify_ssa_function(&func).expect_err("missing metadata insn should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapInsnMissing {
+                table: "cpp_this_args",
+                block: BlockId(0),
+                insn_idx: 99,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_crypto_annotation_missing_end_instruction() {
+        let mut func = simple_ssa();
+        func.crypto_annotations.push(crate::ssa::CryptoAnnotation {
+            algorithm: "AES".into(),
+            start_loc: (BlockId(0), 0),
+            end_loc: (BlockId(0), 99),
+        });
+
+        let err = verify_ssa_function(&func).expect_err("missing crypto end insn should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapInsnMissing {
+                table: "crypto_annotations.end_loc",
+                block: BlockId(0),
+                insn_idx: 99,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_rust_async_poll_call_missing_instruction() {
+        let mut func = simple_ssa();
+        func.rust_async = Some(crate::ssa::RustAsyncInfo {
+            future_base: SsaVarnode {
+                base: Varnode::reg(0, 8),
+                version: 0,
+            },
+            state_offset: 0,
+            states: vec![0],
+            poll_calls: vec![(BlockId(0), 99)],
+            poll_returns: Vec::new(),
+        });
+
+        let err = verify_ssa_function(&func).expect_err("missing poll-call insn should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapInsnMissing {
+                table: "rust_async.poll_calls",
+                block: BlockId(0),
+                insn_idx: 99,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_array_strides_missing_instruction() {
+        let mut func = simple_ssa();
+        func.array_strides.insert((BlockId(0), 99), 4);
+
+        let err = verify_ssa_function(&func).expect_err("missing array-stride insn should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapInsnMissing {
+                table: "array_strides",
+                block: BlockId(0),
+                insn_idx: 99,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_sp_delta_at_missing_block() {
+        let mut func = simple_ssa();
+        func.sp_delta_at.insert((BlockId(99), 0), -16);
+
+        let err = verify_ssa_function(&func).expect_err("missing sp-delta block should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapBlockMissing {
+                table: "sp_delta_at",
+                block: BlockId(99),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_tail_call_map_missing_block() {
+        let mut func = simple_ssa();
+        func.tail_call_map.insert(BlockId(99), 0x2000);
+
+        let err = verify_ssa_function(&func).expect_err("missing tail-call block should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapBlockMissing {
+                table: "tail_call_map",
+                block: BlockId(99),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_block_entry_sp_delta_missing_block() {
+        let mut func = simple_ssa();
+        func.block_entry_sp_delta.insert(BlockId(99), -16);
+
+        let err = verify_ssa_function(&func).expect_err("missing block-entry SP block should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapBlockMissing {
+                table: "block_entry_sp_delta",
+                block: BlockId(99),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_go_defer_site_missing_block() {
+        let mut func = simple_ssa();
+        func.go_defer_sites.push(crate::ssa::GoDeferSite {
+            defer_block: BlockId(99),
+            deferred_func: 0x2000,
+            has_recover: false,
+        });
+
+        let err = verify_ssa_function(&func).expect_err("missing defer block should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapBlockMissing {
+                table: "go_defer_sites.defer_block",
+                block: BlockId(99),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_seh_region_missing_handler_block() {
+        let mut func = simple_ssa();
+        func.seh_regions.push(crate::ssa::SehRegion {
+            try_blocks: vec![BlockId(0)],
+            filter: None,
+            handler_blocks: vec![BlockId(99)],
+            finally_blocks: Vec::new(),
+        });
+
+        let err = verify_ssa_function(&func).expect_err("missing seh handler block should fail");
+        assert_eq!(
+            err,
+            VerifyError::SideMapBlockMissing {
+                table: "seh_regions.handler_blocks",
+                block: BlockId(99),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_var_type_metadata_undefined_var() {
+        let mut func = simple_ssa();
+        let stale = SsaVarnode {
+            base: Varnode::unique(0xfe, 4),
+            version: 99,
+        };
+        func.var_types
+            .insert(stale, crate::ssa::PrimitiveType::Int(4));
+
+        let err = verify_ssa_function(&func).expect_err("undefined var type key should fail");
+        assert_eq!(
+            err,
+            VerifyError::MetadataVarUndefined {
+                table: "var_types",
+                var: stale,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_foldable_expr_metadata_undefined_var() {
+        let mut func = simple_ssa();
+        let stale = SsaVarnode {
+            base: Varnode::unique(0xfd, 4),
+            version: 99,
+        };
+        func.foldable_exprs.insert(stale);
+
+        let err = verify_ssa_function(&func).expect_err("undefined foldable var should fail");
+        assert_eq!(
+            err,
+            VerifyError::MetadataVarUndefined {
+                table: "foldable_exprs",
+                var: stale,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_rust_async_future_base_undefined_var() {
+        let mut func = simple_ssa();
+        let stale = SsaVarnode {
+            base: Varnode::unique(0xfc, 8),
+            version: 99,
+        };
+        func.rust_async = Some(crate::ssa::RustAsyncInfo {
+            future_base: stale,
+            state_offset: 0,
+            states: vec![0],
+            poll_calls: Vec::new(),
+            poll_returns: Vec::new(),
+        });
+
+        let err = verify_ssa_function(&func).expect_err("undefined rust async base should fail");
+        assert_eq!(
+            err,
+            VerifyError::MetadataVarUndefined {
+                table: "rust_async.future_base",
+                var: stale,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_undefined_ssa_input() {
+        let mut func = simple_ssa();
+        let stale = SsaVarnode {
+            base: Varnode::unique(0xff, 4),
+            version: 99,
+        };
+        func.var_map
+            .insert((BlockId(0), 1, VarnodeSlot::Input(0)), stale);
+
+        let err = verify_ssa_function(&func).expect_err("undefined SSA input should fail");
+        assert_eq!(
+            err,
+            VerifyError::UndefinedInput {
+                block: BlockId(0),
+                insn_idx: 1,
+                input_idx: 0,
+                var: stale,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_non_dominating_ssa_input() {
+        let mut function = Function::new("same_block", BlockId(0), 0x1000);
+        let mut block = BasicBlock::new(BlockId(0));
+        block.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::unique(0x10, 4)],
+            0x1000,
+        ));
+        block.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::unique(0x10, 4),
+            smallvec![Varnode::constant(1, 4)],
+            0x1004,
+        ));
+        function.insert_block(block);
+        let mut func = build_ssa(function);
+        let non_dominating = SsaVarnode {
+            base: Varnode::unique(0x10, 4),
+            version: 1,
+        };
+        func.var_map
+            .insert((BlockId(0), 1, VarnodeSlot::Output), non_dominating);
+        func.var_map
+            .insert((BlockId(0), 0, VarnodeSlot::Input(0)), non_dominating);
+
+        let err = verify_ssa_function(&func).expect_err("non-dominating input should fail");
+        assert_eq!(
+            err,
+            VerifyError::NonDominatingInput {
+                block: BlockId(0),
+                insn_idx: 0,
+                input_idx: 0,
+                var: non_dominating,
             }
         );
     }
@@ -313,5 +1395,378 @@ mod tests {
                 input_block: BlockId(2)
             }
         );
+    }
+
+    #[test]
+    fn rejects_phi_duplicate_predecessor_input() {
+        let mut function = Function::new("diamond", BlockId(0), 0x1000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1000));
+        b0.successors = smallvec![BlockId(1), BlockId(2)];
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1004));
+        b1.successors = smallvec![BlockId(3)];
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1008));
+        b2.successors = smallvec![BlockId(3)];
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
+        function.insert_block(b0);
+        function.insert_block(b1);
+        function.insert_block(b2);
+        function.insert_block(b3);
+        let mut func = build_ssa(function);
+        func.phi_map.insert(
+            BlockId(3),
+            vec![crate::ssa::PhiNode {
+                output: SsaVarnode {
+                    base: Varnode::reg(0, 4),
+                    version: 1,
+                },
+                inputs: vec![
+                    (
+                        BlockId(1),
+                        SsaVarnode {
+                            base: Varnode::reg(0, 4),
+                            version: 0,
+                        },
+                    ),
+                    (
+                        BlockId(1),
+                        SsaVarnode {
+                            base: Varnode::reg(0, 4),
+                            version: 0,
+                        },
+                    ),
+                ],
+            }],
+        );
+
+        let err = verify_ssa_function(&func).expect_err("duplicate phi input should fail");
+        assert_eq!(
+            err,
+            VerifyError::PhiInputDuplicatePredecessor {
+                block: BlockId(3),
+                input_block: BlockId(1),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_phi_missing_predecessor_input() {
+        let mut function = Function::new("diamond", BlockId(0), 0x1000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1000));
+        b0.successors = smallvec![BlockId(1), BlockId(2)];
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1004));
+        b1.successors = smallvec![BlockId(3)];
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1008));
+        b2.successors = smallvec![BlockId(3)];
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
+        function.insert_block(b0);
+        function.insert_block(b1);
+        function.insert_block(b2);
+        function.insert_block(b3);
+        let mut func = build_ssa(function);
+        func.phi_map.insert(
+            BlockId(3),
+            vec![crate::ssa::PhiNode {
+                output: SsaVarnode {
+                    base: Varnode::reg(0, 4),
+                    version: 1,
+                },
+                inputs: vec![(
+                    BlockId(1),
+                    SsaVarnode {
+                        base: Varnode::reg(0, 4),
+                        version: 0,
+                    },
+                )],
+            }],
+        );
+
+        let err = verify_ssa_function(&func).expect_err("missing phi input should fail");
+        assert_eq!(
+            err,
+            VerifyError::PhiInputMissingPredecessor {
+                block: BlockId(3),
+                predecessor: BlockId(2),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_undefined_phi_input() {
+        let mut function = Function::new("diamond", BlockId(0), 0x1000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1000));
+        b0.successors = smallvec![BlockId(1), BlockId(2)];
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1004));
+        b1.successors = smallvec![BlockId(3)];
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1008));
+        b2.successors = smallvec![BlockId(3)];
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
+        function.insert_block(b0);
+        function.insert_block(b1);
+        function.insert_block(b2);
+        function.insert_block(b3);
+        let mut func = build_ssa(function);
+        let stale = SsaVarnode {
+            base: Varnode::reg(0, 4),
+            version: 99,
+        };
+        func.phi_map.insert(
+            BlockId(3),
+            vec![crate::ssa::PhiNode {
+                output: SsaVarnode {
+                    base: Varnode::reg(0, 4),
+                    version: 1,
+                },
+                inputs: vec![
+                    (BlockId(1), stale),
+                    (
+                        BlockId(2),
+                        SsaVarnode {
+                            base: Varnode::reg(0, 4),
+                            version: 0,
+                        },
+                    ),
+                ],
+            }],
+        );
+
+        let err = verify_ssa_function(&func).expect_err("undefined phi input should fail");
+        assert_eq!(
+            err,
+            VerifyError::UndefinedPhiInput {
+                block: BlockId(3),
+                input_idx: 0,
+                var: stale,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_non_dominating_phi_input() {
+        let mut function = Function::new("diamond", BlockId(0), 0x1000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1000));
+        b0.successors = smallvec![BlockId(1), BlockId(2)];
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1004));
+        b1.successors = smallvec![BlockId(3)];
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(0, 4),
+            smallvec![Varnode::constant(1, 4)],
+            0x1008,
+        ));
+        b2.successors = smallvec![BlockId(3)];
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
+        function.insert_block(b0);
+        function.insert_block(b1);
+        function.insert_block(b2);
+        function.insert_block(b3);
+        let mut func = build_ssa(function);
+        let non_dominating = SsaVarnode {
+            base: Varnode::reg(0, 4),
+            version: 1,
+        };
+        func.var_map
+            .insert((BlockId(2), 0, VarnodeSlot::Output), non_dominating);
+        func.phi_map.insert(
+            BlockId(3),
+            vec![crate::ssa::PhiNode {
+                output: SsaVarnode {
+                    base: Varnode::reg(0, 4),
+                    version: 2,
+                },
+                inputs: vec![
+                    (BlockId(1), non_dominating),
+                    (
+                        BlockId(2),
+                        SsaVarnode {
+                            base: Varnode::reg(0, 4),
+                            version: 0,
+                        },
+                    ),
+                ],
+            }],
+        );
+
+        let err = verify_ssa_function(&func).expect_err("non-dominating phi input should fail");
+        assert_eq!(
+            err,
+            VerifyError::NonDominatingPhiInput {
+                block: BlockId(3),
+                input_idx: 0,
+                var: non_dominating,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_lvar_id_gaps() {
+        let mut func = simple_ssa();
+        let mut lvar = sample_lvar(LvarStorage::Reg { name: "rax".into() });
+        lvar.id = LvarId::new(1);
+        func.lvars.push(lvar);
+
+        let err = verify_ssa_function(&func).expect_err("lvar id gap should fail");
+        assert_eq!(
+            err,
+            VerifyError::LvarIdOutOfOrder {
+                expected: 0,
+                found: 1
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_lvar_missing_live_range_block() {
+        let mut func = simple_ssa();
+        let mut lvar = sample_lvar(LvarStorage::Reg { name: "rax".into() });
+        lvar.live_range.end_block = BlockId(99);
+        func.lvars.push(lvar);
+
+        let err = verify_ssa_function(&func).expect_err("missing lvar block should fail");
+        assert_eq!(
+            err,
+            VerifyError::LvarLiveRangeMissingBlock {
+                id: 0,
+                block: BlockId(99)
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_lvar_missing_stack_slot() {
+        let mut func = simple_ssa();
+        func.lvars
+            .push(sample_lvar(LvarStorage::Stack { offset: -8 }));
+
+        let err = verify_ssa_function(&func).expect_err("missing stack slot should fail");
+        assert_eq!(
+            err,
+            VerifyError::LvarStackStorageMissing { id: 0, offset: -8 }
+        );
+    }
+
+    #[test]
+    fn rejects_lvar_undefined_temp() {
+        let mut func = simple_ssa();
+        let stale = SsaVarnode {
+            base: Varnode::unique(0xff, 4),
+            version: 99,
+        };
+        func.lvars
+            .push(sample_lvar(LvarStorage::Temp { ssa_var: stale }));
+
+        let err = verify_ssa_function(&func).expect_err("undefined temp should fail");
+        assert_eq!(
+            err,
+            VerifyError::LvarTempStorageMissing { id: 0, var: stale }
+        );
+    }
+
+    #[test]
+    fn rejects_lvar_param_out_of_range() {
+        let mut func = simple_ssa();
+        func.lvars.push(sample_lvar(LvarStorage::Param { idx: 0 }));
+
+        let err = verify_ssa_function(&func).expect_err("missing param should fail");
+        assert_eq!(
+            err,
+            VerifyError::LvarParamOutOfRange {
+                id: 0,
+                idx: 0,
+                param_count: 0
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_lvar_return_without_type() {
+        let mut func = simple_ssa();
+        func.lvars.push(sample_lvar(LvarStorage::Return));
+
+        let err = verify_ssa_function(&func).expect_err("unknown return should fail");
+        assert_eq!(err, VerifyError::LvarReturnWithoutType { id: 0 });
+    }
+
+    #[test]
+    fn rejects_stack_access_resolved_to_missing_slot() {
+        let mut func = simple_ssa();
+        func.stack_accesses.push(StackAccess {
+            source_addr: 0x1000,
+            base_register: "rsp".into(),
+            delta: -8,
+            width: 4,
+            is_store: false,
+            resolved_slot: Some(-8),
+            lost_provenance: false,
+        });
+
+        let err = verify_ssa_function(&func).expect_err("missing resolved slot should fail");
+        assert_eq!(
+            err,
+            VerifyError::StackAccessResolvedSlotMissing {
+                source_addr: 0x1000,
+                slot: -8
+            }
+        );
+    }
+
+    #[test]
+    fn accepts_stack_access_resolved_to_frame_slot() {
+        let mut func = simple_ssa();
+        func.stack_frame = Some(crate::ssa::StackFrame {
+            locals: BTreeMap::from([(
+                -8,
+                StackLocal {
+                    offset: -8,
+                    size: 4,
+                    access_widths: vec![4],
+                    kind: Default::default(),
+                },
+            )]),
+            frame_size: 4,
+            max_pos_offset: 0,
+            min_neg_offset: -8,
+        });
+        func.stack_accesses.push(StackAccess {
+            source_addr: 0x1000,
+            base_register: "rsp".into(),
+            delta: -8,
+            width: 4,
+            is_store: false,
+            resolved_slot: Some(-8),
+            lost_provenance: false,
+        });
+
+        verify_ssa_function(&func).expect("resolved frame slot should verify");
     }
 }

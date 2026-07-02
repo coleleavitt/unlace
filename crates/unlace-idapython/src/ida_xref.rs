@@ -1,17 +1,10 @@
 //! `ida_xref` — cross-reference iteration.
 //!
-//! Backed by the binary's **relocation table** (`BinaryImage::relocations`),
-//! which is the cross-reference source available without a full
-//! instruction-level xref index. Each relocation has a target address
-//! (`addr`, the GOT/PLT slot it patches) and a kind: PLT jump slots are
-//! treated as **code** references (`cref`), every other relocation as a
-//! **data** reference (`dref`). This mirrors IDA's cref/dref split closely
-//! enough for symbol/import navigation.
-//!
-//! Honest limitation: these are relocation-derived xrefs (import/GOT edges),
-//! not the complete instruction-operand xref graph IDA builds from full
-//! disassembly. Direct intra-function call/jump xrefs are not yet surfaced
-//! here.
+//! `XrefsTo` is backed by the binary's relocation table
+//! (`BinaryImage::relocations`). `XrefsFrom` is backed by the session's bounded
+//! instruction-xref index. This is still not IDA's complete instruction-operand
+//! xref database; it only surfaces edges the current unlace analysis has staged
+//! into the session.
 
 use unlace_session::Session;
 
@@ -70,6 +63,11 @@ pub fn data_xrefs_to(session: &Session, ea: u64) -> Vec<Xref> {
         .collect()
 }
 
+pub fn xrefs_from(session: &Session, ea: u64) -> Vec<u64> {
+    coverage::mark_implemented("ida_xref.xrefs_from");
+    session.instruction_xrefs_from(ea)
+}
+
 fn reloc_xref_kind(kind: unlace_loader::image::RelocKind) -> XrefKind {
     use unlace_loader::image::RelocKind;
     match kind {
@@ -97,10 +95,7 @@ pub fn get_next_cref_to(session: &Session, ea: u64, prev: u64) -> Option<u64> {
 
 pub fn get_first_cref_from(session: &Session, ea: u64) -> Option<u64> {
     coverage::mark_implemented("ida_xref.get_first_cref_from");
-    // "From" navigation needs an instruction-operand index we don't yet build;
-    // honestly report no edge rather than fabricate.
-    let _ = (session, ea);
-    None
+    xrefs_from(session, ea).first().copied()
 }
 
 pub fn get_first_dref_to(session: &Session, ea: u64) -> Option<u64> {
@@ -155,6 +150,18 @@ mod tests {
         let s = Session::new();
         assert!(xrefs_to(&s, 0x1000).is_empty());
         assert_eq!(get_first_cref_to(&s, 0x1000), None);
+        assert_eq!(get_first_cref_from(&s, 0x1000), None);
         assert_eq!(get_first_dref_to(&s, 0x1000), None);
+    }
+
+    #[test]
+    fn instruction_xrefs_from_session_index() {
+        let s = Session::new();
+        s.add_instruction_xref(0x1000, 0x2000);
+        s.add_instruction_xref(0x1000, 0x3000);
+
+        assert_eq!(xrefs_from(&s, 0x1000), vec![0x2000, 0x3000]);
+        assert_eq!(get_first_cref_from(&s, 0x1000), Some(0x2000));
+        assert!(xrefs_from(&s, 0x1004).is_empty());
     }
 }

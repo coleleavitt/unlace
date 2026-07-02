@@ -1,26 +1,25 @@
 //! `ida_hexrays` — decompiler API.
 //!
-//! Stub for now — the full ctree integration lives in B27.6.
+//! Text-backed subset for staged pseudocode; full ctree integration lives in B27.6.
 //! Reference: `research/ida-hexrays-docs/sdk/include/hexrays.hpp`.
 
 use unlace_session::Session;
 
 use crate::coverage;
 
-/// A simplified `cfunc_t` analog — IDA returns a much richer ctree object,
-/// but for compat purposes the textual `pseudocode` is what 90% of scripts
-/// access.
+/// A simplified text-backed `cfunc_t` analog. This is not full ctree parity.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CFunc {
     pub entry_ea: u64,
     pub name: String,
+    pub text: String,
     pub pseudocode: Vec<String>,
 }
 
 impl CFunc {
     /// IDA scripts call `str(cfunc)` which joins pseudocode lines.
     pub fn as_text(&self) -> String {
-        self.pseudocode.join("\n")
+        self.text.clone()
     }
 }
 
@@ -34,13 +33,17 @@ pub fn init_hexrays_plugin() -> bool {
 
 /// `ida_hexrays.decompile(ea)` — decompile the function at ea.
 ///
-/// Stub: returns None until the full pipeline integration lands. The Rust
-/// crate that consumes this (unlace-cli's `unlace py`) will populate the
-/// CFunc by running the decompilation pipeline.
+/// Returns staged pseudocode text when the hosting session populated a
+/// decompiled-function cache.
 pub fn decompile(session: &Session, ea: u64) -> Option<CFunc> {
     coverage::mark_implemented("ida_hexrays.decompile");
-    _ = (session, ea);
-    None
+    let decompiled = session.decompiled_function(ea)?;
+    Some(CFunc {
+        entry_ea: decompiled.entry_ea,
+        name: decompiled.name,
+        pseudocode: decompiled.text.lines().map(str::to_string).collect(),
+        text: decompiled.text,
+    })
 }
 
 #[cfg(test)]
@@ -57,6 +60,7 @@ mod tests {
         let c = CFunc {
             entry_ea: 0x400000,
             name: "main".into(),
+            text: "int main(void)\n{\n    return 0;\n}".into(),
             pseudocode: vec![
                 "int main(void)".into(),
                 "{".into(),
@@ -65,5 +69,34 @@ mod tests {
             ],
         };
         assert!(c.as_text().contains("return 0"));
+    }
+
+    #[test]
+    fn cfunc_as_text_preserves_original_text() {
+        let c = CFunc {
+            entry_ea: 0x400000,
+            name: "main".into(),
+            text: "int main(void) {}\n".into(),
+            pseudocode: vec!["int main(void) {}".into()],
+        };
+
+        assert_eq!(c.as_text(), "int main(void) {}\n");
+    }
+
+    #[test]
+    fn decompile_reads_staged_session_text() {
+        let s = Session::new();
+        s.set_decompiled_function(
+            0x1000,
+            0x20,
+            "main".into(),
+            "int main(void)\n{\n    return 0;\n}".into(),
+        );
+
+        let cfunc = decompile(&s, 0x1010).expect("staged decompile");
+        assert_eq!(cfunc.entry_ea, 0x1000);
+        assert_eq!(cfunc.name, "main");
+        assert!(cfunc.as_text().contains("return 0"));
+        assert!(decompile(&s, 0x2000).is_none());
     }
 }

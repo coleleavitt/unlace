@@ -383,6 +383,8 @@ mod tests {
             binary_path: Some(PathBuf::from("/tmp/example.bin")),
             binary_sha256: Some([0x11; 32]),
             annotations: Annotations::default(),
+            instruction_xrefs_from: BTreeMap::new(),
+            decompiled_functions: BTreeMap::new(),
             selection: Selection::default(),
             listeners: Vec::new(),
         };

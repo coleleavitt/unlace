@@ -1,0 +1,20 @@
+{
+  "crates/unlace-cli/src/pipeline.rs": "463d11c4b4cc4f85738ff7f1678d9b80",
+  "crates/unlace-ir/tests/dominator_conformance.rs": "5a155bb35fb19a4947d754539e7f5dd9",
+  "crates/unlace-ir/tests/extraction_oracle.rs": "26e373aad74e018c8057db5c03564732",
+  "crates/unlace-ir/tests/layout_conformance.rs": "84970177ac18e43a13594ee66ef21be0",
+  "crates/unlace-ir/tests/tinfo_conformance.rs": "b4a1b0be28f208e0c46ef88840a2b05c",
+  "crates/unlace-output/src/c_printer.rs": "6d10852a7b76bb13f73ee6fe18abb836",
+  "docs/formal-verification.md": "1487e4e637358641ecb086a10d5fcbb7",
+  "docs/golden-triage-2026-06-17.md": "2f0a66728e3b59d77015bc910025bc47",
+  "rocq-tests/COVERAGE.md": "8cfdbcacd813102066f56989a5e2dad4",
+  "rocq-tests/README.md": "65273213d679dfce8f9ef45d03fc5596",
+  "rocq-tests/extraction/.gitignore": "da19d0c1e64c0dd840f8c907ae6633ae",
+  "rocq-tests/extraction/Extract.v": "668be37c79e408b6a2e070b4d3502223",
+  "rocq-tests/extraction/dune": "b9bd3af0d395adc0425656084056d4c6",
+  "rocq-tests/extraction/dune-project": "7683bde65ffaf55487d5882de93926e8",
+  "rocq-tests/extraction/oracle_driver.ml": "51a0457fb32a441fe0f679a3bf4e9aee",
+  "rocq-tests/theories/FlagReconstruct.v": "414a2d9deebe412873c264a9b75120fe",
+  "scripts/extraction_oracle.sh": "6cecb81cdd50f34c55114dfe7d44c58c",
+  "scripts/quality_axes.sh": "f66f91cc81137a64e84060f7aecbf4f8"
+}

@@ -9,7 +9,9 @@ use unlace_ir::{
 };
 
 use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, memory, msa};
-use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
+use crate::register_file::{
+    ZERO, capstone_reg_to_offset, mips32_register_file, mips64_register_file,
+};
 
 // Capstone contains a raw `*mut c_void` handle to the C library.
 // The capstone C library documents that each cs_handle is independent and
@@ -19,26 +21,47 @@ struct SendCapstone(Capstone);
 unsafe impl Send for SendCapstone {}
 
 pub struct MipsLifter {
+    arch: ArchId,
+    word_size: u8,
     reg_file: RegisterFile,
     cs: Mutex<SendCapstone>,
 }
 
-fn make_capstone() -> Capstone {
+fn make_capstone(arch: ArchId) -> Capstone {
     unlace_capstone::ensure_memory_callbacks();
+    let mode = match arch {
+        ArchId::Mips => capstone::arch::mips::ArchMode::Mips32,
+        _ => capstone::arch::mips::ArchMode::Mips64,
+    };
     Capstone::new()
         .mips()
-        .mode(capstone::arch::mips::ArchMode::Mips64)
+        .mode(mode)
         .endian(capstone::Endian::Big)
         .detail(true)
         .build()
-        .expect("capstone MIPS64 init should not fail")
+        .expect("capstone MIPS init should not fail")
 }
 
 impl MipsLifter {
     pub fn new() -> Self {
+        Self::new_mips64()
+    }
+
+    pub fn new_mips32() -> Self {
         Self {
+            arch: ArchId::Mips,
+            word_size: 4,
+            reg_file: mips32_register_file(),
+            cs: Mutex::new(SendCapstone(make_capstone(ArchId::Mips))),
+        }
+    }
+
+    pub fn new_mips64() -> Self {
+        Self {
+            arch: ArchId::Mips64,
+            word_size: 8,
             reg_file: mips64_register_file(),
-            cs: Mutex::new(SendCapstone(make_capstone())),
+            cs: Mutex::new(SendCapstone(make_capstone(ArchId::Mips64))),
         }
     }
 }
@@ -51,7 +74,7 @@ impl Default for MipsLifter {
 
 impl Lifter for MipsLifter {
     fn arch(&self) -> ArchId {
-        ArchId::Mips64
+        self.arch
     }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
@@ -87,7 +110,7 @@ impl Lifter for MipsLifter {
 
         let mnemonic = insn.mnemonic().unwrap_or("");
 
-        let mut ctx = LiftCtx::new(addr);
+        let mut ctx = LiftCtx::new_with_word_size(addr, self.word_size);
         // MSA (MIPS SIMD Architecture) vector ops have no clean scalar IR
         // mapping; route them to tagged Callother intrinsics before the scalar
         // dispatcher. lift_if_msa only fires for instructions whose operands use
@@ -111,16 +134,39 @@ impl Lifter for MipsLifter {
 pub struct LiftCtx {
     pub ops: Vec<IrInsn>,
     pub addr: u64,
+    word_size: u8,
     unique_counter: u64,
 }
 
 impl LiftCtx {
+    #[cfg(test)]
     fn new(addr: u64) -> Self {
+        Self::new_with_word_size(addr, 8)
+    }
+
+    fn new_with_word_size(addr: u64, word_size: u8) -> Self {
         Self {
             ops: Vec::new(),
             addr,
+            word_size,
             unique_counter: 0,
         }
+    }
+
+    pub fn alloc_word(&mut self) -> Varnode {
+        self.alloc_unique(self.word_size)
+    }
+
+    pub fn word_size(&self) -> u8 {
+        self.word_size
+    }
+
+    pub fn word_const(&self, value: u64) -> Varnode {
+        Varnode::constant(value, self.word_size)
+    }
+
+    pub fn reg_at(&self, offset: u64) -> Varnode {
+        Varnode::reg(offset, self.word_size)
     }
 
     pub fn alloc_unique(&mut self, size: u8) -> Varnode {
@@ -163,9 +209,9 @@ impl LiftCtx {
     pub fn read_reg(&self, reg_id: RegId) -> Option<Varnode> {
         let offset = capstone_reg_to_offset(reg_id)?;
         if offset == ZERO {
-            Some(Varnode::constant(0, 8))
+            Some(self.word_const(0))
         } else {
-            Some(register_file::reg64(offset))
+            Some(self.reg_at(offset))
         }
     }
 
@@ -174,13 +220,13 @@ impl LiftCtx {
         if offset == ZERO {
             return None;
         }
-        Some(register_file::reg64(offset))
+        Some(self.reg_at(offset))
     }
 
     pub fn read_operand(&self, op: &MipsOperand) -> Option<Varnode> {
         match op {
             MipsOperand::Reg(reg) => self.read_reg(*reg),
-            MipsOperand::Imm(imm) => Some(Varnode::constant(*imm as u64, 8)),
+            MipsOperand::Imm(imm) => Some(self.word_const(*imm as u64)),
             _ => None,
         }
     }
@@ -193,8 +239,8 @@ impl LiftCtx {
                 if disp == 0 {
                     Some(base)
                 } else {
-                    let disp_vn = Varnode::constant(disp as u64, 8);
-                    let t = self.alloc_unique(8);
+                    let disp_vn = self.word_const(disp as u64);
+                    let t = self.alloc_word();
                     self.emit(IrInsn::with_output(
                         IrOp::IntAdd,
                         t,
@@ -387,9 +433,18 @@ mod tests {
         MipsLifter::new()
     }
 
+    fn lifter32() -> MipsLifter {
+        MipsLifter::new_mips32()
+    }
+
     #[test]
     fn test_arch_is_mips64() {
         assert_eq!(lifter().arch(), ArchId::Mips64);
+    }
+
+    #[test]
+    fn test_arch_is_mips32() {
+        assert_eq!(lifter32().arch(), ArchId::Mips);
     }
 
     #[test]
@@ -409,6 +464,158 @@ mod tests {
         assert_eq!(rf.registers[39].name, "DSPSCOUNT");
         assert_eq!(rf.registers[40].name, "AC0");
         assert_eq!(rf.registers[43].name, "AC3");
+    }
+
+    #[test]
+    fn test_mips32_register_file_widths() {
+        let l = lifter32();
+        let rf = l.register_file();
+        assert_eq!(rf.registers.len(), 78);
+        assert_eq!(rf.registers[0].name, "$zero");
+        assert_eq!(rf.registers[0].varnode.size, 4);
+        assert_eq!(rf.registers[31].name, "$ra");
+        assert_eq!(rf.registers[31].varnode.size, 4);
+    }
+
+    #[test]
+    fn test_mips32_addiu_immediate() {
+        let l = lifter32();
+        let result = l
+            .lift_insn(&[0x24, 0x02, 0x00, 0x2A], 0x1000)
+            .expect("should decode MIPS32 ADDIU");
+        assert_eq!(result.len, 4);
+        let add = result
+            .ir_ops
+            .iter()
+            .find(|op| op.op == IrOp::IntAdd)
+            .expect("MIPS32 ADDIU should produce IntAdd");
+        assert_eq!(add.output.expect("ADDIU output").size, 4);
+        assert!(
+            add.inputs.iter().all(|input| input.size == 4),
+            "MIPS32 ADDIU operands must be 4-byte values: {:?}",
+            result.ir_ops
+        );
+    }
+
+    #[test]
+    fn test_mips32_andi_immediate_widths() {
+        let l = lifter32();
+        let result = l
+            .lift_insn(&[0x30, 0x42, 0x00, 0xff], 0x1000)
+            .expect("should decode MIPS32 ANDI");
+        let and = result
+            .ir_ops
+            .iter()
+            .find(|op| op.op == IrOp::IntAnd)
+            .expect("MIPS32 ANDI should produce IntAnd");
+        assert_eq!(and.output.expect("ANDI output").size, 4);
+        assert!(
+            and.inputs.iter().all(|input| input.size == 4),
+            "MIPS32 ANDI operands must be 4-byte values: {:?}",
+            result.ir_ops
+        );
+    }
+
+    #[test]
+    fn test_mips32_lw_keeps_word_width() {
+        let l = lifter32();
+        let result = l
+            .lift_insn(&[0x8F, 0xA2, 0x00, 0x00], 0x1000)
+            .expect("should decode MIPS32 LW");
+        assert!(result.ir_ops.iter().any(|op| op.op == IrOp::Load));
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|op| op.op == IrOp::IntZext && op.output.is_some_and(|out| out.size == 8)),
+            "MIPS32 LW must not zero-extend to 8 bytes: {:?}",
+            result.ir_ops
+        );
+    }
+
+    #[test]
+    fn test_mips32_jal_return_address_width() {
+        let l = lifter32();
+        let result = l
+            .lift_insn(&[0x0C, 0x10, 0x00, 0x40], 0x1000)
+            .expect("should decode MIPS32 JAL");
+        let ra_copy = result
+            .ir_ops
+            .iter()
+            .find(|op| {
+                op.op == IrOp::Copy
+                    && op.output.is_some_and(|out| {
+                        out.space == SpaceId::Register && out.offset == crate::register_file::RA
+                    })
+            })
+            .expect("JAL should write return address to RA");
+        let output = ra_copy.output.expect("RA output");
+        assert_eq!(output.size, 4);
+        assert_eq!(ra_copy.inputs[0].size, 4);
+    }
+
+    #[test]
+    fn test_mips32_mul_word_widths() {
+        let l = lifter32();
+        let result = l
+            .lift_insn(&[0x70, 0x85, 0x10, 0x02], 0x1000)
+            .expect("should decode MIPS32 MUL");
+        let mult = result
+            .ir_ops
+            .iter()
+            .find(|op| op.op == IrOp::IntMult)
+            .expect("MIPS32 MUL should produce IntMult");
+        assert_eq!(mult.output.expect("MUL output").size, 4);
+        let copy = result
+            .ir_ops
+            .iter()
+            .find(|op| op.op == IrOp::Copy)
+            .expect("MUL should copy into destination register");
+        assert_eq!(copy.output.expect("MUL destination").size, 4);
+        assert_eq!(copy.inputs[0].size, 4);
+    }
+
+    #[test]
+    fn test_mips64_div_hi_lo_word_widths() {
+        let l = lifter();
+        let result = l
+            .lift_insn(&[0x00, 0x85, 0x00, 0x1A], 0x1000)
+            .expect("should decode MIPS64 DIV");
+        for offset in [crate::register_file::LO, crate::register_file::HI] {
+            let copy = result
+                .ir_ops
+                .iter()
+                .find(|op| {
+                    op.op == IrOp::Copy
+                        && op.output.is_some_and(|out| {
+                            out.space == SpaceId::Register && out.offset == offset
+                        })
+                })
+                .expect("DIV should copy quotient/remainder into HI/LO");
+            assert_eq!(copy.output.expect("HI/LO output").size, 8);
+            assert_eq!(copy.inputs[0].size, 8);
+        }
+    }
+
+    #[test]
+    fn test_mips32_madd_lo_copy_widths() {
+        let l = lifter32();
+        let result = l
+            .lift_insn(&[0x70, 0x85, 0x00, 0x00], 0x1000)
+            .expect("should decode MIPS32 MADD");
+        let lo_copy = result
+            .ir_ops
+            .iter()
+            .rev()
+            .find(|op| {
+                op.op == IrOp::Copy
+                    && op.output.is_some_and(|out| {
+                        out.space == SpaceId::Register && out.offset == crate::register_file::LO
+                    })
+            })
+            .expect("MADD should copy into LO");
+        assert_eq!(lo_copy.output.expect("LO output").size, 4);
+        assert_eq!(lo_copy.inputs[0].size, 4);
     }
 
     #[test]
@@ -654,7 +861,41 @@ mod tests {
         assert!(
             ctx.ir_ops()
                 .iter()
-                .any(|op| op.output == Some(Varnode::reg(crate::register_file::DSPOUTFLAG, 8)))
+                .any(|op| op.output == Some(Varnode::reg(crate::register_file::DSPOUTFLAG, 4)))
+        );
+    }
+
+    #[test]
+    fn test_mips32_addq_word_widths() {
+        let mut ctx = LiftCtx::new_with_word_size(0x1000, 4);
+        let ops = [
+            MipsOperand::Reg(capstone::RegId(
+                capstone::arch::mips::MipsReg::MIPS_REG_2 as u16,
+            )),
+            MipsOperand::Reg(capstone::RegId(
+                capstone::arch::mips::MipsReg::MIPS_REG_4 as u16,
+            )),
+            MipsOperand::Reg(capstone::RegId(
+                capstone::arch::mips::MipsReg::MIPS_REG_5 as u16,
+            )),
+        ];
+        crate::ops::dsp::lift_addq(&mut ctx, &ops);
+        let gpr_copy = ctx
+            .ir_ops()
+            .iter()
+            .find(|op| {
+                op.op == IrOp::Copy
+                    && op.output.is_some_and(|out| {
+                        out.space == SpaceId::Register && out.offset == crate::register_file::V0
+                    })
+            })
+            .expect("ADDQ should copy into destination GPR");
+        assert_eq!(gpr_copy.output.expect("ADDQ output").size, 4);
+        assert_eq!(gpr_copy.inputs[0].size, 4);
+        assert!(
+            ctx.ir_ops()
+                .iter()
+                .any(|op| op.output == Some(Varnode::reg(crate::register_file::DSPOUTFLAG, 4)))
         );
     }
 

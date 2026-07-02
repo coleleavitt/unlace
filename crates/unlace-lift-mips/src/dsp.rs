@@ -58,6 +58,10 @@ pub fn reg64(offset: u64) -> Varnode {
     Varnode::new(SpaceId::Register, offset, 8)
 }
 
+pub fn reg32(offset: u64) -> Varnode {
+    Varnode::new(SpaceId::Register, offset, 4)
+}
+
 pub fn reg128(offset: u64) -> Varnode {
     Varnode::new(SpaceId::Register, offset, 16)
 }

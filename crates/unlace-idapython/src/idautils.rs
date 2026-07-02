@@ -4,7 +4,7 @@
 
 use unlace_session::Session;
 
-use crate::coverage;
+use crate::{coverage, ida_xref};
 
 /// `idautils.Functions(start=None, end=None)` — iterate function start addresses.
 pub fn functions(session: &Session, start: Option<u64>, end: Option<u64>) -> Vec<u64> {
@@ -40,25 +40,32 @@ pub fn heads(_session: &Session, start: u64, end: u64) -> Vec<u64> {
 /// `idautils.XrefsTo(ea, flags=0)` — addresses that reference `ea`.
 pub fn xrefs_to(session: &Session, ea: u64) -> Vec<u64> {
     coverage::mark_implemented("idautils.XrefsTo");
-    // unlace-loader stores xrefs on the BinaryImage; we don't have that field
-    // resolved yet so return empty for now. The real wiring happens once
-    // crates/unlace-ir/src/xref.rs is plumbed into the session.
-    _ = ea;
-    _ = session;
-    Vec::new()
+    ida_xref::xrefs_to(session, ea)
+        .into_iter()
+        .map(|xref| xref.to)
+        .collect()
 }
 
 /// `idautils.XrefsFrom(ea, flags=0)` — addresses referenced FROM `ea`.
 pub fn xrefs_from(session: &Session, ea: u64) -> Vec<u64> {
     coverage::mark_implemented("idautils.XrefsFrom");
-    _ = ea;
-    _ = session;
-    Vec::new()
+    ida_xref::xrefs_from(session, ea)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
+    use unlace_loader::image::{ArchId, BinaryImage, Endian, RelocKind, Relocation};
+
+    fn session_with_relocs(relocs: Vec<Relocation>) -> Session {
+        let mut img = BinaryImage::empty(ArchId::X86_64, Endian::Little);
+        img.relocations = relocs;
+        let s = Session::new();
+        s.set_binary(img);
+        s
+    }
 
     #[test]
     fn test_idautils_functions_empty_session() {
@@ -77,5 +84,42 @@ mod tests {
         let s = Session::new();
         let h = heads(&s, 0, 5);
         assert_eq!(h, vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_idautils_xrefs_to_uses_relocations() {
+        let s = session_with_relocs(vec![Relocation {
+            addr: 0x4010,
+            sym_name: "printf".into(),
+            kind: RelocKind::PltJumpSlot,
+        }]);
+        assert_eq!(xrefs_to(&s, 0x4010), vec![0x4010]);
+        assert!(xrefs_to(&s, 0x4020).is_empty());
+    }
+
+    #[test]
+    fn test_idautils_xrefs_from_uses_instruction_xrefs() {
+        let s = Session::new();
+        s.add_instruction_xref(0x1000, 0x2000);
+
+        assert_eq!(xrefs_from(&s, 0x1000), vec![0x2000]);
+        assert!(xrefs_from(&s, 0x1004).is_empty());
+    }
+
+    #[test]
+    fn test_idautils_xrefs_from_consumes_ir_instruction_xrefs() {
+        let mut func = Function::new("caller", BlockId(0), 0x1000);
+        let mut block = BasicBlock::new(BlockId(0));
+        block.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            vec![Varnode::constant(0x2000, 8)],
+            0x1010,
+        ));
+        func.insert_block(block);
+        let funcs = BTreeMap::from([(0x1000, func)]);
+        let s = Session::new();
+        s.add_instruction_xrefs(unlace_ir::xref::build_instruction_xrefs(&funcs));
+
+        assert_eq!(xrefs_from(&s, 0x1010), vec![0x2000]);
     }
 }

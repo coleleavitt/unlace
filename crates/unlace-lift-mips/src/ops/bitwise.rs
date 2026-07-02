@@ -17,7 +17,7 @@ fn lift_reg3(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
     let b = ctx.read_operand(&ops[2]);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 ir_op,
                 result,
@@ -44,7 +44,7 @@ fn lift_reg_imm(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
     let b = ctx.read_operand(&ops[2]);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 ir_op,
                 result,
@@ -95,14 +95,14 @@ pub fn lift_nor(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let b = ctx.read_operand(&ops[2]);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let or_result = ctx.alloc_unique(8);
+            let or_result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntOr,
                 or_result,
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntNegate,
                 result,
@@ -133,7 +133,7 @@ fn lift_shift_imm(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
     };
     match (dst, src, shamt) {
         (Some(dst), Some(src), Some(shamt)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 ir_op,
                 result,

@@ -4,6 +4,21 @@ use unlace_ir::{IrInsn, IrOp};
 
 use crate::lift::LiftCtx;
 
+fn write_low_word(ctx: &mut LiftCtx, dst: unlace_ir::Varnode, value: unlace_ir::Varnode) {
+    if dst.size == value.size {
+        ctx.write_to_reg(dst, value);
+        return;
+    }
+    let low = ctx.alloc_word();
+    ctx.emit(IrInsn::with_output(
+        IrOp::Subpiece,
+        low,
+        smallvec![value, unlace_ir::Varnode::constant(0, 1)],
+        ctx.addr,
+    ));
+    ctx.write_to_reg(dst, low);
+}
+
 pub fn lift_add(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     if ops.len() < 3 {
         ctx.emit_unimplemented();
@@ -17,7 +32,7 @@ pub fn lift_add(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let b = ctx.read_operand(&ops[2]);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 result,
@@ -27,7 +42,7 @@ pub fn lift_add(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
             ctx.write_to_reg(dst, result);
         }
         (None, Some(a), Some(b)) => {
-            let _result = ctx.alloc_unique(8);
+            let _result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 _result,
@@ -52,7 +67,7 @@ pub fn lift_addi(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let b = ctx.read_operand(&ops[2]);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 result,
@@ -62,7 +77,7 @@ pub fn lift_addi(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
             ctx.write_to_reg(dst, result);
         }
         (None, Some(a), Some(b)) => {
-            let _result = ctx.alloc_unique(8);
+            let _result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 _result,
@@ -87,7 +102,7 @@ pub fn lift_sub(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let b = ctx.read_operand(&ops[2]);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSub,
                 result,
@@ -110,14 +125,14 @@ pub fn lift_mult(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let b = ctx.read_operand(&ops[1]);
     match (a, b) {
         (Some(a), Some(b)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntMult,
                 result,
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let lo = crate::register_file::reg64(crate::register_file::LO);
+            let lo = ctx.reg_at(crate::register_file::LO);
             ctx.write_to_reg(lo, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -137,7 +152,7 @@ pub fn lift_mul(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let b = ctx.read_operand(&ops[2]);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntMult,
                 result,
@@ -167,7 +182,7 @@ pub fn lift_madd(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let lo = crate::register_file::reg64(crate::register_file::LO);
+            let lo = ctx.reg_at(crate::register_file::LO);
             let sum = ctx.alloc_unique(8);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
@@ -175,7 +190,7 @@ pub fn lift_madd(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 smallvec![lo, product],
                 ctx.addr,
             ));
-            ctx.write_to_reg(lo, sum);
+            write_low_word(ctx, lo, sum);
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -197,7 +212,7 @@ pub fn lift_msub(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let lo = crate::register_file::reg64(crate::register_file::LO);
+            let lo = ctx.reg_at(crate::register_file::LO);
             let diff = ctx.alloc_unique(8);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSub,
@@ -205,7 +220,7 @@ pub fn lift_msub(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 smallvec![lo, product],
                 ctx.addr,
             ));
-            ctx.write_to_reg(lo, diff);
+            write_low_word(ctx, lo, diff);
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -220,8 +235,8 @@ pub fn lift_div(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let b = ctx.read_operand(&ops[1]);
     match (a, b) {
         (Some(a), Some(b)) => {
-            let quot = ctx.alloc_unique(8);
-            let rem = ctx.alloc_unique(8);
+            let quot = ctx.alloc_word();
+            let rem = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSdiv,
                 quot,
@@ -234,8 +249,8 @@ pub fn lift_div(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let lo = crate::register_file::reg64(crate::register_file::LO);
-            let hi = crate::register_file::reg64(crate::register_file::HI);
+            let lo = ctx.reg_at(crate::register_file::LO);
+            let hi = ctx.reg_at(crate::register_file::HI);
             ctx.write_to_reg(lo, quot);
             ctx.write_to_reg(hi, rem);
         }
@@ -263,7 +278,7 @@ pub fn lift_slt(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntZext,
                 result,
@@ -297,7 +312,7 @@ pub fn lift_sltu(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::IntZext,
                 result,
@@ -323,7 +338,7 @@ pub fn lift_negu(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let src = ctx.read_operand(&ops[1]);
     match (dst, src) {
         (Some(dst), Some(src)) => {
-            let result = ctx.alloc_unique(8);
+            let result = ctx.alloc_word();
             ctx.emit(IrInsn::with_output(
                 IrOp::Int2comp,
                 result,

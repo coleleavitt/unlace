@@ -64,7 +64,7 @@ fn binary_reg(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
         ctx.emit_unimplemented();
         return;
     };
-    let tmp = ctx.alloc_unique(8);
+    let tmp = ctx.alloc_word();
     ctx.emit(IrInsn::with_output(ir_op, tmp, smallvec![a, b], ctx.addr));
     ctx.write_to_reg(dst, tmp);
 }
@@ -82,7 +82,7 @@ fn binary_reg_with_dsp_outflag(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: Ir
         ctx.emit_unimplemented();
         return;
     };
-    let tmp = ctx.alloc_unique(8);
+    let tmp = ctx.alloc_word();
     ctx.emit(IrInsn::with_output(ir_op, tmp, smallvec![a, b], ctx.addr));
     ctx.write_to_reg(dst, tmp);
     let carry = ctx.alloc_unique(1);
@@ -92,14 +92,14 @@ fn binary_reg_with_dsp_outflag(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: Ir
         smallvec![a, b],
         ctx.addr,
     ));
-    let carry64 = ctx.alloc_unique(8);
+    let carry32 = ctx.alloc_unique(4);
     ctx.emit(IrInsn::with_output(
         IrOp::IntZext,
-        carry64,
+        carry32,
         smallvec![carry],
         ctx.addr,
     ));
-    ctx.write_to_reg(dsp::reg64(dsp::DSPOUTFLAG), carry64);
+    ctx.write_to_reg(dsp::reg32(dsp::DSPOUTFLAG), carry32);
 }
 
 fn unary_shift_imm(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
@@ -119,7 +119,7 @@ fn unary_shift_imm(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
         ctx.emit_unimplemented();
         return;
     };
-    let tmp = ctx.alloc_unique(8);
+    let tmp = ctx.alloc_word();
     ctx.emit(IrInsn::with_output(
         ir_op,
         tmp,
@@ -238,7 +238,7 @@ pub fn lift_cmp(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         };
         inputs.push(vn);
     }
-    let dst = dsp::reg64(dsp::DSPCCOND);
+    let dst = dsp::reg32(dsp::DSPCCOND);
     dsp::emit_callother_with_output(ctx, dst, dsp::CALLOTHER_DSP_CMP, inputs);
 }
 

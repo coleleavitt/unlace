@@ -214,7 +214,7 @@ mod tests {
                         BlockId(0),
                         SsaVarnode {
                             base: Varnode::reg(0, 4),
-                            version: 1,
+                            version: 0,
                         },
                     ),
                     (

@@ -298,6 +298,8 @@ pub fn inspect(path: impl AsRef<Path>) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::{Bookmark, Comment, Rename, SessionInner};
 
@@ -314,6 +316,8 @@ mod tests {
                 binary_path: Some(std::path::PathBuf::from("/synthetic")),
                 binary_sha256: Some([0x42u8; 32]),
                 annotations: crate::Annotations::default(),
+                instruction_xrefs_from: BTreeMap::new(),
+                decompiled_functions: BTreeMap::new(),
                 selection: crate::Selection::default(),
                 listeners: Vec::new(),
             };

@@ -138,24 +138,13 @@ enum ProgressRenderMode {
 }
 
 fn progress_render_mode(style: BatchProgressStyle) -> ProgressRenderMode {
-    let tty = std::io::stderr().is_terminal();
+    if !std::io::stderr().is_terminal() {
+        return ProgressRenderMode::Off;
+    }
     match style {
         BatchProgressStyle::Off => ProgressRenderMode::Off,
         BatchProgressStyle::Plain => ProgressRenderMode::Plain,
-        BatchProgressStyle::Color => {
-            if tty {
-                ProgressRenderMode::Color
-            } else {
-                ProgressRenderMode::Plain
-            }
-        }
-        BatchProgressStyle::Auto => {
-            if tty {
-                ProgressRenderMode::Color
-            } else {
-                ProgressRenderMode::Plain
-            }
-        }
+        BatchProgressStyle::Color | BatchProgressStyle::Auto => ProgressRenderMode::Color,
     }
 }
 

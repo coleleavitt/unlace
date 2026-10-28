@@ -1,5 +1,6 @@
 //! Control-flow structuring: recover `if`/`while`/`switch` from SSA CFGs.
 
+#[cfg(feature = "unwired")]
 pub mod bitfield_recovery;
 pub mod block_merge;
 pub mod cmov_switch;
@@ -31,6 +32,7 @@ pub mod label_cleanup;
 pub mod label_fallthrough;
 pub mod label_hoist;
 pub mod label_tail_dup;
+#[cfg(feature = "unwired")]
 pub mod loop_classify;
 pub mod loop_normalize;
 pub mod node_split;
@@ -39,6 +41,7 @@ pub mod region_bridge;
 pub mod region_splice;
 pub mod region_structurer;
 pub mod return_merge;
+#[cfg(feature = "unwired")]
 pub mod seh_lower;
 pub mod short_circuit;
 pub mod structurer;
@@ -75,11 +78,13 @@ pub use label_cleanup::{cleanup_unreachable_labels, repair_missing_goto_labels};
 pub use label_fallthrough::collapse_label_fallthroughs;
 pub use label_hoist::hoist_cross_branch_labels;
 pub use label_tail_dup::duplicate_simple_label_tails;
+#[cfg(feature = "unwired")]
 pub use loop_classify::{LoopFormCounts, classify_function, classify_loop_form, classify_nodes};
 pub use loop_normalize::{normalize_dowhile_to_while, reverse_loop_rotation};
 pub use node_split::split_irreducible_entries;
 pub use region_structurer::{Region, count_gotos, regions_to_hir, structure_regions};
 pub use return_merge::return_merge;
+#[cfg(feature = "unwired")]
 pub use seh_lower::{
     AddrRange, SehCatchArm, SehHandler, SehRegion, catch_all_type, wrap_seh_regions,
 };

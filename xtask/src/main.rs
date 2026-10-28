@@ -19,6 +19,7 @@ mod register_alias_report;
 mod report_io;
 mod sbom;
 mod semantic_report;
+mod status;
 mod type_recovery_report;
 mod unified_parity;
 mod validate_corpus;
@@ -123,6 +124,12 @@ fn main() {
                 process::exit(code);
             }
         }
+        Some("status") => {
+            let code = status::run(&workspace_root());
+            if code != 0 {
+                process::exit(code);
+            }
+        }
         Some("fuzz") => {
             let code = fuzz::run(&args[1..]);
             if code != 0 {
@@ -136,7 +143,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, status, fuzz"
             );
             process::exit(1);
         }

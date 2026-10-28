@@ -12,3 +12,6 @@ linkscope = { path = "../../../linkscope" }
 
 [dev-dependencies]
 insta = { workspace = true }
+
+[features]
+unwired = []

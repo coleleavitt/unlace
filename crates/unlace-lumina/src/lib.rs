@@ -26,6 +26,7 @@
 pub mod client;
 pub mod db;
 pub mod helo;
+#[cfg(feature = "unwired")]
 pub mod legacy_json;
 pub mod protocol;
 pub mod server;
@@ -33,6 +34,7 @@ pub mod wire;
 
 // Re-export the legacy placeholder API at the crate root so old call sites
 // (`unlace_lumina::Annotation`, `unlace_lumina::router`, etc.) keep working.
+#[cfg(feature = "unwired")]
 pub use legacy_json::{
     Annotation, AnnotationKind, AnnotationServer, SharedState, hash_function_bytes, router,
 };

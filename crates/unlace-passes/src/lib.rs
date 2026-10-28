@@ -98,6 +98,7 @@ pub mod format_magic;
 #[cfg(feature = "unwired")]
 pub mod func_fingerprint;
 pub mod func_ptr_table;
+#[cfg(feature = "unwired")]
 pub mod function_analysis_manager;
 #[cfg(feature = "unwired")]
 pub mod function_attrs;
@@ -112,6 +113,7 @@ pub mod go_closure;
 pub mod go_defer;
 #[cfg(feature = "unwired")]
 pub mod go_iface_devirt;
+#[cfg(feature = "unwired")]
 pub mod go_select;
 #[cfg(feature = "unwired")]
 pub mod gui_lib_recognize;
@@ -337,6 +339,7 @@ pub use format_magic::{MagicCheck, detect_magic_check};
 #[cfg(feature = "unwired")]
 pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarity};
 pub use func_ptr_table::{FuncPtrEntry, FuncPtrTable, FuncPtrTablePass, detect_table_loads};
+#[cfg(feature = "unwired")]
 pub use function_analysis_manager::FunctionAnalysisManager;
 #[cfg(feature = "unwired")]
 pub use function_attrs::{
@@ -357,6 +360,7 @@ pub use global_copy_prop::GlobalCopyPropPass;
 #[cfg(feature = "unwired")]
 pub use go_closure::{ClosureAllocation, ClosureCall, detect_go_closures};
 pub use go_defer::{GoDeferSite, detect_go_defer};
+#[cfg(feature = "unwired")]
 pub use go_select::{GoChannelOp, GoChannelOpKind, detect_go_channel_ops};
 pub use gvn::GvnPass;
 #[cfg(feature = "unwired")]

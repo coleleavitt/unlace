@@ -424,10 +424,10 @@ label_28:;
             result = v14 * 0x66666667LL;
             v17 = v20;
             result = (_DWORD)(result >> 0x21) - (v20 >> 0x1f);
-            v28 = (_DWORD)(result + (result << 2LL));
+            int v32 = (_DWORD)(result + (result << 2LL)); // r9d
             result = v20 - (_DWORD)(result + (result << 2LL));
             v24 = result == 2;
-            char v32 = (_BYTE)(result < 2); // temp
+            char v33 = (_BYTE)(result < 2); // temp
             v27 = __OFSUB__(result, 2);
             if (result == 2) {
                 v24 = v20 == 5;
@@ -436,7 +436,7 @@ label_28:;
                 v27 = __OFSUB__(v20, 5);
                 v20 -= 5;
             } else {
-                if (v24 || v32 ^ v27) {
+                if (v24 || v33 ^ v27) {
                     if (!result) {
                         v24 = v17 + v17 == 0;
                         v25 = (_BYTE)(v17 + v17 < 0);
@@ -444,7 +444,7 @@ label_28:;
                         v27 = __OFADD__(v17, v17);
                         v20 = v17 + v17;
                     } else {
-                        v28 = (_DWORD)(v20 + 0xaLL);
+                        v32 = (_DWORD)(v20 + 0xaLL);
                         v24 = result == 1;
                         v25 = (_BYTE)(result < 1);
                         v26 = (_DWORD)result < 1;

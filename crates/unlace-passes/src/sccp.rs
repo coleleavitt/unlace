@@ -23,37 +23,14 @@ use unlace_ir::cfg::EdgeKind;
 use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
+use crate::options::SccpLimits;
 use crate::pass::{Pass, PassError};
-
-const DEFAULT_SCCP_MAX_WORK: u64 = 50_000;
-const DEFAULT_SCCP_MAX_VARS: usize = 25_000;
-
-fn sccp_max_work() -> u64 {
-    sccp_max_work_from(std::env::var("UNLACE_SCCP_MAX_WORK").ok().as_deref())
-}
-
-fn sccp_max_work_from(value: Option<&str>) -> u64 {
-    value
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .unwrap_or(DEFAULT_SCCP_MAX_WORK)
-}
 
 fn sccp_work_exceeded(max_work: u64, work: u64) -> bool {
     max_work > 0 && work > max_work
 }
 
-fn sccp_max_vars() -> usize {
-    sccp_max_vars_from(std::env::var("UNLACE_SCCP_MAX_VARS").ok().as_deref())
-}
-
-fn sccp_max_vars_from(value: Option<&str>) -> usize {
-    value
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_SCCP_MAX_VARS)
-}
-
-fn sccp_var_budget_exceeded(func: &SsaFunction) -> bool {
-    let limit = sccp_max_vars();
+fn sccp_var_budget_exceeded(func: &SsaFunction, limit: usize) -> bool {
     let phi_vars: usize = func
         .phi_map
         .values()
@@ -573,9 +550,10 @@ impl<'a> SccpSolver<'a> {
         }
     }
 
-    /// Run the SCCP algorithm to a fixed point.
+    /// Run the SCCP algorithm to a fixed point with the default work budget.
+    #[cfg(test)]
     fn solve(&mut self) -> bool {
-        self.solve_with_budget(sccp_max_work())
+        self.solve_with_budget(crate::SccpLimits::default().max_work)
     }
 
     fn solve_with_budget(&mut self, max_work: u64) -> bool {
@@ -1115,7 +1093,6 @@ fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
 fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
     let _span = linkscope::phase("pass.sccp.rewrite");
     let mut changed = false;
-    let trace = sccp_trace_enabled();
     let func_name = func.function.name.clone();
 
     // Collect SSA varnodes that feed Callother inputs — these carry semantic
@@ -1169,16 +1146,15 @@ fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
                         smallvec::smallvec![const_vn],
                         insn.addr,
                     );
-                    if trace && sccp_trace_filter_matches(&func_name, &before, Some(&after)) {
-                        eprintln!(
-                            "[unlace sccp] func={} addr={:#x} rewrite {} -> {} lattice={:?}",
-                            func_name,
-                            before.addr,
-                            before,
-                            after,
-                            LatticeValue::Constant { value, size }
-                        );
-                    }
+                    tracing::debug!(
+                        target: "unlace::sccp",
+                        "func={} addr={:#x} rewrite {} -> {} lattice={:?}",
+                        func_name,
+                        before.addr,
+                        before,
+                        after,
+                        LatticeValue::Constant { value, size }
+                    );
                     *insn = after;
                     changed = true;
                 }
@@ -1191,38 +1167,14 @@ fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
     changed
 }
 
-fn sccp_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_SCCP_TRACE")
-        || env_flag_enabled("UNLACE_LIFT_TRACE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn sccp_trace_filter_matches(func_name: &str, before: &IrInsn, after: Option<&IrInsn>) -> bool {
-    let Some(filter) = std::env::var("UNLACE_SCCP_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-    else {
-        return true;
-    };
-    let needle = filter.trim();
-    needle.is_empty()
-        || func_name.contains(needle)
-        || before.to_string().contains(needle)
-        || after.is_some_and(|insn| insn.to_string().contains(needle))
-        || format!("{:#x}", before.addr).contains(needle)
-        || format!("{:x}", before.addr).contains(needle)
-}
-
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name).is_some()
-}
-
 // ---------------------------------------------------------------------------
 // Pass implementation
 // ---------------------------------------------------------------------------
 
-pub struct SccpPass;
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SccpPass {
+    pub limits: SccpLimits,
+}
 
 impl Pass for SccpPass {
     fn name(&self) -> &str {
@@ -1234,12 +1186,12 @@ impl Pass for SccpPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        if sccp_var_budget_exceeded(func) {
+        if sccp_var_budget_exceeded(func, self.limits.max_vars) {
             return Ok(false);
         }
         let results = {
             let mut solver = SccpSolver::new(func);
-            if !solver.solve() {
+            if !solver.solve_with_budget(self.limits.max_work) {
                 return Ok(false);
             }
             SccpResults {
@@ -1292,7 +1244,9 @@ mod tests {
         let insn2 = IrInsn::with_output(IrOp::IntAdd, out2, smallvec![out1, c3], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![insn1, insn2]);
-        let changed = SccpPass.run(&mut ssa).expect("pass should succeed");
+        let changed = SccpPass::default()
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1323,7 +1277,9 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let changed = SccpPass.run(&mut ssa).expect("pass should succeed");
+        let changed = SccpPass::default()
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(
             !changed,
             "runtime condition chain must not be rewritten to constants"
@@ -1356,7 +1312,9 @@ mod tests {
             ),
         ]);
 
-        let changed = SccpPass.run(&mut ssa).expect("pass should succeed");
+        let changed = SccpPass::default()
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(
             !changed,
             "initial register reads are runtime inputs, not zero constants"
@@ -1381,21 +1339,9 @@ mod tests {
     }
 
     #[test]
-    fn sccp_work_limit_default_and_override() {
-        assert_eq!(sccp_max_work_from(None), 50_000);
-        assert_eq!(sccp_max_work_from(Some("42")), 42);
-        assert_eq!(sccp_max_work_from(Some("0")), 0);
-        assert_eq!(sccp_max_work_from(Some("bad")), 50_000);
+    fn sccp_work_limit_zero_is_unlimited() {
         assert!(!sccp_work_exceeded(0, u64::MAX));
         assert!(sccp_work_exceeded(1, 2));
-    }
-
-    #[test]
-    fn sccp_var_limit_default_and_override() {
-        assert_eq!(sccp_max_vars_from(None), 25_000);
-        assert_eq!(sccp_max_vars_from(Some("42")), 42);
-        assert_eq!(sccp_max_vars_from(Some("0")), 0);
-        assert_eq!(sccp_max_vars_from(Some("bad")), 25_000);
     }
 
     #[test]
@@ -1410,7 +1356,9 @@ mod tests {
         ]);
         let mut solver = SccpSolver::new(&ssa);
         assert!(!solver.solve_with_budget(1));
-        let changed = SccpPass.run(&mut ssa).expect("pass should still succeed");
+        let changed = SccpPass::default()
+            .run(&mut ssa)
+            .expect("pass should still succeed");
         assert!(changed, "normal budget should still allow the fold");
     }
 
@@ -1480,7 +1428,9 @@ mod tests {
             "phi expected at BB3 for v1"
         );
 
-        let changed = SccpPass.run(&mut ssa).expect("pass should succeed");
+        let changed = SccpPass::default()
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed, "SCCP should have propagated constants");
 
         // The condition is always true, so BB2 is unreachable.
@@ -1737,7 +1687,9 @@ mod tests {
 
         let mut ssa = make_single_block_ssa(vec![load]);
         let before = unlace_ir::alias::preserved_count();
-        let _ = SccpPass.run(&mut ssa).expect("pass should succeed");
+        let _ = SccpPass::default()
+            .run(&mut ssa)
+            .expect("pass should succeed");
         let after = unlace_ir::alias::preserved_count();
 
         let block = ssa.function.blocks.values().next().expect("has block");

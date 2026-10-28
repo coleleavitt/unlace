@@ -180,6 +180,7 @@ pub mod op_type_binding;
 pub mod opaque_pred;
 #[cfg(feature = "unwired")]
 pub mod opt_remarks;
+pub mod options;
 #[cfg(feature = "unwired")]
 pub mod packet_struct;
 pub mod pass;
@@ -371,9 +372,8 @@ pub use indirect_jump_resolve::{IndirectJumpResolvePass, collect_jump_table_cand
 #[cfg(feature = "unwired")]
 pub use inline_foldback::{InlineFoldback, detect_inlined_calls};
 pub use instrument::{
-    dump_pass_timings, dump_pass_timings_csv, dump_schedule_audit_csv, pass_should_trace,
-    pass_timing_csv_path, pass_timing_enabled, record_pass_timing, run_instrumented,
-    schedule_audit_oscillations, schedule_audit_path,
+    dump_pass_timings, dump_pass_timings_csv, dump_schedule_audit_csv, pass_timing_enabled,
+    record_pass_timing, run_instrumented, schedule_audit_oscillations,
 };
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
 pub use ipa_slice::{IpaSlicePass, ProgramSlice, SliceCriterion};
@@ -425,6 +425,10 @@ pub use op_type_binding::{OpTypeBindingPass, render_enum_const, render_field_acc
 pub use opaque_pred::opaque_predicate_detect;
 #[cfg(feature = "unwired")]
 pub use opt_remarks::{OptimizationRemark, RemarkKind, RemarkSink};
+pub use options::{
+    IvOptLimits, PassDiagnostics, PassOptions, SccpLimits, TypeConstraintLimits,
+    VariableMergeLimits,
+};
 #[cfg(feature = "unwired")]
 pub use packet_struct::{PacketStruct, detect_packet_struct};
 pub use pass::{
@@ -591,7 +595,8 @@ mod tests {
         let prop = CopyPropagationPass;
         let passes: &[&dyn crate::Pass] = &[&fold, &prop];
 
-        let total = run_to_fixedpoint(passes, &mut ssa).expect("fixedpoint should succeed");
+        let total = run_to_fixedpoint(passes, &mut ssa, &crate::PassOptions::default())
+            .expect("fixedpoint should succeed");
         assert!(total >= 2, "expected at least 2 change-rounds, got {total}");
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -620,7 +625,8 @@ mod tests {
         let prop = CopyPropagationPass;
         let passes: &[&dyn crate::Pass] = &[&fold, &prop];
 
-        let total = run_to_fixedpoint(passes, &mut ssa).expect("fixedpoint should succeed");
+        let total = run_to_fixedpoint(passes, &mut ssa, &crate::PassOptions::default())
+            .expect("fixedpoint should succeed");
         assert_eq!(total, 0);
     }
 

@@ -177,7 +177,7 @@ pub fn fuzz_iteration(bytes: &[u8]) -> FuzzResult {
 
     let config = PipelineConfig {
         timeout: PER_FUNCTION_TIMEOUT,
-        print_config: None,
+        options: Default::default(),
         annotations: None,
         flirt: unlace_cli::pipeline::FlirtConfig::default(),
         dwarf_sidecar: None,

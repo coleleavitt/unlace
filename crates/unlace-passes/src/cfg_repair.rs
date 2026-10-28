@@ -141,7 +141,7 @@ impl Pass for CfgRepairPass {
             verify_ssa_function_pipeline(func)
         };
         if let Err(err) = verify_result {
-            if cfg_repair_trace_enabled() {
+            if tracing::enabled!(target: "unlace::cfg_repair", tracing::Level::DEBUG) {
                 trace_duplicate_definitions(func);
             }
             return Err(PassError::InvariantViolation {
@@ -151,17 +151,6 @@ impl Pass for CfgRepairPass {
 
         Ok(changed)
     }
-}
-
-fn cfg_repair_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_CFG_REPAIR_TRACE")
-        .or_else(|| std::env::var_os("UNLACE_PIPELINE_TRACE"))
-        .and_then(|v| v.into_string().ok())
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-        .unwrap_or(false)
 }
 
 fn trace_duplicate_definitions(func: &SsaFunction) {
@@ -203,13 +192,14 @@ fn trace_duplicate_definitions(func: &SsaFunction) {
         if sites.len() <= 1 {
             continue;
         }
-        eprintln!(
-            "[unlace cfg-repair] duplicate-def func={} sv={sv:?} sites={}",
+        tracing::debug!(
+            target: "unlace::cfg_repair",
+            "duplicate-def func={} sv={sv:?} sites={}",
             func.function.name,
             sites.len()
         );
         for site in sites {
-            eprintln!("[unlace cfg-repair]   {site}");
+            tracing::debug!(target: "unlace::cfg_repair", "  {site}");
         }
     }
 }

@@ -58,7 +58,7 @@ Decompile all discovered functions.
 Per-function decompilation timeout (default: 30).
 .TP
 .B \-v ", \-\-verbose"
-Enable verbose/debug logging (set UNLACE_LOG=debug).
+Increase verbosity. Diagnostics are selected with \fB\-\-log\fR or \fBRUST_LOG\fR.
 .TP
 .BI \-\-plugin\-dir " DIR"
 Load plugins from DIR.
@@ -87,17 +87,14 @@ Write one .c file per function to DIR.
 Write generated signatures to FILE.
 .SH ENVIRONMENT
 .TP
-.B UNLACE_LOG
-Set log level: trace, debug, info, warn (default), error.
+.B RUST_LOG
+Diagnostic filter in tracing EnvFilter syntax (default \fBwarn\fR), e.g.
+\fBunlace::sccp=debug\fR. \fB\-\-log\fR overrides it.
 .TP
-.B UNLACE_MAX_WIDTH
-Default max line width for C output.
-.TP
-.B UNLACE_TAB_WIDTH
-Default tab/indentation width.
-.TP
-.B UNLACE_TIMEOUT
-Default per-function timeout in seconds.
+.B XDG_CONFIG_HOME
+Directory searched for \fBunlace/config.toml\fR when neither
+\fB\-\-config\fR nor \fB./unlace.toml\fR is given (default
+\fB~/.config\fR).
 .SH EXIT STATUS
 .TP
 .B 0

@@ -21,7 +21,6 @@ use unlace_ir::Lifter;
 use unlace_loader::{BinaryImage, DwarfInfo};
 
 use crate::args::EmitFormat;
-use crate::batch::worker_stack_bytes;
 use crate::pipeline::{self, FunctionEntry, PipelineConfig};
 use crate::profiling::{self, TraceField};
 
@@ -143,7 +142,7 @@ impl ParallelEngine {
         let thread_count = self.thread_count();
         let pool = {
             let _profile_stage = profiling::phase("parallel.build-thread-pool");
-            let stack_size = worker_stack_bytes();
+            let stack_size = pipeline_config.options.batch.worker_stack_bytes();
             rayon::ThreadPoolBuilder::new()
                 .num_threads(thread_count)
                 .stack_size(stack_size)
@@ -191,7 +190,7 @@ impl ParallelEngine {
 
                     let fn_config = PipelineConfig {
                         timeout,
-                        print_config: pipeline_config.print_config.clone(),
+                        options: pipeline_config.options.clone(),
                         annotations: pipeline_config.annotations.clone(),
                         flirt: pipeline_config.flirt.clone(),
                         dwarf_sidecar: None,

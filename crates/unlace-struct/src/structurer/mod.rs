@@ -8,6 +8,9 @@
 //! - **DoWhile**: natural loop where the exit test is at the latch, not
 //!   the header.
 //! - **Fallback**: any unstructured edge becomes a Goto/Label pair.
+//!
+//! Diagnostics: enable `unlace::struct=debug` for structuring decisions and
+//! `unlace::struct=trace` for per-edge and HIR-count detail.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,10 +22,12 @@ use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::eager_returns::eager_returns;
 use crate::hir::{HirCallArg, HirFunction, HirNode, LabelId, SwitchCase};
-use crate::reaching_conditions::{Cond, dream_structuring_enabled};
+use crate::options::StructureOptions;
+use crate::reaching_conditions::Cond;
 use crate::switch_recovery::{IndirectBranchKind, classify_indirect_branch};
 use crate::{condition_refinement, irreducible, reaching_conditions, region_bridge, region_splice};
 
+#[macro_use]
 mod trace;
 
 use trace::*;
@@ -42,56 +47,13 @@ pub enum StructureError {
     Timeout { function: String },
 }
 
-const DEFAULT_STRUCT_MAX_PHIS: usize = 12288;
-const DEFAULT_UNSTRUCTURED_FALLBACK_MAX_BLOCKS: usize = 256;
-const DEFAULT_UNSTRUCTURED_FALLBACK_MAX_INSNS: usize = 4096;
-
-fn structure_phi_limit() -> usize {
-    structure_phi_limit_from(std::env::var("UNLACE_STRUCT_MAX_PHIS").ok().as_deref())
-}
-
-fn structure_phi_limit_from(value: Option<&str>) -> usize {
-    value
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_STRUCT_MAX_PHIS)
-}
-
-fn unstructured_fallback_full_enabled() -> bool {
-    std::env::var("UNLACE_STRUCT_FULL_FALLBACK")
-        .ok()
-        .is_some_and(|value| {
-            let value = value.trim().to_ascii_lowercase();
-            !(value.is_empty()
-                || value == "0"
-                || value == "false"
-                || value == "off"
-                || value == "no")
-        })
-}
-
-fn unstructured_fallback_block_limit() -> usize {
-    std::env::var("UNLACE_STRUCT_FALLBACK_MAX_BLOCKS")
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_UNSTRUCTURED_FALLBACK_MAX_BLOCKS)
-}
-
-fn unstructured_fallback_insn_limit() -> usize {
-    std::env::var("UNLACE_STRUCT_FALLBACK_MAX_INSNS")
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_UNSTRUCTURED_FALLBACK_MAX_INSNS)
-}
-
 fn should_emit_full_unstructured_fallback(
     blocks: usize,
     insns: usize,
-    force_full: bool,
     block_limit: usize,
     insn_limit: usize,
 ) -> bool {
-    force_full
-        || ((block_limit == 0 || blocks <= block_limit) && (insn_limit == 0 || insns <= insn_limit))
+    (block_limit == 0 || blocks <= block_limit) && (insn_limit == 0 || insns <= insn_limit)
 }
 
 fn hir_contains_label_or_goto(nodes: &[HirNode]) -> bool {
@@ -178,20 +140,18 @@ fn normalize_edge_target(
     target: BlockId,
 ) {
     if let Some((old_target, _)) = edges.iter_mut().find(|(_, edge_kind)| *edge_kind == kind) {
-        if *old_target != target && struct_trace_verbose_enabled() {
-            eprintln!(
-                "[unlace-struct] normalize-edge block={bid:?} kind={kind:?} cfg_target={old_target:?} ir_target={target:?}"
+        if *old_target != target {
+            struct_trace!(
+                "normalize-edge block={bid:?} kind={kind:?} cfg_target={old_target:?} ir_target={target:?}"
             );
         }
         *old_target = target;
         return;
     }
 
-    if struct_trace_verbose_enabled() {
-        eprintln!(
-            "[unlace-struct] normalize-edge block={bid:?} kind={kind:?} cfg_target=None ir_target={target:?}"
-        );
-    }
+    struct_trace!(
+        "normalize-edge block={bid:?} kind={kind:?} cfg_target=None ir_target={target:?}"
+    );
     edges.push((target, kind));
 }
 
@@ -254,7 +214,7 @@ pub fn structure_with_arch(
     func: &SsaFunction,
     arch: ArchId,
 ) -> Result<HirFunction, StructureError> {
-    structure_with_arch_inner(func, arch, None)
+    structure_with_arch_inner(func, arch, None, StructureOptions::default())
 }
 
 /// [`structure_with_arch`] with a hard deadline.
@@ -263,7 +223,21 @@ pub fn structure_with_arch_until(
     arch: ArchId,
     deadline: Instant,
 ) -> Result<HirFunction, StructureError> {
-    structure_with_arch_inner(func, arch, Some(deadline))
+    structure_with_arch_inner(func, arch, Some(deadline), StructureOptions::default())
+}
+
+/// Structure `func` under explicit complexity budgets, wrapping regions at
+/// `landing_pad_addrs` in `TryCatch` nodes and aborting past `deadline`.
+pub fn structure_with_options(
+    func: &SsaFunction,
+    arch: ArchId,
+    landing_pad_addrs: &BTreeSet<u64>,
+    deadline: Option<Instant>,
+    options: &StructureOptions,
+) -> Result<HirFunction, StructureError> {
+    let mut hir = structure_with_arch_inner(func, arch, deadline, *options)?;
+    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
+    Ok(hir)
 }
 
 /// Conservative unstructured fallback for functions whose structured recovery
@@ -281,7 +255,18 @@ pub fn structure_unstructured_fallback_with_arch(
     arch: ArchId,
     reason: impl Into<String>,
 ) -> HirFunction {
-    let mut ctx = StructureCtx::new_with_deadline(func, None);
+    structure_unstructured_fallback_with_options(func, arch, reason, &StructureOptions::default())
+}
+
+/// [`structure_unstructured_fallback_with_arch`] under explicit fallback
+/// size budgets.
+pub fn structure_unstructured_fallback_with_options(
+    func: &SsaFunction,
+    arch: ArchId,
+    reason: impl Into<String>,
+    options: &StructureOptions,
+) -> HirFunction {
+    let mut ctx = StructureCtx::new_with_deadline(func, None, *options);
     let body = {
         let _span = linkscope::phase("struct.unstructured-fallback");
         ctx.unstructured_fallback_body(reason.into())
@@ -293,6 +278,7 @@ fn structure_with_arch_inner(
     func: &SsaFunction,
     arch: ArchId,
     deadline: Option<Instant>,
+    options: StructureOptions,
 ) -> Result<HirFunction, StructureError> {
     let entry = func.function.entry;
 
@@ -301,7 +287,7 @@ fn structure_with_arch_inner(
     }
 
     let phi_count: usize = func.phi_map.values().map(Vec::len).sum();
-    let phi_limit = structure_phi_limit();
+    let phi_limit = options.max_phis;
     if phi_limit > 0 && phi_count > phi_limit {
         return Err(StructureError::ComplexityLimit {
             kind: "phi nodes",
@@ -312,7 +298,7 @@ fn structure_with_arch_inner(
 
     let mut ctx = {
         let _span = linkscope::phase("struct.ctx-new");
-        StructureCtx::new_with_deadline(func, deadline)
+        StructureCtx::new_with_deadline(func, deadline, options)
     };
     let mut body = {
         let _span = linkscope::phase("struct.structure-region");
@@ -489,12 +475,7 @@ pub fn structure_with_landing_pads_and_arch(
     arch: ArchId,
 ) -> Result<HirFunction, StructureError> {
     let mut hir = structure_with_arch(func, arch)?;
-    if !landing_pad_addrs.is_empty() {
-        let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
-        if !confirmed.is_empty() {
-            hir.body = wrap_try_catch(hir.body, &confirmed, func);
-        }
-    }
+    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
     Ok(hir)
 }
 
@@ -506,13 +487,18 @@ pub fn structure_with_landing_pads_and_arch_until(
     deadline: Instant,
 ) -> Result<HirFunction, StructureError> {
     let mut hir = structure_with_arch_until(func, arch, deadline)?;
-    if !landing_pad_addrs.is_empty() {
-        let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
-        if !confirmed.is_empty() {
-            hir.body = wrap_try_catch(hir.body, &confirmed, func);
-        }
-    }
+    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
     Ok(hir)
+}
+
+fn wrap_landing_pads(hir: &mut HirFunction, func: &SsaFunction, landing_pad_addrs: &BTreeSet<u64>) {
+    if landing_pad_addrs.is_empty() {
+        return;
+    }
+    let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
+    if !confirmed.is_empty() {
+        hir.body = wrap_try_catch(std::mem::take(&mut hir.body), &confirmed, func);
+    }
 }
 
 /// Apply [`eager_returns`] before structuring, so functions with multiple
@@ -714,6 +700,7 @@ fn recurse_try_catch_children(
 
 struct StructureCtx<'a> {
     func: &'a SsaFunction,
+    options: StructureOptions,
     /// Optional wall-clock deadline for structuring.
     deadline: Option<Instant>,
     /// Set once a deadline overrun is observed.
@@ -960,8 +947,8 @@ fn structured_predicates_defined_before_use_inner(
                 if struct_trace_enabled()
                     && let Some(pred) = first_undefined_predicate(cond, region_blocks, emitted)
                 {
-                    eprintln!(
-                        "[unlace-struct] dream predicate-before-source pred=BlockId({}) emitted={emitted:?}",
+                    struct_debug!(
+                        "dream predicate-before-source pred=BlockId({}) emitted={emitted:?}",
                         pred.0
                     );
                 }
@@ -995,11 +982,9 @@ fn structured_predicates_defined_before_use_inner(
             default,
         } => {
             if !predicate_source_defined_before_use(*selector, region_blocks, emitted) {
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] dream predicate-before-source pred=BlockId({selector}) emitted={emitted:?}"
-                    );
-                }
+                struct_debug!(
+                    "dream predicate-before-source pred=BlockId({selector}) emitted={emitted:?}"
+                );
                 return false;
             }
             for (_, case) in cases {
@@ -1085,10 +1070,14 @@ fn dream_predicate_source_nodes(
 impl<'a> StructureCtx<'a> {
     #[cfg(test)]
     fn new(func: &'a SsaFunction) -> Self {
-        Self::new_with_deadline(func, None)
+        Self::new_with_deadline(func, None, StructureOptions::default())
     }
 
-    fn new_with_deadline(func: &'a SsaFunction, deadline: Option<Instant>) -> Self {
+    fn new_with_deadline(
+        func: &'a SsaFunction,
+        deadline: Option<Instant>,
+        options: StructureOptions,
+    ) -> Self {
         let mut back_edges = BTreeSet::new();
         let mut loop_headers = BTreeSet::new();
         let synthetic = BTreeSet::from([func.cfg.exit_block(), func.cfg.unknown_block()]);
@@ -1127,19 +1116,17 @@ impl<'a> StructureCtx<'a> {
             }
         }
 
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] init func={} blocks={} back_edges={} loop_headers={} goto_targets={}",
-                func.function.name,
-                func.function.blocks.len(),
-                back_edges.len(),
-                loop_headers.len(),
-                goto_targets.len()
-            );
-        }
+        struct_debug!(
+            "init func={} blocks={} back_edges={} loop_headers={} goto_targets={}",
+            func.function.name,
+            func.function.blocks.len(),
+            back_edges.len(),
+            loop_headers.len(),
+            goto_targets.len()
+        );
         if struct_trace_verbose_enabled() {
-            eprintln!("[unlace-struct] init back_edges={back_edges:?}");
-            eprintln!("[unlace-struct] init loop_headers={loop_headers:?}");
+            struct_trace!("init back_edges={back_edges:?}");
+            struct_trace!("init loop_headers={loop_headers:?}");
             for target in &goto_targets {
                 let preds: Vec<BlockId> = func
                     .cfg
@@ -1148,12 +1135,13 @@ impl<'a> StructureCtx<'a> {
                     .map(|(src, _)| src)
                     .filter(|src| !synthetic.contains(src))
                     .collect();
-                eprintln!("[unlace-struct] init goto_target={target:?} preds={preds:?}");
+                struct_trace!("init goto_target={target:?} preds={preds:?}");
             }
         }
 
         Self {
             func,
+            options,
             deadline,
             deadline_exceeded: false,
             emitted: BTreeSet::new(),
@@ -1175,12 +1163,7 @@ impl<'a> StructureCtx<'a> {
             && Instant::now() >= deadline
         {
             self.deadline_exceeded = true;
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] timeout-exceeded func={}",
-                    self.func.function.name
-                );
-            }
+            struct_debug!("timeout-exceeded func={}", self.func.function.name);
             return false;
         }
         true
@@ -1202,11 +1185,9 @@ impl<'a> StructureCtx<'a> {
     ) -> Vec<(BlockId, EdgeKind)> {
         let mut edges = self.func.cfg.edges_from(bid);
         let Some((kind, target)) = concrete_terminator_edge(self.func, bid, &edges) else {
-            if struct_trace_verbose_enabled() {
-                eprintln!(
-                    "[unlace-struct] loop-edge-normalize block={bid:?} header={header:?} action=skip reason=no-concrete-terminator edges={edges:?}"
-                );
-            }
+            struct_trace!(
+                "loop-edge-normalize block={bid:?} header={header:?} action=skip reason=no-concrete-terminator edges={edges:?}"
+            );
             return edges;
         };
 
@@ -1215,15 +1196,15 @@ impl<'a> StructureCtx<'a> {
             let cfg_target = edges
                 .iter()
                 .find_map(|(edge_target, edge_kind)| (*edge_kind == kind).then_some(*edge_target));
-            eprintln!(
-                "[unlace-struct] loop-edge-normalize block={bid:?} header={header:?} kind={kind:?} cfg_target={cfg_target:?} ir_target={target:?} target_in_loop={target_in_loop}"
+            struct_debug!(
+                "loop-edge-normalize block={bid:?} header={header:?} kind={kind:?} cfg_target={cfg_target:?} ir_target={target:?} target_in_loop={target_in_loop}"
             );
         }
         if target_in_loop {
             normalize_edge_target(&mut edges, bid, kind, target);
-        } else if struct_trace_verbose_enabled() {
-            eprintln!(
-                "[unlace-struct] loop-edge-normalize block={bid:?} header={header:?} action=ignore reason=terminator-target-outside-loop"
+        } else {
+            struct_trace!(
+                "loop-edge-normalize block={bid:?} header={header:?} action=ignore reason=terminator-target-outside-loop"
             );
         }
         edges
@@ -1236,9 +1217,7 @@ impl<'a> StructureCtx<'a> {
         let label = LabelId(self.next_label);
         self.next_label += 1;
         self.block_labels.insert(block, label);
-        if struct_trace_enabled() {
-            eprintln!("[unlace-struct] alloc-label block={block:?} label={label:?}");
-        }
+        struct_debug!("alloc-label block={block:?} label={label:?}");
         label
     }
 
@@ -1264,9 +1243,8 @@ impl<'a> StructureCtx<'a> {
         if !should_emit_full_unstructured_fallback(
             block_ids.len(),
             insn_count,
-            unstructured_fallback_full_enabled(),
-            unstructured_fallback_block_limit(),
-            unstructured_fallback_insn_limit(),
+            self.options.fallback_max_blocks,
+            self.options.fallback_max_insns,
         ) {
             linkscope::record_items("struct.unstructured-fallback.summary", 1);
             return self.unstructured_summary_body(reason, block_ids.len(), insn_count);
@@ -1305,7 +1283,7 @@ impl<'a> StructureCtx<'a> {
                 "unstructured fallback summary: control-flow structuring skipped".to_string(),
                 reason,
                 format!("omitted full fallback body: blocks={block_count} insns={insn_count}"),
-                "set UNLACE_STRUCT_FULL_FALLBACK=1 to force full labeled-block fallback"
+                "raise [structure] fallback_max_blocks/fallback_max_insns (0 disables) to force full labeled-block fallback"
                     .to_string(),
             ],
             post: Vec::new(),
@@ -1423,10 +1401,8 @@ impl<'a> StructureCtx<'a> {
 
     /// DREAM residual-region seam.
     ///
-    /// This is deliberately conservative. DREAM is default-on, but
-    /// `UNLACE_DREAM_STRUCT=0` returns `None` before doing any work, preserving
-    /// the legacy rollback path by construction. When enabled, it only consumes
-    /// a residual irreducible region when all of the following are true:
+    /// This is deliberately conservative. It only consumes a residual
+    /// irreducible region when all of the following are true:
     ///
     /// * `bid` is one of the region's residual entry blocks,
     /// * the reaching-condition skeleton is acyclic, a conservative
@@ -1445,9 +1421,6 @@ impl<'a> StructureCtx<'a> {
         if !self.check_deadline() {
             return None;
         }
-        if !dream_structuring_enabled() {
-            return None;
-        }
         let region = {
             let _span = linkscope::phase("struct.dream.detect-irreducible");
             irreducible::detect_irreducible_regions(self.func)
@@ -1458,13 +1431,11 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] dream candidate entry={bid:?} body_blocks={} entries={:?}",
-                region.body_blocks.len(),
-                region.entry_blocks
-            );
-        }
+        struct_debug!(
+            "dream candidate entry={bid:?} body_blocks={} entries={:?}",
+            region.body_blocks.len(),
+            region.entry_blocks
+        );
 
         let mut dream_body_blocks = region.body_blocks.clone();
         let (initial_dream_region, _, initial_region_exits) = {
@@ -1473,12 +1444,13 @@ impl<'a> StructureCtx<'a> {
         };
         let initial_rc = {
             let _span = linkscope::phase("struct.dream.initial-reaching-conditions");
-            reaching_conditions::compute_reaching_conditions(&initial_dream_region)
+            reaching_conditions::compute_reaching_conditions(
+                &initial_dream_region,
+                self.options.max_reaching_condition_nodes,
+            )
         };
         if initial_rc.limited {
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] dream skip entry={bid:?} reason=initial-rc-limited");
-            }
+            struct_debug!("dream skip entry={bid:?} reason=initial-rc-limited");
             return None;
         }
         if !initial_rc.back_edges.is_empty() {
@@ -1492,18 +1464,14 @@ impl<'a> StructureCtx<'a> {
                     let _span = linkscope::phase("struct.dream.expand-linear-exit-tails");
                     self.dream_expand_linear_exit_tails(&dream_body_blocks, &initial_real_exits)
                 }) else {
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] dream skip entry={bid:?} reason=cyclic-multiple-exits exits={initial_real_exits:?}"
-                        );
-                    }
+                    struct_debug!(
+                        "dream skip entry={bid:?} reason=cyclic-multiple-exits exits={initial_real_exits:?}"
+                    );
                     return None;
                 };
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] dream expand-exits entry={bid:?} join={join:?} tails={exit_tail_blocks:?}"
-                    );
-                }
+                struct_debug!(
+                    "dream expand-exits entry={bid:?} join={join:?} tails={exit_tail_blocks:?}"
+                );
                 dream_body_blocks.extend(exit_tail_blocks);
             }
         }
@@ -1514,12 +1482,13 @@ impl<'a> StructureCtx<'a> {
         };
         let rc = {
             let _span = linkscope::phase("struct.dream.reaching-conditions");
-            reaching_conditions::compute_reaching_conditions(&dream_region)
+            reaching_conditions::compute_reaching_conditions(
+                &dream_region,
+                self.options.max_reaching_condition_nodes,
+            )
         };
         if rc.limited {
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] dream skip entry={bid:?} reason=rc-limited");
-            }
+            struct_debug!("dream skip entry={bid:?} reason=rc-limited");
             return None;
         }
         let has_back_edges = !rc.back_edges.is_empty();
@@ -1530,11 +1499,9 @@ impl<'a> StructureCtx<'a> {
         let real_exit_targets: BTreeSet<BlockId> =
             real_region_exits.iter().map(|exit| exit.target).collect();
         if has_back_edges && real_exit_targets.len() > 1 {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] dream skip entry={bid:?} reason=cyclic-multiple-exits exits={real_exit_targets:?}"
-                );
-            }
+            struct_debug!(
+                "dream skip entry={bid:?} reason=cyclic-multiple-exits exits={real_exit_targets:?}"
+            );
             return None;
         }
 
@@ -1548,7 +1515,11 @@ impl<'a> StructureCtx<'a> {
                 .collect();
             let structured = {
                 let _span = linkscope::phase("struct.dream.refine-cyclic");
-                condition_refinement::refine_cyclic_region_with_exits(&dream_region, &exit_edges)
+                condition_refinement::refine_cyclic_region_with_exits(
+                    &dream_region,
+                    &exit_edges,
+                    self.options.max_reaching_condition_nodes,
+                )
             };
             if matches!(
                 structured,
@@ -1560,24 +1531,26 @@ impl<'a> StructureCtx<'a> {
                     &dream_region,
                     &exit_edges,
                     &predicate_sources,
+                    self.options.max_reaching_condition_nodes,
                 )
             } else {
                 structured
             }
         } else {
             let _span = linkscope::phase("struct.dream.refine-acyclic");
-            condition_refinement::refine_region(&dream_region)
+            condition_refinement::refine_region(
+                &dream_region,
+                self.options.max_reaching_condition_nodes,
+            )
         };
         if matches!(
             structured,
             condition_refinement::StructuredNode::Unsupported
         ) {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] dream skip entry={bid:?} reason=unsupported back_edges={:?}",
-                    rc.back_edges
-                );
-            }
+            struct_debug!(
+                "dream skip entry={bid:?} reason=unsupported back_edges={:?}",
+                rc.back_edges
+            );
             return None;
         }
 
@@ -1586,20 +1559,14 @@ impl<'a> StructureCtx<'a> {
             self.dream_predicate_conditions(&dream_body_blocks)
         };
         if !structured_predicates_resolve(&structured, &pred_cond) {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] dream skip entry={bid:?} reason=unresolved-predicate preds={:?}",
-                    used_predicates(&structured)
-                );
-            }
+            struct_debug!(
+                "dream skip entry={bid:?} reason=unresolved-predicate preds={:?}",
+                used_predicates(&structured)
+            );
             return None;
         }
         if !structured_predicates_defined_before_use(&structured, &node_to_block) {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] dream skip entry={bid:?} reason=predicate-before-source"
-                );
-            }
+            struct_debug!("dream skip entry={bid:?} reason=predicate-before-source");
             return None;
         }
 
@@ -1608,9 +1575,7 @@ impl<'a> StructureCtx<'a> {
             self.dream_region_has_unspliced_control(&dream_body_blocks)
         };
         if has_unspliced_control {
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] dream skip entry={bid:?} reason=unspliced-control");
-            }
+            struct_debug!("dream skip entry={bid:?} reason=unspliced-control");
             return None;
         }
 
@@ -1620,11 +1585,7 @@ impl<'a> StructureCtx<'a> {
             self.dream_region_exits(&dream_body_blocks)
         };
         if exits.len() > 1 {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] dream skip entry={bid:?} reason=multiple-exits exits={exits:?}"
-                );
-            }
+            struct_debug!("dream skip entry={bid:?} reason=multiple-exits exits={exits:?}");
             return None;
         }
 
@@ -1670,11 +1631,9 @@ impl<'a> StructureCtx<'a> {
             (expected_statements, spliced_statements)
         };
         if spliced_statements != expected_statements {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] dream skip entry={bid:?} reason=statement-count-mismatch expected={expected_statements} spliced={spliced_statements}"
-                );
-            }
+            struct_debug!(
+                "dream skip entry={bid:?} reason=statement-count-mismatch expected={expected_statements} spliced={spliced_statements}"
+            );
             return None;
         }
 
@@ -1845,27 +1804,19 @@ impl<'a> StructureCtx<'a> {
             if !self.check_deadline() {
                 break;
             }
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] region current={bid:?}");
-            }
+            struct_debug!("region current={bid:?}");
             trace_block_edges(self.func, bid, "region");
             if self.synthetic.contains(&bid) {
-                if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] region stop synthetic={bid:?}");
-                }
+                struct_debug!("region stop synthetic={bid:?}");
                 break;
             }
             if self.emitted.contains(&bid) {
                 if self.goto_targets.contains(&bid) {
                     let label = self.alloc_label(bid);
                     nodes.push(HirNode::Goto(label));
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] region emitted-target goto block={bid:?} label={label:?}"
-                        );
-                    }
-                } else if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] region stop already-emitted={bid:?}");
+                    struct_debug!("region emitted-target goto block={bid:?} label={label:?}");
+                } else {
+                    struct_debug!("region stop already-emitted={bid:?}");
                 }
                 break;
             }
@@ -1874,9 +1825,7 @@ impl<'a> StructureCtx<'a> {
                 trace_hir_counts("region-dream-node", &dream_nodes);
                 nodes.extend(dream_nodes);
                 current = next;
-                if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] region dream bid={bid:?} next={current:?}");
-                }
+                struct_debug!("region dream bid={bid:?} next={current:?}");
                 continue;
             }
 
@@ -1890,9 +1839,7 @@ impl<'a> StructureCtx<'a> {
                     nodes.push(node);
                     // After the loop, continue with the loop exit target.
                     current = self.find_loop_exit(bid);
-                    if struct_trace_enabled() {
-                        eprintln!("[unlace-struct] region loop header={bid:?} exit={current:?}");
-                    }
+                    struct_debug!("region loop header={bid:?} exit={current:?}");
                     continue;
                 }
             }
@@ -1909,18 +1856,14 @@ impl<'a> StructureCtx<'a> {
                 trace_hir_counts("region-if-node", std::slice::from_ref(&if_node));
                 nodes.push(if_node);
                 current = join;
-                if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] region if bid={bid:?} join={current:?}");
-                }
+                struct_debug!("region if bid={bid:?} join={current:?}");
                 continue;
             }
 
             // Default: emit as a linear block of statements.
             self.emit_block_statements(bid, &mut nodes);
             current = self.single_successor(bid);
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] region linear bid={bid:?} next={current:?}");
-            }
+            struct_debug!("region linear bid={bid:?} next={current:?}");
         }
 
         nodes
@@ -1942,20 +1885,16 @@ impl<'a> StructureCtx<'a> {
         // Emit label if this block was targeted by a goto.
         if let Some(&label) = self.block_labels.get(&bid) {
             nodes.push(HirNode::Label(label));
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] emit-block label block={bid:?} label={label:?}");
-            }
+            struct_debug!("emit-block label block={bid:?} label={label:?}");
         }
 
         let Some(block) = self.func.function.blocks.get(&bid) else {
             return;
         };
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] emit-block block={bid:?} insns={} start_nodes={start_len}",
-                block.insns.len()
-            );
-        }
+        struct_debug!(
+            "emit-block block={bid:?} insns={} start_nodes={start_len}",
+            block.insns.len()
+        );
         trace_block_edges(self.func, bid, "emit-block");
 
         let mut pending_guard: Option<(u8, Vec<HirNode>)> = None;
@@ -2027,12 +1966,10 @@ impl<'a> StructureCtx<'a> {
         fuse_guarded_if_else(nodes);
         fold_guarded_ternary(nodes);
         fold_csel_ternary(nodes);
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] emit-block done block={bid:?} added_nodes={}",
-                nodes.len().saturating_sub(start_len)
-            );
-        }
+        struct_debug!(
+            "emit-block done block={bid:?} added_nodes={}",
+            nodes.len().saturating_sub(start_len)
+        );
     }
 
     fn try_structure_switch(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
@@ -2710,16 +2647,13 @@ impl<'a> StructureCtx<'a> {
             }
         }
         if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] if bid={bid:?} pre_stmts={} true={true_blk:?} false={false_blk:?}",
+            struct_debug!(
+                "if bid={bid:?} pre_stmts={} true={true_blk:?} false={false_blk:?}",
                 pre_stmts.len()
             );
             for stmt in &pre_stmts {
                 if let HirNode::Statement(insn) = stmt {
-                    eprintln!(
-                        "[unlace-struct] if bid={bid:?} pre addr=0x{:x} op={:?}",
-                        insn.addr, insn.op
-                    );
+                    struct_debug!("if bid={bid:?} pre addr=0x{:x} op={:?}", insn.addr, insn.op);
                 }
             }
         }
@@ -2730,8 +2664,8 @@ impl<'a> StructureCtx<'a> {
         let mut then_body = self.structure_until(true_blk, join);
         let mut else_body = self.structure_until(false_blk, join);
         if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] if bid={bid:?} join={join:?} true={true_blk:?} false={false_blk:?} then_nodes={} else_nodes={}",
+            struct_debug!(
+                "if bid={bid:?} join={join:?} true={true_blk:?} false={false_blk:?} then_nodes={} else_nodes={}",
                 then_body.len(),
                 else_body.len()
             );
@@ -2740,8 +2674,8 @@ impl<'a> StructureCtx<'a> {
                 let false_is_join = join == Some(false_blk);
                 let true_goto_target = self.goto_targets.contains(&true_blk);
                 let false_goto_target = self.goto_targets.contains(&false_blk);
-                eprintln!(
-                    "[unlace-struct] if-empty-arm bid={bid:?} join={join:?} true={true_blk:?} true_is_join={true_is_join} true_goto_target={true_goto_target} false={false_blk:?} false_is_join={false_is_join} false_goto_target={false_goto_target}"
+                struct_debug!(
+                    "if-empty-arm bid={bid:?} join={join:?} true={true_blk:?} true_is_join={true_is_join} true_goto_target={true_goto_target} false={false_blk:?} false_is_join={false_is_join} false_goto_target={false_goto_target}"
                 );
                 trace_branch_shape(&format!("if-empty-arm bid={bid:?} then"), &then_body);
                 trace_branch_shape(&format!("if-empty-arm bid={bid:?} else"), &else_body);
@@ -2761,8 +2695,8 @@ impl<'a> StructureCtx<'a> {
                 let label = self.alloc_label(join_blk);
                 then_body.push(HirNode::Goto(label));
                 if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] if-join-branch-goto bid={bid:?} join={join_blk:?} guarded_branch=true sibling={false_blk:?} label={label:?} reason=empty-sibling-hoist-guard"
+                    struct_debug!(
+                        "if-join-branch-goto bid={bid:?} join={join_blk:?} guarded_branch=true sibling={false_blk:?} label={label:?} reason=empty-sibling-hoist-guard"
                     );
                     trace_branch_shape(
                         &format!("if-join-branch-goto bid={bid:?} then"),
@@ -2776,8 +2710,8 @@ impl<'a> StructureCtx<'a> {
                 let label = self.alloc_label(join_blk);
                 else_body.push(HirNode::Goto(label));
                 if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] if-join-branch-goto bid={bid:?} join={join_blk:?} guarded_branch=false sibling={true_blk:?} label={label:?} reason=empty-sibling-hoist-guard"
+                    struct_debug!(
+                        "if-join-branch-goto bid={bid:?} join={join_blk:?} guarded_branch=false sibling={true_blk:?} label={label:?} reason=empty-sibling-hoist-guard"
                     );
                     trace_branch_shape(
                         &format!("if-join-branch-goto bid={bid:?} else"),
@@ -2844,8 +2778,8 @@ impl<'a> StructureCtx<'a> {
         if struct_trace_enabled() {
             let true_in_loop = true_blk == header || loop_blocks.contains(&true_blk);
             let false_in_loop = false_blk == header || loop_blocks.contains(&false_blk);
-            eprintln!(
-                "[unlace-struct] loop-if-edges bid={bid:?} header={header:?} edges={edges:?} true={true_blk:?} true_in_loop={true_in_loop} false={false_blk:?} false_in_loop={false_in_loop}"
+            struct_debug!(
+                "loop-if-edges bid={bid:?} header={header:?} edges={edges:?} true={true_blk:?} true_in_loop={true_in_loop} false={false_blk:?} false_in_loop={false_in_loop}"
             );
         }
 
@@ -2875,15 +2809,15 @@ impl<'a> StructureCtx<'a> {
         if struct_trace_enabled() {
             let join_in_loop =
                 join.is_some_and(|join| join == header || loop_blocks.contains(&join));
-            eprintln!(
-                "[unlace-struct] loop-if-join bid={bid:?} header={header:?} join={join:?} join_in_loop={join_in_loop}"
+            struct_debug!(
+                "loop-if-join bid={bid:?} header={header:?} join={join:?} join_in_loop={join_in_loop}"
             );
         }
         let then_body = self.structure_loop_branch_until(true_blk, join, header, loop_blocks);
         let else_body = self.structure_loop_branch_until(false_blk, join, header, loop_blocks);
         if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] loop-if bid={bid:?} header={header:?} join={join:?} true={true_blk:?} false={false_blk:?} then_nodes={} else_nodes={}",
+            struct_debug!(
+                "loop-if bid={bid:?} header={header:?} join={join:?} true={true_blk:?} false={false_blk:?} then_nodes={} else_nodes={}",
                 then_body.len(),
                 else_body.len()
             );
@@ -2894,8 +2828,8 @@ impl<'a> StructureCtx<'a> {
                 let false_goto_target = self.goto_targets.contains(&false_blk);
                 let true_in_loop = true_blk == header || loop_blocks.contains(&true_blk);
                 let false_in_loop = false_blk == header || loop_blocks.contains(&false_blk);
-                eprintln!(
-                    "[unlace-struct] loop-if-empty-arm bid={bid:?} header={header:?} join={join:?} true={true_blk:?} true_is_join={true_is_join} true_in_loop={true_in_loop} true_goto_target={true_goto_target} false={false_blk:?} false_is_join={false_is_join} false_in_loop={false_in_loop} false_goto_target={false_goto_target}"
+                struct_debug!(
+                    "loop-if-empty-arm bid={bid:?} header={header:?} join={join:?} true={true_blk:?} true_is_join={true_is_join} true_in_loop={true_in_loop} true_goto_target={true_goto_target} false={false_blk:?} false_is_join={false_is_join} false_in_loop={false_in_loop} false_goto_target={false_goto_target}"
                 );
                 trace_branch_shape(&format!("loop-if-empty-arm bid={bid:?} then"), &then_body);
                 trace_branch_shape(&format!("loop-if-empty-arm bid={bid:?} else"), &else_body);
@@ -2967,11 +2901,9 @@ impl<'a> StructureCtx<'a> {
             None
         };
         let latch_has_cbranch = single_latch.is_some_and(|l| self.block_has_cbranch(l));
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] loop header={header:?} latches={latches:?} header_cbranch={header_has_cbranch} single_latch={single_latch:?} latch_cbranch={latch_has_cbranch}"
-            );
-        }
+        struct_debug!(
+            "loop header={header:?} latches={latches:?} header_cbranch={header_has_cbranch} single_latch={single_latch:?} latch_cbranch={latch_has_cbranch}"
+        );
 
         if header_has_cbranch {
             if latches.contains(&header) {
@@ -3003,22 +2935,18 @@ impl<'a> StructureCtx<'a> {
             // Find which successor is the loop body vs. the exit.
             let edges = self.func.cfg.edges_from(header);
             let (body_entry, exit) = self.classify_loop_edges(header, &edges);
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] while header={header:?} body={body_entry:?} exit={exit:?} edges={edges:?}"
-                );
-            }
+            struct_debug!(
+                "while header={header:?} body={body_entry:?} exit={exit:?} edges={edges:?}"
+            );
 
             self.emitted.insert(header);
 
             let header_nodes = self.non_control_block_statements(header);
             let loop_blocks = self.collect_loop_blocks(header);
-            if struct_trace_verbose_enabled() {
-                eprintln!(
-                    "[unlace-struct] while header={header:?} loop_blocks={loop_blocks:?} header_nodes={}",
-                    header_nodes.len()
-                );
-            }
+            struct_trace!(
+                "while header={header:?} loop_blocks={loop_blocks:?} header_nodes={}",
+                header_nodes.len()
+            );
 
             if exit.is_none() {
                 let mut body_nodes = header_nodes;
@@ -3046,13 +2974,11 @@ impl<'a> StructureCtx<'a> {
                 let else_body = false_target
                     .map(|target| self.loop_branch_nodes_for_target(target, header, &loop_blocks))
                     .unwrap_or_else(|| vec![HirNode::Break]);
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] while-no-exit header={header:?} true_target={true_target:?} false_target={false_target:?} then_nodes={} else_nodes={}",
-                        then_body.len(),
-                        else_body.len()
-                    );
-                }
+                struct_debug!(
+                    "while-no-exit header={header:?} true_target={true_target:?} false_target={false_target:?} then_nodes={} else_nodes={}",
+                    then_body.len(),
+                    else_body.len()
+                );
                 if struct_trace_verbose_enabled() {
                     trace_hir_counts(&format!("while-no-exit header={header:?} then"), &then_body);
                     trace_hir_counts(&format!("while-no-exit header={header:?} else"), &else_body);
@@ -3277,27 +3203,17 @@ impl<'a> StructureCtx<'a> {
     ) -> Vec<HirNode> {
         if self.synthetic.contains(&target) || !loop_blocks.contains(&target) {
             let node = self.loop_exit_transfer_node(Some(target), header);
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] loop-branch header={header:?} target={target:?} action={} reason=outside-loop",
-                    hir_node_kind(&node)
-                );
-            }
+            struct_debug!(
+                "loop-branch header={header:?} target={target:?} action={} reason=outside-loop",
+                hir_node_kind(&node)
+            );
             return vec![node];
         }
         if target == header {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] loop-branch header={header:?} target={target:?} action=continue"
-                );
-            }
+            struct_debug!("loop-branch header={header:?} target={target:?} action=continue");
             return vec![HirNode::Continue];
         }
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] loop-branch header={header:?} target={target:?} action=structure-body"
-            );
-        }
+        struct_debug!("loop-branch header={header:?} target={target:?} action=structure-body");
         let nodes = self.structure_loop_body(target, header);
         trace_hir_counts(
             &format!("loop-branch header={header:?} target={target:?}"),
@@ -3362,11 +3278,9 @@ impl<'a> StructureCtx<'a> {
         nodes: &mut Vec<HirNode>,
     ) -> bool {
         if !loop_blocks.contains(&bid) {
-            if struct_trace_verbose_enabled() {
-                eprintln!(
-                    "[unlace-struct] emitted-latch-path block={bid:?} header={header:?} action=skip reason=outside-loop"
-                );
-            }
+            struct_trace!(
+                "emitted-latch-path block={bid:?} header={header:?} action=skip reason=outside-loop"
+            );
             return false;
         }
 
@@ -3380,22 +3294,18 @@ impl<'a> StructureCtx<'a> {
         let known_back_edge = self.back_edges.contains(&(bid, header));
 
         if !direct_to_header && !known_back_edge {
-            if struct_trace_verbose_enabled() {
-                eprintln!(
-                    "[unlace-struct] emitted-latch-path block={bid:?} header={header:?} action=skip reason=not-direct-latch real_edges={real_edges:?} known_back_edge={known_back_edge}"
-                );
-            }
+            struct_trace!(
+                "emitted-latch-path block={bid:?} header={header:?} action=skip reason=not-direct-latch real_edges={real_edges:?} known_back_edge={known_back_edge}"
+            );
             return false;
         }
 
         let mut replay = self.non_control_block_statements(bid);
         let stmt_count = replay.len();
         replay.push(HirNode::Continue);
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] emitted-latch-path block={bid:?} header={header:?} action=replay-continue stmts={stmt_count} real_edges={real_edges:?} known_back_edge={known_back_edge}"
-            );
-        }
+        struct_debug!(
+            "emitted-latch-path block={bid:?} header={header:?} action=replay-continue stmts={stmt_count} real_edges={real_edges:?} known_back_edge={known_back_edge}"
+        );
         trace_hir_counts(
             &format!("emitted-latch-path block={bid:?} header={header:?}"),
             &replay,
@@ -3418,12 +3328,10 @@ impl<'a> StructureCtx<'a> {
     ) -> Vec<HirNode> {
         if self.synthetic.contains(&start) {
             let node = self.loop_exit_transfer_node(Some(start), header);
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] loop-branch-until start={start:?} stop={stop:?} header={header:?} action={} reason=start-outside-loop",
-                    hir_node_kind(&node)
-                );
-            }
+            struct_debug!(
+                "loop-branch-until start={start:?} stop={stop:?} header={header:?} action={} reason=start-outside-loop",
+                hir_node_kind(&node)
+            );
             return vec![node];
         }
         if !loop_blocks.contains(&start) {
@@ -3433,8 +3341,8 @@ impl<'a> StructureCtx<'a> {
                     let reaches_header = self.reaches_block(start, header);
                     let reaches_header_loop_edges =
                         self.reaches_block_in_loop(start, header, header, loop_blocks);
-                    eprintln!(
-                        "[unlace-struct] loop-branch-until start={start:?} stop={stop:?} header={header:?} action=structure-outside-branch reason=known-stop dominated_by_header={dominated_by_header} reaches_header={reaches_header} reaches_header_loop_edges={reaches_header_loop_edges}"
+                    struct_debug!(
+                        "loop-branch-until start={start:?} stop={stop:?} header={header:?} action=structure-outside-branch reason=known-stop dominated_by_header={dominated_by_header} reaches_header={reaches_header} reaches_header_loop_edges={reaches_header_loop_edges}"
                     );
                 }
                 let nodes = self.structure_until(start, stop);
@@ -3448,20 +3356,16 @@ impl<'a> StructureCtx<'a> {
             }
 
             let node = self.loop_exit_transfer_node(Some(start), header);
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] loop-branch-until start={start:?} stop={stop:?} header={header:?} action={} reason=start-outside-loop",
-                    hir_node_kind(&node)
-                );
-            }
+            struct_debug!(
+                "loop-branch-until start={start:?} stop={stop:?} header={header:?} action={} reason=start-outside-loop",
+                hir_node_kind(&node)
+            );
             return vec![node];
         }
         if start == header {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] loop-branch-until start={start:?} stop={stop:?} header={header:?} action=continue"
-                );
-            }
+            struct_debug!(
+                "loop-branch-until start={start:?} stop={stop:?} header={header:?} action=continue"
+            );
             return vec![HirNode::Continue];
         }
         self.structure_until_in_loop(start, stop, header, loop_blocks)
@@ -3476,36 +3380,28 @@ impl<'a> StructureCtx<'a> {
     ) -> Vec<HirNode> {
         let mut nodes = Vec::new();
         let mut current = Some(start);
-        if struct_trace_enabled() {
-            eprintln!("[unlace-struct] until-loop start={start:?} stop={stop:?} header={header:?}");
-        }
+        struct_debug!("until-loop start={start:?} stop={stop:?} header={header:?}");
 
         while let Some(bid) = current {
             if !self.check_deadline() {
                 break;
             }
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] until-loop current={bid:?} stop={stop:?} header={header:?}"
-                );
-            }
+            struct_debug!("until-loop current={bid:?} stop={stop:?} header={header:?}");
             trace_block_edges(self.func, bid, "until-loop");
 
             if Some(bid) == stop {
                 if self.synthetic.contains(&bid) || !loop_blocks.contains(&bid) {
                     let node = self.loop_exit_transfer_node(Some(bid), header);
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] until-loop stop-is-exit current={bid:?} header={header:?} action={}",
-                            hir_node_kind(&node)
-                        );
-                    }
+                    struct_debug!(
+                        "until-loop stop-is-exit current={bid:?} header={header:?} action={}",
+                        hir_node_kind(&node)
+                    );
                     nodes.push(node);
                 } else if struct_trace_enabled() {
                     let is_goto_target = self.goto_targets.contains(&bid);
                     let label = self.block_labels.get(&bid).copied();
-                    eprintln!(
-                        "[unlace-struct] until-loop stop-hit current={bid:?} header={header:?} goto_target={is_goto_target} label={label:?} in_loop=true synthetic=false"
+                    struct_debug!(
+                        "until-loop stop-hit current={bid:?} header={header:?} goto_target={is_goto_target} label={label:?} in_loop=true synthetic=false"
                     );
                 }
                 break;
@@ -3513,22 +3409,18 @@ impl<'a> StructureCtx<'a> {
 
             if self.synthetic.contains(&bid) || !loop_blocks.contains(&bid) {
                 let node = self.loop_exit_transfer_node(Some(bid), header);
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] until-loop exit-transfer current={bid:?} header={header:?} action={}",
-                        hir_node_kind(&node)
-                    );
-                }
+                struct_debug!(
+                    "until-loop exit-transfer current={bid:?} header={header:?} action={}",
+                    hir_node_kind(&node)
+                );
                 nodes.push(node);
                 break;
             }
 
             if bid == header {
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] until-loop back-to-header current={bid:?} header={header:?} action=continue"
-                    );
-                }
+                struct_debug!(
+                    "until-loop back-to-header current={bid:?} header={header:?} action=continue"
+                );
                 nodes.push(HirNode::Continue);
                 break;
             }
@@ -3539,15 +3431,9 @@ impl<'a> StructureCtx<'a> {
                 } else if self.goto_targets.contains(&bid) {
                     let label = self.alloc_label(bid);
                     nodes.push(HirNode::Goto(label));
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] until-loop emitted-target goto block={bid:?} label={label:?}"
-                        );
-                    }
-                } else if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] until-loop stop already-emitted={bid:?} header={header:?}"
-                    );
+                    struct_debug!("until-loop emitted-target goto block={bid:?} label={label:?}");
+                } else {
+                    struct_debug!("until-loop stop already-emitted={bid:?} header={header:?}");
                 }
                 break;
             }
@@ -3557,19 +3443,15 @@ impl<'a> StructureCtx<'a> {
                     if struct_trace_enabled() {
                         let nested_blocks = self.collect_loop_blocks(bid);
                         let exits = self.loop_exit_targets(&nested_blocks);
-                        eprintln!(
-                            "[unlace-struct] until-loop nested-loop-skip-multiexit bid={bid:?} outer_header={header:?} exits={exits:?}"
+                        struct_debug!(
+                            "until-loop nested-loop-skip-multiexit bid={bid:?} outer_header={header:?} exits={exits:?}"
                         );
                     }
                 } else if let Some(loop_node) = self.try_structure_loop(bid) {
                     trace_hir_counts("until-loop-nested-loop", std::slice::from_ref(&loop_node));
                     nodes.push(loop_node);
                     current = self.find_loop_exit(bid);
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] until-loop nested-loop bid={bid:?} next={current:?}"
-                        );
-                    }
+                    struct_debug!("until-loop nested-loop bid={bid:?} next={current:?}");
                     continue;
                 }
             }
@@ -3578,11 +3460,7 @@ impl<'a> StructureCtx<'a> {
                 trace_hir_counts("until-loop-if-node", std::slice::from_ref(&if_node));
                 nodes.push(if_node);
                 current = join;
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] until-loop if bid={bid:?} header={header:?} join={current:?}"
-                    );
-                }
+                struct_debug!("until-loop if bid={bid:?} header={header:?} join={current:?}");
                 continue;
             }
 
@@ -3594,11 +3472,9 @@ impl<'a> StructureCtx<'a> {
                 .map(|(tgt, _)| *tgt)
                 .collect();
             current = (real_edges.len() == 1).then_some(real_edges[0]);
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] until-loop linear bid={bid:?} header={header:?} next={current:?} real_edges={real_edges:?}"
-                );
-            }
+            struct_debug!(
+                "until-loop linear bid={bid:?} header={header:?} next={current:?} real_edges={real_edges:?}"
+            );
         }
 
         trace_hir_counts(
@@ -3657,20 +3533,16 @@ impl<'a> StructureCtx<'a> {
                 {
                     loop_blocks.insert(src);
                     worklist.push(src);
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] loop-block-add header={header:?} block={src:?} via={bid:?} edges={edges:?}"
-                        );
-                    }
+                    struct_debug!(
+                        "loop-block-add header={header:?} block={src:?} via={bid:?} edges={edges:?}"
+                    );
                 }
             }
         }
 
-        if struct_trace_verbose_enabled() {
-            eprintln!(
-                "[unlace-struct] loop-blocks-detail header={header:?} latches={latches:?} final={loop_blocks:?}"
-            );
-        }
+        struct_trace!(
+            "loop-blocks-detail header={header:?} latches={latches:?} final={loop_blocks:?}"
+        );
 
         self.loop_blocks_cache
             .borrow_mut()
@@ -3725,11 +3597,9 @@ impl<'a> StructureCtx<'a> {
 
             for (succ, _) in self.loop_edges_from(bid, header, loop_blocks) {
                 if succ == target {
-                    if struct_trace_verbose_enabled() {
-                        eprintln!(
-                            "[unlace-struct] loop-reach start={start:?} target={target:?} header={header:?} hit_from={bid:?}"
-                        );
-                    }
+                    struct_trace!(
+                        "loop-reach start={start:?} target={target:?} header={header:?} hit_from={bid:?}"
+                    );
                     return true;
                 }
                 if !visited.contains(&succ) {
@@ -3738,11 +3608,9 @@ impl<'a> StructureCtx<'a> {
             }
         }
 
-        if struct_trace_verbose_enabled() {
-            eprintln!(
-                "[unlace-struct] loop-reach start={start:?} target={target:?} header={header:?} result=false visited={visited:?}"
-            );
-        }
+        struct_trace!(
+            "loop-reach start={start:?} target={target:?} header={header:?} result=false visited={visited:?}"
+        );
         false
     }
 
@@ -3771,61 +3639,41 @@ impl<'a> StructureCtx<'a> {
     ) -> Vec<HirNode> {
         let mut nodes = Vec::new();
         let mut current = Some(start);
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] loop-body start={start:?} header={header:?} loop_blocks={}",
-                loop_blocks.len()
-            );
-        }
-        if struct_trace_verbose_enabled() {
-            eprintln!(
-                "[unlace-struct] loop-body start={start:?} header={header:?} loop_blocks={loop_blocks:?}"
-            );
-        }
+        struct_debug!(
+            "loop-body start={start:?} header={header:?} loop_blocks={}",
+            loop_blocks.len()
+        );
+        struct_trace!("loop-body start={start:?} header={header:?} loop_blocks={loop_blocks:?}");
 
         while let Some(bid) = current {
             if !self.check_deadline() {
                 break;
             }
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] loop-body current={bid:?} header={header:?}");
-            }
+            struct_debug!("loop-body current={bid:?} header={header:?}");
             trace_block_edges(self.func, bid, "loop-body");
             if self.synthetic.contains(&bid) {
-                if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] loop-body stop synthetic={bid:?}");
-                }
+                struct_debug!("loop-body stop synthetic={bid:?}");
                 break;
             }
 
             if !loop_blocks.contains(&bid) {
                 let node = self.loop_exit_transfer_node(Some(bid), header);
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] loop-body exit-transfer current={bid:?} header={header:?} action={}",
-                        hir_node_kind(&node)
-                    );
-                }
+                struct_debug!(
+                    "loop-body exit-transfer current={bid:?} header={header:?} action={}",
+                    hir_node_kind(&node)
+                );
                 nodes.push(node);
                 break;
             }
 
             if self.emitted.contains(&bid) {
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] loop-body stop already-emitted current={bid:?} header={header:?}"
-                    );
-                }
+                struct_debug!("loop-body stop already-emitted current={bid:?} header={header:?}");
                 break;
             }
 
             let is_back_to_header = self.back_edges.contains(&(bid, header));
             if is_back_to_header && bid == start {
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] loop-body latch-at-start current={bid:?} header={header:?}"
-                    );
-                }
+                struct_debug!("loop-body latch-at-start current={bid:?} header={header:?}");
                 self.emit_block_statements(bid, &mut nodes);
                 self.emit_latch_decision(bid, header, &mut nodes);
                 break;
@@ -3836,34 +3684,24 @@ impl<'a> StructureCtx<'a> {
                     if struct_trace_enabled() {
                         let nested_blocks = self.collect_loop_blocks(bid);
                         let exits = self.loop_exit_targets(&nested_blocks);
-                        eprintln!(
-                            "[unlace-struct] loop-body nested-loop-skip-multiexit current={bid:?} outer_header={header:?} exits={exits:?}"
+                        struct_debug!(
+                            "loop-body nested-loop-skip-multiexit current={bid:?} outer_header={header:?} exits={exits:?}"
                         );
                     }
                 } else if let Some(loop_node) = self.try_structure_loop(bid) {
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] loop-body nested-loop current={bid:?} outer_header={header:?}"
-                        );
-                    }
+                    struct_debug!("loop-body nested-loop current={bid:?} outer_header={header:?}");
                     trace_hir_counts("loop-body-nested-loop", std::slice::from_ref(&loop_node));
                     nodes.push(loop_node);
                     current = self.find_loop_exit(bid);
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] loop-body nested-loop-exit current={bid:?} outer_header={header:?} next={current:?}"
-                        );
-                    }
+                    struct_debug!(
+                        "loop-body nested-loop-exit current={bid:?} outer_header={header:?} next={current:?}"
+                    );
                     continue;
                 }
             }
 
             if let Some((if_node, join)) = self.try_structure_if_in_loop(bid, header, loop_blocks) {
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] loop-body if current={bid:?} header={header:?} join={join:?}"
-                    );
-                }
+                struct_debug!("loop-body if current={bid:?} header={header:?} join={join:?}");
                 trace_hir_counts("loop-body-if", std::slice::from_ref(&if_node));
                 nodes.push(if_node);
                 current = join;
@@ -3882,11 +3720,9 @@ impl<'a> StructureCtx<'a> {
                 .collect();
 
             current = non_back_succs.first().copied();
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] loop-body linear current={bid:?} header={header:?} next={current:?} non_back_succs={non_back_succs:?}"
-                );
-            }
+            struct_debug!(
+                "loop-body linear current={bid:?} header={header:?} next={current:?} non_back_succs={non_back_succs:?}"
+            );
         }
 
         trace_hir_counts(
@@ -3899,17 +3735,13 @@ impl<'a> StructureCtx<'a> {
     fn structure_until(&mut self, start: BlockId, stop: Option<BlockId>) -> Vec<HirNode> {
         let mut nodes = Vec::new();
         let mut current = Some(start);
-        if struct_trace_enabled() {
-            eprintln!("[unlace-struct] until start={start:?} stop={stop:?}");
-        }
+        struct_debug!("until start={start:?} stop={stop:?}");
 
         while let Some(bid) = current {
             if !self.check_deadline() {
                 break;
             }
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] until current={bid:?} stop={stop:?}");
-            }
+            struct_debug!("until current={bid:?} stop={stop:?}");
             trace_block_edges(self.func, bid, "until");
             if Some(bid) == stop {
                 if struct_trace_enabled() {
@@ -3923,16 +3755,14 @@ impl<'a> StructureCtx<'a> {
                         .map(|(src, _)| src)
                         .filter(|src| !self.synthetic.contains(src))
                         .collect();
-                    eprintln!(
-                        "[unlace-struct] until stop-hit current={bid:?} goto_target={is_goto_target} label={label:?} preds={preds:?}"
+                    struct_debug!(
+                        "until stop-hit current={bid:?} goto_target={is_goto_target} label={label:?} preds={preds:?}"
                     );
                 }
                 break;
             }
             if self.synthetic.contains(&bid) {
-                if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] until stop synthetic={bid:?}");
-                }
+                struct_debug!("until stop synthetic={bid:?}");
                 break;
             }
             if self.emitted.contains(&bid) {
@@ -3944,13 +3774,9 @@ impl<'a> StructureCtx<'a> {
                 if self.goto_targets.contains(&bid) {
                     let label = self.alloc_label(bid);
                     nodes.push(HirNode::Goto(label));
-                    if struct_trace_enabled() {
-                        eprintln!(
-                            "[unlace-struct] until emitted-target goto block={bid:?} label={label:?}"
-                        );
-                    }
-                } else if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] until stop already-emitted={bid:?}");
+                    struct_debug!("until emitted-target goto block={bid:?} label={label:?}");
+                } else {
+                    struct_debug!("until stop already-emitted={bid:?}");
                 }
                 break;
             }
@@ -3963,9 +3789,7 @@ impl<'a> StructureCtx<'a> {
                 trace_hir_counts("until-loop-node", std::slice::from_ref(&loop_node));
                 nodes.push(loop_node);
                 current = self.find_loop_exit(bid);
-                if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] until nested-loop bid={bid:?} next={current:?}");
-                }
+                struct_debug!("until nested-loop bid={bid:?} next={current:?}");
                 continue;
             }
 
@@ -3974,9 +3798,7 @@ impl<'a> StructureCtx<'a> {
                 trace_hir_counts("until-switch-node", std::slice::from_ref(&switch_node));
                 nodes.push(switch_node);
                 current = join;
-                if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] until switch bid={bid:?} join={current:?}");
-                }
+                struct_debug!("until switch bid={bid:?} join={current:?}");
                 continue;
             }
 
@@ -3985,17 +3807,13 @@ impl<'a> StructureCtx<'a> {
                 trace_hir_counts("until-if-node", std::slice::from_ref(&if_node));
                 nodes.push(if_node);
                 current = join;
-                if struct_trace_enabled() {
-                    eprintln!("[unlace-struct] until if bid={bid:?} join={current:?}");
-                }
+                struct_debug!("until if bid={bid:?} join={current:?}");
                 continue;
             }
 
             self.emit_block_statements(bid, &mut nodes);
             current = self.single_successor(bid);
-            if struct_trace_enabled() {
-                eprintln!("[unlace-struct] until linear bid={bid:?} next={current:?}");
-            }
+            struct_debug!("until linear bid={bid:?} next={current:?}");
         }
 
         trace_hir_counts(&format!("until done start={start:?} stop={stop:?}"), &nodes);
@@ -4203,11 +4021,7 @@ impl<'a> StructureCtx<'a> {
         let edges = self.func.cfg.edges_from(header);
         let (_body, classified_exit) = self.classify_loop_edges(header, &edges);
         if classified_exit.is_some() {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] loop-exit header={header:?} classified={classified_exit:?}"
-                );
-            }
+            struct_debug!("loop-exit header={header:?} classified={classified_exit:?}");
             return classified_exit;
         }
 
@@ -4218,11 +4032,7 @@ impl<'a> StructureCtx<'a> {
                 if self.synthetic.contains(&tgt) || loop_blocks.contains(&tgt) {
                     continue;
                 }
-                if struct_trace_enabled() {
-                    eprintln!(
-                        "[unlace-struct] loop-exit header={header:?} from={bid:?} target={tgt:?}"
-                    );
-                }
+                struct_debug!("loop-exit header={header:?} from={bid:?} target={tgt:?}");
                 return Some(tgt);
             }
         }
@@ -4259,11 +4069,9 @@ impl<'a> StructureCtx<'a> {
     ) -> Option<BlockId> {
         let postdom_join = self.find_join_point_postdom(cond_block);
         let bfs_join = self.find_join_point_bfs(true_blk, false_blk);
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] join-candidates cond={cond_block:?} true={true_blk:?} false={false_blk:?} postdom={postdom_join:?} bfs={bfs_join:?}"
-            );
-        }
+        struct_debug!(
+            "join-candidates cond={cond_block:?} true={true_blk:?} false={false_blk:?} postdom={postdom_join:?} bfs={bfs_join:?}"
+        );
 
         // Prefer a shared loop header over a post-loop join. When both
         // branches converge into a loop entry (peel-then-loop pattern from
@@ -4278,27 +4086,21 @@ impl<'a> StructureCtx<'a> {
             && self.loop_headers.contains(&bfs)
             && Some(bfs) != postdom_join
         {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] join cond={cond_block:?} true={true_blk:?} false={false_blk:?} source=loop-header-bfs join={bfs:?} postdom_was={postdom_join:?}"
-                );
-            }
+            struct_debug!(
+                "join cond={cond_block:?} true={true_blk:?} false={false_blk:?} source=loop-header-bfs join={bfs:?} postdom_was={postdom_join:?}"
+            );
             return Some(bfs);
         }
 
         if let Some(join) = postdom_join {
-            if struct_trace_enabled() {
-                eprintln!(
-                    "[unlace-struct] join cond={cond_block:?} true={true_blk:?} false={false_blk:?} source=postdom join={join:?}"
-                );
-            }
+            struct_debug!(
+                "join cond={cond_block:?} true={true_blk:?} false={false_blk:?} source=postdom join={join:?}"
+            );
             return Some(join);
         }
-        if struct_trace_enabled() {
-            eprintln!(
-                "[unlace-struct] join cond={cond_block:?} true={true_blk:?} false={false_blk:?} source=bfs join={bfs_join:?}"
-            );
-        }
+        struct_debug!(
+            "join cond={cond_block:?} true={true_blk:?} false={false_blk:?} source=bfs join={bfs_join:?}"
+        );
         bfs_join
     }
 
@@ -4317,11 +4119,9 @@ impl<'a> StructureCtx<'a> {
         // Collect all blocks reachable from true_blk (stopping at already-emitted).
         let true_reachable = self.collect_reachable(true_blk, 16);
         let false_reachable = self.collect_reachable(false_blk, 16);
-        if struct_trace_verbose_enabled() {
-            eprintln!(
-                "[unlace-struct] join-bfs true={true_blk:?} reachable={true_reachable:?} false={false_blk:?} reachable={false_reachable:?}"
-            );
-        }
+        struct_trace!(
+            "join-bfs true={true_blk:?} reachable={true_reachable:?} false={false_blk:?} reachable={false_reachable:?}"
+        );
 
         // Find the first block reachable from both.
         for bid in &true_reachable {

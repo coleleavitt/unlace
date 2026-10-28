@@ -18,17 +18,6 @@ const MAX_VARS: usize = 6;
 /// Avoid spending unbounded recursion on malformed or cyclic def-use chains.
 const MAX_EXPR_DEPTH: usize = 128;
 
-fn bool_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_BOOL_TRACE")
-        .or_else(|| std::env::var_os("UNLACE_PASS_TRACE"))
-        .and_then(|v| v.into_string().ok())
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-        .unwrap_or(false)
-}
-
 /// Boolean simplification pass (Espresso-lite via Quine-McCluskey).
 pub struct BoolSimplifyPass;
 
@@ -58,9 +47,10 @@ impl Pass for BoolSimplifyPass {
                 record_def(&mut def_map, insn);
                 let new_idx = new_insns.len();
                 if let Some(simplified) = try_simplify(insn, &def_map, &mut next_unique) {
-                    if bool_trace_enabled() {
-                        eprintln!(
-                            "[unlace bool] func={} block={bid:?} old_idx={old_idx} new_idx={} op={:?} output={:?} emitted={}",
+                    if tracing::enabled!(target: "unlace::bool_simplify", tracing::Level::DEBUG) {
+                        tracing::debug!(
+                            target: "unlace::bool_simplify",
+                            "func={} block={bid:?} old_idx={old_idx} new_idx={} op={:?} output={:?} emitted={}",
                             func_name,
                             new_insns.len(),
                             insn.op,

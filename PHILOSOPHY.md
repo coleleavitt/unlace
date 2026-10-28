@@ -143,7 +143,7 @@ depth, wiring, and evidence gaps, not pretend the foundations are absent.
 
 Unlace does not need to copy IDA's UI to benefit from IDA compatibility.
 
-The non-frontend compatibility surfaces matter because they let existing workflows
+The headless compatibility surfaces matter because they let existing workflows
 move over gradually:
 - IDAPython scripts should run when they only need database, bytes, functions,
   names, xrefs, and decompiler access.
@@ -158,7 +158,7 @@ move over gradually:
 
 Compatibility is a bridge. The destination is cleaner, measured analysis.
 
-Frontend/editor work is deferred product-surface work. The preferred path is
+Unlace is headless; there is no UI frontend. The preferred path is
 CLI, SDK, MCP, and scriptability first.
 
 ### 10. AI Assists; Evidence Decides

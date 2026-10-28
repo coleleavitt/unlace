@@ -186,6 +186,7 @@ fn edge_label(src: BlockId, kind: EdgeKind, ordinal: usize) -> Option<EdgeLabel>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::StructureOptions;
     use crate::reaching_conditions::{Cond, compute_reaching_conditions};
 
     fn bid(n: u32) -> BlockId {
@@ -244,7 +245,10 @@ mod tests {
             header: node_of[&bid(0)],
             edges: map_edges(&node_of, &adjacency),
         };
-        let rc = compute_reaching_conditions(&region);
+        let rc = compute_reaching_conditions(
+            &region,
+            StructureOptions::default().max_reaching_condition_nodes,
+        );
         // Predicate id is the source block id (0) for both branch arms.
         assert_eq!(rc.conditions[&node_of[&bid(1)]], Cond::Pred(0));
         assert_eq!(rc.conditions[&node_of[&bid(2)]], Cond::NotPred(0));
@@ -398,7 +402,10 @@ mod tests {
         // The Return edge from BB_3 leaves the region (exit block not in body)
         // and must be dropped: exactly 4 in-region edges.
         assert_eq!(region.edges.len(), 4);
-        let rc = compute_reaching_conditions(&region);
+        let rc = compute_reaching_conditions(
+            &region,
+            StructureOptions::default().max_reaching_condition_nodes,
+        );
         // Map node back to BlockId(3) and check its merge condition.
         let n3 = *reverse.iter().find(|&(_, &b)| b == BlockId(3)).unwrap().0;
         match &rc.conditions[&n3] {

@@ -20,6 +20,7 @@ use unlace_loader::{
 };
 
 use crate::args::{BatchProgressStyle, EmitFormat};
+use crate::config::Config;
 use crate::pipeline::{self, FunctionEntry, PipelineConfig};
 use crate::profiling::{self, TraceField};
 
@@ -42,6 +43,8 @@ pub struct BatchConfig {
     pub flirt: pipeline::FlirtConfig,
     /// Raw bytes of an external DWARF sidecar ELF (`--dwarf-sidecar`).
     pub dwarf_sidecar: Option<Vec<u8>>,
+    /// Pass, structuring, printer, and batch options from the configuration file.
+    pub options: Arc<Config>,
 }
 
 /// Drop entries whose name doesn't match `re`. Errors if the filter empties the set.
@@ -95,37 +98,6 @@ fn default_manifest_version() -> u8 {
     1
 }
 
-/// Memory bound (in functions) for the interprocedural SSA map. When a
-/// batch exceeds this count, we emit a warning so operators running
-/// `unlace batch --interproc` on multi-thousand-function binaries
-/// understand why RSS climbs — and have a single env knob
-/// (`UNLACE_INTERPROC_MAX`) to raise or lower the threshold.
-///
-/// 4096 is empirically the rough crossover where a release-build
-/// `SsaFunction` map stays under ~2 GiB on the project's medium and
-/// large fixtures. Crossing it doesn't *fail* the run; it just
-/// surfaces a single tracing warning so users can hop to the
-/// per-function (non-interproc) path if they hit OOM.
-const DEFAULT_INTERPROC_FN_BOUND: usize = 4096;
-const DEFAULT_WORKER_STACK_BYTES: usize = 512 * 1024 * 1024;
-const DEFAULT_LARGE_FUNCTION_SERIAL_BYTES: u64 = 8 * 1024;
-
-pub(crate) fn worker_stack_bytes() -> usize {
-    std::env::var("UNLACE_WORKER_STACK_MB")
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .filter(|mb| *mb > 0)
-        .map(|mb| mb.saturating_mul(1024 * 1024))
-        .unwrap_or(DEFAULT_WORKER_STACK_BYTES)
-}
-
-fn large_function_serial_bytes() -> u64 {
-    std::env::var("UNLACE_BATCH_LARGE_FUNCTION_SERIAL_BYTES")
-        .ok()
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .unwrap_or(DEFAULT_LARGE_FUNCTION_SERIAL_BYTES)
-}
-
 fn should_serialize_large_function(entry: &FunctionEntry, threshold: u64) -> bool {
     threshold > 0 && entry.size >= threshold
 }
@@ -138,24 +110,13 @@ enum ProgressRenderMode {
 }
 
 fn progress_render_mode(style: BatchProgressStyle) -> ProgressRenderMode {
-    let tty = std::io::stderr().is_terminal();
+    if !std::io::stderr().is_terminal() {
+        return ProgressRenderMode::Off;
+    }
     match style {
         BatchProgressStyle::Off => ProgressRenderMode::Off,
         BatchProgressStyle::Plain => ProgressRenderMode::Plain,
-        BatchProgressStyle::Color => {
-            if tty {
-                ProgressRenderMode::Color
-            } else {
-                ProgressRenderMode::Plain
-            }
-        }
-        BatchProgressStyle::Auto => {
-            if tty {
-                ProgressRenderMode::Color
-            } else {
-                ProgressRenderMode::Plain
-            }
-        }
+        BatchProgressStyle::Color | BatchProgressStyle::Auto => ProgressRenderMode::Color,
     }
 }
 
@@ -450,7 +411,7 @@ pub fn run_batch(
 
     let pool = {
         let _span = profiling::phase("batch.build-thread-pool");
-        let stack_size = worker_stack_bytes();
+        let stack_size = config.options.batch.worker_stack_bytes();
         profiling::diagnostic(
             "info",
             "building batch worker pool",
@@ -559,7 +520,7 @@ fn decompile_all_parallel(
     };
     let pipeline_config = PipelineConfig {
         timeout: std::time::Duration::from_secs(config.timeout_secs),
-        print_config: None,
+        options: config.options.clone(),
         annotations: None,
         flirt: config.flirt.clone(),
         dwarf_sidecar: None,
@@ -581,7 +542,7 @@ fn decompile_all_parallel(
     let failed = AtomicUsize::new(0);
     let active = AtomicUsize::new(0);
 
-    let large_threshold = large_function_serial_bytes();
+    let large_threshold = config.options.batch.large_function_serial_bytes;
     let mut parallel_entries = Vec::new();
     let mut serial_entries = Vec::new();
     for entry in sorted {
@@ -695,7 +656,7 @@ fn decompile_interproc(
     };
     let pipeline_config = PipelineConfig {
         timeout: std::time::Duration::from_secs(config.timeout_secs),
-        print_config: None,
+        options: config.options.clone(),
         annotations: None,
         flirt: config.flirt.clone(),
         dwarf_sidecar: None,
@@ -714,10 +675,7 @@ fn decompile_interproc(
     // configured bound we emit a single warning so operators know
     // *why* RSS will climb and have a knob to opt out (rerun without
     // `--interproc` to fall back to the per-function path).
-    let interproc_bound = std::env::var("UNLACE_INTERPROC_MAX")
-        .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(DEFAULT_INTERPROC_FN_BOUND);
+    let interproc_bound = config.options.batch.interproc_max_functions;
     if sorted.len() > interproc_bound {
         profiling::diagnostic(
             "warn",
@@ -727,7 +685,7 @@ fn decompile_interproc(
                 TraceField::count("bound", interproc_bound as u64),
                 TraceField::text(
                     "hint",
-                    "peak RSS will be proportional to function count; set UNLACE_INTERPROC_MAX or rerun without --interproc",
+                    "peak RSS will be proportional to function count; raise batch.interproc_max_functions or rerun without --interproc",
                 ),
             ],
         );
@@ -850,7 +808,11 @@ fn decompile_interproc(
         "interproc phase 2: whole-program fixed-point (sequential)",
         [TraceField::count("functions", ssa_map.len() as u64)],
     );
-    if let Err(e) = pipeline::run_whole_program_interproc(&mut ssa_map, config.max_iterations) {
+    if let Err(e) = pipeline::run_whole_program_interproc(
+        &mut ssa_map,
+        config.max_iterations,
+        &config.options.passes,
+    ) {
         profiling::diagnostic(
             "warn",
             "interprocedural fixed-point failed; emitting with per-function results",
@@ -858,7 +820,11 @@ fn decompile_interproc(
         );
     }
 
-    match pipeline::run_whole_program_quality_refinement(&mut ssa_map, config.max_iterations) {
+    match pipeline::run_whole_program_quality_refinement(
+        &mut ssa_map,
+        config.max_iterations,
+        &config.options.passes,
+    ) {
         Ok(report) => {
             profiling::diagnostic(
                 "info",
@@ -1369,6 +1335,7 @@ mod tests {
             progress_style: BatchProgressStyle::Off,
             flirt: pipeline::FlirtConfig::default(),
             dwarf_sidecar: None,
+            options: Arc::default(),
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -1425,6 +1392,7 @@ mod tests {
             progress_style: BatchProgressStyle::Off,
             flirt: pipeline::FlirtConfig::default(),
             dwarf_sidecar: None,
+            options: Arc::default(),
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -1764,6 +1732,7 @@ mod tests {
             progress_style: BatchProgressStyle::Off,
             flirt: pipeline::FlirtConfig::default(),
             dwarf_sidecar: None,
+            options: Arc::default(),
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -1803,6 +1772,7 @@ mod tests {
             progress_style: BatchProgressStyle::Off,
             flirt: pipeline::FlirtConfig::default(),
             dwarf_sidecar: None,
+            options: Arc::default(),
         };
 
         let data = fs::read(fixture("hello_world.elf")).unwrap();
@@ -1849,6 +1819,7 @@ mod tests {
             progress_style: BatchProgressStyle::Off,
             flirt: pipeline::FlirtConfig::default(),
             dwarf_sidecar: None,
+            options: Arc::default(),
         };
         let data = fs::read(fixture("medium.elf")).unwrap();
         let image = ElfLoader::load(&data).unwrap();

@@ -9,8 +9,7 @@
 //!
 //! This module is the pure reaching-condition core for that engine
 //! (`docs/design-structurer-irreducible-2026-05-29.md`, step 1). Production
-//! wiring is conservative: only fully accepted residual regions are spliced,
-//! and `UNLACE_DREAM_STRUCT=0` remains the legacy rollback path.
+//! wiring is conservative: only fully accepted residual regions are spliced.
 //!
 //! # Model
 //!
@@ -35,19 +34,6 @@ use std::collections::{BTreeMap, BTreeSet};
 /// A node identifier within a region. Kept abstract (a `u32`) so this engine is
 /// decoupled from `BlockId` and trivially unit-testable.
 pub type RegionNode = u32;
-
-/// Whether the DREAM condition-based structuring path is enabled.
-///
-/// DREAM is default-on for residual irreducible regions. Set
-/// `UNLACE_DREAM_STRUCT=0` to force the legacy structurer path; any other value
-/// (including an unset variable) enables DREAM.
-pub fn dream_structuring_enabled() -> bool {
-    dream_structuring_enabled_from(std::env::var("UNLACE_DREAM_STRUCT").ok().as_deref())
-}
-
-fn dream_structuring_enabled_from(value: Option<&str>) -> bool {
-    !matches!(value, Some("0"))
-}
 
 /// The branch decision a CFG edge represents.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -133,15 +119,6 @@ pub struct ReachingConditions {
     pub back_edges: BTreeSet<(RegionNode, RegionNode)>,
     /// True when condition growth exceeded the configured budget.
     pub limited: bool,
-}
-
-const DEFAULT_RC_MAX_COND_NODES: usize = 8192;
-
-fn reaching_condition_node_limit() -> usize {
-    std::env::var("UNLACE_RC_MAX_COND_NODES")
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_RC_MAX_COND_NODES)
 }
 
 fn over_condition_limit(limit: usize, size: usize) -> bool {
@@ -454,11 +431,10 @@ fn topo_order(
 
 /// Compute reaching conditions `cr(header, n)` for every node, over the acyclic
 /// skeleton (back-edges excluded and reported separately).
-pub fn compute_reaching_conditions(region: &Region) -> ReachingConditions {
-    compute_reaching_conditions_with_limit(region, reaching_condition_node_limit())
-}
-
-fn compute_reaching_conditions_with_limit(
+///
+/// Analysis gives up and sets [`ReachingConditions::limited`] once a condition
+/// tree grows past `condition_node_limit` nodes; `0` disables the budget.
+pub fn compute_reaching_conditions(
     region: &Region,
     condition_node_limit: usize,
 ) -> ReachingConditions {
@@ -573,6 +549,11 @@ fn compute_reaching_conditions_with_limit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::StructureOptions;
+
+    fn default_limit() -> usize {
+        StructureOptions::default().max_reaching_condition_nodes
+    }
 
     fn lbl_t(id: u32) -> EdgeLabel {
         EdgeLabel::True(id)
@@ -587,7 +568,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, EdgeLabel::Always)],
         };
-        let rc = compute_reaching_conditions(&region);
+        let rc = compute_reaching_conditions(&region, default_limit());
         assert_eq!(rc.conditions[&0], Cond::True);
         assert_eq!(rc.conditions[&1], Cond::True); // Always edge
     }
@@ -604,7 +585,7 @@ mod tests {
                 (2, 3, EdgeLabel::Always),
             ],
         };
-        let rc = compute_reaching_conditions(&region);
+        let rc = compute_reaching_conditions(&region, default_limit());
         assert!(!rc.limited);
         assert_eq!(rc.conditions[&1], Cond::Pred(0));
         assert_eq!(rc.conditions[&2], Cond::NotPred(0));
@@ -631,7 +612,7 @@ mod tests {
                 (2, 3, EdgeLabel::Always),
             ],
         };
-        let rc = compute_reaching_conditions_with_limit(&region, 2);
+        let rc = compute_reaching_conditions(&region, 2);
         assert!(rc.limited);
         assert!(
             !rc.conditions.contains_key(&3),
@@ -646,7 +627,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, lbl_t(0)), (1, 2, lbl_t(1))],
         };
-        let rc = compute_reaching_conditions(&region);
+        let rc = compute_reaching_conditions(&region, default_limit());
         assert_eq!(
             rc.conditions[&2],
             Cond::And(Box::new(Cond::Pred(0)), Box::new(Cond::Pred(1)))
@@ -665,22 +646,11 @@ mod tests {
                 (2, 1, EdgeLabel::Always),
             ],
         };
-        let rc = compute_reaching_conditions(&region);
+        let rc = compute_reaching_conditions(&region, default_limit());
         assert!(rc.back_edges.contains(&(2, 1)));
         // cr(1) only sees the forward edge from 0 → True.
         assert_eq!(rc.conditions[&1], Cond::True);
         assert_eq!(rc.conditions[&2], Cond::True);
-    }
-
-    #[test]
-    fn dream_gate_policy_defaults_on_with_zero_rollback() {
-        // Pure helper tests avoid process-env mutation so the test remains
-        // parallel-safe.
-        assert!(dream_structuring_enabled_from(None));
-        assert!(dream_structuring_enabled_from(Some("")));
-        assert!(dream_structuring_enabled_from(Some("1")));
-        assert!(dream_structuring_enabled_from(Some("true")));
-        assert!(!dream_structuring_enabled_from(Some("0")));
     }
 
     #[test]
@@ -718,7 +688,7 @@ mod tests {
                 (2, 1, EdgeLabel::Always),
             ],
         };
-        let rc = compute_reaching_conditions(&region);
+        let rc = compute_reaching_conditions(&region, default_limit());
         // Exactly one of (1,2)/(2,1) is a back-edge (DFS-order dependent) and a
         // topo order exists over the remaining skeleton.
         assert_eq!(rc.back_edges.len(), 1);

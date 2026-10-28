@@ -13,12 +13,15 @@ use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::iv_elim::BasicIv;
 use crate::licm::find_natural_loops;
+use crate::options::IvOptLimits;
 use crate::pass::{Pass, PassError};
 
 const MAX_INNER_ITERS: usize = 3;
 
-#[derive(Default)]
-pub struct StrengthReducePass;
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StrengthReducePass {
+    pub limits: IvOptLimits,
+}
 
 impl Pass for StrengthReducePass {
     fn name(&self) -> &str {
@@ -30,7 +33,7 @@ impl Pass for StrengthReducePass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        if crate::iv_elim::iv_opt_too_large(func) {
+        if crate::iv_elim::iv_opt_too_large(func, self.limits) {
             return Ok(false);
         }
         let mut any = false;
@@ -463,7 +466,7 @@ mod tests {
         let pre_mult_before = pre.insns.iter().filter(|i| i.op == IrOp::IntMult).count();
         let phi_before = ssa.phi_map.get(&BlockId(1)).map_or(0, |v| v.len());
 
-        let _ = StrengthReducePass.run(&mut ssa).expect("ok");
+        let _ = StrengthReducePass::default().run(&mut ssa).expect("ok");
 
         let pre = &ssa.function.blocks[&BlockId(0)];
         let pre_mult_after = pre.insns.iter().filter(|i| i.op == IrOp::IntMult).count();
@@ -492,7 +495,7 @@ mod tests {
     #[test]
     fn strength_reduce_skips_self_loop_multiplier() {
         let mut ssa = build_self_loop_var_mul();
-        let changed = StrengthReducePass.run(&mut ssa).expect("ok");
+        let changed = StrengthReducePass::default().run(&mut ssa).expect("ok");
         assert!(!changed, "self-loop IVs should be left intact");
 
         let header = &ssa.function.blocks[&BlockId(1)];

@@ -31,49 +31,12 @@ const MSX64_ARG_REGS: &[u64] = &[RCX, RDX, R8, R9];
 const SYSV_ONLY_REGS: &[u64] = &[RDI, RSI];
 const AARCH64_ARG_REGS: &[u64] = &[0, 8, 16, 24, 32, 40, 48, 56];
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false)
-}
-
-fn calling_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_CALLING_TRACE")
-        || env_flag_enabled("UNLACE_TYPE_TRACE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn calling_trace_verbose_enabled() -> bool {
-    env_flag_enabled("UNLACE_CALLING_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TYPE_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn calling_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_CALLING_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_TYPE_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .filter(|s| !s.is_empty())
-}
-
 fn calling_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
-    if !calling_trace_enabled() {
-        return;
-    }
-    if let Some(filter) = calling_trace_filter()
-        && !func.function.name.contains(&filter)
-    {
-        return;
-    }
-    eprintln!("[unlace calling] func={} {message}", func.function.name);
+    tracing::debug!(target: "unlace::calling", "func={} {message}", func.function.name);
 }
 
 fn calling_trace_line_verbose(func: &SsaFunction, message: impl std::fmt::Display) {
-    if calling_trace_verbose_enabled() {
-        calling_trace_line(func, message);
-    }
+    tracing::trace!(target: "unlace::calling", "func={} {message}", func.function.name);
 }
 
 fn tracked_reg_contains(tracked_regs: &[u64], reg: u64) -> bool {

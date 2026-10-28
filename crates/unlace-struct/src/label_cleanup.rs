@@ -1,8 +1,16 @@
 //! Cleanup unreachable and redundant labels after goto rewrites.
+//!
+//! Diagnostics: enable `unlace::struct::label_cleanup=debug`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::hir::{HirFunction, HirNode, LabelId};
+
+macro_rules! label_cleanup_debug {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::struct::label_cleanup", "{}", format_args!($($arg)*))
+    };
+}
 
 /// Remove labels with no remaining incoming gotos and merge adjacent label
 /// clusters by retargeting gotos to the first label in each cluster.
@@ -10,9 +18,7 @@ pub fn cleanup_unreachable_labels(func: &mut HirFunction) {
     let mut aliases = BTreeMap::new();
     collapse_label_clusters(&mut func.body, &mut aliases);
     if !aliases.is_empty() {
-        if label_cleanup_trace_enabled() {
-            eprintln!("[unlace-label-cleanup] aliases={aliases:?}");
-        }
+        label_cleanup_debug!("aliases={aliases:?}");
         rewrite_gotos(&mut func.body, &aliases);
     }
     remove_same_scope_backedges(&mut func.body);
@@ -20,11 +26,6 @@ pub fn cleanup_unreachable_labels(func: &mut HirFunction) {
     let mut used = BTreeSet::new();
     collect_gotos(&func.body, &mut used);
     remove_unused_labels(&mut func.body, &used);
-}
-
-fn label_cleanup_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_LABEL_CLEANUP_TRACE").is_some()
-        || std::env::var_os("UNLACE_HIR_TRACE_VERBOSE").is_some()
 }
 
 /// Ensure every surviving `Goto` has a same-function `Label`.
@@ -59,9 +60,7 @@ fn remove_same_scope_backedges(nodes: &mut Vec<HirNode>) {
                 retained.push(node);
             }
             HirNode::Goto(label) if visible.contains(label) => {
-                if label_cleanup_trace_enabled() {
-                    eprintln!("[unlace-label-cleanup] remove-same-scope-backedge label={label:?}");
-                }
+                label_cleanup_debug!("remove-same-scope-backedge label={label:?}");
                 // drop the redundant in-same-scope backward goto
             }
             HirNode::Block(children) => {
@@ -301,15 +300,12 @@ fn collect_gotos(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
 }
 
 fn remove_unused_labels(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
-    nodes.retain(|node| {
-        let remove = matches!(node, HirNode::Label(label) if !used.contains(label));
-        if remove
-            && label_cleanup_trace_enabled()
-            && let HirNode::Label(label) = node
-        {
-            eprintln!("[unlace-label-cleanup] remove-unused-label label={label:?}");
+    nodes.retain(|node| match node {
+        HirNode::Label(label) if !used.contains(label) => {
+            label_cleanup_debug!("remove-unused-label label={label:?}");
+            false
         }
-        !remove
+        _ => true,
     });
     for node in nodes {
         match node {

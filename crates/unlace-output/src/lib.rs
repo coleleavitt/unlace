@@ -3,23 +3,15 @@
 pub mod c_printer;
 pub mod cfg_dot;
 #[cfg(feature = "unwired")]
-pub mod cfg_svg;
-#[cfg(feature = "unwired")]
 pub mod cpp_class;
 pub mod cpp_stl;
 pub mod demangle;
 pub mod expr_ast;
 #[cfg(feature = "unwired")]
-pub mod hex_view;
-#[cfg(feature = "unwired")]
 pub mod instruction_annotations;
 pub mod ir_dump;
 #[cfg(feature = "unwired")]
-pub mod pernosco_html;
-#[cfg(feature = "unwired")]
 pub mod seh_output;
-#[cfg(feature = "unwired")]
-pub mod stream;
 #[cfg(feature = "unwired")]
 pub mod windbg_dml;
 

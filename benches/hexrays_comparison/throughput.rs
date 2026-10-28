@@ -38,7 +38,7 @@ fn bench_full_binary_throughput(c: &mut Criterion) {
     let functions = pipeline::discover_functions(&image, None).unwrap_or_default();
     let config = PipelineConfig {
         timeout: Duration::from_secs(10),
-        print_config: None,
+        options: Default::default(),
         annotations: None,
         flirt: pipeline::FlirtConfig::default(),
         dwarf_sidecar: None,
@@ -88,7 +88,7 @@ fn bench_per_function_latency(c: &mut Criterion) {
     let functions = pipeline::discover_functions(&image, None).unwrap_or_default();
     let config = PipelineConfig {
         timeout: Duration::from_secs(10),
-        print_config: None,
+        options: Default::default(),
         annotations: None,
         flirt: pipeline::FlirtConfig::default(),
         dwarf_sidecar: None,

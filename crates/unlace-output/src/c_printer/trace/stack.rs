@@ -188,9 +188,7 @@ pub(in crate::c_printer) fn trace_stack_resolution(
     let text = format!(
         "stack source={source} stmt={stmt_idx} raw_idx={raw_idx:?} raw={vn:?} offset={offset:?} access_size={access_size:?} slot={slot_text} result={result:?}"
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
+    tracing::debug!(target: "unlace::cprinter::stack", "{text}");
 }
 
 pub(in crate::c_printer) fn trace_stack_offset_step(
@@ -209,9 +207,7 @@ pub(in crate::c_printer) fn trace_stack_offset_step(
     let text = format!(
         "stack-offset source={source} stmt={stmt_idx} raw_idx={raw_idx:?} depth={depth} raw={vn:?} sv={sv:?} def={def:?} result={result:?}"
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
+    tracing::debug!(target: "unlace::cprinter::stack", "{text}");
 }
 
 pub(in crate::c_printer) fn trace_load_render(
@@ -223,7 +219,7 @@ pub(in crate::c_printer) fn trace_load_render(
     is_mmio: Option<bool>,
     result: Option<&str>,
 ) {
-    if !c_printer_stack_trace_enabled() && !c_printer_trace_enabled() {
+    if !c_printer_stack_trace_enabled() {
         return;
     }
     let addr = insn.inputs.get(addr_idx);
@@ -231,9 +227,7 @@ pub(in crate::c_printer) fn trace_load_render(
         "load-render source={source} stmt={stmt_idx} addr=0x{:x} output={:?} addr_idx={addr_idx} addr={addr:?} size={load_size} mmio={is_mmio:?} result={result:?}",
         insn.addr, insn.output,
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
+    tracing::debug!(target: "unlace::cprinter::stack", "{text}");
 }
 
 pub(in crate::c_printer) fn trace_readonly_resolution(
@@ -249,7 +243,5 @@ pub(in crate::c_printer) fn trace_readonly_resolution(
     let text = format!(
         "readonly stmt={stmt_idx} raw={vn:?} addr=0x{addr:x} size={access_size} value={value}"
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
+    tracing::debug!(target: "unlace::cprinter::stack", "{text}");
 }

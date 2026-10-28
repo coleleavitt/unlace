@@ -271,7 +271,7 @@ fn run_passes(ssa: &mut SsaFunction) -> usize {
     let dce = DeadCodeElimPass;
     let passes: &[&dyn Pass] = &[&fold, &prop, &dce];
 
-    run_to_fixedpoint(passes, ssa).unwrap_or(0)
+    run_to_fixedpoint(passes, ssa, &unlace_passes::PassOptions::default()).unwrap_or(0)
 }
 
 fn run_type_infer_bounded(ssa: &mut SsaFunction) {

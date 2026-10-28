@@ -67,7 +67,10 @@ fn decl_re() -> &'static Regex {
 
 fn flag_idiom_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    regex(&RE, r"__(?:OF|CF|SF|PF|ZF)[A-Z]*__\s*\(|__SETP__\s*\(")
+    regex(
+        &RE,
+        r"__(?:OF|CF|SF|PF|ZF)[A-Z]*__\s*\(|__SETP__\s*\(|\b(?:S?CARRY|SBORROW)\d+\s*\(",
+    )
 }
 
 fn nzcv_member_re() -> &'static Regex {
@@ -258,7 +261,8 @@ pub fn measure(body: &str) -> OutputMetrics {
         .collect();
 
     for (name, var) in &vars {
-        match var.role {
+        let role = var.role.or_else(|| engine_register_input(name));
+        match role {
             Some(role) if FLAG_REGISTERS.contains(&role) => {
                 flag_vars.insert(name.clone());
             }
@@ -299,6 +303,19 @@ fn assignment_target(code: &str) -> Option<&str> {
     }
     let name = ident_re().find_iter(lhs).last()?;
     lhs[name.end()..].trim().is_empty().then_some(name.as_str())
+}
+
+/// The register of a variable the Ghidra engine names after a register it reads before writing
+/// (`in_ZF`, `unaff_RBX`, `extraout_EAX`); such names carry no declaration comment.
+fn engine_register_input(name: &str) -> Option<&str> {
+    let register = ["in_", "unaff_", "extraout_"]
+        .iter()
+        .find_map(|prefix| name.strip_prefix(prefix))?;
+    if FLAG_REGISTERS.contains(&register) {
+        return Some(register);
+    }
+    let lower = register.to_ascii_lowercase();
+    is_register_name(&lower).then_some("reg?")
 }
 
 fn is_register_name(role: &str) -> bool {
@@ -392,5 +409,23 @@ label_1:;
 }
 ";
         assert_eq!(measure(body).dead_stores, 0);
+    }
+
+    #[test]
+    fn counts_ghidra_engine_flags_and_register_inputs() {
+        let body = r"int f(int a1) {
+  char in_CF;
+  long in_RAX;
+  bool v1;
+  v1 = SCARRY4(a1, 1);
+  if (v1 != in_CF) {
+    return (int)in_RAX;
+  }
+  return 0;
+}
+";
+        let m = measure(body);
+        assert_eq!(m.flag_vars, 2);
+        assert_eq!(m.register_carriers, 1);
     }
 }

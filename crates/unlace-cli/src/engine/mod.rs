@@ -5,6 +5,7 @@
 //! function in a fresh `Program`, so the text of a function does not depend on which functions
 //! were decompiled before it or on which worker ran it.
 
+mod listing;
 mod prelude;
 mod prototypes;
 
@@ -220,7 +221,7 @@ pub fn render_c(outputs: &[FunctionOutput], style: OutputStyle) -> String {
     let mut body = String::new();
     for output in outputs {
         match &output.text {
-            Ok(text) => body.push_str(text),
+            Ok(text) => body.push_str(&listing::function_text(&output.function, text)),
             Err(error) => body.push_str(&format!(
                 "\n/* decompilation failed for '{}' at {:#x}: {} */\n",
                 output.function.name,

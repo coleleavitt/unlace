@@ -10,6 +10,7 @@ problems; this corpus can. See `docs/architecture/pipeline-redesign-2026-10.md`
 cargo xtask corpus                    # build, decompile, measure; writes <target>/corpus/
 cargo xtask corpus --program bst      # one program (no baseline check)
 cargo xtask corpus --skip-recompile   # metrics only
+cargo xtask corpus --engine ghidra    # measure another engine (no baseline check)
 cargo xtask corpus --check            # gate: fail if worse than baseline.json
 cargo xtask corpus --update-baseline  # rewrite baseline.json and BASELINE.md
 ```

@@ -96,12 +96,12 @@ mod hir_recovery;
 
 /// Once-per-process pipeline phase-monotonicity check.
 ///
-/// When `UNLACE_VALIDATE_PIPELINE=1` is set, the first call to
+/// With `unlace::schedule=info` enabled, the first call to
 /// `run_passes_with_report_inner` runs
-/// [`validate_named_phase_monotonicity`] against
-/// [`canonical_pipeline_descriptor`] and emits one warning line per
-/// out-of-order transition to stderr. Subsequent calls are a single
-/// atomic load — the validator runs at most once per process.
+/// [`validate_named_phase_monotonicity_with_exceptions`] against
+/// [`canonical_pipeline_descriptor`] and logs the outcome plus one line per
+/// unexplained out-of-order transition. The check runs at most once per
+/// process.
 ///
 /// The schedule is *intentionally* not monotone (Batch 10 slice 1 pins
 /// 11 backward transitions inside the inner fixed-point cluster); the
@@ -111,34 +111,34 @@ fn maybe_validate_pipeline_once() {
     use std::sync::OnceLock;
     static DONE: OnceLock<()> = OnceLock::new();
     DONE.get_or_init(|| {
-        let env_on = std::env::var_os("UNLACE_VALIDATE_PIPELINE")
-            .map(|v| v != "0")
-            .unwrap_or(false);
-        if !env_on {
+        if !tracing::enabled!(target: "unlace::schedule", tracing::Level::INFO) {
             return;
         }
         let desc = canonical_pipeline_descriptor();
         match validate_named_phase_monotonicity_with_exceptions(&desc) {
             Ok(()) => {
                 let allowed = canonical_pipeline_backedge_exceptions();
-                eprintln!(
-                    "[unlace] pipeline phase-monotonicity check passed \
+                tracing::info!(
+                    target: "unlace::schedule",
+                    "pipeline phase-monotonicity check passed \
                      ({} passes, {} explicitly-allowed backedges)",
                     desc.len(),
                     allowed.len()
                 );
             }
             Err(violations) => {
-                eprintln!(
-                    "[unlace] pipeline phase-monotonicity check: \
+                tracing::info!(
+                    target: "unlace::schedule",
+                    "pipeline phase-monotonicity check: \
                      {} unexplained out-of-order transition(s)",
                     violations.len()
                 );
                 for v in &violations {
-                    eprintln!("[unlace]   {}", v.to_message());
+                    tracing::info!(target: "unlace::schedule", "  {}", v.to_message());
                 }
-                eprintln!(
-                    "[unlace]   register an `AllowedBackedge` in \
+                tracing::info!(
+                    target: "unlace::schedule",
+                    "  register an `AllowedBackedge` in \
                      unlace_passes::canonical_pipeline_backedge_exceptions \
                      or fix the schedule"
                 );

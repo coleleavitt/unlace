@@ -190,43 +190,7 @@ fn collect_stack_accesses(
 }
 
 fn stack_access_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
-    if !stack_access_trace_enabled() {
-        return;
-    }
-    if let Some(filter) = stack_access_trace_filter()
-        && !func.function.name.contains(&filter)
-        && !message.to_string().contains(&filter)
-    {
-        return;
-    }
-    eprintln!(
-        "[unlace stack-access] func={} {message}",
-        func.function.name
-    );
-}
-
-fn stack_access_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_STACK_ACCESS_TRACE")
-        || env_flag_enabled("UNLACE_STACK_TRACE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn stack_access_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_STACK_ACCESS_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_STACK_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .filter(|s| !s.is_empty())
-}
-
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .and_then(|v| v.into_string().ok())
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-        .unwrap_or(false)
+    tracing::debug!(target: "unlace::stack::access", "func={} {message}", func.function.name);
 }
 
 fn resolved_stack_slot(func: &SsaFunction, delta: i64, width: u8) -> Option<i64> {

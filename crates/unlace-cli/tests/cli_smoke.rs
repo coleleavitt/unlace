@@ -2,18 +2,9 @@ use std::process::{Command, Output};
 
 fn unlace_bin() -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
+    // A `RUST_LOG` inherited from the test runner would add diagnostics to
+    // stderr; tests that want them pass `--log` explicitly.
     cmd.env_remove("RUST_LOG");
-    // Batch 16: the spec verification gate is run as
-    // `UNLACE_VALIDATE_PIPELINE=1 cargo test --test cli_smoke`. That
-    // env var leaks to child unlace processes spawned here, which
-    // would make every test's stderr noisy with the scheduler-audit
-    // banner and break the `decompile_emit_c` assertion that "normal
-    // CLI runs should not emit scheduler-audit noise by default".
-    //
-    // Tests that explicitly want the audit banner re-set the env var
-    // on the returned `Command` themselves; everything else gets the
-    // clean stderr a normal user would see.
-    cmd.env_remove("UNLACE_VALIDATE_PIPELINE");
     cmd
 }
 
@@ -138,7 +129,7 @@ fn decompile_emit_c() {
     );
 }
 
-/// Batch 16: when `UNLACE_VALIDATE_PIPELINE=1` is set, the CLI must
+/// Batch 16: with `--log unlace::schedule=info`, the CLI must
 /// emit a single line that confirms the schedule passed the
 /// exception-aware monotonicity check, naming the registered backedge
 /// exceptions instead of the prior ambiguous "intentional in current
@@ -147,8 +138,15 @@ fn decompile_emit_c() {
 #[test]
 fn decompile_with_validate_pipeline_env_emits_explicit_backedge_summary() {
     let output = unlace_bin()
-        .env("UNLACE_VALIDATE_PIPELINE", "1")
-        .args(["decompile", "--emit", "c", "--function", "main"])
+        .args([
+            "--log",
+            "unlace::schedule=info",
+            "decompile",
+            "--emit",
+            "c",
+            "--function",
+            "main",
+        ])
         .arg(fixture("hello_world.elf"))
         .output()
         .expect("failed to run unlace");
@@ -161,7 +159,7 @@ fn decompile_with_validate_pipeline_env_emits_explicit_backedge_summary() {
     // Must produce a phase-monotonicity audit line.
     assert!(
         stderr.contains("phase-monotonicity check"),
-        "with UNLACE_VALIDATE_PIPELINE=1 the CLI must emit the audit banner: {stderr}"
+        "with unlace::schedule=info the CLI must emit the audit banner: {stderr}"
     );
     // The banner must name how many backedges are explicitly allowed
     // — proving the new exception-aware validator is wired, not the
@@ -182,8 +180,19 @@ fn decompile_with_validate_pipeline_env_emits_explicit_backedge_summary() {
 #[test]
 fn ir_dump_maturity_dump_emits_representative_phase_snapshots() {
     let snapshot_dir = tempfile::tempdir().expect("tempdir");
+    let config_path = snapshot_dir.path().join("unlace.toml");
+    let dump_dir = snapshot_dir.path().join("maturity");
+    std::fs::write(
+        &config_path,
+        format!(
+            "[passes.diagnostics]\nmaturity_dump = {:?}\n",
+            dump_dir.display().to_string()
+        ),
+    )
+    .expect("write config");
     let output = unlace_bin()
-        .env("UNLACE_MATURITY_DUMP", snapshot_dir.path())
+        .arg("--config")
+        .arg(&config_path)
         .args(["ir-dump", "--function", "main"])
         .arg(fixture("hello_world.elf"))
         .output()
@@ -199,7 +208,7 @@ fn ir_dump_maturity_dump_emits_representative_phase_snapshots() {
         "ir-dump should dump main: {stdout}"
     );
 
-    let mut snapshot_names: Vec<String> = std::fs::read_dir(snapshot_dir.path())
+    let mut snapshot_names: Vec<String> = std::fs::read_dir(&dump_dir)
         .expect("read maturity snapshot dir")
         .map(|entry| {
             entry
@@ -231,7 +240,7 @@ fn ir_dump_maturity_dump_emits_representative_phase_snapshots() {
         "hello_world.elf:main should converge before a third outer maturity iteration: {snapshot_names:#?}"
     );
 
-    let final_snapshot = snapshot_dir.path().join("main-M_FINAL-iter0.txt");
+    let final_snapshot = dump_dir.join("main-M_FINAL-iter0.txt");
     let final_ir = std::fs::read_to_string(&final_snapshot)
         .unwrap_or_else(|err| panic!("read {}: {err}", final_snapshot.display()));
     assert!(

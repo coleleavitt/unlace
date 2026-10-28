@@ -37,51 +37,12 @@ const FPU_BASE: u64 = 0x300;
 const FPU_STRIDE: u64 = 16;
 const FPU_SLOTS: u64 = 8;
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false)
-}
-
-fn x87_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_X87_TRACE")
-        || env_flag_enabled("UNLACE_TYPE_TRACE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn x87_trace_verbose_enabled() -> bool {
-    env_flag_enabled("UNLACE_X87_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TYPE_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn x87_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_X87_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_TYPE_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .filter(|s| !s.is_empty())
-}
-
 fn x87_trace_line(func_name: &str, message: impl std::fmt::Display) {
-    if !x87_trace_enabled() {
-        return;
-    }
-    let message = message.to_string();
-    if let Some(filter) = x87_trace_filter()
-        && !func_name.contains(&filter)
-        && !message.contains(&filter)
-    {
-        return;
-    }
-    eprintln!("[unlace x87-top] func={func_name} {message}");
+    tracing::debug!(target: "unlace::x87", "func={func_name} {message}");
 }
 
 fn x87_trace_line_verbose(func_name: &str, message: impl std::fmt::Display) {
-    if x87_trace_verbose_enabled() {
-        x87_trace_line(func_name, message);
-    }
+    tracing::trace!(target: "unlace::x87", "func={func_name} {message}");
 }
 
 /// Stack effect of an x87 op on TOP, keyed by the `Callother` tag constant in

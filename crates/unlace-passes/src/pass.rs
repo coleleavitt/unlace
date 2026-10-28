@@ -663,7 +663,7 @@ pub struct AllowedBackedge {
     pub next_name: &'static str,
     /// Why this backward transition is intentional. One short sentence;
     /// surfaced verbatim by `cargo xtask dump-pipeline` and by the
-    /// `UNLACE_VALIDATE_PIPELINE=1` CLI startup hook.
+    /// `unlace::schedule=info` CLI startup hook.
     pub reason: &'static str,
 }
 
@@ -878,7 +878,7 @@ pub fn validate_named_phase_monotonicity(passes: &[PassDescriptor]) -> Result<()
 /// unit test below.
 ///
 /// Consumers:
-///   * `unlace-cli` startup-time validation when `UNLACE_VALIDATE_PIPELINE=1`
+///   * `unlace-cli` startup-time validation when `unlace::schedule=info`
 ///     (or `cfg!(debug_assertions)`).
 ///   * `cargo xtask dump-pipeline`.
 pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {

@@ -10,22 +10,27 @@ dump output is `tracing` events on stderr, selected with `RUST_LOG` or
 ```bash
 # One area, every function.
 unlace --log unlace::sccp=debug decompile fixtures/medium.elf
-# One area, one function (the function span is `function{name, addr}`).
-unlace --log 'unlace::cprinter::prune[function{name=main}]=debug' decompile --function main fixtures/medium.elf
-# Everything for one function, with span context on each line.
-unlace --log '[function{name=main}]=trace' decompile fixtures/medium.elf
-# Show the enclosing function on every line of an area trace.
+# One area, one function: restrict the run with --function.
+unlace --log unlace::cprinter::prune=debug decompile --function main fixtures/medium.elf
+# Every area inside one function's span (works for whole-binary runs and batch).
+unlace --log '[function{name=main}]=debug' decompile fixtures/medium.elf 2>&1 | grep unlace::cprinter
+# Prefix every line of an area trace with its function span.
 unlace --log 'unlace::function=info,unlace::var_naming=debug' decompile fixtures/medium.elf
-# Per-pass IR diff for one pass.
-unlace --log 'unlace::pass::ir[pass{name=sccp}]=trace' decompile --function main fixtures/loops.elf
+# Every event inside one pass (start/done, IR diff, the pass's own trace).
+unlace --log 'unlace::pass[pass{name=sccp}]=trace' decompile --function main fixtures/loops.elf
 ```
 
-Span-field values are regular expressions matched against the whole value, so
-`name=.*ackermann.*` selects by substring. Message text filtering (the old
-`*_TRACE_FILTER` substrings) is `2>&1 | grep`. Targets are hierarchical:
-`unlace::cprinter=debug` enables every `unlace::cprinter::*` trace, and
-`unlace=debug` is the old `UNLACE_TRACE_ALL`. `debug` is the normal trace level;
-`trace` adds the former `*_VERBOSE` / `*_FULL` detail.
+Span filters (`[span{field=value}]`) enable *all* events inside the matching
+span. A target before the brackets restricts which spans match, not which
+events print, so `unlace::sccp[function{name=main}]` matches nothing (the
+function span's target is `unlace::function`); combine `--function` with an
+area target, or a span filter with `grep`. Span-field values are regular
+expressions matched against the whole value, so `name=.*ackermann.*` selects
+by substring. Message text filtering (the old `*_TRACE_FILTER` substrings) is
+`2>&1 | grep`. Targets are hierarchical: `unlace::cprinter=debug` enables
+every `unlace::cprinter::*` trace, and `unlace=debug` is the old
+`UNLACE_TRACE_ALL`. `debug` is the normal trace level; `trace` adds the former
+`*_VERBOSE` / `*_FULL` detail.
 
 ## Targets
 

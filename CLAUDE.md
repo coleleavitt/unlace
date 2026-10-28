@@ -167,7 +167,8 @@ config (`unlace.example.toml`, `unlace config show`).
   `returned-branch-merge-keep`, `commented-keep`, `line-comment-keep`.
 - `unlace::lift_bounds` — function lift extent: begin/no-fallthrough/stop
   with known_size + all_padding flags (pins early-stop truncation).
-- Example: `unlace --log 'unlace::cprinter::prune[function{name=main}]=debug' decompile --function main fixtures/medium.elf`.
+- Example: `unlace --log unlace::cprinter::prune=debug decompile --function main fixtures/medium.elf`;
+  `[function{name=main}]=debug` enables every area inside one function's span.
 
 Other durable facts:
 
@@ -323,7 +324,7 @@ look like.
   `unlace::register_coalesce`, `unlace::var_naming`, `unlace::calling`,
   `unlace::cfg_build`, `unlace::struct::split`, `unlace::cprinter::{stage,prune}`,
   `unlace::lift_bounds`, `unlace::pass::ir` (per-pass IR diff), narrowed with
-  `[function{name=<f>}]`, plus `unlace ir-dump --function <f> <bin>` and
+  `--function <f>` or the `[function{name=<f>}]` span filter, plus `unlace ir-dump --function <f> <bin>` and
   `passes.diagnostics.maturity_dump`. Add a temporary `tracing::debug!` probe
   when no existing trace answers the question, measure, then act. Keep a
   permanent `unlace::<area>` event when the signal is reusable; revert one-off

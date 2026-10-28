@@ -14,7 +14,8 @@
 //! * `unlace::pass=debug` logs each pass start and end with IR shape counts.
 //! * `unlace::pass::ir=trace` logs a line diff of the `{:#?}` IR snapshot
 //!   before and after each pass. Every pass runs inside a `pass{name=...}`
-//!   span, so `unlace::pass::ir[pass{name=sccp}]=trace` narrows it to one pass.
+//!   span (target `unlace::pass`), so `unlace::pass[pass{name=sccp}]=trace`
+//!   narrows it to one pass.
 //!
 //! The wrapper only observes: pass semantics and the IR are never changed by it.
 

@@ -2,9 +2,9 @@
 //!
 //! Diagnostics go to stderr. The filter comes from `--log`, else `RUST_LOG`,
 //! else `warn`. Analysis traces use `unlace::<area>` targets, and each analyzed
-//! function runs inside a `function{name=..., addr=...}` span, so
-//! `RUST_LOG='unlace::sccp[function{name=main}]=debug'` traces one pass on one
-//! function.
+//! function runs inside a `function{name=..., addr=...}` span (target
+//! `unlace::function`), so `[function{name=main}]=debug` traces every area for
+//! one function. `docs/diagnostics.md` lists the targets.
 
 use std::io::IsTerminal;
 

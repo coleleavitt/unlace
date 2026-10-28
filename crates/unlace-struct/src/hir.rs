@@ -612,10 +612,11 @@ pub struct HirFunction {
     pub cpp_lambda_captures: Vec<unlace_ir::ssa::CppLambdaCapture>,
     /// C++ vtable call targets keyed by instruction VA.
     ///
-    /// When a `Callind` instruction's VA is a key here and the value is
-    /// `TargetSet::VtableSlot { class_name, slot_idx }`, the C printer renders
-    /// the call as `this->__vftable->method_<slot_idx>(args)` in place of the
-    /// raw IDA-style function-pointer cast.
+    /// When a `Callind`/`Branchind` instruction's VA is a key here and the
+    /// value is `TargetSet::VtableSlot`, the C printer renders the call as
+    /// `obj->method(args)` (or `obj->__vftable->method_<slot_idx>(args)` when
+    /// the method is unnamed) in place of the raw IDA-style function-pointer
+    /// cast.
     ///
     /// Populated from [`unlace_ir::ssa::SsaFunction::indirect_call_targets`]
     /// (filtering for `VtableSlot` entries) at structuring time.

@@ -1,25 +1,32 @@
 //! C++ vtable dispatch detection.
 //!
-//! Detects the single-pointer pattern used by C++ virtual calls and annotates
-//! `CALLIND` (and tail-dispatch `BRANCHIND`) instructions that dispatch
-//! through vtable slots.
+//! Recognises the single-pointer pattern used by C++ virtual calls and
+//! annotates the `CALLIND` (and tail-dispatch `BRANCHIND`) instructions that
+//! dispatch through a vtable slot.
 //!
-//! Pattern: `CALLIND(LOAD(LOAD(this + 0) + N))` where the vptr lives at
-//! offset 0 of the object (C++ ABI convention — contrast with Rust trait
-//! objects where the vtable pointer is at offset 8 in the fat pointer).
-//! Slot index = N / 8.
+//! Pattern: `CALLIND(LOAD(LOAD(obj + 0) + N))`. The vptr lives at offset 0
+//! of the object (contrast with Rust trait objects, where the vtable pointer
+//! is the second word of a fat pointer). Slot index = N / 8.
 //!
-//! Tail-call shapes that compile to `jmp *(*(this) + N)` surface as the
-//! same chain terminated by `BRANCHIND` instead of `CALLIND`; those are
-//! recognised too (Itanium-ABI `virtual int Base::value()` forwarded
-//! through a thunk is the canonical example).
+//! The chain is followed through SSA definitions, so it may span blocks:
+//! `-O2` code often loads the method pointer, compares it against a known
+//! override (speculative devirtualization) and only dispatches on the
+//! mismatch edge. Tail calls that compile to `jmp *(*(obj) + N)` end in
+//! `BRANCHIND` instead of `CALLIND`.
+//!
+//! [`resolve_virtual_calls`] later names each dispatch from RTTI: the
+//! receiver's static class and the method in that vtable slot.
+
+mod naming;
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, TargetSet, VtableCallInfo};
-use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, TargetSet, VarnodeSlot, VtableCallInfo};
+use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
+
+pub use naming::resolve_virtual_calls;
 
 const PTR_SIZE: u64 = 8;
 
@@ -38,199 +45,186 @@ impl Pass for CppVtablePass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let mut found = BTreeMap::new();
+        let found = detect_dispatches(func);
+        let before_targets = func.indirect_call_targets.clone();
+        let before_calls = std::mem::take(&mut func.cpp_vtable_calls);
+        stamp_dispatches(func, &found);
+        func.cpp_vtable_calls = found;
+        Ok(before_targets != func.indirect_call_targets || before_calls != func.cpp_vtable_calls)
+    }
+}
 
-        for (&bid, block) in &func.function.blocks {
-            let insns = &block.insns;
-            for (i, insn) in insns.iter().enumerate() {
-                // The same vptr->method->dispatch chain compiles to a
-                // `CALLIND` for normal virtual calls and to a `BRANCHIND`
-                // for tail-jmp-via-vtable forwarders (`void use_base(Base*
-                // b) { return b->value(); }` lowers to `jmp *(*rdi)` under
-                // -O2). Both are virtual dispatches semantically.
-                if !matches!(insn.op, IrOp::Callind | IrOp::Branchind) {
-                    continue;
-                }
-                if let Some(info) = try_match_cpp_vtable(insns, i) {
-                    found.insert((bid, i), info);
-                }
+/// Every vtable dispatch in `func`, keyed by the dispatching instruction.
+fn detect_dispatches(func: &SsaFunction) -> BTreeMap<(BlockId, usize), VtableCallInfo> {
+    let defs = DefSites::new(func);
+    let mut found = BTreeMap::new();
+    for (&bid, block) in &func.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            if !matches!(insn.op, IrOp::Callind | IrOp::Branchind) {
+                continue;
+            }
+            if let Some(info) = defs.match_dispatch(bid, idx) {
+                found.insert((bid, idx), info);
             }
         }
-
-        if found.is_empty() {
-            return Ok(false);
-        }
-
-        // Stamp `TargetSet::VtableSlot` on every recognised virtual dispatch
-        // so the C printer can emit `this->__vftable->method_N(args)` without
-        // needing the class name. `CppMethodPass` (which runs afterwards) will
-        // override entries it can name with the real class name.
-        for (&(bid, idx), info) in &found {
-            let slot_idx = u16::try_from(info.slot_index).unwrap_or(u16::MAX);
-            // Only insert when there is not already a more-informative entry
-            // (e.g. a VtableSlot with a non-empty class_name placed by a
-            // previous run — the pass framework can run fixedpoint rounds).
-            func.indirect_call_targets
-                .entry((bid, idx))
-                .or_insert_with(|| TargetSet::VtableSlot {
-                    class_name: String::new(),
-                    slot_idx,
-                });
-        }
-
-        func.cpp_vtable_calls.extend(found);
-        Ok(true)
     }
+    found
 }
 
-/// Match `CALLIND(LOAD(LOAD(this + 0) + N))`.
-///
-/// 1. CALLIND target comes from a LOAD (method pointer load).
-/// 2. That LOAD's address is `vtable_ptr + offset` (or just vtable_ptr for slot 0).
-/// 3. vtable_ptr comes from a LOAD whose address is `this + 0` (or just `this`).
-fn try_match_cpp_vtable(insns: &[IrInsn], callind_idx: usize) -> Option<VtableCallInfo> {
-    let callind = &insns[callind_idx];
-    if callind.inputs.is_empty() {
-        return None;
-    }
-    let target_vn = callind.inputs[0];
-
-    // target must come from a LOAD — the method pointer load: LOAD(vtable + offset)
-    let method_load_idx = find_def(insns, callind_idx, &target_vn)?;
-    let method_load = &insns[method_load_idx];
-    if method_load.op != IrOp::Load {
-        return None;
-    }
-
-    let method_addr_vn = load_address(method_load)?;
-
-    // method_addr is either:
-    //   (a) vtable_ptr + const_offset  (INT_ADD or PTRADD)
-    //   (b) vtable_ptr directly (offset 0, i.e. first virtual method slot)
-    let (vtable_vn, vtable_offset) = resolve_offset(insns, method_load_idx, &method_addr_vn)?;
-
-    // vtable_offset must be pointer-aligned
-    if vtable_offset % PTR_SIZE != 0 {
-        return None;
-    }
-
-    // vtable_ptr must come from a LOAD — the vptr load: LOAD(this + 0)
-    let (vtable_load_idx, vtable_load) = find_load_def(insns, method_load_idx, &vtable_vn)?;
-
-    let vtable_addr_vn = load_address(vtable_load)?;
-
-    // vtable_addr must be `this + 0` (offset 0) or just `this` directly
-    let (base_vn, base_offset) = resolve_offset(insns, vtable_load_idx, &vtable_addr_vn)?;
-
-    if base_offset != VTABLE_PTR_OFFSET {
-        return None;
-    }
-
-    let slot_index = (vtable_offset / PTR_SIZE) as usize;
-
-    let base_varnode = SsaVarnode {
-        base: base_vn,
-        version: 0,
-    };
-
-    Some(VtableCallInfo {
-        base_varnode,
-        vtable_offset,
-        slot_index,
-    })
-}
-
-/// Extract the address operand from a LOAD instruction.
-fn load_address(load: &IrInsn) -> Option<Varnode> {
-    match load.inputs.len() {
-        1 => Some(load.inputs[0]),
-        2.. => {
-            if load.inputs[0].space == SpaceId::Const {
-                Some(load.inputs[1])
-            } else {
-                Some(load.inputs[0])
-            }
-        }
-        _ => None,
-    }
-}
-
-/// Resolve a varnode into (base_varnode, constant_offset).
-fn resolve_offset(insns: &[IrInsn], before: usize, vn: &Varnode) -> Option<(Varnode, u64)> {
-    if vn.space == SpaceId::Const {
-        return None;
-    }
-
-    if let Some(def_idx) = find_def(insns, before, vn) {
-        let def = &insns[def_idx];
-        match def.op {
-            IrOp::IntAdd if def.inputs.len() == 2 => {
-                let (a, b) = (def.inputs[0], def.inputs[1]);
-                if b.space == SpaceId::Const && a.space != SpaceId::Const {
-                    return Some((a, b.offset));
-                }
-                if a.space == SpaceId::Const && b.space != SpaceId::Const {
-                    return Some((b, a.offset));
-                }
-            }
-            IrOp::Ptradd if def.inputs.len() >= 2 => {
-                let (base, idx) = (def.inputs[0], def.inputs[1]);
-                if idx.space == SpaceId::Const && base.space != SpaceId::Const {
-                    let elem_size =
-                        if def.inputs.len() >= 3 && def.inputs[2].space == SpaceId::Const {
-                            def.inputs[2].offset
-                        } else {
-                            1
-                        };
-                    return Some((base, idx.offset * elem_size));
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // No offset — the varnode itself is the base at offset 0
-    Some((*vn, 0))
-}
-
-fn find_def(insns: &[IrInsn], before: usize, target: &Varnode) -> Option<usize> {
-    for j in (0..before).rev() {
-        if let Some(out) = insns[j].output
-            && out == *target
-        {
-            return Some(j);
-        }
-    }
-    None
-}
-
-/// Like [`find_def`], but also follows `COPY` chains so that:
-/// ```text
-/// v0 = LOAD(...)
-/// v1 = COPY(v0)
-/// ... LOAD(v1) ...    ← find_load_def sees LOAD(v0) here
-/// ```
-/// Returns the index and the resolved (LOAD) instruction together.
-fn find_load_def<'a>(
-    insns: &'a [IrInsn],
-    before: usize,
-    target: &Varnode,
-) -> Option<(usize, &'a IrInsn)> {
-    let mut vn = *target;
-    let mut limit = before;
-    loop {
-        let idx = find_def(insns, limit, &vn)?;
-        let insn = &insns[idx];
-        if insn.op == IrOp::Load {
-            return Some((idx, insn));
-        }
-        // Follow COPY one level.
-        if insn.op == IrOp::Copy && insn.inputs.len() == 1 {
-            vn = insns[idx].inputs[0];
-            limit = idx;
+/// Record `found` as `TargetSet::VtableSlot` entries, replacing entries from
+/// earlier rounds. Instruction indices shift as passes delete instructions,
+/// so stale keys are dropped rather than trusted. A class or method name an
+/// earlier round attached to the same dispatch is kept.
+fn stamp_dispatches(func: &mut SsaFunction, found: &BTreeMap<(BlockId, usize), VtableCallInfo>) {
+    let mut previous = BTreeMap::new();
+    func.indirect_call_targets.retain(|&key, target| {
+        if let TargetSet::VtableSlot { .. } = target {
+            previous.insert(key, target.clone());
+            false
         } else {
+            true
+        }
+    });
+    for (&key, info) in found {
+        let slot_idx = u16::try_from(info.slot_index).unwrap_or(u16::MAX);
+        let receiver = Some(info.base_varnode);
+        let (class_name, method) = match previous.remove(&key) {
+            Some(TargetSet::VtableSlot {
+                receiver: prev_receiver,
+                class_name,
+                slot_idx: prev_slot,
+                method,
+            }) if prev_receiver == receiver && prev_slot == slot_idx => (class_name, method),
+            _ => (String::new(), None),
+        };
+        func.indirect_call_targets.insert(
+            key,
+            TargetSet::VtableSlot {
+                receiver,
+                class_name,
+                slot_idx,
+                method,
+            },
+        );
+    }
+}
+
+/// SSA definition sites of one function, for walking value chains across
+/// blocks.
+struct DefSites<'a> {
+    func: &'a SsaFunction,
+    sites: BTreeMap<SsaVarnode, (BlockId, usize)>,
+}
+
+impl<'a> DefSites<'a> {
+    fn new(func: &'a SsaFunction) -> Self {
+        let sites = func
+            .var_map
+            .iter()
+            .filter(|((_, _, slot), _)| matches!(slot, VarnodeSlot::Output))
+            .map(|(&(bid, idx, _), &sv)| (sv, (bid, idx)))
+            .collect();
+        Self { func, sites }
+    }
+
+    fn input(&self, bid: BlockId, idx: usize, input: usize) -> Option<SsaVarnode> {
+        self.func
+            .var_map
+            .get(&(bid, idx, VarnodeSlot::Input(input)))
+            .copied()
+    }
+
+    fn def(&self, sv: SsaVarnode) -> Option<(BlockId, usize, &'a IrInsn)> {
+        let &(bid, idx) = self.sites.get(&sv)?;
+        let insn = self.func.function.blocks.get(&bid)?.insns.get(idx)?;
+        Some((bid, idx, insn))
+    }
+
+    /// Follow `COPY` chains back to the value they forward.
+    fn origin(&self, mut sv: SsaVarnode) -> SsaVarnode {
+        // SSA copy chains are acyclic; the bound only guards malformed IR.
+        for _ in 0..32 {
+            let Some((bid, idx, insn)) = self.def(sv) else {
+                break;
+            };
+            if insn.op != IrOp::Copy || insn.inputs.len() != 1 {
+                break;
+            }
+            let Some(src) = self.input(bid, idx, 0) else {
+                break;
+            };
+            sv = src;
+        }
+        sv
+    }
+
+    /// The address `sv` was loaded from, when `sv` is the result of a `LOAD`.
+    fn loaded_from(&self, sv: SsaVarnode) -> Option<SsaVarnode> {
+        let (bid, idx, insn) = self.def(self.origin(sv))?;
+        if insn.op != IrOp::Load {
             return None;
         }
+        // `LOAD space, addr` or `LOAD addr`.
+        let addr_input = match insn.inputs.as_slice() {
+            [space, _] if space.space == SpaceId::Const => 1,
+            [_] => 0,
+            _ => return None,
+        };
+        self.input(bid, idx, addr_input)
+    }
+
+    /// Split `sv` into `base + constant`; a plain value is `sv + 0`.
+    fn base_offset(&self, sv: SsaVarnode) -> Option<(SsaVarnode, u64)> {
+        let sv = self.origin(sv);
+        if sv.base.space == SpaceId::Const {
+            return None;
+        }
+        let Some((bid, idx, insn)) = self.def(sv) else {
+            return Some((sv, 0));
+        };
+        let constant = |k: usize| {
+            insn.inputs
+                .get(k)
+                .filter(|vn| vn.space == SpaceId::Const)
+                .map(|vn| vn.offset)
+        };
+        let split = match insn.op {
+            IrOp::IntAdd if insn.inputs.len() == 2 => match (constant(0), constant(1)) {
+                (None, Some(off)) => self.input(bid, idx, 0).map(|base| (base, off)),
+                (Some(off), None) => self.input(bid, idx, 1).map(|base| (base, off)),
+                _ => None,
+            },
+            IrOp::Ptradd if insn.inputs.len() >= 2 => match (constant(0), constant(1)) {
+                (None, Some(index)) => {
+                    let elem_size = constant(2).unwrap_or(1);
+                    self.input(bid, idx, 0)
+                        .map(|base| (base, index.wrapping_mul(elem_size)))
+                }
+                _ => None,
+            },
+            _ => None,
+        };
+        Some(split.map_or((sv, 0), |(base, off)| (self.origin(base), off)))
+    }
+
+    /// Match `CALLIND/BRANCHIND(LOAD(LOAD(obj + 0) + N))` at `(bid, idx)`.
+    fn match_dispatch(&self, bid: BlockId, idx: usize) -> Option<VtableCallInfo> {
+        let target = self.input(bid, idx, 0)?;
+        let slot_addr = self.loaded_from(target)?;
+        let (vptr, vtable_offset) = self.base_offset(slot_addr)?;
+        if vtable_offset % PTR_SIZE != 0 {
+            return None;
+        }
+        let vptr_addr = self.loaded_from(vptr)?;
+        let (object, vptr_offset) = self.base_offset(vptr_addr)?;
+        if vptr_offset != VTABLE_PTR_OFFSET {
+            return None;
+        }
+        Some(VtableCallInfo {
+            base_varnode: object,
+            vtable_offset,
+            slot_index: usize::try_from(vtable_offset / PTR_SIZE).ok()?,
+        })
     }
 }
 
@@ -522,6 +516,55 @@ mod tests {
         assert!(
             ssa.indirect_call_targets.contains_key(&(BlockId(0), 3)),
             "indirect_call_targets should have VtableSlot"
+        );
+    }
+
+    // ── Speculative devirtualization: the method pointer is loaded in one
+    //    block and dispatched from another. ──
+    #[test]
+    fn test_cpp_vtable_dispatch_across_blocks() {
+        let this_ptr = Varnode::reg(56, 8);
+        let vtable_ptr = Varnode::unique(0, 8);
+        let method_ptr = Varnode::unique(8, 8);
+
+        let mut load_block = BasicBlock::new(BlockId(0));
+        load_block.insns = vec![
+            IrInsn::with_output(
+                IrOp::Load,
+                vtable_ptr,
+                smallvec![Varnode::constant(1, 4), this_ptr],
+                0x1000,
+            ),
+            IrInsn::with_output(
+                IrOp::Load,
+                method_ptr,
+                smallvec![Varnode::constant(1, 4), vtable_ptr],
+                0x1004,
+            ),
+            IrInsn::without_output(IrOp::Branch, smallvec![], 0x1008),
+        ];
+        load_block.successors.push(BlockId(1));
+        let mut dispatch_block = BasicBlock::new(BlockId(1));
+        dispatch_block.insns = vec![IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![method_ptr],
+            0x1010,
+        )];
+        let mut func = Function::new("test", BlockId(0), 0x1000);
+        func.insert_block(load_block);
+        func.insert_block(dispatch_block);
+        let mut ssa = build_ssa(func);
+
+        assert!(CppVtablePass.run(&mut ssa).expect("pass succeeds"));
+        let info = ssa
+            .cpp_vtable_calls
+            .get(&(BlockId(1), 0))
+            .expect("cross-block dispatch recorded");
+        assert_eq!(info.slot_index, 0);
+        assert_eq!(info.base_varnode.base, this_ptr);
+        assert!(
+            !CppVtablePass.run(&mut ssa).expect("pass succeeds"),
+            "a second run over unchanged IR reports no change"
         );
     }
 }

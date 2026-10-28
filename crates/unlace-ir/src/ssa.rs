@@ -388,7 +388,8 @@ pub struct VtableCallInfo {
 /// Populated lazily and per-call-site by specialised passes:
 /// - `Resolved` / `Multiple` / `Unknown` by
 ///   [`IndirectCallResolvePass`](https://docs.rs/unlace-passes).
-/// - `VtableSlot` by `CppVtablePass` (separate follow-up).
+/// - `VtableSlot` by `CppVtablePass`; `resolve_virtual_calls` names the
+///   receiver class and slot method from RTTI.
 /// - `ObjcSelector` by `ObjcDispatchPass` (separate follow-up).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum TargetSet {
@@ -397,9 +398,18 @@ pub enum TargetSet {
     /// Multiple plausible targets (e.g. a function pointer fed from
     /// several constant call sites within the same function body).
     Multiple(Vec<(u64, String)>),
-    /// C++ virtual method call: dispatch is `this->vftable[slot_idx]`,
-    /// where the static type is `class_name`.
-    VtableSlot { class_name: String, slot_idx: u16 },
+    /// C++ virtual method call: dispatch is `receiver->vftable[slot_idx]`.
+    VtableSlot {
+        /// The object whose vptr was loaded, when the dispatch chain was
+        /// traced back to it.
+        receiver: Option<SsaVarnode>,
+        /// Static class of the receiver; empty when unknown.
+        class_name: String,
+        slot_idx: u16,
+        /// Method name of the slot (`speak`, `~Animal`) recovered from RTTI
+        /// vtables.
+        method: Option<String>,
+    },
     /// Objective-C message send: selector is fixed, receiver class is
     /// dynamic.
     ObjcSelector(String),

@@ -7057,8 +7057,10 @@ fn test_vtable_call_renders_arrow_syntax() {
     func.vtable_call_targets.insert(
         0x1000,
         TargetSet::VtableSlot {
+            receiver: None,
             class_name: "Base".to_string(),
             slot_idx: 0,
+            method: None,
         },
     );
 
@@ -7090,8 +7092,10 @@ fn test_vtable_call_slot_index() {
     func.vtable_call_targets.insert(
         0x2000,
         TargetSet::VtableSlot {
+            receiver: None,
             class_name: "Derived".to_string(),
             slot_idx: 2,
+            method: None,
         },
     );
 
@@ -7114,8 +7118,10 @@ fn test_vtable_tail_branch_suppresses_following_return() {
     func.vtable_call_targets.insert(
         0x2100,
         TargetSet::VtableSlot {
+            receiver: None,
             class_name: "Base".to_string(),
             slot_idx: 0,
+            method: None,
         },
     );
 
@@ -7131,6 +7137,41 @@ fn test_vtable_tail_branch_suppresses_following_return() {
         body_text.matches("return").count(),
         1,
         "following synthetic return should be suppressed: {body_text}"
+    );
+}
+
+#[test]
+fn test_vtable_call_with_rtti_method_renders_member_call() {
+    use unlace_ir::ssa::TargetSet;
+
+    let fptr = reg(0, 8);
+    let object = SsaVarnode {
+        base: reg(56, 8),
+        version: 0,
+    };
+    let branchind = IrInsn::without_output(IrOp::Branchind, smallvec![fptr], 0x2200);
+    let body = vec![HirNode::Statement(branchind), HirNode::Return(None)];
+
+    let mut func = make_func("vtable_named", body);
+    func.vtable_call_targets.insert(
+        0x2200,
+        TargetSet::VtableSlot {
+            receiver: Some(object),
+            class_name: "Dog".to_string(),
+            slot_idx: 0,
+            method: Some("speak".to_string()),
+        },
+    );
+
+    let output = print_c(&func);
+    let body_text = function_body_text(&output, "vtable_named");
+    assert!(
+        body_text.contains("->speak();"),
+        "named vtable slot should render as a member call: {body_text}"
+    );
+    assert!(
+        !body_text.contains("__vftable") && !body_text.contains("this"),
+        "the traced receiver replaces the `this` placeholder: {body_text}"
     );
 }
 

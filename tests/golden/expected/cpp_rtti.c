@@ -186,13 +186,14 @@ char * identify(Animal *a1) {
                 if (c2 == c1) {
                     return "meow";
                 } else {
+                    return v15->speak();
                 }
             }
         } else {
             v10 = *(_QWORD *)(v14); result = v10; c4 = 0x1300LL;
             v10 = *(_QWORD *)(result); c1 = v10; result = "woof";
             if (c1 != c4) {
-                a1 = c2;
+                a1 = c2; return v14->speak();
             } else {
                 return result;
             }

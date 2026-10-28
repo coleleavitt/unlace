@@ -4049,6 +4049,10 @@ pub fn emit_function_interproc(
             &config.options.passes,
         );
     }
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.cpp-virtual-calls", entry);
+        unlace_passes::resolve_virtual_calls(ssa, rtti);
+    }
     if !symbols.is_empty() {
         let _profile_stage = profile_pipeline_stage("pipeline.detect-go-defer", entry);
         ssa.go_defer_sites = detect_go_defer(ssa, |addr| stable_symbol_names.get(&addr).copied())
@@ -4748,6 +4752,10 @@ pub fn decompile_function_with_symbols(
             symbol_context.objc_dispatch_pass.as_deref(),
             &config.options.passes,
         );
+    }
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.cpp-virtual-calls", entry);
+        unlace_passes::resolve_virtual_calls(&mut ssa, rtti);
     }
 
     if !symbols.is_empty() {

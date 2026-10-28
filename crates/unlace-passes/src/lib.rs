@@ -338,7 +338,7 @@ pub use cpp_lambda::{CppLambdaCapturePass, recover_lambda_captures};
 pub use cpp_method::{CppMethodPass, ParsedMethod, parse_mangled_method};
 pub use cpp_stl::recognize_stl_type;
 pub use cpp_variant::CppVariantPass;
-pub use cpp_vtable::CppVtablePass;
+pub use cpp_vtable::{CppVtablePass, resolve_virtual_calls};
 pub use crypto_idioms::CryptoIdiomPass;
 pub use cse::CsePass;
 #[cfg(feature = "unwired")]

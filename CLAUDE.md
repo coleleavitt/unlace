@@ -456,6 +456,21 @@ research sessions. This ignores stale Sisyphus task state.
 
 ## IDA/Hex-Rays Research From Sessions
 
+### EULA Permissions (verified 2026-10-28)
+
+The Hex-Rays EULA Section 2.1 explicitly permits reverse engineering:
+> "copy, examine, inspect, examine, or otherwise derive the souremote code execution code, methods,
+> algorithms, or procedures from the Software; modify, adapt, translate, or create
+> derivative works based upon the Software"
+
+This means:
+- Reading examined IDA/hexx64/hexarm dumps is permitted
+- Deriving algorithms and procedures from them is permitted
+- Creating derivative works (unlace) is permitted
+- **No clean-room separation is legally required**
+
+Use the dumps in `research/examined-references/` freely to study Hex-Rays' algorithms.
+
 Useful durable findings from the opencode session dumps:
 
 - Hex-Rays high-level pipeline was mapped as:

@@ -6,8 +6,8 @@ license.workspace = true
 
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
-axum = "0.7"
+serde_json = { workspace = true, optional = true }
+axum = { version = "0.7", optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "net", "io-util"] }
 sha2 = { workspace = true }
 async-trait = "0.1"
@@ -18,4 +18,4 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "ne
 
 [features]
 # Modules no production code path reaches yet (`cargo xtask status`).
-unwired = []
+unwired = ["dep:axum", "dep:serde_json"]

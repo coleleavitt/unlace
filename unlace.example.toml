@@ -84,3 +84,11 @@ trace = "off"
 report = true
 # Print a profile snapshot every N seconds.
 # report_interval_secs = 30
+
+[engine]
+# Engine of `decompile` and `batch` without `--engine`: "legacy" or "ghidra".
+default = "legacy"
+# Naming of `ghidra` engine output without `--engine-style`: "ida" or "ghidra".
+style = "ida"
+# Fold loads from read-only sections into constants.
+propagate_readonly = true

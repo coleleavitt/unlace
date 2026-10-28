@@ -1,5 +1,8 @@
 //! Tests for the SPARC lifter.
 
+// Test instruction words are spelled field by field, zero fields included.
+#![allow(clippy::identity_op, clippy::unusual_byte_groupings)]
+
 use unlace_ir::{ArchId, IrOp, Lifter};
 
 use crate::SparcLifter;

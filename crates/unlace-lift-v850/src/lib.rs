@@ -108,6 +108,8 @@ fn fmt_bytes(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
+// Test instruction words are spelled field by field, zero fields included.
+#[allow(clippy::identity_op, clippy::unusual_byte_groupings)]
 mod tests {
     use super::*;
     use unlace_ir::IrOp;

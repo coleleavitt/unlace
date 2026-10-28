@@ -13,6 +13,8 @@ use unlace_output::PrintConfig;
 use unlace_passes::PassOptions;
 use unlace_struct::StructureOptions;
 
+use crate::engine::EngineConfig;
+
 /// Effective configuration for one `unlace` invocation.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -22,6 +24,7 @@ pub struct Config {
     pub printer: PrintConfig,
     pub batch: BatchOptions,
     pub linkscope: LinkscopeOptions,
+    pub engine: EngineConfig,
 }
 
 /// Resource budgets for `unlace batch` and the parallel analyze driver.

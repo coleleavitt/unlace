@@ -13,6 +13,7 @@ pub mod binary_input;
 pub mod cache;
 pub mod config;
 pub mod decompiler;
+pub mod engine;
 pub mod identify_packer;
 pub mod ir_dump;
 pub mod load;

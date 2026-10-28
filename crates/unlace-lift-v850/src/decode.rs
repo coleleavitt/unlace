@@ -677,6 +677,8 @@ fn decode_32bit(hw0: u16, hw1: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg
 }
 
 #[cfg(test)]
+// Test instruction words are spelled field by field, zero fields included.
+#[allow(clippy::identity_op, clippy::unusual_byte_groupings)]
 mod tests {
     use super::*;
 

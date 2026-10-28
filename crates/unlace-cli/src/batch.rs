@@ -1197,7 +1197,7 @@ fn prune_existing_outputs(
     Ok(skipped)
 }
 
-fn sanitize_filename(name: &str, addr: u64) -> String {
+pub(crate) fn sanitize_filename(name: &str, addr: u64) -> String {
     const MAX_STEM_LEN: usize = 180;
     let mut sanitized: String = name
         .chars()

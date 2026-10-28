@@ -3194,7 +3194,7 @@ mod tests {
         blob[header_len..header_len + 4].copy_from_slice(&1u32.to_le_bytes());
         // seg_info_offset[0] already zero
         // import entry: lib_ordinal=2, weak=0, name_offset=0
-        let import = 2u32 | (0u32 << 8) | (0u32 << 9);
+        let import = 2u32;
         blob[imports_offset..imports_offset + 4].copy_from_slice(&import.to_le_bytes());
         // symbols: "memcpy\0"
         blob.extend_from_slice(b"memcpy\0");

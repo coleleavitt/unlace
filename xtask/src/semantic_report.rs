@@ -278,11 +278,16 @@ struct SemanticOptions {
     /// `--runner <fixture-or-arch>=<path>`: user-mode runner for non-host
     /// executable cases, keyed by fixture name or architecture.
     runners: BTreeMap<String, PathBuf>,
+    /// `--engine <legacy|ghidra>`: analysis engine passed to `unlace decompile`.
+    engine: String,
 }
 
 impl SemanticOptions {
     fn from_args(args: &[String]) -> Result<Self, String> {
-        let mut opts = Self::default();
+        let mut opts = Self {
+            engine: "legacy".to_string(),
+            ..Self::default()
+        };
         let mut args = args.iter();
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -291,6 +296,7 @@ impl SemanticOptions {
                     opts.keep_temps = true;
                 }
                 "--keep-temps" => opts.keep_temps = true,
+                "--engine" => opts.engine = args.next().ok_or("--engine needs a name")?.clone(),
                 "--runner" => {
                     let spec = args
                         .next()
@@ -642,7 +648,15 @@ fn run_executable_case(
     ));
 
     let decompile = Command::new(unlace_bin)
-        .args(["decompile", "--emit", "c", "--function", function])
+        .args([
+            "decompile",
+            "--engine",
+            &opts.engine,
+            "--emit",
+            "c",
+            "--function",
+            function,
+        ])
         .args(["--timeout", &timeout_arg()])
         .arg(&binary)
         .env_remove("RUST_LOG")
@@ -799,7 +813,15 @@ fn run_shape_case(
     ));
     let binary = root.join(&fixture.binary_path);
     let decompile = Command::new(unlace_bin)
-        .args(["decompile", "--emit", "c", "--function", case.function])
+        .args([
+            "decompile",
+            "--engine",
+            &opts.engine,
+            "--emit",
+            "c",
+            "--function",
+            case.function,
+        ])
         .args(["--timeout", &timeout_arg()])
         .arg(&binary)
         .env_remove("RUST_LOG")
@@ -1112,9 +1134,9 @@ fn fixture_call_alias_decls(fixture: &Fixture, function: &str) -> String {
                 .to_string()
         }
         ("stripped", "main") => [
-            "long long sub_1570(void) { return f_rec_fib(8); }\n",
-            "long long sub_1b80(void) { return f_rec_power(2, 8); }\n",
-            "long long sub_1830(void) { return f_ackermann(2, 3); }\n",
+            "long long sub_1570() { return f_rec_fib(8); }\n",
+            "long long sub_1b80() { return f_rec_power(2, 8); }\n",
+            "long long sub_1830() { return f_ackermann(2, 3); }\n",
         ]
         .concat(),
         _ => String::new(),

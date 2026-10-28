@@ -16,6 +16,7 @@ unlace-session = { workspace = true }
 unlace-emu = { workspace = true }
 unlace-debugger = { workspace = true, optional = true }
 unlace-flirt = { workspace = true }
+unlace-engine = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
 clap = { workspace = true }
 anyhow = { workspace = true }

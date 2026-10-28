@@ -109,6 +109,7 @@ unlace-lumina = { path = "crates/unlace-lumina" }
 unlace-session = { path = "crates/unlace-session" }
 unlace-debugger = { path = "crates/unlace-debugger" }
 unlace-emu = { path = "crates/unlace-emu" }
+unlace-engine = { path = "crates/unlace-engine" }
 
 # Tests and gates run the whole decompiler on fixture binaries; at opt-level 0
 # that is about 5x slower (medium.elf: 26 s vs 5 s). opt-level 2 buys only

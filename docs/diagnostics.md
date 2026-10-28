@@ -58,6 +58,7 @@ every `unlace::cprinter::*` trace, and `unlace=debug` is the old
 | `unlace::lvar`, `unlace::variable_merge`, `unlace::register_coalesce`, `unlace::var_naming` | `UNLACE_LVAR_TRACE`, `UNLACE_VAR_MERGE_TRACE` / `UNLACE_INTERFERENCE_TRACE`, `UNLACE_REG_COALESCE_TRACE`, `UNLACE_VAR_NAMING_TRACE` |
 | `unlace::dwarf_map`, `unlace::jump_table` | `UNLACE_DWARF_MAP_TRACE`, `UNLACE_JUMPTABLE_TRACE` |
 | `unlace::hir` (`trace` = details) | `UNLACE_HIR_TRACE`, `_VERBOSE` |
+| `unlace::engine` (debug: per-function timing; info: batch summary) | — (`--engine ghidra`) |
 | `unlace::struct` and `unlace::struct::*` | `UNLACE_STRUCT_TRACE`, `UNLACE_SPLIT_TRACE`, `UNLACE_LABEL_*_TRACE`, `UNLACE_GOTO_ELIM_TRACE`, `UNLACE_EMPTY_IF_TRACE` |
 | `unlace::cprinter` and `unlace::cprinter::*` | `UNLACE_CPRINTER_*`, `UNLACE_C_PRINTER_TRACE`, `UNLACE_CPRINTER_PIPELINE` |
 | `unlace::quality` | `UNLACE_QUALITY_TRACE` |

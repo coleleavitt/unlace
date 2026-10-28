@@ -21,7 +21,7 @@ use crate::pass::{Pass, PassError};
 /// Names are matched **case-sensitive, exact** against the symbol returned
 /// by the resolver (typically the PLT/import name). For prefix matches see
 /// [`is_noreturn_by_name`].
-const NORETURN_NAMES: &[&str] = &[
+pub const NORETURN_NAMES: &[&str] = &[
     // libc termination
     "exit",
     "_exit",
@@ -164,8 +164,8 @@ impl NoreturnDetectPass {
                 let block = func.function.blocks.get_mut(&bid).unwrap();
 
                 if block.insns.len() > keep_count {
-                    for old_idx in keep_count..block.insns.len() {
-                        let input_count = block.insns[old_idx].inputs.len();
+                    for (old_idx, insn) in block.insns.iter().enumerate().skip(keep_count) {
+                        let input_count = insn.inputs.len();
                         for i in 0..input_count {
                             func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)));
                         }

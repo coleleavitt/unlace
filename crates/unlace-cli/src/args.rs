@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 
 /// unlace — a decompiler for reverse engineering.
 #[derive(Parser)]
@@ -126,6 +127,15 @@ pub enum Cmd {
         /// Minimum FLIRT confidence as an integer percentage.
         #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u8).range(0..=100))]
         flirt_min_confidence: u8,
+
+        /// Analysis engine (default: `[engine] default` in the config, else `legacy`). `ghidra` is the
+        /// `unlace-engine` core (Ghidra's decompiler ported to Rust).
+        #[arg(long, value_enum)]
+        engine: Option<Engine>,
+
+        /// Naming of `--engine ghidra` output: IDA/Hex-Rays (`int`, `_QWORD`, `sub_401000`) or Ghidra's own.
+        #[arg(long, value_enum)]
+        engine_style: Option<EngineStyle>,
     },
 
     /// Generate FLIRT patterns from a compiled static library archive (.a).
@@ -247,6 +257,15 @@ pub enum Cmd {
         /// Minimum FLIRT confidence as an integer percentage.
         #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u8).range(0..=100))]
         flirt_min_confidence: u8,
+
+        /// Analysis engine (default: `[engine] default` in the config, else `legacy`). `ghidra` is the
+        /// `unlace-engine` core (Ghidra's decompiler ported to Rust).
+        #[arg(long, value_enum)]
+        engine: Option<Engine>,
+
+        /// Naming of `--engine ghidra` output: IDA/Hex-Rays (`int`, `_QWORD`, `sub_401000`) or Ghidra's own.
+        #[arg(long, value_enum)]
+        engine_style: Option<EngineStyle>,
     },
 
     /// Dump end-state SSA IR text for one (or all) functions at a chosen
@@ -613,4 +632,33 @@ pub enum BatchProgressStyle {
     Plain,
     /// ANSI-colored progress bar when stderr is a terminal.
     Color,
+}
+
+/// Analysis engine for `decompile` and `batch`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Engine {
+    /// unlace's own lifters, passes, structurer, and C printer.
+    #[default]
+    Legacy,
+    /// `unlace-engine`, the Rust port of Ghidra's decompiler.
+    Ghidra,
+}
+
+/// Naming convention of `--engine ghidra` output.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EngineStyle {
+    #[default]
+    Ida,
+    Ghidra,
+}
+
+impl From<EngineStyle> for unlace_engine::output_style::OutputStyle {
+    fn from(style: EngineStyle) -> Self {
+        match style {
+            EngineStyle::Ida => Self::Ida,
+            EngineStyle::Ghidra => Self::Ghidra,
+        }
+    }
 }

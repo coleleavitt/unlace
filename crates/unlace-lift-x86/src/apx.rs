@@ -651,6 +651,6 @@ mod tests {
             crate::register_file::R31,
             crate::register_file::egpr_offset(31)
         );
-        assert!(crate::register_file::CF >= crate::register_file::R31 + 8);
+        const { assert!(crate::register_file::CF >= crate::register_file::R31 + 8) };
     }
 }

@@ -11,10 +11,11 @@ use unlace_passes::PassOptions;
 use unlace_plugin::PluginManager;
 
 use unlace_cli::annotations::{self, AnnotationDb};
-use unlace_cli::args::{self, Args, Cmd, ConfigAction, LuminaAction, ProjectAction};
+use unlace_cli::args::{self, Args, Cmd, ConfigAction, Engine, LuminaAction, ProjectAction};
 use unlace_cli::batch::{self, BatchConfig};
 use unlace_cli::config::Config;
 use unlace_cli::decompiler::{Decompiler, FunctionOutput, finish_output};
+use unlace_cli::engine::EngineOptions;
 use unlace_cli::ir_dump::IrDumpPhase;
 use unlace_cli::pipeline::{self, PipelineConfig};
 use unlace_cli::profiling::{self, TraceField};
@@ -48,6 +49,19 @@ fn main() {
         Cmd::Decompile {
             binary,
             function,
+            output,
+            engine,
+            engine_style,
+            ..
+        } if engine.unwrap_or(config.engine.default) == Engine::Ghidra => run_engine_decompile(
+            &binary,
+            function.as_deref(),
+            output.as_deref(),
+            &EngineOptions::new(&config.engine, engine_style, 0),
+        ),
+        Cmd::Decompile {
+            binary,
+            function,
             emit,
             arch,
             output,
@@ -66,6 +80,8 @@ fn main() {
             sig,
             sig_dir,
             flirt_min_confidence,
+            engine: _,
+            engine_style: _,
         } => {
             let options = if max_width.is_some() || tab_width.is_some() {
                 let mut options = Config::clone(&config);
@@ -150,6 +166,18 @@ fn main() {
         Cmd::Batch {
             binary,
             jobs,
+            output_dir,
+            engine,
+            engine_style,
+            ..
+        } if engine.unwrap_or(config.engine.default) == Engine::Ghidra => run_engine_batch(
+            &binary,
+            output_dir.as_deref(),
+            &EngineOptions::new(&config.engine, engine_style, jobs),
+        ),
+        Cmd::Batch {
+            binary,
+            jobs,
             emit,
             arch,
             output_dir,
@@ -167,6 +195,8 @@ fn main() {
             sig,
             sig_dir,
             flirt_min_confidence,
+            engine: _,
+            engine_style: _,
         } => build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence).and_then(|flirt| {
             run_batch_cmd(
                 binary,
@@ -1652,6 +1682,50 @@ fn trim_name(s: &str, n: usize) -> String {
 // library's `batch` module can also use it.
 
 #[allow(clippy::too_many_arguments)]
+fn run_engine_decompile(
+    binary: &std::path::Path,
+    function: Option<&str>,
+    output: Option<&std::path::Path>,
+    options: &EngineOptions,
+) -> Result<()> {
+    let outputs = unlace_cli::engine::decompile_binary(binary, function, options)?;
+    let text = unlace_cli::engine::render_c(&outputs, options.style);
+    match output {
+        Some(path) => {
+            fs::write(path, text).with_context(|| format!("failed to write '{}'", path.display()))
+        }
+        None => std::io::stdout()
+            .write_all(text.as_bytes())
+            .context("failed to write stdout"),
+    }
+}
+
+fn run_engine_batch(
+    binary: &std::path::Path,
+    output_dir: Option<&std::path::Path>,
+    options: &EngineOptions,
+) -> Result<()> {
+    let started = std::time::Instant::now();
+    let outputs = unlace_cli::engine::decompile_binary(binary, None, options)?;
+    let elapsed = started.elapsed();
+    match output_dir {
+        Some(dir) => unlace_cli::engine::write_per_function(dir, &outputs, options.style)?,
+        None => std::io::stdout()
+            .write_all(unlace_cli::engine::render_c(&outputs, options.style).as_bytes())
+            .context("failed to write stdout")?,
+    }
+    let failed = outputs.iter().filter(|output| output.text.is_err()).count();
+    tracing::info!(
+        target: "unlace::engine",
+        functions = outputs.len(),
+        failed,
+        elapsed_ms = elapsed.as_millis() as u64,
+        "batch finished"
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)] // one parameter per `batch` flag
 fn run_batch_cmd(
     binary: std::path::PathBuf,
     jobs: usize,

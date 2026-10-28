@@ -403,6 +403,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpp_demangle"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0667304c32ea56cb4cd6d2d7c0cfe9a2f8041229db8c033af7f8d69492429def"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -410,6 +419,21 @@ checksum = "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eb8a2a1cd12ab0d987a5d5e825195d372001a4094a0376319d5a0ad71c1ba0d"
+dependencies = [
+ "crc-catalog",
+]
+
+[[package]]
+name = "crc-catalog"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "217698eaf96b4a3f0bc4f3662aaa55bdf913cd54d7204591faa790070c6d0853"
 
 [[package]]
 name = "crc32fast"
@@ -1321,6 +1345,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
+name = "lzma-rs"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "297e814c836ae64db86b36cf2a557ba54368d03f6afcd7d947c266692f71115e"
+dependencies = [
+ "byteorder",
+ "crc",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1410,6 +1444,15 @@ name = "number_prefix"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
+
+[[package]]
+name = "object"
+version = "0.37.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "object"
@@ -1750,9 +1793,9 @@ dependencies = [
 
 [[package]]
 name = "rustc-demangle"
-version = "0.1.27"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b50b8869d9fc858ce7266cce0194bd74df58b9d0e3f6df3a9fc8eb470d95c09d"
+checksum = "b74b56ffa8bb2830709a538c2cbcae9aa062db0d2a42563bfb09bdaae44020eb"
 
 [[package]]
 name = "rustc_version"
@@ -2092,7 +2135,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "912017718eb4d21930546245af9a3475c9dccf15675a5c215664e76621afc471"
 dependencies = [
  "cc",
- "cpp_demangle",
+ "cpp_demangle 0.4.5",
  "msvc-demangler",
  "rustc-demangle",
  "symbolic-common",
@@ -2449,6 +2492,7 @@ dependencies = [
  "tracing-subscriber",
  "unlace-debugger",
  "unlace-emu",
+ "unlace-engine",
  "unlace-flirt",
  "unlace-ir",
  "unlace-lift",
@@ -2482,12 +2526,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-engine"
+version = "2.1.0"
+dependencies = [
+ "cpp_demangle 0.5.1",
+ "lzma-rs",
+ "miniz_oxide",
+ "object 0.37.3",
+ "regex",
+ "rustc-demangle",
+]
+
+[[package]]
 name = "unlace-flirt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "flate2",
- "object",
+ "object 0.39.1",
  "postcard",
  "serde",
  "thiserror",
@@ -2880,7 +2936,7 @@ dependencies = [
  "fallible-iterator 0.2.0",
  "gimli",
  "insta",
- "object",
+ "object 0.39.1",
  "pdb",
  "rustc-demangle",
  "tempfile",
@@ -3529,7 +3585,7 @@ dependencies = [
  "capstone",
  "gimli",
  "iced-x86",
- "object",
+ "object 0.39.1",
  "regex",
  "serde",
  "serde_json",

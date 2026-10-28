@@ -3596,8 +3596,8 @@ fn test_format_float_literal_neg_infinity_f64() {
 
 #[test]
 fn test_format_float_literal_finite_f64() {
-    let bytes = 3.14159f64.to_le_bytes();
-    assert_eq!(super::format_float_literal(&bytes, 8), "3.14159");
+    let bytes = 1.23456f64.to_le_bytes();
+    assert_eq!(super::format_float_literal(&bytes, 8), "1.23456");
 }
 
 #[test]
@@ -3666,13 +3666,13 @@ fn test_float_const_context_renders_double_literal() {
     // `FLOAT_ADD` of two constants should render the operands as
     // double literals, not integer hex.
     let r0 = reg(0, 8);
-    let pi = con(3.14159f64.to_bits(), 8);
+    let lhs = con(1.23456f64.to_bits(), 8);
     let two = con(2.0f64.to_bits(), 8);
     let body = vec![
         HirNode::Statement(IrInsn::with_output(
             IrOp::FloatAdd,
             r0,
-            smallvec![pi, two],
+            smallvec![lhs, two],
             0x1000,
         )),
         HirNode::Return(Some(SsaVarnode {
@@ -3683,7 +3683,7 @@ fn test_float_const_context_renders_double_literal() {
     let func = make_func("fp_add", body);
     let output = print_c(&func);
     assert!(
-        output.contains("3.14159") && output.contains("2.0"),
+        output.contains("1.23456") && output.contains("2.0"),
         "should render float constants as decimals: {output}",
     );
     assert!(
@@ -6006,7 +6006,7 @@ fn test_call_renders_forwarded_resolution_comment() {
 #[test]
 fn call_renders_flirt_confidence_comment() {
     let call_va: u64 = 0x1000;
-    let target_va: u64 = 0x4010_40;
+    let target_va: u64 = 0x0040_1040;
     let target_addr = con(target_va, 8);
     let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
     let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
@@ -6041,7 +6041,7 @@ fn call_renders_flirt_confidence_comment() {
 #[test]
 fn call_renders_flirt_low_confidence_comment() {
     let call_va: u64 = 0x1100;
-    let target_va: u64 = 0x4011_00;
+    let target_va: u64 = 0x0040_1100;
     let target_addr = con(target_va, 8);
     let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
     let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
@@ -10255,8 +10255,10 @@ fn test_msvc_rtti_preamble_renders() {
             inheritance: 0x1,
         },
     );
-    let mut ann = super::PrinterAnnotations::default();
-    ann.msvc_rtti = Some(rtti);
+    let ann = super::PrinterAnnotations {
+        msvc_rtti: Some(rtti),
+        ..Default::default()
+    };
 
     let output =
         super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
@@ -11775,8 +11777,10 @@ fn function_comment_renders() {
         address: 0x1000,
         ..Default::default()
     };
-    let mut ann = super::PrinterAnnotations::default();
-    ann.function_comment = Some("ENTRY: validates auth token".into());
+    let ann = super::PrinterAnnotations {
+        function_comment: Some("ENTRY: validates auth token".into()),
+        ..Default::default()
+    };
     let output = super::print_c_with_annotations(
         &func,
         None,
@@ -13660,12 +13664,14 @@ fn test_t260_nonstandard_regs_emit_usercall() {
         ("p1".to_string(), PrimitiveType::Int(4)),
     ];
 
-    let mut ann = super::PrinterAnnotations::default();
-    ann.usercall = Some(super::UsercallSpec {
-        return_reg: "rax".to_string(),
-        param_regs: vec!["r10".to_string(), "rdx".to_string()],
-        purge: false,
-    });
+    let ann = super::PrinterAnnotations {
+        usercall: Some(super::UsercallSpec {
+            return_reg: "rax".to_string(),
+            param_regs: vec!["r10".to_string(), "rdx".to_string()],
+            purge: false,
+        }),
+        ..Default::default()
+    };
 
     let output =
         super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));

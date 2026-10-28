@@ -57,6 +57,8 @@ pub struct CorpusOptions {
     pub skip_recompile: bool,
     /// Directory holding an external `manifest.json` corpus; `None` skips it.
     pub external_corpus: Option<PathBuf>,
+    /// `--engine <name>`: analysis engine to measure instead of unlace's default.
+    pub engine: Option<String>,
 }
 
 impl CorpusOptions {
@@ -144,9 +146,15 @@ pub fn measure(root: &Path, unlace: &Path, options: &CorpusOptions) -> Result<Re
         binary: unlace,
         config: out_dir.join("unlace-defaults.toml"),
     };
+    let engine = match &options.engine {
+        Some(engine) => format!("\n[engine]\ndefault = \"{engine}\"\n"),
+        None => String::new(),
+    };
     write(
         &unlace.config,
-        "# Empty on purpose: the corpus measures unlace's default configuration,\n# not ./unlace.toml or the user's config.\n",
+        &format!(
+            "# Empty on purpose: the corpus measures unlace's default configuration,\n# not ./unlace.toml or the user's config.\n{engine}"
+        ),
     )?;
     let builder = Builder {
         corpus_dir: &corpus_dir,
@@ -583,12 +591,14 @@ fn run_cli(root: &Path, args: &[String]) -> Result<i32, String> {
             "--skip-recompile" => options.skip_recompile = true,
             "--external" => options.external_corpus = Some(PathBuf::from(value("--external")?)),
             "--no-external" => options.external_corpus = None,
+            "--engine" => options.engine = Some(value("--engine")?),
             "--check" => check = true,
             "--update-baseline" => update_baseline = true,
             other => return Err(format!("unknown argument {other:?}")),
         }
     }
-    let partial = !options.programs.is_empty() || options.skip_recompile;
+    let partial =
+        !options.programs.is_empty() || options.skip_recompile || options.engine.is_some();
     if partial && (check || update_baseline) {
         return Err(
             "--check/--update-baseline need the full corpus with recompilation".to_string(),

@@ -1123,9 +1123,9 @@ mod tests {
     #[test]
     fn t313_apx_egprs_do_not_alias_rip_or_flags() {
         assert_ne!(R16, RIP, "R16 and RIP must be distinct register slots");
-        assert!(R16 < CF, "APX EGPRs should remain ordinary GP registers");
+        const { assert!(R16 < CF, "APX EGPRs should remain ordinary GP registers") };
         assert_eq!(R31 + 8, CF, "R31 should end exactly before RFLAGS bits");
-        assert!(RIP > OF, "RIP must not live inside the RFLAGS region");
+        const { assert!(RIP > OF, "RIP must not live inside the RFLAGS region") };
     }
 
     #[test]

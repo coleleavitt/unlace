@@ -1017,11 +1017,7 @@ fn resolve_annotations(
     if let Some(path) = explicit {
         return AnnotationDb::load(path).map(Some);
     }
-    let sidecar = annotations::default_path(binary);
-    if sidecar.exists() {
-        return AnnotationDb::load(&sidecar).map(Some);
-    }
-    Ok(None)
+    annotations::load_default(binary)
 }
 
 fn build_flirt_config(

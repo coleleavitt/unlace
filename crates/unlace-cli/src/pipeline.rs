@@ -167,6 +167,13 @@ pub struct FunctionEntry {
     pub size: u64,
 }
 
+impl FunctionEntry {
+    /// Whether `addr` lies in this function; a zero-size entry contains only its start.
+    pub fn contains(&self, addr: u64) -> bool {
+        addr == self.addr || (addr > self.addr && addr - self.addr < self.size)
+    }
+}
+
 pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<Vec<FunctionEntry>> {
     let permissive_symbol_sizes = matches!(
         image.arch,

@@ -71,6 +71,15 @@ pub fn default_path(binary_path: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
+/// Load the default sidecar for `binary_path` when it exists; absence is not an error.
+pub fn load_default(binary_path: &Path) -> Result<Option<AnnotationDb>> {
+    let sidecar = default_path(binary_path);
+    if sidecar.exists() {
+        return AnnotationDb::load(&sidecar).map(Some);
+    }
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

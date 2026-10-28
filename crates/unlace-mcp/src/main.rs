@@ -1,19 +1,11 @@
-//! `unlace-mcp` — a CLI-first Model Context Protocol server.
+//! `unlace-mcp` — a read-only Model Context Protocol server for unlace.
 //!
-//! Exposes unlace's **read-only** decompiler capabilities over MCP stdio
-//! transport so agents and external tooling can ask unlace to open a binary,
-//! list its functions, and decompile one function. This realizes ROADMAP.md
-//! Phase F.4 and follows `docs/mcp.md`.
-//!
-//! The server shells out to the `unlace` binary (resolved from the `UNLACE_BIN`
-//! environment variable, else `unlace` on `PATH`). This keeps the MCP surface a
-//! thin, stable wrapper over the CLI rather than a second copy of the pipeline
-//! orchestration; it can later be upgraded to in-process linking against
-//! `unlace-cli` without changing the tool contract.
-//!
-//! Every tool here is read-only: there is no tool that writes, patches, or
-//! mutates project state.
+//! Serves MCP over stdio and answers every tool by running unlace's loader,
+//! lifter, and decompiler in-process (the `unlace-cli` library), so results
+//! are typed JSON rather than scraped CLI text. No tool writes, patches, or
+//! mutates anything; see `docs/mcp.md` for the tool contract.
 
+mod analysis;
 mod server;
 
 use anyhow::Result;

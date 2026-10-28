@@ -20,6 +20,7 @@ pub mod pipeline;
 pub mod profiling;
 pub mod project;
 pub mod quality;
+pub mod xrefs;
 
 use anyhow::{Result, bail};
 use unlace_ir::ArchId;

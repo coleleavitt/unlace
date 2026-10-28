@@ -80,30 +80,12 @@ fn test_structure_until_past_deadline_times_out() {
 }
 
 #[test]
-fn test_structure_phi_limit_default_and_override() {
-    assert_eq!(structure_phi_limit_from(None), 12288);
-    assert_eq!(structure_phi_limit_from(Some("2048")), 2048);
-    assert_eq!(structure_phi_limit_from(Some("0")), 0);
-    assert_eq!(structure_phi_limit_from(Some("not-a-number")), 12288);
-}
-
-#[test]
 fn test_unstructured_fallback_budget_predicate() {
-    assert!(should_emit_full_unstructured_fallback(
-        10, 20, false, 10, 20
-    ));
-    assert!(!should_emit_full_unstructured_fallback(
-        11, 20, false, 10, 20
-    ));
-    assert!(!should_emit_full_unstructured_fallback(
-        10, 21, false, 10, 20
-    ));
-    assert!(should_emit_full_unstructured_fallback(
-        1000, 1000, true, 10, 20
-    ));
-    assert!(should_emit_full_unstructured_fallback(
-        1000, 20, false, 0, 20
-    ));
+    assert!(should_emit_full_unstructured_fallback(10, 20, 10, 20));
+    assert!(!should_emit_full_unstructured_fallback(11, 20, 10, 20));
+    assert!(!should_emit_full_unstructured_fallback(10, 21, 10, 20));
+    assert!(should_emit_full_unstructured_fallback(1000, 1000, 0, 0));
+    assert!(should_emit_full_unstructured_fallback(1000, 20, 0, 20));
 }
 
 #[test]

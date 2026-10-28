@@ -14,18 +14,12 @@ use crate::register_file::{iced_reg_to_varnode, x86_64_register_file, x86_reg_vi
 
 pub struct X86Lifter {
     reg_file: RegisterFile,
-    trace: bool,
 }
 
 impl X86Lifter {
     pub fn new() -> Self {
-        Self::with_trace(false)
-    }
-
-    pub fn with_trace(trace: bool) -> Self {
         Self {
             reg_file: x86_64_register_file(),
-            trace,
         }
     }
 }
@@ -46,11 +40,12 @@ impl Lifter for X86Lifter {
             return Err(LiftError::ShortBuffer);
         }
 
-        let mut apx_ctx = LiftCtx::new(addr, self.trace);
+        let mut apx_ctx = LiftCtx::new(addr);
         if let Some(len) = apx::try_lift_apx(&mut apx_ctx, bytes) {
             if apx_ctx.trace {
-                eprintln!(
-                    "[unlace-lift-x86] {addr:#x}: APX custom lift len={len} ops={}",
+                tracing::debug!(
+                    target: "unlace::lift::x86",
+                    "{addr:#x}: APX custom lift len={len} ops={}",
                     apx_ctx.ops.len()
                 );
             }
@@ -69,7 +64,7 @@ impl Lifter for X86Lifter {
             )));
         }
 
-        let mut ctx = LiftCtx::new(addr, self.trace);
+        let mut ctx = LiftCtx::new(addr);
         ctx.trace_decoded(bytes, &insn);
         dispatch_mnemonic(&mut ctx, &insn);
         ctx.trace_summary();
@@ -93,12 +88,12 @@ pub struct LiftCtx {
 }
 
 impl LiftCtx {
-    fn new(addr: u64, force_trace: bool) -> Self {
+    fn new(addr: u64) -> Self {
         Self {
             ops: Vec::new(),
             addr,
             unique_counter: 0,
-            trace: force_trace || lift_trace_enabled(),
+            trace: lift_trace_enabled(),
         }
     }
 
@@ -516,8 +511,9 @@ impl LiftCtx {
             return;
         }
         let len = insn.len().min(bytes.len());
-        eprintln!(
-            "[unlace-lift-x86] {:#x}: decode {:?} code={:?} len={} bytes={:02x?}",
+        tracing::debug!(
+            target: "unlace::lift::x86",
+            "{:#x}: decode {:?} code={:?} len={} bytes={:02x?}",
             self.addr,
             insn.mnemonic(),
             insn.code(),
@@ -532,13 +528,13 @@ impl LiftCtx {
 
     pub fn trace(&self, message: impl std::fmt::Display) {
         if self.trace {
-            eprintln!("[unlace-lift-x86] {:#x}: {message}", self.addr);
+            tracing::debug!(target: "unlace::lift::x86", "{:#x}: {message}", self.addr);
         }
     }
 }
 
 fn lift_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_LIFT_TRACE").is_some()
+    tracing::enabled!(target: "unlace::lift::x86", tracing::Level::DEBUG)
 }
 
 fn register_access_writes(access: OpAccess) -> bool {

@@ -39,7 +39,5 @@ pub use legacy_json::{
 
 // Also surface the additional legacy sub-modules that pre-dated this rewrite.
 pub mod collab;
-pub mod conflict_ui;
 pub mod privacy_client;
 pub mod public_db;
-pub mod web_ui;

@@ -1,4 +1,7 @@
 //! Forward-goto cleanup and fake-loop elimination for HIR.
+//!
+//! Diagnostics: enable `unlace::struct::goto_elim=debug` for per-stage HIR
+//! counts and unreachable-tail truncations.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,8 +30,14 @@ struct HirStats {
     labels: usize,
 }
 
+macro_rules! goto_elim_debug {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::struct::goto_elim", "{}", format_args!($($arg)*))
+    };
+}
+
 fn goto_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_GOTO_ELIM_TRACE").is_some()
+    tracing::enabled!(target: "unlace::struct::goto_elim", tracing::Level::DEBUG)
 }
 
 fn trace_goto_stage(stage: &str, nodes: &[HirNode]) {
@@ -36,9 +45,13 @@ fn trace_goto_stage(stage: &str, nodes: &[HirNode]) {
         return;
     }
     let stats = hir_stats(nodes);
-    eprintln!(
-        "[unlace-goto-elim] stage={stage} nodes={} calls={} returns={} gotos={} labels={}",
-        stats.nodes, stats.calls, stats.returns, stats.gotos, stats.labels
+    goto_elim_debug!(
+        "stage={stage} nodes={} calls={} returns={} gotos={} labels={}",
+        stats.nodes,
+        stats.calls,
+        stats.returns,
+        stats.gotos,
+        stats.labels
     );
 }
 
@@ -50,9 +63,13 @@ fn trace_removed_unreachable(index: usize, removed: &[HirNode]) {
     if stats.calls == 0 && stats.returns == 0 && stats.labels == 0 {
         return;
     }
-    eprintln!(
-        "[unlace-goto-elim] truncate-after-terminal index={index} removed_nodes={} calls={} returns={} gotos={} labels={}",
-        stats.nodes, stats.calls, stats.returns, stats.gotos, stats.labels
+    goto_elim_debug!(
+        "truncate-after-terminal index={index} removed_nodes={} calls={} returns={} gotos={} labels={}",
+        stats.nodes,
+        stats.calls,
+        stats.returns,
+        stats.gotos,
+        stats.labels
     );
 }
 

@@ -1,6 +1,6 @@
 use crate::c_printer::postprocess::{is_prunable_synthetic_local, parse_shadowing_local_decl_name};
 
-use super::{prune_dead_plain_assignments_once, prune_trace_enabled};
+use super::prune_dead_plain_assignments_once;
 
 pub(in crate::c_printer) fn prune_dead_plain_assignments(output: String) -> String {
     // Fixpoint iteration exists ONLY to collapse cond-family flag-temp chains:
@@ -18,32 +18,27 @@ pub(in crate::c_printer) fn prune_dead_plain_assignments(output: String) -> Stri
     // So: iterate to a fixpoint only when the text actually contains a
     // cond-family temp. Register-only functions take exactly one pass, matching
     // the pre-1e3703d86 behaviour the v850/register goldens depend on.
-    let trace = prune_trace_enabled();
     let max_passes = if output_has_cond_family_temp(&output) || output_has_plain_temp_decl(&output)
     {
         8
     } else {
         1
     };
-    if trace {
-        eprintln!(
-            "[unlace-output] plain-prune begin max_passes={max_passes} has_cond_family={}",
-            output_has_cond_family_temp(&output)
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter::prune",
+        "plain-prune begin max_passes={max_passes} has_cond_family={}",
+        output_has_cond_family_temp(&output)
+    );
     let mut current = output;
     for pass in 0..max_passes {
         let next = prune_dead_plain_assignments_once(&current, pass);
         if next == current {
-            if trace {
-                eprintln!("[unlace-output] plain-prune fixpoint reached after pass={pass}");
-            }
+            tracing::debug!(target: "unlace::cprinter::prune", "plain-prune fixpoint reached after pass={pass}");
             return next;
         }
         current = next;
     }
-    if trace && max_passes > 1 {
-        eprintln!("[unlace-output] plain-prune hit {max_passes}-pass cap without fixpoint");
+    if max_passes > 1 {
+        tracing::debug!(target: "unlace::cprinter::prune", "plain-prune hit {max_passes}-pass cap without fixpoint");
     }
     current
 }

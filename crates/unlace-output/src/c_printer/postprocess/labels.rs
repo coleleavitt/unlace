@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use super::{is_c_identifier, prune_trace_enabled};
+use super::is_c_identifier;
 
 /// Drop an unconditional `goto L;` when the very next emitted statement is
 /// `L:`. The label itself is preserved here because other gotos may still
@@ -18,12 +18,10 @@ pub(in crate::c_printer) fn prune_fallthrough_gotos(output: String) -> String {
             continue;
         };
         if target == label {
-            if prune_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fallthrough-goto-prune line={} target={target}",
-                    idx + 1
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter::prune",
+                "fallthrough-goto-prune line={} target={target}",
+                idx + 1
+            );
             remove.insert(idx);
         }
     }

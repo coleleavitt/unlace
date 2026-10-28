@@ -184,11 +184,9 @@ fn trace_call_args(
     visible: usize,
     added: usize,
 ) {
-    if std::env::var_os("UNLACE_CALL_ARGS_TRACE").is_none() {
-        return;
-    }
-    eprintln!(
-        "[unlace-call-args] call=0x{call_addr:x} target=0x{target_addr:x} name={} wanted={wanted} existing={existing} visible={visible} added={added}",
+    tracing::debug!(
+        target: "unlace::call_args",
+        "call=0x{call_addr:x} target=0x{target_addr:x} name={} wanted={wanted} existing={existing} visible={visible} added={added}",
         callee_name.unwrap_or("<unknown>")
     );
 }

@@ -37,7 +37,7 @@ fn medium_elf_collects_lvars_for_every_function() {
         };
         let mut ssa = build_ssa(ir);
         ssa.arch = image.arch;
-        if pipeline::run_passes(&mut ssa).is_err() {
+        if pipeline::run_passes(&mut ssa, &unlace_passes::PassOptions::default()).is_err() {
             continue;
         }
         analyzed += 1;

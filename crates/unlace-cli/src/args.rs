@@ -10,6 +10,16 @@ use clap::{Parser, Subcommand, ValueEnum};
 pub struct Args {
     #[command(subcommand)]
     pub cmd: Cmd,
+
+    /// Configuration file. Default: `./unlace.toml`, then
+    /// `$XDG_CONFIG_HOME/unlace/config.toml`.
+    #[arg(long, global = true)]
+    pub config: Option<PathBuf>,
+
+    /// Diagnostic filter in `RUST_LOG` syntax, e.g. `unlace::sccp=debug` or
+    /// `unlace=debug,[function{name=main}]=trace`. Overrides `RUST_LOG`.
+    #[arg(long, global = true)]
+    pub log: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -18,6 +28,12 @@ pub enum Cmd {
     Project {
         #[command(subcommand)]
         action: ProjectAction,
+    },
+
+    /// Inspect the effective configuration.
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
     },
 
     /// Decompile a binary file.
@@ -43,7 +59,6 @@ pub enum Cmd {
         output: Option<PathBuf>,
 
         /// Also snapshot this run under DIR/<timestamp>-<uuid>/ for diffing.
-        /// Can also be set with UNLACE_DECOMPILE_CAPTURE_DIR.
         #[arg(long)]
         capture_dir: Option<PathBuf>,
 
@@ -203,15 +218,16 @@ pub enum Cmd {
 
         /// Emit live progress while decompiling. `dump-all` turns this on by
         /// default; `batch` keeps the historical default (off) unless this flag
-        /// or `UNLACE_PROGRESS=1` is set.
+        /// is set.
         #[arg(long)]
         progress: bool,
 
-        /// Progress rendering mode.
+        /// Progress rendering mode. Progress is drawn on stderr only when
+        /// stderr is a terminal; logs and pipes never receive it.
         ///
-        /// - `auto`: color + single-line live updates on TTY, plain lines otherwise
-        /// - `plain`: newline progress updates (safe for logs/CI)
-        /// - `color`: ANSI-colored live updates (falls back to plain when not a TTY)
+        /// - `auto`: same as `color`
+        /// - `plain`: uncolored progress bar
+        /// - `color`: ANSI-colored progress bar
         /// - `off`: disable progress output
         #[arg(long, value_enum, default_value = "auto")]
         progress_style: BatchProgressStyle,
@@ -234,8 +250,8 @@ pub enum Cmd {
     },
 
     /// Dump end-state SSA IR text for one (or all) functions at a chosen
-    /// pipeline phase. Complementary to `UNLACE_TRACE_PASSES`, which prints
-    /// per-pass diffs *inside* the pipeline — `ir-dump` snapshots the final
+    /// pipeline phase. Complementary to `--log unlace::pass::ir=trace`, which
+    /// prints per-pass diffs *inside* the pipeline — `ir-dump` snapshots the final
     /// IR after a named milestone instead.
     IrDump {
         /// Path to the binary file.
@@ -480,6 +496,13 @@ pub enum Cmd {
     },
 }
 
+/// Sub-actions for `unlace config`.
+#[derive(Subcommand)]
+pub enum ConfigAction {
+    /// Print the effective configuration (file values over defaults) as TOML.
+    Show,
+}
+
 /// Sub-actions for `unlace project`.
 #[derive(Subcommand)]
 pub enum ProjectAction {
@@ -597,12 +620,12 @@ pub enum EmitFormat {
 /// Batch progress rendering mode.
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
 pub enum BatchProgressStyle {
-    /// Auto-detect based on whether stderr is a TTY.
+    /// Colored progress bar when stderr is a terminal.
     Auto,
     /// Disable batch progress output.
     Off,
-    /// Plain text progress lines.
+    /// Uncolored progress bar when stderr is a terminal.
     Plain,
-    /// ANSI-colored live progress.
+    /// ANSI-colored progress bar when stderr is a terminal.
     Color,
 }

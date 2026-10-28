@@ -16,21 +16,10 @@ use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::licm::find_natural_loops;
+use crate::options::IvOptLimits;
 use crate::pass::{Pass, PassError};
 
 const MAX_INNER_ITERS: usize = 3;
-const DEFAULT_IV_OPT_MAX_NODES: usize = 20_000;
-
-pub(crate) fn iv_opt_node_limit() -> usize {
-    iv_opt_node_limit_from(std::env::var("UNLACE_IV_OPT_MAX_NODES").ok().as_deref())
-}
-
-pub(crate) fn iv_opt_node_limit_from(value: Option<&str>) -> usize {
-    value
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_IV_OPT_MAX_NODES)
-}
-
 pub(crate) fn iv_opt_node_count(func: &SsaFunction) -> usize {
     let insns: usize = func
         .function
@@ -42,8 +31,8 @@ pub(crate) fn iv_opt_node_count(func: &SsaFunction) -> usize {
     insns.saturating_add(phis)
 }
 
-pub(crate) fn iv_opt_too_large(func: &SsaFunction) -> bool {
-    let limit = iv_opt_node_limit();
+pub(crate) fn iv_opt_too_large(func: &SsaFunction, limits: IvOptLimits) -> bool {
+    let limit = limits.max_nodes;
     let nodes = iv_opt_node_count(func);
     linkscope::record_items("pass.iv-opt.nodes", nodes as u64);
     linkscope::record_items("pass.iv-opt.limit", limit as u64);
@@ -54,8 +43,10 @@ pub(crate) fn iv_opt_too_large(func: &SsaFunction) -> bool {
     too_large
 }
 
-#[derive(Default)]
-pub struct IvElimPass;
+#[derive(Clone, Copy, Debug, Default)]
+pub struct IvElimPass {
+    pub limits: IvOptLimits,
+}
 
 impl Pass for IvElimPass {
     fn name(&self) -> &str {
@@ -67,7 +58,7 @@ impl Pass for IvElimPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        if iv_opt_too_large(func) {
+        if iv_opt_too_large(func, self.limits) {
             return Ok(false);
         }
         let mut any = false;
@@ -434,14 +425,6 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn iv_opt_limit_default_and_override() {
-        assert_eq!(iv_opt_node_limit_from(None), 20_000);
-        assert_eq!(iv_opt_node_limit_from(Some("42")), 42);
-        assert_eq!(iv_opt_node_limit_from(Some("0")), 0);
-        assert_eq!(iv_opt_node_limit_from(Some("bad")), 20_000);
-    }
-
     /// 4-block loop:
     ///   B0 (preheader): i_init = const(0); branch B1
     ///   B1 (header): /* phi i */; j = i * 4; cbranch B2, B3
@@ -562,7 +545,7 @@ mod tests {
     fn iv_elim_replaces_basic_mul_iv() {
         let mut ssa = build_loop(None);
         let phi_count_before = ssa.phi_map.get(&BlockId(1)).map_or(0, |v| v.len());
-        let _changed = IvElimPass.run(&mut ssa).expect("ok");
+        let _changed = IvElimPass::default().run(&mut ssa).expect("ok");
 
         let phi_count_after = ssa.phi_map.get(&BlockId(1)).map_or(0, |v| v.len());
         assert!(
@@ -589,7 +572,7 @@ mod tests {
     #[test]
     fn iv_elim_skips_self_loop_basic_iv() {
         let mut ssa = build_self_loop(None);
-        let changed = IvElimPass.run(&mut ssa).expect("ok");
+        let changed = IvElimPass::default().run(&mut ssa).expect("ok");
         assert!(!changed, "self-loop IVs should be left intact");
 
         let header = &ssa.function.blocks[&BlockId(1)];
@@ -611,7 +594,7 @@ mod tests {
         let unrelated = IrInsn::with_output(IrOp::IntAdd, k, smallvec![extra_a, extra_b], 0x1104);
 
         let mut ssa = build_loop(Some(unrelated));
-        let _ = IvElimPass.run(&mut ssa).expect("ok");
+        let _ = IvElimPass::default().run(&mut ssa).expect("ok");
 
         let header = &ssa.function.blocks[&BlockId(1)];
         let unrelated_present = header

@@ -29,6 +29,7 @@ unlace-lift-evm = { workspace = true }
 unlace-lift-sparc = { workspace = true }
 unlace-lift-wasm = { workspace = true }
 smallvec = { workspace = true }
+tracing = { workspace = true }
 unlace-lift-6502 = { workspace = true }
 unlace-lift-stm8 = { workspace = true }
 unlace-lift-8051 = { workspace = true }

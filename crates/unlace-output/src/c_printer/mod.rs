@@ -816,7 +816,7 @@ pub struct UsercallSpec {
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
-/// When `config` is `None` the printer falls back to [`PrintConfig::from_env`].
+/// When `config` is `None` the printer uses [`PrintConfig::default`].
 pub fn print_c_with_rtti_config(
     func: &HirFunction,
     dwarf: Option<&DwarfInfo>,
@@ -1687,7 +1687,7 @@ pub fn print_c_with_annotations(
     out.push_str("}\n");
 
     // Post-emission textual cleanup pipeline. Each stage is applied in order;
-    // under UNLACE_CPRINTER_STAGE_TRACE every stage logs whether it mutated the
+    // under `unlace::cprinter::stage` every stage logs whether it mutated the
     // text and the line-count delta, so a vanished statement can be pinned to
     // the exact transform that dropped it.
     let cleanup_span = linkscope::phase("cprinter.cleanup");
@@ -1774,7 +1774,7 @@ pub fn print_c_with_annotations(
 }
 
 /// Apply one post-emission cleanup `stage` to `input`, logging a before/after
-/// summary when `UNLACE_CPRINTER_STAGE_TRACE` is set. The trace reports the
+/// summary when `unlace::cprinter::stage` is enabled. The trace reports the
 /// stage name, the function it ran on, whether the text changed, and the line
 /// delta — enough to bisect "which transform dropped statement X" without
 /// re-reading every helper.
@@ -1803,7 +1803,7 @@ fn run_cleanup_stage(
         "depolarize-empty-if" => Some(linkscope::phase("cprinter.cleanup.depolarize-empty-if")),
         _ => Some(linkscope::phase("cprinter.cleanup.other")),
     };
-    let want_counts = std::env::var_os("UNLACE_CPRINTER_STAGE_TRACE").is_some();
+    let want_counts = tracing::enabled!(target: "unlace::cprinter::stage", tracing::Level::DEBUG);
     let want_diff = c_printer_pipeline_trace_enabled();
     if !want_counts && !want_diff {
         return stage_fn(input);
@@ -1814,8 +1814,8 @@ fn run_cleanup_stage(
     let after_lines = output.lines().count();
     let changed = output != before;
     if want_counts {
-        eprintln!(
-            "[unlace-output] stage func={func_name} name={stage} changed={changed} lines={before_lines}->{after_lines} delta={}",
+        tracing::debug!(target: "unlace::cprinter::stage",
+            "stage func={func_name} name={stage} changed={changed} lines={before_lines}->{after_lines} delta={}",
             after_lines as isize - before_lines as isize
         );
     }
@@ -2389,20 +2389,9 @@ struct HoistPlan {
 /// * `wrap_floor` — Minimum line width before wrapping kicks in. Matches
 ///   the IDA Options-dialog default of **80**.
 ///
-/// All four fields can be overridden at construction time via environment
-/// variables read inside [`PrintCtx::new`]:
-///
-/// | Variable                  | Field            |
-/// |---------------------------|------------------|
-/// | `UNLACE_MAX_LINE_WIDTH`   | `max_line_width` |
-/// | `UNLACE_TAB_WIDTH`        | `tab_width`      |
-/// | `UNLACE_INDENT`           | `indent_width`   |
-/// | `UNLACE_WRAP_FLOOR`       | `wrap_floor`     |
-/// | `UNLACE_FORMAT_FLAGS`     | `format_flags`   |
-///
-/// Values that fail to parse as `usize` (or that are absent) leave the
-/// corresponding field at its IDA-aligned default.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The CLI fills it from the `[printer]` table of its configuration file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct PrintConfig {
     /// IDA `module_data + 600` — soft right margin (default 100).
     pub max_line_width: usize,
@@ -2434,42 +2423,9 @@ impl Default for PrintConfig {
     }
 }
 
-impl PrintConfig {
-    /// Build a [`PrintConfig`] starting from [`PrintConfig::default`] and
-    /// applying any present `UNLACE_*` environment overrides. Unparseable
-    /// values are silently ignored so a malformed env var never panics
-    /// the printer mid-decompilation.
-    pub fn from_env() -> Self {
-        let mut cfg = Self::default();
-        if let Some(v) = read_usize_env("UNLACE_MAX_LINE_WIDTH") {
-            cfg.max_line_width = v;
-        }
-        if let Some(v) = read_usize_env("UNLACE_TAB_WIDTH") {
-            cfg.tab_width = v;
-        }
-        if let Some(v) = read_usize_env("UNLACE_INDENT") {
-            cfg.indent_width = v;
-        }
-        if let Some(v) = read_usize_env("UNLACE_WRAP_FLOOR") {
-            cfg.wrap_floor = v;
-        }
-        if let Some(v) = read_usize_env("UNLACE_FORMAT_FLAGS") {
-            cfg.format_flags = v as u32;
-        }
-        cfg
-    }
-}
-
-fn read_usize_env(name: &str) -> Option<usize> {
-    std::env::var(name)
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok())
-}
-
 struct PrintCtx {
     /// Output formatting configuration (indent width, line margins, …).
-    /// Populated from environment variables at [`PrintCtx::new`] time
-    /// via [`PrintConfig::from_env`].
+    /// [`PrintConfig::default`] until the caller supplies one.
     config: PrintConfig,
     /// Per-arch stack/frame-pointer register offsets, resolved from the
     /// function's architecture when the caller supplied it (see
@@ -2876,7 +2832,7 @@ impl PrintCtx {
             }
         }
         Self {
-            config: PrintConfig::from_env(),
+            config: PrintConfig::default(),
             stack_spec: None,
             next_var: start_next,
             var_names: BTreeMap::new(),
@@ -3120,14 +3076,11 @@ fn try_resolve_struct_field(
     if traces_to_frame_base(base_input, None, addr_stmt_idx, ctx, 0) {
         return None;
     }
-    let trace = std::env::var_os("UNLACE_TYPE_TRACE").is_some();
     let Some(field_name) = field_name_for_offset(ctx, const_offset) else {
-        if trace {
-            eprintln!(
-                "[unlace:type] struct-field no-field-at-offset off={const_offset} known_offsets={:?}",
-                ctx.field_by_offset.keys().collect::<Vec<_>>()
-            );
-        }
+        tracing::debug!(target: "unlace::cprinter::types",
+            "struct-field no-field-at-offset off={const_offset} known_offsets={:?}",
+            ctx.field_by_offset.keys().collect::<Vec<_>>()
+        );
         return None;
     };
     let base_sv = ctx
@@ -3141,18 +3094,16 @@ fn try_resolve_struct_field(
                 if let Some(di) = ctx.stmt_insns.get(&ds).cloned() {
                     format!("({})", emit_expr(&di, ds, ctx))
                 } else {
-                    fallback_field_base_name(ctx, &sv.base, trace)?
+                    fallback_field_base_name(ctx, &sv.base)?
                 }
             } else {
-                fallback_field_base_name(ctx, &sv.base, trace)?
+                fallback_field_base_name(ctx, &sv.base)?
             }
         }
-        None => fallback_field_base_name(ctx, base_input, trace)?,
+        None => fallback_field_base_name(ctx, base_input)?,
     };
     if is_generic_address_expr(&base_expr) {
-        if trace {
-            eprintln!("[unlace:type] struct-field generic-base base_expr={base_expr:?}");
-        }
+        tracing::debug!(target: "unlace::cprinter::types", "struct-field generic-base base_expr={base_expr:?}");
         return None;
     }
     // `->` is postfix (binds tighter than `-`/`+`), so a non-atomic base like
@@ -3170,7 +3121,7 @@ fn try_resolve_struct_field(
 /// this required a `name_overrides` entry and returned `None` otherwise, which
 /// made a struct field load through a plain `vN` base (no DWARF param) miss the
 /// `->field` rendering and fall through to raw array-index output.
-fn fallback_field_base_name(ctx: &mut PrintCtx, base: &Varnode, trace: bool) -> Option<String> {
+fn fallback_field_base_name(ctx: &mut PrintCtx, base: &Varnode) -> Option<String> {
     if let Some(name) = ctx.name_overrides.get(base) {
         return meaningful_field_base_name(name);
     }
@@ -3180,9 +3131,7 @@ fn fallback_field_base_name(ctx: &mut PrintCtx, base: &Varnode, trace: bool) -> 
         base: *base,
         version: 0,
     });
-    if trace {
-        eprintln!("[unlace:type] struct-field fallback-base name={name:?}");
-    }
+    tracing::debug!(target: "unlace::cprinter::types", "struct-field fallback-base name={name:?}");
     meaningful_field_base_name(&name)
 }
 
@@ -3248,9 +3197,9 @@ fn try_resolve_field_from_addr(
     };
     let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
     let resolved = try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx);
-    if resolved.is_none() && std::env::var_os("UNLACE_TYPE_TRACE").is_some() {
-        eprintln!(
-            "[unlace:type] field miss stmt={stmt_idx} addr={addr_vn:?} def_stmt={def_stmt} op={:?}",
+    if resolved.is_none() {
+        tracing::debug!(target: "unlace::cprinter::types",
+            "field miss stmt={stmt_idx} addr={addr_vn:?} def_stmt={def_stmt} op={:?}",
             def_insn.op
         );
     }
@@ -4443,9 +4392,9 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
             .as_ref()
             .and_then(|slots| slots.inputs.get(&raw_idx).copied())
         {
-            if sv.base != *input && c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] collect stmt={idx} addr=0x{:x} op={:?} input{raw_idx} raw={input:?} annotated={sv:?}; using annotated SSA slot",
+            if sv.base != *input {
+                tracing::debug!(target: "unlace::cprinter",
+                    "collect stmt={idx} addr=0x{:x} op={:?} input{raw_idx} raw={input:?} annotated={sv:?}; using annotated SSA slot",
                     insn.addr, insn.op
                 );
             }
@@ -4467,13 +4416,10 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
             } else {
                 "collect-input-current"
             };
-            let text = format!(
+            tracing::debug!(target: "unlace::cprinter::name",
                 "{source} stmt={idx} addr=0x{:x} op={:?} raw_idx={raw_idx} raw={input:?} sv={sv:?} name={name}",
                 insn.addr, insn.op
             );
-            if trace_text_matches_filter(&text) {
-                eprintln!("[unlace-output] {text}");
-            }
         }
         input_svs.push(sv);
         input_slots.insert(raw_idx, sv);
@@ -4520,34 +4466,26 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
     ctx.stmt_insns.insert(idx, insn.clone());
     if c_printer_name_trace_enabled() {
         if let Some(sv) = output_sv {
-            let text = format!(
+            tracing::debug!(target: "unlace::cprinter::name",
                 "collect-output stmt={idx} addr=0x{:x} op={:?} output={sv:?} name={:?}",
                 insn.addr,
                 insn.op,
                 known_name_of_sv(ctx, &sv)
             );
-            if trace_text_matches_filter(&text) {
-                eprintln!("[unlace-output] {text}");
-            }
         } else {
-            let text = format!(
+            tracing::debug!(target: "unlace::cprinter::name",
                 "collect-output stmt={idx} addr=0x{:x} op={:?} output=None",
                 insn.addr, insn.op
             );
-            if trace_text_matches_filter(&text) {
-                eprintln!("[unlace-output] {text}");
-            }
         }
     }
-    if c_printer_trace_enabled() {
-        eprintln!(
-            "[unlace-output] collect stmt={idx} addr=0x{:x} op={:?} output={:?} inputs={:?}",
-            insn.addr,
-            insn.op,
-            output_sv,
-            ctx.stmt_input_slots.get(&idx)
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter",
+        "collect stmt={idx} addr=0x{:x} op={:?} output={:?} inputs={:?}",
+        insn.addr,
+        insn.op,
+        output_sv,
+        ctx.stmt_input_slots.get(&idx)
+    );
     idx
 }
 
@@ -5021,12 +4959,10 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         };
 
         if ctx.commented_stmts.contains(&stmt_idx) {
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=commented-keep",
-                    insn.op
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=commented-keep",
+                insn.op
+            );
             continue;
         }
 
@@ -5046,22 +4982,18 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         // `v4 = *(_DWORD *)(a1 + 8)` back to a 3-line `v3 = a1 + 8; v4 = *v3;`
         // with an interposed comment.
         if ctx.line_comments.contains_key(&insn.addr) {
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} addr={:#x} decision=line-comment-keep",
-                    insn.op, insn.addr
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} addr={:#x} decision=line-comment-keep",
+                insn.op, insn.addr
+            );
             continue;
         }
 
         if def_counts.get(&output_sv).copied().unwrap_or(0) > 1 {
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=multi-def-merge",
-                    insn.op
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=multi-def-merge",
+                insn.op
+            );
             continue;
         }
 
@@ -5069,12 +5001,10 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             if insn.op == IrOp::Load && is_temp_varnode(&output_sv.base) {
                 ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
             }
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=never",
-                    insn.op
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=never",
+                insn.op
+            );
             continue;
         }
 
@@ -5093,12 +5023,10 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             if use_count > 0 && is_temp_varnode(&output_sv.base) {
                 ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
             }
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=not-single-use",
-                    insn.op
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=not-single-use",
+                insn.op
+            );
             continue;
         }
 
@@ -5112,22 +5040,18 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             let def_depth = ctx.stmt_depths.get(&stmt_idx).copied().unwrap_or(0);
             let is_returned_merge = ctx.returned_svs.contains(&output_sv) && def_depth > 0;
             if is_returned_merge {
-                if c_printer_trace_enabled() {
-                    eprintln!(
-                        "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} def_depth={def_depth} decision=returned-branch-merge-keep",
-                        insn.op
-                    );
-                }
+                tracing::debug!(target: "unlace::cprinter",
+                    "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} def_depth={def_depth} decision=returned-branch-merge-keep",
+                    insn.op
+                );
                 continue;
             }
             ctx.foldable_stmts.insert(stmt_idx);
             ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} def_depth={def_depth} decision=cond-only",
-                    insn.op
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} def_depth={def_depth} decision=cond-only",
+                insn.op
+            );
             continue;
         }
 
@@ -5138,8 +5062,8 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             && let Some(scanned_consumer) = consumer_stmt
             && sv_consumer_stmt.get(&output_sv).copied() != Some(scanned_consumer)
         {
-            eprintln!(
-                "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} consumer-map={:?} consumer-scan={scanned_consumer}",
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} consumer-map={:?} consumer-scan={scanned_consumer}",
                 insn.op,
                 sv_consumer_stmt.get(&output_sv)
             );
@@ -5149,12 +5073,10 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             .unwrap_or(u32::MAX);
 
         if def_depth != consumer_depth {
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=depth-mismatch def_depth={def_depth} consumer_depth={consumer_depth}",
-                    insn.op
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=depth-mismatch def_depth={def_depth} consumer_depth={consumer_depth}",
+                insn.op
+            );
             continue;
         }
 
@@ -5167,12 +5089,10 @@ fn compute_foldable(ctx: &mut PrintCtx) {
                 ctx,
             )
         {
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=snapshot-source-redefined consumer={consumer_stmt}",
-                    insn.op
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=snapshot-source-redefined consumer={consumer_stmt}",
+                insn.op
+            );
             continue;
         }
 
@@ -5185,23 +5105,19 @@ fn compute_foldable(ctx: &mut PrintCtx) {
                 ctx,
             )
         {
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=expr-input-redefined consumer={consumer_stmt}",
-                    insn.op
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=expr-input-redefined consumer={consumer_stmt}",
+                insn.op
+            );
             continue;
         }
 
         ctx.foldable_stmts.insert(stmt_idx);
         ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
-        if c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} consumer={consumer_stmt:?} def_depth={def_depth} consumer_depth={consumer_depth} decision=fold",
-                insn.op
-            );
-        }
+        tracing::debug!(target: "unlace::cprinter",
+            "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} consumer={consumer_stmt:?} def_depth={def_depth} consumer_depth={consumer_depth} decision=fold",
+            insn.op
+        );
     }
 
     ctx.sv_use_counts = use_counts;
@@ -5273,11 +5189,9 @@ fn refuse_folds_past_aliased_input_redef(ctx: &mut PrintCtx) {
             if let Some((input_sv, redef_stmt, candidate)) = conflict {
                 ctx.foldable_stmts.remove(&stmt_idx);
                 changed = true;
-                if c_printer_trace_enabled() {
-                    eprintln!(
-                        "[unlace-output] unfold stmt={stmt_idx} emission={emission_stmt} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?} reason=transitive-input-redefined",
-                    );
-                }
+                tracing::debug!(target: "unlace::cprinter",
+                    "unfold stmt={stmt_idx} emission={emission_stmt} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?} reason=transitive-input-redefined",
+                );
             }
         }
     }
@@ -5346,12 +5260,10 @@ fn copy_like_snapshot_source_redefined_before_consumer(
     if source_sv == *output_sv {
         return false;
     }
-    if c_printer_trace_enabled() {
-        eprintln!(
-            "[unlace-output] snapshot-source-check stmt={stmt_idx} consumer={consumer_stmt} op={:?} output={output_sv:?} source={source_sv:?}",
-            insn.op
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter",
+        "snapshot-source-check stmt={stmt_idx} consumer={consumer_stmt} op={:?} output={output_sv:?} source={source_sv:?}",
+        insn.op
+    );
 
     if ctx
         .stmt_outputs
@@ -5362,9 +5274,9 @@ fn copy_like_snapshot_source_redefined_before_consumer(
             };
             let redefined = *candidate != source_sv
                 && (candidate.base == source_sv.base || aliases(candidate.base, source_sv.base));
-            if redefined && c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] snapshot-source-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
+            if redefined {
+                tracing::debug!(target: "unlace::cprinter",
+                    "snapshot-source-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
                 );
             }
             redefined
@@ -5606,50 +5518,40 @@ fn snapshot_source_expression_input_redefined_before_consumer(
     ) || output_sv.base.space != SpaceId::Register
         || source_sv.base.space != SpaceId::Unique
     {
-        if c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} op={:?} output={output_sv:?} source={source_sv:?} reason=shape",
-                insn.op
-            );
-        }
+        tracing::debug!(target: "unlace::cprinter",
+            "snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} op={:?} output={output_sv:?} source={source_sv:?} reason=shape",
+            insn.op
+        );
         return false;
     }
 
     let Some(source_def_stmt) = defining_stmt_for_sv(source_sv, ctx) else {
-        if c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} reason=no-source-def",
-            );
-        }
+        tracing::debug!(target: "unlace::cprinter",
+            "snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} reason=no-source-def",
+        );
         return false;
     };
     if source_def_stmt >= stmt_idx {
-        if c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} source_def_stmt={source_def_stmt} reason=source-def-after-copy",
-            );
-        }
+        tracing::debug!(target: "unlace::cprinter",
+            "snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} source_def_stmt={source_def_stmt} reason=source-def-after-copy",
+        );
         return false;
     }
     let Some(source_def) = ctx.stmt_insns.get(&source_def_stmt) else {
         return false;
     };
     if source_def.inputs.len() < 2 || instr_has_side_effects(source_def) {
-        if c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} source_def_stmt={source_def_stmt} source_op={:?} input_count={} reason=source-not-expression",
-                source_def.op,
-                source_def.inputs.len()
-            );
-        }
+        tracing::debug!(target: "unlace::cprinter",
+            "snapshot-source-expr-skip stmt={stmt_idx} consumer={consumer_stmt} source={source_sv:?} source_def_stmt={source_def_stmt} source_op={:?} input_count={} reason=source-not-expression",
+            source_def.op,
+            source_def.inputs.len()
+        );
         return false;
     }
-    if c_printer_trace_enabled() {
-        eprintln!(
-            "[unlace-output] snapshot-source-expr-check stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} source_def_stmt={source_def_stmt} source_op={:?}",
-            source_def.op
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter",
+        "snapshot-source-expr-check stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} source_def_stmt={source_def_stmt} source_op={:?}",
+        source_def.op
+    );
 
     for (input_idx, input) in source_def.inputs.iter().enumerate() {
         if input.space == SpaceId::Const {
@@ -5663,11 +5565,9 @@ fn snapshot_source_expression_input_redefined_before_consumer(
         if input_sv.base.space != SpaceId::Register {
             continue;
         }
-        if c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] snapshot-source-expr-input stmt={stmt_idx} source_def_stmt={source_def_stmt} input_idx={input_idx} input={input_sv:?}",
-            );
-        }
+        tracing::debug!(target: "unlace::cprinter",
+            "snapshot-source-expr-input stmt={stmt_idx} source_def_stmt={source_def_stmt} input_idx={input_idx} input={input_sv:?}",
+        );
         for (&redef_stmt, output) in ctx.stmt_outputs.range((stmt_idx + 1)..consumer_stmt) {
             let Some(candidate) = output else {
                 continue;
@@ -5676,11 +5576,9 @@ fn snapshot_source_expression_input_redefined_before_consumer(
                 continue;
             }
             if candidate.base == input_sv.base || aliases(candidate.base, input_sv.base) {
-                if c_printer_trace_enabled() {
-                    eprintln!(
-                        "[unlace-output] snapshot-source-expr-input-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} source_def_stmt={source_def_stmt} input_idx={input_idx} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
-                    );
-                }
+                tracing::debug!(target: "unlace::cprinter",
+                    "snapshot-source-expr-input-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} source_def_stmt={source_def_stmt} input_idx={input_idx} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
+                );
                 return true;
             }
         }
@@ -5738,11 +5636,9 @@ fn expression_inputs_aliased_redefined_before_consumer(
                 continue;
             }
             if candidate.base == input_sv.base || aliases(candidate.base, input_sv.base) {
-                if c_printer_trace_enabled() {
-                    eprintln!(
-                        "[unlace-output] expr-input-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
-                    );
-                }
+                tracing::debug!(target: "unlace::cprinter",
+                    "expr-input-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
+                );
                 return true;
             }
         }
@@ -5789,12 +5685,10 @@ fn is_stack_canary_compare_artifact(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx
     if !expr_tree_has_fs_canary_load(insn, stmt_idx, ctx, &mut seen, 0) {
         return false;
     }
-    if c_printer_trace_enabled() {
-        eprintln!(
-            "[unlace-output] stmt={stmt_idx} addr=0x{:x} op={:?} decision=suppress-stack-canary-artifact",
-            insn.addr, insn.op
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter",
+        "stmt={stmt_idx} addr=0x{:x} op={:?} decision=suppress-stack-canary-artifact",
+        insn.addr, insn.op
+    );
     true
 }
 
@@ -6135,13 +6029,10 @@ fn trace_dead_suppress_decision(
                 .join(",")
         })
         .unwrap_or_default();
-    let text = format!(
+    tracing::debug!(target: "unlace::cprinter",
         "dead-suppress stmt={stmt_idx} addr=0x{:x} op={:?} out={out_sv:?} name={out_name:?} uses={uses} phi={phi} inputs=[{inputs}] decision={decision} reason={reason}",
         insn.addr, insn.op
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
 }
 
 fn snapshot_assignment_must_be_materialized(
@@ -7966,9 +7857,9 @@ fn input_or_latest_sv_for_operand(
                     .and_then(|inputs| inputs.get(&raw_idx).copied())
             })
     {
-        if sv.base != *vn && c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} annotated={sv:?}; using annotated SSA slot",
+        if sv.base != *vn {
+            tracing::debug!(target: "unlace::cprinter",
+                "operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} annotated={sv:?}; using annotated SSA slot",
             );
         }
         trace_operand_resolution("annotated-slot", stmt_idx, Some(raw_idx), vn, Some(sv), ctx);
@@ -8747,13 +8638,10 @@ fn trace_dedupe_var_name(
     if !c_printer_name_trace_enabled() {
         return;
     }
-    let text = format!(
+    tracing::debug!(target: "unlace::cprinter::name",
         "dedupe name={name} decision={decision} owner={owner_sv:?} candidate={sv:?} replacement={}",
         replacement.unwrap_or("<shared>")
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
 }
 
 /// Set `name_overrides[base] = name` and rewrite any cached `vN` entries in
@@ -11058,12 +10946,10 @@ fn resolve_post_body_control_cond_expr(
         return None;
     }
 
-    if c_printer_trace_enabled() {
-        eprintln!(
-            "[unlace-output] post-body-cond def_stmt={def_stmt} range={start_stmt}..{end_stmt} op={:?} lhs={:?} rhs={:?}",
-            def_insn.op, lhs, rhs
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter",
+        "post-body-cond def_stmt={def_stmt} range={start_stmt}..{end_stmt} op={:?} lhs={:?} rhs={:?}",
+        def_insn.op, lhs, rhs
+    );
 
     let changed = lhs.changed || rhs.changed;
     let rendered = changed.then(|| {
@@ -11407,11 +11293,9 @@ fn rebase_cond_operand_after_body(
     trace_sequence(format_args!(
         "rebase-cond-operand-enter stmt={stmt_idx} raw_idx={raw_idx} range={start_stmt}..{end_stmt} vn={vn:?} sv={sv:?} original={original_text:?}"
     ));
-    if c_printer_trace_enabled() {
-        eprintln!(
-            "[unlace-output] rebase-cond operand stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} sv={sv:?} original={original_text}"
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter",
+        "rebase-cond operand stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?} sv={sv:?} original={original_text}"
+    );
 
     let candidate_bases = condition_rebase_candidate_bases(&sv, ctx);
     trace_sequence(format_args!(
@@ -11509,7 +11393,9 @@ fn rebase_compare_copy_source_after_body(
             return None;
         }
     }
-    if source_is_reassigned_before_condition(&source, def_stmt, stmt_idx, ctx) {
+    if source_is_reassigned_before_condition(&source, def_stmt, stmt_idx, ctx)
+        || source_operands_reassigned_before_condition(&source, def_stmt, stmt_idx, ctx, 0)
+    {
         return None;
     }
     let text = pure_condition_source_text(&source, def_stmt, ctx, 0)?;
@@ -11543,6 +11429,45 @@ fn source_is_reassigned_before_condition(
     ctx.stmt_outputs
         .range((copy_stmt + 1)..cond_stmt)
         .any(|(_stmt, output)| output.is_some_and(|out| out.base == source_sv.base))
+}
+
+/// Whether a storage operand read by the temporary `source` expression is
+/// overwritten before the condition. Rendering `source` as text at the
+/// condition is only sound while every storage it reads still holds the same
+/// value; `rax = rax + 1` followed by `rax != n` must not become `rax + 1 != n`.
+fn source_operands_reassigned_before_condition(
+    source: &Varnode,
+    use_stmt: u32,
+    cond_stmt: u32,
+    ctx: &PrintCtx,
+    depth: u8,
+) -> bool {
+    if source.space != SpaceId::Unique || depth >= 4 {
+        return false;
+    }
+    let Some(source_sv) = input_or_latest_sv_for_operand(source, Some(0), use_stmt, ctx) else {
+        return false;
+    };
+    let Some(def_stmt) = defining_stmt_for_sv(&source_sv, ctx) else {
+        return false;
+    };
+    let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
+        return false;
+    };
+    def_insn.inputs.iter().any(|input| match input.space {
+        SpaceId::Const => false,
+        SpaceId::Unique => {
+            source_operands_reassigned_before_condition(input, def_stmt, cond_stmt, ctx, depth + 1)
+        }
+        _ => ctx
+            .stmt_outputs
+            .range((def_stmt + 1)..cond_stmt)
+            .any(|(_stmt, output)| {
+                output.is_some_and(|out| {
+                    out.base.space == input.space && out.base.offset == input.offset
+                })
+            }),
+    })
 }
 
 fn pure_condition_source_text(
@@ -11592,20 +11517,16 @@ fn condition_rebase_candidate_bases(sv: &SsaVarnode, ctx: &PrintCtx) -> Vec<Varn
             bases.push(current.base);
         }
         let Some(def_stmt) = defining_stmt_for_sv(&current, ctx) else {
-            if c_printer_trace_enabled() {
-                eprintln!("[unlace-output] rebase-candidates no def for {current:?}");
-            }
+            tracing::debug!(target: "unlace::cprinter", "rebase-candidates no def for {current:?}");
             break;
         };
         let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
             break;
         };
-        if c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] rebase-candidates current={current:?} def_stmt={def_stmt} op={:?} inputs={:?}",
-                def_insn.op, def_insn.inputs
-            );
-        }
+        tracing::debug!(target: "unlace::cprinter",
+            "rebase-candidates current={current:?} def_stmt={def_stmt} op={:?} inputs={:?}",
+            def_insn.op, def_insn.inputs
+        );
         if !matches!(
             def_insn.op,
             IrOp::Copy | IrOp::Subpiece | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
@@ -11662,11 +11583,9 @@ fn latest_linear_update_copy_for_base_in_range(
     end_stmt: u32,
     ctx: &PrintCtx,
 ) -> Option<(SsaVarnode, i128)> {
-    if c_printer_trace_enabled() {
-        eprintln!(
-            "[unlace-output] linear-rebase search base={base:?} range={start_stmt}..{end_stmt}"
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter",
+        "linear-rebase search base={base:?} range={start_stmt}..{end_stmt}"
+    );
     ctx.stmt_outputs
         .range(start_stmt..end_stmt)
         .rev()
@@ -11676,12 +11595,10 @@ fn latest_linear_update_copy_for_base_in_range(
                 return None;
             }
             let copy = ctx.stmt_insns.get(&stmt_idx)?;
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] linear-rebase candidate stmt={stmt_idx} output={output_sv:?} op={:?} inputs={:?}",
-                    copy.op, copy.inputs
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "linear-rebase candidate stmt={stmt_idx} output={output_sv:?} op={:?} inputs={:?}",
+                copy.op, copy.inputs
+            );
             if !matches!(
                 copy.op,
                 IrOp::Copy | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
@@ -11699,12 +11616,10 @@ fn latest_linear_update_copy_for_base_in_range(
                 return None;
             }
             let source_def = ctx.stmt_insns.get(&source_def_stmt)?;
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] linear-rebase source stmt={source_def_stmt} op={:?} inputs={:?}",
-                    source_def.op, source_def.inputs
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "linear-rebase source stmt={source_def_stmt} op={:?} inputs={:?}",
+                source_def.op, source_def.inputs
+            );
             linear_update_delta_from_base_resolved(source_def, source_def_stmt, base, ctx)
                 .map(|delta| (output_sv, delta))
         })
@@ -13350,9 +13265,9 @@ fn input_is_statement_output(
     let input_sv = stmt_input_sv(ctx, stmt_idx, input_idx);
     if stmt_has_ssa_identity(ctx, stmt_idx) {
         let matched = output_sv.is_some() && input_sv == output_sv;
-        if !matched && c_printer_trace_enabled() {
-            eprintln!(
-                "[unlace-output] self-update stmt={stmt_idx} input={input_idx} decision=reject-ssa-mismatch raw_in={:?} raw_out={:?} input_sv={input_sv:?} output_sv={output_sv:?}",
+        if !matched {
+            tracing::debug!(target: "unlace::cprinter",
+                "self-update stmt={stmt_idx} input={input_idx} decision=reject-ssa-mismatch raw_in={:?} raw_out={:?} input_sv={input_sv:?} output_sv={output_sv:?}",
                 insn.inputs.get(input_idx),
                 insn.output,
             );
@@ -13797,24 +13712,18 @@ fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
 fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     let _span = cprinter_detail_phase("cprinter.emit.inline-statement");
     let idx = ctx.emit_stmt;
-    if c_printer_trace_enabled() {
-        eprintln!(
-            "[unlace-output] inline stmt={idx} addr=0x{:x} op={:?} enter output={:?}",
-            insn.addr,
-            insn.op,
-            ctx.stmt_outputs.get(&idx).copied().flatten()
-        );
-    }
+    tracing::debug!(target: "unlace::cprinter",
+        "inline stmt={idx} addr=0x{:x} op={:?} enter output={:?}",
+        insn.addr,
+        insn.op,
+        ctx.stmt_outputs.get(&idx).copied().flatten()
+    );
     if ctx.source_map.contains_key(&insn.addr) {
-        if c_printer_trace_enabled() {
-            eprintln!("[unlace-output] inline stmt={idx} decision=defer-source-map");
-        }
+        tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=defer-source-map");
         return None;
     }
     if ctx.commented_stmts.contains(&idx) || ctx.line_comments.contains_key(&insn.addr) {
-        if c_printer_trace_enabled() {
-            eprintln!("[unlace-output] inline stmt={idx} decision=defer-comment");
-        }
+        tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=defer-comment");
         return None;
     }
     if matches!(insn.op, IrOp::Call | IrOp::Callind)
@@ -13856,23 +13765,17 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
         || is_dead_suppressed_stack_load(insn, idx, ctx)
         || is_stack_canary_compare_artifact(insn, idx, ctx)
     {
-        if c_printer_trace_enabled() {
-            eprintln!("[unlace-output] inline stmt={idx} decision=suppress-fold-dead");
-        }
+        tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=suppress-fold-dead");
         return Some(String::new());
     }
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         if is_x86_frame_base_update(insn, &sv.base) {
-            if c_printer_trace_enabled() {
-                eprintln!("[unlace-output] inline stmt={idx} decision=suppress-frame-base");
-            }
+            tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=suppress-frame-base");
             return Some(String::new());
         }
         if is_control_only_condition_assignment(idx, &sv, insn, ctx) {
-            if c_printer_trace_enabled() {
-                eprintln!("[unlace-output] inline stmt={idx} decision=suppress-control-cond");
-            }
+            tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=suppress-control-cond");
             return Some(String::new());
         }
         // A void-returning runtime helper (e.g. `__stack_chk_fail`) must never
@@ -13903,37 +13806,27 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
         let lhs = ctx.name_of(&sv);
         if let Some(short) = try_emit_increment_form(insn, idx, &lhs, ctx) {
             let rendered = format!("{};", short);
-            if c_printer_trace_enabled() {
-                eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
-            }
+            tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=emit text={rendered}");
             Some(rendered)
         } else if let Some(short) = try_emit_compound_assign(insn, idx, &lhs, ctx) {
             let rendered = format!("{};", short);
-            if c_printer_trace_enabled() {
-                eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
-            }
+            tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=emit text={rendered}");
             Some(rendered)
         } else if insn.op == IrOp::Call {
             if let Some(bracket) = objc_bracket_call(insn, ctx) {
                 let rendered = format_inline_assignment(idx, &sv, &lhs, bracket, ctx);
-                if c_printer_trace_enabled() {
-                    eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
-                }
+                tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=emit text={rendered}");
                 Some(rendered)
             } else {
                 let rhs = emit_direct_call_expr(insn, idx, ctx);
                 let rendered = format_inline_assignment(idx, &sv, &lhs, rhs, ctx);
-                if c_printer_trace_enabled() {
-                    eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
-                }
+                tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=emit text={rendered}");
                 Some(rendered)
             }
         } else {
             let rhs = emit_expr(insn, idx, ctx);
             let rendered = format_inline_assignment(idx, &sv, &lhs, rhs, ctx);
-            if c_printer_trace_enabled() {
-                eprintln!("[unlace-output] inline stmt={idx} decision=emit text={rendered}");
-            }
+            tracing::debug!(target: "unlace::cprinter", "inline stmt={idx} decision=emit text={rendered}");
             Some(rendered)
         }
     } else {
@@ -14060,12 +13953,10 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             // CSEL-family intrinsic). Suppress it rather than leaking a
             // side-effect-free `__unlace_int_*` / `__unlace_copy` statement.
             _ if is_dead_no_output_scalar_op(insn, idx, ctx) => {
-                if c_printer_trace_enabled() {
-                    eprintln!(
-                        "[unlace-output] inline stmt={idx} decision=suppress-dead-pure-no-output op={:?}",
-                        insn.op
-                    );
-                }
+                tracing::debug!(target: "unlace::cprinter",
+                    "inline stmt={idx} decision=suppress-dead-pure-no-output op={:?}",
+                    insn.op
+                );
                 Some(String::new())
             }
             // Batch 19 DOD: unsupported statement-level opcodes render as
@@ -14271,15 +14162,12 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                         .collect()
                 })
                 .unwrap_or_default();
-            let text = format!(
+            tracing::debug!(target: "unlace::cprinter::name",
                 "emit-stmt stmt={idx} addr=0x{:x} op={:?} output={sv:?} lhs={lhs} inputs=[{}]",
                 insn.addr,
                 insn.op,
                 input_names.join(", ")
             );
-            if trace_text_matches_filter(&text) {
-                eprintln!("[unlace-output] {text}");
-            }
         }
 
         if matches!(insn.op, IrOp::Call | IrOp::Callind)
@@ -15195,13 +15083,10 @@ fn emit_expr_with_prec(
             } else {
                 expr
             };
-            if c_printer_trace_enabled() {
-                let text =
-                    format!("emit-select stmt={stmt_idx} parent={parent:?} rendered={rendered:?}");
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(
+                target: "unlace::cprinter",
+                "emit-select stmt={stmt_idx} parent={parent:?} rendered={rendered:?}"
+            );
             rendered
         }
 
@@ -16780,14 +16665,9 @@ fn emit_operand_with_prec(
         let _span = cprinter_detail_phase("cprinter.emit.operand.readonly-scalar");
         try_readonly_scalar_value_for_sv(&sv, ctx)
     } {
-        if c_printer_name_trace_enabled() {
-            let text = format!(
-                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=readonly value={value}"
-            );
-            if trace_text_matches_filter(&text) {
-                eprintln!("[unlace-output] {text}");
-            }
-        }
+        tracing::debug!(target: "unlace::cprinter::name",
+            "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=readonly value={value}"
+        );
         trace_full(format_args!(
             "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=readonly rendered={value:?}"
         ));
@@ -16799,14 +16679,9 @@ fn emit_operand_with_prec(
     {
         if def_insn.op == IrOp::Load && !stable_load_expr_is_inlineable(&def_insn, def_stmt, ctx) {
             let name = ctx.name_of(&sv);
-            if c_printer_name_trace_enabled() {
-                let text = format!(
-                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op=Load decision=unstable-load-name name={name}",
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::name",
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op=Load decision=unstable-load-name name={name}",
+            );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op=Load decision=unstable-load-name rendered={name:?}"
             ));
@@ -16815,15 +16690,10 @@ fn emit_operand_with_prec(
         if ctx.commented_stmts.contains(&def_stmt) || ctx.line_comments.contains_key(&def_insn.addr)
         {
             let name = ctx.name_of(&sv);
-            if c_printer_name_trace_enabled() {
-                let text = format!(
-                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=commented-def-name name={name}",
-                    def_insn.op
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::name",
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=commented-def-name name={name}",
+                def_insn.op
+            );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=commented-def-name rendered={name:?}",
                 def_insn.op
@@ -16839,15 +16709,10 @@ fn emit_operand_with_prec(
                 "emit-operand-materialized-source stmt={stmt_idx} raw_idx={raw_idx} sv={sv:?} def_stmt={def_stmt} op={:?} materialized_sv={materialized_sv:?} name={name:?}",
                 def_insn.op
             ));
-            if c_printer_name_trace_enabled() {
-                let text = format!(
-                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-source-name materialized={materialized_sv:?} name={name}",
-                    def_insn.op
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::name",
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-source-name materialized={materialized_sv:?} name={name}",
+                def_insn.op
+            );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-source-name materialized={materialized_sv:?} rendered={name:?}",
                 def_insn.op
@@ -16861,21 +16726,14 @@ fn emit_operand_with_prec(
             )
         };
         if !ctx.foldable_stmts.contains(&def_stmt) && snapshot_source_redefined {
-            if c_printer_trace_enabled() {
-                eprintln!(
-                    "[unlace-output] operand stmt={stmt_idx} sv={sv:?} def_stmt={def_stmt} decision=snapshot-name"
-                );
-            }
+            tracing::debug!(target: "unlace::cprinter",
+                "operand stmt={stmt_idx} sv={sv:?} def_stmt={def_stmt} decision=snapshot-name"
+            );
             let name = ctx.name_of(&sv);
-            if c_printer_name_trace_enabled() {
-                let text = format!(
-                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=snapshot-name name={name}",
-                    def_insn.op
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::name",
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=snapshot-name name={name}",
+                def_insn.op
+            );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=snapshot-name rendered={name:?}",
                 def_insn.op
@@ -16890,15 +16748,10 @@ fn emit_operand_with_prec(
         };
         if alias_redefined_before_consumer {
             let name = ctx.name_of(&sv);
-            if c_printer_name_trace_enabled() {
-                let text = format!(
-                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=expr-input-stale name={name}",
-                    def_insn.op
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::name",
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=expr-input-stale name={name}",
+                def_insn.op
+            );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=expr-input-stale rendered={name:?}",
                 def_insn.op
@@ -16915,15 +16768,10 @@ fn emit_operand_with_prec(
                 "emit-operand-materialized-cond stmt={stmt_idx} raw_idx={raw_idx} sv={sv:?} def_stmt={def_stmt} op={:?} name={name:?} reason=def-emitted-before-condition",
                 def_insn.op
             ));
-            if c_printer_name_trace_enabled() {
-                let text = format!(
-                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-cond-name name={name}",
-                    def_insn.op
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::name",
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-cond-name name={name}",
+                def_insn.op
+            );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-cond-name rendered={name:?}",
                 def_insn.op
@@ -16932,15 +16780,10 @@ fn emit_operand_with_prec(
         }
         if !ctx.resolving_exprs.insert(sv) {
             let name = ctx.name_of(&sv);
-            if c_printer_name_trace_enabled() {
-                let text = format!(
-                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=cycle name={name}",
-                    def_insn.op
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::name",
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=cycle name={name}",
+                def_insn.op
+            );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=cycle rendered={name:?}",
                 def_insn.op
@@ -16952,15 +16795,10 @@ fn emit_operand_with_prec(
             emit_expr_with_prec(&def_insn, def_stmt, parent, ctx)
         };
         ctx.resolving_exprs.remove(&sv);
-        if c_printer_name_trace_enabled() {
-            let text = format!(
-                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=inline rendered={rendered}",
-                def_insn.op
-            );
-            if trace_text_matches_filter(&text) {
-                eprintln!("[unlace-output] {text}");
-            }
-        }
+        tracing::debug!(target: "unlace::cprinter::name",
+            "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=inline rendered={rendered}",
+            def_insn.op
+        );
         trace_full(format_args!(
             "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=inline rendered={rendered:?}",
             def_insn.op
@@ -16979,15 +16817,10 @@ fn emit_operand_with_prec(
     {
         if !ctx.resolving_exprs.insert(sv) {
             let name = ctx.name_of(&sv);
-            if c_printer_name_trace_enabled() {
-                let text = format!(
-                    "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-cycle name={name}",
-                    def_insn.op
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::name",
+                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-cycle name={name}",
+                def_insn.op
+            );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-cycle rendered={name:?}",
                 def_insn.op
@@ -16999,15 +16832,10 @@ fn emit_operand_with_prec(
             emit_expr_with_prec(&def_insn, def_stmt, parent, ctx)
         };
         ctx.resolving_exprs.remove(&sv);
-        if c_printer_name_trace_enabled() {
-            let text = format!(
-                "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-inline rendered={rendered}",
-                def_insn.op
-            );
-            if trace_text_matches_filter(&text) {
-                eprintln!("[unlace-output] {text}");
-            }
-        }
+        tracing::debug!(target: "unlace::cprinter::name",
+            "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-inline rendered={rendered}",
+            def_insn.op
+        );
         trace_full(format_args!(
             "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=stable-load-inline rendered={rendered:?}",
             def_insn.op
@@ -17016,14 +16844,9 @@ fn emit_operand_with_prec(
     }
 
     let name = ctx.name_of(&sv);
-    if c_printer_name_trace_enabled() {
-        let text = format!(
-            "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=name name={name}"
-        );
-        if trace_text_matches_filter(&text) {
-            eprintln!("[unlace-output] {text}");
-        }
-    }
+    tracing::debug!(target: "unlace::cprinter::name",
+        "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=name name={name}"
+    );
     trace_full(format_args!(
         "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=name rendered={name:?}"
     ));
@@ -18252,7 +18075,7 @@ fn x86_64_register_name(offset: u64, size: u8) -> &'static str {
 ///
 /// Replaces the previous hard-coded `"    "` literal so callers can drive
 /// the indent step from [`PrintCtx::config`] (and ultimately from the
-/// `UNLACE_TAB_WIDTH` env var or IDA's `module_data + 592` indent
+/// `[printer]` config table or IDA's `module_data + 592` indent
 /// configuration). With `tab_width = 4` (the default) output remains
 /// byte-identical to the pre-config behaviour.
 fn indent(depth: usize, tab_width: usize, out: &mut String) {

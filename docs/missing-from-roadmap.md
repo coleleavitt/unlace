@@ -1,8 +1,8 @@
 # Features Missing from ROADMAP.md
 
 > Historical input snapshot. The root `ROADMAP.md`, `docs/roadmap.md`, and
-> `docs/status.md` now absorb the CLI-first gaps from this file. Frontend rows here
-> are intentionally out of scope for the current roadmap pass, and
+> `docs/status.md` now absorb the CLI-first gaps from this file.
+> IDA's UI windows are not listed: unlace is CLI/headless only, and
 > implementation status must be rechecked against current source before copying
 > any "zero coverage" claim.
 
@@ -10,31 +10,6 @@ This document lists IDA features that are NOT currently in the unlace roadmap.
 Derived from `research/ida-hexrays-docs/GAP_ANALYSIS_FROM_DOCS.md` (55 changelogs + 33 PDFs + 156 tips).
 
 ## Tier 1: Critical Missing (Would Block Adoption)
-
-### UI / Workflow (out of scope for current roadmap)
-
-The current roadmap intentionally excludes frontend productization.
-
-| Feature | IDA Version | Impact |
-|---------|-------------|--------|
-| Disassembly view | core | **CRITICAL** |
-| Pseudocode view | core | **CRITICAL** |
-| Graph view (CFG) | 4.7+ | **CRITICAL** |
-| Hex view | core | High |
-| Functions list | 5.6+ | High |
-| Names/Imports/Exports windows | core | High |
-| Local Types editor | 8.4 | Medium |
-| Stack frame view | core | Medium |
-| Cross-references tree/graph | 9.2+ | High |
-| Microcode viewer (interactive) | 9.2+ | Medium |
-| Command palette | 8.0+ | Medium |
-| Synced views (disasm ⇄ pseudo ⇄ hex) | core | High |
-| Function call hierarchy | 9.2+ | Medium |
-| Dark theme | 7.0+ | Low |
-| Bookmarks | core | Medium |
-
-**Recommendation:** Keep these rows out of the CLI-first roadmap. Revisit them in
-a separate product-surface plan only if frontend work becomes active again.
 
 ### Debugger (partial substrate, production breadth missing)
 

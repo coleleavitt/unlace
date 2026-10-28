@@ -62,7 +62,7 @@ fn interproc_converges_on_branches() {
         funcs.len()
     );
 
-    let report = pipeline::run_whole_program_interproc(&mut funcs, 0)
+    let report = pipeline::run_whole_program_interproc(&mut funcs, 0, &Default::default())
         .expect("interproc fixed-point should succeed");
 
     assert!(
@@ -90,7 +90,7 @@ fn interproc_runs_on_medium_without_panic() {
         funcs.len()
     );
 
-    let report = pipeline::run_whole_program_interproc(&mut funcs, 0)
+    let report = pipeline::run_whole_program_interproc(&mut funcs, 0, &Default::default())
         .expect("interproc fixed-point should succeed on medium.elf");
 
     assert!(report.iterations >= 1);

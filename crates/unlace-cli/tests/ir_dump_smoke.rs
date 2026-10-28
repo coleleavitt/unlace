@@ -1,6 +1,6 @@
 //! Smoke tests for the `unlace ir-dump` subcommand (Batch 16 slice 2).
 //!
-//! `UNLACE_TRACE_PASSES` already prints per-pass IR diffs *during* the
+//! `--log unlace::pass::ir=trace` already prints per-pass IR diffs *during* the
 //! pipeline; this subcommand snapshots the end-state IR after a named
 //! milestone (`lift`, `post-passes`, `post-structuring`) so users can
 //! inspect a single function's final shape without grepping a trace

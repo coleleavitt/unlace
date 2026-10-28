@@ -138,7 +138,7 @@ void sub_1290(void) {
     return;
 }
 
-/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
+/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
 __int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4020) {

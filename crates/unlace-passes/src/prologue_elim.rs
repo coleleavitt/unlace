@@ -166,6 +166,18 @@ fn scan_push_rbp(
         return i;
     }
 
+    // Lifted x86 `push rbp`: `tmp = RSP - 8; RSP = tmp; STORE(tmp, RBP)`.
+    if let Some((start, end)) = (i..=i + 3).find_map(|start| {
+        split_push_range(insns, start)
+            .filter(|&(_, reg)| reg == RBP)
+            .map(|(end, _)| (start, end))
+    }) {
+        for idx in start..=end {
+            marked.insert((bid, idx));
+        }
+        return end + 1;
+    }
+
     // Look for STORE of RBP to a stack address involving RSP.
     let store_idx = find_store_of_reg(insns, i, RBP);
     if let Some(si) = store_idx {
@@ -500,6 +512,18 @@ fn scan_epilogue_frame_restore(
         }
     }
 
+    // Lifted x86 `pop rbp`: `tmp = LOAD(RSP); t = RSP + 8; RSP = t; RBP = tmp`.
+    for idx in (scan_start..i).rev() {
+        if let Some(end) = lowered_pop_end(insns, idx, RBP)
+            && end < i
+        {
+            for marked_idx in idx..=end {
+                marked.insert((bid, marked_idx));
+            }
+            return idx;
+        }
+    }
+
     // Also check for standalone pop rbp pattern:
     // RBP = LOAD(addr); RSP = RSP + 8
     for idx in (scan_start..i).rev() {
@@ -580,6 +604,22 @@ fn mark_pop_rbp_after(
 
         break;
     }
+}
+
+/// Match the lifted `pop reg` sequence starting at `start`:
+/// `tmp = LOAD(RSP); t = RSP + 8; RSP = COPY(t); REG = COPY(tmp)`.
+/// Returns the index of the final copy.
+fn lowered_pop_end(insns: &[unlace_ir::IrInsn], start: usize, reg: u64) -> Option<usize> {
+    let [load, inc, sp_copy, reg_copy] = insns.get(start..start + 4)? else {
+        return None;
+    };
+    let tmp = load.output?;
+    let reads_rsp = load.op == IrOp::Load && load.inputs.get(1).is_some_and(|a| is_reg(a, RSP));
+    let pops = reads_rsp
+        && is_rsp_increment_temp(inc, 8)
+        && copy_from_to(sp_copy, inc.output?, RSP)
+        && copy_from_to(reg_copy, tmp, reg);
+    pops.then_some(start + 3)
 }
 
 fn copy_from_to(insn: &unlace_ir::IrInsn, src: Varnode, dst_reg: u64) -> bool {

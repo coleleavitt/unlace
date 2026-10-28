@@ -152,6 +152,7 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
         final_params.push((name.clone(), narrowed));
     }
 
+    let mut stack_param_slots = BTreeMap::new();
     if final_params.is_empty()
         && let Some(x87_params) = x87_long_double_stack_params(func)
     {
@@ -159,7 +160,10 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
             func,
             format!("x87-stack-params params={x87_params:?} source=inferred-stack-params"),
         );
-        final_params = x87_params;
+        for (idx, (name, ty, slot)) in x87_params.into_iter().enumerate() {
+            final_params.push((name, ty));
+            stack_param_slots.insert(idx, slot);
+        }
     }
 
     // Rule 3: infer return type from caller-side use.
@@ -213,6 +217,7 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
         dropped_param_count: dropped,
         sret,
         variadic: func.variadic.is_some(),
+        stack_param_slots,
     };
     sig_trace_line(
         func,
@@ -486,7 +491,9 @@ fn char_ptr_type() -> Type {
     Type::Named("char *".to_string())
 }
 
-fn x87_long_double_stack_params(func: &SsaFunction) -> Option<Vec<(String, Type)>> {
+/// `long double` parameters of an x87 function, each with its incoming
+/// stack slot.
+fn x87_long_double_stack_params(func: &SsaFunction) -> Option<Vec<(String, Type, i64)>> {
     if !has_x87_callother(func) || func.inferred_stack_params.is_empty() {
         return None;
     }
@@ -496,7 +503,7 @@ fn x87_long_double_stack_params(func: &SsaFunction) -> Option<Vec<(String, Type)
         .copied()
         .filter(|off| *off >= 8)
         .enumerate()
-        .map(|(idx, _off)| (format!("a{}", idx + 1), long_double_type()))
+        .map(|(idx, off)| (format!("a{}", idx + 1), long_double_type(), off))
         .collect::<Vec<_>>();
     (!params.is_empty()).then_some(params)
 }

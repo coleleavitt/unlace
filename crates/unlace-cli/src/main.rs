@@ -148,21 +148,30 @@ fn main() {
             result
         }
         Cmd::Siggen {
-            archive,
+            inputs,
             output,
+            format,
+            name,
+            min_fixed_bytes,
+            exclude_prefixes,
             pattern_len,
             crc_len,
             min_function_len,
             verbose: _,
-        } => run_siggen(
-            &archive,
-            output.as_deref(),
-            unlace_loader::SigGenerateOptions {
-                pattern_len,
-                crc_len,
-                min_function_len,
-            },
-        ),
+        } => match format {
+            args::SigFormat::Sig => {
+                run_siggen_sig(&inputs, output.as_deref(), name, min_fixed_bytes, &exclude_prefixes)
+            }
+            args::SigFormat::Toml => run_siggen(
+                &inputs,
+                output.as_deref(),
+                unlace_loader::SigGenerateOptions {
+                    pattern_len,
+                    crc_len,
+                    min_function_len,
+                },
+            ),
+        },
         Cmd::Batch {
             binary,
             jobs,
@@ -424,17 +433,23 @@ fn run_project(action: ProjectAction) -> Result<()> {
 }
 
 fn run_siggen(
-    archive_path: &std::path::Path,
+    inputs: &[std::path::PathBuf],
     output_path: Option<&std::path::Path>,
     options: unlace_loader::SigGenerateOptions,
 ) -> Result<()> {
-    let patterns =
-        unlace_loader::generate_archive_patterns(archive_path, options).with_context(|| {
-            format!(
-                "failed to generate signatures from '{}'",
-                archive_path.display()
-            )
-        })?;
+    let mut patterns = Vec::new();
+    for archive_path in inputs {
+        patterns.extend(
+            unlace_loader::generate_archive_patterns(archive_path, options).with_context(
+                || {
+                    format!(
+                        "failed to generate signatures from '{}'",
+                        archive_path.display()
+                    )
+                },
+            )?,
+        );
+    }
     let toml = unlace_loader::render_patterns_toml(&patterns);
     if let Some(path) = output_path {
         fs::write(path, toml)
@@ -446,11 +461,62 @@ fn run_siggen(
     profiling::diagnostic(
         "info",
         "generated FLIRT patterns",
-        [
-            TraceField::count("count", patterns.len() as u64),
-            TraceField::text("archive", archive_path.display().to_string()),
-        ],
+        [TraceField::count("count", patterns.len() as u64)],
     );
+    Ok(())
+}
+
+fn run_siggen_sig(
+    inputs: &[std::path::PathBuf],
+    output_path: Option<&std::path::Path>,
+    name: Option<String>,
+    min_fixed_bytes: usize,
+    exclude_prefixes: &[String],
+) -> Result<()> {
+    use unlace_flirt::sig::make::{LibraryObjects, make_sig};
+
+    let output_path = output_path.context("`--format sig` needs `--output <file.sig>`")?;
+    let mut objects = LibraryObjects::default();
+    for input in inputs {
+        let data = fs::read(input).with_context(|| format!("reading {}", input.display()))?;
+        objects
+            .add_file(&data)
+            .with_context(|| format!("reading functions from {}", input.display()))?;
+    }
+    objects.functions.retain(|function| {
+        function.names.iter().all(|n| {
+            exclude_prefixes
+                .iter()
+                .all(|prefix| !n.name.starts_with(prefix.as_str()))
+        })
+    });
+    objects.canonicalize_references();
+    let name = name.unwrap_or_else(|| {
+        inputs[0]
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+    });
+    let mut spec = objects
+        .sig_spec(name)
+        .context("inputs contain no x86, x86-64, ARM or AArch64 objects")?;
+    spec.min_fixed_bytes = min_fixed_bytes;
+    let (bytes, report) = make_sig(&spec, &objects.functions)?;
+    fs::write(output_path, &bytes)
+        .with_context(|| format!("writing {}", output_path.display()))?;
+    eprintln!(
+        "{}: {} modules from {} functions ({} too short, {} duplicates, \
+         {} collisions resolved, {} dropped)",
+        output_path.display(),
+        report.modules,
+        objects.functions.len(),
+        report.too_short,
+        report.duplicates,
+        report.resolved_collisions,
+        report.dropped_collisions.len(),
+    );
+    for names in &report.dropped_collisions {
+        tracing::debug!(target: "unlace::flirt", names = ?names, "collision dropped");
+    }
     Ok(())
 }
 

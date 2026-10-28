@@ -2026,6 +2026,7 @@ fn t230_dropped_param_shrinks_header() {
     ];
     func.finalized_signature = Some(FinalizedSignature {
         variadic: false,
+        stack_param_slots: BTreeMap::new(),
         params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))],
         return_type: Type::Primitive(PrimitiveType::Unknown),
         dropped_param_count: 1,
@@ -2062,6 +2063,7 @@ fn variadic_signature_ends_header_with_ellipsis() {
             dropped_param_count: 0,
             sret: false,
             variadic: true,
+            stack_param_slots: BTreeMap::new(),
         });
         print_c(&func)
     };
@@ -2091,6 +2093,7 @@ fn t263_dropped_param_comment_uses_dead_in_body_phrasing() {
     ];
     func.finalized_signature = Some(FinalizedSignature {
         variadic: false,
+        stack_param_slots: BTreeMap::new(),
         params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))],
         return_type: Type::Primitive(PrimitiveType::Unknown),
         dropped_param_count: 2,
@@ -2120,6 +2123,7 @@ fn t230_narrowed_byte_param_renders_as_int8() {
     func.params = vec![("a1".into(), PrimitiveType::Int(8))];
     func.finalized_signature = Some(FinalizedSignature {
         variadic: false,
+        stack_param_slots: BTreeMap::new(),
         params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(1)))],
         return_type: Type::Primitive(PrimitiveType::Unknown),
         dropped_param_count: 0,
@@ -2152,6 +2156,7 @@ fn t230_finalized_return_type_drives_header() {
     // Finalized return type narrowed from consistent caller use to int8.
     func.finalized_signature = Some(FinalizedSignature {
         variadic: false,
+        stack_param_slots: BTreeMap::new(),
         params: vec![],
         return_type: Type::Primitive(PrimitiveType::Int(1)),
         dropped_param_count: 0,
@@ -7268,11 +7273,41 @@ fn test_callother_syscall_tag_resolves_per_arch() {
         print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann))
     };
 
-    let aarch64 = print_for(unlace_ir::ArchId::AArch64, 0x437, Some(0));
-    assert!(aarch64.contains("__svc(0"), "AArch64 SVC: {aarch64}");
-    // PPC `sc` shares its tag value with the AArch64 LD1 tag.
-    let ppc = print_for(unlace_ir::ArchId::Ppc64, 0x400, None);
-    assert!(ppc.contains("__syscall();"), "PPC sc: {ppc}");
+    let aarch64 = print_for(unlace_ir::ArchId::AArch64, 0x437, Some(1));
+    assert!(aarch64.contains("__svc(1"), "AArch64 SVC: {aarch64}");
+}
+
+#[test]
+fn test_syscall_prints_hex_rays_helper() {
+    use unlace_ir::syscall::SyscallConvention;
+    let x = |n: u64| Varnode::reg(n * 8, 8);
+    for (convention, helper) in [
+        (SyscallConvention::Linux, "linux_syscall(0x5dLL, 0LL)"),
+        (
+            SyscallConvention::LinuxEabi,
+            "linux_eabi_syscall(0x5dLL, 0LL)",
+        ),
+        (SyscallConvention::Darwin, "mac_syscall(0x5dLL, 0LL)"),
+    ] {
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                x(8),
+                smallvec![con(93, 8)],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                x(0),
+                smallvec![con(0, 8)],
+                0x1004,
+            )),
+            HirNode::Statement(convention.insn(x(8), [x(0)], x(0), 0x1008)),
+            HirNode::Return(None),
+        ];
+        let out = print_c(&make_func("exit0", body));
+        assert!(out.contains(helper), "{convention:?}: {out}");
+    }
 }
 
 #[test]
@@ -9476,6 +9511,117 @@ fn accessed_stack_arg_slot_is_not_synthesized_as_local() {
     assert!(
         !output.contains("v_16"),
         "accessed stack-argument slot must not be synthesized as a source local: {output}",
+    );
+}
+
+/// A read of a stack-passed parameter's incoming slot prints as the
+/// parameter.
+#[test]
+fn stack_param_slot_reads_print_as_the_parameter() {
+    use unlace_ir::ssa::{FinalizedSignature, FrameSlotKind, StackFrame, StackLocal};
+    use unlace_ir::types::Type;
+
+    let rsp = reg(32, 8);
+    let addr = Varnode::unique(0x100, 8);
+    let loaded = reg(0, 8);
+    let body = vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![rsp, con(8, 8)],
+            0x1000,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::Load,
+            loaded,
+            smallvec![con(1, 8), addr],
+            0x1004,
+        )),
+        HirNode::Return(Some(sv(0, 8))),
+    ];
+    let mut func = make_func("stack_param_read", body);
+    let mut locals = BTreeMap::new();
+    locals.insert(
+        8,
+        StackLocal {
+            offset: 8,
+            size: 8,
+            access_widths: vec![8],
+            kind: FrameSlotKind::StackArg,
+        },
+    );
+    func.stack_frame = Some(StackFrame {
+        locals,
+        frame_size: 8,
+        max_pos_offset: 16,
+        min_neg_offset: 8,
+    });
+    func.finalized_signature = Some(FinalizedSignature {
+        params: vec![("a1".to_string(), Type::Primitive(PrimitiveType::Int(8)))],
+        return_type: Type::Primitive(PrimitiveType::Int(8)),
+        dropped_param_count: 0,
+        sret: false,
+        variadic: false,
+        stack_param_slots: BTreeMap::from([(0, 8)]),
+    });
+
+    let output = print_c(&func);
+    assert!(
+        output.contains("a1;"),
+        "slot read must print as a1: {output}"
+    );
+    assert!(!output.contains("8LL)"), "no raw stack access: {output}");
+}
+
+/// A store into an incoming stack-argument slot is a real write (Go spills
+/// register arguments to the caller's argument area around `morestack`),
+/// so it must be printed even though the slot is not declared as a local.
+#[test]
+fn store_to_stack_arg_slot_is_not_dropped() {
+    use unlace_ir::ssa::{FrameSlotKind, StackFrame, StackLocal};
+
+    let rsp = reg(32, 8);
+    let addr = Varnode::unique(0x100, 8);
+    let body = vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![rsp, con(8, 8)],
+            0x1000,
+        )),
+        HirNode::Statement(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![con(1, 8), addr, reg(0, 8)],
+            0x1004,
+        )),
+        HirNode::Return(None),
+    ];
+    let mut func = make_func("store_stack_arg_slot", body);
+    let mut locals = BTreeMap::new();
+    locals.insert(
+        8,
+        StackLocal {
+            offset: 8,
+            size: 8,
+            access_widths: vec![8],
+            kind: FrameSlotKind::StackArg,
+        },
+    );
+    func.stack_frame = Some(StackFrame {
+        locals,
+        frame_size: 8,
+        max_pos_offset: 16,
+        min_neg_offset: 8,
+    });
+
+    let output = print_c(&func);
+    assert!(
+        output.contains(" + 8LL) = "),
+        "store into the stack-argument slot must be printed: {output}",
+    );
+    assert!(
+        !output.contains("v_8"),
+        "slot must not become a local: {output}"
     );
 }
 

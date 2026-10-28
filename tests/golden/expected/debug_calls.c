@@ -92,7 +92,7 @@ void sub_1070(void) {
     return;
 }
 // debug language: C
-/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
+/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4010) {
@@ -115,58 +115,56 @@ void sub_1120(void) {
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
     int field_0;
-    void * field_4;
+    int field_4;
 };
 
 // debug language: C
-/* Function:   add | Address: 0x1129 | Size: 0x17 (23 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
+/* Function:   add | Address: 0x1129 | Size: 0x17 (23 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs from: unknown */
 int add(int a, int b) {
+    int v_8;
     int v_4;
-    int v2; // rbp
-    _DWORD v3; // temp
     v_4 = (_DWORD)a;
+    v_8 = (_DWORD)b;
     // fixtures/src/calls.c:1
-    _QWORD v4 = v_4; // rdx
-    v3 = *(_DWORD *)(v2 - 8);
-    return v3 + v4;
+    _QWORD v2 = v_4; // rdx
+    return v_8 + v2;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
     int field_0;
-    void * field_4;
+    int field_4;
 };
 
 // debug language: C
-/* Function:   sub | Address: 0x1141 | Size: 0x15 (21 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
+/* Function:   sub | Address: 0x1141 | Size: 0x15 (21 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs from: unknown */
 int sub(int a, int b) {
+    int v_8;
     int v_4;
-    int v2; // rbp
     v_4 = (_DWORD)a;
-    int v3 = v_4; // temp
-    _DWORD v4 = *(_DWORD *)(v2 - 8); // temp
-    return v3 - v4;
+    v_8 = (_DWORD)b;
+    int v2 = v_4; // temp
+    return v2 - v_8;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
     int field_0;
-    void * field_4;
+    int field_4;
 };
 
 // debug language: C
-/* Function:   mul | Address: 0x1157 | Size: 0x16 (22 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
+/* Function:   mul | Address: 0x1157 | Size: 0x16 (22 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs from: unknown */
 int mul(int a, int b) {
     __int64 result; // temp
+    int v_8;
     int v_4;
-    int v3; // rbp
-    _DWORD v4; // temp
     v_4 = (_DWORD)a;
+    v_8 = (_DWORD)b;
     // fixtures/src/calls.c:3
     result = v_4;
-    v4 = *(_DWORD *)(v3 - 8);
-    return result * v4;
+    return result * v_8;
 }
 // debug language: C
-/* Function:   square | Address: 0x116e | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   mul | Xrefs from: unknown */
+/* Function:   square | Address: 0x116e | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x4 (4 bytes) | Xrefs to:   mul | Xrefs from: unknown */
 int square(int x) {
     int v_4;
     v_4 = x;
@@ -174,7 +172,7 @@ int square(int x) {
     return mul(x, v_4);
 }
 // debug language: C
-/* Function:   cube | Address: 0x118e | Size: 0x28 (40 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   mul, square | Xrefs from: unknown */
+/* Function:   cube | Address: 0x118e | Size: 0x28 (40 bytes) | Convention: System V AMD64 | Stack frame: 0x4 (4 bytes) | Xrefs to:   mul, square | Xrefs from: unknown */
 int cube(int x) {
     int v_4;
     v_4 = x;
@@ -182,14 +180,8 @@ int cube(int x) {
     int v1 = (_DWORD)square(x); // temp
     return mul(v1, v_4);
 }
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    int field_0;
-    void * field_4;
-};
-
 // debug language: C
-/* Function:   abs_val | Address: 0x11b7 | Size: 0x16 (22 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
+/* Function:   abs_val | Address: 0x11b7 | Size: 0x16 (22 bytes) | Convention: System V AMD64 | Stack frame: 0x4 (4 bytes) | Xrefs from: unknown */
 int abs_val(int x) {
     int v_4;
     _QWORD result; // rax
@@ -202,55 +194,59 @@ int abs_val(int x) {
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
     int field_0;
-    void * field_4;
+    int field_4;
 };
 
 // debug language: C
-/* Function:   max | Address: 0x11ce | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
+/* Function:   max | Address: 0x11ce | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs from: unknown */
 int max(int a, int b) {
+    int v_8;
     int v_4;
     _QWORD result; // rax
-    int v3; // rbp
     v_4 = (_DWORD)a;
+    v_8 = (_DWORD)b;
     // fixtures/src/calls.c:7
-    _QWORD v4 = *(_DWORD *)(v3 - 8); // rdx
+    _QWORD v3 = v_8; // rdx
     result = v_4;
-    return result <= v4 ? v4 : result;
+    return result <= v3 ? v3 : result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
     int field_0;
-    void * field_4;
+    int field_4;
 };
 
 // debug language: C
-/* Function:   min | Address: 0x11e9 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
+/* Function:   min | Address: 0x11e9 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs from: unknown */
 int min(int a, int b) {
+    int v_8;
     int v_4;
     _QWORD result; // rax
-    int v3; // rbp
     v_4 = (_DWORD)a;
+    v_8 = (_DWORD)b;
     // fixtures/src/calls.c:8
-    _QWORD v4 = *(_DWORD *)(v3 - 8); // rdx
+    _QWORD v3 = v_8; // rdx
     result = v_4;
-    return v4 <= result ? v4 : result;
+    return v3 <= result ? v3 : result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
     int field_0;
-    void * field_4;
+    int field_4;
+    int field_8;
 };
 
 // debug language: C
 /* Function:   clamp | Address: 0x1204 | Size: 0x33 (51 bytes) | Convention: System V AMD64 | Stack frame: 0xc (12 bytes) | Xrefs to:   max, min | Xrefs from: unknown */
 int clamp(int x, int lo, int hi) {
-    int v_4;
     int v_12;
-    int v3; // rbp
+    int v_8;
+    int v_4;
     v_4 = x;
+    v_8 = lo;
     v_12 = hi;
     // fixtures/src/calls.c:9
-    hi = *(_DWORD *)(v3 - 8);
+    hi = v_8;
     lo = hi;
     x = v_4;
     hi = (_DWORD)max(x, lo);
@@ -261,7 +257,8 @@ struct __anon0 {
     int field_0;
     int field_4;
     int field_8;
-    void * field_12;
+    int field_12;
+    int field_16;
 };
 
 // debug language: C
@@ -273,7 +270,6 @@ int compute(int x) {
     //   int c;
     //   int d;
     //   int e;
-    int v_4;
     int a;
     int b;
     int c;
@@ -281,10 +277,11 @@ int compute(int x) {
     int e;
     int v_16;
     int v_12;
+    int v_8;
+    int v_4;
     __int64 v1; // rax
     __int64 v2; // rax
     __int64 v3; // rax
-    __int64 v4; // rax
     a = x;
     x = a;
     e = (_DWORD)add(x, 0xaLL);
@@ -292,23 +289,15 @@ int compute(int x) {
     v_16 = (_DWORD)v1;
     v2 = square(v_16);
     v_12 = (_DWORD)v2;
-    v3 = cube(2LL);
+    v_8 = (_DWORD)cube(2LL);
     // fixtures/src/calls.c:16
-    _QWORD v5 = *(_DWORD *)((uintptr_t)&a - 8); // rdx
-    v4 = sub(v_12, v5);
-    v_4 = (_DWORD)abs_val((_DWORD)v4);
+    _QWORD v4 = v_8; // rdx
+    v3 = sub(v_12, v4);
+    v_4 = (_DWORD)abs_val((_DWORD)v3);
     return clamp(v_4, 0LL, 0x64LL);
 }
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    void * field_0;
-    void * field_8;
-};
-
 // debug language: C
-/* Function:   main | Address: 0x12b4 | Size: 0x13 (19 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   compute | Xrefs from: unknown */
+/* Function:   main | Address: 0x12b4 | Size: 0x13 (19 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   compute | Xrefs from: unknown */
 int main(void) {
-    __int64 result; // rax
-    result = compute(5LL);
-    return result;
+    return compute(5LL);
 }

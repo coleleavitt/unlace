@@ -78,6 +78,7 @@
 mod crc;
 mod decode;
 mod header;
+pub mod make;
 pub mod matching;
 #[cfg(test)]
 pub(crate) mod tests;

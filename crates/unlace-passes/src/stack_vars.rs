@@ -89,6 +89,9 @@ impl Pass for StackVarRecoveryPass {
         let def_map = build_def_map(func);
 
         let mut accesses: BTreeMap<i64, Vec<(SsaVarnode, u8)>> = BTreeMap::new();
+        // The loaded/stored values only: the address operands recorded in
+        // `accesses` are pointers and say nothing about the slot's type.
+        let mut values: BTreeMap<i64, Vec<(SsaVarnode, u8)>> = BTreeMap::new();
         let mut resolve_cache: ResolveCache = BTreeMap::new();
         let mut ssa_resolve_cache: SsaResolveCache = BTreeMap::new();
 
@@ -118,6 +121,7 @@ impl Pass for StackVarRecoveryPass {
                                 func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(2)))
                             {
                                 accesses.entry(offset).or_default().push((sv, value_size));
+                                values.entry(offset).or_default().push((sv, value_size));
                             }
                             // Also record the address varnode
                             if let Some(&sv) =
@@ -147,6 +151,7 @@ impl Pass for StackVarRecoveryPass {
                                 func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output))
                             {
                                 accesses.entry(offset).or_default().push((sv, load_size));
+                                values.entry(offset).or_default().push((sv, load_size));
                             }
                             // Also record the address varnode
                             if let Some(&sv) =
@@ -174,6 +179,7 @@ impl Pass for StackVarRecoveryPass {
                     let offset = output.offset as i64;
                     if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)) {
                         accesses.entry(offset).or_default().push((sv, output.size));
+                        values.entry(offset).or_default().push((sv, output.size));
                     }
                 }
                 for (inp_idx, inp) in insn.inputs.iter().enumerate() {
@@ -184,6 +190,7 @@ impl Pass for StackVarRecoveryPass {
                                 .get(&(bid, insn_idx, VarnodeSlot::Input(inp_idx)))
                         {
                             accesses.entry(offset).or_default().push((sv, inp.size));
+                            values.entry(offset).or_default().push((sv, inp.size));
                         }
                     }
                 }
@@ -200,7 +207,18 @@ impl Pass for StackVarRecoveryPass {
                     format!("local_{abs_offset:x}")
                 });
 
-            let ty = infer_stack_var_type(access_list, &func.var_types);
+            let ty = match infer_stack_var_type(
+                values.get(offset).map_or(&[][..], Vec::as_slice),
+                &func.var_types,
+            ) {
+                PrimitiveType::Unknown => access_list
+                    .first()
+                    .filter(|&&(_, size)| size > 0)
+                    .map_or(PrimitiveType::Unknown, |&(_, size)| {
+                        PrimitiveType::Int(size)
+                    }),
+                ty => ty,
+            };
 
             let mut unique_varnodes: Vec<SsaVarnode> = Vec::new();
             for &(sv, _) in access_list {
@@ -873,6 +891,35 @@ mod tests {
     }
     fn rbp() -> Varnode {
         Varnode::reg(40, 8)
+    }
+
+    /// The address operand of a slot access is a pointer; only the stored
+    /// value decides the slot's type.
+    #[test]
+    fn slot_type_ignores_the_address_operand_type() {
+        let addr = Varnode::unique(0, 8);
+        let insns = vec![
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                addr,
+                smallvec![rbp(), Varnode::constant((-8i64) as u64, 8)],
+                0x1000,
+            ),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![Varnode::constant(1, 8), addr, Varnode::constant(0, 4)],
+                0x1004,
+            ),
+        ];
+        let mut ssa = make_single_block_ssa(insns);
+        let addr_sv = ssa.var_map[&(BlockId(0), 0, VarnodeSlot::Output)];
+        ssa.var_types.insert(addr_sv, PrimitiveType::Ptr);
+
+        StackVarRecoveryPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+
+        assert_eq!(ssa.stack_vars[&-8].ty, PrimitiveType::Int(4));
     }
 
     #[test]

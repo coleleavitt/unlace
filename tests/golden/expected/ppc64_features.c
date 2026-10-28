@@ -55,12 +55,14 @@ void sub_10000120(void);
 
 /* Function:   _start | Address: 0x10000100 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
-    __syscall();
+    linux_syscall(1LL, 0LL, 0x14LL, 0x1eLL, -10LL);
     return;
 }
-/* Function:   sub_10000104 | Address: 0x10000104 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_10000104 | Address: 0x10000104 | Size: 0x14 (20 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10000104(void) {
-    __syscall();
+    __int64 v0 = v1 + 0x14LL; // rbp
+    __int64 v1 = 0; // rbx
+    linux_syscall(1LL, 0LL, 0x14LL, v0, v1 - 0x14LL);
     return;
 }
 /* Function:   ppc_branch | Address: 0x1000011c | Size: 0x18 (24 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

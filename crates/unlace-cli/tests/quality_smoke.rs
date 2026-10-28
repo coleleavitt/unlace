@@ -358,8 +358,9 @@ fn baseline_branches() {
         "branches: no unknown Callother semantic gaps"
     );
     assert_eq!(
-        t.stack_vars_recovered, 3,
-        "branches: startup stack artifacts remain recovered"
+        t.stack_vars_recovered, 2,
+        "branches: startup stack artifacts remain recovered (the `push rbp` \
+         save is frame setup, not a stack variable)"
     );
     assert_eq!(
         t.struct_fields_recovered, 2,

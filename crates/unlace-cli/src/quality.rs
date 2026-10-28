@@ -820,6 +820,9 @@ enum CallotherClass {
 }
 
 fn classify_callother(insn: &IrInsn) -> CallotherClass {
+    if unlace_ir::syscall::SyscallConvention::of(insn).is_some() {
+        return CallotherClass::KnownIntrinsic;
+    }
     match callother_tag(insn) {
         Some(0x300) => CallotherClass::TrapOrPadding,
         Some(tag) if is_known_callother_tag(tag) => CallotherClass::KnownIntrinsic,

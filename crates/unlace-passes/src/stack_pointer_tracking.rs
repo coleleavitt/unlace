@@ -54,7 +54,7 @@ impl Pass for StackPointerTrackingPass {
             walk_sp_deltas(func, &spec);
         let stack_holes = compute_stack_holes(func, min_depth);
         let saved_register_slots =
-            classify_saved_register_slots(func, &spec, &block_entry_sp_delta);
+            classify_saved_register_slots(func, &spec, &block_entry_sp_delta, &sp_delta_at);
         let frame_holes = compute_frame_holes(func, &spec, &saved_register_slots);
         let stack_accesses = collect_stack_accesses(func, &spec, &sp_delta_at);
         stack_access_trace_line(
@@ -524,14 +524,23 @@ fn callee_saved_x86_64(cc: CallingConvention, reg_offset: u64) -> Option<&'stati
 /// Real binaries can split prologue work after an early guard branch; scanning
 /// only the entry block misses those saved-register slots and lets them leak as
 /// source locals.
+///
+/// When the prologue establishes a frame pointer (`mov rbp, rsp`), the
+/// recovered locals are frame-pointer relative, so the slots are reported in
+/// that space too: a callee-saved push after the frame-pointer setup lands at
+/// `-8`. The push of `rbp` itsexecutable is not reported: at its SP-relative `-8` it
+/// would claim the first frame-pointer local (`[rbp-8]`) as a saved register
+/// and hide it.
 fn classify_saved_register_slots(
     func: &SsaFunction,
     spec: &StackSpec,
     block_entry_sp_delta: &BTreeMap<BlockId, i64>,
+    sp_delta_at: &BTreeMap<(BlockId, usize), i64>,
 ) -> BTreeSet<i64> {
     const PROLOGUE_WINDOW: usize = 32;
     let mut slots: BTreeSet<i64> = BTreeSet::new();
     let cc = func.calling_convention;
+    let frame_pointer_delta = frame_pointer_entry_delta(func, spec, sp_delta_at);
     for (&bid, block) in &func.function.blocks {
         let block_delta = block_entry_sp_delta.get(&bid).copied().unwrap_or(0);
         for (idx, insn) in block.insns.iter().take(PROLOGUE_WINDOW).enumerate() {
@@ -547,17 +556,68 @@ fn classify_saved_register_slots(
             if callee_saved_x86_64(cc, value.offset).is_none() {
                 continue;
             }
+            let addr = &insn.inputs[1];
+            if let Some(fp_delta) = frame_pointer_delta {
+                // The saved frame pointer sits at frame-pointer offset 0, which
+                // no frame-pointer-relative local can use; its push is frame
+                // setup, so there is nothing to hide.
+                if spec.is_fp(value) {
+                    continue;
+                }
+                if let Some((offset, StackBase::Register { reg, idx: read_idx })) =
+                    resolve_stack_addr_in_block(&block.insns, idx, addr, spec, 0)
+                {
+                    let base_delta = if spec.is_fp(&reg) {
+                        fp_delta
+                    } else {
+                        sp_delta_at
+                            .get(&(bid, read_idx))
+                            .copied()
+                            .unwrap_or(block_delta)
+                    };
+                    slots.insert(base_delta + offset - fp_delta);
+                }
+                continue;
+            }
             if let Some(&offset) = func.stack_offset_hints.get(&(bid, idx)) {
                 slots.insert(offset);
                 continue;
             }
-            let addr = &insn.inputs[1];
-            if let Some(offset) = resolve_stack_addr_in_block(&block.insns, idx, addr, spec, 0) {
+            if let Some((offset, _)) = resolve_stack_addr_in_block(&block.insns, idx, addr, spec, 0)
+            {
                 slots.insert(block_delta + offset);
             }
         }
     }
     slots
+}
+
+/// Entry-relative SP delta at which the prologue copies SP into the frame
+/// pointer, or `None` when the function does not establish one.
+fn frame_pointer_entry_delta(
+    func: &SsaFunction,
+    spec: &StackSpec,
+    sp_delta_at: &BTreeMap<(BlockId, usize), i64>,
+) -> Option<i64> {
+    func.frame_setup_insns.iter().find_map(|&(bid, idx)| {
+        let insn = func.function.blocks.get(&bid)?.insns.get(idx)?;
+        let sets_fp_from_sp = insn.op == IrOp::Copy
+            && insn.output.is_some_and(|out| spec.is_fp(&out))
+            && insn.inputs.first().is_some_and(|src| spec.is_sp(src));
+        if !sets_fp_from_sp {
+            return None;
+        }
+        sp_delta_at.get(&(bid, idx)).copied()
+    })
+}
+
+/// What a resolved stack address is relative to.
+#[derive(Clone, Copy)]
+enum StackBase {
+    /// A frame-base register (SP or FP) as read by the instruction at `idx`.
+    Register { reg: Varnode, idx: usize },
+    /// A `SpaceId::Stack` varnode, already in stack-space coordinates.
+    StackSpace,
 }
 
 fn resolve_stack_addr_in_block(
@@ -566,16 +626,22 @@ fn resolve_stack_addr_in_block(
     addr: &Varnode,
     spec: &StackSpec,
     depth: u8,
-) -> Option<i64> {
+) -> Option<(i64, StackBase)> {
     const MAX_DEPTH: u8 = 16;
     if depth > MAX_DEPTH {
         return None;
     }
     if spec.is_frame_base(addr) {
-        return Some(0);
+        return Some((
+            0,
+            StackBase::Register {
+                reg: *addr,
+                idx: before_idx,
+            },
+        ));
     }
     if addr.space == SpaceId::Stack {
-        return Some(addr.offset as i64);
+        return Some((addr.offset as i64, StackBase::StackSpace));
     }
     if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
         return None;
@@ -605,10 +671,10 @@ fn resolve_stack_addr_in_block(
                 );
             }
             IrOp::IntSub if prev.inputs.len() >= 2 => {
-                let base =
+                let (base, read) =
                     resolve_stack_addr_in_block(insns, prev_idx, &prev.inputs[0], spec, depth + 1)?;
                 let rhs = &prev.inputs[1];
-                return (rhs.space == SpaceId::Const).then_some(base - rhs.offset as i64);
+                return (rhs.space == SpaceId::Const).then_some((base - rhs.offset as i64, read));
             }
             _ => return None,
         }
@@ -623,14 +689,14 @@ fn resolve_stack_addr_add(
     b: &Varnode,
     spec: &StackSpec,
     depth: u8,
-) -> Option<i64> {
+) -> Option<(i64, StackBase)> {
     if b.space == SpaceId::Const {
-        let base = resolve_stack_addr_in_block(insns, before_idx, a, spec, depth)?;
-        return Some(base + b.offset as i64);
+        let (base, read) = resolve_stack_addr_in_block(insns, before_idx, a, spec, depth)?;
+        return Some((base + b.offset as i64, read));
     }
     if a.space == SpaceId::Const {
-        let base = resolve_stack_addr_in_block(insns, before_idx, b, spec, depth)?;
-        return Some(base + a.offset as i64);
+        let (base, read) = resolve_stack_addr_in_block(insns, before_idx, b, spec, depth)?;
+        return Some((base + a.offset as i64, read));
     }
     None
 }
@@ -1273,6 +1339,110 @@ mod tests {
             .find(|lvar| matches!(lvar.storage, LvarStorage::Stack { offset: -8 }))
             .expect("red-zone slot should surface as a stack lvar");
         assert_eq!(red_zone_lvar.name.as_deref(), Some("v_8"));
+    }
+
+    /// `-O0` leaf with a frame pointer and three spilled parameters:
+    /// `push rbp; mov rbp, rsp; mov [rbp-4], edi; mov [rbp-8], esi;
+    /// mov [rbp-12], edx`. The push of `rbp` is frame setup and its slot is
+    /// not reported, so `[rbp-8]` stays a local, and the three parameter
+    /// homes stay three scalars rather than fusing into one array.
+    #[test]
+    fn frame_pointer_push_does_not_hide_first_rbp_local() {
+        const RBP: u64 = 0x28;
+        let rbp = Varnode::reg(RBP, 8);
+        let pushed = Varnode::unique(0, 8);
+        let mut insns = vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                pushed,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![pushed], 0x1000),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![Varnode::constant(1, 8), pushed, rbp],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rbp, smallvec![rsp()], 0x1001),
+        ];
+        for (i, (reg, disp)) in [(0x38u64, -4i64), (0x30, -8), (0x10, -12)]
+            .into_iter()
+            .enumerate()
+        {
+            let addr = Varnode::unique(8 * (i as u64 + 1), 8);
+            let pc = 0x1004 + 3 * i as u64;
+            insns.push(IrInsn::with_output(
+                IrOp::IntAdd,
+                addr,
+                smallvec![rbp, Varnode::constant(disp as u64, 8)],
+                pc,
+            ));
+            insns.push(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![Varnode::constant(1, 8), addr, Varnode::reg(reg, 4)],
+                pc,
+            ));
+        }
+        let mut ssa = build(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+
+        crate::prologue_elim::PrologueElimPass
+            .run(&mut ssa)
+            .unwrap();
+        assert!((0..4).all(|idx| ssa.frame_setup_insns.contains(&(BlockId(0), idx))));
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+        assert!(
+            !ssa.saved_register_slots.contains(&-8),
+            "the rbp push must not claim [rbp-8]: {:?}",
+            ssa.saved_register_slots
+        );
+
+        let frame = recover_stack_frame(&ssa);
+        let offsets: Vec<i64> = frame.locals.keys().copied().collect();
+        assert_eq!(offsets, vec![-12, -8, -4]);
+        assert!(
+            frame
+                .locals
+                .values()
+                .all(|slot| slot.kind == unlace_ir::ssa::FrameSlotKind::Local && slot.size == 4)
+        );
+    }
+
+    /// `sub rsp, 0x18; mov [rsp+8], rdi`: the spill is below the entry SP,
+    /// so it is a local, not an incoming stack argument at `+8`.
+    #[test]
+    fn spill_above_moved_rsp_is_local_not_stack_arg() {
+        let adjusted = Varnode::unique(0, 8);
+        let slot_addr = Varnode::unique(8, 8);
+        let mut ssa = build(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                adjusted,
+                smallvec![rsp(), Varnode::constant(0x18, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![adjusted], 0x1000),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                slot_addr,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x1004,
+            ),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![Varnode::constant(1, 8), slot_addr, Varnode::reg(0x38, 8)],
+                0x1004,
+            ),
+        ]);
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        let frame = recover_stack_frame(&ssa);
+        let slot = frame
+            .locals
+            .get(&8)
+            .expect("spill slot recovered at its rsp offset");
+        assert_eq!(slot.kind, unlace_ir::ssa::FrameSlotKind::Local);
     }
 
     #[test]

@@ -25,6 +25,7 @@ pub mod reg_alias;
 mod space;
 pub mod ssa;
 pub mod stack;
+pub mod syscall;
 pub mod tinfo;
 pub mod types;
 pub mod value_lattice;

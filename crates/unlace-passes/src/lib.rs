@@ -261,6 +261,7 @@ pub mod switch_table_recovery;
 pub mod symbolic_heap;
 #[cfg(feature = "unwired")]
 pub mod symex_coverage;
+pub mod syscall_args;
 #[cfg(feature = "unwired")]
 pub mod sysv_eightbyte;
 pub mod tail_call;
@@ -526,6 +527,7 @@ pub use struct_field_detect::StructFieldDetectPass;
 pub use struct_field_recovery::recover_structs;
 #[cfg(feature = "unwired")]
 pub use symbolic_heap::{HeapRegion, MemAccess, SymbolicHeapPass};
+pub use syscall_args::trim_syscall_args;
 #[cfg(feature = "unwired")]
 pub use sysv_eightbyte::{EightbyteClass, FieldKind as SysvFieldKind, classify_aggregate};
 pub use tail_call::TailCallDetectPass;

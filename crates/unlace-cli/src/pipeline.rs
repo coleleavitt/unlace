@@ -989,12 +989,16 @@ pub fn lift_function(
     // `merge_linear_blocks` would fold it there. Resolve the tables once,
     // rebuild with the targets as leaders, and wire the dispatch edges.
     let tables = resolve_function_jump_tables(image, &function);
-    if tables.is_empty() {
-        return Ok(function);
-    }
-    let leaders: Vec<u64> = tables.values().flatten().copied().collect();
-    let mut function = build_function_from_insns(&entry.name, func_start, &lifted_insns, &leaders);
-    install_dispatch_successors(&mut function, &tables);
+    let mut function = if tables.is_empty() {
+        function
+    } else {
+        let leaders: Vec<u64> = tables.values().flatten().copied().collect();
+        let mut function =
+            build_function_from_insns(&entry.name, func_start, &lifted_insns, &leaders);
+        install_dispatch_successors(&mut function, &tables);
+        function
+    };
+    unlace_passes::trim_syscall_args(&mut function);
     Ok(function)
 }
 
@@ -3708,12 +3712,26 @@ pub fn build_symbol_context_with_config(
         for entry in &eligible {
             let bundled = bundled_flirt_match(image, entry, &resolved, flirt_config);
             if let Some(fc) = prefer_flirt_match(explicit.remove(&entry.addr), bundled) {
+                tracing::debug!(
+                    target: "unlace::flirt",
+                    addr = format_args!("{:#x}", entry.addr),
+                    name = %fc.name,
+                    confidence = fc.confidence,
+                    "named"
+                );
                 table.insert(entry.addr, fc.name.clone());
                 flirt.insert(entry.addr, fc);
                 matched += 1;
             }
         }
         let eligible = eligible.len() as u64;
+        tracing::info!(
+            target: "unlace::flirt",
+            functions = discovered.len(),
+            eligible,
+            matched,
+            "FLIRT scan"
+        );
         profiling::record_items("symbol-context.flirt-scan", eligible);
         profiling::diagnostic(
             "info",

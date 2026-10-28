@@ -56,6 +56,34 @@ mod tests {
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
     }
 
+    /// Read-modify-write ops on a memory destination compute and store at
+    /// the memory operand's width, not at the width of its address.
+    #[test]
+    fn memory_destination_rmw_stores_operand_width() {
+        for (bytes, what) in [
+            (&[0x01, 0x45, 0xf8][..], "add dword [rbp-8], eax"),
+            (&[0x83, 0x45, 0xfc, 0x01][..], "add dword [rbp-4], 1"),
+            (&[0xff, 0x45, 0xfc][..], "inc dword [rbp-4]"),
+            (&[0xf7, 0x5d, 0xfc][..], "neg dword [rbp-4]"),
+            (&[0xd1, 0x65, 0xfc][..], "shl dword [rbp-4], 1"),
+            (&[0x66, 0x21, 0x45, 0xfe][..], "and word [rbp-2], ax"),
+        ] {
+            let result = lifter().lift_insn(bytes, 0x1000).expect(what);
+            let stores: Vec<u8> = result
+                .ir_ops
+                .iter()
+                .filter(|i| i.op == IrOp::Store)
+                .map(|i| i.inputs[2].size)
+                .collect();
+            let width = if what.contains("word [") && !what.contains("dword") {
+                2
+            } else {
+                4
+            };
+            assert_eq!(stores, vec![width], "{what}: {:?}", result.ir_ops);
+        }
+    }
+
     #[test]
     fn t313_mov_eax_defines_canonical_rax() {
         // 89 d8 = mov eax, ebx

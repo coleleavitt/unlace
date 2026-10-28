@@ -138,24 +138,47 @@ pub enum Cmd {
         engine_style: Option<EngineStyle>,
     },
 
-    /// Generate FLIRT patterns from a compiled static library archive (.a).
+    /// Generate a FLIRT `.sig` file (or unlace TOML patterns) from static
+    /// libraries (`.a`, `.rlib`, `.lib`) and relocatable objects.
     Siggen {
-        /// Path to the input static archive (.a).
-        archive: PathBuf,
+        /// Input archives and object files; all must target one architecture.
+        #[arg(required = true)]
+        inputs: Vec<PathBuf>,
 
-        /// Write TOML pattern output to a file instead of stdout.
+        /// Output file. Required for `--format sig`; TOML goes to stdout
+        /// without it.
         #[arg(long, short)]
         output: Option<PathBuf>,
 
-        /// Number of leading function bytes to include in each pattern.
+        /// Output format.
+        #[arg(long, value_enum, default_value = "sig")]
+        format: SigFormat,
+
+        /// Library name recorded in the `.sig` header (default: the first
+        /// input's file name).
+        #[arg(long)]
+        name: Option<String>,
+
+        /// `.sig` only: skip functions with fewer fixed (non-relocated)
+        /// bytes in their 32-byte pattern and CRC range.
+        #[arg(long, default_value_t = unlace_flirt::sig::make::SigSpec::DEFAULT_MIN_FIXED_BYTES)]
+        min_fixed_bytes: usize,
+
+        /// `.sig` only: leave out functions whose name starts with this
+        /// prefix (e.g. `main.` and `cmd/` when the input is a Go program's
+        /// `go.o`). May be repeated.
+        #[arg(long = "exclude-prefix")]
+        exclude_prefixes: Vec<String>,
+
+        /// TOML only: number of leading function bytes in each pattern.
         #[arg(long, default_value_t = 32)]
         pattern_len: usize,
 
-        /// Number of tail bytes to checksum for disambiguation.
+        /// TOML only: number of tail bytes to checksum for disambiguation.
         #[arg(long, default_value_t = 32)]
         crc_len: usize,
 
-        /// Skip functions shorter than this many bytes.
+        /// TOML only: skip functions shorter than this many bytes.
         #[arg(long, default_value_t = 1)]
         min_function_len: usize,
 
@@ -599,6 +622,15 @@ pub enum LuminaAction {
         #[arg(long, default_value = "")]
         password: String,
     },
+}
+
+/// `siggen` output format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum SigFormat {
+    /// IDA FLIRT `.sig` (IDASGN v10), loadable with `--sig`/`--sig-dir`.
+    Sig,
+    /// unlace TOML patterns.
+    Toml,
 }
 
 /// Quality report output format.

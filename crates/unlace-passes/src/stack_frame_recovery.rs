@@ -95,6 +95,11 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     // BTreeMap keeps offsets sorted for the later fusion sweep.
     let mut observations: BTreeMap<i64, Vec<u8>> = BTreeMap::new();
     let mut heuristic_stack_accesses: BTreeSet<HeuristicStackAccessKey> = BTreeSet::new();
+    // Slots the entry block fills straight from an incoming register: the
+    // home slots of register parameters (`mov [rbp-4], edi` at -O0).
+    let mut param_homes: BTreeSet<i64> = BTreeSet::new();
+    // Slots whose address is materialized into a register (`lea rdi, [rsp+0x10]`).
+    let mut address_taken: BTreeSet<i64> = BTreeSet::new();
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             if func.frame_setup_insns.contains(&(bid, insn_idx)) {
@@ -122,6 +127,17 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                         &spec,
                     ) {
                         let width = insn.inputs[2].size;
+                        if bid == func.function.entry
+                            && stores_incoming_arg_register(func, (bid, insn_idx))
+                        {
+                            param_homes.insert(offset);
+                            stack_frame_trace_line(
+                                func,
+                                format_args!(
+                                    "param-home bid={bid:?} idx={insn_idx} offset={offset}"
+                                ),
+                            );
+                        }
                         if width > 0 {
                             record_observation(offset, width, &mut observations);
                             heuristic_stack_accesses.insert((insn.addr, offset, width, true));
@@ -185,6 +201,18 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                     }
                 }
                 _ => {}
+            }
+
+            if let Some(offset) = taken_stack_address(
+                (bid, insn_idx),
+                insn,
+                func,
+                &def_map,
+                &mut resolve_cache,
+                &mut ssa_resolve_cache,
+                &spec,
+            ) {
+                address_taken.insert(offset);
             }
 
             // Also pick up direct `SpaceId::Stack` operands — some lifters
@@ -295,6 +323,8 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
         &locals,
         &func.dwarf_local_names,
         &func.dwarf_aggregate_offsets,
+        &param_homes,
+        &address_taken,
     );
     for (start, span, widths) in array_groups {
         stack_frame_trace_line(
@@ -353,7 +383,8 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
         frame_size = (hi - lo).max(0) as u64;
     }
 
-    classify_slot_kinds(func, &spec, &mut locals);
+    let below_entry_sp = offsets_below_entry_sp(func, &heuristic_stack_accesses);
+    classify_slot_kinds(func, &spec, &below_entry_sp, &mut locals);
     for (&offset, local) in &locals {
         stack_frame_trace_line(
             func,
@@ -405,6 +436,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
 fn classify_slot_kinds(
     func: &SsaFunction,
     spec: &StackSpec,
+    below_entry_sp: &BTreeSet<i64>,
     locals: &mut BTreeMap<i64, StackLocal>,
 ) {
     let ptr = spec.ptr_size as i64;
@@ -436,12 +468,43 @@ fn classify_slot_kinds(
             slot.kind = FrameSlotKind::Local;
             continue;
         }
+        let end = offset.saturating_add(slot.size as i64);
+        if below_entry_sp.range(offset..end).next().is_some() {
+            slot.kind = FrameSlotKind::Local;
+            continue;
+        }
         if shadow_size > 0 && offset < ptr + shadow_size {
             slot.kind = FrameSlotKind::ShadowSpace;
             continue;
         }
         slot.kind = FrameSlotKind::StackArg;
     }
+}
+
+/// Offsets of accesses that are relative to a moved stack pointer
+/// (`[rsp+8]` after `sub rsp, 0x18`) and land below the entry SP.
+///
+/// The heuristic offsets are relative to the base register's value at the
+/// access, so a non-negative one is not by itsexecutable an incoming stack argument;
+/// the entry-relative delta that [`SsaFunction::stack_accesses`] tracks for
+/// the same instruction tells the two apart.
+fn offsets_below_entry_sp(
+    func: &SsaFunction,
+    heuristic_stack_accesses: &BTreeSet<HeuristicStackAccessKey>,
+) -> BTreeSet<i64> {
+    let mut out = BTreeSet::new();
+    for acc in func.stack_accesses.iter().filter(|acc| acc.delta < 0) {
+        for &(addr, offset, width, is_store) in heuristic_stack_accesses {
+            if offset >= 0
+                && addr == acc.source_addr
+                && width == acc.width
+                && is_store == acc.is_store
+            {
+                out.insert(offset);
+            }
+        }
+    }
+    out
 }
 
 fn record_observation(off: i64, width: u8, obs: &mut BTreeMap<i64, Vec<u8>>) {
@@ -583,10 +646,19 @@ fn primitive_width(ty: PrimitiveType, spec: &StackSpec) -> Option<u8> {
 /// c, d, e;`), not array elements, so fusing them into one buffer is a
 /// regression. Aggregate-typed DWARF names still fuse because a source array or
 /// struct legitimately spans more than one observed slot.
+///
+/// A run is also rejected when it covers a parameter home slot (`param_homes`):
+/// adjacent spills of `edi`, `esi`, `edx` are separate parameters, not
+/// elements of one buffer. And the run's address must be taken somewhere
+/// inside it (`address_taken`): adjacent equal-width scalars and register
+/// spills around a call look the same as array elements, and only an escaping
+/// address makes the run one object (IDA keeps such slots as scalars too).
 fn detect_arrays(
     locals: &BTreeMap<i64, StackLocal>,
     dwarf_names: &BTreeMap<i64, String>,
     dwarf_aggregate_offsets: &BTreeSet<i64>,
+    param_homes: &BTreeSet<i64>,
+    address_taken: &BTreeSet<i64>,
 ) -> Vec<(i64, u64, Vec<u8>)> {
     let mut out = Vec::new();
     let entries: Vec<(i64, u64, Vec<u8>)> = locals
@@ -630,11 +702,16 @@ fn detect_arrays(
                 .filter_map(|(off, _, _)| dwarf_names.get(off))
                 .collect::<BTreeSet<_>>()
                 .len();
-            if scalar_named > 0 {
+            let covers_param_home = entries[i..j]
+                .iter()
+                .any(|(off, _, _)| param_homes.contains(off));
+            let span = stride * count as u64;
+            let run_end = start_off.saturating_add(span as i64);
+            let address_escapes = address_taken.range(start_off..run_end).next().is_some();
+            if scalar_named > 0 || covers_param_home || !address_escapes {
                 i += 1;
                 continue;
             }
-            let span = stride * count as u64;
             out.push((start_off, span, widths));
             i = j;
         } else {
@@ -988,6 +1065,72 @@ fn resolve_operand_offset(
     None
 }
 
+/// The stack offset whose address `insn` materializes into a register
+/// (`lea rdi, [rsp+0x10]` lifts to `rdi = rsp + 0x10`), if any.
+fn taken_stack_address(
+    site: (BlockId, usize),
+    insn: &IrInsn,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+    ssa_resolve_cache: &mut SsaResolveCache,
+    spec: &StackSpec,
+) -> Option<i64> {
+    let out = insn.output?;
+    if out.space != SpaceId::Register
+        || spec.is_frame_base(&out)
+        || !matches!(insn.op, IrOp::IntAdd | IrOp::IntSub | IrOp::Copy)
+    {
+        return None;
+    }
+    let out_sv = func.var_map.get(&(site.0, site.1, VarnodeSlot::Output))?;
+    find_relative_offset_ssa(
+        out_sv,
+        func,
+        def_map,
+        resolve_cache,
+        ssa_resolve_cache,
+        0,
+        spec,
+    )
+}
+
+/// Does the STORE at `site` write a value the function received in an
+/// argument register (one nothing in the function defines, possibly narrowed
+/// or extended on the way)?
+fn stores_incoming_arg_register(func: &SsaFunction, site: (BlockId, usize)) -> bool {
+    let Some(&start) = func.var_map.get(&(site.0, site.1, VarnodeSlot::Input(2))) else {
+        return false;
+    };
+    let mut sv = start;
+    for _ in 0..4 {
+        let Some((bid, idx)) = defining_site_for_sv(func, &sv) else {
+            return sv.base.space == SpaceId::Register
+                && crate::call_args::arg_regs_for(crate::call_args::calling_convention_for(func))
+                    .contains(&sv.base.offset);
+        };
+        let Some(def) = func
+            .function
+            .blocks
+            .get(&bid)
+            .and_then(|b| b.insns.get(idx))
+        else {
+            return false;
+        };
+        if !matches!(
+            def.op,
+            IrOp::Copy | IrOp::Subpiece | IrOp::IntZext | IrOp::IntSext
+        ) {
+            return false;
+        }
+        let Some(&src) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(0))) else {
+            return false;
+        };
+        sv = src;
+    }
+    false
+}
+
 fn defining_site_for_sv(
     func: &SsaFunction,
     needle: &unlace_ir::ssa::SsaVarnode,
@@ -1333,9 +1476,9 @@ mod tests {
         assert_eq!(frame.frame_size, 16);
     }
 
-    /// Test 3: 8-element int array starting at -32.  Each element is 4
-    /// bytes ⇒ 8 STOREs at -32, -28, -24, ..., -4.  The detector must
-    /// collapse them into one slot of size 32 at offset -32.
+    /// Test 3: 8-element int array starting at -32 whose address is taken.
+    /// Each element is 4 bytes ⇒ 8 STOREs at -32, -28, -24, ..., -4.  The
+    /// detector must collapse them into one slot of size 32 at offset -32.
     #[test]
     fn t209_eight_element_int_array_at_minus_32() {
         let ram = Varnode::constant(1, 8);
@@ -1360,6 +1503,13 @@ mod tests {
             ));
         }
 
+        // `lea rdi, [rsp-32]`: the array's address escapes.
+        insns.push(IrInsn::with_output(
+            IrOp::IntSub,
+            Varnode::reg(0x38, 8),
+            smallvec![rsp(), Varnode::constant(32, 8)],
+            0x1100,
+        ));
         let ssa = make_single_block_ssa(insns);
         let frame = recover_stack_frame(&ssa);
 
@@ -1630,7 +1780,13 @@ mod tests {
         names.insert(-8, "d".to_string());
         names.insert(-4, "e".to_string());
 
-        let groups = detect_arrays(&locals, &names, &BTreeSet::new());
+        let groups = detect_arrays(
+            &locals,
+            &names,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &all_taken(&locals),
+        );
         assert!(
             groups.is_empty(),
             "distinct named scalars a,b,c,d,e must not fuse: {groups:?}"
@@ -1646,7 +1802,13 @@ mod tests {
         let mut names = BTreeMap::new();
         names.insert(-20i64, "e".to_string());
 
-        let groups = detect_arrays(&locals, &names, &BTreeSet::new());
+        let groups = detect_arrays(
+            &locals,
+            &names,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &all_taken(&locals),
+        );
         assert!(groups.is_empty(), "scalar e must not fuse with tail slots");
     }
 
@@ -1657,10 +1819,61 @@ mod tests {
         for off in [-20i64, -16, -12, -8, -4] {
             locals.insert(off, stack_local(4));
         }
-        let groups = detect_arrays(&locals, &BTreeMap::new(), &BTreeSet::new());
+        let groups = detect_arrays(
+            &locals,
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &all_taken(&locals),
+        );
         assert_eq!(groups.len(), 1, "unnamed equal-stride run should fuse");
         assert_eq!(groups[0].0, -20);
         assert_eq!(groups[0].1, 20);
+    }
+
+    /// The same run without its address taken anywhere is a row of scalars.
+    #[test]
+    fn detect_arrays_keeps_unescaped_run_as_scalars() {
+        let mut locals = BTreeMap::new();
+        for off in [-20i64, -16, -12, -8, -4] {
+            locals.insert(off, stack_local(4));
+        }
+        let groups = detect_arrays(
+            &locals,
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        );
+        assert!(
+            groups.is_empty(),
+            "no escaping address, no array: {groups:?}"
+        );
+    }
+
+    /// Parameter home slots never fuse, even when the run's address escapes.
+    #[test]
+    fn detect_arrays_keeps_param_homes_as_scalars() {
+        let mut locals = BTreeMap::new();
+        for off in [-12i64, -8, -4] {
+            locals.insert(off, stack_local(4));
+        }
+        let homes: BTreeSet<i64> = [-8].into_iter().collect();
+        let groups = detect_arrays(
+            &locals,
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+            &homes,
+            &all_taken(&locals),
+        );
+        assert!(
+            groups.is_empty(),
+            "parameter homes must not fuse: {groups:?}"
+        );
+    }
+
+    fn all_taken(locals: &BTreeMap<i64, StackLocal>) -> BTreeSet<i64> {
+        locals.keys().copied().collect()
     }
 
     /// Aggregate-named slots are excluded from the distinct-name count, so two
@@ -1679,7 +1892,13 @@ mod tests {
         aggregates.insert(-24i64);
         aggregates.insert(-16);
 
-        let groups = detect_arrays(&locals, &names, &aggregates);
+        let groups = detect_arrays(
+            &locals,
+            &names,
+            &aggregates,
+            &BTreeSet::new(),
+            &all_taken(&locals),
+        );
         assert_eq!(
             groups.len(),
             1,

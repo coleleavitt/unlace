@@ -262,11 +262,20 @@ mod tests {
             "sc must not lift to Unimplemented, got {:?}",
             result.ir_ops
         );
-        assert!(
-            result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
-            "sc should lift to a Callother (syscall) intrinsic, got {:?}",
-            result.ir_ops
+        let [sc] = result.ir_ops.as_slice() else {
+            panic!("sc should lift to one instruction, got {:?}", result.ir_ops);
+        };
+        assert_eq!(
+            unlace_ir::syscall::SyscallConvention::of(sc),
+            Some(unlace_ir::syscall::SyscallConvention::Linux)
         );
+        // Number in r0, arguments r3-r8, result in r3.
+        let regs: Vec<u64> = sc.inputs[unlace_ir::syscall::NUMBER_INPUT..]
+            .iter()
+            .map(|vn| vn.offset / u64::from(vn.size))
+            .collect();
+        assert_eq!(regs, [0, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(sc.output.map(|vn| vn.offset / u64::from(vn.size)), Some(3));
     }
 
     #[test]

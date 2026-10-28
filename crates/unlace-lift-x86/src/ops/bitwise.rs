@@ -98,9 +98,9 @@ fn lift_binop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, op: IrOp) {
     let b = ctx.operand_read(insn, 1);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(op, result, smallvec![a, b], ctx.addr));
-            emit_logical_flags(ctx, result, dst.size);
+            emit_logical_flags(ctx, result, a.size);
             ctx.write_operand_insn(insn, 0, dst, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -137,7 +137,7 @@ pub fn lift_not(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let src = ctx.operand_read(insn, 0);
     match (dst, src) {
         (Some(dst), Some(src)) => {
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), src.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntNegate,
                 result,
@@ -157,7 +157,7 @@ pub fn lift_shl(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
             // x86 masks the shift count: count & (op_size*8 - 1)
-            let mask = Varnode::constant(dst.size as u64 * 8 - 1, b.size);
+            let mask = Varnode::constant(a.size as u64 * 8 - 1, b.size);
             let masked = Varnode::unique(ctx.alloc_unique(), b.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAnd,
@@ -166,14 +166,14 @@ pub fn lift_shl(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
 
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntLeft,
                 result,
                 smallvec![a, masked],
                 ctx.addr,
             ));
-            emit_logical_flags(ctx, result, dst.size);
+            emit_logical_flags(ctx, result, a.size);
             ctx.write_operand_insn(insn, 0, dst, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -186,7 +186,7 @@ pub fn lift_shr(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let b = ctx.operand_read(insn, 1);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let mask = Varnode::constant(dst.size as u64 * 8 - 1, b.size);
+            let mask = Varnode::constant(a.size as u64 * 8 - 1, b.size);
             let masked = Varnode::unique(ctx.alloc_unique(), b.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAnd,
@@ -195,14 +195,14 @@ pub fn lift_shr(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
 
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntRight,
                 result,
                 smallvec![a, masked],
                 ctx.addr,
             ));
-            emit_logical_flags(ctx, result, dst.size);
+            emit_logical_flags(ctx, result, a.size);
             ctx.write_operand_insn(insn, 0, dst, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -215,7 +215,7 @@ pub fn lift_sar(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let b = ctx.operand_read(insn, 1);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let mask = Varnode::constant(dst.size as u64 * 8 - 1, b.size);
+            let mask = Varnode::constant(a.size as u64 * 8 - 1, b.size);
             let masked = Varnode::unique(ctx.alloc_unique(), b.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAnd,
@@ -224,14 +224,14 @@ pub fn lift_sar(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
 
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSright,
                 result,
                 smallvec![a, masked],
                 ctx.addr,
             ));
-            emit_logical_flags(ctx, result, dst.size);
+            emit_logical_flags(ctx, result, a.size);
             ctx.write_operand_insn(insn, 0, dst, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -244,7 +244,7 @@ pub fn lift_rol(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let b = ctx.operand_read(insn, 1);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let bits = dst.size as u64 * 8;
+            let bits = a.size as u64 * 8;
             let mask = Varnode::constant(bits - 1, b.size);
             let masked = Varnode::unique(ctx.alloc_unique(), b.size);
             ctx.emit(IrInsn::with_output(
@@ -255,7 +255,7 @@ pub fn lift_rol(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
 
             // left = a << count
-            let left = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let left = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntLeft,
                 left,
@@ -274,7 +274,7 @@ pub fn lift_rol(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
 
             // right = a >> complement
-            let right = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let right = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntRight,
                 right,
@@ -283,7 +283,7 @@ pub fn lift_rol(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
 
             // result = left | right
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntOr,
                 result,
@@ -303,7 +303,7 @@ pub fn lift_ror(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let b = ctx.operand_read(insn, 1);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let bits = dst.size as u64 * 8;
+            let bits = a.size as u64 * 8;
             let mask = Varnode::constant(bits - 1, b.size);
             let masked = Varnode::unique(ctx.alloc_unique(), b.size);
             ctx.emit(IrInsn::with_output(
@@ -314,7 +314,7 @@ pub fn lift_ror(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
 
             // right = a >> count
-            let right = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let right = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntRight,
                 right,
@@ -333,7 +333,7 @@ pub fn lift_ror(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
 
             // left = a << complement
-            let left = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let left = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntLeft,
                 left,
@@ -342,7 +342,7 @@ pub fn lift_ror(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
 
             // result = right | left
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntOr,
                 result,

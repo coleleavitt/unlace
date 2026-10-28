@@ -2,10 +2,11 @@ use capstone::arch::DetailsArchInsn;
 use capstone::arch::ppc::PpcOperand;
 use capstone::{Capstone, Insn, InsnDetail};
 use smallvec::smallvec;
+use unlace_ir::syscall::SyscallConvention;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::lift::{LiftCtx, operand_imm, trace_lift_lazy};
-use crate::register_file::{cr_eq, ctr_with_size, lr_with_size};
+use crate::register_file::{cr_eq, ctr_with_size, gpr_with_size, lr_with_size};
 
 pub fn lift_b(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     let target = match ops.first().and_then(operand_imm) {
@@ -147,9 +148,6 @@ pub fn lift_blr(ctx: &mut LiftCtx) {
 /// stable intrinsic identifier so later passes can recover the original
 /// instruction semantics without re-decoding.
 pub mod ppc_tag {
-    /// `sc` — PowerPC system call (`0x44000002`, primary opcode 17).
-    pub const SYSCALL: u64 = 0x400;
-
     /// Base for AltiVec/VMX vector intrinsics (primary opcode 4). These
     /// operations have no clean scalar IR mapping, so they are preserved as
     /// `CALLOTHER` intrinsics tagged with a stable per-mnemonic identifier.
@@ -173,14 +171,9 @@ pub mod ppc_tag {
 
 /// Lift `sc` (system call, primary opcode 17, e.g. `0x44000002`).
 ///
-/// PowerPC has no architecturally-defined target for `sc`; it traps into the
-/// supervisor. We model it the same way x86 `syscall` is modelled: as a
-/// `CALLOTHER` intrinsic tagged with [`ppc_tag::SYSCALL`].
+/// On Linux the call number is in r0, the arguments in r3-r8 and the result
+/// comes back in r3; Hex-Rays prints it as `linux_syscall`.
 pub fn lift_sc(ctx: &mut LiftCtx) {
-    let tag_vn = Varnode::constant(ppc_tag::SYSCALL, 8);
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![tag_vn],
-        ctx.addr,
-    ));
+    let gpr = |n| gpr_with_size(n, ctx.ptr_size);
+    ctx.emit(SyscallConvention::Linux.insn(gpr(0), (3..=8).map(gpr), gpr(3), ctx.addr));
 }

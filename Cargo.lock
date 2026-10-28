@@ -2536,6 +2536,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "flate2",
+ "iced-x86",
  "object 0.39.1",
  "postcard",
  "serde",

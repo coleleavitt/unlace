@@ -160,14 +160,14 @@ pub fn lift_add(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let b = ctx.operand_read(insn, 1);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 result,
                 smallvec![a, b],
                 ctx.addr,
             ));
-            emit_add_flags(ctx, a, b, result, dst.size);
+            emit_add_flags(ctx, a, b, result, a.size);
             ctx.write_operand_insn(insn, 0, dst, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -180,14 +180,14 @@ pub fn lift_sub(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let b = ctx.operand_read(insn, 1);
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSub,
                 result,
                 smallvec![a, b],
                 ctx.addr,
             ));
-            emit_sub_flags(ctx, a, b, result, dst.size);
+            emit_sub_flags(ctx, a, b, result, a.size);
             ctx.write_operand_insn(insn, 0, dst, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -201,7 +201,7 @@ pub fn lift_adc(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
             let cf_in = Varnode::new(unlace_ir::SpaceId::Register, CF, 1);
-            let cf_ext = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let cf_ext = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntZext,
                 cf_ext,
@@ -209,14 +209,14 @@ pub fn lift_adc(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
 
-            let tmp = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let tmp = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 tmp,
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 result,
@@ -224,7 +224,7 @@ pub fn lift_adc(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
 
-            emit_add_flags(ctx, a, b, result, dst.size);
+            emit_add_flags(ctx, a, b, result, a.size);
             ctx.write_operand_insn(insn, 0, dst, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -238,7 +238,7 @@ pub fn lift_sbb(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
             let cf_in = Varnode::new(unlace_ir::SpaceId::Register, CF, 1);
-            let cf_ext = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let cf_ext = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntZext,
                 cf_ext,
@@ -246,14 +246,14 @@ pub fn lift_sbb(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
 
-            let tmp = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let tmp = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSub,
                 tmp,
                 smallvec![a, b],
                 ctx.addr,
             ));
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSub,
                 result,
@@ -261,7 +261,7 @@ pub fn lift_sbb(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
 
-            emit_sub_flags(ctx, a, b, result, dst.size);
+            emit_sub_flags(ctx, a, b, result, a.size);
             ctx.write_operand_insn(insn, 0, dst, result);
         }
         _ => ctx.emit_unimplemented(),
@@ -514,7 +514,7 @@ pub fn lift_neg(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let src = ctx.operand_read(insn, 0);
     match (dst, src) {
         (Some(dst), Some(src)) => {
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let result = Varnode::unique(ctx.alloc_unique(), src.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::Int2comp,
                 result,
@@ -523,7 +523,7 @@ pub fn lift_neg(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ));
 
             // CF = (src != 0)
-            let zero = Varnode::constant(0, dst.size);
+            let zero = Varnode::constant(0, src.size);
             let cf = Varnode::new(unlace_ir::SpaceId::Register, CF, 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntNotequal,
@@ -532,8 +532,8 @@ pub fn lift_neg(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
                 ctx.addr,
             ));
 
-            emit_result_flags(ctx, result, dst.size);
-            emit_parity_flag(ctx, result, dst.size);
+            emit_result_flags(ctx, result, src.size);
+            emit_parity_flag(ctx, result, src.size);
 
             let of = Varnode::new(unlace_ir::SpaceId::Register, OF, 1);
             ctx.emit(IrInsn::with_output(
@@ -554,16 +554,16 @@ pub fn lift_inc(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let src = ctx.operand_read(insn, 0);
     match (dst, src) {
         (Some(dst), Some(src)) => {
-            let one = Varnode::constant(1, dst.size);
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let one = Varnode::constant(1, src.size);
+            let result = Varnode::unique(ctx.alloc_unique(), src.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 result,
                 smallvec![src, one],
                 ctx.addr,
             ));
-            emit_result_flags(ctx, result, dst.size);
-            emit_parity_flag(ctx, result, dst.size);
+            emit_result_flags(ctx, result, src.size);
+            emit_parity_flag(ctx, result, src.size);
             let of = Varnode::new(unlace_ir::SpaceId::Register, OF, 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntScarry,
@@ -582,16 +582,16 @@ pub fn lift_dec(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let src = ctx.operand_read(insn, 0);
     match (dst, src) {
         (Some(dst), Some(src)) => {
-            let one = Varnode::constant(1, dst.size);
-            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            let one = Varnode::constant(1, src.size);
+            let result = Varnode::unique(ctx.alloc_unique(), src.size);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSub,
                 result,
                 smallvec![src, one],
                 ctx.addr,
             ));
-            emit_result_flags(ctx, result, dst.size);
-            emit_parity_flag(ctx, result, dst.size);
+            emit_result_flags(ctx, result, src.size);
+            emit_parity_flag(ctx, result, src.size);
             let of = Varnode::new(unlace_ir::SpaceId::Register, OF, 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::IntSborrow,

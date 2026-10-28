@@ -515,10 +515,71 @@ mod tests {
         assert_callother_tag(&[0x02, 0xb0, 0x81, 0x9a], 0x330);
     }
 
+    /// The convention, number register/constant and argument register
+    /// indices of the system call `bytes` lifts to, plus its result register.
+    fn lifted_syscall(
+        l: &ArmLifter,
+        bytes: &[u8],
+    ) -> (
+        unlace_ir::syscall::SyscallConvention,
+        Varnode,
+        Vec<u64>,
+        u64,
+    ) {
+        use unlace_ir::syscall::{FIRST_ARG_INPUT, NUMBER_INPUT, SyscallConvention};
+        let result = l.lift_insn(bytes, 0x1000).expect("should interpret");
+        let [call] = result.ir_ops.as_slice() else {
+            panic!("expected one instruction, got {:?}", result.ir_ops);
+        };
+        let convention = SyscallConvention::of(call).expect("system-call shape");
+        let index = |vn: &Varnode| vn.offset / u64::from(vn.size);
+        let args = call.inputs[FIRST_ARG_INPUT..].iter().map(index).collect();
+        let ret = call.output.as_ref().map(index).expect("result register");
+        (convention, call.inputs[NUMBER_INPUT], args, ret)
+    }
+
     #[test]
-    fn arm64_svc_lifts_to_callother() {
+    fn arm64_svc_0_lifts_to_linux_syscall() {
+        use unlace_ir::syscall::SyscallConvention;
         // SVC #0 → d4000001
-        assert_callother_tag(&[0x01, 0x00, 0x00, 0xd4], 0x437);
+        let (convention, number, args, ret) = lifted_syscall(&lifter(), &[0x01, 0x00, 0x00, 0xd4]);
+        assert_eq!(convention, SyscallConvention::LinuxEabi);
+        assert_eq!(number, Varnode::reg(8 * 8, 8));
+        assert_eq!(args, [0, 1, 2, 3, 4, 5]);
+        assert_eq!(ret, 0);
+    }
+
+    #[test]
+    fn arm64_svc_0x80_lifts_to_darwin_syscall() {
+        use unlace_ir::syscall::SyscallConvention;
+        // SVC #0x80 → d4001001
+        let (convention, number, args, ret) = lifted_syscall(&lifter(), &[0x01, 0x10, 0x00, 0xd4]);
+        assert_eq!(convention, SyscallConvention::Darwin);
+        assert_eq!(number, Varnode::reg(16 * 8, 8));
+        assert_eq!(args, [0, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(ret, 0);
+    }
+
+    #[test]
+    fn arm64_svc_other_immediate_stays_opaque() {
+        // SVC #1 → d4000021
+        assert_callother_tag(&[0x21, 0x00, 0x00, 0xd4], 0x437);
+    }
+
+    #[test]
+    fn arm32_svc_lifts_to_linux_syscalls() {
+        use unlace_ir::syscall::SyscallConvention;
+        let l = ArmLifter::new_arm32();
+        // SVC #0 → ef000000: EABI, number in r7.
+        let (convention, number, args, ret) = lifted_syscall(&l, &[0x00, 0x00, 0x00, 0xef]);
+        assert_eq!(convention, SyscallConvention::LinuxEabi);
+        assert_eq!(number, Varnode::reg(7 * 4, 4));
+        assert_eq!(args, [0, 1, 2, 3, 4, 5, 6]);
+        assert_eq!(ret, 0);
+        // SVC #0x900001 → ef900001: OABI `exit`, number in the immediate.
+        let (convention, number, _, _) = lifted_syscall(&l, &[0x01, 0x00, 0x90, 0xef]);
+        assert_eq!(convention, SyscallConvention::Linux);
+        assert_eq!(number, Varnode::constant(1, 4));
     }
 
     #[test]

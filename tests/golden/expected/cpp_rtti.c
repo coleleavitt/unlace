@@ -148,7 +148,7 @@ void sub_1170(void) {
     return;
 }
 
-/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
+/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
 __int64 sub_11e0(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4010) {
@@ -173,23 +173,24 @@ void sub_1220(void) {
 // identify(Animal*)
 char * identify(Animal *a1) {
     __int64 v_16;
+    __int64 v_8;
     __int64 v1; // rax
     __int64 v2; // rax
     __int64 result; // rax
     __int64 v4; // rcx
-    __int64 v5; // rsp
     if (!a1) {
         result = "unknown";
         return "unknown";
     } else {
-        __int64 v6 = 0x3d40; // rsi
+        __int64 v5 = 0x3d40; // rsi
+        v_8 = a1;
         /* dynamic cast */
         v1 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
-        a1 = *(_QWORD *)(v5 + 8LL);
-        __int64 v7 = v1; // rdx
+        a1 = v_8;
+        __int64 v6 = v1; // rdx
         if (!v1) {
-            v7 = 0x3d68;
-            v6 = 0x3d40;
+            v6 = 0x3d68;
+            v5 = 0x3d40;
             /* dynamic cast */
             v2 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, 0LL);
             a1 = v2;
@@ -199,9 +200,9 @@ char * identify(Animal *a1) {
             } else {
                 result = *(_QWORD *)v2;
                 v4 = 0x1310;
-                v7 = *(_QWORD *)result;
+                v6 = *(_QWORD *)result;
                 result = "meow";
-                if (v7 == v4) {
+                if (v6 == v4) {
                     return "meow";
                 } else {
                     return v2->speak();
@@ -209,11 +210,11 @@ char * identify(Animal *a1) {
             }
         } else {
             result = *(_QWORD *)v1;
-            v6 = 0x1300;
+            v5 = 0x1300;
             v4 = *(_QWORD *)result;
             result = "woof";
-            if (v4 != v6) {
-                a1 = v7;
+            if (v4 != v5) {
+                a1 = v6;
                 return v1->speak();
             } else {
                 return result;

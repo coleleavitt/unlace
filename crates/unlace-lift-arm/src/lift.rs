@@ -17,6 +17,7 @@ use capstone::arch::arm::{ArmCC, ArmInsn, ArmOpMem, ArmOperandType, ArmReg, ArmS
 use capstone::arch::arm64::{Arm64Insn, Arm64OpMem, Arm64OperandType, Arm64Shift};
 use capstone::prelude::*;
 use smallvec::smallvec;
+use unlace_ir::syscall::SyscallConvention;
 use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
@@ -931,8 +932,34 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_VLD1 => emit_arm32_neon_mem(ctx, &ops, neon_tag::VLD1),
         ArmInsn::ARM_INS_VST1 => emit_arm32_neon_mem(ctx, &ops, neon_tag::VST1),
 
+        ArmInsn::ARM_INS_SVC => emit_arm32_svc(ctx, &ops),
+
         _ => ctx.emit_unimplemented(),
     }
+}
+
+/// Base of the Linux OABI `SVC #imm` range, where the call number is
+/// `imm - OABI_SYSCALL_BASE`.
+const OABI_SYSCALL_BASE: i64 = 0x90_0000;
+
+/// `SVC #imm` on Linux. EABI (`#0`) reads the call number from r7; the old
+/// ABI encodes it in the immediate. Both pass arguments in r0-r6 and return
+/// in r0, and Hex-Rays prints them as `linux_eabi_syscall` and
+/// `linux_syscall`. Other immediates stay unimplemented.
+fn emit_arm32_svc(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(&ArmOperandType::Imm(imm)) = ops.first() else {
+        return ctx.emit_unimplemented();
+    };
+    let (convention, number) = match i64::from(imm) {
+        0 => (SyscallConvention::LinuxEabi, arm32_reg_varnode(7)),
+        n if (OABI_SYSCALL_BASE..=OABI_SYSCALL_BASE + 0xfffff).contains(&n) => (
+            SyscallConvention::Linux,
+            Varnode::constant((n - OABI_SYSCALL_BASE) as u64, 4),
+        ),
+        _ => return ctx.emit_unimplemented(),
+    };
+    let args = (0..7).map(arm32_reg_varnode);
+    ctx.emit(convention.insn(number, args, arm32_reg_varnode(0), ctx.addr));
 }
 
 /// Callother tag identifiers for the ARM32 NEON Advanced-SIMD intrinsic
@@ -2798,7 +2825,7 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_BRK | Arm64Insn::ARM64_INS_UDF => {
             emit_aarch64_exception(ctx, &ops, CALLOTHER_AARCH64_BRK)
         }
-        Arm64Insn::ARM64_INS_SVC => emit_aarch64_exception(ctx, &ops, CALLOTHER_AARCH64_SVC),
+        Arm64Insn::ARM64_INS_SVC => emit_aarch64_svc(ctx, &ops),
         Arm64Insn::ARM64_INS_CLREX => emit_aarch64_clrex(ctx, &ops),
 
         // t186 — AArch64 NEON LDn/STn multi-structure register-list ops.
@@ -3500,6 +3527,24 @@ fn emit_aarch64_exception(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shif
         smallvec![Varnode::constant(tag, 8), imm],
         ctx.addr,
     ));
+}
+
+/// `SVC #imm`. Hex-Rays reads `#0` as a Linux system call (number in x8,
+/// arguments in x0-x5) and `#0x80` as a Darwin one (number in x16,
+/// arguments in x0-x7); both return in x0. Any other immediate is an
+/// OS-specific trap kept as an opaque `SVC` intrinsic.
+fn emit_aarch64_svc(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    let imm = ops
+        .first()
+        .and_then(|(op, _)| aarch64_immediate_const(op, 8))
+        .map(|vn| vn.offset);
+    let (convention, number, arg_count) = match imm {
+        Some(0) => (SyscallConvention::LinuxEabi, 8, 6),
+        Some(0x80) => (SyscallConvention::Darwin, 16, 8),
+        _ => return emit_aarch64_exception(ctx, ops, CALLOTHER_AARCH64_SVC),
+    };
+    let x = |n: u64| Varnode::new(SpaceId::Register, n * 8, 8);
+    ctx.emit(convention.insn(x(number), (0..arg_count).map(x), x(0), ctx.addr));
 }
 
 fn emit_aarch64_clrex(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {

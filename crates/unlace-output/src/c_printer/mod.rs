@@ -107,6 +107,7 @@ use unlace_ir::reg_alias::aliases;
 use unlace_ir::ssa::{
     DwarfStackLocalSpan, GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode, TargetSet,
 };
+use unlace_ir::syscall::{NUMBER_INPUT, SyscallConvention};
 use unlace_ir::types::{Type, TypeKind};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::{DwarfInfo, FunctionDebugInfo};
@@ -1000,6 +1001,7 @@ fn print_c_attempt(
     {
         let _span = linkscope::phase("cprinter.precompute.stack-frame-names");
         compute_stack_frame_names(func, &mut ctx);
+        compute_stack_param_slot_names(func, &mut ctx);
     }
     trace_stack_frame_inventory("after-stack-frame-names", func);
     trace_stack_slot_inventory("after-stack-frame-names", &ctx);
@@ -2801,6 +2803,11 @@ struct PrintCtx {
     /// Stack-frame offsets that should not be rendered as source locals or raw
     /// memory stores, such as saved-register slots and ABI-owned stack areas.
     suppressed_stack_offsets: BTreeSet<i64>,
+    /// The incoming stack-argument slots among `suppressed_stack_offsets`.
+    /// They are not declared as locals, but a store into one is a real
+    /// write (Go spills register arguments there around `morestack`), so
+    /// it is printed rather than dropped.
+    stack_arg_offsets: BTreeSet<i64>,
     /// Stack-frame offsets used only for compiler-inserted stack canary spills.
     /// These are also suppressed, but kept distinct so canary compare pruning
     /// can recognize epilogue reloads from the saved guard slot.
@@ -3065,6 +3072,7 @@ impl PrintCtx {
             byref_union_types: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
             suppressed_stack_offsets: BTreeSet::new(),
+            stack_arg_offsets: BTreeSet::new(),
             canary_stack_offsets: BTreeSet::new(),
             has_stack_address_targets: false,
             stack_frame_slots: BTreeMap::new(),
@@ -6782,6 +6790,15 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             ));
             continue;
         }
+        if SyscallConvention::of(&insn).is_some()
+            && ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) == 0
+        {
+            // An unused system-call result renders as a bare call.
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=unused-syscall"
+            ));
+            continue;
+        }
 
         // Compound (`v += 1`) and increment (`v++`) forms reuse the lhs as
         // both rvalue and lvalue; declaring inside such a stmt is illegal.
@@ -7053,6 +7070,41 @@ fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
     }
 }
 
+/// Name the incoming stack-argument slots of stack-passed parameters after
+/// the parameter, so `*(_QWORD *)(rsp + 8)` prints as `a1`. The parameter is
+/// already declared by the signature, so the slot gets no declaration.
+fn compute_stack_param_slot_names(func: &HirFunction, ctx: &mut PrintCtx) {
+    let (Some(sig), Some(frame)) = (func.finalized_signature.as_ref(), func.stack_frame.as_ref())
+    else {
+        return;
+    };
+    for (&idx, &offset) in &sig.stack_param_slots {
+        let Some((name, _)) = sig.params.get(idx) else {
+            continue;
+        };
+        let Some(slot) = frame
+            .locals
+            .get(&offset)
+            .filter(|slot| matches!(slot.kind, unlace_ir::ssa::FrameSlotKind::StackArg))
+        else {
+            continue;
+        };
+        trace_stack_text(format_args!(
+            "stack-param-name offset={offset} size={} param_idx={idx} name={name}",
+            slot.size
+        ));
+        ctx.stack_frame_slots.insert(
+            offset,
+            StackSlotName {
+                name: name.clone(),
+                size: slot.size,
+                is_buffer: false,
+            },
+        );
+        ctx.suppressed_stack_offsets.remove(&offset);
+    }
+}
+
 fn absorbed_stack_offsets_by_buffers(func: &HirFunction, ctx: &PrintCtx) -> BTreeSet<i64> {
     use unlace_ir::ssa::FrameSlotKind;
     let Some(frame) = func.stack_frame.as_ref() else {
@@ -7204,6 +7256,9 @@ fn compute_suppressed_stack_offsets(func: &HirFunction, ctx: &mut PrintCtx) {
     for local in frame.locals.values() {
         if !matches!(local.kind, FrameSlotKind::Local) {
             ctx.suppressed_stack_offsets.insert(local.offset);
+        }
+        if matches!(local.kind, FrameSlotKind::StackArg) {
+            ctx.stack_arg_offsets.insert(local.offset);
         }
     }
 }
@@ -8111,8 +8166,9 @@ fn is_suppressed_stack_access(
     stmt_idx: u32,
     ctx: &PrintCtx,
 ) -> bool {
-    resolve_stack_offset_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0)
-        .is_some_and(|offset| ctx.suppressed_stack_offsets.contains(&offset))
+    resolve_stack_offset_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0).is_some_and(|offset| {
+        ctx.suppressed_stack_offsets.contains(&offset) && !ctx.stack_arg_offsets.contains(&offset)
+    })
 }
 
 /// t232: emit `__intN v_<offset>;` (or `char buf_<offset>[N];`) declarations
@@ -13770,6 +13826,12 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             };
             return Some(format!("{};", call));
         }
+        if SyscallConvention::of(insn).is_some()
+            && ctx.sv_use_counts.get(&sv).copied().unwrap_or(0) == 0
+            && !has_later_alias_use(&sv.base, idx, ctx)
+        {
+            return Some(format!("{};", emit_callother(insn, idx, ctx)));
+        }
         let lhs = ctx.name_of(&sv);
         if let Some(short) = try_emit_increment_form(insn, idx, &lhs, ctx) {
             let rendered = format!("{};", short);
@@ -15715,17 +15777,25 @@ fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> S
     format!("{}({})", func, arg)
 }
 
+/// The helper Hex-Rays prints a system call of `convention` as.
+fn syscall_helper_name(convention: SyscallConvention) -> &'static str {
+    match convention {
+        SyscallConvention::Linux => "linux_syscall",
+        SyscallConvention::LinuxEabi => "linux_eabi_syscall",
+        SyscallConvention::Darwin => "mac_syscall",
+    }
+}
+
 /// Resolve a CALLOTHER tag whose meaning depends on the emitting lifter.
 ///
 /// Lifters number their tags independently, so the same value can mean
-/// different instructions on different architectures (PPC `sc` is `0x400`,
-/// the AArch64 `LD1` tag). This table is consulted before the shared
-/// [`callother_intrinsic_name`] table and the AArch64-specific paths.
+/// different instructions on different architectures. This table is
+/// consulted before the shared [`callother_intrinsic_name`] table and the
+/// AArch64-specific paths.
 fn arch_callother_intrinsic_name(arch: unlace_ir::ArchId, tag: u64) -> Option<&'static str> {
     use unlace_ir::ArchId;
     match (arch, tag) {
-        (ArchId::AArch64, 0x437) => Some("__svc"), // SVC #imm
-        (ArchId::Ppc | ArchId::Ppc64, 0x400) => Some("__syscall"), // sc
+        (ArchId::AArch64, 0x437) => Some("__svc"), // SVC #imm other than 0 / 0x80
         _ => None,
     }
 }
@@ -16299,6 +16369,15 @@ fn is_cmov_callother(insn: &IrInsn) -> bool {
 fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     if insn.inputs.is_empty() {
         return "/* CALLOTHER (no tag) */ 0".to_string();
+    }
+
+    if let Some(convention) = SyscallConvention::of(insn) {
+        let args: Vec<String> = insn.inputs[NUMBER_INPUT..]
+            .iter()
+            .enumerate()
+            .map(|(i, vn)| emit_operand_resolved(vn, NUMBER_INPUT + i, stmt_idx, ctx))
+            .collect();
+        return format!("{}({})", syscall_helper_name(convention), args.join(", "));
     }
 
     let tag_vn = &insn.inputs[0];

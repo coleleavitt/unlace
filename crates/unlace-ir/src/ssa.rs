@@ -1180,6 +1180,11 @@ pub struct FinalizedSignature {
     /// ends in `...`.
     #[serde(default)]
     pub variadic: bool,
+    /// Incoming stack slot (byte offset from the entry stack pointer) of each
+    /// parameter the caller passes on the stack, keyed by its index in
+    /// `params`. The printer names reads of those slots after the parameter.
+    #[serde(default)]
+    pub stack_param_slots: BTreeMap<usize, i64>,
 }
 
 /// Classification of a recovered stack-frame slot (Batch 2 slice 2).

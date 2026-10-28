@@ -118,20 +118,20 @@ sources = ["src/varargs.c"]
 [[program]]
 name = "sha256"
 summary = "SHA-256 known-answer test"
-sources = ["vendor/crypto-algorithms/sha256.c", "vendor/crypto-algorithms/sha256_test.c"]
+sources = ["third_party/crypto-algorithms/sha256.c", "third_party/crypto-algorithms/sha256_test.c"]
 cflags = ["-include", "string.h", "-w"]
 origin = "https://github.com/B-Con/crypto-algorithms @ cfbde48414baacf51fc7c74f275190881f037d32 (public domain)"
 
 [[program]]
 name = "md5"
 summary = "MD5 known-answer test"
-sources = ["vendor/crypto-algorithms/md5.c", "vendor/crypto-algorithms/md5_test.c"]
+sources = ["third_party/crypto-algorithms/md5.c", "third_party/crypto-algorithms/md5_test.c"]
 cflags = ["-include", "string.h", "-w"]
 origin = "https://github.com/B-Con/crypto-algorithms @ cfbde48414baacf51fc7c74f275190881f037d32 (public domain)"
 
 [[program]]
 name = "arcfour"
 summary = "RC4 key schedule and keystream known-answer test"
-sources = ["vendor/crypto-algorithms/arcfour.c", "vendor/crypto-algorithms/arcfour_test.c"]
+sources = ["third_party/crypto-algorithms/arcfour.c", "third_party/crypto-algorithms/arcfour_test.c"]
 cflags = ["-include", "string.h", "-w"]
 origin = "https://github.com/B-Con/crypto-algorithms @ cfbde48414baacf51fc7c74f275190881f037d32 (public domain)"

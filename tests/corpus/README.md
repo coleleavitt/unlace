@@ -73,7 +73,7 @@ skipped.
 
 ## Adding a program
 
-1. Add `src/<name>.c` (or vendor sources under `vendor/` with their license
+1. Add `src/<name>.c` (or vendor sources under `third_party/` with their license
    and upstream commit). Programs must be deterministic, read no input, print
    their results with `printf`, and avoid libc in the measured functions other
    than what `include/freestanding/` provides, so the AArch64 build links.

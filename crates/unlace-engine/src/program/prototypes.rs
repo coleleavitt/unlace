@@ -56,19 +56,29 @@ impl Program {
         if let Some(prototype) = prototypes.get(&address) {
             self.apply_prototype(sym, prototype)?;
         }
-        for &callee in callees {
-            let prototype = prototypes.get(&callee);
-            if prototype.is_none() && self.no_return_names.is_empty() {
-                continue;
-            }
-            let callee_sym = self.function_at(callee)?;
-            if let Some(prototype) = prototype {
+        for callee in callees {
+            if let Some(prototype) = prototypes.get(callee) {
+                let callee_sym = self.function_at(*callee)?;
                 self.apply_prototype(callee_sym, prototype)?;
             }
-            let name = self.symbol_table()?.symbol(callee_sym).get_name();
-            if self.no_return_names.contains(name.trim_end_matches("@plt")) {
-                self.set_no_return(callee_sym)?;
-            }
+        }
+        Ok(())
+    }
+
+    /// Mark the functions named in `no_return_names`, so that flow stops after calls to them
+    /// instead of decoding the bytes that follow the call.
+    pub(super) fn mark_no_return_functions(&mut self) -> Result<()> {
+        let no_return: Vec<SymbolId> = self
+            .functions
+            .iter()
+            .filter(|(_, record)| {
+                let name = record.name.trim_end_matches("@plt").trim_end_matches("_plt");
+                self.no_return_names.contains(name)
+            })
+            .map(|(sym, _)| *sym)
+            .collect();
+        for sym in no_return {
+            self.set_no_return(sym)?;
         }
         Ok(())
     }

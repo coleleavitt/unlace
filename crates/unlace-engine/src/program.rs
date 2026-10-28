@@ -333,6 +333,7 @@ impl Program {
             SymbolInput::Loader => program.architecture.read_loader_symbols()?,
             SymbolInput::Full(image) => program.add_symbols(*image)?,
         }
+        program.mark_no_return_functions()?;
         Ok(program)
     }
 
@@ -836,7 +837,7 @@ impl Program {
 
     fn decompile_unguarded(&mut self, address: u64) -> Result<String> {
         let sym = self.function_at(address)?;
-        if !self.string_sections.is_empty() || !self.prototypes.is_empty() || !self.no_return_names.is_empty() {
+        if !self.string_sections.is_empty() || !self.prototypes.is_empty() {
             if let Some(facts) = self.flow_facts(sym)? {
                 self.add_referenced_strings(&facts.constants)?;
                 self.apply_known_prototypes(address, sym, &facts.call_targets)?;

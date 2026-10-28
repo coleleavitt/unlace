@@ -581,27 +581,41 @@ impl LoadImage for ObjectLoadImage {
         if state.buffer.len() < size {
             state.buffer.resize(size, 0);
         }
-        // The buffer caches only the contiguous mapped bytes from `curaddr`, so a read answers
-        // the same whether or not an earlier read buffered its address (Ghidra's loader served
-        // zero-filled gaps from the cache but rejected the same addresses on a fresh read).
+        // A read inside the image (from the first mapped section to the end of the last one) gets
+        // the section bytes with gaps between sections as zeros; a read past the last section or
+        // before the first fails. Only bytes inside the image are cached, so a read answers the
+        // same whether or not an earlier read buffered its address (Ghidra's loader also served
+        // zero-filled bytes past the image from the cache while rejecting a fresh read there).
         let mut offset = 0usize;
         let mut cursize = state.buffer.len() as u64;
+        let image_start = decoded
+            .sections
+            .iter()
+            .filter(|section| section.is_mapped())
+            .map(|section| section.vma.wrapping_add(adjust))
+            .min();
         while cursize > 0 {
             let Some((index, secsize)) = ObjectLoadImage::find_section(&decoded.sections, adjust, curaddr) else {
                 break;
             };
             let section = &decoded.sections[index];
             let vma = section.vma.wrapping_add(adjust);
+            let readsize;
             if vma > curaddr {
-                break;
+                if image_start.is_none_or(|start| curaddr < start) {
+                    break;
+                }
+                readsize = (vma - curaddr).min(cursize);
+                state.buffer[offset..offset + readsize as usize].fill(0);
+            } else {
+                readsize = cursize.min(vma.wrapping_add(secsize).wrapping_sub(curaddr));
+                ObjectLoadImage::section_contents(
+                    &data,
+                    section,
+                    curaddr - vma,
+                    &mut state.buffer[offset..offset + readsize as usize],
+                );
             }
-            let readsize = cursize.min(vma.wrapping_add(secsize).wrapping_sub(curaddr));
-            ObjectLoadImage::section_contents(
-                &data,
-                section,
-                curaddr - vma,
-                &mut state.buffer[offset..offset + readsize as usize],
-            );
             offset += readsize as usize;
             cursize -= readsize;
             curaddr = curaddr.wrapping_add(readsize);

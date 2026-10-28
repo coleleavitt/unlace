@@ -190,12 +190,18 @@ fn not_an_object_file() {
 }
 
 #[test]
-fn unmapped_gap_reads_do_not_depend_on_buffer_state() {
+fn reads_do_not_depend_on_buffer_state() {
     let space = ram(8);
     let gap = Address::new(space.clone(), 0x402ad0);
+    let past_image = Address::new(space.clone(), 0x404190);
     let fresh = open("x86_64-O0", &space);
-    let mut buf = [0u8; 4];
-    assert!(matches!(fresh.load_fill(&mut buf, &gap), Err(Error::DataUnavail(_))));
+    let mut buf = [0xffu8; 4];
+    fresh.load_fill(&mut buf, &gap).expect("gap between sections loads");
+    assert_eq!(buf, [0; 4]);
+    assert!(matches!(
+        fresh.load_fill(&mut buf, &past_image),
+        Err(Error::DataUnavail(_))
+    ));
 
     let buffered = open("x86_64-O0", &space);
     let file = std::fs::read(binary("x86_64-O0")).expect("binary readable");
@@ -204,5 +210,14 @@ fn unmapped_gap_reads_do_not_depend_on_buffer_state() {
         .load_fill(&mut tail, &Address::new(space.clone(), 0x402ab9))
         .expect(".text tail loads");
     assert_eq!(&tail[..], &file[0x2ab9..0x2ac9]);
-    assert!(matches!(buffered.load_fill(&mut buf, &gap), Err(Error::DataUnavail(_))));
+    buf = [0xff; 4];
+    buffered.load_fill(&mut buf, &gap).expect("gap between sections loads");
+    assert_eq!(buf, [0; 4]);
+    buffered
+        .load_fill(&mut tail, &Address::new(space.clone(), 0x404180))
+        .expect(".bss tail loads");
+    assert!(matches!(
+        buffered.load_fill(&mut buf, &past_image),
+        Err(Error::DataUnavail(_))
+    ));
 }

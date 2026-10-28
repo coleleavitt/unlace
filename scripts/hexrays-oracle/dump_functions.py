@@ -268,6 +268,7 @@ def microcode_at(pfn, maturity_name: str) -> dict:
             opcode_names.setdefault(getattr(ida_hexrays, attr), attr)
 
     opcodes: dict[str, int] = {}
+    nested_opcodes: dict[str, int] = {}
     flag_regs: dict[str, int] = {}
     call_arities: list[int] = []
     insns = 0
@@ -280,15 +281,29 @@ def microcode_at(pfn, maturity_name: str) -> dict:
                     flag_regs[name] = flag_regs.get(name, 0) + 1
             return 0
 
+    class Instructions(ida_hexrays.minsn_visitor_t):
+        """Every instruction, including sub-instructions nested in operands."""
+
+        def visit_minsn(self):
+            ins = self.curins
+            name = opcode_names.get(ins.opcode, f"m_{ins.opcode}")
+            nested_opcodes[name] = nested_opcodes.get(name, 0) + 1
+            if (
+                ins.opcode in (ida_hexrays.m_call, ida_hexrays.m_icall)
+                and ins.d.t == ida_hexrays.mop_f
+                and ins.d.f is not None
+            ):
+                call_arities.append(ins.d.f.args.size())
+            return 0
+
     for serial in range(mba.qty):
         blk = mba.get_mblock(serial)
+        blk.for_all_insns(Instructions())
         ins = blk.head
         while ins is not None:
             insns += 1
             name = opcode_names.get(ins.opcode, f"m_{ins.opcode}")
             opcodes[name] = opcodes.get(name, 0) + 1
-            if ins.opcode == ida_hexrays.m_call and ins.d.t == ida_hexrays.mop_f and ins.d.f is not None:
-                call_arities.append(ins.d.f.args.size())
             ins.for_all_ops(Operands())
             ins = ins.next
 
@@ -296,8 +311,9 @@ def microcode_at(pfn, maturity_name: str) -> dict:
         "blocks": mba.qty,
         "insns": insns,
         "opcodes": dict(sorted(opcodes.items())),
+        "all_opcodes": dict(sorted(nested_opcodes.items())),
         "flag_reg_refs": dict(sorted(flag_regs.items())),
-        "call_arities": call_arities,
+        "call_arities": sorted(call_arities),
         "text": printer.lines,
     }
 

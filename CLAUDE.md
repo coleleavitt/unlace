@@ -303,7 +303,7 @@ Current architecture queue:
 5. Product surfaces exist but remain maturity work: IDAPython xrefs and
    `ida_hexrays::decompile`, Lumina placeholder responses, debugger platform
    breadth, emulator breadth, and lifter coverage honesty all still need
-   focused work. Front-end productization is not part of the active workspace.
+   focused work. Unlace is CLI/headless only; there is no UI frontend.
 
 ### Measure, don't assume (decompiler-behavior changes)
 

@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -1097,7 +1097,7 @@ fn run_symfetch(
 }
 
 fn fetch_url_to(url: &str, target: &std::path::Path) -> Result<()> {
-    println!("fetching {url}");
+    eprintln!("fetching {url}");
     let report = unlace_loader::symcache_fetch::fetch_to_path(url, target)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     println!(
@@ -1934,6 +1934,9 @@ struct StatsCollector {
     goto_tokens: usize,
     readfsqword_tokens: usize,
     stack_chk_fail_tokens: usize,
+    /// The live progress line is redrawn with `\r`, so it is drawn only when
+    /// stderr is a terminal; logs and pipes get the final scorecard alone.
+    draw_progress: bool,
     last_progress_len: usize,
 }
 
@@ -1960,6 +1963,7 @@ impl StatsCollector {
             goto_tokens: 0,
             readfsqword_tokens: 0,
             stack_chk_fail_tokens: 0,
+            draw_progress: on && std::io::stderr().is_terminal(),
             last_progress_len: 0,
         }
     }
@@ -1984,7 +1988,7 @@ impl StatsCollector {
     }
 
     fn tick_progress(&mut self, idx: usize, total: usize, name: &str) {
-        if !self.on || total == 0 {
+        if !self.draw_progress || total == 0 {
             return;
         }
         // Only redraw every ~32 functions or for the last one to avoid
@@ -2011,7 +2015,7 @@ impl StatsCollector {
     }
 
     fn clear_progress(&mut self) {
-        if !self.on || self.last_progress_len == 0 {
+        if !self.draw_progress || self.last_progress_len == 0 {
             return;
         }
         eprint!("\r{}\r", " ".repeat(self.last_progress_len));

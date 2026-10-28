@@ -8,7 +8,6 @@ pub mod demangle;
 pub mod expr_ast;
 pub mod instruction_annotations;
 pub mod ir_dump;
-pub mod stream;
 
 pub use c_printer::{
     FunctionHeaderInfo, PrintConfig, PrinterAnnotations, SsaStatementSlots, StackLvarAnnotation,

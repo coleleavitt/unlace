@@ -207,11 +207,12 @@ pub enum Cmd {
         #[arg(long)]
         progress: bool,
 
-        /// Progress rendering mode.
+        /// Progress rendering mode. Progress is drawn on stderr only when
+        /// stderr is a terminal; logs and pipes never receive it.
         ///
-        /// - `auto`: color + single-line live updates on TTY, plain lines otherwise
-        /// - `plain`: newline progress updates (safe for logs/CI)
-        /// - `color`: ANSI-colored live updates (falls back to plain when not a TTY)
+        /// - `auto`: same as `color`
+        /// - `plain`: uncolored progress bar
+        /// - `color`: ANSI-colored progress bar
         /// - `off`: disable progress output
         #[arg(long, value_enum, default_value = "auto")]
         progress_style: BatchProgressStyle,
@@ -597,12 +598,12 @@ pub enum EmitFormat {
 /// Batch progress rendering mode.
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
 pub enum BatchProgressStyle {
-    /// Auto-detect based on whether stderr is a TTY.
+    /// Colored progress bar when stderr is a terminal.
     Auto,
     /// Disable batch progress output.
     Off,
-    /// Plain text progress lines.
+    /// Uncolored progress bar when stderr is a terminal.
     Plain,
-    /// ANSI-colored live progress.
+    /// ANSI-colored progress bar when stderr is a terminal.
     Color,
 }

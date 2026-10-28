@@ -8,11 +8,10 @@ backlog in `plan.md`. Status snapshots live in `docs/status.md`.
 The four bands below are intentionally coarse. Their order is *priority*, not
 the schedule.
 
-This is a CLI-first roadmap. Front-end productization can be planned elsewhere
-only if explicitly revived; this file tracks the pieces that make unlace viable as a
-decompiler engine, CLI, library, scripting target, debugger/emulator evidence
-consumer, and automation component. The preferred product order is CLI, SDK,
-MCP, then optional frontends only if explicitly revived.
+Unlace is a CLI and headless decompiler: an engine, CLI, library, scripting
+target, debugger/emulator evidence consumer, and automation component. It has
+no GUI, TUI, or web UI, and this roadmap does not plan one. The preferred
+product order is CLI, SDK, then MCP.
 
 ## Band 1 — output correctness
 
@@ -61,9 +60,9 @@ Once the production architectures are honest about quality, expand:
   index: entrypoint-owned executable section fallback, `.pdata` / `.xdata`, TLS
   callbacks, import thunks, Go pclntab/moduledata, and external dump manifests.
 
-## Band 3 — interactive workflow
+## Band 3 — project workflow
 
-Decompilation has to be more than a one-shot batch tool, even without a bundled frontend:
+Decompilation has to be more than a one-shot batch tool:
 
 - Persistent `.unlace` project format with rename/comment/type metadata
   surviving reanalysis (Batch 24).
@@ -86,9 +85,8 @@ Decompilation has to be more than a one-shot batch tool, even without a bundled 
 - Opt-in Lumina-style shared annotations.
 - Lumina, plugins, scripts, debugger traces, and manual overrides all write
   into one deterministic typed fact store.
-- Frontend/editor productization is deferred. Do not route roadmap priority
-  there while CLI, SDK, MCP, persistence, and corpus evidence are still
-  incomplete.
+- No UI frontend. Graph, xref, and hex data are headless exports (for
+  example GraphViz dot) that external tools can render.
 
 ## Band 4 — production hardening
 

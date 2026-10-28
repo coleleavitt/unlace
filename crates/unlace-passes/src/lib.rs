@@ -343,7 +343,7 @@ pub use cse::CsePass;
 pub use cxx_vtable_recognize::{VtableInfo, recognize_vtables};
 #[cfg(feature = "unwired")]
 pub use daikon_invariants::DaikonInvariantPass;
-pub use dce::DeadCodeElimPass;
+pub use dce::{DeadCodeElimPass, DeadPhiElimPass};
 pub use dead_flag_elim::DeadFlagElimPass;
 #[cfg(feature = "unwired")]
 pub use dead_param_elim::{DeadParamReport, analyze_dead_params};

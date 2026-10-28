@@ -497,7 +497,7 @@ fn output_sanity_counters_are_reported() {
         "markdown must render aggregate stale-return count"
     );
     assert!(
-        md.contains("- leaked temp declarations: 1"),
+        md.contains("- leaked temp declarations: 0"),
         "markdown must render aggregate leaked-temp declaration count"
     );
     assert!(
@@ -512,5 +512,5 @@ fn output_sanity_counters_are_reported() {
     assert_eq!(main.output_leaked_temp_decls, 0);
     assert_eq!(report.totals.output_null_deref_sites, 0);
     assert_eq!(report.totals.output_stale_return_result, 0);
-    assert_eq!(report.totals.output_leaked_temp_decls, 1);
+    assert_eq!(report.totals.output_leaked_temp_decls, 0);
 }

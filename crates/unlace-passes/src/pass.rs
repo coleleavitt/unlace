@@ -945,6 +945,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("IndirectJumpResolvePass", GlobalOpt),
         PassDescriptor::new("OpTypeBindingPass", TypeRecovery),
         // (3) presentation post-passes
+        PassDescriptor::new("DeadPhiElimPass", FinalCleanup),
         PassDescriptor::new("ExpressionTreePass", FinalCleanup),
         PassDescriptor::new("VariableMergePass", LVarAlloc),
         PassDescriptor::new("LvarCollectPass", FinalCleanup),
@@ -1275,6 +1276,7 @@ mod phase_tests {
             Box::new(crate::variable_merge::VariableMergePass::default()),
             Box::new(crate::lvar_collect::LvarCollectPass),
             // ---- FinalCleanup ----
+            Box::new(crate::dce::DeadPhiElimPass),
             Box::new(crate::register_coalesce::RegisterCoalescePass),
             Box::new(crate::var_naming::VarNamingPass::default()),
             Box::new(crate::expression_tree::ExpressionTreePass),
@@ -1350,7 +1352,7 @@ mod phase_tests {
             (PassPhase::TypeRecovery.ordinal(), 18),
             (PassPhase::StackRecovery.ordinal(), 3),
             (PassPhase::LVarAlloc.ordinal(), 1),
-            (PassPhase::FinalCleanup.ordinal(), 5),
+            (PassPhase::FinalCleanup.ordinal(), 6),
         ]
         .into_iter()
         .collect();
@@ -1457,6 +1459,7 @@ mod phase_tests {
             GlobalOpt,    // IndirectJumpResolvePass
             TypeRecovery, // OpTypeBindingPass
             // (3) presentation post-passes
+            FinalCleanup, // DeadPhiElimPass
             FinalCleanup, // ExpressionTreePass
             LVarAlloc,    // VariableMergePass
             FinalCleanup, // LvarCollectPass

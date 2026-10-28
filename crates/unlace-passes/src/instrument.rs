@@ -164,6 +164,7 @@ fn linkscope_pass_name_span(name: &str) -> linkscope::Span {
             linkscope::phase("pass.name.IndirectJumpResolvePass")
         }
         "OpTypeBindingPass" | "op_type_binding" => linkscope::phase("pass.name.OpTypeBindingPass"),
+        "DeadPhiElimPass" | "dead-phi-elim" => linkscope::phase("pass.name.DeadPhiElimPass"),
         "ExpressionTreePass" | "expression-tree" => {
             linkscope::phase("pass.name.ExpressionTreePass")
         }

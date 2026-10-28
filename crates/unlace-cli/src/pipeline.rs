@@ -75,17 +75,17 @@ use unlace_passes::{
     CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstantFoldPass,
     CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass, CppVariantPass,
     CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass, DivisionIdiomPass,
-    ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IndirectCallResolvePass,
-    IndirectJumpResolvePass, IvElimPass, KnownBitsSimplifyPass, LicmPass, LvarCollectPass,
-    MemorySsaDsePass, ModuloIdiomPass, NoreturnDetectPass, ObjcDispatchPass, OpTypeBindingPass,
-    OuterFixedpointReport, ParamInferPass, PassAdapter, PassOptions, PassWithContext,
-    PrologueElimPass, RedundantFlagElimPass, RegisterCoalescePass, RepStringIdiomPass,
-    ReturnTypeInferPass, RustAsyncPass, RustEnumPass, RustPanicPass, RustVtablePass, SccpPass,
-    SignatureSnapshot, SizeofRecognitionPass, StackOffsetSnapshotPass, StackPointerTrackingPass,
-    StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, TailCallDetectPass,
-    TypeConstraintSolverPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
-    bump_if_signature_changed, canonical_pipeline_backedge_exceptions,
+    DeadFlagElimPass, DeadPhiElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,
+    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
+    IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, KnownBitsSimplifyPass, LicmPass,
+    LvarCollectPass, MemorySsaDsePass, ModuloIdiomPass, NoreturnDetectPass, ObjcDispatchPass,
+    OpTypeBindingPass, OuterFixedpointReport, ParamInferPass, PassAdapter, PassOptions,
+    PassWithContext, PrologueElimPass, RedundantFlagElimPass, RegisterCoalescePass,
+    RepStringIdiomPass, ReturnTypeInferPass, RustAsyncPass, RustEnumPass, RustPanicPass,
+    RustVtablePass, SccpPass, SignatureSnapshot, SizeofRecognitionPass, StackOffsetSnapshotPass,
+    StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
+    TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass, VariableMergePass,
+    annotate_libc_calls, bump_if_signature_changed, canonical_pipeline_backedge_exceptions,
     canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
     recover_direct_call_args_with_param_counts, recover_stack_frame, recover_structs,
     run_instrumented, run_outer_fixedpoint, run_to_fixedpoint_with_context,
@@ -2795,6 +2795,7 @@ fn pipeline_stage_lvar(
     opts: &PassOptions,
 ) -> Result<(), unlace_passes::PassError> {
     let trace = tracing::enabled!(target: "unlace::interproc", tracing::Level::DEBUG);
+    run_instrumented(&DeadPhiElimPass, ssa, opts)?;
     if trace {
         tracing::debug!(
             target: "unlace::interproc",

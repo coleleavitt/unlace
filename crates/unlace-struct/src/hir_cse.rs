@@ -247,11 +247,19 @@ fn cse_flat(nodes: &mut [HirNode]) {
 /// a pure value into a temporary. `Copy` is plain renaming, and register or
 /// stack outputs are machine storage that calls and ABI effects clobber
 /// without an explicit HIR write, so reusing them is not provably safe.
+/// Temporary operands are refused too: SSA passes rewrite operands through
+/// the SSA var map and delete the temporaries' original definitions, so two
+/// equal raw temporary names can stand for different values with no HIR
+/// write between them.
 fn is_cse_candidate(insn: &IrInsn) -> bool {
     insn.op != IrOp::Copy
         && !is_side_effecting(insn.op)
         && !insn.inputs.is_empty()
         && insn.output.is_some_and(|out| out.space == SpaceId::Unique)
+        && insn
+            .inputs
+            .iter()
+            .all(|input| input.space != SpaceId::Unique)
 }
 
 /// Same purity classification as `hir_licm::is_side_effecting`. Inlined
@@ -432,6 +440,29 @@ mod tests {
                 assert_eq!(insn.output, Some(t2));
                 assert_eq!(insn.inputs.as_slice(), &[addr]);
             }
+            other => panic!("expected Statement, got {other:?}"),
+        }
+    }
+
+    /// Equal raw temporary operands may name different values once SSA
+    /// passes have deleted the temporaries' definitions, so they are not
+    /// evidence of a common subexpression.
+    #[test]
+    fn temporary_operands_are_not_reused() {
+        let u = Varnode::unique(0, 4);
+        let t1 = Varnode::unique(8, 4);
+        let t2 = Varnode::unique(16, 4);
+        let one = Varnode::constant(1, 4);
+
+        let mut body = vec![
+            stmt(IrOp::IntAdd, t1, vec![u, one], 0x1000),
+            stmt(IrOp::IntAdd, t2, vec![u, one], 0x1004),
+        ];
+
+        eliminate_common_subexpressions(&mut body);
+
+        match &body[1] {
+            HirNode::Statement(insn) => assert_eq!(insn.op, IrOp::IntAdd),
             other => panic!("expected Statement, got {other:?}"),
         }
     }

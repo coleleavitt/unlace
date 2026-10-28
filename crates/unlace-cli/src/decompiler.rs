@@ -143,32 +143,35 @@ impl<'img> Decompiler<'img> {
 
     pub fn decompile(&self, entry: &FunctionEntry, emit: EmitFormat) -> FunctionOutput {
         let rtti = (!self.rtti.is_empty()).then_some(&self.rtti);
-        match pipeline::decompile_function_with_symbols(
-            self.image,
-            self.lifter.as_ref(),
-            entry,
-            emit,
-            &self.config,
-            self.dwarf.as_ref(),
-            &self.functions,
-            rtti,
-        ) {
-            Ok(text) => FunctionOutput::Decompiled(text),
-            Err(e) => {
-                profiling::diagnostic(
-                    "warn",
-                    "function decompilation failed",
-                    [
-                        TraceField::text("function", entry.name.clone()),
-                        TraceField::text("err", e.to_string()),
-                    ],
-                );
-                FunctionOutput::Failed(format!(
-                    "/* decompilation failed for '{}': {} */\n",
-                    entry.name, e
-                ))
-            }
-        }
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            pipeline::decompile_function_with_symbols(
+                self.image,
+                self.lifter.as_ref(),
+                entry,
+                emit,
+                &self.config,
+                self.dwarf.as_ref(),
+                &self.functions,
+                rtti,
+            )
+        }));
+        let error = match outcome {
+            Ok(Ok(text)) => return FunctionOutput::Decompiled(text),
+            Ok(Err(e)) => e.to_string(),
+            Err(payload) => format!("panicked: {}", panic_message(payload.as_ref())),
+        };
+        profiling::diagnostic(
+            "warn",
+            "function decompilation failed",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::text("err", error.clone()),
+            ],
+        );
+        FunctionOutput::Failed(format!(
+            "/* decompilation failed for '{}': {} */\n",
+            entry.name, error
+        ))
     }
 
     /// Decompile every selected function and apply [`finish_output`]; this is
@@ -191,4 +194,12 @@ pub fn finish_output(emit: EmitFormat, mut output: String) -> String {
         output = unlace_output::dedupe_rtti_hierarchy(&output);
     }
     output
+}
+
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("non-string panic payload")
 }

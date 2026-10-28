@@ -21,7 +21,6 @@ pub struct Config {
     pub structure: StructureOptions,
     pub printer: PrintConfig,
     pub batch: BatchOptions,
-    pub py: PyOptions,
     pub linkscope: LinkscopeOptions,
 }
 
@@ -53,22 +52,6 @@ impl Default for BatchOptions {
 impl BatchOptions {
     pub fn worker_stack_bytes(&self) -> usize {
         self.worker_stack_mb.max(1).saturating_mul(1024 * 1024)
-    }
-}
-
-/// Options for `unlace py`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct PyOptions {
-    /// Functions pre-analyzed into the session before the script runs.
-    pub max_staged_functions: usize,
-}
-
-impl Default for PyOptions {
-    fn default() -> Self {
-        Self {
-            max_staged_functions: 64,
-        }
     }
 }
 

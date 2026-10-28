@@ -104,6 +104,10 @@ pub fn run_image(interp: &mut Interpreter, image: &BinaryImage, cfg: &RunConfig)
     interp.regs.set("rbp", cfg.stack_top);
     interp.regs.set("rip", image.entry);
 
+    let lifter = match get_lifter(image.arch) {
+        Ok(lifter) => lifter,
+        Err(err) => return finalize_result(interp, StepOutcome::Faulted(err.to_string())),
+    };
     let mut outcome = StepOutcome::Continue;
     while interp.instruction_count < cfg.max_instructions {
         let pc = interp.regs.pc();
@@ -111,7 +115,6 @@ pub fn run_image(interp: &mut Interpreter, image: &BinaryImage, cfg: &RunConfig)
             outcome = StepOutcome::Faulted(format!("unmapped PC {:#x}", pc));
             break;
         };
-        let lifter = get_lifter(image.arch);
         let lifted = match lifter.lift_insn(&window, pc) {
             Ok(l) => l,
             Err(e) => {

@@ -14,12 +14,16 @@
 //!
 //! # Running
 //!
+//! Fixtures for experimental architectures (mips64, riscv64, ppc64, v850,
+//! arc) run only with their `arch-*` feature. The decompiler runs in-process,
+//! so no prior `cargo build` is needed.
+//!
 //! ```bash
 //! # Verify current output matches stored goldens:
-//! cargo test -p unlace-test-harness --test golden_fixtures
+//! cargo nextest run -p unlace-test-harness --features all-arches --test golden_fixtures
 //!
 //! # Refresh goldens after intentional output changes:
-//! UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures
+//! UPDATE_GOLDEN=1 cargo nextest run -p unlace-test-harness --features all-arches --test golden_fixtures
 //! ```
 //!
 //! # Metrics
@@ -44,7 +48,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use unlace_cli::args::EmitFormat;
-use unlace_cli::decompile;
+use unlace_cli::decompiler;
 use unlace_test_harness::fixture_metrics::{
     FIXTURE_DECOMPILE_TIMEOUT, FidelityCounters, GOLDEN_FIXTURES, Metrics, load_reference_metrics,
 };
@@ -81,7 +85,7 @@ fn update_golden_enabled() -> bool {
 fn decompile(name: &str) -> String {
     let binary = fixture_path(name);
     assert!(binary.exists(), "fixture missing: {binary:?}");
-    decompile::decompile_to_string(&binary, None, EmitFormat::C, FIXTURE_DECOMPILE_TIMEOUT)
+    decompiler::decompile_path(&binary, None, EmitFormat::C, FIXTURE_DECOMPILE_TIMEOUT)
         .unwrap_or_else(|e| panic!("unlace failed on {name}: {e:#}"))
 }
 
@@ -249,26 +253,31 @@ fn golden_arm64_features() {
     run_golden("arm64_features");
 }
 
+#[cfg(feature = "arch-mips")]
 #[test]
 fn golden_mips64_features() {
     run_golden("mips64_features");
 }
 
+#[cfg(feature = "arch-riscv")]
 #[test]
 fn golden_riscv64_features() {
     run_golden("riscv64_features");
 }
 
+#[cfg(feature = "arch-v850")]
 #[test]
 fn golden_v850_features() {
     run_golden("v850_features");
 }
 
+#[cfg(feature = "arch-arc")]
 #[test]
 fn golden_arc_features() {
     run_golden("arc_features");
 }
 
+#[cfg(feature = "arch-ppc")]
 #[test]
 fn golden_ppc64_features() {
     run_golden("ppc64_features");

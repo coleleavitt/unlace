@@ -27,7 +27,7 @@
 use std::path::Path;
 
 use unlace_cli::args::EmitFormat;
-use unlace_cli::decompile;
+use unlace_cli::decompiler;
 use unlace_test_harness::fixture_metrics::FIXTURE_DECOMPILE_TIMEOUT;
 
 fn workspace_root() -> &'static Path {
@@ -63,7 +63,7 @@ fn decompile_fixture_function(fixture_name: &str, func: &str) -> String {
 
 fn decompile_fixture_filtered(fixture_name: &str, function: Option<&str>) -> String {
     let binary = fixture(&format!("{fixture_name}.elf"));
-    decompile::decompile_to_string(
+    decompiler::decompile_path(
         Path::new(&binary),
         function,
         EmitFormat::C,

@@ -62,18 +62,15 @@ A production-grade decompiler is:
   hard-float, AltiVec/VSX depth, and full SIMD/FPU/ABI coverage.
 
 ### 4. CLI-first adoption gaps
-- IDAPython has real shims plus ctree/microcode wrapper types and
-  relocation-driven xrefs, but `ida_hexrays.decompile` is still a partial
-  session-text path, `hxe_*` event callbacks do not exist, and script corpus
-  compatibility (findcrypt/lazy_ida/class_informer) is untested.
 - Debugger: Linux ptrace (incl. hardware + conditional breakpoints,
   fp-walk stack traces) and a GDB/RSP `gdb_stub` backend landed; the Windows
   DebugAPI backend is a gated scaffold without a live-API body, macOS has no
   backend at all, and watch expressions/coverage overlay remain open.
 - Lumina-equivalent APIs and plugin SDK boundaries exist but need stable
   protocol behavior, examples, compatibility tests, and confidence propagation.
-- `crates/unlace-mcp` exists with a stdio server; remaining work is tool
-  breadth, resource URIs, read-only policy tests, and MCP-client fixtures.
+- `crates/unlace-mcp` runs unlace in-process over stdio with typed binary,
+  function, IR, and xref tools; remaining work is `unlace://` resources,
+  project/report tools, read-only policy tests, and MCP-client fixtures.
 - Persistent `.unlace` project state exists (`unlace-session` with typed
   user-override facts and an `xtask project-roundtrip` proof); remaining work
   is merge/conflict handling and wiring every producer through it.
@@ -419,7 +416,9 @@ Acceptance:
   objects, diagnostics, and validated mutations
 - Rust plugin API through `unlace-plugin`
 - WASM-sandboxed runtime with explicit capabilities
-- Python bindings and IDAPython compatibility wrappers over the same SDK
+- Python bindings over the same SDK
+- Plugin loading via manifest, hot-reload during development, and a versioned
+  plugin registry
 - Loader, processor/lifter, debugger, and trace extension traits after the core
   fact model is stable
 - SDK compatibility matrix grounded in `docs/sdk.md` and the local IDA SDK 9.3
@@ -433,19 +432,18 @@ Acceptance:
 
 ### F.3 Scripting and Automation Surface
 
-CLI-first adoption depends on existing automation continuing to work:
+Automation runs on unlace's own surfaces:
 
-- `unlace py --ida-compat` for common IDAPython scripts
-- stable `ida_funcs`, `ida_bytes`, `ida_name`, `ida_xref`, `idaapi`, `idc`,
-  `idautils`, and `ida_hexrays` shims
-- ctree/microcode visitor hooks for deobfuscators
+- HIR/IR visitor hooks for deobfuscators
 - scriptable batch decompilation with stable JSON/SARIF outputs
-- compatibility fixtures from real public IDA scripts
 
 ### F.4 MCP Server
 
-Status 2026-07-01: `crates/unlace-mcp` exists (stdio server). Remaining:
-tool breadth, `unlace://` resources, read-only policy tests, client fixtures.
+Status 2026-10-28: `crates/unlace-mcp` serves six read-only tools over stdio
+(`binary_info`, `list_functions`, `decompile_function`, `ir_dump_function`,
+`xrefs_from`, `xrefs_to`) by running the `unlace-cli` library in-process and
+returning typed JSON. Remaining: `unlace://` resources, project/type/diagnostic
+and report tools, read-only policy tests, and pagination for large artifacts.
 
 `unlace-mcp` is the preferred agent/automation surface after the CLI and SDK.
 It should follow `docs/mcp.md` and use the local Rust MCP SDK reference at
@@ -546,7 +544,6 @@ through CLI output, the SDK, and data exports such as GraphViz dot.
 Acceptance:
 - Unlace SDK documented with examples
 - `unlace-mcp` roadmap and stdio tool contract documented
-- IDAPython compatibility matrix is generated from real scripts
 - CI produces signed artifacts
 
 ### F.10 Export & Interop (new 2026-07-01)
@@ -607,44 +604,13 @@ Acceptance:
 
 ---
 
-## Phase H — IDAPython Compatibility
+## Phase H — Dropped
 
-**Goal:** Run existing IDA scripts unmodified.
-
-### H.1 Core API
-- `idaapi` module (database access)
-- `idc` module (legacy scripting)
-- `idautils` module (iteration helpers)
-- `ida_funcs`, `ida_bytes`, `ida_name` (analysis API)
-
-### H.2 Hex-Rays API
-- `ida_hexrays` module (decompiler access)
-- `cfunc_t`, `citem_t`, `cexpr_t` types
-- `hxe_*` event callbacks
-- Microcode access (`mba_t`, `minsn_t`)
-
-### H.3 Plugin Infrastructure
-- Plugin loading via manifest (`ida-plugin.json`)
-- Hot-reload during development
-- Plugin registry with versioning
-
-### H.4 Compatibility Testing
-- findcrypt.py runs unmodified
-- lazy_ida.py runs unmodified
-- class_informer.py runs unmodified
-- IDArling basic functionality
-
-Status 2026-07-01: core modules expanded over real `Session` (44 tests),
-ctree wrappers (`citem_t`/`cexpr_t`/`cinsn_t` over HIR), microcode wrappers
-(`mba_t`/`minsn_t` over SSA), and relocation-driven `ida_xref` landed.
-Still zero coverage: `hxe_*` event callbacks (H.2), plugin manifest/hot-reload
-(H.3), and the real-script compat harness (H.4 — no findcrypt/lazy_ida/
-class_informer fixtures exist). `ida_hexrays.decompile` remains a partial
-staged-session-text path, not full pipeline wiring.
-
-Acceptance:
-- 90%+ of top-100 public IDA scripts run without modification
-- Custom deobfuscators using `hxe_*` events work
+IDAPython compatibility was removed on 2026-10-28. Unlace is its own
+examiner: automation goes through the Rust library, the CLI, and the MCP
+server (F.4), not through a re-implementation of IDA's scripting API. The
+letter stays unused so existing phase references remain stable. Generic
+plugin manifest, hot-reload, and registry work now lives under F.1.
 
 ---
 
@@ -747,8 +713,7 @@ Acceptance:
 - WASM plugin sandbox for untrusted plugins
 - Python bindings over stable concepts, not private implementation details
 - Versioned compatibility policy for plugins and scripts
-- Generated SDK support matrix for Rust, Python, WASM, IDAPython-compatible, and
-  IDA-SDK-inspired surfaces
+- Generated SDK support matrix for the Rust, Python, WASM, and MCP surfaces
 
 ### K.3 Release and Supply Chain
 - Reproducible release artifacts
@@ -776,16 +741,15 @@ Acceptance:
 | E — Format/Dynamic | 1-2 months | 15 months |
 | F — Ecosystem | 1-2 months | 17 months |
 | G — Debugger | 2-3 months | 20 months |
-| H — IDAPython | 2-3 months | 23 months |
-| I — User-Guided Analysis | 1-2 months | 25 months |
-| J — Corpus Evidence | 1-2 months | 27 months |
-| K — Platform/Release | 1-2 months | 29 months |
+| I — User-Guided Analysis | 1-2 months | 22 months |
+| J — Corpus Evidence | 1-2 months | 24 months |
+| K — Platform/Release | 1-2 months | 26 months |
 | Packers/Obfuscation | 2-4 months | integrate with E/F/J |
 | AI-assisted RE | 1-2 months | integrate after SDK/MCP |
 | MCP — CLI Agent Surface | 1 month | integrate after SDK core |
 
 With sustained agent-assisted development, the critical CLI-first adoption path is
-shorter than the full parity path: CLI, SDK, MCP, IDAPython/xrefs, persistent
+shorter than the full parity path: CLI, SDK, MCP, xrefs, persistent
 project state, basic debugger breadth, and corpus evidence should land before
 long-tail architecture or release polish.
 There is no UI track.

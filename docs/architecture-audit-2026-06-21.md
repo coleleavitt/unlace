@@ -68,8 +68,7 @@ domain:
 
 4. CLI-first product-surface maturity.
    The crates exist, so avoid backlog wording that says they are absent. Current
-   partial/stub surfaces include IDAPython xrefs, `idaapi::decompile`,
-   `ida_hexrays::decompile`, ctree/microcode hooks, Lumina placeholder API
+   partial/stub surfaces include HIR/IR hooks, Lumina placeholder API
    responses, debugger platform breadth, debugger trace/coverage export,
    emulator opcode/memory-model breadth, stable Unlace SDK contracts
    (`docs/sdk.md`), CLI-first MCP server contracts (`docs/mcp.md`),
@@ -115,14 +114,16 @@ domain:
    transport, `ServerHandler`, `#[tool]`, `#[tool_router]`, resources,
    prompts, and streamable HTTP. If the rmcp checkout is moved or mirrored to
    `/home/cole/RustProjects/active/rust-sdk`, use that active checkout as the
-   reference. The planned `crates/unlace-mcp` should be a separate
-   integration crate over the stable SDK facade. Start with stdio, read-only
-   policy, and typed tool schemas. Do not route frontend work through MCP.
+   reference. `crates/unlace-mcp` is a separate integration crate; since
+   2026-10-28 it runs the `unlace-cli` library in-process over stdio with
+   read-only, typed tool schemas. Move it onto the stable SDK facade once that
+   exists. Do not route frontend work through MCP.
 
 11. Deferred frontends.
     The user preference is CLI-first. Frontend productization should stay
     deferred unless explicitly revived. Keep roadmap energy on CLI, SDK, MCP,
-    persistence, IDAPython compatibility, debugger breadth, and corpus evidence.
+    persistence, debugger breadth, and corpus evidence. (IDAPython
+    compatibility was dropped on 2026-10-28.)
 
 12. `unlace-ir/src/types.rs`.
    This is the only catchall-looking filename found in the broad scan, but it

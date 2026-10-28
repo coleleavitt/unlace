@@ -16,3 +16,7 @@ smallvec = { workspace = true }
 [[example]]
 name = "hello_plugin"
 path = "examples/hello_plugin.rs"
+
+[features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []

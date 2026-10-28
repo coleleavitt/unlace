@@ -11,6 +11,7 @@ pub mod arch_support;
 mod block;
 pub mod cfg;
 pub mod data_layout;
+#[cfg(feature = "unwired")]
 pub mod data_xrefs;
 mod display;
 mod function;

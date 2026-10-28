@@ -1,5 +1,6 @@
 //! Control-flow structuring: recover `if`/`while`/`switch` from SSA CFGs.
 
+#[cfg(feature = "unwired")]
 pub mod bitfield_recovery;
 pub mod block_merge;
 pub mod cmov_switch;
@@ -7,11 +8,14 @@ pub mod condition_dup;
 pub mod condition_normalize;
 pub mod condition_refinement;
 pub mod continue_break;
+#[cfg(feature = "unwired")]
 pub mod cpp_eh;
+#[cfg(feature = "unwired")]
 pub mod cross_jump_revert;
 pub mod eager_returns;
 pub mod empty_if_cleanup;
 pub mod flatten_if_else;
+#[cfg(feature = "unwired")]
 pub mod goto_classify;
 pub mod goto_coalesce;
 pub mod goto_elim;
@@ -26,6 +30,7 @@ pub mod label_cleanup;
 pub mod label_fallthrough;
 pub mod label_hoist;
 pub mod label_tail_dup;
+#[cfg(feature = "unwired")]
 pub mod loop_classify;
 pub mod loop_normalize;
 pub mod node_split;
@@ -35,6 +40,7 @@ pub mod region_bridge;
 pub mod region_splice;
 pub mod region_structurer;
 pub mod return_merge;
+#[cfg(feature = "unwired")]
 pub mod seh_lower;
 pub mod short_circuit;
 pub mod structurer;
@@ -49,11 +55,14 @@ pub use cmov_switch::recover_cmov_switches;
 pub use condition_dup::duplicate_goto_conditions;
 pub use condition_normalize::normalize_conditions;
 pub use continue_break::detect_continue_break;
+#[cfg(feature = "unwired")]
 pub use cpp_eh::cpp_eh_regions_to_seh;
+#[cfg(feature = "unwired")]
 pub use cross_jump_revert::cross_jump_revert;
 pub use eager_returns::eager_returns;
 pub use empty_if_cleanup::cleanup_empty_ifs;
 pub use flatten_if_else::{flatten_if_else_chains, simplify_chain_conditions};
+#[cfg(feature = "unwired")]
 pub use goto_classify::{GotoClassification, classify as classify_gotos};
 pub use goto_coalesce::coalesce_goto_chains;
 pub use goto_elim::eliminate_forward_gotos;
@@ -68,12 +77,14 @@ pub use label_cleanup::{cleanup_unreachable_labels, repair_missing_goto_labels};
 pub use label_fallthrough::collapse_label_fallthroughs;
 pub use label_hoist::hoist_cross_branch_labels;
 pub use label_tail_dup::duplicate_simple_label_tails;
+#[cfg(feature = "unwired")]
 pub use loop_classify::{LoopFormCounts, classify_function, classify_loop_form, classify_nodes};
 pub use loop_normalize::{normalize_dowhile_to_while, reverse_loop_rotation};
 pub use node_split::split_irreducible_entries;
 pub use options::StructureOptions;
 pub use region_structurer::{Region, count_gotos, regions_to_hir, structure_regions};
 pub use return_merge::return_merge;
+#[cfg(feature = "unwired")]
 pub use seh_lower::{
     AddrRange, SehCatchArm, SehHandler, SehRegion, catch_all_type, wrap_seh_regions,
 };

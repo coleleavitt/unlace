@@ -27,10 +27,26 @@ pub struct CallGraph {
     indirect_call_count: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// How an instruction reaches the target of an [`InstructionXref`].
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum XrefKind {
+    /// A direct `CALL` to a constant target.
+    Call,
+    /// A direct unconditional `BRANCH` to a constant target.
+    Branch,
+}
+
+/// A direct control-flow edge from one instruction address to a constant target.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct InstructionXref {
     pub from: u64,
     pub to: u64,
+    pub kind: XrefKind,
 }
 
 /// Sentinel empty set returned by reference when a lookup misses.
@@ -110,24 +126,31 @@ pub fn build_call_graph(functions: &BTreeMap<u64, Function>) -> CallGraph {
     }
 }
 
+/// Collect every direct `CALL`/`BRANCH` edge with a constant target, sorted by
+/// `(from, to, kind)` and deduplicated.
 pub fn build_instruction_xrefs(functions: &BTreeMap<u64, Function>) -> Vec<InstructionXref> {
     let mut out = Vec::new();
     for func in functions.values() {
         for block in func.blocks.values() {
             for insn in &block.insns {
-                if matches!(insn.op, IrOp::Call | IrOp::Branch)
-                    && let Some(target_vn) = insn.inputs.first()
+                let kind = match insn.op {
+                    IrOp::Call => XrefKind::Call,
+                    IrOp::Branch => XrefKind::Branch,
+                    _ => continue,
+                };
+                if let Some(target_vn) = insn.inputs.first()
                     && target_vn.space == SpaceId::Const
                 {
                     out.push(InstructionXref {
                         from: insn.addr,
                         to: target_vn.offset,
+                        kind,
                     });
                 }
             }
         }
     }
-    out.sort_by_key(|xref| (xref.from, xref.to));
+    out.sort();
     out.dedup();
     out
 }
@@ -321,7 +344,36 @@ mod tests {
             xrefs,
             vec![super::InstructionXref {
                 from: 0x1000,
-                to: 0x2000
+                to: 0x2000,
+                kind: super::XrefKind::Call,
+            }]
+        );
+    }
+
+    #[test]
+    fn instruction_xrefs_classify_direct_branches() {
+        let mut func = Function::new("jumper", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Branch,
+            smallvec![Varnode::constant(0x1040, 8)],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Branch,
+            smallvec![Varnode::reg(0, 8)],
+            0x1008,
+        ));
+        func.insert_block(bb);
+        let mut funcs = BTreeMap::new();
+        funcs.insert(0x1000, func);
+
+        assert_eq!(
+            build_instruction_xrefs(&funcs),
+            vec![super::InstructionXref {
+                from: 0x1004,
+                to: 0x1040,
+                kind: super::XrefKind::Branch,
             }]
         );
     }

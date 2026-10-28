@@ -13,3 +13,15 @@ unlace-cli = { workspace = true }
 unlace-lift = { workspace = true }
 unlace-lift-arm = { workspace = true }
 unlace-ir = { workspace = true }
+
+# Tests for experimental architectures run only with their feature.
+[features]
+default = []
+all-arches = ["arch-arc", "arch-avr", "arch-ebpf", "arch-mips", "arch-ppc", "arch-riscv", "arch-v850"]
+arch-arc = ["unlace-lift/arch-arc"]
+arch-avr = ["unlace-lift/arch-avr"]
+arch-ebpf = ["unlace-lift/arch-ebpf"]
+arch-mips = ["unlace-lift/arch-mips"]
+arch-ppc = ["unlace-lift/arch-ppc"]
+arch-riscv = ["unlace-lift/arch-riscv"]
+arch-v850 = ["unlace-lift/arch-v850"]

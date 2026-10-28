@@ -135,28 +135,26 @@ Support requires:
 - visible unsupported markers when semantics are missing
 - a status row that says exactly how mature the feature is
 
-`unlace-debugger`, `unlace-idapython`, `unlace-lumina`, `unlace-emu`, and the
+`unlace-debugger`, `unlace-lumina`, `unlace-emu`, and the
 long-tail lifters are foundations. The roadmap should describe their remaining
 depth, wiring, and evidence gaps, not pretend the foundations are absent.
 
 ### 9. Compatibility Is an Adoption Surface
 
-Unlace does not need to copy IDA's UI to benefit from IDA compatibility.
+Unlace is its own examiner. It does not re-implement IDA's UI or IDA's
+scripting API (the IDAPython compatibility layer was removed on 2026-10-28).
 
-The headless compatibility surfaces matter because they let existing workflows
-move over gradually:
-- IDAPython scripts should run when they only need database, bytes, functions,
-  names, xrefs, and decompiler access.
+Adoption comes from headless native surfaces that are easy to drive:
 - MCP should expose CLI-first, read-only agent workflows over the stable SDK,
   with mutation gated by explicit capability and provenance.
-- Hex-Rays-style ctree and microcode hooks should expose useful decompiler
-  facts without freezing unlace into IDA's internal design.
+- HIR and IR hooks should expose useful analyzer facts in unlace's own
+  vocabulary rather than IDA's ctree/microcode shapes.
 - Lumina-style signatures and annotations should be deterministic, private by
   default, and conflict-aware.
 - Plugin and SDK APIs should wrap stable unlace concepts, as described in
   `docs/sdk.md`, not raw implementation internals that will churn.
 
-Compatibility is a bridge. The destination is cleaner, measured analysis.
+IDA output stays a measurement reference; it is not an API to mimic.
 
 Unlace is headless; there is no UI frontend. The preferred path is
 CLI, SDK, MCP, and scriptability first.

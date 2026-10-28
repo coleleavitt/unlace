@@ -23,7 +23,6 @@ capstone = "0.14"
 capstone-sys = "0.18"
 # Debug info
 gimli = "0.33"
-addr2line = "0.26"
 pdb = "0.8"
 fallible-iterator = "0.2"
 # Graph algorithms (CFG, dominator trees)
@@ -91,7 +90,6 @@ unlace-lift-amdgpu = { path = "crates/unlace-lift-amdgpu" }
 unlace-lift-sharc = { path = "crates/unlace-lift-sharc" }
 unlace-lift-ti = { path = "crates/unlace-lift-ti" }
 unlace-lift-evm = { path = "crates/unlace-lift-evm" }
-unlace-lift-lua = { path = "crates/unlace-lift-lua" }
 unlace-lift-6502 = { path = "crates/unlace-lift-6502" }
 unlace-lift-8051 = { path = "crates/unlace-lift-8051" }
 unlace-lift-pic = { path = "crates/unlace-lift-pic" }
@@ -109,7 +107,6 @@ unlace-sbom = { path = "crates/unlace-sbom" }
 unlace-test-harness = { path = "crates/unlace-test-harness" }
 unlace-lumina = { path = "crates/unlace-lumina" }
 unlace-session = { path = "crates/unlace-session" }
-unlace-idapython = { path = "crates/unlace-idapython" }
 unlace-debugger = { path = "crates/unlace-debugger" }
 unlace-emu = { path = "crates/unlace-emu" }
 

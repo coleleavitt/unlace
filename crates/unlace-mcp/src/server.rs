@@ -1,108 +1,103 @@
-//! The read-only MCP server implementation.
+//! The MCP tool surface: argument types, tool descriptions, and the hop from
+//! the async server onto blocking analysis threads.
 
-use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
-use tokio::process::Command;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-/// A binary-path-only request.
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+use rmcp::{Json, handler::server::wrapper::Parameters, schemars, tool, tool_router};
+use serde::Deserialize;
+use unlace_cli::config::Config;
+
+use crate::analysis::{self, Address, BinaryInfo, Decompilation, FunctionList, XrefsFrom, XrefsTo};
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct BinaryRequest {
-    /// Filesystem path to the binary (ELF / PE / Mach-O / …) to analyze.
-    pub binary: String,
+    /// Filesystem path to the ELF, PE, or Mach-O binary.
+    pub binary: PathBuf,
 }
 
-/// A single-function decompile request.
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct DecompileRequest {
-    /// Filesystem path to the binary to analyze.
-    pub binary: String,
-    /// Function to decompile: a symbol name or a hex address like `0x401000`.
-    /// When omitted, every discovered function is decompiled.
-    pub function: Option<String>,
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct FunctionRequest {
+    /// Filesystem path to the binary.
+    pub binary: PathBuf,
+    /// Function symbol name or entry address (`0x401000` or decimal).
+    pub function: String,
 }
 
-/// A single-function IR dump request.
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct IrDumpRequest {
-    /// Filesystem path to the binary to analyze.
-    pub binary: String,
-    /// Function to dump: a symbol name or a hex address like `0x401000`.
-    /// When omitted, every discovered function is dumped.
-    pub function: Option<String>,
-    /// Pipeline phase to snapshot: `lift`, `post-passes`, or `post-structuring`.
-    /// Defaults to the CLI's `post-passes` phase.
+    /// Filesystem path to the binary.
+    pub binary: PathBuf,
+    /// Function symbol name or entry address (`0x401000` or decimal).
+    pub function: String,
+    /// Pipeline milestone: `lift`, `post-passes` (default), `post-structuring`,
+    /// `lvars`, or `types`.
     pub phase: Option<String>,
 }
 
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct XrefsFromRequest {
-    pub binary: String,
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct AddressRequest {
+    /// Filesystem path to the binary.
+    pub binary: PathBuf,
+    /// Virtual address (`0x401000` or decimal).
     pub address: String,
 }
 
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct DecompileTextRequest {
-    pub binary: String,
-    pub address: String,
+/// Read-only unlace analysis exposed over MCP.
+#[derive(Debug, Clone)]
+pub struct UnlaceServer {
+    /// Pipeline options, loaded once at startup the way `unlace` loads them.
+    config: Arc<Config>,
 }
-
-/// Read-only unlace decompiler exposed over MCP.
-#[derive(Debug, Clone, Default)]
-pub struct UnlaceServer;
 
 impl UnlaceServer {
-    pub fn new() -> Self {
-        Self
+    pub fn new(config: Arc<Config>) -> Self {
+        Self { config }
     }
 }
 
 #[tool_router(server_handler)]
 impl UnlaceServer {
     #[tool(
-        description = "Open a binary and return a quality/summary report: detected architecture, \
-                       function count, and a per-function table. Read-only."
+        description = "Load a binary and summarize it: architecture, byte order, entry point, \
+                       sections, and symbol, relocation, and discovered-function counts."
     )]
     async fn binary_info(
         &self,
         Parameters(BinaryRequest { binary }): Parameters<BinaryRequest>,
-    ) -> String {
-        run_unlace(&["quality", &binary]).await
+    ) -> Result<Json<BinaryInfo>, String> {
+        blocking(move || analysis::binary_info(&binary))
+            .await
+            .map(Json)
     }
 
-    #[tool(
-        description = "List the functions unlace discovers in a binary (name + ok/failed status), \
-                       parsed from the quality report. Read-only."
-    )]
+    #[tool(description = "List the functions unlace discovers in a binary (name, address, size).")]
     async fn list_functions(
         &self,
         Parameters(BinaryRequest { binary }): Parameters<BinaryRequest>,
-    ) -> String {
-        let report = run_unlace(&["quality", &binary]).await;
-        let funcs = parse_function_names(&report);
-        if funcs.is_empty() {
-            return report;
-        }
-        funcs.join("\n")
+    ) -> Result<Json<FunctionList>, String> {
+        blocking(move || analysis::list_functions(&binary))
+            .await
+            .map(Json)
     }
 
     #[tool(
-        description = "Decompile one function (or all functions when `function` is omitted) to \
-                       pseudo-C. `function` may be a symbol name or a hex address. Read-only."
+        description = "Decompile one function, selected by symbol name or entry address, to \
+                       pseudo-C. The code matches `unlace decompile --function <function>`."
     )]
     async fn decompile_function(
         &self,
-        Parameters(DecompileRequest { binary, function }): Parameters<DecompileRequest>,
-    ) -> String {
-        let mut args: Vec<&str> = vec!["decompile", &binary, "--emit", "c"];
-        if let Some(func) = function.as_deref() {
-            args.push("--function");
-            args.push(func);
-        }
-        run_unlace(&args).await
+        Parameters(FunctionRequest { binary, function }): Parameters<FunctionRequest>,
+    ) -> Result<Json<Decompilation>, String> {
+        let config = Arc::clone(&self.config);
+        blocking(move || analysis::decompile_function(&binary, &function, &config))
+            .await
+            .map(Json)
     }
 
     #[tool(
-        description = "Dump SSA IR for one function (or all functions) at a named pipeline phase. \
-                       Useful for explaining decompilation gaps. Read-only."
+        description = "Dump one function's SSA IR at a pipeline milestone, as `unlace ir-dump` \
+                       prints it. Useful for explaining decompilation gaps."
     )]
     async fn ir_dump_function(
         &self,
@@ -111,368 +106,234 @@ impl UnlaceServer {
             function,
             phase,
         }): Parameters<IrDumpRequest>,
-    ) -> String {
-        let args = ir_dump_args(&binary, function.as_deref(), phase.as_deref());
-        run_unlace_owned(&args).await
+    ) -> Result<String, String> {
+        let config = Arc::clone(&self.config);
+        blocking(move || analysis::ir_dump_function(&binary, &function, phase.as_deref(), &config))
+            .await
     }
 
     #[tool(
-        description = "List instruction targets referenced from an address using unlace's staged \
-                       IDAPython XrefsFrom surface. Requires UNLACE_BIN/path `unlace` to be built \
-                       with the unlace-cli `python` feature. The generated script is read-only."
+        description = "Direct call and branch edges leaving `address`. When `address` is a \
+                       function entry, returns every edge leaving that function."
     )]
     async fn xrefs_from(
         &self,
-        Parameters(XrefsFromRequest { binary, address }): Parameters<XrefsFromRequest>,
-    ) -> String {
-        let address = match parse_xref_address(&address) {
-            Ok(address) => address,
-            Err(err) => return format!("error: invalid address `{address}` ({err})"),
-        };
-        run_xrefs_from(&binary, address).await
+        Parameters(AddressRequest { binary, address }): Parameters<AddressRequest>,
+    ) -> Result<Json<XrefsFrom>, String> {
+        let address = decode_address(&address)?;
+        blocking(move || analysis::xrefs_from(&binary, address))
+            .await
+            .map(Json)
     }
 
     #[tool(
-        description = "List addresses that reference a target address using unlace's staged \
-                       IDAPython XrefsTo surface. Requires UNLACE_BIN/path `unlace` to be built \
-                       with the unlace-cli `python` feature. The generated script is read-only."
+        description = "Direct call and branch edges targeting `address`, plus the relocations \
+                       (GOT/PLT slots) that patch it."
     )]
     async fn xrefs_to(
         &self,
-        Parameters(XrefsFromRequest { binary, address }): Parameters<XrefsFromRequest>,
-    ) -> String {
-        let address = match parse_xref_address(&address) {
-            Ok(address) => address,
-            Err(err) => return format!("error: invalid address `{address}` ({err})"),
-        };
-        run_xrefs_to(&binary, address).await
-    }
-
-    #[tool(
-        description = "Return staged pseudocode text for the function containing an address using \
-                       unlace's IDAPython idaapi/ida_hexrays decompile surface. Requires \
-                       UNLACE_BIN/path `unlace` to be built with the unlace-cli `python` feature. \
-                       The generated script is read-only."
-    )]
-    async fn decompile_text(
-        &self,
-        Parameters(DecompileTextRequest { binary, address }): Parameters<DecompileTextRequest>,
-    ) -> String {
-        let address = match parse_xref_address(&address) {
-            Ok(address) => address,
-            Err(err) => return format!("error: invalid address `{address}` ({err})"),
-        };
-        run_decompile_text(&binary, address).await
+        Parameters(AddressRequest { binary, address }): Parameters<AddressRequest>,
+    ) -> Result<Json<XrefsTo>, String> {
+        let address = decode_address(&address)?;
+        blocking(move || analysis::xrefs_to(&binary, address))
+            .await
+            .map(Json)
     }
 }
 
-fn ir_dump_args(binary: &str, function: Option<&str>, phase: Option<&str>) -> Vec<String> {
-    let mut args = vec!["ir-dump".to_string(), binary.to_string()];
-    if let Some(func) = function {
-        args.push("--function".to_string());
-        args.push(func.to_string());
-    }
-    if let Some(phase) = phase {
-        args.push("--phase".to_string());
-        args.push(phase.to_string());
-    }
-    args
+fn decode_address(address: &str) -> Result<Address, String> {
+    address
+        .parse()
+        .map_err(|err| format!("invalid address `{address}`: {err}"))
 }
 
-async fn run_unlace_owned(args: &[String]) -> String {
-    let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
-    run_unlace(&borrowed).await
-}
-
-async fn run_xrefs_from(binary: &str, address: u64) -> String {
-    run_artifact_script(
-        binary,
-        address,
-        "from",
-        xrefs_from_script,
-        normalize_xrefs_from_error,
-    )
-    .await
-}
-
-async fn run_xrefs_to(binary: &str, address: u64) -> String {
-    run_artifact_script(
-        binary,
-        address,
-        "to",
-        xrefs_to_script,
-        normalize_xrefs_to_error,
-    )
-    .await
-}
-
-async fn run_decompile_text(binary: &str, address: u64) -> String {
-    run_artifact_script(
-        binary,
-        address,
-        "decompile",
-        decompile_text_script,
-        normalize_decompile_text_error,
-    )
-    .await
-}
-
-async fn run_artifact_script(
-    binary: &str,
-    address: u64,
-    kind: &str,
-    build_script: fn(u64, &str) -> String,
-    normalize_error: fn(&str) -> String,
-) -> String {
-    let output_path = std::env::temp_dir().join(format!(
-        "unlace-mcp-artifact-{kind}-{}-{}.txt",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_nanos())
-            .unwrap_or_default()
-    ));
-    let script = build_script(address, &output_path.to_string_lossy());
-    let script_path = std::env::temp_dir().join(format!(
-        "unlace-mcp-artifact-{kind}-{}-{}.py",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_nanos())
-            .unwrap_or_default()
-    ));
-    if let Err(err) = std::fs::write(&script_path, script) {
-        return format!(
-            "error: failed to write temporary script `{}` ({err})",
-            script_path.display()
-        );
-    }
-    let args = vec![
-        "py".to_string(),
-        script_path.to_string_lossy().into_owned(),
-        "--binary".to_string(),
-        binary.to_string(),
-    ];
-    let output = run_unlace_owned(&args).await;
-    let _ = std::fs::remove_file(&script_path);
-    if output.starts_with("error:") {
-        let _ = std::fs::remove_file(&output_path);
-        return normalize_error(&output);
-    }
-    let artifact = std::fs::read_to_string(&output_path).unwrap_or_else(|err| {
-        format!(
-            "error: failed to read temporary script output `{}` ({err})",
-            output_path.display()
-        )
-    });
-    let _ = std::fs::remove_file(&output_path);
-    artifact
-}
-
-fn normalize_xrefs_from_error(output: &str) -> String {
-    if output.contains("built without the `python` feature") {
-        return "error: xrefs_from requires `unlace` built with the `python` feature. Set UNLACE_BIN to a python-enabled unlace binary.".to_string();
-    }
-    output.to_string()
-}
-
-fn normalize_xrefs_to_error(output: &str) -> String {
-    if output.contains("built without the `python` feature") {
-        return "error: xrefs_to requires `unlace` built with the `python` feature. Set UNLACE_BIN to a python-enabled unlace binary.".to_string();
-    }
-    output.to_string()
-}
-
-fn normalize_decompile_text_error(output: &str) -> String {
-    if output.contains("built without the `python` feature") {
-        return "error: decompile_text requires `unlace` built with the `python` feature. Set UNLACE_BIN to a python-enabled unlace binary.".to_string();
-    }
-    output.to_string()
-}
-
-fn xrefs_from_script(address: u64, output_path: &str) -> String {
-    format!(
-        "import idautils\nwith open({output_path:?}, 'w', encoding='utf-8') as f:\n    for x in idautils.XrefsFrom({address:#x}, 0):\n        f.write(hex(x) + '\\n')\n"
-    )
-}
-
-fn xrefs_to_script(address: u64, output_path: &str) -> String {
-    format!(
-        "import idautils\nwith open({output_path:?}, 'w', encoding='utf-8') as f:\n    for x in idautils.XrefsTo({address:#x}, 0):\n        f.write(hex(x) + '\\n')\n"
-    )
-}
-
-fn decompile_text_script(address: u64, output_path: &str) -> String {
-    format!(
-        "import idaapi, ida_hexrays\ntext = idaapi.decompile({address:#x})\nhexrays_cfunc = ida_hexrays.decompile({address:#x})\nhexrays_text = None if hexrays_cfunc is None else str(hexrays_cfunc)\nif text is None:\n    text = ''\nif hexrays_text is not None and text != hexrays_text:\n    raise AssertionError('idaapi and ida_hexrays decompile text differ')\nwith open({output_path:?}, 'w', encoding='utf-8') as f:\n    f.write(text)\n"
-    )
-}
-
-fn parse_xref_address(address: &str) -> Result<u64, std::num::ParseIntError> {
-    if let Some(hex) = address
-        .strip_prefix("0x")
-        .or_else(|| address.strip_prefix("0X"))
-    {
-        u64::from_str_radix(hex, 16)
-    } else {
-        address.parse()
-    }
-}
-
-/// Resolve the `unlace` binary: `$UNLACE_BIN` if set, else `unlace` on `PATH`.
-fn unlace_bin() -> String {
-    std::env::var("UNLACE_BIN").unwrap_or_else(|_| "unlace".to_string())
-}
-
-/// Run `unlace <args...>` and return combined human-readable output. On failure
-/// returns a structured error string rather than panicking — MCP tools must not
-/// crash the server on bad input.
-async fn run_unlace(args: &[&str]) -> String {
-    let bin = unlace_bin();
-    let output = match Command::new(&bin).args(args).output().await {
-        Ok(o) => o,
-        Err(e) => {
-            return format!(
-                "error: failed to spawn `{bin}` ({e}). Set UNLACE_BIN to the unlace binary path."
-            );
-        }
-    };
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if output.status.success() {
-        stdout.into_owned()
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        format!(
-            "error: `{bin} {}` exited with {}.\n--- stderr ---\n{}\n--- stdout ---\n{}",
-            args.join(" "),
-            output.status,
-            stderr.trim(),
-            stdout.trim()
-        )
-    }
-}
-
-/// Extract backtick-quoted function names from the markdown quality table rows
-/// (`| \`name\` | … |`). Deterministic: preserves the report's row order.
-fn parse_function_names(report: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in report.lines() {
-        let trimmed = line.trim_start();
-        if !trimmed.starts_with("| `") {
-            continue;
-        }
-        // First cell looks like: | `name` |
-        if let Some(rest) = trimmed.strip_prefix("| `")
-            && let Some(end) = rest.find('`')
-        {
-            let name = &rest[..end];
-            if name != "TOTAL" && !name.is_empty() {
-                out.push(name.to_string());
-            }
-        }
-    }
-    out
+/// Run `analysis` on the blocking pool; errors become tool-level error text.
+async fn blocking<T, F>(analysis: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> anyhow::Result<T> + Send + 'static,
+{
+    tokio::task::spawn_blocking(analysis)
+        .await
+        .map_err(|err| format!("analysis task failed: {err}"))?
+        .map_err(|err| format!("{err:#}"))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use rmcp::ServiceExt;
+    use serde_json::{Value, json};
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines, ReadHalf, WriteHalf};
+    use tokio::io::{DuplexStream, duplex, split};
+
     use super::*;
 
     #[test]
-    fn parses_function_names_from_quality_table() {
-        let report = "\
-# Quality report
+    fn requests_decode_from_tool_arguments() {
+        let ir: IrDumpRequest =
+            serde_json::from_value(json!({"binary": "a.elf", "function": "main"})).unwrap();
+        assert_eq!(ir.binary, Path::new("a.elf"));
+        assert_eq!(ir.function, "main");
+        assert_eq!(ir.phase, None);
 
-| function | insns |
-|----------|------:|
-| `main` | 6 |
-| `_start` | 14 |
-| `sub_1120` | 34 |
-| **TOTAL** | 72 |
-";
-        let funcs = parse_function_names(report);
-        assert_eq!(funcs, vec!["main", "_start", "sub_1120"]);
+        let missing_function =
+            serde_json::from_value::<FunctionRequest>(json!({"binary": "a.elf"}));
+        assert!(missing_function.is_err());
+
+        assert_eq!(decode_address("0x1050"), Ok(Address(0x1050)));
+        assert_eq!(decode_address("4176"), Ok(Address(0x1050)));
+        assert!(
+            decode_address("main")
+                .unwrap_err()
+                .starts_with("invalid address `main`")
+        );
     }
 
-    #[test]
-    fn empty_report_yields_no_names() {
-        assert!(parse_function_names("no table here").is_empty());
+    struct Client {
+        lines: Lines<BufReader<ReadHalf<DuplexStream>>>,
+        write: WriteHalf<DuplexStream>,
+        next_id: u64,
     }
 
-    #[test]
-    fn ir_dump_args_include_function_and_phase() {
+    impl Client {
+        async fn send(&mut self, message: Value) {
+            let mut line = message.to_string();
+            line.push('\n');
+            self.write.write_all(line.as_bytes()).await.unwrap();
+        }
+
+        async fn request(&mut self, method: &str, params: Value) -> Value {
+            self.next_id += 1;
+            let id = self.next_id;
+            self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))
+                .await;
+            loop {
+                let line = self
+                    .lines
+                    .next_line()
+                    .await
+                    .unwrap()
+                    .expect("server closed");
+                let message: Value = serde_json::from_str(&line).unwrap();
+                if message["id"] == id {
+                    return message;
+                }
+            }
+        }
+
+        async fn call(&mut self, tool: &str, arguments: Value) -> Value {
+            let response = self
+                .request("tools/call", json!({"name": tool, "arguments": arguments}))
+                .await;
+            response["result"].clone()
+        }
+    }
+
+    #[tokio::test]
+    async fn stdio_session_initializes_lists_and_calls_tools() {
+        let (client_io, server_io) = duplex(1 << 20);
+        let server = tokio::spawn(async move {
+            let running = UnlaceServer::new(Arc::new(Config::default()))
+                .serve(server_io)
+                .await
+                .unwrap();
+            running.waiting().await.unwrap();
+        });
+        let (read, write) = split(client_io);
+        let mut client = Client {
+            lines: BufReader::new(read).lines(),
+            write,
+            next_id: 0,
+        };
+
+        let init = client
+            .request(
+                "initialize",
+                json!({
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "unlace-mcp-smoke", "version": "0"},
+                }),
+            )
+            .await;
+        assert!(
+            init["result"]["capabilities"]["tools"].is_object(),
+            "{init}"
+        );
+        client
+            .send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}))
+            .await;
+
+        let listed = client.request("tools/list", json!({})).await;
+        let mut names: Vec<&str> = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap())
+            .collect();
+        names.sort_unstable();
         assert_eq!(
-            ir_dump_args("bin.elf", Some("main"), Some("lift")),
-            vec![
-                "ir-dump",
-                "bin.elf",
-                "--function",
-                "main",
-                "--phase",
-                "lift"
+            names,
+            [
+                "binary_info",
+                "decompile_function",
+                "ir_dump_function",
+                "list_functions",
+                "xrefs_from",
+                "xrefs_to",
             ]
         );
-    }
 
-    #[test]
-    fn xrefs_from_script_uses_numeric_address_literal() {
-        let script = xrefs_from_script(0x1010, "/tmp/xrefs.txt");
-        assert!(script.contains("idautils.XrefsFrom(0x1010, 0)"));
-        assert!(script.contains("\"/tmp/xrefs.txt\""));
-        assert!(script.contains("f.write(hex(x) + '\\n')"));
-    }
+        let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/hello_world.elf");
 
-    #[test]
-    fn xrefs_to_script_uses_numeric_address_literal() {
-        let script = xrefs_to_script(0x4010, "/tmp/xrefs-to.txt");
-        assert!(script.contains("idautils.XrefsTo(0x4010, 0)"));
-        assert!(script.contains("\"/tmp/xrefs-to.txt\""));
-        assert!(script.contains("f.write(hex(x) + '\\n')"));
-    }
-
-    #[test]
-    fn parse_xref_address_accepts_hex_and_decimal() {
-        assert_eq!(parse_xref_address("0x1010").unwrap(), 0x1010);
-        assert_eq!(parse_xref_address("4112").unwrap(), 4112);
-    }
-
-    #[test]
-    fn xrefs_from_error_names_python_feature_requirement() {
-        let output = "error: `unlace py script.py --binary bin` exited with exit status: 1.\n--- stderr ---\nunlace-cli was built without the `python` feature\n--- stdout ---";
-
-        assert_eq!(
-            normalize_xrefs_from_error(output),
-            "error: xrefs_from requires `unlace` built with the `python` feature. Set UNLACE_BIN to a python-enabled unlace binary."
+        let info = client.call("binary_info", json!({"binary": binary})).await;
+        assert!(
+            info["structuredContent"]["function_count"]
+                .as_u64()
+                .unwrap()
+                > 0,
+            "{info}"
         );
-    }
 
-    #[test]
-    fn xrefs_to_error_names_python_feature_requirement() {
-        let output = "error: `unlace py script.py --binary bin` exited with exit status: 1.\n--- stderr ---\nunlace-cli was built without the `python` feature\n--- stdout ---";
-
+        let decompiled = client
+            .call(
+                "decompile_function",
+                json!({"binary": binary, "function": "main"}),
+            )
+            .await;
+        let decompiled = &decompiled["structuredContent"];
         assert_eq!(
-            normalize_xrefs_to_error(output),
-            "error: xrefs_to requires `unlace` built with the `python` feature. Set UNLACE_BIN to a python-enabled unlace binary."
+            decompiled["functions"][0]["address"], "0x1060",
+            "{decompiled}"
         );
-    }
-
-    #[test]
-    fn decompile_text_script_uses_numeric_address_literal() {
-        let script = decompile_text_script(0x1060, "/tmp/decompile.txt");
-        assert!(script.contains("idaapi.decompile(0x1060)"));
-        assert!(script.contains("ida_hexrays.decompile(0x1060)"));
-        assert!(script.contains("str(hexrays_cfunc)"));
-        assert!(script.contains("\"/tmp/decompile.txt\""));
-        assert!(script.contains("f.write(text)"));
-    }
-
-    #[test]
-    fn decompile_text_error_names_python_feature_requirement() {
-        let output = "error: `unlace py script.py --binary bin` exited with exit status: 1.\n--- stderr ---\nunlace-cli was built without the `python` feature\n--- stdout ---";
-
-        assert_eq!(
-            normalize_decompile_text_error(output),
-            "error: decompile_text requires `unlace` built with the `python` feature. Set UNLACE_BIN to a python-enabled unlace binary."
+        assert!(
+            decompiled["code"].as_str().unwrap().contains("main("),
+            "{decompiled}"
         );
+
+        let callers = client
+            .call("xrefs_to", json!({"binary": binary, "address": "0x1050"}))
+            .await;
+        let callers = &callers["structuredContent"]["xrefs"];
+        assert!(
+            callers.as_array().unwrap().contains(&json!({
+                "from": "0x106f",
+                "from_function": "main",
+                "to": "0x1050",
+                "to_function": null,
+                "kind": "call",
+            })),
+            "{callers}"
+        );
+
+        let bad = client
+            .call("xrefs_from", json!({"binary": binary, "address": "main"}))
+            .await;
+        assert_eq!(bad["isError"], true, "{bad}");
+
+        drop(client);
+        server.await.unwrap();
     }
 }

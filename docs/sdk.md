@@ -44,7 +44,7 @@ Unlace already has the right starting pieces:
   WASM sandbox policy, and sample plugins.
 - `crates/unlace-session`: session annotations, project loading, and project
   annotation export.
-- `crates/unlace-idapython`: partial IDAPython shim.
+- `crates/unlace-mcp`: read-only MCP server over the in-process pipeline.
 - `crates/unlace-lumina`: annotation transport and function-hash lookup.
 - `crates/unlace-debugger`: debugger trait plus partial Linux ptrace backend.
 - `crates/unlace-emu`: emulator substrate.
@@ -54,8 +54,9 @@ The SDK gap is not "no crates." The gap is a stable facade, compatibility
 policy, event model, provenance, and tests that prove third-party code can rely
 on those surfaces.
 
-`docs/mcp.md` builds on this SDK roadmap. `unlace-mcp` should consume the stable
-SDK facade instead of reaching into private pipeline modules.
+`docs/mcp.md` builds on this SDK roadmap. `unlace-mcp` currently calls the
+`unlace-cli` library (`load`, `decompiler`, `ir_dump`, `xrefs`) in-process; it
+should move onto the stable SDK facade once that exists.
 
 ## SDK Principles
 
@@ -121,7 +122,7 @@ flags or ad hoc per-command state.
 
 ### 4. Decompiler SDK
 
-The Hex-Rays-compatible surface sits here:
+The decompiler surface sits here:
 
 - `decompile(function)` returns a stable decompilation object
 - pseudocode line access with address/token spans
@@ -130,11 +131,9 @@ The Hex-Rays-compatible surface sits here:
 - hook points before/after analysis, before/after structuring, before/after
   print
 - safe rewrite APIs for narrow, validated transformations
-- compatibility wrappers for `ida_hexrays.decompile`, `cfunc_t`, `citem_t`,
-  `cexpr_t`, `Hexrays_Hooks`, and `hxe_*`-style events
 
-IDA compatibility should be measured by running SDK examples and public
-IDAPython decompiler scripts.
+Decompiler SDK coverage should be measured by SDK examples and fixtures, not by
+mimicking IDA's scripting API.
 
 ### 5. Loader and Processor SDK
 
@@ -173,7 +172,6 @@ Runtimes:
 - Rust dynamic plugins through `crates/unlace-plugin`
 - WASM sandboxed plugins with capability policy
 - Python bindings over the same SDK facade
-- IDAPython compatibility wrappers over the Python SDK
 - future Lua or other scripting only if it shares the same fact model
 
 Required host behavior:
@@ -203,12 +201,12 @@ Acceptance:
 ### SDK.2 Read-Only Automation
 
 - Expose function, symbol, byte, segment, xref, type, and pseudocode readers.
-- Back IDAPython read APIs with this layer.
 - Add fixture scripts that only read state.
 
 Acceptance:
 
-- At least 25 high-use read-only IDAPython APIs are SDK-backed.
+- Function, symbol, byte, segment, xref, type, and pseudocode reads are
+  SDK-backed and covered by read-only fixtures.
 - Script fixtures run without direct access to private session internals.
 
 ### SDK.3 Decompiler Objects and Hooks
@@ -216,12 +214,10 @@ Acceptance:
 - Add stable decompilation object, pseudocode line, token span, ctree/HIR
   visitor, and phase snapshot APIs.
 - Add hook registration for analysis/structuring/printing events.
-- Back `idaapi.decompile` and `ida_hexrays.decompile` with this layer.
 
 Acceptance:
 
-- A `vds6.py`-style script can inspect pseudocode lines through the compatibility
-  layer.
+- A script can inspect pseudocode lines and token spans through the SDK.
 - Hook order is deterministic and covered by tests.
 
 ### SDK.4 Mutating Facts
@@ -263,7 +259,7 @@ Acceptance:
 ### SDK.7 Compatibility Scoreboard
 
 - Build an SDK coverage matrix from the IDA SDK reference areas.
-- Track IDAPython examples, Hex-Rays examples, loader samples, debugger samples,
+- Track decompiler-hook examples, loader samples, debugger samples,
   and plugin samples separately.
 - Track MCP examples separately: stdio startup, tool listing, tool calls,
   resources, prompts, read-only policy, and optional streamable HTTP.
@@ -271,8 +267,8 @@ Acceptance:
 
 Acceptance:
 
-- A generated report says which SDK and IDAPython surfaces are supported,
-  partial, unsupported, or intentionally different.
+- A generated report says which SDK surfaces are supported, partial,
+  unsupported, or intentionally different.
 
 ## CodeGraph Workflow
 

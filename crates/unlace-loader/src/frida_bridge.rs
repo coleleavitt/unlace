@@ -27,11 +27,7 @@ pub enum FridaEvent {
         value: Vec<u8>,
     },
     /// Module loaded.
-    ModuleLoad {
-        name: String,
-        base: u64,
-        size: u64,
-    },
+    ModuleLoad { name: String, base: u64, size: u64 },
 }
 
 /// Configuration for a Frida hook session.
@@ -82,7 +78,9 @@ fn extract_u64_field(json: &str, field: &str) -> Option<u64> {
     let key = format!("\"{}\":", field);
     let pos = json.find(&key)? + key.len();
     let rest = json[pos..].trim_start();
-    let end = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
     rest[..end].parse().ok()
 }
 
@@ -90,7 +88,7 @@ fn extract_string_field(json: &str, field: &str) -> Option<String> {
     let key = format!("\"{}\":\"", field);
     let pos = json.find(&key)? + key.len();
     let end = json[pos..].find('"')?;
-    Some(json[pos..pos+end].to_string())
+    Some(json[pos..pos + end].to_string())
 }
 
 #[cfg(test)]
@@ -101,14 +99,24 @@ mod tests {
     fn test_parse_enter_event() {
         let json = r#"{"type":"enter","address":4194304,"threadId":1234}"#;
         let event = parse_frida_event(json).unwrap();
-        assert!(matches!(event, FridaEvent::FunctionEnter { address: 4194304, thread_id: 1234, .. }));
+        assert!(matches!(
+            event,
+            FridaEvent::FunctionEnter {
+                address: 4194304,
+                thread_id: 1234,
+                ..
+            }
+        ));
     }
 
     #[test]
     fn test_parse_leave_event() {
         let json = r#"{"type":"leave","address":4194304,"threadId":1,"retval":42}"#;
         let event = parse_frida_event(json).unwrap();
-        assert!(matches!(event, FridaEvent::FunctionLeave { retval: 42, .. }));
+        assert!(matches!(
+            event,
+            FridaEvent::FunctionLeave { retval: 42, .. }
+        ));
     }
 
     #[test]

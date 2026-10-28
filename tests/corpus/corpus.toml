@@ -1,0 +1,137 @@
+# -O2 measurement corpus. `cargo xtask corpus` builds every program with the
+# toolchains in xtask/src/corpus/build.rs, decompiles each build, and reports
+# per-function output metrics. Binaries go to target/corpus/, never into git.
+#
+# `sources` are relative to tests/corpus/. `cflags` are appended for every
+# toolchain. Vendored programs record their upstream in `origin`.
+
+[[program]]
+name = "array_stats"
+summary = "array extremes, mean, median"
+sources = ["src/array_stats.c"]
+
+[[program]]
+name = "bigint"
+summary = "multi-limb unsigned arithmetic"
+sources = ["src/bigint.c"]
+
+[[program]]
+name = "bitops"
+summary = "bit tricks and bitwise CRC-32"
+sources = ["src/bitops.c"]
+
+[[program]]
+name = "bst"
+summary = "index-linked binary search tree"
+sources = ["src/bst.c"]
+
+[[program]]
+name = "calendar"
+summary = "calendar arithmetic with month switch"
+sources = ["src/calendar.c"]
+
+[[program]]
+name = "callbacks"
+summary = "function-pointer tables and callbacks"
+sources = ["src/callbacks.c"]
+
+[[program]]
+name = "codec"
+summary = "RLE, base64, hex decoding"
+sources = ["src/codec.c"]
+
+[[program]]
+name = "early_exit"
+summary = "break/continue/early-return loops"
+sources = ["src/early_exit.c"]
+
+[[program]]
+name = "expr_parser"
+summary = "recursive-descent expression evaluator"
+sources = ["src/expr_parser.c"]
+
+[[program]]
+name = "hash_table"
+summary = "open addressing map with FNV-1a"
+sources = ["src/hash_table.c"]
+
+[[program]]
+name = "matrix"
+summary = "dense integer matrix kernels"
+sources = ["src/matrix.c"]
+
+[[program]]
+name = "pool_list"
+summary = "linked list over a node pool"
+sources = ["src/pool_list.c"]
+
+[[program]]
+name = "records"
+summary = "arrays of structs with mixed field widths"
+sources = ["src/records.c"]
+
+[[program]]
+name = "recursion"
+summary = "fib, ackermann, hanoi, gcd, binomial"
+sources = ["src/recursion.c"]
+
+[[program]]
+name = "register_pressure"
+summary = "values live across calls (callee-saved registers)"
+sources = ["src/register_pressure.c"]
+
+[[program]]
+name = "sorting"
+summary = "quicksort, heapsort, binary search"
+sources = ["src/sorting.c"]
+
+[[program]]
+name = "stack_vm"
+summary = "bytecode interpreter with dense opcode switch"
+sources = ["src/stack_vm.c"]
+
+[[program]]
+name = "strops"
+summary = "hand-rolled string routines"
+sources = ["src/strops.c"]
+
+[[program]]
+name = "tail_calls"
+summary = "self and mutual tail recursion"
+sources = ["src/tail_calls.c"]
+
+[[program]]
+name = "tokenizer"
+summary = "switch-driven lexer state machine"
+sources = ["src/tokenizer.c"]
+
+[[program]]
+name = "utf8"
+summary = "UTF-8 decode/encode/validate"
+sources = ["src/utf8.c"]
+
+[[program]]
+name = "varargs"
+summary = "variadic accumulation and formatting"
+sources = ["src/varargs.c"]
+
+[[program]]
+name = "sha256"
+summary = "SHA-256 known-answer test"
+sources = ["third_party/crypto-algorithms/sha256.c", "third_party/crypto-algorithms/sha256_test.c"]
+cflags = ["-include", "string.h", "-w"]
+origin = "https://github.com/B-Con/crypto-algorithms @ cfbde48414baacf51fc7c74f275190881f037d32 (public domain)"
+
+[[program]]
+name = "md5"
+summary = "MD5 known-answer test"
+sources = ["third_party/crypto-algorithms/md5.c", "third_party/crypto-algorithms/md5_test.c"]
+cflags = ["-include", "string.h", "-w"]
+origin = "https://github.com/B-Con/crypto-algorithms @ cfbde48414baacf51fc7c74f275190881f037d32 (public domain)"
+
+[[program]]
+name = "arcfour"
+summary = "RC4 key schedule and keystream known-answer test"
+sources = ["third_party/crypto-algorithms/arcfour.c", "third_party/crypto-algorithms/arcfour_test.c"]
+cflags = ["-include", "string.h", "-w"]
+origin = "https://github.com/B-Con/crypto-algorithms @ cfbde48414baacf51fc7c74f275190881f037d32 (public domain)"

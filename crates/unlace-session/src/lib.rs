@@ -11,6 +11,7 @@
 pub mod db;
 pub mod patches;
 pub mod project;
+#[cfg(feature = "unwired")]
 pub mod til;
 pub mod til_import;
 pub mod til_parser;
@@ -100,20 +101,6 @@ pub struct DeletedInsn {
 pub struct PropagationBlock {
     pub function_ea: u64,
     pub var_name: String,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InstructionXref {
-    pub from: u64,
-    pub to: u64,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DecompiledFunction {
-    pub entry_ea: u64,
-    pub size: u64,
-    pub name: String,
-    pub text: String,
 }
 
 /// A user bookmark.
@@ -209,8 +196,6 @@ pub(crate) struct SessionInner {
     pub(crate) binary_path: Option<PathBuf>,
     pub(crate) binary_sha256: Option<[u8; 32]>,
     pub(crate) annotations: Annotations,
-    pub(crate) instruction_xrefs_from: BTreeMap<u64, Vec<u64>>,
-    pub(crate) decompiled_functions: BTreeMap<u64, DecompiledFunction>,
     pub(crate) selection: Selection,
     pub(crate) listeners: Vec<SessionListener>,
 }
@@ -226,8 +211,6 @@ impl Session {
                 binary_path: None,
                 binary_sha256: None,
                 annotations: Annotations::new(),
-                instruction_xrefs_from: BTreeMap::new(),
-                decompiled_functions: BTreeMap::new(),
                 selection: Selection::default(),
                 listeners: Vec::new(),
             })),
@@ -249,8 +232,6 @@ impl Session {
             g.binary = Some(image);
             g.binary_path = Some(path.to_path_buf());
             g.binary_sha256 = Some(sha);
-            g.instruction_xrefs_from.clear();
-            g.decompiled_functions.clear();
         }
         self.emit(SessionEvent::Loaded {
             path: path.to_path_buf(),
@@ -283,67 +264,10 @@ impl Session {
     pub fn set_binary(&self, image: BinaryImage) {
         let mut g = self.inner.write();
         g.binary = Some(image);
-        g.instruction_xrefs_from.clear();
-        g.decompiled_functions.clear();
     }
 
     pub fn annotations(&self) -> Annotations {
         self.inner.read().annotations.clone()
-    }
-
-    pub fn add_instruction_xref(&self, from: u64, to: u64) {
-        let mut g = self.inner.write();
-        let targets = g.instruction_xrefs_from.entry(from).or_default();
-        if !targets.contains(&to) {
-            targets.push(to);
-        }
-    }
-
-    pub fn add_instruction_xrefs(
-        &self,
-        xrefs: impl IntoIterator<Item = unlace_ir::xref::InstructionXref>,
-    ) {
-        let mut g = self.inner.write();
-        for xref in xrefs {
-            let targets = g.instruction_xrefs_from.entry(xref.from).or_default();
-            if !targets.contains(&xref.to) {
-                targets.push(xref.to);
-            }
-        }
-    }
-
-    pub fn instruction_xrefs_from(&self, from: u64) -> Vec<u64> {
-        self.inner
-            .read()
-            .instruction_xrefs_from
-            .get(&from)
-            .cloned()
-            .unwrap_or_default()
-    }
-
-    pub fn set_decompiled_function(&self, entry_ea: u64, size: u64, name: String, text: String) {
-        self.inner.write().decompiled_functions.insert(
-            entry_ea,
-            DecompiledFunction {
-                entry_ea,
-                size,
-                name,
-                text,
-            },
-        );
-    }
-
-    pub fn decompiled_function(&self, ea: u64) -> Option<DecompiledFunction> {
-        self.inner
-            .read()
-            .decompiled_functions
-            .range(..=ea)
-            .next_back()
-            .and_then(|(_, decompiled)| {
-                let end = decompiled.entry_ea.saturating_add(decompiled.size);
-                (ea == decompiled.entry_ea || (decompiled.size > 0 && ea < end))
-                    .then(|| decompiled.clone())
-            })
     }
 
     pub fn selection(&self) -> Selection {
@@ -551,76 +475,6 @@ mod tests {
         };
         s.set_selection(sel);
         assert_eq!(s.selection(), sel);
-    }
-
-    #[test]
-    fn test_instruction_xrefs_from_round_trip_is_deterministic() {
-        let s = Session::new();
-        s.add_instruction_xref(0x1000, 0x2000);
-        s.add_instruction_xref(0x1000, 0x2000);
-        s.add_instruction_xref(0x1000, 0x3000);
-
-        assert_eq!(s.instruction_xrefs_from(0x1000), vec![0x2000, 0x3000]);
-        assert!(s.instruction_xrefs_from(0x1004).is_empty());
-    }
-
-    #[test]
-    fn test_instruction_xrefs_ingest_ir_edges() {
-        let s = Session::new();
-        s.add_instruction_xrefs([
-            unlace_ir::xref::InstructionXref {
-                from: 0x1000,
-                to: 0x2000,
-            },
-            unlace_ir::xref::InstructionXref {
-                from: 0x1000,
-                to: 0x2000,
-            },
-            unlace_ir::xref::InstructionXref {
-                from: 0x1000,
-                to: 0x3000,
-            },
-        ]);
-
-        assert_eq!(s.instruction_xrefs_from(0x1000), vec![0x2000, 0x3000]);
-    }
-
-    #[test]
-    fn test_set_binary_clears_instruction_xrefs() {
-        let s = Session::new();
-        s.add_instruction_xref(0x1000, 0x2000);
-        s.set_binary(BinaryImage::empty(
-            unlace_loader::image::ArchId::X86_64,
-            unlace_loader::image::Endian::Little,
-        ));
-
-        assert!(s.instruction_xrefs_from(0x1000).is_empty());
-    }
-
-    #[test]
-    fn test_decompiled_function_text_round_trip() {
-        let s = Session::new();
-        s.set_decompiled_function(0x1000, 0x20, "main".into(), "int main(void) {}".into());
-
-        let decompiled = s
-            .decompiled_function(0x1010)
-            .expect("address inside staged function");
-        assert_eq!(decompiled.entry_ea, 0x1000);
-        assert_eq!(decompiled.name, "main");
-        assert_eq!(decompiled.text, "int main(void) {}");
-        assert!(s.decompiled_function(0x2000).is_none());
-    }
-
-    #[test]
-    fn test_set_binary_clears_decompiled_functions() {
-        let s = Session::new();
-        s.set_decompiled_function(0x1000, 0x20, "main".into(), "int main(void) {}".into());
-        s.set_binary(BinaryImage::empty(
-            unlace_loader::image::ArchId::X86_64,
-            unlace_loader::image::Endian::Little,
-        ));
-
-        assert!(s.decompiled_function(0x1000).is_none());
     }
 
     #[test]

@@ -44,7 +44,7 @@ Common gates:
 RUSTC_WRAPPER= cargo check --workspace
 RUSTC_WRAPPER= cargo nextest run --workspace     # all tests, one process each, in parallel
 RUSTC_WRAPPER= cargo test --workspace --doc      # doctests (nextest does not run them)
-RUSTC_WRAPPER= cargo nextest run -p unlace-test-harness --test golden_fixtures
+RUSTC_WRAPPER= cargo nextest run -p unlace-test-harness --features all-arches --test golden_fixtures
 RUSTC_WRAPPER= cargo xtask gate                  # every quality gate from one build
 RUSTC_WRAPPER= cargo xtask gate --quick          # golden triage + stylistic score only
 cargo xtask lint-determinism

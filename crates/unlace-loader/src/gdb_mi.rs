@@ -8,13 +8,23 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MiRecord {
     /// Result record: `^done`, `^error`, etc.
-    Result { token: Option<u32>, class: String, fields: Vec<(String, MiValue)> },
+    Result {
+        token: Option<u32>,
+        class: String,
+        fields: Vec<(String, MiValue)>,
+    },
     /// Async exec record: `*stopped`, `*running`.
-    Exec { class: String, fields: Vec<(String, MiValue)> },
+    Exec {
+        class: String,
+        fields: Vec<(String, MiValue)>,
+    },
     /// Async status record: `+download`.
     Status { class: String },
     /// Async notify record: `=thread-created`.
-    Notify { class: String, fields: Vec<(String, MiValue)> },
+    Notify {
+        class: String,
+        fields: Vec<(String, MiValue)>,
+    },
     /// Console stream output: `~"text"`.
     Console(String),
     /// Target stream output: `@"text"`.
@@ -52,16 +62,38 @@ pub fn parse_mi_line(line: &str) -> Option<MiRecord> {
             Some(MiRecord::Log(text))
         }
         b'^' => {
-            let class = line[1..].split(',').next().unwrap_or(&line[1..]).to_string();
-            Some(MiRecord::Result { token: None, class, fields: Vec::new() })
+            let class = line[1..]
+                .split(',')
+                .next()
+                .unwrap_or(&line[1..])
+                .to_string();
+            Some(MiRecord::Result {
+                token: None,
+                class,
+                fields: Vec::new(),
+            })
         }
         b'*' => {
-            let class = line[1..].split(',').next().unwrap_or(&line[1..]).to_string();
-            Some(MiRecord::Exec { class, fields: Vec::new() })
+            let class = line[1..]
+                .split(',')
+                .next()
+                .unwrap_or(&line[1..])
+                .to_string();
+            Some(MiRecord::Exec {
+                class,
+                fields: Vec::new(),
+            })
         }
         b'=' => {
-            let class = line[1..].split(',').next().unwrap_or(&line[1..]).to_string();
-            Some(MiRecord::Notify { class, fields: Vec::new() })
+            let class = line[1..]
+                .split(',')
+                .next()
+                .unwrap_or(&line[1..])
+                .to_string();
+            Some(MiRecord::Notify {
+                class,
+                fields: Vec::new(),
+            })
         }
         b'+' => {
             let class = line[1..].to_string();
@@ -73,8 +105,16 @@ pub fn parse_mi_line(line: &str) -> Option<MiRecord> {
             let token: u32 = line[..token_end].parse().ok()?;
             let rest = &line[token_end..];
             if rest.starts_with('^') {
-                let class = rest[1..].split(',').next().unwrap_or(&rest[1..]).to_string();
-                Some(MiRecord::Result { token: Some(token), class, fields: Vec::new() })
+                let class = rest[1..]
+                    .split(',')
+                    .next()
+                    .unwrap_or(&rest[1..])
+                    .to_string();
+                Some(MiRecord::Result {
+                    token: Some(token),
+                    class,
+                    fields: Vec::new(),
+                })
             } else {
                 None
             }
@@ -87,8 +127,13 @@ fn unescape_mi_string(s: &str) -> Option<String> {
     if !s.starts_with('"') || !s.ends_with('"') {
         return Some(s.to_string());
     }
-    let inner = &s[1..s.len()-1];
-    Some(inner.replace("\\n", "\n").replace("\\t", "\t").replace("\\\"", "\""))
+    let inner = &s[1..s.len() - 1];
+    Some(
+        inner
+            .replace("\\n", "\n")
+            .replace("\\t", "\t")
+            .replace("\\\"", "\""),
+    )
 }
 
 #[cfg(test)]
@@ -120,6 +165,8 @@ mod tests {
     #[test]
     fn test_parse_with_token() {
         let record = parse_mi_line("42^done").unwrap();
-        assert!(matches!(record, MiRecord::Result { token: Some(42), class, .. } if class == "done"));
+        assert!(
+            matches!(record, MiRecord::Result { token: Some(42), class, .. } if class == "done")
+        );
     }
 }

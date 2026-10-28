@@ -7,6 +7,7 @@ mod arch_scorecard;
 mod cargo_bin;
 mod compare_corpus;
 mod compare_golden;
+mod corpus;
 mod dump_pipeline;
 mod fixture_outputs;
 mod fuzz;
@@ -16,11 +17,13 @@ mod goto_count;
 mod lift_trace;
 mod lifter_coverage;
 mod loader_scorecard;
+mod oracle_diff;
 mod project_roundtrip;
 mod register_alias_report;
 mod report_io;
 mod sbom;
 mod semantic_report;
+mod status;
 mod type_recovery_report;
 mod unified_parity;
 mod validate_corpus;
@@ -46,6 +49,13 @@ fn main() {
         Some("golden-triage") => {
             let root = workspace_root();
             let code = golden_triage::run(&root);
+            if code != 0 {
+                process::exit(code);
+            }
+        }
+        Some("corpus") => {
+            let root = workspace_root();
+            let code = corpus::run(&root, &args[1..]);
             if code != 0 {
                 process::exit(code);
             }
@@ -123,11 +133,23 @@ fn main() {
                 process::exit(code);
             }
         }
+        Some("oracle-diff") => {
+            let code = oracle_diff::run(&workspace_root(), &args[1..]);
+            if code != 0 {
+                process::exit(code);
+            }
+        }
         Some("dump-pipeline") => {
             dump_pipeline::run();
         }
         Some("sbom") => {
             let code = sbom::run(&args[1..]);
+            if code != 0 {
+                process::exit(code);
+            }
+        }
+        Some("status") => {
+            let code = status::run(&workspace_root());
             if code != 0 {
                 process::exit(code);
             }
@@ -145,7 +167,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, corpus, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, oracle-diff, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, status, fuzz"
             );
             process::exit(1);
         }

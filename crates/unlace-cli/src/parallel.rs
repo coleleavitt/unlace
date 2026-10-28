@@ -11,8 +11,8 @@
 //!   throughput and keep all cores saturated
 //! - **Result aggregation** with structured error classification
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
@@ -151,8 +151,7 @@ impl ParallelEngine {
                 .expect("failed to create rayon thread pool")
         };
 
-        let mut indexed: Vec<(usize, &FunctionEntry)> =
-            functions.iter().enumerate().collect();
+        let mut indexed: Vec<(usize, &FunctionEntry)> = functions.iter().enumerate().collect();
 
         {
             let _profile_stage = profiling::phase("parallel.order-functions");
@@ -199,9 +198,7 @@ impl ParallelEngine {
                     };
 
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        pipeline::decompile_function(
-                            image, lifter, entry, emit, &fn_config, dwarf,
-                        )
+                        pipeline::decompile_function(image, lifter, entry, emit, &fn_config, dwarf)
                     }));
 
                     let elapsed = start.elapsed();
@@ -254,13 +251,16 @@ impl ParallelEngine {
                         });
                     }
 
-                    (orig_idx, ParallelResult {
-                        addr: entry.addr,
-                        name: entry.name.clone(),
-                        size: entry.size,
-                        output,
-                        elapsed,
-                    })
+                    (
+                        orig_idx,
+                        ParallelResult {
+                            addr: entry.addr,
+                            name: entry.name.clone(),
+                            size: entry.size,
+                            output,
+                            elapsed,
+                        },
+                    )
                 })
                 .collect()
         });
@@ -329,16 +329,31 @@ mod tests {
 
     #[test]
     fn explicit_thread_count() {
-        let config = ParallelConfig { max_threads: 4, ..Default::default() };
+        let config = ParallelConfig {
+            max_threads: 4,
+            ..Default::default()
+        };
         assert_eq!(ParallelEngine::new(config).thread_count(), 4);
     }
 
     #[test]
     fn priority_strategy_ordering() {
         let entries = vec![
-            FunctionEntry { name: "big".into(), addr: 0x1000, size: 1000 },
-            FunctionEntry { name: "small".into(), addr: 0x2000, size: 10 },
-            FunctionEntry { name: "med".into(), addr: 0x3000, size: 100 },
+            FunctionEntry {
+                name: "big".into(),
+                addr: 0x1000,
+                size: 1000,
+            },
+            FunctionEntry {
+                name: "small".into(),
+                addr: 0x2000,
+                size: 10,
+            },
+            FunctionEntry {
+                name: "med".into(),
+                addr: 0x3000,
+                size: 100,
+            },
         ];
         let mut indexed: Vec<(usize, &FunctionEntry)> = entries.iter().enumerate().collect();
         indexed.sort_by_key(|(_, f)| f.size);
@@ -357,16 +372,25 @@ mod tests {
     fn stats_classification() {
         let results = vec![
             ParallelResult {
-                addr: 0x1000, name: "ok".into(), size: 100,
-                output: Ok("int f(){}".into()), elapsed: Duration::from_millis(50),
+                addr: 0x1000,
+                name: "ok".into(),
+                size: 100,
+                output: Ok("int f(){}".into()),
+                elapsed: Duration::from_millis(50),
             },
             ParallelResult {
-                addr: 0x2000, name: "to".into(), size: 200,
-                output: Err(ParallelError::Timeout { limit: Duration::from_secs(30) }),
+                addr: 0x2000,
+                name: "to".into(),
+                size: 200,
+                output: Err(ParallelError::Timeout {
+                    limit: Duration::from_secs(30),
+                }),
                 elapsed: Duration::from_secs(30),
             },
             ParallelResult {
-                addr: 0x3000, name: "pa".into(), size: 50,
+                addr: 0x3000,
+                name: "pa".into(),
+                size: 50,
                 output: Err(ParallelError::Panic("oops".into())),
                 elapsed: Duration::from_millis(5),
             },
@@ -380,8 +404,22 @@ mod tests {
 
     #[test]
     fn parallel_error_display() {
-        assert!(ParallelError::Timeout { limit: Duration::from_secs(30) }.to_string().contains("timeout"));
-        assert!(ParallelError::Pipeline("bad".into()).to_string().contains("bad"));
-        assert!(ParallelError::Panic("crash".into()).to_string().contains("crash"));
+        assert!(
+            ParallelError::Timeout {
+                limit: Duration::from_secs(30)
+            }
+            .to_string()
+            .contains("timeout")
+        );
+        assert!(
+            ParallelError::Pipeline("bad".into())
+                .to_string()
+                .contains("bad")
+        );
+        assert!(
+            ParallelError::Panic("crash".into())
+                .to_string()
+                .contains("crash")
+        );
     }
 }

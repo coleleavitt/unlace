@@ -43,10 +43,15 @@ mod manager;
 
 pub use error::PluginError;
 pub use manager::PluginManager;
+#[cfg(feature = "unwired")]
 pub mod lua_bridge;
+#[cfg(feature = "unwired")]
 pub mod python_bridge;
+#[cfg(feature = "unwired")]
 pub mod registry;
+#[cfg(feature = "unwired")]
 pub mod samples;
+#[cfg(feature = "unwired")]
 pub mod wasm_sandbox;
 
 /// Entry point symbol name that every plugin shared library must export.

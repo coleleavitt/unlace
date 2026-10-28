@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use unlace_cli::args::EmitFormat;
-use unlace_cli::decompile;
+use unlace_cli::decompiler;
 use unlace_test_harness::fixture_metrics::FIXTURE_DECOMPILE_TIMEOUT;
 
 /// Stack size of the main thread the `unlace` binary decompiles on.
@@ -25,7 +25,7 @@ pub fn fixture_binary(root: &Path, name: &str) -> PathBuf {
 /// chain) by fixture name.
 pub fn decompile_fixtures(root: &Path, names: &[String]) -> FixtureOutputs {
     map_parallel(names, |name| {
-        decompile::decompile_to_string(
+        decompiler::decompile_path(
             &fixture_binary(root, name),
             None,
             EmitFormat::C,

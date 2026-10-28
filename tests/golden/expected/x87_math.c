@@ -79,8 +79,8 @@ void _start(void) {
 }
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
-    int v5; // reg?
-    if (v5) {
+    int v0; // reg?
+    if (v0) {
         return;
     } else {
         if (!qword_3FE0) {
@@ -96,7 +96,7 @@ __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FF8) {
-            __int64 c3 = qword_4008; // rdi
+            __int64 v1 = qword_4008; // rdi
             result = sub_1030();
         }
         result = sub_1070();
@@ -111,46 +111,46 @@ void sub_1120(void) {
 /* Function:   sum_squares_x87 | Address: 0x1129 | Size: 0x14 (20 bytes) | Convention: System V AMD64 | Stack frame: 0x1a (26 bytes) | Xrefs from: unknown */
 long double sum_squares_x87(long double a1, long double a2) {
     int v2; // rsp
-    int c1 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
-    int c0 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
-    c0 = __fmul(c0, c0);
-    __fxch(c0, c1);
-    c0 = __fmul(c0, c0);
-    c1 = __faddp(c1, c0);
+    int v3 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
+    int v4 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
+    v4 = __fmul(v4, v4);
+    __fxch(v4, v3);
+    v4 = __fmul(v4, v4);
+    v3 = __faddp(v3, v4);
     return 0;
 }
 /* Function:   compare_floats_x87 | Address: 0x113e | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0x1a (26 bytes) | Xrefs from: unknown */
 int compare_floats_x87(long double a1, long double a2) {
-    _QWORD c0; // rax
-    int v2; // rsp
-    int v3; // CF
-    int v4; // ZF
-    int c2 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
-    int c1 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
-    c0 = 0xffffffff;
-    __fcom(c1, c2);
-    if (!v3 && !v4) {
-        c1 = __fstp(c1);
-        c2 = __fstp(c2);
+    _QWORD result; // rax
+    int v3; // rsp
+    int v4; // CF
+    int v5; // ZF
+    int v6 = __fld(*(_QWORD *)(v3 + 8LL)); // reg?
+    int v7 = __fld(*(_QWORD *)(v3 + 0x18LL)); // reg?
+    result = 0xffffffff;
+    __fcom(v7, v6);
+    if (!v4 && !v5) {
+        v7 = __fstp(v7);
+        v6 = __fstp(v6);
     } else {
-        __fxch(c1, c2);
-        __fcomp(c1, c2);
-        c2 = __fstp(c2);
-        c0 = (_QWORD)(0xffffff00LL | (_QWORD)(!v3 && !v4));
+        __fxch(v7, v6);
+        __fcomp(v7, v6);
+        v6 = __fstp(v6);
+        result = (_QWORD)(0xffffff00LL | (_QWORD)(!v4 && !v5));
     }
-    return c0;
+    return result;
 }
 /* Function:   mix_ops_x87 | Address: 0x1166 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x2a (42 bytes) | Xrefs from: unknown */
 long double mix_ops_x87(long double a1, long double a2, long double a3) {
-    int v2; // rsp
-    int c1 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
-    int v5 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
-    int c0 = __fld(v5); // reg?
-    c0 = __fadd(c0, v5);
-    int v3 = __fld(*(_QWORD *)(v2 + 0x28LL)); // reg?
-    c0 = __fmulp(c0, v3);
-    c1 = __fsubrp(c0, c1);
-    c1 = __fdivp(c1, v5);
+    int v3; // rsp
+    int v4 = __fld(*(_QWORD *)(v3 + 8LL)); // reg?
+    int v5 = __fld(*(_QWORD *)(v3 + 0x18LL)); // reg?
+    int v6 = __fld(v5); // reg?
+    v6 = __fadd(v6, v5);
+    int v7 = __fld(*(_QWORD *)(v3 + 0x28LL)); // reg?
+    v6 = __fmulp(v6, v7);
+    v4 = __fsubrp(v6, v4);
+    v4 = __fdivp(v4, v5);
     return 0;
 }
 /* Function:   main | Address: 0x1181 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

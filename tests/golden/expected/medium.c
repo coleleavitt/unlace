@@ -74,296 +74,296 @@ struct __anon1 {
 
 /* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: System V AMD64 | Stack frame: 0x58 (88 bytes) | Xrefs to:   __stack_chk_fail, f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 int main(void) {
-    __int64 cond_47; // temp
-    __int64 v23; // temp
-    __int64 v24; // temp
-    __int64 v32; // temp
-    __int64 v40; // temp
+    __int64 v0; // temp
+    __int64 v1; // temp
+    __int64 v2; // temp
+    __int64 v3; // temp
+    __int64 v4; // temp
     char buf_88[64];
     __int64 v_16;
     char buf_0[64]; // int buf_0[16]
-    _QWORD c0; // rax
-    __int64 v50; // rax
-    __int64 v51; // rax
-    __int64 v52; // rax
-    _QWORD c3; // rbx
-    _QWORD a2; // rsi
-    _QWORD a1; // rdi
-    _QWORD c8; // r10
-    __m128i c16; // xmm1
-    _DWORD v28; // temp
-    _DWORD v29; // temp
-    __int64 v27; // temp
-    int v30; // temp
-    int v44; // temp
-    __int64 c2 = 0xa; // rdx
-    _BOOL c11 = !(__builtin_popcount(0) & 1); // PF
-    __int64 c1 = 0; // rcx
-    __m128i c15 = (((unsigned __int128)0x900000006ULL << 64) | 0x300000000ULL); // xmm0
-    char c12 = 1; // ZF
-    char c13 = 0; // SF
-    char c10 = 0; // CF
-    char c14 = 0; // OF
-    c0 = 1;
-    *(_OWORD *)buf_0 = c15;
-    c15 = (((unsigned __int128)0x1500000012ULL << 64) | 0xf0000000cULL);
-    *(_OWORD *)(buf_0 + 16) = c15;
-    c15 = (((unsigned __int128)0x210000001eULL << 64) | 0x1b00000018ULL);
-    *(_OWORD *)(buf_0 + 32) = c15;
-    c15 = (((unsigned __int128)0x2d0000002aULL << 64) | 0x2700000024ULL);
-    *(_OWORD *)(buf_0 + 48) = c15;
+    _QWORD result; // rax
+    __int64 v6; // rax
+    __int64 v7; // rax
+    __int64 v8; // rax
+    _QWORD v9; // rbx
+    _QWORD v10; // rsi
+    _QWORD v11; // rdi
+    _QWORD v12; // r10
+    __m128i v13; // xmm1
+    _DWORD v14; // temp
+    _DWORD v15; // temp
+    __int64 v16; // temp
+    int v17; // temp
+    int v18; // temp
+    __int64 v19 = 0xa; // rdx
+    _BOOL v20 = !(__builtin_popcount(0) & 1); // PF
+    __int64 v21 = 0; // rcx
+    __m128i v22 = (((unsigned __int128)0x900000006ULL << 64) | 0x300000000ULL); // xmm0
+    char v23 = 1; // ZF
+    char v24 = 0; // SF
+    char v25 = 0; // CF
+    char v26 = 0; // OF
+    result = 1;
+    *(_OWORD *)buf_0 = v22;
+    v22 = (((unsigned __int128)0x1500000012ULL << 64) | 0xf0000000cULL);
+    *(_OWORD *)(buf_0 + 16) = v22;
+    v22 = (((unsigned __int128)0x210000001eULL << 64) | 0x1b00000018ULL);
+    *(_OWORD *)(buf_0 + 32) = v22;
+    v22 = (((unsigned __int128)0x2d0000002aULL << 64) | 0x2700000024ULL);
+    *(_OWORD *)(buf_0 + 48) = v22;
     do {
-        v28 = c0;
-        a2 = c0;
-        c0 += c1;
-        c1 = v28;
-        v28 = c2;
-        c12 = c2 == 1;
-        c13 = (_BYTE)(c2 < 1);
-        c10 = (_DWORD)c2 < 1;
-        c14 = __OFSUB__(c2, 1);
-        --c2;
-    } while (c2);
-    c12 = c1 == -910;
-    c13 = (_BYTE)(c1 + 0x38e < 0);
-    c10 = (c1 + 0x38e) < c1;
-    c14 = __OFADD__(c1, 0x38e);
-    c1 += 0x38e;
-    c2 = 0x24;
-    c0 = 0x30;
+        v14 = result;
+        v10 = result;
+        result += v21;
+        v21 = v14;
+        v14 = v19;
+        v23 = v19 == 1;
+        v24 = (_BYTE)(v19 < 1);
+        v25 = (_DWORD)v19 < 1;
+        v26 = __OFSUB__(v19, 1);
+        --v19;
+    } while (v19);
+    v23 = v21 == -910;
+    v24 = (_BYTE)(v21 + 0x38e < 0);
+    v25 = (v21 + 0x38e) < v21;
+    v26 = __OFADD__(v21, 0x38e);
+    v21 += 0x38e;
+    v19 = 0x24;
+    result = 0x30;
     do {
-        a2 = c2;
-        c2 = c0 % a2;
-        c0 = a2;
-        c12 = !c2;
-        c13 = (_BYTE)(c2 < 0);
-        c10 = 0;
-        c14 = 0;
-    } while (c2);
-    c12 = c1 + a2 == 0;
-    c13 = (_BYTE)(c1 + a2 < 0);
-    c10 = (c1 + c0) < c1;
-    c14 = __OFADD__(c1, c0);
-    c0 = 0x1b;
+        v10 = v19;
+        v19 = result % v10;
+        result = v10;
+        v23 = !v19;
+        v24 = (_BYTE)(v19 < 0);
+        v25 = 0;
+        v26 = 0;
+    } while (v19);
+    v23 = v21 + v10 == 0;
+    v24 = (_BYTE)(v21 + v10 < 0);
+    v25 = (v21 + result) < v21;
+    v26 = __OFADD__(v21, result);
+    result = 0x1b;
     while (1) {
-        v28 = c0;
-        v29 = c0 & 1;
-        c8 = c0 & 1;
-        if (v29) {
-            v28 = (_DWORD)(c0 + (c0 << 1LL) + 1LL);
-            c2 += 2;
-            c12 = v28 >> 1 == 0;
-            c13 = (_BYTE)(v28 >> 1 < 0);
-            c10 = 0;
-            c14 = 0;
-            c0 = v28 >> 1;
+        v14 = result;
+        v15 = result & 1;
+        v12 = result & 1;
+        if (v15) {
+            v14 = (_DWORD)(result + (result << 1LL) + 1LL);
+            v19 += 2;
+            v23 = v14 >> 1 == 0;
+            v24 = (_BYTE)(v14 >> 1 < 0);
+            v25 = 0;
+            v26 = 0;
+            result = v14 >> 1;
             continue;
         } else {
-            c0 = v28 >> 1;
-            ++c2;
-            c12 = c0 == 1;
-            c13 = (_BYTE)(c0 < 1);
-            c10 = (_DWORD)c0 < 1;
-            c14 = __OFSUB__(c0, 1);
-            if (c0 != 1) {
+            result = v14 >> 1;
+            ++v19;
+            v23 = result == 1;
+            v24 = (_BYTE)(result < 1);
+            v25 = (_DWORD)result < 1;
+            v26 = __OFSUB__(result, 1);
+            if (result != 1) {
                 continue;
             } else {
                 break;
             }
         }
     }
-    c1 = c1 + a2 + c2;
-    c12 = 1;
-    c13 = 0;
-    c10 = 0;
-    c14 = 0;
-    a2 = 0;
-    c2 = 0x20;
-    c0 = 0xdeadbeef;
+    v21 = v21 + v10 + v19;
+    v23 = 1;
+    v24 = 0;
+    v25 = 0;
+    v26 = 0;
+    v10 = 0;
+    v19 = 0x20;
+    result = 0xdeadbeef;
     do {
-        v28 = c0;
-        c0 = (_DWORD)c0 >> 1;
-        v29 = v28 & 1;
-        a1 = v28 & 1;
-        a2 += v29;
-        v28 = c2;
-        c12 = c2 == 1;
-        c13 = (_BYTE)(c2 < 1);
-        c10 = (_DWORD)c2 < 1;
-        c14 = __OFSUB__(c2, 1);
-        --c2;
-    } while (c2);
-    c1 = (_DWORD)(a2 + c1 + 0x46LL);
-    __int64 c7 = (uintptr_t)buf_0; // r9
-    __int64 v8 = (uintptr_t)(buf_0 + 64); // r8
-    c0 = (uintptr_t)buf_0;
-    c15 = 0;
+        v14 = result;
+        result = (_DWORD)result >> 1;
+        v15 = v14 & 1;
+        v11 = v14 & 1;
+        v10 += v15;
+        v14 = v19;
+        v23 = v19 == 1;
+        v24 = (_BYTE)(v19 < 1);
+        v25 = (_DWORD)v19 < 1;
+        v26 = __OFSUB__(v19, 1);
+        --v19;
+    } while (v19);
+    v21 = (_DWORD)(v10 + v21 + 0x46LL);
+    __int64 v27 = (uintptr_t)buf_0; // r9
+    __int64 v28 = (uintptr_t)(buf_0 + 64); // r8
+    result = (uintptr_t)buf_0;
+    v22 = 0;
     do {
-        c15 = _mm_add_epi32(c15, *(_OWORD *)c0);
-        v27 = c0 + 0x10LL;
-        c0 += 0x10LL;
-        c12 = (uintptr_t)(buf_0 + 64) == v27;
-        c13 = (_BYTE)((uintptr_t)(buf_0 + 64) < v27);
-        c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0;
-        c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0);
-    } while ((uintptr_t)(buf_0 + 64) != c0);
-    a1 = (uintptr_t)(buf_0 + 4);
-    c0 = 0;
-    __int64 c9 = (uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4); // r11
-    a2 = (uintptr_t)(buf_0 + 4);
-    c15 = _mm_add_epi32(c15, (_OWORD)c15 >> 0x40);
-    c16 = (_OWORD)c15 >> 0x20;
-    c15 = _mm_add_epi32(c15, c16);
-    c2 = (_DWORD)c15 + c1;
-    c12 = !(c9 & 4);
-    c13 = (_BYTE)((c9 & 4) < 0);
-    c10 = 0;
-    c14 = 0;
-    c9 &= 4;
-    c1 = (uintptr_t)(buf_0 + 4);
-    if (!(c9 & 4)) {
+        v22 = _mm_add_epi32(v22, *(_OWORD *)result);
+        v16 = result + 0x10LL;
+        result += 0x10LL;
+        v23 = (uintptr_t)(buf_0 + 64) == v16;
+        v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
+        v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)result;
+        v26 = __OFSUB__((uintptr_t)(buf_0 + 64), result);
+    } while ((uintptr_t)(buf_0 + 64) != result);
+    v11 = (uintptr_t)(buf_0 + 4);
+    result = 0;
+    __int64 v29 = (uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4); // r11
+    v10 = (uintptr_t)(buf_0 + 4);
+    v22 = _mm_add_epi32(v22, (_OWORD)v22 >> 0x40);
+    v13 = (_OWORD)v22 >> 0x20;
+    v22 = _mm_add_epi32(v22, v13);
+    v19 = (_DWORD)v22 + v21;
+    v23 = !(v29 & 4);
+    v24 = (_BYTE)((v29 & 4) < 0);
+    v25 = 0;
+    v26 = 0;
+    v29 &= 4;
+    v21 = (uintptr_t)(buf_0 + 4);
+    if (!(v29 & 4)) {
         goto label_19;
     } else {
-        a2 = *(_DWORD *)(buf_0 + 4);
-        c0 = 0u < a2 ? a2 : 0u;
-        a2 = (uintptr_t)(buf_0 + 8);
-        c12 = (uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8);
-        c13 = (_BYTE)((uintptr_t)(buf_0 + 64) < (uintptr_t)(buf_0 + 8));
-        c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)(uintptr_t)(buf_0 + 8);
-        c14 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8));
+        v10 = *(_DWORD *)(buf_0 + 4);
+        result = 0u < v10 ? v10 : 0u;
+        v10 = (uintptr_t)(buf_0 + 8);
+        v23 = (uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8);
+        v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < (uintptr_t)(buf_0 + 8));
+        v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)(uintptr_t)(buf_0 + 8);
+        v26 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8));
         if ((uintptr_t)(buf_0 + 64) != (uintptr_t)(buf_0 + 8)) {
             do {
-                c9 = *(_DWORD *)a2;
-                v28 = c0 < c9 ? c9 : c0;
-                c9 = *(_DWORD *)(a2 + 4LL);
-                v29 = v28;
-                v30 = v29 - c9;
-                c0 = v29 < c9 ? c9 : v29;
-                v27 = a2 + 8LL;
-                a2 += 8LL;
-                v40 = (uintptr_t)(buf_0 + 64) - v27;
-                c12 = (uintptr_t)(buf_0 + 64) == v27;
-                c13 = (_BYTE)((uintptr_t)(buf_0 + 64) < v27);
-                c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a2;
-                c14 = __OFSUB__((uintptr_t)(buf_0 + 64), a2);
-            } while ((uintptr_t)(buf_0 + 64) != a2);
+                v29 = *(_DWORD *)v10;
+                v14 = result < v29 ? v29 : result;
+                v29 = *(_DWORD *)(v10 + 4LL);
+                v15 = v14;
+                v17 = v15 - v29;
+                result = v15 < v29 ? v29 : v15;
+                v16 = v10 + 8LL;
+                v10 += 8LL;
+                v4 = (uintptr_t)(buf_0 + 64) - v16;
+                v23 = (uintptr_t)(buf_0 + 64) == v16;
+                v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
+                v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v10;
+                v26 = __OFSUB__((uintptr_t)(buf_0 + 64), v10);
+            } while ((uintptr_t)(buf_0 + 64) != v10);
         }
-        v28 = c0 + c2;
-        c0 += c2;
-        c2 = 0;
-        c12 = !((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4);
-        c13 = (_BYTE)(((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4) < 0);
-        c10 = 0;
-        c14 = 0;
-        a2 = (_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4;
+        v14 = result + v19;
+        result += v19;
+        v19 = 0;
+        v23 = !((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4);
+        v24 = (_BYTE)(((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4) < 0);
+        v25 = 0;
+        v26 = 0;
+        v10 = (_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4;
         if (!((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4)) {
             goto label_18;
         } else {
-            c1 = *(_DWORD *)(buf_0 + 4);
-            c2 = 0u != c1 && c1 <= 0u ? c1 : 0u;
-            c1 = (uintptr_t)(buf_0 + 8);
-            c12 = (uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8);
-            c13 = (_BYTE)((uintptr_t)(buf_0 + 64) < (uintptr_t)(buf_0 + 8));
-            c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)(uintptr_t)(buf_0 + 8);
-            c14 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8));
+            v21 = *(_DWORD *)(buf_0 + 4);
+            v19 = 0u != v21 && v21 <= 0u ? v21 : 0u;
+            v21 = (uintptr_t)(buf_0 + 8);
+            v23 = (uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8);
+            v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < (uintptr_t)(buf_0 + 8));
+            v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)(uintptr_t)(buf_0 + 8);
+            v26 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8));
             if ((uintptr_t)(buf_0 + 64) != (uintptr_t)(buf_0 + 8)) {
                 do {
-                    a2 = *(_DWORD *)c1;
-                    c2 = c2 != a2 && a2 <= c2 ? a2 : c2;
-                    a2 = *(_DWORD *)(c1 + 4LL);
-                    c2 = c2 != a2 && a2 <= c2 ? a2 : c2;
-                    v27 = c1 + 8LL;
-                    c1 += 8LL;
-                    c12 = (uintptr_t)(buf_0 + 64) == v27;
-                    c13 = (_BYTE)((uintptr_t)(buf_0 + 64) < v27);
-                    c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c1;
-                    c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c1);
-                } while ((uintptr_t)(buf_0 + 64) != c1);
+                    v10 = *(_DWORD *)v21;
+                    v19 = v19 != v10 && v10 <= v19 ? v10 : v19;
+                    v10 = *(_DWORD *)(v21 + 4LL);
+                    v19 = v19 != v10 && v10 <= v19 ? v10 : v19;
+                    v16 = v21 + 8LL;
+                    v21 += 8LL;
+                    v23 = (uintptr_t)(buf_0 + 64) == v16;
+                    v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
+                    v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v21;
+                    v26 = __OFSUB__((uintptr_t)(buf_0 + 64), v21);
+                } while ((uintptr_t)(buf_0 + 64) != v21);
             }
-            c12 = c2 + v28 == 0;
-            c13 = (_BYTE)(c2 + v28 < 0);
-            c10 = (c2 + c0) < c2;
-            c14 = __OFADD__(c2, c0);
-            c2 += v28;
-            __m128i c17 = 0; // xmm2
-            c0 = (uintptr_t)buf_0;
+            v23 = v19 + v14 == 0;
+            v24 = (_BYTE)(v19 + v14 < 0);
+            v25 = (v19 + result) < v19;
+            v26 = __OFADD__(v19, result);
+            v19 += v14;
+            __m128i v30 = 0; // xmm2
+            result = (uintptr_t)buf_0;
             do {
-                c15 = *(_OWORD *)c0;
-                v27 = c0 + 0x10LL;
-                c0 += 0x10LL;
-                c16 = c15;
-                c16 = _mm_mul_epu32(c15, c15);
-                c15 = _mm_srli_epi64(c15, 0x20);
-                c15 = _mm_mul_epu32(c15, c15);
-                c16 = _mm_shuffle_epi32(c16, 8);
-                c15 = _mm_shuffle_epi32(c15, 8);
-                c16 = _mm_unpacklo_epi32(c16, c15);
-                c17 = _mm_add_epi32(c17, c16);
-                c12 = (uintptr_t)(buf_0 + 64) == v27;
-                c13 = (_BYTE)((uintptr_t)(buf_0 + 64) < v27);
-                c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0;
-                c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0);
-            } while ((uintptr_t)(buf_0 + 64) != c0);
-            c0 = 0;
-            c17 = _mm_add_epi32(c17, (_OWORD)c17 >> 0x40);
-            c17 = _mm_add_epi32(c17, (_OWORD)c17 >> 0x20);
-            c12 = (_DWORD)c17 + c2 == 0;
-            c13 = (_BYTE)((_DWORD)c17 + c2 < 0);
-            c10 = ((_DWORD)c17 + c2) < (_DWORD)c17;
-            c14 = __OFADD__((_DWORD)c17, c2);
-            c1 = (_DWORD)c17 + c2;
-            c2 = (uintptr_t)buf_0;
+                v22 = *(_OWORD *)result;
+                v16 = result + 0x10LL;
+                result += 0x10LL;
+                v13 = v22;
+                v13 = _mm_mul_epu32(v22, v22);
+                v22 = _mm_srli_epi64(v22, 0x20);
+                v22 = _mm_mul_epu32(v22, v22);
+                v13 = _mm_shuffle_epi32(v13, 8);
+                v22 = _mm_shuffle_epi32(v22, 8);
+                v13 = _mm_unpacklo_epi32(v13, v22);
+                v30 = _mm_add_epi32(v30, v13);
+                v23 = (uintptr_t)(buf_0 + 64) == v16;
+                v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
+                v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)result;
+                v26 = __OFSUB__((uintptr_t)(buf_0 + 64), result);
+            } while ((uintptr_t)(buf_0 + 64) != result);
+            result = 0;
+            v30 = _mm_add_epi32(v30, (_OWORD)v30 >> 0x40);
+            v30 = _mm_add_epi32(v30, (_OWORD)v30 >> 0x20);
+            v23 = (_DWORD)v30 + v19 == 0;
+            v24 = (_BYTE)((_DWORD)v30 + v19 < 0);
+            v25 = ((_DWORD)v30 + v19) < (_DWORD)v30;
+            v26 = __OFADD__((_DWORD)v30, v19);
+            v21 = (_DWORD)v30 + v19;
+            v19 = (uintptr_t)buf_0;
             while (1) {
-                v28 = *(_DWORD *)c2;
-                v29 = v28 - 0xf;
-                c12 = v28 == 0xf;
-                c13 = (_BYTE)(v28 < 0xf);
-                c10 = (_DWORD)v28 < 0xf;
-                c14 = __OFSUB__(v28, 0xf);
-                if (v28 == 0xf) {
+                v14 = *(_DWORD *)v19;
+                v15 = v14 - 0xf;
+                v23 = v14 == 0xf;
+                v24 = (_BYTE)(v14 < 0xf);
+                v25 = (_DWORD)v14 < 0xf;
+                v26 = __OFSUB__(v14, 0xf);
+                if (v14 == 0xf) {
                     break;
                 } else {
-                    v28 = c0;
-                    v29 = c0 + 1;
-                    ++c0;
-                    c2 += 4LL;
-                    v30 = v29;
-                    c12 = c0 == 0x10;
-                    c13 = (_BYTE)(c0 < 0x10);
-                    c10 = (_DWORD)c0 < 0x10;
-                    c14 = __OFSUB__(c0, 0x10);
-                    if (c0 != 0x10) {
+                    v14 = result;
+                    v15 = result + 1;
+                    ++result;
+                    v19 += 4LL;
+                    v17 = v15;
+                    v23 = result == 0x10;
+                    v24 = (_BYTE)(result < 0x10);
+                    v25 = (_DWORD)result < 0x10;
+                    v26 = __OFSUB__(result, 0x10);
+                    if (result != 0x10) {
                         continue;
                     } else {
                         goto label_2;
                     }
                 }
             }
-            a2 = 2;
-            c9 = (_DWORD)(c0 + c1 + 0x581LL);
-            c1 = 2;
-            c12 = 2u == 3;
-            c13 = (_BYTE)(2u < 3);
-            c10 = (_DWORD)2u < 3;
-            c14 = __OFSUB__(2u, 3);
+            v10 = 2;
+            v29 = (_DWORD)(result + v21 + 0x581LL);
+            v21 = 2;
+            v23 = 2u == 3;
+            v24 = (_BYTE)(2u < 3);
+            v25 = (_DWORD)2u < 3;
+            v26 = __OFSUB__(2u, 3);
             if (!(2u != 3 && 3 <= 2u)) {
                 goto label_6;
             }
         label_4:;
-            c0 = a2;
+            result = v10;
             while (1) {
-                c0 = a2 / c1;
-                c2 = a2 % c1;
-                c12 = !c2;
-                c13 = (_BYTE)(c2 < 0);
-                if (c2) {
-                    ++c1;
-                    c0 = c1 * c1;
-                    c12 = c0 == a2;
-                    c13 = (_BYTE)(c0 < a2);
-                    c10 = (_DWORD)c0 < (_DWORD)a2;
-                    c14 = __OFSUB__(c0, a2);
-                    if (c0 != a2 && a2 <= c0) {
+                result = v10 / v21;
+                v19 = v10 % v21;
+                v23 = !v19;
+                v24 = (_BYTE)(v19 < 0);
+                if (v19) {
+                    ++v21;
+                    result = v21 * v21;
+                    v23 = result == v10;
+                    v24 = (_BYTE)(result < v10);
+                    v25 = (_DWORD)result < (_DWORD)v10;
+                    v26 = __OFSUB__(result, v10);
+                    if (result != v10 && v10 <= result) {
                         goto label_6;
                     } else {
                         continue;
@@ -373,199 +373,199 @@ int main(void) {
                 }
             }
         label_7:;
-            ++a2;
-            c1 = 2;
-            c12 = a2 == 3;
-            c13 = (_BYTE)(a2 < 3);
-            c10 = (_DWORD)a2 < 3;
-            c14 = __OFSUB__(a2, 3);
-            if (a2 != 3 && 3 <= a2) {
+            ++v10;
+            v21 = 2;
+            v23 = v10 == 3;
+            v24 = (_BYTE)(v10 < 3);
+            v25 = (_DWORD)v10 < 3;
+            v26 = __OFSUB__(v10, 3);
+            if (v10 != 3 && 3 <= v10) {
                 goto label_4;
             } else {
             }
         label_6:;
-            ++c8;
-            c12 = c8 == 0xa;
-            c13 = (_BYTE)(c8 < 0xa);
-            c10 = (_DWORD)c8 < 0xa;
-            c14 = __OFSUB__(c8, 0xa);
-            if (c8 != 0xa) {
+            ++v12;
+            v23 = v12 == 0xa;
+            v24 = (_BYTE)(v12 < 0xa);
+            v25 = (_DWORD)v12 < 0xa;
+            v26 = __OFSUB__(v12, 0xa);
+            if (v12 != 0xa) {
                 goto label_7;
             } else {
             }
-            c12 = c9 + a2 == 0;
-            c13 = (_BYTE)(c9 + a2 < 0);
-            c10 = (c9 + a2) < c9;
-            c14 = __OFADD__(c9, a2);
-            c9 += a2;
-            c1 = 0x12;
-            c3 = 0xc;
+            v23 = v29 + v10 == 0;
+            v24 = (_BYTE)(v29 + v10 < 0);
+            v25 = (v29 + v10) < v29;
+            v26 = __OFADD__(v29, v10);
+            v29 += v10;
+            v21 = 0x12;
+            v9 = 0xc;
             do {
-                v28 = (_DWORD)c3;
-                v44 = c1;
-                c3 = c1;
-                v29 = v28;
-                v30 = v29 / c1;
-                c0 = v30;
-                c2 = v29 % c1;
-                c1 = c2;
-                c12 = !c2;
-                c13 = (_BYTE)(c2 < 0);
-                c10 = 0;
-                c14 = 0;
-            } while (c2);
-            c12 = 1;
-            c13 = 0;
-            c10 = 0;
-            c14 = 0;
-            a2 = 0;
-            c0 = 0xd8u / v44;
-            c2 = 0xd8u % v44;
-            c8 = (_DWORD)(c0 + c9 - 1218664206);
+                v14 = (_DWORD)v9;
+                v18 = v21;
+                v9 = v21;
+                v15 = v14;
+                v17 = v15 / v21;
+                result = v17;
+                v19 = v15 % v21;
+                v21 = v19;
+                v23 = !v19;
+                v24 = (_BYTE)(v19 < 0);
+                v25 = 0;
+                v26 = 0;
+            } while (v19);
+            v23 = 1;
+            v24 = 0;
+            v25 = 0;
+            v26 = 0;
+            v10 = 0;
+            result = 0xd8u / v18;
+            v19 = 0xd8u % v18;
+            v12 = (_DWORD)(result + v29 - 1218664206);
             while (1) {
-                v28 = *(_DWORD *)c7;
-                c2 = v28;
-                c0 = v28 * 0x66666667LL;
-                v30 = c2;
-                c0 = (_DWORD)(c0 >> 0x21) - (c2 >> 0x1f);
-                c7 = (_DWORD)(c0 + (c0 << 2LL));
-                c0 = c2 - (_DWORD)(c0 + (c0 << 2LL));
-                c12 = c0 == 2;
-                char v33 = (_BYTE)(c0 < 2); // temp
-                c14 = __OFSUB__(c0, 2);
-                if (c0 == 2) {
-                    c12 = c2 == 5;
-                    c13 = (_BYTE)(c2 < 5);
-                    c10 = (_DWORD)c2 < 5;
-                    c14 = __OFSUB__(c2, 5);
-                    c2 -= 5;
+                v14 = *(_DWORD *)v27;
+                v19 = v14;
+                result = v14 * 0x66666667LL;
+                v17 = v19;
+                result = (_DWORD)(result >> 0x21) - (v19 >> 0x1f);
+                v27 = (_DWORD)(result + (result << 2LL));
+                result = v19 - (_DWORD)(result + (result << 2LL));
+                v23 = result == 2;
+                char v31 = (_BYTE)(result < 2); // temp
+                v26 = __OFSUB__(result, 2);
+                if (result == 2) {
+                    v23 = v19 == 5;
+                    v24 = (_BYTE)(v19 < 5);
+                    v25 = (_DWORD)v19 < 5;
+                    v26 = __OFSUB__(v19, 5);
+                    v19 -= 5;
                 } else {
-                    if (c12 || v33 ^ c14) {
-                        if (!c0) {
-                            c12 = v30 + v30 == 0;
-                            c13 = (_BYTE)(v30 + v30 < 0);
-                            c10 = (v30 + v30) < v30;
-                            c2 = v30 + v30;
+                    if (v23 || v31 ^ v26) {
+                        if (!result) {
+                            v23 = v17 + v17 == 0;
+                            v24 = (_BYTE)(v17 + v17 < 0);
+                            v25 = (v17 + v17) < v17;
+                            v19 = v17 + v17;
                         } else {
-                            c7 = (_DWORD)(c2 + 0xaLL);
-                            c12 = c0 == 1;
-                            c13 = (_BYTE)(c0 < 1);
-                            c10 = (_DWORD)c0 < 1;
-                            c2 = c12 ? (_DWORD)(c2 + 0xaLL) : c2;
+                            v27 = (_DWORD)(v19 + 0xaLL);
+                            v23 = result == 1;
+                            v24 = (_BYTE)(result < 1);
+                            v25 = (_DWORD)result < 1;
+                            v19 = v23 ? (_DWORD)(v19 + 0xaLL) : v19;
                         }
                     } else {
-                        v28 = c0;
-                        c12 = v28 == 3;
-                        c2 = c12 ? -v30 : v30;
-                        c7 = a1;
-                        a2 += c2;
-                        c12 = (uintptr_t)(buf_0 + 64) == a1;
-                        c13 = (_BYTE)((uintptr_t)(buf_0 + 64) < a1);
-                        c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a1;
-                        if ((uintptr_t)(buf_0 + 64) != a1) {
-                            v27 = a1 + 4LL;
-                            c12 = a1 == -4LL;
-                            cond_47 = v27 < 0;
-                            v32 = (_BYTE)cond_47;
-                            c13 = v32;
-                            c10 = (a1 + 4LL) < a1;
-                            v32 = (_BYTE)v27;
-                            v23 = __builtin_popcount(v32);
-                            v24 = v23 & 1;
-                            c11 = !v24;
-                            a1 = v27;
+                        v14 = result;
+                        v23 = v14 == 3;
+                        v19 = v23 ? -v17 : v17;
+                        v27 = v11;
+                        v10 += v19;
+                        v23 = (uintptr_t)(buf_0 + 64) == v11;
+                        v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v11);
+                        v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v11;
+                        if ((uintptr_t)(buf_0 + 64) != v11) {
+                            v16 = v11 + 4LL;
+                            v23 = v11 == -4LL;
+                            v0 = v16 < 0;
+                            v3 = (_BYTE)v0;
+                            v24 = v3;
+                            v25 = (v11 + 4LL) < v11;
+                            v3 = (_BYTE)v16;
+                            v1 = __builtin_popcount(v3);
+                            v2 = v1 & 1;
+                            v20 = !v2;
+                            v11 = v16;
                             continue;
                         } else {
                             break;
                         }
                     }
                 }
-                a2 += c2;
-                c7 = a1;
-                c12 = (uintptr_t)(buf_0 + 64) == a1;
-                c13 = (_BYTE)((uintptr_t)(buf_0 + 64) < a1);
-                c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a1;
-                if ((uintptr_t)(buf_0 + 64) == a1) {
+                v10 += v19;
+                v27 = v11;
+                v23 = (uintptr_t)(buf_0 + 64) == v11;
+                v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v11);
+                v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v11;
+                if ((uintptr_t)(buf_0 + 64) == v11) {
                     break;
                 } else {
-                    v27 = a1 + 4LL;
-                    c12 = a1 == -4LL;
-                    cond_47 = v27 < 0;
-                    v32 = (_BYTE)cond_47;
-                    c13 = v32;
-                    c10 = (a1 + 4LL) < a1;
-                    v32 = (_BYTE)v27;
-                    v23 = __builtin_popcount(v32);
-                    v24 = v23 & 1;
-                    c11 = !v24;
-                    a1 = v27;
+                    v16 = v11 + 4LL;
+                    v23 = v11 == -4LL;
+                    v0 = v16 < 0;
+                    v3 = (_BYTE)v0;
+                    v24 = v3;
+                    v25 = (v11 + 4LL) < v11;
+                    v3 = (_BYTE)v16;
+                    v1 = __builtin_popcount(v3);
+                    v2 = v1 & 1;
+                    v20 = !v2;
+                    v11 = v16;
                     continue;
                 }
             }
-            c2 = (_DWORD)(c8 + a2);
-            c12 = 1;
-            c13 = 0;
-            c10 = 0;
-            c14 = 0;
-            c0 = 0;
+            v19 = (_DWORD)(v12 + v10);
+            v23 = 1;
+            v24 = 0;
+            v25 = 0;
+            v26 = 0;
+            result = 0;
             while (1) {
-                c12 = c0 == 9;
-                c13 = (_BYTE)(c0 < 9);
-                c10 = (_DWORD)c0 < 9;
-                if (c0 != 9 && 9 <= c0) {
-                    c1 = (_DWORD)(c1 + c0 - 10);
-                    v28 = c0;
-                    v29 = c0 + 1;
-                    ++c0;
-                    c12 = c0 == 0x14;
-                    c13 = (_BYTE)(c0 < 0x14);
-                    c10 = (_DWORD)c0 < 0x14;
-                    if (c0 != 0x14) {
+                v23 = result == 9;
+                v24 = (_BYTE)(result < 9);
+                v25 = (_DWORD)result < 9;
+                if (result != 9 && 9 <= result) {
+                    v21 = (_DWORD)(v21 + result - 10);
+                    v14 = result;
+                    v15 = result + 1;
+                    ++result;
+                    v23 = result == 0x14;
+                    v24 = (_BYTE)(result < 0x14);
+                    v25 = (_DWORD)result < 0x14;
+                    if (result != 0x14) {
                         continue;
                     } else {
                         break;
                     }
                 } else {
-                    v28 = c0;
-                    if (v28 <= 4) {
-                        a2 = (_DWORD)(c0 + (c0 << 1LL));
-                        ++c0;
-                        c12 = c1 + a2 == 0;
-                        c13 = (_BYTE)(c1 + a2 < 0);
-                        c10 = (c1 + a2) < c1;
-                        c1 += a2;
+                    v14 = result;
+                    if (v14 <= 4) {
+                        v10 = (_DWORD)(result + (result << 1LL));
+                        ++result;
+                        v23 = v21 + v10 == 0;
+                        v24 = (_BYTE)(v21 + v10 < 0);
+                        v25 = (v21 + v10) < v21;
+                        v21 += v10;
                         continue;
                     } else {
-                        c1 = (_DWORD)(c1 + c0 + 0x14LL);
-                        c0 = v28 + 1;
-                        c12 = c0 == 9;
-                        c13 = (_BYTE)(c0 < 9);
-                        c10 = (_DWORD)c0 < 9;
+                        v21 = (_DWORD)(v21 + result + 0x14LL);
+                        result = v14 + 1;
+                        v23 = result == 9;
+                        v24 = (_BYTE)(result < 9);
+                        v25 = (_DWORD)result < 9;
                     }
                 }
             }
-            a2 = (_DWORD)(c2 + c1 + 0x12dLL);
-            c0 = 0x30;
-            c1 = 0x24;
+            v10 = (_DWORD)(v19 + v21 + 0x12dLL);
+            result = 0x30;
+            v21 = 0x24;
             while (1) {
-                c2 = c0 % c1;
-                c0 = c1;
-                if (c2) {
-                    c1 = c2;
+                v19 = result % v21;
+                result = v21;
+                if (v19) {
+                    v21 = v19;
                 } else {
                     break;
                 }
             }
-            v50 = f_rec_fib(8LL);
-            c8 = (_DWORD)(v50 + (_DWORD)(a2 + c1 + 3LL));
-            v51 = f_rec_power_constprop_0(8LL);
-            c8 += v51;
-            v52 = f_ackermann(2LL, 3LL);
-            v29 = (_DWORD)(c8 + v52 + 0xabe0cLL);
-            c2 = (_DWORD)(c8 + v52 + 0xabe0cLL) >> 0x1f >> 0x18;
-            v28 = v29;
-            c0 = (_QWORD)(_BYTE)(v28 + c2) - c2;
-            return c0;
+            v6 = f_rec_fib(8LL);
+            v12 = (_DWORD)(v6 + (_DWORD)(v10 + v21 + 3LL));
+            v7 = f_rec_power_constprop_0(8LL);
+            v12 += v7;
+            v8 = f_ackermann(2LL, 3LL);
+            v15 = (_DWORD)(v12 + v8 + 0xabe0cLL);
+            v19 = (_DWORD)(v12 + v8 + 0xabe0cLL) >> 0x1f >> 0x18;
+            v14 = v15;
+            result = (_QWORD)(_BYTE)(v14 + v19) - v19;
+            return result;
         }
     }
 label_2:;
@@ -590,8 +590,8 @@ void _start(void) {
 }
 /* Function:   sub_14b0 | Address: 0x14b0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_14b0(void) {
-    int v5; // reg?
-    if (v5) {
+    int v0; // reg?
+    if (v0) {
         return;
     } else {
         if (!qword_3FE0) {
@@ -607,7 +607,7 @@ __int64 sub_1520(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FF8) {
-            __int64 c3 = qword_4008; // rdi
+            __int64 v1 = qword_4008; // rdi
             result = sub_1040();
         }
         result = sub_14b0();
@@ -652,298 +652,298 @@ int f_rec_fib(int a1) {
     char buf_96[48];
     char buf_40[48];
     _QWORD result; // rax
-    __int64 v53; // rax
-    _QWORD c3; // rbx
-    _QWORD c10; // r10
-    _QWORD c13; // r13
-    _QWORD c15; // r15
-    _DWORD v32; // temp
-    _DWORD v33; // temp
+    __int64 v2; // rax
+    _QWORD v3; // rbx
+    _QWORD v4; // r10
+    _QWORD v5; // r13
+    _QWORD v6; // r15
+    _DWORD v7; // temp
+    _DWORD v8; // temp
     if (a1 <= 1) {
         return a1;
     } else {
-        __int64 c14 = 0; // r14
-        _QWORD c5 = (_DWORD)(a1 - 2); // rbp
-        __int64 v29 = (uintptr_t)(buf_40 + 40) - 8LL; // temp
+        __int64 v9 = 0; // r14
+        _QWORD v10 = (_DWORD)(a1 - 2); // rbp
+        __int64 v11 = (uintptr_t)(buf_40 + 40) - 8LL; // temp
         *(_QWORD *)(buf_40 + 32) = (uintptr_t)(buf_40 + 40);
-        c3 = (uintptr_t)(buf_40 + 40);
-        _BOOL c18 = (uintptr_t)(buf_40 + 40) == 0x38; // ZF
-        char c19 = (_BYTE)((uintptr_t)(buf_40 + 40) < 0x38); // SF
-        _BOOL c16 = (_QWORD)(uintptr_t)(buf_40 + 40) < 0x38; // CF
-        _BOOL c20 = __OFSUB__((uintptr_t)(buf_40 + 40), 0x38LL); // OF
+        v3 = (uintptr_t)(buf_40 + 40);
+        _BOOL v12 = (uintptr_t)(buf_40 + 40) == 0x38; // ZF
+        char v13 = (_BYTE)((uintptr_t)(buf_40 + 40) < 0x38); // SF
+        _BOOL v14 = (_QWORD)(uintptr_t)(buf_40 + 40) < 0x38; // CF
+        _BOOL v15 = __OFSUB__((uintptr_t)(buf_40 + 40), 0x38LL); // OF
         while (1) {
-            _QWORD c12 = (_DWORD)(c3 - 2); // r12
-            c18 = (_DWORD)c3 == 1;
-            c19 = (_BYTE)((_DWORD)c3 < 1);
-            c16 = (_DWORD)c3 < 1;
-            if ((_DWORD)c3 > 1) {
+            _QWORD v16 = (_DWORD)(v3 - 2); // r12
+            v12 = (_DWORD)v3 == 1;
+            v13 = (_BYTE)((_DWORD)v3 < 1);
+            v14 = (_DWORD)v3 < 1;
+            if ((_DWORD)v3 > 1) {
                 do {
-                    c15 = (_DWORD)c3;
-                    result = (_DWORD)c14;
+                    v6 = (_DWORD)v3;
+                    result = (_DWORD)v9;
                     while (1) {
-                        c5 = (_DWORD)(c12 - 2);
-                        c18 = (_DWORD)c12 == 1;
-                        c19 = (_BYTE)((_DWORD)c12 < 1);
-                        c16 = (_DWORD)c12 < 1;
-                        if ((_DWORD)c12 > 1) {
-                            c19 = 0;
+                        v10 = (_DWORD)(v16 - 2);
+                        v12 = (_DWORD)v16 == 1;
+                        v13 = (_BYTE)((_DWORD)v16 < 1);
+                        v14 = (_DWORD)v16 < 1;
+                        if ((_DWORD)v16 > 1) {
+                            v13 = 0;
                             do {
-                                v_12 = (_DWORD)c3;
-                                c13 = (_DWORD)c12;
-                                _QWORD c2 = result; // rdx
+                                v_12 = (_DWORD)v3;
+                                v5 = (_DWORD)v16;
+                                _QWORD v17 = result; // rdx
                                 while (1) {
-                                    c18 = (_DWORD)(uintptr_t)(buf_40 + 40) == 1;
-                                    c19 = (_BYTE)((_DWORD)(uintptr_t)(buf_40 + 40) < 1);
-                                    c16 = (_DWORD)(uintptr_t)(buf_40 + 40) < 1;
+                                    v12 = (_DWORD)(uintptr_t)(buf_40 + 40) == 1;
+                                    v13 = (_BYTE)((_DWORD)(uintptr_t)(buf_40 + 40) < 1);
+                                    v14 = (_DWORD)(uintptr_t)(buf_40 + 40) < 1;
                                     if ((_DWORD)(uintptr_t)(buf_40 + 40) > 1) {
                                         do {
-                                            _QWORD c9 = (_DWORD)c2; // r9
-                                            _QWORD c6 = (_DWORD)c12; // rsi
-                                            c2 = (_DWORD)(uintptr_t)(buf_40 + 38);
-                                            _QWORD c1 = (_DWORD)c15; // rcx
-                                            v32 = (_DWORD)(uintptr_t)(buf_40 + 40);
-                                            c12 = (_DWORD)(uintptr_t)(buf_40 + 40);
+                                            _QWORD v18 = (_DWORD)v17; // r9
+                                            _QWORD v19 = (_DWORD)v16; // rsi
+                                            v17 = (_DWORD)(uintptr_t)(buf_40 + 38);
+                                            _QWORD v20 = (_DWORD)v6; // rcx
+                                            v7 = (_DWORD)(uintptr_t)(buf_40 + 40);
+                                            v16 = (_DWORD)(uintptr_t)(buf_40 + 40);
                                             while (1) {
-                                                c3 = (_DWORD)(c2 - 2);
-                                                c18 = (_DWORD)c2 == 1;
-                                                c19 = (_BYTE)((_DWORD)c2 < 1);
-                                                c16 = (_DWORD)c2 < 1;
-                                                if ((_DWORD)c2 > 1) {
+                                                v3 = (_DWORD)(v17 - 2);
+                                                v12 = (_DWORD)v17 == 1;
+                                                v13 = (_BYTE)((_DWORD)v17 < 1);
+                                                v14 = (_DWORD)v17 < 1;
+                                                if ((_DWORD)v17 > 1) {
                                                     do {
-                                                        _QWORD c11 = (_DWORD)c9; // r11
-                                                        c9 = c6;
-                                                        c6 = (_DWORD)c2;
+                                                        _QWORD v21 = (_DWORD)v18; // r11
+                                                        v18 = v19;
+                                                        v19 = (_DWORD)v17;
                                                         while (1) {
-                                                            c15 = (_DWORD)(c3 - 2);
-                                                            c18 = (_DWORD)c3 == 1;
-                                                            c19 = (_BYTE)((_DWORD)c3 < 1);
-                                                            c16 = (_DWORD)c3 < 1;
-                                                            if ((_DWORD)c3 > 1) {
+                                                            v6 = (_DWORD)(v3 - 2);
+                                                            v12 = (_DWORD)v3 == 1;
+                                                            v13 = (_BYTE)((_DWORD)v3 < 1);
+                                                            v14 = (_DWORD)v3 < 1;
+                                                            if ((_DWORD)v3 > 1) {
                                                                 while (1) {
-                                                                    c18 = (_DWORD)c15 == 1;
-                                                                    c19 = (_BYTE)((_DWORD)c15 < 1);
-                                                                    c16 = (_DWORD)c15 < 1;
-                                                                    if ((_DWORD)c15 > 1) {
-                                                                        c19 = 0;
+                                                                    v12 = (_DWORD)v6 == 1;
+                                                                    v13 = (_BYTE)((_DWORD)v6 < 1);
+                                                                    v14 = (_DWORD)v6 < 1;
+                                                                    if ((_DWORD)v6 > 1) {
+                                                                        v13 = 0;
                                                                         do {
-                                                                            *(_DWORD *)(buf_40 + 40) = (_DWORD)c2;
-                                                                            result = (_DWORD)c9;
-                                                                            c9 = (_DWORD)(c15 - 2);
+                                                                            *(_DWORD *)(buf_40 + 40) = (_DWORD)v17;
+                                                                            result = (_DWORD)v18;
+                                                                            v18 = (_DWORD)(v6 - 2);
                                                                             while (1) {
-                                                                                _QWORD c8 = (_DWORD)(c9 - 2); // r8
-                                                                                c18 = (_DWORD)c9 == 1;
-                                                                                c19 = (_BYTE)((_DWORD)c9 < 1);
-                                                                                c16 = (_DWORD)c9 < 1;
-                                                                                if ((_DWORD)c9 > 1) {
+                                                                                _QWORD v22 = (_DWORD)(v18 - 2); // r8
+                                                                                v12 = (_DWORD)v18 == 1;
+                                                                                v13 = (_BYTE)((_DWORD)v18 < 1);
+                                                                                v14 = (_DWORD)v18 < 1;
+                                                                                if ((_DWORD)v18 > 1) {
                                                                                     do {
-                                                                                        a1 = (_DWORD)c9;
-                                                                                        c9 = (_DWORD)c15;
-                                                                                        c15 = (_DWORD)c3;
-                                                                                        v33 = result;
-                                                                                        c3 = result;
+                                                                                        a1 = (_DWORD)v18;
+                                                                                        v18 = (_DWORD)v6;
+                                                                                        v6 = (_DWORD)v3;
+                                                                                        v8 = result;
+                                                                                        v3 = result;
                                                                                         result = a1;
                                                                                         while (1) {
-                                                                                            a1 = (_DWORD)(c8 - 2);
-                                                                                            c18 = (_DWORD)c8 == 1;
-                                                                                            c19 = (_BYTE)((_DWORD)c8 < 1);
-                                                                                            c16 = (_DWORD)c8 < 1;
-                                                                                            if (!(c16 || c18)) {
+                                                                                            a1 = (_DWORD)(v22 - 2);
+                                                                                            v12 = (_DWORD)v22 == 1;
+                                                                                            v13 = (_BYTE)((_DWORD)v22 < 1);
+                                                                                            v14 = (_DWORD)v22 < 1;
+                                                                                            if (!(v14 || v12)) {
                                                                                                 do {
-                                                                                                    *(_DWORD *)(buf_40 + 44) = c11;
-                                                                                                    c11 = result;
+                                                                                                    *(_DWORD *)(buf_40 + 44) = v21;
+                                                                                                    v21 = result;
                                                                                                     do {
-                                                                                                        v_44 = c11;
-                                                                                                        v_40 = (_DWORD)c9;
-                                                                                                        v_36 = (_DWORD)c8;
-                                                                                                        v_32 = (_DWORD)c10;
-                                                                                                        v_28 = c6;
-                                                                                                        v_24 = (_DWORD)c2;
-                                                                                                        v_20 = (_DWORD)c1;
+                                                                                                        v_44 = v21;
+                                                                                                        v_40 = (_DWORD)v18;
+                                                                                                        v_36 = (_DWORD)v22;
+                                                                                                        v_32 = (_DWORD)v4;
+                                                                                                        v_28 = v19;
+                                                                                                        v_24 = (_DWORD)v17;
+                                                                                                        v_20 = (_DWORD)v20;
                                                                                                         v_16 = a1;
-                                                                                                        v53 = f_rec_fib(a1);
+                                                                                                        v2 = f_rec_fib(a1);
                                                                                                         a1 = v_16;
-                                                                                                        c2 = v_24;
-                                                                                                        c6 = v_28;
+                                                                                                        v17 = v_24;
+                                                                                                        v19 = v_28;
                                                                                                         --a1;
-                                                                                                        c1 = v_20 + v53;
-                                                                                                        c10 = v_32;
-                                                                                                        c8 = v_36;
-                                                                                                        c18 = a1 == -1;
-                                                                                                        c19 = (_BYTE)(a1 < -1);
-                                                                                                        c16 = (_DWORD)a1 < (_DWORD)0xffffffffffffffffULL;
-                                                                                                        c9 = v_40;
-                                                                                                        c11 = v_44;
+                                                                                                        v20 = v_20 + v2;
+                                                                                                        v4 = v_32;
+                                                                                                        v22 = v_36;
+                                                                                                        v12 = a1 == -1;
+                                                                                                        v13 = (_BYTE)(a1 < -1);
+                                                                                                        v14 = (_DWORD)a1 < (_DWORD)0xffffffffffffffffULL;
+                                                                                                        v18 = v_40;
+                                                                                                        v21 = v_44;
                                                                                                     } while (a1 != -2);
-                                                                                                    c8 = v_36 - 1;
-                                                                                                    result = c11;
-                                                                                                    c2 = (_DWORD)(c1 + c2 + 1LL);
-                                                                                                    c11 = *(_DWORD *)(buf_40 + 44);
-                                                                                                    a1 = (_DWORD)(c8 - 2);
-                                                                                                    c1 = 0;
-                                                                                                    c18 = c8 == 1;
-                                                                                                    c19 = (_BYTE)(c8 < 1);
-                                                                                                    c16 = (_DWORD)c8 < 1;
-                                                                                                } while ((_DWORD)1 <= (_DWORD)c8 && c8 != 1);
+                                                                                                    v22 = v_36 - 1;
+                                                                                                    result = v21;
+                                                                                                    v17 = (_DWORD)(v20 + v17 + 1LL);
+                                                                                                    v21 = *(_DWORD *)(buf_40 + 44);
+                                                                                                    a1 = (_DWORD)(v22 - 2);
+                                                                                                    v20 = 0;
+                                                                                                    v12 = v22 == 1;
+                                                                                                    v13 = (_BYTE)(v22 < 1);
+                                                                                                    v14 = (_DWORD)v22 < 1;
+                                                                                                } while ((_DWORD)1 <= (_DWORD)v22 && v22 != 1);
                                                                                             }
-                                                                                            c2 = (_DWORD)c2 + (_DWORD)c8;
-                                                                                            if ((_DWORD)c8) {
-                                                                                                c18 = 1;
-                                                                                                c19 = 0;
-                                                                                                c16 = 0;
-                                                                                                c20 = 0;
-                                                                                                c8 = 0;
+                                                                                            v17 = (_DWORD)v17 + (_DWORD)v22;
+                                                                                            if ((_DWORD)v22) {
+                                                                                                v12 = 1;
+                                                                                                v13 = 0;
+                                                                                                v14 = 0;
+                                                                                                v15 = 0;
+                                                                                                v22 = 0;
                                                                                             } else {
                                                                                                 break;
                                                                                             }
                                                                                         }
                                                                                         a1 = result;
-                                                                                        result = v33;
-                                                                                        c3 = c15;
-                                                                                        c15 = (_DWORD)c9;
-                                                                                        c9 = (_DWORD)(a1 - 1);
-                                                                                        c10 = (_DWORD)(c2 + c10 + 1LL);
-                                                                                        c1 = *(_DWORD *)(uintptr_t)(buf_40 + 48);
-                                                                                        c2 = 0;
-                                                                                        c8 = (_DWORD)(c9 - 2);
-                                                                                        c18 = c9 == 1;
-                                                                                        c19 = (_BYTE)(c9 < 1);
-                                                                                        c16 = (_DWORD)c9 < 1;
-                                                                                    } while (c9 != 1 && 1 <= c9);
+                                                                                        result = v8;
+                                                                                        v3 = v6;
+                                                                                        v6 = (_DWORD)v18;
+                                                                                        v18 = (_DWORD)(a1 - 1);
+                                                                                        v4 = (_DWORD)(v17 + v4 + 1LL);
+                                                                                        v20 = *(_DWORD *)(uintptr_t)(buf_40 + 48);
+                                                                                        v17 = 0;
+                                                                                        v22 = (_DWORD)(v18 - 2);
+                                                                                        v12 = v18 == 1;
+                                                                                        v13 = (_BYTE)(v18 < 1);
+                                                                                        v14 = (_DWORD)v18 < 1;
+                                                                                    } while (v18 != 1 && 1 <= v18);
                                                                                 }
-                                                                                c10 = (_DWORD)c10 + (_DWORD)c9;
-                                                                                if ((_DWORD)c9) {
-                                                                                    c18 = 1;
-                                                                                    c19 = 0;
-                                                                                    c16 = 0;
-                                                                                    c20 = 0;
-                                                                                    c9 = 0;
+                                                                                v4 = (_DWORD)v4 + (_DWORD)v18;
+                                                                                if ((_DWORD)v18) {
+                                                                                    v12 = 1;
+                                                                                    v13 = 0;
+                                                                                    v14 = 0;
+                                                                                    v15 = 0;
+                                                                                    v18 = 0;
                                                                                 } else {
                                                                                     break;
                                                                                 }
                                                                             }
-                                                                            c2 = *(_DWORD *)(buf_40 + 40);
-                                                                            c15 = (_DWORD)c15 - 1;
-                                                                            c9 = result;
-                                                                            c2 = (_DWORD)(c2 + c10 + 1LL);
-                                                                            c18 = c15 == 1;
-                                                                            c19 = (_BYTE)(c15 < 1);
-                                                                            c16 = (_DWORD)c15 < 1;
-                                                                        } while (c15 != 1 && 1 <= c15);
+                                                                            v17 = *(_DWORD *)(buf_40 + 40);
+                                                                            v6 = (_DWORD)v6 - 1;
+                                                                            v18 = result;
+                                                                            v17 = (_DWORD)(v17 + v4 + 1LL);
+                                                                            v12 = v6 == 1;
+                                                                            v13 = (_BYTE)(v6 < 1);
+                                                                            v14 = (_DWORD)v6 < 1;
+                                                                        } while (v6 != 1 && 1 <= v6);
                                                                     }
-                                                                    c2 = (_DWORD)c2 + (_DWORD)c15;
-                                                                    if ((_DWORD)c15) {
-                                                                        c18 = 1;
-                                                                        c19 = 0;
-                                                                        c16 = 0;
-                                                                        c20 = 0;
-                                                                        c15 = 0;
+                                                                    v17 = (_DWORD)v17 + (_DWORD)v6;
+                                                                    if ((_DWORD)v6) {
+                                                                        v12 = 1;
+                                                                        v13 = 0;
+                                                                        v14 = 0;
+                                                                        v15 = 0;
+                                                                        v6 = 0;
                                                                     } else {
-                                                                        c3 = (_DWORD)c3 - 1;
-                                                                        c5 = (_DWORD)((uintptr_t)(buf_40 + 40) + c2 + 1LL);
-                                                                        c2 = 0;
-                                                                        c15 = (_DWORD)(c3 - 2);
-                                                                        c18 = c3 == 1;
-                                                                        c19 = (_BYTE)(c3 < 1);
-                                                                        c16 = (_DWORD)c3 < 1;
-                                                                        if (!(c3 != 1 && 1 <= c3)) {
+                                                                        v3 = (_DWORD)v3 - 1;
+                                                                        v10 = (_DWORD)((uintptr_t)(buf_40 + 40) + v17 + 1LL);
+                                                                        v17 = 0;
+                                                                        v6 = (_DWORD)(v3 - 2);
+                                                                        v12 = v3 == 1;
+                                                                        v13 = (_BYTE)(v3 < 1);
+                                                                        v14 = (_DWORD)v3 < 1;
+                                                                        if (!(v3 != 1 && 1 <= v3)) {
                                                                             break;
                                                                         }
                                                                     }
                                                                 }
                                                             }
-                                                            c5 = (_DWORD)(uintptr_t)(buf_40 + 40) + (_DWORD)c3;
-                                                            if ((_DWORD)c3) {
-                                                                c18 = 1;
-                                                                c19 = 0;
-                                                                c16 = 0;
-                                                                c20 = 0;
-                                                                c3 = 0;
+                                                            v10 = (_DWORD)(uintptr_t)(buf_40 + 40) + (_DWORD)v3;
+                                                            if ((_DWORD)v3) {
+                                                                v12 = 1;
+                                                                v13 = 0;
+                                                                v14 = 0;
+                                                                v15 = 0;
+                                                                v3 = 0;
                                                             } else {
                                                                 break;
                                                             }
                                                         }
-                                                        v33 = (_DWORD)(c6 - 1);
-                                                        c2 = (_DWORD)(c6 - 1);
-                                                        c14 = (_DWORD)(c14 + (uintptr_t)(buf_40 + 40) + 1LL);
-                                                        c6 = (_DWORD)c9;
-                                                        c5 = 0;
-                                                        c9 = c11;
-                                                        c3 = (_DWORD)(c2 - 2);
-                                                        c18 = c2 == 1;
-                                                        c19 = (_BYTE)(c2 < 1);
-                                                        c16 = (_DWORD)c2 < 1;
-                                                    } while (c2 != 1 && 1 <= c2);
+                                                        v8 = (_DWORD)(v19 - 1);
+                                                        v17 = (_DWORD)(v19 - 1);
+                                                        v9 = (_DWORD)(v9 + (uintptr_t)(buf_40 + 40) + 1LL);
+                                                        v19 = (_DWORD)v18;
+                                                        v10 = 0;
+                                                        v18 = v21;
+                                                        v3 = (_DWORD)(v17 - 2);
+                                                        v12 = v17 == 1;
+                                                        v13 = (_BYTE)(v17 < 1);
+                                                        v14 = (_DWORD)v17 < 1;
+                                                    } while (v17 != 1 && 1 <= v17);
                                                 }
-                                                c14 = (_DWORD)c14 + (_DWORD)c2;
-                                                if ((_DWORD)c2) {
-                                                    c18 = 1;
-                                                    c19 = 0;
-                                                    c16 = 0;
-                                                    c20 = 0;
-                                                    c2 = 0;
+                                                v9 = (_DWORD)v9 + (_DWORD)v17;
+                                                if ((_DWORD)v17) {
+                                                    v12 = 1;
+                                                    v13 = 0;
+                                                    v14 = 0;
+                                                    v15 = 0;
+                                                    v17 = 0;
                                                 } else {
                                                     break;
                                                 }
                                             }
-                                            v33 = v32;
-                                            c2 = (_DWORD)c9;
-                                            c12 = (_DWORD)(c6 + c14 + 1LL);
-                                            c15 = (_DWORD)c1;
-                                            c5 = v33 - 1;
-                                            c14 = 0;
-                                            v32 = v33 - 1;
-                                            c18 = v32 == 1;
-                                            c19 = (_BYTE)(v32 < 1);
-                                            c16 = (_DWORD)v32 < 1;
-                                        } while (v32 != 1 && 1 <= v32);
+                                            v8 = v7;
+                                            v17 = (_DWORD)v18;
+                                            v16 = (_DWORD)(v19 + v9 + 1LL);
+                                            v6 = (_DWORD)v20;
+                                            v10 = v8 - 1;
+                                            v9 = 0;
+                                            v7 = v8 - 1;
+                                            v12 = v7 == 1;
+                                            v13 = (_BYTE)(v7 < 1);
+                                            v14 = (_DWORD)v7 < 1;
+                                        } while (v7 != 1 && 1 <= v7);
                                     }
-                                    c12 = (_DWORD)c12 + (_DWORD)(uintptr_t)(buf_40 + 40);
+                                    v16 = (_DWORD)v16 + (_DWORD)(uintptr_t)(buf_40 + 40);
                                     if ((_DWORD)(uintptr_t)(buf_40 + 40)) {
-                                        c18 = 1;
-                                        c19 = 0;
-                                        c16 = 0;
-                                        c20 = 0;
-                                        c5 = 0;
+                                        v12 = 1;
+                                        v13 = 0;
+                                        v14 = 0;
+                                        v15 = 0;
+                                        v10 = 0;
                                     } else {
                                         break;
                                     }
                                 }
-                                c3 = v_12;
-                                result = (_DWORD)c2;
-                                c3 = (_DWORD)(c3 + c12 + 1LL);
-                                c12 = (_DWORD)(c13 - 1);
-                                c18 = c12 == 1;
-                                c19 = (_BYTE)(c12 < 1);
-                                c16 = (_DWORD)c12 < 1;
-                            } while (c12 != 1 && 1 <= c12);
+                                v3 = v_12;
+                                result = (_DWORD)v17;
+                                v3 = (_DWORD)(v3 + v16 + 1LL);
+                                v16 = (_DWORD)(v5 - 1);
+                                v12 = v16 == 1;
+                                v13 = (_BYTE)(v16 < 1);
+                                v14 = (_DWORD)v16 < 1;
+                            } while (v16 != 1 && 1 <= v16);
                         }
-                        c3 = (_DWORD)c3 + (_DWORD)c12;
-                        if ((_DWORD)c12) {
-                            c18 = 1;
-                            c19 = 0;
-                            c16 = 0;
-                            c20 = 0;
-                            c12 = 0;
+                        v3 = (_DWORD)v3 + (_DWORD)v16;
+                        if ((_DWORD)v16) {
+                            v12 = 1;
+                            v13 = 0;
+                            v14 = 0;
+                            v15 = 0;
+                            v16 = 0;
                         } else {
                             break;
                         }
                     }
-                    c14 = (_DWORD)(result + c3 + 1LL);
-                    c3 = (_DWORD)(c15 - 1);
-                    c12 = (_DWORD)(c3 - 2);
-                    c18 = c3 == 1;
-                    c19 = (_BYTE)(c3 < 1);
-                    c16 = (_DWORD)c3 < 1;
-                } while (c3 != 1 && 1 <= c3);
+                    v9 = (_DWORD)(result + v3 + 1LL);
+                    v3 = (_DWORD)(v6 - 1);
+                    v16 = (_DWORD)(v3 - 2);
+                    v12 = v3 == 1;
+                    v13 = (_BYTE)(v3 < 1);
+                    v14 = (_DWORD)v3 < 1;
+                } while (v3 != 1 && 1 <= v3);
             }
-            c14 = (_DWORD)c14 + (_DWORD)c3;
-            if ((_DWORD)c3) {
-                c3 = 0;
+            v9 = (_DWORD)v9 + (_DWORD)v3;
+            if ((_DWORD)v3) {
+                v3 = 0;
             } else {
-                result = (_DWORD)(c14 + 1LL);
-                c3 = v29;
-                c12 = v29;
-                c14 = v29;
+                result = (_DWORD)(v9 + 1LL);
+                v3 = v11;
+                v16 = v11;
+                v9 = v11;
                 return result;
             }
         }
@@ -963,409 +963,409 @@ struct __anon1 {
 
 /* Function:   f_ackermann | Address: 0x1830 | Size: 0x34e (846 bytes) | Convention: System V AMD64 | Stack frame: 0x18 (24 bytes) | Xrefs to:   f_ackermann | Xrefs from: unknown */
 int f_ackermann(int a1, int a2) {
-    __int64 c4; // temp
-    __int64 v29; // temp
+    __int64 v2; // temp
+    __int64 v3; // temp
     int v_4;
     int v_52;
     _QWORD result; // rax
-    __int64 v35; // rax
-    _QWORD c1; // rcx
-    _QWORD c3; // rbx
-    _QWORD c5; // rbp
-    _QWORD c9; // r12
-    _QWORD c10; // r13
-    _QWORD c11; // r14
-    _QWORD c12; // r15
-    _DWORD v27; // temp
+    __int64 v5; // rax
+    _QWORD v6; // rcx
+    _QWORD v7; // rbx
+    _QWORD v8; // rbp
+    _QWORD v9; // r12
+    _QWORD v10; // r13
+    _QWORD v11; // r14
+    _QWORD v12; // r15
+    _DWORD v13; // temp
     result = a2;
-    _BOOL c15 = c4 == 0x18; // ZF
-    char c16 = (_BYTE)(c4 < 0x18); // SF
-    _BOOL c13 = (_QWORD)c4 < 0x18; // CF
-    _BOOL c17 = __OFSUB__(c4, 0x18LL); // OF
+    _BOOL v14 = v2 == 0x18; // ZF
+    char v15 = (_BYTE)(v2 < 0x18); // SF
+    _BOOL v16 = (_QWORD)v2 < 0x18; // CF
+    _BOOL v17 = __OFSUB__(v2, 0x18LL); // OF
     while (1) {
-        _QWORD c2 = *(_DWORD *)(c4 + 0xcLL); // rdx
-        c5 = (_DWORD)(c2 - 1);
-        c15 = !(_DWORD)result;
-        c16 = (_BYTE)((_DWORD)result < 0);
+        _QWORD v18 = *(_DWORD *)(v2 + 0xcLL); // rdx
+        v8 = (_DWORD)(v18 - 1);
+        v14 = !(_DWORD)result;
+        v15 = (_BYTE)((_DWORD)result < 0);
         if ((_DWORD)result) {
-            c2 = c5;
-            c5 = *(_DWORD *)(c4 + 0xcLL);
+            v18 = v8;
+            v8 = *(_DWORD *)(v2 + 0xcLL);
         } else {
-            v29 = c5;
-            c15 = !c5;
-            c16 = (_BYTE)(c5 < 0);
-            c13 = 0;
-            c17 = 0;
-            if (!c5) {
+            v3 = v8;
+            v14 = !v8;
+            v15 = (_BYTE)(v8 < 0);
+            v16 = 0;
+            v17 = 0;
+            if (!v8) {
                 result = 1;
                 break;
             } else {
-                v27 = *(_DWORD *)(c4 + 0xcLL);
-                c15 = v27 == 2;
-                c16 = (_BYTE)(v27 < 2);
-                c13 = (_DWORD)v27 < 2;
+                v13 = *(_DWORD *)(v2 + 0xcLL);
+                v14 = v13 == 2;
+                v15 = (_BYTE)(v13 < 2);
+                v16 = (_DWORD)v13 < 2;
                 result = 1;
             }
         }
-        c15 = (_DWORD)result == 1;
-        c16 = (_BYTE)((_DWORD)result < 1);
-        c13 = (_DWORD)result < 1;
+        v14 = (_DWORD)result == 1;
+        v15 = (_BYTE)((_DWORD)result < 1);
+        v16 = (_DWORD)result < 1;
         result = (_DWORD)result - 1;
         while (1) {
-            c9 = (_DWORD)(c5 - 1);
-            c15 = !(_DWORD)result;
-            c16 = (_BYTE)((_DWORD)result < 0);
+            v9 = (_DWORD)(v8 - 1);
+            v14 = !(_DWORD)result;
+            v15 = (_BYTE)((_DWORD)result < 0);
             if ((_DWORD)result) {
-                c2 = c9;
-                c9 = c5;
-                c5 = c9;
+                v18 = v9;
+                v9 = v8;
+                v8 = v9;
             } else {
-                v29 = c9;
-                if (!c9) {
+                v3 = v9;
+                if (!v9) {
                     goto label_53;
                 } else {
-                    c15 = c5 == 2;
-                    c16 = (_BYTE)(c5 < 2);
-                    c13 = (_DWORD)c5 < 2;
-                    c5 -= 2;
+                    v14 = v8 == 2;
+                    v15 = (_BYTE)(v8 < 2);
+                    v16 = (_DWORD)v8 < 2;
+                    v8 -= 2;
                     result = 1;
                 }
             }
-            c15 = (_DWORD)result == 1;
-            c16 = (_BYTE)((_DWORD)result < 1);
-            c13 = (_DWORD)result < 1;
+            v14 = (_DWORD)result == 1;
+            v15 = (_BYTE)((_DWORD)result < 1);
+            v16 = (_DWORD)result < 1;
             result = (_DWORD)result - 1;
             while (1) {
-                c10 = (_DWORD)(c9 - 1);
-                c15 = !(_DWORD)result;
-                c16 = (_BYTE)((_DWORD)result < 0);
+                v10 = (_DWORD)(v9 - 1);
+                v14 = !(_DWORD)result;
+                v15 = (_BYTE)((_DWORD)result < 0);
                 if ((_DWORD)result) {
-                    c2 = c10;
-                    c10 = c9;
-                    c9 = c10;
+                    v18 = v10;
+                    v10 = v9;
+                    v9 = v10;
                 } else {
-                    v29 = c10;
-                    if (!c10) {
+                    v3 = v10;
+                    if (!v10) {
                         goto label_52;
                     } else {
-                        c15 = c9 == 2;
-                        c16 = (_BYTE)(c9 < 2);
-                        c13 = (_DWORD)c9 < 2;
-                        c9 -= 2;
+                        v14 = v9 == 2;
+                        v15 = (_BYTE)(v9 < 2);
+                        v16 = (_DWORD)v9 < 2;
+                        v9 -= 2;
                         result = 1;
                     }
                 }
-                c15 = (_DWORD)result == 1;
-                c16 = (_BYTE)((_DWORD)result < 1);
-                c13 = (_DWORD)result < 1;
+                v14 = (_DWORD)result == 1;
+                v15 = (_BYTE)((_DWORD)result < 1);
+                v16 = (_DWORD)result < 1;
                 result = (_DWORD)result - 1;
                 while (1) {
-                    c11 = (_DWORD)(c10 - 1);
-                    c15 = !(_DWORD)result;
-                    c16 = (_BYTE)((_DWORD)result < 0);
+                    v11 = (_DWORD)(v10 - 1);
+                    v14 = !(_DWORD)result;
+                    v15 = (_BYTE)((_DWORD)result < 0);
                     if ((_DWORD)result) {
-                        c2 = c11;
-                        c11 = c10;
-                        c10 = c11;
+                        v18 = v11;
+                        v11 = v10;
+                        v10 = v11;
                     } else {
-                        v29 = c11;
-                        if (!c11) {
+                        v3 = v11;
+                        if (!v11) {
                             goto label_51;
                         } else {
-                            c15 = c10 == 2;
-                            c16 = (_BYTE)(c10 < 2);
-                            c13 = (_DWORD)c10 < 2;
-                            c10 -= 2;
+                            v14 = v10 == 2;
+                            v15 = (_BYTE)(v10 < 2);
+                            v16 = (_DWORD)v10 < 2;
+                            v10 -= 2;
                             result = 1;
                         }
                     }
-                    c15 = (_DWORD)result == 1;
-                    c16 = (_BYTE)((_DWORD)result < 1);
-                    c13 = (_DWORD)result < 1;
+                    v14 = (_DWORD)result == 1;
+                    v15 = (_BYTE)((_DWORD)result < 1);
+                    v16 = (_DWORD)result < 1;
                     result = (_DWORD)result - 1;
                     while (1) {
-                        c12 = (_DWORD)(c11 - 1);
-                        c15 = !(_DWORD)result;
-                        c16 = (_BYTE)((_DWORD)result < 0);
+                        v12 = (_DWORD)(v11 - 1);
+                        v14 = !(_DWORD)result;
+                        v15 = (_BYTE)((_DWORD)result < 0);
                         if ((_DWORD)result) {
-                            c2 = c12;
-                            c12 = c11;
-                            c11 = c12;
+                            v18 = v12;
+                            v12 = v11;
+                            v11 = v12;
                         } else {
-                            v29 = c12;
-                            if (!c12) {
+                            v3 = v12;
+                            if (!v12) {
                                 goto label_50;
                             } else {
-                                c15 = c11 == 2;
-                                c16 = (_BYTE)(c11 < 2);
-                                c13 = (_DWORD)c11 < 2;
-                                c11 -= 2;
+                                v14 = v11 == 2;
+                                v15 = (_BYTE)(v11 < 2);
+                                v16 = (_DWORD)v11 < 2;
+                                v11 -= 2;
                                 result = 1;
                             }
                         }
-                        c15 = (_DWORD)result == 1;
-                        c16 = (_BYTE)((_DWORD)result < 1);
-                        c13 = (_DWORD)result < 1;
+                        v14 = (_DWORD)result == 1;
+                        v15 = (_BYTE)((_DWORD)result < 1);
+                        v16 = (_DWORD)result < 1;
                         result = (_DWORD)result - 1;
                         while (1) {
-                            c3 = (_DWORD)(c12 - 1);
-                            c15 = !(_DWORD)result;
-                            c16 = (_BYTE)((_DWORD)result < 0);
+                            v7 = (_DWORD)(v12 - 1);
+                            v14 = !(_DWORD)result;
+                            v15 = (_BYTE)((_DWORD)result < 0);
                             if ((_DWORD)result) {
-                                c1 = c3;
-                                c3 = c12;
-                                c12 = c3;
+                                v6 = v7;
+                                v7 = v12;
+                                v12 = v7;
                             } else {
-                                v29 = c3;
-                                if (!c3) {
+                                v3 = v7;
+                                if (!v7) {
                                     goto label_49;
                                 } else {
-                                    c15 = c12 == 2;
-                                    c16 = (_BYTE)(c12 < 2);
-                                    c13 = (_DWORD)c12 < 2;
-                                    c12 -= 2;
+                                    v14 = v12 == 2;
+                                    v15 = (_BYTE)(v12 < 2);
+                                    v16 = (_DWORD)v12 < 2;
+                                    v12 -= 2;
                                     result = 1;
                                 }
                             }
-                            c15 = (_DWORD)result == 1;
-                            c16 = (_BYTE)((_DWORD)result < 1);
-                            c13 = (_DWORD)result < 1;
+                            v14 = (_DWORD)result == 1;
+                            v15 = (_BYTE)((_DWORD)result < 1);
+                            v16 = (_DWORD)result < 1;
                             result = (_DWORD)result - 1;
                             while (1) {
-                                c1 = (_DWORD)(c3 - 1);
-                                c15 = !(_DWORD)result;
-                                c16 = (_BYTE)((_DWORD)result < 0);
+                                v6 = (_DWORD)(v7 - 1);
+                                v14 = !(_DWORD)result;
+                                v15 = (_BYTE)((_DWORD)result < 0);
                                 if ((_DWORD)result) {
-                                    a2 = c1;
-                                    c1 = c3;
-                                    c3 = c1;
+                                    a2 = v6;
+                                    v6 = v7;
+                                    v7 = v6;
                                 } else {
-                                    v29 = c1;
-                                    if (!c1) {
+                                    v3 = v6;
+                                    if (!v6) {
                                         goto label_48;
                                     } else {
-                                        c15 = c3 == 2;
-                                        c16 = (_BYTE)(c3 < 2);
-                                        c13 = (_DWORD)c3 < 2;
-                                        c3 -= 2;
+                                        v14 = v7 == 2;
+                                        v15 = (_BYTE)(v7 < 2);
+                                        v16 = (_DWORD)v7 < 2;
+                                        v7 -= 2;
                                         result = 1;
                                     }
                                 }
-                                c15 = (_DWORD)result == 1;
-                                c16 = (_BYTE)((_DWORD)result < 1);
-                                c13 = (_DWORD)result < 1;
+                                v14 = (_DWORD)result == 1;
+                                v15 = (_BYTE)((_DWORD)result < 1);
+                                v16 = (_DWORD)result < 1;
                                 result = (_DWORD)result - 1;
                                 while (1) {
-                                    _QWORD c8 = (_DWORD)(c1 - 1); // r8
-                                    c15 = !(_DWORD)result;
-                                    c16 = (_BYTE)((_DWORD)result < 0);
+                                    _QWORD v19 = (_DWORD)(v6 - 1); // r8
+                                    v14 = !(_DWORD)result;
+                                    v15 = (_BYTE)((_DWORD)result < 0);
                                     if ((_DWORD)result) {
-                                        a2 = c8;
-                                        c8 = c1;
-                                        c1 = c8;
+                                        a2 = v19;
+                                        v19 = v6;
+                                        v6 = v19;
                                     } else {
-                                        v29 = c8;
-                                        if (!c8) {
+                                        v3 = v19;
+                                        if (!v19) {
                                             goto label_47;
                                         } else {
-                                            c15 = c1 == 2;
-                                            c16 = (_BYTE)(c1 < 2);
-                                            c13 = (_DWORD)c1 < 2;
-                                            c1 -= 2;
+                                            v14 = v6 == 2;
+                                            v15 = (_BYTE)(v6 < 2);
+                                            v16 = (_DWORD)v6 < 2;
+                                            v6 -= 2;
                                             result = 1;
                                         }
                                     }
-                                    c15 = (_DWORD)result == 1;
-                                    c16 = (_BYTE)((_DWORD)result < 1);
-                                    c13 = (_DWORD)result < 1;
+                                    v14 = (_DWORD)result == 1;
+                                    v15 = (_BYTE)((_DWORD)result < 1);
+                                    v16 = (_DWORD)result < 1;
                                     result = (_DWORD)result - 1;
                                     while (1) {
-                                        a1 = (_DWORD)(c8 - 1);
-                                        c15 = !(_DWORD)result;
-                                        c16 = (_BYTE)((_DWORD)result < 0);
+                                        a1 = (_DWORD)(v19 - 1);
+                                        v14 = !(_DWORD)result;
+                                        v15 = (_BYTE)((_DWORD)result < 0);
                                         if ((_DWORD)result) {
                                             a2 = a1;
-                                            a1 = c8;
-                                            c8 = a1;
+                                            a1 = v19;
+                                            v19 = a1;
                                         } else {
                                             if (!a1) {
                                                 break;
                                             } else {
-                                                c15 = c8 == 2;
-                                                c16 = (_BYTE)(c8 < 2);
-                                                c13 = (_DWORD)c8 < 2;
-                                                c8 -= 2;
+                                                v14 = v19 == 2;
+                                                v15 = (_BYTE)(v19 < 2);
+                                                v16 = (_DWORD)v19 < 2;
+                                                v19 -= 2;
                                                 result = 1;
                                             }
                                         }
                                         a2 = (_DWORD)(result - 1);
-                                        v_4 = c1;
-                                        v35 = f_ackermann(a1, a2);
-                                        c8 = *(_DWORD *)(c4 + 8LL);
-                                        c1 = v_4;
-                                        c15 = !c8;
-                                        c16 = (_BYTE)(c8 < 0);
-                                        c13 = 0;
-                                        c17 = 0;
-                                        if (!c8) {
+                                        v_4 = v6;
+                                        v5 = f_ackermann(a1, a2);
+                                        v19 = *(_DWORD *)(v2 + 8LL);
+                                        v6 = v_4;
+                                        v14 = !v19;
+                                        v15 = (_BYTE)(v19 < 0);
+                                        v16 = 0;
+                                        v17 = 0;
+                                        if (!v19) {
                                             goto label_37;
                                         }
                                     }
                                     result = 1u + 1;
-                                    c15 = !c1;
-                                    c16 = (_BYTE)(c1 < 0);
-                                    c13 = 0;
-                                    c17 = 0;
-                                    if (c1) {
+                                    v14 = !v6;
+                                    v15 = (_BYTE)(v6 < 0);
+                                    v16 = 0;
+                                    v17 = 0;
+                                    if (v6) {
                                         continue;
                                     } else {
                                         break;
                                     }
                                 label_37:;
-                                    result = (_DWORD)v35 + 1;
-                                    c15 = !c1;
-                                    c16 = (_BYTE)(c1 < 0);
-                                    c13 = 0;
-                                    c17 = 0;
-                                    if (!c1) {
+                                    result = (_DWORD)v5 + 1;
+                                    v14 = !v6;
+                                    v15 = (_BYTE)(v6 < 0);
+                                    v16 = 0;
+                                    v17 = 0;
+                                    if (!v6) {
                                         break;
                                     }
                                 }
                                 result = (_DWORD)result + 1;
-                                c15 = !c3;
-                                c16 = (_BYTE)(c3 < 0);
-                                c13 = 0;
-                                c17 = 0;
-                                if (c3) {
+                                v14 = !v7;
+                                v15 = (_BYTE)(v7 < 0);
+                                v16 = 0;
+                                v17 = 0;
+                                if (v7) {
                                     continue;
                                 } else {
                                     break;
                                 }
                             label_47:;
                                 result = 1u + 1;
-                                c15 = !c3;
-                                c16 = (_BYTE)(c3 < 0);
-                                c13 = 0;
-                                c17 = 0;
-                                if (!c3) {
+                                v14 = !v7;
+                                v15 = (_BYTE)(v7 < 0);
+                                v16 = 0;
+                                v17 = 0;
+                                if (!v7) {
                                     break;
                                 }
                             }
                             result = (_DWORD)result + 1;
-                            c15 = !c12;
-                            c16 = (_BYTE)(c12 < 0);
-                            c13 = 0;
-                            c17 = 0;
-                            if (c12) {
+                            v14 = !v12;
+                            v15 = (_BYTE)(v12 < 0);
+                            v16 = 0;
+                            v17 = 0;
+                            if (v12) {
                                 continue;
                             } else {
                                 break;
                             }
                         label_48:;
                             result = 1u + 1;
-                            c15 = !c12;
-                            c16 = (_BYTE)(c12 < 0);
-                            c13 = 0;
-                            c17 = 0;
-                            if (!c12) {
+                            v14 = !v12;
+                            v15 = (_BYTE)(v12 < 0);
+                            v16 = 0;
+                            v17 = 0;
+                            if (!v12) {
                                 break;
                             }
                         }
                         result = (_DWORD)result + 1;
-                        c15 = !c11;
-                        c16 = (_BYTE)(c11 < 0);
-                        c13 = 0;
-                        c17 = 0;
-                        if (c11) {
+                        v14 = !v11;
+                        v15 = (_BYTE)(v11 < 0);
+                        v16 = 0;
+                        v17 = 0;
+                        if (v11) {
                             continue;
                         } else {
                             break;
                         }
                     label_49:;
                         result = 1u + 1;
-                        c15 = !c11;
-                        c16 = (_BYTE)(c11 < 0);
-                        c13 = 0;
-                        c17 = 0;
-                        if (!c11) {
+                        v14 = !v11;
+                        v15 = (_BYTE)(v11 < 0);
+                        v16 = 0;
+                        v17 = 0;
+                        if (!v11) {
                             break;
                         }
                     }
                     result = (_DWORD)result + 1;
-                    c15 = !c10;
-                    c16 = (_BYTE)(c10 < 0);
-                    c13 = 0;
-                    c17 = 0;
-                    if (c10) {
+                    v14 = !v10;
+                    v15 = (_BYTE)(v10 < 0);
+                    v16 = 0;
+                    v17 = 0;
+                    if (v10) {
                         continue;
                     } else {
                         break;
                     }
                 label_50:;
                     result = 1u + 1;
-                    c15 = !c10;
-                    c16 = (_BYTE)(c10 < 0);
-                    c13 = 0;
-                    c17 = 0;
-                    if (!c10) {
+                    v14 = !v10;
+                    v15 = (_BYTE)(v10 < 0);
+                    v16 = 0;
+                    v17 = 0;
+                    if (!v10) {
                         break;
                     }
                 }
                 result = (_DWORD)result + 1;
-                c15 = !c9;
-                c16 = (_BYTE)(c9 < 0);
-                c13 = 0;
-                c17 = 0;
-                if (c9) {
+                v14 = !v9;
+                v15 = (_BYTE)(v9 < 0);
+                v16 = 0;
+                v17 = 0;
+                if (v9) {
                     continue;
                 } else {
                     break;
                 }
             label_51:;
                 result = 1u + 1;
-                c15 = !c9;
-                c16 = (_BYTE)(c9 < 0);
-                c13 = 0;
-                c17 = 0;
-                if (!c9) {
+                v14 = !v9;
+                v15 = (_BYTE)(v9 < 0);
+                v16 = 0;
+                v17 = 0;
+                if (!v9) {
                     break;
                 }
             }
             result = (_DWORD)result + 1;
-            c15 = !c5;
-            c16 = (_BYTE)(c5 < 0);
-            c13 = 0;
-            c17 = 0;
-            if (c5) {
+            v14 = !v8;
+            v15 = (_BYTE)(v8 < 0);
+            v16 = 0;
+            v17 = 0;
+            if (v8) {
                 continue;
             } else {
                 break;
             }
         label_52:;
             result = 1u + 1;
-            c15 = !c5;
-            c16 = (_BYTE)(c5 < 0);
-            c13 = 0;
-            c17 = 0;
-            if (!c5) {
+            v14 = !v8;
+            v15 = (_BYTE)(v8 < 0);
+            v16 = 0;
+            v17 = 0;
+            if (!v8) {
                 break;
             }
         }
-        c2 = *(_DWORD *)(c4 + 0xcLL);
+        v18 = *(_DWORD *)(v2 + 0xcLL);
         result = (_DWORD)result + 1;
-        c15 = !c2;
-        c16 = (_BYTE)(c2 < 0);
-        c13 = 0;
-        c17 = 0;
-        if (c2) {
+        v14 = !v18;
+        v15 = (_BYTE)(v18 < 0);
+        v16 = 0;
+        v17 = 0;
+        if (v18) {
             continue;
         } else {
             break;
         }
     label_53:;
-        c2 = *(_DWORD *)(c4 + 0xcLL);
+        v18 = *(_DWORD *)(v2 + 0xcLL);
         result = 1u + 1;
-        if (!c2) {
+        if (!v18) {
             break;
         }
     }
@@ -1384,25 +1384,25 @@ int f_rec_power_constprop_0(char a1) {
     char buf_24[16];
     char buf_0[16]; // int buf_0[4]
     _QWORD result; // rax
-    __int64 v29; // rax
-    _QWORD c2; // rdx
-    _QWORD c4; // rsi
-    _QWORD c6; // r8
-    __int64 c7; // r9
-    _DWORD v17; // temp
-    _DWORD v18; // temp
-    _DWORD v21; // temp
-    _BOOL c10 = !((_BYTE)a1 & 1); // ZF
-    char c11 = ((_BYTE)a1 & 1) < '\0'; // SF
-    char c8 = 0; // CF
-    char c12 = 0; // OF
+    __int64 v2; // rax
+    _QWORD v3; // rdx
+    _QWORD v4; // rsi
+    _QWORD v5; // r8
+    __int64 v6; // r9
+    _DWORD v7; // temp
+    _DWORD v8; // temp
+    _DWORD v9; // temp
+    _BOOL v10 = !((_BYTE)a1 & 1); // ZF
+    char v11 = ((_BYTE)a1 & 1) < '\0'; // SF
+    char v12 = 0; // CF
+    char v13 = 0; // OF
     if (!((_BYTE)a1 & 1)) {
-        c2 = 1;
+        v3 = 1;
     } else {
-        c2 = 2;
-        c10 = a1 == 1;
-        c11 = (_BYTE)(a1 < 1);
-        c8 = (_DWORD)a1 < 1;
+        v3 = 2;
+        v10 = a1 == 1;
+        v11 = (_BYTE)(a1 < 1);
+        v12 = (_DWORD)a1 < 1;
         --a1;
         if (a1 == 1) {
             return 2;
@@ -1410,91 +1410,91 @@ int f_rec_power_constprop_0(char a1) {
     }
     a1 >>= 1;
     result = a1;
-    c10 = !((_BYTE)a1 & 1);
-    c11 = ((_BYTE)a1 & 1) < '\0';
-    c8 = 0;
-    c12 = 0;
+    v10 = !((_BYTE)a1 & 1);
+    v11 = ((_BYTE)a1 & 1) < '\0';
+    v12 = 0;
+    v13 = 0;
     if (!((_BYTE)a1 & 1)) {
-        c4 = 1;
+        v4 = 1;
     } else {
-        c4 = 2;
-        c10 = result == 1;
-        c11 = (_BYTE)(result < 1);
-        c8 = (_DWORD)result < 1;
+        v4 = 2;
+        v10 = result == 1;
+        v11 = (_BYTE)(result < 1);
+        v12 = (_DWORD)result < 1;
         result = a1 - 1;
         if (result == 1) {
             result = 2u * 2u;
-            return result * (_DWORD)c2;
+            return result * (_DWORD)v3;
         }
     }
     result >>= 1;
-    __int64 c1 = result; // rcx
-    c10 = !((_BYTE)result & 1);
-    c11 = ((_BYTE)result & 1) < '\0';
-    c8 = 0;
-    c12 = 0;
+    __int64 v14 = result; // rcx
+    v10 = !((_BYTE)result & 1);
+    v11 = ((_BYTE)result & 1) < '\0';
+    v12 = 0;
+    v13 = 0;
     if (!((_BYTE)result & 1)) {
-        c6 = 1;
+        v5 = 1;
     } else {
-        c10 = result == 1;
-        c11 = (_BYTE)(result < 1);
-        c8 = (_DWORD)result < 1;
-        c6 = 2;
-        c1 = result - 1;
+        v10 = result == 1;
+        v11 = (_BYTE)(result < 1);
+        v12 = (_DWORD)result < 1;
+        v5 = 2;
+        v14 = result - 1;
         result = 2;
         if (result == 1) {
-            v17 = result * result;
-            result = v17;
-            v17 = (_DWORD)c4;
-            v18 = result * v17;
-            result = v18;
-            v17 = result * result;
-            result = v17;
-            v17 = (_DWORD)c2;
-            v18 = result * v17;
-            result = v18;
+            v7 = result * result;
+            result = v7;
+            v7 = (_DWORD)v4;
+            v8 = result * v7;
+            result = v8;
+            v7 = result * result;
+            result = v7;
+            v7 = (_DWORD)v3;
+            v8 = result * v7;
+            result = v8;
             return result;
         }
     }
-    c1 >>= 1;
-    a1 = c1;
-    c10 = !((_BYTE)c1 & 1);
-    c11 = ((_BYTE)c1 & 1) < '\0';
-    c8 = 0;
-    c12 = 0;
-    if (!((_BYTE)c1 & 1)) {
-        c7 = 1;
+    v14 >>= 1;
+    a1 = v14;
+    v10 = !((_BYTE)v14 & 1);
+    v11 = ((_BYTE)v14 & 1) < '\0';
+    v12 = 0;
+    v13 = 0;
+    if (!((_BYTE)v14 & 1)) {
+        v6 = 1;
     } else {
-        --c1;
-        c7 = 2;
-        a1 = c1;
-        if (c1 == 1) {
+        --v14;
+        v6 = 2;
+        a1 = v14;
+        if (v14 == 1) {
             result = 2u * 2u;
-            result *= (_DWORD)c6;
-            v17 = result * result;
-            result = v17;
-            v17 = (_DWORD)c4;
-            v18 = result * v17;
-            result = v18;
-            v17 = result * result;
-            result = v17;
-            v17 = (_DWORD)c2;
-            v18 = result * v17;
-            result = v18;
+            result *= (_DWORD)v5;
+            v7 = result * result;
+            result = v7;
+            v7 = (_DWORD)v4;
+            v8 = result * v7;
+            result = v8;
+            v7 = result * result;
+            result = v7;
+            v7 = (_DWORD)v3;
+            v8 = result * v7;
+            result = v8;
             return result;
         }
     }
-    *(_DWORD *)(buf_0 + 12) = (_DWORD)c2;
-    *(_DWORD *)(buf_0 + 8) = (_DWORD)c4;
-    *(_DWORD *)(buf_0 + 4) = (_DWORD)c6;
-    *(_DWORD *)buf_0 = (_DWORD)c7;
-    v29 = f_rec_power_constprop_0(a1 >> 1);
-    v17 = *(_DWORD *)(buf_0 + 4);
-    v18 = *(_DWORD *)(buf_0 + 8);
-    result = v29 * v29;
-    v21 = *(_DWORD *)(buf_0 + 12);
+    *(_DWORD *)(buf_0 + 12) = (_DWORD)v3;
+    *(_DWORD *)(buf_0 + 8) = (_DWORD)v4;
+    *(_DWORD *)(buf_0 + 4) = (_DWORD)v5;
+    *(_DWORD *)buf_0 = (_DWORD)v6;
+    v2 = f_rec_power_constprop_0(a1 >> 1);
+    v7 = *(_DWORD *)(buf_0 + 4);
+    v8 = *(_DWORD *)(buf_0 + 8);
+    result = v2 * v2;
+    v9 = *(_DWORD *)(buf_0 + 12);
     result *= *(_DWORD *)buf_0;
-    result = result * result * v17;
-    result = result * result * v18;
-    return result * result * v21;
+    result = result * result * v7;
+    result = result * result * v8;
+    return result * result * v9;
 }

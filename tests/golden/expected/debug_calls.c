@@ -81,8 +81,8 @@ void _start(void) {
 // debug language: C
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
-    int v5; // reg?
-    if (v5) {
+    int v0; // reg?
+    if (v0) {
         return;
     } else {
         if (!qword_3FE0) {
@@ -99,7 +99,7 @@ __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FF8) {
-            __int64 c3 = qword_4008; // rdi
+            __int64 v1 = qword_4008; // rdi
             result = sub_1030();
         }
         result = sub_1070();
@@ -122,13 +122,13 @@ struct __anon0 {
 /* Function:   add | Address: 0x1129 | Size: 0x17 (23 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
 int add(int a, int b) {
     int v_4;
-    int c2; // rbp
-    _DWORD v11; // temp
+    int v2; // rbp
+    _DWORD v3; // temp
     v_4 = (_DWORD)a;
     // fixtures/src/calls.c:1
-    _QWORD v2 = v_4; // rdx
-    v11 = *(_DWORD *)(c2 - 8);
-    return v11 + v2;
+    _QWORD v4 = v_4; // rdx
+    v3 = *(_DWORD *)(v2 - 8);
+    return v3 + v4;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -140,11 +140,11 @@ struct __anon0 {
 /* Function:   sub | Address: 0x1141 | Size: 0x15 (21 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
 int sub(int a, int b) {
     int v_4;
-    int c2; // rbp
+    int v2; // rbp
     v_4 = (_DWORD)a;
-    int v10 = v_4; // temp
-    _DWORD v11 = *(_DWORD *)(c2 - 8); // temp
-    return v10 - v11;
+    int v3 = v_4; // temp
+    _DWORD v4 = *(_DWORD *)(v2 - 8); // temp
+    return v3 - v4;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -157,13 +157,13 @@ struct __anon0 {
 int mul(int a, int b) {
     __int64 result; // temp
     int v_4;
-    int c2; // rbp
-    _DWORD v10; // temp
+    int v3; // rbp
+    _DWORD v4; // temp
     v_4 = (_DWORD)a;
     // fixtures/src/calls.c:3
     result = v_4;
-    v10 = *(_DWORD *)(c2 - 8);
-    return result * v10;
+    v4 = *(_DWORD *)(v3 - 8);
+    return result * v4;
 }
 // debug language: C
 /* Function:   square | Address: 0x116e | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   mul | Xrefs from: unknown */
@@ -179,8 +179,8 @@ int cube(int x) {
     int v_4;
     v_4 = x;
     x = v_4;
-    int v9 = (_DWORD)square(x); // temp
-    return mul(v9, v_4);
+    int v1 = (_DWORD)square(x); // temp
+    return mul(v1, v_4);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -196,8 +196,8 @@ int abs_val(int x) {
     v_4 = (_DWORD)x;
     // fixtures/src/calls.c:6
     result = v_4;
-    _QWORD c1 = result; // rdx
-    return !(_BYTE)(result < 0) ? c1 : result;
+    _QWORD v2 = result; // rdx
+    return !(_BYTE)(result < 0) ? v2 : result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -210,12 +210,12 @@ struct __anon0 {
 int max(int a, int b) {
     int v_4;
     _QWORD result; // rax
-    int c2; // rbp
+    int v3; // rbp
     v_4 = (_DWORD)a;
     // fixtures/src/calls.c:7
-    _QWORD v2 = *(_DWORD *)(c2 - 8); // rdx
+    _QWORD v4 = *(_DWORD *)(v3 - 8); // rdx
     result = v_4;
-    return result <= v2 ? v2 : result;
+    return result <= v4 ? v4 : result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -228,12 +228,12 @@ struct __anon0 {
 int min(int a, int b) {
     int v_4;
     _QWORD result; // rax
-    int c2; // rbp
+    int v3; // rbp
     v_4 = (_DWORD)a;
     // fixtures/src/calls.c:8
-    _QWORD v2 = *(_DWORD *)(c2 - 8); // rdx
+    _QWORD v4 = *(_DWORD *)(v3 - 8); // rdx
     result = v_4;
-    return v2 <= result ? v2 : result;
+    return v4 <= result ? v4 : result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -246,11 +246,11 @@ struct __anon0 {
 int clamp(int x, int lo, int hi) {
     int v_4;
     int v_12;
-    int c3; // rbp
+    int v3; // rbp
     v_4 = x;
     v_12 = hi;
     // fixtures/src/calls.c:9
-    hi = *(_DWORD *)(c3 - 8);
+    hi = *(_DWORD *)(v3 - 8);
     lo = hi;
     x = v_4;
     hi = (_DWORD)max(x, lo);
@@ -281,22 +281,22 @@ int compute(int x) {
     int e;
     int v_16;
     int v_12;
-    __int64 v14; // rax
-    __int64 v15; // rax
-    __int64 v16; // rax
-    __int64 v17; // rax
+    __int64 v1; // rax
+    __int64 v2; // rax
+    __int64 v3; // rax
+    __int64 v4; // rax
     a = x;
     x = a;
     e = (_DWORD)add(x, 0xaLL);
-    v14 = sub(e, 3LL);
-    v_16 = (_DWORD)v14;
-    v15 = square(v_16);
-    v_12 = (_DWORD)v15;
-    v16 = cube(2LL);
+    v1 = sub(e, 3LL);
+    v_16 = (_DWORD)v1;
+    v2 = square(v_16);
+    v_12 = (_DWORD)v2;
+    v3 = cube(2LL);
     // fixtures/src/calls.c:16
-    _QWORD c1 = *(_DWORD *)((uintptr_t)&a - 8); // rdx
-    v17 = sub(v_12, c1);
-    v_4 = (_DWORD)abs_val((_DWORD)v17);
+    _QWORD v5 = *(_DWORD *)((uintptr_t)&a - 8); // rdx
+    v4 = sub(v_12, v5);
+    v_4 = (_DWORD)abs_val((_DWORD)v4);
     return clamp(v_4, 0LL, 0x64LL);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)

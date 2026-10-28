@@ -250,7 +250,7 @@ fn test_print_if_else() {
     let func = make_func("if_else", body);
     let output = print_c(&func);
 
-    assert!(output.contains("if (v1)"), "if: {output}");
+    assert!(output.contains("if (v0)"), "if: {output}");
     assert!(output.contains("} else {"), "else: {output}");
     assert!(output.contains("return result;"), "return: {output}");
 }
@@ -414,7 +414,7 @@ fn test_empty_then_else_prints_inverted_condition() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("if (!v1) {"),
+        output.contains("if (!v0) {"),
         "empty then-branch should render as an inverted guard: {output}"
     );
     assert!(
@@ -1413,7 +1413,7 @@ fn test_post_dowhile_compare_copy_scaffold_inlines_sources() {
             base: bound64,
             version: 0,
         },
-        "a1".to_string(),
+        "v1".to_string(),
     );
     func.var_role_names.insert(
         SsaVarnode {
@@ -1426,7 +1426,7 @@ fn test_post_dowhile_compare_copy_scaffold_inlines_sources() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("} while (a1 != result);"),
+        output.contains("} while (v1 != result);"),
         "do/while latch should inline pure compare-copy sources: {output}",
     );
     assert!(
@@ -1434,7 +1434,7 @@ fn test_post_dowhile_compare_copy_scaffold_inlines_sources() {
         "test sentinel names should not leak: {output}",
     );
     assert!(
-        !output.contains("v1 = a1;") && !output.contains("v2 = result;"),
+        !output.contains("v1 = v1;") && !output.contains("v2 = result;"),
         "pure compare-copy scaffold should be pruned after condition inlining: {output}",
     );
 }
@@ -1460,8 +1460,8 @@ fn test_print_while() {
     let func = make_func("while_func", body);
     let output = print_c(&func);
 
-    assert!(output.contains("while (v1)"), "while: {output}");
-    assert!(output.contains("--v1;"), "body: {output}");
+    assert!(output.contains("while (v0)"), "while: {output}");
+    assert!(output.contains("--v0;"), "body: {output}");
     assert!(output.contains("return 0;"), "return: {output}");
 }
 
@@ -1489,7 +1489,7 @@ fn test_control_condition_assignment_inlines_when_control_only() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("if (!v1)"),
+        output.contains("if (!v0)"),
         "control-only condition should inline its comparison: {output}",
     );
     assert!(
@@ -1524,7 +1524,7 @@ fn test_control_condition_inlines_latest_same_base_version() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("} while (!v1);"),
+        output.contains("} while (!v0);"),
         "do/while condition should inline the latest same-base comparison: {output}",
     );
     assert!(
@@ -1637,14 +1637,14 @@ fn test_hoist_merged_temp_decl_from_var_names() {
             base: u0,
             version: 0,
         },
-        "v1".to_string(),
+        "v0".to_string(),
     );
 
     let output = print_c(&func);
 
-    assert!(output.contains("int v1 = sub_2000();"), "{output}");
+    assert!(output.contains("int v0 = sub_2000();"), "{output}");
     assert!(
-        !output.contains("\n    int v1;\n"),
+        !output.contains("\n    int v0;\n"),
         "merged temp should not leak a function-top declaration: {output}",
     );
 }
@@ -1713,16 +1713,16 @@ fn test_hoist_shared_merged_name_declares_once() {
     let mut func = make_func("hoist_shared", body);
     for base in [u0, u4] {
         func.merged_names
-            .insert(SsaVarnode { base, version: 0 }, "v1".to_string());
+            .insert(SsaVarnode { base, version: 0 }, "v0".to_string());
     }
 
     let output = print_c(&func);
 
-    assert_eq!(output.matches("int v1 = ").count(), 1, "{output}");
-    assert!(output.contains("int v1 = sub_2000();"), "{output}");
-    assert!(output.contains("v1 = sub_2004();"), "{output}");
+    assert_eq!(output.matches("int v0 = ").count(), 1, "{output}");
+    assert!(output.contains("int v0 = sub_2000();"), "{output}");
+    assert!(output.contains("v0 = sub_2004();"), "{output}");
     assert!(
-        !output.contains("int v1 = sub_2004();"),
+        !output.contains("int v0 = sub_2004();"),
         "shared merged name must not be redeclared: {output}",
     );
 }
@@ -1995,7 +1995,7 @@ fn t227_no_roles_no_loops_falls_back_to_default() {
     // unnamed r8 input. The exact index isn't important — only
     // that no role-style identifier leaked in from anywhere.
     let has_default =
-        body_text.contains("v1") || body_text.contains("v2") || body_text.contains("v3");
+        body_text.contains("v0") || body_text.contains("v2") || body_text.contains("v3");
     assert!(
         has_default,
         "with no roles or loops we should see a default vN name: {body_text}",
@@ -2366,7 +2366,7 @@ fn test_print_do_while() {
     let output = print_c(&func);
 
     assert!(output.contains("do {"), "do: {output}");
-    assert!(output.contains("} while (v1);"), "while cond: {output}");
+    assert!(output.contains("} while (v0);"), "while cond: {output}");
 }
 
 #[test]
@@ -2436,7 +2436,7 @@ fn test_print_indentation() {
     // Depth 3: function body (1) + outer if (2) + inner if (3) = 12 spaces.
     let add_line = output
         .lines()
-        .find(|l| l.contains("++v1;"))
+        .find(|l| l.contains("++v0;"))
         .expect("should find add line");
     assert!(
         add_line.starts_with("            "),
@@ -4769,8 +4769,8 @@ fn test_compound_and_assign() {
     let func = make_func("and_assign", body);
     let output = print_c(&func);
     assert!(
-        output.contains("result &= v2;"),
-        "should emit result &= v2: {output}"
+        output.contains("result &= v1;"),
+        "should emit result &= v1: {output}"
     );
 }
 
@@ -4790,8 +4790,8 @@ fn test_compound_or_assign() {
     let func = make_func("or_assign", body);
     let output = print_c(&func);
     assert!(
-        output.contains("result |= v2;"),
-        "should emit result |= v2: {output}"
+        output.contains("result |= v1;"),
+        "should emit result |= v1: {output}"
     );
 }
 
@@ -4826,7 +4826,7 @@ fn test_negate_less_to_geq() {
     let func = make_func("negate_less", body);
     let output = print_c(&func);
     assert!(
-        output.contains(">= v2"),
+        output.contains(">= v1"),
         "!(a < b) should fold to a >= b: {output}",
     );
     assert!(
@@ -4862,7 +4862,7 @@ fn test_negate_equal_to_neq() {
     let func = make_func("negate_equal", body);
     let output = print_c(&func);
     assert!(
-        output.contains("!= v2"),
+        output.contains("!= v1"),
         "!(a == b) should fold to a != b: {output}",
     );
 }
@@ -4965,7 +4965,7 @@ fn test_non_guard_double_boolnegate_preserves_nested_negation() {
     let body = function_body_text(&output, "non_guard_double_boolnegate");
 
     assert!(
-        body.contains("return !!v1;"),
+        body.contains("return !!v0;"),
         "non-guard expression must keep nested negation: {body}"
     );
     assert!(
@@ -4996,7 +4996,7 @@ fn test_intcarry_emits_check() {
     let func = make_func("carry_test", body);
     let output = print_c(&func);
     assert!(
-        output.contains("(v1 + v2) < v1"),
+        output.contains("(v0 + v1) < v0"),
         "IntCarry should emit `(a + b) < a`: {output}",
     );
 }
@@ -5019,7 +5019,7 @@ fn test_intscarry_emits_ofadd() {
     let func = make_func("scarry_test", body);
     let output = print_c(&func);
     assert!(
-        output.contains("__OFADD__(v1, v2)"),
+        output.contains("__OFADD__(v0, v1)"),
         "IntScarry should emit `__OFADD__(a, b)`: {output}",
     );
 }
@@ -5042,7 +5042,7 @@ fn test_intsborrow_emits_ofsub() {
     let func = make_func("sborrow_test", body);
     let output = print_c(&func);
     assert!(
-        output.contains("__OFSUB__(v1, v2)"),
+        output.contains("__OFSUB__(v0, v1)"),
         "IntSborrow should emit `__OFSUB__(a, b)`: {output}",
     );
 }
@@ -5084,7 +5084,7 @@ fn test_unsigned_div_cast() {
     let func = make_func("unsigned_div", body);
     let output = print_c(&func);
     assert!(
-        output.contains("(_DWORD)v1 / (_DWORD)v2"),
+        output.contains("(_DWORD)v0 / (_DWORD)v1"),
         "IntDiv should cast both operands to unsigned: {output}",
     );
 }
@@ -5107,7 +5107,7 @@ fn test_signed_div_no_cast() {
     let func = make_func("signed_div", body);
     let output = print_c(&func);
     assert!(
-        output.contains("v1 / v2"),
+        output.contains("v0 / v1"),
         "IntSdiv should NOT cast to unsigned: {output}",
     );
     let body_output: String = output
@@ -5139,7 +5139,7 @@ fn test_unsigned_shift_cast() {
     let func = make_func("unsigned_shift", body);
     let output = print_c(&func);
     assert!(
-        output.contains("(_DWORD)v1 >> v2"),
+        output.contains("(_DWORD)v0 >> v1"),
         "IntRight should cast LHS to unsigned, not RHS: {output}",
     );
 }
@@ -5162,7 +5162,7 @@ fn test_signed_shift_no_cast() {
     let func = make_func("signed_shift", body);
     let output = print_c(&func);
     assert!(
-        output.contains("v1 >> v2"),
+        output.contains("v0 >> v1"),
         "IntSright should not cast to unsigned: {output}",
     );
 }
@@ -5185,7 +5185,7 @@ fn test_unsigned_less_cast() {
     let func = make_func("unsigned_less", body);
     let output = print_c(&func);
     assert!(
-        output.contains("(_DWORD)v1 < (_DWORD)v2"),
+        output.contains("(_DWORD)v0 < (_DWORD)v1"),
         "IntLess should cast both operands to unsigned: {output}",
     );
 }
@@ -5208,7 +5208,7 @@ fn test_signed_less_no_cast() {
     let func = make_func("signed_less", body);
     let output = print_c(&func);
     assert!(
-        output.contains("v1 < v2"),
+        output.contains("v0 < v1"),
         "IntSless should not cast to unsigned: {output}",
     );
 }
@@ -5231,7 +5231,7 @@ fn test_unsigned_rem_cast() {
     let func = make_func("unsigned_rem", body);
     let output = print_c(&func);
     assert!(
-        output.contains("(_QWORD)v1 % (_QWORD)v2"),
+        output.contains("(_QWORD)v0 % (_QWORD)v1"),
         "IntRem should cast both operands to unsigned: {output}",
     );
 }
@@ -5254,7 +5254,7 @@ fn test_unsigned_lessequal_cast() {
     let func = make_func("unsigned_leq", body);
     let output = print_c(&func);
     assert!(
-        output.contains("(_DWORD)v1 <= (_DWORD)v2"),
+        output.contains("(_DWORD)v0 <= (_DWORD)v1"),
         "IntLessequal should cast both operands to unsigned: {output}",
     );
 }
@@ -5291,7 +5291,7 @@ fn test_parens_shift_in_add() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("(v1 << v2) + v4"),
+        output.contains("(v0 << v1) + v2"),
         "shift inside add must be parenthesized: {output}",
     );
 }
@@ -5324,7 +5324,7 @@ fn test_parens_add_in_multiply() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("(v1 + v2) * v4"),
+        output.contains("(v0 + v1) * v2"),
         "add inside multiply must be parenthesized: {output}",
     );
 }
@@ -5357,11 +5357,11 @@ fn test_no_parens_same_prec_assoc() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("v1 + v2 + v4"),
+        output.contains("v0 + v1 + v2"),
         "same-prec associative ops should NOT have extra parens: {output}",
     );
     assert!(
-        !output.contains("(v1 + v2) + v4"),
+        !output.contains("(v0 + v1) + v2"),
         "should not wrap same-prec: {output}",
     );
 }
@@ -5394,7 +5394,7 @@ fn test_parens_nested_binop() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("(v1 | v2) & v4"),
+        output.contains("(v0 | v1) & v2"),
         "OR inside AND must be parenthesized: {output}",
     );
 }
@@ -5426,7 +5426,7 @@ fn test_parens_unary_on_binop() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("-(v1 + v2)"),
+        output.contains("-(v0 + v1)"),
         "unary minus on binop should parenthesize the add: {output}",
     );
 }
@@ -5621,7 +5621,7 @@ fn test_global_store_naming() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("dword_604000 = v1;"),
+        output.contains("dword_604000 = v0;"),
         "STORE to 0x604000 should emit dword_604000: {output}",
     );
 }
@@ -8060,7 +8060,7 @@ fn test_or_zero_identity() {
     // v | 0 folds to v, either materialised as `result = v1;` or folded
     // into `return v1;` under the returned-value fold policy.
     assert!(
-        output.contains("result = v1;") || output.contains("return v1;"),
+        output.contains("result = result;") || output.contains("return result;"),
         "v | 0 should fold to v: {output}",
     );
     // Whichever form, the `|` operator must not survive the fold. Check
@@ -10110,11 +10110,11 @@ fn test_heuristic_result_for_returned_var() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("return result;") || output.contains("return v1 + 1;"),
+        output.contains("return result;") || output.contains("return v0 + 1;"),
         "returned varnode should appear in return: {output}",
     );
     assert!(
-        output.contains("result = ") || output.contains("return v1 + 1;"),
+        output.contains("result = ") || output.contains("return v0 + 1;"),
         "definition of returned var should be 'result =' or merged return: {output}",
     );
 }
@@ -10148,7 +10148,7 @@ fn test_heuristic_cond_for_comparison_output() {
     assert!(
         output.contains("_Bool cond")
             || output.contains("_BOOL cond")
-            || output.contains("if (v1 == v2)"),
+            || output.contains("if (v0 == v1)"),
         "comparison output should be named or inlined as a condition: {output}",
     );
 }
@@ -10797,8 +10797,10 @@ fn test_return_low_subregister_uses_latest_covering_output() {
     let func = make_func("ret_subreg", body);
     let output = print_c(&func);
 
+    // The returned lvar is named `result`; it must be a declared local, not
+    // the undeclared `return result;` placeholder.
     assert!(
-        output.contains("return v") && !output.contains("return result;"),
+        output.contains("return result;") && output.contains(" result; // "),
         "low-byte return should reuse the latest covering register value: {output}",
     );
 }
@@ -11353,7 +11355,7 @@ fn callother_rdpmc_renders_named_helper() {
     let func = make_func("read_pmc", body);
     let output = print_c(&func);
     assert!(
-        output.contains("__rdpmc__(v1)"),
+        output.contains("__rdpmc__(v0)"),
         "missing rdpmc helper: {output}"
     );
 }
@@ -11513,7 +11515,7 @@ fn print_ctx_custom_tab_width_drives_indent() {
     // depth 3 × tab_width 2 = 6 leading spaces (was 12 with default).
     let add_line = output
         .lines()
-        .find(|l| l.contains("++v1;"))
+        .find(|l| l.contains("++v0;"))
         .expect("should find add line");
     let lead = add_line.len() - add_line.trim_start().len();
     assert_eq!(lead, 6, "expected 6 spaces (3 × 2): {add_line:?}");
@@ -11583,7 +11585,7 @@ fn print_config_explicit_override_reaches_ctx() {
     );
     // tab_width=2 forced through config: depth-2 body line indents by
     // 4 spaces (2 × 2), not the default 8 (2 × 4).
-    let body_line = out.lines().find(|l| l.contains("++v1;")).expect("body");
+    let body_line = out.lines().find(|l| l.contains("++v0;")).expect("body");
     let lead = body_line.len() - body_line.trim_start().len();
     assert_eq!(
         lead, 4,
@@ -11613,7 +11615,7 @@ fn print_ctx_default_tab_width_is_four() {
     // depth 2 × tab_width 4 = 8 leading spaces.
     let add_line = output
         .lines()
-        .find(|l| l.contains("++v1;"))
+        .find(|l| l.contains("++v0;"))
         .expect("should find add line");
     let lead = add_line.len() - add_line.trim_start().len();
     assert_eq!(lead, 8, "expected 8 spaces (2 × 4 default): {add_line:?}");
@@ -12724,7 +12726,7 @@ fn t202_non_const_format_string_emits_no_casts() {
         "non-const fmt must not produce any (long long *) casts:\n{output}",
     );
     assert!(
-        output.contains("printf(str, v2);"),
+        output.contains("printf(str, v0);"),
         "non-const fmt should render recovered runtime args:\n{output}",
     );
 }
@@ -13604,7 +13606,7 @@ fn test_materialized_static_load_snapshot_is_not_reloaded_in_condition() {
     let body = function_body_text(&output, "materialized_static_load_snapshot_cond");
 
     assert!(
-        body.contains("v1 = g_flag;") || body.contains("v2 = g_flag;"),
+        body.contains("v0 = g_flag;") || body.contains("v2 = g_flag;"),
         "multi-use static load should be materialized as a snapshot:\n{body}"
     );
     assert!(
@@ -13612,7 +13614,7 @@ fn test_materialized_static_load_snapshot_is_not_reloaded_in_condition() {
         "test should include the intervening write to the global:\n{body}"
     );
     assert!(
-        body.contains("if (!v1)") || body.contains("if (!v2)"),
+        body.contains("if (!v0)") || body.contains("if (!v2)"),
         "condition must use the materialized snapshot, not reload g_flag:\n{body}"
     );
     assert!(
@@ -13675,7 +13677,7 @@ fn test_materialized_stack_load_snapshot_is_not_reloaded_in_condition() {
     let body = function_body_text(&output, "materialized_stack_load_snapshot_cond");
 
     assert!(
-        body.contains("v1 = v_8;") || body.contains("v2 = v_8;"),
+        body.contains("v0 = v_8;") || body.contains("v2 = v_8;"),
         "multi-use stack load should be materialized as a snapshot:\n{body}"
     );
     assert!(
@@ -13683,7 +13685,7 @@ fn test_materialized_stack_load_snapshot_is_not_reloaded_in_condition() {
         "test should include the intervening stack write:\n{body}"
     );
     assert!(
-        body.contains("if (!v1)") || body.contains("if (!v2)"),
+        body.contains("if (!v0)") || body.contains("if (!v2)"),
         "condition must use the materialized stack snapshot, not reload v_8:\n{body}"
     );
     assert!(

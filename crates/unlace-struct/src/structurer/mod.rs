@@ -25,10 +25,14 @@ use crate::hir::{HirCallArg, HirFunction, HirNode, LabelId, SwitchCase};
 use crate::options::StructureOptions;
 use crate::reaching_conditions::Cond;
 use crate::switch_recovery::{IndirectBranchKind, classify_indirect_branch};
-use crate::{condition_refinement, irreducible, reaching_conditions, region_bridge, region_splice};
+use crate::{
+    condition_refinement, goto_resolve, irreducible, reaching_conditions, region_bridge,
+    region_splice,
+};
 
 #[macro_use]
 mod trace;
+mod dominator;
 
 use trace::*;
 
@@ -308,6 +312,23 @@ fn structure_with_arch_inner(
         return Err(StructureError::Timeout {
             function: func.function.name.clone(),
         });
+    }
+    if goto_resolve::count_gotos(&body) > 0 {
+        let _span = linkscope::phase("struct.dominator-structure");
+        let mut dom_ctx = StructureCtx::new_with_deadline(func, deadline, options);
+        if let Some(dom_body) = dom_ctx.structure_by_dominators() {
+            let mut region_body = body.clone();
+            goto_resolve::resolve_body(&mut region_body);
+            let dom_gotos = goto_resolve::count_gotos(&dom_body);
+            let region_gotos = goto_resolve::count_gotos(&region_body);
+            struct_debug!(
+                "dominator-structure func={} region_gotos={region_gotos} dominator_gotos={dom_gotos}",
+                func.function.name
+            );
+            if dom_gotos < region_gotos {
+                body = dom_body;
+            }
+        }
     }
     trace_hir_top("raw", &body);
     {
@@ -1129,8 +1150,9 @@ impl<'a> StructureCtx<'a> {
             struct_trace!("init loop_headers={loop_headers:?}");
             for (&bid, block) in &func.function.blocks {
                 struct_trace!(
-                    "init cfg block={bid:?} insns={} edges={:?}",
+                    "init cfg block={bid:?} insns={} addr={:x?} edges={:?}",
                     block.insns.len(),
+                    block.insns.first().map(|insn| insn.addr),
                     func.cfg.edges_from(bid)
                 );
             }

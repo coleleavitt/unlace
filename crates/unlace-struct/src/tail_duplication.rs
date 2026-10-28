@@ -1,30 +1,21 @@
-//! Tail duplication pre-pass for multi-entry blocks.
+//! Tail duplication pre-pass for shared return blocks.
 //!
-//! Duplicates blocks with ≤ `MAX_DUP_INSNS` instructions that have multiple
-//! predecessors, giving each predecessor its own copy. This eliminates the
-//! multi-predecessor condition that the structurer uses to mark `goto_targets`,
-//! reducing goto count in the final output.
+//! Duplicates small blocks that end in `return` and have multiple
+//! predecessors, giving each predecessor its own copy. A shared return block
+//! is a merge point that the structurer can only reach with a `goto` from all
+//! but one predecessor; a private copy per predecessor removes the merge.
+//!
+//! Only blocks that end in `return` are copied. A copy of any other block
+//! keeps the original's successors, so the merge moves to those successors
+//! instead of disappearing.
 //!
 //! # Aggressive mode
 //!
-//! [`tail_duplicate_aggressive`] extends the conservative pass with a
-//! goto-elimination heuristic:
-//! - Blocks up to `MAX_DUP_INSNS` (8) statements are always eligible.
-//! - Blocks up to `GOTO_ELIM_THRESHOLD` (32) statements are duplicated if
-//!   doing so would eliminate a goto (the block is a shared exit with multiple
-//!   predecessors, meaning the structurer would emit goto/label for it).
+//! [`tail_duplicate_aggressive`] raises the size limit from `MAX_DUP_INSNS`
+//! (8) to `GOTO_ELIM_THRESHOLD` (32) instructions.
 //!
 //! Both modes respect a per-function cap of `MAX_DUPS_PER_FUNC` (5) to avoid
 //! code explosion.
-//!
-//! # Motivation
-//!
-//! The structurer pre-identifies blocks with 2+ real predecessors (that are not
-//! loop headers) as goto targets. In deeply nested if/else trees (e.g. GCC
-//! constprop output), small join-point blocks at the end of branches trigger
-//! this heuristic even though the CFG is reducible. Duplicating these blocks
-//! so each predecessor has its own copy removes the multi-entry condition
-//! entirely.
 //!
 //! # Pipeline position
 //!
@@ -36,80 +27,54 @@
 use std::collections::BTreeMap;
 
 use smallvec::SmallVec;
-use unlace_ir::{BasicBlock, BlockId, Function};
+use unlace_ir::{BasicBlock, BlockId, Function, IrOp};
 
 /// Maximum instruction count for a block to be eligible for duplication.
 const MAX_DUP_INSNS: usize = 8;
 
-/// Maximum instruction count for goto-eliminating duplication.
+/// Maximum instruction count for duplication in aggressive mode.
 const GOTO_ELIM_THRESHOLD: usize = 32;
 
 /// Per-function cap on the number of duplications performed.
 const MAX_DUPS_PER_FUNC: usize = 5;
-const EXP_MAX_SUCCS: usize = 0;
 
-/// Duplicate small multi-predecessor blocks so each predecessor gets its own
+/// Duplicate small shared return blocks so each predecessor gets its own
 /// copy. Returns the number of duplications performed.
 ///
 /// Operates on a raw [`Function`] (pre-SSA). A single pass is sufficient
-/// because duplication only adds single-predecessor copies — it never creates
-/// new multi-predecessor blocks.
+/// because a copy of a return block has no successors and so creates no new
+/// multi-predecessor block.
 pub fn tail_duplicate_small_blocks(func: &mut Function) -> usize {
-    tail_duplicate_impl(func, MAX_DUP_INSNS, /* goto_elim */ false)
+    tail_duplicate_impl(func, MAX_DUP_INSNS)
 }
 
-/// Aggressive tail duplication: uses the goto-elimination heuristic in
-/// addition to the standard threshold. Returns the number of duplications
+/// Like [`tail_duplicate_small_blocks`] with the larger
+/// `GOTO_ELIM_THRESHOLD` size limit. Returns the number of duplications
 /// performed.
-///
-/// When a block has more than `MAX_DUP_INSNS` instructions but ≤
-/// `GOTO_ELIM_THRESHOLD`, it is still duplicated if doing so would remove a
-/// goto target (multi-predecessor shared exit).
 pub fn tail_duplicate_aggressive(func: &mut Function) -> usize {
-    tail_duplicate_impl(func, MAX_DUP_INSNS, /* goto_elim */ true)
+    tail_duplicate_impl(func, GOTO_ELIM_THRESHOLD)
 }
 
-/// Core implementation shared by conservative and aggressive modes.
-fn tail_duplicate_impl(func: &mut Function, threshold: usize, goto_elim: bool) -> usize {
+fn tail_duplicate_impl(func: &mut Function, max_insns: usize) -> usize {
     let preds = compute_predecessors(func);
     let entry = func.entry;
 
-    // Collect candidates: blocks with ≤ threshold instructions and ≥ 2
-    // predecessors that are not the entry block.
     let mut candidates: Vec<(BlockId, Vec<BlockId>)> = func
         .blocks
         .iter()
         .filter_map(|(&bid, block)| {
-            if bid == entry {
+            if bid == entry || block.insns.len() > max_insns {
+                return None;
+            }
+            if block
+                .insns
+                .last()
+                .is_none_or(|insn| insn.op != IrOp::Return)
+            {
                 return None;
             }
             let block_preds = preds.get(&bid)?;
-            if block_preds.len() < 2 {
-                return None;
-            }
-
-            if block.successors.len() > EXP_MAX_SUCCS {
-                return None;
-            }
-            let insn_count = block.insns.len();
-
-            // Within the standard threshold — always eligible.
-            if insn_count <= threshold {
-                return Some((bid, block_preds.clone()));
-            }
-
-            // Goto-elimination heuristic: larger blocks (up to
-            // GOTO_ELIM_THRESHOLD) are eligible if duplicating would
-            // eliminate a goto.
-            if goto_elim && insn_count <= GOTO_ELIM_THRESHOLD {
-                // A block is considered goto-producing if it is a shared
-                // exit with multiple predecessors (which is exactly our
-                // candidate criterion). The structurer emits a goto for
-                // every predecessor beyond the first reaching this block.
-                return Some((bid, block_preds.clone()));
-            }
-
-            None
+            (block_preds.len() >= 2).then(|| (bid, block_preds.clone()))
         })
         .collect();
 
@@ -425,39 +390,31 @@ mod tests {
     /// 6th duplication attempt is skipped because of the per-function cap (5).
     #[test]
     fn test_cap_hit_6th_duplication_skipped() {
-        // Build a function with 6 separate diamond joins — each should
-        // produce one duplication attempt, but only 5 should succeed.
+        // Six shared return blocks. Header `i` branches to `left_i` or to the
+        // next header; `left_i` branches to `join_i` directly or through
+        // `mid_i`, so each `join_i` has two predecessors.
         let mut func = Function::new("cap_test", BlockId(0), 0x5000);
-
-        let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns.push(branch(0x5000));
-        bb0.successors = smallvec![BlockId(1)];
-        func.insert_block(bb0);
-
-        let mut next_bid = 1u32;
-        // Create 6 mini-diamonds that each produce one duplication.
-        // Each diamond: header(cbranch) → left, right → join
+        let mut next_bid = 0u32;
         for i in 0..6u32 {
             let header = BlockId(next_bid);
             let left = BlockId(next_bid + 1);
-            let right = BlockId(next_bid + 2);
+            let mid = BlockId(next_bid + 2);
             let join = BlockId(next_bid + 3);
-
-            let base_addr = 0x5000 + (i as u64 + 1) * 0x100;
+            let next_header = BlockId(next_bid + 4);
+            let base_addr = 0x5000 + u64::from(i) * 0x100;
 
             let mut bh = BasicBlock::new(header);
             bh.insns.push(cbranch(base_addr));
-            bh.successors = smallvec![left, right];
+            bh.successors = smallvec![left, next_header];
 
             let mut bl = BasicBlock::new(left);
-            bl.insns.push(arith(base_addr + 0x10));
-            bl.insns.push(branch(base_addr + 0x14));
-            bl.successors = smallvec![join];
+            bl.insns.push(cbranch(base_addr + 0x10));
+            bl.successors = smallvec![join, mid];
 
-            let mut br = BasicBlock::new(right);
-            br.insns.push(arith(base_addr + 0x20));
-            br.insns.push(branch(base_addr + 0x24));
-            br.successors = smallvec![join];
+            let mut bm = BasicBlock::new(mid);
+            bm.insns.push(arith(base_addr + 0x20));
+            bm.insns.push(branch(base_addr + 0x24));
+            bm.successors = smallvec![join];
 
             let mut bj = BasicBlock::new(join);
             bj.insns.push(arith(base_addr + 0x30));
@@ -465,28 +422,48 @@ mod tests {
 
             func.insert_block(bh);
             func.insert_block(bl);
-            func.insert_block(br);
+            func.insert_block(bm);
             func.insert_block(bj);
-
-            // Chain: previous join → next header (except first, which is
-            // reached from BB0). We'll fix up successors for the join to
-            // point to next header for all but the last.
-            if i < 5 {
-                let next_header = BlockId(next_bid + 4);
-                // Remove the return from join, add a branch to next header.
-                let jblock = func.blocks.get_mut(&join).unwrap();
-                jblock.insns.pop(); // remove ret
-                jblock.insns.push(branch(base_addr + 0x38));
-                jblock.successors = smallvec![next_header];
-            }
-
             next_bid += 4;
         }
-
-        // Fix BB0 to point to the first header.
-        func.blocks.get_mut(&BlockId(0)).unwrap().successors = smallvec![BlockId(1)];
+        let mut last = BasicBlock::new(BlockId(next_bid));
+        last.insns.push(ret(0x5800));
+        func.insert_block(last);
 
         let dups = tail_duplicate_aggressive(&mut func);
         assert_eq!(dups, 5, "should hit the per-function cap at 5; got {dups}");
+    }
+
+    /// A shared block that does not return only moves the merge to its
+    /// successors, so it is left alone.
+    #[test]
+    fn test_shared_non_return_block_not_duplicated() {
+        let mut func = Function::new("non_return_join", BlockId(0), 0x6000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch(0x6000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(branch(0x6010));
+        bb1.successors = smallvec![BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(branch(0x6020));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(arith(0x6030));
+        bb3.insns.push(branch(0x6034));
+        bb3.successors = smallvec![BlockId(4)];
+
+        let mut bb4 = BasicBlock::new(BlockId(4));
+        bb4.insns.push(ret(0x6040));
+
+        for block in [bb0, bb1, bb2, bb3, bb4] {
+            func.insert_block(block);
+        }
+
+        assert_eq!(tail_duplicate_aggressive(&mut func), 0);
     }
 }

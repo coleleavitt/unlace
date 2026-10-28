@@ -11,24 +11,35 @@
 //! - a `continue` when `L` continues the innermost enclosing loop;
 //! - a `break` when `L` continues where the innermost enclosing loop or
 //!   switch exits to;
-//! - a copy of the `return` that `L` reaches.
+//! - a copy of the code at `L` when that code is a short straight-line run
+//!   of statements ending in `return`.
 //!
 //! Diagnostics: enable `unlace::struct::goto_resolve=debug`.
 
 use std::collections::{BTreeMap, BTreeSet};
+
+use unlace_ir::SpaceId;
 
 use crate::hir::{HirFunction, HirNode, LabelId};
 
 /// Upper bound on rewrite rounds; each round only removes gotos or labels.
 const MAX_ROUNDS: usize = 8;
 
+/// Longest statement run before a `return` that a goto may copy.
+const MAX_COPIED_STATEMENTS: usize = 24;
+
 /// Rewrite gotos that have a structured equivalent and drop labels that lose
 /// their last goto.
 pub fn resolve_gotos(func: &mut HirFunction) {
+    resolve_body(&mut func.body);
+}
+
+/// [`resolve_gotos`] over a function body.
+pub(crate) fn resolve_body(body: &mut Vec<HirNode>) {
     for round in 0..MAX_ROUNDS {
         let mut analysis = Analysis::default();
         walk_list(
-            &mut func.body,
+            body,
             Point::FunctionEnd,
             Ctx::default(),
             &mut analysis,
@@ -37,8 +48,7 @@ pub fn resolve_gotos(func: &mut HirFunction) {
         let rewrites = analysis.rewrites();
         tracing::debug!(
             target: "unlace::struct::goto_resolve",
-            "func={} round={round} gotos={} rewrites={}",
-            func.name,
+            "round={round} gotos={} rewrites={}",
             analysis.gotos.len(),
             rewrites.len()
         );
@@ -46,21 +56,34 @@ pub fn resolve_gotos(func: &mut HirFunction) {
             break;
         }
         walk_list(
-            &mut func.body,
+            body,
             Point::FunctionEnd,
             Ctx::default(),
             &mut Analysis::default(),
             Some(&rewrites),
         );
-        remove_empty_blocks(&mut func.body);
+        remove_empty_blocks(body);
         let mut used = BTreeSet::new();
-        collect_goto_targets(&func.body, &mut used);
-        remove_unused_labels(&mut func.body, &used);
+        collect_goto_targets(body, &mut used);
+        remove_unused_labels(body, &used);
     }
 }
 
+/// Number of `goto` statements in `nodes`.
+pub(crate) fn count_gotos(nodes: &[HirNode]) -> usize {
+    nodes
+        .iter()
+        .map(|node| {
+            let own = usize::from(matches!(node.unwrap_commented(), HirNode::Goto(_)));
+            let mut nested = 0;
+            for_each_body(node, &mut |body| nested += count_gotos(body));
+            own + nested
+        })
+        .sum()
+}
+
 /// A program point, identified by node visit order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Point {
     /// A node that does something when reached.
     Node(usize),
@@ -77,6 +100,9 @@ struct Ctx {
     innermost_loop: Option<usize>,
     /// The innermost loop or switch and the point it exits to.
     breakable_exit: Option<Point>,
+    /// Inside a `try` construct, where copied code would change which
+    /// handler covers it.
+    in_try: bool,
 }
 
 #[derive(Debug)]
@@ -91,15 +117,20 @@ enum Rewrite {
     Remove,
     Continue,
     Break,
-    Return(Box<HirNode>),
+    /// Replace the goto with a copy of the code it reaches.
+    Copy(Vec<HirNode>),
 }
 
 #[derive(Default)]
 struct Analysis {
     next_id: usize,
+    /// Points that behave like another point: the entry of a `while (1)`
+    /// body is that loop's continue point.
+    aliases: BTreeMap<Point, Point>,
     labels: BTreeMap<LabelId, Point>,
     gotos: BTreeMap<usize, GotoSite>,
-    returns: BTreeMap<usize, HirNode>,
+    /// Straight-line runs that end in `return`, keyed by their first node.
+    return_tails: BTreeMap<Point, Vec<HirNode>>,
 }
 
 impl Analysis {
@@ -109,23 +140,33 @@ impl Analysis {
         id
     }
 
+    fn canonical(&self, point: Point) -> Point {
+        self.aliases.get(&point).copied().unwrap_or(point)
+    }
+
     fn rewrites(&self) -> BTreeMap<usize, Rewrite> {
         let mut rewrites = BTreeMap::new();
         for (&id, site) in &self.gotos {
             let Some(&target) = self.labels.get(&site.label) else {
                 continue;
             };
-            let rewrite = if target == site.fallthrough {
+            let target = self.canonical(target);
+            let rewrite = if target == self.canonical(site.fallthrough) {
                 Rewrite::Remove
             } else if site.ctx.innermost_loop.map(Point::LoopContinue) == Some(target) {
                 Rewrite::Continue
-            } else if site.ctx.breakable_exit == Some(target) {
+            } else if site.ctx.breakable_exit.map(|exit| self.canonical(exit)) == Some(target) {
                 Rewrite::Break
-            } else if let Point::Node(node) = target
-                && let Some(ret) = self.returns.get(&node)
-            {
-                Rewrite::Return(Box::new(ret.clone()))
+            } else if let Some(tail) = self.return_tails.get(&target) {
+                Rewrite::Copy(tail.clone())
             } else {
+                tracing::debug!(
+                    target: "unlace::struct::goto_resolve",
+                    "goto label={:?} target={target:?} fallthrough={:?} ctx={:?} rewrite=none",
+                    site.label,
+                    site.fallthrough,
+                    site.ctx
+                );
                 continue;
             };
             tracing::debug!(
@@ -178,7 +219,7 @@ fn walk_node(
                     Rewrite::Remove => HirNode::Block(Vec::new()),
                     Rewrite::Continue => HirNode::Continue,
                     Rewrite::Break => HirNode::Break,
-                    Rewrite::Return(ret) => (**ret).clone(),
+                    Rewrite::Copy(tail) => HirNode::Block(tail.clone()),
                 };
                 return Point::Node(id);
             }
@@ -197,7 +238,23 @@ fn walk_node(
             .map_or(Point::Node(id), Point::LoopContinue),
         HirNode::Break => ctx.breakable_exit.unwrap_or(Point::Node(id)),
         HirNode::Return(_) => {
-            analysis.returns.insert(id, node.clone());
+            if !ctx.in_try {
+                analysis
+                    .return_tails
+                    .insert(Point::Node(id), vec![node.clone()]);
+            }
+            Point::Node(id)
+        }
+        HirNode::Statement(_) => {
+            if !ctx.in_try
+                && let Some(tail) = analysis.return_tails.get(&next)
+                && tail.len() <= MAX_COPIED_STATEMENTS
+            {
+                let tail = std::iter::once(node.clone())
+                    .chain(tail.iter().cloned())
+                    .collect();
+                analysis.return_tails.insert(Point::Node(id), tail);
+            }
             Point::Node(id)
         }
         HirNode::If {
@@ -225,18 +282,32 @@ fn walk_node(
             walk_list(else_body, next, ctx, analysis, rewrites);
             Point::Node(id)
         }
-        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+        HirNode::While { cond, body } => {
             let loop_ctx = Ctx {
                 innermost_loop: Some(id),
                 breakable_exit: Some(next),
+                ..ctx
+            };
+            let entry = walk_list(body, Point::LoopContinue(id), loop_ctx, analysis, rewrites);
+            let entry_in_body = matches!(entry, Point::Node(node) if node > id);
+            if entry_in_body && cond.base.space == SpaceId::Const && cond.base.offset != 0 {
+                analysis.aliases.insert(entry, Point::LoopContinue(id));
+            }
+            Point::Node(id)
+        }
+        HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            let loop_ctx = Ctx {
+                innermost_loop: Some(id),
+                breakable_exit: Some(next),
+                ..ctx
             };
             walk_list(body, Point::LoopContinue(id), loop_ctx, analysis, rewrites);
             Point::Node(id)
         }
         HirNode::Switch { cases, default, .. } => {
             let switch_ctx = Ctx {
-                innermost_loop: ctx.innermost_loop,
                 breakable_exit: Some(next),
+                ..ctx
             };
             for (_, body, _) in cases.iter_mut() {
                 let end = Point::Opaque(analysis.fresh_id());
@@ -252,11 +323,15 @@ fn walk_node(
             try_body,
             catch_arms,
         } => {
+            let try_ctx = Ctx {
+                in_try: true,
+                ..Ctx::default()
+            };
             let end = Point::Opaque(analysis.fresh_id());
-            walk_list(try_body, end, Ctx::default(), analysis, rewrites);
+            walk_list(try_body, end, try_ctx, analysis, rewrites);
             for (_, body) in catch_arms.iter_mut() {
                 let end = Point::Opaque(analysis.fresh_id());
-                walk_list(body, end, Ctx::default(), analysis, rewrites);
+                walk_list(body, end, try_ctx, analysis, rewrites);
             }
             Point::Node(id)
         }
@@ -264,14 +339,17 @@ fn walk_node(
             try_body,
             finally_body,
         } => {
+            let try_ctx = Ctx {
+                in_try: true,
+                ..Ctx::default()
+            };
             let end = Point::Opaque(analysis.fresh_id());
-            walk_list(try_body, end, Ctx::default(), analysis, rewrites);
+            walk_list(try_body, end, try_ctx, analysis, rewrites);
             let end = Point::Opaque(analysis.fresh_id());
-            walk_list(finally_body, end, Ctx::default(), analysis, rewrites);
+            walk_list(finally_body, end, try_ctx, analysis, rewrites);
             Point::Node(id)
         }
-        HirNode::Statement(_)
-        | HirNode::Ternary { .. }
+        HirNode::Ternary { .. }
         | HirNode::TailCall { .. }
         | HirNode::ObjcBlock { .. }
         | HirNode::GuardedTernary { .. }
@@ -280,7 +358,7 @@ fn walk_node(
     }
 }
 
-fn for_each_body(node: &HirNode, f: &mut impl FnMut(&[HirNode])) {
+pub(crate) fn for_each_body(node: &HirNode, f: &mut impl FnMut(&[HirNode])) {
     match node {
         HirNode::Block(children) => f(children),
         HirNode::Commented { inner, .. } => for_each_body(inner, f),
@@ -338,7 +416,7 @@ fn for_each_body(node: &HirNode, f: &mut impl FnMut(&[HirNode])) {
     }
 }
 
-fn for_each_body_mut(node: &mut HirNode, f: &mut impl FnMut(&mut Vec<HirNode>)) {
+pub(crate) fn for_each_body_mut(node: &mut HirNode, f: &mut impl FnMut(&mut Vec<HirNode>)) {
     match node {
         HirNode::Block(children) => f(children),
         HirNode::Commented { inner, .. } => for_each_body_mut(inner, f),
@@ -416,5 +494,175 @@ fn remove_empty_blocks(nodes: &mut Vec<HirNode>) {
     nodes.retain(|node| !matches!(node, HirNode::Block(children) if children.is_empty()));
     for node in nodes.iter_mut() {
         for_each_body_mut(node, &mut |body| remove_empty_blocks(body));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use smallvec::smallvec;
+    use unlace_ir::ssa::SsaVarnode;
+    use unlace_ir::{IrInsn, IrOp, Varnode};
+
+    use super::*;
+    use crate::hir::SwitchCase;
+
+    fn stmt(reg: u64) -> HirNode {
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(reg, 8),
+            smallvec![Varnode::constant(0, 8)],
+            0,
+        ))
+    }
+
+    fn cond() -> SsaVarnode {
+        SsaVarnode {
+            base: Varnode::reg(0x100, 1),
+            version: 0,
+        }
+    }
+
+    fn while_true(body: Vec<HirNode>) -> HirNode {
+        HirNode::While {
+            cond: SsaVarnode {
+                base: Varnode::constant(1, 1),
+                version: 0,
+            },
+            body,
+        }
+    }
+
+    fn if_goto(label: LabelId) -> HirNode {
+        HirNode::If {
+            cond: cond(),
+            then_body: vec![HirNode::Goto(label)],
+            else_body: None,
+        }
+    }
+
+    #[test]
+    fn goto_to_the_fallthrough_point_is_removed() {
+        let label = LabelId(0);
+        let mut body = vec![
+            HirNode::If {
+                cond: cond(),
+                then_body: vec![stmt(0), HirNode::Goto(label)],
+                else_body: Some(vec![stmt(8)]),
+            },
+            HirNode::Label(label),
+            stmt(16),
+        ];
+        resolve_body(&mut body);
+        assert_eq!(
+            body,
+            vec![
+                HirNode::If {
+                    cond: cond(),
+                    then_body: vec![stmt(0)],
+                    else_body: Some(vec![stmt(8)]),
+                },
+                stmt(16),
+            ]
+        );
+    }
+
+    #[test]
+    fn goto_to_the_top_of_while_true_is_continue() {
+        let label = LabelId(0);
+        let mut body = vec![while_true(vec![
+            HirNode::Label(label),
+            stmt(0),
+            if_goto(label),
+            stmt(8),
+        ])];
+        resolve_body(&mut body);
+        assert_eq!(
+            body,
+            vec![while_true(vec![
+                stmt(0),
+                HirNode::If {
+                    cond: cond(),
+                    then_body: vec![HirNode::Continue],
+                    else_body: None,
+                },
+                stmt(8),
+            ])]
+        );
+    }
+
+    #[test]
+    fn goto_to_the_loop_exit_is_break() {
+        let label = LabelId(0);
+        let mut body = vec![
+            while_true(vec![stmt(0), if_goto(label), stmt(8)]),
+            HirNode::Label(label),
+            stmt(16),
+        ];
+        resolve_body(&mut body);
+        assert!(matches!(
+            &body[0],
+            HirNode::While { body, .. } if matches!(
+                &body[1],
+                HirNode::If { then_body, .. } if then_body == &[HirNode::Break]
+            )
+        ));
+        assert_eq!(count_gotos(&body), 0);
+    }
+
+    #[test]
+    fn goto_out_of_a_nested_loop_stays() {
+        let label = LabelId(0);
+        let mut body = vec![
+            while_true(vec![while_true(vec![stmt(0), if_goto(label)]), stmt(8)]),
+            HirNode::Label(label),
+            stmt(16),
+        ];
+        resolve_body(&mut body);
+        assert_eq!(count_gotos(&body), 1);
+    }
+
+    #[test]
+    fn goto_to_a_short_return_tail_copies_it() {
+        let label = LabelId(0);
+        let mut body = vec![
+            if_goto(label),
+            stmt(0),
+            HirNode::Return(None),
+            HirNode::Label(label),
+            stmt(8),
+            HirNode::Return(None),
+        ];
+        resolve_body(&mut body);
+        assert_eq!(
+            body[0],
+            HirNode::If {
+                cond: cond(),
+                then_body: vec![HirNode::Block(vec![stmt(8), HirNode::Return(None)])],
+                else_body: None,
+            }
+        );
+        assert_eq!(count_gotos(&body), 0);
+    }
+
+    #[test]
+    fn goto_into_a_switch_case_end_stays() {
+        let label = LabelId(0);
+        let mut body = vec![
+            if_goto(label),
+            HirNode::Switch {
+                cond: cond(),
+                cases: vec![(
+                    SwitchCase::Value(1),
+                    vec![stmt(0), HirNode::Label(label)],
+                    false,
+                )],
+                default: None,
+                jumptable_addr: None,
+                jumptable_cases: None,
+            },
+            stmt(8),
+        ];
+        resolve_body(&mut body);
+        assert_eq!(count_gotos(&body), 1);
     }
 }

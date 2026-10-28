@@ -68,14 +68,14 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8; ((__int64 (*)())pfn)();
-    __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
+    ((__int64 (*)())pfn)(); __builtin_trap(); return;
 }
 // debug language: C
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
-    int v7; // reg?
-    if (v7) {
+    int v5; // reg?
+    if (v5) {
         return;
     } else {
         if (qword_3FE0 == 0LL) {
@@ -92,8 +92,7 @@ __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FF8 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
+            __int64 c3 = qword_4008; // rdi
             result = sub_1030();
         }
         result = sub_1070(); byte_4010 = 1; return result;
@@ -134,8 +133,9 @@ int sub(int a, int b) {
     int v_4;
     int c2; // rbp
     v_4 = LODWORD(a);
+    int v10 = v_4; // temp
     _DWORD v11 = *(_DWORD *)(c2 - 8); // temp
-    return v_4 - v11;
+    return v10 - v11;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -187,7 +187,8 @@ int abs_val(int x) {
     v_4 = LODWORD(x);
     // fixtures/src/calls.c:6
     result = v_4;
-    return !LOBYTE(result < 0) ? result : result;
+    _QWORD c1 = result; // rdx
+    return !LOBYTE(result < 0) ? c1 : result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -242,8 +243,7 @@ int clamp(int x, int lo, int hi) {
     int v_12;
     __int64 v13; // rax
     int c3; // rbp
-    v_4 = x;
-    v_12 = hi;
+    v_4 = x; v_12 = hi;
     // fixtures/src/calls.c:9
     _DWORD v12 = *(_DWORD *)(c3 - 8); // temp
     // fixtures/src/calls.c:9
@@ -283,8 +283,7 @@ int compute(int x) {
     __int64 v17; // rax
     __int64 v18; // rax
     a = x;
-    x = a; v13 = add(x, 0xaLL);
-    e = LODWORD(v13);
+    x = a; v13 = add(x, 0xaLL); e = LODWORD(v13);
     v14 = sub(e, 3LL); v_16 = LODWORD(v14);
     v15 = square(v_16); v_12 = LODWORD(v15);
     v16 = cube(2LL);
@@ -292,8 +291,7 @@ int compute(int x) {
     _DWORD v9 = *(_DWORD *)((uintptr_t)&a - 8); // temp
     // fixtures/src/calls.c:16
     _QWORD c1 = v9; // rdx
-    v17 = sub(v_12, c1); v18 = abs_val(LODWORD(v17));
-    v_4 = LODWORD(v18);
+    v17 = sub(v_12, c1); v18 = abs_val(LODWORD(v17)); v_4 = LODWORD(v18);
     return clamp(v_4, 0LL, 0x64LL);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)

@@ -73,13 +73,13 @@ struct __anon1 {
 
 /* Function:   bitfield_test | Address: 0x400148 | Size: 0x1c (28 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x28 (40 bytes) | Xrefs from: unknown */
 void __aapcs bitfield_test(void) {
-    __int64 v1; // temp
-    __int64 v8; // temp
+    __int64 v2; // temp
+    __int64 v3; // temp
     __int64 v_24;
     __int64 v_16;
+    int v1; // rcx
     int v4; // r31
-    _QWORD v5; // temp
-    *(_QWORD *)(v4 - 16) = v5; *(_QWORD *)(v4 - 24) = v8;
+    *(_QWORD *)(v4 - 16) = v2; *(_QWORD *)(v4 - 24) = v3;
     __int64 v7 = __isb__(v1, 4LL, 8LL); // temp
     __dmb__(); return;
 }

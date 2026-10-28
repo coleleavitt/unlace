@@ -80,8 +80,8 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8; ((__int64 (*)())pfn)();
-    __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
+    ((__int64 (*)())pfn)(); __builtin_trap(); return;
 }
 // DWARF composite types
 typedef struct Point Point;
@@ -98,8 +98,8 @@ struct Rect {
 // debug language: C
 /* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1090(void) {
-    int v7; // reg?
-    if (v7) {
+    int v5; // reg?
+    if (v5) {
         return;
     } else {
         if (qword_3FE0 == 0LL) {
@@ -128,8 +128,7 @@ __int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FF8 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
+            __int64 c3 = qword_4008; // rdi
             result = sub_1040();
         }
         result = sub_1090(); byte_4010 = 1; return result;
@@ -187,11 +186,9 @@ struct Rect {
 // debug language: C
 /* Function:   offset | Address: 0x1155 | Size: 0x15 (21 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 Point offset(Point p, int dx, int dy) {
-    __int64 result_1; // temp
     // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:5
     dy = LODWORD(dy + (p >> 0x20));
-    dy = dy << 0x20; result_1 = LODWORD(dx + p) | dy;
-    return LODWORD(dx + p) | dy;
+    dy = dy << 0x20; return LODWORD(dx + p) | dy;
 }
 // DWARF composite types
 typedef struct Point Point;
@@ -210,5 +207,5 @@ struct Rect {
 int main(void) {
     // DWARF locals
     //   Rect r;
-        printf(0x2004LL, 0xc8LL); return 0;
+    printf(0x2004LL, 0xc8LL); return 0;
 }

@@ -67,13 +67,13 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8; ((__int64 (*)())pfn)();
-    __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
+    ((__int64 (*)())pfn)(); __builtin_trap(); return;
 }
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
-    int v7; // reg?
-    if (v7) {
+    int v5; // reg?
+    if (v5) {
         return;
     } else {
         if (qword_3FE0 == 0LL) {
@@ -89,8 +89,7 @@ __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FF8 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
+            __int64 c3 = qword_4008; // rdi
             result = sub_1030();
         }
         result = sub_1070(); byte_4010 = 1; return result;
@@ -102,12 +101,11 @@ void sub_1120(void) {
 }
 /* Function:   dispatch | Address: 0x1129 | Size: 0x4e (78 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 int dispatch(int a1) {
-    __int64 v3; // temp
     if ((_DWORD)7 <= (_DWORD)a1 && a1 != 7) {
         return 0xffffffff;
     } else {
         a1 = a1;
-        __int64 v1 = v3 + 0x2004LL; // rdx
+        __int64 v1 = 0x2004LL; // rdx
         switch (a1) {
         case 0:
             return 0xa;
@@ -137,15 +135,13 @@ struct __anon0 {
 
 /* Function:   main | Address: 0x117b | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   dispatch | Xrefs from: unknown */
 int main(void) /* // dropped 1 param(s) (dead in body) */ {
-    __int64 v38; // rax
+    __int64 v22; // rax
     _QWORD c1; // rbx
     c1 = 0LL;
     __int64 c3 = 0LL; // rbp
     do {
         _QWORD c4 = LODWORD(c1); // rdi
-        v38 = dispatch(c4);
-        c3 = LODWORD(c3) + v38;
-        c1 = LODWORD(c1) + 1;
+        v22 = dispatch(c4); c3 = LODWORD(c3) + v22; c1 = LODWORD(c1) + 1;
     } while (c1 != 8);
     return (_QWORD)(LOBYTE(c3));
 }

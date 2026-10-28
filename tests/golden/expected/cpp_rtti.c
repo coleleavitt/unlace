@@ -90,7 +90,6 @@ struct __anon0 {
 
 /* Function:   main | Address: 0x10c0 | Size: 0x77 (119 bytes) | Convention: System V AMD64 | Stack frame: 0x28 (40 bytes) | Xrefs to:   identify(Animal*), __printf_chk, __stack_chk_fail | Xrefs from: unknown */
 int main(void) {
-    __int64 v7; // temp
     __int64 v_8;
     __int64 v_16;
     __int64 v_32;
@@ -100,9 +99,9 @@ int main(void) {
     __int64 v16; // rax
     __int64 c1; // rbx
     _QWORD v9; // temp
-    result_0 = v9; result_0 = v7 + 0x3d00LL;
+    result_0 = v9; result_0 = 0x3d00LL;
     __int64 c3 = (uintptr_t)&v_16; // rdi
-    v_8 = result_0; result_0 = v7 + 0x3d28LL; v_16 = result_0;
+    v_8 = result_0; result_0 = 0x3d28LL; v_16 = result_0;
     v14 = identify(&v_16); c1 = v14; v15 = identify(&v_8);
     __int64 v3 = v15; // rdx
     v16 = printf("%s %s\n", (char *)v3, (char *)c1);
@@ -120,14 +119,14 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FE0; ((__int64 (*)())pfn)();
-    __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FE0;
+    ((__int64 (*)())pfn)(); __builtin_trap(); return;
 }
 
 /* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1170(void) {
-    int v7; // reg?
-    if (v7) {
+    int v5; // reg?
+    if (v5) {
         return;
     } else {
         if (qword_3FE8 == 0LL) {
@@ -144,8 +143,7 @@ __int64 sub_11e0(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FD8 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
+            __int64 c3 = qword_4008; // rdi
             result = sub_1070();
         }
         result = sub_1170(); byte_4010 = 1; return result;
@@ -160,43 +158,39 @@ void sub_1220(void) {
 /* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xc7 (199 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
 // identify(Animal*)
 char * identify(Animal *a1) {
-    __int64 v8; // temp
     __int64 v_16;
-    __int64 v18; // rax
-    __int64 v19; // rax
+    __int64 v14; // rax
+    __int64 v15; // rax
     __int64 result; // rax
     __int64 c1; // rcx
     __int64 c3; // rsp
-    __int64 result_1; // temp
-    __int64 result_2; // temp
+    _QWORD v10; // temp
     if (a1 == 0LL) {
-        result_2 = v8 + "unknown"; result = v8 + "unknown"; return v8 + "unknown";
+        result = "unknown"; return "unknown";
     } else {
-        __int64 c4 = v8 + 0x3d40LL; // rsi
-        __int64 v10 = c3 + 8LL; // temp
+        __int64 c4 = 0x3d40LL; // rsi
         /* dynamic cast */
-        v18 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
+        v14 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
         v10 = *(_QWORD *)(c3 + 8LL); a1 = v10;
-        __int64 c2 = v18; // rdx
-        if (v18 == 0LL) {
-            c2 = v8 + 0x3d68LL; c4 = v8 + 0x3d40LL;
+        __int64 c2 = v14; // rdx
+        if (v14 == 0LL) {
+            c2 = 0x3d68LL; c4 = 0x3d40LL;
             /* dynamic cast */
-            v19 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, 0LL);
-            a1 = v19;
-            if (v19 == 0LL) {
-                result = v8 + "unknown"; return result;
+            v15 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, 0LL);
+            a1 = v15;
+            if (v15 == 0LL) {
+                result = "unknown"; return result;
             } else {
-                v10 = *(_QWORD *)(v19); result = v10; c1 = v8 + 0x1310LL;
-                v10 = *(_QWORD *)(result); c2 = v10; result_1 = v8 + "meow";
-                result = v8 + "meow";
+                v10 = *(_QWORD *)(v15); result = v10; c1 = 0x1310LL;
+                v10 = *(_QWORD *)(result); c2 = v10; result = "meow";
                 if (c2 == c1) {
-                    return v8 + "meow";
+                    return "meow";
                 } else {
                 }
             }
         } else {
-            v10 = *(_QWORD *)(v18); result = v10; c4 = v8 + 0x1300LL;
-            v10 = *(_QWORD *)(result); c1 = v10; result = v8 + "woof";
+            v10 = *(_QWORD *)(v14); result = v10; c4 = 0x1300LL;
+            v10 = *(_QWORD *)(result); c1 = v10; result = "woof";
             if (c1 != c4) {
                 a1 = c2;
             } else {
@@ -210,15 +204,13 @@ char * identify(Animal *a1) {
 /* Function:   Dog::speak() | Address: 0x1300 | Size: 0xb (11 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::speak()
 char * Dog_speak(Dog *this) {
-    __int64 v1; // temp
-    return v1 + "woof";
+    return "woof";
 }
 
 /* Function:   Cat::speak() | Address: 0x1310 | Size: 0xb (11 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Cat::speak()
 char * Cat_speak(Cat *this) {
-    __int64 v1; // temp
-    return v1 + "meow";
+    return "meow";
 }
 
 /* Function:   Dog::~Dog() | Address: 0x1320 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

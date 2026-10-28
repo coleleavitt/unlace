@@ -87,14 +87,14 @@ struct __anon0 {
 /* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_throw, __printf_chk | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
 _Noreturn int safe_call(void) {
-    __int64 v14; // rax
+    __int64 v13; // rax
     __int64 c2; // rbx
     __int64 c4 = 0x10LL; // rdi
     /* allocate exception */
-    __int64 v12 = __cxa_allocate_exception(c4); // rax
-    c2 = v12; std_runtime_error_runtime_error();
+    __int64 v11 = __cxa_allocate_exception(c4); // rax
+    c2 = v11; std_runtime_error_runtime_error();
     /* throw */
-    v14 = __cxa_throw(c2, 0x3d40LL, qword_3FE0);
+    v13 = __cxa_throw(c2, 0x3d40LL, qword_3FE0);
     return 0;
 }
 
@@ -113,14 +113,14 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8; ((__int64 (*)())pfn)();
-    __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
+    ((__int64 (*)())pfn)(); __builtin_trap(); return;
 }
 
 /* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1290(void) {
-    int v7; // reg?
-    if (v7) {
+    int v5; // reg?
+    if (v5) {
         return;
     } else {
         if (qword_3FE8 == 0LL) {
@@ -137,8 +137,7 @@ __int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FD0 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
+            __int64 c3 = qword_4008; // rdi
             result = sub_10b0();
         }
         result = sub_1290(); byte_4020 = 1; return result;

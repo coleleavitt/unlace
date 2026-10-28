@@ -67,13 +67,13 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8; ((__int64 (*)())pfn)();
-    __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
+    ((__int64 (*)())pfn)(); __builtin_trap(); return;
 }
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
-    int v7; // reg?
-    if (v7) {
+    int v5; // reg?
+    if (v5) {
         return;
     } else {
         if (qword_3FE0 == 0LL) {
@@ -89,8 +89,7 @@ __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FF8 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
+            __int64 c3 = qword_4008; // rdi
             result = sub_1030();
         }
         result = sub_1070(); byte_4010 = 1; return result;
@@ -116,18 +115,16 @@ int compare_floats_x87(long double a1, long double a2) {
     int v2; // rsp
     int v3; // CF
     int v4; // ZF
-    _BOOL cond; // temp
     _DWORD v8 = *(_QWORD *)(v2 + 8LL); // temp
     int c2 = __fld(v8); // reg?
     v8 = *(_QWORD *)(v2 + 0x18LL);
     int c1 = __fld(v8); // reg?
-    c0 = 0xffffffffLL; __fcom(c1, c2); cond = !v3;
-    _BOOL cond_1 = !v4; // temp
-    if (cond && cond_1) {
+    c0 = 0xffffffffLL; __fcom(c1, c2);
+    if (!v3 && !v4) {
         c1 = __fstp(c1); c2 = __fstp(c2);
     } else {
         __fxch(c1, c2); __fcomp(c1, c2); c2 = __fstp(c2);
-        c0 = (_QWORD)(0xffffff00LL | (_QWORD)(cond && cond_1));
+        c0 = (_QWORD)(0xffffff00LL | (_QWORD)(!v3 && !v4));
     }
     return c0;
 }

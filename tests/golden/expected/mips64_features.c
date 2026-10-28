@@ -57,9 +57,6 @@ void arithmetic_test(void) {
 }
 /* Function:   logic_test | Address: 0x120000140 | Size: 0xc (12 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void logic_test(void) {
-    int v3; // reg?
-    if (v3) {
-    }
     return;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -74,16 +71,12 @@ struct __anon1 {
 
 /* Function:   memory_test | Address: 0x120000170 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x28 (40 bytes) | Xrefs from: unknown */
 void memory_test(void) {
+    __int64 v2; // temp
     int v_32;
     __int64 v_16;
     __int64 v_8;
-    __int64 c0; // r29
-    _QWORD v5; // temp
-    __int64 v4 = c0 - 32; // temp
-    c0 = c0 - 32; *(_QWORD *)(c0 - 32 + 0x18LL) = v5; v4 = c0 + 0x10LL;
-    *(_QWORD *)(c0 + 0x10LL) = v4; *(_DWORD *)(c0) = LODWORD(0x42LL);
-    _DWORD v7 = *(_DWORD *)(c0); // temp
-    if ((_QWORD)(v7 < 0x64LL) == 0LL) {
-    }
+    __int64 v3; // r31
+    __int64 c0 = c0 - 32; // r29
+    *(_QWORD *)(c0 - 32 + 0x18LL) = v3; *(_QWORD *)(c0 + 0x10LL) = v2; *(_DWORD *)(c0) = LODWORD(0x42LL);
     return;
 }

@@ -865,6 +865,50 @@ pub fn print_c_with_annotations(
     config: Option<PrintConfig>,
     annotations: Option<&PrinterAnnotations>,
 ) -> String {
+    // A call folded into its reader must be printed exactly once. The printer
+    // decides that a statement is suppressed, or that a temporary is
+    // re-rendered at each read, in many places; rather than predict every one,
+    // check the output and print again with the unconfirmed calls kept as
+    // statements. Each retry vetoes at least one more call, so this ends.
+    let mut call_fold_veto = BTreeSet::new();
+    loop {
+        let (output, unconfirmed) = print_c_attempt(
+            func,
+            dwarf,
+            header,
+            symbols,
+            string_table,
+            rtti,
+            config,
+            annotations,
+            &call_fold_veto,
+        );
+        if unconfirmed.is_empty() {
+            return output;
+        }
+        tracing::debug!(target: "unlace::cprinter",
+            "fold-call-retry func={} unconfirmed={unconfirmed:?}",
+            func.name
+        );
+        call_fold_veto.extend(unconfirmed);
+    }
+}
+
+/// One printing of `func`, with the calls at `call_fold_veto` kept as
+/// statements. Also returns the folded calls whose text does not appear
+/// exactly once in the output.
+#[allow(clippy::too_many_arguments)]
+fn print_c_attempt(
+    func: &HirFunction,
+    dwarf: Option<&DwarfInfo>,
+    header: Option<&FunctionHeaderInfo>,
+    symbols: Option<&BTreeMap<u64, String>>,
+    string_table: Option<&BTreeMap<u64, String>>,
+    rtti: Option<&unlace_loader::RttiInfo>,
+    config: Option<PrintConfig>,
+    annotations: Option<&PrinterAnnotations>,
+    call_fold_veto: &BTreeSet<u32>,
+) -> (String, BTreeSet<u32>) {
     let _print_span = linkscope::phase("cprinter.print");
     let context_span = linkscope::phase("cprinter.context-build");
     let mut sym_owned = symbols.cloned().unwrap_or_default();
@@ -884,6 +928,7 @@ pub fn print_c_with_annotations(
         func.merged_names.clone(),
         func.var_role_names.clone(),
     );
+    ctx.call_fold_veto = call_fold_veto.clone();
     if let Some(ann) = annotations {
         ctx.line_comments = ann.line_comments.clone();
         ctx.custom_names = ann.custom_names.clone();
@@ -1804,7 +1849,17 @@ pub fn print_c_with_annotations(
     );
     drop(cleanup_span);
     linkscope::record_bytes("cprinter.print", output.len() as u64);
-    output
+    let unconfirmed = ctx
+        .folded_calls
+        .iter()
+        .filter(|stmt| {
+            ctx.folded_call_texts
+                .get(stmt)
+                .is_none_or(|text| output.matches(text.as_str()).count() != 1)
+        })
+        .copied()
+        .collect();
+    (output, unconfirmed)
 }
 
 /// Apply one post-emission cleanup `stage` to `input`, logging a before/after
@@ -2569,6 +2624,13 @@ struct PrintCtx {
     /// Conditions of `while`, `do`/`while` and `for` loops, which are read
     /// once per iteration rather than at one point.
     loop_cond_uses: BTreeSet<SsaVarnode>,
+    /// Call statements folded into their reader by
+    /// `fold_single_use_call_results`.
+    folded_calls: BTreeSet<u32>,
+    /// Call statements that must stay statements this printing.
+    call_fold_veto: BTreeSet<u32>,
+    /// The text each folded call was last rendered as at its reader.
+    folded_call_texts: BTreeMap<u32, String>,
     collect_depth: u32,
     stmt_depths: BTreeMap<u32, u32>,
     /// Lexical scope path of each statement, recorded during
@@ -2935,6 +2997,9 @@ impl PrintCtx {
             cond_use_stmts: Vec::new(),
             cond_use_scope_paths: Vec::new(),
             loop_cond_uses: BTreeSet::new(),
+            folded_calls: BTreeSet::new(),
+            call_fold_veto: BTreeSet::new(),
+            folded_call_texts: BTreeMap::new(),
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
             stmt_scope_paths: BTreeMap::new(),
@@ -4742,6 +4807,7 @@ fn compute_foldable(ctx: &mut PrintCtx) {
     }
 
     ctx.sv_use_counts = use_counts;
+    fold_single_use_call_results(ctx);
     // The transitive fold-pass guard is currently disabled: empirical regressions
     // on small HIR fixtures show it removes folds that are needed for shape
     // tests. The emit-time guard in [`emit_operand_with_prec`] handles the
@@ -4749,6 +4815,160 @@ fn compute_foldable(ctx: &mut PrintCtx) {
     // touching the fold set. Keep [`refuse_folds_past_aliased_input_redef`]
     // available for future use if the emit-time guard proves insufficient.
     let _ = refuse_folds_past_aliased_input_redef;
+}
+
+/// Fold each call whose result is read once into that reader, as Hex-Rays'
+/// propagation (hexx64 `sub_17D8C0`) does for a call with a destination:
+/// `v = f(x); y = v + 1;` prints as `y = f(x) + 1;`.
+///
+/// The call then runs where the reader is printed instead of at its own
+/// statement. Nothing in between may have side effects or read memory, the
+/// arguments must keep their values, and the reader must not read memory or
+/// call another function, because C leaves the order of those against the
+/// call unspecified. Runs after the other fold decisions, which it depends
+/// on.
+fn fold_single_use_call_results(ctx: &mut PrintCtx) {
+    let calls: Vec<(u32, SsaVarnode)> = ctx
+        .stmt_outputs
+        .iter()
+        .filter_map(|(&stmt_idx, output)| {
+            let insn = ctx.stmt_insns.get(&stmt_idx)?;
+            matches!(insn.op, IrOp::Call | IrOp::Callind).then_some((stmt_idx, (*output)?))
+        })
+        .collect();
+    for (stmt_idx, out_sv) in calls {
+        if ctx.call_fold_veto.contains(&stmt_idx) {
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op=Call output={out_sv:?} decision=call-keep reason=vetoed"
+            );
+            continue;
+        }
+        if let Err(reason) = call_result_read_site(stmt_idx, out_sv, ctx) {
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op=Call output={out_sv:?} decision=call-keep reason={reason}"
+            );
+            continue;
+        }
+        ctx.foldable_stmts.insert(stmt_idx);
+        ctx.folded_calls.insert(stmt_idx);
+        ctx.sv_defining_stmt.insert(out_sv, stmt_idx);
+        tracing::debug!(target: "unlace::cprinter",
+            "fold stmt={stmt_idx} op=Call output={out_sv:?} decision=fold-call"
+        );
+    }
+}
+
+/// The statement where the result of the call at `stmt_idx` is read, or why
+/// the call cannot move there.
+fn call_result_read_site(
+    stmt_idx: u32,
+    out_sv: SsaVarnode,
+    ctx: &PrintCtx,
+) -> Result<u32, &'static str> {
+    let insn = &ctx.stmt_insns[&stmt_idx];
+    if ctx.commented_stmts.contains(&stmt_idx)
+        || ctx.line_comments.contains_key(&insn.addr)
+        || ctx.panic_sites.contains_key(&insn.addr)
+        || cxa_call_annotation(insn, ctx).is_some()
+        || ctx.libc_call_canonical.contains_key(&insn.addr)
+    {
+        return Err("annotated");
+    }
+    if ctx
+        .stmt_outputs
+        .values()
+        .filter(|output| **output == Some(out_sv))
+        .count()
+        > 1
+    {
+        return Err("multi-def-merge");
+    }
+    if ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) != 1 {
+        return Err("not-single-use");
+    }
+    let consumer_stmt = last_consumer_stmt_for_sv(&out_sv, ctx).ok_or("no-consumer")?;
+    if consumer_stmt <= stmt_idx {
+        return Err("consumer-before-def");
+    }
+    if consumer_uses_sv_as_indirect_call_target(&out_sv, consumer_stmt, ctx) {
+        return Err("call-target");
+    }
+    let read_site =
+        printed_read_site(out_sv, consumer_stmt, ctx).ok_or("loop-or-unknown-read-site")?;
+    let (read_stmt, read_path) = (read_site.stmt, read_site.scope);
+    let def_path = ctx
+        .stmt_scope_paths
+        .get(&stmt_idx)
+        .map_or(&[][..], Vec::as_slice);
+    if read_stmt <= stmt_idx || read_path != def_path {
+        return Err("scope");
+    }
+    if ctx
+        .stmt_insns
+        .range(stmt_idx + 1..read_stmt)
+        .any(|(_, between)| between.op == IrOp::Load || instr_has_side_effects(between))
+    {
+        return Err("memory-between");
+    }
+    if inlined_read_clobbered_before(stmt_idx, read_stmt, false, ctx)
+        || expression_inputs_aliased_redefined_before_consumer(
+            &out_sv,
+            insn,
+            stmt_idx,
+            consumer_stmt,
+            ctx,
+        )
+    {
+        return Err("argument-redefined");
+    }
+    if !read_site.by_condition
+        && let Some(reader) = ctx.stmt_insns.get(&read_stmt)
+        && (is_dead_zero_init(reader, read_stmt, ctx)
+            || is_dead_suppressible_store(reader, read_stmt, ctx)
+            || is_dead_suppressed_stack_load(reader, read_stmt, ctx)
+            || is_stack_canary_compare_artifact(reader, read_stmt, ctx))
+    {
+        return Err("reader-not-printed");
+    }
+    if reader_reads_memory_besides(read_stmt, stmt_idx, ctx) {
+        return Err("reader-reads-memory");
+    }
+    Ok(read_stmt)
+}
+
+/// Whether the expression printed at `read_stmt` reads memory or calls a
+/// function other than the call at `call_stmt`: an inlined load, or a folded
+/// call, anywhere among its operands.
+fn reader_reads_memory_besides(read_stmt: u32, call_stmt: u32, ctx: &PrintCtx) -> bool {
+    let mut pending = vec![read_stmt];
+    let mut visited = BTreeSet::new();
+    while let Some(stmt) = pending.pop() {
+        if !visited.insert(stmt) {
+            continue;
+        }
+        for input_sv in ctx.stmt_inputs.get(&stmt).into_iter().flatten() {
+            let Some(def) = defining_stmt_for_sv(input_sv, ctx) else {
+                continue;
+            };
+            if def == call_stmt {
+                continue;
+            }
+            let Some(def_insn) = ctx.stmt_insns.get(&def) else {
+                continue;
+            };
+            let inlined = ctx.foldable_stmts.contains(&def)
+                || (def_insn.op == IrOp::Load
+                    && stable_load_expr_is_inlineable(def_insn, def, ctx));
+            if !inlined {
+                continue;
+            }
+            if matches!(def_insn.op, IrOp::Load | IrOp::Call | IrOp::Callind) {
+                return true;
+            }
+            pending.push(def);
+        }
+    }
+    false
 }
 
 /// Second pass over [`compute_foldable`]: walk each foldable expression's
@@ -16385,6 +16605,9 @@ fn emit_operand_with_prec(
             let _span = cprinter_detail_phase("cprinter.emit.operand.inline-def");
             emit_expr_with_prec(&def_insn, def_stmt, parent, ctx)
         };
+        if ctx.folded_calls.contains(&def_stmt) {
+            ctx.folded_call_texts.insert(def_stmt, rendered.clone());
+        }
         ctx.resolving_exprs.remove(&sv);
         tracing::debug!(target: "unlace::cprinter::name",
             "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=inline rendered={rendered}",
@@ -16590,7 +16813,12 @@ fn single_use_load_expr_is_inlineable(
         }
         consumer_stmt
     } else {
-        let Some((read_stmt, read_path)) = printed_read_site(out_sv, consumer_stmt, ctx) else {
+        let Some(ReadSite {
+            stmt: read_stmt,
+            scope: read_path,
+            ..
+        }) = printed_read_site(out_sv, consumer_stmt, ctx)
+        else {
             trace_load_text(format_args!(
                 "single-use-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=loop-or-unknown-read-site"
             ));
@@ -16626,45 +16854,83 @@ fn single_use_load_expr_is_inlineable(
     true
 }
 
-/// Where the single read of `sv` by `consumer_stmt` is printed: the
-/// statement index it is printed before and the scope it executes in.
+/// The point where a value folded into its reader is evaluated.
+struct ReadSite<'a> {
+    /// Statement the read is printed in, or before for a condition.
+    stmt: u32,
+    /// Lexical scope the read executes in.
+    scope: &'a [u32],
+    /// Whether a control condition or `return` reads the value rather than
+    /// the statement `stmt`.
+    by_condition: bool,
+}
+
+/// Where the single read of `sv` by `consumer_stmt` is printed.
 ///
-/// A folded consumer is printed where its own value is read, so the walk
-/// follows the fold chain; a folded value read more than once would print
-/// the load at every read and has no single site. A condition of an `if`, `switch` or `return`
-/// executes in the enclosing scope of its anchor statement. A loop condition
-/// runs once per iteration and has no single read site.
+/// A reader that is itsexecutable inlined (a folded statement, or a load printed at
+/// its own reader) is printed where its value is read, so the walk follows
+/// that chain while each value is read once. A condition of an `if`,
+/// `switch` or `return` executes in the enclosing scope of its anchor
+/// statement. There is no single read site for a loop condition, which runs
+/// once per iteration, nor for a reader whose temporary is re-rendered at
+/// each of its own reads.
 fn printed_read_site(
     mut sv: SsaVarnode,
     mut consumer_stmt: u32,
     ctx: &PrintCtx,
-) -> Option<(u32, &[u32])> {
+) -> Option<ReadSite<'_>> {
     let mut visited = BTreeSet::new();
-    while ctx.foldable_stmts.contains(&consumer_stmt) {
+    loop {
+        if ctx.loop_cond_uses.contains(&sv) {
+            return None;
+        }
+        if let Some((_, path)) = ctx
+            .cond_use_scope_paths
+            .iter()
+            .find(|(cond, _)| *cond == sv)
+        {
+            return Some(ReadSite {
+                stmt: consumer_stmt,
+                scope: path,
+                by_condition: true,
+            });
+        }
         if !visited.insert(consumer_stmt) {
             return None;
         }
-        sv = ctx.stmt_outputs.get(&consumer_stmt).copied().flatten()?;
+        let reader_output = ctx.stmt_outputs.get(&consumer_stmt).copied().flatten();
+        if !reader_is_inlined(consumer_stmt, ctx) {
+            if reader_output.is_some_and(|out| {
+                ctx.sv_defining_stmt.contains_key(&out)
+                    && ctx.sv_use_counts.get(&out).copied().unwrap_or(0) > 0
+            }) {
+                return None;
+            }
+            let scope = ctx
+                .stmt_scope_paths
+                .get(&consumer_stmt)
+                .map_or(&[][..], Vec::as_slice);
+            return Some(ReadSite {
+                stmt: consumer_stmt,
+                scope,
+                by_condition: false,
+            });
+        }
+        sv = reader_output?;
         if ctx.sv_use_counts.get(&sv).copied().unwrap_or(0) != 1 {
             return None;
         }
         consumer_stmt = last_consumer_stmt_for_sv(&sv, ctx)?;
     }
-    if ctx.loop_cond_uses.contains(&sv) {
-        return None;
-    }
-    if let Some((_, path)) = ctx
-        .cond_use_scope_paths
-        .iter()
-        .find(|(cond, _)| *cond == sv)
-    {
-        return Some((consumer_stmt, path));
-    }
-    let path = ctx
-        .stmt_scope_paths
-        .get(&consumer_stmt)
-        .map_or(&[][..], Vec::as_slice);
-    Some((consumer_stmt, path))
+}
+
+/// Whether statement `stmt` is printed inside its reader rather than as a
+/// statement of its own.
+fn reader_is_inlined(stmt: u32, ctx: &PrintCtx) -> bool {
+    ctx.foldable_stmts.contains(&stmt)
+        || ctx.stmt_insns.get(&stmt).is_some_and(|insn| {
+            insn.op == IrOp::Load && stable_load_expr_is_inlineable(insn, stmt, ctx)
+        })
 }
 
 fn consumer_uses_sv_as_indirect_call_target(

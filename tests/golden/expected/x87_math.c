@@ -106,10 +106,8 @@ void sub_1120(void) {
 /* Function:   sum_squares_x87 | Address: 0x1129 | Size: 0x14 (20 bytes) | Convention: System V AMD64 | Stack frame: 0x1a (26 bytes) | Xrefs from: unknown */
 long double sum_squares_x87(long double a1, long double a2) {
     int v2; // rsp
-    _DWORD v6 = *(_QWORD *)(v2 + 0x18LL); // temp
-    int c1 = __fld(v6); // reg?
-    v6 = *(_QWORD *)(v2 + 8LL);
-    int c0 = __fld(v6); // reg?
+    int c1 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
+    int c0 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
     c0 = __fmul(c0, c0); __fxch(c0, c1); c0 = __fmul(c0, c0);
     c1 = __faddp(c1, c0); return 0;
 }
@@ -119,10 +117,8 @@ int compare_floats_x87(long double a1, long double a2) {
     int v2; // rsp
     int v3; // CF
     int v4; // ZF
-    _DWORD v8 = *(_QWORD *)(v2 + 8LL); // temp
-    int c2 = __fld(v8); // reg?
-    v8 = *(_QWORD *)(v2 + 0x18LL);
-    int c1 = __fld(v8); // reg?
+    int c2 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
+    int c1 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
     c0 = 0xffffffffLL; __fcom(c1, c2);
     if (!v3 && !v4) {
         c1 = __fstp(c1); c2 = __fstp(c2);
@@ -135,13 +131,11 @@ int compare_floats_x87(long double a1, long double a2) {
 /* Function:   mix_ops_x87 | Address: 0x1166 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x2a (42 bytes) | Xrefs from: unknown */
 long double mix_ops_x87(long double a1, long double a2, long double a3) {
     int v2; // rsp
-    _DWORD v8 = *(_QWORD *)(v2 + 8LL); // temp
-    int c1 = __fld(v8); // reg?
-    v8 = *(_QWORD *)(v2 + 0x18LL);
-    int v5 = __fld(v8); // reg?
+    int c1 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
+    int v5 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
     int c0 = __fld(v5); // reg?
-    c0 = __fadd(c0, v5); v8 = *(_QWORD *)(v2 + 0x28LL);
-    int v3 = __fld(v8); // reg?
+    c0 = __fadd(c0, v5);
+    int v3 = __fld(*(_QWORD *)(v2 + 0x28LL)); // reg?
     c0 = __fmulp(c0, v3); c1 = __fsubrp(c0, c1); c1 = __fdivp(c1, v5);
     return 0;
 }

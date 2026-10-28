@@ -13663,6 +13663,83 @@ fn test_materialized_stack_load_snapshot_is_not_reloaded_in_condition() {
     );
 }
 
+/// `rbx = f(rdi) + 1; g(rbx);` with `between` after the call to `f` and a
+/// reader of `rbx` that is `g` unless `rbx_dead`.
+fn call_result_func(name: &str, between: Vec<HirNode>, rbx_dead: bool) -> String {
+    let rax = reg(0, 8);
+    let rbx = Varnode::unique(0x400, 8);
+    let mut body = vec![HirNode::Statement(IrInsn::with_output(
+        IrOp::Call,
+        rax,
+        smallvec![con(0x4010, 8), reg(56, 8)],
+        0x1000,
+    ))];
+    body.extend(between);
+    body.push(HirNode::Statement(IrInsn::with_output(
+        IrOp::IntAdd,
+        rbx,
+        smallvec![rax, con(1, 8)],
+        0x1010,
+    )));
+    if !rbx_dead {
+        body.push(HirNode::Statement(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![con(0x4020, 8), rbx],
+            0x1014,
+        )));
+    }
+    body.push(HirNode::Return(None));
+    let mut symbols = BTreeMap::new();
+    symbols.insert(0x4010, "f".to_string());
+    symbols.insert(0x4020, "g".to_string());
+    let output = super::print_c_full(&make_func(name, body), None, None, Some(&symbols), None);
+    function_body_text(&output, name)
+}
+
+#[test]
+fn single_use_call_result_folds_into_its_reader() {
+    let body = call_result_func("call_result_fold", Vec::new(), false);
+
+    assert!(
+        body.split(';')
+            .any(|stmt| stmt.contains("f(") && stmt.contains("+ 1")),
+        "a call result read once must render inside its reader:\n{body}"
+    );
+}
+
+#[test]
+fn single_use_call_result_stays_a_statement_across_a_store() {
+    let store = HirNode::Statement(IrInsn::without_output(
+        IrOp::Store,
+        smallvec![con(1, 8), reg(48, 8), con(0, 8)],
+        0x1008,
+    ));
+    let body = call_result_func("call_result_store_between", vec![store], false);
+
+    assert!(
+        !body
+            .split(';')
+            .any(|stmt| stmt.contains("f(") && stmt.contains("+ 1")),
+        "a call must not move past a store:\n{body}"
+    );
+    assert_eq!(
+        body.matches("f(").count(),
+        1,
+        "the call must be printed once:\n{body}"
+    );
+}
+
+#[test]
+fn call_read_by_a_dead_reader_is_still_printed() {
+    let body = call_result_func("call_result_dead_reader", Vec::new(), true);
+
+    assert_eq!(
+        body.matches("f(").count(),
+        1,
+        "the call must be printed once:\n{body}"
+    );
+}
+
 /// `rdi + 12` loaded as a 4-byte value and compared with 2 by `if`; the
 /// statements in `between` run after the load.
 fn heap_load_cond_func(name: &str, between: Vec<HirNode>, loop_cond: bool) -> HirFunction {

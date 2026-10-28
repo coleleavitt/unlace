@@ -231,8 +231,7 @@ mod tests {
     }
 
     fn make_session_with_symbol(addr: u64, name: &str) -> Session {
-        use unlace_ir::ArchId;
-        use unlace_loader::{BinaryImage, Endian, Symbol, SymbolKind};
+        use unlace_loader::{ArchId, BinaryImage, Endian, Symbol, SymbolKind};
         let mut img = BinaryImage::empty(ArchId::X86_64, Endian::Little);
         img.symbols.insert(
             addr,

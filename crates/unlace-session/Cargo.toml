@@ -6,7 +6,6 @@ license.workspace = true
 description = "Shared session state for unlace CLI, scripts, plugins, and integrations"
 
 [dependencies]
-unlace-ir.workspace = true
 unlace-loader.workspace = true
 anyhow.workspace = true
 serde = { workspace = true, features = ["derive"] }

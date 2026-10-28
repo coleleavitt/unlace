@@ -16,7 +16,6 @@ unlace-session = { workspace = true }
 unlace-emu = { workspace = true }
 unlace-debugger = { workspace = true }
 unlace-flirt = { workspace = true }
-unlace-idapython = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
 clap = { workspace = true }
 anyhow = { workspace = true }
@@ -40,8 +39,6 @@ tempfile = { workspace = true }
 default = []
 # Enable the Linux ptrace debugger backend behind `unlace dbg`. Linux-only.
 dbg-ptrace = ["unlace-debugger/linux-ptrace"]
-# Enable IDAPython script execution via pyo3.
-python = ["unlace-idapython/python"]
 
 [[bin]]
 name = "unlace"

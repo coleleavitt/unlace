@@ -69,12 +69,9 @@ impl PlaceholderCounts {
 /// files no module tree declares.
 pub fn placeholder_counts(krate: &Crate, uncompiled: &[PathBuf]) -> PlaceholderCounts {
     let mut counts = PlaceholderCounts::default();
-    let compiled = krate
-        .files
-        .iter()
-        .filter(|f| !is_test_file(&f.path) && !uncompiled.contains(&f.path));
+    let compiled = krate.files.iter().filter(|f| !uncompiled.contains(&f.path));
     for file in compiled {
-        let tokens = non_test_tokens(&file.tokens);
+        let tokens = &file.code;
         let mut per_kind = BTreeMap::new();
         for kind in Placeholder::ALL {
             let (ty, variant) = kind.path();
@@ -89,61 +86,6 @@ pub fn placeholder_counts(krate: &Crate, uncompiled: &[PathBuf]) -> PlaceholderC
         counts.per_file.insert(file.path.clone(), per_kind);
     }
     counts
-}
-
-fn is_test_file(path: &Path) -> bool {
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or_default();
-    stem == "tests"
-        || stem.ends_with("_tests")
-        || path.components().any(|c| c.as_os_str() == "tests")
-}
-
-/// Tokens outside `#[cfg(test)]` items.
-fn non_test_tokens(tokens: &[Token]) -> Vec<Token> {
-    let mut out = Vec::with_capacity(tokens.len());
-    let mut i = 0;
-    while i < tokens.len() {
-        let is_cfg_test = matches!(
-            tokens.get(i..i + 7),
-            Some([
-                Token::Punct('#'),
-                Token::Punct('['),
-                cfg,
-                Token::Punct('('),
-                test,
-                Token::Punct(')'),
-                Token::Punct(']'),
-            ]) if cfg.is_ident("cfg") && test.is_ident("test")
-        );
-        if !is_cfg_test {
-            out.push(tokens[i].clone());
-            i += 1;
-            continue;
-        }
-        i += 7;
-        while i < tokens.len() && !tokens[i].is_punct('{') && !tokens[i].is_punct(';') {
-            i += 1;
-        }
-        if tokens.get(i).is_some_and(|t| t.is_punct('{')) {
-            let mut depth = 0usize;
-            while i < tokens.len() {
-                if tokens[i].is_punct('{') {
-                    depth += 1;
-                } else if tokens[i].is_punct('}') {
-                    depth -= 1;
-                    if depth == 0 {
-                        break;
-                    }
-                }
-                i += 1;
-            }
-        }
-        i += 1;
-    }
-    out
 }
 
 /// `#[allow(.., dead_code, ..)]` / `#![allow(..)]` attributes in a crate.
@@ -169,7 +111,7 @@ pub fn dead_code_allows(krate: &Crate) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::status::source::{SourceFile, lex};
+    use crate::status::source::SourceFile;
 
     #[test]
     fn counts_skip_cfg_test_items() {
@@ -180,11 +122,7 @@ mod tests {
         let krate = Crate {
             name: "unlace-lift-demo".into(),
             dir: PathBuf::from("/ws/demo"),
-            files: vec![SourceFile {
-                path: PathBuf::from("/ws/demo/src/lib.rs"),
-                lines: 5,
-                tokens: lex(src),
-            }],
+            files: vec![SourceFile::new(PathBuf::from("/ws/demo/src/lib.rs"), src)],
         };
         let counts = placeholder_counts(&krate, &[]);
         assert_eq!(counts.total(Placeholder::Unimplemented), 1);

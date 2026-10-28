@@ -1,6 +1,7 @@
 //! x86 / x86-64 → IR lifter (via iced-x86).
 
 pub mod apx;
+#[cfg(feature = "unwired")]
 pub mod intrinsics;
 pub mod lift;
 mod ops;
@@ -3132,6 +3133,7 @@ mod tests {
 
     /// Phase C.1 — registry sanity: every new AVX-512 mnemonic resolves
     /// to its `_mm512_*` C intrinsic so the recoverer can name the op.
+    #[cfg(feature = "unwired")]
     #[test]
     fn phase_c1_registry_entries() {
         let reg = crate::intrinsics::IntrinsicRegistry::default();

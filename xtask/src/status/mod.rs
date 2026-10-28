@@ -32,6 +32,11 @@ const TEST_ONLY_MODULES: &[(&str, &str, &str)] = &[
         "data_layout",
         "Rocq-mirrored layout rules, pinned by tests/layout_conformance.rs",
     ),
+    (
+        "unlace-ir",
+        "tinfo",
+        "Rocq-mirrored type-info core, pinned by tests/tinfo_conformance.rs",
+    ),
 ];
 
 /// Source files no module tree declares that do not compile when declared.

@@ -171,22 +171,92 @@ fn skip_char_or_lifetime(chars: &[char], i: usize) -> usize {
 pub struct SourceFile {
     pub path: PathBuf,
     pub lines: usize,
+    /// Every token, including test code.
     pub tokens: Vec<Token>,
+    /// Tokens of non-test code: `#[cfg(test)]` items removed, and nothing at
+    /// all for test-only files.
+    pub code: Vec<Token>,
 }
 
 impl SourceFile {
+    pub fn new(path: PathBuf, text: &str) -> Self {
+        let tokens = lex(text);
+        let code = if is_test_file(&path) {
+            Vec::new()
+        } else {
+            non_test_tokens(&tokens)
+        };
+        Self {
+            path,
+            lines: text.lines().count(),
+            tokens,
+            code,
+        }
+    }
+
     pub fn read(path: &Path) -> Option<Self> {
         let text = std::fs::read_to_string(path).ok()?;
-        Some(Self {
-            path: path.to_path_buf(),
-            lines: text.lines().count(),
-            tokens: lex(&text),
-        })
+        Some(Self::new(path.to_path_buf(), &text))
     }
 
     pub fn mentions(&self, ident: &str) -> bool {
-        self.tokens.iter().any(|t| t.is_ident(ident))
+        self.code.iter().any(|t| t.is_ident(ident))
     }
+}
+
+fn is_test_file(path: &Path) -> bool {
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    stem == "tests"
+        || stem.ends_with("_tests")
+        || path.components().any(|c| c.as_os_str() == "tests")
+}
+
+/// Tokens outside `#[cfg(test)]` items.
+fn non_test_tokens(tokens: &[Token]) -> Vec<Token> {
+    let mut out = Vec::with_capacity(tokens.len());
+    let mut i = 0;
+    while i < tokens.len() {
+        let is_cfg_test = matches!(
+            tokens.get(i..i + 7),
+            Some([
+                Token::Punct('#'),
+                Token::Punct('['),
+                cfg,
+                Token::Punct('('),
+                test,
+                Token::Punct(')'),
+                Token::Punct(']'),
+            ]) if cfg.is_ident("cfg") && test.is_ident("test")
+        );
+        if !is_cfg_test {
+            out.push(tokens[i].clone());
+            i += 1;
+            continue;
+        }
+        i += 7;
+        while i < tokens.len() && !tokens[i].is_punct('{') && !tokens[i].is_punct(';') {
+            i += 1;
+        }
+        if tokens.get(i).is_some_and(|t| t.is_punct('{')) {
+            let mut depth = 0usize;
+            while i < tokens.len() {
+                if tokens[i].is_punct('{') {
+                    depth += 1;
+                } else if tokens[i].is_punct('}') {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                i += 1;
+            }
+        }
+        i += 1;
+    }
+    out
 }
 
 /// A workspace member and its non-test source files under `src/`.

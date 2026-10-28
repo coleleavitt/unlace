@@ -126,7 +126,7 @@ fn cfg_feature(attr: &[Token]) -> Option<String> {
 /// `pub use crate::m::..`): the token range of each statement and the
 /// names it brings into scope. `None` names means a glob import.
 fn imports_from(lib: &SourceFile, m: &str) -> (Vec<(usize, usize)>, Option<BTreeSet<String>>) {
-    let tokens = &lib.tokens;
+    let tokens = &lib.code;
     let mut ranges = Vec::new();
     let mut names = BTreeSet::new();
     let mut glob = false;
@@ -252,7 +252,7 @@ fn is_referenced(crates: &[Crate], owner: &Crate, m: &str, excluded: &BTreeSet<P
                 continue;
             }
             let is_lib = same_crate && file.path == lib.path;
-            let tokens = &file.tokens;
+            let tokens = &file.code;
             let in_use_stmt =
                 |k: usize| is_lib && use_ranges.iter().any(|&(s, e)| (s..=e).contains(&k));
             for (k, t) in tokens.iter().enumerate() {
@@ -386,14 +386,9 @@ fn mod_decls(tokens: &[Token]) -> Vec<(String, Option<String>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::status::source::lex;
 
     fn file(path: &str, src: &str) -> SourceFile {
-        SourceFile {
-            path: PathBuf::from(path),
-            lines: src.lines().count(),
-            tokens: lex(src),
-        }
+        SourceFile::new(PathBuf::from(path), src)
     }
 
     fn krate(name: &str, files: Vec<SourceFile>) -> Crate {

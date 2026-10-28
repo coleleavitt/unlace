@@ -3613,7 +3613,10 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "capstone",
+ "gimli",
  "iced-x86",
+ "object",
+ "regex",
  "serde",
  "serde_json",
  "toml",

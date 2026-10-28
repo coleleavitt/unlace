@@ -92,6 +92,7 @@ use unlace_passes::{
     validate_named_phase_monotonicity_with_exceptions,
 };
 
+mod function_extents;
 mod hir_recovery;
 
 /// Once-per-process pipeline phase-monotonicity check.
@@ -223,6 +224,13 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         funcs = scan_for_prologues(image);
     }
 
+    let eh_frame = unlace_loader::parse_eh_frame(image).unwrap_or_else(|err| {
+        tracing::debug!(target: "unlace::discover", %err, ".eh_frame unreadable");
+        unlace_loader::EhFrameInfo::empty()
+    });
+    function_extents::add_eh_frame_functions(image, &eh_frame, &mut funcs);
+    let recorded = function_extents::RecordedExtents::collect(image, &eh_frame);
+
     if funcs.is_empty() {
         profiling::diagnostic(
             "info",
@@ -251,7 +259,10 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     }
 
     if !(had_symbol_funcs && permissive_symbol_sizes) && uses_x86_function_discovery(image.arch) {
+        function_extents::reconcile_with_recorded_extents(&recorded, &mut funcs);
         funcs = recursive_descent_discovery(image, funcs);
+        function_extents::reconcile_with_recorded_extents(&recorded, &mut funcs);
+        function_extents::drop_eh_frame_tail_chunks(image, &eh_frame, &mut funcs);
     }
     if permissive_symbol_sizes {
         infer_arch_fixture_sizes(image, &mut funcs);

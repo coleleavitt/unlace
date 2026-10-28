@@ -42,6 +42,7 @@ impl DataLayout {
             PrimitiveType::Float => Some(4),
             PrimitiveType::Double => Some(8),
             PrimitiveType::Ptr => Some(u64::from(self.pointer_size)),
+            PrimitiveType::Vector(v) => Some(u64::from(v.size())),
         }
     }
 

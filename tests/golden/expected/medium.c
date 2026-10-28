@@ -29,15 +29,19 @@ _DWORD __readfsdword(unsigned int offset);
 #ifndef INFINITY
 #define INFINITY __builtin_inff()
 #endif
+// SIMD register types. 128-bit values are carried as raw bits so the vector
+// helpers below stay plain C; wider registers use GCC vector types.
+typedef unsigned long long __m64; typedef unsigned __int128 __m128i; typedef unsigned __int128 __m128; typedef unsigned __int128 __m128d;
+typedef long long __m256i __attribute__((__vector_size__(32))); typedef float __m256 __attribute__((__vector_size__(32))); typedef double __m256d __attribute__((__vector_size__(32)));
+typedef long long __m512i __attribute__((__vector_size__(64))); typedef float __m512 __attribute__((__vector_size__(64))); typedef double __m512d __attribute__((__vector_size__(64)));
 // Minimal executable semantics for the SSE vector helpers emitted below.
-static inline unsigned int __unlace_vec_u32(unsigned __int128 v, unsigned int lane) { return (unsigned int)(v >> (lane * 32)); }
-static inline unsigned long long __unlace_vec_u64(unsigned __int128 v, unsigned int lane) { return (unsigned long long)(v >> (lane * 64)); }
-static inline unsigned __int128 _mm_add_epi32(unsigned __int128 a, unsigned __int128 b) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)(__unlace_vec_u32(a, i) + __unlace_vec_u32(b, i)) << (i * 32); return out; }
-static inline unsigned __int128 _mm_mul_epu32(unsigned __int128 a, unsigned __int128 b) { unsigned long long lo = (unsigned long long)__unlace_vec_u32(a, 0) * __unlace_vec_u32(b, 0); unsigned long long hi = (unsigned long long)__unlace_vec_u32(a, 2) * __unlace_vec_u32(b, 2); return (unsigned __int128)lo | ((unsigned __int128)hi << 64); }
-static inline unsigned __int128 _mm_shuffle_epi32(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)__unlace_vec_u32(a, (imm >> (i * 2)) & 3u) << (i * 32); return out; }
-static inline unsigned __int128 __unlace_psrldq(unsigned __int128 a, unsigned int imm) { return imm >= 16 ? 0 : a >> (imm * 8); }
-static inline unsigned __int128 __unlace_psrlq(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 2; i++) { unsigned long long lane = __unlace_vec_u64(a, i); lane = imm >= 64 ? 0 : lane >> imm; out |= (unsigned __int128)lane << (i * 64); } return out; }
-static inline unsigned __int128 __unlace_punpckldq(unsigned __int128 a, unsigned __int128 b) { return (unsigned __int128)__unlace_vec_u32(a, 0) | ((unsigned __int128)__unlace_vec_u32(b, 0) << 32) | ((unsigned __int128)__unlace_vec_u32(a, 1) << 64) | ((unsigned __int128)__unlace_vec_u32(b, 1) << 96); }
+static inline unsigned int __unlace_vec_u32(__m128i v, unsigned int lane) { return (unsigned int)(v >> (lane * 32)); }
+static inline unsigned long long __unlace_vec_u64(__m128i v, unsigned int lane) { return (unsigned long long)(v >> (lane * 64)); }
+static inline __m128i _mm_add_epi32(__m128i a, __m128i b) { __m128i out = 0; for (unsigned int i = 0; i < 4; i++) out |= (__m128i)(__unlace_vec_u32(a, i) + __unlace_vec_u32(b, i)) << (i * 32); return out; }
+static inline __m128i _mm_mul_epu32(__m128i a, __m128i b) { unsigned long long lo = (unsigned long long)__unlace_vec_u32(a, 0) * __unlace_vec_u32(b, 0); unsigned long long hi = (unsigned long long)__unlace_vec_u32(a, 2) * __unlace_vec_u32(b, 2); return (__m128i)lo | ((__m128i)hi << 64); }
+static inline __m128i _mm_shuffle_epi32(__m128i a, unsigned int imm) { __m128i out = 0; for (unsigned int i = 0; i < 4; i++) out |= (__m128i)__unlace_vec_u32(a, (imm >> (i * 2)) & 3u) << (i * 32); return out; }
+static inline __m128i _mm_srli_epi64(__m128i a, unsigned int imm) { __m128i out = 0; for (unsigned int i = 0; i < 2; i++) { unsigned long long lane = __unlace_vec_u64(a, i); lane = imm >= 64 ? 0 : lane >> imm; out |= (__m128i)lane << (i * 64); } return out; }
+static inline __m128i _mm_unpacklo_epi32(__m128i a, __m128i b) { return (__m128i)__unlace_vec_u32(a, 0) | ((__m128i)__unlace_vec_u32(b, 0) << 32) | ((__m128i)__unlace_vec_u32(a, 1) << 64) | ((__m128i)__unlace_vec_u32(b, 1) << 96); }
 // Minimal C11 atomic declarations used by recovered AArch64 atomics.
 typedef enum { memory_order_relaxed, memory_order_consume, memory_order_acquire, memory_order_release, memory_order_acq_rel, memory_order_seq_cst } memory_order;
 #define _Atomic
@@ -74,29 +78,30 @@ int main(void) {
     __int64 v23; // temp
     __int64 v24; // temp
     __int64 v32; // temp
-    __int64 v39; // temp
+    __int64 v40; // temp
     char buf_88[64];
     __int64 v_16;
     char buf_0[64]; // int buf_0[16]
     _QWORD c0; // rax
-    __int64 v49; // rax
     __int64 v50; // rax
     __int64 v51; // rax
+    __int64 v52; // rax
     _QWORD c3; // rbx
     _QWORD a2; // rsi
     _QWORD a1; // rdi
     _QWORD c8; // r10
-    _OWORD v25; // temp
+    __m128i c16; // xmm1
     _DWORD v28; // temp
     _DWORD v29; // temp
+    __m128i v37; // temp
     __int64 v27; // temp
     int v30; // temp
-    int v43; // temp
-    _QWORD v38; // temp
+    int v44; // temp
+    _QWORD v39; // temp
     __int64 c2 = 0xaLL; // rdx
     _BOOL c11 = !(__builtin_popcount(LOBYTE(0)) & 1); // PF
     __int64 c1 = 0LL; // rcx
-    __int128 c15 = (((unsigned __int128)0x900000006ULL << 64) | 0x300000000ULL); // xmm0
+    __m128i c15 = (((unsigned __int128)0x900000006ULL << 64) | 0x300000000ULL); // xmm0
     char c12 = 1; // ZF
     char c13 = LOBYTE(0); // SF
     char c10 = 0; // CF
@@ -151,19 +156,17 @@ int main(void) {
     __int64 v8 = (uintptr_t)(buf_0 + 64); // r8
     c0 = (uintptr_t)buf_0; c15 = 0;
     do {
-        v25 = *(_OWORD *)(c0); c15 = _mm_add_epi32(c15, v25); v27 = c0 + 0x10LL;
-        c0 = c0 + 0x10LL; v38 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27;
+        v37 = *(_OWORD *)(c0); c15 = _mm_add_epi32(c15, v37); v27 = c0 + 0x10LL;
+        c0 = c0 + 0x10LL; v39 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27;
         c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0);
-        c11 = !(__builtin_popcount(LOBYTE(v38)) & 1);
+        c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
     } while ((uintptr_t)(buf_0 + 64) != c0);
-    __int128 c16 = c15; // xmm1
-    a1 = (uintptr_t)(buf_0 + 4); c0 = 0LL; c16 = __unlace_psrldq(c15, 8);
+    a1 = (uintptr_t)(buf_0 + 4); c0 = 0LL;
     __int64 c9 = (uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4); // r11
-    a2 = (uintptr_t)(buf_0 + 4); c15 = _mm_add_epi32(c15, c16); c16 = c15;
-    c16 = __unlace_psrldq(c15, 4); c15 = _mm_add_epi32(c15, c16); c2 = LODWORD(c15) + c1;
-    c12 = !(c9 & 4); c13 = LOBYTE((c9 & 4) < 0); c10 = 0;
-    c14 = 0; c11 = !(__builtin_popcount(LOBYTE(c9 & 4)) & 1); c9 = c9 & 4;
-    c1 = (uintptr_t)(buf_0 + 4);
+    a2 = (uintptr_t)(buf_0 + 4); c15 = _mm_add_epi32(c15, (_OWORD)c15 >> 0x40); c16 = (_OWORD)c15 >> 0x20;
+    c15 = _mm_add_epi32(c15, c16); c2 = LODWORD(c15) + c1; c12 = !(c9 & 4);
+    c13 = LOBYTE((c9 & 4) < 0); c10 = 0; c14 = 0;
+    c11 = !(__builtin_popcount(LOBYTE(c9 & 4)) & 1); c9 = c9 & 4; c1 = (uintptr_t)(buf_0 + 4);
     if (!(c9 & 4)) {
         goto label_19;
     } else {
@@ -175,9 +178,9 @@ int main(void) {
                 v28 = *(_DWORD *)(a2); c9 = v28; v28 = c0 < c9 ? c9 : c0;
                 v29 = *(_DWORD *)(a2 + 4LL); c9 = v29; v29 = v28;
                 v30 = v29 - c9; c0 = v29 < c9 ? c9 : v29; v27 = a2 + 8LL;
-                a2 = a2 + 8LL; v39 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27;
+                a2 = a2 + 8LL; v40 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27;
                 c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a2; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), a2);
-                c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
+                c11 = !(__builtin_popcount(LOBYTE(v40)) & 1);
             } while ((uintptr_t)(buf_0 + 64) != a2);
         }
         v28 = c0 + c2; c0 = c0 + c2; c2 = 0LL;
@@ -193,28 +196,27 @@ int main(void) {
                 do {
                     v29 = *(_DWORD *)(c1); a2 = v29; c2 = c2 != a2 && a2 <= c2 ? a2 : c2;
                     v29 = *(_DWORD *)(c1 + 4LL); a2 = v29; c2 = c2 != a2 && a2 <= c2 ? a2 : c2;
-                    v27 = c1 + 8LL; c1 = c1 + 8LL; v38 = (uintptr_t)(buf_0 + 64) - v27;
+                    v27 = c1 + 8LL; c1 = c1 + 8LL; v39 = (uintptr_t)(buf_0 + 64) - v27;
                     c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c1;
-                    c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c1); c11 = !(__builtin_popcount(LOBYTE(v38)) & 1);
+                    c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c1); c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
                 } while ((uintptr_t)(buf_0 + 64) != c1);
             }
             c12 = c2 + v28 == 0; c13 = LOBYTE(c2 + v28 < 0); c10 = (c2 + c0) < c2;
             c14 = __OFADD__(c2, c0); c11 = !(__builtin_popcount(LOBYTE(c2 + v28)) & 1); c2 = c2 + v28;
-            __int128 c17 = 0; // xmm2
+            __m128i c17 = 0; // xmm2
             c0 = (uintptr_t)buf_0;
             do {
-                v25 = *(_OWORD *)(c0); c15 = v25; v27 = c0 + 0x10LL;
+                v37 = *(_OWORD *)(c0); c15 = v37; v27 = c0 + 0x10LL;
                 c0 = c0 + 0x10LL; c16 = c15; c16 = _mm_mul_epu32(c15, c15);
-                c15 = __unlace_psrlq(c15, 0x20); c15 = _mm_mul_epu32(c15, c15); c16 = _mm_shuffle_epi32(c16, 8);
-                c15 = _mm_shuffle_epi32(c15, 8); c16 = __unlace_punpckldq(c16, c15); c17 = _mm_add_epi32(c17, c16);
-                v38 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27);
-                c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0); c11 = !(__builtin_popcount(LOBYTE(v38)) & 1);
+                c15 = _mm_srli_epi64(c15, 0x20); c15 = _mm_mul_epu32(c15, c15); c16 = _mm_shuffle_epi32(c16, 8);
+                c15 = _mm_shuffle_epi32(c15, 8); c16 = _mm_unpacklo_epi32(c16, c15); c17 = _mm_add_epi32(c17, c16);
+                v39 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27);
+                c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0); c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
             } while ((uintptr_t)(buf_0 + 64) != c0);
-            c15 = c17; c0 = 0LL; c15 = __unlace_psrldq(c17, 8);
-            c17 = _mm_add_epi32(c17, c15); c15 = c17; c15 = __unlace_psrldq(c17, 4);
-            c17 = _mm_add_epi32(c17, c15); c12 = LODWORD(c17) + c2 == 0; c13 = LOBYTE(LODWORD(c17) + c2 < 0);
-            c10 = (LODWORD(c17) + c2) < LODWORD(c17); c14 = __OFADD__(LODWORD(c17), c2); c11 = !(__builtin_popcount(LOBYTE(LODWORD(c17) + c2)) & 1);
-            c1 = LODWORD(c17) + c2; c2 = (uintptr_t)buf_0;
+            c0 = 0LL; c17 = _mm_add_epi32(c17, (_OWORD)c17 >> 0x40); c17 = _mm_add_epi32(c17, (_OWORD)c17 >> 0x20);
+            c12 = LODWORD(c17) + c2 == 0; c13 = LOBYTE(LODWORD(c17) + c2 < 0); c10 = (LODWORD(c17) + c2) < LODWORD(c17);
+            c14 = __OFADD__(LODWORD(c17), c2); c11 = !(__builtin_popcount(LOBYTE(LODWORD(c17) + c2)) & 1); c1 = LODWORD(c17) + c2;
+            c2 = (uintptr_t)buf_0;
             while (1) {
                 v28 = *(_DWORD *)(c2); v29 = v28 - 0xf; c12 = v28 == 0xf;
                 c13 = LOBYTE(v28 < 0xf); c10 = (_DWORD)v28 < (_DWORD)0xf; c14 = __OFSUB__(v28, 0xf);
@@ -276,7 +278,7 @@ int main(void) {
             c14 = __OFADD__(c9, a2); c11 = !(__builtin_popcount(LOBYTE(c9 + a2)) & 1); c9 = c9 + a2;
             c1 = 0x12LL; c3 = 0xcLL;
             do {
-                v28 = LODWORD(c3); v43 = c1; c3 = c1;
+                v28 = LODWORD(c3); v44 = c1; c3 = c1;
                 v29 = v28; v30 = v29 / c1; c0 = v30;
                 c2 = v29 % c1; c1 = c2; c12 = !(c2 & c2);
                 c13 = LOBYTE((c2 & c2) < 0); c10 = 0; c14 = 0;
@@ -284,7 +286,7 @@ int main(void) {
             } while ((c2 & c2) != 0);
             c12 = 1; c13 = LOBYTE(0); c10 = 0;
             c14 = 0; c11 = c11; a2 = 0LL;
-            c0 = LODWORD(0xd8LL) / v43; c2 = LODWORD(0xd8LL) % v43; c8 = LODWORD(c0 + c9 - 1218664206);
+            c0 = LODWORD(0xd8LL) / v44; c2 = LODWORD(0xd8LL) % v44; c8 = LODWORD(c0 + c9 - 1218664206);
             while (1) {
                 v28 = *(_DWORD *)(c7); c2 = v28; c0 = v28 * 0x66666667LL;
                 v30 = c2; c0 = LODWORD(c0 >> 0x21) - (c2 >> 0x1f); c7 = LODWORD(c0 + (c0 << 2LL));
@@ -368,9 +370,9 @@ int main(void) {
                     break;
                 }
             }
-            v49 = f_rec_fib(8LL); c8 = LODWORD(v49 + LODWORD(a2 + c1 + 3LL)); v50 = f_rec_power_constprop_0(8LL);
-            c8 = c8 + v50; v51 = f_ackermann(2LL, 3LL); v29 = LODWORD(c8 + v51 + 0xabe0cLL);
-            c2 = (_DWORD)LODWORD(c8 + v51 + 0xabe0cLL) >> 0x1f >> 0x18; v28 = v29; c0 = (_QWORD)(LOBYTE(v28 + c2)) - c2;
+            v50 = f_rec_fib(8LL); c8 = LODWORD(v50 + LODWORD(a2 + c1 + 3LL)); v51 = f_rec_power_constprop_0(8LL);
+            c8 = c8 + v51; v52 = f_ackermann(2LL, 3LL); v29 = LODWORD(c8 + v52 + 0xabe0cLL);
+            c2 = (_DWORD)LODWORD(c8 + v52 + 0xabe0cLL) >> 0x1f >> 0x18; v28 = v29; c0 = (_QWORD)(LOBYTE(v28 + c2)) - c2;
             return c0;
         }
     }

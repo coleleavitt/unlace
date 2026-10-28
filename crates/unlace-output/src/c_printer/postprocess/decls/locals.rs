@@ -102,5 +102,15 @@ pub(in crate::c_printer) fn is_plain_local_decl_type_start(first: &str) -> bool 
             | "__int16"
             | "__int64"
             | "__int128"
+            | "__m64"
+            | "__m128"
+            | "__m128d"
+            | "__m128i"
+            | "__m256"
+            | "__m256d"
+            | "__m256i"
+            | "__m512"
+            | "__m512d"
+            | "__m512i"
     )
 }

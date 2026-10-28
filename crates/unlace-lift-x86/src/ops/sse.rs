@@ -29,10 +29,8 @@ pub mod tag {
     pub const PSUBD: u64 = 0x11A;
     pub const PSUBQ: u64 = 0x11B;
 
-    pub const PAND: u64 = 0x120;
-    pub const POR: u64 = 0x121;
-    pub const PXOR: u64 = 0x122;
-
+    // 0x120..0x122 (PAND/POR/PXOR) retired: packed bitwise logic lowers to
+    // integer IR in `lift_vector_logic`.
     pub const PMULLD: u64 = 0x123;
     /// SSE2 unsigned 32×32→64 multiply of the low dword of each 64-bit lane.
     pub const PMULUDQ: u64 = 0x127;
@@ -133,7 +131,7 @@ pub mod tag {
     pub const VMOVDQU64: u64 = 0x602;
     pub const VPERMB: u64 = 0x603;
     pub const VGF2P8AFFINEQB: u64 = 0x604;
-    pub const XORPS: u64 = 0x605;
+    // 0x605 (XORPS) and 0x614 (PSRLDQ) retired: lowered to integer IR.
     pub const MOVSS: u64 = 0x606;
     pub const KMOVQ: u64 = 0x607;
     pub const VPERMI2B: u64 = 0x608;
@@ -148,7 +146,6 @@ pub mod tag {
     pub const CVTSS2SD: u64 = 0x611;
     pub const VPORQ: u64 = 0x612;
     pub const PREFETCH: u64 = 0x613;
-    pub const PSRLDQ: u64 = 0x614;
     pub const MOVD: u64 = 0x615;
     pub const PREFETCHT0: u64 = 0x616;
     pub const VPBROADCASTB: u64 = 0x617;
@@ -183,12 +180,7 @@ pub mod tag {
     pub const VPBLENDD: u64 = 0x1C4;
     /// VPERMD — cross-lane 32-bit dword permute (256-bit).
     pub const VPERMD: u64 = 0x1C5;
-    /// VPAND — packed bitwise AND (256-bit).
-    pub const VPAND: u64 = 0x1C6;
-    /// VPOR — packed bitwise OR (256-bit).
-    pub const VPOR: u64 = 0x1C7;
-    /// VPXOR — packed bitwise XOR (256-bit).
-    pub const VPXOR: u64 = 0x1C8;
+    // 0x1C6..0x1C8 (VPAND/VPOR/VPXOR) retired: see `lift_vector_logic`.
 
     // ── AVX-512 EVEX packed integer ops (t205) ──────────────────
     //
@@ -327,53 +319,118 @@ pub fn lift_sse_shuffle_imm(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, cal
     ));
 }
 
-/// PXOR / XORPS / XORPD with self-XOR detection.
+/// Whole-register operation of a packed bitwise instruction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VectorLogic {
+    And,
+    /// `PANDN` / `ANDNPS` / `ANDNPD`: `~first & second`.
+    AndNot,
+    Or,
+    Xor,
+}
+
+/// Packed bitwise logic (PAND, PANDN, POR, PXOR, their PS/PD forms and the
+/// VEX three-operand forms) lowered to integer IR on the whole register:
+/// lane boundaries do not matter to bitwise operations.
 ///
-/// `pxor xmm0, xmm0` is an idiom for zeroing a register — we lower it to
-/// `Copy(0)` instead of emitting a Callother.
-pub fn lift_sse_xor(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, _callother_tag: u64) {
+/// `pxor xmm0, xmm0` and `pandn xmm0, xmm0` are zeroing idioms and become
+/// `Copy(0)`, so the old register value does not stay live.
+pub fn lift_vector_logic(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, logic: VectorLogic) {
     use iced_x86::OpKind;
 
-    // Detect self-XOR idiom: both operands are the same register.
-    if insn.op_kind(0) == OpKind::Register
-        && insn.op_kind(1) == OpKind::Register
-        && insn.op_register(0) == insn.op_register(1)
-    {
-        let Some(dst) = ctx.operand_write(insn, 0) else {
+    // Legacy SSE is destructive (`op0 = op0 OP op1`); VEX reads op1 and op2.
+    let (a_idx, b_idx) = if insn.op_count() >= 3 { (1, 2) } else { (0, 1) };
+    let zeroing_idiom = matches!(logic, VectorLogic::Xor | VectorLogic::AndNot)
+        && insn.op_kind(a_idx) == OpKind::Register
+        && insn.op_kind(b_idx) == OpKind::Register
+        && insn.op_register(a_idx) == insn.op_register(b_idx);
+    let sources = if zeroing_idiom {
+        None
+    } else {
+        let (Some(a), Some(b)) = (ctx.operand_read(insn, a_idx), ctx.operand_read(insn, b_idx))
+        else {
             ctx.emit_unimplemented();
             return;
         };
-        ctx.emit(IrInsn::with_output(
-            IrOp::Copy,
-            dst,
-            smallvec![Varnode::constant(0, dst.size)],
-            ctx.addr,
-        ));
-        return;
-    }
-
-    let Some(src0) = ctx.operand_read(insn, 0) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(src1) = ctx.operand_read(insn, 1) else {
-        ctx.emit_unimplemented();
-        return;
+        Some((a, b))
     };
     let Some(dst) = ctx.operand_write(insn, 0) else {
         ctx.emit_unimplemented();
         return;
     };
-    let (xor_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
-    let src0 = ctx.resize_value(src0, xor_dst.size);
-    let src1 = ctx.resize_value(src1, xor_dst.size);
-    ctx.emit(IrInsn::with_output(
-        IrOp::IntXor,
-        xor_dst,
-        smallvec![src0, src1],
-        ctx.addr,
-    ));
-    ctx.finish_zero_extending_vector_output(zero_ext_reg, xor_dst);
+    let (out, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
+
+    match sources {
+        None => ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            out,
+            smallvec![Varnode::constant(0, out.size)],
+            ctx.addr,
+        )),
+        Some((a, b)) => {
+            let a = ctx.resize_value(a, out.size);
+            let b = ctx.resize_value(b, out.size);
+            let (op, a) = match logic {
+                VectorLogic::And => (IrOp::IntAnd, a),
+                VectorLogic::Or => (IrOp::IntOr, a),
+                VectorLogic::Xor => (IrOp::IntXor, a),
+                VectorLogic::AndNot => {
+                    let not_a = Varnode::unique(ctx.alloc_unique(), out.size);
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::IntNegate,
+                        not_a,
+                        smallvec![a],
+                        ctx.addr,
+                    ));
+                    (IrOp::IntAnd, not_a)
+                }
+            };
+            ctx.emit(IrInsn::with_output(op, out, smallvec![a, b], ctx.addr));
+        }
+    }
+    ctx.finish_zero_extending_vector_output(zero_ext_reg, out);
+}
+
+/// Legacy-SSE PSRLDQ / PSLLDQ: shift the XMM register by `imm8` bytes,
+/// which is exactly an integer shift of the 128-bit value by `8 * imm8`
+/// bits. Counts above 15 clear the register. (The VEX YMM forms shift each
+/// 128-bit lane separately and are not lowered here.)
+///
+/// `op` is [`IrOp::IntRight`] or [`IrOp::IntLeft`].
+pub fn lift_byte_shift(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, op: IrOp) {
+    let count = u64::from(insn.immediate8());
+    let src = if count < 16 {
+        let Some(src) = ctx.operand_read(insn, 0) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        Some(src)
+    } else {
+        None
+    };
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (out, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
+    match src {
+        Some(src) => {
+            let src = ctx.resize_value(src, out.size);
+            ctx.emit(IrInsn::with_output(
+                op,
+                out,
+                smallvec![src, Varnode::constant(count * 8, 1)],
+                ctx.addr,
+            ));
+        }
+        None => ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            out,
+            smallvec![Varnode::constant(0, out.size)],
+            ctx.addr,
+        )),
+    }
+    ctx.finish_zero_extending_vector_output(zero_ext_reg, out);
 }
 
 /// Single-source packed SSE (e.g. SQRTPS, PMOVMSKB): `dst = Callother(tag, src)`.

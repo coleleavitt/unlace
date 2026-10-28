@@ -48,7 +48,7 @@ pub(in crate::c_printer) fn prune_dead_plain_assignments(output: String) -> Stri
 /// fixpoint so a register-only function takes a single, non-cascading pass.
 ///
 /// CRITICAL: only the function body is scanned, not the shared IDA prelude —
-/// the prelude's SSE helpers (`memory_order_consume`, the `__unlace_psrlq`
+/// the prelude's SSE helpers (`memory_order_consume`, the `_mm_srli_epi64`
 /// ternary, etc.) contain the substring `cond`, which would otherwise make
 /// every function (even register-only ones like v850 `sub_10118`) take the
 /// 8-pass cascade and re-trigger the live-out over-prune this gate prevents.

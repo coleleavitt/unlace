@@ -193,6 +193,8 @@ pub enum PrimitiveType {
     Double,
     /// Pointer (size = pointer width, typically 8 on 64-bit targets).
     Ptr,
+    /// SIMD register value (`__m128i`, `__m256`, ...).
+    Vector(crate::types::VectorType),
 }
 
 impl PrimitiveType {
@@ -208,6 +210,15 @@ impl PrimitiveType {
                 if w == w2 =>
             {
                 Self::Int(w)
+            }
+            (Self::Vector(a), Self::Vector(b)) => a.join(b).map_or(Self::Unknown, Self::Vector),
+            // A SIMD value moved through memory or general integer ops of
+            // its own width is still that vector.
+            (Self::Vector(v), Self::Int(w) | Self::UnsignedInt(w))
+            | (Self::Int(w) | Self::UnsignedInt(w), Self::Vector(v))
+                if w == v.size() =>
+            {
+                Self::Vector(v)
             }
             // Conflict: collapse back to Unknown.
             _ => Self::Unknown,
@@ -225,6 +236,7 @@ impl std::fmt::Display for PrimitiveType {
             Self::Float => f.write_str("f32"),
             Self::Double => f.write_str("f64"),
             Self::Ptr => f.write_str("ptr"),
+            Self::Vector(v) => write!(f, "{v}"),
         }
     }
 }

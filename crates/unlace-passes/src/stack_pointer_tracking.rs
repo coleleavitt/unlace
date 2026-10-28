@@ -683,6 +683,7 @@ fn primitive_size(ty: PrimitiveType) -> u32 {
         PrimitiveType::Float => 4,
         PrimitiveType::Double => 8,
         PrimitiveType::Ptr => 8,
+        PrimitiveType::Vector(v) => u32::from(v.size()),
         PrimitiveType::Unknown => 8,
     }
 }

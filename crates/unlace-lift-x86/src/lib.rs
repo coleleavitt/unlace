@@ -862,16 +862,89 @@ mod tests {
         assert_eq!(dst.size, 16);
     }
 
+    /// Assert `bytes` lift to integer IR containing an `op` with a
+    /// `size`-byte output and no `Callother` / `Unimplemented`.
+    fn assert_lowers_to(bytes: &[u8], op: IrOp, size: u8) -> Vec<unlace_ir::IrInsn> {
+        let result = lifter().lift_insn(bytes, 0x1000).unwrap();
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == op && i.output.is_some_and(|o| o.size == size)),
+            "expected {op:?} with a {size}-byte output: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| matches!(i.op, IrOp::Callother | IrOp::Unimplemented)),
+            "unexpected opaque op: {:?}",
+            result.ir_ops
+        );
+        result.ir_ops
+    }
+
     #[test]
     fn test_lift_sse_pand() {
         // 66 0F DB C1 = pand xmm0, xmm1
-        assert_callother_tag(&[0x66, 0x0F, 0xDB, 0xC1], sse_tag::PAND);
+        assert_lowers_to(&[0x66, 0x0F, 0xDB, 0xC1], IrOp::IntAnd, 16);
     }
 
     #[test]
     fn test_lift_sse_por() {
         // 66 0F EB C1 = por xmm0, xmm1
-        assert_callother_tag(&[0x66, 0x0F, 0xEB, 0xC1], sse_tag::POR);
+        assert_lowers_to(&[0x66, 0x0F, 0xEB, 0xC1], IrOp::IntOr, 16);
+    }
+
+    #[test]
+    fn test_lift_sse_pandn_negates_first_operand() {
+        // 66 0F DF C1 = pandn xmm0, xmm1  (xmm0 = ~xmm0 & xmm1)
+        let ops = assert_lowers_to(&[0x66, 0x0F, 0xDF, 0xC1], IrOp::IntAnd, 16);
+        let not = ops.iter().find(|i| i.op == IrOp::IntNegate).unwrap();
+        let and = ops.iter().find(|i| i.op == IrOp::IntAnd).unwrap();
+        assert_eq!(and.inputs[0], not.output.unwrap());
+    }
+
+    #[test]
+    fn test_lift_sse_andps() {
+        // 0F 54 C1 = andps xmm0, xmm1
+        assert_lowers_to(&[0x0F, 0x54, 0xC1], IrOp::IntAnd, 16);
+    }
+
+    #[test]
+    fn test_lift_vex_xor_zeroing_idiom() {
+        // C5 F1 EF C1 = vpxor xmm0, xmm1, xmm1
+        let ops = assert_lowers_to(&[0xC5, 0xF1, 0xEF, 0xC1], IrOp::Copy, 16);
+        assert!(!ops.iter().any(|i| i.op == IrOp::IntXor));
+        assert!(
+            ops.iter().any(|i| i.op == IrOp::IntZext),
+            "a VEX write zero-extends to the full register: {ops:?}"
+        );
+    }
+
+    #[test]
+    fn test_lift_sse_psrldq_is_a_128_bit_shift() {
+        // 66 0F 73 D8 08 = psrldq xmm0, 8
+        let ops = assert_lowers_to(&[0x66, 0x0F, 0x73, 0xD8, 0x08], IrOp::IntRight, 16);
+        let shift = ops.iter().find(|i| i.op == IrOp::IntRight).unwrap();
+        assert_eq!(shift.inputs[1], unlace_ir::Varnode::constant(64, 1));
+    }
+
+    #[test]
+    fn test_lift_sse_pslldq() {
+        // 66 0F 73 F8 04 = pslldq xmm0, 4
+        let ops = assert_lowers_to(&[0x66, 0x0F, 0x73, 0xF8, 0x04], IrOp::IntLeft, 16);
+        let shift = ops.iter().find(|i| i.op == IrOp::IntLeft).unwrap();
+        assert_eq!(shift.inputs[1], unlace_ir::Varnode::constant(32, 1));
+    }
+
+    #[test]
+    fn test_lift_sse_psrldq_past_the_register_clears_it() {
+        // 66 0F 73 D8 10 = psrldq xmm0, 16
+        let ops = assert_lowers_to(&[0x66, 0x0F, 0x73, 0xD8, 0x10], IrOp::Copy, 16);
+        let copy = ops.iter().find(|i| i.op == IrOp::Copy).unwrap();
+        assert_eq!(copy.inputs[0], unlace_ir::Varnode::constant(0, 16));
     }
 
     #[test]
@@ -1439,26 +1512,6 @@ mod tests {
             .expect("PMULLD must emit Callother");
         assert_eq!(co.inputs[0].offset, sse_tag::PMULLD);
         assert_eq!(co.output.unwrap().size, 16);
-        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-    }
-
-    #[test]
-    fn pand_uses_intand_or_callother() {
-        // 66 0F DB C1 = pand xmm0, xmm1.
-        // lift-x86 lowers 128-bit SSE bitwise ops via Callother; accept either
-        // IntAnd or Callother(tag::PAND) so future 128-bit IntAnd drops in.
-        let result = lifter()
-            .lift_insn(&[0x66, 0x0F, 0xDB, 0xC1], 0x1000)
-            .unwrap();
-        let is_intand = result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd);
-        let is_callother_pand = result
-            .ir_ops
-            .iter()
-            .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PAND);
-        assert!(
-            is_intand || is_callother_pand,
-            "PAND must lift to either IntAnd or Callother(tag::PAND)"
-        );
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
@@ -2056,10 +2109,7 @@ mod tests {
             result.ir_ops
         );
         assert!(
-            !result
-                .ir_ops
-                .iter()
-                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PXOR),
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
             "PXOR should not fall back to Callother"
         );
     }
@@ -2821,25 +2871,25 @@ mod tests {
         assert_avx_lift(&[0xC4, 0xE2, 0x7D, 0x36, 0xC1], sse_tag::VPERMD, 32);
     }
 
-    /// t192 — VPAND ymm0, ymm0, ymm1 → `_mm256_and_si256`.
+    /// t192 — VPAND ymm0, ymm0, ymm1 is bitwise on the whole register.
     #[test]
     fn t192_vpand_lift() {
         // c5 fd db c1 = vpand ymm0, ymm0, ymm1.
-        assert_avx_lift(&[0xC5, 0xFD, 0xDB, 0xC1], sse_tag::VPAND, 32);
+        assert_lowers_to(&[0xC5, 0xFD, 0xDB, 0xC1], IrOp::IntAnd, 32);
     }
 
-    /// t192 — VPOR ymm0, ymm0, ymm1 → `_mm256_or_si256`.
+    /// t192 — VPOR ymm0, ymm0, ymm1 is bitwise on the whole register.
     #[test]
     fn t192_vpor_lift() {
         // c5 fd eb c1 = vpor ymm0, ymm0, ymm1.
-        assert_avx_lift(&[0xC5, 0xFD, 0xEB, 0xC1], sse_tag::VPOR, 32);
+        assert_lowers_to(&[0xC5, 0xFD, 0xEB, 0xC1], IrOp::IntOr, 32);
     }
 
-    /// t192 — VPXOR ymm0, ymm0, ymm1 → `_mm256_xor_si256`.
+    /// t192 — VPXOR ymm0, ymm0, ymm1 is bitwise on the whole register.
     #[test]
     fn t192_vpxor_lift() {
         // c5 fd ef c1 = vpxor ymm0, ymm0, ymm1.
-        assert_avx_lift(&[0xC5, 0xFD, 0xEF, 0xC1], sse_tag::VPXOR, 32);
+        assert_lowers_to(&[0xC5, 0xFD, 0xEF, 0xC1], IrOp::IntXor, 32);
     }
 
     /// t192/t314 — YMM write sanity: a VEX YMM destination carries a

@@ -117,7 +117,8 @@ fn coalesce_type_class(
             | PrimitiveType::UnsignedInt(_)
             | PrimitiveType::Bool
             | PrimitiveType::Float
-            | PrimitiveType::Double,
+            | PrimitiveType::Double
+            | PrimitiveType::Vector(_),
         ) => CoalesceTypeClass::Scalar,
         Some(PrimitiveType::Unknown) | None => CoalesceTypeClass::Unknown,
     }

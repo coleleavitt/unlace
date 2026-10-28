@@ -889,7 +889,9 @@ fn meet_dense(
 
 fn primitive_to_capability(ty: PrimitiveType, fallback_width: u8) -> Option<TypeCapability> {
     match ty {
-        PrimitiveType::Unknown => None,
+        // SIMD values are typed by `TypeInferPass` from the intrinsic that
+        // defines them; the scalar capability lattice has nothing to add.
+        PrimitiveType::Unknown | PrimitiveType::Vector(_) => None,
         PrimitiveType::Bool => Some(TypeCapability::Bool),
         PrimitiveType::Int(w) => Some(TypeCapability::Integer {
             width: w,

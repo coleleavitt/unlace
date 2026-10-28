@@ -2522,7 +2522,7 @@ fn test_print_ternary() {
     let output = print_c(&func);
 
     // Scope to the function body — the shared IDA/SSE prelude legitimately
-    // contains `?:` (e.g. `__unlace_psrldq`), which would otherwise be the
+    // contains `?:` (e.g. `_mm_srli_epi64`), which would otherwise be the
     // first `?`-bearing line found.
     let body_text = function_body_text(&output, "ternary_func");
     assert!(

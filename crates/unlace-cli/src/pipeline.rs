@@ -982,12 +982,11 @@ fn lift_instructions(
     let mut next_unique_base = 0u64;
     let mut offset = 0usize;
     let code_end = base_addr.saturating_add(code.len() as u64);
-    let trace_lift_bounds = std::env::var_os("UNLACE_LIFT_BOUNDS_TRACE")
-        .map(|v| v != "0")
-        .unwrap_or(false);
+    let trace_lift_bounds = tracing::enabled!(target: "unlace::lift_bounds", tracing::Level::DEBUG);
     if trace_lift_bounds {
-        eprintln!(
-            "[unlace:lift-bounds] begin func={base_addr:#x} len={} end={code_end:#x} known_size={has_known_size}",
+        tracing::debug!(
+            target: "unlace::lift_bounds",
+            "begin func={base_addr:#x} len={} end={code_end:#x} known_size={has_known_size}",
             code.len()
         );
     }
@@ -1025,8 +1024,9 @@ fn lift_instructions(
                         has_known_size,
                     );
                 if trace_lift_bounds && no_fallthrough {
-                    eprintln!(
-                        "[unlace:lift-bounds] no-fallthrough func={base_addr:#x} insn={addr:#x} next={:#x} remaining={} known_size={has_known_size} all_padding={} stop={want_stop}",
+                    tracing::debug!(
+                        target: "unlace::lift_bounds",
+                        "no-fallthrough func={base_addr:#x} insn={addr:#x} next={:#x} remaining={} known_size={has_known_size} all_padding={} stop={want_stop}",
                         base_addr.saturating_add(next_offset as u64),
                         remaining_after.len(),
                         is_padding_tail(lifter.arch(), remaining_after),
@@ -1034,8 +1034,9 @@ fn lift_instructions(
                 }
                 if want_stop {
                     if trace_lift_bounds {
-                        eprintln!(
-                            "[unlace:lift-bounds] stop func={base_addr:#x} at insn={addr:#x} next={:#x} end={code_end:#x}",
+                        tracing::debug!(
+                            target: "unlace::lift_bounds",
+                            "stop func={base_addr:#x} at insn={addr:#x} next={:#x} end={code_end:#x}",
                             base_addr.saturating_add(next_offset as u64)
                         );
                     }
@@ -1236,8 +1237,9 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
 
     let trace_cfg = cfg_build_trace_enabled();
     if trace_cfg {
-        eprintln!(
-            "[unlace:cfg-build] begin func={name} entry={entry_addr:#x} insns={}",
+        tracing::debug!(
+            target: "unlace::cfg_build",
+            "begin func={name} entry={entry_addr:#x} insns={}",
             insns.len()
         );
     }
@@ -1259,8 +1261,9 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                 {
                     let in_set = insn_addr_set.contains(&target.offset);
                     if trace_cfg {
-                        eprintln!(
-                            "[unlace:cfg-build] leader-scan insn={:#x} op={:?} target={:#x} in_insn_set={in_set}{}",
+                        tracing::debug!(
+                            target: "unlace::cfg_build",
+                            "leader-scan insn={:#x} op={:?} target={:#x} in_insn_set={in_set}{}",
                             rec.addr,
                             ir_op.op,
                             target.offset,
@@ -1335,8 +1338,9 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                                         bb.successors.push(target_bid);
                                     }
                                 } else if trace_cfg {
-                                    eprintln!(
-                                        "[unlace:cfg-build] BB_{block_idx} cbranch insn={:#x} TAKEN target={:#x} has NO block leader  <<< edge dropped",
+                                    tracing::debug!(
+                                        target: "unlace::cfg_build",
+                                        "BB_{block_idx} cbranch insn={:#x} TAKEN target={:#x} has NO block leader  <<< edge dropped",
                                         rec.addr, target.offset
                                     );
                                 }
@@ -1355,8 +1359,9 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                                         bb.successors.push(fall_bid);
                                     }
                                 } else if trace_cfg {
-                                    eprintln!(
-                                        "[unlace:cfg-build] BB_{block_idx} cbranch insn={:#x} FALLTHROUGH next={:#x} has NO block leader  <<< edge dropped",
+                                    tracing::debug!(
+                                        target: "unlace::cfg_build",
+                                        "BB_{block_idx} cbranch insn={:#x} FALLTHROUGH next={:#x} has NO block leader  <<< edge dropped",
                                         rec.addr, next.addr
                                     );
                                 }
@@ -1372,8 +1377,9 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
 
         if trace_cfg {
             let last_op = bb.insns.last().map(|i| i.op);
-            eprintln!(
-                "[unlace:cfg-build] built BB_{block_idx} addr={block_addr:#x} insns={} last_op={last_op:?} successors={:?}",
+            tracing::debug!(
+                target: "unlace::cfg_build",
+                "built BB_{block_idx} addr={block_addr:#x} insns={} last_op={last_op:?} successors={:?}",
                 bb.insns.len(),
                 bb.successors
             );
@@ -1383,8 +1389,9 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
     }
 
     if trace_cfg {
-        eprintln!(
-            "[unlace:cfg-build] done func={name} blocks={} leaders={}",
+        tracing::debug!(
+            target: "unlace::cfg_build",
+            "done func={name} blocks={} leaders={}",
             function.blocks.len(),
             block_starts.len()
         );
@@ -1393,12 +1400,8 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
     function
 }
 
-/// Whether `UNLACE_CFG_BUILD_TRACE` is set — enables per-instruction
-/// block-leader + successor-resolution tracing in `build_function_from_insns`.
 fn cfg_build_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_CFG_BUILD_TRACE")
-        .map(|v| v != "0")
-        .unwrap_or(false)
+    tracing::enabled!(target: "unlace::cfg_build", tracing::Level::DEBUG)
 }
 
 pub fn run_passes(ssa: &mut SsaFunction, opts: &PassOptions) -> Result<usize> {
@@ -1497,13 +1500,12 @@ fn run_interproc_analysis_passes(
     maybe_validate_pipeline_once();
     let pre_pipeline_sig = SignatureSnapshot::of(ssa);
     let mut changed = false;
-    let trace = std::env::var_os("UNLACE_INTERPROC_TRACE")
-        .map(|v| v != "0")
-        .unwrap_or(false);
+    let trace = tracing::enabled!(target: "unlace::interproc", tracing::Level::DEBUG);
 
     if trace {
-        eprintln!(
-            "[unlace interproc] analysis-start name={} maturity={:?} sig_rev={}",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "analysis-start name={} maturity={:?} sig_rev={}",
             ssa.function.name, ssa.maturity, ssa.signature_revision
         );
     }
@@ -1511,24 +1513,27 @@ fn run_interproc_analysis_passes(
     if ssa.maturity < Maturity::GlobalOpt {
         ssa.maturity = Maturity::GlobalOpt;
         if trace {
-            eprintln!(
-                "[unlace interproc] type-refresh-start name={} maturity={:?}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "type-refresh-start name={} maturity={:?}",
                 ssa.function.name, ssa.maturity
             );
         }
         pipeline_stage_type_recovery(ssa, None, opts).context("interproc type refresh failed")?;
         changed = bump_if_signature_changed(ssa, &pre_pipeline_sig);
         if trace {
-            eprintln!(
-                "[unlace interproc] type-refresh-done name={} changed={} sig_rev={}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "type-refresh-done name={} changed={} sig_rev={}",
                 ssa.function.name, changed, ssa.signature_revision
             );
         }
     }
 
     if trace {
-        eprintln!(
-            "[unlace interproc] analysis-done name={} maturity={:?} changed={}",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "analysis-done name={} maturity={:?} changed={}",
             ssa.function.name, ssa.maturity, changed
         );
     }
@@ -1625,16 +1630,15 @@ pub fn run_whole_program_quality_refinement(
     cap: usize,
     opts: &PassOptions,
 ) -> Result<WholeProgramQualityReport> {
-    let trace = std::env::var_os("UNLACE_INTERPROC_TRACE")
-        .map(|v| v != "0")
-        .unwrap_or(false);
+    let trace = tracing::enabled!(target: "unlace::interproc", tracing::Level::DEBUG);
     let mut report = WholeProgramQualityReport::default();
 
     let mut registry = unlace_ir::ssa::FunctionSignatureRegistry::new();
     unlace_passes::seed_registry_from_funcs(funcs, &mut registry);
     if trace {
-        eprintln!(
-            "[unlace interproc] quality-start funcs={} registry={}",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "quality-start funcs={} registry={}",
             funcs.len(),
             registry.len()
         );
@@ -1656,15 +1660,17 @@ pub fn run_whole_program_quality_refinement(
         cap
     };
     if trace {
-        eprintln!(
-            "[unlace interproc] quality-cc-start cap={} caller_param_changed={} registry_applied={}",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "quality-cc-start cap={} caller_param_changed={} registry_applied={}",
             cc_cap, report.caller_param_changed, report.registry_applied
         );
     }
     report.calling_conv = unlace_passes::run_whole_prog_cc(funcs, cc_cap);
     if trace {
-        eprintln!(
-            "[unlace interproc] quality-cc-done iters={} hit_cap={}",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "quality-cc-done iters={} hit_cap={}",
             report.calling_conv.iterations, report.calling_conv.hit_cap
         );
     }
@@ -1673,16 +1679,18 @@ pub fn run_whole_program_quality_refinement(
     let unifier = unlace_passes::unify_structs_across_program(&refs);
     report.canonical_struct_layouts = unifier.distinct_layouts();
     if trace {
-        eprintln!(
-            "[unlace interproc] quality-structs distinct_layouts={}",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "quality-structs distinct_layouts={}",
             report.canonical_struct_layouts
         );
     }
 
     for ssa in funcs.values_mut() {
         if trace {
-            eprintln!(
-                "[unlace interproc] quality-refresh-start name={} maturity={:?}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "quality-refresh-start name={} maturity={:?}",
                 ssa.function.name, ssa.maturity
             );
         }
@@ -1700,16 +1708,18 @@ pub fn run_whole_program_quality_refinement(
 
         ssa.maturity = Maturity::Lvars;
         if trace {
-            eprintln!(
-                "[unlace interproc] quality-lvar-start name={} maturity={:?}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "quality-lvar-start name={} maturity={:?}",
                 ssa.function.name, ssa.maturity
             );
         }
         pipeline_stage_lvar(ssa, opts).context("whole-program lvar refresh failed")?;
         ssa.maturity = Maturity::Final;
         if trace {
-            eprintln!(
-                "[unlace interproc] quality-final-start name={} maturity={:?}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "quality-final-start name={} maturity={:?}",
                 ssa.function.name, ssa.maturity
             );
         }
@@ -1723,16 +1733,18 @@ pub fn run_whole_program_quality_refinement(
             report.final_refresh_changes += 1;
         }
         if trace {
-            eprintln!(
-                "[unlace interproc] quality-refresh-done name={} final_changed={}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "quality-refresh-done name={} final_changed={}",
                 ssa.function.name, report.final_refresh_changes
             );
         }
     }
 
     if trace {
-        eprintln!(
-            "[unlace interproc] quality-done struct_rewrites={} final_refresh_changes={}",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "quality-done struct_rewrites={} final_refresh_changes={}",
             report.struct_name_rewrite_functions, report.final_refresh_changes
         );
     }
@@ -1850,7 +1862,7 @@ fn run_passes_with_report_inner(
     let mut total_ir_changes: usize = 0;
 
     // Batch 16: opt-in per-maturity IR snapshots. Set
-    // `UNLACE_MATURITY_DUMP=<dir>` and one file per
+    // `passes.diagnostics.maturity_dump = "<dir>"` and one file per
     // (function, maturity-stage, outer-iter) is written into that directory
     // as a text dump of [`unlace_output::dump_ir`].
     maturity_snapshot(ssa, "M_ZERO", 0, opts);
@@ -2057,38 +2069,12 @@ fn maturity_snapshot(ssa: &SsaFunction, stage: &str, iter: usize, opts: &PassOpt
 // Each helper below corresponds to one maturity-level stage. The pass
 // composition follows the canonical descriptor in unlace-passes/src/pass.rs.
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .and_then(|v| v.into_string().ok())
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-        .unwrap_or(false)
-}
-
 fn pipeline_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_PIPELINE_TRACE")
-        || env_flag_enabled("UNLACE_PIPELINE_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
+    tracing::enabled!(target: "unlace::pipeline", tracing::Level::DEBUG)
 }
 
 fn pipeline_trace_verbose_enabled() -> bool {
-    env_flag_enabled("UNLACE_PIPELINE_TRACE_VERBOSE") || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn pipeline_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_PIPELINE_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
-fn pipeline_trace_matches(line: &str) -> bool {
-    pipeline_trace_filter()
-        .map(|filter| line.contains(&filter))
-        .unwrap_or(true)
+    tracing::enabled!(target: "unlace::pipeline", tracing::Level::TRACE)
 }
 
 fn function_shape(function: &Function) -> (usize, usize) {
@@ -2173,7 +2159,7 @@ fn profile_ssa_stage(
 
 fn pipeline_trace_start(func_name: &str, stage: &str) {
     if pipeline_trace_enabled() {
-        eprintln!("[unlace pipeline] func={func_name} stage={stage} start");
+        tracing::debug!(target: "unlace::pipeline", "func={func_name} stage={stage} start");
     }
 }
 
@@ -2182,8 +2168,9 @@ fn pipeline_trace_done(func_name: &str, stage: &str, start: Instant, deadline: I
         let remaining_ms = deadline
             .saturating_duration_since(Instant::now())
             .as_millis();
-        eprintln!(
-            "[unlace pipeline] func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms}",
+        tracing::debug!(
+            target: "unlace::pipeline",
+            "func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms}",
             start.elapsed().as_millis(),
         );
     }
@@ -2201,8 +2188,9 @@ fn pipeline_trace_ir(
         let remaining_ms = deadline
             .saturating_duration_since(Instant::now())
             .as_millis();
-        eprintln!(
-            "[unlace pipeline] func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms} blocks={blocks} insns={insns}",
+        tracing::debug!(
+            target: "unlace::pipeline",
+            "func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms} blocks={blocks} insns={insns}",
             start.elapsed().as_millis(),
         );
     }
@@ -2220,8 +2208,9 @@ fn pipeline_trace_ssa(
         let remaining_ms = deadline
             .saturating_duration_since(Instant::now())
             .as_millis();
-        eprintln!(
-            "[unlace pipeline] func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms} blocks={blocks} insns={insns} phis={phis} var_map={var_map} maturity={:?}",
+        tracing::debug!(
+            target: "unlace::pipeline",
+            "func={func_name} stage={stage} done elapsed_ms={} remaining_ms={remaining_ms} blocks={blocks} insns={insns} phis={phis} var_map={var_map} maturity={:?}",
             start.elapsed().as_millis(),
             ssa.maturity,
         );
@@ -2238,8 +2227,9 @@ fn pipeline_trace_maturity_stage(
 ) {
     if pipeline_trace_enabled() {
         let (blocks, insns, phis, var_map) = ssa_shape(ssa);
-        eprintln!(
-            "[unlace pipeline] func={} outer_iter={iter} stage={stage} done elapsed_ms={} blocks={blocks} insns={insns} phis={phis} var_map={var_map} maturity={:?}{extra}",
+        tracing::debug!(
+            target: "unlace::pipeline",
+            "func={} outer_iter={iter} stage={stage} done elapsed_ms={} blocks={blocks} insns={insns} phis={phis} var_map={var_map} maturity={:?}{extra}",
             ssa.function.name,
             start.elapsed().as_millis(),
             ssa.maturity,
@@ -2275,9 +2265,7 @@ fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
         ssa.inferred_params.len(),
         ssa.inferred_return_type,
     );
-    if pipeline_trace_matches(&header) {
-        eprintln!("[unlace pipeline] {header}");
-    }
+    tracing::trace!(target: "unlace::pipeline", "{header}");
     for acc in &ssa.stack_accesses {
         let line = format!(
             "func={func_name} stage={stage} stack-access addr={:#x} base={} delta={} width={} store={} resolved={:?} lost={}",
@@ -2289,9 +2277,7 @@ fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
             acc.resolved_slot,
             acc.lost_provenance,
         );
-        if pipeline_trace_matches(&line) {
-            eprintln!("[unlace pipeline] {line}");
-        }
+        tracing::trace!(target: "unlace::pipeline", "{line}");
     }
     if let Some(frame) = &ssa.stack_frame {
         for local in frame.locals.values() {
@@ -2299,9 +2285,7 @@ fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
                 "func={func_name} stage={stage} stack-frame offset={} size={} widths={:?} kind={:?}",
                 local.offset, local.size, local.access_widths, local.kind,
             );
-            if pipeline_trace_matches(&line) {
-                eprintln!("[unlace pipeline] {line}");
-            }
+            tracing::trace!(target: "unlace::pipeline", "{line}");
         }
     }
     for lv in &ssa.lvars {
@@ -2312,9 +2296,7 @@ fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
             "func={func_name} stage={stage} stack-lvar id={} storage={:?} name={:?} ty={:?} source={:?} flags={:?}",
             lv.id, lv.storage, lv.name, lv.ty, lv.source, lv.flags,
         );
-        if pipeline_trace_matches(&line) {
-            eprintln!("[unlace pipeline] {line}");
-        }
+        tracing::trace!(target: "unlace::pipeline", "{line}");
     }
     for (block, phis) in &ssa.phi_map {
         for phi in phis {
@@ -2322,16 +2304,12 @@ fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
                 "func={func_name} stage={stage} phi block={block:?} output={:?} inputs={:?}",
                 phi.output, phi.inputs
             );
-            if pipeline_trace_matches(&line) {
-                eprintln!("[unlace pipeline] {line}");
-            }
+            tracing::trace!(target: "unlace::pipeline", "{line}");
         }
     }
     for (key, sv) in &ssa.var_map {
         let line = format!("func={func_name} stage={stage} var_map key={key:?} sv={sv:?}");
-        if pipeline_trace_matches(&line) {
-            eprintln!("[unlace pipeline] {line}");
-        }
+        tracing::trace!(target: "unlace::pipeline", "{line}");
     }
     for (&bid, block) in &ssa.function.blocks {
         for (idx, insn) in block.insns.iter().enumerate() {
@@ -2348,16 +2326,12 @@ fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
                 "func={func_name} stage={stage} insn block={bid:?} idx={idx} addr=0x{:x} op={:?} output={output:?} inputs={inputs:?}",
                 insn.addr, insn.op
             );
-            if pipeline_trace_matches(&line) {
-                eprintln!("[unlace pipeline] {line}");
-            }
+            tracing::trace!(target: "unlace::pipeline", "{line}");
         }
     }
     for (sv, name) in &ssa.merged_names {
         let line = format!("func={func_name} stage={stage} merged_name sv={sv:?} name={name}");
-        if pipeline_trace_matches(&line) {
-            eprintln!("[unlace pipeline] {line}");
-        }
+        tracing::trace!(target: "unlace::pipeline", "{line}");
     }
 }
 
@@ -2620,8 +2594,9 @@ fn calibrate_dwarf_offsets(ssa: &mut SsaFunction) {
 
     let trace = dwarf_map_trace_enabled();
     if trace {
-        eprintln!(
-            "[unlace dwarf-map] calibrate func={} cfi_delta={:?} zero_matches={} chosen_delta={} pending={}",
+        tracing::debug!(
+            target: "unlace::dwarf_map",
+            "calibrate func={} cfi_delta={:?} zero_matches={} chosen_delta={} pending={}",
             ssa.function.name,
             cfi_delta,
             zero_matches,
@@ -2683,8 +2658,9 @@ fn calibrate_dwarf_offsets(ssa: &mut SsaFunction) {
                 .entry(key)
                 .or_insert_with(|| pending.name.clone());
             if trace {
-                eprintln!(
-                    "[unlace dwarf-map]   name raw={} -> resolved={} name={}",
+                tracing::debug!(
+                    target: "unlace::dwarf_map",
+                    "  name raw={} -> resolved={} name={}",
                     pending.frame_offset, key, pending.name
                 );
             }
@@ -2708,8 +2684,9 @@ fn record_dwarf_stack_local_annotations(ssa: &mut SsaFunction, delta: i64, trace
             byte_size,
         });
         if trace {
-            eprintln!(
-                "[unlace dwarf-map]   aggregate raw={} calibrated={} name={} type={:?} size={:?}",
+            tracing::debug!(
+                target: "unlace::dwarf_map",
+                "  aggregate raw={} calibrated={} name={} type={:?} size={:?}",
                 pending.frame_offset,
                 pending.frame_offset + delta,
                 pending.name,
@@ -2721,9 +2698,7 @@ fn record_dwarf_stack_local_annotations(ssa: &mut SsaFunction, delta: i64, trace
 }
 
 fn dwarf_map_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_DWARF_MAP_TRACE")
-        .map(|v| v != "0")
-        .unwrap_or(false)
+    tracing::enabled!(target: "unlace::dwarf_map", tracing::Level::DEBUG)
 }
 
 /// Stage 4 (M_CALLS): indirect call resolution + vtable detection.
@@ -2792,23 +2767,24 @@ fn pipeline_stage_lvar(
     ssa: &mut SsaFunction,
     opts: &PassOptions,
 ) -> Result<(), unlace_passes::PassError> {
-    let trace = std::env::var_os("UNLACE_INTERPROC_TRACE")
-        .map(|v| v != "0")
-        .unwrap_or(false);
+    let trace = tracing::enabled!(target: "unlace::interproc", tracing::Level::DEBUG);
     if trace {
-        eprintln!(
-            "[unlace interproc] lvar-pass-start name={} pass=ExpressionTreePass",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "lvar-pass-start name={} pass=ExpressionTreePass",
             ssa.function.name
         );
     }
     run_instrumented(&ExpressionTreePass, ssa, opts)?;
     if trace {
-        eprintln!(
-            "[unlace interproc] lvar-pass-done name={} pass=ExpressionTreePass",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "lvar-pass-done name={} pass=ExpressionTreePass",
             ssa.function.name
         );
-        eprintln!(
-            "[unlace interproc] lvar-pass-start name={} pass=VariableMergePass",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "lvar-pass-start name={} pass=VariableMergePass",
             ssa.function.name
         );
     }
@@ -2820,30 +2796,35 @@ fn pipeline_stage_lvar(
         opts,
     )?;
     if trace {
-        eprintln!(
-            "[unlace interproc] lvar-pass-done name={} pass=VariableMergePass",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "lvar-pass-done name={} pass=VariableMergePass",
             ssa.function.name
         );
-        eprintln!(
-            "[unlace interproc] lvar-pass-start name={} pass=LvarCollectPass",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "lvar-pass-start name={} pass=LvarCollectPass",
             ssa.function.name
         );
     }
     run_instrumented(&LvarCollectPass, ssa, opts)?;
     if trace {
-        eprintln!(
-            "[unlace interproc] lvar-pass-done name={} pass=LvarCollectPass",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "lvar-pass-done name={} pass=LvarCollectPass",
             ssa.function.name
         );
-        eprintln!(
-            "[unlace interproc] lvar-pass-start name={} pass=RegisterCoalescePass",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "lvar-pass-start name={} pass=RegisterCoalescePass",
             ssa.function.name
         );
     }
     run_instrumented(&RegisterCoalescePass, ssa, opts)?;
     if trace {
-        eprintln!(
-            "[unlace interproc] lvar-pass-done name={} pass=RegisterCoalescePass",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "lvar-pass-done name={} pass=RegisterCoalescePass",
             ssa.function.name
         );
     }
@@ -3860,12 +3841,11 @@ fn estimate_direct_target_param_counts(
             continue;
         };
         let count = estimate_sysv_param_count(&func);
-        if std::env::var_os("UNLACE_CALL_ARGS_TRACE").is_some() {
-            eprintln!(
-                "[unlace-call-args] estimated-param-count target=0x{target:x} name={} count={count}",
-                entry.name
-            );
-        }
+        tracing::debug!(
+            target: "unlace::call_args",
+            "estimated-param-count target=0x{target:x} name={} count={count}",
+            entry.name
+        );
         out.insert(target, count);
     }
     out
@@ -4423,8 +4403,9 @@ pub fn decompile_function_with_symbols(
     profiling::record_items("pipeline.function", 1);
     let deadline = Instant::now() + config.timeout;
     if pipeline_trace_enabled() {
-        eprintln!(
-            "[unlace pipeline] func={} addr=0x{:x} size=0x{:x} emit={emit:?} timeout_ms={} start",
+        tracing::debug!(
+            target: "unlace::pipeline",
+            "func={} addr=0x{:x} size=0x{:x} emit={emit:?} timeout_ms={} start",
             entry.name,
             entry.addr,
             entry.size,
@@ -4629,8 +4610,9 @@ pub fn decompile_function_with_symbols(
             ],
         );
         if pipeline_trace_enabled() {
-            eprintln!(
-                "[unlace pipeline] func={} stage=run-passes error={e:#}",
+            tracing::debug!(
+                target: "unlace::pipeline",
+                "func={} stage=run-passes error={e:#}",
                 entry.name
             );
         }
@@ -6086,7 +6068,7 @@ pub fn emit_output(
 
 fn trace_hir_pipeline(stage: &str, hir: &unlace_struct::hir::HirFunction) {
     let linkscope_enabled = profiling::is_enabled();
-    let stderr_enabled = std::env::var_os("UNLACE_HIR_TRACE").is_some();
+    let stderr_enabled = tracing::enabled!(target: "unlace::hir", tracing::Level::DEBUG);
     if !linkscope_enabled && !stderr_enabled {
         return;
     }
@@ -6113,8 +6095,9 @@ fn trace_hir_pipeline(stage: &str, hir: &unlace_struct::hir::HirFunction) {
     if !stderr_enabled {
         return;
     }
-    eprintln!(
-        "[unlace-cli] hir stage={stage} top={} nodes={} stmts={} calls={} returns={} gotos={} labels={} breaks={} continues={} empty_ifs={}",
+    tracing::debug!(
+        target: "unlace::hir",
+        "stage={stage} top={} nodes={} stmts={} calls={} returns={} gotos={} labels={} breaks={} continues={} empty_ifs={}",
         hir.body.len(),
         counts.nodes,
         counts.statements,
@@ -6126,11 +6109,11 @@ fn trace_hir_pipeline(stage: &str, hir: &unlace_struct::hir::HirFunction) {
         counts.continues,
         counts.empty_ifs
     );
-    if std::env::var_os("UNLACE_HIR_TRACE_VERBOSE").is_some() {
+    if tracing::enabled!(target: "unlace::hir", tracing::Level::TRACE) {
         let mut details = Vec::new();
         collect_hir_trace_details(&hir.body, "body".to_string(), &mut details);
         for detail in details.into_iter().take(64) {
-            eprintln!("[unlace-cli] hir-detail stage={stage} {detail}");
+            tracing::trace!(target: "unlace::hir", "detail stage={stage} {detail}");
         }
     }
 }

@@ -3628,6 +3628,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "tracing-subscriber",
  "unlace-cli",
  "unlace-ir",
  "unlace-lift",

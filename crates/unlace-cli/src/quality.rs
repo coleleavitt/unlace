@@ -347,8 +347,9 @@ impl FunctionQuality {
                             CallotherClass::SemanticGap => q.callother_semantic_gap_ops += 1,
                         }
                         if quality_trace_enabled() {
-                            eprintln!(
-                                "[unlace-quality] func={name} callother addr=0x{:x} tag={:?} class={:?}",
+                            tracing::debug!(
+                                target: "unlace::quality",
+                                "func={name} callother addr=0x{:x} tag={:?} class={:?}",
                                 insn.addr,
                                 callother_tag(insn),
                                 classify_callother(insn),
@@ -523,8 +524,9 @@ fn leaked_temp_decl_count(emitted_c: &str) -> usize {
                 // Per-site visibility into the precision-denominator inflation:
                 // shows exactly which declaration each leaked temp came from,
                 // so a leaked-temp regression can be pinned to a single line.
-                eprintln!(
-                    "[unlace-quality] leaked-temp #{count} line={} name={name} decl={decl:?}",
+                tracing::debug!(
+                    target: "unlace::quality",
+                    "leaked-temp #{count} line={} name={name} decl={decl:?}",
                     line_no + 1,
                 );
             }
@@ -850,7 +852,7 @@ fn is_known_callother_tag(tag: u64) -> bool {
 }
 
 fn quality_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_QUALITY_TRACE").is_some()
+    tracing::enabled!(target: "unlace::quality", tracing::Level::DEBUG)
 }
 
 /// Count the leaf fields of a recovered struct/union type, recursing into

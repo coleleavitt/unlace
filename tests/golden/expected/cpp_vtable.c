@@ -106,6 +106,6 @@ void sub_1170(void) {
 }
 /* Function:   use_base(Base*) | Address: 0x1180 | Size: 0x7 (7 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // use_base(Base*)
-int use_base(Base * a1) {
+int use_base(Base *a1) {
     return this->__vftable->method_0();
 }

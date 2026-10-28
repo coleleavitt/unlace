@@ -166,13 +166,11 @@ struct Rect {
 
 // debug language: C
 /* Function:   area | Address: 0x1149 | Size: 0xb (11 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-int area(__int64 a1) {
+int area(Rect *r) {
     __int64 result; // temp
     // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
-    _DWORD v4 = *(_DWORD *)(a1 + 8LL); // temp
-    // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
-    result = v4;
-    v4 = *(_DWORD *)(a1 + 0xcLL); return result * v4;
+    result = r->size.x;
+    return result * r->size.y;
 }
 // DWARF composite types
 typedef struct Point Point;

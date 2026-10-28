@@ -159,7 +159,7 @@ void sub_1220(void) {
 
 /* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xc7 (199 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
 // identify(Animal*)
-char * identify(Animal * a1) {
+char * identify(Animal *a1) {
     __int64 v8; // temp
     __int64 v_16;
     __int64 v18; // rax

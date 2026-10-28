@@ -1,6 +1,8 @@
 //! Text metrics over C-like pseudocode, applied identically to Hex-Rays and
 //! unlace output so the two sides are measured by the same yardstick.
 
+use std::collections::BTreeMap;
+
 /// CPU flag registers as they appear in declaration comments
 /// (`char v5; // zf`, `_BOOL c11; // PF`).
 const FLAG_REGISTERS: &[&str] = &["cf", "zf", "sf", "of", "pf", "af", "df"];
@@ -61,6 +63,8 @@ pub struct TextMetrics {
     pub empty_blocks: usize,
     pub raw_derefs: usize,
     pub memory_refs: usize,
+    /// Declared local types by spelling (`int`, `_QWORD`, `char *`, `int[]`).
+    pub decl_types: BTreeMap<String, usize>,
 }
 
 impl TextMetrics {
@@ -74,6 +78,9 @@ impl TextMetrics {
         self.empty_blocks += other.empty_blocks;
         self.raw_derefs += other.raw_derefs;
         self.memory_refs += other.memory_refs;
+        for (ty, n) in &other.decl_types {
+            *self.decl_types.entry(ty.clone()).or_default() += n;
+        }
     }
 }
 
@@ -133,8 +140,9 @@ pub fn measure(text: &str) -> TextMetrics {
             .iter()
             .map(|h| count_word(&code, h))
             .sum::<usize>();
-        if is_declaration(trimmed) {
+        if let Some(ty) = declared_type(trimmed) {
             metrics.lvar_decls += 1;
+            *metrics.decl_types.entry(ty).or_default() += 1;
             if declares_flag(line) {
                 metrics.flag_vars += 1;
             }
@@ -288,21 +296,27 @@ fn is_label(code: &str) -> bool {
     })
 }
 
-/// `T name;`, `T *name[4];`, `T name = init;`: two adjacent words before any
-/// initializer only occur in declarations.
-fn is_declaration(code: &str) -> bool {
+/// The declared type of `T name;`, `T *name[4];`, or `T name = init;`: two
+/// adjacent words before any initializer only occur in declarations.
+fn declared_type(code: &str) -> Option<String> {
     const STATEMENT_KEYWORDS: &[&str] = &["return", "goto", "case", "else", "do", "sizeof"];
-    let Some(stmt) = code.strip_suffix(';') else {
-        return false;
-    };
+    let stmt = code.strip_suffix(';')?;
     let decl = stmt.split('=').next().unwrap_or(stmt).trim();
     let allowed =
         |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | ' ' | '*' | '[' | ']' | ':');
     if !decl.chars().all(allowed) {
-        return false;
+        return None;
     }
-    let words: Vec<&str> = decl.split_whitespace().collect();
-    words.len() >= 2 && !STATEMENT_KEYWORDS.contains(&words[0])
+    let (ty, name) = decl.rsplit_once(' ')?;
+    if ty.trim().is_empty() || STATEMENT_KEYWORDS.contains(&ty.split_whitespace().next()?) {
+        return None;
+    }
+    let stars = name.chars().take_while(|&c| c == '*').count();
+    let mut ty = format!("{ty}{}", "*".repeat(stars));
+    if name.contains('[') {
+        ty.push_str("[]");
+    }
+    Some(normalize_type(&ty))
 }
 
 fn is_type_word(word: &str) -> bool {
@@ -384,6 +398,7 @@ mod tests {
                     *(_QWORD *)(buf_0 + 12) = v1;\n    c12 = __OFSUB__(v1, 1);\n    goto LABEL_5;\nLABEL_5:\n    return 0;\n}";
         let m = measure(text);
         assert_eq!(m.lvar_decls, 2);
+        assert_eq!(m.decl_types.get("char"), Some(&1));
         assert_eq!(m.flag_vars, 1);
         assert_eq!(m.flag_helpers, 1);
         assert_eq!(m.empty_blocks, 1);

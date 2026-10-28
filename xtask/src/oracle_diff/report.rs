@@ -122,6 +122,31 @@ pub fn summary_table(diffs: &[BinaryDiff]) -> String {
     out
 }
 
+const TOP_TYPES: usize = 12;
+
+/// Most common declared local types on each side, over matched functions.
+fn type_spelling(diffs: &[BinaryDiff]) -> String {
+    let mut total = Summary::default();
+    for diff in diffs {
+        total.add(&Summary::of(diff));
+    }
+    let top = |m: &TextMetrics| {
+        let mut types: Vec<(&String, &usize)> = m.decl_types.iter().collect();
+        types.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        types
+            .into_iter()
+            .take(TOP_TYPES)
+            .map(|(ty, n)| format!("`{ty}` {n}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    format!(
+        "\n## Type spelling\n\nDeclared local types, most common first.\n\n- Hex-Rays: {}\n- unlace: {}\n",
+        top(&total.hexrays),
+        top(&total.unlace)
+    )
+}
+
 struct Gap<'a> {
     key: &'a str,
     row: &'a FunctionRow,
@@ -165,6 +190,7 @@ pub fn markdown(diffs: &[BinaryDiff], ida_version: &str) -> String {
     );
     let _ = writeln!(out, "## Summary\n");
     out.push_str(&summary_table(diffs));
+    out.push_str(&type_spelling(diffs));
 
     let errors: Vec<_> = diffs
         .iter()

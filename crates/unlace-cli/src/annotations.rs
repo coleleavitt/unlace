@@ -71,6 +71,22 @@ pub fn default_path(binary_path: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
+/// Resolve which annotation DB (if any) should be loaded for `binary`.
+///
+/// * Explicit `--annotations-load` always wins (and errors if missing).
+/// * Otherwise the default sidecar `<binary>.unlace.json` is used *only* if
+///   it already exists — absence is not an error.
+pub fn resolve(binary: &Path, explicit: Option<&Path>) -> Result<Option<AnnotationDb>> {
+    if let Some(path) = explicit {
+        return AnnotationDb::load(path).map(Some);
+    }
+    let sidecar = default_path(binary);
+    if sidecar.exists() {
+        return AnnotationDb::load(&sidecar).map(Some);
+    }
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

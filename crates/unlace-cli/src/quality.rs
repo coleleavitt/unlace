@@ -404,6 +404,9 @@ impl FunctionQuality {
             .values()
             .filter(|t| **t == PrimitiveType::Unknown)
             .count();
+        if quality_trace_enabled() {
+            trace_unknown_types(name, ssa);
+        }
         // Stack-frame composites contribute their field count; array-of-structs
         // layouts contribute theirs.
         for ty in ssa.inferred_structs.values() {
@@ -849,6 +852,47 @@ fn is_known_callother_tag(tag: u64) -> bool {
             // Intel AMX plus the currently-known vector fallback block.
             | 0x500..=0x623
     )
+}
+
+/// Log each `Unknown`-typed varnode with the ops that define and use it.
+fn trace_unknown_types(name: &str, ssa: &SsaFunction) {
+    for (sv, _) in ssa
+        .var_types
+        .iter()
+        .filter(|(_, t)| **t == PrimitiveType::Unknown)
+    {
+        let mut def = Vec::new();
+        let mut uses = Vec::new();
+        for ((bid, idx, slot), v) in &ssa.var_map {
+            if v != sv {
+                continue;
+            }
+            let Some(insn) = ssa.function.blocks.get(bid).and_then(|b| b.insns.get(*idx)) else {
+                continue;
+            };
+            let entry = format!("{:?}@{:x}:{:?}", insn.op, insn.addr, slot);
+            if *slot == unlace_ir::ssa::VarnodeSlot::Output {
+                def.push(entry);
+            } else {
+                uses.push(entry);
+            }
+        }
+        let phi_def = ssa.phi_map.values().flatten().any(|phi| phi.output == *sv);
+        let phi_use = ssa
+            .phi_map
+            .values()
+            .flatten()
+            .filter(|phi| phi.inputs.iter().any(|(_, i)| i == sv))
+            .count();
+        tracing::debug!(
+            target: "unlace::quality",
+            "func={name} unknown-type var={:?}:{:x}:{}#{} def={def:?} phi_def={phi_def} phi_uses={phi_use} uses={uses:?}",
+            sv.base.space,
+            sv.base.offset,
+            sv.base.size,
+            sv.version,
+        );
+    }
 }
 
 fn quality_trace_enabled() -> bool {

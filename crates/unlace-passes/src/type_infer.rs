@@ -63,18 +63,14 @@ impl Pass for TypeInferPass {
 
             for phis in func.phi_map.values() {
                 for phi in phis {
-                    let existing = current_type(&func.var_types, &phi.output);
-                    let mut merged = existing;
+                    let size = phi.output.base.size;
+                    let mut merged = current_type(&func.var_types, &phi.output);
                     for (_pred, input) in &phi.inputs {
-                        merged = merged.join(current_type(&func.var_types, input));
+                        merged = refine(merged, current_type(&func.var_types, input), size);
                     }
-                    if merged != existing {
-                        changed |= set_type(&mut func.var_types, phi.output, merged);
-                    }
+                    changed |= set_type(&mut func.var_types, phi.output, merged);
                     for (_pred, input) in &phi.inputs {
-                        if current_type(&func.var_types, input) != merged {
-                            changed |= set_type(&mut func.var_types, *input, merged);
-                        }
+                        changed |= set_type(&mut func.var_types, *input, merged);
                     }
                 }
             }
@@ -202,16 +198,10 @@ fn seed_from_composites(func: &mut SsaFunction) {
             | Type::TypeParam { .. }
             | Type::Union { .. } => PrimitiveType::Ptr,
         };
-        let entry = func.var_types.entry(*sv).or_insert(primitive);
-        // Only promote if the var hasn't already been collapsed to Unknown
-        // by a prior conflict. Without this guard, seed_from_composites
-        // re-asserts a concrete type every outer iteration, creating an
-        // oscillation with any constraint that collapses it.
-        if *entry == PrimitiveType::Unknown && *entry != primitive {
-            // Already collapsed — leave frozen.
-        } else {
-            *entry = entry.join(primitive);
-        }
+        // `set_type` leaves a var that a prior conflict collapsed to
+        // `Unknown` frozen; re-asserting a concrete type every outer
+        // iteration would otherwise oscillate with that conflict.
+        set_type(&mut func.var_types, *sv, primitive);
     }
 }
 
@@ -219,10 +209,43 @@ fn current_type(var_types: &BTreeMap<SsaVarnode, PrimitiveType>, sv: &SsaVarnode
     var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown)
 }
 
-/// Join `sv`'s type with `ty`. Returns true if the type changed.
+/// Combine an existing inference `old` with a new fact `new` for a varnode
+/// of `size` bytes.
+///
+/// Machine code routinely uses one value in ways that a flat lattice treats
+/// as conflicts, so unlike [`PrimitiveType::join`] this resolves them:
+///
+/// * integer facts are resized to the varnode's own width first, because phi
+///   and copy edges can carry a type from a differently-sized alias of the
+///   same register;
+/// * a 0/1 flag that is also used as an integer is that integer;
+/// * a value that is dereferenced and also compared, masked or subtracted is
+///   a pointer.
+///
+/// The order `Bool < UnsignedInt < Int < Ptr` is a chain, so repeated
+/// refinement still terminates. Integer/float mixes remain conflicts.
+fn refine(old: PrimitiveType, new: PrimitiveType, size: u8) -> PrimitiveType {
+    use PrimitiveType::{Bool, Int, Ptr, UnsignedInt};
+    let fit = |ty| match ty {
+        Int(_) => Int(size),
+        UnsignedInt(_) => UnsignedInt(size),
+        other => other,
+    };
+    match (fit(old), fit(new)) {
+        (Bool, int @ (Int(_) | UnsignedInt(_))) | (int @ (Int(_) | UnsignedInt(_)), Bool) => int,
+        (Ptr, Bool | Int(_) | UnsignedInt(_)) | (Bool | Int(_) | UnsignedInt(_), Ptr)
+            if size >= 4 =>
+        {
+            Ptr
+        }
+        (a, b) => a.join(b),
+    }
+}
+
+/// Refine `sv`'s type with `ty`. Returns true if the type changed.
 ///
 /// **Monotonicity**: once a var is present in the map with value `Unknown`
-/// (meaning it was concrete and got collapsed by a conflict join), it stays
+/// (meaning it was concrete and got collapsed by a conflict), it stays
 /// frozen — subsequent concrete assertions are rejected. This prevents the
 /// infinite oscillation that caused TypeInfer to hit its 100-iteration cap.
 fn set_type(
@@ -233,23 +256,24 @@ fn set_type(
     if ty == PrimitiveType::Unknown {
         return false;
     }
-    let old = var_types
-        .get(&sv)
-        .copied()
-        .unwrap_or(PrimitiveType::Unknown);
-    // Frozen: was concrete, collapsed to Unknown — don't ascend.
-    if old == PrimitiveType::Unknown && var_types.contains_key(&sv) {
-        return false;
-    }
-    let joined = old.join(ty);
-    if joined != old {
-        var_types.insert(sv, joined);
-        true
-    } else if let std::collections::btree_map::Entry::Vacant(e) = var_types.entry(sv) {
-        e.insert(ty);
-        true
-    } else {
-        false
+    match var_types.entry(sv) {
+        std::collections::btree_map::Entry::Vacant(e) => {
+            e.insert(refine(PrimitiveType::Unknown, ty, sv.base.size));
+            true
+        }
+        std::collections::btree_map::Entry::Occupied(mut e) => {
+            let old = *e.get();
+            // Frozen: was concrete, collapsed to Unknown — don't ascend.
+            if old == PrimitiveType::Unknown {
+                return false;
+            }
+            let refined = refine(old, ty, sv.base.size);
+            if refined == old {
+                return false;
+            }
+            e.insert(refined);
+            true
+        }
     }
 }
 
@@ -582,7 +606,7 @@ fn infer_insn(
             if let (Some(inp), Some(out), Some(it), Some(ot)) =
                 (input_sv(0), output_sv, in_ty, out_ty)
             {
-                let joined = it.join(ot);
+                let joined = refine(it, ot, out.base.size);
                 if joined != PrimitiveType::Unknown {
                     changed |= set_type(var_types, inp, joined);
                     changed |= set_type(var_types, out, joined);
@@ -1507,6 +1531,100 @@ mod tests {
             ssa.var_types.get(&v2_sv).copied(),
             Some(PrimitiveType::Ptr),
             "struct field at offset 8 is Ptr (next pointer)"
+        );
+    }
+
+    #[test]
+    fn refine_resolves_machine_code_conflicts() {
+        use PrimitiveType::*;
+        // A flag byte that is also used as an integer is that integer.
+        assert_eq!(refine(Bool, Int(1), 1), Int(1));
+        assert_eq!(refine(UnsignedInt(1), Bool, 1), UnsignedInt(1));
+        // A dereferenced value that is also compared or masked is a pointer.
+        assert_eq!(refine(Ptr, Int(8), 8), Ptr);
+        assert_eq!(refine(UnsignedInt(8), Ptr, 8), Ptr);
+        // Integer facts take the varnode's own width.
+        assert_eq!(refine(UnsignedInt(8), Int(4), 4), Int(4));
+        // Integer/float mixes remain conflicts.
+        assert_eq!(refine(Float, Int(4), 4), Unknown);
+    }
+
+    #[test]
+    fn test_flag_byte_used_as_bool_and_int_stays_typed() {
+        // ZF-style `t = x & 1; zf = !t; sf = t < 0` on one byte.
+        let x = Varnode::reg(0, 1);
+        let t = Varnode::unique(0x10, 1);
+        let zf = Varnode::reg(0x200, 1);
+        let sf = Varnode::reg(0x201, 1);
+        let mut func = Function::new("flag_byte", BlockId(0), 0x1000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAnd,
+            t,
+            smallvec![x, Varnode::constant(1, 1)],
+            0x1000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::BoolNegate,
+            zf,
+            smallvec![t],
+            0x1000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntSless,
+            sf,
+            smallvec![t, Varnode::constant(0, 1)],
+            0x1000,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        assert_eq!(
+            lookup_output_type(&ssa, BlockId(0), 0),
+            Some(PrimitiveType::Int(1))
+        );
+        assert_eq!(
+            lookup_output_type(&ssa, BlockId(0), 1),
+            Some(PrimitiveType::Bool)
+        );
+    }
+
+    #[test]
+    fn test_compared_pointer_stays_ptr() {
+        // `v = *p; if (p == q) ...`: the comparison does not erase `p`'s
+        // pointer type.
+        let p = Varnode::reg(0, 8);
+        let q = Varnode::reg(8, 8);
+        let mut func = Function::new("ptr_cmp", BlockId(0), 0x1000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(0x10, 4),
+            smallvec![Varnode::constant(1, 8), p],
+            0x1000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntEqual,
+            Varnode::reg(0x200, 1),
+            smallvec![p, q],
+            0x1004,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        assert_eq!(
+            lookup_input_type(&ssa, BlockId(0), 1, 0),
+            Some(PrimitiveType::Ptr)
+        );
+        assert_eq!(
+            lookup_input_type(&ssa, BlockId(0), 1, 1),
+            Some(PrimitiveType::Int(8))
         );
     }
 }

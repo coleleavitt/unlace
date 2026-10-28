@@ -26,6 +26,13 @@ part), `rustfmt.toml`. Not imported: `ci/`, `fuzz/` (a separate Cargo project), 
 - `heritage::VariableStack` is a `BTreeMap` (as `std::map` in Ghidra); the two remaining
   `HashMap`s are lookup-only caches marked `// determinism:allow`, and the crate is checked by
   `cargo xtask lint-determinism`.
+- `ObjectLoadImage::load_fill` (Ghidra `LoadImageBfd::loadFill`) answered a read from its 512-byte
+  buffer whenever an earlier read had buffered the address. The buffer spanned unmapped gaps
+  (zero-filled) and non-allocated sections at address 0 (`.debug_info`, `.comment`), so a PLT stub
+  disassembled as debug-info bytes after its neighbour `_init` was decompiled, and output depended
+  on decompilation order. The buffer now holds only the contiguous bytes of mapped sections; a read
+  outside them fails, or reads a non-allocated section that contains it without buffering
+  (test `unmapped_gap_reads_do_not_depend_on_buffer_state`).
 - Crate-level lint allowances: the upstream list in `src/lib.rs` (`clippy::mutable_key_type`,
   `too_many_arguments`, `needless_range_loop`, `if_same_then_else`, `while_let_loop`,
   `unnecessary_unwrap`, `field_reassign_with_default`, `needless_late_init`,

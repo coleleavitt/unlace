@@ -188,3 +188,21 @@ fn not_an_object_file() {
     let err = image.open().expect_err("text file is not an object");
     assert!(err.explain().ends_with(" : not in recognized object file format"));
 }
+
+#[test]
+fn unmapped_gap_reads_do_not_depend_on_buffer_state() {
+    let space = ram(8);
+    let gap = Address::new(space.clone(), 0x402ad0);
+    let fresh = open("x86_64-O0", &space);
+    let mut buf = [0u8; 4];
+    assert!(matches!(fresh.load_fill(&mut buf, &gap), Err(Error::DataUnavail(_))));
+
+    let buffered = open("x86_64-O0", &space);
+    let file = std::fs::read(binary("x86_64-O0")).expect("binary readable");
+    let mut tail = [0u8; 16];
+    buffered
+        .load_fill(&mut tail, &Address::new(space.clone(), 0x402ab9))
+        .expect(".text tail loads");
+    assert_eq!(&tail[..], &file[0x2ab9..0x2ac9]);
+    assert!(matches!(buffered.load_fill(&mut buf, &gap), Err(Error::DataUnavail(_))));
+}

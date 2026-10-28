@@ -50,6 +50,14 @@ struct ObjectSectionRecord {
     flags: u32,
 }
 
+impl ObjectSectionRecord {
+    /// Whether the section occupies the address space. Non-allocated sections such as ELF
+    /// `.debug_*` and `.comment` have address 0 and would otherwise shadow loaded code.
+    fn is_mapped(&self) -> bool {
+        self.flags & SEC_ALLOC != 0 || self.vma != 0
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct ObjectSymbolRecord {
     name: String,
@@ -71,6 +79,8 @@ struct ObjectLoadImageState {
     spaceid: Option<SpaceRef>,
     adjust: u64,
     bufoffset: u64,
+    /// Number of leading `buffer` bytes that are mapped by a section.
+    mapped: usize,
     buffer: Vec<u8>,
     symbols_open: bool,
     cursymbol: usize,
@@ -418,6 +428,7 @@ impl ObjectLoadImage {
                 spaceid: None,
                 adjust: 0,
                 bufoffset: u64::MAX,
+                mapped: 0,
                 buffer: vec![0; BUFFER_SIZE],
                 symbols_open: false,
                 cursymbol: 0,
@@ -480,7 +491,8 @@ impl ObjectLoadImage {
     }
 
     fn find_section(sections: &[ObjectSectionRecord], adjust: u64, offset: u64) -> Option<(usize, u64)> {
-        for (index, section) in sections.iter().enumerate() {
+        let loaded = sections.iter().enumerate().filter(|(_, section)| section.is_mapped());
+        for (index, section) in loaded.clone() {
             let start = section.vma.wrapping_add(adjust);
             let stop = start.wrapping_add(section.size);
             if offset >= start && offset < stop {
@@ -488,7 +500,7 @@ impl ObjectLoadImage {
             }
         }
         let mut champ: Option<usize> = None;
-        for (index, section) in sections.iter().enumerate() {
+        for (index, section) in loaded {
             let vma = section.vma.wrapping_add(adjust);
             if vma > offset {
                 match champ {
@@ -502,6 +514,15 @@ impl ObjectLoadImage {
             }
         }
         champ.map(|index| (index, sections[index].size))
+    }
+
+    /// The non-mapped section containing `offset`, which Ghidra's loader reads when no mapped
+    /// section does (for example `.comment` at address 0). Such reads bypass the buffer.
+    fn unmapped_section(sections: &[ObjectSectionRecord], adjust: u64, offset: u64) -> Option<&ObjectSectionRecord> {
+        sections.iter().find(|section| {
+            let start = section.vma.wrapping_add(adjust);
+            !section.is_mapped() && offset >= start && offset < start.wrapping_add(section.size)
+        })
     }
 
     fn section_contents(data: &[u8], section: &ObjectSectionRecord, offset: u64, out: &mut [u8]) {
@@ -544,8 +565,8 @@ impl LoadImage for ObjectLoadImage {
             )));
         }
         let mut curaddr = addr.get_offset();
-        let bufsize = state.buffer.len() as u64;
-        if curaddr >= state.bufoffset && curaddr.wrapping_add(size as u64) < state.bufoffset.wrapping_add(bufsize) {
+        let mapped = state.mapped as u64;
+        if curaddr >= state.bufoffset && curaddr.wrapping_add(size as u64) < state.bufoffset.wrapping_add(mapped) {
             let start = (curaddr - state.bufoffset) as usize;
             ptr.copy_from_slice(&state.buffer[start..start + size]);
             return Ok(());
@@ -553,56 +574,53 @@ impl LoadImage for ObjectLoadImage {
         let data = self.data.read().unwrap_or_else(|poisoned| poisoned.into_inner());
         let adjust = state.adjust;
         let state = &mut *state;
-        let parsed = state
+        let decoded = state
             .parsed
             .as_ref()
             .ok_or_else(|| Error::Lowlevel("load image is not open".to_string()))?;
         if state.buffer.len() < size {
             state.buffer.resize(size, 0);
         }
-        state.bufoffset = curaddr;
+        // The buffer caches only the contiguous mapped bytes from `curaddr`, so a read answers
+        // the same whether or not an earlier read buffered its address (Ghidra's loader served
+        // zero-filled gaps from the cache but rejected the same addresses on a fresh read).
         let mut offset = 0usize;
         let mut cursize = state.buffer.len() as u64;
         while cursize > 0 {
-            let Some((index, secsize)) = ObjectLoadImage::find_section(&parsed.sections, adjust, curaddr) else {
-                if offset == 0 {
-                    break;
-                }
-                state.buffer[offset..].fill(0);
-                ptr.copy_from_slice(&state.buffer[..size]);
-                return Ok(());
+            let Some((index, secsize)) = ObjectLoadImage::find_section(&decoded.sections, adjust, curaddr) else {
+                break;
             };
-            let section = &parsed.sections[index];
+            let section = &decoded.sections[index];
             let vma = section.vma.wrapping_add(adjust);
-            let readsize;
             if vma > curaddr {
-                if offset == 0 {
-                    break;
-                }
-                readsize = (vma - curaddr).min(cursize);
-                state.buffer[offset..offset + readsize as usize].fill(0);
-            } else {
-                let mut amount = cursize;
-                if curaddr.wrapping_add(amount) > vma.wrapping_add(secsize) {
-                    amount = vma.wrapping_add(secsize).wrapping_sub(curaddr);
-                }
-                readsize = amount;
-                ObjectLoadImage::section_contents(
-                    &data,
-                    section,
-                    curaddr - vma,
-                    &mut state.buffer[offset..offset + readsize as usize],
-                );
+                break;
             }
+            let readsize = cursize.min(vma.wrapping_add(secsize).wrapping_sub(curaddr));
+            ObjectLoadImage::section_contents(
+                &data,
+                section,
+                curaddr - vma,
+                &mut state.buffer[offset..offset + readsize as usize],
+            );
             offset += readsize as usize;
             cursize -= readsize;
             curaddr = curaddr.wrapping_add(readsize);
         }
-        if cursize > 0 {
+        if offset == 0 {
+            state.bufoffset = u64::MAX;
+            state.mapped = 0;
+            if let Some(section) = ObjectLoadImage::unmapped_section(&decoded.sections, adjust, curaddr) {
+                let vma = section.vma.wrapping_add(adjust);
+                ObjectLoadImage::section_contents(&data, section, curaddr - vma, ptr);
+                return Ok(());
+            }
             let mut message = format!("Unable to load {cursize} bytes at {}", addr.get_shortcut());
             addr.print_raw(&mut message);
             return Err(Error::DataUnavail(message));
         }
+        state.buffer[offset..].fill(0);
+        state.bufoffset = addr.get_offset();
+        state.mapped = offset;
         ptr.copy_from_slice(&state.buffer[..size]);
         Ok(())
     }

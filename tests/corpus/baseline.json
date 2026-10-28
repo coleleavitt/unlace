@@ -1,0 +1,159 @@
+{
+  "toolchains": {
+    "clang-aarch64-freestanding": "clang version 22.1.8 (https://github.com/llvm/llvm-project.git ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+    "clang-x86_64": "clang version 22.1.8 (https://github.com/llvm/llvm-project.git ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+    "gcc-x86_64": "gcc (Gentoo 15.3.0 p8) 15.3.0"
+  },
+  "totals": {
+    "clang-aarch64-freestanding/stripped": {
+      "programs_failed": 0,
+      "functions": 159,
+      "missing": 159,
+      "metrics": {
+        "flag_vars": 0,
+        "gotos": 0,
+        "empty_blocks": 0,
+        "dead_stores": 0,
+        "leaked_temps": 0,
+        "register_carriers": 0,
+        "raw_stack_accesses": 0,
+        "lines": 0
+      },
+      "source_lines": 0,
+      "arity_checked": 0,
+      "arity_mismatches": 0,
+      "recompile": {
+        "pass": 0,
+        "mismatch": 0,
+        "compile_error": 0,
+        "link_error": 0,
+        "untestable": 159
+      }
+    },
+    "clang-aarch64-freestanding/unstripped": {
+      "programs_failed": 0,
+      "functions": 159,
+      "missing": 28,
+      "metrics": {
+        "flag_vars": 882,
+        "gotos": 224,
+        "empty_blocks": 40,
+        "dead_stores": 1742,
+        "leaked_temps": 1725,
+        "register_carriers": 1360,
+        "raw_stack_accesses": 0,
+        "lines": 11511
+      },
+      "source_lines": 1457,
+      "arity_checked": 131,
+      "arity_mismatches": 25,
+      "recompile": {
+        "pass": 1,
+        "mismatch": 35,
+        "compile_error": 76,
+        "link_error": 19,
+        "untestable": 28
+      }
+    },
+    "clang-x86_64/stripped": {
+      "programs_failed": 1,
+      "functions": 153,
+      "missing": 6,
+      "metrics": {
+        "flag_vars": 304,
+        "gotos": 206,
+        "empty_blocks": 45,
+        "dead_stores": 1736,
+        "leaked_temps": 1426,
+        "register_carriers": 1018,
+        "raw_stack_accesses": 35,
+        "lines": 10140
+      },
+      "source_lines": 1588,
+      "arity_checked": 147,
+      "arity_mismatches": 56,
+      "recompile": {
+        "pass": 12,
+        "mismatch": 40,
+        "compile_error": 86,
+        "link_error": 9,
+        "untestable": 6
+      }
+    },
+    "clang-x86_64/unstripped": {
+      "programs_failed": 1,
+      "functions": 153,
+      "missing": 0,
+      "metrics": {
+        "flag_vars": 319,
+        "gotos": 280,
+        "empty_blocks": 48,
+        "dead_stores": 1930,
+        "leaked_temps": 1563,
+        "register_carriers": 1019,
+        "raw_stack_accesses": 38,
+        "lines": 10714
+      },
+      "source_lines": 1657,
+      "arity_checked": 153,
+      "arity_mismatches": 29,
+      "recompile": {
+        "pass": 10,
+        "mismatch": 40,
+        "compile_error": 100,
+        "link_error": 3,
+        "untestable": 0
+      }
+    },
+    "gcc-x86_64/stripped": {
+      "programs_failed": 0,
+      "functions": 164,
+      "missing": 15,
+      "metrics": {
+        "flag_vars": 320,
+        "gotos": 275,
+        "empty_blocks": 60,
+        "dead_stores": 1860,
+        "leaked_temps": 1336,
+        "register_carriers": 1195,
+        "raw_stack_accesses": 38,
+        "lines": 10521
+      },
+      "source_lines": 1705,
+      "arity_checked": 145,
+      "arity_mismatches": 60,
+      "recompile": {
+        "pass": 13,
+        "mismatch": 53,
+        "compile_error": 69,
+        "link_error": 7,
+        "untestable": 22
+      }
+    },
+    "gcc-x86_64/unstripped": {
+      "programs_failed": 0,
+      "functions": 164,
+      "missing": 0,
+      "metrics": {
+        "flag_vars": 357,
+        "gotos": 290,
+        "empty_blocks": 69,
+        "dead_stores": 2133,
+        "leaked_temps": 1468,
+        "register_carriers": 1209,
+        "raw_stack_accesses": 33,
+        "lines": 12163
+      },
+      "source_lines": 1934,
+      "arity_checked": 159,
+      "arity_mismatches": 34,
+      "recompile": {
+        "pass": 11,
+        "mismatch": 51,
+        "compile_error": 89,
+        "link_error": 5,
+        "untestable": 8
+      }
+    }
+  }
+}

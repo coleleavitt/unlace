@@ -314,14 +314,18 @@ fn totals_cells(t: &Totals) -> String {
 /// The headline table: one row per build config.
 pub fn totals_markdown(report: &Report) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "| config | functions | missing {TOTALS_HEADER}");
-    let _ = writeln!(out, "|---|---:|---:{TOTALS_RULE}");
+    let _ = writeln!(
+        out,
+        "| config | failed programs | functions | missing {TOTALS_HEADER}"
+    );
+    let _ = writeln!(out, "|---|---:|---:|---:{TOTALS_RULE}");
     for config in &report.configs {
         let t = &config.totals;
         let _ = writeln!(
             out,
-            "| {} | {} | {} {}",
+            "| {} | {} | {} | {} {}",
             config.config,
+            t.programs_failed,
             t.functions,
             t.missing,
             totals_cells(t)

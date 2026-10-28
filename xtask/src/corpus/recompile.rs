@@ -364,14 +364,18 @@ fn first_error(output: &Output) -> String {
 }
 
 fn run_program(target: &Target, binary: &Path) -> Result<Behaviour, String> {
-    let mut cmd = match target.runner {
-        Some(runner) => {
-            let mut cmd = Command::new(runner);
-            cmd.arg(binary);
-            cmd
-        }
-        None => Command::new(binary),
-    };
+    // No ASLR, no environment, and a location-independent argv[0]: decompiled
+    // code that reads uninitialized stack then behaves the same on every run.
+    let dir = binary.parent().unwrap_or(Path::new("."));
+    let name = binary
+        .file_name()
+        .ok_or_else(|| format!("{} has no file name", binary.display()))?;
+    let mut cmd = Command::new("setarch");
+    cmd.args([std::env::consts::ARCH, "-R"])
+        .args(target.runner)
+        .arg(Path::new(".").join(name))
+        .current_dir(dir)
+        .env_clear();
     let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

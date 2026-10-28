@@ -17,8 +17,8 @@ part), `rustfmt.toml`. Not imported: `ci/`, `fuzz/` (a separate Cargo project), 
 ## Local changes
 
 - Package renamed to `unlace-engine`; the library is `unlace_engine` (tests and examples updated).
-- Builds with the unlace workspace toolchain. The `[profile.test] opt-level = 1` of upstream is
-  replaced by `[profile.dev.package.unlace-engine] opt-level = 1` in the workspace manifest.
+- Builds with the unlace workspace toolchain; the workspace dev profile (`opt-level = 1`) replaces
+  upstream's `[profile.test] opt-level = 1`.
 - Default processor features are `x86`, `arm`, `aarch64` (unlace product scope). The upstream
   default set is the `upstream-default` feature. Upstream tests that need MIPS, PowerPC or RISC-V
   are gated on those features (`decomp_corpus` skips corpus binaries of disabled processors);

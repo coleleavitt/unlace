@@ -6,9 +6,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
-use std::process::{Command, Stdio};
 
-use crate::cargo_bin;
+use crate::fixture_outputs::{FixtureOutputs, decompile_fixtures, fixture_binary};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +44,11 @@ impl GoldenClassification {
     }
 }
 
+pub struct TriageSummary {
+    pub pass_rows: usize,
+    pub review_rows: usize,
+}
+
 #[derive(Debug, Default)]
 struct DiffSummary {
     matches: bool,
@@ -58,8 +62,10 @@ struct DiffSummary {
 }
 
 pub fn run(root: &Path) -> i32 {
-    match run_inner(root) {
-        Ok(()) => 0,
+    let result = expected_golden_names(root)
+        .and_then(|names| ledger(root, &decompile_fixtures(root, &names)));
+    match result {
+        Ok(_) => 0,
         Err(e) => {
             eprintln!("golden-triage: {e}");
             1
@@ -67,11 +73,11 @@ pub fn run(root: &Path) -> i32 {
     }
 }
 
-fn run_inner(root: &Path) -> Result<(), String> {
+/// Check every stored golden against `outputs` and print the ledger.
+pub fn ledger(root: &Path, outputs: &FixtureOutputs) -> Result<TriageSummary, String> {
     let manifest = read_triage_manifest(root)?;
     let rows = index_rows(manifest)?;
     let expected = expected_golden_names(root)?;
-    let unlace_bin = cargo_bin::build_unlace_bin(root)?;
 
     let expected_set: BTreeSet<&str> = expected.iter().map(String::as_str).collect();
     for name in rows.keys() {
@@ -92,7 +98,7 @@ fn run_inner(root: &Path) -> Result<(), String> {
             .ok_or_else(|| format!("missing triage row for tests/golden/expected/{name}.c"))?;
         validate_row(row)?;
 
-        let fixture = root.join("fixtures").join(format!("{name}.elf"));
+        let fixture = fixture_binary(root, &name);
         if !fixture.exists() {
             return Err(format!(
                 "fixture missing for golden row {name}: {}",
@@ -102,8 +108,12 @@ fn run_inner(root: &Path) -> Result<(), String> {
         let expected_path = root.join("tests/golden/expected").join(format!("{name}.c"));
         let expected_text = std::fs::read_to_string(&expected_path)
             .map_err(|e| format!("failed to read {}: {e}", expected_path.display()))?;
-        let actual_text = decompile_fixture(&unlace_bin, &fixture, &name)?;
-        let diff = DiffSummary::compare(&actual_text, &expected_text);
+        let actual_text = match outputs.get(&name) {
+            Some(Ok(text)) => text,
+            Some(Err(e)) => return Err(format!("unlace failed for {name}: {e}")),
+            None => return Err(format!("no decompiled output for {name}")),
+        };
+        let diff = DiffSummary::compare(actual_text, &expected_text);
 
         if diff.matches && row.classification != GoldenClassification::ExactPass {
             return Err(format!(
@@ -143,7 +153,10 @@ fn run_inner(root: &Path) -> Result<(), String> {
 
     println!();
     println!("golden-triage: pass_rows={pass_rows} review_rows={review_rows}");
-    Ok(())
+    Ok(TriageSummary {
+        pass_rows,
+        review_rows,
+    })
 }
 
 fn read_triage_manifest(root: &Path) -> Result<TriageManifest, String> {
@@ -176,7 +189,7 @@ fn validate_row(row: &TriageRow) -> Result<(), String> {
     Ok(())
 }
 
-fn expected_golden_names(root: &Path) -> Result<Vec<String>, String> {
+pub fn expected_golden_names(root: &Path) -> Result<Vec<String>, String> {
     let dir = root.join("tests/golden/expected");
     let mut names = Vec::new();
     let entries =
@@ -194,28 +207,6 @@ fn expected_golden_names(root: &Path) -> Result<Vec<String>, String> {
     }
     names.sort();
     Ok(names)
-}
-
-fn decompile_fixture(unlace_bin: &Path, fixture: &Path, name: &str) -> Result<String, String> {
-    let output = Command::new(unlace_bin)
-        .args(["decompile", "--emit", "c"])
-        .arg(fixture)
-        .env_remove("RUST_LOG")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| format!("failed to spawn unlace for {name}: {e}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "unlace failed for {name}: {}",
-            String::from_utf8_lossy(&output.stderr)
-                .lines()
-                .next()
-                .unwrap_or("unknown error")
-        ));
-    }
-    String::from_utf8(output.stdout)
-        .map_err(|e| format!("unlace output for {name} was not UTF-8: {e}"))
 }
 
 impl DiffSummary {

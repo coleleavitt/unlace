@@ -99,10 +99,10 @@ changes and verify the resulting output is actually better.
 
 ## Current Verified State
 
-Last verified on 2026-06-21 in this checkout with
-`RUSTC_WRAPPER= bash scripts/quality_axes.sh`:
+Last verified on 2026-06-21 in this checkout with the quality-axis run (then
+`scripts/quality_axes.sh`, now `cargo xtask gate`):
 
-- `scripts/score_parity.sh` reports `Stylistic Fixture Parity: 83.0%`.
+- The stylistic score reported `Stylistic Fixture Parity: 83.0%`.
 - `cargo run -p xtask -- golden-triage` reports 15 exact-pass rows and 0
   review rows. The older "18 pass / 14 fail" and "0 exact-pass / 15 review"
   notes are historical; do not use them as current evidence.
@@ -201,23 +201,41 @@ DWARF. `unlace_ir::arch_support::product_tier` is the source of truth.
   `unwired` feature. `cargo xtask status` lists tiers, gated/unwired modules,
   undeclared source files and lifter placeholder counts, and fails when an
   ungated module is unreferenced.
-- xtask reports and `scripts/score_parity.sh` build `unlace` with
-  `--features all-arches`; experimental-arch tests run only with their feature
-  (`cargo test -p unlace-test-harness --features all-arches`).
+- `cargo xtask` (the alias enables `all-arches`) and the reports it runs
+  build `unlace` with `--features all-arches`; experimental-arch tests run
+  only with their feature (`cargo nextest run -p unlace-test-harness
+  --features all-arches`).
 
 ## Standard Commands
 
-Prefer disabling `sccache` in this environment:
+The dev/test profile builds workspace crates at `opt-level = 1` with
+incremental compilation: the decompiler runs ~5x faster than at opt-level 0
+and a rebuild after editing one pass takes ~5 s. Do not export
+`CARGO_INCREMENTAL=0` (it overrides the profile; the same rebuild takes ~70 s)
+and do not wrap rustc with sccache.
 
 ```bash
-RUSTC_WRAPPER= cargo check --workspace
-RUSTC_WRAPPER= cargo test --workspace
-RUSTC_WRAPPER= cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture
-RUSTC_WRAPPER= bash scripts/score_parity.sh
+cargo check --workspace
+cargo nextest run --workspace     # all tests, one process each, in parallel
+cargo test --workspace --doc      # doctests (nextest does not run them)
+cargo nextest run -p unlace-test-harness --features all-arches --test golden_fixtures
+cargo xtask gate                  # every quality gate from one build
+cargo xtask gate --quick          # golden triage + stylistic score only
 cargo xtask lint-determinism
-RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
+cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
 ```
+
+`cargo xtask gate` builds `unlace` once, decompiles every golden fixture once
+in-process and in parallel, and derives the golden triage ledger, the
+stylistic score, and the fidelity/quality counters from that run. The
+semantic and type-recovery reports and the Rocq axes (skipped without
+`coqc`/`dune`) run concurrently. It prints one table, writes outputs and logs
+to `target/gate/`, and exits non-zero when any check fails. The golden tests
+run the decompiler in-process too, so they need no prior `cargo build`.
+Refresh goldens with `UPDATE_GOLDEN=1 cargo nextest run -p unlace-test-harness
+--features all-arches --test golden_fixtures` only for reviewed, intentional
+output changes.
 
 Coverage and benchmarking tools are installed locally as of 2026-06-21:
 `cargo-llvm-cov 0.6.18`, `grcov 0.10.5`, `llvm-cov`, `cargo-nextest 0.9.132`,
@@ -225,13 +243,13 @@ and `cargo-codspeed 4.7.0`.
 
 ```bash
 # Coverage: LCOV for upload tools, or HTML for local inspection.
-RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
-RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
+cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
+cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
 
 # Criterion benches already wired through unlace-cli.
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench decompile_medium
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench spec_suite
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench hexrays_throughput
+cargo bench -p unlace-cli --bench decompile_medium
+cargo bench -p unlace-cli --bench spec_suite
+cargo bench -p unlace-cli --bench hexrays_throughput
 
 # CodSpeed runner path for CI or local simulation/walltime runs.
 cargo codspeed build -p unlace-cli --bench decompile_medium --bench spec_suite --bench hexrays_throughput
@@ -243,7 +261,7 @@ Formal-verification gate (Rocq 9.1 machine-checked decompiler cores; see
 
 ```bash
 bash scripts/verify_proofs.sh                                   # build + coqchk: zero admits/axioms
-RUSTC_WRAPPER= cargo test -p unlace-ir --test coq_conformance   # pin the Rust↔Coq mirror
+cargo test -p unlace-ir --test coq_conformance   # pin the Rust↔Coq mirror
 ```
 
 If a command fails because of the sandbox, do not work around it by changing the
@@ -372,7 +390,7 @@ research sessions. This ignores stale Sisyphus task state.
    `// determinism:allow` and a concrete reason.
 
 2. Clippy and warning hygiene.
-   Keep `RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings` clean.
+   Keep `cargo clippy --workspace -- -D warnings` clean.
    Treat any warning regression as a real gate failure unless the user
    explicitly asks for exploratory code.
 

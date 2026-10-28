@@ -124,17 +124,18 @@ Run these locally. `docs/status.md` records the latest quality-axis snapshot;
 older rebaseline notes are historical once the status matrix has moved.
 
 ```bash
-RUSTC_WRAPPER= cargo check --workspace
-RUSTC_WRAPPER= cargo nextest run --workspace
-RUSTC_WRAPPER= cargo test --workspace --doc
-RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
-RUSTC_WRAPPER= cargo xtask lint-determinism
+cargo check --workspace
+cargo nextest run --workspace
+cargo test --workspace --doc
+cargo clippy --workspace -- -D warnings
+cargo xtask lint-determinism
 cargo fmt --all -- --check
-RUSTC_WRAPPER= cargo xtask gate
+cargo xtask gate
 ```
 
-Disable `sccache` (`RUSTC_WRAPPER=`) — the workspace builds reliably without
-it, and the cached macro-expansion can stale on this codebase.
+Do not wrap rustc with `sccache` (its cached macro expansion went stale on
+this codebase) and do not export `CARGO_INCREMENTAL=0`: the dev profile relies
+on incremental compilation.
 
 ## Coverage and benchmarks
 

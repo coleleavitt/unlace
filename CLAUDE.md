@@ -208,17 +208,21 @@ DWARF. `unlace_ir::arch_support::product_tier` is the source of truth.
 
 ## Standard Commands
 
-Prefer disabling `sccache` in this environment:
+The dev/test profile builds workspace crates at `opt-level = 1` with
+incremental compilation: the decompiler runs ~5x faster than at opt-level 0
+and a rebuild after editing one pass takes ~5 s. Do not export
+`CARGO_INCREMENTAL=0` (it overrides the profile; the same rebuild takes ~70 s)
+and do not wrap rustc with sccache.
 
 ```bash
-RUSTC_WRAPPER= cargo check --workspace
-RUSTC_WRAPPER= cargo nextest run --workspace     # all tests, one process each, in parallel
-RUSTC_WRAPPER= cargo test --workspace --doc      # doctests (nextest does not run them)
-RUSTC_WRAPPER= cargo nextest run -p unlace-test-harness --features all-arches --test golden_fixtures
-RUSTC_WRAPPER= cargo xtask gate                  # every quality gate from one build
-RUSTC_WRAPPER= cargo xtask gate --quick          # golden triage + stylistic score only
+cargo check --workspace
+cargo nextest run --workspace     # all tests, one process each, in parallel
+cargo test --workspace --doc      # doctests (nextest does not run them)
+cargo nextest run -p unlace-test-harness --features all-arches --test golden_fixtures
+cargo xtask gate                  # every quality gate from one build
+cargo xtask gate --quick          # golden triage + stylistic score only
 cargo xtask lint-determinism
-RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
+cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
 ```
 
@@ -230,7 +234,8 @@ semantic and type-recovery reports and the Rocq axes (skipped without
 to `target/gate/`, and exits non-zero when any check fails. The golden tests
 run the decompiler in-process too, so they need no prior `cargo build`.
 Refresh goldens with `UPDATE_GOLDEN=1 cargo nextest run -p unlace-test-harness
---features all-arches --test golden_fixtures` only for reviewed, intentional output changes.
+--features all-arches --test golden_fixtures` only for reviewed, intentional
+output changes.
 
 Coverage and benchmarking tools are installed locally as of 2026-06-21:
 `cargo-llvm-cov 0.6.18`, `grcov 0.10.5`, `llvm-cov`, `cargo-nextest 0.9.132`,

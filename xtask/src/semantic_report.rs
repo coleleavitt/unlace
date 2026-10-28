@@ -13,6 +13,7 @@ use std::process::{self, Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::cargo_bin;
+use crate::fixture_outputs::timeout_arg;
 use serde::Deserialize;
 use unlace_loader::{ElfLoader, Loader, SectionFlags};
 
@@ -589,6 +590,7 @@ fn run_executable_case(
 
     let decompile = Command::new(unlace_bin)
         .args(["decompile", "--emit", "c", "--function", function])
+        .args(["--timeout", &timeout_arg()])
         .arg(&binary)
         .env_remove("RUST_LOG")
         .output()
@@ -755,6 +757,7 @@ fn run_shape_case(
     let binary = root.join(&fixture.binary_path);
     let decompile = Command::new(unlace_bin)
         .args(["decompile", "--emit", "c", "--function", case.function])
+        .args(["--timeout", &timeout_arg()])
         .arg(&binary)
         .env_remove("RUST_LOG")
         .output()

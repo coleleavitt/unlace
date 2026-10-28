@@ -36,9 +36,7 @@ pub fn build_unlace_bin(root: &Path) -> Result<PathBuf, String> {
 }
 
 pub fn find_unlace_binary(root: &Path) -> Option<PathBuf> {
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| root.join("target"));
+    let target_dir = target_dir(root);
     let debug_bin = target_dir.join("debug").join(executable_name("unlace"));
     if debug_bin.exists() {
         return Some(debug_bin);
@@ -48,6 +46,12 @@ pub fn find_unlace_binary(root: &Path) -> Option<PathBuf> {
         return Some(release_bin);
     }
     None
+}
+
+pub fn target_dir(root: &Path) -> PathBuf {
+    std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("target"))
 }
 
 fn executable_from_cargo_json(root: &Path, stdout: &[u8]) -> Option<PathBuf> {

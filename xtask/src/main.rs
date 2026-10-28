@@ -8,7 +8,9 @@ mod cargo_bin;
 mod compare_corpus;
 mod compare_golden;
 mod dump_pipeline;
+mod fixture_outputs;
 mod fuzz;
+mod gate;
 mod golden_triage;
 mod goto_count;
 mod lift_trace;
@@ -33,6 +35,13 @@ fn main() {
         Some("compare-golden") => {
             let root = workspace_root();
             compare_golden::run(&root);
+        }
+        Some("gate") => {
+            let root = workspace_root();
+            let code = gate::run(&root, &args[1..]);
+            if code != 0 {
+                process::exit(code);
+            }
         }
         Some("golden-triage") => {
             let root = workspace_root();

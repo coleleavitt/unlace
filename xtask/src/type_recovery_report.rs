@@ -13,6 +13,7 @@ use std::path::Path;
 use std::process::{self, Command};
 
 use crate::cargo_bin;
+use crate::fixture_outputs::timeout_arg;
 use serde::Deserialize;
 use unlace_loader::{
     DwarfInfo, ElfLoader, FunctionDebugInfo, Loader, LocalVariable, ParameterInfo, StructField,
@@ -1845,7 +1846,14 @@ fn score_fixture(
 
     let binary = root.join(&fixture.binary_path);
     let mut command = Command::new(unlace_bin);
-    command.args(["batch", "--emit", "c", "--output-dir"]);
+    command.args([
+        "batch",
+        "--emit",
+        "c",
+        "--timeout",
+        &timeout_arg(),
+        "--output-dir",
+    ]);
     command.arg(&output_dir);
     if truth_kind == TruthKind::Dwarf {
         let scope = format!(

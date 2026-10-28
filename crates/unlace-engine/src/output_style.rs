@@ -99,6 +99,15 @@ impl OutputStyle {
         }
     }
 
+    /// The name a symbol prints with. IDA replaces the `.` and `@` of names such as
+    /// `f.constprop.0` and `printf@got` with `_`.
+    pub fn symbol_name(self, name: &str) -> String {
+        match self {
+            OutputStyle::Ghidra => name.to_string(),
+            OutputStyle::Ida => name.replace(['.', '@'], "_"),
+        }
+    }
+
     pub fn default_function_name(self, addr: &Address) -> String {
         match self {
             OutputStyle::Ghidra => {
@@ -150,4 +159,21 @@ fn is_register_artifact(name: &str) -> bool {
     ["in_", "unaff_", "extraout_"]
         .iter()
         .any(|prefix| name.starts_with(prefix))
+}
+
+/// IDA's spelling of an access to `size` bytes at `offset` inside variable `name`, for accesses
+/// Ghidra prints as a partial field (`v1._8_8_`) or a mismatched symbol (`_v1`).
+pub(crate) fn raw_access(name: &str, offset: i64, size: i32) -> String {
+    let unit = match size {
+        1 => "_BYTE",
+        2 => "_WORD",
+        4 => "_DWORD",
+        8 => "_QWORD",
+        16 => "_OWORD",
+        _ => return format!("(*(_BYTE (*)[{size}])((char *)&{name} + {offset}))"),
+    };
+    match offset {
+        0 => format!("(*({unit} *)&{name})"),
+        _ => format!("(*({unit} *)((char *)&{name} + {offset}))"),
+    }
 }

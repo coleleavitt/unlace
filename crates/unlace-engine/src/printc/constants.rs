@@ -882,6 +882,23 @@ impl PrintC {
             self.push_op(ctx, OpTokenKey::Typecast, op)?;
             self.push_type(ctx, finalcast)?;
         }
+        if ctx.glb.output_style == OutputStyle::Ida
+            && let [
+                PartialSymbolEntry {
+                    field: None,
+                    offset,
+                    size,
+                    ..
+                },
+            ] = stack.as_slice()
+            && *size > 0
+        {
+            let access = raw_access(&symbol_display_name(ctx, sym), *offset, *size);
+            return self.push_atom(
+                ctx,
+                &Atom::with_varnode(&access, PrintTagType::Vartoken, SyntaxHighlight::VarColor, op, vn),
+            );
+        }
         for entry in stack.iter().rev() {
             self.push_op(ctx, entry.token, op)?;
         }
@@ -929,12 +946,15 @@ impl PrintC {
         ctx: &mut PrintContext<'_>,
         sym: SymbolId,
         off: i32,
-        _sz: i32,
+        sz: i32,
         vn: Option<VarnodeId>,
         op: Option<OpId>,
     ) -> Result<()> {
         if off == 0 {
-            let nm = format!("_{}", symbol_display_name(ctx, sym));
+            let nm = match ctx.glb.output_style {
+                OutputStyle::Ghidra => format!("_{}", symbol_display_name(ctx, sym)),
+                OutputStyle::Ida => raw_access(&symbol_display_name(ctx, sym), 0, sz),
+            };
             self.push_atom(
                 ctx,
                 &Atom::with_varnode(&nm, PrintTagType::Vartoken, SyntaxHighlight::VarColor, op, vn),

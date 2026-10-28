@@ -1083,9 +1083,9 @@ fn fixture_call_alias_decls(fixture: &Fixture, function: &str) -> String {
                 .to_string()
         }
         ("stripped", "main") => [
-            "long long sub_1570(void) { return f_rec_fib(8); }\n",
-            "long long sub_1b80(void) { return f_rec_power(2, 8); }\n",
-            "long long sub_1830(void) { return f_ackermann(2, 3); }\n",
+            "long long sub_1570() { return f_rec_fib(8); }\n",
+            "long long sub_1b80() { return f_rec_power(2, 8); }\n",
+            "long long sub_1830() { return f_ackermann(2, 3); }\n",
         ]
         .concat(),
         _ => String::new(),

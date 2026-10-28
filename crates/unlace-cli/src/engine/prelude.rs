@@ -1,6 +1,6 @@
-//! Declarations that make engine output compile as C: the type names of the output style and
-//! the p-code helper operations Ghidra prints as calls (`CONCAT44`, `SUB84`, `ZEXT48`,
-//! `CARRY4`, ...). Only what the text uses is declared.
+//! Declarations that make engine output compile as C: the type names of the output style, the
+//! p-code helper operations Ghidra prints as calls (`CONCAT44`, `SUB84`, `ZEXT48`, `CARRY4`, ...),
+//! and runtime functions without a standard header. Only what the text uses is declared.
 
 use std::collections::BTreeSet;
 
@@ -17,6 +17,7 @@ const IDA_TYPES: &[(&str, &str)] = &[
     ("_WORD", "typedef uint16_t _WORD;"),
     ("_DWORD", "typedef uint32_t _DWORD;"),
     ("_QWORD", "typedef uint64_t _QWORD;"),
+    ("_OWORD", "typedef unsigned __int128 _OWORD;"),
     ("char16_t", "typedef uint16_t char16_t;"),
     ("char32_t", "typedef uint32_t char32_t;"),
     ("code", "typedef void code();"),
@@ -80,9 +81,73 @@ fn identifiers(text: &str) -> BTreeSet<&str> {
         .collect()
 }
 
+/// Runtime functions that no standard C header declares: glibc fortify wrappers and the Itanium
+/// C++ ABI.
+const RUNTIME_DECLARATIONS: &[(&str, &str)] = &[
+    (
+        "__printf_chk",
+        "int __printf_chk(int flag, const char *format, ...);",
+    ),
+    (
+        "__fprintf_chk",
+        "int __fprintf_chk(void *stream, int flag, const char *format, ...);",
+    ),
+    (
+        "__sprintf_chk",
+        "int __sprintf_chk(char *s, int flag, __SIZE_TYPE__ slen, const char *format, ...);",
+    ),
+    (
+        "__snprintf_chk",
+        "int __snprintf_chk(char *s, __SIZE_TYPE__ maxlen, int flag, __SIZE_TYPE__ slen, const char *format, ...);",
+    ),
+    (
+        "__memcpy_chk",
+        "void *__memcpy_chk(void *dest, const void *src, __SIZE_TYPE__ len, __SIZE_TYPE__ destlen);",
+    ),
+    (
+        "__memset_chk",
+        "void *__memset_chk(void *dest, int c, __SIZE_TYPE__ len, __SIZE_TYPE__ destlen);",
+    ),
+    (
+        "__strcpy_chk",
+        "char *__strcpy_chk(char *dest, const char *src, __SIZE_TYPE__ destlen);",
+    ),
+    (
+        "__cxa_allocate_exception",
+        "void *__cxa_allocate_exception(__SIZE_TYPE__ size);",
+    ),
+    (
+        "__cxa_free_exception",
+        "void __cxa_free_exception(void *exception);",
+    ),
+    (
+        "__cxa_throw",
+        "void __cxa_throw(void *exception, void *tinfo, void (*dest)(void *));",
+    ),
+    (
+        "__cxa_begin_catch",
+        "void *__cxa_begin_catch(void *exception);",
+    ),
+    ("__cxa_end_catch", "void __cxa_end_catch(void);"),
+    ("__cxa_rethrow", "void __cxa_rethrow(void);"),
+    ("_Unwind_Resume", "void _Unwind_Resume(void *exception);"),
+];
+
 fn helper_definition(name: &str) -> Option<String> {
+    if let Some((_, declaration)) = RUNTIME_DECLARATIONS
+        .iter()
+        .find(|(runtime, _)| *runtime == name)
+    {
+        return Some(declaration.to_string());
+    }
     if name == "halt_baddata" {
         return Some("#define halt_baddata() __builtin_trap()".to_string());
+    }
+    if let Some((prefix, size)) = ["unkbyte", "unkint", "unkuint", "unkfloat"]
+        .iter()
+        .find_map(|prefix| Some((*prefix, name.strip_prefix(prefix)?.parse::<u32>().ok()?)))
+    {
+        return Some(format!("typedef uint8_t {prefix}{size}[{size}];"));
     }
     if name == "POPCOUNT" {
         return Some(

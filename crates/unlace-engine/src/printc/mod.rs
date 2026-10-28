@@ -13,7 +13,7 @@ use crate::fspec::{CallSpecId, FuncCallSpecs, FuncProto};
 use crate::funcdata::Funcdata;
 use crate::op::{OpId, PcodeOp};
 use crate::opcodes::{OpCode, get_booleanflip};
-use crate::output_style::OutputStyle;
+use crate::output_style::{OutputStyle, raw_access};
 use crate::prettyprint::{BraceStyle, Emit, FuncMark, PendPrint, PendPrintRef, SymbolMark, SyntaxHighlight};
 use crate::printlanguage::{
     Atom, COMMA_SEPARATE, FALSEBRANCH, FLAT, FORCE_DEC, FORCE_HEX, FORCE_POINTER, FORCE_SCINOTE, HIDE_THISPARAM,
@@ -355,6 +355,24 @@ pub(crate) fn function_display_name(ctx: &PrintContext<'_>, sym: SymbolId) -> (S
         None => Address::default(),
     };
     (symbol.get_display_name().to_string(), addr)
+}
+
+/// In IDA style, a cast of a pointer to a narrower integer goes through the pointer-sized
+/// unsigned integer (`(int)(unsigned __int64)p`), which C accepts without a size-mismatch warning.
+fn pointer_width_integer(ctx: &PrintContext<'_>, op: OpId, outtype: TypeId) -> Option<TypeId> {
+    if ctx.glb.output_style != OutputStyle::Ida {
+        return None;
+    }
+    let factory = types(ctx.glb);
+    let output = factory.get(outtype);
+    let input = factory.get(ctx.data_ref().vn(op_in(ctx, op, 0)).get_type());
+    let pointer_size = input.get_size();
+    let narrows_pointer = input.get_metatype() == TypeMetatype::Ptr
+        && matches!(output.get_metatype(), TypeMetatype::Int | TypeMetatype::Uint)
+        && output.get_size() < pointer_size;
+    narrows_pointer
+        .then(|| factory.find_base_existing(pointer_size, TypeMetatype::Uint))
+        .flatten()
 }
 
 /// For a load from `FS_OFFSET + c` or `GS_OFFSET + c` (x86 segment-base registers, which code
@@ -876,6 +894,10 @@ impl PrintC {
         if !self.option_nocasts {
             self.push_op(ctx, OpTokenKey::Typecast, Some(op))?;
             self.push_type(ctx, dt)?;
+            if let Some(widened) = pointer_width_integer(ctx, op, dt) {
+                self.push_op(ctx, OpTokenKey::Typecast, Some(op))?;
+                self.push_type(ctx, widened)?;
+            }
         }
         let mods = self.mods();
         self.push_vn(ctx, op_in(ctx, op, 0), Some(op), mods)

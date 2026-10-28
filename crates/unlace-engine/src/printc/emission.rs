@@ -557,6 +557,14 @@ impl PrintC {
 
     pub fn generic_type_name(&self, ctx: &mut PrintContext<'_>, ct: TypeId) -> String {
         let datatype = types(ctx.glb).get(ct);
+        if ctx.glb.output_style == OutputStyle::Ida && datatype.get_size() == 16 {
+            match datatype.get_metatype() {
+                TypeMetatype::Unknown => return "_OWORD".to_string(),
+                TypeMetatype::Int => return "__int128".to_string(),
+                TypeMetatype::Uint => return "unsigned __int128".to_string(),
+                _ => {}
+            }
+        }
         let prefix = match datatype.get_metatype() {
             TypeMetatype::Int => "unkint",
             TypeMetatype::Uint => "unkuint",
@@ -1376,6 +1384,7 @@ impl PrintC {
         if let Some(cast) = self.base.cast_strategy.as_deref_mut() {
             cast.set_type_factory(types_ref);
         }
+        self.base.clarify_precedence = glb.output_style == OutputStyle::Ida;
         if types_ref.get_size_of_long() == types_ref.get_size_of_int() {
             self.size_suffix = "LL".to_string();
         } else {

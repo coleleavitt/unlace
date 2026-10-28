@@ -544,6 +544,9 @@ pub struct PrintLanguageBase {
     pub instr_comment_type: u32,
     pub head_comment_type: u32,
     pub namespc_strategy: NamespaceStrategy,
+    /// Parenthesize operands whose precedence readers (and `gcc -Wparentheses`) commonly misread,
+    /// such as `(a + b) & c`.
+    pub clarify_precedence: bool,
 }
 
 impl PrintLanguageBase {
@@ -566,6 +569,7 @@ impl PrintLanguageBase {
             instr_comment_type: 0,
             head_comment_type: 0,
             namespc_strategy: NamespaceStrategy::MinimalNamespaces,
+            clarify_precedence: false,
         };
         base.reset_defaults_internal();
         base
@@ -943,6 +947,9 @@ pub trait PrintLanguage: PrintLanguageAny + Send {
         let stage = top.visited;
         match top_token.tp {
             OpTokenType::Space | OpTokenType::Binary => {
+                if base.clarify_precedence && is_misread_precedence(top.tok, op2) {
+                    return true;
+                }
                 if top_token.precedence > second.precedence {
                     return true;
                 }
@@ -1663,6 +1670,38 @@ pub trait PrintLanguage: PrintLanguageAny + Send {
     }
 
     fn get_scope_delimiter(&self) -> String;
+}
+
+/// Whether `child` as an operand of `parent` relies on a precedence rule that readers commonly
+/// misread: arithmetic, comparisons or another bitwise operator inside `&`, `|`, `^`; `+`/`-`
+/// inside a shift; `&&` inside `||`.
+fn is_misread_precedence(parent: OpTokenKey, child: OpTokenKey) -> bool {
+    use OpTokenKey::*;
+    let bitwise = |key: OpTokenKey| matches!(key, BitwiseAnd | BitwiseXor | BitwiseOr);
+    match parent {
+        BitwiseAnd | BitwiseXor | BitwiseOr => {
+            matches!(
+                child,
+                Multiply
+                    | Divide
+                    | Modulo
+                    | BinaryPlus
+                    | BinaryMinus
+                    | ShiftLeft
+                    | ShiftRight
+                    | ShiftSright
+                    | LessThan
+                    | LessEqual
+                    | GreaterThan
+                    | GreaterEqual
+                    | Equal
+                    | NotEqual
+            ) || (bitwise(child) && child != parent)
+        }
+        ShiftLeft | ShiftRight | ShiftSright => matches!(child, BinaryPlus | BinaryMinus),
+        BooleanOr => child == BooleanAnd,
+        _ => false,
+    }
 }
 
 fn is_c_space(byte: u8) -> bool {

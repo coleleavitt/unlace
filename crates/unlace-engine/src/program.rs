@@ -38,6 +38,8 @@ pub struct Program {
 }
 
 const MIN_STRING_LENGTH: usize = 4;
+/// Minimum length of a string that directly follows a NUL (such as `"%d\n"`).
+const MIN_BOUNDED_STRING_LENGTH: usize = 2;
 const MAX_STRING_LENGTH: usize = 4096;
 
 /// Settings fixed when a `Program` is created.
@@ -312,6 +314,10 @@ impl Program {
         let mut store = DocumentStorage::new();
         architecture.init(&mut store)?;
         architecture.readonlypropagate = options.propagate_readonly;
+        if options.style == OutputStyle::Ida {
+            architecture.max_basetype_size = 16;
+            architecture.refresh_type_properties();
+        }
         let mut program = Program {
             architecture,
             functions: BTreeMap::new(),
@@ -392,6 +398,7 @@ impl Program {
     }
 
     fn add_typed_data_symbol(&mut self, name: &str, symbol: Option<&str>, address: u64, size: u64) -> Result<()> {
+        let name = &self.architecture.output_style.symbol_name(name);
         let type_size = i32::try_from(size).map_err(|_| Error::Lowlevel(format!("data symbol too large: {name}")))?;
         let types = self.architecture.types_mut()?;
         let data_type = match type_size {
@@ -478,12 +485,27 @@ impl Program {
                     let is_printable = text
                         .chars()
                         .all(|character| !character.is_control() || matches!(character, '\t' | '\n' | '\r'));
-                    return (text.chars().count() >= MIN_STRING_LENGTH && is_printable).then_some(text);
+                    let min_length = if self.follows_nul(&data_address) {
+                        MIN_BOUNDED_STRING_LENGTH
+                    } else {
+                        MIN_STRING_LENGTH
+                    };
+                    return (text.chars().count() >= min_length && is_printable).then_some(text);
                 }
                 None => bytes.extend_from_slice(&chunk),
             }
         }
         None
+    }
+
+    /// Whether the byte before `address` is a NUL, so a string at `address` starts where the
+    /// previous one ends.
+    fn follows_nul(&self, address: &Address) -> bool {
+        let Some(loader) = self.architecture.loader.as_ref() else {
+            return false;
+        };
+        let mut previous = [0xffu8; 1];
+        loader.load_fill(&mut previous, &address.add(-1)).is_ok() && previous[0] == 0
     }
 
     pub fn data_symbols(&self) -> Result<Vec<DataEntry>> {
@@ -654,6 +676,7 @@ impl Program {
         address: &Address,
         source: FunctionSource,
     ) -> Result<SymbolId> {
+        let name = &self.architecture.output_style.symbol_name(name);
         let scope = self.global_scope()?;
         let sym = Database::scope_add_function(&mut self.architecture, scope, address, name)?;
         self.functions.insert(

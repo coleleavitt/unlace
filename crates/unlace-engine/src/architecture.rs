@@ -890,7 +890,7 @@ impl Architecture {
     /// default name of the output style.
     pub fn unnamed_function_name(&self, addr: &Address) -> String {
         match self.function_names.get(&addr.get_offset()) {
-            Some(name) => name.clone(),
+            Some(name) => self.output_style.symbol_name(name),
             None => self.output_style.default_function_name(addr),
         }
     }

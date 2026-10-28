@@ -121,9 +121,11 @@ use unlace_struct::{HirFunction, HirNode, SwitchCase};
 
 use crate::expr_ast::CExpr;
 
+mod member_path;
 mod postprocess;
 mod trace;
 
+use member_path::StructLayouts;
 use postprocess::*;
 use trace::*;
 
@@ -960,6 +962,7 @@ pub fn print_c_with_annotations(
     {
         let _span = linkscope::phase("cprinter.precompute.param-register-names");
         compute_param_register_names(func, dwarf_func, header, &mut ctx);
+        compute_param_pointee_structs(dwarf_func, header, &mut ctx);
     }
     trace_ctx_snapshot("param-register-names", &ctx);
     {
@@ -1212,8 +1215,12 @@ pub fn print_c_with_annotations(
         .cloned();
     let emit_name = match (&custom_self_name, &dwarf_func, &demangled) {
         (Some(name), _, _) => name.clone(),
-        (None, Some(df), _) => df.name.clone(),
-        (None, None, Some(dr)) => {
+        // A C++ member's DWARF name is unqualified (`speak`, `~Dog`); the
+        // demangled symbol carries the class it needs (`Dog_speak`).
+        (None, Some(df), dr) if dr.as_ref().is_none_or(|dr| dr.class_name.is_none()) => {
+            df.name.clone()
+        }
+        (None, _, Some(dr)) => {
             // Strip libcxx / libstdc++ inline namespaces so the header
             // comment matches the rendered `this` parameter type, which
             // routes through `recognize_stl_type` → `clean_inline_ns`.
@@ -1236,7 +1243,7 @@ pub fn print_c_with_annotations(
             }
             crate::demangle::sanitize_for_c(&dr.short_name)
         }
-        (None, None, None) => c_symbol_name(&func.name),
+        (None, _, None) => c_symbol_name(&func.name),
     };
 
     // t230 — prefer the finalized signature over the raw inferred
@@ -1878,6 +1885,35 @@ fn compute_param_register_names(
                 .entry(Varnode::new(SpaceId::Register, reg, size))
                 .or_insert_with(|| name.clone());
         }
+    }
+}
+
+/// Record the entry value of each DWARF struct-pointer parameter so accesses
+/// through it render as `param->member`.
+fn compute_param_pointee_structs(
+    dwarf_func: Option<&FunctionDebugInfo>,
+    header: Option<&FunctionHeaderInfo>,
+    ctx: &mut PrintCtx,
+) {
+    let (Some(df), Some(regs)) = (
+        dwarf_func,
+        header.and_then(|h| param_registers_for_convention(&h.convention)),
+    ) else {
+        return;
+    };
+    for (param, &reg) in df.params.iter().zip(regs) {
+        let Some(pointee) = param
+            .type_name
+            .as_deref()
+            .and_then(|ty| ctx.struct_layouts.pointee_struct(ty))
+        else {
+            continue;
+        };
+        let entry_value = SsaVarnode {
+            base: Varnode::new(SpaceId::Register, reg, 8),
+            version: 0,
+        };
+        ctx.pointee_structs.insert(entry_value, pointee.to_string());
     }
 }
 
@@ -2525,7 +2561,11 @@ struct PrintCtx {
     /// by hoisted declaration emission to render `[rsp+...] [rbp-...]`
     /// trailing comments matching the function-top decl block.
     frame_size: Option<u64>,
-    field_by_offset: BTreeMap<u64, Vec<(String, String, u64)>>,
+    /// DWARF struct layouts for typed `base->member` rendering.
+    struct_layouts: StructLayouts,
+    /// Pointer values whose pointee is a known DWARF struct (entry values of
+    /// struct-pointer parameters), keyed to that struct's name.
+    pointee_structs: BTreeMap<SsaVarnode, String>,
     panic_sites: BTreeMap<u64, PanicKind>,
     /// Merged symbol table: address → symbol name (PLT + function symbols).
     symbols: BTreeMap<u64, String>,
@@ -2819,7 +2859,8 @@ impl PrintCtx {
         merged_names: BTreeMap<SsaVarnode, String>,
         var_role_names: BTreeMap<SsaVarnode, String>,
     ) -> Self {
-        let field_by_offset = build_field_offset_map(dwarf);
+        let struct_layouts =
+            StructLayouts::new(dwarf.map(|d| d.structs.clone()).unwrap_or_default());
         // Advance the fresh-name allocator past any `vN` already claimed by
         // the variable-merge pass so fallback names never collide with
         // pre-coalesced ones.
@@ -2865,7 +2906,8 @@ impl PrintCtx {
             current_scope_path: Vec::new(),
             hoist_decl_plan: BTreeMap::new(),
             frame_size: None,
-            field_by_offset,
+            struct_layouts,
+            pointee_structs: BTreeMap::new(),
             panic_sites,
             symbols,
             string_table,
@@ -2985,24 +3027,6 @@ impl PrintCtx {
     }
 }
 
-fn build_field_offset_map(dwarf: Option<&DwarfInfo>) -> BTreeMap<u64, Vec<(String, String, u64)>> {
-    let mut map: BTreeMap<u64, Vec<(String, String, u64)>> = BTreeMap::new();
-    let dwarf = match dwarf {
-        Some(d) => d,
-        None => return map,
-    };
-    for st in dwarf.structs.values() {
-        for field in &st.fields {
-            map.entry(field.offset).or_default().push((
-                st.name.clone(),
-                field.name.clone(),
-                field.size,
-            ));
-        }
-    }
-    map
-}
-
 /// `true` when `vn` traces (through `Copy`/`IntAdd`/`IntSub` of constants) back
 /// to a stack/frame-pointer register. Such an address is a frame-relative access
 /// and must NOT be rendered as `base->field` (the frame pointer is a scalar, so
@@ -3048,15 +3072,14 @@ fn traces_to_frame_base(
     }
 }
 
+/// Render `*(T *)(base + off)` as `base->member` when `base` points to a known
+/// DWARF struct and the access lands exactly on one leaf member.
 fn try_resolve_struct_field(
     addr_insn: &IrInsn,
     addr_stmt_idx: u32,
-    _load_size: u8,
+    access_size: u8,
     ctx: &mut PrintCtx,
 ) -> Option<String> {
-    if ctx.field_by_offset.is_empty() {
-        return None;
-    }
     if addr_insn.op != IrOp::IntAdd || addr_insn.inputs.len() < 2 {
         return None;
     }
@@ -3070,89 +3093,41 @@ fn try_resolve_struct_field(
     if base_input.space == SpaceId::Const {
         return None;
     }
-    // A frame-relative access (`(frame - N)->field`) must render as a raw deref,
-    // not `base->field`: the frame pointer is a scalar, so the arrow is invalid
-    // C. Bail to let the caller fall through to `*(T *)(frame + off)`.
-    if traces_to_frame_base(base_input, None, addr_stmt_idx, ctx, 0) {
-        return None;
-    }
-    let Some(field_name) = field_name_for_offset(ctx, const_offset) else {
-        tracing::debug!(target: "unlace::cprinter::types",
-            "struct-field no-field-at-offset off={const_offset} known_offsets={:?}",
-            ctx.field_by_offset.keys().collect::<Vec<_>>()
-        );
-        return None;
-    };
     let base_sv = ctx
         .stmt_inputs
         .get(&addr_stmt_idx)
-        .cloned()
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_input).copied());
-    let base_expr = match base_sv {
-        Some(sv) => {
-            if let Some(&ds) = ctx.sv_defining_stmt.get(&sv) {
-                if let Some(di) = ctx.stmt_insns.get(&ds).cloned() {
-                    format!("({})", emit_expr(&di, ds, ctx))
-                } else {
-                    fallback_field_base_name(ctx, &sv.base)?
-                }
-            } else {
-                fallback_field_base_name(ctx, &sv.base)?
-            }
-        }
-        None => fallback_field_base_name(ctx, base_input)?,
-    };
-    if is_generic_address_expr(&base_expr) {
-        tracing::debug!(target: "unlace::cprinter::types", "struct-field generic-base base_expr={base_expr:?}");
-        return None;
-    }
-    // `->` is postfix (binds tighter than `-`/`+`), so a non-atomic base like
-    // `c0 - 32` must be parenthesised: `(c0 - 32)->field`, else it parses as
-    // `c0 - (32->field)`.
-    Some(format!(
-        "{}->{}",
-        paren_if_non_atomic_base(&base_expr),
-        field_name
-    ))
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_input).copied())?;
+    let path = typed_member_path(base_sv, const_offset, access_size, ctx)?;
+    let base_expr = fallback_field_base_name(ctx, &base_sv)?;
+    path.through_pointer(CExpr::Lit(base_expr))
+        .map(|expr| expr.to_string())
 }
 
-/// Resolve the printable name of a struct-access base varnode, falling back to
-/// the cached `vN` name when the base has no role/DWARF override. Previously
-/// this required a `name_overrides` entry and returned `None` otherwise, which
-/// made a struct field load through a plain `vN` base (no DWARF param) miss the
-/// `->field` rendering and fall through to raw array-index output.
-fn fallback_field_base_name(ctx: &mut PrintCtx, base: &Varnode) -> Option<String> {
-    if let Some(name) = ctx.name_overrides.get(base) {
-        return meaningful_field_base_name(name);
-    }
-    // No explicit override: use the deterministic `vN` cache name. This is a
-    // legitimate base expression (`v1->size`), not a generic `aN` arg name.
-    let name = ctx.name_of(&SsaVarnode {
-        base: *base,
-        version: 0,
-    });
-    tracing::debug!(target: "unlace::cprinter::types", "struct-field fallback-base name={name:?}");
-    meaningful_field_base_name(&name)
-}
-
-fn field_name_for_offset(ctx: &PrintCtx, offset: u64) -> Option<String> {
-    ctx.field_by_offset
-        .get(&offset)
-        .and_then(|entries| entries.first())
-        .map(|(_, field, _)| field.clone())
-}
-
-fn try_base_struct_field_access(
-    addr_vn: &Varnode,
+/// The member an access of `access_size` bytes at `offset` from `base_sv`
+/// reads, when `base_sv` points to a known struct.
+fn typed_member_path(
+    base_sv: SsaVarnode,
     offset: u64,
-    ctx: &mut PrintCtx,
-) -> Option<String> {
-    if addr_vn.space == SpaceId::Const {
-        return None;
+    access_size: u8,
+    ctx: &PrintCtx,
+) -> Option<member_path::MemberPath> {
+    let pointee = ctx.pointee_structs.get(&base_sv)?;
+    let path = ctx
+        .struct_layouts
+        .member_path(pointee, offset, u64::from(access_size));
+    if path.is_none() {
+        tracing::debug!(target: "unlace::cprinter::types",
+            "struct-field no-member pointee={pointee} off={offset} size={access_size}"
+        );
     }
-    let field_name = field_name_for_offset(ctx, offset)?;
-    let base_name = meaningful_field_base_name(ctx.name_overrides.get(addr_vn)?)?;
-    Some(format!("{base_name}->{field_name}"))
+    path
+}
+
+/// Printable name of a typed struct-pointer base, or `None` for a generic
+/// `aN` argument name (which would hide the pointer type the member implies).
+fn fallback_field_base_name(ctx: &mut PrintCtx, base_sv: &SsaVarnode) -> Option<String> {
+    let name = ctx.name_of(base_sv);
+    meaningful_field_base_name(&name)
 }
 
 fn meaningful_field_base_name(name: &str) -> Option<String> {
@@ -3174,6 +3149,8 @@ fn is_generic_address_expr(expr: &str) -> bool {
     chars.next() == Some('a') && chars.all(|c| c.is_ascii_digit())
 }
 
+/// Typed member access for a load/store whose address operand is `addr_vn`:
+/// either `base + const` or the struct pointer itself (offset 0).
 fn try_resolve_field_from_addr(
     addr_vn: &Varnode,
     _idx: usize,
@@ -3181,29 +3158,23 @@ fn try_resolve_field_from_addr(
     access_size: u8,
     ctx: &mut PrintCtx,
 ) -> Option<String> {
-    if ctx.field_by_offset.is_empty() || addr_vn.space == SpaceId::Const {
+    if ctx.pointee_structs.is_empty() || addr_vn.space == SpaceId::Const {
         return None;
     }
-    let Some(addr_sv) = ctx
+    let addr_sv = ctx
         .stmt_inputs
         .get(&stmt_idx)
-        .cloned()
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())
-    else {
-        return try_base_struct_field_access(addr_vn, 0, ctx);
-    };
-    let Some(&def_stmt) = ctx.sv_defining_stmt.get(&addr_sv) else {
-        return try_base_struct_field_access(addr_vn, 0, ctx);
-    };
-    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
-    let resolved = try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx);
-    if resolved.is_none() {
-        tracing::debug!(target: "unlace::cprinter::types",
-            "field miss stmt={stmt_idx} addr={addr_vn:?} def_stmt={def_stmt} op={:?}",
-            def_insn.op
-        );
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
+    if ctx.pointee_structs.contains_key(&addr_sv) {
+        let path = typed_member_path(addr_sv, 0, access_size, ctx)?;
+        let base_expr = fallback_field_base_name(ctx, &addr_sv)?;
+        return path
+            .through_pointer(CExpr::Lit(base_expr))
+            .map(|expr| expr.to_string());
     }
-    resolved
+    let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
+    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
+    try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx)
 }
 
 // ---------------------------------------------------------------------------
@@ -9417,11 +9388,9 @@ fn dwarf_decl_to_c(dwarf_type: &str, name: &str) -> String {
     let (base_end, suffix) = split_dwarf_array_suffix(dwarf_type);
     let base = dwarf_type.get(..base_end).unwrap_or(dwarf_type).trim();
     let ty = dwarf_type_to_c(base);
-    if suffix.is_empty() {
-        format!("{ty} {name}")
-    } else {
-        format!("{ty} {name}{suffix}")
-    }
+    // IDA style binds the declarator star to the name: `Rect *r`.
+    let sep = if ty.ends_with('*') { "" } else { " " };
+    format!("{ty}{sep}{name}{suffix}")
 }
 
 fn cpp_demangled_param_decl(
@@ -16912,7 +16881,7 @@ fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) 
         ));
         return true;
     }
-    if field_load_expr_is_stable(addr, stmt_idx, ctx) {
+    if field_load_expr_is_stable(addr, stmt_idx, load_size, ctx) {
         trace_load_text(format_args!(
             "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=field"
         ));
@@ -17036,8 +17005,13 @@ fn consumer_uses_sv_as_indirect_call_target(
             .is_some_and(|target| target == sv)
 }
 
-fn field_load_expr_is_stable(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
-    if ctx.field_by_offset.is_empty() || addr_vn.space == SpaceId::Const {
+fn field_load_expr_is_stable(
+    addr_vn: &Varnode,
+    stmt_idx: u32,
+    load_size: u8,
+    ctx: &PrintCtx,
+) -> bool {
+    if ctx.pointee_structs.is_empty() || addr_vn.space == SpaceId::Const {
         return false;
     }
     let Some(addr_sv) = ctx
@@ -17045,24 +17019,19 @@ fn field_load_expr_is_stable(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -
         .get(&stmt_idx)
         .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())
     else {
-        return field_name_for_offset(ctx, 0).is_some()
-            && ctx
-                .name_overrides
-                .get(addr_vn)
-                .and_then(|name| meaningful_field_base_name(name))
-                .is_some();
-    };
-    let Some(&def_stmt) = ctx.sv_defining_stmt.get(&addr_sv) else {
-        return field_name_for_offset(ctx, 0).is_some()
-            && ctx
-                .name_overrides
-                .get(addr_vn)
-                .and_then(|name| meaningful_field_base_name(name))
-                .is_some();
-    };
-    let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
         return false;
     };
+    if ctx.pointee_structs.contains_key(&addr_sv) {
+        return typed_member_path(addr_sv, 0, load_size, ctx).is_some();
+    }
+    let Some(def_insn) = ctx
+        .sv_defining_stmt
+        .get(&addr_sv)
+        .and_then(|def_stmt| ctx.stmt_insns.get(def_stmt).map(|insn| (*def_stmt, insn)))
+    else {
+        return false;
+    };
+    let (def_stmt, def_insn) = def_insn;
     if def_insn.op != IrOp::IntAdd || def_insn.inputs.len() < 2 {
         return false;
     }
@@ -17073,12 +17042,10 @@ fn field_load_expr_is_stable(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -
     } else {
         return false;
     };
-    field_name_for_offset(ctx, const_offset).is_some()
-        && ctx
-            .name_overrides
-            .get(base_input)
-            .and_then(|name| meaningful_field_base_name(name))
-            .is_some()
+    ctx.stmt_inputs
+        .get(&def_stmt)
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_input).copied())
+        .is_some_and(|base_sv| typed_member_path(base_sv, const_offset, load_size, ctx).is_some())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

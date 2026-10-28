@@ -34,13 +34,14 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use gimli::{
-    AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_count, DW_AT_data_member_location,
-    DW_AT_high_pc, DW_AT_language, DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name,
-    DW_AT_type, DW_AT_upper_bound, DW_TAG_array_type, DW_TAG_base_type, DW_TAG_const_type,
-    DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter, DW_TAG_member,
-    DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type, DW_TAG_subprogram,
-    DW_TAG_subrange_type, DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type,
-    DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
+    AttributeValue, DW_AT_abstract_origin, DW_AT_byte_size, DW_AT_const_value, DW_AT_count,
+    DW_AT_data_member_location, DW_AT_high_pc, DW_AT_language, DW_AT_linkage_name, DW_AT_location,
+    DW_AT_low_pc, DW_AT_name, DW_AT_specification, DW_AT_type, DW_AT_upper_bound,
+    DW_TAG_array_type, DW_TAG_base_type, DW_TAG_const_type, DW_TAG_enumeration_type,
+    DW_TAG_enumerator, DW_TAG_formal_parameter, DW_TAG_member, DW_TAG_pointer_type,
+    DW_TAG_restrict_type, DW_TAG_structure_type, DW_TAG_subprogram, DW_TAG_subrange_type,
+    DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable,
+    DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -718,12 +719,15 @@ fn extract_functions_from_unit(
             },
         };
 
-        let name = match attr_string(dwarf, unit, entry, DW_AT_name)? {
-            Some(n) => n,
+        let name = match described_attr(unit, entry, DW_AT_name)? {
+            Some(val) => dwarf.attr_string(unit, val)?.to_string_lossy().into_owned(),
             None => continue,
         };
 
-        let linkage_name = attr_string(dwarf, unit, entry, DW_AT_linkage_name)?;
+        let linkage_name = match described_attr(unit, entry, DW_AT_linkage_name)? {
+            Some(val) => Some(dwarf.attr_string(unit, val)?.to_string_lossy().into_owned()),
+            None => None,
+        };
 
         let high_pc = match entry.attr_value(DW_AT_high_pc) {
             Some(AttributeValue::Addr(addr)) => Some(addr),
@@ -731,7 +735,7 @@ fn extract_functions_from_unit(
             _ => ranges.iter().map(|r| r.end).max(),
         };
 
-        let return_type = match entry.attr_value(DW_AT_type) {
+        let return_type = match described_attr(unit, entry, DW_AT_type)? {
             Some(val) => resolve_type_name(dwarf, unit, val)?,
             None => None,
         };
@@ -996,11 +1000,11 @@ fn resolve_type_size(
         .and_then(|v| v.udata_value())
 }
 
-fn extract_params_and_locals(
+fn extract_params_and_locals<'a>(
     dwarf: &gimli::Dwarf<R<'_>>,
-    unit: &gimli::Unit<R<'_>>,
+    unit: &gimli::Unit<R<'a>>,
     resolver: &DebugLocationResolver,
-    func_node: gimli::EntriesTreeNode<'_, '_, R<'_>>,
+    func_node: gimli::EntriesTreeNode<'_, '_, R<'a>>,
 ) -> Result<(Vec<ParameterInfo>, Vec<LocalVariable>), gimli::Error> {
     let mut params = Vec::new();
     let mut locals = Vec::new();
@@ -1011,8 +1015,11 @@ fn extract_params_and_locals(
         let entry = child.entry();
 
         if tag == DW_TAG_formal_parameter {
-            let name = attr_string(dwarf, unit, entry, DW_AT_name)?;
-            let type_name = match entry.attr_value(DW_AT_type) {
+            let name = match described_attr(unit, entry, DW_AT_name)? {
+                Some(val) => Some(dwarf.attr_string(unit, val)?.to_string_lossy().into_owned()),
+                None => None,
+            };
+            let type_name = match described_attr(unit, entry, DW_AT_type)? {
                 Some(val) => resolve_type_name(dwarf, unit, val)?,
                 None => None,
             };
@@ -1498,6 +1505,46 @@ fn extract_template_params_for_type_die(
     Ok(params)
 }
 
+/// Upper bound on `DW_AT_abstract_origin` / `DW_AT_specification` hops; real
+/// chains are at most two long (concrete instance -> inline abstract ->
+/// in-class declaration).
+const MAX_ORIGIN_HOPS: usize = 4;
+
+/// Read `attr` from `entry`, or from the DIE its `DW_AT_abstract_origin` or
+/// `DW_AT_specification` refers to. A concrete out-of-line copy of an inline
+/// function, its parameters, and an out-of-line C++ member definition keep
+/// their name and type on the referenced DIE, not on themselves.
+fn described_attr<'a>(
+    unit: &gimli::Unit<R<'a>>,
+    entry: &gimli::DebuggingInformationEntry<R<'a>>,
+    attr: gimli::DwAt,
+) -> Result<Option<AttributeValue<R<'a>>>, gimli::Error> {
+    if let Some(value) = entry.attr_value(attr) {
+        return Ok(Some(value));
+    }
+    let mut origin = origin_ref(entry);
+    for _ in 0..MAX_ORIGIN_HOPS {
+        let Some(offset) = origin else {
+            break;
+        };
+        let die = unit.entry(offset)?;
+        if let Some(value) = die.attr_value(attr) {
+            return Ok(Some(value));
+        }
+        origin = origin_ref(&die);
+    }
+    Ok(None)
+}
+
+fn origin_ref(entry: &gimli::DebuggingInformationEntry<R<'_>>) -> Option<gimli::UnitOffset> {
+    [DW_AT_abstract_origin, DW_AT_specification]
+        .into_iter()
+        .find_map(|attr| match entry.attr_value(attr) {
+            Some(AttributeValue::UnitRef(offset)) => Some(offset),
+            _ => None,
+        })
+}
+
 fn attr_string(
     dwarf: &gimli::Dwarf<R<'_>>,
     unit: &gimli::Unit<R<'_>>,
@@ -1980,6 +2027,24 @@ mod tests {
         let data = std::fs::read("../../fixtures/debug_structs.elf")
             .expect("fixture debug_structs.elf must exist");
         ElfLoader::load(&data).expect("should parse debug_structs.elf")
+    }
+
+    /// `area` is declared inline, so its out-of-line copy carries only
+    /// `DW_AT_abstract_origin`; the name and the `Rect *r` parameter live on
+    /// the abstract DIE.
+    #[test]
+    fn abstract_origin_supplies_name_and_params() {
+        let img = load_structs_fixture();
+        let info = import_dwarf(&img).expect("should decode DWARF");
+        let area = info
+            .functions
+            .values()
+            .find(|f| f.name == "area")
+            .expect("out-of-line area must be recovered");
+        assert_eq!(area.return_type.as_deref(), Some("int"));
+        assert_eq!(area.params.len(), 1);
+        assert_eq!(area.params[0].name.as_deref(), Some("r"));
+        assert_eq!(area.params[0].type_name.as_deref(), Some("Rect *"));
     }
 
     #[test]

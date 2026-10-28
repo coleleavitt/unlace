@@ -2536,18 +2536,68 @@ fn test_print_ternary_compiles() {
     );
 }
 
+/// DWARF info declaring `struct_name` and a function at 0x1000 whose single
+/// parameter `param` points to it.
+fn dwarf_with_struct_param(
+    struct_ty: unlace_loader::StructType,
+    param: &str,
+) -> (unlace_loader::DwarfInfo, super::FunctionHeaderInfo) {
+    use unlace_loader::{DwarfInfo, FunctionDebugInfo, ParameterInfo};
+    let mut functions = BTreeMap::new();
+    functions.insert(
+        0x1000,
+        FunctionDebugInfo {
+            name: "f".to_string(),
+            linkage_name: None,
+            low_pc: 0x1000,
+            high_pc: Some(0x1020),
+            ranges: vec![],
+            params: vec![ParameterInfo {
+                name: Some(param.to_string()),
+                type_name: Some(format!("{} *", struct_ty.name)),
+                frame_offset: None,
+            }],
+            return_type: Some("int".to_string()),
+            decl: None,
+            locals: vec![],
+            cfa_to_rbp_delta: None,
+        },
+    );
+    let mut structs = BTreeMap::new();
+    structs.insert(struct_ty.name.clone(), struct_ty);
+    let dwarf = DwarfInfo {
+        functions,
+        source_map: BTreeMap::new(),
+        structs,
+        enums: BTreeMap::new(),
+        unions: BTreeMap::new(),
+        macros: vec![],
+        languages: std::collections::BTreeSet::new(),
+        dwo_references: vec![],
+    };
+    let header = super::FunctionHeaderInfo {
+        name: "f".to_string(),
+        address: 0x1000,
+        size: 0x20,
+        convention: "System V AMD64".to_string(),
+        stack_frame: 0,
+        callees: vec![],
+        dynamic_sp: false,
+    };
+    (dwarf, header)
+}
+
 #[test]
 fn test_struct_field_access() {
-    use std::collections::BTreeMap;
-    use unlace_loader::{DwarfInfo, StructField, StructType};
-    let r0 = reg(0, 8);
+    use unlace_loader::{StructField, StructType};
+    let rdi = reg(56, 8);
     let r8 = reg(8, 4);
     let c8 = con(8, 8);
     let space = con(0, 8);
     let addr_add = IrInsn::with_output(
         IrOp::IntAdd,
         Varnode::unique(0, 8),
-        smallvec![r0, c8],
+        smallvec![rdi, c8],
         0x1000,
     );
     let load = IrInsn::with_output(
@@ -2562,55 +2612,52 @@ fn test_struct_field_access() {
         HirNode::Return(Some(sv(8, 4))),
     ];
     let func = make_func("test_field", body);
-    let mut structs = BTreeMap::new();
-    structs.insert(
-        "Rect".to_string(),
-        StructType {
-            name: "Rect".to_string(),
-            size: 16,
-            template_params: vec![],
-            fields: vec![
-                StructField {
-                    name: "origin".to_string(),
-                    offset: 0,
-                    size: 8,
-                    type_name: "Point".to_string(),
-                },
-                StructField {
-                    name: "size".to_string(),
-                    offset: 8,
-                    size: 4,
-                    type_name: "int".to_string(),
-                },
-            ],
-        },
-    );
-    let dwarf = DwarfInfo {
-        functions: BTreeMap::new(),
-        source_map: BTreeMap::new(),
-        structs,
-        enums: BTreeMap::new(),
-        unions: BTreeMap::new(),
-        macros: vec![],
-        languages: std::collections::BTreeSet::new(),
-        dwo_references: vec![],
+    let rect = StructType {
+        name: "Rect".to_string(),
+        size: 16,
+        template_params: vec![],
+        fields: vec![
+            StructField {
+                name: "origin".to_string(),
+                offset: 0,
+                size: 8,
+                type_name: "Point".to_string(),
+            },
+            StructField {
+                name: "size".to_string(),
+                offset: 8,
+                size: 4,
+                type_name: "int".to_string(),
+            },
+        ],
     };
-    let output = super::print_c_with_dwarf(&func, Some(&dwarf));
-    assert!(output.contains("->size"), "should contain ->size: {output}");
+    let (dwarf, header) = dwarf_with_struct_param(rect, "r");
+    let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
+    assert!(
+        output.contains("r->size"),
+        "should contain r->size: {output}"
+    );
+
+    // Without the parameter's type the base is untyped: a struct that merely
+    // has a field at offset 8 must not name the access.
+    let untyped = super::print_c_with_dwarf(&func, Some(&dwarf));
+    assert!(
+        !untyped.contains("->"),
+        "untyped base must stay raw: {untyped}"
+    );
 }
 #[test]
 fn test_struct_field_store_writes_arrow_syntax() {
-    use std::collections::BTreeMap;
-    use unlace_loader::{DwarfInfo, StructField, StructType};
+    use unlace_loader::{StructField, StructType};
 
-    let r0 = reg(0, 8);
+    let rdi = reg(56, 8);
     let r8 = reg(8, 4);
     let c4 = con(4, 8);
     let space = con(0, 8);
     let addr_add = IrInsn::with_output(
         IrOp::IntAdd,
         Varnode::unique(0, 8),
-        smallvec![r0, c4],
+        smallvec![rdi, c4],
         0x1000,
     );
     let store = IrInsn::without_output(
@@ -2624,45 +2671,30 @@ fn test_struct_field_store_writes_arrow_syntax() {
         HirNode::Return(None),
     ];
     let func = make_func("test_store_field", body);
-
-    let mut structs = BTreeMap::new();
-    structs.insert(
-        "Point".to_string(),
-        StructType {
-            name: "Point".to_string(),
-            size: 8,
-            template_params: vec![],
-            fields: vec![
-                StructField {
-                    name: "x".to_string(),
-                    offset: 0,
-                    size: 4,
-                    type_name: "int".to_string(),
-                },
-                StructField {
-                    name: "y".to_string(),
-                    offset: 4,
-                    size: 4,
-                    type_name: "int".to_string(),
-                },
-            ],
-        },
-    );
-    let dwarf = DwarfInfo {
-        functions: BTreeMap::new(),
-        source_map: BTreeMap::new(),
-        structs,
-        enums: BTreeMap::new(),
-        unions: BTreeMap::new(),
-        macros: vec![],
-        languages: std::collections::BTreeSet::new(),
-        dwo_references: vec![],
+    let point = StructType {
+        name: "Point".to_string(),
+        size: 8,
+        template_params: vec![],
+        fields: vec![
+            StructField {
+                name: "x".to_string(),
+                offset: 0,
+                size: 4,
+                type_name: "int".to_string(),
+            },
+            StructField {
+                name: "y".to_string(),
+                offset: 4,
+                size: 4,
+                type_name: "int".to_string(),
+            },
+        ],
     };
-
-    let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+    let (dwarf, header) = dwarf_with_struct_param(point, "p");
+    let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
     assert!(
-        output.contains("->y"),
-        "STORE at offset 4 should resolve to ->y field: {output}",
+        output.contains("p->y ="),
+        "STORE at offset 4 should resolve to p->y: {output}",
     );
 }
 
@@ -3031,7 +3063,7 @@ fn test_dwarf_param_names_override_inferred() {
 
     let output = super::print_c_with_dwarf(&func, Some(&dwarf));
     assert!(
-        output.contains("int process(int count, char * buf)"),
+        output.contains("int process(int count, char *buf)"),
         "DWARF names must override inferred a1/a2: {output}",
     );
     assert!(

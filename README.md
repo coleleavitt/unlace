@@ -145,13 +145,13 @@ local simulation/walltime run is desired.
 
 ```bash
 # LCOV for upload tools, or HTML for local inspection.
-RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
-RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
+cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
+cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
 
 # Existing Criterion benches.
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench decompile_medium
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench spec_suite
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench hexrays_throughput
+cargo bench -p unlace-cli --bench decompile_medium
+cargo bench -p unlace-cli --bench spec_suite
+cargo bench -p unlace-cli --bench hexrays_throughput
 
 # CodSpeed build/run path.
 cargo codspeed build -p unlace-cli --bench decompile_medium --bench spec_suite --bench hexrays_throughput

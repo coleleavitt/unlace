@@ -243,13 +243,13 @@ and `cargo-codspeed 4.7.0`.
 
 ```bash
 # Coverage: LCOV for upload tools, or HTML for local inspection.
-RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
-RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
+cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
+cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
 
 # Criterion benches already wired through unlace-cli.
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench decompile_medium
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench spec_suite
-RUSTC_WRAPPER= cargo bench -p unlace-cli --bench hexrays_throughput
+cargo bench -p unlace-cli --bench decompile_medium
+cargo bench -p unlace-cli --bench spec_suite
+cargo bench -p unlace-cli --bench hexrays_throughput
 
 # CodSpeed runner path for CI or local simulation/walltime runs.
 cargo codspeed build -p unlace-cli --bench decompile_medium --bench spec_suite --bench hexrays_throughput
@@ -261,7 +261,7 @@ Formal-verification gate (Rocq 9.1 machine-checked decompiler cores; see
 
 ```bash
 bash scripts/verify_proofs.sh                                   # build + coqchk: zero admits/axioms
-RUSTC_WRAPPER= cargo test -p unlace-ir --test coq_conformance   # pin the Rust↔Coq mirror
+cargo test -p unlace-ir --test coq_conformance   # pin the Rust↔Coq mirror
 ```
 
 If a command fails because of the sandbox, do not work around it by changing the
@@ -390,7 +390,7 @@ research sessions. This ignores stale Sisyphus task state.
    `// determinism:allow` and a concrete reason.
 
 2. Clippy and warning hygiene.
-   Keep `RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings` clean.
+   Keep `cargo clippy --workspace -- -D warnings` clean.
    Treat any warning regression as a real gate failure unless the user
    explicitly asks for exploratory code.
 

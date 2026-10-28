@@ -209,7 +209,7 @@ items until the evidence exists.
 When a batch lands code that should move a row:
 
 1. Update `crates/unlace-ir/src/arch_support.rs` (or the relevant module).
-2. Run `RUSTC_WRAPPER= cargo test -p unlace-ir --lib arch_support`.
+2. Run `cargo test -p unlace-ir --lib arch_support`.
 3. Regenerate the matrix in this file (the in-tree string is hand-mirrored
    today; the source-of-truth is the Rust table, which the unit test pins).
 4. Update `docs/rebaseline-<date>.md` if the verification commands now report

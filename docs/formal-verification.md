@@ -251,7 +251,7 @@ Each `.v` documents its own scope; the load-bearing ones:
 
 ```bash
 bash scripts/verify_proofs.sh                          # build + coqchk, no admits/axioms
-RUSTC_WRAPPER= cargo test -p unlace-ir --test coq_conformance   # pin the mirror
+cargo test -p unlace-ir --test coq_conformance   # pin the mirror
 ```
 
 Both are wired into `cargo xtask gate` as the `rocq proofs` row.

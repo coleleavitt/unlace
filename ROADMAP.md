@@ -828,10 +828,10 @@ Pattern frequency from `research/decompiled-references/ida/` — what IDA actual
 
 ```bash
 # Full quality axis report (`--quick`: golden triage + stylistic score)
-RUSTC_WRAPPER= cargo xtask gate
+cargo xtask gate
 
 # Individual metrics
-RUSTC_WRAPPER= cargo run -p xtask -- golden-triage
-RUSTC_WRAPPER= cargo run -p xtask -- semantic-report
-RUSTC_WRAPPER= cargo run -p xtask -- type-recovery-report
+cargo run -p xtask -- golden-triage
+cargo run -p xtask -- semantic-report
+cargo run -p xtask -- type-recovery-report
 ```

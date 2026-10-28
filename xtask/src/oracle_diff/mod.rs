@@ -8,7 +8,7 @@
 //! variables, gotos, local declarations, line count, and raw memory artifacts.
 //! It is a reporting tool and always exits 0 once the report is written.
 //!
-//! Usage: `cargo xtask oracle-diff [--oracle-dir DIR] [--out DIR] [--only SUBSTR]`
+//! Usage: `cargo xtask oracle-diff [--oracle-dir DIR] [--out DIR] [--only SUBSTR] [--reuse-unlace]`
 
 mod hexrays;
 mod pseudo_c;
@@ -31,6 +31,8 @@ struct Options {
     oracle_dir: PathBuf,
     out_dir: PathBuf,
     only: Option<String>,
+    /// Re-measure the unlace C saved by an earlier run instead of decompiling.
+    reuse_unlace: bool,
 }
 
 impl Options {
@@ -40,6 +42,7 @@ impl Options {
             oracle_dir: root.join("target/hexrays-oracle"),
             out_dir: root.join("target/oracle-diff"),
             only: None,
+            reuse_unlace: false,
         };
         let mut args = args.iter();
         while let Some(arg) = args.next() {
@@ -48,6 +51,7 @@ impl Options {
                 "--oracle-dir" => options.oracle_dir = PathBuf::from(value()?),
                 "--out" => options.out_dir = PathBuf::from(value()?),
                 "--only" => options.only = Some(value()?),
+                "--reuse-unlace" => options.reuse_unlace = true,
                 other => return Err(format!("unknown argument {other}")),
             }
         }
@@ -118,11 +122,15 @@ pub fn run(root: &Path, args: &[String]) -> i32 {
             return 1;
         }
     };
-    let bin = match cargo_bin::build_unlace_bin(root) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("oracle-diff: {e}");
-            return 1;
+    let bin = if options.reuse_unlace {
+        None
+    } else {
+        match cargo_bin::build_unlace_bin(root) {
+            Ok(p) => Some(p),
+            Err(e) => {
+                eprintln!("oracle-diff: {e}");
+                return 1;
+            }
         }
     };
     let targets: Vec<(&String, &hexrays::IndexEntry)> = index
@@ -149,7 +157,7 @@ pub fn run(root: &Path, args: &[String]) -> i32 {
             scope.spawn(|| {
                 while let Some((key, entry)) = targets.get(next.fetch_add(1, Ordering::Relaxed)) {
                     eprintln!("oracle-diff: {key}");
-                    let diff = diff_binary(&bin, &options, key, entry);
+                    let diff = diff_binary(bin.as_deref(), &options, key, entry);
                     results
                         .lock()
                         .expect("no panics while holding the lock")
@@ -174,7 +182,7 @@ pub fn run(root: &Path, args: &[String]) -> i32 {
 }
 
 fn diff_binary(
-    bin: &Path,
+    bin: Option<&Path>,
     options: &Options,
     key: &str,
     entry: &hexrays::IndexEntry,
@@ -193,12 +201,15 @@ fn diff_binary(
             return diff;
         }
     };
-    let printed = match unlace::decompile(bin, &options.root.join(&entry.source)) {
-        Ok(text) => {
-            let c_path = options.out_dir.join("unlace").join(format!("{key}.c"));
-            crate::report_io::write_artifact(&c_path, &text);
-            unlace::split_functions(&text)
-        }
+    let c_path = options.out_dir.join("unlace").join(format!("{key}.c"));
+    let output = match bin {
+        None => std::fs::read_to_string(&c_path).map_err(|e| format!("{}: {e}", c_path.display())),
+        Some(bin) => unlace::decompile(bin, &options.root.join(&entry.source)).inspect(|text| {
+            crate::report_io::write_artifact(&c_path, text);
+        }),
+    };
+    let printed = match output {
+        Ok(text) => unlace::split_functions(&text),
         Err(e) => {
             diff.error = Some(e);
             BTreeMap::new()

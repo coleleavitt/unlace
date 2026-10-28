@@ -233,21 +233,24 @@ pub fn markdown(diffs: &[BinaryDiff], ida_version: &str) -> String {
     let _ = writeln!(out, "\n## Prototype mismatches\n");
     let _ = writeln!(
         out,
-        "| binary | function | Hex-Rays | unlace |\n|---|---|---|---|"
+        "Arity or varargs differ. At most {LIST_CAP} rows per binary; the JSON has all.\n\n\
+         | binary | function | Hex-Rays | unlace |\n|---|---|---|---|"
     );
     for diff in diffs {
-        for row in &diff.functions {
-            let Some(unlace) = &row.unlace else { continue };
-            if row.arity_matches() == Some(false) {
-                let _ = writeln!(
-                    out,
-                    "| `{}` | `{}` | `{}` | `{}` |",
-                    diff.key,
-                    row.hexrays.name,
-                    prototype(&row.hexrays),
-                    prototype(unlace)
-                );
-            }
+        let mismatches = diff
+            .functions
+            .iter()
+            .filter_map(|row| Some((row, row.unlace.as_ref()?)))
+            .filter(|(row, _)| row.arity_matches() == Some(false));
+        for (row, unlace) in mismatches.take(LIST_CAP) {
+            let _ = writeln!(
+                out,
+                "| `{}` | `{}` | `{}` | `{}` |",
+                diff.key,
+                row.hexrays.name,
+                prototype(&row.hexrays),
+                prototype(unlace)
+            );
         }
     }
 
@@ -262,9 +265,10 @@ pub fn markdown(diffs: &[BinaryDiff], ida_version: &str) -> String {
         if !missing.is_empty() {
             let _ = writeln!(
                 out,
-                "- `{}` missing in unlace: {}",
+                "- `{}` missing in unlace ({}): {}",
                 diff.key,
-                missing.join(", ")
+                missing.len(),
+                capped(&missing)
             );
         }
         if !diff.unlace_extra_starts.is_empty() {
@@ -275,13 +279,28 @@ pub fn markdown(diffs: &[BinaryDiff], ida_version: &str) -> String {
                 .collect();
             let _ = writeln!(
                 out,
-                "- `{}` unlace-only starts: {}",
+                "- `{}` unlace-only starts ({}): {}",
                 diff.key,
-                extra.join(", ")
+                extra.len(),
+                capped(&extra)
             );
         }
     }
     out
+}
+
+const LIST_CAP: usize = 20;
+
+fn capped(items: &[String]) -> String {
+    let mut text = items[..items.len().min(LIST_CAP)].join(", ");
+    if items.len() > LIST_CAP {
+        let _ = write!(
+            text,
+            ", ... ({} more in oracle-diff.json)",
+            items.len() - LIST_CAP
+        );
+    }
+    text
 }
 
 fn prototype(side: &super::Side) -> String {

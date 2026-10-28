@@ -136,6 +136,22 @@ pub enum Cmd {
         /// Naming of `--engine ghidra` output: IDA/Hex-Rays (`int`, `_QWORD`, `sub_401000`) or Ghidra's own.
         #[arg(long, value_enum)]
         engine_style: Option<EngineStyle>,
+
+        /// Print a JSON array with one object per function (`name`, `address`,
+        /// `size`, `ok`, `line_count`, `code`) instead of the plain listing.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List the functions a binary would be decompiled into, one
+    /// `0x<address> <name>` per line.
+    Functions {
+        /// Path to the binary file.
+        binary: PathBuf,
+
+        /// Print a JSON array of `{name, address, size}` objects instead.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Generate a FLIRT `.sig` file (or unlace TOML patterns) from static

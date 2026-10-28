@@ -16,6 +16,7 @@ use unlace_cli::batch::{self, BatchConfig};
 use unlace_cli::config::Config;
 use unlace_cli::decompiler::{Decompiler, FunctionOutput, finish_output};
 use unlace_cli::engine::EngineOptions;
+use unlace_cli::function_json::{self, DecompiledRecord, FunctionRecord};
 use unlace_cli::ir_dump::IrDumpPhase;
 use unlace_cli::pipeline::{self, PipelineConfig};
 use unlace_cli::profiling::{self, TraceField};
@@ -52,13 +53,16 @@ fn main() {
             output,
             engine,
             engine_style,
+            json,
             ..
         } if engine.unwrap_or(config.engine.default) == Engine::Ghidra => run_engine_decompile(
             &binary,
             function.as_deref(),
             output.as_deref(),
             &EngineOptions::new(&config.engine, engine_style, 0),
+            json,
         ),
+        Cmd::Functions { binary, json } => run_functions(&binary, json),
         Cmd::Decompile {
             binary,
             function,
@@ -82,6 +86,7 @@ fn main() {
             flirt_min_confidence,
             engine: _,
             engine_style: _,
+            json,
         } => {
             let options = if max_width.is_some() || tab_width.is_some() {
                 let mut options = Config::clone(&config);
@@ -129,6 +134,7 @@ fn main() {
                             &config,
                             &mgr,
                             stats,
+                            json,
                         )
                     })
                 });
@@ -1213,6 +1219,7 @@ fn run_decompile(
     config: &PipelineConfig,
     _plugin_mgr: &PluginManager,
     stats: bool,
+    json: bool,
 ) -> Result<()> {
     let _profile_command = profiling::phase("cmd.decompile");
     let _profile_trace = profiling::trace_fields(
@@ -1271,6 +1278,7 @@ fn run_decompile(
     sw.set_function_count(functions.len());
 
     let mut all_output = String::new();
+    let mut records = Vec::new();
 
     let t_decompile = std::time::Instant::now();
     let total = functions.len();
@@ -1302,13 +1310,23 @@ fn run_decompile(
             }
             FunctionOutput::Failed(_) => sw.record_failure(&func_entry.name),
         }
-        all_output.push_str(output.text());
+        if json {
+            let ok = matches!(output, FunctionOutput::Decompiled(_));
+            let code = finish_output(emit, output.text().to_owned());
+            records.push(DecompiledRecord::new(func_entry, ok, code));
+        } else {
+            all_output.push_str(output.text());
+        }
     }
     sw.phase("decompile (all functions)", t_decompile.elapsed());
     sw.clear_progress();
 
     let t_post = std::time::Instant::now();
-    all_output = finish_output(emit, all_output);
+    all_output = if json {
+        function_json::to_json(&records)
+    } else {
+        finish_output(emit, all_output)
+    };
     sw.phase("post-process", t_post.elapsed());
     sw.set_output_size(all_output.len() as u64);
 
@@ -1769,9 +1787,22 @@ fn run_engine_decompile(
     function: Option<&str>,
     output: Option<&std::path::Path>,
     options: &EngineOptions,
+    json: bool,
 ) -> Result<()> {
     let outputs = unlace_cli::engine::decompile_binary(binary, function, options)?;
-    let text = unlace_cli::engine::render_c(&outputs, options.style);
+    let text = if json {
+        let records: Vec<_> = outputs
+            .iter()
+            .map(|output| {
+                let code =
+                    unlace_cli::engine::render_c(std::slice::from_ref(output), options.style);
+                DecompiledRecord::new(&output.function, output.text.is_ok(), code)
+            })
+            .collect();
+        function_json::to_json(&records)
+    } else {
+        unlace_cli::engine::render_c(&outputs, options.style)
+    };
     match output {
         Some(path) => {
             fs::write(path, text).with_context(|| format!("failed to write '{}'", path.display()))
@@ -1780,6 +1811,24 @@ fn run_engine_decompile(
             .write_all(text.as_bytes())
             .context("failed to write stdout"),
     }
+}
+
+/// `unlace functions`: the functions `decompile` selects from, without decompiling them.
+fn run_functions(binary: &std::path::Path, json: bool) -> Result<()> {
+    let image = unlace_cli::load::open_image(binary)?;
+    let (functions, _dwarf) = unlace_cli::decompiler::discover_with_dwarf(&image, None)?;
+    let text = if json {
+        let records: Vec<FunctionRecord> = functions.iter().map(Into::into).collect();
+        function_json::to_json(&records)
+    } else {
+        functions
+            .iter()
+            .map(|f| format!("{:#x} {}\n", f.addr, f.name))
+            .collect()
+    };
+    std::io::stdout()
+        .write_all(text.as_bytes())
+        .context("failed to write stdout")
 }
 
 fn run_engine_batch(

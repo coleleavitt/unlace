@@ -14,6 +14,7 @@ pub mod cache;
 pub mod config;
 pub mod decompiler;
 pub mod engine;
+pub mod function_json;
 pub mod identify_packer;
 pub mod ir_dump;
 pub mod load;

@@ -69,45 +69,7 @@ impl<'img> Decompiler<'img> {
             let _span = profiling::phase("decompile.get-lifter");
             get_lifter(image.arch)?
         };
-        let mut functions = {
-            let _span = profiling::phase("decompile.discover-functions");
-            pipeline::discover_functions(image, None)?
-        };
-        profiling::record_items("decompile.discover-functions", functions.len() as u64);
-
-        let dwarf = {
-            let _span = profiling::phase("decompile.import-dwarf");
-            match import_dwarf_with_sidecar(image, config.dwarf_sidecar.as_deref()) {
-                Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
-                    profiling::record_items("decompile.import-dwarf", d.functions.len() as u64);
-                    profiling::diagnostic(
-                        "info",
-                        "loaded DWARF debug info",
-                        [
-                            TraceField::count("functions", d.functions.len() as u64),
-                            TraceField::count("structs", d.structs.len() as u64),
-                        ],
-                    );
-                    pipeline::drop_dwarf_duplicate_subfunctions(&mut functions, &d);
-                    Some(d)
-                }
-                Ok(_) => None,
-                Err(e) => {
-                    profiling::diagnostic(
-                        "debug",
-                        "DWARF import failed; continuing without type info",
-                        [TraceField::text("err", e.to_string())],
-                    );
-                    None
-                }
-            }
-        };
-
-        profiling::diagnostic(
-            "info",
-            "discovered functions",
-            [TraceField::count("count", functions.len() as u64)],
-        );
+        let (mut functions, dwarf) = discover_with_dwarf(image, config.dwarf_sidecar.as_deref())?;
 
         let mut effective_config = config.clone();
         effective_config.symbol_context = Some({
@@ -207,6 +169,55 @@ pub fn decompile_path(
         ..PipelineConfig::default()
     };
     Ok(Decompiler::prepare(&image, filter, &config)?.decompile_all(emit))
+}
+
+/// Discover the functions of `image` and import its DWARF (from `dwarf_sidecar` when set),
+/// dropping functions DWARF shows to be parts of another. This is the function list every
+/// whole-binary command selects from.
+pub fn discover_with_dwarf(
+    image: &BinaryImage,
+    dwarf_sidecar: Option<&[u8]>,
+) -> Result<(Vec<FunctionEntry>, Option<DwarfInfo>)> {
+    let mut functions = {
+        let _span = profiling::phase("decompile.discover-functions");
+        pipeline::discover_functions(image, None)?
+    };
+    profiling::record_items("decompile.discover-functions", functions.len() as u64);
+
+    let dwarf = {
+        let _span = profiling::phase("decompile.import-dwarf");
+        match import_dwarf_with_sidecar(image, dwarf_sidecar) {
+            Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
+                profiling::record_items("decompile.import-dwarf", d.functions.len() as u64);
+                profiling::diagnostic(
+                    "info",
+                    "loaded DWARF debug info",
+                    [
+                        TraceField::count("functions", d.functions.len() as u64),
+                        TraceField::count("structs", d.structs.len() as u64),
+                    ],
+                );
+                pipeline::drop_dwarf_duplicate_subfunctions(&mut functions, &d);
+                Some(d)
+            }
+            Ok(_) => None,
+            Err(e) => {
+                profiling::diagnostic(
+                    "debug",
+                    "DWARF import failed; continuing without type info",
+                    [TraceField::text("err", e.to_string())],
+                );
+                None
+            }
+        }
+    };
+
+    profiling::diagnostic(
+        "info",
+        "discovered functions",
+        [TraceField::count("count", functions.len() as u64)],
+    );
+    Ok((functions, dwarf))
 }
 
 /// Whole-output cleanup applied once every function has been emitted.

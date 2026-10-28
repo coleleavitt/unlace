@@ -121,7 +121,10 @@ pub fn parse_signature(text: &str) -> Option<Signature> {
 
 /// Measure a function's pseudocode, from its signature through its closing brace.
 pub fn measure(text: &str) -> TextMetrics {
-    let mut metrics = TextMetrics::default();
+    let mut metrics = TextMetrics {
+        empty_blocks: count_empty_blocks(text),
+        ..TextMetrics::default()
+    };
     for line in text.lines() {
         let code = strip_comments(line);
         let trimmed = code.trim();
@@ -133,7 +136,6 @@ pub fn measure(text: &str) -> TextMetrics {
             metrics.labels += 1;
         }
         metrics.gotos += count_word(&code, "goto");
-        metrics.empty_blocks += count_empty_blocks(&code);
         metrics.raw_derefs += count_raw_derefs(&code);
         metrics.memory_refs += code.matches("MEMORY[").count();
         metrics.flag_helpers += FLAG_HELPERS
@@ -353,8 +355,12 @@ fn count_word(text: &str, word: &str) -> usize {
         .count()
 }
 
-fn count_empty_blocks(code: &str) -> usize {
-    let compact: String = code.chars().filter(|c| !c.is_whitespace()).collect();
+/// `{}` bodies, including ones whose braces sit on separate lines.
+fn count_empty_blocks(text: &str) -> usize {
+    let compact: String = strip_literals(&strip_comments(text))
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
     compact.matches("{}").count()
 }
 
@@ -394,7 +400,7 @@ mod tests {
 
     #[test]
     fn measures_flags_gotos_and_raw_derefs() {
-        let text = "int main(void) {\n    char c12 = 1; // ZF\n    int v1; // eax\n    if (v1) { }\n    \
+        let text = "int main(void) {\n    char c12 = 1; // ZF\n    int v1; // eax\n    if (v1) {\n    }\n    \
                     *(_QWORD *)(buf_0 + 12) = v1;\n    c12 = __OFSUB__(v1, 1);\n    goto LABEL_5;\nLABEL_5:\n    return 0;\n}";
         let m = measure(text);
         assert_eq!(m.lvar_decls, 2);

@@ -77,7 +77,6 @@ void __aapcs bitfield_test(void) {
     __int64 v8; // temp
     __int64 v_24;
     __int64 v_16;
-    __int64 v_0;
     int v4; // r31
     _QWORD v5; // temp
     *(_QWORD *)(v4 - 16) = v5; *(_QWORD *)(v4 - 24) = v8;

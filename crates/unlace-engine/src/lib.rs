@@ -66,6 +66,7 @@ pub mod opcodes;
 pub mod oplist;
 pub mod options;
 pub mod orderedindex;
+pub mod output_style;
 pub mod overrides;
 pub mod paramid;
 pub mod partmap;

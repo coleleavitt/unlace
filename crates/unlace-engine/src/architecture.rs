@@ -20,6 +20,7 @@ use crate::marshal::{
 };
 use crate::opbehavior::OpBehaviorRef;
 use crate::options::{ELEM_OPTIONSLIST, OptionDatabase, OptionSplitDatatypes};
+use crate::output_style::{FunctionNames, OutputStyle};
 use crate::overrides::{ELEM_CALLDEST, ELEM_DEADCODEDELAY, ELEM_FLOW};
 use crate::pcodeinject::{CALLFIXUP_TYPE, ELEM_CALLFIXUP, ELEM_CALLOTHERFIXUP, ELEM_INJECTDEBUG, PcodeInjectLibrary};
 use crate::pcoderaw::VarnodeData;
@@ -313,6 +314,8 @@ pub struct Architecture {
     pub debugstream: Option<ErrorStream>,
     pub builder: Option<Arc<dyn ArchitectureBuilder>>,
     pub segmented_resolvers: BTreeMap<i32, Arc<SegmentedResolver>>,
+    pub output_style: OutputStyle,
+    pub function_names: FunctionNames,
 }
 
 fn missing(what: &str) -> Error {
@@ -378,6 +381,8 @@ impl Architecture {
             debugstream: None,
             builder: None,
             segmented_resolvers: BTreeMap::new(),
+            output_style: OutputStyle::default(),
+            function_names: FunctionNames::default(),
         };
         glb.reset_defaults_internal();
         glb.min_funcsymbol_size = 1;
@@ -878,9 +883,16 @@ impl Architecture {
     }
 
     pub fn name_function_base(&self, addr: &Address, name: &mut String) {
-        let mut defname = "func_".to_string();
-        addr.print_raw(&mut defname);
-        *name = defname;
+        *name = self.unnamed_function_name(addr);
+    }
+
+    /// The name of a function at `addr` that has no symbol: its entry in `function_names`, or the
+    /// default name of the output style.
+    pub fn unnamed_function_name(&self, addr: &Address) -> String {
+        match self.function_names.get(&addr.get_offset()) {
+            Some(name) => name.clone(),
+            None => self.output_style.default_function_name(addr),
+        }
     }
 
     pub fn get_scope_delimiter(&self) -> String {

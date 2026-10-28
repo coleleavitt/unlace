@@ -16,12 +16,14 @@ unlace-session = { workspace = true }
 unlace-emu = { workspace = true }
 unlace-debugger = { workspace = true }
 unlace-flirt = { workspace = true }
+unlace-engine = { workspace = true }
 unlace-idapython = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
 clap = { workspace = true }
 anyhow = { workspace = true }
 smallvec = { workspace = true }
 rayon = { workspace = true }
+tracing = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 hex = "0.4"

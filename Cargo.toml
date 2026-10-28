@@ -111,6 +111,7 @@ unlace-session = { path = "crates/unlace-session" }
 unlace-idapython = { path = "crates/unlace-idapython" }
 unlace-debugger = { path = "crates/unlace-debugger" }
 unlace-emu = { path = "crates/unlace-emu" }
+unlace-engine = { path = "crates/unlace-engine" }
 
 [profile.dev]
 incremental = true

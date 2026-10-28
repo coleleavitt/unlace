@@ -86,7 +86,7 @@ impl PrintC {
                 )
             };
             if name.is_empty() {
-                let nm = self.generic_function_name(&entry);
+                let nm = ctx.glb.unnamed_function_name(&entry);
                 self.push_atom(
                     ctx,
                     &Atom::with_func(

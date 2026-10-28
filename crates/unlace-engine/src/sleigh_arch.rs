@@ -863,36 +863,13 @@ impl SleighArchitecture {
             let mut decoder = XmlDecode::with_root(None, el, 0);
             return TypeFactory::decode_core_types(glb, &mut decoder);
         }
+        let style = glb.output_style;
         let types = glb
             .types
             .as_mut()
             .ok_or_else(|| Error::Lowlevel("missing type factory".to_string()))?;
-        let core: [(&str, i32, TypeMetatype, bool); 22] = [
-            ("void", 1, TypeMetatype::Void, false),
-            ("bool", 1, TypeMetatype::Bool, false),
-            ("uint1", 1, TypeMetatype::Uint, false),
-            ("uint2", 2, TypeMetatype::Uint, false),
-            ("uint4", 4, TypeMetatype::Uint, false),
-            ("uint8", 8, TypeMetatype::Uint, false),
-            ("int1", 1, TypeMetatype::Int, false),
-            ("int2", 2, TypeMetatype::Int, false),
-            ("int4", 4, TypeMetatype::Int, false),
-            ("int8", 8, TypeMetatype::Int, false),
-            ("float4", 4, TypeMetatype::Float, false),
-            ("float8", 8, TypeMetatype::Float, false),
-            ("float10", 10, TypeMetatype::Float, false),
-            ("float16", 16, TypeMetatype::Float, false),
-            ("xunknown1", 1, TypeMetatype::Unknown, false),
-            ("xunknown2", 2, TypeMetatype::Unknown, false),
-            ("xunknown4", 4, TypeMetatype::Unknown, false),
-            ("xunknown8", 8, TypeMetatype::Unknown, false),
-            ("code", 1, TypeMetatype::Code, false),
-            ("char", 1, TypeMetatype::Int, true),
-            ("wchar2", 2, TypeMetatype::Int, true),
-            ("wchar4", 4, TypeMetatype::Int, true),
-        ];
-        for (name, size, meta, chartp) in core {
-            types.set_core_type(name, size, meta, chartp)?;
+        for core in style.core_types() {
+            types.set_core_type(core.name, core.size, core.meta, core.chartp)?;
         }
         types.cache_core_types()
     }

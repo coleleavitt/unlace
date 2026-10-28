@@ -16,6 +16,7 @@ use crate::error::{Error, Result};
 use crate::loadimage::LoadImageFunc;
 use crate::object_arch::{ObjectArchitecture, is_object_file};
 use crate::opcodes::{OpCode, get_opname};
+use crate::output_style::{FunctionNames, OutputStyle};
 use crate::pcoderaw::VarnodeData;
 use crate::raw_arch::RawBinaryArchitecture;
 use crate::space::SpaceRef;
@@ -34,6 +35,14 @@ pub struct Program {
 
 const MIN_STRING_LENGTH: usize = 4;
 const MAX_STRING_LENGTH: usize = 4096;
+
+/// Settings fixed when a `Program` is created.
+#[derive(Clone, Debug, Default)]
+pub struct ProgramOptions {
+    pub style: OutputStyle,
+    /// Names for functions that have no symbol, such as functions an external analysis found.
+    pub function_names: FunctionNames,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SymbolLoading {
@@ -243,6 +252,16 @@ impl Program {
         language: Option<&str>,
         loading: SymbolLoading,
     ) -> Result<Program> {
+        Program::from_image_with_options(name, bytes, language, loading, &ProgramOptions::default())
+    }
+
+    pub fn from_image_with_options(
+        name: &str,
+        bytes: Vec<u8>,
+        language: Option<&str>,
+        loading: SymbolLoading,
+        options: &ProgramOptions,
+    ) -> Result<Program> {
         if !is_object_file(&bytes) {
             return Err(Error::Lowlevel(format!("unrecognized executable format: {name}")));
         }
@@ -251,25 +270,35 @@ impl Program {
             SymbolLoading::Full => SymbolInput::Full(Box::new(symbols::image_symbols(&bytes))),
         };
         let builder = ObjectArchitecture::with_bytes(name, language.unwrap_or("default"), bytes);
-        Program::initialize(Arc::new(builder), symbols)
+        Program::initialize(Arc::new(builder), symbols, options)
     }
 
     pub fn from_raw_bytes(bytes: Vec<u8>, language: &str, base_address: u64) -> Result<Program> {
         let code_end = base_address.saturating_add(bytes.len() as u64);
         let builder = RawBinaryArchitecture::with_bytes("raw", language, bytes, base_address);
-        let mut program = Program::initialize(Arc::new(builder), SymbolInput::None)?;
+        let mut program = Program::initialize(Arc::new(builder), SymbolInput::None, &ProgramOptions::default())?;
         program.code_sections = std::iter::once(base_address..code_end).collect();
         program.entry = Some(base_address);
         Ok(program)
     }
 
-    fn initialize(builder: Arc<dyn ArchitectureBuilder>, symbols: SymbolInput) -> Result<Program> {
-        panic_guard(|| Program::initialize_unguarded(builder, symbols))
+    fn initialize(
+        builder: Arc<dyn ArchitectureBuilder>,
+        symbols: SymbolInput,
+        options: &ProgramOptions,
+    ) -> Result<Program> {
+        panic_guard(|| Program::initialize_unguarded(builder, symbols, options))
     }
 
-    fn initialize_unguarded(builder: Arc<dyn ArchitectureBuilder>, symbols: SymbolInput) -> Result<Program> {
+    fn initialize_unguarded(
+        builder: Arc<dyn ArchitectureBuilder>,
+        symbols: SymbolInput,
+        options: &ProgramOptions,
+    ) -> Result<Program> {
         let mut architecture = Box::new(Architecture::new());
         architecture.builder = Some(builder);
+        architecture.output_style = options.style;
+        architecture.function_names = options.function_names.clone();
         let mut store = DocumentStorage::new();
         architecture.init(&mut store)?;
         let mut program = Program {

@@ -14,7 +14,7 @@ use unlace_loader::{
 use unlace_plugin::PluginManager;
 
 use unlace_cli::annotations::{self, AnnotationDb};
-use unlace_cli::args::{self, Args, Cmd, LuminaAction, ProjectAction};
+use unlace_cli::args::{self, Args, Cmd, Engine, EngineStyle, LuminaAction, ProjectAction};
 use unlace_cli::batch::{self, BatchConfig};
 use unlace_cli::pipeline::{self, PipelineConfig};
 use unlace_cli::profiling::{self, TraceField};
@@ -37,6 +37,19 @@ fn main() {
         Cmd::Decompile {
             binary,
             function,
+            output,
+            engine: Engine::Ghidra,
+            engine_style,
+            ..
+        } => run_engine_decompile(
+            &binary,
+            function.as_deref(),
+            output.as_deref(),
+            engine_style,
+        ),
+        Cmd::Decompile {
+            binary,
+            function,
             emit,
             arch,
             output,
@@ -55,6 +68,8 @@ fn main() {
             sig,
             sig_dir,
             flirt_min_confidence,
+            engine: _,
+            engine_style: _,
         } => {
             let print_config = if max_width.is_some() || tab_width.is_some() {
                 let mut cfg = unlace_output::PrintConfig::from_env();
@@ -139,6 +154,14 @@ fn main() {
         Cmd::Batch {
             binary,
             jobs,
+            output_dir,
+            engine: Engine::Ghidra,
+            engine_style,
+            ..
+        } => run_engine_batch(&binary, jobs, output_dir.as_deref(), engine_style),
+        Cmd::Batch {
+            binary,
+            jobs,
             emit,
             arch,
             output_dir,
@@ -156,6 +179,8 @@ fn main() {
             sig,
             sig_dir,
             flirt_min_confidence,
+            engine: _,
+            engine_style: _,
         } => build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence).and_then(|flirt| {
             run_batch_cmd(
                 binary,
@@ -2150,6 +2175,56 @@ fn trim_name(s: &str, n: usize) -> String {
 // library's `batch` module can also use it.
 
 #[allow(clippy::too_many_arguments)]
+fn run_engine_decompile(
+    binary: &std::path::Path,
+    function: Option<&str>,
+    output: Option<&std::path::Path>,
+    style: EngineStyle,
+) -> Result<()> {
+    let options = unlace_cli::engine::EngineOptions {
+        style: style.into(),
+        ..Default::default()
+    };
+    let outputs = unlace_cli::engine::decompile_binary(binary, function, &options)?;
+    let text = unlace_cli::engine::render_c(&outputs, options.style);
+    match output {
+        Some(path) => {
+            fs::write(path, text).with_context(|| format!("failed to write '{}'", path.display()))
+        }
+        None => std::io::stdout()
+            .write_all(text.as_bytes())
+            .context("failed to write stdout"),
+    }
+}
+
+fn run_engine_batch(
+    binary: &std::path::Path,
+    jobs: usize,
+    output_dir: Option<&std::path::Path>,
+    style: EngineStyle,
+) -> Result<()> {
+    let options = unlace_cli::engine::EngineOptions {
+        jobs,
+        style: style.into(),
+    };
+    let started = std::time::Instant::now();
+    let outputs = unlace_cli::engine::decompile_binary(binary, None, &options)?;
+    let elapsed = started.elapsed();
+    match output_dir {
+        Some(dir) => unlace_cli::engine::write_per_function(dir, &outputs, options.style)?,
+        None => std::io::stdout()
+            .write_all(unlace_cli::engine::render_c(&outputs, options.style).as_bytes())
+            .context("failed to write stdout")?,
+    }
+    let failed = outputs.iter().filter(|output| output.text.is_err()).count();
+    eprintln!(
+        "batch: {} functions ({failed} failed) in {:.2}s",
+        outputs.len(),
+        elapsed.as_secs_f64()
+    );
+    Ok(())
+}
+
 fn run_batch_cmd(
     binary: std::path::PathBuf,
     jobs: usize,

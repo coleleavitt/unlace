@@ -20,7 +20,12 @@ pub struct HexConfig {
 
 impl Default for HexConfig {
     fn default() -> Self {
-        Self { bytes_per_row: 16, show_ascii: true, base_address: 0, xrefs: Vec::new() }
+        Self {
+            bytes_per_row: 16,
+            show_ascii: true,
+            base_address: 0,
+            xrefs: Vec::new(),
+        }
     }
 }
 
@@ -39,14 +44,18 @@ pub fn render_hex_view(data: &[u8], config: &HexConfig) -> String {
         // Hex bytes
         for (i, &byte) in chunk.iter().enumerate() {
             let _ = write!(out, "{:02x} ", byte);
-            if i == bpr / 2 - 1 { out.push(' '); }
+            if i == bpr / 2 - 1 {
+                out.push(' ');
+            }
         }
         // Pad short last line
         if chunk.len() < bpr {
             let missing = bpr - chunk.len();
             for i in 0..missing {
                 out.push_str("   ");
-                if chunk.len() + i == bpr / 2 - 1 { out.push(' '); }
+                if chunk.len() + i == bpr / 2 - 1 {
+                    out.push(' ');
+                }
             }
         }
 
@@ -55,7 +64,11 @@ pub fn render_hex_view(data: &[u8], config: &HexConfig) -> String {
             out.push(' ');
             out.push('|');
             for &byte in chunk {
-                out.push(if byte.is_ascii_graphic() || byte == b' ' { byte as char } else { '.' });
+                out.push(if byte.is_ascii_graphic() || byte == b' ' {
+                    byte as char
+                } else {
+                    '.'
+                });
             }
             out.push('|');
         }
@@ -98,7 +111,10 @@ mod tests {
     #[test]
     fn custom_base_address() {
         let data = &[0u8; 16];
-        let config = HexConfig { base_address: 0x401000, ..Default::default() };
+        let config = HexConfig {
+            base_address: 0x401000,
+            ..Default::default()
+        };
         let out = render_hex_view(data, &config);
         assert!(out.contains("00401000"));
     }
@@ -106,7 +122,10 @@ mod tests {
     #[test]
     fn xref_annotation() {
         let data = &[0xffu8; 32];
-        let config = HexConfig { xrefs: vec![(4, "call_target".into())], ..Default::default() };
+        let config = HexConfig {
+            xrefs: vec![(4, "call_target".into())],
+            ..Default::default()
+        };
         let out = render_hex_view(data, &config);
         assert!(out.contains("→ call_target"));
     }

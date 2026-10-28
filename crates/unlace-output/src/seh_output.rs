@@ -18,12 +18,7 @@ pub struct SehOutputRegion {
 }
 
 /// Render an SEH try/except block as C source.
-pub fn render_try_except(
-    try_body: &str,
-    filter: &str,
-    except_body: &str,
-    indent: usize,
-) -> String {
+pub fn render_try_except(try_body: &str, filter: &str, except_body: &str, indent: usize) -> String {
     let pad = " ".repeat(indent * 4);
     let mut out = String::new();
     writeln!(out, "{pad}__try {{").unwrap();
@@ -39,11 +34,7 @@ pub fn render_try_except(
 }
 
 /// Render an SEH try/finally block as C source.
-pub fn render_try_finally(
-    try_body: &str,
-    finally_body: &str,
-    indent: usize,
-) -> String {
+pub fn render_try_finally(try_body: &str, finally_body: &str, indent: usize) -> String {
     let pad = " ".repeat(indent * 4);
     let mut out = String::new();
     writeln!(out, "{pad}__try {{").unwrap();
@@ -78,11 +69,7 @@ mod tests {
 
     #[test]
     fn test_try_finally_output() {
-        let output = render_try_finally(
-            "acquire_lock();",
-            "release_lock();",
-            1,
-        );
+        let output = render_try_finally("acquire_lock();", "release_lock();", 1);
         assert!(output.contains("    __try {"));
         assert!(output.contains("    } __finally {"));
         assert!(output.contains("        release_lock();"));

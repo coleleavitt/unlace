@@ -118,7 +118,27 @@ pub use uefi_module::{
     TE_MAGIC, TeImage, TeSection, UefiModule, UefiModuleKind, UefiSubsystem, detect_uefi_module,
     parse_te_image, te_to_binary_image,
 };
+#[cfg(feature = "unwired")]
+pub mod apple_kernelcache;
+#[cfg(feature = "unwired")]
+pub mod dyld_mmap;
+#[cfg(feature = "unwired")]
+pub mod evm_solidity;
+#[cfg(feature = "unwired")]
+pub mod frida_bridge;
+#[cfg(feature = "unwired")]
+pub mod gdb_mi;
+#[cfg(feature = "unwired")]
+pub mod lldb_bridge;
+#[cfg(feature = "unwired")]
+pub mod minidump;
+#[cfg(feature = "unwired")]
+pub mod rr_trace;
 pub mod wasm_component;
+#[cfg(feature = "unwired")]
+pub mod wasm_wit;
+#[cfg(feature = "unwired")]
+pub mod windbg_ttd;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,

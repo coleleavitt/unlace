@@ -77,23 +77,56 @@ pub fn compute_layout(
         let x = (*col as i32) * (node_width + h_spacing) as i32;
         let y = (layer as i32) * (node_height + v_spacing) as i32;
         *col += 1;
-        layout_nodes.push(LayoutNode { id, label: label.clone(), x, y, width: node_width, height: node_height, is_loop_header: is_loop });
+        layout_nodes.push(LayoutNode {
+            id,
+            label: label.clone(),
+            x,
+            y,
+            width: node_width,
+            height: node_height,
+            is_loop_header: is_loop,
+        });
     }
 
-    let layout_edges: Vec<LayoutEdge> = edges.iter().map(|&(from, to, ref label, is_back)| {
-        LayoutEdge { from, to, label: label.clone(), is_back_edge: is_back }
-    }).collect();
+    let layout_edges: Vec<LayoutEdge> = edges
+        .iter()
+        .map(|&(from, to, ref label, is_back)| LayoutEdge {
+            from,
+            to,
+            label: label.clone(),
+            is_back_edge: is_back,
+        })
+        .collect();
 
-    let total_width = layout_nodes.iter().map(|n| (n.x as u32) + n.width).max().unwrap_or(0) + h_spacing;
-    let total_height = layout_nodes.iter().map(|n| (n.y as u32) + n.height).max().unwrap_or(0) + v_spacing;
+    let total_width = layout_nodes
+        .iter()
+        .map(|n| (n.x as u32) + n.width)
+        .max()
+        .unwrap_or(0)
+        + h_spacing;
+    let total_height = layout_nodes
+        .iter()
+        .map(|n| (n.y as u32) + n.height)
+        .max()
+        .unwrap_or(0)
+        + v_spacing;
 
-    CfgLayout { nodes: layout_nodes, edges: layout_edges, width: total_width, height: total_height }
+    CfgLayout {
+        nodes: layout_nodes,
+        edges: layout_edges,
+        width: total_width,
+        height: total_height,
+    }
 }
 
 /// Render a CFG layout as SVG.
 pub fn render_svg(layout: &CfgLayout) -> String {
     let mut svg = String::with_capacity(2048);
-    let _ = write!(svg, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\">\n", layout.width, layout.height);
+    let _ = write!(
+        svg,
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\">\n",
+        layout.width, layout.height
+    );
     svg.push_str("<defs><marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"7\" refX=\"10\" refY=\"3.5\" orient=\"auto\"><polygon points=\"0 0, 10 3.5, 0 7\" fill=\"#666\"/></marker></defs>\n");
 
     // Edges first (behind nodes)
@@ -101,19 +134,42 @@ pub fn render_svg(layout: &CfgLayout) -> String {
         let from_node = layout.nodes.iter().find(|n| n.id == edge.from);
         let to_node = layout.nodes.iter().find(|n| n.id == edge.to);
         if let (Some(f), Some(t)) = (from_node, to_node) {
-            let color = if edge.is_back_edge { "#e06060" } else { "#666666" };
-            let _ = write!(svg, "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"1.5\" marker-end=\"url(#arrow)\"/>\n",
-                f.x + f.width as i32 / 2, f.y + f.height as i32,
-                t.x + t.width as i32 / 2, t.y, color);
+            let color = if edge.is_back_edge {
+                "#e06060"
+            } else {
+                "#666666"
+            };
+            let _ = write!(
+                svg,
+                "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"1.5\" marker-end=\"url(#arrow)\"/>\n",
+                f.x + f.width as i32 / 2,
+                f.y + f.height as i32,
+                t.x + t.width as i32 / 2,
+                t.y,
+                color
+            );
         }
     }
 
     // Nodes
     for node in &layout.nodes {
-        let fill = if node.is_loop_header { "#2060a0" } else { "#404060" };
-        let _ = write!(svg, "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" rx=\"4\"/>\n", node.x, node.y, node.width, node.height, fill);
-        let _ = write!(svg, "<text x=\"{}\" y=\"{}\" fill=\"white\" font-size=\"11\" text-anchor=\"middle\">{}</text>\n",
-            node.x + node.width as i32 / 2, node.y + node.height as i32 / 2 + 4, node.label);
+        let fill = if node.is_loop_header {
+            "#2060a0"
+        } else {
+            "#404060"
+        };
+        let _ = write!(
+            svg,
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" rx=\"4\"/>\n",
+            node.x, node.y, node.width, node.height, fill
+        );
+        let _ = write!(
+            svg,
+            "<text x=\"{}\" y=\"{}\" fill=\"white\" font-size=\"11\" text-anchor=\"middle\">{}</text>\n",
+            node.x + node.width as i32 / 2,
+            node.y + node.height as i32 / 2 + 4,
+            node.label
+        );
     }
 
     svg.push_str("</svg>\n");
@@ -126,8 +182,16 @@ mod tests {
 
     #[test]
     fn simple_layout() {
-        let nodes = vec![(0, "entry".into(), false), (1, "body".into(), true), (2, "exit".into(), false)];
-        let edges = vec![(0, 1, Some("T".into()), false), (1, 2, None, false), (1, 1, None, true)];
+        let nodes = vec![
+            (0, "entry".into(), false),
+            (1, "body".into(), true),
+            (2, "exit".into(), false),
+        ];
+        let edges = vec![
+            (0, 1, Some("T".into()), false),
+            (1, 2, None, false),
+            (1, 1, None, true),
+        ];
         let layout = compute_layout(&nodes, &edges);
         assert_eq!(layout.nodes.len(), 3);
         assert_eq!(layout.edges.len(), 3);

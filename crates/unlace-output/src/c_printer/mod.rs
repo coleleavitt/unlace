@@ -11509,7 +11509,9 @@ fn rebase_compare_copy_source_after_body(
             return None;
         }
     }
-    if source_is_reassigned_before_condition(&source, def_stmt, stmt_idx, ctx) {
+    if source_is_reassigned_before_condition(&source, def_stmt, stmt_idx, ctx)
+        || source_operands_reassigned_before_condition(&source, def_stmt, stmt_idx, ctx, 0)
+    {
         return None;
     }
     let text = pure_condition_source_text(&source, def_stmt, ctx, 0)?;
@@ -11543,6 +11545,45 @@ fn source_is_reassigned_before_condition(
     ctx.stmt_outputs
         .range((copy_stmt + 1)..cond_stmt)
         .any(|(_stmt, output)| output.is_some_and(|out| out.base == source_sv.base))
+}
+
+/// Whether a storage operand read by the temporary `source` expression is
+/// overwritten before the condition. Rendering `source` as text at the
+/// condition is only sound while every storage it reads still holds the same
+/// value; `rax = rax + 1` followed by `rax != n` must not become `rax + 1 != n`.
+fn source_operands_reassigned_before_condition(
+    source: &Varnode,
+    use_stmt: u32,
+    cond_stmt: u32,
+    ctx: &PrintCtx,
+    depth: u8,
+) -> bool {
+    if source.space != SpaceId::Unique || depth >= 4 {
+        return false;
+    }
+    let Some(source_sv) = input_or_latest_sv_for_operand(source, Some(0), use_stmt, ctx) else {
+        return false;
+    };
+    let Some(def_stmt) = defining_stmt_for_sv(&source_sv, ctx) else {
+        return false;
+    };
+    let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
+        return false;
+    };
+    def_insn.inputs.iter().any(|input| match input.space {
+        SpaceId::Const => false,
+        SpaceId::Unique => {
+            source_operands_reassigned_before_condition(input, def_stmt, cond_stmt, ctx, depth + 1)
+        }
+        _ => ctx
+            .stmt_outputs
+            .range((def_stmt + 1)..cond_stmt)
+            .any(|(_stmt, output)| {
+                output.is_some_and(|out| {
+                    out.base.space == input.space && out.base.offset == input.offset
+                })
+            }),
+    })
 }
 
 fn pure_condition_source_text(

@@ -1,10 +1,13 @@
 //! Per-architecture support tier classification (plan.md Batch 22).
 //!
-//! This is a single source of truth for "how trustworthy is the
-//! decompiler output for this architecture today". The xtask scorecard
-//! generator reads from here; `docs/status.md` is generated from it.
+//! This is the single source of truth for "is this architecture built, and
+//! how trustworthy is the output for it today". The `unlace-lift` facade
+//! and `cargo xtask status` read from here.
 //!
-//! The classification is intentionally narrow:
+//! Two axes are tracked. [`ProductTier`] is the product scope: which
+//! lifters a default build compiles (x86, ARM, AArch64) and which stay
+//! experimental behind an `arch-*` cargo feature of `unlace-lift`.
+//! [`SupportTier`] is lifter maturity, classified intentionally narrowly:
 //!
 //! * **Production** — the lifter, ABI/calling convention recovery, and
 //!   final C output are exercised by golden fixtures and a non-trivial
@@ -43,6 +46,82 @@ impl SupportTier {
             SupportTier::Stub => "stub",
         }
     }
+}
+
+/// Whether an architecture is part of the default product build.
+///
+/// This is orthogonal to [`SupportTier`]: the product tier says what a
+/// default `unlace` build lifts at all, the support tier says how mature the
+/// lifter is once it is built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ProductTier {
+    /// Always compiled into `unlace-lift`; in the current product scope
+    /// (x86, ARM, Apple).
+    Supported,
+    /// Kept in tree but only compiled when the named `unlace-lift` (and
+    /// `unlace-cli`) cargo feature is enabled.
+    Experimental { feature: &'static str },
+    /// No lifter is wired into the `unlace-lift` facade.
+    Unsupported,
+}
+
+impl ProductTier {
+    /// Human-readable label for documentation tables.
+    pub const fn label(self) -> &'static str {
+        match self {
+            ProductTier::Supported => "supported",
+            ProductTier::Experimental { .. } => "experimental",
+            ProductTier::Unsupported => "unsupported",
+        }
+    }
+
+    /// Cargo feature that enables an experimental lifter.
+    pub const fn feature(self) -> Option<&'static str> {
+        match self {
+            ProductTier::Experimental { feature } => Some(feature),
+            ProductTier::Supported | ProductTier::Unsupported => None,
+        }
+    }
+}
+
+/// Product tier for `arch`: supported in the default build, experimental
+/// behind an `arch-*` cargo feature, or without a lifter.
+pub const fn product_tier(arch: ArchId) -> ProductTier {
+    use ArchId::*;
+    let feature = match arch {
+        X86 | X86_64 | Arm | AArch64 => return ProductTier::Supported,
+        Lua | Unknown(_) => return ProductTier::Unsupported,
+        RiscV64 => "arch-riscv",
+        Mips | Mips64 => "arch-mips",
+        Ppc | Ppc64 => "arch-ppc",
+        V850 => "arch-v850",
+        Arc => "arch-arc",
+        TriCore => "arch-tricore",
+        Wasm => "arch-wasm",
+        Ebpf | Sbpf => "arch-ebpf",
+        Avr => "arch-avr",
+        Msp430 => "arch-msp430",
+        AmdGpu => "arch-amdgpu",
+        Stm8 => "arch-stm8",
+        Z80 => "arch-z80",
+        RxRenesas => "arch-rx",
+        Agx => "arch-agx",
+        Sparc => "arch-sparc",
+        M68k => "arch-m68k",
+        SuperH => "arch-superh",
+        NvidiaSass => "arch-sass",
+        Xtensa => "arch-xtensa",
+        Mos6502 => "arch-6502",
+        I8051 => "arch-8051",
+        Hexagon => "arch-hexagon",
+        Pic16 => "arch-pic",
+        Sharc | SharcBlackfin => "arch-sharc",
+        TiC6x | TiC28x => "arch-ti",
+        Evm => "arch-evm",
+        SpirV => "arch-spirv",
+        AppleAgx => "arch-appleagx",
+    };
+    ProductTier::Experimental { feature }
 }
 
 /// Current support tier for `arch`. Defaults to [`SupportTier::Stub`] for
@@ -118,17 +197,25 @@ pub fn all_arches() -> &'static [ArchId] {
 /// stable.
 pub fn support_matrix_markdown() -> String {
     use std::fmt::Write;
-    let mut rows: Vec<(SupportTier, String)> = all_arches()
+    let mut rows: Vec<(ProductTier, SupportTier, String)> = all_arches()
         .iter()
-        .map(|&a| (support_tier(a), a.to_string()))
+        .map(|&a| (product_tier(a), support_tier(a), a.to_string()))
         .collect();
     rows.sort();
 
     let mut s = String::new();
-    let _ = writeln!(s, "| architecture | tier |");
-    let _ = writeln!(s, "|--------------|------|");
-    for (tier, name) in &rows {
-        let _ = writeln!(s, "| `{name}` | {} |", tier.label());
+    let _ = writeln!(s, "| architecture | product | maturity | cargo feature |");
+    let _ = writeln!(s, "|--------------|---------|----------|---------------|");
+    for (product, tier, name) in &rows {
+        let feature = product
+            .feature()
+            .map_or("-".to_string(), |f| format!("`{f}`"));
+        let _ = writeln!(
+            s,
+            "| `{name}` | {} | {} | {feature} |",
+            product.label(),
+            tier.label()
+        );
     }
     s
 }
@@ -141,6 +228,31 @@ mod tests {
     fn x86_64_and_aarch64_are_production() {
         assert_eq!(support_tier(ArchId::X86_64), SupportTier::Production);
         assert_eq!(support_tier(ArchId::AArch64), SupportTier::Production);
+    }
+
+    #[test]
+    fn product_scope_is_x86_and_arm() {
+        for arch in all_arches() {
+            let supported = matches!(
+                arch,
+                ArchId::X86 | ArchId::X86_64 | ArchId::Arm | ArchId::AArch64
+            );
+            assert_eq!(
+                product_tier(*arch) == ProductTier::Supported,
+                supported,
+                "{arch:?}"
+            );
+        }
+        assert_eq!(product_tier(ArchId::Unknown(7)), ProductTier::Unsupported);
+    }
+
+    #[test]
+    fn experimental_features_are_arch_prefixed() {
+        for arch in all_arches() {
+            if let Some(feature) = product_tier(*arch).feature() {
+                assert!(feature.starts_with("arch-"), "{arch:?}: {feature}");
+            }
+        }
     }
 
     #[test]

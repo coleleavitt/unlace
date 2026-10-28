@@ -351,7 +351,7 @@ fn bench_load(c: &mut Criterion) {
 
 fn bench_lift(c: &mut Criterion) {
     let image = load_image();
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
     let funcs = discover_all_functions(&image);
 
     c.bench_function("stage_lift", |b| {
@@ -369,7 +369,7 @@ fn bench_lift(c: &mut Criterion) {
 
 fn bench_ssa(c: &mut Criterion) {
     let image = load_image();
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
     let funcs = discover_all_functions(&image);
     let lifted: Vec<Function> = funcs
         .iter()
@@ -390,7 +390,7 @@ fn bench_ssa(c: &mut Criterion) {
 
 fn bench_passes(c: &mut Criterion) {
     let image = load_image();
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
     let funcs = discover_all_functions(&image);
     let lifted: Vec<Function> = funcs
         .iter()
@@ -415,7 +415,7 @@ fn bench_passes(c: &mut Criterion) {
 
 fn bench_structure(c: &mut Criterion) {
     let image = load_image();
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
     let funcs = discover_all_functions(&image);
     let lifted: Vec<Function> = funcs
         .iter()
@@ -438,7 +438,7 @@ fn bench_structure(c: &mut Criterion) {
 
 fn bench_output(c: &mut Criterion) {
     let image = load_image();
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
     let funcs = discover_all_functions(&image);
     let lifted: Vec<Function> = funcs
         .iter()
@@ -471,7 +471,7 @@ fn bench_e2e(c: &mut Criterion) {
     c.bench_function("decompile_medium_e2e", |b| {
         b.iter(|| {
             let image = ElfLoader::load(&data).expect("parse failed");
-            let lifter = get_lifter(image.arch);
+            let lifter = get_lifter(image.arch).expect("supported arch");
             let funcs = discover_all_functions(&image);
 
             let mut output = String::new();

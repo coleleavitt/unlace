@@ -3,85 +3,42 @@
 //!
 //! Enumerates every named [`ArchId`] and asks the facade [`get_lifter`] which
 //! lifter answers for it, classifying each as **registered** (a real per-arch
-//! lifter with a populated register file) or **stub** (the fallback
-//! `StubLifter`, which has an empty register file). This gives a single,
-//! trendable view of architecture breadth that updates automatically as
-//! lifters are wired into the facade. Read-only; writes stdout +
+//! lifter compiled into this build), **not enabled** (an experimental lifter
+//! whose `arch-*` cargo feature is off), or **no lifter**. This gives a single,
+//! trendable view of architecture breadth. Read-only; writes stdout +
 //! `target/arch-scorecard.md`.
 
 use std::path::Path;
 
 use unlace_ir::ArchId;
-use unlace_lift::get_lifter;
-
-/// Every named architecture the IR knows about. `Unknown(u16)` is excluded
-/// (it is the catch-all, never a registration target).
-const ARCHES: &[ArchId] = &[
-    ArchId::X86,
-    ArchId::X86_64,
-    ArchId::Arm,
-    ArchId::AArch64,
-    ArchId::RiscV64,
-    ArchId::Mips,
-    ArchId::Mips64,
-    ArchId::Ppc,
-    ArchId::Ppc64,
-    ArchId::V850,
-    ArchId::Arc,
-    ArchId::TriCore,
-    ArchId::Wasm,
-    ArchId::Ebpf,
-    ArchId::Sbpf,
-    ArchId::Avr,
-    ArchId::Msp430,
-    ArchId::AmdGpu,
-    ArchId::Stm8,
-    ArchId::Z80,
-    ArchId::RxRenesas,
-    ArchId::Agx,
-    ArchId::Sparc,
-    ArchId::M68k,
-    ArchId::SuperH,
-    ArchId::NvidiaSass,
-    ArchId::Xtensa,
-    ArchId::Mos6502,
-    ArchId::I8051,
-    ArchId::Hexagon,
-    ArchId::Pic16,
-    ArchId::Sharc,
-    ArchId::SharcBlackfin,
-    ArchId::TiC6x,
-    ArchId::TiC28x,
-    ArchId::Evm,
-    ArchId::SpirV,
-    ArchId::AppleAgx,
-    ArchId::Lua,
-];
+use unlace_ir::arch_support::all_arches;
+use unlace_lift::{LifterUnavailable, get_lifter};
 
 pub fn run(root: &Path) {
-    let mut registered = Vec::new();
-    let mut stub = Vec::new();
+    let mut registered: Vec<(ArchId, usize)> = Vec::new();
+    let mut not_enabled: Vec<(ArchId, &'static str)> = Vec::new();
+    let mut no_lifter: Vec<ArchId> = Vec::new();
 
-    for &arch in ARCHES {
-        let lifter = get_lifter(arch);
-        // A registered lifter populates a register file; the StubLifter does not.
-        let reg_count = lifter.register_file().registers.len();
-        if reg_count > 0 {
-            registered.push((arch, reg_count));
-        } else {
-            stub.push(arch);
+    for &arch in all_arches() {
+        match get_lifter(arch) {
+            Ok(lifter) => registered.push((arch, lifter.register_file().registers.len())),
+            Err(LifterUnavailable::NotEnabled { feature, .. }) => {
+                not_enabled.push((arch, feature));
+            }
+            Err(LifterUnavailable::NoLifter { .. }) => no_lifter.push(arch),
         }
     }
 
-    let total = ARCHES.len();
+    let total = all_arches().len();
     let mut out = String::new();
     out.push_str("# arch-scorecard\n\n");
     out.push_str(&format!(
-        "Facade lifter registration: **{} / {} architectures** resolve to a real \
-         lifter (non-empty register file); {} fall through to the stub.\n\n",
+        "Facade lifter registration: **{} / {} architectures** resolve to a lifter in \
+         this build; {} are experimental and not enabled; {} have no lifter.\n\n",
         registered.len(),
         total,
-        stub.len()
+        not_enabled.len(),
+        no_lifter.len()
     ));
 
     out.push_str("## Registered\n\n");
@@ -90,11 +47,21 @@ pub fn run(root: &Path) {
         out.push_str(&format!("| `{arch:?}` | {n} |\n"));
     }
 
-    out.push_str("\n## Stub (unregistered in facade)\n\n");
-    if stub.is_empty() {
-        out.push_str("_none — every named architecture resolves to a real lifter._\n");
+    out.push_str("\n## Experimental, not enabled in this build\n\n");
+    if not_enabled.is_empty() {
+        out.push_str("_none_\n");
     } else {
-        for arch in &stub {
+        out.push_str("| arch | cargo feature |\n|------|---------------|\n");
+        for (arch, feature) in &not_enabled {
+            out.push_str(&format!("| `{arch:?}` | `{feature}` |\n"));
+        }
+    }
+
+    out.push_str("\n## No lifter\n\n");
+    if no_lifter.is_empty() {
+        out.push_str("_none_\n");
+    } else {
+        for arch in &no_lifter {
             out.push_str(&format!("- `{arch:?}`\n"));
         }
     }

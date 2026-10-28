@@ -12,8 +12,8 @@ use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use unlace_ir::ArchId;
 use unlace_ir::ssa::SsaFunction;
+use unlace_ir::{ArchId, Lifter};
 use unlace_lift::get_lifter;
 use unlace_loader::{
     BinaryImage, DwarfInfo, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar,
@@ -331,6 +331,7 @@ pub fn run_batch(
             image.arch,
         );
     }
+    let lifter = get_lifter(image.arch)?;
 
     let mut functions = {
         let _span = profiling::phase("batch.discover-functions");
@@ -452,12 +453,22 @@ pub fn run_batch(
 
     let results: Vec<BatchResult> = if config.interproc {
         let _span = profiling::phase("batch.decompile-interproc");
-        pool.install(|| decompile_interproc(&image, &functions, config, dwarf.as_ref(), rtti_opt))
+        pool.install(|| {
+            decompile_interproc(
+                &image,
+                lifter.as_ref(),
+                &functions,
+                config,
+                dwarf.as_ref(),
+                rtti_opt,
+            )
+        })
     } else {
         let _span = profiling::phase("batch.decompile-parallel");
         pool.install(|| {
             decompile_all_parallel(
                 &image,
+                lifter.as_ref(),
                 &functions,
                 config,
                 dwarf.as_ref(),
@@ -492,13 +503,13 @@ pub fn run_batch(
 
 fn decompile_all_parallel(
     image: &BinaryImage,
+    lifter: &dyn Lifter,
     functions: &[FunctionEntry],
     config: &BatchConfig,
     dwarf: Option<&DwarfInfo>,
     rtti: Option<&unlace_loader::RttiInfo>,
     stream_output_dir: Option<&Path>,
 ) -> Vec<BatchResult> {
-    let lifter = get_lifter(image.arch);
     let symbol_context = {
         let _span = profiling::phase("batch.symbol-context");
         Arc::new(pipeline::build_symbol_context_with_config(
@@ -577,7 +588,7 @@ fn decompile_all_parallel(
         }
         let output = pipeline::decompile_function_with_symbols(
             image,
-            lifter.as_ref(),
+            lifter,
             entry,
             config.emit,
             &pipeline_config,
@@ -629,12 +640,12 @@ fn decompile_all_parallel(
 /// NOTE: The SSA map for a large binary can consume significant memory since we hold *all* functions' SSA simultaneously.
 fn decompile_interproc(
     image: &BinaryImage,
+    lifter: &dyn Lifter,
     functions: &[FunctionEntry],
     config: &BatchConfig,
     dwarf: Option<&DwarfInfo>,
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Vec<BatchResult> {
-    let lifter = get_lifter(image.arch);
     let symbol_context = {
         let _span = profiling::phase("batch.symbol-context");
         Arc::new(pipeline::build_symbol_context_with_config(
@@ -725,7 +736,7 @@ fn decompile_interproc(
             }
             let r = pipeline::lift_and_run_passes(
                 image,
-                lifter.as_ref(),
+                lifter,
                 entry,
                 &pipeline_config,
                 dwarf,
@@ -1331,7 +1342,16 @@ mod tests {
         let image = ElfLoader::load(&data).unwrap();
         let functions = pipeline::discover_functions(&image, None).unwrap();
 
-        let results = decompile_all_parallel(&image, &functions, &config, None, None, None);
+        let lifter = get_lifter(image.arch).expect("supported arch");
+        let results = decompile_all_parallel(
+            &image,
+            lifter.as_ref(),
+            &functions,
+            &config,
+            None,
+            None,
+            None,
+        );
 
         let mut output = String::new();
         let mut sorted: Vec<&BatchResult> = results.iter().collect();
@@ -1378,7 +1398,16 @@ mod tests {
         let data = fs::read(fixture("medium.elf")).unwrap();
         let image = ElfLoader::load(&data).unwrap();
         let functions = pipeline::discover_functions(&image, None).unwrap();
-        let results = decompile_all_parallel(&image, &functions, &config, None, None, None);
+        let lifter = get_lifter(image.arch).expect("supported arch");
+        let results = decompile_all_parallel(
+            &image,
+            lifter.as_ref(),
+            &functions,
+            &config,
+            None,
+            None,
+            None,
+        );
 
         write_per_file_with_manifest(tmp.path(), &results, &[]).unwrap();
 
@@ -1711,7 +1740,16 @@ mod tests {
         let functions = pipeline::discover_functions(&image, None).unwrap();
         assert!(!functions.is_empty());
 
-        let results = decompile_all_parallel(&image, &functions, &config, None, None, None);
+        let lifter = get_lifter(image.arch).expect("supported arch");
+        let results = decompile_all_parallel(
+            &image,
+            lifter.as_ref(),
+            &functions,
+            &config,
+            None,
+            None,
+            None,
+        );
 
         assert_eq!(results.len(), functions.len());
         let has_failures = results.iter().any(|r| r.output.is_err());
@@ -1741,7 +1779,16 @@ mod tests {
         let image = ElfLoader::load(&data).unwrap();
         let functions = pipeline::discover_functions(&image, None).unwrap();
 
-        let results = decompile_all_parallel(&image, &functions, &config, None, None, None);
+        let lifter = get_lifter(image.arch).expect("supported arch");
+        let results = decompile_all_parallel(
+            &image,
+            lifter.as_ref(),
+            &functions,
+            &config,
+            None,
+            None,
+            None,
+        );
         let succeeded = results.iter().filter(|r| r.output.is_ok()).count();
         assert!(
             succeeded > 0,
@@ -1781,8 +1828,10 @@ mod tests {
             .num_threads(2)
             .build()
             .unwrap();
-        let results: Vec<BatchResult> =
-            pool.install(|| decompile_interproc(&image, &functions, &config, None, None));
+        let lifter = get_lifter(image.arch).expect("supported arch");
+        let results: Vec<BatchResult> = pool.install(|| {
+            decompile_interproc(&image, lifter.as_ref(), &functions, &config, None, None)
+        });
         let succeeded = results.iter().filter(|r| r.output.is_ok()).count();
         assert!(
             succeeded >= 2,

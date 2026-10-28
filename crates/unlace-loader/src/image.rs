@@ -638,6 +638,13 @@ impl BinaryImage {
         self.symbols.range(..=addr).next_back().map(|(_, sym)| sym)
     }
 
+    /// Relocations that patch the slot at `addr`, in relocation-table order.
+    pub fn relocations_at(&self, addr: u64) -> impl Iterator<Item = &Relocation> {
+        self.relocations
+            .iter()
+            .filter(move |reloc| reloc.addr == addr)
+    }
+
     /// Predicate suitable for [`unlace_ir::data_xrefs::build_data_xref_graph`]:
     /// returns `true` iff `addr` falls inside any non-executable mapped
     /// section (data / rodata / bss). Executable sections are excluded so
@@ -721,6 +728,35 @@ mod tests {
             auth_ptr_slots: Vec::new(),
             wasm_component: None,
         }
+    }
+
+    #[test]
+    fn relocations_at_returns_slot_relocations_in_table_order() {
+        let mut image = empty_image();
+        image.relocations = vec![
+            Relocation {
+                addr: 0x4018,
+                sym_name: "printf".into(),
+                kind: RelocKind::PltJumpSlot,
+            },
+            Relocation {
+                addr: 0x4020,
+                sym_name: "stdout".into(),
+                kind: RelocKind::GlobDat,
+            },
+            Relocation {
+                addr: 0x4018,
+                sym_name: "printf@alias".into(),
+                kind: RelocKind::Other,
+            },
+        ];
+
+        let names: Vec<&str> = image
+            .relocations_at(0x4018)
+            .map(|reloc| reloc.sym_name.as_str())
+            .collect();
+        assert_eq!(names, ["printf", "printf@alias"]);
+        assert_eq!(image.relocations_at(0x4000).count(), 0);
     }
 
     #[test]

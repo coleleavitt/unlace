@@ -57,13 +57,25 @@ pub enum WitTypeKind {
 /// WIT primitive and composite types.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WitType {
-    U8, U16, U32, U64,
-    S8, S16, S32, S64,
-    F32, F64,
-    Bool, Char, String_,
+    U8,
+    U16,
+    U32,
+    U64,
+    S8,
+    S16,
+    S32,
+    S64,
+    F32,
+    F64,
+    Bool,
+    Char,
+    String_,
     List(Box<WitType>),
     Option_(Box<WitType>),
-    Result_ { ok: Option<Box<WitType>>, err: Option<Box<WitType>> },
+    Result_ {
+        ok: Option<Box<WitType>>,
+        err: Option<Box<WitType>>,
+    },
     Named(String),
 }
 

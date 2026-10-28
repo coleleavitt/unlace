@@ -25,7 +25,11 @@ pub fn render_dml(lines: &[DmlLine]) -> String {
     let mut out = String::with_capacity(lines.len() * 80);
     for line in lines {
         // Address as clickable exec link
-        let _ = write!(out, "<exec cmd=\"u 0x{:x}\">{:016x}</exec>  ", line.address, line.address);
+        let _ = write!(
+            out,
+            "<exec cmd=\"u 0x{:x}\">{:016x}</exec>  ",
+            line.address, line.address
+        );
         // Symbol annotation
         if let Some(ref sym) = line.symbol {
             let _ = write!(out, "<b>{}</b>: ", escape_dml(sym));
@@ -34,7 +38,12 @@ pub fn render_dml(lines: &[DmlLine]) -> String {
         let _ = write!(out, "{:<8}", line.mnemonic);
         // Operands with optional xref
         if let Some(target) = line.xref_target {
-            let _ = write!(out, "<link cmd=\"u 0x{:x}\">{}</link>", target, escape_dml(&line.operands));
+            let _ = write!(
+                out,
+                "<link cmd=\"u 0x{:x}\">{}</link>",
+                target,
+                escape_dml(&line.operands)
+            );
         } else {
             out.push_str(&escape_dml(&line.operands));
         }
@@ -45,7 +54,10 @@ pub fn render_dml(lines: &[DmlLine]) -> String {
 
 /// Escape characters that are special in DML/XML.
 pub fn escape_dml(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 #[cfg(test)]
@@ -55,8 +67,11 @@ mod tests {
     #[test]
     fn test_simple_line() {
         let lines = vec![DmlLine {
-            address: 0x401000, mnemonic: "push".into(), operands: "rbp".into(),
-            xref_target: None, symbol: Some("main".into()),
+            address: 0x401000,
+            mnemonic: "push".into(),
+            operands: "rbp".into(),
+            xref_target: None,
+            symbol: Some("main".into()),
         }];
         let dml = render_dml(&lines);
         assert!(dml.contains("<exec cmd=\"u 0x401000\">"));
@@ -67,8 +82,11 @@ mod tests {
     #[test]
     fn test_xref_link() {
         let lines = vec![DmlLine {
-            address: 0x401005, mnemonic: "call".into(), operands: "sub_402000".into(),
-            xref_target: Some(0x402000), symbol: None,
+            address: 0x401005,
+            mnemonic: "call".into(),
+            operands: "sub_402000".into(),
+            xref_target: Some(0x402000),
+            symbol: None,
         }];
         let dml = render_dml(&lines);
         assert!(dml.contains("<link cmd=\"u 0x402000\">sub_402000</link>"));

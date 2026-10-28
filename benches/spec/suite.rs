@@ -30,7 +30,7 @@ fn bench_category_a_single_function(c: &mut Criterion) {
 
     let data = fs::read(&fixture).expect("read medium.elf");
     let image = ElfLoader::load(&data).expect("parse medium.elf");
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
 
     let funcs: Vec<_> = image
         .symbols
@@ -82,7 +82,7 @@ fn bench_category_b_full_pipeline(c: &mut Criterion) {
 
     group.bench_function("full_lift", |b| {
         let image = ElfLoader::load(&data).expect("parse");
-        let lifter = get_lifter(image.arch);
+        let lifter = get_lifter(image.arch).expect("supported arch");
         let funcs: Vec<_> = image
             .symbols
             .values()
@@ -124,7 +124,7 @@ fn bench_category_c_scalability(c: &mut Criterion) {
 
     let data = fs::read(&fixture).expect("read medium.elf");
     let image = ElfLoader::load(&data).expect("parse");
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
 
     let all_funcs: Vec<_> = image
         .symbols

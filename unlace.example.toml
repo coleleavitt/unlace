@@ -72,10 +72,6 @@ large_function_serial_bytes = 8192
 # Function count above which `--interproc` warns about peak memory.
 interproc_max_functions = 4096
 
-[py]
-# Functions pre-analyzed into the session before an `unlace py` script runs.
-max_staged_functions = 64
-
 [linkscope]
 # Record phase timings and counters.
 enabled = false

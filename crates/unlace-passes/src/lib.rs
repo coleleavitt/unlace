@@ -1,43 +1,63 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
+#[cfg(feature = "unwired")]
 pub mod aarch64_pac_bti;
+#[cfg(feature = "unwired")]
 pub mod abi_clobber;
+#[cfg(feature = "unwired")]
 pub mod abi_layout;
 pub mod algebraic_simplify;
 pub mod alias_analysis;
 pub mod alias_categorize;
 pub mod analysis_context;
+#[cfg(feature = "unwired")]
 pub mod anti_debug_detect;
+#[cfg(feature = "unwired")]
 pub mod api_hash_resolve;
+#[cfg(feature = "unwired")]
 pub mod arm_it_block;
+#[cfg(feature = "unwired")]
 pub mod assumption_cache;
+#[cfg(feature = "unwired")]
 pub mod attributor;
 pub mod auth_call_resolve;
+#[cfg(feature = "unwired")]
 pub mod bb_align;
 pub mod bitfield_idioms;
+#[cfg(feature = "unwired")]
 pub mod bitfield_recovery;
 pub mod bmi_idioms;
+#[cfg(feature = "unwired")]
 pub mod bool_coverage;
 pub mod bool_simplify;
+#[cfg(feature = "unwired")]
 pub mod boost_recognize;
+#[cfg(feature = "unwired")]
 pub mod bsim_db;
+#[cfg(feature = "unwired")]
 pub mod builtin_recognize;
 pub mod byref_detect;
 pub mod call_args;
 pub mod call_boundary_copyprop;
+#[cfg(feature = "unwired")]
 pub mod call_snapshot;
 pub mod caller_param_propagate;
+#[cfg(feature = "unwired")]
 pub mod calling_conv_coverage;
 pub mod calling_conv_finalize;
+#[cfg(feature = "unwired")]
 pub mod calling_conv_whole_prog;
 pub mod calling_convention;
 pub mod cfg_repair;
 pub mod cmov_preserve;
+#[cfg(feature = "unwired")]
 pub mod combine_worklist;
 pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
+#[cfg(feature = "unwired")]
 pub mod counterexample_refine;
+#[cfg(feature = "unwired")]
 pub mod coverage_ingest;
 pub mod cpp_coroutine;
 pub mod cpp_lambda;
@@ -46,98 +66,151 @@ pub mod cpp_stl;
 pub mod cpp_variant;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
+#[cfg(feature = "unwired")]
 pub mod crypto_lib_recognize;
 pub mod cse;
+#[cfg(feature = "unwired")]
 pub mod ct_violation;
+#[cfg(feature = "unwired")]
 pub mod cve_classify;
+#[cfg(feature = "unwired")]
 pub mod cwe_detect;
 pub mod cxx_eh;
+#[cfg(feature = "unwired")]
 pub mod cxx_vtable_recognize;
+#[cfg(feature = "unwired")]
 pub mod daikon_invariants;
+#[cfg(feature = "unwired")]
 pub mod db_recognize;
 pub mod dce;
 pub mod dead_flag_elim;
+#[cfg(feature = "unwired")]
 pub mod dead_param_elim;
 pub mod dead_store_elim;
+#[cfg(feature = "unwired")]
 pub mod deflat;
+#[cfg(feature = "unwired")]
 pub mod diff_coverage;
 pub mod division_idiom;
+#[cfg(feature = "unwired")]
 pub mod dom_update;
 pub mod dse_global;
+#[cfg(feature = "unwired")]
 pub mod embed_interp_recognize;
 pub mod expression_tree;
+#[cfg(feature = "unwired")]
 pub mod format_magic;
+#[cfg(feature = "unwired")]
 pub mod func_fingerprint;
+#[cfg(feature = "unwired")]
 pub mod func_ptr_table;
+#[cfg(feature = "unwired")]
 pub mod function_analysis_manager;
+#[cfg(feature = "unwired")]
 pub mod function_attrs;
+#[cfg(feature = "unwired")]
 pub mod gcc_cleanup;
+#[cfg(feature = "unwired")]
 pub mod generated_code;
+#[cfg(feature = "unwired")]
 pub mod generated_code_filter;
 pub mod global_copy_prop;
+#[cfg(feature = "unwired")]
 pub mod go_closure;
 pub mod go_defer;
+#[cfg(feature = "unwired")]
 pub mod go_iface_devirt;
+#[cfg(feature = "unwired")]
 pub mod go_select;
+#[cfg(feature = "unwired")]
 pub mod gui_lib_recognize;
 pub mod gvn;
+#[cfg(feature = "unwired")]
 pub mod hir_loop_recovery;
 pub mod idiom_recognition;
 pub mod indirect_call_resolve;
 pub mod indirect_jump_resolve;
+#[cfg(feature = "unwired")]
 pub mod inline_foldback;
 pub mod instrument;
 pub mod interproc_fixpoint;
+#[cfg(feature = "unwired")]
 pub mod ipa_slice;
+#[cfg(feature = "unwired")]
 pub mod ipa_summary;
 pub mod itanium_demangle;
 pub mod iv_elim;
+#[cfg(feature = "unwired")]
 pub mod jump_threading;
+#[cfg(feature = "unwired")]
 pub mod junk_code_removal;
 pub mod known_bits_analysis;
 pub mod known_bits_simplify;
+#[cfg(feature = "unwired")]
 pub mod lazy_lift;
+#[cfg(feature = "unwired")]
 pub mod lazy_value_info;
+#[cfg(feature = "unwired")]
 pub mod lcssa;
 pub mod libc_idioms;
 pub mod libc_signatures;
 pub mod licm;
+#[cfg(feature = "unwired")]
 pub mod live_concrete;
 #[cfg(test)]
 mod llvm_fixture_tests;
+#[cfg(feature = "unwired")]
 pub mod loop_canonical;
 pub mod lvar_collect;
+#[cfg(feature = "unwired")]
 pub mod lvar_lanes;
 pub mod memory_ssa_builder;
 pub mod memory_ssa_dse;
+#[cfg(feature = "unwired")]
 pub mod memory_ssa_updater;
+#[cfg(feature = "unwired")]
 pub mod mips_delay_slot;
 pub mod modulo_idiom;
+#[cfg(feature = "unwired")]
 pub mod msvc_seh;
+#[cfg(feature = "unwired")]
 pub mod nday_correlate;
 pub mod noreturn;
 pub mod noreturn_propagation;
+#[cfg(feature = "unwired")]
 pub mod nullability;
+#[cfg(feature = "unwired")]
 pub mod nullability_taint;
+#[cfg(feature = "unwired")]
 pub mod objc_blocks;
 pub mod objc_byref;
 pub mod objc_dispatch;
 pub mod op_type_binding;
+#[cfg(feature = "unwired")]
 pub mod opaque_pred;
+#[cfg(feature = "unwired")]
 pub mod opt_remarks;
 pub mod options;
+#[cfg(feature = "unwired")]
 pub mod packet_struct;
 pub mod pass;
+#[cfg(feature = "unwired")]
 pub mod pass_adaptors;
 pub mod pass_with_context;
+#[cfg(feature = "unwired")]
 pub mod path_sensitive;
+#[cfg(feature = "unwired")]
 pub mod pgo_outlining;
+#[cfg(feature = "unwired")]
 pub mod pipeline_parser;
 pub mod printf_type_infer;
 pub mod prologue_elim;
+#[cfg(feature = "unwired")]
 pub mod protobuf_recognize;
 pub mod ptr_struct_infer;
+#[cfg(feature = "unwired")]
 pub mod qemu_tcg;
+#[cfg(feature = "unwired")]
 pub mod qt_recognize;
 pub mod reanalysis;
 pub mod redundant_flag_elim;
@@ -146,49 +219,71 @@ pub mod rep_string_idiom;
 pub mod rust_async;
 pub mod rust_enum;
 pub mod rust_panic;
+#[cfg(feature = "unwired")]
 pub mod rust_result;
 pub mod rust_vtable;
 pub mod scalar_evolution;
 pub mod sccp;
+#[cfg(feature = "unwired")]
 pub mod scev_nested;
+#[cfg(feature = "unwired")]
 pub mod serial_recognize;
+#[cfg(feature = "unwired")]
 pub mod simplify_cfg;
 pub mod sixty_four_bit_demote;
 pub mod sizeof_recognition;
+#[cfg(feature = "unwired")]
 pub mod smc_unwrap;
+#[cfg(feature = "unwired")]
 pub mod source_sink;
+#[cfg(feature = "unwired")]
 pub mod sroa;
+#[cfg(feature = "unwired")]
 pub mod sroa_plan;
+#[cfg(feature = "unwired")]
 pub mod ssa_cache;
+#[cfg(feature = "unwired")]
 pub mod stack_context;
 pub mod stack_frame_recovery;
 pub mod stack_pointer_tracking;
 pub mod stack_vars;
 pub mod strength_reduce;
+#[cfg(feature = "unwired")]
 pub mod string_decode_recognize;
 pub mod string_hash_switch;
+#[cfg(feature = "unwired")]
 pub mod struct_boundary;
 pub mod struct_field_detect;
 pub mod struct_field_recovery;
+#[cfg(feature = "unwired")]
 pub mod switch_table_recovery;
+#[cfg(feature = "unwired")]
 pub mod symbolic_heap;
+#[cfg(feature = "unwired")]
 pub mod symex_coverage;
+#[cfg(feature = "unwired")]
 pub mod sysv_eightbyte;
 pub mod tail_call;
+#[cfg(feature = "unwired")]
 pub mod tail_duplication;
+#[cfg(feature = "unwired")]
 pub mod taint_engine;
+#[cfg(feature = "unwired")]
 pub mod target_transform;
 pub mod type_constraint_solver;
 pub mod type_infer;
+#[cfg(feature = "unwired")]
 pub mod union_recovery;
 pub mod var_naming;
 pub mod vararg_detect;
 pub mod variable_merge;
+#[cfg(feature = "unwired")]
 pub mod vm_dispatch_recognize;
 pub mod whole_prog_cc;
 pub mod whole_prog_type_unify;
 pub mod x87_top;
 
+#[cfg(feature = "unwired")]
 pub use abi_clobber::{
     CallClobber, CallClobberModel, UpperLaneEffect, argument_registers, classify_call_clobber,
 };
@@ -196,33 +291,42 @@ pub use algebraic_simplify::AlgebraicSimplifyPass;
 pub use alias_analysis::{AliasAnalysis, AliasRelation, ModRef};
 pub use alias_categorize::AliasCategorizePass;
 pub use analysis_context::{AnalysisContext, AnalysisKind, PreservedAnalyses};
+#[cfg(feature = "unwired")]
 pub use assumption_cache::{Assumption, AssumptionCache};
+#[cfg(feature = "unwired")]
 pub use attributor::{merge_summary, propagate_readonly_once};
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
+#[cfg(feature = "unwired")]
 pub use bitfield_recovery::{BitfieldRecoveryPass, BitfieldSite};
 pub use bmi_idioms::BmiIdiomPass;
+#[cfg(feature = "unwired")]
 pub use bool_coverage::BoolCoveragePass;
 pub use bool_simplify::BoolSimplifyPass;
+#[cfg(feature = "unwired")]
 pub use builtin_recognize::{
     BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,
 };
 pub use byref_detect::detect_byref;
 pub use call_args::{recover_direct_call_args, recover_direct_call_args_with_param_counts};
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
+#[cfg(feature = "unwired")]
 pub use call_snapshot::{CallRegisterSnapshot, CallSnapshot, UseSite, collect_call_snapshots};
 pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,
 };
 pub use calling_conv_finalize::{CallingConvFinalizePass, FinalizedSignature, finalize_signature};
+#[cfg(feature = "unwired")]
 pub use calling_conv_whole_prog::WholeProgCallingConvPass;
 pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, ReturnTypeInferPass};
 pub use cfg_repair::CfgRepairPass;
 pub use cmov_preserve::CmovPreservePass;
+#[cfg(feature = "unwired")]
 pub use combine_worklist::{CombineWorklist, WorkItem};
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
+#[cfg(feature = "unwired")]
 pub use coverage_ingest::{
     AFL_MAP_SIZE, CoverageError, CoverageMap, LLVM_PROFRAW_MAGIC_BE, LLVM_PROFRAW_MAGIC_LE,
     ProfRaw, parse_afl_coverage, parse_profraw,
@@ -235,88 +339,121 @@ pub use cpp_variant::CppVariantPass;
 pub use cpp_vtable::CppVtablePass;
 pub use crypto_idioms::CryptoIdiomPass;
 pub use cse::CsePass;
+#[cfg(feature = "unwired")]
 pub use cxx_vtable_recognize::{VtableInfo, recognize_vtables};
+#[cfg(feature = "unwired")]
 pub use daikon_invariants::DaikonInvariantPass;
 pub use dce::DeadCodeElimPass;
 pub use dead_flag_elim::DeadFlagElimPass;
+#[cfg(feature = "unwired")]
 pub use dead_param_elim::{DeadParamReport, analyze_dead_params};
 pub use dead_store_elim::DeadStoreElimPass;
+#[cfg(feature = "unwired")]
 pub use deflat::{CaseSuccessors, FlattenedCfg, detect_flattened_dispatch, recover_original_cfg};
 pub use division_idiom::DivisionIdiomPass;
+#[cfg(feature = "unwired")]
 pub use dom_update::DominatorUpdater;
 pub use dse_global::DeadStoreElimGlobalPass;
 pub use expression_tree::ExpressionTreePass;
+#[cfg(feature = "unwired")]
 pub use format_magic::{MagicCheck, detect_magic_check};
+#[cfg(feature = "unwired")]
 pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarity};
+#[cfg(feature = "unwired")]
 pub use func_ptr_table::{FuncPtrEntry, FuncPtrTable, FuncPtrTablePass, detect_table_loads};
+#[cfg(feature = "unwired")]
 pub use function_analysis_manager::FunctionAnalysisManager;
+#[cfg(feature = "unwired")]
 pub use function_attrs::{
     AttrMap, FunctionAttrs, infer_attrs_batch, infer_attrs_for_function,
     propagate_noreturn as propagate_attrs_noreturn,
 };
+#[cfg(feature = "unwired")]
 pub use gcc_cleanup::{CleanupHandler, GccCleanupPass, detect_cleanup_calls};
+#[cfg(feature = "unwired")]
 pub use generated_code::{
     FunctionTag, classify_by_name, classify_functions, classify_plt_stub, classify_wrapper_thunk,
     count_hidden_shown,
 };
+#[cfg(feature = "unwired")]
 pub use generated_code_filter::{
     FunctionVisibility, annotation_for_function, classify_pipeline, should_hide_function,
 };
 pub use global_copy_prop::GlobalCopyPropPass;
+#[cfg(feature = "unwired")]
 pub use go_closure::{ClosureAllocation, ClosureCall, detect_go_closures};
 pub use go_defer::{GoDeferSite, detect_go_defer};
+#[cfg(feature = "unwired")]
 pub use go_select::{GoChannelOp, GoChannelOpKind, detect_go_channel_ops};
 pub use gvn::GvnPass;
+#[cfg(feature = "unwired")]
 pub use hir_loop_recovery::{CountedLoop, LoopFacts, Reduction, ReductionOp, recover_loop_facts};
 pub use idiom_recognition::IdiomRecognitionPass;
 pub use indirect_call_resolve::IndirectCallResolvePass;
 pub use indirect_jump_resolve::{IndirectJumpResolvePass, collect_jump_table_candidates};
+#[cfg(feature = "unwired")]
 pub use inline_foldback::{InlineFoldback, detect_inlined_calls};
 pub use instrument::{
     dump_pass_timings, dump_pass_timings_csv, dump_schedule_audit_csv, pass_timing_enabled,
     record_pass_timing, run_instrumented, schedule_audit_oscillations,
 };
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
+#[cfg(feature = "unwired")]
 pub use ipa_slice::{IpaSlicePass, ProgramSlice, SliceCriterion};
+#[cfg(feature = "unwired")]
 pub use ipa_summary::{
     FunctionSummary, FunctionSummaryRegistry, build_summary_registry, summarize_function,
 };
 pub use itanium_demangle::{VtableHeader, demangle_itanium, read_vtable_header};
 pub use iv_elim::IvElimPass;
+#[cfg(feature = "unwired")]
 pub use jump_threading::{JumpThreadCandidate, collect_jump_thread_candidates};
+#[cfg(feature = "unwired")]
 pub use junk_code_removal::JunkCodeRemovalPass;
 pub use known_bits_analysis::{KnownBitsMap, compute_known_bits};
 pub use known_bits_simplify::KnownBitsSimplifyPass;
+#[cfg(feature = "unwired")]
 pub use lazy_value_info::{FactSite, LazyValueInfo};
+#[cfg(feature = "unwired")]
 pub use lcssa::{LcssaDiagnostic, diagnose_lcssa};
 pub use libc_idioms::{LibcKind, annotate_libc_calls, recognize_libc};
 pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
+#[cfg(feature = "unwired")]
 pub use loop_canonical::{LoopCanonicalDiagnostic, diagnose_loop_canonical_form};
 pub use lvar_collect::LvarCollectPass;
+#[cfg(feature = "unwired")]
 pub use lvar_lanes::{
     LaneDecision, LaneSite, RegisterLane, RegisterLaneGroup, analyze_register_lanes,
 };
 pub use memory_ssa_builder::{AccessSite, MemorySsaMap, build_memory_ssa, clobber_for_load};
 pub use memory_ssa_dse::MemorySsaDsePass;
+#[cfg(feature = "unwired")]
 pub use memory_ssa_updater::MemorySsaUpdater;
 pub use modulo_idiom::ModuloIdiomPass;
+#[cfg(feature = "unwired")]
 pub use nday_correlate::{NdayHit, NdayPattern, match_against_binary as match_nday_patterns};
 pub use noreturn::NoreturnDetectPass;
 pub use noreturn_propagation::{DEFAULT_PROPAGATE_CAP, propagate_noreturn};
+#[cfg(feature = "unwired")]
 pub use nullability::{Nullability, infer_param_nullability};
+#[cfg(feature = "unwired")]
 pub use nullability_taint::{
     TaintWarning, analyze_taint, infer_nullability, is_taint_sink, is_taint_source,
 };
+#[cfg(feature = "unwired")]
 pub use objc_blocks::{BLOCK_ISA_SYMBOLS, BlockLiteral, detect_objc_blocks};
 pub use objc_byref::{ByrefBox, apply_objc_byref, detect_objc_byref_boxes};
 pub use objc_dispatch::ObjcDispatchPass;
 pub use op_type_binding::{OpTypeBindingPass, render_enum_const, render_field_access};
+#[cfg(feature = "unwired")]
 pub use opaque_pred::opaque_predicate_detect;
+#[cfg(feature = "unwired")]
 pub use opt_remarks::{OptimizationRemark, RemarkKind, RemarkSink};
 pub use options::{
     IvOptLimits, PassDiagnostics, PassOptions, SccpLimits, TypeConstraintLimits,
     VariableMergeLimits,
 };
+#[cfg(feature = "unwired")]
 pub use packet_struct::{PacketStruct, detect_packet_struct};
 pub use pass::{
     AllowedBackedge, DEFAULT_OUTER_FIXEDPOINT_CAP, DefIndex, OuterFixedpointReport, Pass,
@@ -325,10 +462,14 @@ pub use pass::{
     validate_named_phase_monotonicity, validate_named_phase_monotonicity_with_exceptions,
     validate_phase_monotonicity,
 };
+#[cfg(feature = "unwired")]
 pub use pass_adaptors::{AdaptedPass, PassScope};
 pub use pass_with_context::{PassAdapter, PassWithContext, run_to_fixedpoint_with_context};
+#[cfg(feature = "unwired")]
 pub use path_sensitive::PathSensitivePass;
+#[cfg(feature = "unwired")]
 pub use pgo_outlining::{OutlinedFragment, PgoOutliningPass};
+#[cfg(feature = "unwired")]
 pub use pipeline_parser::{ParsedPipeline, parse_pipeline};
 pub use prologue_elim::PrologueElimPass;
 pub use ptr_struct_infer::{StructFieldCandidate, StructLayoutCandidate, infer_struct_layouts};
@@ -344,6 +485,7 @@ pub use rep_string_idiom::{
 pub use rust_async::{AsyncStateMachine, RustAsyncPass, detect_async_state_machines};
 pub use rust_enum::RustEnumPass;
 pub use rust_panic::RustPanicPass;
+#[cfg(feature = "unwired")]
 pub use rust_result::{RustTaggedUnion, detect_rust_tagged_unions};
 pub use rust_vtable::RustVtablePass;
 pub use scalar_evolution::{
@@ -351,14 +493,19 @@ pub use scalar_evolution::{
     analyze_loop_scevs, compute_trip_count, derive_scev_expr, detect_triangular_sum_reduction,
 };
 pub use sccp::SccpPass;
+#[cfg(feature = "unwired")]
 pub use scev_nested::{
     NoWrapFlags, contains_addrec, loop_nest_depth, nested_add_rec, scev_add, scev_mul_const,
 };
+#[cfg(feature = "unwired")]
 pub use serial_recognize::{SerialKind, recognize_serial_api};
+#[cfg(feature = "unwired")]
 pub use simplify_cfg::{CfgSimplifyAction, collect_simplify_cfg_actions};
 pub use sixty_four_bit_demote::SixtyFourBitDemotePass;
 pub use sizeof_recognition::{SizeofRecognitionPass, recognize_with_resolver};
+#[cfg(feature = "unwired")]
 pub use sroa::{StackSlotFragment, StackSlotPartition, collect_stack_slot_partitions};
+#[cfg(feature = "unwired")]
 pub use sroa_plan::{SroaRewriteAction, plan_sroa_rewrites};
 pub use stack_frame_recovery::recover_stack_frame;
 pub use stack_pointer_tracking::StackPointerTrackingPass;
@@ -375,11 +522,16 @@ pub use string_hash_switch::{
 };
 pub use struct_field_detect::StructFieldDetectPass;
 pub use struct_field_recovery::recover_structs;
+#[cfg(feature = "unwired")]
 pub use symbolic_heap::{HeapRegion, MemAccess, SymbolicHeapPass};
+#[cfg(feature = "unwired")]
 pub use sysv_eightbyte::{EightbyteClass, FieldKind as SysvFieldKind, classify_aggregate};
 pub use tail_call::TailCallDetectPass;
+#[cfg(feature = "unwired")]
 pub use tail_duplication::TailDuplicationPass;
+#[cfg(feature = "unwired")]
 pub use taint_engine::{TaintEnginePass, TaintFinding, TaintSink, TaintSource, propagate_taint};
+#[cfg(feature = "unwired")]
 pub use target_transform::{TargetTransformInfo, TransformBenefit};
 pub use type_constraint_solver::{
     Constraint, PolyTypeBounds, PolyTypeSolution, TypeCapability, TypeConstraintSolverPass,

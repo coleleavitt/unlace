@@ -2,6 +2,8 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Build the `unlace` binary with every experimental lifter enabled, so
+/// reports cover the experimental-architecture fixtures as well.
 pub fn build_unlace_bin(root: &Path) -> Result<PathBuf, String> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
     let output = Command::new(cargo)
@@ -11,6 +13,8 @@ pub fn build_unlace_bin(root: &Path) -> Result<PathBuf, String> {
             "unlace-cli",
             "--bin",
             "unlace",
+            "--features",
+            "all-arches",
             "--message-format=json-render-diagnostics",
         ])
         .current_dir(root)
@@ -19,7 +23,7 @@ pub fn build_unlace_bin(root: &Path) -> Result<PathBuf, String> {
 
     if !output.status.success() {
         return Err(format!(
-            "cargo build -p unlace-cli --bin unlace failed: {}",
+            "cargo build -p unlace-cli --bin unlace --features all-arches failed: {}",
             first_diagnostic_line(&output.stderr)
         ));
     }

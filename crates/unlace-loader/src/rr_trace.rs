@@ -4,8 +4,6 @@
 //! checkpoint positions, and memory maps for deterministic replay-assisted
 //! decompilation.
 
-use std::path::Path;
-
 /// An rr trace directory layout.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RrTrace {
@@ -48,7 +46,11 @@ pub fn parse_maps_file(content: &str) -> Vec<RrMemoryMap> {
             continue;
         }
         let (addr_range, perms) = (parts[0], parts[1]);
-        let file_path = if parts.len() >= 6 { Some(parts[5].to_string()) } else { None };
+        let file_path = if parts.len() >= 6 {
+            Some(parts[5].to_string())
+        } else {
+            None
+        };
 
         if let Some((start_str, end_str)) = addr_range.split_once('-') {
             let start = u64::from_str_radix(start_str, 16).unwrap_or(0);

@@ -9,3 +9,7 @@ smallvec = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+
+[features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []

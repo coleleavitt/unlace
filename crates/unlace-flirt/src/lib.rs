@@ -7,6 +7,7 @@ pub mod builder;
 mod error;
 pub mod match_pass;
 mod pattern;
+#[cfg(feature = "unwired")]
 pub mod prologue;
 pub mod sig;
 

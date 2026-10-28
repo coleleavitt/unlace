@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 unlace-ir = { workspace = true }
 unlace-loader = { workspace = true }
-unlace-passes = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
@@ -16,3 +15,7 @@ linkscope = { path = "../../../linkscope" }
 [dev-dependencies]
 insta = { workspace = true }
 smallvec = { workspace = true }
+
+[features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []

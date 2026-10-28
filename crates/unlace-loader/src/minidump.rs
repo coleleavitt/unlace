@@ -84,7 +84,11 @@ pub fn validate_minidump(data: &[u8]) -> Result<MinidumpHeader, MinidumpError> {
     let stream_count = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
     let stream_dir_rva = u32::from_le_bytes([data[12], data[13], data[14], data[15]]);
 
-    Ok(MinidumpHeader { version, stream_count, stream_directory_rva: stream_dir_rva })
+    Ok(MinidumpHeader {
+        version,
+        stream_count,
+        stream_directory_rva: stream_dir_rva,
+    })
 }
 
 /// Minidump file header.
@@ -97,7 +101,9 @@ pub struct MinidumpHeader {
 
 /// Resolve which module contains a given address.
 pub fn module_for_address(modules: &[MinidumpModule], addr: u64) -> Option<&MinidumpModule> {
-    modules.iter().find(|m| addr >= m.base_address && addr < m.base_address + m.size as u64)
+    modules
+        .iter()
+        .find(|m| addr >= m.base_address && addr < m.base_address + m.size as u64)
 }
 
 #[cfg(test)]
@@ -108,7 +114,8 @@ mod tests {
     fn validate_magic() {
         let mut data = vec![0u8; 32];
         data[..4].copy_from_slice(b"MDMP");
-        data[4] = 0x93; data[5] = 0xa7; // version
+        data[4] = 0x93;
+        data[5] = 0xa7; // version
         let hdr = validate_minidump(&data).unwrap();
         assert_eq!(&data[..4], MINIDUMP_MAGIC);
         assert_eq!(hdr.version, 0xa793);
@@ -128,11 +135,25 @@ mod tests {
     #[test]
     fn module_lookup() {
         let modules = vec![
-            MinidumpModule { base_address: 0x10000, size: 0x5000, name: "app.exe".into() },
-            MinidumpModule { base_address: 0x70000, size: 0x1000, name: "ntdll.dll".into() },
+            MinidumpModule {
+                base_address: 0x10000,
+                size: 0x5000,
+                name: "app.exe".into(),
+            },
+            MinidumpModule {
+                base_address: 0x70000,
+                size: 0x1000,
+                name: "ntdll.dll".into(),
+            },
         ];
-        assert_eq!(module_for_address(&modules, 0x12000).unwrap().name, "app.exe");
-        assert_eq!(module_for_address(&modules, 0x70500).unwrap().name, "ntdll.dll");
+        assert_eq!(
+            module_for_address(&modules, 0x12000).unwrap().name,
+            "app.exe"
+        );
+        assert_eq!(
+            module_for_address(&modules, 0x70500).unwrap().name,
+            "ntdll.dll"
+        );
         assert!(module_for_address(&modules, 0x99999).is_none());
     }
 }

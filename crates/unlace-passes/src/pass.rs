@@ -1217,10 +1217,6 @@ mod phase_tests {
             Box::new(crate::prologue_elim::PrologueElimPass),
             Box::new(crate::noreturn::NoreturnDetectPass::new()),
             Box::new(crate::cmov_preserve::CmovPreservePass),
-            Box::new(crate::gcc_cleanup::GccCleanupPass {
-                cleanup_symbols: std::collections::BTreeMap::new(),
-            }),
-            Box::new(crate::junk_code_removal::JunkCodeRemovalPass),
             // ---- LocalOpt ----
             Box::new(crate::sccp::SccpPass::default()),
             Box::new(crate::copy_prop::CopyPropagationPass),
@@ -1248,46 +1244,27 @@ mod phase_tests {
             Box::new(crate::dse_global::DeadStoreElimGlobalPass),
             Box::new(crate::cfg_repair::CfgRepairPass),
             Box::new(crate::tail_call::TailCallDetectPass),
-            Box::new(crate::tail_duplication::TailDuplicationPass),
-            Box::new(crate::bool_coverage::BoolCoveragePass),
-            Box::new(crate::func_ptr_table::FuncPtrTablePass),
             Box::new(crate::indirect_call_resolve::IndirectCallResolvePass),
             Box::new(crate::indirect_jump_resolve::IndirectJumpResolvePass),
             Box::new(crate::sixty_four_bit_demote::SixtyFourBitDemotePass),
-            Box::new(crate::msvc_seh::MsvcSehPass {
-                scope_tables: std::collections::BTreeMap::new(),
-            }),
             // ---- TypeRecovery ----
             Box::new(crate::type_infer::TypeInferPass),
             Box::new(crate::type_constraint_solver::TypeConstraintSolverPass::default()),
             Box::new(crate::op_type_binding::OpTypeBindingPass),
-            Box::new(crate::counterexample_refine::CounterexampleRefinePass),
             Box::new(crate::calling_convention::CallingConventionDetectPass),
-            Box::new(crate::calling_conv_whole_prog::WholeProgCallingConvPass {
-                registry: unlace_ir::ssa::FunctionSignatureRegistry::new(),
-            }),
             Box::new(crate::calling_convention::ParamInferPass),
             Box::new(crate::calling_convention::ReturnTypeInferPass),
             Box::new(crate::struct_field_detect::StructFieldDetectPass),
-            Box::new(crate::bitfield_recovery::BitfieldRecoveryPass),
             Box::new(crate::sizeof_recognition::SizeofRecognitionPass::default()),
             Box::new(crate::cpp_vtable::CppVtablePass),
             Box::new(crate::cpp_method::CppMethodPass),
             Box::new(crate::cpp_lambda::CppLambdaCapturePass),
             Box::new(crate::cpp_coroutine::CppCoroutinePass),
             Box::new(crate::cpp_variant::CppVariantPass),
-            Box::new(crate::daikon_invariants::DaikonInvariantPass),
-            Box::new(crate::ipa_slice::IpaSlicePass),
-            Box::new(crate::path_sensitive::PathSensitivePass),
-            Box::new(crate::pgo_outlining::PgoOutliningPass),
             Box::new(crate::rust_enum::RustEnumPass),
             Box::new(crate::rust_vtable::RustVtablePass),
             Box::new(crate::rust_panic::RustPanicPass),
             Box::new(crate::rust_async::RustAsyncPass),
-            Box::new(crate::symbolic_heap::SymbolicHeapPass),
-            Box::new(crate::taint_engine::TaintEnginePass {
-                symbols: std::collections::BTreeMap::new(),
-            }),
             Box::new(crate::objc_dispatch::ObjcDispatchPass::new()),
             // GoIfaceDevirtPass has a lifetime parameter; skipped here.
             // ---- StackRecovery ----
@@ -1302,6 +1279,37 @@ mod phase_tests {
             Box::new(crate::var_naming::VarNamingPass),
             Box::new(crate::expression_tree::ExpressionTreePass),
             Box::new(crate::calling_conv_finalize::CallingConvFinalizePass),
+        ]
+    }
+
+    /// Pass implementations that no pipeline schedules; compiled only with
+    /// the `unwired` feature.
+    #[cfg(feature = "unwired")]
+    fn unwired_passes() -> Vec<Box<dyn Pass>> {
+        vec![
+            Box::new(crate::gcc_cleanup::GccCleanupPass {
+                cleanup_symbols: std::collections::BTreeMap::new(),
+            }),
+            Box::new(crate::junk_code_removal::JunkCodeRemovalPass),
+            Box::new(crate::tail_duplication::TailDuplicationPass),
+            Box::new(crate::bool_coverage::BoolCoveragePass),
+            Box::new(crate::func_ptr_table::FuncPtrTablePass),
+            Box::new(crate::msvc_seh::MsvcSehPass {
+                scope_tables: std::collections::BTreeMap::new(),
+            }),
+            Box::new(crate::counterexample_refine::CounterexampleRefinePass),
+            Box::new(crate::calling_conv_whole_prog::WholeProgCallingConvPass {
+                registry: unlace_ir::ssa::FunctionSignatureRegistry::new(),
+            }),
+            Box::new(crate::bitfield_recovery::BitfieldRecoveryPass),
+            Box::new(crate::daikon_invariants::DaikonInvariantPass),
+            Box::new(crate::ipa_slice::IpaSlicePass),
+            Box::new(crate::path_sensitive::PathSensitivePass),
+            Box::new(crate::pgo_outlining::PgoOutliningPass),
+            Box::new(crate::symbolic_heap::SymbolicHeapPass),
+            Box::new(crate::taint_engine::TaintEnginePass {
+                symbols: std::collections::BTreeMap::new(),
+            }),
         ]
     }
 
@@ -1336,10 +1344,10 @@ mod phase_tests {
         // GoIfaceDevirtPass (TypeRecovery) is omitted from `all_passes`
         // because it borrows a `&dyn` resolver.
         let expected: BTreeMap<u8, usize> = [
-            (PassPhase::PreOpt.ordinal(), 9),
+            (PassPhase::PreOpt.ordinal(), 7),
             (PassPhase::LocalOpt.ordinal(), 18),
-            (PassPhase::GlobalOpt.ordinal(), 14),
-            (PassPhase::TypeRecovery.ordinal(), 27),
+            (PassPhase::GlobalOpt.ordinal(), 10),
+            (PassPhase::TypeRecovery.ordinal(), 18),
             (PassPhase::StackRecovery.ordinal(), 3),
             (PassPhase::LVarAlloc.ordinal(), 1),
             (PassPhase::FinalCleanup.ordinal(), 5),
@@ -1354,6 +1362,27 @@ mod phase_tests {
              Adjust the expected map *and* the canonical pipeline order \
              documented in unlace-cli/src/pipeline.rs."
         );
+    }
+
+    #[cfg(feature = "unwired")]
+    #[test]
+    fn every_unwired_pass_has_explicit_phase() {
+        use std::collections::BTreeMap;
+
+        let mut counts: BTreeMap<u8, usize> = BTreeMap::new();
+        for p in &unwired_passes() {
+            *counts
+                .entry(<dyn Pass as Pass>::phase(p.as_ref()).ordinal())
+                .or_insert(0) += 1;
+        }
+        let expected: BTreeMap<u8, usize> = [
+            (PassPhase::PreOpt.ordinal(), 2),
+            (PassPhase::GlobalOpt.ordinal(), 4),
+            (PassPhase::TypeRecovery.ordinal(), 9),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(counts, expected, "per-phase unwired pass count drifted");
     }
 
     /// The canonical per-function pipeline order, as a list of phases

@@ -39,9 +39,14 @@ pub fn extract_selectors(bytecode: &[u8]) -> Vec<SoliditySelector> {
         // PUSH4 selector EQ PUSH2 dest JUMPI
         // 0x63 XX XX XX XX 0x14 0x61 YY YY 0x57
         if bytecode[i] == 0x63 && i + 9 < bytecode.len() {
-            let sel = [bytecode[i+1], bytecode[i+2], bytecode[i+3], bytecode[i+4]];
-            if bytecode[i+5] == 0x14 && bytecode[i+6] == 0x61 && bytecode[i+9] == 0x57 {
-                let dest = u16::from_be_bytes([bytecode[i+7], bytecode[i+8]]);
+            let sel = [
+                bytecode[i + 1],
+                bytecode[i + 2],
+                bytecode[i + 3],
+                bytecode[i + 4],
+            ];
+            if bytecode[i + 5] == 0x14 && bytecode[i + 6] == 0x61 && bytecode[i + 9] == 0x57 {
+                let dest = u16::from_be_bytes([bytecode[i + 7], bytecode[i + 8]]);
                 selectors.push(SoliditySelector {
                     selector: sel,
                     jump_dest: dest,
@@ -62,10 +67,8 @@ pub fn extract_metadata(bytecode: &[u8]) -> Option<SolidityMetadata> {
     if bytecode.len() < 4 {
         return None;
     }
-    let meta_len = u16::from_be_bytes([
-        bytecode[bytecode.len() - 2],
-        bytecode[bytecode.len() - 1],
-    ]) as usize;
+    let meta_len =
+        u16::from_be_bytes([bytecode[bytecode.len() - 2], bytecode[bytecode.len() - 1]]) as usize;
     if meta_len + 2 > bytecode.len() || meta_len == 0 {
         return None;
     }

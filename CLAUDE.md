@@ -145,9 +145,10 @@ Stale-plan reconciliation:
   reassembly. The remaining gap is broad real-world cache coverage,
   kernel-cache/fileset handling, and subcache edge cases.
 - `unlace-session`, `unlace-emu`, `unlace-debugger`, `unlace-lumina`, and
-  `unlace-idapython` crates exist. Treat platform UX as integration/API
-  maturity work, not absence of crates. IDAPython xrefs and
-  `ida_hexrays::decompile` are still partial.
+  `unlace-mcp` crates exist. Treat platform UX as integration/API
+  maturity work, not absence of crates. The IDAPython compatibility layer
+  was removed on 2026-10-28; do not reintroduce IDA-shaped scripting APIs.
+  `unlace-mcp` runs the `unlace-cli` library in-process (no `UNLACE_BIN`).
 - Production architecture claims remain limited to x86, x86_64, and AArch64.
   Several other lifters are beta/fixture breadth and may intentionally emit
   `IrOp::Unimplemented` / `LiftError::Unsupported`.
@@ -184,6 +185,25 @@ the quality-axis gate is green, exact-line golden triage is clean on this
 checkout, and meaningful type/output debt remains visible in the ledgers. This
 is not full IDA/Hex-Rays parity. Rerun the full workspace gates before claiming
 a source-changing batch is green.
+
+## Product Scope and Feature Gates
+
+The supported scope is x86 (16/32/64), ARM32/Thumb and AArch64 (incl.
+arm64e), with ELF, PE/COFF+PDB, Mach-O (+dyld cache and Apple metadata) and
+DWARF. `unlace_ir::arch_support::product_tier` is the source of truth.
+
+- Other lifters are experimental: optional deps of `unlace-lift` behind
+  `arch-*` features (`all-arches` enables all), forwarded by `unlace-cli`.
+  A default build reports `LifterUnavailable::NotEnabled` for them.
+- Loader formats outside the supported scope sit behind `format-*` features of
+  `unlace-loader` (`all-formats`).
+- Modules no production code reaches are compiled only with a per-crate
+  `unwired` feature. `cargo xtask status` lists tiers, gated/unwired modules,
+  undeclared source files and lifter placeholder counts, and fails when an
+  ungated module is unreferenced.
+- xtask reports and `scripts/score_parity.sh` build `unlace` with
+  `--features all-arches`; experimental-arch tests run only with their feature
+  (`cargo test -p unlace-test-harness --features all-arches`).
 
 ## Standard Commands
 
@@ -307,8 +327,8 @@ Current architecture queue:
    output assembly while preserving CLI behavior.
 4. Treat loader file size as format-domain pressure. Split Mach-O, dyld cache,
    PE/PDB, and DWARF files by subdomain only when changing those behaviors.
-5. Product surfaces exist but remain maturity work: IDAPython xrefs and
-   `ida_hexrays::decompile`, Lumina placeholder responses, debugger platform
+5. Product surfaces exist but remain maturity work: `unlace-mcp` tool
+   breadth, Lumina placeholder responses, debugger platform
    breadth, emulator breadth, and lifter coverage honesty all still need
    focused work. Unlace is CLI/headless only; there is no UI frontend.
 

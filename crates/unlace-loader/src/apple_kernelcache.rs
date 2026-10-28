@@ -57,7 +57,7 @@ pub fn detect_kernelcache_compression(data: &[u8]) -> Option<&'static str> {
 pub fn parse_prelink_info(xml: &str) -> Vec<KextInfo> {
     let mut kexts = Vec::new();
     let mut current_id = None;
-    let mut current_addr = 0u64;
+    let current_addr = 0u64;
 
     for line in xml.lines() {
         let trimmed = line.trim();

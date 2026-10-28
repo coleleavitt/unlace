@@ -6,12 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 
-use unlace_ir::ArchId;
-use unlace_lift::get_lifter;
-use unlace_loader::{
-    BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar, import_pdb,
-    import_pdb_types,
-};
+use unlace_loader::{BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader};
 use unlace_passes::PassOptions;
 use unlace_plugin::PluginManager;
 
@@ -19,7 +14,9 @@ use unlace_cli::annotations::{self, AnnotationDb};
 use unlace_cli::args::{self, Args, Cmd, ConfigAction, Engine, LuminaAction, ProjectAction};
 use unlace_cli::batch::{self, BatchConfig};
 use unlace_cli::config::Config;
+use unlace_cli::decompiler::{Decompiler, FunctionOutput, finish_output};
 use unlace_cli::engine::EngineOptions;
+use unlace_cli::ir_dump::IrDumpPhase;
 use unlace_cli::pipeline::{self, PipelineConfig};
 use unlace_cli::profiling::{self, TraceField};
 
@@ -295,7 +292,6 @@ fn main() {
             apply,
             binary,
         } => run_tilload(&path, limit, json, apply, binary.as_deref()),
-        Cmd::Py { script, binary } => run_py(&script, binary.as_deref(), &config),
     };
 
     write_pass_diagnostics(&config.passes);
@@ -458,37 +454,6 @@ fn run_siggen(
     Ok(())
 }
 
-/// Pipeline milestone selected by `ir-dump --phase`.
-///
-/// `Lift` snapshots the SSA function immediately after construction (no
-/// optimisation passes have run). `PostPasses` is the default and matches
-/// the IR the C printer would receive. `PostStructuring` re-runs
-/// `structure_preserve_returns`, which may rewrite the SSA in place
-/// (eager-return splitting, etc.), then dumps the resulting IR.
-#[derive(Clone, Copy)]
-enum IrDumpPhase {
-    Lift,
-    PostPasses,
-    PostStructuring,
-    /// Batch 18: emit the lvar audit table instead of raw SSA.
-    Lvars,
-    /// Batch 20: emit the type-recovery audit table instead of raw SSA.
-    Types,
-}
-
-fn parse_ir_dump_phase(s: Option<&str>) -> Result<IrDumpPhase> {
-    match s.unwrap_or("post-passes") {
-        "lift" => Ok(IrDumpPhase::Lift),
-        "post-passes" | "passes" => Ok(IrDumpPhase::PostPasses),
-        "post-structuring" | "structuring" | "post-struct" => Ok(IrDumpPhase::PostStructuring),
-        "lvars" => Ok(IrDumpPhase::Lvars),
-        "types" | "type-audit" => Ok(IrDumpPhase::Types),
-        other => bail!(
-            "unknown --phase '{other}' (expected: lift, post-passes, post-structuring, lvars, types)"
-        ),
-    }
-}
-
 fn run_ir_dump(
     binary_path: &std::path::Path,
     function_filter: Option<&str>,
@@ -504,7 +469,10 @@ fn run_ir_dump(
             TraceField::text("phase", phase_str.unwrap_or("post-passes")),
         ],
     );
-    let phase = parse_ir_dump_phase(phase_str)?;
+    let phase = phase_str
+        .map(str::parse::<IrDumpPhase>)
+        .transpose()?
+        .unwrap_or_default();
 
     // Batch 25: mmap path for large binaries, heap path for small ones.
     let input = {
@@ -517,127 +485,10 @@ fn run_ir_dump(
 
     let image = {
         let _span = profiling::phase("ir-dump.load-binary");
-        if ElfLoader::can_load(data) {
-            ElfLoader::load(data)
-        } else if MachoLoader::can_load(data) {
-            MachoLoader::load(data)
-        } else if PeLoader::can_load(data) {
-            PeLoader::load(data)
-        } else {
-            bail!(
-                "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
-                binary_path.display(),
-            );
-        }
-        .with_context(|| format!("failed to parse '{}'", binary_path.display()))?
+        unlace_cli::load::parse_image(data, binary_path)?
     };
 
-    let lifter = {
-        let _span = profiling::phase("ir-dump.get-lifter");
-        get_lifter(image.arch)
-    };
-    let functions = {
-        let _span = profiling::phase("ir-dump.discover-functions");
-        let functions = pipeline::discover_functions(&image, function_filter)?;
-        profiling::record_items("ir-dump.discover-functions", functions.len() as u64);
-        functions
-    };
-
-    let mut out = String::new();
-    for entry in &functions {
-        let _profile_function = profiling::phase("ir-dump.function");
-        let _profile_trace = profiling::trace_fields(
-            "ir-dump.function",
-            [
-                TraceField::text("function", entry.name.clone()),
-                TraceField::addr("addr", entry.addr),
-                TraceField::count("size", entry.size),
-            ],
-        );
-        profiling::record_items("ir-dump.function", 1);
-        let _function_span = pipeline::function_span(entry);
-        let lift_result = {
-            let _span = profiling::phase("ir-dump.lift");
-            pipeline::lift_function(&image, lifter.as_ref(), entry)
-        };
-        let ir_func = match lift_result {
-            Ok(f) => f,
-            Err(e) => {
-                profiling::diagnostic(
-                    "warn",
-                    "ir-dump lift failed; skipping",
-                    [
-                        TraceField::text("function", entry.name.clone()),
-                        TraceField::text("err", e.to_string()),
-                    ],
-                );
-                out.push_str(&format!(
-                    "// [ir-dump] lift failed for '{}': {}\n",
-                    entry.name, e
-                ));
-                continue;
-            }
-        };
-
-        let mut ssa = {
-            let _span = profiling::phase("ir-dump.build-ssa");
-            unlace_ir::ssa::build_ssa(ir_func)
-        };
-        ssa.arch = image.arch;
-
-        match phase {
-            IrDumpPhase::Lift => {}
-            IrDumpPhase::PostPasses
-            | IrDumpPhase::PostStructuring
-            | IrDumpPhase::Lvars
-            | IrDumpPhase::Types => {
-                let pass_result = {
-                    let _span = profiling::phase("ir-dump.run-passes");
-                    pipeline::run_passes(&mut ssa, &options.passes)
-                };
-                if let Err(e) = pass_result {
-                    profiling::diagnostic(
-                        "warn",
-                        "ir-dump pass pipeline failed; dumping unoptimized",
-                        [
-                            TraceField::text("function", entry.name.clone()),
-                            TraceField::text("err", format!("{e:#}")),
-                        ],
-                    );
-                }
-                if matches!(phase, IrDumpPhase::PostStructuring)
-                    && let Err(e) = {
-                        let _span = profiling::phase("ir-dump.structure-preserve-returns");
-                        unlace_struct::structure_preserve_returns(&mut ssa)
-                    }
-                {
-                    profiling::diagnostic(
-                        "warn",
-                        "ir-dump structurer failed; dumping post-passes IR",
-                        [
-                            TraceField::text("function", entry.name.clone()),
-                            TraceField::text("err", format!("{e:?}")),
-                        ],
-                    );
-                }
-            }
-        }
-
-        match phase {
-            IrDumpPhase::Lvars => {
-                let _span = profiling::phase("ir-dump.emit-lvars");
-                out.push_str(&unlace_output::dump_lvars(&ssa));
-            }
-            IrDumpPhase::Types => {
-                let _span = profiling::phase("ir-dump.emit-types");
-                out.push_str(&unlace_output::dump_type_audit(&ssa));
-            }
-            _ => {
-                let _span = profiling::phase("ir-dump.emit-ir");
-                out.push_str(&unlace_output::dump_ir(&ssa));
-            }
-        }
-    }
+    let out = unlace_cli::ir_dump::dump_functions(&image, function_filter, phase, &options.passes)?;
 
     {
         let _span = profiling::phase("ir-dump.write-stdout");
@@ -776,140 +627,6 @@ fn run_patch(
         report.patches_skipped,
     );
     Ok(())
-}
-
-#[cfg(feature = "python")]
-fn run_py(
-    script: &std::path::Path,
-    binary: Option<&std::path::Path>,
-    options: &Config,
-) -> Result<()> {
-    let session = unlace_session::Session::new();
-    if let Some(b) = binary {
-        session
-            .load_binary(b)
-            .with_context(|| format!("loading {}", b.display()))?;
-        if let Err(err) = populate_python_instruction_xrefs(&session) {
-            profiling::diagnostic(
-                "debug",
-                "failed to stage instruction xrefs for python session",
-                [TraceField::text("err", err.to_string())],
-            );
-        }
-        if let Err(err) = populate_python_decompiled_functions(&session, options) {
-            profiling::diagnostic(
-                "debug",
-                "failed to stage decompiled functions for python session",
-                [TraceField::text("err", err.to_string())],
-            );
-        }
-    }
-    let source =
-        std::fs::read_to_string(script).with_context(|| format!("reading {}", script.display()))?;
-    unlace_idapython::pybridge::run_script(session, &source)
-        .map_err(|e| anyhow::anyhow!("python: {e}"))
-}
-
-#[cfg(feature = "python")]
-fn populate_python_instruction_xrefs(session: &unlace_session::Session) -> Result<usize> {
-    let xrefs = session
-        .with_binary(|image| -> Result<Vec<unlace_ir::xref::InstructionXref>> {
-            let functions = pipeline::discover_functions(image, None)?;
-            let lifter = get_lifter(image.arch);
-            let mut lifted = std::collections::BTreeMap::new();
-            for entry in &functions {
-                match pipeline::lift_function(image, lifter.as_ref(), entry) {
-                    Ok(function) => {
-                        lifted.insert(entry.addr, function);
-                    }
-                    Err(err) => {
-                        profiling::diagnostic(
-                            "debug",
-                            "skipping xref lift failure",
-                            [
-                                TraceField::text("function", entry.name.clone()),
-                                TraceField::text("err", err.to_string()),
-                            ],
-                        );
-                    }
-                }
-            }
-            Ok(unlace_ir::xref::build_instruction_xrefs(&lifted))
-        })
-        .transpose()?
-        .unwrap_or_default();
-    let count = xrefs.len();
-    session.add_instruction_xrefs(xrefs);
-    Ok(count)
-}
-
-#[cfg(feature = "python")]
-fn populate_python_decompiled_functions(
-    session: &unlace_session::Session,
-    options: &Config,
-) -> Result<usize> {
-    populate_python_decompiled_functions_with_limit(session, options.py.max_staged_functions)
-}
-
-#[cfg(feature = "python")]
-fn populate_python_decompiled_functions_with_limit(
-    session: &unlace_session::Session,
-    limit: usize,
-) -> Result<usize> {
-    let staged = session
-        .with_binary(|image| -> Result<Vec<(u64, u64, String, String)>> {
-            let functions = pipeline::discover_functions(image, None)?;
-            let lifter = get_lifter(image.arch);
-            let config = PipelineConfig::default();
-            let rtti = unlace_loader::scan_rtti(image);
-            let rtti = (!rtti.is_empty()).then_some(&rtti);
-            let mut staged = Vec::new();
-            for entry in functions.iter().take(limit) {
-                match pipeline::decompile_function_with_symbols(
-                    image,
-                    lifter.as_ref(),
-                    entry,
-                    args::EmitFormat::C,
-                    &config,
-                    None,
-                    &functions,
-                    rtti,
-                ) {
-                    Ok(text) => staged.push((entry.addr, entry.size, entry.name.clone(), text)),
-                    Err(err) => {
-                        profiling::diagnostic(
-                            "debug",
-                            "skipping python decompile staging failure",
-                            [
-                                TraceField::text("function", entry.name.clone()),
-                                TraceField::text("err", err.to_string()),
-                            ],
-                        );
-                    }
-                }
-            }
-            Ok(staged)
-        })
-        .transpose()?
-        .unwrap_or_default();
-    let count = staged.len();
-    for (addr, size, name, text) in staged {
-        session.set_decompiled_function(addr, size, name, text);
-    }
-    Ok(count)
-}
-
-#[cfg(not(feature = "python"))]
-fn run_py(
-    _script: &std::path::Path,
-    _binary: Option<&std::path::Path>,
-    _options: &Config,
-) -> Result<()> {
-    bail!(
-        "unlace-cli was built without the `python` feature; \
-         rebuild with `cargo build -p unlace-cli --features python` \
-         to enable IDAPython script execution"
-    )
 }
 
 fn run_sigload(
@@ -1334,11 +1051,7 @@ fn resolve_annotations(
     if let Some(path) = explicit {
         return AnnotationDb::load(path).map(Some);
     }
-    let sidecar = annotations::default_path(binary);
-    if sidecar.exists() {
-        return AnnotationDb::load(&sidecar).map(Some);
-    }
-    Ok(None)
+    annotations::load_default(binary)
 }
 
 fn build_flirt_config(
@@ -1407,91 +1120,6 @@ fn read_dwarf_sidecar(path: Option<&std::path::Path>) -> Result<Option<Vec<u8>>>
     }
 }
 
-fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
-    if image.pdb_types.is_some() && image.pdb_info.is_some() {
-        return;
-    }
-    let parent = binary_path
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new("."));
-    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
-
-    for rec in &image.debug_records {
-        if let Some(pdb_path) = rec.pdb_path.as_deref()
-            && let Some(name) = std::path::Path::new(pdb_path).file_name()
-        {
-            candidates.push(parent.join(name));
-        }
-    }
-    if let Some(stem) = binary_path.file_stem() {
-        let mut sibling = parent.join(stem);
-        sibling.set_extension("pdb");
-        candidates.push(sibling);
-    }
-
-    for candidate in candidates {
-        if !candidate.exists() {
-            continue;
-        }
-        let mut loaded_sidecar = false;
-        if image.pdb_types.is_none() {
-            match import_pdb_types(&candidate) {
-                Ok(types) => {
-                    profiling::diagnostic(
-                        "info",
-                        "loaded PDB type sidecar",
-                        [
-                            TraceField::text("pdb", candidate.display().to_string()),
-                            TraceField::count("structs", types.structs.len() as u64),
-                        ],
-                    );
-                    image.pdb_types = Some(types);
-                    loaded_sidecar = true;
-                }
-                Err(e) => {
-                    profiling::diagnostic(
-                        "debug",
-                        "PDB type sidecar import failed; continuing without it",
-                        [
-                            TraceField::text("pdb", candidate.display().to_string()),
-                            TraceField::text("err", e.to_string()),
-                        ],
-                    );
-                }
-            }
-        }
-        if image.pdb_info.is_none() {
-            match import_pdb(&candidate) {
-                Ok(info) => {
-                    profiling::diagnostic(
-                        "info",
-                        "loaded PDB debug sidecar",
-                        [
-                            TraceField::text("pdb", candidate.display().to_string()),
-                            TraceField::count("local_functions", info.function_locals.len() as u64),
-                        ],
-                    );
-                    image.pdb_info = Some(info);
-                    loaded_sidecar = true;
-                }
-                Err(e) => {
-                    profiling::diagnostic(
-                        "debug",
-                        "PDB debug sidecar import failed; continuing without it",
-                        [
-                            TraceField::text("pdb", candidate.display().to_string()),
-                            TraceField::text("err", e.to_string()),
-                        ],
-                    );
-                }
-            }
-        }
-        if loaded_sidecar {
-            return;
-        }
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 fn run_decompile(
     binary_path: &std::path::Path,
@@ -1523,19 +1151,7 @@ fn run_decompile(
 
     let mut image = {
         let _span = profiling::phase("decompile.load-binary");
-        if ElfLoader::can_load(&data) {
-            ElfLoader::load(&data)
-        } else if MachoLoader::can_load(&data) {
-            MachoLoader::load(&data)
-        } else if PeLoader::can_load(&data) {
-            PeLoader::load(&data)
-        } else {
-            bail!(
-                "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
-                binary_path.display(),
-            );
-        }
-        .with_context(|| format!("failed to parse '{}'", binary_path.display()))?
+        unlace_cli::load::parse_image(&data, binary_path)?
     };
     sw.phase("load+parse", t_load.elapsed());
     sw.set_input_size(data.len() as u64);
@@ -1551,7 +1167,7 @@ fn run_decompile(
 
     {
         let _span = profiling::phase("decompile.attach-pdb");
-        attach_pdb_sidecar(&mut image, binary_path);
+        unlace_cli::load::attach_pdb_sidecar(&mut image, binary_path);
     }
 
     if let Some(override_str) = arch_override {
@@ -1565,91 +1181,11 @@ fn run_decompile(
         }
     }
 
-    if !matches!(
-        image.arch,
-        ArchId::X86_64
-            | ArchId::X86
-            | ArchId::AArch64
-            | ArchId::Mips64
-            | ArchId::RiscV64
-            | ArchId::V850
-            | ArchId::Arc
-            | ArchId::Agx
-            | ArchId::Ppc
-            | ArchId::Ppc64
-    ) {
-        bail!(
-            "architecture {} is not yet supported for decompilation",
-            image.arch,
-        );
-    }
-
-    let lifter = {
-        let _span = profiling::phase("decompile.get-lifter");
-        get_lifter(image.arch)
-    };
-    let t_discover = std::time::Instant::now();
-    let mut functions = {
-        let _span = profiling::phase("decompile.discover-functions");
-        pipeline::discover_functions(&image, function_filter)?
-    };
-    profiling::record_items("decompile.discover-functions", functions.len() as u64);
-
-    let dwarf = {
-        let _span = profiling::phase("decompile.import-dwarf");
-        match import_dwarf_with_sidecar(&image, config.dwarf_sidecar.as_deref()) {
-            Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
-                profiling::record_items("decompile.import-dwarf", d.functions.len() as u64);
-                profiling::diagnostic(
-                    "info",
-                    "loaded DWARF debug info",
-                    [
-                        TraceField::count("functions", d.functions.len() as u64),
-                        TraceField::count("structs", d.structs.len() as u64),
-                    ],
-                );
-                pipeline::drop_dwarf_duplicate_subfunctions(&mut functions, &d);
-                Some(d)
-            }
-            Ok(_) => None,
-            Err(e) => {
-                profiling::diagnostic(
-                    "debug",
-                    "DWARF import failed; continuing without type info",
-                    [TraceField::text("err", e.to_string())],
-                );
-                None
-            }
-        }
-    };
-    sw.phase("discover+dwarf", t_discover.elapsed());
+    let t_prepare = std::time::Instant::now();
+    let decompiler = Decompiler::prepare(&image, function_filter, config)?;
+    let functions = decompiler.functions();
+    sw.phase("discover+dwarf+rtti", t_prepare.elapsed());
     sw.set_function_count(functions.len());
-
-    profiling::diagnostic(
-        "info",
-        "discovered functions",
-        [TraceField::count("count", functions.len() as u64)],
-    );
-
-    let mut effective_config = config.clone();
-    effective_config.symbol_context = Some({
-        let _span = profiling::phase("decompile.symbol-context");
-        std::sync::Arc::new(pipeline::build_symbol_context_with_config(
-            &image,
-            &functions,
-            &config.flirt,
-        ))
-    });
-
-    // Scan RTTI once for the whole binary; the C printer uses it to
-    // emit class hierarchy + reconstructed vtable layouts.
-    let t_rtti = std::time::Instant::now();
-    let rtti = {
-        let _span = profiling::phase("decompile.scan-rtti");
-        unlace_loader::scan_rtti(&image)
-    };
-    let rtti_opt = if rtti.is_empty() { None } else { Some(&rtti) };
-    sw.phase("rtti-scan", t_rtti.elapsed());
 
     let mut all_output = String::new();
 
@@ -1676,49 +1212,20 @@ fn run_decompile(
         sw.tick_progress(idx, total, &func_entry.name);
 
         let t_fn = std::time::Instant::now();
-        match pipeline::decompile_function_with_symbols(
-            &image,
-            lifter.as_ref(),
-            func_entry,
-            emit,
-            &effective_config,
-            dwarf.as_ref(),
-            &functions,
-            rtti_opt,
-        ) {
-            Ok(text) => {
-                sw.record_function(&func_entry.name, t_fn.elapsed(), text.len(), &text);
-                all_output.push_str(&text);
+        let output = decompiler.decompile(func_entry, emit);
+        match &output {
+            FunctionOutput::Decompiled(text) => {
+                sw.record_function(&func_entry.name, t_fn.elapsed(), text.len(), text);
             }
-            Err(e) => {
-                sw.record_failure(&func_entry.name);
-                profiling::diagnostic(
-                    "warn",
-                    "function decompilation failed",
-                    [
-                        TraceField::text("function", func_entry.name.clone()),
-                        TraceField::text("err", e.to_string()),
-                    ],
-                );
-                all_output.push_str(&format!(
-                    "/* decompilation failed for '{}': {} */\n",
-                    func_entry.name, e
-                ));
-            }
+            FunctionOutput::Failed(_) => sw.record_failure(&func_entry.name),
         }
+        all_output.push_str(output.text());
     }
     sw.phase("decompile (all functions)", t_decompile.elapsed());
     sw.clear_progress();
 
     let t_post = std::time::Instant::now();
-    {
-        let _span = profiling::phase("decompile.post-process");
-        if matches!(emit, args::EmitFormat::C) {
-            all_output = unlace_output::dedupe_ida_typedefs(&all_output);
-            all_output = unlace_output::declare_pseudo_c_externals(&all_output);
-            all_output = unlace_output::dedupe_rtti_hierarchy(&all_output);
-        }
-    }
+    all_output = finish_output(emit, all_output);
     sw.phase("post-process", t_post.elapsed());
     sw.set_output_size(all_output.len() as u64);
 
@@ -2267,119 +1774,4 @@ fn run_batch_cmd(
         options,
     };
     batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use unlace_loader::{DebugRecord, Endian};
-
-    #[test]
-    fn attach_pdb_sidecar_is_noop_when_no_pdb_present() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let bin = tmp.path().join("nopdb.exe");
-        std::fs::write(&bin, b"MZ").unwrap();
-
-        let mut image = BinaryImage::empty(ArchId::X86_64, Endian::Little);
-        assert!(image.pdb_types.is_none());
-        attach_pdb_sidecar(&mut image, &bin);
-        assert!(
-            image.pdb_types.is_none(),
-            "no sidecar should leave pdb_types empty",
-        );
-    }
-
-    #[test]
-    fn attach_pdb_sidecar_skips_when_already_populated() {
-        // Pre-populate pdb_types to force the early-return branch and
-        // confirm the helper does not stomp existing data.
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let bin = tmp.path().join("preloaded.exe");
-        std::fs::write(&bin, b"MZ").unwrap();
-
-        let mut image = BinaryImage::empty(ArchId::X86_64, Endian::Little);
-        image.pdb_types = Some(Default::default());
-        let before_ptr = image.pdb_types.as_ref().map(|t| t as *const _);
-        attach_pdb_sidecar(&mut image, &bin);
-        let after_ptr = image.pdb_types.as_ref().map(|t| t as *const _);
-        assert_eq!(
-            before_ptr, after_ptr,
-            "existing pdb_types must be preserved"
-        );
-    }
-
-    #[test]
-    fn attach_pdb_sidecar_drops_absolute_build_host_path() {
-        // PE CodeView records frequently contain a Windows build-host
-        // absolute path (e.g. `D:\src\foo\bar.pdb`). The helper must
-        // resolve only by basename next to the binary, so a nonexistent
-        // absolute path never causes a panic or attempts to load it.
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let bin = tmp.path().join("absolute-cv.exe");
-        std::fs::write(&bin, b"MZ").unwrap();
-
-        let mut image = BinaryImage::empty(ArchId::X86_64, Endian::Little);
-        image.debug_records.push(DebugRecord {
-            typ: 2, // IMAGE_DEBUG_TYPE_CODEVIEW
-            time_stamp: 0,
-            pdb_path: Some("D:\\nonexistent\\absolute\\path.pdb".into()),
-            pdb_guid: None,
-            pdb_age: None,
-        });
-        attach_pdb_sidecar(&mut image, &bin);
-        assert!(
-            image.pdb_types.is_none(),
-            "no real .pdb on disk → no panic, no spurious load",
-        );
-    }
-
-    #[cfg(feature = "python")]
-    #[test]
-    fn populate_python_instruction_xrefs_stages_direct_edges() {
-        let manifest = env!("CARGO_MANIFEST_DIR");
-        let binary = std::path::PathBuf::from(format!("{manifest}/../../fixtures/hello_world.elf"));
-        let session = unlace_session::Session::new();
-        session.load_binary(&binary).expect("load fixture");
-
-        let staged = populate_python_instruction_xrefs(&session).expect("stage xrefs");
-
-        assert!(
-            staged > 0,
-            "hello_world should stage at least one direct xref"
-        );
-    }
-
-    #[cfg(feature = "python")]
-    #[test]
-    fn populate_python_decompiled_functions_stages_text() {
-        let manifest = env!("CARGO_MANIFEST_DIR");
-        let binary = std::path::PathBuf::from(format!("{manifest}/../../fixtures/hello_world.elf"));
-        let session = unlace_session::Session::new();
-        session.load_binary(&binary).expect("load fixture");
-
-        let staged = populate_python_decompiled_functions(&session).expect("stage pseudocode");
-
-        assert!(
-            staged > 0,
-            "hello_world should stage at least one decompile"
-        );
-        assert!(
-            session.decompiled_function(0x1060).is_some(),
-            "hello_world main should have staged pseudocode"
-        );
-    }
-
-    #[cfg(feature = "python")]
-    #[test]
-    fn populate_python_decompiled_functions_respects_limit() {
-        let manifest = env!("CARGO_MANIFEST_DIR");
-        let binary = std::path::PathBuf::from(format!("{manifest}/../../fixtures/hello_world.elf"));
-        let session = unlace_session::Session::new();
-        session.load_binary(&binary).expect("load fixture");
-
-        let staged = populate_python_decompiled_functions_with_limit(&session, 1)
-            .expect("stage bounded pseudocode");
-
-        assert_eq!(staged, 1);
-    }
 }

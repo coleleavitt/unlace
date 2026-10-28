@@ -407,21 +407,6 @@ pub enum Cmd {
         output: Option<PathBuf>,
     },
 
-    /// Run an IDAPython-compatible script against a loaded binary.
-    ///
-    /// Requires `--features python` on `unlace-cli`. The script can
-    /// `import idc`, `idautils`, `ida_funcs` and will see the loaded
-    /// binary's symbol table + sections through the unlace
-    /// `Session`.
-    Py {
-        /// Path to the Python script.
-        script: PathBuf,
-
-        /// Binary to load before running the script.
-        #[arg(long)]
-        binary: Option<PathBuf>,
-    },
-
     /// Load and inspect an IDA FLIRT `.sig` signature file.
     ///
     /// Decompresses the IDASGN zlib payload and prints the parsed

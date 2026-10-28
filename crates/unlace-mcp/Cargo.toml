@@ -3,20 +3,26 @@ name = "unlace-mcp"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "CLI-first Model Context Protocol server exposing unlace's read-only decompiler capabilities over stdio."
+description = "Read-only Model Context Protocol server that runs unlace's analysis in-process over stdio."
 
 [dependencies]
+unlace-cli = { workspace = true }
+unlace-ir = { workspace = true }
+unlace-loader = { workspace = true }
 rmcp = { version = "1.8", features = [
     "server",
     "macros",
     "transport-io",
 ] }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std", "io-util", "process"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
 anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 schemars = "1.0"
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
 
 [[bin]]
 name = "unlace-mcp"

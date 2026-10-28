@@ -12,3 +12,17 @@ thiserror = { workspace = true }
 unlace-lift = { workspace = true }
 unlace-lift-arm = { workspace = true }
 unlace-ir = { workspace = true }
+
+# Tests for experimental architectures run only with their feature. Golden
+# tests drive the `unlace` binary, which must be built with the same feature
+# (`cargo build -p unlace-cli --features all-arches`).
+[features]
+default = []
+all-arches = ["arch-arc", "arch-avr", "arch-ebpf", "arch-mips", "arch-ppc", "arch-riscv", "arch-v850"]
+arch-arc = ["unlace-lift/arch-arc"]
+arch-avr = ["unlace-lift/arch-avr"]
+arch-ebpf = ["unlace-lift/arch-ebpf"]
+arch-mips = ["unlace-lift/arch-mips"]
+arch-ppc = ["unlace-lift/arch-ppc"]
+arch-riscv = ["unlace-lift/arch-riscv"]
+arch-v850 = ["unlace-lift/arch-v850"]

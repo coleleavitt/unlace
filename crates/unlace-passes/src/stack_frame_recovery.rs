@@ -565,6 +565,7 @@ fn primitive_width(ty: PrimitiveType, spec: &StackSpec) -> Option<u8> {
         PrimitiveType::Float => Some(4),
         PrimitiveType::Double => Some(8),
         PrimitiveType::Ptr => Some(spec.ptr_size.max(1)),
+        PrimitiveType::Vector(v) => Some(v.size()),
     }
 }
 

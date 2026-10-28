@@ -437,6 +437,7 @@ fn field_size(ty: PrimitiveType) -> Option<u8> {
         PrimitiveType::Float => Some(4),
         PrimitiveType::Double => Some(8),
         PrimitiveType::Ptr => Some(8),
+        PrimitiveType::Vector(v) => Some(v.size()),
         PrimitiveType::Unknown => None,
     }
 }

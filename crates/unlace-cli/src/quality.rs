@@ -282,10 +282,8 @@ pub struct FunctionQuality {
     /// [`unlace_ir::ssa::ByrefInfo`] (populated by
     /// `unlace_passes::byref_detect`).
     pub byref_args: usize,
-    /// SSA variables typed as a SIMD vector (`__m128` / `__m256` /
-    /// `__m512`). `PrimitiveType` has no vector variants yet, so this
-    /// is a width-based proxy: count `var_types` keys whose `base.size`
-    /// is at least 16 bytes.
+    /// SSA variables typed as a SIMD vector (`__m128i`, `__m256`, ...)
+    /// by `TypeInferPass`.
     pub simd_typed_vars: usize,
     /// Total [`unlace_ir::lvar::Lvar`] candidates emitted by
     /// `LvarCollectPass`. Batch 3 slice 1 introduced the data model;
@@ -592,11 +590,11 @@ fn fill_extended_typing_counters(
     if let Some(byref) = ssa.byref_info.as_ref() {
         q.byref_args = byref.byref_locals.len() + byref.byref_params.len();
     }
-    // simd_typed_vars: width-based proxy (varnode size >= 16 bytes).
-    // PrimitiveType has no SIMD variants yet, so we look at the
-    // varnode width — 128/256/512-bit registers are the only sources
-    // of such widths in current lifters.
-    q.simd_typed_vars = ssa.var_types.keys().filter(|sv| sv.base.size >= 16).count();
+    q.simd_typed_vars = ssa
+        .var_types
+        .values()
+        .filter(|ty| matches!(ty, PrimitiveType::Vector(_)))
+        .count();
     // call_resolution_rate: percentage of call sites with a known
     // target. Direct calls always have a concrete target address;
     // indirect calls are "resolved" only when they appear in
@@ -1585,7 +1583,7 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - compound assignments: {ca}\n\
          - short-circuit ops (&&/||): {sc}\n\
          - byref args (&local/&param): {ba}\n\
-         - SIMD-typed vars (>= 128 bits): {sv}\n\
+         - SIMD-typed vars (vector types): {sv}\n\
          - Callother total / trap-padding / known-intrinsic / semantic-gap: {co} / {cot} / {cok} / {cog}\n\
          - call resolution rate (mean per-fn): {crr:.1}%\n\
          - type quality score (mean per-fn): {tqs:.1}%\n\

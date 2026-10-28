@@ -116,6 +116,106 @@ pub enum Type {
     TypeParam { name: String, constraint: String },
 }
 
+/// Lane domain of a SIMD register value.
+///
+/// Intel's intrinsic types tell three domains apart by name: packed
+/// `float` (`__m128`), packed `double` (`__m128d`) and any packed integer
+/// lane width (`__m128i`). The integer lane width is not part of the type;
+/// each intrinsic (`_mm_add_epi32`, `_mm_add_epi8`, ...) states it.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+pub enum VectorLanes {
+    /// Packed integers of any lane width.
+    Int,
+    /// Packed IEEE-754 binary32.
+    Float,
+    /// Packed IEEE-754 binary64.
+    Double,
+}
+
+/// An x86 SIMD register value type: `__m64`, `__m128{,d,i}`,
+/// `__m256{,d,i}` or `__m512{,d,i}`.
+///
+/// Built only through [`VectorType::new`], which accepts the register
+/// widths that have an Intel type name.
+///
+/// ```
+/// use unlace_ir::types::{VectorLanes, VectorType};
+///
+/// let v = VectorType::new(VectorLanes::Int, 16).unwrap();
+/// assert_eq!(v.c_name(), "__m128i");
+/// assert!(VectorType::new(VectorLanes::Float, 8).is_none());
+/// ```
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+pub struct VectorType {
+    lanes: VectorLanes,
+    size: u8,
+}
+
+impl VectorType {
+    /// The vector type of `size` bytes in the `lanes` domain, or `None`
+    /// when Intel has no type of that shape. MMX `__m64` is integer-only.
+    pub const fn new(lanes: VectorLanes, size: u8) -> Option<Self> {
+        match (lanes, size) {
+            (VectorLanes::Int, 8) | (_, 16 | 32 | 64) => Some(Self { lanes, size }),
+            _ => None,
+        }
+    }
+
+    /// Lane domain.
+    pub const fn lanes(self) -> VectorLanes {
+        self.lanes
+    }
+
+    /// Register width in bytes.
+    pub const fn size(self) -> u8 {
+        self.size
+    }
+
+    /// Intel intrinsic type name.
+    pub const fn c_name(self) -> &'static str {
+        match (self.size, self.lanes) {
+            (8, _) => "__m64",
+            (16, VectorLanes::Float) => "__m128",
+            (16, VectorLanes::Double) => "__m128d",
+            (16, VectorLanes::Int) => "__m128i",
+            (32, VectorLanes::Float) => "__m256",
+            (32, VectorLanes::Double) => "__m256d",
+            (32, VectorLanes::Int) => "__m256i",
+            (_, VectorLanes::Float) => "__m512",
+            (_, VectorLanes::Double) => "__m512d",
+            (_, VectorLanes::Int) => "__m512i",
+        }
+    }
+
+    /// Join two facts about one register value. Values of different widths
+    /// conflict. Mixed lane domains of one width become integer lanes: code
+    /// that reinterprets a register (`_mm_castps_si128`, bitwise ops on
+    /// floats) is read most directly as raw lanes.
+    pub fn join(self, other: Self) -> Option<Self> {
+        if self.size != other.size {
+            return None;
+        }
+        if self.lanes == other.lanes {
+            Some(self)
+        } else {
+            Some(Self {
+                lanes: VectorLanes::Int,
+                size: self.size,
+            })
+        }
+    }
+}
+
+impl fmt::Display for VectorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.c_name())
+    }
+}
+
 /// Compact, `Copy` type tag used to stamp libc-call argument/return shapes
 /// onto SSA call sites without dragging the full composite [`Type`] tree
 /// (which owns `String`/`Vec` and isn't `Copy`).
@@ -460,6 +560,7 @@ fn primitive_size(p: PrimitiveType) -> Option<u8> {
         PrimitiveType::Float => Some(4),
         PrimitiveType::Double => Some(8),
         PrimitiveType::Ptr => Some(8),
+        PrimitiveType::Vector(v) => Some(v.size()),
     }
 }
 
@@ -480,6 +581,7 @@ fn primitive_c_name(p: PrimitiveType) -> &'static str {
         PrimitiveType::Float => "float",
         PrimitiveType::Double => "double",
         PrimitiveType::Ptr => "void *",
+        PrimitiveType::Vector(v) => v.c_name(),
     }
 }
 
@@ -505,6 +607,7 @@ impl fmt::Display for Type {
                         PrimitiveType::Double => "double",
                         PrimitiveType::Unknown => "void",
                         PrimitiveType::Int(_) | PrimitiveType::UnsignedInt(_) => "__int64",
+                        PrimitiveType::Vector(v) => v.c_name(),
                         PrimitiveType::Ptr => unreachable!(),
                     };
                     write!(f, "{base} *")
@@ -598,6 +701,20 @@ impl Type {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vector_join_with_same_width_integers_and_mixed_lanes() {
+        let ps = VectorType::new(VectorLanes::Float, 16).unwrap();
+        let pd = VectorType::new(VectorLanes::Double, 16).unwrap();
+        let ymm = VectorType::new(VectorLanes::Int, 32).unwrap();
+        let v = PrimitiveType::Vector;
+
+        assert_eq!(v(ps).join(PrimitiveType::UnsignedInt(16)), v(ps));
+        assert_eq!(PrimitiveType::Int(16).join(v(ps)), v(ps));
+        assert_eq!(v(ps).join(PrimitiveType::Int(8)), PrimitiveType::Unknown);
+        assert_eq!(v(ps).join(v(pd)).to_string(), "__m128i");
+        assert_eq!(v(ps).join(v(ymm)), PrimitiveType::Unknown);
+    }
 
     #[test]
     fn construct_int_uint() {

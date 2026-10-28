@@ -81,8 +81,13 @@ fn compute_insn_known_bits(
     insn: &IrInsn,
     current: &KnownBitsMap,
 ) -> KnownBits {
+    // `KnownBits` tracks at most 64 bits. Modelling a wider value (a 128-bit
+    // SSE register lowered to integer IR) by its low 64 bits would let a
+    // shift by 64 "prove" it zero, so wide values stay unknown.
+    if insn.output.is_some_and(|o| o.size > 8) {
+        return KnownBits::unknown(64);
+    }
     let out_width = insn.output.map(|o| o.size.saturating_mul(8)).unwrap_or(64);
-    let out_width = out_width.min(64);
 
     match insn.op {
         IrOp::Copy if insn.inputs.len() == 1 => {

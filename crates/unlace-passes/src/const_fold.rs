@@ -79,6 +79,14 @@ fn sign_extend(val: u64, size: u8) -> i64 {
 }
 
 fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
+    // Constants are `u64`. A result or operand wider than that (a 128-bit
+    // SSE register lowered to integer IR) is evaluated only when the
+    // operation cannot carry bits past bit 63.
+    if !matches!(op, IrOp::Copy | IrOp::IntZext)
+        && (out_size > 8 || inputs.iter().any(|v| v.size > 8))
+    {
+        return None;
+    }
     let mask = mask_for_size(out_size);
 
     match op {
@@ -351,6 +359,18 @@ mod tests {
         assert_eq!(folded.inputs[0].space, SpaceId::Const);
         assert_eq!(folded.inputs[0].offset, 8);
         assert_eq!(folded.inputs[0].size, 4);
+    }
+
+    #[test]
+    fn test_const_fold_skips_values_wider_than_u64() {
+        // 1 << 64 is a valid 128-bit result that a `u64` constant cannot hold.
+        let out = Varnode::unique(0, 16);
+        let one = Varnode::constant(1, 16);
+        let sixty_four = Varnode::constant(64, 1);
+        let insn = IrInsn::with_output(IrOp::IntLeft, out, smallvec![one, sixty_four], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        assert!(!ConstantFoldPass.run(&mut ssa).expect("pass should succeed"));
     }
 
     #[test]

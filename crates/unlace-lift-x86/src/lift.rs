@@ -7,6 +7,7 @@ use unlace_ir::{
 };
 
 use crate::apx;
+use crate::ops::sse::VectorLogic;
 use crate::ops::{
     amx, arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
 };
@@ -765,10 +766,10 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Psubd => sse::lift_sse_binop(ctx, insn, sse::tag::PSUBD),
         M::Psubq => sse::lift_sse_binop(ctx, insn, sse::tag::PSUBQ),
 
-        M::Pand => sse::lift_sse_binop(ctx, insn, sse::tag::PAND),
-        M::Por => sse::lift_sse_binop(ctx, insn, sse::tag::POR),
-        M::Pxor => sse::lift_sse_xor(ctx, insn, sse::tag::PXOR),
-        M::Xorps => sse::lift_sse_xor(ctx, insn, sse::tag::XORPS),
+        M::Pand | M::Andps | M::Andpd => sse::lift_vector_logic(ctx, insn, VectorLogic::And),
+        M::Pandn | M::Andnps | M::Andnpd => sse::lift_vector_logic(ctx, insn, VectorLogic::AndNot),
+        M::Por | M::Orps | M::Orpd => sse::lift_vector_logic(ctx, insn, VectorLogic::Or),
+        M::Pxor | M::Xorps | M::Xorpd => sse::lift_vector_logic(ctx, insn, VectorLogic::Xor),
         M::Psrlq => sse::lift_sse_binop(ctx, insn, sse::tag::PSRLQ),
 
         M::Pmulld => sse::lift_sse_binop(ctx, insn, sse::tag::PMULLD),
@@ -795,7 +796,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Punpckldq => sse::lift_sse_binop(ctx, insn, sse::tag::PUNPCKLDQ),
         M::Pslld => sse::lift_sse_binop(ctx, insn, sse::tag::PSLLD),
         M::Psrld => sse::lift_sse_binop(ctx, insn, sse::tag::PSRLD),
-        M::Psrldq => sse::lift_sse_binop(ctx, insn, sse::tag::PSRLDQ),
+        M::Psrldq => sse::lift_byte_shift(ctx, insn, IrOp::IntRight),
+        M::Pslldq => sse::lift_byte_shift(ctx, insn, IrOp::IntLeft),
 
         // SSSE3 packed integer ops (t174).
         M::Phaddw => sse::lift_sse_binop(ctx, insn, sse::tag::PHADDW),
@@ -876,11 +878,11 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Vpmulld => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLD),
         M::Vpshufb => sse::lift_avx_binop(ctx, insn, sse::tag::VPSHUFB),
         M::Vpermd => sse::lift_avx_binop(ctx, insn, sse::tag::VPERMD),
-        M::Vpand => sse::lift_avx_binop(ctx, insn, sse::tag::VPAND),
+        M::Vpand => sse::lift_vector_logic(ctx, insn, VectorLogic::And),
         M::Vpandq => sse::lift_vector_generic(ctx, insn, sse::tag::VPANDQ),
-        M::Vpor => sse::lift_avx_binop(ctx, insn, sse::tag::VPOR),
+        M::Vpor => sse::lift_vector_logic(ctx, insn, VectorLogic::Or),
         M::Vporq => sse::lift_vector_generic(ctx, insn, sse::tag::VPORQ),
-        M::Vpxor => sse::lift_avx_binop(ctx, insn, sse::tag::VPXOR),
+        M::Vpxor => sse::lift_vector_logic(ctx, insn, VectorLogic::Xor),
         M::Vpblendd => sse::lift_avx_blend(ctx, insn, sse::tag::VPBLENDD),
         M::Vpermb => sse::lift_vector_generic(ctx, insn, sse::tag::VPERMB),
         M::Vpermi2b => sse::lift_vector_generic(ctx, insn, sse::tag::VPERMI2B),

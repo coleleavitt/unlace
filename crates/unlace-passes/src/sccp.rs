@@ -787,6 +787,14 @@ fn sign_extend(val: u64, size: u8) -> i64 {
 }
 
 fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
+    // Constants are `u64`. A result or operand wider than that (a 128-bit
+    // SSE register lowered to integer IR) is evaluated only when the
+    // operation cannot carry bits past bit 63.
+    if !matches!(op, IrOp::Copy | IrOp::IntZext)
+        && (out_size > 8 || inputs.iter().any(|v| v.size > 8))
+    {
+        return None;
+    }
     let mask = mask_for_size(out_size);
 
     match op {

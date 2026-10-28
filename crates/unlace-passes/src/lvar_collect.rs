@@ -608,6 +608,7 @@ fn primitive_to_kind(pty: PrimitiveType) -> TypeKind {
         PrimitiveType::Float => TypeKind::Int, // no f32 in TypeKind
         PrimitiveType::Double => TypeKind::Long, // no f64 in TypeKind
         PrimitiveType::Ptr => TypeKind::VoidPtr,
+        PrimitiveType::Vector(_) => TypeKind::Int, // no vector in TypeKind
     }
 }
 
@@ -619,6 +620,7 @@ fn primitive_width(pty: PrimitiveType) -> Option<u8> {
         PrimitiveType::Float => Some(4),
         PrimitiveType::Double => Some(8),
         PrimitiveType::Ptr => Some(8),
+        PrimitiveType::Vector(v) => Some(v.size()),
     }
 }
 

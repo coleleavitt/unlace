@@ -3185,6 +3185,7 @@ fn primitive_to_lvar_kind(primitive: PrimitiveType) -> TypeKind {
         PrimitiveType::Float => TypeKind::Int,
         PrimitiveType::Double => TypeKind::Long,
         PrimitiveType::Ptr => TypeKind::VoidPtr,
+        PrimitiveType::Vector(_) => TypeKind::Int,
     }
 }
 
@@ -6109,6 +6110,14 @@ pub fn emit_output(
                 ann_clone.ssa_phi_uses = collect_ssa_phi_uses(ssa);
                 ann_clone.return_value_aliases = collect_return_value_aliases(ssa, symbols);
                 ann_clone.stack_lvars = unlace_output::stack_lvar_annotations_from_ssa(ssa);
+                ann_clone.vector_var_types = ssa
+                    .var_types
+                    .iter()
+                    .filter_map(|(sv, ty)| match ty {
+                        PrimitiveType::Vector(v) => Some((*sv, *v)),
+                        _ => None,
+                    })
+                    .collect();
             }
             check_output_deadline(deadline, &ssa.function.name, "output.annotation-maps")?;
             ann_clone.arch = Some(ssa.arch);

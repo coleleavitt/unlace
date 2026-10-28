@@ -196,6 +196,7 @@ impl FunctionHeaderInfo {
                     PrimitiveType::Float => 4,
                     PrimitiveType::Double => 8,
                     PrimitiveType::Ptr => 8,
+                    PrimitiveType::Vector(v) => i64::from(v.size()),
                     PrimitiveType::Unknown => 8,
                 };
                 lo = lo.min(sv.offset);
@@ -652,6 +653,10 @@ pub struct PrinterAnnotations {
     /// offsets the printer historically hard-coded. `None` (the default and the
     /// value passed by unit tests) preserves the legacy hard-coded behaviour.
     pub arch: Option<unlace_ir::ArchId>,
+    /// SIMD types `TypeInferPass` recovered for SSA varnodes. The printer
+    /// otherwise types values from their defining opcode alone, which sees
+    /// a 16-byte register as a plain `__int128`.
+    pub vector_var_types: BTreeMap<SsaVarnode, unlace_ir::types::VectorType>,
 }
 
 /// Convert final SSA lvar metadata into the stack-name side channel consumed
@@ -786,6 +791,7 @@ fn primitive_size_hint(ty: PrimitiveType) -> Option<u8> {
         PrimitiveType::Float => Some(4),
         PrimitiveType::Double => Some(8),
         PrimitiveType::Ptr => Some(8),
+        PrimitiveType::Vector(v) => Some(v.size()),
     }
 }
 
@@ -900,6 +906,11 @@ pub fn print_c_with_annotations(
         ctx.byref_union_types = ann.byref_union_types.clone();
         ctx.flirt_call_annotations = ann.flirt_call_annotations.clone();
         ctx.stack_spec = ann.arch.and_then(unlace_ir::stack::StackSpec::for_arch);
+        ctx.var_types.extend(
+            ann.vector_var_types
+                .iter()
+                .map(|(sv, v)| (*sv, PrimitiveType::Vector(*v))),
+        );
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -1687,6 +1698,10 @@ pub fn print_c_with_annotations(
         declared_names.insert("cond".to_string());
     }
     ctx.top_declared_names = declared_names.clone();
+    ctx.vector_decl_types = preferred_decl_types
+        .into_iter()
+        .filter(|(_, ty)| matches!(ty, PrimitiveType::Vector(_)))
+        .collect();
 
     let body_span = linkscope::phase("cprinter.emit-body");
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
@@ -2717,6 +2732,11 @@ struct PrintCtx {
     /// this set so block-local declarations do not collide with an existing
     /// function-scope temporary that prints with the same name.
     top_declared_names: BTreeSet<String>,
+    /// Names whose SSA versions include a SIMD value, with the merged
+    /// vector type. A register carrier such as `xmm0` is declared once for
+    /// all its versions; when the declaration is hoisted to a version that
+    /// only copies a constant or a load, its own type is a plain integer.
+    vector_decl_types: BTreeMap<String, PrimitiveType>,
     /// Stack ranges promoted to synthetic byte arrays because their address
     /// escapes to a call with a visible element count. This preserves
     /// original frame contiguity in standalone C.
@@ -2950,6 +2970,7 @@ impl PrintCtx {
             dwarf_array_locals: Vec::new(),
             dwarf_array_buffer_decls: BTreeMap::new(),
             top_declared_names: BTreeSet::new(),
+            vector_decl_types: BTreeMap::new(),
             promoted_stack_buffers: BTreeMap::new(),
             synthetic_stack_scalars: BTreeMap::new(),
             vtable_call_targets: BTreeMap::new(),
@@ -8824,6 +8845,7 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
         PrimitiveType::Float => "float",
         PrimitiveType::Double => "double",
         PrimitiveType::Ptr => "void *",
+        PrimitiveType::Vector(v) => v.c_name(),
     }
 }
 
@@ -8837,6 +8859,12 @@ fn c_type_for_var(ctx: &PrintCtx, var: &Varnode, fallback: &PrimitiveType) -> St
 fn prefer_decl_type(existing: PrimitiveType, candidate: PrimitiveType) -> PrimitiveType {
     use PrimitiveType::*;
     match (existing, candidate) {
+        (Vector(a), Vector(b)) => {
+            Vector(a.join(b).unwrap_or(if b.size() > a.size() { b } else { a }))
+        }
+        // A SIMD register carrier is the widest declaration; its scalar
+        // versions (low-lane moves) fit inside it.
+        (Vector(v), _) | (_, Vector(v)) => Vector(v),
         (Ptr, _) | (_, Ptr) => Ptr,
         (Double, _) | (_, Double) => Double,
         (Float, _) | (_, Float) => Float,
@@ -8937,6 +8965,7 @@ fn c_sig_type(ty: &PrimitiveType) -> &'static str {
         PrimitiveType::Float => "float",
         PrimitiveType::Double => "double",
         PrimitiveType::Ptr => "void *",
+        PrimitiveType::Vector(v) => v.c_name(),
     }
 }
 
@@ -13589,8 +13618,10 @@ fn hoisted_decl_for_stmt(idx: u32, sv: &SsaVarnode, ctx: &PrintCtx) -> Option<(S
         return None;
     }
     let ty = ctx
-        .var_types
+        .var_names
         .get(sv)
+        .and_then(|name| ctx.vector_decl_types.get(name))
+        .or_else(|| ctx.var_types.get(sv))
         .copied()
         .unwrap_or(PrimitiveType::Unknown);
     let prefix = format!("{} ", c_type_for_var(ctx, &sv.base, &ty));
@@ -15403,11 +15434,6 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x123 => Some("_mm_mullo_epi32"), // PMULLD
         0x127 => Some("_mm_mul_epu32"),   // PMULUDQ
 
-        // ── SSE2 packed bitwise logic (0x120..0x122) ───────────
-        0x120 => Some("_mm_and_si128"), // PAND
-        0x121 => Some("_mm_or_si128"),  // POR
-        0x122 => Some("_mm_xor_si128"), // PXOR
-
         // ── SSE packed float arithmetic (0x130..0x136) ─────────
         0x130 => Some("_mm_add_ps"),  // ADDPS
         0x131 => Some("_mm_sub_ps"),  // SUBPS
@@ -15421,9 +15447,8 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x140 => Some("_mm_shuffle_epi32"),  // PSHUFD
         0x141 => Some("_mm_shuffle_epi8"),   // PSHUFB
         0x142 => Some("_mm_unpacklo_epi8"),  // PUNPCKLBW
-        0x614 => Some("__unlace_psrldq"),    // PSRLDQ
-        0x61D => Some("__unlace_psrlq"),     // PSRLQ
-        0x61E => Some("__unlace_punpckldq"), // PUNPCKLDQ
+        0x61D => Some("_mm_srli_epi64"),     // PSRLQ
+        0x61E => Some("_mm_unpacklo_epi32"), // PUNPCKLDQ
 
         // ── SSE misc (0x150) ───────────────────────────────────
         0x150 => Some("_mm_movemask_epi8"), // PMOVMSKB
@@ -17814,15 +17839,19 @@ _DWORD __readfsdword(unsigned int offset);
 #ifndef INFINITY
 #define INFINITY __builtin_inff()
 #endif
+// SIMD register types. 128-bit values are carried as raw bits so the vector
+// helpers below stay plain C; wider registers use GCC vector types.
+typedef unsigned long long __m64; typedef unsigned __int128 __m128i; typedef unsigned __int128 __m128; typedef unsigned __int128 __m128d;
+typedef long long __m256i __attribute__((__vector_size__(32))); typedef float __m256 __attribute__((__vector_size__(32))); typedef double __m256d __attribute__((__vector_size__(32)));
+typedef long long __m512i __attribute__((__vector_size__(64))); typedef float __m512 __attribute__((__vector_size__(64))); typedef double __m512d __attribute__((__vector_size__(64)));
 // Minimal executable semantics for the SSE vector helpers emitted below.
-static inline unsigned int __unlace_vec_u32(unsigned __int128 v, unsigned int lane) { return (unsigned int)(v >> (lane * 32)); }
-static inline unsigned long long __unlace_vec_u64(unsigned __int128 v, unsigned int lane) { return (unsigned long long)(v >> (lane * 64)); }
-static inline unsigned __int128 _mm_add_epi32(unsigned __int128 a, unsigned __int128 b) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)(__unlace_vec_u32(a, i) + __unlace_vec_u32(b, i)) << (i * 32); return out; }
-static inline unsigned __int128 _mm_mul_epu32(unsigned __int128 a, unsigned __int128 b) { unsigned long long lo = (unsigned long long)__unlace_vec_u32(a, 0) * __unlace_vec_u32(b, 0); unsigned long long hi = (unsigned long long)__unlace_vec_u32(a, 2) * __unlace_vec_u32(b, 2); return (unsigned __int128)lo | ((unsigned __int128)hi << 64); }
-static inline unsigned __int128 _mm_shuffle_epi32(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 4; i++) out |= (unsigned __int128)__unlace_vec_u32(a, (imm >> (i * 2)) & 3u) << (i * 32); return out; }
-static inline unsigned __int128 __unlace_psrldq(unsigned __int128 a, unsigned int imm) { return imm >= 16 ? 0 : a >> (imm * 8); }
-static inline unsigned __int128 __unlace_psrlq(unsigned __int128 a, unsigned int imm) { unsigned __int128 out = 0; for (unsigned int i = 0; i < 2; i++) { unsigned long long lane = __unlace_vec_u64(a, i); lane = imm >= 64 ? 0 : lane >> imm; out |= (unsigned __int128)lane << (i * 64); } return out; }
-static inline unsigned __int128 __unlace_punpckldq(unsigned __int128 a, unsigned __int128 b) { return (unsigned __int128)__unlace_vec_u32(a, 0) | ((unsigned __int128)__unlace_vec_u32(b, 0) << 32) | ((unsigned __int128)__unlace_vec_u32(a, 1) << 64) | ((unsigned __int128)__unlace_vec_u32(b, 1) << 96); }
+static inline unsigned int __unlace_vec_u32(__m128i v, unsigned int lane) { return (unsigned int)(v >> (lane * 32)); }
+static inline unsigned long long __unlace_vec_u64(__m128i v, unsigned int lane) { return (unsigned long long)(v >> (lane * 64)); }
+static inline __m128i _mm_add_epi32(__m128i a, __m128i b) { __m128i out = 0; for (unsigned int i = 0; i < 4; i++) out |= (__m128i)(__unlace_vec_u32(a, i) + __unlace_vec_u32(b, i)) << (i * 32); return out; }
+static inline __m128i _mm_mul_epu32(__m128i a, __m128i b) { unsigned long long lo = (unsigned long long)__unlace_vec_u32(a, 0) * __unlace_vec_u32(b, 0); unsigned long long hi = (unsigned long long)__unlace_vec_u32(a, 2) * __unlace_vec_u32(b, 2); return (__m128i)lo | ((__m128i)hi << 64); }
+static inline __m128i _mm_shuffle_epi32(__m128i a, unsigned int imm) { __m128i out = 0; for (unsigned int i = 0; i < 4; i++) out |= (__m128i)__unlace_vec_u32(a, (imm >> (i * 2)) & 3u) << (i * 32); return out; }
+static inline __m128i _mm_srli_epi64(__m128i a, unsigned int imm) { __m128i out = 0; for (unsigned int i = 0; i < 2; i++) { unsigned long long lane = __unlace_vec_u64(a, i); lane = imm >= 64 ? 0 : lane >> imm; out |= (__m128i)lane << (i * 64); } return out; }
+static inline __m128i _mm_unpacklo_epi32(__m128i a, __m128i b) { return (__m128i)__unlace_vec_u32(a, 0) | ((__m128i)__unlace_vec_u32(b, 0) << 32) | ((__m128i)__unlace_vec_u32(a, 1) << 64) | ((__m128i)__unlace_vec_u32(b, 1) << 96); }
 // Minimal C11 atomic declarations used by recovered AArch64 atomics.
 typedef enum { memory_order_relaxed, memory_order_consume, memory_order_acquire, memory_order_release, memory_order_acq_rel, memory_order_seq_cst } memory_order;
 #define _Atomic

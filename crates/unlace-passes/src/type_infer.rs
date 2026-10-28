@@ -5,9 +5,11 @@ use std::collections::BTreeMap;
 use linkscope::TraceField;
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 use unlace_ir::types::Type;
-use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId};
+use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId};
 
 use crate::pass::{DefIndex, Pass, PassError};
+
+mod simd;
 
 pub struct TypeInferPass;
 
@@ -48,6 +50,7 @@ impl Pass for TypeInferPass {
             for (&bid, block) in &func.function.blocks {
                 for (insn_idx, insn) in block.insns.iter().enumerate() {
                     changed |= infer_insn(
+                        func.arch,
                         &func.var_map,
                         &defs,
                         &mut func.var_types,
@@ -302,6 +305,7 @@ type CompositeMap = BTreeMap<SsaVarnode, Type>;
 type BlockMap = BTreeMap<BlockId, unlace_ir::BasicBlock>;
 
 fn infer_insn(
+    arch: ArchId,
     var_map: &VarMap,
     defs: &DefIndex,
     var_types: &mut TypeMap,
@@ -631,6 +635,34 @@ fn infer_insn(
             }
         }
 
+        // x86 SIMD intrinsics: register-wide operands are vectors.
+        IrOp::Callother => {
+            let simd = insn
+                .inputs
+                .first()
+                .filter(|tag| tag.space == SpaceId::Const)
+                .and_then(|tag| simd::x86_simd_operands(arch, tag.offset));
+            if let Some(simd) = simd {
+                if let Some(out) = output_sv
+                    && let Some(vt) = simd::register_type(simd.output, out.base.size)
+                {
+                    changed |= set_type(var_types, out, PrimitiveType::Vector(vt));
+                }
+                if let Some(lanes) = simd.inputs {
+                    for (idx, inp) in insn.inputs.iter().enumerate().skip(1) {
+                        if inp.space == SpaceId::Const {
+                            continue;
+                        }
+                        if let Some(sv) = input_sv(idx)
+                            && let Some(vt) = simd::register_type(lanes, sv.base.size)
+                        {
+                            changed |= set_type(var_types, sv, PrimitiveType::Vector(vt));
+                        }
+                    }
+                }
+            }
+        }
+
         IrOp::Cast => {
             if let Some(out) = output_sv {
                 let in_ty = input_sv(0).map(|sv| current_type(var_types, &sv));
@@ -811,6 +843,60 @@ mod tests {
 
         let in0_ty = lookup_input_type(&ssa, BlockId(0), 0, 0);
         assert_eq!(in0_ty, Some(PrimitiveType::Int(8)));
+    }
+
+    #[test]
+    fn x86_simd_callother_types_register_operands_as_vectors() {
+        // xmm1 = LOAD [rdi]; xmm0 = PADDD(xmm0, xmm1)
+        let xmm0 = Varnode::reg(0x400, 16);
+        let xmm1 = Varnode::reg(0x440, 16);
+        let rdi = Varnode::reg(0x38, 8);
+        let mut func = Function::new("paddd", BlockId(0), 0x1000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            xmm1,
+            smallvec![Varnode::constant(1, 8), rdi],
+            0x1000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Callother,
+            xmm0,
+            smallvec![Varnode::constant(0x112, 8), xmm0, xmm1],
+            0x1004,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
+        func.insert_block(bb0);
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+        TypeInferPass.run(&mut ssa).unwrap();
+
+        let m128i = PrimitiveType::Vector(
+            unlace_ir::types::VectorType::new(unlace_ir::types::VectorLanes::Int, 16).unwrap(),
+        );
+        assert_eq!(lookup_output_type(&ssa, BlockId(0), 1), Some(m128i));
+        assert_eq!(lookup_input_type(&ssa, BlockId(0), 1, 1), Some(m128i));
+        // The load's integer fact joins with the vector use.
+        assert_eq!(lookup_output_type(&ssa, BlockId(0), 0), Some(m128i));
+    }
+
+    #[test]
+    fn simd_callother_tags_are_not_vectors_off_x86() {
+        let q0 = Varnode::reg(0x400, 16);
+        let mut func = Function::new("neon", BlockId(0), 0x1000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Callother,
+            q0,
+            smallvec![Varnode::constant(0x112, 8), q0, q0],
+            0x1000,
+        ));
+        func.insert_block(bb0);
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::AArch64;
+        TypeInferPass.run(&mut ssa).unwrap();
+        assert_eq!(lookup_output_type(&ssa, BlockId(0), 0), None);
     }
 
     #[test]

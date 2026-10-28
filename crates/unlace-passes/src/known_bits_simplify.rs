@@ -140,6 +140,16 @@ mod tests {
     }
 
     #[test]
+    fn test_known_bits_simplify_keeps_wide_shift() {
+        // A 128-bit `x >> 64` keeps x's high half; it is not provably zero.
+        let x = Varnode::reg(0x400, 16);
+        let sixty_four = Varnode::constant(64, 1);
+        let mut ssa = build_function_with_op(IrOp::IntRight, vec![x, sixty_four], 16);
+        assert!(!KnownBitsSimplifyPass.run(&mut ssa).unwrap());
+        assert_eq!(ssa.function.blocks[&BlockId(0)].insns[0].op, IrOp::IntRight);
+    }
+
+    #[test]
     fn test_known_bits_simplify_and_with_zero() {
         // x & 0 → 0
         let x = Varnode::reg(0, 4);

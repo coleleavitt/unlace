@@ -436,6 +436,7 @@ fn primitive_type_width(ty: PrimitiveType) -> Option<u8> {
         PrimitiveType::Int(width) | PrimitiveType::UnsignedInt(width) => Some(width),
         PrimitiveType::Float => Some(4),
         PrimitiveType::Double | PrimitiveType::Ptr => Some(8),
+        PrimitiveType::Vector(v) => Some(v.size()),
     }
 }
 

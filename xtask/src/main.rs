@@ -14,6 +14,7 @@ mod goto_count;
 mod lift_trace;
 mod lifter_coverage;
 mod loader_scorecard;
+mod oracle_diff;
 mod project_roundtrip;
 mod register_alias_report;
 mod report_io;
@@ -114,6 +115,12 @@ fn main() {
                 process::exit(code);
             }
         }
+        Some("oracle-diff") => {
+            let code = oracle_diff::run(&workspace_root(), &args[1..]);
+            if code != 0 {
+                process::exit(code);
+            }
+        }
         Some("dump-pipeline") => {
             dump_pipeline::run();
         }
@@ -136,7 +143,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, oracle-diff, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, fuzz"
             );
             process::exit(1);
         }

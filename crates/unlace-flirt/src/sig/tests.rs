@@ -63,8 +63,12 @@ impl Encoder {
         } else if v < 0x4000 {
             self.out.extend([0x80 | (v >> 8) as u8, v as u8]);
         } else if v < 0x2000_0000 {
-            self.out
-                .extend([0xC0 | (v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8]);
+            self.out.extend([
+                0xC0 | (v >> 24) as u8,
+                (v >> 16) as u8,
+                (v >> 8) as u8,
+                v as u8,
+            ]);
         } else {
             self.out.push(0xE0);
             self.out.extend(v.to_be_bytes());
@@ -72,7 +76,11 @@ impl Encoder {
     }
 
     fn offset(&mut self, v: u32) {
-        if self.version > 8 { self.long(v) } else { self.short(v) }
+        if self.version > 8 {
+            self.long(v)
+        } else {
+            self.short(v)
+        }
     }
 
     fn node(&mut self, node: &TNode) {
@@ -142,7 +150,9 @@ impl Encoder {
                         parse |= 0x04;
                     }
                     match modules.get(i + 1) {
-                        Some(next) if (next.crc_len, next.crc16) == (module.crc_len, module.crc16) => {
+                        Some(next)
+                            if (next.crc_len, next.crc16) == (module.crc_len, module.crc16) =>
+                        {
                             parse |= 0x08
                         }
                         Some(_) => parse |= 0x10,
@@ -238,7 +248,9 @@ fn encode(spec: &Spec, root: &TNode) -> Vec<u8> {
 
 /// A signature with one root child per module. The four bytes at a
 /// module's reference offset are variant, as `sigmake` marks relocations.
-pub(crate) fn encode_flat(modules: &[(&[u8], &'static str, Option<(i32, &'static str)>)]) -> Vec<u8> {
+pub(crate) fn encode_flat(
+    modules: &[(&[u8], &'static str, Option<(i32, &'static str)>)],
+) -> Vec<u8> {
     let children = modules
         .iter()
         .map(|&(bytes, name, reference)| {
@@ -274,8 +286,8 @@ const BASE: u64 = 0x1000;
 /// `strlen`: `mov rax, rdi; cmp byte [rax], 0; jz done; inc rax; jmp loop;
 /// done: sub rax, rdi; ret`.
 const STRLEN: &[u8] = &[
-    0x48, 0x89, 0xF8, 0x80, 0x38, 0x00, 0x74, 0x05, 0x48, 0xFF, 0xC0, 0xEB, 0xF6, 0x48, 0x29,
-    0xF8, 0xC3,
+    0x48, 0x89, 0xF8, 0x80, 0x38, 0x00, 0x74, 0x05, 0x48, 0xFF, 0xC0, 0xEB, 0xF6, 0x48, 0x29, 0xF8,
+    0xC3,
 ];
 
 /// `memcpy`: `mov rax, rdi; mov rcx, rdx; rep movsb; ret`.
@@ -397,7 +409,11 @@ fn crc_and_tail_bytes_separate_identical_prefixes() {
     )]);
     let sig = SigFile::parse(&encode(&Spec::default(), &root)).unwrap();
     let names = BTreeMap::new();
-    for (tail, expected) in [(&tail_a, "strcpy"), (&tail_b, "strcat"), (&tail_c, "strncat")] {
+    for (tail, expected) in [
+        (&tail_a, "strcpy"),
+        (&tail_b, "strcat"),
+        (&tail_c, "strncat"),
+    ] {
         let mut image = prefix.clone();
         image.extend(tail);
         let cx = MatchContext {
@@ -412,7 +428,9 @@ fn crc_and_tail_bytes_separate_identical_prefixes() {
 #[test]
 fn reference_must_resolve_to_the_named_symbol() {
     // `_wremove`-style wrapper: `sub rsp, 28h; call [rip+X]; add rsp, 28h; ret`.
-    let mut code = vec![0x48, 0x83, 0xEC, 0x28, 0xFF, 0x15, 0, 0, 0, 0, 0x48, 0x83, 0xC4, 0x28, 0xC3];
+    let mut code = vec![
+        0x48, 0x83, 0xEC, 0x28, 0xFF, 0x15, 0, 0, 0, 0, 0x48, 0x83, 0xC4, 0x28, 0xC3,
+    ];
     let site = BASE + 6;
     let iat_slot = 0x9000u64;
     let disp = (iat_slot as i64 - (site as i64 + 4)) as i32;
@@ -500,7 +518,13 @@ fn version_8_uses_short_offsets_and_byte_lengths() {
     };
     let sig = SigFile::parse(&encode(&spec, &root)).unwrap();
     assert_eq!(sig.modules()[0].length, 300);
-    assert_eq!(sig.modules()[0].tail_bytes, vec![TailByte { offset: 3, value: 0xC3 }]);
+    assert_eq!(
+        sig.modules()[0].tail_bytes,
+        vec![TailByte {
+            offset: 3,
+            value: 0xC3
+        }]
+    );
 }
 
 #[test]
@@ -539,8 +563,8 @@ fn decodes_every_ida_signature() {
         for entry in entries {
             let path = entry.unwrap().path();
             if path.extension().is_some_and(|ext| ext == "sig") {
-                let sig = SigFile::load(&path)
-                    .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+                let sig =
+                    SigFile::load(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
                 assert!(!sig.modules().is_empty(), "{}", path.display());
                 decoded += 1;
             }

@@ -290,10 +290,7 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
 }
 
 /// Keep the functions `filter` names: a symbol name or a hex address.
-pub fn select_functions(
-    mut funcs: Vec<FunctionEntry>,
-    filter: &str,
-) -> Result<Vec<FunctionEntry>> {
+pub fn select_functions(mut funcs: Vec<FunctionEntry>, filter: &str) -> Result<Vec<FunctionEntry>> {
     let target = parse_function_filter(filter);
     funcs.retain(|f| match &target {
         FunctionTarget::Name(name) => f.name == *name,
@@ -4319,9 +4316,14 @@ pub fn flirt_match_detailed_with_config(
     if !config.should_scan_for_arch(image.arch) || !is_flirt_eligible_name(&entry.name) {
         return None;
     }
-    let explicit = config.explicit_hits(image, &[entry.addr]).remove(&entry.addr);
+    let explicit = config
+        .explicit_hits(image, &[entry.addr])
+        .remove(&entry.addr);
     let resolved = flirt_resolved_names_with_config(image, config);
-    prefer_flirt_match(explicit, bundled_flirt_match(image, entry, &resolved, config))
+    prefer_flirt_match(
+        explicit,
+        bundled_flirt_match(image, entry, &resolved, config),
+    )
 }
 
 /// Prefer the explicit `.sig` match unless the bundled one is more certain.
@@ -4408,8 +4410,7 @@ fn flirt_resolved_names_with_config(
                     addr: sym.addr,
                     size: sym.size,
                 };
-                bundled_flirt_match(image, &entry, &resolved, config)
-                    .map(|m| (sym.addr, m.name))
+                bundled_flirt_match(image, &entry, &resolved, config).map(|m| (sym.addr, m.name))
             })
             .collect();
         candidates.sort_by_key(|(addr, _)| *addr);

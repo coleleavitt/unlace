@@ -67,7 +67,9 @@ impl SigHeader {
             8 | 9 => 43,
             10 => 45,
             _ => {
-                return Err(FlirtError::Sig(format!("unsupported IDASGN version {version}")));
+                return Err(FlirtError::Sig(format!(
+                    "unsupported IDASGN version {version}"
+                )));
             }
         };
         let name_len = usize::from(bytes[34]);

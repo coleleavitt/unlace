@@ -27,7 +27,13 @@ const MAX_ROUNDS: usize = 8;
 pub fn resolve_gotos(func: &mut HirFunction) {
     for round in 0..MAX_ROUNDS {
         let mut analysis = Analysis::default();
-        walk_list(&mut func.body, Point::FunctionEnd, Ctx::default(), &mut analysis, None);
+        walk_list(
+            &mut func.body,
+            Point::FunctionEnd,
+            Ctx::default(),
+            &mut analysis,
+            None,
+        );
         let rewrites = analysis.rewrites();
         tracing::debug!(
             target: "unlace::struct::goto_resolve",
@@ -39,7 +45,13 @@ pub fn resolve_gotos(func: &mut HirFunction) {
         if rewrites.is_empty() {
             break;
         }
-        walk_list(&mut func.body, Point::FunctionEnd, Ctx::default(), &mut Analysis::default(), Some(&rewrites));
+        walk_list(
+            &mut func.body,
+            Point::FunctionEnd,
+            Ctx::default(),
+            &mut Analysis::default(),
+            Some(&rewrites),
+        );
         remove_empty_blocks(&mut func.body);
         let mut used = BTreeSet::new();
         collect_goto_targets(&func.body, &mut used);
@@ -79,7 +91,7 @@ enum Rewrite {
     Remove,
     Continue,
     Break,
-    Return(HirNode),
+    Return(Box<HirNode>),
 }
 
 #[derive(Default)]
@@ -112,7 +124,7 @@ impl Analysis {
             } else if let Point::Node(node) = target
                 && let Some(ret) = self.returns.get(&node)
             {
-                Rewrite::Return(ret.clone())
+                Rewrite::Return(Box::new(ret.clone()))
             } else {
                 continue;
             };
@@ -166,7 +178,7 @@ fn walk_node(
                     Rewrite::Remove => HirNode::Block(Vec::new()),
                     Rewrite::Continue => HirNode::Continue,
                     Rewrite::Break => HirNode::Break,
-                    Rewrite::Return(ret) => ret.clone(),
+                    Rewrite::Return(ret) => (**ret).clone(),
                 };
                 return Point::Node(id);
             }
@@ -180,7 +192,9 @@ fn walk_node(
             );
             Point::Node(id)
         }
-        HirNode::Continue => ctx.innermost_loop.map_or(Point::Node(id), Point::LoopContinue),
+        HirNode::Continue => ctx
+            .innermost_loop
+            .map_or(Point::Node(id), Point::LoopContinue),
         HirNode::Break => ctx.breakable_exit.unwrap_or(Point::Node(id)),
         HirNode::Return(_) => {
             analysis.returns.insert(id, node.clone());

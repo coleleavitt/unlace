@@ -85,7 +85,8 @@ impl SigFile {
         match &node.children {
             NodeChildren::Leaf(ids) => ids.iter().find_map(|&id| {
                 let module = &self.modules[id.index()];
-                self.module_holds(module, cx, ea).then_some(SigMatch { id, module })
+                self.module_holds(module, cx, ea)
+                    .then_some(SigMatch { id, module })
             }),
             NodeChildren::Inner(children) => children.iter().find_map(|child| {
                 let len = child.pattern.len();
@@ -157,7 +158,9 @@ impl SigFile {
         let site = ea.wrapping_add_signed(offset);
         let targets = operand_targets(cx.arch, &cx.code, site);
         if reference.is_ctype_table() {
-            return targets.iter().any(|&target| self.ctype_table_at(cx, target));
+            return targets
+                .iter()
+                .any(|&target| self.ctype_table_at(cx, target));
         }
         targets.iter().any(|&target| {
             cx.names
@@ -176,20 +179,24 @@ impl SigFile {
         } else {
             (1, 128)
         };
-        [target, target.wrapping_sub(width)].into_iter().any(|addr| {
-            if header.features.contains(SigFeatures::CTYPE)
-                && cx.names.name_at(addr) == Some(header.ctype_name.as_str())
-            {
-                return true;
-            }
-            let Some(bytes) = cx.code.read(addr, len) else {
-                return false;
-            };
-            let crc = crc16(bytes);
-            crc == header.ctype_crc
-                || (header.features.contains(SigFeatures::CTYPE_ALT) && crc == header.ctype_crc_alt)
-                || (header.features.contains(SigFeatures::CTYPE_3V) && crc == header.ctype_crc_3v)
-        })
+        [target, target.wrapping_sub(width)]
+            .into_iter()
+            .any(|addr| {
+                if header.features.contains(SigFeatures::CTYPE)
+                    && cx.names.name_at(addr) == Some(header.ctype_name.as_str())
+                {
+                    return true;
+                }
+                let Some(bytes) = cx.code.read(addr, len) else {
+                    return false;
+                };
+                let crc = crc16(bytes);
+                crc == header.ctype_crc
+                    || (header.features.contains(SigFeatures::CTYPE_ALT)
+                        && crc == header.ctype_crc_alt)
+                    || (header.features.contains(SigFeatures::CTYPE_3V)
+                        && crc == header.ctype_crc_3v)
+            })
     }
 }
 

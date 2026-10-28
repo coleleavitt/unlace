@@ -5,8 +5,8 @@ use std::io::Read;
 use flate2::read::{DeflateDecoder, ZlibDecoder};
 
 use super::{
-    Module, ModuleId, ModuleRef, NameFlags, Node, NodeChildren, PublicName, SigFeatures,
-    SigFile, SigHeader, TailByte,
+    Module, ModuleId, ModuleRef, NameFlags, Node, NodeChildren, PublicName, SigFeatures, SigFile,
+    SigHeader, TailByte,
 };
 use crate::FlirtError;
 
@@ -31,14 +31,17 @@ pub(super) fn decode(bytes: &[u8]) -> Result<SigFile, FlirtError> {
     let (header, body_start) = SigHeader::decode(bytes)?;
     let body = inflate(&header, &bytes[body_start..])?;
     let mut decoder = BodyDecoder {
-        reader: Reader { bytes: &body, pos: 0 },
+        reader: Reader {
+            bytes: &body,
+            pos: 0,
+        },
         version: header.body_version(),
         pattern_size: usize::from(header.pattern_size),
         modules: Vec::new(),
     };
-    let root = decoder.node(Vec::new(), 0, 0)?.ok_or_else(|| {
-        FlirtError::Sig("signature tree has no fixed bytes".into())
-    })?;
+    let root = decoder
+        .node(Vec::new(), 0, 0)?
+        .ok_or_else(|| FlirtError::Sig("signature tree has no fixed bytes".into()))?;
     if decoder.reader.pos != body.len() {
         return Err(FlirtError::Sig(format!(
             "{} trailing bytes after signature tree",
@@ -60,7 +63,9 @@ fn inflate(header: &SigHeader, body: &[u8]) -> Result<Vec<u8>, FlirtError> {
     let result = if header.version >= 7 {
         ZlibDecoder::new(body).take(MAX_BODY).read_to_end(&mut out)
     } else {
-        DeflateDecoder::new(body).take(MAX_BODY).read_to_end(&mut out)
+        DeflateDecoder::new(body)
+            .take(MAX_BODY)
+            .read_to_end(&mut out)
     };
     result.map_err(|e| FlirtError::Sig(format!("inflating signature body: {e}")))?;
     if out.len() as u64 == MAX_BODY {
@@ -264,7 +269,11 @@ impl BodyDecoder<'_> {
 
         let mut tail_bytes = Vec::new();
         if flags & parse_flags::TAIL_BYTES != 0 {
-            let count = if self.version <= 7 { 1 } else { self.reader.u8()? };
+            let count = if self.version <= 7 {
+                1
+            } else {
+                self.reader.u8()?
+            };
             for _ in 0..count {
                 let offset = self.offset()?;
                 let value = self.reader.u8()?;
@@ -323,7 +332,11 @@ impl BodyDecoder<'_> {
             name.push(byte);
             byte = self.reader.u8()?;
         }
-        Ok((String::from_utf8_lossy(&name).into_owned(), name_flags, byte))
+        Ok((
+            String::from_utf8_lossy(&name).into_owned(),
+            name_flags,
+            byte,
+        ))
     }
 }
 

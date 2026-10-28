@@ -154,7 +154,11 @@ impl FlirtMatcher {
                 }
                 let hit = FlirtHit {
                     name: public.name.clone(),
-                    confidence: if matched.module.reference.is_some() { 1.0 } else { 0.9 },
+                    confidence: if matched.module.reference.is_some() {
+                        1.0
+                    } else {
+                        0.9
+                    },
                     signature_id: first_id + matched.id.index(),
                 };
                 names.found.insert(ea, hit.name.clone());
@@ -277,8 +281,8 @@ mod tests {
     use crate::sig::tests::encode_flat;
 
     const STRLEN: &[u8] = &[
-        0x48, 0x89, 0xF8, 0x80, 0x38, 0x00, 0x74, 0x05, 0x48, 0xFF, 0xC0, 0xEB, 0xF6, 0x48,
-        0x29, 0xF8, 0xC3,
+        0x48, 0x89, 0xF8, 0x80, 0x38, 0x00, 0x74, 0x05, 0x48, 0xFF, 0xC0, 0xEB, 0xF6, 0x48, 0x29,
+        0xF8, 0xC3,
     ];
     /// `strnlen` wrapper: `mov rsi, -1; jmp strlen`.
     const TAIL_CALL: &[u8] = &[0x48, 0xC7, 0xC6, 0xFF, 0xFF, 0xFF, 0xFF, 0xE9, 0, 0, 0, 0];
@@ -309,7 +313,12 @@ mod tests {
         let m = matcher();
         let (bytes, strlen_at, wrapper_at) = image_bytes();
         let windows = [CodeWindow::new(0x1000, &bytes)];
-        let hits = m.identify(ArchId::X86_64, &windows, &[strlen_at, wrapper_at], &BTreeMap::new());
+        let hits = m.identify(
+            ArchId::X86_64,
+            &windows,
+            &[strlen_at, wrapper_at],
+            &BTreeMap::new(),
+        );
         assert_eq!(hits[&strlen_at].name, "strlen");
         assert_eq!(hits[&strlen_at].confidence, 0.9);
         assert_eq!(hits[&wrapper_at].name, "strlen_wrapper");
@@ -328,7 +337,10 @@ mod tests {
         let (bytes, strlen_at, _) = image_bytes();
         let windows = [CodeWindow::new(0x1000, &bytes)];
         let known = BTreeMap::from([(0x5000, "strlen".to_string())]);
-        assert!(m.identify(ArchId::X86_64, &windows, &[strlen_at], &known).is_empty());
+        assert!(
+            m.identify(ArchId::X86_64, &windows, &[strlen_at], &known)
+                .is_empty()
+        );
     }
 
     #[test]
@@ -336,7 +348,10 @@ mod tests {
         let m = matcher();
         let (bytes, strlen_at, _) = image_bytes();
         let windows = [CodeWindow::new(0x1000, &bytes)];
-        assert!(m.identify(ArchId::AArch64, &windows, &[strlen_at], &BTreeMap::new()).is_empty());
+        assert!(
+            m.identify(ArchId::AArch64, &windows, &[strlen_at], &BTreeMap::new())
+                .is_empty()
+        );
     }
 
     #[test]
@@ -413,7 +428,10 @@ mod tests {
 
         let m = matcher();
         let report = m.apply_to_session(&session, false);
-        assert_eq!(report.renamed, 0, "named funcs must be skipped without force");
+        assert_eq!(
+            report.renamed, 0,
+            "named funcs must be skipped without force"
+        );
 
         let forced = m.apply_to_session(&session, true);
         assert_eq!(forced.renamed, 1, "force must override existing names");

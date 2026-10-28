@@ -7,6 +7,7 @@
 //! Every mutating pass invalidates the AnalysisContext after it reports a
 //! change, so subsequent passes always see fresh facts.
 
+use linkscope::TraceField;
 use unlace_ir::ssa::SsaFunction;
 
 use crate::analysis_context::{AnalysisContext, PreservedAnalyses};
@@ -68,6 +69,18 @@ pub fn run_to_fixedpoint_with_context(
     func: &mut SsaFunction,
     ctx: &mut AnalysisContext,
 ) -> Result<usize, PassError> {
+    let _linkscope_span = linkscope::phase("pass.context-fixedpoint");
+    let _linkscope_trace = if linkscope::is_enabled() {
+        Some(linkscope::trace_fields(
+            "pass.context-fixedpoint",
+            [
+                TraceField::text("function", func.function.name.clone()),
+                TraceField::count("passes", passes.len() as u64),
+            ],
+        ))
+    } else {
+        None
+    };
     const MAX_ROUNDS: usize = 200;
     let mut total_changes = 0usize;
     let func_name = func.function.name.clone();
@@ -75,11 +88,38 @@ pub fn run_to_fixedpoint_with_context(
 
     loop {
         round += 1;
+        let _round_span = linkscope::phase("pass.context-fixedpoint.round");
+        let _round_trace = if linkscope::is_enabled() {
+            linkscope::event_fields(
+                "pass.context-fixedpoint.round.start",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("round", round as u64),
+                    TraceField::count("passes", passes.len() as u64),
+                ],
+            );
+            Some(linkscope::trace_fields(
+                "pass.context-fixedpoint.round",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("round", round as u64),
+                    TraceField::count("passes", passes.len() as u64),
+                ],
+            ))
+        } else {
+            None
+        };
         if round > MAX_ROUNDS {
-            tracing::error!(
-                func = %func_name,
-                rounds = MAX_ROUNDS,
-                "run_to_fixedpoint_with_context did not converge - passes are oscillating"
+            linkscope::event_fields(
+                "pass.context-fixedpoint.error",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("rounds", MAX_ROUNDS as u64),
+                    TraceField::text(
+                        "message",
+                        "run_to_fixedpoint_with_context did not converge - passes are oscillating",
+                    ),
+                ],
             );
             return Err(PassError::InvariantViolation {
                 message: format!(
@@ -109,12 +149,14 @@ pub fn run_to_fixedpoint_with_context(
                 );
             }
             if elapsed >= std::time::Duration::from_millis(500) {
-                tracing::warn!(
-                    func = %func_name,
-                    pass = pass.name(),
-                    round,
-                    elapsed_ms = elapsed.as_millis(),
-                    "slow pass"
+                linkscope::event_fields(
+                    "pass.slow",
+                    [
+                        TraceField::text("function", func_name.clone()),
+                        TraceField::text("pass", pass.name().to_string()),
+                        TraceField::count("round", round as u64),
+                        TraceField::count("elapsed_ms", elapsed.as_millis() as u64),
+                    ],
                 );
             }
             if changed {
@@ -126,20 +168,24 @@ pub fn run_to_fixedpoint_with_context(
         }
 
         if changed_this_round {
-            tracing::trace!(
-                func = %func_name,
-                round,
-                ?changed_passes,
-                "fixedpoint round"
+            linkscope::event_fields(
+                "pass.context-fixedpoint.round.changed",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("round", round as u64),
+                    TraceField::text("changed_passes", changed_passes.join(",")),
+                ],
             );
         }
 
         if !changed_this_round {
-            tracing::debug!(
-                func = %func_name,
-                rounds = round,
-                total_changes,
-                "run_to_fixedpoint_with_context converged"
+            linkscope::event_fields(
+                "pass.context-fixedpoint.converged",
+                [
+                    TraceField::text("function", func_name),
+                    TraceField::count("rounds", round as u64),
+                    TraceField::count("total_changes", total_changes as u64),
+                ],
             );
             return Ok(total_changes);
         }

@@ -131,9 +131,201 @@ pub struct ReachingConditions {
     /// are excluded from the acyclic condition sweep and handed to the cyclic
     /// structurer in a later step.
     pub back_edges: BTreeSet<(RegionNode, RegionNode)>,
+    /// True when condition growth exceeded the configured budget.
+    pub limited: bool,
+}
+
+const DEFAULT_RC_MAX_COND_NODES: usize = 8192;
+
+fn reaching_condition_node_limit() -> usize {
+    std::env::var("UNLACE_RC_MAX_COND_NODES")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_RC_MAX_COND_NODES)
+}
+
+fn over_condition_limit(limit: usize, size: usize) -> bool {
+    limit > 0 && size > limit
+}
+
+fn cond_tree_size_bounded(cond: &Cond, limit: usize) -> usize {
+    let mut count = 0usize;
+    let mut stack = vec![cond];
+    while let Some(cond) = stack.pop() {
+        count = count.saturating_add(1);
+        if over_condition_limit(limit, count) {
+            return count;
+        }
+        match cond {
+            Cond::NotCaseEq(inner) => stack.push(inner),
+            Cond::And(left, right) | Cond::Or(left, right) => {
+                stack.push(left);
+                stack.push(right);
+            }
+            Cond::True | Cond::False | Cond::Pred(_) | Cond::NotPred(_) | Cond::CaseEq(_, _) => {}
+        }
+    }
+    count
+}
+
+fn estimate_and_size(left: &Cond, left_size: usize, right: &Cond) -> usize {
+    match (left, right) {
+        (Cond::False, _) | (_, Cond::False) => 1,
+        (Cond::True, _) => 1,
+        (_, Cond::True) => left_size,
+        _ => left_size.saturating_add(2),
+    }
+}
+
+fn estimate_or_size(left: &Cond, left_size: usize, right: &Cond, right_size: usize) -> usize {
+    match (left, right) {
+        (Cond::True, _) | (_, Cond::True) => 1,
+        (Cond::False, _) => right_size,
+        (_, Cond::False) => left_size,
+        _ => left_size.saturating_add(right_size).saturating_add(1),
+    }
+}
+
+fn checked_and_label(
+    cond: &Cond,
+    cond_size: usize,
+    label: &EdgeLabel,
+    limit: usize,
+) -> Option<(Cond, usize)> {
+    let label_cond = Cond::from_label(label);
+    let estimated_size = estimate_and_size(cond, cond_size, &label_cond);
+    if over_condition_limit(limit, estimated_size) {
+        return None;
+    }
+    let combined = cond.clone().and(label_cond);
+    let size = cond_tree_size_bounded(&combined, limit);
+    if over_condition_limit(limit, size) {
+        return None;
+    }
+    Some((combined, size))
+}
+
+fn checked_or(
+    left: Cond,
+    left_size: usize,
+    right: Cond,
+    right_size: usize,
+    limit: usize,
+) -> Option<(Cond, usize)> {
+    let estimated_size = estimate_or_size(&left, left_size, &right, right_size);
+    if over_condition_limit(limit, estimated_size) {
+        return None;
+    }
+    let combined = left.or(right);
+    let size = cond_tree_size_bounded(&combined, limit);
+    if over_condition_limit(limit, size) {
+        return None;
+    }
+    Some((combined, size))
+}
+
+const RC_SWEEP_NODE_PHASES: [&str; 64] = [
+    "struct.rc.sweep-node.000",
+    "struct.rc.sweep-node.001",
+    "struct.rc.sweep-node.002",
+    "struct.rc.sweep-node.003",
+    "struct.rc.sweep-node.004",
+    "struct.rc.sweep-node.005",
+    "struct.rc.sweep-node.006",
+    "struct.rc.sweep-node.007",
+    "struct.rc.sweep-node.008",
+    "struct.rc.sweep-node.009",
+    "struct.rc.sweep-node.010",
+    "struct.rc.sweep-node.011",
+    "struct.rc.sweep-node.012",
+    "struct.rc.sweep-node.013",
+    "struct.rc.sweep-node.014",
+    "struct.rc.sweep-node.015",
+    "struct.rc.sweep-node.016",
+    "struct.rc.sweep-node.017",
+    "struct.rc.sweep-node.018",
+    "struct.rc.sweep-node.019",
+    "struct.rc.sweep-node.020",
+    "struct.rc.sweep-node.021",
+    "struct.rc.sweep-node.022",
+    "struct.rc.sweep-node.023",
+    "struct.rc.sweep-node.024",
+    "struct.rc.sweep-node.025",
+    "struct.rc.sweep-node.026",
+    "struct.rc.sweep-node.027",
+    "struct.rc.sweep-node.028",
+    "struct.rc.sweep-node.029",
+    "struct.rc.sweep-node.030",
+    "struct.rc.sweep-node.031",
+    "struct.rc.sweep-node.032",
+    "struct.rc.sweep-node.033",
+    "struct.rc.sweep-node.034",
+    "struct.rc.sweep-node.035",
+    "struct.rc.sweep-node.036",
+    "struct.rc.sweep-node.037",
+    "struct.rc.sweep-node.038",
+    "struct.rc.sweep-node.039",
+    "struct.rc.sweep-node.040",
+    "struct.rc.sweep-node.041",
+    "struct.rc.sweep-node.042",
+    "struct.rc.sweep-node.043",
+    "struct.rc.sweep-node.044",
+    "struct.rc.sweep-node.045",
+    "struct.rc.sweep-node.046",
+    "struct.rc.sweep-node.047",
+    "struct.rc.sweep-node.048",
+    "struct.rc.sweep-node.049",
+    "struct.rc.sweep-node.050",
+    "struct.rc.sweep-node.051",
+    "struct.rc.sweep-node.052",
+    "struct.rc.sweep-node.053",
+    "struct.rc.sweep-node.054",
+    "struct.rc.sweep-node.055",
+    "struct.rc.sweep-node.056",
+    "struct.rc.sweep-node.057",
+    "struct.rc.sweep-node.058",
+    "struct.rc.sweep-node.059",
+    "struct.rc.sweep-node.060",
+    "struct.rc.sweep-node.061",
+    "struct.rc.sweep-node.062",
+    "struct.rc.sweep-node.063",
+];
+
+const RC_SWEEP_EDGE_PHASES: [&str; 16] = [
+    "struct.rc.sweep-edge.00",
+    "struct.rc.sweep-edge.01",
+    "struct.rc.sweep-edge.02",
+    "struct.rc.sweep-edge.03",
+    "struct.rc.sweep-edge.04",
+    "struct.rc.sweep-edge.05",
+    "struct.rc.sweep-edge.06",
+    "struct.rc.sweep-edge.07",
+    "struct.rc.sweep-edge.08",
+    "struct.rc.sweep-edge.09",
+    "struct.rc.sweep-edge.10",
+    "struct.rc.sweep-edge.11",
+    "struct.rc.sweep-edge.12",
+    "struct.rc.sweep-edge.13",
+    "struct.rc.sweep-edge.14",
+    "struct.rc.sweep-edge.15",
+];
+
+fn rc_sweep_node_phase(index: usize) -> &'static str {
+    RC_SWEEP_NODE_PHASES
+        .get(index)
+        .copied()
+        .unwrap_or("struct.rc.sweep-node.overflow")
+}
+
+fn rc_sweep_edge_phase(index: usize) -> &'static str {
+    RC_SWEEP_EDGE_PHASES
+        .get(index)
+        .copied()
+        .unwrap_or("struct.rc.sweep-edge.overflow")
 }
 
 fn nodes_of(region: &Region) -> BTreeSet<RegionNode> {
+    let _span = linkscope::phase("struct.rc.nodes-of");
     let mut s = BTreeSet::new();
     s.insert(region.header);
     for (a, b, _) in &region.edges {
@@ -144,6 +336,7 @@ fn nodes_of(region: &Region) -> BTreeSet<RegionNode> {
 }
 
 fn succs(region: &Region) -> BTreeMap<RegionNode, Vec<(RegionNode, EdgeLabel)>> {
+    let _span = linkscope::phase("struct.rc.succs");
     let mut m: BTreeMap<RegionNode, Vec<(RegionNode, EdgeLabel)>> = BTreeMap::new();
     for (a, b, l) in &region.edges {
         m.entry(*a).or_default().push((*b, l.clone()));
@@ -161,12 +354,15 @@ enum BackEdgeStep {
 /// Classify back-edges via a DFS from the header: an edge `(u, v)` is a
 /// back-edge iff `v` is on the current DFS stack (an ancestor of `u`).
 fn classify_back_edges(region: &Region) -> BTreeSet<(RegionNode, RegionNode)> {
+    let _span = linkscope::phase("struct.rc.classify-back-edges");
     let succ = succs(region);
     let mut back = BTreeSet::new();
     let mut on_stack: BTreeSet<RegionNode> = BTreeSet::new();
     let mut visited: BTreeSet<RegionNode> = BTreeSet::new();
     let mut stack = vec![BackEdgeStep::Enter(region.header)];
+    let mut steps = 0u64;
     while let Some(step) = stack.pop() {
+        steps += 1;
         let n = match step {
             BackEdgeStep::Leave(n) => {
                 on_stack.remove(&n);
@@ -179,8 +375,13 @@ fn classify_back_edges(region: &Region) -> BTreeSet<(RegionNode, RegionNode)> {
         }
         on_stack.insert(n);
         stack.push(BackEdgeStep::Leave(n));
-        visit_succs_for_back_edges(n, &succ, &on_stack, &visited, &mut back, &mut stack);
+        {
+            let _span = linkscope::phase("struct.rc.classify-visit-succs");
+            visit_succs_for_back_edges(n, &succ, &on_stack, &visited, &mut back, &mut stack);
+        }
     }
+    linkscope::record_items("struct.rc.classify-back-edges.steps", steps);
+    linkscope::record_items("struct.rc.classify-back-edges.edges", back.len() as u64);
     back
 }
 
@@ -210,70 +411,162 @@ fn topo_order(
     region: &Region,
     back: &BTreeSet<(RegionNode, RegionNode)>,
 ) -> Option<Vec<RegionNode>> {
+    let _span = linkscope::phase("struct.rc.topo-order");
     let nodes = nodes_of(region);
-    let mut indeg: BTreeMap<RegionNode, usize> = nodes.iter().map(|&n| (n, 0)).collect();
-    let mut fwd: BTreeMap<RegionNode, Vec<RegionNode>> = BTreeMap::new();
-    for (a, b, _) in &region.edges {
-        if back.contains(&(*a, *b)) {
-            continue;
+    let (mut indeg, fwd) = {
+        let _span = linkscope::phase("struct.rc.topo-build-graph");
+        let mut indeg: BTreeMap<RegionNode, usize> = nodes.iter().map(|&n| (n, 0)).collect();
+        let mut fwd: BTreeMap<RegionNode, Vec<RegionNode>> = BTreeMap::new();
+        for (a, b, _) in &region.edges {
+            if back.contains(&(*a, *b)) {
+                continue;
+            }
+            *indeg.get_mut(b).expect("node in set") += 1;
+            fwd.entry(*a).or_default().push(*b);
         }
-        *indeg.get_mut(b).expect("node in set") += 1;
-        fwd.entry(*a).or_default().push(*b);
-    }
-    // Deterministic Kahn's algorithm (BTree-ordered queue).
-    let mut ready: BTreeSet<RegionNode> = indeg
-        .iter()
-        .filter(|(_, d)| **d == 0)
-        .map(|(n, _)| *n)
-        .collect();
-    let mut order = Vec::with_capacity(nodes.len());
-    while let Some(&n) = ready.iter().next() {
-        ready.remove(&n);
-        order.push(n);
-        for m in fwd.get(&n).into_iter().flatten() {
-            let d = indeg.get_mut(m).expect("node");
-            *d -= 1;
-            if *d == 0 {
-                ready.insert(*m);
+        (indeg, fwd)
+    };
+    let order = {
+        let _span = linkscope::phase("struct.rc.topo-kahn");
+        // Deterministic Kahn's algorithm (BTree-ordered queue).
+        let mut ready: BTreeSet<RegionNode> = indeg
+            .iter()
+            .filter(|(_, d)| **d == 0)
+            .map(|(n, _)| *n)
+            .collect();
+        let mut order = Vec::with_capacity(nodes.len());
+        while let Some(&n) = ready.iter().next() {
+            ready.remove(&n);
+            order.push(n);
+            for m in fwd.get(&n).into_iter().flatten() {
+                let d = indeg.get_mut(m).expect("node");
+                *d -= 1;
+                if *d == 0 {
+                    ready.insert(*m);
+                }
             }
         }
-    }
+        order
+    };
+    linkscope::record_items("struct.rc.topo-order.nodes", nodes.len() as u64);
     (order.len() == nodes.len()).then_some(order)
 }
 
 /// Compute reaching conditions `cr(header, n)` for every node, over the acyclic
 /// skeleton (back-edges excluded and reported separately).
 pub fn compute_reaching_conditions(region: &Region) -> ReachingConditions {
+    compute_reaching_conditions_with_limit(region, reaching_condition_node_limit())
+}
+
+fn compute_reaching_conditions_with_limit(
+    region: &Region,
+    condition_node_limit: usize,
+) -> ReachingConditions {
+    let _span = linkscope::phase("struct.rc.compute");
+    linkscope::record_items("struct.rc.compute.edges", region.edges.len() as u64);
+    linkscope::record_items(
+        "struct.rc.compute.cond-node-limit",
+        condition_node_limit as u64,
+    );
     let back = classify_back_edges(region);
     let mut conditions: BTreeMap<RegionNode, Cond> = BTreeMap::new();
+    let mut condition_sizes: BTreeMap<RegionNode, usize> = BTreeMap::new();
+    let mut limited = false;
     conditions.insert(region.header, Cond::True);
+    condition_sizes.insert(region.header, 1);
 
     // Incoming forward edges per node.
-    let mut incoming: BTreeMap<RegionNode, Vec<(RegionNode, EdgeLabel)>> = BTreeMap::new();
-    for (a, b, l) in &region.edges {
-        if back.contains(&(*a, *b)) {
-            continue;
-        }
-        incoming.entry(*b).or_default().push((*a, l.clone()));
-    }
-
-    if let Some(order) = topo_order(region, &back) {
-        for n in order {
-            if n == region.header {
+    let incoming = {
+        let _span = linkscope::phase("struct.rc.incoming");
+        let mut incoming: BTreeMap<RegionNode, Vec<(RegionNode, EdgeLabel)>> = BTreeMap::new();
+        for (a, b, l) in &region.edges {
+            if back.contains(&(*a, *b)) {
                 continue;
             }
-            let mut acc = Cond::False;
-            for (p, label) in incoming.get(&n).into_iter().flatten() {
-                let pc = conditions.get(p).cloned().unwrap_or(Cond::False);
-                acc = acc.or(pc.and(Cond::from_label(label)));
+            incoming.entry(*b).or_default().push((*a, l.clone()));
+        }
+        linkscope::record_items("struct.rc.incoming.nodes", incoming.len() as u64);
+        incoming
+    };
+
+    if let Some(order) = topo_order(region, &back) {
+        let _span = linkscope::phase("struct.rc.sweep");
+        linkscope::record_items("struct.rc.sweep.nodes", order.len() as u64);
+        'sweep: for (idx, n) in order.into_iter().enumerate() {
+            let _span = linkscope::phase("struct.rc.sweep-node");
+            let _node_span = linkscope::phase(rc_sweep_node_phase(idx));
+            linkscope::record_items("struct.rc.sweep-node.index", idx as u64);
+            if linkscope::is_enabled() {
+                let incoming_count = incoming.get(&n).map_or(0, Vec::len);
+                linkscope::event_fields(
+                    "struct.rc.sweep-node.start",
+                    [
+                        linkscope::TraceField::count("index", idx as u64),
+                        linkscope::TraceField::count("node", n as u64),
+                        linkscope::TraceField::count("incoming", incoming_count as u64),
+                    ],
+                );
             }
-            conditions.insert(n, acc);
+            if n != region.header {
+                let mut acc = Cond::False;
+                let mut acc_size = 1usize;
+                let mut incoming_count = 0u64;
+                for (edge_idx, (p, label)) in incoming.get(&n).into_iter().flatten().enumerate() {
+                    incoming_count += 1;
+                    let _edge_span = linkscope::phase(rc_sweep_edge_phase(edge_idx));
+                    if linkscope::is_enabled() {
+                        linkscope::event_fields(
+                            "struct.rc.sweep-edge.start",
+                            [
+                                linkscope::TraceField::count("node_index", idx as u64),
+                                linkscope::TraceField::count("node", n as u64),
+                                linkscope::TraceField::count("edge_index", edge_idx as u64),
+                                linkscope::TraceField::count("pred", *p as u64),
+                            ],
+                        );
+                    }
+                    let (Some(pc), Some(&pc_size)) = (conditions.get(p), condition_sizes.get(p))
+                    else {
+                        continue;
+                    };
+                    let Some((term, term_size)) =
+                        checked_and_label(pc, pc_size, label, condition_node_limit)
+                    else {
+                        limited = true;
+                        linkscope::record_items("struct.rc.condition-limited.node", n as u64);
+                        linkscope::record_items("struct.rc.condition-limited.pred", *p as u64);
+                        linkscope::record_items(
+                            "struct.rc.condition-limited.edge-index",
+                            edge_idx as u64,
+                        );
+                        break 'sweep;
+                    };
+                    let Some((next_acc, next_acc_size)) =
+                        checked_or(acc, acc_size, term, term_size, condition_node_limit)
+                    else {
+                        limited = true;
+                        linkscope::record_items("struct.rc.condition-limited.node", n as u64);
+                        linkscope::record_items("struct.rc.condition-limited.pred", *p as u64);
+                        linkscope::record_items(
+                            "struct.rc.condition-limited.edge-index",
+                            edge_idx as u64,
+                        );
+                        break 'sweep;
+                    };
+                    acc = next_acc;
+                    acc_size = next_acc_size;
+                }
+                linkscope::record_items("struct.rc.sweep-node.incoming", incoming_count);
+                conditions.insert(n, acc);
+                condition_sizes.insert(n, acc_size);
+            }
         }
     }
 
     ReachingConditions {
         conditions,
         back_edges: back,
+        limited,
     }
 }
 
@@ -312,6 +605,7 @@ mod tests {
             ],
         };
         let rc = compute_reaching_conditions(&region);
+        assert!(!rc.limited);
         assert_eq!(rc.conditions[&1], Cond::Pred(0));
         assert_eq!(rc.conditions[&2], Cond::NotPred(0));
         // p0 OR !p0 simplifies structurally? Our `or` only folds syntactic
@@ -324,6 +618,25 @@ mod tests {
             }
             other => panic!("expected Or, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn condition_budget_marks_limited_before_or_tree_growth() {
+        let region = Region {
+            header: 0,
+            edges: vec![
+                (0, 1, lbl_t(0)),
+                (0, 2, lbl_f(0)),
+                (1, 3, EdgeLabel::Always),
+                (2, 3, EdgeLabel::Always),
+            ],
+        };
+        let rc = compute_reaching_conditions_with_limit(&region, 2);
+        assert!(rc.limited);
+        assert!(
+            !rc.conditions.contains_key(&3),
+            "limited node should not be materialized"
+        );
     }
 
     #[test]

@@ -318,10 +318,12 @@ impl KnownBits {
         let tz_b = (rhs.zero & !rhs.one).trailing_ones().min(self.width as u32);
         let tz_sum = (tz_a + tz_b).min(self.width as u32);
 
-        let known_zero_low = if tz_sum > 0 {
-            ((1u64 << tz_sum) - 1) & mask
-        } else {
+        let known_zero_low = if tz_sum == 0 {
             0
+        } else if tz_sum >= 64 {
+            mask
+        } else {
+            ((1u64 << tz_sum) - 1) & mask
         };
 
         Self {
@@ -641,6 +643,27 @@ mod tests {
         let b = KnownBits::from_constant(3, 8);
         let r = a.mul(&b);
         assert_eq!(r.constant_value(), Some(21));
+    }
+
+    #[test]
+    fn test_known_bits_mul_tz_sum_width64_does_not_overflow() {
+        // Both operands are known-even in every bit position, so trailing-zero
+        // lower bound saturates at width=64. This used to panic on `1u64 << 64`.
+        let a = KnownBits {
+            zero: u64::MAX,
+            one: 0,
+            width: 64,
+        };
+        let b = KnownBits {
+            zero: u64::MAX,
+            one: 0,
+            width: 64,
+        };
+
+        let r = a.mul(&b);
+        assert_eq!(r.width, 64);
+        assert_eq!(r.zero, u64::MAX);
+        assert_eq!(r.one, 0);
     }
 
     #[test]

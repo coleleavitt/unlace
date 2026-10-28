@@ -10,7 +10,7 @@ unlace-passes = { workspace = true }
 unlace-struct = { workspace = true }
 symbolic-demangle = { workspace = true }
 thiserror = { workspace = true }
-tracing = { workspace = true }
+linkscope = { path = "../../../linkscope" }
 
 [dev-dependencies]
 gimli = { workspace = true }

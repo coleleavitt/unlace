@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use linkscope::TraceField;
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 use unlace_ir::types::Type;
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId};
@@ -32,9 +33,13 @@ impl Pass for TypeInferPass {
         let mut chain_promoted = std::collections::BTreeSet::<SsaVarnode>::new();
         while changed {
             if iteration >= max_iterations {
-                tracing::warn!(
-                    iterations = max_iterations,
-                    "TypeInferPass hit iteration limit; possible oscillation"
+                linkscope::event_fields(
+                    "pass.iteration-limit",
+                    [
+                        TraceField::text("pass", self.name()),
+                        TraceField::text("function", func.function.name.clone()),
+                        TraceField::count("iterations", max_iterations as u64),
+                    ],
                 );
                 break;
             }

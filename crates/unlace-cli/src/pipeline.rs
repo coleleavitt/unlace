@@ -148,6 +148,7 @@ fn maybe_validate_pipeline_once() {
 }
 
 use crate::args::EmitFormat;
+use crate::profiling::{self, TraceField};
 
 const IR_NODE_WARN_THRESHOLD: usize = 100_000;
 
@@ -206,14 +207,22 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     add_go_pclntab_functions(image, &mut funcs);
 
     if funcs.is_empty() && uses_x86_function_discovery(image.arch) {
-        tracing::info!("no function symbols found; attempting prologue scan");
+        profiling::diagnostic(
+            "info",
+            "no function symbols found; attempting prologue scan",
+            [TraceField::text("arch", image.arch.to_string())],
+        );
         funcs = scan_for_prologues(image);
     }
 
     add_macho_function_starts(image, &mut funcs);
 
     if funcs.is_empty() {
-        tracing::info!("prologue scan found nothing; falling back to entry point");
+        profiling::diagnostic(
+            "info",
+            "prologue scan found nothing; falling back to entry point",
+            [TraceField::addr("entry", image.entry)],
+        );
         funcs.push(FunctionEntry {
             name: "entry".into(),
             addr: image.entry,
@@ -926,11 +935,13 @@ pub fn lift_function(
     let offset_end = ((func_end - text.vaddr) as usize).min(text.data.len());
     let code = &text.data[offset_start..offset_end];
 
-    tracing::debug!(
-        func = %entry.name,
-        addr = %format_args!("{:#x}", func_start),
-        size = code.len(),
-        "lifting function"
+    profiling::event_fields(
+        "pipeline.lift.start",
+        [
+            TraceField::text("function", entry.name.clone()),
+            TraceField::addr("addr", func_start),
+            TraceField::bytes("size", code.len() as u64),
+        ],
     );
 
     // When the symbol table gave us an exact size, `code` is precisely the
@@ -1036,7 +1047,14 @@ fn lift_instructions(
                 if is_padding_tail(lifter.arch(), remaining) {
                     break;
                 }
-                tracing::warn!(addr = %format_args!("{:#x}", addr), err = %e, "lift failed; emitting Unimplemented and continuing");
+                profiling::diagnostic(
+                    "warn",
+                    "lift failed; emitting Unimplemented and continuing",
+                    [
+                        TraceField::addr("addr", addr),
+                        TraceField::text("err", e.to_string()),
+                    ],
+                );
                 // Emit an Unimplemented marker so the CFG continues past this
                 // instruction. Fixed-width ISAs must stay aligned after a
                 // decode failure; byte stepping turns one bad AArch64 word
@@ -1397,7 +1415,37 @@ pub fn run_passes_with_resolver(
     ssa: &mut SsaFunction,
     resolver: &dyn Fn(u64) -> Option<&'static str>,
 ) -> Result<usize> {
-    let report = run_passes_with_report_inner(ssa, Some(resolver))?;
+    let report = run_passes_with_report_inner(ssa, Some(resolver), None)?;
+    Ok(report.ir_changes)
+}
+
+#[derive(Clone, Debug)]
+struct PassDeadline {
+    deadline: Instant,
+    func_name: String,
+}
+
+fn check_pass_deadline(deadline: Option<&PassDeadline>) -> Result<(), unlace_passes::PassError> {
+    if let Some(deadline) = deadline
+        && Instant::now() > deadline.deadline
+    {
+        return Err(unlace_passes::PassError::InvariantViolation {
+            message: format!("timeout exceeded for function '{}'", deadline.func_name),
+        });
+    }
+    Ok(())
+}
+
+fn run_passes_with_resolver_until(
+    ssa: &mut SsaFunction,
+    resolver: &dyn Fn(u64) -> Option<&'static str>,
+    deadline: Instant,
+) -> Result<usize> {
+    let deadline = PassDeadline {
+        deadline,
+        func_name: ssa.function.name.clone(),
+    };
+    let report = run_passes_with_report_inner(ssa, Some(resolver), Some(deadline))?;
     Ok(report.ir_changes)
 }
 
@@ -1751,7 +1799,7 @@ pub fn run_whole_program_quality_refinement(
 ///    presentation-layer concerns and re-running them inside the loop
 ///    would either be redundant or risk oscillation.
 pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
-    run_passes_with_report_inner(ssa, None)
+    run_passes_with_report_inner(ssa, None, None)
 }
 
 /// Inner driver shared by [`run_passes_with_report`] (no resolver) and
@@ -1764,20 +1812,29 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
 fn run_passes_with_report_inner(
     ssa: &mut SsaFunction,
     resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
+    deadline: Option<PassDeadline>,
 ) -> Result<PassesReport> {
+    let _profile_pass_pipeline = profile_ssa_stage("pipeline.passes", ssa, 0);
     maybe_validate_pipeline_once();
+    check_pass_deadline(deadline.as_ref())?;
 
     // (1) One-time pre-pass: snapshot pre-optimization stack offsets.
-    run_instrumented(&StackOffsetSnapshotPass, ssa).context("stack offset snapshot failed")?;
+    {
+        let _profile_stage = profile_ssa_stage("pipeline.pre-stack-snapshot", ssa, 0);
+        run_instrumented(&StackOffsetSnapshotPass, ssa).context("stack offset snapshot failed")?;
+    }
+    check_pass_deadline(deadline.as_ref())?;
 
     let pre_pipeline_sig = SignatureSnapshot::of(ssa);
 
     // Noreturn detection runs once before the maturity loop.
     if let Some(resolve) = resolver {
+        let _profile_stage = profile_ssa_stage("pipeline.noreturn-detect", ssa, 0);
         NoreturnDetectPass::new()
             .run_with_resolver(ssa, resolve)
             .context("noreturn detect pass failed")?;
     }
+    check_pass_deadline(deadline.as_ref())?;
 
     // === MATURITY PIPELINE (models sub_14B8B0's while-loop) ===
     ssa.maturity = Maturity::Zero;
@@ -1795,20 +1852,27 @@ fn run_passes_with_report_inner(
         ssa,
         DEFAULT_OUTER_FIXEDPOINT_CAP,
         |ssa, _iter| -> Result<(), unlace_passes::PassError> {
+            check_pass_deadline(deadline.as_ref())?;
             // Stage 1: M_GENERATED — IR-level fixed-point cluster
             // Note: re-entry from outer loop constitutes a maturity
             // downgrade (sub_F9180 equivalent) — types changed, so we
             // re-run from Generated to let IR passes exploit new facts.
             if _iter > 0 {
-                tracing::debug!(
-                    func = %ssa.function.name,
-                    iter = _iter,
-                    "maturity downgrade: types changed, re-running from M_GENERATED"
+                profiling::diagnostic(
+                    "debug",
+                    "maturity downgrade: types changed, re-running from M_GENERATED",
+                    [
+                        TraceField::text("function", ssa.function.name.clone()),
+                        TraceField::count("iter", _iter as u64),
+                    ],
                 );
             }
             ssa.maturity = Maturity::Generated;
             let stage_start = Instant::now();
-            let ir_changes = pipeline_stage_ir_fixedpoint(ssa)?;
+            let ir_changes = {
+                let _profile_stage = profile_ssa_stage("pipeline.maturity.generated", ssa, _iter);
+                pipeline_stage_ir_fixedpoint(ssa)?
+            };
             total_ir_changes = total_ir_changes.saturating_add(ir_changes);
             maturity_snapshot(ssa, "M_GENERATED", _iter);
             pipeline_trace_maturity_stage(
@@ -1818,77 +1882,119 @@ fn run_passes_with_report_inner(
                 stage_start,
                 &format!(" ir_changes={ir_changes}"),
             );
+            check_pass_deadline(deadline.as_ref())?;
 
             // Stage 2: M_PREOPTIMIZED — cleanup passes
             ssa.maturity = Maturity::PreOptimized;
             let stage_start = Instant::now();
-            pipeline_stage_cleanup(ssa)?;
+            {
+                let _profile_stage =
+                    profile_ssa_stage("pipeline.maturity.preoptimized", ssa, _iter);
+                pipeline_stage_cleanup(ssa)?;
+            }
             maturity_snapshot(ssa, "M_PREOPTIMIZED", _iter);
             pipeline_trace_maturity_stage(ssa, "M_PREOPTIMIZED", _iter, stage_start, "");
+            check_pass_deadline(deadline.as_ref())?;
 
             // Stage 3: M_LOCOPT — structural detection + stack recovery
             ssa.maturity = Maturity::LocalOpt;
             let stage_start = Instant::now();
-            pipeline_stage_structural(ssa)?;
+            {
+                let _profile_stage = profile_ssa_stage("pipeline.maturity.localopt", ssa, _iter);
+                pipeline_stage_structural(ssa)?;
+            }
             maturity_snapshot(ssa, "M_LOCOPT", _iter);
             pipeline_trace_maturity_stage(ssa, "M_LOCOPT", _iter, stage_start, "");
+            check_pass_deadline(deadline.as_ref())?;
 
             // Stage 4: M_CALLS — call resolution + vtables
             ssa.maturity = Maturity::Calls;
             let stage_start = Instant::now();
-            pipeline_stage_call_resolution(ssa)?;
+            {
+                let _profile_stage = profile_ssa_stage("pipeline.maturity.calls", ssa, _iter);
+                pipeline_stage_call_resolution(ssa)?;
+            }
             maturity_snapshot(ssa, "M_CALLS", _iter);
             pipeline_trace_maturity_stage(ssa, "M_CALLS", _iter, stage_start, "");
+            check_pass_deadline(deadline.as_ref())?;
 
             // Stage 5: M_GLBOPT — type recovery
             ssa.maturity = Maturity::GlobalOpt;
             let stage_start = Instant::now();
-            pipeline_stage_type_recovery(ssa, resolver)?;
+            {
+                let _profile_stage = profile_ssa_stage("pipeline.maturity.globalopt", ssa, _iter);
+                pipeline_stage_type_recovery(ssa, resolver)?;
+            }
             maturity_snapshot(ssa, "M_GLBOPT", _iter);
             pipeline_trace_maturity_stage(ssa, "M_GLBOPT", _iter, stage_start, "");
+            check_pass_deadline(deadline.as_ref())?;
 
             Ok(())
         },
     )
     .context("outer fixed-point pipeline failed")?;
+    check_pass_deadline(deadline.as_ref())?;
 
     if outer_report.hit_cap {
-        tracing::warn!(
-            func = %ssa.function.name,
-            cap = DEFAULT_OUTER_FIXEDPOINT_CAP,
-            "pass pipeline outer loop hit iteration cap without converging"
+        profiling::diagnostic(
+            "warn",
+            "pass pipeline outer loop hit iteration cap without converging",
+            [
+                TraceField::text("function", ssa.function.name.clone()),
+                TraceField::count("cap", DEFAULT_OUTER_FIXEDPOINT_CAP as u64),
+            ],
         );
     }
 
     // Stage 6: M_LVARS — post-loop one-shots + lvar allocation
     ssa.maturity = Maturity::Lvars;
     let stage_start = Instant::now();
-    pipeline_stage_post_loop(ssa)?;
+    {
+        let _profile_stage = profile_ssa_stage("pipeline.maturity.lvars-post-loop", ssa, 0);
+        pipeline_stage_post_loop(ssa)?;
+    }
     pipeline_trace_maturity_stage(ssa, "M_LVARS_POST_LOOP", 0, stage_start, "");
+    check_pass_deadline(deadline.as_ref())?;
     let stage_start = Instant::now();
-    pipeline_stage_experimental_old(ssa, resolver)?;
+    {
+        let _profile_stage = profile_ssa_stage("pipeline.maturity.experimental-old", ssa, 0);
+        pipeline_stage_experimental_old(ssa, resolver)?;
+    }
     pipeline_trace_maturity_stage(ssa, "M_LVARS_EXPERIMENTAL_OLD", 0, stage_start, "");
+    check_pass_deadline(deadline.as_ref())?;
     let stage_start = Instant::now();
-    pipeline_stage_lvar(ssa)?;
+    {
+        let _profile_stage = profile_ssa_stage("pipeline.maturity.lvars", ssa, 0);
+        pipeline_stage_lvar(ssa)?;
+    }
     maturity_snapshot(ssa, "M_LVARS", 0);
     pipeline_trace_maturity_stage(ssa, "M_LVARS", 0, stage_start, "");
+    check_pass_deadline(deadline.as_ref())?;
 
     // Stage 7: M_FINAL — language-specific + naming + finalization
     ssa.maturity = Maturity::Final;
     let stage_start = Instant::now();
-    pipeline_stage_final(ssa, resolver)?;
+    {
+        let _profile_stage = profile_ssa_stage("pipeline.maturity.final", ssa, 0);
+        pipeline_stage_final(ssa, resolver)?;
+    }
     maturity_snapshot(ssa, "M_FINAL", 0);
     pipeline_trace_maturity_stage(ssa, "M_FINAL", 0, stage_start, "");
+    check_pass_deadline(deadline.as_ref())?;
 
     let _ = bump_if_signature_changed(ssa, &pre_pipeline_sig);
 
-    tracing::debug!(
-        ir_changes = total_ir_changes,
-        outer_iters = outer_report.iterations,
-        outer_hit_cap = outer_report.hit_cap,
-        signature_revision = ssa.signature_revision,
-        maturity = ?ssa.maturity,
-        "pass pipeline complete"
+    profiling::diagnostic(
+        "debug",
+        "pass pipeline complete",
+        [
+            TraceField::text("function", ssa.function.name.clone()),
+            TraceField::count("ir_changes", total_ir_changes as u64),
+            TraceField::count("outer_iters", outer_report.iterations as u64),
+            TraceField::text("outer_hit_cap", outer_report.hit_cap.to_string()),
+            TraceField::count("signature_revision", ssa.signature_revision),
+            TraceField::text("maturity", format!("{:?}", ssa.maturity)),
+        ],
     );
 
     Ok(PassesReport {
@@ -1923,7 +2029,14 @@ fn maturity_snapshot(ssa: &SsaFunction, stage: &str, iter: usize) {
         return;
     };
     if let Err(e) = std::fs::create_dir_all(dir) {
-        tracing::warn!(dir = %dir.display(), err = %e, "maturity-dump: mkdir failed");
+        profiling::diagnostic(
+            "warn",
+            "maturity-dump: mkdir failed",
+            [
+                TraceField::text("dir", dir.display().to_string()),
+                TraceField::text("err", e.to_string()),
+            ],
+        );
         return;
     }
     let safe_func: String = ssa
@@ -1942,7 +2055,14 @@ fn maturity_snapshot(ssa: &SsaFunction, stage: &str, iter: usize) {
     let path = dir.join(file_name);
     let body = unlace_output::dump_ir(ssa);
     if let Err(e) = std::fs::write(&path, body) {
-        tracing::warn!(path = %path.display(), err = %e, "maturity-dump: write failed");
+        profiling::diagnostic(
+            "warn",
+            "maturity-dump: write failed",
+            [
+                TraceField::text("path", path.display().to_string()),
+                TraceField::text("err", e.to_string()),
+            ],
+        );
     }
 }
 
@@ -1994,6 +2114,74 @@ fn ssa_shape(ssa: &SsaFunction) -> (usize, usize, usize, usize) {
     let (blocks, insns) = function_shape(&ssa.function);
     let phis = ssa.phi_map.values().map(|phis| phis.len()).sum();
     (blocks, insns, phis, ssa.var_map.len())
+}
+
+fn profile_pipeline_stage(
+    label: &'static str,
+    entry: &FunctionEntry,
+) -> Option<(profiling::Span, profiling::TraceFrame)> {
+    if !profiling::is_enabled() {
+        return None;
+    }
+    profiling::event_fields(
+        "pipeline.stage.start",
+        [
+            TraceField::text("stage", label),
+            TraceField::text("function", entry.name.clone()),
+            TraceField::addr("addr", entry.addr),
+            TraceField::count("size", entry.size),
+        ],
+    );
+    Some((
+        profiling::phase(label),
+        profiling::trace_fields(
+            label,
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::addr("addr", entry.addr),
+                TraceField::count("size", entry.size),
+            ],
+        ),
+    ))
+}
+
+fn profile_ssa_stage(
+    label: &'static str,
+    ssa: &SsaFunction,
+    iter: usize,
+) -> Option<(profiling::Span, profiling::TraceFrame)> {
+    if !profiling::is_enabled() {
+        return None;
+    }
+    let (blocks, insns, phis, var_map) = ssa_shape(ssa);
+    profiling::event_fields(
+        "pipeline.ssa-stage.start",
+        [
+            TraceField::text("stage", label),
+            TraceField::text("function", ssa.function.name.clone()),
+            TraceField::text("maturity", format!("{:?}", ssa.maturity)),
+            TraceField::count("iter", iter as u64),
+            TraceField::count("blocks", blocks as u64),
+            TraceField::count("insns", insns as u64),
+            TraceField::count("phis", phis as u64),
+            TraceField::count("var_map", var_map as u64),
+        ],
+    );
+    Some((
+        profiling::phase(label),
+        profiling::trace_fields(
+            label,
+            [
+                TraceField::text("function", ssa.function.name.clone()),
+                TraceField::text("maturity", format!("{:?}", ssa.maturity)),
+                TraceField::count("iter", iter as u64),
+                TraceField::count("blocks", blocks as u64),
+                TraceField::count("insns", insns as u64),
+                TraceField::count("phis", phis as u64),
+                TraceField::count("var_map", var_map as u64),
+            ],
+        ),
+    ))
 }
 
 fn pipeline_trace_start(func_name: &str, stage: &str) {
@@ -2559,9 +2747,10 @@ fn pipeline_stage_experimental_old(
     run_instrumented(&PathSensitivePass, ssa)?;
 
     if resolver.is_some() {
-        tracing::debug!(
-            func = %ssa.function.name,
-            "experimental old-pass tier ran with resolver available"
+        profiling::diagnostic(
+            "debug",
+            "experimental old-pass tier ran with resolver available",
+            [TraceField::text("function", ssa.function.name.clone())],
         );
     }
 
@@ -3064,15 +3253,60 @@ pub fn ir_node_count(ssa: &SsaFunction) -> usize {
 pub fn warn_if_large_ir(func_name: &str, ssa: &SsaFunction) {
     let count = ir_node_count(ssa);
     if count > IR_NODE_WARN_THRESHOLD {
-        tracing::warn!(
-            func = %func_name,
-            ir_nodes = count,
-            threshold = IR_NODE_WARN_THRESHOLD,
-            "function exceeds IR node threshold"
+        profiling::diagnostic(
+            "warn",
+            "function exceeds IR node threshold",
+            [
+                TraceField::text("function", func_name.to_string()),
+                TraceField::count("ir_nodes", count as u64),
+                TraceField::count("threshold", IR_NODE_WARN_THRESHOLD as u64),
+            ],
         );
     }
 }
 
+#[derive(Clone)]
+pub struct SymbolContext {
+    pub symbols: BTreeMap<u64, String>,
+    pub flirt_calls: BTreeMap<u64, FlirtConfidence>,
+    pub stable_symbol_names: BTreeMap<u64, &'static str>,
+    pub objc_classes: Vec<unlace_loader::ObjcClass>,
+    pub objc_categories: Vec<unlace_loader::ObjcCategory>,
+    pub objc_dispatch_pass: Option<Arc<ObjcDispatchPass>>,
+    pub go_itab_methods: BTreeSet<u64>,
+}
+
+impl SymbolContext {
+    fn new(
+        symbols: BTreeMap<u64, String>,
+        flirt_calls: BTreeMap<u64, FlirtConfidence>,
+        objc_classes: Vec<unlace_loader::ObjcClass>,
+        objc_categories: Vec<unlace_loader::ObjcCategory>,
+        objc_dispatch_pass: Option<Arc<ObjcDispatchPass>>,
+        go_itab_methods: BTreeSet<u64>,
+    ) -> Self {
+        let stable_symbol_names = symbols
+            .iter()
+            .map(|(&addr, name)| {
+                (
+                    addr,
+                    Box::leak(name.clone().into_boxed_str()) as &'static str,
+                )
+            })
+            .collect();
+        Self {
+            symbols,
+            flirt_calls,
+            stable_symbol_names,
+            objc_classes,
+            objc_categories,
+            objc_dispatch_pass,
+            go_itab_methods,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct PipelineConfig {
     pub timeout: Duration,
     /// Optional explicit C-printer configuration. When `None` the printer
@@ -3088,6 +3322,10 @@ pub struct PipelineConfig {
     /// present, its debug info is merged into whatever the primary image
     /// yields, letting a stripped binary recover names/types.
     pub dwarf_sidecar: Option<Vec<u8>>,
+    /// Whole-binary symbol/FLIRT context shared across per-function pipeline
+    /// calls. Batch and decompile commands build this once; interactive callers
+    /// can leave it unset and fall back to per-call construction.
+    pub symbol_context: Option<Arc<SymbolContext>>,
 }
 
 impl Default for PipelineConfig {
@@ -3098,6 +3336,7 @@ impl Default for PipelineConfig {
             annotations: None,
             flirt: FlirtConfig::default(),
             dwarf_sidecar: None,
+            symbol_context: None,
         }
     }
 }
@@ -3173,6 +3412,18 @@ impl FlirtConfig {
         self.options.enabled
     }
 
+    fn has_explicit_signatures(&self) -> bool {
+        !self.options.sig_paths.is_empty() || !self.options.sig_dirs.is_empty()
+    }
+
+    fn bundled_applicable_to_arch(&self, arch: ArchId) -> bool {
+        matches!(arch, ArchId::X86 | ArchId::X86_64)
+    }
+
+    fn should_scan_for_arch(&self, arch: ArchId) -> bool {
+        self.enabled() && (self.has_explicit_signatures() || self.bundled_applicable_to_arch(arch))
+    }
+
     fn min_confidence_f32(&self) -> f32 {
         (self.options.min_confidence as f32) / 100.0
     }
@@ -3242,18 +3493,44 @@ pub fn build_symbol_table_and_flirt_with_config(
     discovered: &[FunctionEntry],
     flirt_config: &FlirtConfig,
 ) -> (BTreeMap<u64, String>, BTreeMap<u64, FlirtConfidence>) {
+    let context = build_symbol_context_with_config(image, discovered, flirt_config);
+    (context.symbols, context.flirt_calls)
+}
+
+pub fn build_symbol_context_with_config(
+    image: &BinaryImage,
+    discovered: &[FunctionEntry],
+    flirt_config: &FlirtConfig,
+) -> SymbolContext {
     let mut table = BTreeMap::new();
     let mut flirt = BTreeMap::new();
-    for entry in discovered {
-        table.insert(entry.addr, entry.name.clone());
-    }
-    for (addr, sym) in &image.symbols {
-        if sym.kind == SymbolKind::Function {
-            table.insert(*addr, sym.name.clone());
+    {
+        let _span = profiling::phase("symbol-context.discovered-functions");
+        for entry in discovered {
+            table.insert(entry.addr, entry.name.clone());
         }
+        profiling::record_items(
+            "symbol-context.discovered-functions",
+            discovered.len() as u64,
+        );
     }
-    for (addr, name) in &image.plt_symbols {
-        table.insert(*addr, name.clone());
+    {
+        let _span = profiling::phase("symbol-context.loader-symbols");
+        let mut function_symbols = 0u64;
+        for (addr, sym) in &image.symbols {
+            if sym.kind == SymbolKind::Function {
+                table.insert(*addr, sym.name.clone());
+                function_symbols += 1;
+            }
+        }
+        profiling::record_items("symbol-context.loader-symbols", function_symbols);
+    }
+    {
+        let _span = profiling::phase("symbol-context.plt-symbols");
+        for (addr, name) in &image.plt_symbols {
+            table.insert(*addr, name.clone());
+        }
+        profiling::record_items("symbol-context.plt-symbols", image.plt_symbols.len() as u64);
     }
     // Batch 20: overlay FLIRT/SIG-recovered canonical names. Replaces
     // synthetic `sub_XXXX` stub names with the matched library name
@@ -3265,18 +3542,87 @@ pub fn build_symbol_table_and_flirt_with_config(
     // §5.5: collect the full `FlirtConfidence` per entry address so
     // downstream printer annotations and quality counters can see the
     // confidence + signature_id without re-running the matcher.
-    if flirt_config.enabled() {
+    if flirt_config.should_scan_for_arch(image.arch) {
+        let _span = profiling::phase("symbol-context.flirt-scan");
+        let mut eligible = 0u64;
+        let mut matched = 0u64;
         for entry in discovered {
             if !is_flirt_eligible_name(&entry.name) {
                 continue;
             }
+            eligible += 1;
             if let Some(fc) = flirt_match_detailed_with_config(image, entry, flirt_config) {
                 table.insert(entry.addr, fc.name.clone());
                 flirt.insert(entry.addr, fc);
+                matched += 1;
             }
         }
+        profiling::record_items("symbol-context.flirt-scan", eligible);
+        profiling::diagnostic(
+            "info",
+            "symbol-context FLIRT scan complete",
+            [
+                TraceField::text("arch", image.arch.to_string()),
+                TraceField::count("eligible", eligible),
+                TraceField::count("matched", matched),
+            ],
+        );
+    } else if flirt_config.enabled() {
+        profiling::diagnostic(
+            "info",
+            "skipping bundled FLIRT scan for unsupported arch without explicit signatures",
+            [
+                TraceField::text("arch", image.arch.to_string()),
+                TraceField::count("functions", discovered.len() as u64),
+            ],
+        );
     }
-    (table, flirt)
+    {
+        let _span = profiling::phase("symbol-context.stable-names");
+        let (objc_classes, objc_categories, objc_dispatch_pass) = {
+            let _span = profiling::phase("symbol-context.objc-classlist");
+            let objc_info = unlace_loader::scan_objc_classlist(image);
+            let classes: Vec<_> = objc_info.classes.into_values().collect();
+            let categories = objc_info.categories;
+            profiling::record_items("symbol-context.objc-classlist", classes.len() as u64);
+            let mut dispatch_pass = ObjcDispatchPass::from_plt_symbols(&image.plt_symbols);
+            let dispatch_pass = if dispatch_pass.msgsend_addrs.is_empty() {
+                None
+            } else {
+                let class_symbols = table
+                    .iter()
+                    .filter_map(|(&addr, name)| {
+                        name.strip_prefix("_OBJC_CLASS_$_")
+                            .or_else(|| name.strip_prefix("OBJC_CLASS_$_"))
+                            .map(|class| (addr, class.to_string()))
+                    })
+                    .collect();
+                dispatch_pass = dispatch_pass
+                    .with_class_symbols(class_symbols)
+                    .with_selector_strings(image.string_table.clone())
+                    .with_categories(&categories);
+                Some(Arc::new(dispatch_pass))
+            };
+            (classes, categories, dispatch_pass)
+        };
+        let go_itab_methods = {
+            let _span = profiling::phase("symbol-context.go-itab-methods");
+            let mut methods = BTreeSet::new();
+            for itab in image.go_itabs.values() {
+                methods.extend(itab.methods.iter().copied());
+            }
+            profiling::record_items("symbol-context.go-itab-methods", methods.len() as u64);
+            methods
+        };
+        SymbolContext::new(
+            table,
+            flirt,
+            objc_classes,
+            objc_categories,
+            objc_dispatch_pass,
+            go_itab_methods,
+        )
+    }
 }
 
 /// Phase-1 helper for interproc batch: lift a function, build SSA, apply DWARF
@@ -3297,38 +3643,80 @@ pub fn lift_and_run_passes(
     rtti: Option<&unlace_loader::RttiInfo>,
     discovered: &[FunctionEntry],
 ) -> Result<SsaFunction> {
-    let _span = tracing::debug_span!("lift_and_run_passes", func = %entry.name).entered();
+    let _profile_function = profile_pipeline_stage("interproc.lift-and-run-passes", entry);
     let deadline = Instant::now() + config.timeout;
 
-    let mut ir_func = lift_function(image, lifter, entry)?;
-    unlace_struct::merge_linear_blocks(&mut ir_func);
-    unlace_struct::tail_duplicate_aggressive(&mut ir_func);
-    unlace_struct::split_irreducible_entries(&mut ir_func);
+    let mut ir_func = {
+        let _profile_stage = profile_pipeline_stage("pipeline.lift", entry);
+        lift_function(image, lifter, entry)?
+    };
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.merge-linear-blocks", entry);
+        unlace_struct::merge_linear_blocks(&mut ir_func);
+    }
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.tail-duplicate", entry);
+        unlace_struct::tail_duplicate_aggressive(&mut ir_func);
+    }
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.split-irreducible", entry);
+        unlace_struct::split_irreducible_entries(&mut ir_func);
+    }
     // Resolve x87 ST(i) stack-relative references to concrete physical slots
     // before SSA construction (no-op for non-x87 functions).
-    unlace_passes::rewrite_x87_top(&mut ir_func);
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.x87-top", entry);
+        unlace_passes::rewrite_x87_top(&mut ir_func);
+    }
 
     check_timeout(deadline, &entry.name)?;
 
-    let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+    let mut ssa = {
+        let _profile_stage = profile_pipeline_stage("pipeline.build-ssa", entry);
+        unlace_ir::ssa::build_ssa(ir_func)
+    };
     ssa.arch = image.arch;
 
-    if let Some(dwarf_info) = dwarf {
-        apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
-    }
-    apply_pdb_debug_to_ssa(&mut ssa, image, entry);
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.debug-info-overlay", entry);
+        if let Some(dwarf_info) = dwarf {
+            apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
+        }
+        apply_pdb_debug_to_ssa(&mut ssa, image, entry);
 
-    populate_eh_landing_pads(image, entry, &mut ssa, rtti);
+        populate_eh_landing_pads(image, entry, &mut ssa, rtti);
+    }
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;
 
-    let (symbols, _) = build_symbol_table_and_flirt_with_config(image, discovered, &config.flirt);
-    let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
-    for (&addr, name) in &symbols {
-        stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+    let profile_pre_pass = profile_pipeline_stage("pipeline.pre-pass-analysis", entry);
+    let owned_symbol_context = config
+        .symbol_context
+        .is_none()
+        .then(|| build_symbol_context_with_config(image, discovered, &config.flirt));
+    let symbol_context = config
+        .symbol_context
+        .as_deref()
+        .or(owned_symbol_context.as_ref())
+        .expect("symbol context is present");
+    let symbols = &symbol_context.symbols;
+    let stable_symbol_names = &symbol_context.stable_symbol_names;
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.symbol-table", entry);
+        profiling::event_fields(
+            "pipeline.symbol-table.reuse",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::count("symbols", symbols.len() as u64),
+            ],
+        );
     }
-    let estimated_param_counts =
-        estimate_direct_target_param_counts(image, lifter, discovered, &ssa);
+    let estimated_param_counts = {
+        let _profile_stage = profile_pipeline_stage("pipeline.estimate-param-counts", entry);
+        let counts = estimate_direct_target_param_counts(image, lifter, discovered, &ssa);
+        profiling::record_items("pipeline.estimate-param-counts", counts.len() as u64);
+        counts
+    };
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
     let dwarf_param_count = |addr: u64| -> Option<usize> {
@@ -3337,8 +3725,10 @@ pub fn lift_and_run_passes(
             .or_else(|| estimated_param_counts.get(&addr).copied())
     };
 
-    let _call_args_pre =
-        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &dwarf_param_count);
+    let _call_args_pre = {
+        let _profile_stage = profile_pipeline_stage("pipeline.recover-call-args", entry);
+        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &dwarf_param_count)
+    };
 
     // Batch 6 (pre-pass): parse printf-family format strings against the
     // raw post-SSA IR. The pre-pass run is load-bearing because the
@@ -3349,16 +3739,34 @@ pub fn lift_and_run_passes(
     // site. The post-pass call below remains for completeness and to
     // capture sites the pre-pass missed; `parse_printf_format_strings`
     // is additive and never clobbers existing entries.
-    let _variadic_types_pre = parse_printf_format_strings(
-        &mut ssa,
-        &|addr| stable_symbol_names.get(&addr).copied(),
-        &image.string_table,
-    );
+    let _variadic_types_pre = {
+        let _profile_stage = profile_pipeline_stage("pipeline.parse-printf-pre", entry);
+        parse_printf_format_strings(
+            &mut ssa,
+            &|addr| stable_symbol_names.get(&addr).copied(),
+            &image.string_table,
+        )
+    };
+    drop(profile_pre_pass);
 
-    resolve_jump_tables_for_pipeline(&mut ssa, image);
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.jump-table-pre", entry);
+        resolve_jump_tables_for_pipeline(&mut ssa, image);
+    }
 
-    if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
-        tracing::warn!(func = %entry.name, err = %e, "pass pipeline failed; continuing with unoptimized");
+    let pass_result = {
+        let _profile_stage = profile_pipeline_stage("pipeline.run-passes", entry);
+        run_passes_with_resolver_until(&mut ssa, &resolve_name, deadline)
+    };
+    if let Err(e) = pass_result {
+        profiling::diagnostic(
+            "warn",
+            "pass pipeline failed; continuing with unoptimized",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::text("err", e.to_string()),
+            ],
+        );
     }
 
     check_timeout(deadline, &entry.name)?;
@@ -3470,15 +3878,36 @@ pub fn emit_function_interproc(
     discovered: &[FunctionEntry],
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Result<String> {
-    let _span = tracing::debug_span!("emit_function_interproc", func = %entry.name).entered();
-    let (symbols, flirt_map) =
-        build_symbol_table_and_flirt_with_config(image, discovered, &config.flirt);
-    let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
-    for (&addr, name) in &symbols {
-        stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+    let _profile_function = profile_pipeline_stage("interproc.emit-function", entry);
+    let profile_post_annotations = profile_pipeline_stage("pipeline.post-pass-annotations", entry);
+    let owned_symbol_context = config
+        .symbol_context
+        .is_none()
+        .then(|| build_symbol_context_with_config(image, discovered, &config.flirt));
+    let symbol_context = config
+        .symbol_context
+        .as_deref()
+        .or(owned_symbol_context.as_ref())
+        .expect("symbol context is present");
+    let symbols = &symbol_context.symbols;
+    let flirt_map = &symbol_context.flirt_calls;
+    let stable_symbol_names = &symbol_context.stable_symbol_names;
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.symbol-table", entry);
+        profiling::event_fields(
+            "pipeline.symbol-table.reuse",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::count("symbols", symbols.len() as u64),
+            ],
+        );
     }
-    run_objc_dispatch_for_image(ssa, image, &symbols);
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.objc-dispatch", entry);
+        run_objc_dispatch_pass(ssa, symbol_context.objc_dispatch_pass.as_deref());
+    }
     if !symbols.is_empty() {
+        let _profile_stage = profile_pipeline_stage("pipeline.detect-go-defer", entry);
         ssa.go_defer_sites = detect_go_defer(ssa, |addr| stable_symbol_names.get(&addr).copied())
             .into_iter()
             .map(|site| unlace_ir::ssa::GoDeferSite {
@@ -3488,14 +3917,30 @@ pub fn emit_function_interproc(
             })
             .collect();
     }
-    let _libc = annotate_libc_calls(ssa, &|addr| symbols.get(&addr).cloned());
-    let _var = parse_printf_format_strings(
-        ssa,
-        &|addr| stable_symbol_names.get(&addr).copied(),
-        &image.string_table,
-    );
-    let go_iface_devirtualized_calls = collect_go_iface_devirtualized_calls(ssa, image, &symbols);
-    let cxx_eh_actions = collect_cxx_eh_actions(ssa, &symbols);
+    let _libc = {
+        let _profile_stage = profile_pipeline_stage("pipeline.annotate-libc", entry);
+        annotate_libc_calls(ssa, &|addr| symbols.get(&addr).cloned())
+    };
+    let _var = {
+        let _profile_stage = profile_pipeline_stage("pipeline.parse-printf-post", entry);
+        parse_printf_format_strings(
+            ssa,
+            &|addr| stable_symbol_names.get(&addr).copied(),
+            &image.string_table,
+        )
+    };
+    let go_iface_devirtualized_calls = {
+        let _profile_stage = profile_pipeline_stage("pipeline.go-iface-devirt", entry);
+        collect_go_iface_devirtualized_calls_with_methods(
+            ssa,
+            symbols,
+            &symbol_context.go_itab_methods,
+        )
+    };
+    let cxx_eh_actions = {
+        let _profile_stage = profile_pipeline_stage("pipeline.cxx-eh-actions", entry);
+        collect_cxx_eh_actions(ssa, symbols)
+    };
     let mut libc_call_canonical: BTreeMap<u64, String> = BTreeMap::new();
     for (&(bid, idx), canonical) in &ssa.libc_call_annotations {
         if let Some(block) = ssa.function.blocks.get(&bid)
@@ -3512,12 +3957,19 @@ pub fn emit_function_interproc(
     printer_annotations.go_defer_sites = ssa.go_defer_sites.clone();
     let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
-    printer_annotations.readonly_scalars = collect_readonly_scalars(image);
+    printer_annotations.readonly_scalars = {
+        let _profile_stage = profile_pipeline_stage("pipeline.collect-readonly-scalars", entry);
+        collect_readonly_scalars_for_ssa(image, ssa)
+    };
     if let Some(pdb_types) = image.pdb_types.as_ref() {
         printer_annotations.pdb_constants_by_value = pdb_types.constants_by_value.clone();
     }
-    let objc_info = unlace_loader::scan_objc_classlist(image);
-    printer_annotations.objc_classes = objc_info.classes.into_values().collect();
+    let objc_classes = {
+        let _profile_stage = profile_pipeline_stage("pipeline.scan-objc-classlist", entry);
+        symbol_context.objc_classes.clone()
+    };
+    printer_annotations.objc_classes = objc_classes;
+    printer_annotations.objc_categories = symbol_context.objc_categories.clone();
     printer_annotations.go_interfaces = image.go_types.clone();
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
@@ -3535,19 +3987,27 @@ pub fn emit_function_interproc(
     printer_annotations.recover_triangular_sum_loop =
         unlace_passes::detect_triangular_sum_reduction(ssa).is_some();
     let printer_annotations = Some(printer_annotations);
-    resolve_jump_tables_for_pipeline(ssa, image);
-    let jt_sections = build_jump_table_section_views(image);
-    emit_output(
-        emit,
-        ssa,
-        dwarf,
-        &symbols,
-        &image.string_table,
-        rtti,
-        config.print_config,
-        printer_annotations.as_ref(),
-        &jt_sections,
-    )
+    drop(profile_post_annotations);
+    let jt_sections = {
+        let _profile_stage = profile_pipeline_stage("pipeline.jump-table-post", entry);
+        resolve_jump_tables_for_pipeline(ssa, image);
+        build_jump_table_section_views(image)
+    };
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.emit-output", entry);
+        emit_output(
+            emit,
+            ssa,
+            dwarf,
+            symbols,
+            &image.string_table,
+            rtti,
+            config.print_config,
+            printer_annotations.as_ref(),
+            &jt_sections,
+            None,
+        )
+    }
 }
 
 #[allow(dead_code)]
@@ -3599,36 +4059,81 @@ pub fn decompile_one_function_cached(
     cache: Option<&crate::cache::DiskCache>,
     binary_sha256: Option<&str>,
 ) -> Result<String> {
-    let lifter = unlace_lift::get_lifter(image.arch);
-    let functions = discover_functions(image, None)?;
+    let _profile_lazy = if profiling::is_enabled() {
+        Some((
+            profiling::phase("pipeline.lazy-decompile"),
+            profiling::trace_fields(
+                "pipeline.lazy-decompile",
+                [
+                    TraceField::addr("target_addr", target_addr),
+                    TraceField::text("emit", format!("{emit:?}")),
+                ],
+            ),
+        ))
+    } else {
+        None
+    };
+    let lifter = {
+        let _profile_stage = profiling::phase("pipeline.lazy-get-lifter");
+        unlace_lift::get_lifter(image.arch)
+    };
+    let functions = {
+        let _profile_stage = profiling::phase("pipeline.lazy-discover-functions");
+        let functions = discover_functions(image, None)?;
+        profiling::record_items("pipeline.lazy-discover-functions", functions.len() as u64);
+        functions
+    };
 
-    let entry = functions
-        .iter()
-        .filter(|f| f.addr <= target_addr)
-        .max_by_key(|f| f.addr)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "no function at or below 0x{target_addr:x} (out of {} discovered)",
-                functions.len()
-            )
-        })?;
+    let entry = {
+        let _profile_stage = profiling::phase("pipeline.lazy-select-function");
+        functions
+            .iter()
+            .filter(|f| f.addr <= target_addr)
+            .max_by_key(|f| f.addr)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no function at or below 0x{target_addr:x} (out of {} discovered)",
+                    functions.len()
+                )
+            })?
+    };
+    profiling::event_fields(
+        "pipeline.lazy-selected-function",
+        [
+            TraceField::text("function", entry.name.clone()),
+            TraceField::addr("addr", entry.addr),
+            TraceField::count("size", entry.size),
+        ],
+    );
 
     // Cache lookup before the heavy pipeline.
     let cache_key = match (cache, binary_sha256) {
         (Some(_), Some(sha)) => Some(crate::cache::CacheKey::new(sha, entry.addr, entry.size)),
         _ => None,
     };
+    let _cache_lookup = profiling::phase("pipeline.lazy-cache-lookup");
     if let (Some(cache), Some(key)) = (cache, cache_key.as_ref())
         && let Ok(Some(body)) = cache.get(key)
         && let Ok(s) = std::str::from_utf8(&body)
     {
-        tracing::debug!(
-            func = %entry.name,
-            digest = %key.digest(),
-            "cache hit: skipping pipeline"
+        profiling::event_fields(
+            "pipeline.lazy-cache-hit",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::addr("addr", entry.addr),
+                TraceField::text("digest", key.digest()),
+            ],
         );
         return Ok(s.to_string());
     }
+    drop(_cache_lookup);
+    profiling::event_fields(
+        "pipeline.lazy-cache-miss",
+        [
+            TraceField::text("function", entry.name.clone()),
+            TraceField::addr("addr", entry.addr),
+        ],
+    );
 
     let config = PipelineConfig {
         timeout: Duration::from_secs(30),
@@ -3636,13 +4141,25 @@ pub fn decompile_one_function_cached(
         annotations: None,
         flirt: FlirtConfig::default(),
         dwarf_sidecar: None,
+        symbol_context: None,
     };
-    let rendered = decompile_function(image, lifter.as_ref(), entry, emit, &config, None)?;
+    let rendered = {
+        let _profile_stage = profile_pipeline_stage("pipeline.lazy-run-function", entry);
+        decompile_function(image, lifter.as_ref(), entry, emit, &config, None)?
+    };
 
-    if let (Some(cache), Some(key)) = (cache, cache_key.as_ref())
-        && let Err(e) = cache.put(key, rendered.as_bytes())
-    {
-        tracing::warn!(err = %e, "cache put failed");
+    if let (Some(cache), Some(key)) = (cache, cache_key.as_ref()) {
+        let _profile_stage = profiling::phase("pipeline.lazy-cache-put");
+        if let Err(e) = cache.put(key, rendered.as_bytes()) {
+            profiling::diagnostic(
+                "warn",
+                "cache put failed",
+                [
+                    TraceField::text("digest", key.digest()),
+                    TraceField::text("err", e.to_string()),
+                ],
+            );
+        }
     }
 
     Ok(rendered)
@@ -3701,7 +4218,7 @@ pub fn flirt_match_detailed_with_config(
     entry: &FunctionEntry,
     config: &FlirtConfig,
 ) -> Option<FlirtConfidence> {
-    if !config.enabled() {
+    if !config.should_scan_for_arch(image.arch) {
         return None;
     }
     let resolved = flirt_resolved_names_with_config(image, config);
@@ -3740,16 +4257,24 @@ fn flirt_match_detailed_with_resolved(
         return None;
     }
     let bytes = &text.data[off_start..off_end];
-    let explicit = config.explicit_match(bytes);
-    let bundled = flirt_db()
-        .match_function_with_refs(bytes, resolved)
-        .and_then(|m| {
-            (m.confidence >= config.min_confidence_f32()).then(|| FlirtConfidence {
-                name: m.name.to_string(),
-                confidence: m.confidence,
-                signature_id: m.signature_id,
-            })
-        });
+    let explicit = config
+        .has_explicit_signatures()
+        .then(|| config.explicit_match(bytes))
+        .flatten();
+    let bundled = config
+        .bundled_applicable_to_arch(image.arch)
+        .then(|| {
+            flirt_db()
+                .match_function_with_refs(bytes, resolved)
+                .and_then(|m| {
+                    (m.confidence >= config.min_confidence_f32()).then(|| FlirtConfidence {
+                        name: m.name.to_string(),
+                        confidence: m.confidence,
+                        signature_id: m.signature_id,
+                    })
+                })
+        })
+        .flatten();
     match (explicit, bundled) {
         (Some(a), Some(b)) if b.confidence > a.confidence => Some(b),
         (Some(a), _) => Some(a),
@@ -3843,7 +4368,8 @@ pub fn decompile_function_with_symbols(
     discovered: &[FunctionEntry],
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Result<String> {
-    let _span = tracing::debug_span!("decompile_function", func = %entry.name).entered();
+    let _profile_function = profile_pipeline_stage("pipeline.function", entry);
+    profiling::record_items("pipeline.function", 1);
     let deadline = Instant::now() + config.timeout;
     if pipeline_trace_enabled() {
         eprintln!(
@@ -3856,67 +4382,64 @@ pub fn decompile_function_with_symbols(
     }
 
     if matches!(emit, EmitFormat::C)
-        && let Some(canonical) =
-            flirt_match_detailed_with_config(image, entry, &config.flirt).map(|m| m.name)
+        && let Some(canonical) = config
+            .symbol_context
+            .as_deref()
+            .and_then(|context| context.flirt_calls.get(&entry.addr).map(|m| m.name.clone()))
+            .or_else(|| {
+                flirt_match_detailed_with_config(image, entry, &config.flirt).map(|m| m.name)
+            })
     {
-        tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
+        profiling::diagnostic(
+            "debug",
+            "flirt match; eliding body",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::text("canonical", canonical.clone()),
+            ],
+        );
         return Ok(render_flirt_stub(&canonical, entry));
     }
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "lift");
-    let mut ir_func = lift_function(image, lifter, entry)?;
+    let mut ir_func = {
+        let _profile_stage = profile_pipeline_stage("pipeline.lift", entry);
+        lift_function(image, lifter, entry)?
+    };
     pipeline_trace_ir(&entry.name, "lift", t, deadline, &ir_func);
-    tracing::trace!(
-        elapsed_us = t.elapsed().as_micros() as u64,
-        blocks = ir_func.blocks.len(),
-        insns = ir_func
-            .blocks
-            .values()
-            .map(|b| b.insns.len())
-            .sum::<usize>(),
-        "lift done"
-    );
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "merge-linear-blocks");
-    let merges = unlace_struct::merge_linear_blocks(&mut ir_func);
+    let _merges = {
+        let _profile_stage = profile_pipeline_stage("pipeline.merge-linear-blocks", entry);
+        unlace_struct::merge_linear_blocks(&mut ir_func)
+    };
     pipeline_trace_ir(&entry.name, "merge-linear-blocks", t, deadline, &ir_func);
-    tracing::trace!(
-        elapsed_us = t.elapsed().as_micros() as u64,
-        merges,
-        "merge_linear_blocks done"
-    );
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "tail-duplicate");
-    let dups = unlace_struct::tail_duplicate_aggressive(&mut ir_func);
+    let _dups = {
+        let _profile_stage = profile_pipeline_stage("pipeline.tail-duplicate", entry);
+        unlace_struct::tail_duplicate_aggressive(&mut ir_func)
+    };
     pipeline_trace_ir(&entry.name, "tail-duplicate", t, deadline, &ir_func);
-    tracing::trace!(
-        elapsed_us = t.elapsed().as_micros() as u64,
-        dups,
-        "tail_duplicate_aggressive done"
-    );
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "split-irreducible");
-    let splits = unlace_struct::split_irreducible_entries(&mut ir_func);
+    let _splits = {
+        let _profile_stage = profile_pipeline_stage("pipeline.split-irreducible", entry);
+        unlace_struct::split_irreducible_entries(&mut ir_func)
+    };
     pipeline_trace_ir(&entry.name, "split-irreducible", t, deadline, &ir_func);
-    tracing::trace!(
-        elapsed_us = t.elapsed().as_micros() as u64,
-        splits,
-        "split_irreducible_entries done"
-    );
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "x87-top");
-    let x87_rewrites = unlace_passes::rewrite_x87_top(&mut ir_func);
+    let _x87_rewrites = {
+        let _profile_stage = profile_pipeline_stage("pipeline.x87-top", entry);
+        unlace_passes::rewrite_x87_top(&mut ir_func)
+    };
     pipeline_trace_ir(&entry.name, "x87-top", t, deadline, &ir_func);
-    tracing::trace!(
-        elapsed_us = t.elapsed().as_micros() as u64,
-        x87_rewrites,
-        "rewrite_x87_top done"
-    );
 
     pipeline_trace_start(&entry.name, "timeout-check-after-lift");
     check_timeout(deadline, &entry.name)?;
@@ -3929,26 +4452,28 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "build-ssa");
-    let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+    let mut ssa = {
+        let _profile_stage = profile_pipeline_stage("pipeline.build-ssa", entry);
+        unlace_ir::ssa::build_ssa(ir_func)
+    };
     // Batch 2: tag the SSA function with its target arch so stack-recovery
     // passes consult the right [`unlace_ir::stack::StackSpec`]. Previously
     // every non-x86 binary fell through to a hard-coded RSP=32 lookup and
     // produced `stack_vars.len() == 0`.
     ssa.arch = image.arch;
     pipeline_trace_ssa(&entry.name, "build-ssa", t, deadline, &ssa);
-    tracing::trace!(
-        elapsed_us = t.elapsed().as_micros() as u64,
-        "build_ssa done"
-    );
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "debug-info-overlay");
-    if let Some(dwarf_info) = dwarf {
-        apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
-    }
-    apply_pdb_debug_to_ssa(&mut ssa, image, entry);
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.debug-info-overlay", entry);
+        if let Some(dwarf_info) = dwarf {
+            apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
+        }
+        apply_pdb_debug_to_ssa(&mut ssa, image, entry);
 
-    populate_eh_landing_pads(image, entry, &mut ssa, rtti);
+        populate_eh_landing_pads(image, entry, &mut ssa, rtti);
+    }
     pipeline_trace_ssa(&entry.name, "debug-info-overlay", t, deadline, &ssa);
 
     warn_if_large_ir(&entry.name, &ssa);
@@ -3968,14 +4493,35 @@ pub fn decompile_function_with_symbols(
     // also reused as the resolver backing store.
     let t_pre_pass = Instant::now();
     pipeline_trace_start(&entry.name, "pre-pass-analysis");
-    let (symbols, flirt_map) =
-        build_symbol_table_and_flirt_with_config(image, discovered, &config.flirt);
-    let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
-    for (&addr, name) in &symbols {
-        stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+    let profile_pre_pass = profile_pipeline_stage("pipeline.pre-pass-analysis", entry);
+    let owned_symbol_context = config
+        .symbol_context
+        .is_none()
+        .then(|| build_symbol_context_with_config(image, discovered, &config.flirt));
+    let symbol_context = config
+        .symbol_context
+        .as_deref()
+        .or(owned_symbol_context.as_ref())
+        .expect("symbol context is present");
+    let symbols = &symbol_context.symbols;
+    let flirt_map = &symbol_context.flirt_calls;
+    let stable_symbol_names = &symbol_context.stable_symbol_names;
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.symbol-table", entry);
+        profiling::event_fields(
+            "pipeline.symbol-table.reuse",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::count("symbols", symbols.len() as u64),
+            ],
+        );
     }
-    let estimated_param_counts =
-        estimate_direct_target_param_counts(image, lifter, discovered, &ssa);
+    let estimated_param_counts = {
+        let _profile_stage = profile_pipeline_stage("pipeline.estimate-param-counts", entry);
+        let counts = estimate_direct_target_param_counts(image, lifter, discovered, &ssa);
+        profiling::record_items("pipeline.estimate-param-counts", counts.len() as u64);
+        counts
+    };
 
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
@@ -3985,8 +4531,10 @@ pub fn decompile_function_with_symbols(
             .or_else(|| estimated_param_counts.get(&addr).copied())
     };
 
-    let _call_args_pre =
-        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &dwarf_param_count);
+    let _call_args_pre = {
+        let _profile_stage = profile_pipeline_stage("pipeline.recover-call-args", entry);
+        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &dwarf_param_count)
+    };
 
     // Batch 6 (pre-pass): parse printf-family format strings *before*
     // the optimization pipeline runs. The IR pattern that
@@ -3995,24 +4543,39 @@ pub fn decompile_function_with_symbols(
     // sccp, so the call must precede `run_passes_with_resolver`. The
     // post-pass call below is kept (additive merge) to cover any sites
     // the pre-pass missed.
-    let _variadic_types_pre = parse_printf_format_strings(
-        &mut ssa,
-        &|addr| stable_symbol_names.get(&addr).copied(),
-        &image.string_table,
-    );
+    let _variadic_types_pre = {
+        let _profile_stage = profile_pipeline_stage("pipeline.parse-printf-pre", entry);
+        parse_printf_format_strings(
+            &mut ssa,
+            &|addr| stable_symbol_names.get(&addr).copied(),
+            &image.string_table,
+        )
+    };
+    drop(profile_pre_pass);
     pipeline_trace_ssa(&entry.name, "pre-pass-analysis", t_pre_pass, deadline, &ssa);
 
     let t_jt_pre = Instant::now();
     pipeline_trace_start(&entry.name, "jump-table-pre");
-    resolve_jump_tables_for_pipeline(&mut ssa, image);
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.jump-table-pre", entry);
+        resolve_jump_tables_for_pipeline(&mut ssa, image);
+    }
     pipeline_trace_ssa(&entry.name, "jump-table-pre", t_jt_pre, deadline, &ssa);
 
     let t_passes = Instant::now();
     pipeline_trace_start(&entry.name, "run-passes");
-    if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
-        tracing::warn!(
-            err = format!("{e:#}"),
-            "pass pipeline failed; emitting unoptimized"
+    let pass_result = {
+        let _profile_stage = profile_pipeline_stage("pipeline.run-passes", entry);
+        run_passes_with_resolver_until(&mut ssa, &resolve_name, deadline)
+    };
+    if let Err(e) = pass_result {
+        profiling::diagnostic(
+            "warn",
+            "pass pipeline failed; emitting unoptimized",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::text("err", format!("{e:#}")),
+            ],
         );
         if pipeline_trace_enabled() {
             eprintln!(
@@ -4022,10 +4585,6 @@ pub fn decompile_function_with_symbols(
         }
     }
     pipeline_trace_ssa(&entry.name, "run-passes", t_passes, deadline, &ssa);
-    tracing::trace!(
-        elapsed_us = t_passes.elapsed().as_micros() as u64,
-        "run_passes done"
-    );
 
     pipeline_trace_start(&entry.name, "timeout-check-after-passes");
     check_timeout(deadline, &entry.name)?;
@@ -4038,10 +4597,15 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "post-pass-annotations");
+    let profile_post_annotations = profile_pipeline_stage("pipeline.post-pass-annotations", entry);
 
-    run_objc_dispatch_for_image(&mut ssa, image, &symbols);
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.objc-dispatch", entry);
+        run_objc_dispatch_pass(&mut ssa, symbol_context.objc_dispatch_pass.as_deref());
+    }
 
     if !symbols.is_empty() {
+        let _profile_stage = profile_pipeline_stage("pipeline.detect-go-defer", entry);
         ssa.go_defer_sites = detect_go_defer(&ssa, |addr| stable_symbol_names.get(&addr).copied())
             .into_iter()
             .map(|site| unlace_ir::ssa::GoDeferSite {
@@ -4058,8 +4622,10 @@ pub fn decompile_function_with_symbols(
     // constant-target VA of each Call against the just-built symbol
     // table — the same map the printer will use, so a name only matches
     // here if the printer would also have rendered it.
-    let _libc_annotations_added =
-        annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned());
+    let _libc_annotations_added = {
+        let _profile_stage = profile_pipeline_stage("pipeline.annotate-libc", entry);
+        annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned())
+    };
 
     // Batch 6: recover per-slot variadic argument types for printf-style
     // call sites. Walks each Call to a variadic libc function, resolves
@@ -4068,17 +4634,30 @@ pub fn decompile_function_with_symbols(
     // `PrimitiveType` list in `ssa.variadic_call_types`. The resolver is
     // the same `&'static str` symbol map the noreturn/rust-panic passes
     // used; the string table is the loader's read-only data map.
-    let _variadic_types_added = parse_printf_format_strings(
-        &mut ssa,
-        &|addr| stable_symbol_names.get(&addr).copied(),
-        &image.string_table,
-    );
+    let _variadic_types_added = {
+        let _profile_stage = profile_pipeline_stage("pipeline.parse-printf-post", entry);
+        parse_printf_format_strings(
+            &mut ssa,
+            &|addr| stable_symbol_names.get(&addr).copied(),
+            &image.string_table,
+        )
+    };
 
     // t298 — Go iface-to-concrete devirtualization. When a `Callind`
     // target resolves to a unique method pointer recorded in a
     // `runtime.itab`, surface the concrete method symbol at print time.
-    let go_iface_devirtualized_calls = collect_go_iface_devirtualized_calls(&ssa, image, &symbols);
-    let cxx_eh_actions = collect_cxx_eh_actions(&ssa, &symbols);
+    let go_iface_devirtualized_calls = {
+        let _profile_stage = profile_pipeline_stage("pipeline.go-iface-devirt", entry);
+        collect_go_iface_devirtualized_calls_with_methods(
+            &ssa,
+            symbols,
+            &symbol_context.go_itab_methods,
+        )
+    };
+    let cxx_eh_actions = {
+        let _profile_stage = profile_pipeline_stage("pipeline.cxx-eh-actions", entry);
+        collect_cxx_eh_actions(&ssa, symbols)
+    };
 
     // Re-key (BlockId, insn_idx) → canonical name to (call_va → canonical
     // name) for the printer, which sees instructions only by their VA.
@@ -4099,12 +4678,19 @@ pub fn decompile_function_with_symbols(
     printer_annotations.go_defer_sites = ssa.go_defer_sites.clone();
     let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
-    printer_annotations.readonly_scalars = collect_readonly_scalars(image);
+    printer_annotations.readonly_scalars = {
+        let _profile_stage = profile_pipeline_stage("pipeline.collect-readonly-scalars", entry);
+        collect_readonly_scalars_for_ssa(image, &ssa)
+    };
     if let Some(pdb_types) = image.pdb_types.as_ref() {
         printer_annotations.pdb_constants_by_value = pdb_types.constants_by_value.clone();
     }
-    let objc_info = unlace_loader::scan_objc_classlist(image);
-    printer_annotations.objc_classes = objc_info.classes.into_values().collect();
+    let objc_classes = {
+        let _profile_stage = profile_pipeline_stage("pipeline.scan-objc-classlist", entry);
+        symbol_context.objc_classes.clone()
+    };
+    printer_annotations.objc_classes = objc_classes;
+    printer_annotations.objc_categories = symbol_context.objc_categories.clone();
     printer_annotations.go_interfaces = image.go_types.clone();
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
@@ -4122,6 +4708,7 @@ pub fn decompile_function_with_symbols(
     printer_annotations.recover_triangular_sum_loop =
         unlace_passes::detect_triangular_sum_reduction(&ssa).is_some();
     let printer_annotations = Some(printer_annotations);
+    drop(profile_post_annotations);
     pipeline_trace_ssa(&entry.name, "post-pass-annotations", t, deadline, &ssa);
 
     // Batch 9: section-aware second phase of jump-table recovery.
@@ -4132,34 +4719,46 @@ pub fn decompile_function_with_symbols(
     // No-op when no candidates were detected.
     let t_jt_post = Instant::now();
     pipeline_trace_start(&entry.name, "jump-table-post");
-    resolve_jump_tables_for_pipeline(&mut ssa, image);
-    let jt_sections = build_jump_table_section_views(image);
+    let jt_sections = {
+        let _profile_stage = profile_pipeline_stage("pipeline.jump-table-post", entry);
+        resolve_jump_tables_for_pipeline(&mut ssa, image);
+        build_jump_table_section_views(image)
+    };
     pipeline_trace_ssa(&entry.name, "jump-table-post", t_jt_post, deadline, &ssa);
 
     let t_emit = Instant::now();
     pipeline_trace_start(&entry.name, "emit-output");
-    let result = emit_output(
-        emit,
-        &ssa,
-        dwarf,
-        &symbols,
-        &image.string_table,
-        rtti,
-        config.print_config,
-        printer_annotations.as_ref(),
-        &jt_sections,
-    );
+    let result = {
+        let _profile_stage = profile_pipeline_stage("pipeline.emit-output", entry);
+        emit_output(
+            emit,
+            &ssa,
+            dwarf,
+            symbols,
+            &image.string_table,
+            rtti,
+            config.print_config,
+            printer_annotations.as_ref(),
+            &jt_sections,
+            Some(deadline),
+        )
+    };
     pipeline_trace_done(&entry.name, "emit-output", t_emit, deadline);
-    tracing::trace!(
-        elapsed_us = t.elapsed().as_micros() as u64,
-        "emit_output done"
-    );
     result
 }
 
 fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
     if Instant::now() >= deadline {
         bail!("timeout exceeded for function '{func_name}'");
+    }
+    Ok(())
+}
+
+fn check_output_deadline(deadline: Option<Instant>, func_name: &str, stage: &str) -> Result<()> {
+    if let Some(deadline) = deadline
+        && Instant::now() >= deadline
+    {
+        bail!("timeout exceeded for function '{func_name}' during {stage}");
     }
     Ok(())
 }
@@ -4225,10 +4824,13 @@ fn populate_eh_landing_pads(
     }
 
     if !ssa.eh_landing_pads.is_empty() {
-        tracing::trace!(
-            func = %entry.name,
-            count = ssa.eh_landing_pads.len(),
+        profiling::diagnostic(
+            "trace",
             "populated EH landing pads from LSDA",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::count("count", ssa.eh_landing_pads.len() as u64),
+            ],
         );
     }
 }
@@ -4298,8 +4900,15 @@ fn build_printer_annotations(
     }
 }
 
-fn collect_readonly_scalars(image: &BinaryImage) -> BTreeMap<(u64, u8), u64> {
+fn collect_readonly_scalars_for_ssa(
+    image: &BinaryImage,
+    ssa: &SsaFunction,
+) -> BTreeMap<(u64, u8), u64> {
+    let candidate_addrs = const_addrs_for_ssa(ssa);
     let mut out = BTreeMap::new();
+    if candidate_addrs.is_empty() {
+        return out;
+    }
     for section in &image.sections {
         let readonly_data = section.flags.contains(SectionFlags::READ)
             && !section.flags.contains(SectionFlags::WRITE)
@@ -4308,12 +4917,15 @@ fn collect_readonly_scalars(image: &BinaryImage) -> BTreeMap<(u64, u8), u64> {
         if !readonly_data {
             continue;
         }
-        for width in [1usize, 2, 4, 8] {
-            if section.data.len() < width {
-                continue;
-            }
-            for off in 0..=section.data.len() - width {
-                let bytes = &section.data[off..off + width];
+        let start = section.vaddr;
+        let end = section.vaddr.saturating_add(section.data.len() as u64);
+        for &addr in candidate_addrs.range(start..end) {
+            let section_off = (addr - section.vaddr) as usize;
+            for width in [1usize, 2, 4, 8] {
+                if section_off.saturating_add(width) > section.data.len() {
+                    continue;
+                }
+                let bytes = &section.data[section_off..section_off + width];
                 let value = match image.endian {
                     Endian::Little => bytes
                         .iter()
@@ -4323,11 +4935,63 @@ fn collect_readonly_scalars(image: &BinaryImage) -> BTreeMap<(u64, u8), u64> {
                         .iter()
                         .fold(0u64, |acc, byte| (acc << 8) | (*byte as u64)),
                 };
-                out.insert((section.vaddr + off as u64, width as u8), value);
+                out.insert((addr, width as u8), value);
             }
         }
     }
     out
+}
+
+fn symbols_for_ssa(ssa: &SsaFunction, symbols: &BTreeMap<u64, String>) -> BTreeMap<u64, String> {
+    let mut out = BTreeMap::new();
+    if let Some(name) = symbols.get(&ssa.function.addr) {
+        out.insert(ssa.function.addr, name.clone());
+    }
+    for addr in const_addrs_for_ssa(ssa) {
+        if let Some(name) = symbols.get(&addr) {
+            out.insert(addr, name.clone());
+        }
+    }
+    out
+}
+
+fn string_table_for_ssa(
+    ssa: &SsaFunction,
+    string_table: &BTreeMap<u64, String>,
+) -> BTreeMap<u64, String> {
+    let mut out = BTreeMap::new();
+    for addr in const_addrs_for_ssa(ssa) {
+        if let Some(s) = string_table.get(&addr) {
+            out.insert(addr, s.clone());
+        }
+    }
+    out
+}
+
+fn const_addrs_for_ssa(ssa: &SsaFunction) -> BTreeSet<u64> {
+    let mut candidate_addrs = BTreeSet::new();
+    for block in ssa.function.blocks.values() {
+        for insn in &block.insns {
+            for input in &insn.inputs {
+                if input.space == SpaceId::Const {
+                    candidate_addrs.insert(input.offset);
+                }
+            }
+            if let Some(output) = insn.output
+                && output.space == SpaceId::Const
+            {
+                candidate_addrs.insert(output.offset);
+            }
+        }
+    }
+    for table in ssa.resolved_jump_tables.values() {
+        candidate_addrs.insert(table.base);
+        candidate_addrs.extend(table.targets.iter().copied());
+    }
+    for target in ssa.resolved_indirect_calls.values() {
+        candidate_addrs.insert(*target);
+    }
+    candidate_addrs
 }
 
 pub(crate) fn collect_ssa_statement_slots(
@@ -4482,18 +5146,25 @@ fn traces_to_stack_chk_fail_return(
     })
 }
 
+#[cfg(test)]
 fn collect_go_iface_devirtualized_calls(
     ssa: &SsaFunction,
     image: &BinaryImage,
     symbols: &BTreeMap<u64, String>,
 ) -> BTreeMap<u64, String> {
-    let mut method_to_symbol: BTreeMap<u64, String> = BTreeMap::new();
-    for (&addr, raw) in symbols {
-        method_to_symbol.entry(addr).or_insert_with(|| raw.clone());
+    let mut methods = BTreeSet::new();
+    for itab in image.go_itabs.values() {
+        methods.extend(itab.methods.iter().copied());
     }
+    collect_go_iface_devirtualized_calls_with_methods(ssa, symbols, &methods)
+}
 
-    let itabs = Arc::new(image.go_itabs.clone());
-    if itabs.is_empty() || method_to_symbol.is_empty() {
+fn collect_go_iface_devirtualized_calls_with_methods(
+    ssa: &SsaFunction,
+    symbols: &BTreeMap<u64, String>,
+    go_itab_methods: &BTreeSet<u64>,
+) -> BTreeMap<u64, String> {
+    if go_itab_methods.is_empty() || symbols.is_empty() {
         return BTreeMap::new();
     }
 
@@ -4510,11 +5181,8 @@ fn collect_go_iface_devirtualized_calls(
         }
 
         let mut matched_name: Option<String> = None;
-        for itab in itabs.values() {
-            if !itab.methods.contains(&target) {
-                continue;
-            }
-            let Some(raw_name) = method_to_symbol.get(&target) else {
+        if go_itab_methods.contains(&target) {
+            let Some(raw_name) = symbols.get(&target) else {
                 continue;
             };
             // The unique target address is enough to prove the concrete
@@ -4527,7 +5195,6 @@ fn collect_go_iface_devirtualized_calls(
                     .map(|d| d.short_name)
                     .unwrap_or_else(|| raw_name.clone()),
             ));
-            break;
         }
 
         if let Some(name) = matched_name {
@@ -4573,35 +5240,19 @@ fn collect_cxx_eh_actions(
     unlace_passes::cxx_eh::collect_eh_sites(&calls)
 }
 
-fn build_objc_dispatch_pass(
-    image: &BinaryImage,
-    symbols: &BTreeMap<u64, String>,
-) -> ObjcDispatchPass {
-    let class_symbols = symbols
-        .iter()
-        .filter_map(|(&addr, name)| {
-            name.strip_prefix("_OBJC_CLASS_$_")
-                .or_else(|| name.strip_prefix("OBJC_CLASS_$_"))
-                .map(|class| (addr, class.to_string()))
-        })
-        .collect();
-    let selector_strings = image.string_table.clone();
-    let objc_info = unlace_loader::scan_objc_classlist(image);
-
-    ObjcDispatchPass::from_plt_symbols(&image.plt_symbols)
-        .with_class_symbols(class_symbols)
-        .with_selector_strings(selector_strings)
-        .with_categories(&objc_info.categories)
-}
-
-fn run_objc_dispatch_for_image(
-    ssa: &mut SsaFunction,
-    image: &BinaryImage,
-    symbols: &BTreeMap<u64, String>,
-) {
-    let pass = build_objc_dispatch_pass(image, symbols);
-    if let Err(e) = run_instrumented(&pass, ssa) {
-        tracing::warn!(func = %ssa.function.name, err = %e, "objc dispatch pass failed");
+fn run_objc_dispatch_pass(ssa: &mut SsaFunction, pass: Option<&ObjcDispatchPass>) {
+    let Some(pass) = pass else {
+        return;
+    };
+    if let Err(e) = run_instrumented(pass, ssa) {
+        profiling::diagnostic(
+            "warn",
+            "objc dispatch pass failed",
+            [
+                TraceField::text("function", ssa.function.name.clone()),
+                TraceField::text("err", e.to_string()),
+            ],
+        );
     }
 }
 
@@ -4638,7 +5289,14 @@ fn resolve_jump_tables_for_pipeline(
 ) {
     let trace = env_flag_enabled("UNLACE_JUMPTABLE_TRACE");
     if let Err(e) = run_instrumented(&IndirectJumpResolvePass, ssa) {
-        tracing::warn!(func = %ssa.function.name, err = %e, "jump-table candidate recovery failed");
+        profiling::diagnostic(
+            "warn",
+            "jump-table candidate recovery failed",
+            [
+                TraceField::text("function", ssa.function.name.clone()),
+                TraceField::text("err", e.to_string()),
+            ],
+        );
     }
     if trace {
         eprintln!(
@@ -4955,6 +5613,7 @@ pub fn emit_output(
     print_config: Option<unlace_output::PrintConfig>,
     annotations: Option<&unlace_output::PrinterAnnotations>,
     jump_table_sections: &[unlace_struct::SectionView<'_>],
+    deadline: Option<Instant>,
 ) -> Result<String> {
     match format {
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
@@ -4962,12 +5621,46 @@ pub fn emit_output(
         EmitFormat::C => {
             // Use LSDA-derived landing pads when available; falls back to
             // plain `structure` (no TryCatch wrapping) when the set is empty.
-            let mut hir = if ssa.eh_landing_pads.is_empty() {
-                unlace_struct::structure(ssa).context("control-flow structuring failed")?
-            } else {
-                unlace_struct::structure_with_landing_pads(ssa, &ssa.eh_landing_pads)
-                    .context("control-flow structuring failed")?
+            let mut hir = {
+                let _span = profiling::phase("output.structure");
+                let structured = if ssa.eh_landing_pads.is_empty() {
+                    if let Some(deadline) = deadline {
+                        unlace_struct::structure_until(ssa, deadline)
+                    } else {
+                        unlace_struct::structure(ssa)
+                    }
+                } else {
+                    if let Some(deadline) = deadline {
+                        unlace_struct::structure_with_landing_pads_until(
+                            ssa,
+                            &ssa.eh_landing_pads,
+                            deadline,
+                        )
+                    } else {
+                        unlace_struct::structure_with_landing_pads(ssa, &ssa.eh_landing_pads)
+                    }
+                };
+                match structured {
+                    Ok(hir) => hir,
+                    Err(err @ unlace_struct::StructureError::ComplexityLimit { .. }) => {
+                        let reason = err.to_string();
+                        profiling::diagnostic(
+                            "warn",
+                            "control-flow structuring fell back to unstructured labels",
+                            [
+                                TraceField::text("function", ssa.function.name.clone()),
+                                TraceField::text("reason", reason.clone()),
+                            ],
+                        );
+                        {
+                            let _span = profiling::phase("output.structure-unstructured-fallback");
+                            unlace_struct::structure_unstructured_fallback(ssa, reason)
+                        }
+                    }
+                    Err(err) => return Err(err).context("control-flow structuring failed"),
+                }
             };
+            check_output_deadline(deadline, &ssa.function.name, "output.structure")?;
             trace_hir_pipeline("structure", &hir);
             // Batch 9: post-structuring switch recovery, followed by
             // jump-table-aware refinement. `recover_switches` walks the
@@ -4977,99 +5670,297 @@ pub fn emit_output(
             // concrete case values decoded from the binary's jump
             // tables (populated upstream by
             // `IndirectJumpResolvePass` + `resolve_jump_table_targets`).
-            unlace_struct::recover_switches(&mut hir);
-            trace_hir_pipeline("recover_switches", &hir);
-            if !ssa.resolved_jump_tables.is_empty() && !jump_table_sections.is_empty() {
-                let tables_for_refine = jump_table_info_map_to_struct(&ssa.resolved_jump_tables);
-                if !tables_for_refine.is_empty() {
-                    unlace_struct::refine_switches_with_tables(
-                        &mut hir,
-                        &tables_for_refine,
-                        jump_table_sections,
-                    );
-                    trace_hir_pipeline("refine_switches", &hir);
+            {
+                let _span = profiling::phase("output.hir-switch-recovery");
+                {
+                    let _span = profiling::phase("output.hir.recover-switches");
+                    unlace_struct::recover_switches(&mut hir);
+                }
+                check_output_deadline(deadline, &ssa.function.name, "output.hir.recover-switches")?;
+                trace_hir_pipeline("recover_switches", &hir);
+                if !ssa.resolved_jump_tables.is_empty() && !jump_table_sections.is_empty() {
+                    let tables_for_refine = {
+                        let _span = profiling::phase("output.hir.jump-table-info-map");
+                        jump_table_info_map_to_struct(&ssa.resolved_jump_tables)
+                    };
+                    check_output_deadline(
+                        deadline,
+                        &ssa.function.name,
+                        "output.hir.jump-table-info-map",
+                    )?;
+                    if !tables_for_refine.is_empty() {
+                        {
+                            let _span = profiling::phase("output.hir.refine-switches-with-tables");
+                            unlace_struct::refine_switches_with_tables(
+                                &mut hir,
+                                &tables_for_refine,
+                                jump_table_sections,
+                            );
+                        }
+                        check_output_deadline(
+                            deadline,
+                            &ssa.function.name,
+                            "output.hir.refine-switches-with-tables",
+                        )?;
+                        trace_hir_pipeline("refine_switches", &hir);
+                    }
                 }
             }
-            unlace_struct::ternary_recovery(&mut hir);
-            trace_hir_pipeline("ternary", &hir);
-            unlace_struct::short_circuit_recovery(&mut hir);
-            trace_hir_pipeline("short_circuit", &hir);
-            unlace_struct::flatten_if_else_chains(&mut hir);
-            trace_hir_pipeline("flatten_if_else", &hir);
-            unlace_struct::simplify_chain_conditions(&mut hir, ssa);
-            trace_hir_pipeline("simplify_chain_conditions", &hir);
-            unlace_struct::normalize_conditions(&mut hir);
-            trace_hir_pipeline("normalize_conditions1", &hir);
-            unlace_struct::if_chain_to_switch(&mut hir, ssa);
-            trace_hir_pipeline("if_chain_to_switch", &hir);
-            unlace_struct::recover_cmov_switches(&mut hir, ssa);
-            trace_hir_pipeline("recover_cmov_switches", &hir);
-            unlace_struct::goto_to_break(&mut hir);
-            trace_hir_pipeline("goto_to_break", &hir);
-            unlace_struct::goto_to_continue(&mut hir);
-            trace_hir_pipeline("goto_to_continue", &hir);
-            unlace_struct::detect_continue_break(&mut hir.body);
-            trace_hir_pipeline("detect_continue_break1", &hir);
-            unlace_struct::reverse_loop_rotation(&mut hir);
-            trace_hir_pipeline("reverse_loop_rotation", &hir);
-            unlace_struct::normalize_dowhile_to_while(&mut hir);
-            trace_hir_pipeline("normalize_dowhile_to_while", &hir);
-            unlace_struct::while_to_for(&mut hir);
-            trace_hir_pipeline("while_to_for", &hir);
-            unlace_struct::eliminate_forward_gotos(&mut hir);
-            trace_hir_pipeline("eliminate_forward_gotos1", &hir);
-            unlace_struct::hoist_cross_branch_labels(&mut hir);
-            trace_hir_pipeline("hoist_cross_branch_labels", &hir);
-            unlace_struct::coalesce_goto_chains(&mut hir);
-            trace_hir_pipeline("coalesce_goto_chains1", &hir);
-            unlace_struct::collapse_label_fallthroughs(&mut hir);
-            trace_hir_pipeline("collapse_label_fallthroughs1", &hir);
-            unlace_struct::duplicate_goto_conditions(&mut hir);
-            trace_hir_pipeline("duplicate_goto_conditions", &hir);
-            unlace_struct::duplicate_simple_label_tails(&mut hir);
-            trace_hir_pipeline("duplicate_simple_label_tails1", &hir);
-            unlace_struct::normalize_conditions(&mut hir);
-            trace_hir_pipeline("normalize_conditions2", &hir);
-            unlace_struct::detect_continue_break(&mut hir.body);
-            trace_hir_pipeline("detect_continue_break2", &hir);
-            unlace_struct::eliminate_forward_gotos(&mut hir);
-            trace_hir_pipeline("eliminate_forward_gotos2", &hir);
-            unlace_struct::coalesce_goto_chains(&mut hir);
-            trace_hir_pipeline("coalesce_goto_chains2", &hir);
-            unlace_struct::collapse_label_fallthroughs(&mut hir);
-            trace_hir_pipeline("collapse_label_fallthroughs2", &hir);
-            unlace_struct::cleanup_unreachable_labels(&mut hir);
-            trace_hir_pipeline("cleanup_unreachable_labels", &hir);
-            unlace_struct::return_merge(&mut hir);
-            trace_hir_pipeline("return_merge", &hir);
-            unlace_struct::duplicate_simple_label_tails(&mut hir);
-            trace_hir_pipeline("duplicate_simple_label_tails2", &hir);
-            unlace_struct::detect_continue_break(&mut hir.body);
-            trace_hir_pipeline("detect_continue_break3", &hir);
-            unlace_struct::eliminate_forward_gotos(&mut hir);
-            trace_hir_pipeline("eliminate_forward_gotos3", &hir);
-            unlace_struct::coalesce_goto_chains(&mut hir);
-            trace_hir_pipeline("coalesce_goto_chains3", &hir);
-            unlace_struct::collapse_label_fallthroughs(&mut hir);
-            trace_hir_pipeline("collapse_label_fallthroughs3", &hir);
-            unlace_struct::cleanup_unreachable_labels(&mut hir);
-            trace_hir_pipeline("cleanup_unreachable_labels_final", &hir);
-            unlace_struct::eliminate_forward_gotos(&mut hir);
-            trace_hir_pipeline("eliminate_forward_gotos4", &hir);
-            unlace_struct::cleanup_unreachable_labels(&mut hir);
-            trace_hir_pipeline("cleanup_unreachable_labels_final2", &hir);
-            unlace_struct::recover_guarded_whiles(&mut hir);
-            trace_hir_pipeline("recover_guarded_whiles", &hir);
-            unlace_struct::cleanup_empty_ifs(&mut hir);
-            trace_hir_pipeline("cleanup_empty_ifs", &hir);
-            hir_recovery::apply_expression_recovery(&mut hir);
-            trace_hir_pipeline("batch19_expression_recovery", &hir);
-            // Batch 9 slice 2: collapse consecutive cases with equal
-            // bodies and drop redundant `default:` arms so the printer
-            // emits IDA-style stacked case labels.
-            unlace_struct::cleanup_switches(&mut hir);
-            unlace_struct::repair_missing_goto_labels(&mut hir);
-            let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, symbols);
+            {
+                let _span = profiling::phase("output.hir-post-process");
+                macro_rules! hir_step {
+                    ($phase:literal, $stage:literal, $body:block) => {{
+                        {
+                            let _step = profiling::phase($phase);
+                            $body
+                        }
+                        check_output_deadline(deadline, &ssa.function.name, $phase)?;
+                        trace_hir_pipeline($stage, &hir);
+                    }};
+                }
+
+                hir_step!("output.hir.ternary", "ternary", {
+                    unlace_struct::ternary_recovery(&mut hir);
+                });
+                hir_step!("output.hir.short-circuit", "short_circuit", {
+                    unlace_struct::short_circuit_recovery(&mut hir);
+                });
+                hir_step!("output.hir.flatten-if-else", "flatten_if_else", {
+                    unlace_struct::flatten_if_else_chains(&mut hir);
+                });
+                hir_step!(
+                    "output.hir.simplify-chain-conditions",
+                    "simplify_chain_conditions",
+                    {
+                        unlace_struct::simplify_chain_conditions(&mut hir, ssa);
+                    }
+                );
+                hir_step!(
+                    "output.hir.normalize-conditions1",
+                    "normalize_conditions1",
+                    {
+                        unlace_struct::normalize_conditions(&mut hir);
+                    }
+                );
+                hir_step!("output.hir.if-chain-to-switch", "if_chain_to_switch", {
+                    unlace_struct::if_chain_to_switch(&mut hir, ssa);
+                });
+                hir_step!(
+                    "output.hir.recover-cmov-switches",
+                    "recover_cmov_switches",
+                    {
+                        unlace_struct::recover_cmov_switches(&mut hir, ssa);
+                    }
+                );
+                hir_step!("output.hir.goto-to-break", "goto_to_break", {
+                    unlace_struct::goto_to_break(&mut hir);
+                });
+                hir_step!("output.hir.goto-to-continue", "goto_to_continue", {
+                    unlace_struct::goto_to_continue(&mut hir);
+                });
+                hir_step!(
+                    "output.hir.detect-continue-break1",
+                    "detect_continue_break1",
+                    {
+                        unlace_struct::detect_continue_break(&mut hir.body);
+                    }
+                );
+                hir_step!(
+                    "output.hir.reverse-loop-rotation",
+                    "reverse_loop_rotation",
+                    {
+                        unlace_struct::reverse_loop_rotation(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.normalize-dowhile-to-while",
+                    "normalize_dowhile_to_while",
+                    {
+                        unlace_struct::normalize_dowhile_to_while(&mut hir);
+                    }
+                );
+                hir_step!("output.hir.while-to-for", "while_to_for", {
+                    unlace_struct::while_to_for(&mut hir);
+                });
+                hir_step!(
+                    "output.hir.eliminate-forward-gotos1",
+                    "eliminate_forward_gotos1",
+                    {
+                        unlace_struct::eliminate_forward_gotos(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.hoist-cross-branch-labels",
+                    "hoist_cross_branch_labels",
+                    {
+                        unlace_struct::hoist_cross_branch_labels(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.coalesce-goto-chains1",
+                    "coalesce_goto_chains1",
+                    {
+                        unlace_struct::coalesce_goto_chains(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.collapse-label-fallthroughs1",
+                    "collapse_label_fallthroughs1",
+                    {
+                        unlace_struct::collapse_label_fallthroughs(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.duplicate-goto-conditions",
+                    "duplicate_goto_conditions",
+                    {
+                        unlace_struct::duplicate_goto_conditions(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.duplicate-simple-label-tails1",
+                    "duplicate_simple_label_tails1",
+                    {
+                        unlace_struct::duplicate_simple_label_tails(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.normalize-conditions2",
+                    "normalize_conditions2",
+                    {
+                        unlace_struct::normalize_conditions(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.detect-continue-break2",
+                    "detect_continue_break2",
+                    {
+                        unlace_struct::detect_continue_break(&mut hir.body);
+                    }
+                );
+                hir_step!(
+                    "output.hir.eliminate-forward-gotos2",
+                    "eliminate_forward_gotos2",
+                    {
+                        unlace_struct::eliminate_forward_gotos(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.coalesce-goto-chains2",
+                    "coalesce_goto_chains2",
+                    {
+                        unlace_struct::coalesce_goto_chains(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.collapse-label-fallthroughs2",
+                    "collapse_label_fallthroughs2",
+                    {
+                        unlace_struct::collapse_label_fallthroughs(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.cleanup-unreachable-labels1",
+                    "cleanup_unreachable_labels",
+                    {
+                        unlace_struct::cleanup_unreachable_labels(&mut hir);
+                    }
+                );
+                hir_step!("output.hir.return-merge", "return_merge", {
+                    unlace_struct::return_merge(&mut hir);
+                });
+                hir_step!(
+                    "output.hir.duplicate-simple-label-tails2",
+                    "duplicate_simple_label_tails2",
+                    {
+                        unlace_struct::duplicate_simple_label_tails(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.detect-continue-break3",
+                    "detect_continue_break3",
+                    {
+                        unlace_struct::detect_continue_break(&mut hir.body);
+                    }
+                );
+                hir_step!(
+                    "output.hir.eliminate-forward-gotos3",
+                    "eliminate_forward_gotos3",
+                    {
+                        unlace_struct::eliminate_forward_gotos(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.coalesce-goto-chains3",
+                    "coalesce_goto_chains3",
+                    {
+                        unlace_struct::coalesce_goto_chains(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.collapse-label-fallthroughs3",
+                    "collapse_label_fallthroughs3",
+                    {
+                        unlace_struct::collapse_label_fallthroughs(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.cleanup-unreachable-labels-final1",
+                    "cleanup_unreachable_labels_final",
+                    {
+                        unlace_struct::cleanup_unreachable_labels(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.eliminate-forward-gotos4",
+                    "eliminate_forward_gotos4",
+                    {
+                        unlace_struct::eliminate_forward_gotos(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.cleanup-unreachable-labels-final2",
+                    "cleanup_unreachable_labels_final2",
+                    {
+                        unlace_struct::cleanup_unreachable_labels(&mut hir);
+                    }
+                );
+                hir_step!(
+                    "output.hir.recover-guarded-whiles",
+                    "recover_guarded_whiles",
+                    {
+                        unlace_struct::recover_guarded_whiles(&mut hir);
+                    }
+                );
+                hir_step!("output.hir.cleanup-empty-ifs", "cleanup_empty_ifs", {
+                    unlace_struct::cleanup_empty_ifs(&mut hir);
+                });
+                hir_step!(
+                    "output.hir.expression-recovery",
+                    "batch19_expression_recovery",
+                    {
+                        hir_recovery::apply_expression_recovery(&mut hir);
+                    }
+                );
+                // Batch 9 slice 2: collapse consecutive cases with equal
+                // bodies and drop redundant `default:` arms so the printer
+                // emits IDA-style stacked case labels.
+                hir_step!("output.hir.cleanup-switches", "cleanup_switches", {
+                    unlace_struct::cleanup_switches(&mut hir);
+                });
+                hir_step!(
+                    "output.hir.repair-missing-goto-labels",
+                    "repair_missing_goto_labels",
+                    {
+                        unlace_struct::repair_missing_goto_labels(&mut hir);
+                    }
+                );
+            }
+            let header = {
+                let _span = profiling::phase("output.function-header");
+                unlace_output::FunctionHeaderInfo::from_ssa(ssa, symbols)
+            };
+            check_output_deadline(deadline, &ssa.function.name, "output.function-header")?;
 
             // t224: precompute the recovered-composite preamble from the
             // SsaFunction here — the printer sees only HirFunction and so
@@ -5083,8 +5974,14 @@ pub fn emit_output(
             // preamble) and clone the layouts themselves through so the
             // printer's `try_array_struct_field_access` can rewrite
             // Load/Store sites into `arr<N>[i].field_<offset>` form.
-            let inferred_preamble = unlace_output::emit_inferred_struct_preamble(ssa);
-            let array_indices = unlace_output::compute_array_struct_indices(ssa);
+            let (inferred_preamble, array_indices) = {
+                let _span = profiling::phase("output.annotation-preamble");
+                (
+                    unlace_output::emit_inferred_struct_preamble(ssa),
+                    unlace_output::compute_array_struct_indices(ssa),
+                )
+            };
+            check_output_deadline(deadline, &ssa.function.name, "output.annotation-preamble")?;
             let has_arrays = !ssa.array_struct_layouts.is_empty();
             let mut ann_clone = annotations.cloned().unwrap_or_default();
             if !inferred_preamble.is_empty() || has_arrays {
@@ -5096,34 +5993,69 @@ pub fn emit_output(
                     ann_clone.array_struct_indices = array_indices;
                 }
             }
-            ann_clone.ssa_statement_slots = collect_ssa_statement_slots(ssa);
-            ann_clone.ssa_phi_uses = collect_ssa_phi_uses(ssa);
-            ann_clone.return_value_aliases = collect_return_value_aliases(ssa, symbols);
-            ann_clone.stack_lvars = unlace_output::stack_lvar_annotations_from_ssa(ssa);
+            {
+                let _span = profiling::phase("output.annotation-maps");
+                ann_clone.ssa_statement_slots = collect_ssa_statement_slots(ssa);
+                ann_clone.ssa_phi_uses = collect_ssa_phi_uses(ssa);
+                ann_clone.return_value_aliases = collect_return_value_aliases(ssa, symbols);
+                ann_clone.stack_lvars = unlace_output::stack_lvar_annotations_from_ssa(ssa);
+            }
+            check_output_deadline(deadline, &ssa.function.name, "output.annotation-maps")?;
             ann_clone.arch = Some(ssa.arch);
             let ann_owned = Some(ann_clone);
             let ann_ref = ann_owned.as_ref();
 
-            Ok(unlace_output::print_c_with_annotations(
-                &hir,
-                dwarf,
-                Some(&header),
-                Some(symbols),
-                Some(string_table),
-                rtti,
-                print_config,
-                ann_ref,
-            ))
+            let rendered = {
+                let _span = profiling::phase("output.print-c");
+                let print_symbols = symbols_for_ssa(ssa, symbols);
+                let print_string_table = string_table_for_ssa(ssa, string_table);
+                unlace_output::print_c_with_annotations(
+                    &hir,
+                    dwarf,
+                    Some(&header),
+                    Some(&print_symbols),
+                    Some(&print_string_table),
+                    rtti,
+                    print_config,
+                    ann_ref,
+                )
+            };
+            check_output_deadline(deadline, &ssa.function.name, "output.print-c")?;
+            profiling::record_bytes("output.print-c", rendered.len() as u64);
+            Ok(rendered)
         }
     }
 }
 
 fn trace_hir_pipeline(stage: &str, hir: &unlace_struct::hir::HirFunction) {
-    if std::env::var_os("UNLACE_HIR_TRACE").is_none() {
+    let linkscope_enabled = profiling::is_enabled();
+    let stderr_enabled = std::env::var_os("UNLACE_HIR_TRACE").is_some();
+    if !linkscope_enabled && !stderr_enabled {
         return;
     }
     let mut counts = HirTraceCounts::default();
     count_hir_nodes(&hir.body, &mut counts);
+    if linkscope_enabled {
+        profiling::event_fields(
+            "output.hir-stage",
+            [
+                TraceField::text("stage", stage),
+                TraceField::count("top", hir.body.len() as u64),
+                TraceField::count("nodes", counts.nodes as u64),
+                TraceField::count("stmts", counts.statements as u64),
+                TraceField::count("calls", counts.calls as u64),
+                TraceField::count("returns", counts.returns as u64),
+                TraceField::count("gotos", counts.gotos as u64),
+                TraceField::count("labels", counts.labels as u64),
+                TraceField::count("breaks", counts.breaks as u64),
+                TraceField::count("continues", counts.continues as u64),
+                TraceField::count("empty_ifs", counts.empty_ifs as u64),
+            ],
+        );
+    }
+    if !stderr_enabled {
+        return;
+    }
     eprintln!(
         "[unlace-cli] hir stage={stage} top={} nodes={} stmts={} calls={} returns={} gotos={} labels={} breaks={} continues={} empty_ifs={}",
         hir.body.len(),
@@ -5352,6 +6284,7 @@ fn collect_hir_trace_details(
 mod tests {
     use super::*;
     use smallvec::smallvec;
+    use std::time::{Duration, Instant};
     use unlace_ir::ArchId;
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{Function, IrInsn, Varnode};
@@ -5402,6 +6335,74 @@ mod tests {
             auth_ptr_slots: Vec::new(),
             wasm_component: None,
         }
+    }
+
+    #[test]
+    fn run_passes_timeout_deadline_is_enforced() {
+        let mut func = Function::new("timeout_func", BlockId(0), 0x1000);
+        let out = Varnode::reg(0, 8);
+        let mut block = BasicBlock::new(BlockId(0));
+        block.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            out,
+            smallvec![Varnode::constant(1, 8)],
+            0x1000,
+        ));
+        block
+            .insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![out], 0x1001));
+        func.insert_block(block);
+        let mut ssa = build_ssa(func);
+
+        let resolver = |_addr: u64| None;
+        let err = run_passes_with_resolver_until(
+            &mut ssa,
+            &resolver,
+            Instant::now() - Duration::from_millis(1),
+        )
+        .expect_err("deadline in the past should force timeout");
+        assert!(
+            err.to_string()
+                .contains("timeout exceeded for function 'timeout_func'"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    #[test]
+    fn emit_output_structuring_timeout_deadline_is_enforced() {
+        let mut func = Function::new("emit_timeout_func", BlockId(0), 0x1000);
+        let out = Varnode::reg(0, 8);
+        let mut block = BasicBlock::new(BlockId(0));
+        block.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            out,
+            smallvec![Varnode::constant(1, 8)],
+            0x1000,
+        ));
+        block
+            .insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![out], 0x1001));
+        func.insert_block(block);
+        let ssa = build_ssa(func);
+
+        let err = emit_output(
+            EmitFormat::C,
+            &ssa,
+            None,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            None,
+            None,
+            None,
+            &[],
+            Some(Instant::now() - Duration::from_millis(1)),
+        )
+        .expect_err("deadline in the past should force timeout");
+        let chain = format!("{err:#}");
+        assert!(
+            chain.contains("structuring timeout exceeded for function 'emit_timeout_func'"),
+            "unexpected error: {err:#}"
+        );
     }
 
     #[test]
@@ -6835,8 +7836,10 @@ mod tests {
             },
         );
 
-        let mut annotations = unlace_output::PrinterAnnotations::default();
-        annotations.stack_lvars = unlace_output::stack_lvar_annotations_from_ssa(&ssa);
+        let annotations = unlace_output::PrinterAnnotations {
+            stack_lvars: unlace_output::stack_lvar_annotations_from_ssa(&ssa),
+            ..Default::default()
+        };
 
         let rsp = Varnode::reg(32, 8);
         let addr = Varnode::unique(0x100, 8);

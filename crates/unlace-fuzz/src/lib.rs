@@ -175,6 +175,7 @@ pub fn fuzz_iteration(bytes: &[u8]) -> FuzzResult {
         annotations: None,
         flirt: unlace_cli::pipeline::FlirtConfig::default(),
         dwarf_sidecar: None,
+        symbol_context: None,
     };
 
     let mut decompiled = 0usize;

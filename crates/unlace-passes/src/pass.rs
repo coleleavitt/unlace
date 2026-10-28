@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
+use linkscope::TraceField;
 use unlace_ir::BlockId;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 
@@ -293,17 +294,56 @@ impl DefIndex {
 /// change the whole sequence is re-run. The loop terminates when a full
 /// sweep produces no changes.
 pub fn run_to_fixedpoint(passes: &[&dyn Pass], func: &mut SsaFunction) -> Result<usize, PassError> {
+    let _linkscope_span = linkscope::phase("pass.fixedpoint");
+    let _linkscope_trace = if linkscope::is_enabled() {
+        Some(linkscope::trace_fields(
+            "pass.fixedpoint",
+            [
+                TraceField::text("function", func.function.name.clone()),
+                TraceField::count("passes", passes.len() as u64),
+            ],
+        ))
+    } else {
+        None
+    };
     const MAX_ROUNDS: usize = 200;
     let mut total_changes = 0usize;
     let func_name = func.function.name.clone();
     let mut round = 0usize;
     loop {
         round += 1;
+        let _round_span = linkscope::phase("pass.fixedpoint.round");
+        let _round_trace = if linkscope::is_enabled() {
+            linkscope::event_fields(
+                "pass.fixedpoint.round.start",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("round", round as u64),
+                    TraceField::count("passes", passes.len() as u64),
+                ],
+            );
+            Some(linkscope::trace_fields(
+                "pass.fixedpoint.round",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("round", round as u64),
+                    TraceField::count("passes", passes.len() as u64),
+                ],
+            ))
+        } else {
+            None
+        };
         if round > MAX_ROUNDS {
-            tracing::error!(
-                func = %func_name,
-                rounds = MAX_ROUNDS,
-                "run_to_fixedpoint did not converge — passes are oscillating"
+            linkscope::event_fields(
+                "pass.fixedpoint.error",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("rounds", MAX_ROUNDS as u64),
+                    TraceField::text(
+                        "message",
+                        "run_to_fixedpoint did not converge - passes are oscillating",
+                    ),
+                ],
             );
             return Err(PassError::InvariantViolation {
                 message: format!(
@@ -335,12 +375,14 @@ pub fn run_to_fixedpoint(passes: &[&dyn Pass], func: &mut SsaFunction) -> Result
                 );
             }
             if elapsed >= std::time::Duration::from_millis(500) {
-                tracing::warn!(
-                    func = %func_name,
-                    pass = pass.name(),
-                    round,
-                    elapsed_ms = elapsed.as_millis(),
-                    "slow pass"
+                linkscope::event_fields(
+                    "pass.slow",
+                    [
+                        TraceField::text("function", func_name.clone()),
+                        TraceField::text("pass", pass.name().to_string()),
+                        TraceField::count("round", round as u64),
+                        TraceField::count("elapsed_ms", elapsed.as_millis() as u64),
+                    ],
                 );
             }
             if changed {
@@ -350,22 +392,26 @@ pub fn run_to_fixedpoint(passes: &[&dyn Pass], func: &mut SsaFunction) -> Result
             }
         }
         if changed_this_round {
-            tracing::trace!(
-                func = %func_name,
-                round,
-                ?changed_passes,
-                "fixedpoint round"
+            linkscope::event_fields(
+                "pass.fixedpoint.round.changed",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("round", round as u64),
+                    TraceField::text("changed_passes", changed_passes.join(",")),
+                ],
             );
         }
         if !changed_this_round {
             break;
         }
     }
-    tracing::debug!(
-        func = %func_name,
-        rounds = round,
-        total_changes,
-        "run_to_fixedpoint converged"
+    linkscope::event_fields(
+        "pass.fixedpoint.converged",
+        [
+            TraceField::text("function", func_name),
+            TraceField::count("rounds", round as u64),
+            TraceField::count("total_changes", total_changes as u64),
+        ],
     );
     Ok(total_changes)
 }
@@ -465,22 +511,57 @@ pub fn run_outer_fixedpoint<F>(
 where
     F: FnMut(&mut SsaFunction, usize) -> Result<(), PassError>,
 {
+    let _linkscope_span = linkscope::phase("pass.outer-fixedpoint");
+    let _linkscope_trace = if linkscope::is_enabled() {
+        Some(linkscope::trace_fields(
+            "pass.outer-fixedpoint",
+            [
+                TraceField::text("function", func.function.name.clone()),
+                TraceField::count("max_iters", max_iters as u64),
+            ],
+        ))
+    } else {
+        None
+    };
     let max_iters = max_iters.max(1);
     let func_name = func.function.name.clone();
     let mut report = OuterFixedpointReport::default();
     let mut prev_sig = ssa_type_signature(func);
 
     for iter in 0..max_iters {
+        let _iter_span = linkscope::phase("pass.outer-fixedpoint.iter");
+        let _iter_trace = if linkscope::is_enabled() {
+            linkscope::event_fields(
+                "pass.outer-fixedpoint.iter.start",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("iter", (iter + 1) as u64),
+                    TraceField::count("max_iters", max_iters as u64),
+                ],
+            );
+            Some(linkscope::trace_fields(
+                "pass.outer-fixedpoint.iter",
+                [
+                    TraceField::text("function", func_name.clone()),
+                    TraceField::count("iter", (iter + 1) as u64),
+                    TraceField::count("max_iters", max_iters as u64),
+                ],
+            ))
+        } else {
+            None
+        };
         cycle(func, iter)?;
         report.iterations = iter + 1;
         let new_sig = ssa_type_signature(func);
         let changed = new_sig != prev_sig;
         report.changed_per_iteration.push(changed);
-        tracing::trace!(
-            func = %func_name,
-            iter = iter + 1,
-            changed,
-            "outer fixedpoint cycle"
+        linkscope::event_fields(
+            "pass.outer-fixedpoint.iter.done",
+            [
+                TraceField::text("function", func_name.clone()),
+                TraceField::count("iter", (iter + 1) as u64),
+                TraceField::text("changed", changed.to_string()),
+            ],
         );
         if !changed {
             return Ok(report);
@@ -497,10 +578,12 @@ where
         .unwrap_or(false);
     if last_changed {
         report.hit_cap = true;
-        tracing::debug!(
-            func = %func_name,
-            cap = max_iters,
-            "outer fixedpoint reached iteration cap without converging"
+        linkscope::event_fields(
+            "pass.outer-fixedpoint.hit-cap",
+            [
+                TraceField::text("function", func_name),
+                TraceField::count("cap", max_iters as u64),
+            ],
         );
     }
     Ok(report)

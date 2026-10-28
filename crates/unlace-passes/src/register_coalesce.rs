@@ -43,12 +43,21 @@ fn reg_coalesce_trace_filter() -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-fn reg_coalesce_trace_line(line: &str) {
+macro_rules! reg_coalesce_trace_line {
+    ($($arg:tt)*) => {{
+        if reg_coalesce_trace_enabled() {
+            reg_coalesce_trace_line_args(format_args!($($arg)*));
+        }
+    }};
+}
+
+fn reg_coalesce_trace_line_args(args: std::fmt::Arguments<'_>) {
     if !reg_coalesce_trace_enabled() {
         return;
     }
+    let line = args.to_string();
     if let Some(filter) = reg_coalesce_trace_filter()
-        && !line.contains(&filter)
+        && !line.contains(filter.as_str())
     {
         return;
     }
@@ -68,25 +77,28 @@ impl Pass for RegisterCoalescePass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let all_vars = collect_all_ssa_vars(func);
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "start func={} all_vars={} phis={} existing_merged={}",
             func.function.name,
             all_vars.len(),
             func.phi_map.values().map(|phis| phis.len()).sum::<usize>(),
             func.merged_names.len(),
-        ));
+        );
         if all_vars.is_empty() {
-            reg_coalesce_trace_line(&format!("empty func={}", func.function.name));
+            reg_coalesce_trace_line!("empty func={}", func.function.name);
             return Ok(false);
         }
 
         let live = compute_live_ranges(func, &all_vars);
         let use_sites = classify_use_sites(func);
         for (sv, interval) in &live.intervals {
-            reg_coalesce_trace_line(&format!(
+            reg_coalesce_trace_line!(
                 "interval func={} sv={:?} start={} end={}",
-                func.function.name, sv, interval.start, interval.end
-            ));
+                func.function.name,
+                sv,
+                interval.start,
+                interval.end
+            );
         }
 
         let mut uf = UnionFind::new(&all_vars);
@@ -204,26 +216,33 @@ fn try_coalesce_live_intervals(
     b: SsaVarnode,
 ) -> bool {
     if a == b {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "try func={} a={:?} b={:?} decision=skip-same",
-            func_name, a, b
-        ));
+            func_name,
+            a,
+            b
+        );
         return false;
     }
     if !same_base_class(a, b) {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "try func={} a={:?} b={:?} decision=reject-base-class",
-            func_name, a, b
-        ));
+            func_name,
+            a,
+            b
+        );
         return false;
     }
     let ra = uf.find(a);
     let rb = uf.find(b);
     if ra == rb {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "try func={} a={:?} b={:?} root={:?} decision=already-merged",
-            func_name, a, b, ra
-        ));
+            func_name,
+            a,
+            b,
+            ra
+        );
         return false;
     }
 
@@ -240,43 +259,67 @@ fn try_coalesce_live_intervals(
     for &ga in &group_a {
         for &gb in &group_b {
             if !same_base_class(ga, gb) || live.overlaps(ga, gb) {
-                reg_coalesce_trace_line(&format!(
+                reg_coalesce_trace_line!(
                     "try func={} a={:?} b={:?} ga={:?} gb={:?} group_a={:?} group_b={:?} decision=reject-interference",
-                    func_name, a, b, ga, gb, group_a, group_b
-                ));
+                    func_name,
+                    a,
+                    b,
+                    ga,
+                    gb,
+                    group_a,
+                    group_b
+                );
                 return false;
             }
         }
     }
     if group_a.is_empty() || group_b.is_empty() {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "try func={} a={:?} b={:?} decision=reject-empty-group group_a={:?} group_b={:?}",
-            func_name, a, b, group_a, group_b
-        ));
+            func_name,
+            a,
+            b,
+            group_a,
+            group_b
+        );
         return false;
     }
 
     if pointer_scalar_conflict(var_types, &group_a, &group_b) {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "try func={} a={:?} b={:?} decision=reject-pointer-scalar-conflict group_a={:?} group_b={:?}",
-            func_name, a, b, group_a, group_b
-        ));
+            func_name,
+            a,
+            b,
+            group_a,
+            group_b
+        );
         return false;
     }
 
     if address_arith_conflict(use_sites, &group_a, &group_b) {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "try func={} a={:?} b={:?} decision=reject-address-arith-conflict group_a={:?} group_b={:?}",
-            func_name, a, b, group_a, group_b
-        ));
+            func_name,
+            a,
+            b,
+            group_a,
+            group_b
+        );
         return false;
     }
 
     uf.union(ra, rb);
-    reg_coalesce_trace_line(&format!(
+    reg_coalesce_trace_line!(
         "try func={} a={:?} b={:?} root_a={:?} root_b={:?} decision=merged group_a={:?} group_b={:?}",
-        func_name, a, b, ra, rb, group_a, group_b
-    ));
+        func_name,
+        a,
+        b,
+        ra,
+        rb,
+        group_a,
+        group_b
+    );
     true
 }
 
@@ -538,20 +581,23 @@ fn compute_live_ranges(func: &SsaFunction, _all_vars: &BTreeSet<SsaVarnode>) -> 
 
     for (&bid, block) in &func.function.blocks {
         let block_start = point;
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "block-start func={} block={:?} point={} insns={}",
             func.function.name,
             bid,
             block_start,
             block.insns.len(),
-        ));
+        );
         if let Some(phis) = func.phi_map.get(&bid) {
             for phi in phis {
                 sets.touch(phi.output, block_start);
-                reg_coalesce_trace_line(&format!(
+                reg_coalesce_trace_line!(
                     "touch-phi-output func={} block={:?} point={} output={:?}",
-                    func.function.name, bid, block_start, phi.output
-                ));
+                    func.function.name,
+                    bid,
+                    block_start,
+                    phi.output
+                );
             }
         }
         for (idx, insn) in block.insns.iter().enumerate() {
@@ -559,25 +605,41 @@ fn compute_live_ranges(func: &SsaFunction, _all_vars: &BTreeSet<SsaVarnode>) -> 
             for i in 0..insn.inputs.len() {
                 if let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(i))) {
                     sets.touch(sv, point);
-                    reg_coalesce_trace_line(&format!(
+                    reg_coalesce_trace_line!(
                         "touch-input func={} block={:?} insn={} addr=0x{:x} op={:?} idx={} point={} sv={:?}",
-                        func.function.name, bid, idx, insn.addr, insn.op, i, point, sv
-                    ));
+                        func.function.name,
+                        bid,
+                        idx,
+                        insn.addr,
+                        insn.op,
+                        i,
+                        point,
+                        sv
+                    );
                 }
             }
             if let Some(&sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Output)) {
                 sets.touch(sv, point);
-                reg_coalesce_trace_line(&format!(
+                reg_coalesce_trace_line!(
                     "touch-output func={} block={:?} insn={} addr=0x{:x} op={:?} point={} sv={:?}",
-                    func.function.name, bid, idx, insn.addr, insn.op, point, sv
-                ));
+                    func.function.name,
+                    bid,
+                    idx,
+                    insn.addr,
+                    insn.op,
+                    point,
+                    sv
+                );
             }
         }
         block_bounds.insert(bid, (block_start, point));
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "block-end func={} block={:?} start={} end={}",
-            func.function.name, bid, block_start, point
-        ));
+            func.function.name,
+            bid,
+            block_start,
+            point
+        );
         point = point.saturating_add(1);
     }
 
@@ -594,10 +656,16 @@ fn compute_live_ranges(func: &SsaFunction, _all_vars: &BTreeSet<SsaVarnode>) -> 
                     .map(|(_start, end)| *end)
                     .unwrap_or(phi_point);
                 sets.touch(*input, input_point);
-                reg_coalesce_trace_line(&format!(
+                reg_coalesce_trace_line!(
                     "touch-phi-edge func={} pred={:?} succ={:?} input_point={} phi_point={} input={:?} output={:?}",
-                    func.function.name, pred, bid, input_point, phi_point, input, phi.output
-                ));
+                    func.function.name,
+                    pred,
+                    bid,
+                    input_point,
+                    phi_point,
+                    input,
+                    phi.output
+                );
             }
         }
     }
@@ -695,17 +763,19 @@ fn emit_merged_names(
         groups.entry(r).or_default().push(v);
     }
     for (root, group) in &groups {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "group func={} root={:?} members={:?}",
-            func.function.name, root, group
-        ));
+            func.function.name,
+            root,
+            group
+        );
     }
     let multi_groups: Vec<&Vec<SsaVarnode>> = groups.values().filter(|g| g.len() > 1).collect();
     if multi_groups.is_empty() {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "emit func={} multi_groups=0 changed=false",
             func.function.name
-        ));
+        );
         return Ok(false);
     }
     let mut name_idx = 0usize;
@@ -716,10 +786,12 @@ fn emit_merged_names(
         }
         let name = match existing_group_name(func, group) {
             Some(name) => {
-                reg_coalesce_trace_line(&format!(
+                reg_coalesce_trace_line!(
                     "reuse-name func={} group={:?} name={}",
-                    func.function.name, group, name
-                ));
+                    func.function.name,
+                    group,
+                    name
+                );
                 name
             }
             None => {
@@ -730,22 +802,19 @@ fn emit_merged_names(
         };
         for &v in group {
             new_names.insert(v, name.clone());
-            reg_coalesce_trace_line(&format!(
-                "name func={} sv={:?} name={}",
-                func.function.name, v, name
-            ));
+            reg_coalesce_trace_line!("name func={} sv={:?} name={}", func.function.name, v, name);
         }
     }
     let mut merged = func.merged_names.clone();
     merged.extend(new_names);
     let changed = merged != func.merged_names;
     func.merged_names = merged;
-    reg_coalesce_trace_line(&format!(
+    reg_coalesce_trace_line!(
         "emit func={} changed={} merged_names={}",
         func.function.name,
         changed,
         func.merged_names.len()
-    ));
+    );
     Ok(changed)
 }
 
@@ -757,10 +826,13 @@ fn existing_group_name(func: &SsaFunction, group: &[SsaVarnode]) -> Option<Strin
     names.sort();
     names.dedup();
     if names.len() > 1 {
-        reg_coalesce_trace_line(&format!(
+        reg_coalesce_trace_line!(
             "reuse-name-conflict func={} group={:?} names={:?} chosen={}",
-            func.function.name, group, names, names[0]
-        ));
+            func.function.name,
+            group,
+            names,
+            names[0]
+        );
     }
     names.into_iter().next()
 }

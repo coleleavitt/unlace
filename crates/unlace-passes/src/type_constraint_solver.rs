@@ -29,10 +29,37 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use linkscope::TraceField;
 use unlace_ir::IrOp;
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 
 use crate::pass::{Pass, PassError};
+
+const DEFAULT_TYPE_CONSTRAINT_MAX_CONSTRAINTS: usize = 30_000;
+
+fn type_constraint_max_constraints() -> usize {
+    type_constraint_max_constraints_from(
+        std::env::var("UNLACE_TYPE_CONSTRAINT_MAX_CONSTRAINTS")
+            .ok()
+            .as_deref(),
+    )
+}
+
+fn type_constraint_max_constraints_from(value: Option<&str>) -> usize {
+    value
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_TYPE_CONSTRAINT_MAX_CONSTRAINTS)
+}
+
+fn type_constraint_over_budget(count: usize) -> bool {
+    let limit = type_constraint_max_constraints();
+    linkscope::record_items("pass.type-constraint.max-constraints", limit as u64);
+    let over_budget = limit > 0 && count > limit;
+    if over_budget {
+        linkscope::record_items("pass.type-constraint.large-skip", 1);
+    }
+    over_budget
+}
 
 /// One type-recovery fact about an SSA varnode (or a pair of them).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -509,6 +536,7 @@ pub fn solve_polymorphic_constraints(
     func: &SsaFunction,
     constraints: Vec<Constraint>,
 ) -> PolyTypeSolution {
+    let _span = linkscope::phase("pass.type-constraint.solve");
     // Two perf improvements over the original naive `for c in &constraints`
     // double-loop:
     //
@@ -534,11 +562,25 @@ pub fn solve_polymorphic_constraints(
     // docs/rustc-techniques.md for the rustc Zulip context.
 
     let mut constraints = constraints;
-    constraints.sort();
-    constraints.dedup();
+    let original_constraints = constraints.len() as u64;
+    {
+        let _span = linkscope::phase("pass.type-constraint.dedup");
+        constraints.sort();
+        constraints.dedup();
+    }
+    linkscope::record_items("pass.type-constraint.constraints.raw", original_constraints);
+    linkscope::record_items(
+        "pass.type-constraint.constraints.dedup",
+        constraints.len() as u64,
+    );
 
-    let dense = DenseVars::new(func, &constraints);
-    let indexed_constraints: Vec<_> = constraints.iter().map(|c| dense.convert(c)).collect();
+    let (dense, indexed_constraints) = {
+        let _span = linkscope::phase("pass.type-constraint.index");
+        let dense = DenseVars::new(func, &constraints);
+        let indexed_constraints: Vec<_> = constraints.iter().map(|c| dense.convert(c)).collect();
+        linkscope::record_items("pass.type-constraint.vars", dense.vars.len() as u64);
+        (dense, indexed_constraints)
+    };
     let var_count = dense.vars.len();
     let mut types = vec![PrimitiveType::Unknown; var_count];
     let mut type_present = vec![false; var_count];
@@ -557,119 +599,149 @@ pub fn solve_polymorphic_constraints(
     let mut iters = 0usize;
     let mut dirty_vars: Vec<usize> = Vec::new();
     let mut dirty_flags = vec![false; var_count];
-    loop {
-        if iters >= max_iters {
-            tracing::warn!(
-                iterations = max_iters,
-                "type_constraint_solver hit iteration limit"
-            );
-            break;
-        }
-        iters += 1;
+    {
+        let _span = linkscope::phase("pass.type-constraint.fixedpoint");
+        let mut constraint_visits = 0u64;
+        let mut materialized_vars = 0u64;
+        loop {
+            if iters >= max_iters {
+                linkscope::event_fields(
+                    "pass.iteration-limit",
+                    [
+                        TraceField::text("pass", "TypeConstraintSolver"),
+                        TraceField::text("function", func.function.name.clone()),
+                        TraceField::count("iterations", max_iters as u64),
+                    ],
+                );
+                break;
+            }
+            iters += 1;
 
-        let mut changed = false;
-        for c in &indexed_constraints {
-            match c {
-                IndexedConstraint::Equal(v, t) => {
-                    let type_changed = meet_dense(&mut types, &mut type_present, *v, *t);
-                    let bound_changed = add_primitive_bound_dense(&mut bounds, &dense.vars, *v, *t);
-                    if type_changed || bound_changed {
-                        changed = true;
-                        mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
+            let mut changed = false;
+            for c in &indexed_constraints {
+                constraint_visits += 1;
+                match c {
+                    IndexedConstraint::Equal(v, t) => {
+                        let type_changed = meet_dense(&mut types, &mut type_present, *v, *t);
+                        let bound_changed =
+                            add_primitive_bound_dense(&mut bounds, &dense.vars, *v, *t);
+                        if type_changed || bound_changed {
+                            changed = true;
+                            mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
+                        }
                     }
-                }
-                IndexedConstraint::Subtype(v, t) => {
-                    let type_changed = meet_dense(&mut types, &mut type_present, *v, *t);
-                    let bound_changed = add_primitive_bound_dense(&mut bounds, &dense.vars, *v, *t);
-                    if type_changed || bound_changed {
-                        changed = true;
-                        mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
+                    IndexedConstraint::Subtype(v, t) => {
+                        let type_changed = meet_dense(&mut types, &mut type_present, *v, *t);
+                        let bound_changed =
+                            add_primitive_bound_dense(&mut bounds, &dense.vars, *v, *t);
+                        if type_changed || bound_changed {
+                            changed = true;
+                            mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
+                        }
                     }
-                }
-                IndexedConstraint::PointsTo(addr, _val) => {
-                    let a = meet_dense(&mut types, &mut type_present, *addr, PrimitiveType::Ptr);
-                    let b = insert_lower_dense(
-                        &mut bounds,
-                        &dense.vars,
-                        *addr,
-                        TypeCapability::Pointer,
-                    );
-                    let c2 = insert_lower_dense(
-                        &mut bounds,
-                        &dense.vars,
-                        *addr,
-                        TypeCapability::Address,
-                    );
-                    if a | b | c2 {
-                        changed = true;
-                        mark_dirty(*addr, &mut dirty_flags, &mut dirty_vars);
+                    IndexedConstraint::PointsTo(addr, _val) => {
+                        let a =
+                            meet_dense(&mut types, &mut type_present, *addr, PrimitiveType::Ptr);
+                        let b = insert_lower_dense(
+                            &mut bounds,
+                            &dense.vars,
+                            *addr,
+                            TypeCapability::Pointer,
+                        );
+                        let c2 = insert_lower_dense(
+                            &mut bounds,
+                            &dense.vars,
+                            *addr,
+                            TypeCapability::Address,
+                        );
+                        if a | b | c2 {
+                            changed = true;
+                            mark_dirty(*addr, &mut dirty_flags, &mut dirty_vars);
+                        }
                     }
-                }
-                IndexedConstraint::SameType(a, b) => {
-                    let mut any = propagate_between_dense(&mut bounds, &dense.vars, *a, *b);
-                    let ta = get_dense(&types, &type_present, *a);
-                    let tb = get_dense(&types, &type_present, *b);
-                    let j = ta.join(tb);
-                    if j != PrimitiveType::Unknown {
-                        any |= meet_dense(&mut types, &mut type_present, *a, j);
-                        any |= meet_dense(&mut types, &mut type_present, *b, j);
-                        any |= add_primitive_bound_dense(&mut bounds, &dense.vars, *a, j);
-                        any |= add_primitive_bound_dense(&mut bounds, &dense.vars, *b, j);
+                    IndexedConstraint::SameType(a, b) => {
+                        let mut any = propagate_between_dense(&mut bounds, &dense.vars, *a, *b);
+                        let ta = get_dense(&types, &type_present, *a);
+                        let tb = get_dense(&types, &type_present, *b);
+                        let j = ta.join(tb);
+                        if j != PrimitiveType::Unknown {
+                            any |= meet_dense(&mut types, &mut type_present, *a, j);
+                            any |= meet_dense(&mut types, &mut type_present, *b, j);
+                            any |= add_primitive_bound_dense(&mut bounds, &dense.vars, *a, j);
+                            any |= add_primitive_bound_dense(&mut bounds, &dense.vars, *b, j);
+                        }
+                        if any {
+                            changed = true;
+                            mark_dirty(*a, &mut dirty_flags, &mut dirty_vars);
+                            mark_dirty(*b, &mut dirty_flags, &mut dirty_vars);
+                        }
                     }
-                    if any {
-                        changed = true;
-                        mark_dirty(*a, &mut dirty_flags, &mut dirty_vars);
-                        mark_dirty(*b, &mut dirty_flags, &mut dirty_vars);
+                    IndexedConstraint::PolySubtype { lower, upper } => {
+                        let a = propagate_lower_to_upper_dense(
+                            &mut bounds,
+                            &dense.vars,
+                            *lower,
+                            *upper,
+                        );
+                        let b = propagate_upper_to_lower_dense(&mut bounds, *lower, *upper);
+                        if a | b {
+                            changed = true;
+                            mark_dirty(*lower, &mut dirty_flags, &mut dirty_vars);
+                            mark_dirty(*upper, &mut dirty_flags, &mut dirty_vars);
+                        }
                     }
-                }
-                IndexedConstraint::PolySubtype { lower, upper } => {
-                    let a =
-                        propagate_lower_to_upper_dense(&mut bounds, &dense.vars, *lower, *upper);
-                    let b = propagate_upper_to_lower_dense(&mut bounds, *lower, *upper);
-                    if a | b {
-                        changed = true;
-                        mark_dirty(*lower, &mut dirty_flags, &mut dirty_vars);
-                        mark_dirty(*upper, &mut dirty_flags, &mut dirty_vars);
-                    }
-                }
-                IndexedConstraint::HasCapability(v, cap) => {
-                    if insert_lower_dense(&mut bounds, &dense.vars, *v, *cap) {
-                        changed = true;
-                        mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
+                    IndexedConstraint::HasCapability(v, cap) => {
+                        if insert_lower_dense(&mut bounds, &dense.vars, *v, *cap) {
+                            changed = true;
+                            mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
+                        }
                     }
                 }
             }
-        }
 
-        // Materialise only the vars that moved this iteration, not the
-        // full bounds map. On a function with thousands of vars and
-        // only a handful changing per outer pass this is the dominant
-        // savings.
-        let drained = std::mem::take(&mut dirty_vars);
-        for idx in drained {
-            dirty_flags[idx] = false;
-            if let Some(ty) = materialize_primitive(dense.vars[idx], &bounds[idx]) {
-                changed |= meet_dense(&mut types, &mut type_present, idx, ty);
+            // Materialise only the vars that moved this iteration, not the
+            // full bounds map. On a function with thousands of vars and
+            // only a handful changing per outer pass this is the dominant
+            // savings.
+            let drained = std::mem::take(&mut dirty_vars);
+            materialized_vars += drained.len() as u64;
+            for idx in drained {
+                dirty_flags[idx] = false;
+                if let Some(ty) = materialize_primitive(dense.vars[idx], &bounds[idx]) {
+                    changed |= meet_dense(&mut types, &mut type_present, idx, ty);
+                }
+            }
+
+            if !changed {
+                break;
             }
         }
-
-        if !changed {
-            break;
-        }
+        linkscope::record_items("pass.type-constraint.iterations", iters as u64);
+        linkscope::record_items("pass.type-constraint.constraint-visits", constraint_visits);
+        linkscope::record_items("pass.type-constraint.materialized-vars", materialized_vars);
     }
 
-    let mut bounds_map = BTreeMap::new();
-    for (idx, b) in bounds.into_iter().enumerate() {
-        if !b.lower.is_empty() || !b.upper.is_empty() {
-            bounds_map.insert(dense.vars[idx], b);
+    let (bounds_map, primitive_types) = {
+        let _span = linkscope::phase("pass.type-constraint.materialize-output");
+        let mut bounds_map = BTreeMap::new();
+        for (idx, b) in bounds.into_iter().enumerate() {
+            if !b.lower.is_empty() || !b.upper.is_empty() {
+                bounds_map.insert(dense.vars[idx], b);
+            }
         }
-    }
-    let mut primitive_types = BTreeMap::new();
-    for (idx, ty) in types.into_iter().enumerate() {
-        if type_present[idx] {
-            primitive_types.insert(dense.vars[idx], ty);
+        let mut primitive_types = BTreeMap::new();
+        for (idx, ty) in types.into_iter().enumerate() {
+            if type_present[idx] {
+                primitive_types.insert(dense.vars[idx], ty);
+            }
         }
-    }
+        linkscope::record_items("pass.type-constraint.bounds", bounds_map.len() as u64);
+        linkscope::record_items(
+            "pass.type-constraint.primitive-types",
+            primitive_types.len() as u64,
+        );
+        (bounds_map, primitive_types)
+    };
 
     PolyTypeSolution {
         bounds: bounds_map,
@@ -681,24 +753,36 @@ pub fn solve_polymorphic_constraints(
 /// and merge the solution back into `func.var_types`. Returns `true` when
 /// any entry was added or refined.
 pub fn collect_and_apply(func: &mut SsaFunction) -> bool {
-    let cs = collect_constraints(func);
+    let _span = linkscope::phase("pass.type-constraint.collect-and-apply");
+    let cs = {
+        let _span = linkscope::phase("pass.type-constraint.collect");
+        let cs = collect_constraints(func);
+        linkscope::record_items("pass.type-constraint.collect", cs.len() as u64);
+        cs
+    };
+    if type_constraint_over_budget(cs.len()) {
+        return false;
+    }
     let solved = solve_constraints(func, cs);
 
     let mut changed = false;
-    for (sv, ty) in solved {
-        let cur = func
-            .var_types
-            .get(&sv)
-            .copied()
-            .unwrap_or(PrimitiveType::Unknown);
-        let joined = cur.join(ty);
-        // Only widen toward a *more specific* type — never erase a fact.
-        if joined != cur && joined != PrimitiveType::Unknown {
-            func.var_types.insert(sv, joined);
-            changed = true;
-        } else if cur == PrimitiveType::Unknown && ty != PrimitiveType::Unknown {
-            func.var_types.insert(sv, ty);
-            changed = true;
+    {
+        let _span = linkscope::phase("pass.type-constraint.apply");
+        for (sv, ty) in solved {
+            let cur = func
+                .var_types
+                .get(&sv)
+                .copied()
+                .unwrap_or(PrimitiveType::Unknown);
+            let joined = cur.join(ty);
+            // Only widen toward a *more specific* type — never erase a fact.
+            if joined != cur && joined != PrimitiveType::Unknown {
+                func.var_types.insert(sv, joined);
+                changed = true;
+            } else if cur == PrimitiveType::Unknown && ty != PrimitiveType::Unknown {
+                func.var_types.insert(sv, ty);
+                changed = true;
+            }
         }
     }
     changed
@@ -1070,6 +1154,17 @@ mod tests {
     use smallvec::smallvec;
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
+
+    #[test]
+    fn type_constraint_limit_default_and_override() {
+        assert_eq!(type_constraint_max_constraints_from(None), 30_000);
+        assert_eq!(type_constraint_max_constraints_from(Some("42")), 42);
+        assert_eq!(type_constraint_max_constraints_from(Some("0")), 0);
+        assert_eq!(
+            type_constraint_max_constraints_from(Some("not-a-number")),
+            30_000
+        );
+    }
 
     fn make_ssa(insns: Vec<IrInsn>) -> SsaFunction {
         let mut func = Function::new("test", BlockId(0), 0x1000);

@@ -18,11 +18,60 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use smallvec::SmallVec;
 use unlace_ir::cfg::EdgeKind;
 use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
+
+const DEFAULT_SCCP_MAX_WORK: u64 = 50_000;
+const DEFAULT_SCCP_MAX_VARS: usize = 25_000;
+
+fn sccp_max_work() -> u64 {
+    sccp_max_work_from(std::env::var("UNLACE_SCCP_MAX_WORK").ok().as_deref())
+}
+
+fn sccp_max_work_from(value: Option<&str>) -> u64 {
+    value
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_SCCP_MAX_WORK)
+}
+
+fn sccp_work_exceeded(max_work: u64, work: u64) -> bool {
+    max_work > 0 && work > max_work
+}
+
+fn sccp_max_vars() -> usize {
+    sccp_max_vars_from(std::env::var("UNLACE_SCCP_MAX_VARS").ok().as_deref())
+}
+
+fn sccp_max_vars_from(value: Option<&str>) -> usize {
+    value
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_SCCP_MAX_VARS)
+}
+
+fn sccp_var_budget_exceeded(func: &SsaFunction) -> bool {
+    let limit = sccp_max_vars();
+    let phi_vars: usize = func
+        .phi_map
+        .values()
+        .map(|phis| {
+            phis.iter()
+                .map(|phi| 1usize.saturating_add(phi.inputs.len()))
+                .sum::<usize>()
+        })
+        .sum();
+    let vars = func.var_map.len().saturating_add(phi_vars);
+    linkscope::record_items("pass.sccp.var-budget.vars", vars as u64);
+    linkscope::record_items("pass.sccp.var-budget.limit", limit as u64);
+    let exceeded = limit > 0 && vars > limit;
+    if exceeded {
+        linkscope::record_items("pass.sccp.var-budget.skip", 1);
+    }
+    exceeded
+}
 
 // ---------------------------------------------------------------------------
 // Lattice
@@ -69,6 +118,8 @@ struct SccpSolver<'a> {
     values: BTreeMap<SsaVarnode, LatticeValue>,
     /// Which blocks have been marked reachable.
     reachable: BTreeSet<BlockId>,
+    /// Executable CFG edges already queued/processed.
+    executable_edges: BTreeSet<(BlockId, BlockId)>,
     /// CFG worklist: edges (source, dest) to process.
     cfg_worklist: VecDeque<(BlockId, BlockId)>,
     /// SSA worklist: definitions whose value changed.
@@ -78,6 +129,9 @@ struct SccpSolver<'a> {
     uses: BTreeMap<SsaVarnode, Vec<(BlockId, usize)>>,
     /// Phi-uses: given a definition SsaVarnode, which (block, phi_output) use it.
     phi_uses: BTreeMap<SsaVarnode, Vec<(BlockId, SsaVarnode)>>,
+    /// Phi definitions keyed by `(block, output)` so worklist processing can
+    /// re-evaluate one affected phi without scanning every phi in that block.
+    phis_by_output: BTreeMap<(BlockId, SsaVarnode), PhiNode>,
 }
 
 struct DominanceIndex {
@@ -120,13 +174,21 @@ impl<'a> SccpSolver<'a> {
             func,
             values: BTreeMap::new(),
             reachable: BTreeSet::new(),
+            executable_edges: BTreeSet::new(),
             cfg_worklist: VecDeque::new(),
             ssa_worklist: VecDeque::new(),
             uses: BTreeMap::new(),
             phi_uses: BTreeMap::new(),
+            phis_by_output: BTreeMap::new(),
         };
-        solver.build_use_chains();
-        solver.init_external_inputs();
+        {
+            let _span = linkscope::phase("pass.sccp.build-use-chains");
+            solver.build_use_chains();
+        }
+        {
+            let _span = linkscope::phase("pass.sccp.init-external-inputs");
+            solver.init_external_inputs();
+        }
         solver
     }
 
@@ -139,6 +201,7 @@ impl<'a> SccpSolver<'a> {
 
         for (&bid, phis) in &self.func.phi_map {
             for phi in phis {
+                self.phis_by_output.insert((bid, phi.output), phi.clone());
                 for (_pred, input) in &phi.inputs {
                     self.phi_uses
                         .entry(*input)
@@ -301,47 +364,33 @@ impl<'a> SccpSolver<'a> {
             return self.resolve_input(bid, insn_idx, 0, &insn.inputs[0]);
         }
 
-        // Collect input lattice values.
-        let mut all_const = true;
-        let mut any_bottom = false;
-        let mut const_inputs: Vec<Option<(u64, u8)>> = Vec::new();
+        // Collect constant inputs without heap allocation. Any Bottom input
+        // makes the result overdefined; Top remains optimistic unless a Bottom
+        // appears anywhere in the same instruction.
+        let mut any_top = false;
+        let mut const_varnodes: SmallVec<[Varnode; 4]> = SmallVec::new();
 
         for (idx, input) in insn.inputs.iter().enumerate() {
             let val = self.resolve_input(bid, insn_idx, idx, input);
             match val {
                 LatticeValue::Top => {
-                    all_const = false;
-                    const_inputs.push(None);
+                    any_top = true;
                 }
                 LatticeValue::Constant { value, size } => {
-                    const_inputs.push(Some((value, size)));
+                    const_varnodes.push(Varnode::constant(value, size));
                 }
                 LatticeValue::Bottom => {
-                    any_bottom = true;
-                    all_const = false;
-                    const_inputs.push(None);
+                    return LatticeValue::Bottom;
                 }
             }
         }
 
-        if any_bottom {
-            return LatticeValue::Bottom;
-        }
-
-        if !all_const {
+        if any_top {
             // Some inputs are still Top — leave as Top (optimistic).
             return LatticeValue::Top;
         }
 
         // All inputs constant — try to evaluate.
-        let const_varnodes: Vec<Varnode> = const_inputs
-            .iter()
-            .map(|c| {
-                let (value, size) = c.unwrap();
-                Varnode::constant(value, size)
-            })
-            .collect();
-
         match evaluate(insn.op, &const_varnodes, out.size) {
             Some(result_val) => LatticeValue::Constant {
                 value: result_val,
@@ -365,10 +414,13 @@ impl<'a> SccpSolver<'a> {
     }
 
     /// Process a newly reachable block: evaluate all its phi nodes and instructions.
-    fn visit_block(&mut self, bid: BlockId) {
+    fn visit_block(&mut self, bid: BlockId) -> (u64, u64) {
+        let mut phi_evals = 0;
+        let mut insns_visited = 0;
         // Evaluate phi nodes.
         if let Some(phis) = self.func.phi_map.get(&bid).cloned() {
             for phi in &phis {
+                phi_evals += 1;
                 let val = self.eval_phi(bid, phi);
                 if self.set_value(phi.output, val) {
                     self.propagate_to_uses(phi.output);
@@ -382,8 +434,10 @@ impl<'a> SccpSolver<'a> {
             for i in 0..insn_count {
                 let insn = &self.func.function.blocks[&bid].insns[i];
                 self.visit_insn(bid, i, insn.clone());
+                insns_visited += 1;
             }
         }
+        (phi_evals, insns_visited)
     }
 
     /// Evaluate a single instruction and propagate if changed.
@@ -463,8 +517,9 @@ impl<'a> SccpSolver<'a> {
     /// Add a CFG edge to the worklist if the target isn't already reachable
     /// (or if this is a new source for a phi node in the target).
     fn add_cfg_edge(&mut self, from: BlockId, to: BlockId) {
-        // Always queue the edge so phi nodes can pick up the new predecessor.
-        self.cfg_worklist.push_back((from, to));
+        if self.executable_edges.insert((from, to)) {
+            self.cfg_worklist.push_back((from, to));
+        }
     }
 
     /// Process all non-branch terminators in a block to determine successor
@@ -519,23 +574,66 @@ impl<'a> SccpSolver<'a> {
     }
 
     /// Run the SCCP algorithm to a fixed point.
-    fn solve(&mut self) {
+    fn solve(&mut self) -> bool {
+        self.solve_with_budget(sccp_max_work())
+    }
+
+    fn solve_with_budget(&mut self, max_work: u64) -> bool {
+        let _span = linkscope::phase("pass.sccp.solve");
+        let mut cfg_edges_processed = 0u64;
+        let mut ssa_defs_processed = 0u64;
+        let mut use_sites_visited = 0u64;
+        let mut phi_evals = 0u64;
+        let mut insns_visited = 0u64;
+        let mut work = 0u64;
+
         // Seed: entry block is reachable.
         let entry = self.func.function.entry;
         self.reachable.insert(entry);
-        self.visit_block(entry);
+        let (entry_phi_evals, entry_insns_visited) = self.visit_block(entry);
+        phi_evals += entry_phi_evals;
+        insns_visited += entry_insns_visited;
+        work = work.saturating_add(entry_phi_evals + entry_insns_visited);
+        if sccp_work_exceeded(max_work, work) {
+            self.record_solve_counters(
+                cfg_edges_processed,
+                ssa_defs_processed,
+                use_sites_visited,
+                phi_evals,
+                insns_visited,
+                work,
+                true,
+            );
+            return false;
+        }
         self.visit_terminator(entry);
 
         loop {
             // Prefer CFG edges first (order doesn't matter for correctness,
             // but CFG edges can unlock new phi evaluations).
             if let Some((_from, to)) = self.cfg_worklist.pop_front() {
+                cfg_edges_processed += 1;
+                work = work.saturating_add(1);
                 let first_time = self.reachable.insert(to);
 
                 // Re-evaluate phi nodes in the target block (the new
                 // predecessor may contribute a different value).
                 if let Some(phis) = self.func.phi_map.get(&to).cloned() {
                     for phi in &phis {
+                        phi_evals += 1;
+                        work = work.saturating_add(1);
+                        if sccp_work_exceeded(max_work, work) {
+                            self.record_solve_counters(
+                                cfg_edges_processed,
+                                ssa_defs_processed,
+                                use_sites_visited,
+                                phi_evals,
+                                insns_visited,
+                                work,
+                                true,
+                            );
+                            return false;
+                        }
                         let val = self.eval_phi(to, phi);
                         if self.set_value(phi.output, val) {
                             self.propagate_to_uses(phi.output);
@@ -545,7 +643,21 @@ impl<'a> SccpSolver<'a> {
 
                 if first_time {
                     // First time seeing this block — evaluate all instructions.
-                    self.visit_block_insns_only(to);
+                    let block_insns = self.visit_block_insns_only(to);
+                    insns_visited += block_insns;
+                    work = work.saturating_add(block_insns);
+                    if sccp_work_exceeded(max_work, work) {
+                        self.record_solve_counters(
+                            cfg_edges_processed,
+                            ssa_defs_processed,
+                            use_sites_visited,
+                            phi_evals,
+                            insns_visited,
+                            work,
+                            true,
+                        );
+                        return false;
+                    }
                     self.visit_terminator(to);
                 }
 
@@ -553,6 +665,20 @@ impl<'a> SccpSolver<'a> {
             }
 
             if let Some(def_sv) = self.ssa_worklist.pop_front() {
+                ssa_defs_processed += 1;
+                work = work.saturating_add(1);
+                if sccp_work_exceeded(max_work, work) {
+                    self.record_solve_counters(
+                        cfg_edges_processed,
+                        ssa_defs_processed,
+                        use_sites_visited,
+                        phi_evals,
+                        insns_visited,
+                        work,
+                        true,
+                    );
+                    return false;
+                }
                 // Re-evaluate all uses of this definition.
                 if let Some(use_sites) = self.uses.get(&def_sv).cloned() {
                     for (bid, insn_idx) in use_sites {
@@ -562,6 +688,20 @@ impl<'a> SccpSolver<'a> {
                         if let Some(block) = self.func.function.blocks.get(&bid)
                             && insn_idx < block.insns.len()
                         {
+                            use_sites_visited += 1;
+                            work = work.saturating_add(1);
+                            if sccp_work_exceeded(max_work, work) {
+                                self.record_solve_counters(
+                                    cfg_edges_processed,
+                                    ssa_defs_processed,
+                                    use_sites_visited,
+                                    phi_evals,
+                                    insns_visited,
+                                    work,
+                                    true,
+                                );
+                                return false;
+                            }
                             let insn = block.insns[insn_idx].clone();
                             self.visit_insn(bid, insn_idx, insn);
                         }
@@ -574,14 +714,24 @@ impl<'a> SccpSolver<'a> {
                         if !self.reachable.contains(&bid) {
                             continue;
                         }
-                        if let Some(phis) = self.func.phi_map.get(&bid).cloned() {
-                            for phi in &phis {
-                                if phi.output == phi_out {
-                                    let val = self.eval_phi(bid, phi);
-                                    if self.set_value(phi.output, val) {
-                                        self.propagate_to_uses(phi.output);
-                                    }
-                                }
+                        if let Some(phi) = self.phis_by_output.get(&(bid, phi_out)).cloned() {
+                            phi_evals += 1;
+                            work = work.saturating_add(1);
+                            if sccp_work_exceeded(max_work, work) {
+                                self.record_solve_counters(
+                                    cfg_edges_processed,
+                                    ssa_defs_processed,
+                                    use_sites_visited,
+                                    phi_evals,
+                                    insns_visited,
+                                    work,
+                                    true,
+                                );
+                                return false;
+                            }
+                            let val = self.eval_phi(bid, &phi);
+                            if self.set_value(phi.output, val) {
+                                self.propagate_to_uses(phi.output);
                             }
                         }
                     }
@@ -591,19 +741,52 @@ impl<'a> SccpSolver<'a> {
             }
 
             // Both worklists empty — fixed point reached.
-            break;
+            self.record_solve_counters(
+                cfg_edges_processed,
+                ssa_defs_processed,
+                use_sites_visited,
+                phi_evals,
+                insns_visited,
+                work,
+                false,
+            );
+            return true;
+        }
+    }
+
+    fn record_solve_counters(
+        &self,
+        cfg_edges_processed: u64,
+        ssa_defs_processed: u64,
+        use_sites_visited: u64,
+        phi_evals: u64,
+        insns_visited: u64,
+        work: u64,
+        budget_hit: bool,
+    ) {
+        linkscope::record_items("pass.sccp.cfg-edges", cfg_edges_processed);
+        linkscope::record_items("pass.sccp.ssa-defs", ssa_defs_processed);
+        linkscope::record_items("pass.sccp.use-sites", use_sites_visited);
+        linkscope::record_items("pass.sccp.phi-evals", phi_evals);
+        linkscope::record_items("pass.sccp.insns", insns_visited);
+        linkscope::record_items("pass.sccp.work", work);
+        if budget_hit {
+            linkscope::record_items("pass.sccp.budget-hit", 1);
         }
     }
 
     /// Visit only instructions in a block (phi nodes handled separately).
-    fn visit_block_insns_only(&mut self, bid: BlockId) {
+    fn visit_block_insns_only(&mut self, bid: BlockId) -> u64 {
+        let mut insns_visited = 0;
         if let Some(block) = self.func.function.blocks.get(&bid) {
             let insn_count = block.insns.len();
             for i in 0..insn_count {
                 let insn = self.func.function.blocks[&bid].insns[i].clone();
                 self.visit_insn(bid, i, insn);
+                insns_visited += 1;
             }
         }
+        insns_visited
     }
 }
 
@@ -866,8 +1049,31 @@ impl SccpResults {
 
 fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
     let mut protected = BTreeSet::new();
-    let mut def_inputs: BTreeMap<SsaVarnode, Vec<SsaVarnode>> = BTreeMap::new();
+    let mut worklist = Vec::new();
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            if insn.op != IrOp::Callother {
+                continue;
+            }
+            for (input_pos, input_vn) in insn.inputs.iter().enumerate() {
+                if input_vn.space == SpaceId::Const {
+                    continue;
+                }
+                let key = (bid, insn_idx, VarnodeSlot::Input(input_pos));
+                if let Some(&sv) = func.var_map.get(&key)
+                    && protected.insert(sv)
+                {
+                    worklist.push(sv);
+                }
+            }
+        }
+    }
 
+    if worklist.is_empty() {
+        return protected;
+    }
+
+    let mut def_inputs: BTreeMap<SsaVarnode, Vec<SsaVarnode>> = BTreeMap::new();
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             let Some(output_sv) = func
@@ -889,26 +1095,6 @@ fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
         }
     }
 
-    let mut worklist = Vec::new();
-    for (&bid, block) in &func.function.blocks {
-        for (insn_idx, insn) in block.insns.iter().enumerate() {
-            if insn.op != IrOp::Callother {
-                continue;
-            }
-            for (input_pos, input_vn) in insn.inputs.iter().enumerate() {
-                if input_vn.space == SpaceId::Const {
-                    continue;
-                }
-                let key = (bid, insn_idx, VarnodeSlot::Input(input_pos));
-                if let Some(&sv) = func.var_map.get(&key)
-                    && protected.insert(sv)
-                {
-                    worklist.push(sv);
-                }
-            }
-        }
-    }
-
     while let Some(sv) = worklist.pop() {
         let Some(inputs) = def_inputs.get(&sv) else {
             continue;
@@ -927,6 +1113,7 @@ fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
 }
 
 fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
+    let _span = linkscope::phase("pass.sccp.rewrite");
     let mut changed = false;
     let trace = sccp_trace_enabled();
     let func_name = func.function.name.clone();
@@ -1047,9 +1234,14 @@ impl Pass for SccpPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        if sccp_var_budget_exceeded(func) {
+            return Ok(false);
+        }
         let results = {
             let mut solver = SccpSolver::new(func);
-            solver.solve();
+            if !solver.solve() {
+                return Ok(false);
+            }
             SccpResults {
                 values: solver.values,
             }
@@ -1175,6 +1367,51 @@ mod tests {
         assert_eq!(block.insns[0].inputs[0], rsp);
         assert_eq!(block.insns[0].inputs[1], Varnode::constant(8, 8));
         assert_eq!(block.insns[2].inputs[1], stack_addr);
+    }
+
+    #[test]
+    fn add_cfg_edge_is_idempotent() {
+        let ssa = make_single_block_ssa(Vec::new());
+        let mut solver = SccpSolver::new(&ssa);
+        solver.add_cfg_edge(BlockId(0), BlockId(1));
+        solver.add_cfg_edge(BlockId(0), BlockId(1));
+        solver.add_cfg_edge(BlockId(0), BlockId(1));
+        assert_eq!(solver.cfg_worklist.len(), 1);
+        assert_eq!(solver.executable_edges.len(), 1);
+    }
+
+    #[test]
+    fn sccp_work_limit_default_and_override() {
+        assert_eq!(sccp_max_work_from(None), 50_000);
+        assert_eq!(sccp_max_work_from(Some("42")), 42);
+        assert_eq!(sccp_max_work_from(Some("0")), 0);
+        assert_eq!(sccp_max_work_from(Some("bad")), 50_000);
+        assert!(!sccp_work_exceeded(0, u64::MAX));
+        assert!(sccp_work_exceeded(1, 2));
+    }
+
+    #[test]
+    fn sccp_var_limit_default_and_override() {
+        assert_eq!(sccp_max_vars_from(None), 25_000);
+        assert_eq!(sccp_max_vars_from(Some("42")), 42);
+        assert_eq!(sccp_max_vars_from(Some("0")), 0);
+        assert_eq!(sccp_max_vars_from(Some("bad")), 25_000);
+    }
+
+    #[test]
+    fn solve_reports_incomplete_when_work_budget_is_hit() {
+        let out1 = Varnode::unique(0, 4);
+        let out2 = Varnode::unique(8, 4);
+        let c5 = Varnode::constant(5, 4);
+        let c3 = Varnode::constant(3, 4);
+        let mut ssa = make_single_block_ssa(vec![
+            IrInsn::with_output(IrOp::Copy, out1, smallvec![c5], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out2, smallvec![out1, c3], 0x1004),
+        ]);
+        let mut solver = SccpSolver::new(&ssa);
+        assert!(!solver.solve_with_budget(1));
+        let changed = SccpPass.run(&mut ssa).expect("pass should still succeed");
+        assert!(changed, "normal budget should still allow the fold");
     }
 
     /// SCCP through a taken branch: `if (true) v1 = 5; else v1 = 10; return v1;`

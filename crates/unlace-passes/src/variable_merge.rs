@@ -59,12 +59,21 @@ fn var_merge_trace_filter() -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-fn var_merge_trace_line(line: &str) {
+macro_rules! var_merge_trace_line {
+    ($($arg:tt)*) => {{
+        if var_merge_trace_enabled() {
+            var_merge_trace_line_args(format_args!($($arg)*));
+        }
+    }};
+}
+
+fn var_merge_trace_line_args(args: std::fmt::Arguments<'_>) {
     if !var_merge_trace_enabled() {
         return;
     }
+    let line = args.to_string();
     if let Some(filter) = var_merge_trace_filter()
-        && !line.contains(&filter)
+        && !line.contains(filter.as_str())
     {
         return;
     }
@@ -155,6 +164,22 @@ struct MergeKey {
 /// Hex-Rays output reuses `v3`, `v4`, `v5` across unrelated subexpressions.
 pub struct VariableMergePass;
 
+const DEFAULT_VAR_MERGE_MAX_COALESCIBLE_VARS: usize = 5000;
+
+fn variable_merge_max_coalescible_vars() -> usize {
+    variable_merge_max_coalescible_vars_from(
+        std::env::var("UNLACE_VAR_MERGE_MAX_COALESCIBLE_VARS")
+            .ok()
+            .as_deref(),
+    )
+}
+
+fn variable_merge_max_coalescible_vars_from(value: Option<&str>) -> usize {
+    value
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_VAR_MERGE_MAX_COALESCIBLE_VARS)
+}
+
 impl Pass for VariableMergePass {
     fn name(&self) -> &str {
         "variable-merge"
@@ -166,8 +191,13 @@ impl Pass for VariableMergePass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         // 1. Collect every SSA varnode that needs a name.
-        let all_vars = collect_all_ssa_vars(func);
-        var_merge_trace_line(&format!(
+        let all_vars = {
+            let _span = linkscope::phase("pass.variable-merge.collect-vars");
+            let all_vars = collect_all_ssa_vars(func);
+            linkscope::record_items("pass.variable-merge.collect-vars", all_vars.len() as u64);
+            all_vars
+        };
+        var_merge_trace_line!(
             "start func={} all_vars={} existing_merged={} phis={} var_map={} var_types={} foldable={}",
             func.function.name,
             all_vars.len(),
@@ -176,28 +206,64 @@ impl Pass for VariableMergePass {
             func.var_map.len(),
             func.var_types.len(),
             func.foldable_exprs.len(),
-        ));
+        );
 
         if all_vars.is_empty() {
             let changed = !func.merged_names.is_empty();
             func.merged_names.clear();
-            var_merge_trace_line(&format!(
+            var_merge_trace_line!(
                 "empty func={} changed={} cleared_merged_names",
-                func.function.name, changed
-            ));
+                func.function.name,
+                changed
+            );
             return Ok(changed);
         }
 
-        // 2. Compute live ranges via standard backward dataflow.
-        let live_ranges = compute_live_ranges(func, &all_vars);
+        // 2. Compute live ranges via standard backward dataflow. Only Unique
+        // bases participate in cross-base coalescing; physical register/stack
+        // bases are clustered by base and never consult live ranges.
+        let coalescible_vars: BTreeSet<SsaVarnode> = all_vars
+            .iter()
+            .copied()
+            .filter(|sv| sv.base.space == SpaceId::Unique)
+            .collect();
+        let max_coalescible_vars = variable_merge_max_coalescible_vars();
+        let skip_cross_base_coalescing =
+            max_coalescible_vars > 0 && coalescible_vars.len() > max_coalescible_vars;
+        if skip_cross_base_coalescing {
+            linkscope::record_items(
+                "pass.variable-merge.large-fallback.vars",
+                coalescible_vars.len() as u64,
+            );
+            linkscope::record_items(
+                "pass.variable-merge.large-fallback.limit",
+                max_coalescible_vars as u64,
+            );
+            var_merge_trace_line!(
+                "large-fallback func={} coalescible_vars={} limit={}",
+                func.function.name,
+                coalescible_vars.len(),
+                max_coalescible_vars,
+            );
+        }
+        let live_ranges = {
+            let _span = linkscope::phase("pass.variable-merge.live-ranges");
+            let live_ranges = if skip_cross_base_coalescing {
+                BTreeMap::new()
+            } else {
+                compute_live_ranges(func, &coalescible_vars)
+            };
+            linkscope::record_items("pass.variable-merge.live-ranges", live_ranges.len() as u64);
+            live_ranges
+        };
         for (sv, points) in &live_ranges {
-            var_merge_trace_line(&format!(
+            var_merge_trace_line!(
                 "range func={} sv={:?} len={} points=[{}]",
                 func.function.name,
                 sv,
                 points.len(),
                 fmt_program_points(points, 24),
-            ));
+            );
         }
 
         // 3. Bucket by coalescence key, then greedy-coalesce inside each bucket.
@@ -208,44 +274,50 @@ impl Pass for VariableMergePass {
             .map(|bi| &bi.byref_locals)
             .cloned()
             .unwrap_or_default();
-        let clusters = coalesce_clusters(
-            &func.function.name,
-            &all_vars,
-            &live_ranges,
-            &func.var_types,
-            &byref_offsets,
-        );
+        let clusters = {
+            let _span = linkscope::phase("pass.variable-merge.coalesce");
+            let clusters = if skip_cross_base_coalescing {
+                clusters_by_base(&all_vars)
+            } else {
+                coalesce_clusters(
+                    &func.function.name,
+                    &all_vars,
+                    &live_ranges,
+                    &func.var_types,
+                    &byref_offsets,
+                )
+            };
+            linkscope::record_items("pass.variable-merge.coalesce", clusters.len() as u64);
+            clusters
+        };
         for (idx, cluster) in clusters.iter().enumerate() {
-            var_merge_trace_line(&format!(
+            var_merge_trace_line!(
                 "cluster func={} idx={} members={:?}",
-                func.function.name, idx, cluster
-            ));
+                func.function.name,
+                idx,
+                cluster
+            );
         }
 
         // 4. Assign deterministic v-names per cluster.
-        let merged = assign_names(&func.function.name, &all_vars, &clusters);
+        let merged = {
+            let _span = linkscope::phase("pass.variable-merge.assign-names");
+            let merged = assign_names(&func.function.name, &all_vars, &clusters);
+            linkscope::record_items("pass.variable-merge.assign-names", merged.len() as u64);
+            merged
+        };
         for (sv, name) in &merged {
-            var_merge_trace_line(&format!(
-                "name func={} sv={:?} name={}",
-                func.function.name, sv, name
-            ));
+            var_merge_trace_line!("name func={} sv={:?} name={}", func.function.name, sv, name);
         }
-
-        tracing::debug!(
-            func = %func.function.name,
-            ssa_vars = all_vars.len(),
-            clusters = clusters.len(),
-            "variable_merge: coalesced ssa varnodes into clusters",
-        );
 
         let changed = merged != func.merged_names;
         func.merged_names = merged;
-        var_merge_trace_line(&format!(
+        var_merge_trace_line!(
             "done func={} changed={} merged_names={}",
             func.function.name,
             changed,
             func.merged_names.len(),
-        ));
+        );
         Ok(changed)
     }
 }
@@ -296,7 +368,9 @@ fn compute_live_ranges(
         // Phi outputs are defs at block entry.
         if let Some(phis) = func.phi_map.get(&bid) {
             for phi in phis {
-                liveness.def_set.insert(phi.output);
+                if all_vars.contains(&phi.output) {
+                    liveness.def_set.insert(phi.output);
+                }
             }
         }
 
@@ -307,12 +381,15 @@ fn compute_live_ranges(
                 if let Some(&sv) = func
                     .var_map
                     .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                    && all_vars.contains(&sv)
                     && !liveness.def_set.contains(&sv)
                 {
                     liveness.use_set.insert(sv);
                 }
             }
-            if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)) {
+            if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output))
+                && all_vars.contains(&sv)
+            {
                 liveness.def_set.insert(sv);
             }
         }
@@ -324,7 +401,9 @@ fn compute_live_ranges(
     for (&succ, phis) in &func.phi_map {
         for phi in phis {
             for &(pred, sv) in &phi.inputs {
-                if let Some(pred_live) = blocks.get_mut(&pred) {
+                if all_vars.contains(&sv)
+                    && let Some(pred_live) = blocks.get_mut(&pred)
+                {
                     pred_live.phi_use_out.insert(sv);
                 }
                 let _ = succ; // succ unused — phi inputs are not live-in here.
@@ -332,10 +411,14 @@ fn compute_live_ranges(
         }
     }
     for (bid, liveness) in &blocks {
-        var_merge_trace_line(&format!(
+        var_merge_trace_line!(
             "liveness-seed func={} block={:?} use={:?} def={:?} phi_use_out={:?}",
-            func.function.name, bid, liveness.use_set, liveness.def_set, liveness.phi_use_out,
-        ));
+            func.function.name,
+            bid,
+            liveness.use_set,
+            liveness.def_set,
+            liveness.phi_use_out,
+        );
     }
 
     // ---- Step 2: iterate to fixpoint -------------------------------------
@@ -376,7 +459,7 @@ fn compute_live_ranges(
             }
 
             if new_in != liveness.live_in || new_out != liveness.live_out {
-                var_merge_trace_line(&format!(
+                var_merge_trace_line!(
                     "liveness-update func={} iter={} block={:?} live_in_old={:?} live_out_old={:?} live_in_new={:?} live_out_new={:?}",
                     func.function.name,
                     iters,
@@ -385,22 +468,27 @@ fn compute_live_ranges(
                     liveness.live_out,
                     new_in,
                     new_out,
-                ));
+                );
                 liveness.live_in = new_in;
                 liveness.live_out = new_out;
                 changed = true;
             }
         }
     }
-    var_merge_trace_line(&format!(
+    var_merge_trace_line!(
         "liveness-fixpoint func={} iters={} hit_cap={}",
-        func.function.name, iters, changed,
-    ));
+        func.function.name,
+        iters,
+        changed,
+    );
     for (bid, liveness) in &blocks {
-        var_merge_trace_line(&format!(
+        var_merge_trace_line!(
             "liveness-final func={} block={:?} live_in={:?} live_out={:?}",
-            func.function.name, bid, liveness.live_in, liveness.live_out
-        ));
+            func.function.name,
+            bid,
+            liveness.live_in,
+            liveness.live_out
+        );
     }
 
     // ---- Step 3: materialise per-varnode point sets via backward walk ----
@@ -445,6 +533,7 @@ fn compute_live_ranges(
                 if let Some(&sv) = func
                     .var_map
                     .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                    && all_vars.contains(&sv)
                 {
                     if let Some(set) = ranges.get_mut(&sv) {
                         set.insert(ProgramPoint::at(bid, insn_idx));
@@ -475,6 +564,9 @@ fn compute_live_ranges(
     for phis in func.phi_map.values() {
         for phi in phis {
             for &(pred, sv) in &phi.inputs {
+                if !all_vars.contains(&sv) {
+                    continue;
+                }
                 let pred_block = match func.function.blocks.get(&pred) {
                     Some(b) => b,
                     None => continue,
@@ -524,6 +616,14 @@ fn ranges_interfere(a: &BTreeSet<ProgramPoint>, b: &BTreeSet<ProgramPoint>) -> b
     small.iter().any(|p| big.contains(p))
 }
 
+fn clusters_by_base(all_vars: &BTreeSet<SsaVarnode>) -> Vec<Vec<SsaVarnode>> {
+    let mut by_base: BTreeMap<Varnode, Vec<SsaVarnode>> = BTreeMap::new();
+    for sv in all_vars {
+        by_base.entry(sv.base).or_default().push(*sv);
+    }
+    by_base.into_values().collect()
+}
+
 /// Group SSA varnodes into clusters that share a source-level name.
 ///
 /// Two-level algorithm:
@@ -548,16 +648,18 @@ fn coalesce_clusters(
     var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
     _byref_offsets: &BTreeSet<i64>,
 ) -> Vec<Vec<SsaVarnode>> {
-    let mut by_base: BTreeMap<Varnode, Vec<SsaVarnode>> = BTreeMap::new();
-    for sv in all_vars {
-        by_base.entry(sv.base).or_default().push(*sv);
-    }
+    let by_base = clusters_by_base(all_vars);
 
     let mut clusters: Vec<Vec<SsaVarnode>> = Vec::new();
 
     let mut unique_clusters: Vec<(Vec<SsaVarnode>, BTreeSet<ProgramPoint>, MergeKey)> = Vec::new();
+    let mut unique_clusters_by_key: BTreeMap<MergeKey, Vec<usize>> = BTreeMap::new();
 
-    for (base, members) in by_base {
+    for members in by_base {
+        let base = members
+            .first()
+            .map(|sv| sv.base)
+            .expect("clusters_by_base never emits empty clusters");
         match base.space {
             SpaceId::Unique => {
                 let mut union_range: BTreeSet<ProgramPoint> = BTreeSet::new();
@@ -569,7 +671,7 @@ fn coalesce_clusters(
                     }
                 }
                 let mkey = merge_key_for_base(base, &members, var_types);
-                var_merge_trace_line(&format!(
+                var_merge_trace_line!(
                     "unique-base func={} base={:?} members={:?} key={:?} range_len={} range=[{}]",
                     func_name,
                     base,
@@ -577,44 +679,65 @@ fn coalesce_clusters(
                     mkey,
                     union_range.len(),
                     fmt_program_points(&union_range, 24),
-                ));
+                );
 
                 let mut placed = false;
-                for (cluster_idx, (cluster_members, cluster_range, cluster_mkey)) in
-                    unique_clusters.iter_mut().enumerate()
+                for cluster_idx in unique_clusters_by_key
+                    .get(&mkey)
+                    .cloned()
+                    .unwrap_or_default()
                 {
-                    let key_match = *cluster_mkey == mkey;
+                    let (cluster_members, cluster_range, cluster_mkey) =
+                        &mut unique_clusters[cluster_idx];
+                    debug_assert_eq!(*cluster_mkey, mkey);
                     let interferes = ranges_interfere(&union_range, cluster_range);
-                    var_merge_trace_line(&format!(
+                    var_merge_trace_line!(
                         "unique-try func={} base={:?} cluster={} key_match={} interferes={} existing_members={:?}",
-                        func_name, base, cluster_idx, key_match, interferes, cluster_members
-                    ));
-                    if key_match && !interferes {
+                        func_name,
+                        base,
+                        cluster_idx,
+                        true,
+                        interferes,
+                        cluster_members
+                    );
+                    if !interferes {
                         cluster_members.extend(members.iter().copied());
                         for p in &union_range {
                             cluster_range.insert(*p);
                         }
-                        var_merge_trace_line(&format!(
+                        var_merge_trace_line!(
                             "unique-merge func={} base={:?} cluster={} new_members={:?}",
-                            func_name, base, cluster_idx, cluster_members
-                        ));
+                            func_name,
+                            base,
+                            cluster_idx,
+                            cluster_members
+                        );
                         placed = true;
                         break;
                     }
                 }
                 if !placed {
-                    var_merge_trace_line(&format!(
+                    let cluster_idx = unique_clusters.len();
+                    var_merge_trace_line!(
                         "unique-new-cluster func={} base={:?} members={:?}",
-                        func_name, base, members
-                    ));
-                    unique_clusters.push((members, union_range, mkey));
+                        func_name,
+                        base,
+                        members
+                    );
+                    unique_clusters.push((members, union_range, mkey.clone()));
+                    unique_clusters_by_key
+                        .entry(mkey)
+                        .or_default()
+                        .push(cluster_idx);
                 }
             }
             _ => {
-                var_merge_trace_line(&format!(
+                var_merge_trace_line!(
                     "physical-cluster func={} base={:?} members={:?}",
-                    func_name, base, members
-                ));
+                    func_name,
+                    base,
+                    members
+                );
                 clusters.push(members);
             }
         }
@@ -683,10 +806,13 @@ fn assign_names(
                 next_v_index += 1;
                 name
             };
-            var_merge_trace_line(&format!(
+            var_merge_trace_line!(
                 "assign-order func={} cluster={} first_sv={:?} name={}",
-                func_name, cidx, sv, name
-            ));
+                func_name,
+                cidx,
+                sv,
+                name
+            );
             e.insert(name);
         }
     }
@@ -732,6 +858,36 @@ mod tests {
             .iter()
             .find(|(sv, _)| sv.base == base && sv.version == version)
             .map(|(_, n)| n.clone())
+    }
+
+    #[test]
+    fn var_merge_coalescible_limit_default_and_override() {
+        assert_eq!(variable_merge_max_coalescible_vars_from(None), 5000);
+        assert_eq!(variable_merge_max_coalescible_vars_from(Some("42")), 42);
+        assert_eq!(variable_merge_max_coalescible_vars_from(Some("0")), 0);
+        assert_eq!(
+            variable_merge_max_coalescible_vars_from(Some("not-a-number")),
+            5000
+        );
+    }
+
+    #[test]
+    fn clusters_by_base_groups_versions_without_cross_base_merging() {
+        let u0v0 = SsaVarnode {
+            base: Varnode::unique(0, 4),
+            version: 0,
+        };
+        let u0v1 = SsaVarnode {
+            base: Varnode::unique(0, 4),
+            version: 1,
+        };
+        let u4v0 = SsaVarnode {
+            base: Varnode::unique(4, 4),
+            version: 0,
+        };
+        let all = BTreeSet::from([u0v1, u4v0, u0v0]);
+        let clusters = clusters_by_base(&all);
+        assert_eq!(clusters, vec![vec![u0v0, u0v1], vec![u4v0]]);
     }
 
     // ------------------------------------------------------------------

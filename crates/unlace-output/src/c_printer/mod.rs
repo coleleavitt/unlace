@@ -127,6 +127,10 @@ mod trace;
 use postprocess::*;
 use trace::*;
 
+fn cprinter_detail_phase(name: &'static str) -> Option<linkscope::Span> {
+    linkscope::trace_detail_enabled().then(|| linkscope::phase(name))
+}
+
 /// Metadata for the block comment emitted above each decompiled function.
 ///
 /// Built from [`SsaFunction`] via [`FunctionHeaderInfo::from_ssa`], or
@@ -851,6 +855,8 @@ pub fn print_c_with_annotations(
     config: Option<PrintConfig>,
     annotations: Option<&PrinterAnnotations>,
 ) -> String {
+    let _print_span = linkscope::phase("cprinter.print");
+    let context_span = linkscope::phase("cprinter.context-build");
     let mut sym_owned = symbols.cloned().unwrap_or_default();
     if let Some(ann) = annotations {
         // Custom names take precedence over the synthesized symbol table —
@@ -900,6 +906,7 @@ pub fn print_c_with_annotations(
     ctx.byref_boxes = func.byref_boxes.clone();
     ctx.go_defer_sites = func.go_defer_sites.clone();
     ctx.vtable_call_targets = func.vtable_call_targets.clone();
+    drop(context_span);
     trace_stack_lvar_inventory("annotations", &ctx.stack_lvars);
     trace_full(format_args!(
         "print-enter func={} body_len={} annotations={} dwarf={} header={} symbols={} strings={} rtti={}",
@@ -914,52 +921,113 @@ pub fn print_c_with_annotations(
     ));
     trace_ctx_snapshot("init", &ctx);
 
-    let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
-    ctx.parent_returns_void = function_body_returns_void(func, dwarf_func);
-    compute_dwarf_locals(dwarf_func, header, &mut ctx);
+    let precompute_span = linkscope::phase("cprinter.precompute");
+    let dwarf_func = {
+        let _span = linkscope::phase("cprinter.precompute.dwarf-function");
+        dwarf.and_then(|d| dwarf_function_for_func(d, func, header))
+    };
+    ctx.parent_returns_void = {
+        let _span = linkscope::phase("cprinter.precompute.parent-returns-void");
+        function_body_returns_void(func, dwarf_func)
+    };
+    {
+        let _span = linkscope::phase("cprinter.precompute.dwarf-locals");
+        compute_dwarf_locals(dwarf_func, header, &mut ctx);
+    }
     trace_ctx_snapshot("dwarf-locals", &ctx);
-    compute_suppressed_stack_offsets(func, &mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.suppressed-stack");
+        compute_suppressed_stack_offsets(func, &mut ctx);
+    }
     trace_ctx_snapshot("suppressed-stack", &ctx);
     // t232: register recovered stack-frame slots as named locals
     // (`v_<offset>` for scalars, `buf_<offset>` for arrays). DWARF
     // locals take priority and have already been registered above; this
     // call only fills in slots DWARF did not name.
-    compute_stack_frame_names(func, &mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.stack-frame-names");
+        compute_stack_frame_names(func, &mut ctx);
+    }
     trace_stack_frame_inventory("after-stack-frame-names", func);
     trace_stack_slot_inventory("after-stack-frame-names", &ctx);
     trace_stack_lvar_slot_crosscheck("after-stack-frame-names", &ctx);
     trace_ctx_snapshot("stack-frame-names", &ctx);
-    compute_loop_counter_names(&func.body, 0, &mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.loop-counter-names");
+        compute_loop_counter_names(&func.body, 0, &mut ctx);
+    }
     trace_ctx_snapshot("loop-counter-names", &ctx);
-    compute_param_register_names(func, dwarf_func, header, &mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.param-register-names");
+        compute_param_register_names(func, dwarf_func, header, &mut ctx);
+    }
     trace_ctx_snapshot("param-register-names", &ctx);
-    collect_varnodes(&func.body, &mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.collect-varnodes");
+        collect_varnodes(&func.body, &mut ctx);
+    }
     trace_ctx_snapshot("collect-varnodes", &ctx);
-    compute_canary_stack_offsets(&mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.canary-stack-offsets");
+        compute_canary_stack_offsets(&mut ctx);
+    }
     trace_ctx_snapshot("canary-stack-offsets", &ctx);
-    promote_stack_address_call_arrays(&func.body, &mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.promote-stack-address-call-arrays");
+        promote_stack_address_call_arrays(&func.body, &mut ctx);
+    }
     trace_ctx_snapshot("promote-stack-address-call-arrays", &ctx);
-    compute_foldable(&mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.foldable");
+        compute_foldable(&mut ctx);
+    }
     trace_ctx_snapshot("foldable", &ctx);
-    propagate_dead_chains(&mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.dead-chains");
+        propagate_dead_chains(&mut ctx);
+    }
     trace_ctx_snapshot("dead-chains", &ctx);
-    compute_byref_bases(&mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.byref-bases");
+        compute_byref_bases(&mut ctx);
+    }
     trace_ctx_snapshot("byref-bases", &ctx);
-    compute_heuristic_names(&func.body, &mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.heuristic-names");
+        compute_heuristic_names(&func.body, &mut ctx);
+    }
     trace_ctx_snapshot("heuristic-names", &ctx);
-    dedupe_var_names(&mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.dedupe-var-names");
+        dedupe_var_names(&mut ctx);
+    }
     trace_ctx_snapshot("dedupe-var-names", &ctx);
-    compute_hoist_plan(&mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.hoist-plan");
+        compute_hoist_plan(&mut ctx);
+    }
     trace_ctx_snapshot("hoist-plan", &ctx);
-    detect_mmio_addrs(&mut ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.mmio-addrs");
+        detect_mmio_addrs(&mut ctx);
+    }
     trace_ctx_snapshot("mmio-addrs", &ctx);
-    let merged_return_stmts = merged_assign_return_stmt_indices(&func.body, &ctx);
+    let merged_return_stmts = {
+        let _span = linkscope::phase("cprinter.precompute.merged-return-stmts");
+        merged_assign_return_stmt_indices(&func.body, &ctx)
+    };
     let mut merged_return_svs: BTreeSet<SsaVarnode> = merged_return_stmts
         .iter()
         .filter_map(|stmt_idx| ctx.stmt_outputs.get(stmt_idx).copied().flatten())
         .collect();
-    merged_return_svs.extend(merged_call_return_svs(&func.body, &ctx));
-    let post_dowhile_return_svs = post_dowhile_recovered_return_svs(&func.body, &ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.merged-call-return-svs");
+        merged_return_svs.extend(merged_call_return_svs(&func.body, &ctx));
+    }
+    let post_dowhile_return_svs = {
+        let _span = linkscope::phase("cprinter.precompute.post-dowhile-return-svs");
+        post_dowhile_recovered_return_svs(&func.body, &ctx)
+    };
     trace_full(format_args!(
         "return-precompute func={} merged_return_stmts={} merged_return_svs={} post_dowhile_return_svs={}",
         func.name,
@@ -967,7 +1035,14 @@ pub fn print_c_with_annotations(
         merged_return_svs.len(),
         post_dowhile_return_svs.len()
     ));
+    ctx.has_stack_address_targets = !ctx.stack_frame_slots.is_empty()
+        || ctx
+            .name_overrides
+            .keys()
+            .any(|vn| vn.space == SpaceId::Stack);
+    drop(precompute_span);
 
+    let preamble_span = linkscope::phase("cprinter.preamble-header");
     let mut out = String::with_capacity(1024);
 
     out.push_str(IDA_TYPEDEFS);
@@ -1380,6 +1455,7 @@ pub fn print_c_with_annotations(
         );
     }
     out.push_str(" {\n");
+    drop(preamble_span);
     let materialized_dwarf_array_names: BTreeSet<String> = ctx
         .dwarf_array_buffer_decls
         .values()
@@ -1604,7 +1680,9 @@ pub fn print_c_with_annotations(
     }
     ctx.top_declared_names = declared_names.clone();
 
+    let body_span = linkscope::phase("cprinter.emit-body");
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
+    drop(body_span);
 
     out.push_str("}\n");
 
@@ -1612,6 +1690,7 @@ pub fn print_c_with_annotations(
     // under UNLACE_CPRINTER_STAGE_TRACE every stage logs whether it mutated the
     // text and the line-count delta, so a vanished statement can be pinned to
     // the exact transform that dropped it.
+    let cleanup_span = linkscope::phase("cprinter.cleanup");
     let func_label = func.name.as_str();
     let output = run_cleanup_stage(
         func_label,
@@ -1683,12 +1762,15 @@ pub fn print_c_with_annotations(
     // MUST be the final stage: emptiness of an if-body is only known after every
     // pruning pass above has removed dead stores/decls. Flip `if (!(X)) {}` to
     // the positive `if (X) {}` form once the body is provably empty.
-    run_cleanup_stage(
+    let output = run_cleanup_stage(
         func_label,
         "depolarize-empty-if",
         output,
         depolarize_empty_negated_ifs,
-    )
+    );
+    drop(cleanup_span);
+    linkscope::record_bytes("cprinter.print", output.len() as u64);
+    output
 }
 
 /// Apply one post-emission cleanup `stage` to `input`, logging a before/after
@@ -1702,6 +1784,25 @@ fn run_cleanup_stage(
     input: String,
     stage_fn: impl FnOnce(String) -> String,
 ) -> String {
+    let _span = match stage {
+        "signed-flag-compare" => Some(linkscope::phase("cprinter.cleanup.signed-flag-compare")),
+        "dead-plain-assignments" => {
+            Some(linkscope::phase("cprinter.cleanup.dead-plain-assignments"))
+        }
+        "fallthrough-gotos" => Some(linkscope::phase("cprinter.cleanup.fallthrough-gotos")),
+        "unused-labels" => Some(linkscope::phase("cprinter.cleanup.unused-labels")),
+        "unused-plain-decls" => Some(linkscope::phase("cprinter.cleanup.unused-plain-decls")),
+        "declare-control-v" => Some(linkscope::phase("cprinter.cleanup.declare-control-v")),
+        "declare-temp-v" => Some(linkscope::phase("cprinter.cleanup.declare-temp-v")),
+        "rename-bare-result" => Some(linkscope::phase("cprinter.cleanup.rename-bare-result")),
+        "repair-arg-address" => Some(linkscope::phase("cprinter.cleanup.repair-arg-address")),
+        "double-negation-conditions" => Some(linkscope::phase(
+            "cprinter.cleanup.double-negation-conditions",
+        )),
+        "triangular-sum" => Some(linkscope::phase("cprinter.cleanup.triangular-sum")),
+        "depolarize-empty-if" => Some(linkscope::phase("cprinter.cleanup.depolarize-empty-if")),
+        _ => Some(linkscope::phase("cprinter.cleanup.other")),
+    };
     let want_counts = std::env::var_os("UNLACE_CPRINTER_STAGE_TRACE").is_some();
     let want_diff = c_printer_pipeline_trace_enabled();
     if !want_counts && !want_diff {
@@ -2394,6 +2495,10 @@ struct PrintCtx {
     /// same raw `Unique` base is reused across nearby instructions. Address
     /// recovery needs the slot number to recover the intended SSA version.
     stmt_input_slots: BTreeMap<u32, BTreeMap<usize, SsaVarnode>>,
+    /// Flat lookup companion to [`PrintCtx::stmt_input_slots`] for hot operand
+    /// rendering paths. The nested map is still kept for deterministic
+    /// per-statement iteration.
+    stmt_input_slot_lookup: BTreeMap<(u32, usize), SsaVarnode>,
     /// Next statement index (incremented during collection).
     next_stmt: u32,
     /// Current statement index during emission.
@@ -2404,6 +2509,9 @@ struct PrintCtx {
     foldable_stmts: BTreeSet<u32>,
     /// Maps a foldable SsaVarnode to the statement index that defines it.
     sv_defining_stmt: BTreeMap<SsaVarnode, u32>,
+    /// Outputs defined by `Load` statements. Used to avoid probing readonly
+    /// scalar loads for non-load operands in the hot emission path.
+    load_output_svs: BTreeSet<SsaVarnode>,
     /// SSA values currently being expanded as expressions. Cyclic optimized
     /// loop temps fall back to named variables instead of recursing forever.
     resolving_exprs: BTreeSet<SsaVarnode>,
@@ -2587,6 +2695,10 @@ struct PrintCtx {
     /// These are also suppressed, but kept distinct so canary compare pruning
     /// can recognize epilogue reloads from the saved guard slot.
     canary_stack_offsets: BTreeSet<i64>,
+    /// True once this function has stack slot/name targets that can render as
+    /// address expressions. Hot operand emission uses this to skip recursive
+    /// stack-offset recovery for functions where it cannot succeed.
+    has_stack_address_targets: bool,
     /// User-visible stack slots keyed by their recovered start offset. Used to
     /// render accesses inside wide buffers as `buf_N + delta` instead of
     /// falling through to raw pointer arithmetic.
@@ -2775,11 +2887,13 @@ impl PrintCtx {
             stmt_outputs: BTreeMap::new(),
             stmt_inputs: BTreeMap::new(),
             stmt_input_slots: BTreeMap::new(),
+            stmt_input_slot_lookup: BTreeMap::new(),
             next_stmt: 0,
             emit_stmt: 0,
             stmt_insns: BTreeMap::new(),
             foldable_stmts: BTreeSet::new(),
             sv_defining_stmt: BTreeMap::new(),
+            load_output_svs: BTreeSet::new(),
             resolving_exprs: BTreeSet::new(),
             sv_use_counts: BTreeMap::new(),
             cond_uses: Vec::new(),
@@ -2832,6 +2946,7 @@ impl PrintCtx {
             mmio_addrs: BTreeSet::new(),
             suppressed_stack_offsets: BTreeSet::new(),
             canary_stack_offsets: BTreeSet::new(),
+            has_stack_address_targets: false,
             stack_frame_slots: BTreeMap::new(),
             stack_lvars: BTreeMap::new(),
             dwarf_array_locals: Vec::new(),
@@ -2845,6 +2960,7 @@ impl PrintCtx {
     }
 
     fn name_of(&mut self, sv: &SsaVarnode) -> String {
+        let _span = cprinter_detail_phase("cprinter.name-of");
         if let Some(n) = self.var_names.get(sv) {
             trace_name_decision("cache", sv, n, self);
             return n.clone();
@@ -2887,6 +3003,7 @@ impl PrintCtx {
     }
 
     fn fresh_ssa_name_of(&mut self, sv: &SsaVarnode) -> String {
+        let _span = cprinter_detail_phase("cprinter.fresh-ssa-name-of");
         if let Some(n) = self.var_names.get(sv) {
             trace_name_decision("fresh-cache", sv, n, self);
             return n.clone();
@@ -4063,6 +4180,9 @@ fn try_readonly_scalar_load(
 }
 
 fn try_readonly_scalar_value_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<String> {
+    if ctx.readonly_scalars.is_empty() || !ctx.load_output_svs.contains(sv) {
+        return None;
+    }
     let def_stmt = defining_stmt_for_sv(sv, ctx)?;
     let def = ctx.stmt_insns.get(&def_stmt)?;
     if def.op != IrOp::Load {
@@ -4357,6 +4477,7 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
         }
         input_svs.push(sv);
         input_slots.insert(raw_idx, sv);
+        ctx.stmt_input_slot_lookup.insert((idx, raw_idx), sv);
     }
     ctx.stmt_inputs.insert(idx, input_svs);
     ctx.stmt_input_slots.insert(idx, input_slots);
@@ -4391,6 +4512,11 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
         None
     };
     ctx.stmt_outputs.insert(idx, output_sv);
+    if insn.op == IrOp::Load
+        && let Some(sv) = output_sv
+    {
+        ctx.load_output_svs.insert(sv);
+    }
     ctx.stmt_insns.insert(idx, insn.clone());
     if c_printer_name_trace_enabled() {
         if let Some(sv) = output_sv {
@@ -4695,6 +4821,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     ctx.name_of(&sv);
                     input_svs.push(sv);
                     input_slots.insert(raw_idx, sv);
+                    ctx.stmt_input_slot_lookup.insert((idx, raw_idx), sv);
                 }
                 ctx.stmt_inputs.insert(idx, input_svs);
                 ctx.stmt_input_slots.insert(idx, input_slots);
@@ -6323,7 +6450,7 @@ fn detect_mmio_addrs(ctx: &mut PrintCtx) {
 /// Names that don't qualify fall through to the original function-top
 /// declaration block, preserving prior layout for cases this pass cannot
 /// reason about safely.
-fn stmt_visible_for_hoist_base(ctx: &PrintCtx, base: Varnode, stmt_idx: u32) -> bool {
+fn stmt_visible_for_hoist(ctx: &PrintCtx, stmt_idx: u32) -> bool {
     let Some(insn) = ctx.stmt_insns.get(&stmt_idx) else {
         // Synthetic condition/return anchors have no direct instruction but
         // are still visible uses from the C emitter's perspective.
@@ -6335,6 +6462,21 @@ fn stmt_visible_for_hoist_base(ctx: &PrintCtx, base: Varnode, stmt_idx: u32) -> 
     {
         return false;
     }
+    true
+}
+
+fn stmt_visible_for_hoist_base(
+    ctx: &PrintCtx,
+    base: Varnode,
+    stmt_idx: u32,
+    base_visible: bool,
+) -> bool {
+    if !base_visible {
+        return false;
+    }
+    let Some(insn) = ctx.stmt_insns.get(&stmt_idx) else {
+        return true;
+    };
     if let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx)
         && out_sv.base == base
         && is_control_only_condition_assignment(stmt_idx, out_sv, insn, ctx)
@@ -6344,6 +6486,12 @@ fn stmt_visible_for_hoist_base(ctx: &PrintCtx, base: Varnode, stmt_idx: u32) -> 
     true
 }
 
+fn record_hoist_candidate_name(candidate_bases: &mut BTreeSet<Varnode>, base: Varnode, name: &str) {
+    if is_temp_hoist_name(name) {
+        candidate_bases.insert(base);
+    }
+}
+
 fn compute_hoist_plan(ctx: &mut PrintCtx) {
     use std::collections::BTreeMap;
 
@@ -6351,6 +6499,8 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
     let mut use_stmts: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
     let mut base_scope_paths: BTreeMap<Varnode, Vec<Vec<u32>>> = BTreeMap::new();
     let mut name_scope_paths: BTreeMap<String, Vec<Vec<u32>>> = BTreeMap::new();
+    let mut candidate_bases: BTreeSet<Varnode> = BTreeSet::new();
+    let collect_inputs_span = linkscope::phase("cprinter.hoist.collect-inputs");
     for (&stmt_idx, inputs) in &ctx.stmt_inputs {
         for sv in inputs {
             use_stmts.entry(sv.base).or_default().push(stmt_idx);
@@ -6361,6 +6511,7 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
                     .unwrap_or_default(),
             );
             if let Some(name) = known_name_of_sv(ctx, sv) {
+                record_hoist_candidate_name(&mut candidate_bases, sv.base, &name);
                 name_scope_paths.entry(name).or_default().push(
                     ctx.stmt_scope_paths
                         .get(&stmt_idx)
@@ -6370,6 +6521,13 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             }
         }
     }
+    linkscope::record_items(
+        "cprinter.hoist.collect-inputs",
+        ctx.stmt_inputs.len() as u64,
+    );
+    drop(collect_inputs_span);
+
+    let collect_outputs_span = linkscope::phase("cprinter.hoist.collect-outputs");
     for (&stmt_idx, output_sv_opt) in &ctx.stmt_outputs {
         if let Some(sv) = output_sv_opt {
             use_stmts.entry(sv.base).or_default().push(stmt_idx);
@@ -6380,6 +6538,7 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
                     .unwrap_or_default(),
             );
             if let Some(name) = known_name_of_sv(ctx, sv) {
+                record_hoist_candidate_name(&mut candidate_bases, sv.base, &name);
                 name_scope_paths.entry(name).or_default().push(
                     ctx.stmt_scope_paths
                         .get(&stmt_idx)
@@ -6389,6 +6548,13 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             }
         }
     }
+    linkscope::record_items(
+        "cprinter.hoist.collect-outputs",
+        ctx.stmt_outputs.len() as u64,
+    );
+    drop(collect_outputs_span);
+
+    let collect_conditions_span = linkscope::phase("cprinter.hoist.collect-conditions");
     for (sv, anchor_stmt) in &ctx.cond_use_stmts {
         // Anchor at the *previous* statement (the one that wrote the cond
         // value) when the recorded anchor is past the end of the stmt list.
@@ -6401,6 +6567,7 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             .or_default()
             .push(path.clone());
         if let Some(name) = known_name_of_sv(ctx, sv) {
+            record_hoist_candidate_name(&mut candidate_bases, sv.base, &name);
             name_scope_paths.entry(name).or_default().push(path.clone());
         }
     }
@@ -6422,10 +6589,18 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
                 .or_default()
                 .push(path.clone());
             if let Some(name) = known_name_of_sv(ctx, input_sv) {
+                record_hoist_candidate_name(&mut candidate_bases, input_sv.base, &name);
                 name_scope_paths.entry(name).or_default().push(path.clone());
             }
         }
     }
+    linkscope::record_items(
+        "cprinter.hoist.collect-conditions",
+        ctx.cond_use_stmts.len() as u64,
+    );
+    drop(collect_conditions_span);
+
+    let dedupe_scope_paths_span = linkscope::phase("cprinter.hoist.dedupe-scope-paths");
     for paths in base_scope_paths.values_mut() {
         paths.sort();
         paths.dedup();
@@ -6434,21 +6609,49 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         paths.sort();
         paths.dedup();
     }
+    drop(dedupe_scope_paths_span);
 
+    let candidate_bases_span = linkscope::phase("cprinter.hoist.candidate-bases");
+    linkscope::record_items(
+        "cprinter.hoist.candidate-bases",
+        candidate_bases.len() as u64,
+    );
+    drop(candidate_bases_span);
+
+    let mut stmt_visible_cache: BTreeMap<u32, bool> = BTreeMap::new();
     let mut visible_stmts_by_base: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
-    for (base, stmts) in &use_stmts {
-        let mut visible: Vec<u32> = stmts
-            .iter()
-            .copied()
-            .filter(|stmt_idx| stmt_visible_for_hoist_base(ctx, *base, *stmt_idx))
+    let visible_filter_span = linkscope::phase("cprinter.hoist.visible-filter");
+    for base in &candidate_bases {
+        let Some(stmts) = use_stmts.get(base) else {
+            continue;
+        };
+        let mut unique_stmts = stmts.clone();
+        unique_stmts.sort_unstable();
+        unique_stmts.dedup();
+        let visible: Vec<u32> = unique_stmts
+            .into_iter()
+            .filter(|stmt_idx| {
+                let base_visible = if let Some(base_visible) = stmt_visible_cache.get(stmt_idx) {
+                    *base_visible
+                } else {
+                    let base_visible = stmt_visible_for_hoist(ctx, *stmt_idx);
+                    stmt_visible_cache.insert(*stmt_idx, base_visible);
+                    base_visible
+                };
+                stmt_visible_for_hoist_base(ctx, *base, *stmt_idx, base_visible)
+            })
             .collect();
-        visible.sort_unstable();
-        visible.dedup();
         visible_stmts_by_base.insert(*base, visible);
     }
+    linkscope::record_items(
+        "cprinter.hoist.visible-filter",
+        candidate_bases.len() as u64,
+    );
+    drop(visible_filter_span);
 
     let mut base_names_by_base: BTreeMap<Varnode, String> = BTreeMap::new();
     let mut name_earliest_stmt: BTreeMap<String, u32> = BTreeMap::new();
+    let name_resolution_span = linkscope::phase("cprinter.hoist.name-resolution");
     for (base, stmts) in &visible_stmts_by_base {
         let Some(name) = hoist_name_for_base(ctx, base, stmts) else {
             continue;
@@ -6462,12 +6665,21 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             .and_modify(|existing| *existing = (*existing).min(first_stmt))
             .or_insert(first_stmt);
     }
+    linkscope::record_items(
+        "cprinter.hoist.name-resolution",
+        base_names_by_base.len() as u64,
+    );
+    drop(name_resolution_span);
 
     let empty_path: Vec<u32> = Vec::new();
     let mut planned_names: BTreeSet<String> = BTreeSet::new();
 
-    for (base, raw_stmts) in use_stmts {
-        let mut stmts = visible_stmts_by_base
+    let plan_loop_span = linkscope::phase("cprinter.hoist.plan-loop");
+    for base in candidate_bases {
+        let Some(raw_stmts) = use_stmts.get(&base) else {
+            continue;
+        };
+        let stmts = visible_stmts_by_base
             .get(&base)
             .cloned()
             .unwrap_or_default();
@@ -6477,8 +6689,6 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             ));
             continue;
         }
-        stmts.sort_unstable();
-        stmts.dedup();
         let base_name = base_names_by_base.get(&base).cloned();
         trace_hoist_text(format_args!(
             "candidate base={base:?} name={:?} visible_stmts={:?} raw_stmts={:?}",
@@ -6673,6 +6883,8 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             "plan base={base:?} name={base_name} stmt={first_stmt} fold_into_assignment=true"
         ));
     }
+    linkscope::record_items("cprinter.hoist.plan-loop", ctx.hoist_decl_plan.len() as u64);
+    drop(plan_loop_span);
 }
 
 fn is_temp_hoist_name(name: &str) -> bool {
@@ -7350,6 +7562,7 @@ fn promote_stack_buffer(offset: i64, byte_len: u64, ctx: &mut PrintCtx) {
         debug_stack_lvar_name(ctx, offset).is_some(),
     ));
     ctx.promoted_stack_buffers.insert(offset, size);
+    ctx.has_stack_address_targets = true;
     ctx.stack_frame_slots.insert(
         offset,
         StackSlotName {
@@ -7399,6 +7612,7 @@ fn synthesize_stack_scalar(offset: i64, size: u8, ctx: &mut PrintCtx) {
                 "synthesize-scalar-slot-insert offset={} size={} name={}",
                 offset, size, name
             ));
+            ctx.has_stack_address_targets = true;
             entry.insert(StackSlotName {
                 name: name.clone(),
                 size: u64::from(size),
@@ -7440,6 +7654,9 @@ fn try_stack_frame_access_name(
     access_size: u8,
     ctx: &PrintCtx,
 ) -> Option<String> {
+    if !ctx.has_stack_address_targets {
+        return None;
+    }
     let offset = resolve_stack_offset_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0)?;
     let slot = stack_slot_for_offset(offset, access_size, ctx)?;
     let rendered = if slot.is_buffer || slot.delta != 0 {
@@ -7469,6 +7686,9 @@ fn try_stack_frame_address_expr(
     stmt_idx: u32,
     ctx: &PrintCtx,
 ) -> Option<String> {
+    if !may_resolve_stack_offset(addr_vn, addr_raw_idx, stmt_idx, ctx) {
+        return None;
+    }
     let offset = resolve_stack_offset_for_addr(addr_vn, addr_raw_idx, stmt_idx, ctx, 0)?;
     let slot = stack_slot_for_address_offset(offset, ctx)?;
     let rendered = if slot.is_buffer {
@@ -7489,6 +7709,29 @@ fn try_stack_frame_address_expr(
         Some(rendered.as_str()),
     );
     Some(rendered)
+}
+
+fn may_resolve_stack_offset(
+    vn: &Varnode,
+    raw_idx: Option<usize>,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> bool {
+    if vn.space == SpaceId::Stack || is_x86_frame_base(vn) {
+        return true;
+    }
+    if vn.space == SpaceId::Const {
+        return false;
+    }
+    let Some(sv) = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx) else {
+        return false;
+    };
+    let Some(def_stmt) = defining_stmt_for_sv(&sv, ctx) else {
+        return false;
+    };
+    ctx.stmt_insns
+        .get(&def_stmt)
+        .is_some_and(|def| matches!(def.op, IrOp::Copy | IrOp::IntAdd | IrOp::IntSub))
 }
 
 #[derive(Clone, Debug)]
@@ -7714,9 +7957,14 @@ fn input_or_latest_sv_for_operand(
 ) -> Option<SsaVarnode> {
     if let Some(raw_idx) = raw_idx
         && let Some(sv) = ctx
-            .stmt_input_slots
-            .get(&stmt_idx)
-            .and_then(|inputs| inputs.get(&raw_idx).copied())
+            .stmt_input_slot_lookup
+            .get(&(stmt_idx, raw_idx))
+            .copied()
+            .or_else(|| {
+                ctx.stmt_input_slots
+                    .get(&stmt_idx)
+                    .and_then(|inputs| inputs.get(&raw_idx).copied())
+            })
     {
         if sv.base != *vn && c_printer_trace_enabled() {
             eprintln!(
@@ -9417,6 +9665,10 @@ fn node_is_terminal_for_emission(node: &HirNode) -> bool {
 }
 
 fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut String) {
+    let _span = cprinter_detail_phase("cprinter.emit.nodes");
+    if linkscope::trace_detail_enabled() {
+        linkscope::record_items("cprinter.emit.nodes", nodes.len() as u64);
+    }
     let mut i = 0;
     let mut last_dowhile_stmt_range: Option<(u32, u32)> = None;
     while i < nodes.len() {
@@ -9579,6 +9831,7 @@ fn has_later_sibling_label(nodes: &[HirNode], start: usize) -> bool {
 }
 
 fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
+    let _span = cprinter_detail_phase("cprinter.emit.inline-node");
     match node {
         HirNode::Statement(insn) => inline_statement_text(insn, ctx),
         HirNode::Return(Some(sv)) => {
@@ -9980,6 +10233,7 @@ fn collect_post_dowhile_recovered_return_svs(
 /// from the perspective of non-return uses), so that the merged form doesn't
 /// lose a named variable that other code references.
 fn try_merge_assign_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<String> {
+    let _span = cprinter_detail_phase("cprinter.emit.merge-assign-return");
     if ctx.parent_returns_void {
         return None;
     }
@@ -10007,6 +10261,7 @@ struct CallReturnMergeEmission {
 }
 
 fn try_merge_call_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<CallReturnMergeEmission> {
+    let _span = cprinter_detail_phase("cprinter.emit.merge-call-return");
     let plan = plan_call_return_merge(nodes, ctx.emit_stmt, ctx)?;
     let insn = call_insn_for_merge(&nodes[0])?;
     Some(CallReturnMergeEmission {
@@ -11879,7 +12134,38 @@ fn call_targets_void_runtime_symbol(insn: &IrInsn, ctx: &PrintCtx) -> bool {
         .any(|name| sym == name || sym.ends_with(name))
 }
 
+fn emit_node_phase(node: &HirNode) -> Option<linkscope::Span> {
+    match node {
+        HirNode::Block(_) => cprinter_detail_phase("cprinter.emit.node.block"),
+        HirNode::Statement(_) => cprinter_detail_phase("cprinter.emit.node.statement"),
+        HirNode::If { .. } => cprinter_detail_phase("cprinter.emit.node.if"),
+        HirNode::IfCmp { .. } => cprinter_detail_phase("cprinter.emit.node.ifcmp"),
+        HirNode::While { .. } => cprinter_detail_phase("cprinter.emit.node.while"),
+        HirNode::DoWhile { .. } => cprinter_detail_phase("cprinter.emit.node.dowhile"),
+        HirNode::For { .. } => cprinter_detail_phase("cprinter.emit.node.for"),
+        HirNode::Switch { .. } => cprinter_detail_phase("cprinter.emit.node.switch"),
+        HirNode::Return(_) => cprinter_detail_phase("cprinter.emit.node.return"),
+        HirNode::Goto(_) => cprinter_detail_phase("cprinter.emit.node.goto"),
+        HirNode::Label(_) => cprinter_detail_phase("cprinter.emit.node.label"),
+        HirNode::Ternary { .. } => cprinter_detail_phase("cprinter.emit.node.ternary"),
+        HirNode::GuardedTernary { .. } => {
+            cprinter_detail_phase("cprinter.emit.node.guarded-ternary")
+        }
+        HirNode::CselTernary { .. } => cprinter_detail_phase("cprinter.emit.node.csel-ternary"),
+        HirNode::GuardedIf { .. } => cprinter_detail_phase("cprinter.emit.node.guarded-if"),
+        HirNode::TailCall { .. } => cprinter_detail_phase("cprinter.emit.node.tail-call"),
+        HirNode::Continue => cprinter_detail_phase("cprinter.emit.node.continue"),
+        HirNode::Break => cprinter_detail_phase("cprinter.emit.node.break"),
+        HirNode::ObjcBlock { .. } => cprinter_detail_phase("cprinter.emit.node.objc-block"),
+        HirNode::TryCatch { .. } => cprinter_detail_phase("cprinter.emit.node.try-catch"),
+        HirNode::TryFinally { .. } => cprinter_detail_phase("cprinter.emit.node.try-finally"),
+        HirNode::Asm { .. } => cprinter_detail_phase("cprinter.emit.node.asm"),
+        HirNode::Commented { .. } => cprinter_detail_phase("cprinter.emit.node.commented"),
+    }
+}
+
 fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
+    let _span = emit_node_phase(node);
     trace_flow(format_args!(
         "emit-node depth={depth} stmt={} kind={}",
         ctx.emit_stmt,
@@ -13031,9 +13317,14 @@ fn stmt_output_sv(ctx: &PrintCtx, stmt_idx: u32) -> Option<SsaVarnode> {
 }
 
 fn stmt_input_sv(ctx: &PrintCtx, stmt_idx: u32, raw_idx: usize) -> Option<SsaVarnode> {
-    ctx.stmt_input_slots
-        .get(&stmt_idx)
-        .and_then(|inputs| inputs.get(&raw_idx).copied())
+    ctx.stmt_input_slot_lookup
+        .get(&(stmt_idx, raw_idx))
+        .copied()
+        .or_else(|| {
+            ctx.stmt_input_slots
+                .get(&stmt_idx)
+                .and_then(|inputs| inputs.get(&raw_idx).copied())
+        })
         .or_else(|| {
             ctx.stmt_inputs
                 .get(&stmt_idx)
@@ -13504,6 +13795,7 @@ fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
 }
 
 fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
+    let _span = cprinter_detail_phase("cprinter.emit.inline-statement");
     let idx = ctx.emit_stmt;
     if c_printer_trace_enabled() {
         eprintln!(
@@ -13857,6 +14149,7 @@ fn hoisted_decl_for_stmt(idx: u32, sv: &SsaVarnode, ctx: &PrintCtx) -> Option<(S
 }
 
 fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
+    let _span = cprinter_detail_phase("cprinter.emit.statement");
     let idx = ctx.emit_stmt;
     ctx.emit_stmt += 1;
     trace_flow(format_args!(
@@ -14765,6 +15058,7 @@ fn should_break_before(
 // ---------------------------------------------------------------------------
 
 fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    let _span = cprinter_detail_phase("cprinter.emit.expr");
     trace_full(format_args!(
         "emit-expr-enter stmt={stmt_idx} addr=0x{:x} op={:?} inputs={:?} output={:?}",
         insn.addr, insn.op, insn.inputs, insn.output
@@ -14783,6 +15077,7 @@ fn emit_expr_with_prec(
     parent: ParentCtx,
     ctx: &mut PrintCtx,
 ) -> String {
+    let _span = cprinter_detail_phase("cprinter.emit.operand");
     trace_full(format_args!(
         "emit-expr-prec-enter stmt={stmt_idx} addr=0x{:x} op={:?} parent={parent:?} inputs={:?} output={:?}",
         insn.addr, insn.op, insn.inputs, insn.output
@@ -16341,6 +16636,7 @@ fn emit_operand_resolved(
     stmt_idx: u32,
     ctx: &mut PrintCtx,
 ) -> String {
+    let _span = cprinter_detail_phase("cprinter.emit.operand-resolved");
     trace_full(format_args!(
         "emit-operand-resolved-enter stmt={stmt_idx} raw_idx={raw_idx} vn={vn:?}"
     ));
@@ -16461,20 +16757,29 @@ fn emit_operand_with_prec(
         return rendered;
     }
 
-    let sv =
-        input_or_latest_sv_for_operand(vn, Some(raw_idx), stmt_idx, ctx).unwrap_or(SsaVarnode {
-            base: *vn,
-            version: 0,
-        });
+    let sv = {
+        let _span = cprinter_detail_phase("cprinter.emit.operand.input-or-latest");
+        input_or_latest_sv_for_operand(vn, Some(raw_idx), stmt_idx, ctx)
+    }
+    .unwrap_or(SsaVarnode {
+        base: *vn,
+        version: 0,
+    });
 
-    if let Some(addr) = try_stack_frame_address_expr(vn, Some(raw_idx), stmt_idx, ctx) {
+    if let Some(addr) = {
+        let _span = cprinter_detail_phase("cprinter.emit.operand.stack-frame-address");
+        try_stack_frame_address_expr(vn, Some(raw_idx), stmt_idx, ctx)
+    } {
         trace_full(format_args!(
             "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=stack-frame-address rendered={addr:?}"
         ));
         return addr;
     }
 
-    if let Some(value) = try_readonly_scalar_value_for_sv(&sv, ctx) {
+    if let Some(value) = {
+        let _span = cprinter_detail_phase("cprinter.emit.operand.readonly-scalar");
+        try_readonly_scalar_value_for_sv(&sv, ctx)
+    } {
         if c_printer_name_trace_enabled() {
             let text = format!(
                 "emit-operand stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} decision=readonly value={value}"
@@ -16525,9 +16830,10 @@ fn emit_operand_with_prec(
             ));
             return name;
         }
-        if let Some(materialized_sv) =
+        if let Some(materialized_sv) = {
+            let _span = cprinter_detail_phase("cprinter.emit.operand.materialized-source-check");
             latest_materialized_value_for_same_source(&sv, &def_insn, def_stmt, stmt_idx, ctx)
-        {
+        } {
             let name = ctx.name_of(&materialized_sv);
             trace_sequence(format_args!(
                 "emit-operand-materialized-source stmt={stmt_idx} raw_idx={raw_idx} sv={sv:?} def_stmt={def_stmt} op={:?} materialized_sv={materialized_sv:?} name={name:?}",
@@ -16548,11 +16854,13 @@ fn emit_operand_with_prec(
             ));
             return name;
         }
-        if !ctx.foldable_stmts.contains(&def_stmt)
-            && copy_like_snapshot_source_redefined_before_consumer(
+        let snapshot_source_redefined = {
+            let _span = cprinter_detail_phase("cprinter.emit.operand.snapshot-check");
+            copy_like_snapshot_source_redefined_before_consumer(
                 &sv, &def_insn, def_stmt, stmt_idx, ctx,
             )
-        {
+        };
+        if !ctx.foldable_stmts.contains(&def_stmt) && snapshot_source_redefined {
             if c_printer_trace_enabled() {
                 eprintln!(
                     "[unlace-output] operand stmt={stmt_idx} sv={sv:?} def_stmt={def_stmt} decision=snapshot-name"
@@ -16574,9 +16882,13 @@ fn emit_operand_with_prec(
             ));
             return name;
         }
-        if expression_inputs_aliased_redefined_before_consumer(
-            &sv, &def_insn, def_stmt, stmt_idx, ctx,
-        ) {
+        let alias_redefined_before_consumer = {
+            let _span = cprinter_detail_phase("cprinter.emit.operand.alias-redef-check");
+            expression_inputs_aliased_redefined_before_consumer(
+                &sv, &def_insn, def_stmt, stmt_idx, ctx,
+            )
+        };
+        if alias_redefined_before_consumer {
             let name = ctx.name_of(&sv);
             if c_printer_name_trace_enabled() {
                 let text = format!(
@@ -16635,7 +16947,10 @@ fn emit_operand_with_prec(
             ));
             return name;
         }
-        let rendered = emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
+        let rendered = {
+            let _span = cprinter_detail_phase("cprinter.emit.operand.inline-def");
+            emit_expr_with_prec(&def_insn, def_stmt, parent, ctx)
+        };
         ctx.resolving_exprs.remove(&sv);
         if c_printer_name_trace_enabled() {
             let text = format!(
@@ -16653,9 +16968,14 @@ fn emit_operand_with_prec(
         return rendered;
     }
 
-    if let Some(def_stmt) = defining_stmt_for_sv(&sv, ctx)
-        && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
-        && stable_load_expr_is_inlineable(&def_insn, def_stmt, ctx)
+    if let Some(def_stmt) = {
+        let _span = cprinter_detail_phase("cprinter.emit.operand.defining-stmt");
+        defining_stmt_for_sv(&sv, ctx)
+    } && let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned()
+        && {
+            let _span = cprinter_detail_phase("cprinter.emit.operand.stable-load-check");
+            stable_load_expr_is_inlineable(&def_insn, def_stmt, ctx)
+        }
     {
         if !ctx.resolving_exprs.insert(sv) {
             let name = ctx.name_of(&sv);
@@ -16674,7 +16994,10 @@ fn emit_operand_with_prec(
             ));
             return name;
         }
-        let rendered = emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
+        let rendered = {
+            let _span = cprinter_detail_phase("cprinter.emit.operand.inline-stable-load");
+            emit_expr_with_prec(&def_insn, def_stmt, parent, ctx)
+        };
         ctx.resolving_exprs.remove(&sv);
         if c_printer_name_trace_enabled() {
             let text = format!(
@@ -16867,9 +17190,13 @@ fn consumer_uses_sv_as_indirect_call_target(
     {
         return false;
     }
-    ctx.stmt_input_slots
-        .get(&consumer_stmt)
-        .and_then(|slots| slots.get(&0))
+    ctx.stmt_input_slot_lookup
+        .get(&(consumer_stmt, 0))
+        .or_else(|| {
+            ctx.stmt_input_slots
+                .get(&consumer_stmt)
+                .and_then(|slots| slots.get(&0))
+        })
         .is_some_and(|target| target == sv)
         || ctx
             .stmt_inputs

@@ -19,6 +19,40 @@ use crate::licm::find_natural_loops;
 use crate::pass::{Pass, PassError};
 
 const MAX_INNER_ITERS: usize = 3;
+const DEFAULT_IV_OPT_MAX_NODES: usize = 20_000;
+
+pub(crate) fn iv_opt_node_limit() -> usize {
+    iv_opt_node_limit_from(std::env::var("UNLACE_IV_OPT_MAX_NODES").ok().as_deref())
+}
+
+pub(crate) fn iv_opt_node_limit_from(value: Option<&str>) -> usize {
+    value
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_IV_OPT_MAX_NODES)
+}
+
+pub(crate) fn iv_opt_node_count(func: &SsaFunction) -> usize {
+    let insns: usize = func
+        .function
+        .blocks
+        .values()
+        .map(|block| block.insns.len())
+        .sum();
+    let phis: usize = func.phi_map.values().map(Vec::len).sum();
+    insns.saturating_add(phis)
+}
+
+pub(crate) fn iv_opt_too_large(func: &SsaFunction) -> bool {
+    let limit = iv_opt_node_limit();
+    let nodes = iv_opt_node_count(func);
+    linkscope::record_items("pass.iv-opt.nodes", nodes as u64);
+    linkscope::record_items("pass.iv-opt.limit", limit as u64);
+    let too_large = limit > 0 && nodes > limit;
+    if too_large {
+        linkscope::record_items("pass.iv-opt.large-skip", 1);
+    }
+    too_large
+}
 
 #[derive(Default)]
 pub struct IvElimPass;
@@ -33,6 +67,9 @@ impl Pass for IvElimPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        if iv_opt_too_large(func) {
+            return Ok(false);
+        }
         let mut any = false;
         for _ in 0..MAX_INNER_ITERS {
             let loops = find_natural_loops(func);
@@ -396,6 +433,14 @@ mod tests {
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
+
+    #[test]
+    fn iv_opt_limit_default_and_override() {
+        assert_eq!(iv_opt_node_limit_from(None), 20_000);
+        assert_eq!(iv_opt_node_limit_from(Some("42")), 42);
+        assert_eq!(iv_opt_node_limit_from(Some("0")), 0);
+        assert_eq!(iv_opt_node_limit_from(Some("bad")), 20_000);
+    }
 
     /// 4-block loop:
     ///   B0 (preheader): i_init = const(0); branch B1

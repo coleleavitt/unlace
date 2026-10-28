@@ -30,6 +30,9 @@ impl Pass for StrengthReducePass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        if crate::iv_elim::iv_opt_too_large(func) {
+            return Ok(false);
+        }
         let mut any = false;
         for _ in 0..MAX_INNER_ITERS {
             let loops = find_natural_loops(func);

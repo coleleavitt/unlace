@@ -23,34 +23,10 @@ impl Pass for AlgebraicSimplifyPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let func_name = func.function.name.clone();
-        let block_count = func.function.blocks.len();
-        let instruction_count: usize = func
-            .function
-            .blocks
-            .values()
-            .map(|block| block.insns.len())
-            .sum();
-
-        tracing::debug!(
-            target: "unlace_passes",
-            function = %func_name,
-            blocks = block_count,
-            instructions = instruction_count,
-            "algebraic_simplify: starting"
-        );
-
         let defs = DefIndex::build(func);
         let rewrites = collect_rewrites(func, &defs);
         let simplified = rewrites.len();
         apply_rewrites(func, rewrites);
-
-        tracing::debug!(
-            target: "unlace_passes",
-            function = %func_name,
-            simplified,
-            "algebraic_simplify: done"
-        );
 
         Ok(simplified != 0)
     }

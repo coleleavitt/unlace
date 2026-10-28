@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::c_printer::postprocess::{
-    brace_delta, contains_identifier, output_has_cond_family_temp, prune_trace_enabled,
+    brace_delta, is_ident_byte, output_has_cond_family_temp, prune_trace_enabled,
 };
 use crate::c_printer::trace_text_matches_filter;
 
@@ -57,20 +57,19 @@ pub(in crate::c_printer) fn prune_unused_plain_local_decls_once(output: &str, pa
         }
         let body_end = scan.saturating_sub(1);
 
-        for line_idx in body_start..body_end {
+        let block_decl_names = block_shadowing_decl_names(&lines, body_start, body_end);
+        let mut used_after: BTreeSet<String> = BTreeSet::new();
+        for line_idx in (body_start..body_end).rev() {
             let Some(name) = parse_plain_local_decl_name(lines[line_idx]) else {
+                collect_candidate_identifiers(
+                    lines[line_idx],
+                    &block_decl_names,
+                    None,
+                    &mut used_after,
+                );
                 continue;
             };
-            let mut used_later = false;
-            for later in &lines[(line_idx + 1)..body_end] {
-                if parse_shadowing_local_decl_name(later) == Some(name) {
-                    break;
-                }
-                if contains_identifier(later, name) {
-                    used_later = true;
-                    break;
-                }
-            }
+            let used_later = used_after.contains(name);
             if !used_later {
                 remove.insert(line_idx);
             }
@@ -86,6 +85,13 @@ pub(in crate::c_printer) fn prune_unused_plain_local_decls_once(output: &str, pa
                     eprintln!("[unlace-output] {text}");
                 }
             }
+            used_after.remove(name);
+            collect_candidate_identifiers(
+                lines[line_idx],
+                &block_decl_names,
+                Some(name),
+                &mut used_after,
+            );
         }
     }
 
@@ -102,4 +108,46 @@ pub(in crate::c_printer) fn prune_unused_plain_local_decls_once(output: &str, pa
         pruned.push('\n');
     }
     pruned
+}
+
+fn block_shadowing_decl_names(
+    lines: &[&str],
+    body_start: usize,
+    body_end: usize,
+) -> BTreeSet<String> {
+    lines[body_start..body_end]
+        .iter()
+        .filter_map(|line| parse_shadowing_local_decl_name(line).map(str::to_string))
+        .collect()
+}
+
+fn collect_candidate_identifiers(
+    line: &str,
+    candidates: &BTreeSet<String>,
+    skip: Option<&str>,
+    out: &mut BTreeSet<String>,
+) {
+    if candidates.is_empty() {
+        return;
+    }
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if !is_ident_byte(bytes[i]) {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        i += 1;
+        while i < bytes.len() && is_ident_byte(bytes[i]) {
+            i += 1;
+        }
+        let ident = &line[start..i];
+        if skip == Some(ident) {
+            continue;
+        }
+        if candidates.contains(ident) {
+            out.insert(ident.to_string());
+        }
+    }
 }

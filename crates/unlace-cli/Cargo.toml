@@ -20,9 +20,6 @@ unlace-idapython = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
 clap = { workspace = true }
 anyhow = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-flame = "0.2"
 smallvec = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -32,6 +29,8 @@ regex = "1"
 memmap2 = "0.9"
 sha2 = { workspace = true }
 iced-x86 = { workspace = true }
+indicatif = "0.17.11"
+linkscope = { path = "../../../linkscope", features = ["json"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

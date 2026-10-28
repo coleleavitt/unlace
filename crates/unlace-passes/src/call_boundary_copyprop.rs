@@ -98,7 +98,12 @@ impl Pass for CallBoundaryCopyPropPass {
 ///   a STORE wrote `pre_call_value` to that same stack slot;
 /// - the pre-call value's base is a *register* (callee-saved candidate).
 fn collect_restore_pairs(func: &SsaFunction) -> Vec<(SsaVarnode, SsaVarnode)> {
+    let def_index = {
+        let _span = linkscope::phase("pass.call-boundary.def-index");
+        build_output_def_index(func)
+    };
     let mut pairs = Vec::new();
+    let mut stack_offset_queries = 0u64;
 
     for (&bid, block) in &func.function.blocks {
         // Map: stack_offset -> (insn_idx, ssa_value_stored)
@@ -109,8 +114,9 @@ fn collect_restore_pairs(func: &SsaFunction) -> Vec<(SsaVarnode, SsaVarnode)> {
             match insn.op {
                 IrOp::Store => {
                     let (val_slot, addr_raw) = store_addr_and_val(insn);
+                    stack_offset_queries += u64::from(addr_raw.is_some());
                     if let (Some(addr), Some(val_slot)) = (addr_raw, val_slot)
-                        && let Some(off) = stack_offset_of(&addr, func)
+                        && let Some(off) = stack_offset_of(&addr, func, &def_index)
                         && let Some(&val_sv) = func.var_map.get(&(bid, idx, val_slot))
                         && val_sv.base.space == SpaceId::Register
                     {
@@ -132,8 +138,9 @@ fn collect_restore_pairs(func: &SsaFunction) -> Vec<(SsaVarnode, SsaVarnode)> {
                         continue;
                     }
                     let addr_raw = load_addr(insn);
+                    stack_offset_queries += u64::from(addr_raw.is_some());
                     let Some(addr) = addr_raw else { continue };
-                    let Some(off) = stack_offset_of(&addr, func) else {
+                    let Some(off) = stack_offset_of(&addr, func, &def_index) else {
                         continue;
                     };
                     if let Some(&pre_sv) = saves.get(&off)
@@ -147,7 +154,23 @@ fn collect_restore_pairs(func: &SsaFunction) -> Vec<(SsaVarnode, SsaVarnode)> {
         }
     }
 
+    linkscope::record_items(
+        "pass.call-boundary.stack-offset-queries",
+        stack_offset_queries,
+    );
+    linkscope::record_items("pass.call-boundary.restore-pairs", pairs.len() as u64);
     pairs
+}
+
+fn build_output_def_index(func: &SsaFunction) -> BTreeMap<Varnode, Vec<(BlockId, usize)>> {
+    let mut defs: BTreeMap<Varnode, Vec<(BlockId, usize)>> = BTreeMap::new();
+    for (&(bid, idx, ref slot), sv) in &func.var_map {
+        if matches!(slot, VarnodeSlot::Output) {
+            defs.entry(sv.base).or_default().push((bid, idx));
+        }
+    }
+    linkscope::record_items("pass.call-boundary.def-index", defs.len() as u64);
+    defs
 }
 
 fn store_addr_and_val(insn: &unlace_ir::IrInsn) -> (Option<VarnodeSlot>, Option<Varnode>) {
@@ -177,11 +200,20 @@ fn is_rsp_or_rbp(v: &Varnode) -> bool {
     v.space == SpaceId::Register && (v.offset == RSP_OFFSET || v.offset == RBP_OFFSET)
 }
 
-fn stack_offset_of(addr: &Varnode, func: &SsaFunction) -> Option<i64> {
-    stack_offset_recursive(addr, func, 8)
+fn stack_offset_of(
+    addr: &Varnode,
+    func: &SsaFunction,
+    def_index: &BTreeMap<Varnode, Vec<(BlockId, usize)>>,
+) -> Option<i64> {
+    stack_offset_recursive(addr, func, def_index, 8)
 }
 
-fn stack_offset_recursive(addr: &Varnode, func: &SsaFunction, depth: u32) -> Option<i64> {
+fn stack_offset_recursive(
+    addr: &Varnode,
+    func: &SsaFunction,
+    def_index: &BTreeMap<Varnode, Vec<(BlockId, usize)>>,
+    depth: u32,
+) -> Option<i64> {
     if depth == 0 {
         return None;
     }
@@ -192,10 +224,7 @@ fn stack_offset_recursive(addr: &Varnode, func: &SsaFunction, depth: u32) -> Opt
         return None;
     }
 
-    for (&(bid, idx, ref slot), sv) in &func.var_map {
-        if !matches!(slot, VarnodeSlot::Output) || sv.base != *addr {
-            continue;
-        }
+    for &(bid, idx) in def_index.get(addr).into_iter().flatten() {
         let block = func.function.blocks.get(&bid)?;
         let def_insn = block.insns.get(idx)?;
         match def_insn.op {
@@ -219,7 +248,7 @@ fn stack_offset_recursive(addr: &Varnode, func: &SsaFunction, depth: u32) -> Opt
                 if is_rsp_or_rbp(src) {
                     return Some(0);
                 }
-                return stack_offset_recursive(src, func, depth - 1);
+                return stack_offset_recursive(src, func, def_index, depth - 1);
             }
             _ => {}
         }

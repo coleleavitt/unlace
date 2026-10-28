@@ -1,4 +1,5 @@
 use smallvec::smallvec;
+use std::time::{Duration, Instant};
 
 use unlace_ir::ssa::build_ssa;
 use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
@@ -59,6 +60,83 @@ fn test_structure_linear() {
     assert!(
         !has_control,
         "linear function should have no control flow nodes"
+    );
+}
+
+#[test]
+fn test_structure_until_past_deadline_times_out() {
+    let mut func = Function::new("deadline_timeout", BlockId(0), 0x1800);
+    let mut bb0 = BasicBlock::new(BlockId(0));
+    bb0.insns.push(ctrl_insn(IrOp::Return, 0x1800));
+    func.insert_block(bb0);
+
+    let ssa = build_ssa(func);
+    let err = structure_until(&ssa, Instant::now() - Duration::from_millis(1))
+        .expect_err("past deadline should fail");
+    assert!(
+        matches!(err, StructureError::Timeout { .. }),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn test_structure_phi_limit_default_and_override() {
+    assert_eq!(structure_phi_limit_from(None), 12288);
+    assert_eq!(structure_phi_limit_from(Some("2048")), 2048);
+    assert_eq!(structure_phi_limit_from(Some("0")), 0);
+    assert_eq!(structure_phi_limit_from(Some("not-a-number")), 12288);
+}
+
+#[test]
+fn test_unstructured_fallback_budget_predicate() {
+    assert!(should_emit_full_unstructured_fallback(
+        10, 20, false, 10, 20
+    ));
+    assert!(!should_emit_full_unstructured_fallback(
+        11, 20, false, 10, 20
+    ));
+    assert!(!should_emit_full_unstructured_fallback(
+        10, 21, false, 10, 20
+    ));
+    assert!(should_emit_full_unstructured_fallback(
+        1000, 1000, true, 10, 20
+    ));
+    assert!(should_emit_full_unstructured_fallback(
+        1000, 20, false, 0, 20
+    ));
+}
+
+#[test]
+fn test_unstructured_fallback_emits_label_and_comment() {
+    let mut func = Function::new("fallback", BlockId(0), 0x1900);
+    let r0 = Varnode::reg(0, 4);
+    let mut bb0 = BasicBlock::new(BlockId(0));
+    bb0.insns.push(IrInsn::with_output(
+        IrOp::Copy,
+        r0,
+        smallvec![Varnode::constant(1, 4)],
+        0x1900,
+    ));
+    bb0.insns.push(ctrl_insn(IrOp::Return, 0x1904));
+    func.insert_block(bb0);
+
+    let ssa = build_ssa(func);
+    let hir = structure_unstructured_fallback(&ssa, "test reason");
+    assert!(matches!(
+        hir.body.first(),
+        Some(HirNode::Commented { pre, .. })
+            if pre.iter().any(|line| line.contains("unstructured fallback"))
+                && pre.iter().any(|line| line == "test reason")
+    ));
+    assert!(
+        hir.body
+            .iter()
+            .any(|node| matches!(node, HirNode::Label(_)))
+    );
+    assert!(
+        hir.body
+            .iter()
+            .any(|node| matches!(node, HirNode::Return(_)))
     );
 }
 

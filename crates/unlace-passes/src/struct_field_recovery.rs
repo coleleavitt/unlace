@@ -22,7 +22,7 @@
 //!     [`InferredStruct`]; each unique `offset` becomes one [`StructField`]
 //!     with `size = max access width observed at that offset`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::types::{InferredStruct, StructField};
@@ -30,6 +30,8 @@ use unlace_ir::{BlockId, IrOp, SpaceId};
 
 use crate::iv_elim::detect_basic_ivs;
 use crate::licm::find_natural_loops;
+
+const MAX_ADDR_WALK_DEPTH: u32 = 64;
 
 /// Public entrypoint. Returns one [`InferredStruct`] per `(base_sv, stride)`
 /// group of array-of-struct accesses found in any loop.
@@ -160,7 +162,7 @@ pub fn decompose_address(
     sv: SsaVarnode,
     iv_set: &std::collections::BTreeSet<SsaVarnode>,
 ) -> Option<AddrDecomp> {
-    let (base_sv, stride, iv_sv, offset) = walk_addr(func, sv, iv_set, 0, 0)?;
+    let (base_sv, stride, iv_sv, offset) = walk_addr(func, sv, iv_set, 0, 0, 0, BTreeSet::new())?;
     if stride == 0 {
         return None;
     }
@@ -181,7 +183,12 @@ fn walk_addr(
     iv_set: &std::collections::BTreeSet<SsaVarnode>,
     acc_stride: u64,
     acc_offset: u64,
+    depth: u32,
+    mut visited: BTreeSet<SsaVarnode>,
 ) -> Option<(SsaVarnode, u64, SsaVarnode, u64)> {
+    if depth > MAX_ADDR_WALK_DEPTH || !visited.insert(sv) {
+        return None;
+    }
     let def = lookup_def(func, sv)?;
     match def.op {
         IrOp::IntAdd => {
@@ -195,21 +202,46 @@ fn walk_addr(
 
             // Const + SSA pattern → fold const into offset, recurse on SSA.
             if let (Some(c), Some(other)) = (lhs_const, rhs_sv) {
-                return walk_addr(func, *other, iv_set, acc_stride, acc_offset.wrapping_add(c));
+                return walk_addr(
+                    func,
+                    *other,
+                    iv_set,
+                    acc_stride,
+                    acc_offset.wrapping_add(c),
+                    depth + 1,
+                    visited,
+                );
             }
             if let (Some(c), Some(other)) = (rhs_const, lhs_sv) {
-                return walk_addr(func, *other, iv_set, acc_stride, acc_offset.wrapping_add(c));
+                return walk_addr(
+                    func,
+                    *other,
+                    iv_set,
+                    acc_stride,
+                    acc_offset.wrapping_add(c),
+                    depth + 1,
+                    visited,
+                );
             }
             // SSA + SSA: try both sides as the IV-bearing branch.
             if let (Some(a), Some(b)) = (lhs_sv, rhs_sv) {
-                if let Some(left) = walk_addr(func, *a, iv_set, acc_stride, acc_offset) {
+                if let Some(left) = walk_addr(
+                    func,
+                    *a,
+                    iv_set,
+                    acc_stride,
+                    acc_offset,
+                    depth + 1,
+                    visited.clone(),
+                ) {
                     // The other side is the surviving base.
                     if left.1 != 0 {
                         // left already supplied a stride; the residual base is whatever it returned.
                         return Some((*b, left.1, left.2, left.3));
                     }
                 }
-                if let Some(right) = walk_addr(func, *b, iv_set, acc_stride, acc_offset)
+                if let Some(right) =
+                    walk_addr(func, *b, iv_set, acc_stride, acc_offset, depth + 1, visited)
                     && right.1 != 0
                 {
                     return Some((*a, right.1, right.2, right.3));
@@ -252,7 +284,15 @@ fn walk_addr(
             let in_sv = func
                 .var_map
                 .get(&(def.bid, def.idx, VarnodeSlot::Input(0)))?;
-            walk_addr(func, *in_sv, iv_set, acc_stride, acc_offset)
+            walk_addr(
+                func,
+                *in_sv,
+                iv_set,
+                acc_stride,
+                acc_offset,
+                depth + 1,
+                visited,
+            )
         }
         _ => {
             // Atom: not an IV-bearing expression; surface as the base. No
@@ -328,6 +368,34 @@ mod tests {
             function.insert_block(b);
         }
         build_ssa(function)
+    }
+
+    #[test]
+    fn t213_cyclic_address_chain_is_rejected() {
+        let addr = uniq(0x10, 8);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![addr, con(8, 8)],
+            0x1000,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+
+        let mut func = func_with_blocks(vec![bb0]);
+        let addr_sv = *func
+            .var_map
+            .get(&(BlockId(0), 0, VarnodeSlot::Output))
+            .expect("address output must have an SSA varnode");
+        func.var_map
+            .insert((BlockId(0), 0, VarnodeSlot::Input(0)), addr_sv);
+
+        let iv_set = std::collections::BTreeSet::new();
+        assert!(
+            decompose_address(&func, addr_sv, &iv_set).is_none(),
+            "cyclic address expressions must terminate without recovering a layout"
+        );
     }
 
     /// Loop computing `*(base + 16*i + 0) = 1` and `*(base + 16*i + 8) = 2`

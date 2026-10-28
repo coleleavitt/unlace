@@ -14,6 +14,7 @@ pub mod cache;
 pub mod identify_packer;
 pub mod lsp;
 pub mod pipeline;
+pub mod profiling;
 pub mod project;
 pub mod quality;
 

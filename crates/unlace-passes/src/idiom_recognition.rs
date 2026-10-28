@@ -42,6 +42,7 @@
 
 use std::collections::BTreeMap;
 
+use linkscope::TraceField;
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
@@ -101,10 +102,13 @@ impl Pass for IdiomRecognitionPass {
         loop {
             iter += 1;
             if iter > MAX_INNER {
-                tracing::error!(
-                    func = %func_name,
-                    iters = MAX_INNER,
-                    "idiom_recognition did not converge"
+                linkscope::event_fields(
+                    "pass.inner-fixedpoint.error",
+                    [
+                        TraceField::text("pass", self.name()),
+                        TraceField::text("function", func_name.clone()),
+                        TraceField::count("iters", MAX_INNER as u64),
+                    ],
                 );
                 return Err(PassError::InvariantViolation {
                     message: format!(
@@ -127,7 +131,14 @@ impl Pass for IdiomRecognitionPass {
             }
 
             if changed {
-                tracing::trace!(func = %func_name, iter, "idiom_recognition iter");
+                linkscope::event_fields(
+                    "pass.inner-fixedpoint.changed",
+                    [
+                        TraceField::text("pass", self.name()),
+                        TraceField::text("function", func_name.clone()),
+                        TraceField::count("iter", iter as u64),
+                    ],
+                );
             }
             changed_any |= changed;
             if !changed {
@@ -924,14 +935,28 @@ fn try_recognize_sequences(insns: &mut Vec<IrInsn>) -> bool {
             let remove_count = count * 2;
             let addr = insns[i].addr;
             insns.splice(i..i + remove_count, std::iter::once(replacement));
-            tracing::trace!(addr = %format!("0x{:x}", addr), pairs = count, "memcpy sequence collapsed");
+            linkscope::event_fields(
+                "pass.idiom.sequence-collapsed",
+                [
+                    TraceField::text("kind", "memcpy"),
+                    TraceField::addr("addr", addr),
+                    TraceField::count("pairs", count as u64),
+                ],
+            );
             changed = true;
             continue;
         }
         if let Some((count, replacement)) = try_memset_sequence(insns, i) {
             let addr = insns[i].addr;
             insns.splice(i..i + count, std::iter::once(replacement));
-            tracing::trace!(addr = %format!("0x{:x}", addr), stores = count, "memset sequence collapsed");
+            linkscope::event_fields(
+                "pass.idiom.sequence-collapsed",
+                [
+                    TraceField::text("kind", "memset"),
+                    TraceField::addr("addr", addr),
+                    TraceField::count("stores", count as u64),
+                ],
+            );
             changed = true;
             continue;
         }

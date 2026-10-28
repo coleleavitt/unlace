@@ -25,95 +25,122 @@ impl Pass for CfgRepairPass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let known_blocks: BTreeSet<_> = func.function.blocks.keys().copied().collect();
+        linkscope::record_items("pass.cfg-repair.blocks", known_blocks.len() as u64);
         let mut changed = false;
 
-        for block in func.function.blocks.values_mut() {
-            let before = block.successors.clone();
-            let mut seen = BTreeSet::new();
-            block
-                .successors
-                .retain(|succ| known_blocks.contains(succ) && seen.insert(*succ));
-            changed |= block.successors != before;
+        {
+            let _span = linkscope::phase("pass.cfg-repair.successors");
+            for block in func.function.blocks.values_mut() {
+                let before = block.successors.clone();
+                let mut seen = BTreeSet::new();
+                block
+                    .successors
+                    .retain(|succ| known_blocks.contains(succ) && seen.insert(*succ));
+                changed |= block.successors != before;
+            }
         }
 
-        rebuild_cfg(func);
-        let pred_map: BTreeMap<_, BTreeSet<_>> = known_blocks
-            .iter()
-            .map(|&bid| (bid, func.cfg.predecessors(bid).into_iter().collect()))
-            .collect();
+        {
+            let _span = linkscope::phase("pass.cfg-repair.rebuild-cfg");
+            rebuild_cfg(func);
+        }
+        let pred_map: BTreeMap<_, BTreeSet<_>> = {
+            let _span = linkscope::phase("pass.cfg-repair.pred-map");
+            known_blocks
+                .iter()
+                .map(|&bid| (bid, func.cfg.predecessors(bid).into_iter().collect()))
+                .collect()
+        };
 
-        func.phi_map.retain(|bid, phis| {
-            if !known_blocks.contains(bid) {
-                changed = true;
-                return false;
-            }
+        {
+            let _span = linkscope::phase("pass.cfg-repair.phis");
+            let mut phi_count = 0u64;
+            func.phi_map.retain(|bid, phis| {
+                phi_count = phi_count.saturating_add(phis.len() as u64);
+                if !known_blocks.contains(bid) {
+                    changed = true;
+                    return false;
+                }
 
-            let Some(preds) = pred_map.get(bid) else {
-                return true;
-            };
-            for phi in phis.iter_mut() {
-                let before = phi.inputs.len();
-                // Successor lists are deduplicated above (a conditional
-                // branch whose arms collapse to one target leaves one edge),
-                // so phi inputs must be deduplicated per predecessor too —
-                // keep the first input for each block, mirroring the edge
-                // that survived.
-                let mut seen_inputs = BTreeSet::new();
-                phi.inputs.retain(|(input_bid, _)| {
-                    known_blocks.contains(input_bid)
-                        && preds.contains(input_bid)
-                        && seen_inputs.insert(*input_bid)
-                });
-                changed |= phi.inputs.len() != before;
-            }
-            let before_phis = phis.len();
-            phis.retain(|phi| !phi.inputs.is_empty());
-            changed |= phis.len() != before_phis;
+                let Some(preds) = pred_map.get(bid) else {
+                    return true;
+                };
+                for phi in phis.iter_mut() {
+                    let before = phi.inputs.len();
+                    // Successor lists are deduplicated above (a conditional
+                    // branch whose arms collapse to one target leaves one edge),
+                    // so phi inputs must be deduplicated per predecessor too —
+                    // keep the first input for each block, mirroring the edge
+                    // that survived.
+                    let mut seen_inputs = BTreeSet::new();
+                    phi.inputs.retain(|(input_bid, _)| {
+                        known_blocks.contains(input_bid)
+                            && preds.contains(input_bid)
+                            && seen_inputs.insert(*input_bid)
+                    });
+                    changed |= phi.inputs.len() != before;
+                }
+                let before_phis = phis.len();
+                phis.retain(|phi| !phi.inputs.is_empty());
+                changed |= phis.len() != before_phis;
 
-            // Complete phis for predecessors gained after SSA construction
-            // (edge redirection/branch folding does not maintain phi inputs).
-            // A version-0 input is the explicit spelling of the historical
-            // "no input for this edge" state: undefined/live-in along that
-            // path. Appended in ascending block order for determinism.
-            for phi in phis.iter_mut() {
-                let have: BTreeSet<_> = phi.inputs.iter().map(|(bid, _)| *bid).collect();
-                for &pred in preds {
-                    if !have.contains(&pred) {
-                        phi.inputs.push((
-                            pred,
-                            unlace_ir::ssa::SsaVarnode {
-                                base: phi.output.base,
-                                version: 0,
-                            },
-                        ));
-                        changed = true;
+                // Complete phis for predecessors gained after SSA construction
+                // (edge redirection/branch folding does not maintain phi inputs).
+                // A version-0 input is the explicit spelling of the historical
+                // "no input for this edge" state: undefined/live-in along that
+                // path. Appended in ascending block order for determinism.
+                for phi in phis.iter_mut() {
+                    let have: BTreeSet<_> = phi.inputs.iter().map(|(bid, _)| *bid).collect();
+                    for &pred in preds {
+                        if !have.contains(&pred) {
+                            phi.inputs.push((
+                                pred,
+                                unlace_ir::ssa::SsaVarnode {
+                                    base: phi.output.base,
+                                    version: 0,
+                                },
+                            ));
+                            changed = true;
+                        }
                     }
                 }
-            }
-            true
-        });
-        let before_var_map = func.var_map.len();
-        func.var_map.retain(|(bid, insn_idx, slot), _| {
-            let Some(block) = func.function.blocks.get(bid) else {
-                return false;
-            };
-            let Some(insn) = block.insns.get(*insn_idx) else {
-                return false;
-            };
-            match slot {
-                VarnodeSlot::Output => insn.output.is_some(),
-                VarnodeSlot::Input(input_idx) => *input_idx < insn.inputs.len(),
-            }
-        });
-        changed |= func.var_map.len() != before_var_map;
+                true
+            });
+            linkscope::record_items("pass.cfg-repair.phis", phi_count);
+        }
+        {
+            let _span = linkscope::phase("pass.cfg-repair.var-map");
+            let before_var_map = func.var_map.len();
+            func.var_map.retain(|(bid, insn_idx, slot), _| {
+                let Some(block) = func.function.blocks.get(bid) else {
+                    return false;
+                };
+                let Some(insn) = block.insns.get(*insn_idx) else {
+                    return false;
+                };
+                match slot {
+                    VarnodeSlot::Output => insn.output.is_some(),
+                    VarnodeSlot::Input(input_idx) => *input_idx < insn.inputs.len(),
+                }
+            });
+            changed |= func.var_map.len() != before_var_map;
+            linkscope::record_items("pass.cfg-repair.var-map", before_var_map as u64);
+        }
 
         // Drop side-table annotations whose (block, insn) keys no longer
         // resolve — passes that delete instructions/blocks do not rewrite
         // every annotation table, and the structural verifier below rejects
         // dangling references.
-        changed |= unlace_ir::prune_dangling_metadata(func);
+        {
+            let _span = linkscope::phase("pass.cfg-repair.prune-metadata");
+            changed |= unlace_ir::prune_dangling_metadata(func);
+        }
 
-        if let Err(err) = verify_ssa_function_pipeline(func) {
+        let verify_result = {
+            let _span = linkscope::phase("pass.cfg-repair.verify");
+            verify_ssa_function_pipeline(func)
+        };
+        if let Err(err) = verify_result {
             if cfg_repair_trace_enabled() {
                 trace_duplicate_definitions(func);
             }

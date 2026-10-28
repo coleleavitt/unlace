@@ -9,7 +9,9 @@
 //!   the header.
 //! - **Fallback**: any unstructured edge becomes a Goto/Label pair.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 
 use unlace_ir::cfg::EdgeKind;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
@@ -30,6 +32,66 @@ use trace::*;
 pub enum StructureError {
     #[error("entry block {0} not found in function")]
     MissingEntry(BlockId),
+    #[error("structuring complexity limit exceeded: {kind} count {count} > limit {limit}")]
+    ComplexityLimit {
+        kind: &'static str,
+        count: usize,
+        limit: usize,
+    },
+    #[error("structuring timeout exceeded for function '{function}'")]
+    Timeout { function: String },
+}
+
+const DEFAULT_STRUCT_MAX_PHIS: usize = 12288;
+const DEFAULT_UNSTRUCTURED_FALLBACK_MAX_BLOCKS: usize = 256;
+const DEFAULT_UNSTRUCTURED_FALLBACK_MAX_INSNS: usize = 4096;
+
+fn structure_phi_limit() -> usize {
+    structure_phi_limit_from(std::env::var("UNLACE_STRUCT_MAX_PHIS").ok().as_deref())
+}
+
+fn structure_phi_limit_from(value: Option<&str>) -> usize {
+    value
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_STRUCT_MAX_PHIS)
+}
+
+fn unstructured_fallback_full_enabled() -> bool {
+    std::env::var("UNLACE_STRUCT_FULL_FALLBACK")
+        .ok()
+        .is_some_and(|value| {
+            let value = value.trim().to_ascii_lowercase();
+            !(value.is_empty()
+                || value == "0"
+                || value == "false"
+                || value == "off"
+                || value == "no")
+        })
+}
+
+fn unstructured_fallback_block_limit() -> usize {
+    std::env::var("UNLACE_STRUCT_FALLBACK_MAX_BLOCKS")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_UNSTRUCTURED_FALLBACK_MAX_BLOCKS)
+}
+
+fn unstructured_fallback_insn_limit() -> usize {
+    std::env::var("UNLACE_STRUCT_FALLBACK_MAX_INSNS")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_UNSTRUCTURED_FALLBACK_MAX_INSNS)
+}
+
+fn should_emit_full_unstructured_fallback(
+    blocks: usize,
+    insns: usize,
+    force_full: bool,
+    block_limit: usize,
+    insn_limit: usize,
+) -> bool {
+    force_full
+        || ((block_limit == 0 || blocks <= block_limit) && (insn_limit == 0 || insns <= insn_limit))
 }
 
 fn hir_contains_label_or_goto(nodes: &[HirNode]) -> bool {
@@ -172,6 +234,14 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
     structure_with_arch(func, ArchId::X86_64)
 }
 
+/// Like [`structure`] but aborts when `deadline` is exceeded.
+pub fn structure_until(
+    func: &SsaFunction,
+    deadline: Instant,
+) -> Result<HirFunction, StructureError> {
+    structure_with_arch_until(func, ArchId::X86_64, deadline)
+}
+
 /// Like [`structure`] but classifies any indirect branches that did not
 /// structure as a `Switch` using the per-architecture detectors in
 /// [`crate::switch_recovery::classify_indirect_branch`].
@@ -184,29 +254,106 @@ pub fn structure_with_arch(
     func: &SsaFunction,
     arch: ArchId,
 ) -> Result<HirFunction, StructureError> {
-    let mut ctx = StructureCtx::new(func);
+    structure_with_arch_inner(func, arch, None)
+}
+
+/// [`structure_with_arch`] with a hard deadline.
+pub fn structure_with_arch_until(
+    func: &SsaFunction,
+    arch: ArchId,
+    deadline: Instant,
+) -> Result<HirFunction, StructureError> {
+    structure_with_arch_inner(func, arch, Some(deadline))
+}
+
+/// Conservative unstructured fallback for functions whose structured recovery
+/// is intentionally skipped by a complexity guard.
+pub fn structure_unstructured_fallback(
+    func: &SsaFunction,
+    reason: impl Into<String>,
+) -> HirFunction {
+    structure_unstructured_fallback_with_arch(func, ArchId::X86_64, reason)
+}
+
+/// [`structure_unstructured_fallback`] with explicit arch classification.
+pub fn structure_unstructured_fallback_with_arch(
+    func: &SsaFunction,
+    arch: ArchId,
+    reason: impl Into<String>,
+) -> HirFunction {
+    let mut ctx = StructureCtx::new_with_deadline(func, None);
+    let body = {
+        let _span = linkscope::phase("struct.unstructured-fallback");
+        ctx.unstructured_fallback_body(reason.into())
+    };
+    hir_function_from_body(func, arch, body)
+}
+
+fn structure_with_arch_inner(
+    func: &SsaFunction,
+    arch: ArchId,
+    deadline: Option<Instant>,
+) -> Result<HirFunction, StructureError> {
     let entry = func.function.entry;
 
     if !func.function.blocks.contains_key(&entry) && !func.function.blocks.is_empty() {
         return Err(StructureError::MissingEntry(entry));
     }
 
-    let mut body = ctx.structure_region(entry);
+    let phi_count: usize = func.phi_map.values().map(Vec::len).sum();
+    let phi_limit = structure_phi_limit();
+    if phi_limit > 0 && phi_count > phi_limit {
+        return Err(StructureError::ComplexityLimit {
+            kind: "phi nodes",
+            count: phi_count,
+            limit: phi_limit,
+        });
+    }
+
+    let mut ctx = {
+        let _span = linkscope::phase("struct.ctx-new");
+        StructureCtx::new_with_deadline(func, deadline)
+    };
+    let mut body = {
+        let _span = linkscope::phase("struct.structure-region");
+        ctx.structure_region(entry)
+    };
+    if ctx.deadline_exceeded() {
+        return Err(StructureError::Timeout {
+            function: func.function.name.clone(),
+        });
+    }
     trace_hir_top("raw", &body);
-    strip_unused_labels(&mut body);
+    {
+        let _span = linkscope::phase("struct.strip-unused-labels");
+        strip_unused_labels(&mut body);
+    }
     trace_hir_top("strip-labels", &body);
-    recover_for_loops(&mut body);
+    {
+        let _span = linkscope::phase("struct.recover-for-loops");
+        recover_for_loops(&mut body);
+    }
     trace_hir_top("recover-for", &body);
     // t189: AArch64 CMP+Bcc → HirNode::IfCmp fold. Runs after region
     // structuring so the pass sees the `Block([pre_stmts…, If {…}])` shapes
     // that `try_structure_if_else` emits. Mirrors `fold_csel_ternary` (t180)
     // but for branches.
-    fold_aarch64_bcc_if(&mut body);
+    {
+        let _span = linkscope::phase("struct.fold-aarch64-bcc-if");
+        fold_aarch64_bcc_if(&mut body);
+    }
     trace_hir_top("fold-bcc", &body);
 
-    let indirect_branch_kinds = classify_unstructured_indirect_branches(func, arch);
+    Ok(hir_function_from_body(func, arch, body))
+}
 
-    Ok(HirFunction {
+fn hir_function_from_body(func: &SsaFunction, arch: ArchId, body: Vec<HirNode>) -> HirFunction {
+    let indirect_branch_kinds = {
+        let _span = linkscope::phase("struct.classify-indirect-branches");
+        classify_unstructured_indirect_branches(func, arch)
+    };
+
+    HirFunction {
         name: func.function.name.clone(),
         params: func.inferred_params.clone(),
         return_type: func.inferred_return_type,
@@ -274,7 +421,7 @@ pub fn structure_with_arch(
                 Some((insn.addr, ts.clone()))
             })
             .collect(),
-    })
+    }
 }
 
 /// For every block whose terminator is an unstructured `BRANCHIND` (i.e.
@@ -325,6 +472,15 @@ pub fn structure_with_landing_pads(
     structure_with_landing_pads_and_arch(func, landing_pad_addrs, ArchId::X86_64)
 }
 
+/// Like [`structure_with_landing_pads`] but aborts when `deadline` is exceeded.
+pub fn structure_with_landing_pads_until(
+    func: &SsaFunction,
+    landing_pad_addrs: &BTreeSet<u64>,
+    deadline: Instant,
+) -> Result<HirFunction, StructureError> {
+    structure_with_landing_pads_and_arch_until(func, landing_pad_addrs, ArchId::X86_64, deadline)
+}
+
 /// [`structure_with_landing_pads`] with an explicit `arch` for per-arch
 /// indirect-branch classification.
 pub fn structure_with_landing_pads_and_arch(
@@ -333,6 +489,23 @@ pub fn structure_with_landing_pads_and_arch(
     arch: ArchId,
 ) -> Result<HirFunction, StructureError> {
     let mut hir = structure_with_arch(func, arch)?;
+    if !landing_pad_addrs.is_empty() {
+        let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
+        if !confirmed.is_empty() {
+            hir.body = wrap_try_catch(hir.body, &confirmed, func);
+        }
+    }
+    Ok(hir)
+}
+
+/// [`structure_with_landing_pads_and_arch`] with a hard deadline.
+pub fn structure_with_landing_pads_and_arch_until(
+    func: &SsaFunction,
+    landing_pad_addrs: &BTreeSet<u64>,
+    arch: ArchId,
+    deadline: Instant,
+) -> Result<HirFunction, StructureError> {
+    let mut hir = structure_with_arch_until(func, arch, deadline)?;
     if !landing_pad_addrs.is_empty() {
         let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
         if !confirmed.is_empty() {
@@ -541,12 +714,18 @@ fn recurse_try_catch_children(
 
 struct StructureCtx<'a> {
     func: &'a SsaFunction,
+    /// Optional wall-clock deadline for structuring.
+    deadline: Option<Instant>,
+    /// Set once a deadline overrun is observed.
+    deadline_exceeded: bool,
     /// Blocks already emitted — prevents double-emission.
     emitted: BTreeSet<BlockId>,
     /// Back-edges: (latch → header). A back-edge exists when header dominates latch.
     back_edges: BTreeSet<(BlockId, BlockId)>,
     /// Loop headers (targets of back-edges).
     loop_headers: BTreeSet<BlockId>,
+    /// Cached natural-loop block sets keyed by loop header.
+    loop_blocks_cache: RefCell<BTreeMap<BlockId, BTreeSet<BlockId>>>,
     /// Labels assigned to blocks for goto fallback.
     block_labels: BTreeMap<BlockId, LabelId>,
     /// Monotonic label counter.
@@ -904,7 +1083,12 @@ fn dream_predicate_source_nodes(
 }
 
 impl<'a> StructureCtx<'a> {
+    #[cfg(test)]
     fn new(func: &'a SsaFunction) -> Self {
+        Self::new_with_deadline(func, None)
+    }
+
+    fn new_with_deadline(func: &'a SsaFunction, deadline: Option<Instant>) -> Self {
         let mut back_edges = BTreeSet::new();
         let mut loop_headers = BTreeSet::new();
         let synthetic = BTreeSet::from([func.cfg.exit_block(), func.cfg.unknown_block()]);
@@ -970,14 +1154,40 @@ impl<'a> StructureCtx<'a> {
 
         Self {
             func,
+            deadline,
+            deadline_exceeded: false,
             emitted: BTreeSet::new(),
             back_edges,
             loop_headers,
+            loop_blocks_cache: RefCell::new(BTreeMap::new()),
             block_labels: BTreeMap::new(),
             next_label: 0,
             synthetic,
             goto_targets,
         }
+    }
+
+    fn check_deadline(&mut self) -> bool {
+        if self.deadline_exceeded {
+            return false;
+        }
+        if let Some(deadline) = self.deadline
+            && Instant::now() >= deadline
+        {
+            self.deadline_exceeded = true;
+            if struct_trace_enabled() {
+                eprintln!(
+                    "[unlace-struct] timeout-exceeded func={}",
+                    self.func.function.name
+                );
+            }
+            return false;
+        }
+        true
+    }
+
+    fn deadline_exceeded(&self) -> bool {
+        self.deadline_exceeded
     }
 
     fn is_frame_setup(&self, bid: BlockId, insn_idx: usize) -> bool {
@@ -1032,6 +1242,185 @@ impl<'a> StructureCtx<'a> {
         label
     }
 
+    fn unstructured_fallback_body(&mut self, reason: String) -> Vec<HirNode> {
+        let block_ids: Vec<BlockId> = self
+            .func
+            .function
+            .blocks
+            .keys()
+            .copied()
+            .filter(|bid| !self.synthetic.contains(bid))
+            .collect();
+        let insn_count: usize = block_ids
+            .iter()
+            .filter_map(|bid| self.func.function.blocks.get(bid))
+            .map(|block| block.insns.len())
+            .sum();
+        linkscope::record_items(
+            "struct.unstructured-fallback.blocks",
+            block_ids.len() as u64,
+        );
+        linkscope::record_items("struct.unstructured-fallback.insns", insn_count as u64);
+        if !should_emit_full_unstructured_fallback(
+            block_ids.len(),
+            insn_count,
+            unstructured_fallback_full_enabled(),
+            unstructured_fallback_block_limit(),
+            unstructured_fallback_insn_limit(),
+        ) {
+            linkscope::record_items("struct.unstructured-fallback.summary", 1);
+            return self.unstructured_summary_body(reason, block_ids.len(), insn_count);
+        }
+
+        for bid in &block_ids {
+            self.alloc_label(*bid);
+        }
+
+        let mut nodes = vec![HirNode::Commented {
+            pre: vec![
+                "unstructured fallback: control-flow structuring skipped".to_string(),
+                reason,
+            ],
+            post: Vec::new(),
+            inner: Box::new(HirNode::Block(Vec::new())),
+        }];
+
+        for bid in block_ids {
+            let label = self.alloc_label(bid);
+            nodes.push(HirNode::Label(label));
+            self.emit_unstructured_block_body(bid, &mut nodes);
+            self.emit_unstructured_transfer(bid, &mut nodes);
+        }
+        nodes
+    }
+
+    fn unstructured_summary_body(
+        &self,
+        reason: String,
+        block_count: usize,
+        insn_count: usize,
+    ) -> Vec<HirNode> {
+        vec![HirNode::Commented {
+            pre: vec![
+                "unstructured fallback summary: control-flow structuring skipped".to_string(),
+                reason,
+                format!("omitted full fallback body: blocks={block_count} insns={insn_count}"),
+                "set UNLACE_STRUCT_FULL_FALLBACK=1 to force full labeled-block fallback"
+                    .to_string(),
+            ],
+            post: Vec::new(),
+            inner: Box::new(HirNode::Return(None)),
+        }]
+    }
+
+    fn emit_unstructured_block_body(&self, bid: BlockId, nodes: &mut Vec<HirNode>) {
+        let Some(block) = self.func.function.blocks.get(&bid) else {
+            return;
+        };
+        for (idx, insn) in block.insns.iter().enumerate() {
+            if self.is_frame_setup(bid, idx) {
+                continue;
+            }
+            match insn.op {
+                IrOp::Cbranch | IrOp::Branch | IrOp::Branchind | IrOp::Return => {}
+                _ => nodes.push(HirNode::Statement(insn.clone())),
+            }
+        }
+    }
+
+    fn emit_unstructured_transfer(&mut self, bid: BlockId, nodes: &mut Vec<HirNode>) {
+        let Some(block) = self.func.function.blocks.get(&bid) else {
+            return;
+        };
+        let Some(term) = block.insns.last() else {
+            return;
+        };
+        match term.op {
+            IrOp::Return => {
+                let ret =
+                    self.resolve_ssa_varnode(bid, block.insns.len() - 1, VarnodeSlot::Input(0));
+                nodes.push(HirNode::Return(ret));
+            }
+            IrOp::Cbranch => self.emit_unstructured_cbranch(bid, nodes),
+            IrOp::Branch => {
+                if let Some(target) = self.first_real_successor(bid) {
+                    self.push_goto_to_block(target, nodes);
+                }
+            }
+            IrOp::Branchind => {
+                let targets = self.real_successors(bid);
+                if let Some(&target) = targets.first() {
+                    let label = self.alloc_label(target);
+                    nodes.push(HirNode::Commented {
+                        pre: vec![format!(
+                            "unstructured indirect branch: {} possible targets; using first target",
+                            targets.len()
+                        )],
+                        post: Vec::new(),
+                        inner: Box::new(HirNode::Goto(label)),
+                    });
+                } else {
+                    nodes.push(HirNode::Commented {
+                        pre: vec!["unstructured indirect branch: no concrete target".to_string()],
+                        post: Vec::new(),
+                        inner: Box::new(HirNode::Block(Vec::new())),
+                    });
+                }
+            }
+            _ => {
+                if let Some(target) = self.first_real_successor(bid) {
+                    self.push_goto_to_block(target, nodes);
+                }
+            }
+        }
+    }
+
+    fn emit_unstructured_cbranch(&mut self, bid: BlockId, nodes: &mut Vec<HirNode>) {
+        let cond = self.find_cbranch_cond(bid);
+        let mut true_target = None;
+        let mut false_target = None;
+        for (target, kind) in self.func.cfg.edges_from(bid) {
+            if self.synthetic.contains(&target) {
+                continue;
+            }
+            match kind {
+                EdgeKind::ConditionalTrue => true_target = Some(target),
+                EdgeKind::ConditionalFalse => false_target = Some(target),
+                _ => {}
+            }
+        }
+        let Some(true_target) = true_target.or_else(|| self.real_successors(bid).first().copied())
+        else {
+            return;
+        };
+        let then_body = vec![HirNode::Goto(self.alloc_label(true_target))];
+        let else_body = false_target.map(|target| vec![HirNode::Goto(self.alloc_label(target))]);
+        nodes.push(HirNode::If {
+            cond,
+            then_body,
+            else_body,
+        });
+    }
+
+    fn real_successors(&self, bid: BlockId) -> Vec<BlockId> {
+        self.func
+            .cfg
+            .edges_from(bid)
+            .into_iter()
+            .map(|(target, _)| target)
+            .filter(|target| !self.synthetic.contains(target))
+            .collect()
+    }
+
+    fn first_real_successor(&self, bid: BlockId) -> Option<BlockId> {
+        self.real_successors(bid).into_iter().next()
+    }
+
+    fn push_goto_to_block(&mut self, target: BlockId, nodes: &mut Vec<HirNode>) {
+        let label = self.alloc_label(target);
+        nodes.push(HirNode::Goto(label));
+    }
+
     /// DREAM residual-region seam.
     ///
     /// This is deliberately conservative. DREAM is default-on, but
@@ -1053,12 +1442,21 @@ impl<'a> StructureCtx<'a> {
         &mut self,
         bid: BlockId,
     ) -> Option<(Vec<HirNode>, Option<BlockId>)> {
+        if !self.check_deadline() {
+            return None;
+        }
         if !dream_structuring_enabled() {
             return None;
         }
-        let region = irreducible::detect_irreducible_regions(self.func)
-            .into_iter()
-            .find(|r| r.entry_blocks.contains(&bid))?;
+        let region = {
+            let _span = linkscope::phase("struct.dream.detect-irreducible");
+            irreducible::detect_irreducible_regions(self.func)
+                .into_iter()
+                .find(|r| r.entry_blocks.contains(&bid))?
+        };
+        if !self.check_deadline() {
+            return None;
+        }
 
         if struct_trace_enabled() {
             eprintln!(
@@ -1069,9 +1467,20 @@ impl<'a> StructureCtx<'a> {
         }
 
         let mut dream_body_blocks = region.body_blocks.clone();
-        let (initial_dream_region, _, initial_region_exits) =
-            region_bridge::cfg_region_to_region_with_exits(&self.func.cfg, bid, &dream_body_blocks);
-        let initial_rc = reaching_conditions::compute_reaching_conditions(&initial_dream_region);
+        let (initial_dream_region, _, initial_region_exits) = {
+            let _span = linkscope::phase("struct.dream.initial-region");
+            region_bridge::cfg_region_to_region_with_exits(&self.func.cfg, bid, &dream_body_blocks)
+        };
+        let initial_rc = {
+            let _span = linkscope::phase("struct.dream.initial-reaching-conditions");
+            reaching_conditions::compute_reaching_conditions(&initial_dream_region)
+        };
+        if initial_rc.limited {
+            if struct_trace_enabled() {
+                eprintln!("[unlace-struct] dream skip entry={bid:?} reason=initial-rc-limited");
+            }
+            return None;
+        }
         if !initial_rc.back_edges.is_empty() {
             let initial_real_exits: BTreeSet<BlockId> = initial_region_exits
                 .iter()
@@ -1079,9 +1488,10 @@ impl<'a> StructureCtx<'a> {
                 .map(|exit| exit.target)
                 .collect();
             if initial_real_exits.len() > 1 {
-                let Some((join, exit_tail_blocks)) =
+                let Some((join, exit_tail_blocks)) = ({
+                    let _span = linkscope::phase("struct.dream.expand-linear-exit-tails");
                     self.dream_expand_linear_exit_tails(&dream_body_blocks, &initial_real_exits)
-                else {
+                }) else {
                     if struct_trace_enabled() {
                         eprintln!(
                             "[unlace-struct] dream skip entry={bid:?} reason=cyclic-multiple-exits exits={initial_real_exits:?}"
@@ -1098,9 +1508,20 @@ impl<'a> StructureCtx<'a> {
             }
         }
 
-        let (dream_region, node_to_block, region_exits) =
-            region_bridge::cfg_region_to_region_with_exits(&self.func.cfg, bid, &dream_body_blocks);
-        let rc = reaching_conditions::compute_reaching_conditions(&dream_region);
+        let (dream_region, node_to_block, region_exits) = {
+            let _span = linkscope::phase("struct.dream.region");
+            region_bridge::cfg_region_to_region_with_exits(&self.func.cfg, bid, &dream_body_blocks)
+        };
+        let rc = {
+            let _span = linkscope::phase("struct.dream.reaching-conditions");
+            reaching_conditions::compute_reaching_conditions(&dream_region)
+        };
+        if rc.limited {
+            if struct_trace_enabled() {
+                eprintln!("[unlace-struct] dream skip entry={bid:?} reason=rc-limited");
+            }
+            return None;
+        }
         let has_back_edges = !rc.back_edges.is_empty();
         let real_region_exits: Vec<region_bridge::RegionExit> = region_exits
             .into_iter()
@@ -1118,17 +1539,23 @@ impl<'a> StructureCtx<'a> {
         }
 
         let structured = if has_back_edges {
+            if !self.check_deadline() {
+                return None;
+            }
             let exit_edges: Vec<_> = real_region_exits
                 .iter()
                 .map(|exit| (exit.source, exit.label.clone()))
                 .collect();
-            let structured =
-                condition_refinement::refine_cyclic_region_with_exits(&dream_region, &exit_edges);
+            let structured = {
+                let _span = linkscope::phase("struct.dream.refine-cyclic");
+                condition_refinement::refine_cyclic_region_with_exits(&dream_region, &exit_edges)
+            };
             if matches!(
                 structured,
                 condition_refinement::StructuredNode::Unsupported
             ) {
                 let predicate_sources = dream_predicate_source_nodes(&node_to_block);
+                let _span = linkscope::phase("struct.dream.refine-abnormal-cyclic");
                 condition_refinement::refine_abnormal_cyclic_region_with_exits_and_sources(
                     &dream_region,
                     &exit_edges,
@@ -1138,6 +1565,7 @@ impl<'a> StructureCtx<'a> {
                 structured
             }
         } else {
+            let _span = linkscope::phase("struct.dream.refine-acyclic");
             condition_refinement::refine_region(&dream_region)
         };
         if matches!(
@@ -1153,7 +1581,10 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        let pred_cond = self.dream_predicate_conditions(&dream_body_blocks);
+        let pred_cond = {
+            let _span = linkscope::phase("struct.dream.predicate-conditions");
+            self.dream_predicate_conditions(&dream_body_blocks)
+        };
         if !structured_predicates_resolve(&structured, &pred_cond) {
             if struct_trace_enabled() {
                 eprintln!(
@@ -1172,7 +1603,11 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        if self.dream_region_has_unspliced_control(&dream_body_blocks) {
+        let has_unspliced_control = {
+            let _span = linkscope::phase("struct.dream.unspliced-control-check");
+            self.dream_region_has_unspliced_control(&dream_body_blocks)
+        };
+        if has_unspliced_control {
             if struct_trace_enabled() {
                 eprintln!("[unlace-struct] dream skip entry={bid:?} reason=unspliced-control");
             }
@@ -1193,18 +1628,30 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        let block_bodies = dream_body_blocks
-            .iter()
-            .map(|&block| (block, self.non_control_block_statements(block)))
-            .collect();
-        let label_map = self.dream_structured_label_map(&structured, &node_to_block)?;
-        let hir = region_splice::splice_structured_with_labels(
-            &structured,
-            &node_to_block,
-            &block_bodies,
-            &pred_cond,
-            &label_map,
-        );
+        let block_bodies = {
+            let _span = linkscope::phase("struct.dream.block-bodies");
+            dream_body_blocks
+                .iter()
+                .map(|&block| (block, self.non_control_block_statements(block)))
+                .collect()
+        };
+        let label_map = {
+            let _span = linkscope::phase("struct.dream.label-map");
+            self.dream_structured_label_map(&structured, &node_to_block)?
+        };
+        if !self.check_deadline() {
+            return None;
+        }
+        let hir = {
+            let _span = linkscope::phase("struct.dream.splice");
+            region_splice::splice_structured_with_labels(
+                &structured,
+                &node_to_block,
+                &block_bodies,
+                &pred_cond,
+                &label_map,
+            )
+        };
 
         // Statement-preservation oracle: the spliced HIR must contain each body
         // block's non-control statements EXACTLY once — no drops, no
@@ -1213,11 +1660,15 @@ impl<'a> StructureCtx<'a> {
         // engine is *sound*); without it a mis-structured region could silently
         // lose or double a statement. It is a pure acceptance check: it only
         // ever adds a `return None`, so the rollback path is unaffected.
-        let expected_statements: usize = block_bodies
-            .values()
-            .map(|body| count_hir_statements(body))
-            .sum();
-        let spliced_statements = count_hir_statements(&hir);
+        let (expected_statements, spliced_statements) = {
+            let _span = linkscope::phase("struct.dream.statement-count-check");
+            let expected_statements: usize = block_bodies
+                .values()
+                .map(|body| count_hir_statements(body))
+                .sum();
+            let spliced_statements = count_hir_statements(&hir);
+            (expected_statements, spliced_statements)
+        };
         if spliced_statements != expected_statements {
             if struct_trace_enabled() {
                 eprintln!(
@@ -1391,6 +1842,9 @@ impl<'a> StructureCtx<'a> {
         let mut current = Some(start);
 
         while let Some(bid) = current {
+            if !self.check_deadline() {
+                break;
+            }
             if struct_trace_enabled() {
                 eprintln!("[unlace-struct] region current={bid:?}");
             }
@@ -1582,6 +2036,7 @@ impl<'a> StructureCtx<'a> {
     }
 
     fn try_structure_switch(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
+        let _span = linkscope::phase("struct.try-switch");
         if self.emitted.contains(&bid) {
             return None;
         }
@@ -2205,6 +2660,7 @@ impl<'a> StructureCtx<'a> {
     }
 
     fn try_structure_if(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
+        let _span = linkscope::phase("struct.try-if");
         if self.emitted.contains(&bid) {
             return None;
         }
@@ -2360,6 +2816,7 @@ impl<'a> StructureCtx<'a> {
         header: BlockId,
         loop_blocks: &BTreeSet<BlockId>,
     ) -> Option<(HirNode, Option<BlockId>)> {
+        let _span = linkscope::phase("struct.try-if-in-loop");
         if self.emitted.contains(&bid) {
             return None;
         }
@@ -2473,6 +2930,10 @@ impl<'a> StructureCtx<'a> {
     }
 
     fn try_structure_loop(&mut self, header: BlockId) -> Option<HirNode> {
+        let _span = linkscope::phase("struct.try-loop");
+        if !self.check_deadline() {
+            return None;
+        }
         if self.emitted.contains(&header) {
             return None;
         }
@@ -3020,6 +3481,9 @@ impl<'a> StructureCtx<'a> {
         }
 
         while let Some(bid) = current {
+            if !self.check_deadline() {
+                break;
+            }
             if struct_trace_enabled() {
                 eprintln!(
                     "[unlace-struct] until-loop current={bid:?} stop={stop:?} header={header:?}"
@@ -3161,6 +3625,12 @@ impl<'a> StructureCtx<'a> {
     }
 
     fn collect_loop_blocks(&self, header: BlockId) -> BTreeSet<BlockId> {
+        let _span = linkscope::phase("struct.collect-loop-blocks");
+        if let Some(cached) = self.loop_blocks_cache.borrow().get(&header).cloned() {
+            linkscope::record_items("struct.collect-loop-blocks.cache-hit", 1);
+            return cached;
+        }
+        linkscope::record_items("struct.collect-loop-blocks.cache-miss", 1);
         let latches: Vec<BlockId> = self
             .back_edges
             .iter()
@@ -3202,6 +3672,9 @@ impl<'a> StructureCtx<'a> {
             );
         }
 
+        self.loop_blocks_cache
+            .borrow_mut()
+            .insert(header, loop_blocks.clone());
         loop_blocks
     }
 
@@ -3311,6 +3784,9 @@ impl<'a> StructureCtx<'a> {
         }
 
         while let Some(bid) = current {
+            if !self.check_deadline() {
+                break;
+            }
             if struct_trace_enabled() {
                 eprintln!("[unlace-struct] loop-body current={bid:?} header={header:?}");
             }
@@ -3428,6 +3904,9 @@ impl<'a> StructureCtx<'a> {
         }
 
         while let Some(bid) = current {
+            if !self.check_deadline() {
+                break;
+            }
             if struct_trace_enabled() {
                 eprintln!("[unlace-struct] until current={bid:?} stop={stop:?}");
             }

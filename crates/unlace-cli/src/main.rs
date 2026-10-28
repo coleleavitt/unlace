@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use tracing_subscriber::EnvFilter;
 
 use unlace_ir::ArchId;
 use unlace_lift::get_lifter;
@@ -18,18 +17,23 @@ use unlace_cli::annotations::{self, AnnotationDb};
 use unlace_cli::args::{self, Args, Cmd, LuminaAction, ProjectAction};
 use unlace_cli::batch::{self, BatchConfig};
 use unlace_cli::pipeline::{self, PipelineConfig};
+use unlace_cli::profiling::{self, TraceField};
 
 #[cfg(feature = "python")]
 const DEFAULT_PY_DECOMPILE_STAGE_LIMIT: usize = 64;
 
 fn main() {
+    // `batch` has a visible alias `dump-all`; we use the invoked
+    // subcommand token to provide dump-all-specific defaults (progress on +
+    // output-dir=./all when not explicitly overridden).
+    let invoked_dump_all = std::env::args_os()
+        .nth(1)
+        .is_some_and(|arg| arg == "dump-all");
     let args = Args::parse();
+    let linkscope_guard = unlace_cli::profiling::init_from_env();
 
     let result = match args.cmd {
-        Cmd::Project { action } => {
-            let _flame_guard = init_tracing(0);
-            run_project(action)
-        }
+        Cmd::Project { action } => run_project(action),
         Cmd::Decompile {
             binary,
             function,
@@ -38,7 +42,7 @@ fn main() {
             output,
             capture_dir,
             all: _,
-            verbose,
+            verbose: _,
             timeout,
             plugin_dir,
             max_width,
@@ -52,7 +56,6 @@ fn main() {
             sig_dir,
             flirt_min_confidence,
         } => {
-            let _flame_guard = init_tracing(verbose);
             let print_config = if max_width.is_some() || tab_width.is_some() {
                 let mut cfg = unlace_output::PrintConfig::from_env();
                 if let Some(w) = max_width {
@@ -67,7 +70,11 @@ fn main() {
             };
             let annotation_db = resolve_annotations(&binary, annotations_load.as_deref())
                 .unwrap_or_else(|e| {
-                    tracing::warn!(err = %e, "failed to load annotations; continuing without");
+                    profiling::diagnostic(
+                        "warn",
+                        "failed to load annotations; continuing without",
+                        [TraceField::text("err", e.to_string())],
+                    );
                     None
                 });
             let result = read_dwarf_sidecar(dwarf_sidecar.as_deref())
@@ -82,6 +89,7 @@ fn main() {
                         annotations: annotation_db.clone(),
                         flirt,
                         dwarf_sidecar: dwarf_sidecar_bytes,
+                        symbol_context: None,
                     };
                     load_plugins(plugin_dir.as_deref()).and_then(|mgr| {
                         run_decompile(
@@ -100,7 +108,14 @@ fn main() {
             if let Some(path) = annotations_save.as_deref() {
                 let to_save = annotation_db.unwrap_or_default();
                 if let Err(e) = to_save.save(path) {
-                    tracing::warn!(err = %e, "failed to write annotations sidecar");
+                    profiling::diagnostic(
+                        "warn",
+                        "failed to write annotations sidecar",
+                        [
+                            TraceField::text("path", path.display().to_string()),
+                            TraceField::text("err", e.to_string()),
+                        ],
+                    );
                 }
             }
             result
@@ -111,19 +126,16 @@ fn main() {
             pattern_len,
             crc_len,
             min_function_len,
-            verbose,
-        } => {
-            let _flame_guard = init_tracing(verbose);
-            run_siggen(
-                &archive,
-                output.as_deref(),
-                unlace_loader::SigGenerateOptions {
-                    pattern_len,
-                    crc_len,
-                    min_function_len,
-                },
-            )
-        }
+            verbose: _,
+        } => run_siggen(
+            &archive,
+            output.as_deref(),
+            unlace_loader::SigGenerateOptions {
+                pattern_len,
+                crc_len,
+                min_function_len,
+            },
+        ),
         Cmd::Batch {
             binary,
             jobs,
@@ -131,86 +143,74 @@ fn main() {
             arch,
             output_dir,
             dwarf_sidecar,
-            merged: _,
+            merged,
             timeout,
             interproc,
             all_functions,
             scope,
             max_iterations,
-            verbose,
+            verbose: _,
+            progress,
+            progress_style,
             no_flirt,
             sig,
             sig_dir,
             flirt_min_confidence,
-        } => {
-            let _flame_guard = init_tracing(verbose);
-            build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence).and_then(|flirt| {
-                run_batch_cmd(
-                    binary,
-                    jobs,
-                    emit,
-                    arch,
-                    output_dir,
-                    dwarf_sidecar,
-                    timeout,
-                    interproc,
-                    all_functions,
-                    scope,
-                    max_iterations,
-                    flirt,
-                )
-            })
-        }
+        } => build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence).and_then(|flirt| {
+            run_batch_cmd(
+                binary,
+                jobs,
+                emit,
+                arch,
+                output_dir,
+                merged,
+                dwarf_sidecar,
+                timeout,
+                interproc,
+                all_functions,
+                scope,
+                max_iterations,
+                progress,
+                progress_style,
+                invoked_dump_all,
+                flirt,
+            )
+        }),
         Cmd::Quality {
             binary,
             format,
-            verbose,
+            verbose: _,
             no_flirt,
             sig,
             sig_dir,
             flirt_min_confidence,
-        } => {
-            let _flame_guard = init_tracing(verbose);
-            build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence)
-                .and_then(|flirt| run_quality(&binary, format, &flirt))
-        }
+        } => build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence)
+            .and_then(|flirt| run_quality(&binary, format, &flirt)),
         Cmd::IdentifyPacker { binary, format } => run_identify_packer(&binary, format),
         Cmd::IrDump {
             binary,
             function,
             phase,
-            verbose,
-        } => {
-            let _flame_guard = init_tracing(verbose);
-            run_ir_dump(&binary, function.as_deref(), phase.as_deref())
-        }
+            verbose: _,
+        } => run_ir_dump(&binary, function.as_deref(), phase.as_deref()),
         Cmd::Lumina { action } => run_lumina(action),
         Cmd::Emu {
             binary,
             max_instructions,
             trace,
-            verbose,
-        } => {
-            let _flame_guard = init_tracing(verbose);
-            run_emu(&binary, max_instructions, trace)
-        }
+            verbose: _,
+        } => run_emu(&binary, max_instructions, trace),
         Cmd::Dbg {
             pid,
             breakpoint,
             cont,
-        } => {
-            let _flame_guard = init_tracing(0);
-            run_dbg(pid, breakpoint.as_deref(), cont)
-        }
+        } => run_dbg(pid, breakpoint.as_deref(), cont),
         Cmd::Patch {
             binary,
             ea,
             bytes,
             output,
-        } => {
-            let _flame_guard = init_tracing(0);
-            run_patch(&binary, &ea, &bytes, output.as_deref())
-        }
+        } => run_patch(&binary, &ea, &bytes, output.as_deref()),
         Cmd::Symfetch {
             pdb,
             guid,
@@ -218,17 +218,14 @@ fn main() {
             buildid,
             server,
             fetch,
-        } => {
-            let _flame_guard = init_tracing(0);
-            run_symfetch(
-                pdb.as_deref(),
-                guid.as_deref(),
-                age,
-                buildid.as_deref(),
-                &server,
-                fetch,
-            )
-        }
+        } => run_symfetch(
+            pdb.as_deref(),
+            guid.as_deref(),
+            age,
+            buildid.as_deref(),
+            &server,
+            fetch,
+        ),
         Cmd::Sigload {
             path,
             limit,
@@ -237,32 +234,23 @@ fn main() {
             binary,
             force,
             flirt_min_confidence,
-        } => {
-            let _flame_guard = init_tracing(0);
-            run_sigload(
-                &path,
-                limit,
-                json,
-                apply,
-                binary.as_deref(),
-                force,
-                flirt_min_confidence,
-            )
-        }
+        } => run_sigload(
+            &path,
+            limit,
+            json,
+            apply,
+            binary.as_deref(),
+            force,
+            flirt_min_confidence,
+        ),
         Cmd::Tilload {
             path,
             limit,
             json,
             apply,
             binary,
-        } => {
-            let _flame_guard = init_tracing(0);
-            run_tilload(&path, limit, json, apply, binary.as_deref())
-        }
-        Cmd::Py { script, binary } => {
-            let _flame_guard = init_tracing(0);
-            run_py(&script, binary.as_deref())
-        }
+        } => run_tilload(&path, limit, json, apply, binary.as_deref()),
+        Cmd::Py { script, binary } => run_py(&script, binary.as_deref()),
     };
 
     // Batch 17: per-pass timing dump. The wrapper inside
@@ -320,6 +308,8 @@ fn main() {
             }
         }
     }
+
+    drop(linkscope_guard);
 
     if let Err(e) = result {
         eprintln!("Error: {e:#}");
@@ -428,7 +418,14 @@ fn run_siggen(
         let mut stdout = std::io::stdout().lock();
         stdout.write_all(toml.as_bytes())?;
     }
-    tracing::info!(count = patterns.len(), archive = %archive_path.display(), "generated FLIRT patterns");
+    profiling::diagnostic(
+        "info",
+        "generated FLIRT patterns",
+        [
+            TraceField::count("count", patterns.len() as u64),
+            TraceField::text("archive", archive_path.display().to_string()),
+        ],
+    );
     Ok(())
 }
 
@@ -468,36 +465,81 @@ fn run_ir_dump(
     function_filter: Option<&str>,
     phase_str: Option<&str>,
 ) -> Result<()> {
+    let _profile_command = profiling::phase("cmd.ir-dump");
+    let _profile_trace = profiling::trace_fields(
+        "cmd.ir-dump",
+        [
+            TraceField::text("binary", binary_path.display().to_string()),
+            TraceField::text("function_filter", function_filter.unwrap_or("<all>")),
+            TraceField::text("phase", phase_str.unwrap_or("post-passes")),
+        ],
+    );
     let phase = parse_ir_dump_phase(phase_str)?;
 
     // Batch 25: mmap path for large binaries, heap path for small ones.
-    let input = unlace_cli::binary_input::BinaryInput::open(binary_path)
-        .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
+    let input = {
+        let _span = profiling::phase("ir-dump.open-binary");
+        unlace_cli::binary_input::BinaryInput::open(binary_path)
+            .with_context(|| format!("failed to read '{}'", binary_path.display()))?
+    };
     let data = input.as_bytes();
+    profiling::record_bytes("ir-dump.open-binary", data.len() as u64);
 
-    let image = if ElfLoader::can_load(data) {
-        ElfLoader::load(data)
-    } else if MachoLoader::can_load(data) {
-        MachoLoader::load(data)
-    } else if PeLoader::can_load(data) {
-        PeLoader::load(data)
-    } else {
-        bail!(
-            "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
-            binary_path.display(),
-        );
-    }
-    .with_context(|| format!("failed to parse '{}'", binary_path.display()))?;
+    let image = {
+        let _span = profiling::phase("ir-dump.load-binary");
+        if ElfLoader::can_load(data) {
+            ElfLoader::load(data)
+        } else if MachoLoader::can_load(data) {
+            MachoLoader::load(data)
+        } else if PeLoader::can_load(data) {
+            PeLoader::load(data)
+        } else {
+            bail!(
+                "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
+                binary_path.display(),
+            );
+        }
+        .with_context(|| format!("failed to parse '{}'", binary_path.display()))?
+    };
 
-    let lifter = get_lifter(image.arch);
-    let functions = pipeline::discover_functions(&image, function_filter)?;
+    let lifter = {
+        let _span = profiling::phase("ir-dump.get-lifter");
+        get_lifter(image.arch)
+    };
+    let functions = {
+        let _span = profiling::phase("ir-dump.discover-functions");
+        let functions = pipeline::discover_functions(&image, function_filter)?;
+        profiling::record_items("ir-dump.discover-functions", functions.len() as u64);
+        functions
+    };
 
     let mut out = String::new();
     for entry in &functions {
-        let ir_func = match pipeline::lift_function(&image, lifter.as_ref(), entry) {
+        let _profile_function = profiling::phase("ir-dump.function");
+        let _profile_trace = profiling::trace_fields(
+            "ir-dump.function",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::addr("addr", entry.addr),
+                TraceField::count("size", entry.size),
+            ],
+        );
+        profiling::record_items("ir-dump.function", 1);
+        let lift_result = {
+            let _span = profiling::phase("ir-dump.lift");
+            pipeline::lift_function(&image, lifter.as_ref(), entry)
+        };
+        let ir_func = match lift_result {
             Ok(f) => f,
             Err(e) => {
-                tracing::warn!(name = %entry.name, err = %e, "lift failed; skipping");
+                profiling::diagnostic(
+                    "warn",
+                    "ir-dump lift failed; skipping",
+                    [
+                        TraceField::text("function", entry.name.clone()),
+                        TraceField::text("err", e.to_string()),
+                    ],
+                );
                 out.push_str(&format!(
                     "// [ir-dump] lift failed for '{}': {}\n",
                     entry.name, e
@@ -506,7 +548,10 @@ fn run_ir_dump(
             }
         };
 
-        let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+        let mut ssa = {
+            let _span = profiling::phase("ir-dump.build-ssa");
+            unlace_ir::ssa::build_ssa(ir_func)
+        };
         ssa.arch = image.arch;
 
         match phase {
@@ -515,25 +560,58 @@ fn run_ir_dump(
             | IrDumpPhase::PostStructuring
             | IrDumpPhase::Lvars
             | IrDumpPhase::Types => {
-                if let Err(e) = pipeline::run_passes(&mut ssa) {
-                    tracing::warn!(name = %entry.name, err = format!("{e:#}"), "pass pipeline failed; dumping unoptimized");
+                let pass_result = {
+                    let _span = profiling::phase("ir-dump.run-passes");
+                    pipeline::run_passes(&mut ssa)
+                };
+                if let Err(e) = pass_result {
+                    profiling::diagnostic(
+                        "warn",
+                        "ir-dump pass pipeline failed; dumping unoptimized",
+                        [
+                            TraceField::text("function", entry.name.clone()),
+                            TraceField::text("err", format!("{e:#}")),
+                        ],
+                    );
                 }
                 if matches!(phase, IrDumpPhase::PostStructuring)
-                    && let Err(e) = unlace_struct::structure_preserve_returns(&mut ssa)
+                    && let Err(e) = {
+                        let _span = profiling::phase("ir-dump.structure-preserve-returns");
+                        unlace_struct::structure_preserve_returns(&mut ssa)
+                    }
                 {
-                    tracing::warn!(name = %entry.name, err = ?e, "structurer failed; dumping post-passes IR");
+                    profiling::diagnostic(
+                        "warn",
+                        "ir-dump structurer failed; dumping post-passes IR",
+                        [
+                            TraceField::text("function", entry.name.clone()),
+                            TraceField::text("err", format!("{e:?}")),
+                        ],
+                    );
                 }
             }
         }
 
         match phase {
-            IrDumpPhase::Lvars => out.push_str(&unlace_output::dump_lvars(&ssa)),
-            IrDumpPhase::Types => out.push_str(&unlace_output::dump_type_audit(&ssa)),
-            _ => out.push_str(&unlace_output::dump_ir(&ssa)),
+            IrDumpPhase::Lvars => {
+                let _span = profiling::phase("ir-dump.emit-lvars");
+                out.push_str(&unlace_output::dump_lvars(&ssa));
+            }
+            IrDumpPhase::Types => {
+                let _span = profiling::phase("ir-dump.emit-types");
+                out.push_str(&unlace_output::dump_type_audit(&ssa));
+            }
+            _ => {
+                let _span = profiling::phase("ir-dump.emit-ir");
+                out.push_str(&unlace_output::dump_ir(&ssa));
+            }
         }
     }
 
-    print!("{out}");
+    {
+        let _span = profiling::phase("ir-dump.write-stdout");
+        print!("{out}");
+    }
     Ok(())
 }
 
@@ -676,10 +754,18 @@ fn run_py(script: &std::path::Path, binary: Option<&std::path::Path>) -> Result<
             .load_binary(b)
             .with_context(|| format!("loading {}", b.display()))?;
         if let Err(err) = populate_python_instruction_xrefs(&session) {
-            tracing::debug!(err = %err, "failed to stage instruction xrefs for python session");
+            profiling::diagnostic(
+                "debug",
+                "failed to stage instruction xrefs for python session",
+                [TraceField::text("err", err.to_string())],
+            );
         }
         if let Err(err) = populate_python_decompiled_functions(&session) {
-            tracing::debug!(err = %err, "failed to stage decompiled functions for python session");
+            profiling::diagnostic(
+                "debug",
+                "failed to stage decompiled functions for python session",
+                [TraceField::text("err", err.to_string())],
+            );
         }
     }
     let source =
@@ -701,7 +787,14 @@ fn populate_python_instruction_xrefs(session: &unlace_session::Session) -> Resul
                         lifted.insert(entry.addr, function);
                     }
                     Err(err) => {
-                        tracing::debug!(func = %entry.name, err = %err, "skipping xref lift failure");
+                        profiling::diagnostic(
+                            "debug",
+                            "skipping xref lift failure",
+                            [
+                                TraceField::text("function", entry.name.clone()),
+                                TraceField::text("err", err.to_string()),
+                            ],
+                        );
                     }
                 }
             }
@@ -734,6 +827,7 @@ fn populate_python_decompiled_functions_with_limit(
                 annotations: None,
                 flirt: pipeline::FlirtConfig::default(),
                 dwarf_sidecar: None,
+                symbol_context: None,
             };
             let rtti = unlace_loader::scan_rtti(image);
             let rtti = (!rtti.is_empty()).then_some(&rtti);
@@ -751,7 +845,14 @@ fn populate_python_decompiled_functions_with_limit(
                 ) {
                     Ok(text) => staged.push((entry.addr, entry.size, entry.name.clone(), text)),
                     Err(err) => {
-                        tracing::debug!(func = %entry.name, err = %err, "skipping python decompile staging failure");
+                        profiling::diagnostic(
+                            "debug",
+                            "skipping python decompile staging failure",
+                            [
+                                TraceField::text("function", entry.name.clone()),
+                                TraceField::text("err", err.to_string()),
+                            ],
+                        );
                     }
                 }
             }
@@ -1081,7 +1182,14 @@ fn run_lumina(action: LuminaAction) -> Result<()> {
                 } else {
                     SqliteStore::open(&db)?
                 };
-                tracing::info!(%addr, db = %db, "starting Lumina v6 server");
+                profiling::diagnostic(
+                    "info",
+                    "starting Lumina v6 server",
+                    [
+                        TraceField::text("addr", addr.to_string()),
+                        TraceField::text("db", db.clone()),
+                    ],
+                );
                 serve(addr, Arc::new(store)).await?;
                 Ok::<_, anyhow::Error>(())
             }
@@ -1186,84 +1294,6 @@ fn hex_nibble(b: u8) -> Option<u8> {
     }
 }
 
-/// Install the global tracing subscriber.
-///
-/// Composition (bottom → top):
-///   1. `Registry`             — owns span storage so [`tracing-flame`] can walk it.
-///   2. `EnvFilter`            — RUST_LOG / -v / -vv / -vvv level filter.
-///   3. `fmt::Layer` (stderr)  — pretty-printed lines for humans.
-///   4. `FlameLayer` (optional) — when `UNLACE_FLAME=<path>` is set, capture
-///      per-span timings and write a folded-stack file readable by
-///      `inferno-flamegraph`. Wrapped in a `WorkerGuard` returned to the
-///      caller so it stays alive for the lifetime of the process and the
-///      folded file is flushed on drop.
-///
-/// Usage to produce a flamegraph:
-///   UNLACE_FLAME=/tmp/u.folded unlace decompile <bin>
-///   cat /tmp/u.folded | inferno-flamegraph > /tmp/u.svg
-fn init_tracing(
-    verbose: u8,
-) -> Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>> {
-    let level = match verbose {
-        0 => "warn",
-        1 => "info",
-        2 => "debug",
-        _ => "trace",
-    };
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
-
-    // DEFAULT PATH (no UNLACE_FLAME): a single global fmt subscriber whose
-    // verbosity comes from a GLOBAL `EnvFilter`, not a per-layer `.with_filter()`.
-    //
-    // The per-layer `Filtered` machinery in tracing-subscriber 0.3.x keeps a
-    // thread-local `RefCell` filter state that double-borrows ("RefCell already
-    // borrowed") when spans are entered/evaluated re-entrantly across the rayon
-    // worker threads `unlace batch` spawns — a deterministic abort. A global
-    // env filter is evaluated directly in `enabled()` and never touches that
-    // per-layer RefCell, so the concurrent batch path is safe. (The work-stealing
-    // pool was never the cause; the per-layer fmt filter was.)
-    let Ok(path) = std::env::var("UNLACE_FLAME") else {
-        tracing_subscriber::fmt()
-            .with_writer(std::io::stderr)
-            .with_env_filter(env_filter)
-            .init();
-        return None;
-    };
-
-    // FLAME PATH (opt-in via UNLACE_FLAME): the flame layer must see TRACE-level
-    // pass spans independent of the user's verbosity, which requires per-layer
-    // filtering. This is single-shot profiling, not the concurrent batch path.
-    use tracing_flame::FlameLayer;
-    use tracing_subscriber::Layer;
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-
-    let (flame_layer, flame_guard) = match FlameLayer::with_file(&path) {
-        Ok((layer, guard)) => (
-            layer.with_filter(tracing_subscriber::filter::LevelFilter::TRACE),
-            guard,
-        ),
-        Err(e) => {
-            // Fall back to the safe global-filter default path.
-            eprintln!("warning: UNLACE_FLAME='{path}' could not open: {e}");
-            tracing_subscriber::fmt()
-                .with_writer(std::io::stderr)
-                .with_env_filter(env_filter)
-                .init();
-            return None;
-        }
-    };
-
-    let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stderr)
-        .with_filter(env_filter);
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .with(flame_layer)
-        .init();
-    Some(flame_guard)
-}
-
 /// Resolve which annotation DB (if any) should be loaded for `binary`.
 ///
 /// * Explicit `--annotations-load` always wins (and errors if missing).
@@ -1303,7 +1333,14 @@ fn load_plugins(dir: Option<&std::path::Path>) -> Result<PluginManager> {
         let count = mgr
             .load_from_dir(dir)
             .with_context(|| format!("failed to load plugins from '{}'", dir.display()))?;
-        tracing::info!(count, dir = %dir.display(), "loaded plugins");
+        profiling::diagnostic(
+            "info",
+            "loaded plugins",
+            [
+                TraceField::count("count", count as u64),
+                TraceField::text("dir", dir.display().to_string()),
+            ],
+        );
     }
     Ok(mgr)
 }
@@ -1328,7 +1365,14 @@ fn read_dwarf_sidecar(path: Option<&std::path::Path>) -> Result<Option<Vec<u8>>>
         Some(p) => {
             let bytes = fs::read(p)
                 .with_context(|| format!("failed to read --dwarf-sidecar '{}'", p.display()))?;
-            tracing::info!(sidecar = %p.display(), bytes = bytes.len(), "loaded DWARF sidecar");
+            profiling::diagnostic(
+                "info",
+                "loaded DWARF sidecar",
+                [
+                    TraceField::text("sidecar", p.display().to_string()),
+                    TraceField::bytes("bytes", bytes.len() as u64),
+                ],
+            );
             Ok(Some(bytes))
         }
         None => Ok(None),
@@ -1365,19 +1409,25 @@ fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
         if image.pdb_types.is_none() {
             match import_pdb_types(&candidate) {
                 Ok(types) => {
-                    tracing::info!(
-                        pdb = %candidate.display(),
-                        structs = types.structs.len(),
+                    profiling::diagnostic(
+                        "info",
                         "loaded PDB type sidecar",
+                        [
+                            TraceField::text("pdb", candidate.display().to_string()),
+                            TraceField::count("structs", types.structs.len() as u64),
+                        ],
                     );
                     image.pdb_types = Some(types);
                     loaded_sidecar = true;
                 }
                 Err(e) => {
-                    tracing::debug!(
-                        pdb = %candidate.display(),
-                        err = %e,
+                    profiling::diagnostic(
+                        "debug",
                         "PDB type sidecar import failed; continuing without it",
+                        [
+                            TraceField::text("pdb", candidate.display().to_string()),
+                            TraceField::text("err", e.to_string()),
+                        ],
                     );
                 }
             }
@@ -1385,19 +1435,25 @@ fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
         if image.pdb_info.is_none() {
             match import_pdb(&candidate) {
                 Ok(info) => {
-                    tracing::info!(
-                        pdb = %candidate.display(),
-                        local_functions = info.function_locals.len(),
+                    profiling::diagnostic(
+                        "info",
                         "loaded PDB debug sidecar",
+                        [
+                            TraceField::text("pdb", candidate.display().to_string()),
+                            TraceField::count("local_functions", info.function_locals.len() as u64),
+                        ],
                     );
                     image.pdb_info = Some(info);
                     loaded_sidecar = true;
                 }
                 Err(e) => {
-                    tracing::debug!(
-                        pdb = %candidate.display(),
-                        err = %e,
+                    profiling::diagnostic(
+                        "debug",
                         "PDB debug sidecar import failed; continuing without it",
+                        [
+                            TraceField::text("pdb", candidate.display().to_string()),
+                            TraceField::text("err", e.to_string()),
+                        ],
                     );
                 }
             }
@@ -1420,30 +1476,55 @@ fn run_decompile(
     _plugin_mgr: &PluginManager,
     stats: bool,
 ) -> Result<()> {
+    let _profile_command = profiling::phase("cmd.decompile");
+    let _profile_trace = profiling::trace_fields(
+        "cmd.decompile",
+        [
+            TraceField::text("binary", binary_path.display().to_string()),
+            TraceField::text("function_filter", function_filter.unwrap_or("<all>")),
+        ],
+    );
     let mut sw = StatsCollector::new(stats);
     let t_load = std::time::Instant::now();
-    let data = fs::read(binary_path)
-        .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
+    let data = {
+        let _span = profiling::phase("decompile.read-binary");
+        fs::read(binary_path)
+            .with_context(|| format!("failed to read '{}'", binary_path.display()))?
+    };
+    profiling::record_bytes("decompile.read-binary", data.len() as u64);
 
-    let mut image = if ElfLoader::can_load(&data) {
-        ElfLoader::load(&data)
-    } else if MachoLoader::can_load(&data) {
-        MachoLoader::load(&data)
-    } else if PeLoader::can_load(&data) {
-        PeLoader::load(&data)
-    } else {
-        bail!(
-            "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
-            binary_path.display(),
-        );
-    }
-    .with_context(|| format!("failed to parse '{}'", binary_path.display()))?;
+    let mut image = {
+        let _span = profiling::phase("decompile.load-binary");
+        if ElfLoader::can_load(&data) {
+            ElfLoader::load(&data)
+        } else if MachoLoader::can_load(&data) {
+            MachoLoader::load(&data)
+        } else if PeLoader::can_load(&data) {
+            PeLoader::load(&data)
+        } else {
+            bail!(
+                "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
+                binary_path.display(),
+            );
+        }
+        .with_context(|| format!("failed to parse '{}'", binary_path.display()))?
+    };
     sw.phase("load+parse", t_load.elapsed());
     sw.set_input_size(data.len() as u64);
 
-    tracing::info!(arch = %image.arch, entry = %format_args!("{:#x}", image.entry), "loaded binary");
+    profiling::diagnostic(
+        "info",
+        "loaded binary",
+        [
+            TraceField::text("arch", image.arch.to_string()),
+            TraceField::addr("entry", image.entry),
+        ],
+    );
 
-    attach_pdb_sidecar(&mut image, binary_path);
+    {
+        let _span = profiling::phase("decompile.attach-pdb");
+        attach_pdb_sidecar(&mut image, binary_path);
+    }
 
     if let Some(override_str) = arch_override {
         let requested = unlace_cli::parse_arch(override_str)?;
@@ -1475,35 +1556,70 @@ fn run_decompile(
         );
     }
 
-    let lifter = get_lifter(image.arch);
+    let lifter = {
+        let _span = profiling::phase("decompile.get-lifter");
+        get_lifter(image.arch)
+    };
     let t_discover = std::time::Instant::now();
-    let mut functions = pipeline::discover_functions(&image, function_filter)?;
+    let mut functions = {
+        let _span = profiling::phase("decompile.discover-functions");
+        pipeline::discover_functions(&image, function_filter)?
+    };
+    profiling::record_items("decompile.discover-functions", functions.len() as u64);
 
-    let dwarf = match import_dwarf_with_sidecar(&image, config.dwarf_sidecar.as_deref()) {
-        Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
-            tracing::info!(
-                functions = d.functions.len(),
-                structs = d.structs.len(),
-                "loaded DWARF debug info",
-            );
-            pipeline::drop_dwarf_duplicate_subfunctions(&mut functions, &d);
-            Some(d)
-        }
-        Ok(_) => None,
-        Err(e) => {
-            tracing::debug!(err = %e, "DWARF import failed; continuing without type info");
-            None
+    let dwarf = {
+        let _span = profiling::phase("decompile.import-dwarf");
+        match import_dwarf_with_sidecar(&image, config.dwarf_sidecar.as_deref()) {
+            Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
+                profiling::record_items("decompile.import-dwarf", d.functions.len() as u64);
+                profiling::diagnostic(
+                    "info",
+                    "loaded DWARF debug info",
+                    [
+                        TraceField::count("functions", d.functions.len() as u64),
+                        TraceField::count("structs", d.structs.len() as u64),
+                    ],
+                );
+                pipeline::drop_dwarf_duplicate_subfunctions(&mut functions, &d);
+                Some(d)
+            }
+            Ok(_) => None,
+            Err(e) => {
+                profiling::diagnostic(
+                    "debug",
+                    "DWARF import failed; continuing without type info",
+                    [TraceField::text("err", e.to_string())],
+                );
+                None
+            }
         }
     };
     sw.phase("discover+dwarf", t_discover.elapsed());
     sw.set_function_count(functions.len());
 
-    tracing::info!(count = functions.len(), "discovered functions");
+    profiling::diagnostic(
+        "info",
+        "discovered functions",
+        [TraceField::count("count", functions.len() as u64)],
+    );
+
+    let mut effective_config = config.clone();
+    effective_config.symbol_context = Some({
+        let _span = profiling::phase("decompile.symbol-context");
+        std::sync::Arc::new(pipeline::build_symbol_context_with_config(
+            &image,
+            &functions,
+            &config.flirt,
+        ))
+    });
 
     // Scan RTTI once for the whole binary; the C printer uses it to
     // emit class hierarchy + reconstructed vtable layouts.
     let t_rtti = std::time::Instant::now();
-    let rtti = unlace_loader::scan_rtti(&image);
+    let rtti = {
+        let _span = profiling::phase("decompile.scan-rtti");
+        unlace_loader::scan_rtti(&image)
+    };
     let rtti_opt = if rtti.is_empty() { None } else { Some(&rtti) };
     sw.phase("rtti-scan", t_rtti.elapsed());
 
@@ -1512,7 +1628,23 @@ fn run_decompile(
     let t_decompile = std::time::Instant::now();
     let total = functions.len();
     for (idx, func_entry) in functions.iter().enumerate() {
-        tracing::info!(name = %func_entry.name, addr = %format_args!("{:#x}", func_entry.addr), "decompiling");
+        let _profile_function = profiling::phase("decompile.function");
+        let _profile_trace = profiling::trace_fields(
+            "decompile.function",
+            [
+                TraceField::text("function", func_entry.name.clone()),
+                TraceField::addr("addr", func_entry.addr),
+                TraceField::count("size", func_entry.size),
+            ],
+        );
+        profiling::record_items("decompile.function", 1);
+        profiling::event_fields(
+            "decompile.function.start",
+            [
+                TraceField::text("function", func_entry.name.clone()),
+                TraceField::addr("addr", func_entry.addr),
+            ],
+        );
         sw.tick_progress(idx, total, &func_entry.name);
 
         let t_fn = std::time::Instant::now();
@@ -1521,7 +1653,7 @@ fn run_decompile(
             lifter.as_ref(),
             func_entry,
             emit,
-            config,
+            &effective_config,
             dwarf.as_ref(),
             &functions,
             rtti_opt,
@@ -1532,7 +1664,14 @@ fn run_decompile(
             }
             Err(e) => {
                 sw.record_failure(&func_entry.name);
-                tracing::warn!(name = %func_entry.name, err = %e, "function decompilation failed");
+                profiling::diagnostic(
+                    "warn",
+                    "function decompilation failed",
+                    [
+                        TraceField::text("function", func_entry.name.clone()),
+                        TraceField::text("err", e.to_string()),
+                    ],
+                );
                 all_output.push_str(&format!(
                     "/* decompilation failed for '{}': {} */\n",
                     func_entry.name, e
@@ -1544,35 +1683,47 @@ fn run_decompile(
     sw.clear_progress();
 
     let t_post = std::time::Instant::now();
-    if matches!(emit, args::EmitFormat::C) {
-        all_output = unlace_output::dedupe_ida_typedefs(&all_output);
-        all_output = unlace_output::declare_pseudo_c_externals(&all_output);
-        all_output = unlace_output::dedupe_rtti_hierarchy(&all_output);
+    {
+        let _span = profiling::phase("decompile.post-process");
+        if matches!(emit, args::EmitFormat::C) {
+            all_output = unlace_output::dedupe_ida_typedefs(&all_output);
+            all_output = unlace_output::declare_pseudo_c_externals(&all_output);
+            all_output = unlace_output::dedupe_rtti_hierarchy(&all_output);
+        }
     }
     sw.phase("post-process", t_post.elapsed());
     sw.set_output_size(all_output.len() as u64);
 
     if let Some(capture_root) = resolve_decompile_capture_dir(capture_dir) {
-        let capture_path = write_decompile_capture(
-            &capture_root,
-            binary_path,
-            &data,
-            &image,
-            function_filter,
-            emit,
-            output_path,
-            functions.len(),
-            &all_output,
-        )?;
+        let capture_path = {
+            let _span = profiling::phase("decompile.write-capture");
+            write_decompile_capture(
+                &capture_root,
+                binary_path,
+                &data,
+                &image,
+                function_filter,
+                emit,
+                output_path,
+                functions.len(),
+                &all_output,
+            )?
+        };
         eprintln!("unlace decompile capture: {}", capture_path.display());
     }
 
     if let Some(path) = output_path {
+        let _span = profiling::phase("decompile.write-output-file");
         let mut file = fs::File::create(path)
             .with_context(|| format!("failed to create '{}'", path.display()))?;
         file.write_all(all_output.as_bytes())?;
-        tracing::info!(path = %path.display(), "wrote output");
+        profiling::diagnostic(
+            "info",
+            "wrote output",
+            [TraceField::text("path", path.display().to_string())],
+        );
     } else {
+        let _span = profiling::phase("decompile.write-stdout");
         print!("{all_output}");
     }
 
@@ -2005,12 +2156,16 @@ fn run_batch_cmd(
     emit: args::EmitFormat,
     arch: Option<String>,
     output_dir: Option<std::path::PathBuf>,
+    merged: bool,
     dwarf_sidecar: Option<std::path::PathBuf>,
     timeout: u64,
     interproc: bool,
     all_functions: bool,
     scope: Option<String>,
     max_iterations: usize,
+    progress: bool,
+    progress_style: args::BatchProgressStyle,
+    invoked_dump_all: bool,
     flirt: pipeline::FlirtConfig,
 ) -> Result<()> {
     let scope_re = match scope.as_deref() {
@@ -2019,6 +2174,18 @@ fn run_batch_cmd(
         }
         None => None,
     };
+    let env_progress = matches!(std::env::var("UNLACE_PROGRESS").ok().as_deref(), Some("1"));
+    let progress_style = if progress || invoked_dump_all || env_progress {
+        progress_style
+    } else {
+        args::BatchProgressStyle::Off
+    };
+    let output_dir = if invoked_dump_all && output_dir.is_none() && !merged {
+        Some(std::path::PathBuf::from("all"))
+    } else {
+        output_dir
+    };
+
     let config = BatchConfig {
         jobs,
         emit,
@@ -2027,6 +2194,7 @@ fn run_batch_cmd(
         all_functions,
         scope: scope_re,
         max_iterations,
+        progress_style,
         flirt,
         dwarf_sidecar: read_dwarf_sidecar(dwarf_sidecar.as_deref())?,
     };

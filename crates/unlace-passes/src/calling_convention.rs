@@ -9,8 +9,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use smallvec::SmallVec;
 use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{BlockId, IrOp, SpaceId};
+use unlace_ir::{ArchId, BlockId, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
 
@@ -25,6 +26,7 @@ const R8: u64 = 64;
 const R9: u64 = 72;
 
 const SYSV_ARG_REGS: &[u64] = &[RDI, RSI, RDX, RCX, R8, R9];
+const SYSV_VARARGS_READ_REGS: &[u64] = &[RDI, RSI, RDX, RCX, R8, R9, RAX];
 const MSX64_ARG_REGS: &[u64] = &[RCX, RDX, R8, R9];
 const SYSV_ONLY_REGS: &[u64] = &[RDI, RSI];
 const AARCH64_ARG_REGS: &[u64] = &[0, 8, 16, 24, 32, 40, 48, 56];
@@ -74,6 +76,25 @@ fn calling_trace_line_verbose(func: &SsaFunction, message: impl std::fmt::Displa
     }
 }
 
+fn tracked_reg_contains(tracked_regs: &[u64], reg: u64) -> bool {
+    tracked_regs.contains(&reg)
+}
+
+fn tracked_input_register(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+    input: &unlace_ir::Varnode,
+    tracked_regs: &[u64],
+) -> Option<(u64, u8)> {
+    if input.space != SpaceId::Register || !tracked_reg_contains(tracked_regs, input.offset) {
+        return None;
+    }
+    let (reg, size) = input_register(func, bid, insn_idx, input_idx, input)?;
+    tracked_reg_contains(tracked_regs, reg).then_some((reg, size))
+}
+
 pub struct CallingConventionDetectPass;
 
 impl Pass for CallingConventionDetectPass {
@@ -86,7 +107,10 @@ impl Pass for CallingConventionDetectPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let detected = detect_calling_convention(func);
+        let detected = {
+            let _span = linkscope::phase("pass.calling-convention.detect");
+            detect_calling_convention(func)
+        };
         if detected != func.calling_convention {
             func.calling_convention = detected;
             Ok(true)
@@ -97,6 +121,10 @@ impl Pass for CallingConventionDetectPass {
 }
 
 fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
+    if matches!(func.arch, ArchId::AArch64) {
+        return CallingConvention::AArch64;
+    }
+
     let entry = func.function.entry;
     let Some(entry_block) = func.function.blocks.get(&entry) else {
         return arch_default_cc(func);
@@ -164,13 +192,15 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
 /// Collect registers that are read before being written in any block of the
 /// function. This captures argument register usage that has migrated out of
 /// the entry block due to SSA optimisation (copy-prop, DCE, block merging).
-fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
+fn collect_whole_function_reads_for(func: &SsaFunction, tracked_regs: &[u64]) -> BTreeSet<u64> {
     let mut reads = BTreeSet::new();
     for (bid, block) in &func.function.blocks {
         let mut defined_in_block: BTreeSet<u64> = BTreeSet::new();
         if let Some(phis) = func.phi_map.get(bid) {
             for phi in phis {
-                if phi.output.base.space == SpaceId::Register {
+                if phi.output.base.space == SpaceId::Register
+                    && tracked_reg_contains(tracked_regs, phi.output.base.offset)
+                {
                     defined_in_block.insert(phi.output.base.offset);
                 }
             }
@@ -181,14 +211,19 @@ fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
                 _ => {}
             }
             for (input_idx, inp) in insn.inputs.iter().enumerate() {
-                if let Some((reg, _size)) = input_register(func, *bid, insn_idx, input_idx, inp)
+                if let Some((reg, _size)) =
+                    tracked_input_register(func, *bid, insn_idx, input_idx, inp, tracked_regs)
                     && !defined_in_block.contains(&reg)
                 {
                     reads.insert(reg);
+                    if reads.len() == tracked_regs.len() {
+                        return reads;
+                    }
                 }
             }
             if let Some(output) = insn.output
                 && output.space == SpaceId::Register
+                && tracked_reg_contains(tracked_regs, output.offset)
             {
                 defined_in_block.insert(output.offset);
             }
@@ -220,8 +255,13 @@ fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
 /// the result and cannot be repaired at the name/printer layer. Re-wire this
 /// only together with the upstream fix. See
 /// `docs/design-lvar-liverange-split-2026-06-01.md`.
-#[allow(dead_code)]
-fn collect_live_on_entry_reads(func: &SsaFunction) -> BTreeSet<u64> {
+struct ParamInputScan {
+    live_on_entry_reads: BTreeSet<u64>,
+    reg_consumer_ops: BTreeMap<u64, Vec<IrOp>>,
+    reg_input_sizes: BTreeMap<u64, BTreeSet<u8>>,
+}
+
+fn collect_param_input_scan(func: &SsaFunction, tracked_regs: &[u64]) -> ParamInputScan {
     // Per-block upward-exposed uses (`use`) and definitions (`def`) over machine
     // register offsets. Phi outputs define their register at the block header;
     // phi inputs are uses on the corresponding predecessor edge (recorded
@@ -229,13 +269,17 @@ fn collect_live_on_entry_reads(func: &SsaFunction) -> BTreeSet<u64> {
     let mut use_set: BTreeMap<BlockId, BTreeSet<u64>> = BTreeMap::new();
     let mut def_set: BTreeMap<BlockId, BTreeSet<u64>> = BTreeMap::new();
     let mut phi_pred_uses: BTreeMap<BlockId, BTreeSet<u64>> = BTreeMap::new();
+    let mut reg_consumer_ops: BTreeMap<u64, Vec<IrOp>> = BTreeMap::new();
+    let mut reg_input_sizes: BTreeMap<u64, BTreeSet<u8>> = BTreeMap::new();
 
     for (&bid, block) in &func.function.blocks {
         let mut defined: BTreeSet<u64> = BTreeSet::new();
         let mut used: BTreeSet<u64> = BTreeSet::new();
         if let Some(phis) = func.phi_map.get(&bid) {
             for phi in phis {
-                if phi.output.base.space == SpaceId::Register {
+                if phi.output.base.space == SpaceId::Register
+                    && tracked_reg_contains(tracked_regs, phi.output.base.offset)
+                {
                     defined.insert(phi.output.base.offset);
                 }
             }
@@ -246,14 +290,41 @@ fn collect_live_on_entry_reads(func: &SsaFunction) -> BTreeSet<u64> {
                 _ => {}
             }
             for (input_idx, inp) in insn.inputs.iter().enumerate() {
-                if let Some((reg, _size)) = input_register(func, bid, insn_idx, input_idx, inp)
-                    && !defined.contains(&reg)
-                {
+                let Some((reg, mut size)) =
+                    tracked_input_register(func, bid, insn_idx, input_idx, inp, tracked_regs)
+                else {
+                    continue;
+                };
+                if !defined.contains(&reg) {
                     used.insert(reg);
                 }
+                if input_role_can_imply_pointer(insn.op, input_idx) {
+                    reg_consumer_ops.entry(reg).or_default().push(insn.op);
+                }
+                let raw_size = size;
+                if insn.op == IrOp::Subpiece
+                    && input_idx == 0
+                    && insn.inputs.get(1).is_some_and(|offset| {
+                        offset.space == SpaceId::Const && offset.offset == 0 && offset.size > 0
+                    })
+                    && let Some(output) = insn.output
+                    && output.size > 0
+                    && output.size < size
+                {
+                    size = output.size;
+                    calling_trace_line_verbose(
+                        func,
+                        format!(
+                            "param-size-refine reg={reg} bid={} insn={} input={} raw_size={raw_size} refined_size={size} reason=subpiece-low-output",
+                            bid.0, insn_idx, input_idx
+                        ),
+                    );
+                }
+                reg_input_sizes.entry(reg).or_default().insert(size);
             }
             if let Some(output) = insn.output
                 && output.space == SpaceId::Register
+                && tracked_reg_contains(tracked_regs, output.offset)
             {
                 defined.insert(output.offset);
             }
@@ -271,7 +342,9 @@ fn collect_live_on_entry_reads(func: &SsaFunction) -> BTreeSet<u64> {
                 continue;
             }
             for (pred, input) in &phi.inputs {
-                if input.base.space == SpaceId::Register {
+                if input.base.space == SpaceId::Register
+                    && tracked_reg_contains(tracked_regs, input.base.offset)
+                {
                     phi_pred_uses
                         .entry(*pred)
                         .or_default()
@@ -312,10 +385,14 @@ fn collect_live_on_entry_reads(func: &SsaFunction) -> BTreeSet<u64> {
         }
     }
 
-    live_in
-        .get(&func.function.entry)
-        .cloned()
-        .unwrap_or_default()
+    ParamInputScan {
+        live_on_entry_reads: live_in
+            .get(&func.function.entry)
+            .cloned()
+            .unwrap_or_default(),
+        reg_consumer_ops,
+        reg_input_sizes,
+    }
 }
 
 fn input_register(
@@ -635,19 +712,28 @@ impl Pass for ParamInferPass {
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut changed = false;
 
-        let params = infer_params(func);
+        let params = {
+            let _span = linkscope::phase("pass.param-infer.params");
+            infer_params(func)
+        };
         if params != func.inferred_params {
             func.inferred_params = params;
             changed = true;
         }
 
-        let stack_params = infer_stack_params(func);
+        let stack_params = {
+            let _span = linkscope::phase("pass.param-infer.stack-params");
+            infer_stack_params(func)
+        };
         if stack_params != func.inferred_stack_params {
             func.inferred_stack_params = stack_params;
             changed = true;
         }
 
-        let is_varargs = detect_varargs(func);
+        let is_varargs = {
+            let _span = linkscope::phase("pass.param-infer.varargs");
+            detect_varargs(func)
+        };
         if is_varargs != func.is_varargs {
             func.is_varargs = is_varargs;
             changed = true;
@@ -668,29 +754,6 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         return Vec::new();
     };
 
-    // Collect registers read-before-write in the entry block.
-    let mut defined: BTreeSet<u64> = BTreeSet::new();
-    let mut read_before_write: BTreeSet<u64> = BTreeSet::new();
-
-    for (insn_idx, insn) in entry_block.insns.iter().enumerate() {
-        match insn.op {
-            IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
-            _ => {}
-        }
-        for (input_idx, inp) in insn.inputs.iter().enumerate() {
-            if let Some((reg, _size)) = input_register(func, entry, insn_idx, input_idx, inp)
-                && !defined.contains(&reg)
-            {
-                read_before_write.insert(reg);
-            }
-        }
-        if let Some(output) = insn.output
-            && output.space == SpaceId::Register
-        {
-            defined.insert(output.offset);
-        }
-    }
-
     // If the entry block has no arg-register reads (common after SSA
     // optimisation pushes usage into successor blocks), fall back to the
     // whole-function scan so we still detect parameters.
@@ -703,14 +766,46 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
             return Vec::new();
         }
     };
+    let tracked_regs: SmallVec<[u64; 16]> =
+        int_regs.iter().chain(float_regs.iter()).copied().collect();
+    let tracked_regs = tracked_regs.as_slice();
+
+    // Collect registers read-before-write in the entry block.
+    let entry_scan_span = linkscope::phase("pass.param-infer.entry-scan");
+    let mut defined: BTreeSet<u64> = BTreeSet::new();
+    let mut read_before_write: BTreeSet<u64> = BTreeSet::new();
+
+    for (insn_idx, insn) in entry_block.insns.iter().enumerate() {
+        match insn.op {
+            IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
+            _ => {}
+        }
+        for (input_idx, inp) in insn.inputs.iter().enumerate() {
+            if let Some((reg, _size)) =
+                tracked_input_register(func, entry, insn_idx, input_idx, inp, tracked_regs)
+                && !defined.contains(&reg)
+            {
+                read_before_write.insert(reg);
+            }
+        }
+        if let Some(output) = insn.output
+            && output.space == SpaceId::Register
+            && tracked_reg_contains(tracked_regs, output.offset)
+        {
+            defined.insert(output.offset);
+        }
+    }
+    drop(entry_scan_span);
 
     let has_arg_reg_in_entry = int_regs
         .iter()
         .chain(float_regs.iter())
         .any(|r| read_before_write.contains(r));
 
-    if !has_arg_reg_in_entry {
-        read_before_write = collect_live_on_entry_reads(func);
+    let all_param_scan = if !has_arg_reg_in_entry {
+        let _span = linkscope::phase("pass.param-infer.fallback-scan");
+        let scan = collect_param_input_scan(func, tracked_regs);
+        read_before_write = scan.live_on_entry_reads.clone();
         calling_trace_line(
             func,
             format!(
@@ -718,21 +813,24 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
                  note=backward liveness from entry; excludes outgoing-call-arg setups dominated by defs"
             ),
         );
-    }
+        Some(scan)
+    } else {
+        None
+    };
 
     // Build a map of which registers feed into which ops for type inference
     // of each parameter. When we fell back to the whole-function scan, collect
     // consumer ops across all blocks too.
     let (reg_consumer_ops, reg_input_sizes) = if has_arg_reg_in_entry {
+        let _span = linkscope::phase("pass.param-infer.entry-consumers");
         (
-            collect_reg_consumer_ops_block(func, entry),
-            collect_reg_input_size_set_block(func, entry),
+            collect_reg_consumer_ops_block(func, entry, tracked_regs),
+            collect_reg_input_size_set_block(func, entry, tracked_regs),
         )
+    } else if let Some(scan) = all_param_scan {
+        (scan.reg_consumer_ops, scan.reg_input_sizes)
     } else {
-        (
-            collect_reg_consumer_ops_all(func),
-            collect_reg_input_size_set_all(func),
-        )
+        (BTreeMap::new(), BTreeMap::new())
     };
 
     let mut params = Vec::new();
@@ -796,7 +894,11 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
     params
 }
 
-fn collect_reg_consumer_ops_block(func: &SsaFunction, entry: BlockId) -> BTreeMap<u64, Vec<IrOp>> {
+fn collect_reg_consumer_ops_block(
+    func: &SsaFunction,
+    entry: BlockId,
+    tracked_regs: &[u64],
+) -> BTreeMap<u64, Vec<IrOp>> {
     let Some(block) = func.function.blocks.get(&entry) else {
         return BTreeMap::new();
     };
@@ -806,26 +908,10 @@ fn collect_reg_consumer_ops_block(func: &SsaFunction, entry: BlockId) -> BTreeMa
             if !input_role_can_imply_pointer(insn.op, input_idx) {
                 continue;
             }
-            if let Some((reg, _size)) = input_register(func, entry, insn_idx, input_idx, inp) {
+            if let Some((reg, _size)) =
+                tracked_input_register(func, entry, insn_idx, input_idx, inp, tracked_regs)
+            {
                 map.entry(reg).or_default().push(insn.op);
-            }
-        }
-    }
-    map
-}
-
-/// Collect register→consumer-op mappings across all blocks.
-fn collect_reg_consumer_ops_all(func: &SsaFunction) -> BTreeMap<u64, Vec<IrOp>> {
-    let mut map: BTreeMap<u64, Vec<IrOp>> = BTreeMap::new();
-    for (&bid, block) in &func.function.blocks {
-        for (insn_idx, insn) in block.insns.iter().enumerate() {
-            for (input_idx, inp) in insn.inputs.iter().enumerate() {
-                if !input_role_can_imply_pointer(insn.op, input_idx) {
-                    continue;
-                }
-                if let Some((reg, _size)) = input_register(func, bid, insn_idx, input_idx, inp) {
-                    map.entry(reg).or_default().push(insn.op);
-                }
             }
         }
     }
@@ -845,6 +931,7 @@ fn input_role_can_imply_pointer(op: IrOp, input_idx: usize) -> bool {
 fn collect_reg_input_size_set_block(
     func: &SsaFunction,
     entry: BlockId,
+    tracked_regs: &[u64],
 ) -> BTreeMap<u64, BTreeSet<u8>> {
     let Some(block) = func.function.blocks.get(&entry) else {
         return BTreeMap::new();
@@ -853,25 +940,9 @@ fn collect_reg_input_size_set_block(
     for (insn_idx, insn) in block.insns.iter().enumerate() {
         for (input_idx, inp) in insn.inputs.iter().enumerate() {
             if let Some((reg, size)) =
-                parameter_input_size(func, entry, insn_idx, input_idx, inp, insn)
+                parameter_input_size(func, entry, insn_idx, input_idx, inp, insn, tracked_regs)
             {
                 map.entry(reg).or_default().insert(size);
-            }
-        }
-    }
-    map
-}
-
-fn collect_reg_input_size_set_all(func: &SsaFunction) -> BTreeMap<u64, BTreeSet<u8>> {
-    let mut map: BTreeMap<u64, BTreeSet<u8>> = BTreeMap::new();
-    for (&bid, block) in &func.function.blocks {
-        for (insn_idx, insn) in block.insns.iter().enumerate() {
-            for (input_idx, inp) in insn.inputs.iter().enumerate() {
-                if let Some((reg, size)) =
-                    parameter_input_size(func, bid, insn_idx, input_idx, inp, insn)
-                {
-                    map.entry(reg).or_default().insert(size);
-                }
             }
         }
     }
@@ -885,8 +956,10 @@ fn parameter_input_size(
     input_idx: usize,
     input: &unlace_ir::Varnode,
     insn: &unlace_ir::IrInsn,
+    tracked_regs: &[u64],
 ) -> Option<(u64, u8)> {
-    let (reg, mut size) = input_register(func, bid, insn_idx, input_idx, input)?;
+    let (reg, mut size) =
+        tracked_input_register(func, bid, insn_idx, input_idx, input, tracked_regs)?;
     let raw_size = size;
 
     if insn.op == IrOp::Subpiece
@@ -1028,7 +1101,7 @@ fn detect_varargs(func: &SsaFunction) -> bool {
         return false;
     }
 
-    let reads = collect_whole_function_reads(func);
+    let reads = collect_whole_function_reads_for(func, SYSV_VARARGS_READ_REGS);
 
     // Signal A: %al / %rax read-before-write somewhere in the function.
     let reads_rax = reads.contains(&RAX);
@@ -1061,7 +1134,7 @@ fn detect_varargs(func: &SsaFunction) -> bool {
         xmm_spilled >= 4
     };
 
-    let xmm_save_area = has_xmm_save_area();
+    let xmm_save_area = !(reads_rax && all_int_args_read) && has_xmm_save_area();
     let result = (reads_rax && all_int_args_read) || xmm_save_area;
     calling_trace_line_verbose(
         func,

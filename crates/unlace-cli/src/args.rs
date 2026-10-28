@@ -140,6 +140,9 @@ pub enum Cmd {
     },
 
     /// Batch-decompile all functions in a binary in parallel.
+    ///
+    /// Alias: `dump-all`.
+    #[command(visible_alias = "dump-all")]
     Batch {
         /// Path to the binary file.
         binary: PathBuf,
@@ -197,6 +200,21 @@ pub enum Cmd {
         /// Increase verbosity (-v, -vv, -vvv).
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,
+
+        /// Emit live progress while decompiling. `dump-all` turns this on by
+        /// default; `batch` keeps the historical default (off) unless this flag
+        /// or `UNLACE_PROGRESS=1` is set.
+        #[arg(long)]
+        progress: bool,
+
+        /// Progress rendering mode.
+        ///
+        /// - `auto`: color + single-line live updates on TTY, plain lines otherwise
+        /// - `plain`: newline progress updates (safe for logs/CI)
+        /// - `color`: ANSI-colored live updates (falls back to plain when not a TTY)
+        /// - `off`: disable progress output
+        #[arg(long, value_enum, default_value = "auto")]
+        progress_style: BatchProgressStyle,
 
         /// Disable FLIRT/SIG matching entirely.
         #[arg(long)]
@@ -574,4 +592,17 @@ pub enum EmitFormat {
     Ir,
     /// Emit Graphviz DOT for the CFG.
     CfgDot,
+}
+
+/// Batch progress rendering mode.
+#[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
+pub enum BatchProgressStyle {
+    /// Auto-detect based on whether stderr is a TTY.
+    Auto,
+    /// Disable batch progress output.
+    Off,
+    /// Plain text progress lines.
+    Plain,
+    /// ANSI-colored live progress.
+    Color,
 }

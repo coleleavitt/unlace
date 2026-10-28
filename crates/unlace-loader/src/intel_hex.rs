@@ -313,10 +313,10 @@ pub fn load_s_record(text: &str) -> Result<SRecordImage, SRecordError> {
             '0' | '5' | '6' => {
                 // Header / count records — ignored for image reconstruction.
             }
-            '1' | '2' | '3' => {
+            '1'..='3' => {
                 push_data(&mut image.segments, addr, data);
             }
-            '7' | '8' | '9' => {
+            '7'..='9' => {
                 image.start_addr = Some(addr);
             }
             _ => unreachable!(),

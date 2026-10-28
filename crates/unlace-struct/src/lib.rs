@@ -79,8 +79,10 @@ pub use seh_lower::{
 pub use short_circuit::short_circuit_recovery;
 pub use structurer::{
     StructureError, recover_for_loops, structure, structure_preserve_returns,
-    structure_preserve_returns_with_landing_pads, structure_with_arch, structure_with_landing_pads,
-    structure_with_landing_pads_and_arch,
+    structure_preserve_returns_with_landing_pads, structure_unstructured_fallback,
+    structure_unstructured_fallback_with_arch, structure_until, structure_with_arch,
+    structure_with_arch_until, structure_with_landing_pads, structure_with_landing_pads_and_arch,
+    structure_with_landing_pads_and_arch_until, structure_with_landing_pads_until,
 };
 pub use switch_cleanup::cleanup_switches;
 pub use switch_recovery::{

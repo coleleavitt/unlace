@@ -241,18 +241,46 @@ fn strict_dominance_enabled() -> bool {
 }
 
 fn verify_ssa_function_inner(func: &SsaFunction, dataflow: bool) -> Result<(), VerifyError> {
-    verify_function_cfg_shape(func)?;
-    verify_phis(func, dataflow)?;
-    verify_var_map(func)?;
-    verify_op_type_bindings(func)?;
-    verify_side_maps(func)?;
-    verify_block_metadata(func)?;
-    verify_varnode_metadata(func)?;
+    {
+        let _span = linkscope::phase("verify.cfg-shape");
+        verify_function_cfg_shape(func)?;
+    }
+    {
+        let _span = linkscope::phase("verify.phis");
+        verify_phis(func, dataflow)?;
+    }
+    {
+        let _span = linkscope::phase("verify.var-map");
+        verify_var_map(func)?;
+    }
+    {
+        let _span = linkscope::phase("verify.op-type-bindings");
+        verify_op_type_bindings(func)?;
+    }
+    {
+        let _span = linkscope::phase("verify.side-maps");
+        verify_side_maps(func)?;
+    }
+    {
+        let _span = linkscope::phase("verify.block-metadata");
+        verify_block_metadata(func)?;
+    }
+    {
+        let _span = linkscope::phase("verify.varnode-metadata");
+        verify_varnode_metadata(func)?;
+    }
     if dataflow {
+        let _span = linkscope::phase("verify.ssa-uses");
         verify_ssa_uses(func)?;
     }
-    verify_lvars(func)?;
-    verify_stack_accesses(func)?;
+    {
+        let _span = linkscope::phase("verify.lvars");
+        verify_lvars(func)?;
+    }
+    {
+        let _span = linkscope::phase("verify.stack-accesses");
+        verify_stack_accesses(func)?;
+    }
     Ok(())
 }
 
@@ -905,63 +933,84 @@ fn verify_metadata_block(
 }
 
 fn verify_varnode_metadata(func: &SsaFunction) -> Result<(), VerifyError> {
+    let referenced = collect_referenced_vars(func);
+    linkscope::record_items(
+        "verify.varnode-metadata.referenced",
+        referenced.len() as u64,
+    );
     for &var in func.var_types.keys() {
-        verify_metadata_var(func, "var_types", var)?;
+        verify_metadata_var(&referenced, "var_types", var)?;
     }
     for counterexample in &func.type_counterexamples {
-        verify_metadata_var(func, "type_counterexamples.varnode", counterexample.varnode)?;
+        verify_metadata_var(
+            &referenced,
+            "type_counterexamples.varnode",
+            counterexample.varnode,
+        )?;
     }
     for &var in &func.foldable_exprs {
-        verify_metadata_var(func, "foldable_exprs", var)?;
+        verify_metadata_var(&referenced, "foldable_exprs", var)?;
     }
     for &var in func.merged_names.keys() {
-        verify_metadata_var(func, "merged_names", var)?;
+        verify_metadata_var(&referenced, "merged_names", var)?;
     }
     for discriminant in &func.enum_discriminants {
-        verify_metadata_var(func, "enum_discriminants.load_sv", discriminant.load_sv)?;
+        verify_metadata_var(
+            &referenced,
+            "enum_discriminants.load_sv",
+            discriminant.load_sv,
+        )?;
     }
     for discriminant in &func.cpp_variant_discriminants {
         verify_metadata_var(
-            func,
+            &referenced,
             "cpp_variant_discriminants.tag_sv",
             discriminant.tag_sv,
         )?;
     }
     if let Some(rust_async) = &func.rust_async {
-        verify_metadata_var(func, "rust_async.future_base", rust_async.future_base)?;
+        verify_metadata_var(
+            &referenced,
+            "rust_async.future_base",
+            rust_async.future_base,
+        )?;
     }
     for info in func.vtable_calls.values() {
-        verify_metadata_var(func, "vtable_calls.base_varnode", info.base_varnode)?;
+        verify_metadata_var(&referenced, "vtable_calls.base_varnode", info.base_varnode)?;
     }
     for info in func.cpp_vtable_calls.values() {
-        verify_metadata_var(func, "cpp_vtable_calls.base_varnode", info.base_varnode)?;
+        verify_metadata_var(
+            &referenced,
+            "cpp_vtable_calls.base_varnode",
+            info.base_varnode,
+        )?;
     }
     for stack_var in func.stack_vars.values() {
         for &var in &stack_var.accesses {
-            verify_metadata_var(func, "stack_vars.accesses", var)?;
+            verify_metadata_var(&referenced, "stack_vars.accesses", var)?;
         }
     }
     for &var in func.composite_var_types.keys() {
-        verify_metadata_var(func, "composite_var_types", var)?;
+        verify_metadata_var(&referenced, "composite_var_types", var)?;
     }
     for &var in func.array_struct_layouts.keys() {
-        verify_metadata_var(func, "array_struct_layouts", var)?;
+        verify_metadata_var(&referenced, "array_struct_layouts", var)?;
     }
     for byref_box in func.byref_boxes.values() {
         verify_metadata_var(
-            func,
+            &referenced,
             "byref_boxes.captured_value_sv",
             byref_box.captured_value_sv,
         )?;
     }
     for &var in func.var_role_names.keys() {
-        verify_metadata_var(func, "var_role_names", var)?;
+        verify_metadata_var(&referenced, "var_role_names", var)?;
     }
     Ok(())
 }
 
 fn verify_metadata_var(
-    func: &SsaFunction,
+    referenced: &BTreeSet<SsaVarnode>,
     table: &'static str,
     var: SsaVarnode,
 ) -> Result<(), VerifyError> {
@@ -970,19 +1019,23 @@ fn verify_metadata_var(
     // states (see verify_ssa_function_pipeline), and their annotations must
     // survive for the printer. Only a var absent from the IR entirely is a
     // dangling reference.
-    if var.version != 0 && !ssa_var_referenced(func, var) {
+    if var.version != 0 && !referenced.contains(&var) {
         return Err(VerifyError::MetadataVarUndefined { table, var });
     }
     Ok(())
 }
 
-fn ssa_var_referenced(func: &SsaFunction, var: SsaVarnode) -> bool {
-    func.var_map.values().any(|&mapped| mapped == var)
-        || func
-            .phi_map
-            .values()
-            .flat_map(|phis| phis.iter())
-            .any(|phi| phi.output == var || phi.inputs.iter().any(|&(_, input)| input == var))
+fn collect_referenced_vars(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
+    let mut referenced: BTreeSet<SsaVarnode> = func.var_map.values().copied().collect();
+    for phis in func.phi_map.values() {
+        for phi in phis {
+            referenced.insert(phi.output);
+            for &(_, input) in &phi.inputs {
+                referenced.insert(input);
+            }
+        }
+    }
+    referenced
 }
 
 fn verify_lvars(func: &SsaFunction) -> Result<(), VerifyError> {

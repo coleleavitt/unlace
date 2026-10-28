@@ -108,6 +108,7 @@ fn whole_program_driver_populates_variadic_call_types() {
         annotations: None,
         flirt: pipeline::FlirtConfig::default(),
         dwarf_sidecar: None,
+        symbol_context: None,
     };
 
     // Lift every discovered function (same as batch.rs Phase 1).

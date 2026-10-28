@@ -10,6 +10,7 @@ unlace-passes = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+linkscope = { path = "../../../linkscope" }
 
 [dev-dependencies]
 insta = { workspace = true }

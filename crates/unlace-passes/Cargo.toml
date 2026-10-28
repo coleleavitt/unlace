@@ -9,9 +9,9 @@ unlace-loader = { workspace = true }
 petgraph = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
-tracing = { workspace = true }
 postcard = { workspace = true }
 serde = { workspace = true }
+linkscope = { path = "../../../linkscope" }
 
 [dev-dependencies]
 insta = { workspace = true }

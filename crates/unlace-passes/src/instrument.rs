@@ -49,6 +49,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
+use linkscope::TraceField;
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::verify_ssa_function_pipeline;
 
@@ -125,6 +126,165 @@ fn pass_run_trace_flag() -> bool {
                 !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
             })
             .unwrap_or(false)
+    })
+}
+
+fn linkscope_trace_flag() -> bool {
+    static CELL: OnceLock<bool> = OnceLock::new();
+    *CELL.get_or_init(|| {
+        [
+            "UNLACE_LINKSCOPE_TRACE",
+            "UNLACE_LINKSCOPE_TRACE_STACK",
+            "UNLACE_LINKSCOPE_TRACE_DETAIL",
+            "UNLACE_LINKSCOPE_TRACE_STACK_DETAIL",
+        ]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .filter_map(|v| v.into_string().ok())
+        .any(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+        })
+    })
+}
+
+fn linkscope_trace_enabled() -> bool {
+    linkscope::is_enabled() && linkscope_trace_flag()
+}
+
+fn linkscope_pass_name_spans_enabled() -> bool {
+    static CELL: OnceLock<bool> = OnceLock::new();
+    linkscope::is_enabled()
+        && *CELL.get_or_init(|| {
+            std::env::var_os("UNLACE_LINKSCOPE_PASS_NAMES")
+                .and_then(|v| v.into_string().ok())
+                .map(|v| {
+                    let v = v.trim().to_ascii_lowercase();
+                    !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
+                })
+                .unwrap_or(false)
+        })
+}
+
+fn linkscope_pass_name_span(name: &str) -> Option<linkscope::Span> {
+    if !linkscope_pass_name_spans_enabled() {
+        return None;
+    }
+    Some(match name {
+        "StackOffsetSnapshotPass" | "stack-offset-snapshot" => {
+            linkscope::phase("pass.name.StackOffsetSnapshotPass")
+        }
+        "NoreturnDetectPass" => linkscope::phase("pass.name.NoreturnDetectPass"),
+        "AliasCategorizePass" | "alias-categorize" => {
+            linkscope::phase("pass.name.AliasCategorizePass")
+        }
+        "ConstantFoldPass" | "constant-fold" => linkscope::phase("pass.name.ConstantFoldPass"),
+        "CopyPropagationPass" | "copy-propagation" => {
+            linkscope::phase("pass.name.CopyPropagationPass")
+        }
+        "GlobalCopyPropPass" | "global-copy-propagation" => {
+            linkscope::phase("pass.name.GlobalCopyPropPass")
+        }
+        "DeadCodeElimPass" | "dce" => linkscope::phase("pass.name.DeadCodeElimPass"),
+        "SccpPass" | "sccp" => linkscope::phase("pass.name.SccpPass"),
+        "CsePass" | "cse" => linkscope::phase("pass.name.CsePass"),
+        "GvnPass" | "gvn" => linkscope::phase("pass.name.GvnPass"),
+        "BmiIdiomPass" | "bmi-idioms" => linkscope::phase("pass.name.BmiIdiomPass"),
+        "LicmPass" | "licm" => linkscope::phase("pass.name.LicmPass"),
+        "IvElimPass" | "iv-elim" => linkscope::phase("pass.name.IvElimPass"),
+        "StrengthReducePass" | "strength-reduce" => {
+            linkscope::phase("pass.name.StrengthReducePass")
+        }
+        "IdiomRecognitionPass" | "idiom-recognition" => {
+            linkscope::phase("pass.name.IdiomRecognitionPass")
+        }
+        "ConditionSimplifyPass" | "condition-simplify" => {
+            linkscope::phase("pass.name.ConditionSimplifyPass")
+        }
+        "BoolSimplifyPass" | "bool-simplify" => linkscope::phase("pass.name.BoolSimplifyPass"),
+        "KnownBitsSimplifyPass" | "known-bits-simplify" => {
+            linkscope::phase("pass.name.KnownBitsSimplifyPass")
+        }
+        "CmovPreservePass" => linkscope::phase("pass.name.CmovPreservePass"),
+        "CallBoundaryCopyPropPass" | "call-boundary-copyprop" => {
+            linkscope::phase("pass.name.CallBoundaryCopyPropPass")
+        }
+        "RedundantFlagElimPass" | "redundant-flag-elim" => {
+            linkscope::phase("pass.name.RedundantFlagElimPass")
+        }
+        "AlgebraicSimplifyPass" | "algebraic-simplify" => {
+            linkscope::phase("pass.name.AlgebraicSimplifyPass")
+        }
+        "DeadStoreElimPass" | "dse" => linkscope::phase("pass.name.DeadStoreElimPass"),
+        "DeadFlagElimPass" | "dead-flag-elim" => linkscope::phase("pass.name.DeadFlagElimPass"),
+        "MemorySsaDsePass" | "memory-ssa-dse" => linkscope::phase("pass.name.MemorySsaDsePass"),
+        "CfgRepairPass" | "cfg-repair" => linkscope::phase("pass.name.CfgRepairPass"),
+        "DeadStoreElimGlobalPass" | "dse-global" => {
+            linkscope::phase("pass.name.DeadStoreElimGlobalPass")
+        }
+        "DivisionIdiomPass" | "division-idiom" => linkscope::phase("pass.name.DivisionIdiomPass"),
+        "ModuloIdiomPass" | "modulo-idiom" => linkscope::phase("pass.name.ModuloIdiomPass"),
+        "SixtyFourBitDemotePass" => linkscope::phase("pass.name.SixtyFourBitDemotePass"),
+        "PrologueElimPass" | "prologue-elim" => linkscope::phase("pass.name.PrologueElimPass"),
+        "TailCallDetectPass" | "tail-call-detect" => {
+            linkscope::phase("pass.name.TailCallDetectPass")
+        }
+        "StackPointerTrackingPass" | "stack-pointer-tracking" => {
+            linkscope::phase("pass.name.StackPointerTrackingPass")
+        }
+        "StackVarRecoveryPass" | "stack-var-recovery" => {
+            linkscope::phase("pass.name.StackVarRecoveryPass")
+        }
+        "IndirectCallResolvePass" | "indirect-call-resolve" => {
+            linkscope::phase("pass.name.IndirectCallResolvePass")
+        }
+        "CppVtablePass" | "cpp-vtable" => linkscope::phase("pass.name.CppVtablePass"),
+        "CppMethodPass" | "cpp-method" => linkscope::phase("pass.name.CppMethodPass"),
+        "CallingConventionDetectPass" | "calling-convention-detect" => {
+            linkscope::phase("pass.name.CallingConventionDetectPass")
+        }
+        "ParamInferPass" | "param-infer" => linkscope::phase("pass.name.ParamInferPass"),
+        "ReturnTypeInferPass" | "return-type-infer" => {
+            linkscope::phase("pass.name.ReturnTypeInferPass")
+        }
+        "StructFieldDetectPass" | "struct-field-detect" => {
+            linkscope::phase("pass.name.StructFieldDetectPass")
+        }
+        "TypeInferPass" => linkscope::phase("pass.name.TypeInferPass"),
+        "TypeInfer" => linkscope::phase("pass.name.TypeInferPass"),
+        "TypeConstraintSolverPass" | "TypeConstraintSolver" => {
+            linkscope::phase("pass.name.TypeConstraintSolverPass")
+        }
+        "SizeofRecognitionPass" => linkscope::phase("pass.name.SizeofRecognitionPass"),
+        "CppVariantPass" | "cpp-variant" => linkscope::phase("pass.name.CppVariantPass"),
+        "CppLambdaCapturePass" | "cpp-lambda-captures" => {
+            linkscope::phase("pass.name.CppLambdaCapturePass")
+        }
+        "CppCoroutinePass" | "cpp-coroutine" => linkscope::phase("pass.name.CppCoroutinePass"),
+        "RustAsyncPass" | "rust-async" => linkscope::phase("pass.name.RustAsyncPass"),
+        "RepStringIdiomPass" | "rep-string-idiom" => {
+            linkscope::phase("pass.name.RepStringIdiomPass")
+        }
+        "BitfieldIdiomPass" | "bitfield-idioms" => linkscope::phase("pass.name.BitfieldIdiomPass"),
+        "CryptoIdiomPass" | "crypto-idioms" => linkscope::phase("pass.name.CryptoIdiomPass"),
+        "IndirectJumpResolvePass" | "indirect-jump-resolve" => {
+            linkscope::phase("pass.name.IndirectJumpResolvePass")
+        }
+        "OpTypeBindingPass" | "op_type_binding" => linkscope::phase("pass.name.OpTypeBindingPass"),
+        "ExpressionTreePass" | "expression-tree" => {
+            linkscope::phase("pass.name.ExpressionTreePass")
+        }
+        "VariableMergePass" | "variable-merge" => linkscope::phase("pass.name.VariableMergePass"),
+        "LvarCollectPass" | "lvar-collect" => linkscope::phase("pass.name.LvarCollectPass"),
+        "RegisterCoalescePass" | "register-coalesce" => {
+            linkscope::phase("pass.name.RegisterCoalescePass")
+        }
+        "RustEnumPass" | "rust-enum" => linkscope::phase("pass.name.RustEnumPass"),
+        "RustVtablePass" | "rust-vtable" => linkscope::phase("pass.name.RustVtablePass"),
+        "RustPanicPass" => linkscope::phase("pass.name.RustPanicPass"),
+        "VarNamingPass" => linkscope::phase("pass.name.VarNamingPass"),
+        "CallingConvFinalizePass" => linkscope::phase("pass.name.CallingConvFinalizePass"),
+        _ => linkscope::phase("pass.name.other"),
     })
 }
 
@@ -565,11 +725,49 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
         return Ok(false);
     }
 
-    // A per-pass span so `tracing-flame` (UNLACE_FLAME=<path>) attributes
-    // wall-clock to the pass that consumed it. When no flame/fmt layer is
-    // interested this is a single atomic load + early return inside
-    // `tracing`, so the common path stays effectively free.
-    let _pass_span = tracing::trace_span!("pass", name = pass.name()).entered();
+    // A per-pass linkscope span attributes wall-clock to the pass runner.
+    let _linkscope_span = linkscope::phase("pass.run");
+    let _linkscope_trace = if linkscope_trace_enabled() {
+        linkscope::event_fields(
+            "pass.start",
+            [
+                TraceField::text("function", func.function.name.clone()),
+                TraceField::text("pass", pass.name().to_string()),
+                TraceField::text("phase", format!("{:?}", pass.phase())),
+                TraceField::text("maturity", format!("{:?}", func.maturity)),
+                TraceField::count("blocks", func.function.blocks.len() as u64),
+                TraceField::count(
+                    "insns",
+                    func.function
+                        .blocks
+                        .values()
+                        .map(|b| b.insns.len() as u64)
+                        .sum(),
+                ),
+            ],
+        );
+        Some(linkscope::trace_fields(
+            "pass.run",
+            [
+                TraceField::text("function", func.function.name.clone()),
+                TraceField::text("pass", pass.name().to_string()),
+                TraceField::text("phase", format!("{:?}", pass.phase())),
+                TraceField::text("maturity", format!("{:?}", func.maturity)),
+                TraceField::count("blocks", func.function.blocks.len() as u64),
+                TraceField::count(
+                    "insns",
+                    func.function
+                        .blocks
+                        .values()
+                        .map(|b| b.insns.len() as u64)
+                        .sum(),
+                ),
+            ],
+        ))
+    } else {
+        None
+    };
+    linkscope::record_items("pass.run", 1);
 
     let trace = pass_should_trace(pass.name());
     let timing = pass_timing_enabled();
@@ -579,6 +777,7 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
     let pass_trace = pass_run_trace_enabled();
 
     if !trace && !timing && !csv && !audit && !verify && !pass_trace {
+        let _pass_name_span = linkscope_pass_name_span(pass.name());
         return pass.run(func);
     }
 
@@ -625,7 +824,10 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
     } else {
         None
     };
-    let res = pass.run(func);
+    let res = {
+        let _pass_name_span = linkscope_pass_name_span(pass.name());
+        pass.run(func)
+    };
     if audit {
         let changed = matches!(res, Ok(true));
         let func_name = func_name_owned.as_deref().unwrap_or("");

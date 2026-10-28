@@ -977,6 +977,37 @@ fn batch_jobs_single_thread() {
 }
 
 #[test]
+fn dump_all_alias_defaults_to_all_dir_and_progress() {
+    let tmp = tempfile::tempdir().unwrap();
+    let output = unlace_bin()
+        .current_dir(tmp.path())
+        .args(["dump-all", "--jobs", "1", "--scope", "^main$"])
+        .arg(fixture("hello_world.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let outdir = tmp.path().join("all");
+    assert!(
+        outdir.exists(),
+        "dump-all should default output directory to ./all"
+    );
+    let c_files: Vec<_> = std::fs::read_dir(&outdir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "c"))
+        .collect();
+    assert!(
+        !c_files.is_empty(),
+        "dump-all should emit at least one per-function .c file"
+    );
+}
+
+#[test]
 fn batch_error_resilience() {
     let output = unlace_bin()
         .args(["batch", "--jobs", "1", "--timeout", "0"])

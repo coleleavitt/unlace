@@ -244,6 +244,9 @@ pub fn refine_abnormal_cyclic_region_with_exits_and_sources(
     predicate_sources: &BTreeMap<u32, RegionNode>,
 ) -> StructuredNode {
     let rc = compute_reaching_conditions(region);
+    if rc.limited {
+        return StructuredNode::Unsupported;
+    }
     if rc.back_edges.is_empty() {
         return StructuredNode::Unsupported;
     }
@@ -272,6 +275,9 @@ fn refine_cyclic_region_nested(
         return StructuredNode::Unsupported;
     }
     let rc = compute_reaching_conditions(region);
+    if rc.limited {
+        return StructuredNode::Unsupported;
+    }
     if rc.back_edges.is_empty() {
         // Acyclic — not our job (use `refine_region`).
         return StructuredNode::Unsupported;
@@ -412,6 +418,12 @@ fn refine_nested_cyclic_region(
             continue;
         };
         let collapsed_rc = compute_reaching_conditions(&collapsed.region);
+        if collapsed_rc.limited {
+            cyclic_trace(|| {
+                format!("skip header={header} reason=collapsed-rc-limited depth={depth}")
+            });
+            continue;
+        }
         let outer_tree = if collapsed_rc.back_edges.is_empty() {
             refine_region(&collapsed.region)
         } else {
@@ -1187,6 +1199,9 @@ fn inject_abnormal_block_controls(
 /// [`StructuredNode::Unsupported`] if the region is cyclic (has back-edges).
 pub fn refine_region(region: &Region) -> StructuredNode {
     let rc = compute_reaching_conditions(region);
+    if rc.limited {
+        return StructuredNode::Unsupported;
+    }
     if !rc.back_edges.is_empty() {
         return StructuredNode::Unsupported;
     }
@@ -1204,6 +1219,9 @@ fn refine_region_with_source_order(
     predicate_sources: &BTreeMap<u32, RegionNode>,
 ) -> StructuredNode {
     let rc = compute_reaching_conditions(region);
+    if rc.limited {
+        return StructuredNode::Unsupported;
+    }
     if !rc.back_edges.is_empty() {
         return StructuredNode::Unsupported;
     }

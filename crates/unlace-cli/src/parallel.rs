@@ -21,7 +21,9 @@ use unlace_ir::Lifter;
 use unlace_loader::{BinaryImage, DwarfInfo};
 
 use crate::args::EmitFormat;
+use crate::batch::worker_stack_bytes;
 use crate::pipeline::{self, FunctionEntry, PipelineConfig};
+use crate::profiling::{self, TraceField};
 
 /// Strategy for ordering functions before parallel dispatch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,24 +131,41 @@ impl ParallelEngine {
         dwarf: Option<&DwarfInfo>,
         progress: Option<&ProgressCallback>,
     ) -> Vec<ParallelResult> {
+        let _profile_parallel = profiling::phase("parallel.decompile-all");
+        let _profile_trace = profiling::trace_fields(
+            "parallel.decompile-all",
+            [
+                TraceField::count("functions", functions.len() as u64),
+                TraceField::text("priority", format!("{:?}", self.config.priority)),
+            ],
+        );
+        profiling::record_items("parallel.decompile-all", functions.len() as u64);
         let thread_count = self.thread_count();
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(thread_count)
-            .thread_name(|idx| format!("unlace-par-{idx}"))
-            .build()
-            .expect("failed to create rayon thread pool");
+        let pool = {
+            let _profile_stage = profiling::phase("parallel.build-thread-pool");
+            let stack_size = worker_stack_bytes();
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(thread_count)
+                .stack_size(stack_size)
+                .thread_name(|idx| format!("unlace-par-{idx}"))
+                .build()
+                .expect("failed to create rayon thread pool")
+        };
 
         let mut indexed: Vec<(usize, &FunctionEntry)> =
             functions.iter().enumerate().collect();
 
-        match self.config.priority {
-            PriorityStrategy::SmallestFirst => {
-                indexed.sort_by_key(|(_, f)| f.size);
+        {
+            let _profile_stage = profiling::phase("parallel.order-functions");
+            match self.config.priority {
+                PriorityStrategy::SmallestFirst => {
+                    indexed.sort_by_key(|(_, f)| f.size);
+                }
+                PriorityStrategy::LargestFirst => {
+                    indexed.sort_by_key(|(_, f)| std::cmp::Reverse(f.size));
+                }
+                PriorityStrategy::AddressOrder => {}
             }
-            PriorityStrategy::LargestFirst => {
-                indexed.sort_by_key(|(_, f)| std::cmp::Reverse(f.size));
-            }
-            PriorityStrategy::AddressOrder => {}
         }
 
         let completed = Arc::new(AtomicUsize::new(0));
@@ -159,6 +178,16 @@ impl ParallelEngine {
             indexed
                 .par_iter()
                 .map(|&(orig_idx, entry)| {
+                    let _profile_function = profiling::phase("parallel.function");
+                    let _profile_trace = profiling::trace_fields(
+                        "parallel.function",
+                        [
+                            TraceField::text("function", entry.name.clone()),
+                            TraceField::addr("addr", entry.addr),
+                            TraceField::count("size", entry.size),
+                        ],
+                    );
+                    profiling::record_items("parallel.function", 1);
                     let start = Instant::now();
 
                     let fn_config = PipelineConfig {
@@ -167,6 +196,7 @@ impl ParallelEngine {
                         annotations: pipeline_config.annotations.clone(),
                         flirt: pipeline_config.flirt.clone(),
                         dwarf_sidecar: None,
+                        symbol_context: pipeline_config.symbol_context.clone(),
                     };
 
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -181,6 +211,14 @@ impl ParallelEngine {
                         Ok(Ok(text)) => Ok(text),
                         Ok(Err(e)) => {
                             let msg = format!("{e:#}");
+                            profiling::diagnostic(
+                                "warn",
+                                "parallel function pipeline error",
+                                [
+                                    TraceField::text("function", entry.name.clone()),
+                                    TraceField::text("err", msg.clone()),
+                                ],
+                            );
                             if msg.contains("timeout") || elapsed >= timeout {
                                 Err(ParallelError::Timeout { limit: timeout })
                             } else {
@@ -195,6 +233,14 @@ impl ParallelEngine {
                             } else {
                                 "<non-string panic>".to_string()
                             };
+                            profiling::diagnostic(
+                                "warn",
+                                "parallel function panic",
+                                [
+                                    TraceField::text("function", entry.name.clone()),
+                                    TraceField::text("err", msg.clone()),
+                                ],
+                            );
                             Err(ParallelError::Panic(msg))
                         }
                     };

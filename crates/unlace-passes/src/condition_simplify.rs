@@ -1,6 +1,7 @@
 //! Condition simplification pass: simplify boolean expressions in IR
 //! using algebraic identities (double negation, absorption, De Morgan).
 
+use linkscope::TraceField;
 use std::collections::BTreeMap;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
@@ -46,10 +47,13 @@ impl Pass for ConditionSimplifyPass {
         loop {
             iter += 1;
             if iter > MAX_INNER {
-                tracing::error!(
-                    func = %func_name,
-                    iters = MAX_INNER,
-                    "condition_simplify did not converge"
+                linkscope::event_fields(
+                    "pass.inner-fixedpoint.error",
+                    [
+                        TraceField::text("pass", self.name()),
+                        TraceField::text("function", func_name.clone()),
+                        TraceField::count("iters", MAX_INNER as u64),
+                    ],
                 );
                 return Err(PassError::InvariantViolation {
                     message: format!(
@@ -140,7 +144,14 @@ impl Pass for ConditionSimplifyPass {
             }
 
             if changed {
-                tracing::trace!(func = %func_name, iter, "condition_simplify iter");
+                linkscope::event_fields(
+                    "pass.inner-fixedpoint.changed",
+                    [
+                        TraceField::text("pass", self.name()),
+                        TraceField::text("function", func_name.clone()),
+                        TraceField::count("iter", iter as u64),
+                    ],
+                );
             }
             changed_any |= changed;
             if !changed {

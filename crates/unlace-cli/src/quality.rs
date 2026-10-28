@@ -30,6 +30,7 @@ use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader};
 use unlace_struct::{HirFunction, HirNode};
 
 use crate::pipeline::{self, FlirtConfidence, FunctionEntry};
+use crate::profiling::{self, TraceField};
 use std::collections::BTreeMap;
 use unlace_ir::SpaceId;
 
@@ -1112,25 +1113,48 @@ pub fn analyze_binary_with_flirt(
     binary_path: &Path,
     flirt_config: &pipeline::FlirtConfig,
 ) -> Result<BinaryQuality> {
-    let data = std::fs::read(binary_path)
-        .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
+    let _profile_command = profiling::phase("quality.analyze-binary");
+    let _profile_trace = profiling::trace_fields(
+        "quality.analyze-binary",
+        [TraceField::text(
+            "binary",
+            binary_path.display().to_string(),
+        )],
+    );
+    let data = {
+        let _span = profiling::phase("quality.read-binary");
+        std::fs::read(binary_path)
+            .with_context(|| format!("failed to read '{}'", binary_path.display()))?
+    };
+    profiling::record_bytes("quality.read-binary", data.len() as u64);
 
-    let image = if ElfLoader::can_load(&data) {
-        ElfLoader::load(&data)
-    } else if MachoLoader::can_load(&data) {
-        MachoLoader::load(&data)
-    } else if PeLoader::can_load(&data) {
-        PeLoader::load(&data)
-    } else {
-        bail!(
-            "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
-            binary_path.display(),
-        );
-    }
-    .with_context(|| format!("failed to parse '{}'", binary_path.display()))?;
+    let image = {
+        let _span = profiling::phase("quality.load-binary");
+        if ElfLoader::can_load(&data) {
+            ElfLoader::load(&data)
+        } else if MachoLoader::can_load(&data) {
+            MachoLoader::load(&data)
+        } else if PeLoader::can_load(&data) {
+            PeLoader::load(&data)
+        } else {
+            bail!(
+                "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
+                binary_path.display(),
+            );
+        }
+        .with_context(|| format!("failed to parse '{}'", binary_path.display()))?
+    };
 
-    let lifter = get_lifter(image.arch);
-    let functions = pipeline::discover_functions(&image, None)?;
+    let lifter = {
+        let _span = profiling::phase("quality.get-lifter");
+        get_lifter(image.arch)
+    };
+    let functions = {
+        let _span = profiling::phase("quality.discover-functions");
+        let functions = pipeline::discover_functions(&image, None)?;
+        profiling::record_items("quality.discover-functions", functions.len() as u64);
+        functions
+    };
 
     let pe_mitigations = image.pe_mitigations.as_ref().map(PeMitigationsReport::from);
 
@@ -1145,6 +1169,16 @@ pub fn analyze_binary_with_flirt(
     };
 
     for entry in &functions {
+        let _profile_function = profiling::phase("quality.function");
+        let _profile_trace = profiling::trace_fields(
+            "quality.function",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::addr("addr", entry.addr),
+                TraceField::count("size", entry.size),
+            ],
+        );
+        profiling::record_items("quality.function", 1);
         match analyze_function(&image, lifter.as_ref(), entry, &functions, flirt_config) {
             Ok(q) => {
                 report.totals.accumulate(&q);
@@ -1152,7 +1186,14 @@ pub fn analyze_binary_with_flirt(
                 report.functions_ok += 1;
             }
             Err(e) => {
-                tracing::debug!(func = %entry.name, err = %e, "quality: function analysis failed");
+                profiling::diagnostic(
+                    "debug",
+                    "quality: function analysis failed",
+                    [
+                        TraceField::text("function", entry.name.clone()),
+                        TraceField::text("err", e.to_string()),
+                    ],
+                );
                 report.functions_failed += 1;
             }
         }
@@ -1203,12 +1244,27 @@ fn analyze_function(
     discovered: &[FunctionEntry],
     flirt_config: &pipeline::FlirtConfig,
 ) -> Result<FunctionQuality> {
-    let mut ir_func = pipeline::lift_function(image, lifter, entry)?;
-    unlace_struct::merge_linear_blocks(&mut ir_func);
-    unlace_struct::tail_duplicate_aggressive(&mut ir_func);
-    unlace_struct::split_irreducible_entries(&mut ir_func);
+    let mut ir_func = {
+        let _span = profiling::phase("quality.lift");
+        pipeline::lift_function(image, lifter, entry)?
+    };
+    {
+        let _span = profiling::phase("quality.merge-linear-blocks");
+        unlace_struct::merge_linear_blocks(&mut ir_func);
+    }
+    {
+        let _span = profiling::phase("quality.tail-duplicate");
+        unlace_struct::tail_duplicate_aggressive(&mut ir_func);
+    }
+    {
+        let _span = profiling::phase("quality.split-irreducible");
+        unlace_struct::split_irreducible_entries(&mut ir_func);
+    }
 
-    let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+    let mut ssa = {
+        let _span = profiling::phase("quality.build-ssa");
+        unlace_ir::ssa::build_ssa(ir_func)
+    };
     // Batch 2: tag the SSA function with its arch so stack-recovery passes
     // consult the right StackSpec — same plumbing as the main pipeline.
     ssa.arch = image.arch;
@@ -1216,8 +1272,13 @@ fn analyze_function(
     // Build the same call-target VA → name resolver the main pipeline uses
     // so resolver-gated passes (noreturn, rust-panic) fire and their SSA
     // fields are populated for the counters below.
-    let (symbols, flirt_calls) =
-        pipeline::build_symbol_table_and_flirt_with_config(image, discovered, flirt_config);
+    let (symbols, flirt_calls) = {
+        let _span = profiling::phase("quality.symbol-table");
+        let resolved =
+            pipeline::build_symbol_table_and_flirt_with_config(image, discovered, flirt_config);
+        profiling::record_items("quality.symbol-table", resolved.0.len() as u64);
+        resolved
+    };
     let mut stable_symbol_names: std::collections::BTreeMap<u64, &'static str> =
         std::collections::BTreeMap::new();
     for (&addr, name) in &symbols {
@@ -1232,76 +1293,104 @@ fn analyze_function(
     // a post-pass call alone would always come up empty on PIE binaries.
     // The post-pass call below is kept (additive merge) as a belt-and-
     // braces guard.
-    let _variadic_types_pre = unlace_passes::parse_printf_format_strings(
-        &mut ssa,
-        &|addr| stable_symbol_names.get(&addr).copied(),
-        &image.string_table,
-    );
+    let _variadic_types_pre = {
+        let _span = profiling::phase("quality.parse-printf-pre");
+        unlace_passes::parse_printf_format_strings(
+            &mut ssa,
+            &|addr| stable_symbol_names.get(&addr).copied(),
+            &image.string_table,
+        )
+    };
 
-    if let Err(e) = pipeline::run_passes_with_resolver(&mut ssa, &resolve_name) {
+    let pass_result = {
+        let _span = profiling::phase("quality.run-passes");
+        pipeline::run_passes_with_resolver(&mut ssa, &resolve_name)
+    };
+    if let Err(e) = pass_result {
         // Match the pipeline's behaviour: a failed pass run still yields a
         // measurable (unoptimised) function rather than aborting.
-        tracing::debug!(func = %entry.name, err = %e, "quality: pass pipeline failed");
+        profiling::diagnostic(
+            "debug",
+            "quality: pass pipeline failed",
+            [
+                TraceField::text("function", entry.name.clone()),
+                TraceField::text("err", e.to_string()),
+            ],
+        );
     }
 
     // Batch 9: resolve jump-table candidates (base + entry_size) into
     // concrete target addresses by reading the binary's .rodata sections.
     // This mirrors what `decompile_function_with_symbols` does in the main
     // pipeline so the switch_statements counter fires.
-    pipeline::resolve_jump_table_targets(&mut ssa, image);
+    {
+        let _span = profiling::phase("quality.resolve-jump-tables");
+        pipeline::resolve_jump_table_targets(&mut ssa, image);
+    }
 
     // Batch 6: mirror the main pipeline's post-pass annotation step so
     // variadic_call_types lands in the SSA we measure. Without this, the
     // measurement under-reports against the actual decompile output.
-    let _libc_annotations_added =
-        unlace_passes::annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned());
-    let _variadic_types_added = unlace_passes::parse_printf_format_strings(
-        &mut ssa,
-        &|addr| stable_symbol_names.get(&addr).copied(),
-        &image.string_table,
-    );
+    let _libc_annotations_added = {
+        let _span = profiling::phase("quality.annotate-libc");
+        unlace_passes::annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned())
+    };
+    let _variadic_types_added = {
+        let _span = profiling::phase("quality.parse-printf-post");
+        unlace_passes::parse_printf_format_strings(
+            &mut ssa,
+            &|addr| stable_symbol_names.get(&addr).copied(),
+            &image.string_table,
+        )
+    };
 
-    let mut hir = unlace_struct::structure(&ssa).context("control-flow structuring failed")?;
+    let mut hir = {
+        let _span = profiling::phase("quality.structure");
+        unlace_struct::structure(&ssa).context("control-flow structuring failed")?
+    };
 
     // Run the same post-structuring passes that the main pipeline applies so
     // the quality metric reflects the actual emitted output (not the raw
     // pre-pass HIR which is pessimistic on goto counts).
-    unlace_struct::flatten_if_else_chains(&mut hir);
-    unlace_struct::simplify_chain_conditions(&mut hir, &ssa);
-    unlace_struct::normalize_conditions(&mut hir);
-    unlace_struct::if_chain_to_switch(&mut hir, &ssa);
-    unlace_struct::recover_cmov_switches(&mut hir, &ssa);
-    unlace_struct::goto_to_break(&mut hir);
-    unlace_struct::goto_to_continue(&mut hir);
-    unlace_struct::detect_continue_break(&mut hir.body);
-    unlace_struct::reverse_loop_rotation(&mut hir);
-    unlace_struct::normalize_dowhile_to_while(&mut hir);
-    unlace_struct::while_to_for(&mut hir);
-    unlace_struct::eliminate_forward_gotos(&mut hir);
-    unlace_struct::hoist_cross_branch_labels(&mut hir);
-    unlace_struct::coalesce_goto_chains(&mut hir);
-    unlace_struct::collapse_label_fallthroughs(&mut hir);
-    unlace_struct::duplicate_goto_conditions(&mut hir);
-    unlace_struct::duplicate_simple_label_tails(&mut hir);
-    unlace_struct::normalize_conditions(&mut hir);
-    unlace_struct::detect_continue_break(&mut hir.body);
-    unlace_struct::eliminate_forward_gotos(&mut hir);
-    unlace_struct::coalesce_goto_chains(&mut hir);
-    unlace_struct::collapse_label_fallthroughs(&mut hir);
-    unlace_struct::cleanup_unreachable_labels(&mut hir);
-    unlace_struct::return_merge(&mut hir);
-    unlace_struct::duplicate_simple_label_tails(&mut hir);
-    unlace_struct::detect_continue_break(&mut hir.body);
-    unlace_struct::eliminate_forward_gotos(&mut hir);
-    unlace_struct::coalesce_goto_chains(&mut hir);
-    unlace_struct::collapse_label_fallthroughs(&mut hir);
-    unlace_struct::cleanup_unreachable_labels(&mut hir);
-    unlace_struct::eliminate_forward_gotos(&mut hir);
-    unlace_struct::cleanup_unreachable_labels(&mut hir);
-    unlace_struct::recover_guarded_whiles(&mut hir);
-    unlace_struct::cleanup_empty_ifs(&mut hir);
-    unlace_struct::cleanup_switches(&mut hir);
-    unlace_struct::repair_missing_goto_labels(&mut hir);
+    {
+        let _span = profiling::phase("quality.hir-post-process");
+        unlace_struct::flatten_if_else_chains(&mut hir);
+        unlace_struct::simplify_chain_conditions(&mut hir, &ssa);
+        unlace_struct::normalize_conditions(&mut hir);
+        unlace_struct::if_chain_to_switch(&mut hir, &ssa);
+        unlace_struct::recover_cmov_switches(&mut hir, &ssa);
+        unlace_struct::goto_to_break(&mut hir);
+        unlace_struct::goto_to_continue(&mut hir);
+        unlace_struct::detect_continue_break(&mut hir.body);
+        unlace_struct::reverse_loop_rotation(&mut hir);
+        unlace_struct::normalize_dowhile_to_while(&mut hir);
+        unlace_struct::while_to_for(&mut hir);
+        unlace_struct::eliminate_forward_gotos(&mut hir);
+        unlace_struct::hoist_cross_branch_labels(&mut hir);
+        unlace_struct::coalesce_goto_chains(&mut hir);
+        unlace_struct::collapse_label_fallthroughs(&mut hir);
+        unlace_struct::duplicate_goto_conditions(&mut hir);
+        unlace_struct::duplicate_simple_label_tails(&mut hir);
+        unlace_struct::normalize_conditions(&mut hir);
+        unlace_struct::detect_continue_break(&mut hir.body);
+        unlace_struct::eliminate_forward_gotos(&mut hir);
+        unlace_struct::coalesce_goto_chains(&mut hir);
+        unlace_struct::collapse_label_fallthroughs(&mut hir);
+        unlace_struct::cleanup_unreachable_labels(&mut hir);
+        unlace_struct::return_merge(&mut hir);
+        unlace_struct::duplicate_simple_label_tails(&mut hir);
+        unlace_struct::detect_continue_break(&mut hir.body);
+        unlace_struct::eliminate_forward_gotos(&mut hir);
+        unlace_struct::coalesce_goto_chains(&mut hir);
+        unlace_struct::collapse_label_fallthroughs(&mut hir);
+        unlace_struct::cleanup_unreachable_labels(&mut hir);
+        unlace_struct::eliminate_forward_gotos(&mut hir);
+        unlace_struct::cleanup_unreachable_labels(&mut hir);
+        unlace_struct::recover_guarded_whiles(&mut hir);
+        unlace_struct::cleanup_empty_ifs(&mut hir);
+        unlace_struct::cleanup_switches(&mut hir);
+        unlace_struct::repair_missing_goto_labels(&mut hir);
+    }
 
     let annotations = unlace_output::PrinterAnnotations {
         ssa_statement_slots: pipeline::collect_ssa_statement_slots(&ssa),
@@ -1312,17 +1401,23 @@ fn analyze_function(
         ..Default::default()
     };
 
-    let emitted_c = unlace_output::print_c_with_annotations(
-        &hir,
-        None,
-        None,
-        Some(&symbols),
-        Some(&image.string_table),
-        None,
-        None,
-        Some(&annotations),
-    );
-    let mut quality = FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir, &flirt_calls);
+    let emitted_c = {
+        let _span = profiling::phase("quality.print-c");
+        unlace_output::print_c_with_annotations(
+            &hir,
+            None,
+            None,
+            Some(&symbols),
+            Some(&image.string_table),
+            None,
+            None,
+            Some(&annotations),
+        )
+    };
+    let mut quality = {
+        let _span = profiling::phase("quality.collect");
+        FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir, &flirt_calls)
+    };
     quality.collect_output_sanity(&emitted_c);
     Ok(quality)
 }

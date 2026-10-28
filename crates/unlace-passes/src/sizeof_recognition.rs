@@ -27,6 +27,7 @@
 //!
 //! All unrecognised constants stay constants — no IR mutation.
 
+use linkscope::TraceField;
 use unlace_ir::ssa::{CallingConvention, SsaFunction};
 use unlace_ir::types::Type;
 use unlace_ir::{BlockId, IrOp, SpaceId};
@@ -109,10 +110,14 @@ where
             {
                 func.sizeof_type_map.insert((bid, idx), t.ty.clone());
                 changed = true;
-                tracing::trace!(
-                    target = target_name,
-                    size = c,
-                    "sizeof recognised at {bid:?}, idx={idx}"
+                linkscope::event_fields(
+                    "pass.sizeof-recognized",
+                    [
+                        TraceField::text("target", target_name),
+                        TraceField::bytes("size", c),
+                        TraceField::text("block", format!("{bid:?}")),
+                        TraceField::count("idx", idx as u64),
+                    ],
                 );
             }
 

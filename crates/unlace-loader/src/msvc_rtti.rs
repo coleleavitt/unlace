@@ -285,6 +285,7 @@ mod tests {
     fn empty_image(arch: ArchId) -> BinaryImage {
         BinaryImage {
             arch,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0,
             sections: Vec::new(),

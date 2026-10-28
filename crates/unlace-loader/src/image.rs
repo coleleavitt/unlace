@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-pub use unlace_ir::ArchId;
+pub use unlace_ir::{ArchId, OsAbi};
 
 /// Byte order of the loaded binary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -407,6 +407,8 @@ pub struct DylibDep {
 pub struct BinaryImage {
     /// Target architecture.
     pub arch: ArchId,
+    /// Platform ABI implied by the container format.
+    pub os_abi: OsAbi,
     /// Byte order.
     pub endian: Endian,
     /// Entry point virtual address.
@@ -592,6 +594,7 @@ impl BinaryImage {
     pub fn empty(arch: ArchId, endian: Endian) -> Self {
         Self {
             arch,
+            os_abi: OsAbi::Unknown,
             endian,
             entry: 0,
             image_base: None,
@@ -694,6 +697,7 @@ mod tests {
     fn empty_image() -> BinaryImage {
         BinaryImage {
             arch: ArchId::Unknown(0),
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0,
             image_base: None,

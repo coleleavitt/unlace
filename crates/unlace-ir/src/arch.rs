@@ -94,3 +94,18 @@ impl fmt::Display for ArchId {
         }
     }
 }
+
+/// The ABI family a binary's platform prescribes, taken from its container
+/// format. On x86-64 it fixes the calling convention: Windows code uses the
+/// Microsoft x64 convention, ELF and Mach-O platforms use System V.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub enum OsAbi {
+    #[default]
+    Unknown,
+    /// PE/COFF and UEFI images.
+    Windows,
+    /// ELF and Mach-O images.
+    SysV,
+}

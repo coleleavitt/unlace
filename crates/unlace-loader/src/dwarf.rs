@@ -2208,6 +2208,7 @@ mod tests {
 
         let img = BinaryImage {
             arch: ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: crate::image::Endian::Little,
             entry: 0,
             sections: vec![

@@ -10,7 +10,7 @@ use petgraph::algo::dominators::simple_fast;
 use petgraph::stable_graph::StableDiGraph;
 
 use crate::cfg::{ControlFlowGraph, build_cfg};
-use crate::{ArchId, BlockId, Function, Varnode};
+use crate::{ArchId, BlockId, Function, OsAbi, Varnode};
 
 fn ssa_trace_enabled() -> bool {
     tracing::enabled!(target: "unlace::ssa", tracing::Level::DEBUG)
@@ -523,6 +523,9 @@ pub struct SsaFunction {
     /// pipeline overwrites it from the loaded `BinaryImage` before passes
     /// run.
     pub arch: ArchId,
+    /// Platform ABI of the binary; [`OsAbi::Unknown`] from [`build_ssa`] until
+    /// the CLI pipeline copies it from the `BinaryImage`.
+    pub os_abi: OsAbi,
     /// Current pipeline maturity level. Initialized to [`Maturity::Zero`]
     /// in [`build_ssa`]; advanced by the pipeline driver as passes complete.
     /// May be downgraded by the type-changed check (sub_F9180 equivalent).
@@ -1603,6 +1606,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         // treat `Unknown` as "no stack spec → skip recovery" rather than
         // panicking, so this default is safe.
         arch: ArchId::Unknown(0),
+        os_abi: OsAbi::Unknown,
         maturity: Maturity::Zero,
         cfg,
         dom_tree,

@@ -246,11 +246,12 @@ fn encode(spec: &Spec, root: &TNode) -> Vec<u8> {
     out
 }
 
+/// Code bytes, public name and optional reference `(offset, name)`.
+pub(crate) type FlatModule = (&'static [u8], &'static str, Option<(i32, &'static str)>);
+
 /// A signature with one root child per module. The four bytes at a
 /// module's reference offset are variant, as `sigmake` marks relocations.
-pub(crate) fn encode_flat(
-    modules: &[(&[u8], &'static str, Option<(i32, &'static str)>)],
-) -> Vec<u8> {
+pub(crate) fn encode_flat(modules: &[FlatModule]) -> Vec<u8> {
     let children = modules
         .iter()
         .map(|&(bytes, name, reference)| {

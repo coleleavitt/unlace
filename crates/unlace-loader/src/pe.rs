@@ -107,6 +107,7 @@ where
 
     let mut image = BinaryImage {
         arch,
+        os_abi: unlace_ir::OsAbi::Windows,
         endian: Endian::Little,
         entry,
         sections,
@@ -3058,6 +3059,7 @@ mod tests {
     fn image_with_forwards(forwards: Vec<ForwardedExport>) -> BinaryImage {
         BinaryImage {
             arch: ArchId::Unknown(0),
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0,
             sections: Vec::new(),

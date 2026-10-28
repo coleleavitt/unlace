@@ -836,6 +836,7 @@ mod tests {
         SsaFunction {
             function: func,
             arch: unlace_ir::ArchId::Unknown(0),
+            os_abi: unlace_ir::OsAbi::Unknown,
             maturity: unlace_ir::ssa::Maturity::Zero,
             cfg,
             dom_tree,

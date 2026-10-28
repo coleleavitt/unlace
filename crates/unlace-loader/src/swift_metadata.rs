@@ -363,6 +363,7 @@ mod tests {
     fn empty_image() -> BinaryImage {
         BinaryImage {
             arch: ArchId::AArch64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0,
             sections: Vec::new(),

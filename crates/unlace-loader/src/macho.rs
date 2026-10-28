@@ -264,6 +264,7 @@ where
 
     let mut image = BinaryImage {
         arch,
+        os_abi: unlace_ir::OsAbi::SysV,
         endian,
         entry,
         sections,

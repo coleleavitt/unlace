@@ -329,6 +329,7 @@ mod tests {
     fn test_no_eh_frame_section_returns_empty() {
         let img = BinaryImage {
             arch: crate::image::ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: crate::image::Endian::Little,
             entry: 0,
             sections: vec![],
@@ -373,6 +374,7 @@ mod tests {
     fn test_corrupt_eh_frame_no_panic() {
         let img = BinaryImage {
             arch: crate::image::ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: crate::image::Endian::Little,
             entry: 0,
             sections: vec![crate::image::Section {

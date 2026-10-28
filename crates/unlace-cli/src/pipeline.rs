@@ -3774,6 +3774,7 @@ pub fn lift_and_run_passes(
         unlace_ir::ssa::build_ssa(ir_func)
     };
     ssa.arch = image.arch;
+    ssa.os_abi = image.os_abi;
 
     {
         let _profile_stage = profile_pipeline_stage("pipeline.debug-info-overlay", entry);
@@ -4479,8 +4480,8 @@ pub fn decompile_function_with_symbols(
         && let Some(canonical) = config
             .symbol_context
             .as_deref()
-            .and_then(|context| context.flirt_calls.get(&entry.addr).map(|m| m.name.clone()))
-            .or_else(|| {
+            .map(|context| context.flirt_calls.get(&entry.addr).map(|m| m.name.clone()))
+            .unwrap_or_else(|| {
                 flirt_match_detailed_with_config(image, entry, &config.flirt).map(|m| m.name)
             })
     {
@@ -4555,6 +4556,7 @@ pub fn decompile_function_with_symbols(
     // every non-x86 binary fell through to a hard-coded RSP=32 lookup and
     // produced `stack_vars.len() == 0`.
     ssa.arch = image.arch;
+    ssa.os_abi = image.os_abi;
     pipeline_trace_ssa(&entry.name, "build-ssa", t, deadline, &ssa);
 
     let t = Instant::now();
@@ -6403,6 +6405,7 @@ mod tests {
         let size = code.len() as u64;
         BinaryImage {
             arch: ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: base,
             sections: vec![Section {
@@ -7806,6 +7809,7 @@ mod tests {
         let ir = super::lift_function(&image, lifter.as_ref(), &entry).expect("lift");
         let mut ssa = unlace_ir::ssa::build_ssa(ir);
         ssa.arch = image.arch;
+        ssa.os_abi = image.os_abi;
 
         // Use a positive offset so `stack_offset_matches` resolves
         // through the `raw_offset == frame_offset.unsigned_abs()` arm.
@@ -7849,6 +7853,7 @@ mod tests {
         let ir = super::lift_function(&image, lifter.as_ref(), &entry).expect("lift");
         let mut ssa = unlace_ir::ssa::build_ssa(ir);
         ssa.arch = image.arch;
+        ssa.os_abi = image.os_abi;
         let before = ssa.composite_var_types.len();
         super::apply_pdb_types_to_ssa(&mut ssa, &image);
         assert_eq!(ssa.composite_var_types.len(), before);

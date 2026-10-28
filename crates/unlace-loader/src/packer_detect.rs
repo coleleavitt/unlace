@@ -173,6 +173,7 @@ mod tests {
     fn empty_image() -> BinaryImage {
         BinaryImage {
             arch: ArchId::Unknown(0),
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0x401000,
             sections: Vec::new(),

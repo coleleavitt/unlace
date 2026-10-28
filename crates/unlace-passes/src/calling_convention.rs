@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use smallvec::SmallVec;
 use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{ArchId, BlockId, IrOp, SpaceId};
+use unlace_ir::{ArchId, BlockId, IrOp, OsAbi, SpaceId};
 
 use crate::pass::{Pass, PassError};
 
@@ -89,6 +89,16 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
     if matches!(func.arch, ArchId::AArch64) {
         return CallingConvention::AArch64;
     }
+    // x86-64 has one convention per platform. Register reads cannot tell
+    // arguments from callee-saved spills (Windows saves RDI/RSI with a
+    // `push`, which reads like a System V argument), so trust the platform.
+    if func.arch == ArchId::X86_64 {
+        match func.os_abi {
+            OsAbi::Windows => return CallingConvention::MicrosoftX64,
+            OsAbi::SysV => return CallingConvention::SystemV,
+            OsAbi::Unknown => {}
+        }
+    }
 
     let entry = func.function.entry;
     let Some(entry_block) = func.function.blocks.get(&entry) else {
@@ -129,7 +139,14 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
     }
 
     let base = score_convention_for_arch(func, &read_before_write);
-    let result = refine_convention(func, base, &read_before_write);
+    // The refinements look for x86 stdcall/thiscall evidence in x86
+    // register offsets; on other architectures those offsets name
+    // unrelated registers.
+    let result = if matches!(func.arch, ArchId::X86 | ArchId::X86_64) {
+        refine_convention(func, base, &read_before_write)
+    } else {
+        base
+    };
     calling_trace_line(
         func,
         format!(
@@ -1662,5 +1679,45 @@ mod tests {
             !ssa.inferred_params.is_empty(),
             "register params should also be populated"
         );
+    }
+
+    // -- Platform ABI ----------------------------------------------------------
+
+    /// `push rdi; mov rdi, rdx` in a Windows prologue reads RDI without it
+    /// being an argument; the PE platform still decides Microsoft x64.
+    #[test]
+    fn windows_x64_ignores_callee_saved_rdi_read() {
+        let mut ssa = make_entry_block_ssa(vec![
+            read_reg_to_unique(RDI, 0x1000),
+            read_reg_to_unique(RCX, 0x1001),
+            read_reg_to_unique(RDX, 0x1002),
+        ]);
+        ssa.arch = ArchId::X86_64;
+        assert_eq!(detect_calling_convention(&ssa), CallingConvention::SystemV);
+        ssa.os_abi = OsAbi::Windows;
+        assert_eq!(
+            detect_calling_convention(&ssa),
+            CallingConvention::MicrosoftX64
+        );
+    }
+
+    #[test]
+    fn sysv_x64_keeps_system_v_with_only_rcx_rdx_reads() {
+        let mut ssa = make_entry_block_ssa(vec![
+            read_reg_to_unique(RCX, 0x1000),
+            read_reg_to_unique(RDX, 0x1001),
+        ]);
+        ssa.arch = ArchId::X86_64;
+        ssa.os_abi = OsAbi::SysV;
+        assert_eq!(detect_calling_convention(&ssa), CallingConvention::SystemV);
+    }
+
+    /// Offset 8 is RCX on x86 but an unrelated register elsewhere: storing
+    /// it to the stack is no `this` spill on RISC-V.
+    #[test]
+    fn x86_refinements_do_not_apply_to_other_architectures() {
+        let mut ssa = make_entry_block_ssa(vec![store_reg_to_stack(RCX, 0x10, 0x1000)]);
+        ssa.arch = ArchId::RiscV64;
+        assert_eq!(detect_calling_convention(&ssa), CallingConvention::Unknown);
     }
 }

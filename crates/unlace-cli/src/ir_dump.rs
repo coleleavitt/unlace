@@ -107,6 +107,7 @@ pub fn dump_functions(
             unlace_ir::ssa::build_ssa(ir_func)
         };
         ssa.arch = image.arch;
+        ssa.os_abi = image.os_abi;
 
         match phase {
             IrDumpPhase::Lift => {}

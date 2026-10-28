@@ -324,6 +324,7 @@ pub fn parse_te_image(bytes: &[u8]) -> Option<TeImage> {
 /// `raw_offset == 0` (BSS-like) are projected as zero-filled.
 pub fn te_to_binary_image(te: &TeImage, original_bytes: &[u8], arch: ArchId) -> BinaryImage {
     let mut out = BinaryImage::empty(arch, Endian::Little);
+    out.os_abi = unlace_ir::OsAbi::Windows;
     // TE entry point = ImageBase + entry_rva.
     out.entry = te.image_base.wrapping_add(te.entry_rva as u64);
     let stripped = te.stripped_size as i64 - 40i64;

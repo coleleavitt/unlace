@@ -1457,6 +1457,7 @@ mod tests {
 
         let img = BinaryImage {
             arch: ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0,
             sections: vec![Section {
@@ -1711,6 +1712,7 @@ mod tests {
 
         let mut img = BinaryImage {
             arch: ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0,
             sections: vec![Section {
@@ -1826,6 +1828,7 @@ mod tests {
 
         let mut img = BinaryImage {
             arch: ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0,
             sections: vec![Section {

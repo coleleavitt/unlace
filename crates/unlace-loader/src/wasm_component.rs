@@ -197,6 +197,7 @@ impl Loader for WasmLoader {
 
         Ok(BinaryImage {
             arch: ArchId::Wasm,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: component_info
                 .start_functions

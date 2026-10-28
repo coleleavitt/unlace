@@ -1329,6 +1329,7 @@ fn analyze_function(
     // Batch 2: tag the SSA function with its arch so stack-recovery passes
     // consult the right StackSpec — same plumbing as the main pipeline.
     ssa.arch = image.arch;
+    ssa.os_abi = image.os_abi;
 
     // Build the same call-target VA → name resolver the main pipeline uses
     // so resolver-gated passes (noreturn, rust-panic) fire and their SSA

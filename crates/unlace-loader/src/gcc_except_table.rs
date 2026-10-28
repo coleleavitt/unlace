@@ -661,6 +661,7 @@ mod tests {
     fn make_lsda_image(lsda_section_va: u64, bytes: Vec<u8>) -> BinaryImage {
         BinaryImage {
             arch: crate::image::ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: crate::image::Endian::Little,
             entry: 0,
             sections: vec![crate::image::Section {

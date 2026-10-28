@@ -293,6 +293,7 @@ mod tests {
     fn make_image(sections: Vec<Section>) -> BinaryImage {
         BinaryImage {
             arch: ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: Endian::Little,
             entry: 0,
             sections,

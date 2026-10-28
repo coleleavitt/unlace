@@ -24,6 +24,13 @@ unlace sigload vc64ucrt.sig --apply --binary ./target.exe
 when the module's referenced name was verified and 0.9 otherwise. Only
 functions with synthetic names (`sub_*`, `loc_*`, ...) are renamed.
 
+`decompile` matches every discovered function once, before the selected
+ones are decompiled, so `--function` still sees library names at its call
+sites. `sigload --apply` matches function symbols plus the starts the loader
+found without a symbol (PE `.pdata`, Mach-O `LC_FUNCTION_STARTS`). Matched
+names also bring their libc prototypes (argument counts and types) and
+noreturn status.
+
 ## File format
 
 ### Header

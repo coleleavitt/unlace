@@ -33,7 +33,7 @@ pub mod verify;
 pub mod xref;
 
 pub use alias::AliasCategory;
-pub use arch::ArchId;
+pub use arch::{ArchId, OsAbi};
 pub use block::{BasicBlock, BlockId};
 pub use data_layout::{DataLayout, Endianness};
 pub use function::Function;

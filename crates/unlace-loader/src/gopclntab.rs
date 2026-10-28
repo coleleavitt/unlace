@@ -585,6 +585,7 @@ mod tests {
 
         let mut image = BinaryImage {
             arch: crate::image::ArchId::X86_64,
+            os_abi: unlace_ir::OsAbi::Unknown,
             endian: crate::image::Endian::Little,
             entry: 0x401000,
             sections: vec![Section {

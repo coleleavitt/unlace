@@ -1,0 +1,24 @@
+# cargo-nextest configuration. Run the suite with `cargo nextest run --workspace`
+# (doctests are not run by nextest: add `cargo test --workspace --doc`).
+#
+# Every test runs in its own process, so tests must not share fixed paths or
+# ports; use `tempfile::tempdir()` and port 0.
+
+[profile.default]
+# Report every failure instead of stopping at the first one.
+fail-fast = false
+# Flag tests slower than 60 s and kill them after 5 minutes.
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+# Tests that run the whole decompiler on fixture binaries.
+[[profile.default.overrides]]
+filter = "binary(golden_fixtures) | binary(golden_x86_64) | (package(unlace-cli) & kind(test))"
+slow-timeout = { period = "120s", terminate-after = 5 }
+
+[profile.ci]
+fail-fast = false
+failure-output = "immediate-final"
+slow-timeout = { period = "120s", terminate-after = 5 }
+
+[profile.ci.junit]
+path = "junit.xml"

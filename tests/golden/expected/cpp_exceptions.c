@@ -47,19 +47,14 @@ unsigned long long atomic_fetch_add_explicit(_Atomic unsigned long long *obj, un
 unsigned long long atomic_exchange_explicit(_Atomic unsigned long long *obj, unsigned long long desired, memory_order order);
 _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, unsigned long long *expected, unsigned long long desired, memory_order success, memory_order failure);
 _BYTE byte_4020;
-_Noreturn void sub_1176(void);
-_Noreturn void sub_121c(void);
-_Noreturn void sub_122d(void);
 _QWORD qword_3FD0;
 _QWORD qword_3FD8;
 _QWORD qword_3FE0;
 _QWORD qword_3FE8;
 _QWORD qword_4008;
 __int64 sub_10b0();
-__int64 sub_11e2();
 __int64 sub_12c0();
 __int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */;
-int __fastcall sub_11c4(void);
 void sub_1290(void);
 void sub_1340(void);
 
@@ -92,12 +87,12 @@ struct __anon0 {
 /* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_throw, __printf_chk | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
 _Noreturn int safe_call(void) {
-    __int64 v_0;
-    __int64 v23; // rax
     __int64 v25; // rax
     __int64 c2; // rbx
+    __int64 saved_rbx; // rdi
+    saved_rbx = 0x10LL;
     /* allocate exception */
-    v23 = __cxa_allocate_exception(0x10LL);
+    __int64 v23 = __cxa_allocate_exception(saved_rbx); // rax
     c2 = v23; std_runtime_error_runtime_error();
     /* throw */
     v25 = __cxa_throw(c2, 0x3d40LL, qword_3FE0);
@@ -118,99 +113,9 @@ struct __anon0 {
 /* Function:   _start | Address: 0x1260 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
 void _start(void) {
     __int64 v_8;
-    __int64 v_0;
     _QWORD pfn; // temp
-        v_8 = (uintptr_t)&v_0; pfn = qword_3FD8;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
-}
-
-/* Function:   may_throw(int) | Address: 0x1350 | Size: 0xc (12 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-// may_throw(int)
-void may_throw(int a1) {
-    return;
-}
-
-/* Function:   safe_call(int) | Address: 0x1360 | Size: 0xe (14 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-// safe_call(int)
-int safe_call(int a1) {
-    return 0;
-}
-
-/* Function:   sub_1176 | Address: 0x1176 | Size: 0x12 (18 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume, __cxa_free_exception | Xrefs from: unknown */
-_Noreturn void sub_1176(void) {
-    __int64 c0; // rax
-    int v2; // rbx
-    /* free exception */
-    c0 = __cxa_free_exception(v2);
-    _Unwind_Resume(c0);
-    return;
-}
-
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    void * field_0;
-    void * field_8;
-};
-
-/* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x57 (87 bytes) | Convention: Microsoft x64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_end_catch, __cxa_free_exception, __printf_chk | Xrefs from: unknown */
-int __fastcall sub_11c4(void) {
-    __int64 c1; // temp
-    __int64 v8; // temp
-    __int64 v_0;
-    __int64 result_0; // rax
-    __int64 v11; // rax
-    __int64 v12; // rax
-    __int64 v14; // rax
-    __int64 saved_rbx; // rdi
-    _QWORD v7; // temp
-    _QWORD pfn; // temp
-    v_0 = result_0;
-    /* free exception */
-    result_0 = __cxa_free_exception(v7);
-    saved_rbx = v_0; result_0 = v8 - 1LL;
-    /* catch */
-    v11 = __cxa_begin_catch(result_0);
-    v7 = *(_QWORD *)(v11); pfn = *(_QWORD *)(v7 + 0x10LL); v12 = ((__int64 (*)())pfn)();
-    c1 = v12; printf("caught: %s\n", (char *)c1);
-    /* end catch */
-    v14 = __cxa_end_catch();
-    return 0xffffffff;
-}
-
-/* Function:   sub_121c | Address: 0x121c | Size: 0x6 (6 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume | Xrefs from: unknown */
-_Noreturn void sub_121c(void) {
-    sub_11e2();
-}
-
-/* Function:   sub_122d | Address: 0x122d | Size: 0xf (15 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume, __cxa_end_catch | Xrefs from: unknown */
-_Noreturn void sub_122d(void) {
-    __int64 c0; // rax
-    /* end catch */
-    c0 = __cxa_end_catch();
-    _Unwind_Resume(c0);
-    return;
-}
-
-/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
-__int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
-    __int64 v_0;
-    __int64 result; // rax
-    if (byte_4020 != '\0') {
-        return result;
-    } else {
-        if (qword_3FD0 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
-            result = sub_10b0();
-        }
-        result = sub_1290(); byte_4020 = 1;
-                        return result;
-    }
-}
-
-/* Function:   sub_1340 | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1340(void) {
-    sub_12c0();
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8; ((__int64 (*)())pfn)();
+    __builtin_trap(); return;
 }
 
 /* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
@@ -224,4 +129,36 @@ void sub_1290(void) {
         }
     }
     return;
+}
+
+/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
+__int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
+    __int64 result; // rax
+    if (byte_4020 != '\0') {
+        return result;
+    } else {
+        if (qword_3FD0 != 0LL) {
+            _QWORD v13 = qword_4008; // temp
+            __int64 c3 = v13; // rdi
+            result = sub_10b0();
+        }
+        result = sub_1290(); byte_4020 = 1; return result;
+    }
+}
+
+/* Function:   sub_1340 | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1340(void) {
+    sub_12c0();
+}
+
+/* Function:   may_throw(int) | Address: 0x1350 | Size: 0xc (12 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+// may_throw(int)
+void may_throw(int a1) {
+    return;
+}
+
+/* Function:   safe_call(int) | Address: 0x1360 | Size: 0xe (14 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+// safe_call(int)
+int safe_call(int a1) {
+    return 0;
 }

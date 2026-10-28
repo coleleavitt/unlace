@@ -55,7 +55,7 @@ impl Pass for DeadCodeElimPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let trace = std::env::var_os("UNLACE_DCE_TRACE").is_some();
+        let trace = tracing::enabled!(target: "unlace::dce", tracing::Level::DEBUG);
         let mut used: BTreeSet<SsaVarnode> = BTreeSet::new();
 
         for (&bid, block) in &func.function.blocks {
@@ -103,8 +103,9 @@ impl Pass for DeadCodeElimPass {
                             .find(|used_sv| register_output_covers_use(sv, used_sv))
                         {
                             if trace {
-                                eprintln!(
-                                    "[unlace-dce] keep block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?} alias-use={:?}",
+                                tracing::debug!(
+                                    target: "unlace::dce",
+                                    "keep block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?} alias-use={:?}",
                                     insn.addr, insn.op, sv, used_sv
                                 );
                             }
@@ -119,16 +120,18 @@ impl Pass for DeadCodeElimPass {
 
                 if is_dead {
                     if trace {
-                        eprintln!(
-                            "[unlace-dce] drop block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?}",
+                        tracing::debug!(
+                            target: "unlace::dce",
+                            "drop block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?}",
                             insn.addr, insn.op, output_sv
                         );
                     }
                     changed = true;
                 } else {
                     if trace && keep_reason == Some("exact-use") {
-                        eprintln!(
-                            "[unlace-dce] keep block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?} reason=exact-use",
+                        tracing::debug!(
+                            target: "unlace::dce",
+                            "keep block={bid:?} idx={insn_idx} addr=0x{:x} op={:?} output={:?} reason=exact-use",
                             insn.addr, insn.op, output_sv
                         );
                     }

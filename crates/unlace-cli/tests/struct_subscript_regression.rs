@@ -32,7 +32,6 @@ use std::process::Command;
 fn unlace_bin() -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.env_remove("RUST_LOG");
-    cmd.env_remove("UNLACE_VALIDATE_PIPELINE");
     cmd
 }
 

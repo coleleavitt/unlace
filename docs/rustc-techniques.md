@@ -119,10 +119,10 @@ analysis. → Target: future `ConstantRange` widening in
 rustc ships `-Z self-profile` and the team always measures before
 optimizing.
 
-**unlace mapping**: this is exactly what `--stats` + `UNLACE_TIMING=1` +
-`UNLACE_FLAME` (see `docs/profiling.md`) give us. The wc finding
+**unlace mapping**: this is exactly what `--stats` + `--log unlace::timing=info` +
+linkscope profiling (see `docs/profiling.md`) give us. The wc finding
 (TypeConstraintSolver = 50% of the function budget) came straight from
-`UNLACE_TIMING`, not guesswork. → Done (t131, t132).
+the per-pass timing table, not guesswork. → Done (t131, t132).
 
 ---
 

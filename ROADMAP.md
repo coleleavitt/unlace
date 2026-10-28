@@ -13,11 +13,12 @@ IDA/Hex-Rays is the baseline to beat, not the ceiling. The fixture parity metric
 
 This roadmap assumes the primary users are **reverse engineers, security researchers, and automated analysis pipelines**.
 
-Frontend product work is intentionally out of scope for this roadmap pass.
+Unlace is a CLI and headless decompiler engine and library. It has no GUI,
+TUI, or web UI, and none is planned.
 The CLI-first adoption surfaces are scripting, plugins, persistent project state,
 debugger/emulator/trace evidence, release artifacts, and corpus-scale
 measurement. The preferred product order is CLI first, then SDK, then MCP.
-Frontend/editor work is deferred until explicitly revived.
+Results go to stdout, files, and typed SDK data for other tools to consume.
 
 ## Definition of "Production-Grade"
 
@@ -534,11 +535,11 @@ Acceptance:
 - Fuzzer harness
 - Benchmark suite
 
-### F.9 Deferred Frontends
+### F.9 Headless Product Surface
 
-These are intentionally deferred because the preferred surface is CLI-first.
-They should not consume roadmap priority until CLI, SDK, MCP, project
-persistence, and corpus evidence are stable.
+Unlace ships as a CLI and a Rust library. Interactive views (graph, hex,
+pseudocode panes, minimaps) are out of scope. External tools consume unlace
+through CLI output, the SDK, and data exports such as GraphViz dot.
 
 Acceptance:
 - Unlace SDK documented with examples
@@ -573,15 +574,15 @@ Acceptance:
 ### G.2 Remote Debugger
 - GDB MI protocol client
 - Remote debug server (IDA-compatible protocol)
-- gdbstub frontend for embedded targets
+- GDB stub client for embedded targets
 
 ### G.3 Debugger Features
 - Software/hardware breakpoints
 - Conditional breakpoints with expression eval
 - Watch expressions
-- Register view with type-aware display
+- Register dump with type-aware formatting
 - Call stack with unwind info
-- Memory view with type overlay
+- Memory dump with type overlay
 
 ### G.4 Advanced
 - Bochs emulator integration (malware safe-analysis)
@@ -613,9 +614,10 @@ plugin manifest, hot-reload, and registry work now lives under F.1.
 
 ---
 
-## Phase I — User Interaction
+## Phase I — User-Guided Analysis
 
-**Goal:** Let users manually guide decompilation.
+**Goal:** Let users guide decompilation with typed `.unlace` project facts set
+from the CLI, SDK, or scripts.
 
 ### I.1 Variable Control
 - Force variable type
@@ -739,7 +741,7 @@ Acceptance:
 | E — Format/Dynamic | 1-2 months | 15 months |
 | F — Ecosystem | 1-2 months | 17 months |
 | G — Debugger | 2-3 months | 20 months |
-| I — User Interaction | 1-2 months | 22 months |
+| I — User-Guided Analysis | 1-2 months | 22 months |
 | J — Corpus Evidence | 1-2 months | 24 months |
 | K — Platform/Release | 1-2 months | 26 months |
 | Packers/Obfuscation | 2-4 months | integrate with E/F/J |
@@ -749,8 +751,8 @@ Acceptance:
 With sustained agent-assisted development, the critical CLI-first adoption path is
 shorter than the full parity path: CLI, SDK, MCP, xrefs, persistent
 project state, basic debugger breadth, and corpus evidence should land before
-long-tail architecture or release polish. Frontend/editor productization work
-remains deferred.
+long-tail architecture or release polish.
+There is no UI track.
 
 ---
 

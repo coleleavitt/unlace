@@ -2,9 +2,11 @@
 //! the async server onto blocking analysis threads.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use rmcp::{Json, handler::server::wrapper::Parameters, schemars, tool, tool_router};
 use serde::Deserialize;
+use unlace_cli::config::Config;
 
 use crate::analysis::{self, Address, BinaryInfo, Decompilation, FunctionList, XrefsFrom, XrefsTo};
 
@@ -42,12 +44,15 @@ pub struct AddressRequest {
 }
 
 /// Read-only unlace analysis exposed over MCP.
-#[derive(Debug, Clone, Default)]
-pub struct UnlaceServer;
+#[derive(Debug, Clone)]
+pub struct UnlaceServer {
+    /// Pipeline options, loaded once at startup the way `unlace` loads them.
+    config: Arc<Config>,
+}
 
 impl UnlaceServer {
-    pub fn new() -> Self {
-        Self
+    pub fn new(config: Arc<Config>) -> Self {
+        Self { config }
     }
 }
 
@@ -84,7 +89,8 @@ impl UnlaceServer {
         &self,
         Parameters(FunctionRequest { binary, function }): Parameters<FunctionRequest>,
     ) -> Result<Json<Decompilation>, String> {
-        blocking(move || analysis::decompile_function(&binary, &function))
+        let config = Arc::clone(&self.config);
+        blocking(move || analysis::decompile_function(&binary, &function, &config))
             .await
             .map(Json)
     }
@@ -101,7 +107,9 @@ impl UnlaceServer {
             phase,
         }): Parameters<IrDumpRequest>,
     ) -> Result<String, String> {
-        blocking(move || analysis::ir_dump_function(&binary, &function, phase.as_deref())).await
+        let config = Arc::clone(&self.config);
+        blocking(move || analysis::ir_dump_function(&binary, &function, phase.as_deref(), &config))
+            .await
     }
 
     #[tool(
@@ -227,7 +235,10 @@ mod tests {
     async fn stdio_session_initializes_lists_and_calls_tools() {
         let (client_io, server_io) = duplex(1 << 20);
         let server = tokio::spawn(async move {
-            let running = UnlaceServer::new().serve(server_io).await.unwrap();
+            let running = UnlaceServer::new(Arc::new(Config::default()))
+                .serve(server_io)
+                .await
+                .unwrap();
             running.waiting().await.unwrap();
         });
         let (read, write) = split(client_io);

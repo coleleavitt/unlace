@@ -63,7 +63,8 @@ capability flag and must record provenance.
 `unlace-cli` library in-process (`load`, `decompiler`, `ir_dump`, `xrefs`). It
 does not spawn the `unlace` binary, parse CLI text, or generate scripts. Blocking
 analysis runs on Tokio's blocking pool. Every tool is read-only and reloads the
-binary per call.
+binary per call. Pipeline options come from the same `unlace.toml` lookup as
+the CLI, and diagnostics go to stderr through the CLI's `tracing` subscriber.
 
 | Tool | Arguments | Result |
 |------|-----------|--------|

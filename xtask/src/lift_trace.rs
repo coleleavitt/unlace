@@ -48,7 +48,12 @@ pub fn run(args: &[String]) -> i32 {
         }
     };
 
-    let lifter = X86Lifter::with_trace(true);
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::new("unlace::lift=debug"))
+        .with_writer(std::io::stderr)
+        .without_time()
+        .try_init();
+    let lifter = X86Lifter::new();
     match lifter.lift_insn(&bytes, addr) {
         Ok(lifted) => {
             println!(

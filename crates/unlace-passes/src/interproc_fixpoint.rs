@@ -52,12 +52,6 @@ fn snapshot_signatures(funcs: &BTreeMap<u64, SsaFunction>) -> FunctionSignatureR
     out
 }
 
-fn interproc_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_INTERPROC_TRACE")
-        .map(|v| v != "0")
-        .unwrap_or(false)
-}
-
 /// Drive the cross-function fixed-point loop.
 ///
 /// `per_function` runs the existing single-function analysis pipeline
@@ -76,7 +70,7 @@ where
 {
     use unlace_ir::xref::compute_sccs;
 
-    let trace = interproc_trace_enabled();
+    let trace = tracing::enabled!(target: "unlace::interproc", tracing::Level::DEBUG);
     let mut report = InterprocReport::default();
     let mut registry: FunctionSignatureRegistry = FunctionSignatureRegistry::new();
 
@@ -86,8 +80,9 @@ where
     for iter in 0..cap.max(1) {
         report.iterations = iter + 1;
         if trace {
-            eprintln!(
-                "[unlace interproc] iter={} funcs={} registry={}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "iter={} funcs={} registry={}",
                 iter + 1,
                 funcs.len(),
                 registry.len()
@@ -96,8 +91,9 @@ where
 
         let prev_sigs = snapshot_signatures(funcs);
         if trace {
-            eprintln!(
-                "[unlace interproc] iter={} snapshot-prev={}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "iter={} snapshot-prev={}",
                 iter + 1,
                 prev_sigs.len()
             );
@@ -111,8 +107,9 @@ where
         let all_addrs: Vec<u64> = funcs.keys().copied().collect();
         let sccs = compute_sccs(&cg, &all_addrs);
         if trace {
-            eprintln!(
-                "[unlace interproc] iter={} callgraph: funcs={} sccs={} indirect={}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "iter={} callgraph: funcs={} sccs={} indirect={}",
                 iter + 1,
                 all_addrs.len(),
                 sccs.len(),
@@ -128,8 +125,9 @@ where
             for &addr in scc {
                 if let Some(ssa) = funcs.get_mut(&addr) {
                     if trace {
-                        eprintln!(
-                            "[unlace interproc] iter={} before func={:#x} name={} maturity={:?}",
+                        tracing::debug!(
+                            target: "unlace::interproc",
+                            "iter={} before func={:#x} name={} maturity={:?}",
                             iter + 1,
                             addr,
                             ssa.function.name,
@@ -139,8 +137,9 @@ where
                     ssa.external_signatures = registry.clone();
                     per_function(ssa)?;
                     if trace {
-                        eprintln!(
-                            "[unlace interproc] iter={} after func={:#x} name={} maturity={:?}",
+                        tracing::debug!(
+                            target: "unlace::interproc",
+                            "iter={} after func={:#x} name={} maturity={:?}",
                             iter + 1,
                             addr,
                             ssa.function.name,
@@ -153,8 +152,9 @@ where
 
         let new_sigs = snapshot_signatures(funcs);
         if trace {
-            eprintln!(
-                "[unlace interproc] iter={} snapshot-new={}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "iter={} snapshot-new={}",
                 iter + 1,
                 new_sigs.len()
             );
@@ -167,8 +167,9 @@ where
         let sig_delta = signatures_diff_count(&prev_sigs, &new_sigs);
         report.signature_changes = report.signature_changes.saturating_add(sig_delta);
         if trace {
-            eprintln!(
-                "[unlace interproc] iter={} sig_delta={} registry_changed={} applied={} signature_changes={}",
+            tracing::debug!(
+                target: "unlace::interproc",
+                "iter={} sig_delta={} registry_changed={} applied={} signature_changes={}",
                 iter + 1,
                 sig_delta,
                 registry_changed,
@@ -179,7 +180,7 @@ where
 
         if sig_delta == 0 && !registry_changed && !applied {
             if trace {
-                eprintln!("[unlace interproc] converged iter={}", iter + 1);
+                tracing::debug!(target: "unlace::interproc", "converged iter={}", iter + 1);
             }
             return Ok(report);
         }
@@ -187,8 +188,9 @@ where
 
     report.hit_cap = true;
     if trace {
-        eprintln!(
-            "[unlace interproc] hit cap iterations={} signature_changes={}",
+        tracing::debug!(
+            target: "unlace::interproc",
+            "hit cap iterations={} signature_changes={}",
             report.iterations, report.signature_changes
         );
     }

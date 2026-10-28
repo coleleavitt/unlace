@@ -1,0 +1,86 @@
+# unlace configuration. Every key below is shown at its built-in default;
+# delete what you do not change. Lookup order: `--config <path>`,
+# `./unlace.toml`, `$XDG_CONFIG_HOME/unlace/config.toml`
+# (`~/.config/unlace/config.toml`), then defaults. `unlace config show`
+# prints the effective configuration. A limit of 0 disables that budget.
+#
+# Diagnostics are not configured here: use `RUST_LOG` or `--log`, for example
+# `--log 'unlace::sccp[function{name=main}]=debug'`.
+
+[passes]
+# Pass names to skip; "*" skips every instrumented pass.
+disabled = []
+# Run only the first N instrumented pass invocations (opt-bisect).
+# bisect_limit = 100
+# Run the structural SSA verifier after every successful pass.
+verify_each = false
+
+[passes.sccp]
+# Lattice work items before a solve is abandoned.
+max_work = 50000
+# SSA definitions plus phis above which SCCP is skipped.
+max_vars = 25000
+
+[passes.iv_opt]
+# Instructions plus phis above which IV elimination and strength reduction are skipped.
+max_nodes = 20000
+
+[passes.variable_merge]
+# Coalescible temporaries above which only per-base naming runs.
+max_coalescible_vars = 5000
+
+[passes.type_constraint]
+# Collected constraints above which the TIE-style solver is skipped.
+max_constraints = 30000
+
+[passes.diagnostics]
+# CSV of wall-clock per (function, pass, iteration).
+# timing_csv = "timings.csv"
+# CSV of every pass run/skip decision, plus an oscillation summary on stderr.
+# schedule_audit = "schedule.csv"
+# Directory receiving one IR dump per (function, maturity stage, iteration).
+# maturity_dump = "maturity"
+# One linkscope phase per pass name while linkscope profiling is on.
+linkscope_pass_names = false
+
+[structure]
+# Phi nodes above which structuring falls back to labels and gotos.
+max_phis = 12288
+# Above these sizes the unstructured fallback prints a summary comment.
+fallback_max_blocks = 256
+fallback_max_insns = 4096
+# Condition-tree nodes above which reaching-condition analysis gives up.
+max_reaching_condition_nodes = 8192
+
+[printer]
+# Soft right margin (IDA `module_data + 600`). `--max-width` overrides.
+max_line_width = 100
+# Columns emitted per nesting level. `--tab-width` overrides.
+tab_width = 4
+# Logical indent width (IDA `module_data + 592`).
+indent_width = 2
+# Minimum line width before wrapping.
+wrap_floor = 80
+# IDA `module_data + 719` format-flags bitfield; no bits are consumed yet.
+format_flags = 0
+
+[batch]
+# Stack size of each analysis worker thread, in MiB.
+worker_stack_mb = 512
+# Functions at least this many bytes long run serially after the parallel phase.
+large_function_serial_bytes = 8192
+# Function count above which `--interproc` warns about peak memory.
+interproc_max_functions = 4096
+
+[linkscope]
+# Record phase timings and counters.
+enabled = false
+# Call-tree recording: "off", "events", "stack", "detail", or "stack-detail".
+trace = "off"
+# Write the profile as JSON / a Mermaid flowchart on exit.
+# json = "profile.json"
+# mermaid = "profile.md"
+# Print the profile report to stderr on exit.
+report = true
+# Print a profile snapshot every N seconds.
+# report_interval_secs = 30

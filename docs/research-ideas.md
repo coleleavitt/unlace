@@ -45,8 +45,6 @@ entry here as a commitment.
 
 - A "decompiler diary" mode: every output change is logged with the
   responsible passes, so post-hoc triage of an output regression is mechanical.
-- Hex view / disassembly view backed by the `TaggedStream` model so the UI can
-  share identifiers across views without re-deriving them.
 
 ## What does NOT belong here
 

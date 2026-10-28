@@ -5,6 +5,7 @@ use std::str::FromStr;
 use anyhow::{Result, bail};
 use unlace_lift::get_lifter;
 use unlace_loader::BinaryImage;
+use unlace_passes::PassOptions;
 
 use crate::pipeline;
 use crate::profiling::{self, TraceField};
@@ -52,6 +53,7 @@ pub fn dump_functions(
     image: &BinaryImage,
     filter: Option<&str>,
     phase: IrDumpPhase,
+    passes: &PassOptions,
 ) -> Result<String> {
     let lifter = {
         let _span = profiling::phase("ir-dump.get-lifter");
@@ -76,6 +78,7 @@ pub fn dump_functions(
             ],
         );
         profiling::record_items("ir-dump.function", 1);
+        let _function_span = pipeline::function_span(entry);
         let lift_result = {
             let _span = profiling::phase("ir-dump.lift");
             pipeline::lift_function(image, lifter.as_ref(), entry)
@@ -113,7 +116,7 @@ pub fn dump_functions(
             | IrDumpPhase::Types => {
                 let pass_result = {
                     let _span = profiling::phase("ir-dump.run-passes");
-                    pipeline::run_passes(&mut ssa)
+                    pipeline::run_passes(&mut ssa, passes)
                 };
                 if let Err(e) = pass_result {
                     profiling::diagnostic(

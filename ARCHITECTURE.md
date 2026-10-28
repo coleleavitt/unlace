@@ -3,6 +3,9 @@
 This document maps the unlace decompiler architecture using mermaid diagrams.
 Generated 2026-06-27 from the current crate structure.
 
+Unlace is headless. Every entry point is the `unlace` CLI or a library crate;
+there is no UI layer.
+
 ## Crate Dependency Graph (Core Pipeline)
 
 ```mermaid
@@ -346,7 +349,7 @@ gantt
     section Phase E
     Format Breadth + Dynamic                 :a5, after a4, 2M
     section Phase F
-    Ecosystem (Plugin/UI/Lumina)            :a6, after a5, 2M
+    Ecosystem (Plugin/SDK/Lumina)            :a6, after a5, 2M
 ```
 
 ## Quality Metrics Definitions

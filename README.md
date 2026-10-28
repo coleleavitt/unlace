@@ -6,6 +6,11 @@ industry-standard decompilers (Hex-Rays, Ghidra). Current support is **measured
 fixture-by-fixture** and recorded in [`docs/status.md`](docs/status.md) — not
 claimed as complete.
 
+Unlace is headless: a command-line tool and a Rust library. It has no GUI,
+TUI, or web UI. Results go to stdout or files, diagnostics go to stderr, and
+every command runs without prompts, so it fits scripts, CI, and agent
+pipelines.
+
 If you are evaluating unlace, start with the status matrix. Everything below is
 either evidence that has already landed or design intent we have not yet
 verified end-to-end.
@@ -64,7 +69,6 @@ Listed in [`docs/roadmap.md`](docs/roadmap.md). These items have **no shipped
 code** behind them yet:
 
 - Persistent `.unlace` project format with rename/comment/type round-trip.
-- Editor/front-end integrations.
 - Reproducible signed releases published to GitHub (the local
   [`docs/signed-releases.md`](docs/signed-releases.md) describes the intended
   layout; the workflow is not yet active).
@@ -93,7 +97,7 @@ Key crates:
 - `crates/unlace-lift-*` — per-architecture lifters.
 - `crates/unlace-passes` — IR and SSA recovery passes.
 - `crates/unlace-struct` — HIR and control-flow structuring.
-- `crates/unlace-output` — C printer with `TaggedStream` token model.
+- `crates/unlace-output` — C printer.
 - `crates/unlace-cli` — CLI + end-to-end pipeline + `quality` subcommand.
 - `crates/unlace-sbom` — CycloneDX SBOM generator.
 - `crates/unlace-test-harness` — golden fixture scoring.

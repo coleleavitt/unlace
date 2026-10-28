@@ -144,7 +144,7 @@ depth, wiring, and evidence gaps, not pretend the foundations are absent.
 Unlace is its own examiner. It does not re-implement IDA's UI or IDA's
 scripting API (the IDAPython compatibility layer was removed on 2026-10-28).
 
-Adoption comes from native surfaces that are easy to drive:
+Adoption comes from headless native surfaces that are easy to drive:
 - MCP should expose CLI-first, read-only agent workflows over the stable SDK,
   with mutation gated by explicit capability and provenance.
 - HIR and IR hooks should expose useful analyzer facts in unlace's own
@@ -156,7 +156,7 @@ Adoption comes from native surfaces that are easy to drive:
 
 IDA output stays a measurement reference; it is not an API to mimic.
 
-Frontend/editor work is deferred product-surface work. The preferred path is
+Unlace is headless; there is no UI frontend. The preferred path is
 CLI, SDK, MCP, and scriptability first.
 
 ### 10. AI Assists; Evidence Decides

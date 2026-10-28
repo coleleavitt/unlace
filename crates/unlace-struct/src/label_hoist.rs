@@ -1,49 +1,36 @@
 //! Hoist cross-branch labels to a common enclosing scope.
+//!
+//! Diagnostics: enable `unlace::struct::label_hoist=debug`.
 
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
 
 use crate::hir::{HirFunction, HirNode, LabelId};
+
+macro_rules! label_hoist_debug {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::struct::label_hoist", "{}", format_args!($($arg)*))
+    };
+}
 
 /// Move labels that are targeted from outside their branch to the nearest
 /// common ancestor scope, carrying the label's tail with it.
 pub fn hoist_cross_branch_labels(func: &mut HirFunction) {
     let mut iteration = 0usize;
     while let Some(plan) = find_hoist(&func.body) {
-        if label_hoist_trace_enabled() {
-            eprintln!(
-                "[unlace-label-hoist] iter={iteration} plan label_scope={} label_index={} insert_scope={} insert_index={}",
-                fmt_scope(&plan.label_scope),
-                plan.label_index,
-                fmt_scope(&plan.insert_scope),
-                plan.insert_index
-            );
-        }
+        label_hoist_debug!(
+            "iter={iteration} plan label_scope={} label_index={} insert_scope={} insert_index={}",
+            fmt_scope(&plan.label_scope),
+            plan.label_index,
+            fmt_scope(&plan.insert_scope),
+            plan.insert_index
+        );
         if !apply_hoist(&mut func.body, plan) {
-            if label_hoist_trace_enabled() {
-                eprintln!("[unlace-label-hoist] iter={iteration} apply=false");
-            }
+            label_hoist_debug!("iter={iteration} apply=false");
             break;
         }
         iteration += 1;
     }
-    if label_hoist_trace_enabled() {
-        eprintln!("[unlace-label-hoist] done iterations={iteration}");
-    }
-}
-
-fn label_hoist_trace_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        env_flag("UNLACE_LABEL_HOIST_TRACE")
-            || env_flag("UNLACE_STRUCT_TRACE")
-            || env_flag("UNLACE_STRUCT_TRACE_VERBOSE")
-            || env_flag("UNLACE_HIR_TRACE_VERBOSE")
-    })
-}
-
-fn env_flag(name: &str) -> bool {
-    std::env::var(name).map(|v| v != "0").unwrap_or(false)
+    label_hoist_debug!("done iterations={iteration}");
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -85,22 +72,18 @@ fn find_hoist(nodes: &[HirNode]) -> Option<HoistPlan> {
     let mut gotos = Vec::new();
     collect_positions(nodes, &mut Vec::new(), &mut labels, &mut gotos);
 
-    if label_hoist_trace_enabled() {
-        eprintln!(
-            "[unlace-label-hoist] scan labels={} gotos={}",
-            labels.len(),
-            gotos.len()
-        );
+    if tracing::enabled!(target: "unlace::struct::label_hoist", tracing::Level::DEBUG) {
+        label_hoist_debug!("scan labels={} gotos={}", labels.len(), gotos.len());
         for (label, pos) in labels.iter().take(16) {
-            eprintln!(
-                "[unlace-label-hoist] label={label:?} scope={} index={}",
+            label_hoist_debug!(
+                "label={label:?} scope={} index={}",
                 fmt_scope(&pos.scope),
                 pos.index
             );
         }
         for (label, pos) in gotos.iter().take(16) {
-            eprintln!(
-                "[unlace-label-hoist] goto={label:?} scope={} index={}",
+            label_hoist_debug!(
+                "goto={label:?} scope={} index={}",
                 fmt_scope(&pos.scope),
                 pos.index
             );
@@ -124,17 +107,15 @@ fn find_hoist(nodes: &[HirNode]) -> Option<HoistPlan> {
         let Some(insert_index) = child_index_after_prefix(&label_pos.scope, &insert_scope) else {
             continue;
         };
-        if label_hoist_trace_enabled() {
-            eprintln!(
-                "[unlace-label-hoist] candidate target={target:?} goto_scope={} goto_index={} label_scope={} label_index={} branch_prefix={} common={} insert_index={insert_index}",
-                fmt_scope(&goto_pos.scope),
-                goto_pos.index,
-                fmt_scope(&label_pos.scope),
-                label_pos.index,
-                fmt_scope(branch_prefix),
-                fmt_scope(&insert_scope)
-            );
-        }
+        label_hoist_debug!(
+            "candidate target={target:?} goto_scope={} goto_index={} label_scope={} label_index={} branch_prefix={} common={} insert_index={insert_index}",
+            fmt_scope(&goto_pos.scope),
+            goto_pos.index,
+            fmt_scope(&label_pos.scope),
+            label_pos.index,
+            fmt_scope(branch_prefix),
+            fmt_scope(&insert_scope)
+        );
         return Some(HoistPlan {
             label_scope: label_pos.scope.clone(),
             label_index: label_pos.index,
@@ -292,16 +273,13 @@ fn apply_hoist(nodes: &mut Vec<HirNode>, plan: HoistPlan) -> bool {
             return false;
         }
         let suffix = label_scope.split_off(plan.label_index);
-        if label_hoist_trace_enabled() {
-            let stats = node_stats(&suffix);
-            eprintln!(
-                "[unlace-label-hoist] split label_scope={} remaining={} suffix_len={} suffix={}",
-                fmt_scope(&plan.label_scope),
-                label_scope.len(),
-                suffix.len(),
-                stats
-            );
-        }
+        label_hoist_debug!(
+            "split label_scope={} remaining={} suffix_len={} suffix={}",
+            fmt_scope(&plan.label_scope),
+            label_scope.len(),
+            suffix.len(),
+            node_stats(&suffix)
+        );
         suffix
     };
 
@@ -309,22 +287,18 @@ fn apply_hoist(nodes: &mut Vec<HirNode>, plan: HoistPlan) -> bool {
         return false;
     };
     let insert_at = plan.insert_index.saturating_add(1).min(insert_scope.len());
-    if label_hoist_trace_enabled() {
-        eprintln!(
-            "[unlace-label-hoist] insert insert_scope={} insert_at={} before_len={}",
-            fmt_scope(&plan.insert_scope),
-            insert_at,
-            insert_scope.len()
-        );
-    }
+    label_hoist_debug!(
+        "insert insert_scope={} insert_at={} before_len={}",
+        fmt_scope(&plan.insert_scope),
+        insert_at,
+        insert_scope.len()
+    );
     insert_scope.splice(insert_at..insert_at, suffix);
-    if label_hoist_trace_enabled() {
-        eprintln!(
-            "[unlace-label-hoist] insert-done insert_scope={} after_len={}",
-            fmt_scope(&plan.insert_scope),
-            insert_scope.len()
-        );
-    }
+    label_hoist_debug!(
+        "insert-done insert_scope={} after_len={}",
+        fmt_scope(&plan.insert_scope),
+        insert_scope.len()
+    );
     true
 }
 

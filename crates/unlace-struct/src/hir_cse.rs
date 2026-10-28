@@ -33,7 +33,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::{IrInsn, IrOp, Varnode};
+use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::hir::HirNode;
 
@@ -159,7 +159,7 @@ fn cse_flat(nodes: &mut [HirNode]) {
         match node {
             HirNode::Statement(insn) => {
                 let (rewrite_to_copy_of, can_cse) = match insn.output {
-                    Some(_) if !is_side_effecting(insn.op) && !insn.inputs.is_empty() => {
+                    Some(_) if is_cse_candidate(insn) => {
                         let key = ExprKey::of(insn);
                         let mut cse_target: Option<Varnode> = None;
                         if let Some(&(prior_out, recorded_gen)) = available.get(&key) {
@@ -241,6 +241,17 @@ fn cse_flat(nodes: &mut [HirNode]) {
             }
         }
     }
+}
+
+/// A statement can seed or reuse a common subexpression only when it computes
+/// a pure value into a temporary. `Copy` is plain renaming, and register or
+/// stack outputs are machine storage that calls and ABI effects clobber
+/// without an explicit HIR write, so reusing them is not provably safe.
+fn is_cse_candidate(insn: &IrInsn) -> bool {
+    insn.op != IrOp::Copy
+        && !is_side_effecting(insn.op)
+        && !insn.inputs.is_empty()
+        && insn.output.is_some_and(|out| out.space == SpaceId::Unique)
 }
 
 /// Same purity classification as `hir_licm::is_side_effecting`. Inlined
@@ -348,6 +359,56 @@ mod tests {
                 assert_eq!(insn.output, Some(t2));
                 assert_eq!(insn.inputs.as_slice(), &[a, b]);
             }
+            other => panic!("expected Statement, got {other:?}"),
+        }
+    }
+
+    /// Re-materialising a constant into an argument register before a second
+    /// call must stay a constant copy: the call clobbers the register without
+    /// an explicit HIR write, so reusing the first register is unsound.
+    #[test]
+    fn register_copy_of_constant_is_not_reused_across_calls() {
+        let rdi = Varnode::reg(56, 8);
+        let ten = Varnode::constant(10, 8);
+        let rax = Varnode::reg(0, 8);
+
+        let mut body = vec![
+            stmt(IrOp::Copy, rdi, vec![ten], 0x1000),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Call,
+                rax,
+                smallvec::smallvec![Varnode::constant(0x2000, 8)],
+                0x1004,
+            )),
+            stmt(IrOp::Copy, rdi, vec![ten], 0x1008),
+        ];
+
+        eliminate_common_subexpressions(&mut body);
+
+        match &body[2] {
+            HirNode::Statement(insn) => assert_eq!(insn.inputs.as_slice(), &[ten]),
+            other => panic!("expected Statement, got {other:?}"),
+        }
+    }
+
+    /// A pure expression whose first result lives in a register is not reused:
+    /// only temporaries are safe CSE carriers.
+    #[test]
+    fn register_output_is_not_a_cse_carrier() {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let r = Varnode::reg(16, 4);
+        let t = Varnode::unique(0, 4);
+
+        let mut body = vec![
+            stmt(IrOp::IntAdd, r, vec![a, b], 0x1000),
+            stmt(IrOp::IntAdd, t, vec![a, b], 0x1004),
+        ];
+
+        eliminate_common_subexpressions(&mut body);
+
+        match &body[1] {
+            HirNode::Statement(insn) => assert_eq!(insn.op, IrOp::IntAdd),
             other => panic!("expected Statement, got {other:?}"),
         }
     }

@@ -436,7 +436,6 @@ Goal: make final C output readable and stable.
   - [x] Threshold: 20 chars minimum remaining width.
   - [x] Pre-measure expression width before multi-line layout.
 - [x] Implement IDA-ism macros as `cot_helper` nodes: `LOBYTE`, `HIDWORD`, `COERCE_*`.
-- [x] Implement tagged output stream for interactive identifiers and color-coded symbols.
 
 
 ## Batch 12+ - Loader, Scalability, and Project Memory
@@ -1086,8 +1085,8 @@ Tasks:
   `analysis_cache` via `#[serde(default)]`), and an `apply_renames_to`
   helper. Eight tests cover round-trip, SHA verification, schema
   forward-compat, and apply behaviour.
-- [ ] Add xrefs, call graph, CFG graph, and hex view APIs that use the
-  `TaggedStream` token model.
+- [ ] Add xrefs, call graph, CFG graph, and hex-dump exports as headless
+  CLI/SDK data (GraphViz dot, JSON).
 - [ ] Stabilize plugin SDK boundaries:
   - Rust plugin API
   - WASM sandbox option
@@ -1099,8 +1098,8 @@ Tasks:
   Minimal LSP skeleton landed:
   `unlace_cli::lsp::handle_request` answers `initialize`, `shutdown`,
   `textDocument/hover`, and `textDocument/documentSymbol` over JSON-RPC
-  bodies. Three tests pin the wiring. Frontend productization is no longer part
-  of this workspace.
+  bodies. Three tests pin the wiring. Unlace has no UI frontend; editors reach
+  it through this headless LSP surface.
 
 Acceptance:
 
@@ -1192,19 +1191,23 @@ Acceptance:
 - Xref and decompilation queries are served natively (`unlace_cli::xrefs`,
   `unlace_cli::decompiler`, `BinaryImage::relocations_at`).
 
-## Batch 28 - Frontend Productization Removed
+## Batch 28 - UI Frontend Removed
 
-Frontend productization has been removed from this workspace. The deleted
-front-end crates and commands are no longer active roadmap items; product work
-continues through CLI, SDK/session, scripting, debugger/emulator, persistence,
-and corpus evidence.
+Unlace is CLI and headless only. The `unlace-gui` crate and the front-end
+commands were deleted in July 2026. The remaining UI-only modules (the web UI
+REST types and annotation-conflict UI protocol in `unlace-lumina`, the
+Sugiyama screen layout in `unlace-struct`, the token stream for interactive
+views in `unlace-output`, and the uncompiled SVG CFG, hex view, and HTML trace
+viewer files) were deleted in October 2026. Product work continues through
+CLI, SDK/session, scripting, debugger/emulator, persistence, and corpus
+evidence.
 
 Acceptance:
 
-- Workspace membership and CLI command surfaces do not depend on removed
-  front-end crates.
-- Project/session state remains usable from CLI, scripts, plugins, and future
-  integrations without a bundled frontend.
+- Workspace membership and CLI command surfaces do not depend on any UI crate
+  or module.
+- Project/session state is usable from the CLI, scripts, plugins, and the SDK.
+- The CLI never prompts; progress output appears only when stderr is a TTY.
 
 ## Batch 29 - Database Persistence (.unldb format)
 
@@ -1380,16 +1383,15 @@ Reference material:
       breakpoints via debug registers.
 - [ ] Implement `WindowsDebugger` — local x86 / x64 via Windows
       `DebugActiveProcess` + `WaitForDebugEvent`.
-- [ ] Implement `GdbStubFrontend` — talks GDB Remote Serial Protocol so
-      unlace can connect to a remote stub (qemu-system, openocd, etc.).
-- [ ] Wire `unlace dbg <binary>` CLI that launches the binary, suspends
-      on entry, and gives a `(unlace-dbg)` interactive prompt with
-      commands: `b <addr>`, `c`, `n`, `s`, `r`, `bt`, `info regs`, `x
-      <addr>`, `q`.
+- [ ] Implement the GDB Remote Serial Protocol client so unlace can connect
+      to a remote stub (qemu-system, openocd, etc.).
+- [ ] Wire `unlace dbg <compiled code>` CLI that launches the compiled code, suspends
+      on entry, and runs non-interactively from flags or a command script
+      (`b <addr>`, `c`, `n`, `s`, `r`, `bt`, `info regs`, `x <addr>`, `q`).
 - [ ] Expose debugger state through CLI/session APIs: Registers, Memory, Call
       Stack, Threads, Breakpoints, Locals.
-- [ ] Synchronize debugger PC with the decompiler view (highlight the
-      current source line).
+- [ ] Map the debugger PC to the matching decompiled line in CLI/session
+      output.
 - [ ] Add ASLR-disable flag (Linux personality, Windows DEP-bypass).
 - [ ] Document supported targets in `docs/debugger.md`.
 
@@ -1400,7 +1402,7 @@ Acceptance:
   continues to exit cleanly.
 - A breakpoint set on `main` triggers and register/memory state is visible via
   the debugger/session API.
-- The GDB stub frontend can connect to `qemu-system-x86_64 -s -S` and
+- The GDB stub client can connect to `qemu-system-x86_64 -s -S` and
   control execution.
 
 ## Batch 33 - Symbol Server Integration
@@ -1464,19 +1466,18 @@ Acceptance:
 
 ### Tasks
 
-- [ ] CFG renderer: nodes are basic blocks (asm + small fixed footprint),
-      edges are taken/not-taken/call/return. Layout via `layout-rs` or
-      `petgraph` + a simple Sugiyama implementation.
-- [ ] Call graph renderer: nodes are functions, edges are calls. Folder
-      grouping by module/segment.
-- [ ] Add minimap (current viewport indicator in a small overview pane).
-- [ ] Add export to SVG / GraphViz dot.
+- [ ] CFG export: nodes are basic blocks (asm + block metadata), edges are
+      taken/not-taken/call/return.
+- [ ] Call graph export: nodes are functions, edges are calls, grouped by
+      module/segment.
+- [ ] Emit GraphViz dot and JSON. Layout and rendering stay with external
+      tools; unlace does not lay out or draw graphs.
 
 Acceptance:
 
-- The CFG of `loops.elf::main` renders with at least 4 blocks and the
-  back-edge clearly drawn.
-- The call graph of `branches.elf` shows `main`, `puts`, `printf`
+- The CFG export of `loops.executable::main` has at least 4 blocks and marks
+  the back-edge.
+- The call graph export of `branches.executable` has `main`, `puts`, `printf`
   with appropriate edges.
 
 ## Batch 36 - Emulator / Interpreter on the IR
@@ -1543,7 +1544,7 @@ external reviewer's "what would make this a real tool" feedback):
     OpenSSL, libcurl, sqlite. So pseudocode shows `HANDLE` not `_QWORD`.
 11. **Batch 32: Local Debugger (Linux + Windows MVP)** (8-12 weeks). The big
     one. Half of professional RE is debugging. Linux ptrace + Windows DebugAPI
-    first; GDB-stub frontend second for embedded/remote.
+    first; GDB-stub client second for embedded/remote.
 12. **Batch 33: Symbol Server Integration** (1 week). MSFT symstore +
     debuginfod auto-fetch.
 13. **Batch 34: Binary Patching** (1 week). Modify and write back.

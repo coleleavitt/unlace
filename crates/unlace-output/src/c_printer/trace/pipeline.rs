@@ -33,8 +33,7 @@ pub(in crate::c_printer) fn trace_ctx_snapshot(stage: &str, ctx: &PrintCtx) {
 /// Emit a per-statement multiset diff of a post-emission cleanup stage: the
 /// lines `stage_fn` removed (and any it added), trimmed and capped, so a
 /// vanished statement is attributed to the exact stage that dropped it (with
-/// its text), not merely to a line-count delta. Honors the shared FILTER, so
-/// `FILTER=c7` shows only the stage that touched `c7`.
+/// its text), not merely to a line-count delta.
 pub(in crate::c_printer) fn trace_pipeline_stage_diff(
     func_name: &str,
     stage: &str,

@@ -1,16 +1,19 @@
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 
 use unlace_loader::{BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader};
+use unlace_passes::PassOptions;
 use unlace_plugin::PluginManager;
 
 use unlace_cli::annotations::{self, AnnotationDb};
-use unlace_cli::args::{self, Args, Cmd, LuminaAction, ProjectAction};
+use unlace_cli::args::{self, Args, Cmd, ConfigAction, LuminaAction, ProjectAction};
 use unlace_cli::batch::{self, BatchConfig};
+use unlace_cli::config::Config;
 use unlace_cli::decompiler::{Decompiler, FunctionOutput, finish_output};
 use unlace_cli::ir_dump::IrDumpPhase;
 use unlace_cli::pipeline::{self, PipelineConfig};
@@ -24,10 +27,24 @@ fn main() {
         .nth(1)
         .is_some_and(|arg| arg == "dump-all");
     let args = Args::parse();
-    let linkscope_guard = unlace_cli::profiling::init_from_env();
+    if let Err(e) = unlace_cli::logging::init(args.log.as_deref()) {
+        eprintln!("Error: {e:#}");
+        std::process::exit(1);
+    }
+    let config = match Config::load(args.config.as_deref()) {
+        Ok(config) => Arc::new(config),
+        Err(e) => {
+            eprintln!("Error: {e:#}");
+            std::process::exit(1);
+        }
+    };
+    let linkscope_guard = unlace_cli::profiling::init(&config.linkscope);
 
     let result = match args.cmd {
         Cmd::Project { action } => run_project(action),
+        Cmd::Config {
+            action: ConfigAction::Show,
+        } => config.to_toml().map(|text| print!("{text}")),
         Cmd::Decompile {
             binary,
             function,
@@ -50,17 +67,17 @@ fn main() {
             sig_dir,
             flirt_min_confidence,
         } => {
-            let print_config = if max_width.is_some() || tab_width.is_some() {
-                let mut cfg = unlace_output::PrintConfig::from_env();
+            let options = if max_width.is_some() || tab_width.is_some() {
+                let mut options = Config::clone(&config);
                 if let Some(w) = max_width {
-                    cfg.max_line_width = w;
+                    options.printer.max_line_width = w;
                 }
                 if let Some(t) = tab_width {
-                    cfg.tab_width = t;
+                    options.printer.tab_width = t;
                 }
-                Some(cfg)
+                Arc::new(options)
             } else {
-                None
+                Arc::clone(&config)
             };
             let annotation_db = resolve_annotations(&binary, annotations_load.as_deref())
                 .unwrap_or_else(|e| {
@@ -79,7 +96,7 @@ fn main() {
                 .and_then(|(dwarf_sidecar_bytes, flirt)| {
                     let config = PipelineConfig {
                         timeout: Duration::from_secs(timeout),
-                        print_config,
+                        options,
                         annotations: annotation_db.clone(),
                         flirt,
                         dwarf_sidecar: dwarf_sidecar_bytes,
@@ -168,6 +185,7 @@ fn main() {
                 progress_style,
                 invoked_dump_all,
                 flirt,
+                Arc::clone(&config),
             )
         }),
         Cmd::Quality {
@@ -179,14 +197,14 @@ fn main() {
             sig_dir,
             flirt_min_confidence,
         } => build_flirt_config(no_flirt, sig, sig_dir, flirt_min_confidence)
-            .and_then(|flirt| run_quality(&binary, format, &flirt)),
+            .and_then(|flirt| run_quality(&binary, format, &flirt, &config)),
         Cmd::IdentifyPacker { binary, format } => run_identify_packer(&binary, format),
         Cmd::IrDump {
             binary,
             function,
             phase,
             verbose: _,
-        } => run_ir_dump(&binary, function.as_deref(), phase.as_deref()),
+        } => run_ir_dump(&binary, function.as_deref(), phase.as_deref(), &config),
         Cmd::Lumina { action } => run_lumina(action),
         Cmd::Emu {
             binary,
@@ -246,67 +264,51 @@ fn main() {
         } => run_tilload(&path, limit, json, apply, binary.as_deref()),
     };
 
-    // Batch 17: per-pass timing dump. The wrapper inside
-    // `unlace_passes::run_instrumented` accumulates into a process-global
-    // BTreeMap when `UNLACE_TIMING=1`; here we render that table to
-    // stderr after the command has run so users get a hot-pass summary.
-    // The `pass_timing_enabled()` guard keeps the no-op path free of any
-    // string formatting in the common case.
-    if unlace_passes::pass_timing_enabled() {
-        let table = unlace_passes::dump_pass_timings();
-        if !table.is_empty() {
-            eprintln!("\n=== UNLACE_TIMING: per-pass wall-clock ===\n{table}");
-        }
-    }
-
-    // Batch 17 slice 2: per-function CSV export. When
-    // `UNLACE_TIMING_CSV=<path>` was set on the parent process, the
-    // instrumentation harness has been recording one entry per
-    // `(function, pass, iteration)` for the whole run. Flush it now,
-    // *after* commands complete, so the file reflects the entire
-    // pipeline rather than a partial state. Failure to write the file
-    // is reported on stderr but does not fail the command — timing is
-    // observability, not correctness.
-    if let Some(csv_path) = unlace_passes::pass_timing_csv_path() {
-        let csv = unlace_passes::dump_pass_timings_csv();
-        if let Err(e) = fs::write(&csv_path, &csv) {
-            eprintln!(
-                "warning: UNLACE_TIMING_CSV write to '{}' failed: {e}",
-                csv_path.display()
-            );
-        }
-    }
-
-    // Batch 16: schedule audit. When `UNLACE_SCHEDULE_AUDIT=<path>` was
-    // set, the instrumentation harness recorded a row per
-    // `(function, pass, iteration)` invocation with the declared phase.
-    // Flush the CSV here so consumers can diff schedules across revisions
-    // and a one-line summary of oscillations is surfaced to stderr.
-    if let Some(audit_path) = unlace_passes::schedule_audit_path() {
-        let csv = unlace_passes::dump_schedule_audit_csv();
-        if let Err(e) = fs::write(&audit_path, &csv) {
-            eprintln!(
-                "warning: UNLACE_SCHEDULE_AUDIT write to '{}' failed: {e}",
-                audit_path.display()
-            );
-        }
-        let osc = unlace_passes::schedule_audit_oscillations();
-        if !osc.is_empty() {
-            eprintln!(
-                "\n=== UNLACE_SCHEDULE_AUDIT: {} oscillation(s) detected ===",
-                osc.len()
-            );
-            for v in &osc {
-                eprintln!("  {v}");
-            }
-        }
-    }
+    write_pass_diagnostics(&config.passes);
 
     drop(linkscope_guard);
 
     if let Err(e) = result {
         eprintln!("Error: {e:#}");
         std::process::exit(1);
+    }
+}
+
+/// Flush the pass-run records requested by `passes.diagnostics` and the
+/// `unlace::timing` filter once the command has finished. Write failures are
+/// reported but do not fail the command.
+fn write_pass_diagnostics(passes: &PassOptions) {
+    if unlace_passes::pass_timing_enabled() {
+        let table = unlace_passes::dump_pass_timings();
+        if !table.is_empty() {
+            tracing::info!(target: "unlace::timing", "per-pass wall-clock\n{table}");
+        }
+    }
+    if let Some(path) = &passes.diagnostics.timing_csv
+        && let Err(e) = fs::write(path, unlace_passes::dump_pass_timings_csv())
+    {
+        eprintln!(
+            "warning: passes.diagnostics.timing_csv write to '{}' failed: {e}",
+            path.display()
+        );
+    }
+    if let Some(path) = &passes.diagnostics.schedule_audit {
+        if let Err(e) = fs::write(path, unlace_passes::dump_schedule_audit_csv()) {
+            eprintln!(
+                "warning: passes.diagnostics.schedule_audit write to '{}' failed: {e}",
+                path.display()
+            );
+        }
+        let osc = unlace_passes::schedule_audit_oscillations();
+        if !osc.is_empty() {
+            eprintln!(
+                "\n=== schedule audit: {} oscillation(s) detected ===",
+                osc.len()
+            );
+            for v in &osc {
+                eprintln!("  {v}");
+            }
+        }
     }
 }
 
@@ -426,6 +428,7 @@ fn run_ir_dump(
     binary_path: &std::path::Path,
     function_filter: Option<&str>,
     phase_str: Option<&str>,
+    options: &Config,
 ) -> Result<()> {
     let _profile_command = profiling::phase("cmd.ir-dump");
     let _profile_trace = profiling::trace_fields(
@@ -455,7 +458,7 @@ fn run_ir_dump(
         unlace_cli::load::parse_image(data, binary_path)?
     };
 
-    let out = unlace_cli::ir_dump::dump_functions(&image, function_filter, phase)?;
+    let out = unlace_cli::ir_dump::dump_functions(&image, function_filter, phase, &options.passes)?;
 
     {
         let _span = profiling::phase("ir-dump.write-stdout");
@@ -468,8 +471,9 @@ fn run_quality(
     binary_path: &std::path::Path,
     format: args::QualityFormat,
     flirt: &pipeline::FlirtConfig,
+    options: &Config,
 ) -> Result<()> {
-    let report = unlace_cli::quality::analyze_binary_with_flirt(binary_path, flirt)?;
+    let report = unlace_cli::quality::analyze_binary_with_flirt(binary_path, flirt, options)?;
     let rendered = match format {
         args::QualityFormat::Md => unlace_cli::quality::render_markdown(&report),
         args::QualityFormat::Json => unlace_cli::quality::render_json(&report)?,
@@ -808,7 +812,7 @@ fn run_symfetch(
 }
 
 fn fetch_url_to(url: &str, target: &std::path::Path) -> Result<()> {
-    println!("fetching {url}");
+    eprintln!("fetching {url}");
     let report = unlace_loader::symcache_fetch::fetch_to_path(url, target)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     println!(
@@ -1195,11 +1199,11 @@ fn run_decompile(
     sw.phase("post-process", t_post.elapsed());
     sw.set_output_size(all_output.len() as u64);
 
-    if let Some(capture_root) = resolve_decompile_capture_dir(capture_dir) {
+    if let Some(capture_root) = capture_dir {
         let capture_path = {
             let _span = profiling::phase("decompile.write-capture");
             write_decompile_capture(
-                &capture_root,
+                capture_root,
                 binary_path,
                 &data,
                 &image,
@@ -1230,14 +1234,6 @@ fn run_decompile(
 
     sw.emit_summary(binary_path);
     Ok(())
-}
-
-fn resolve_decompile_capture_dir(cli_dir: Option<&std::path::Path>) -> Option<std::path::PathBuf> {
-    cli_dir.map(std::path::Path::to_path_buf).or_else(|| {
-        std::env::var_os("UNLACE_DECOMPILE_CAPTURE_DIR")
-            .filter(|v| !v.is_empty())
-            .map(std::path::PathBuf::from)
-    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1435,6 +1431,9 @@ struct StatsCollector {
     goto_tokens: usize,
     readfsqword_tokens: usize,
     stack_chk_fail_tokens: usize,
+    /// The live progress line is redrawn with `\r`, so it is drawn only when
+    /// stderr is a terminal; logs and pipes get the final scorecard alone.
+    draw_progress: bool,
     last_progress_len: usize,
 }
 
@@ -1461,6 +1460,7 @@ impl StatsCollector {
             goto_tokens: 0,
             readfsqword_tokens: 0,
             stack_chk_fail_tokens: 0,
+            draw_progress: on && std::io::stderr().is_terminal(),
             last_progress_len: 0,
         }
     }
@@ -1485,7 +1485,7 @@ impl StatsCollector {
     }
 
     fn tick_progress(&mut self, idx: usize, total: usize, name: &str) {
-        if !self.on || total == 0 {
+        if !self.draw_progress || total == 0 {
             return;
         }
         // Only redraw every ~32 functions or for the last one to avoid
@@ -1512,7 +1512,7 @@ impl StatsCollector {
     }
 
     fn clear_progress(&mut self) {
-        if !self.on || self.last_progress_len == 0 {
+        if !self.draw_progress || self.last_progress_len == 0 {
             return;
         }
         eprint!("\r{}\r", " ".repeat(self.last_progress_len));
@@ -1668,6 +1668,7 @@ fn run_batch_cmd(
     progress_style: args::BatchProgressStyle,
     invoked_dump_all: bool,
     flirt: pipeline::FlirtConfig,
+    options: Arc<Config>,
 ) -> Result<()> {
     let scope_re = match scope.as_deref() {
         Some(pat) => {
@@ -1675,8 +1676,7 @@ fn run_batch_cmd(
         }
         None => None,
     };
-    let env_progress = matches!(std::env::var("UNLACE_PROGRESS").ok().as_deref(), Some("1"));
-    let progress_style = if progress || invoked_dump_all || env_progress {
+    let progress_style = if progress || invoked_dump_all {
         progress_style
     } else {
         args::BatchProgressStyle::Off
@@ -1698,6 +1698,7 @@ fn run_batch_cmd(
         progress_style,
         flirt,
         dwarf_sidecar: read_dwarf_sidecar(dwarf_sidecar.as_deref())?,
+        options,
     };
     batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
 }

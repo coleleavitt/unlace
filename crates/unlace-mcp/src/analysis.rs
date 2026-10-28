@@ -4,12 +4,14 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Serialize, Serializer};
 use unlace_cli::annotations;
 use unlace_cli::args::EmitFormat;
+use unlace_cli::config::Config;
 use unlace_cli::decompiler::Decompiler;
 use unlace_cli::ir_dump::{self, IrDumpPhase};
 use unlace_cli::load::open_image;
@@ -229,9 +231,14 @@ pub fn list_functions(path: &Path) -> Result<FunctionList> {
 
 /// Decompile the functions matching `function` (a name or entry address)
 /// exactly as `unlace decompile --emit c --function <function>` does.
-pub fn decompile_function(path: &Path, function: &str) -> Result<Decompilation> {
+pub fn decompile_function(
+    path: &Path,
+    function: &str,
+    options: &Arc<Config>,
+) -> Result<Decompilation> {
     let image = open_image(path)?;
     let config = PipelineConfig {
+        options: Arc::clone(options),
         annotations: annotations::load_default(path)?,
         flirt: FlirtConfig::from_options(FlirtOptions::default())?,
         ..PipelineConfig::default()
@@ -247,13 +254,18 @@ pub fn decompile_function(path: &Path, function: &str) -> Result<Decompilation> 
     })
 }
 
-pub fn ir_dump_function(path: &Path, function: &str, phase: Option<&str>) -> Result<String> {
+pub fn ir_dump_function(
+    path: &Path,
+    function: &str,
+    phase: Option<&str>,
+    options: &Config,
+) -> Result<String> {
     let phase = phase
         .map(str::parse::<IrDumpPhase>)
         .transpose()?
         .unwrap_or_default();
     let image = open_image(path)?;
-    ir_dump::dump_functions(&image, Some(function), phase)
+    ir_dump::dump_functions(&image, Some(function), phase, &options.passes)
 }
 
 /// Direct edges whose source is the instruction at `address`; when `address`

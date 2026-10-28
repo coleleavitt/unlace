@@ -19,7 +19,6 @@ anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 schemars = "1.0"
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 serde_json = { workspace = true }

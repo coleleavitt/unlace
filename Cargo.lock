@@ -2620,7 +2620,6 @@ dependencies = [
 name = "unlace-lift"
 version = "0.1.0"
 dependencies = [
- "smallvec",
  "thiserror",
  "unlace-ir",
  "unlace-lift-6502",

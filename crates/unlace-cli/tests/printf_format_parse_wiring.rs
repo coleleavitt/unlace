@@ -101,7 +101,7 @@ fn whole_program_driver_populates_variadic_call_types() {
     let functions: Vec<FunctionEntry> =
         pipeline::discover_functions(&image, None).expect("discover_functions");
 
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
     let pipeline_config = PipelineConfig {
         timeout: std::time::Duration::from_secs(60),
         print_config: None,

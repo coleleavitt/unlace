@@ -210,15 +210,20 @@ fn corpus_emits_no_uncompilable_struct_or_subscript_forms() {
     // Fixtures that exercised each of the seven fixes, plus a representative
     // cross-section. A regression in any printer path reintroduces a pattern.
     const FIXTURES: &[&str] = &[
-        "debug_templates.elf",  // *-deref subscript, frame-field
-        "x87_math.elf",         // x86 frame-base subscript
-        "cpp_exceptions.elf",   // scalar Load-output subscript (vtable pfn)
-        "arm64_features.elf",   // AArch64 frame-base subscript
-        "mips64_features.elf",  // frame-relative `->` and subscript
+        "debug_templates.elf", // *-deref subscript, frame-field
+        "x87_math.elf",        // x86 frame-base subscript
+        "cpp_exceptions.elf",  // scalar Load-output subscript (vtable pfn)
+        "arm64_features.elf",  // AArch64 frame-base subscript
+        #[cfg(feature = "arch-mips")]
+        "mips64_features.elf", // frame-relative `->` and subscript
+        #[cfg(feature = "arch-riscv")]
         "riscv64_features.elf", // arch-aware frame-base (RISC-V SP at offset 16)
-        "ppc64_features.elf",   // arch-aware frame-base (PPC SP/FP)
-        "v850_features.elf",    // arch-aware frame-base (V850 SP/FP)
-        "arc_features.elf",     // arch-aware frame-base (ARCompact SP/FP)
+        #[cfg(feature = "arch-ppc")]
+        "ppc64_features.elf", // arch-aware frame-base (PPC SP/FP)
+        #[cfg(feature = "arch-v850")]
+        "v850_features.elf", // arch-aware frame-base (V850 SP/FP)
+        #[cfg(feature = "arch-arc")]
+        "arc_features.elf", // arch-aware frame-base (ARCompact SP/FP)
         "medium.elf",
         "loops.elf",
         "switch_table.elf",

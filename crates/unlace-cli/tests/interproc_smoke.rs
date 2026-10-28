@@ -34,7 +34,7 @@ fn build_ssa_map(binary: &str) -> BTreeMap<u64, SsaFunction> {
         panic!("failed to read fixture {binary}: {e}");
     });
     let image = ElfLoader::load(&data).expect("parse ELF");
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
     let entries: Vec<FunctionEntry> =
         pipeline::discover_functions(&image, None).expect("discover functions");
 

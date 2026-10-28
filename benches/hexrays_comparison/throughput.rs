@@ -33,7 +33,7 @@ fn bench_full_binary_throughput(c: &mut Criterion) {
 
     let data = fs::read(&fixture).expect("read medium.elf");
     let image = ElfLoader::load(&data).expect("parse medium.elf");
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
 
     let functions = pipeline::discover_functions(&image, None).unwrap_or_default();
     let config = PipelineConfig {
@@ -83,7 +83,7 @@ fn bench_per_function_latency(c: &mut Criterion) {
 
     let data = fs::read(&fixture).expect("read medium.elf");
     let image = ElfLoader::load(&data).expect("parse medium.elf");
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).expect("supported arch");
 
     let functions = pipeline::discover_functions(&image, None).unwrap_or_default();
     let config = PipelineConfig {

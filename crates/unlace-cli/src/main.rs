@@ -504,7 +504,7 @@ fn run_ir_dump(
 
     let lifter = {
         let _span = profiling::phase("ir-dump.get-lifter");
-        get_lifter(image.arch)
+        get_lifter(image.arch)?
     };
     let functions = {
         let _span = profiling::phase("ir-dump.discover-functions");
@@ -779,7 +779,7 @@ fn populate_python_instruction_xrefs(session: &unlace_session::Session) -> Resul
     let xrefs = session
         .with_binary(|image| -> Result<Vec<unlace_ir::xref::InstructionXref>> {
             let functions = pipeline::discover_functions(image, None)?;
-            let lifter = get_lifter(image.arch);
+            let lifter = get_lifter(image.arch)?;
             let mut lifted = std::collections::BTreeMap::new();
             for entry in &functions {
                 match pipeline::lift_function(image, lifter.as_ref(), entry) {
@@ -820,7 +820,7 @@ fn populate_python_decompiled_functions_with_limit(
     let staged = session
         .with_binary(|image| -> Result<Vec<(u64, u64, String, String)>> {
             let functions = pipeline::discover_functions(image, None)?;
-            let lifter = get_lifter(image.arch);
+            let lifter = get_lifter(image.arch)?;
             let config = PipelineConfig {
                 timeout: Duration::from_secs(30),
                 print_config: None,
@@ -1558,7 +1558,7 @@ fn run_decompile(
 
     let lifter = {
         let _span = profiling::phase("decompile.get-lifter");
-        get_lifter(image.arch)
+        get_lifter(image.arch)?
     };
     let t_discover = std::time::Instant::now();
     let mut functions = {

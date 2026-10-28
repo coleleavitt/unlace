@@ -4075,7 +4075,7 @@ pub fn decompile_one_function_cached(
     };
     let lifter = {
         let _profile_stage = profiling::phase("pipeline.lazy-get-lifter");
-        unlace_lift::get_lifter(image.arch)
+        unlace_lift::get_lifter(image.arch)?
     };
     let functions = {
         let _profile_stage = profiling::phase("pipeline.lazy-discover-functions");
@@ -7665,7 +7665,7 @@ mod tests {
             addr: 0x1000,
             size: 2,
         };
-        let lifter = unlace_lift::get_lifter(image.arch);
+        let lifter = unlace_lift::get_lifter(image.arch).expect("supported arch");
         let ir = super::lift_function(&image, lifter.as_ref(), &entry).expect("lift");
         let mut ssa = unlace_ir::ssa::build_ssa(ir);
         ssa.arch = image.arch;
@@ -7708,7 +7708,7 @@ mod tests {
             addr: 0x1000,
             size: 1,
         };
-        let lifter = unlace_lift::get_lifter(image.arch);
+        let lifter = unlace_lift::get_lifter(image.arch).expect("supported arch");
         let ir = super::lift_function(&image, lifter.as_ref(), &entry).expect("lift");
         let mut ssa = unlace_ir::ssa::build_ssa(ir);
         ssa.arch = image.arch;

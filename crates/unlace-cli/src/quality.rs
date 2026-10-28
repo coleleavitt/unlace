@@ -1147,7 +1147,7 @@ pub fn analyze_binary_with_flirt(
 
     let lifter = {
         let _span = profiling::phase("quality.get-lifter");
-        get_lifter(image.arch)
+        get_lifter(image.arch)?
     };
     let functions = {
         let _span = profiling::phase("quality.discover-functions");

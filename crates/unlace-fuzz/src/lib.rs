@@ -160,7 +160,12 @@ pub fn fuzz_iteration(bytes: &[u8]) -> FuzzResult {
     }
 
     let lifter = match catch_unwind(AssertUnwindSafe(|| get_lifter(image.arch))) {
-        Ok(l) => l,
+        Ok(Ok(l)) => l,
+        Ok(Err(_)) => {
+            return FuzzResult::Ok {
+                functions_decompiled: 0,
+            };
+        }
         Err(payload) => {
             return FuzzResult::Panicked {
                 stage: "get_lifter",

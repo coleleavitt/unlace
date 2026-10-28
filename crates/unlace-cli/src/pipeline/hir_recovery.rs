@@ -1,12 +1,12 @@
-#[cfg(test)]
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(test)]
 use smallvec::smallvec;
+use unlace_ir::Varnode;
 #[cfg(test)]
 use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 #[cfg(test)]
-use unlace_ir::{IrInsn, IrOp, Varnode};
+use unlace_ir::{IrInsn, IrOp};
 use unlace_struct::HirFunction;
 #[cfg(test)]
 use unlace_struct::HirNode;
@@ -17,7 +17,24 @@ pub(super) fn apply_expression_recovery(hir: &mut HirFunction) {
 }
 
 fn apply_loop_invariant_motion(hir: &mut HirFunction) {
-    unlace_struct::hoist_loop_invariants(&mut hir.body);
+    let pinned = bases_sharing_a_name(hir);
+    unlace_struct::hoist_loop_invariants(&mut hir.body, &pinned);
+}
+
+/// Base varnodes whose merged C name also covers another base.
+fn bases_sharing_a_name(hir: &HirFunction) -> BTreeSet<Varnode> {
+    let mut bases_by_name: BTreeMap<&str, BTreeSet<Varnode>> = BTreeMap::new();
+    for (sv, name) in &hir.merged_names {
+        bases_by_name
+            .entry(name.as_str())
+            .or_default()
+            .insert(sv.base);
+    }
+    bases_by_name
+        .into_values()
+        .filter(|bases| bases.len() > 1)
+        .flatten()
+        .collect()
 }
 
 #[cfg(test)]

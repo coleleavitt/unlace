@@ -43,11 +43,16 @@ use crate::hir::HirNode;
 /// Hoist loop-invariant statements out of `While`/`For` loops in `body` (in
 /// place). `DoWhile` bodies are visited for nested loops, but their top-level
 /// statements are not extracted. Nested loops are processed innermost-first.
-pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
+///
+/// Statements writing a `pinned` temporary stay in place. The caller pins
+/// temporaries that share their C variable with other temporaries: this pass
+/// sees only raw varnodes, so it cannot tell that a write to a different
+/// temporary inside the loop overwrites the hoisted value.
+pub fn hoist_loop_invariants(body: &mut Vec<HirNode>, pinned: &BTreeSet<Varnode>) {
     // First recurse into all child constructs so that inner loops are
     // simplified before we evaluate the outer one's invariance.
     for node in body.iter_mut() {
-        recurse_into_children(node);
+        recurse_into_children(node, pinned);
     }
 
     // Now scan for top-level loops in this list. Build a new list where
@@ -59,7 +64,7 @@ pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
                 cond,
                 body: mut loop_body,
             } => {
-                let hoisted = extract_invariants(&mut loop_body, None);
+                let hoisted = extract_invariants(&mut loop_body, None, pinned);
                 out.extend(hoisted);
                 out.push(HirNode::While {
                     cond,
@@ -78,7 +83,7 @@ pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
                 // it (or reads it — though that's already covered by the
                 // modified-set since `update` runs inside the loop).
                 let iv = update.output;
-                let hoisted = extract_invariants(&mut loop_body, iv);
+                let hoisted = extract_invariants(&mut loop_body, iv, pinned);
                 out.extend(hoisted);
                 out.push(HirNode::For {
                     init,
@@ -95,66 +100,66 @@ pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
 
 /// Recurse into every body-bearing child of `node` so nested loops are
 /// hoisted before their enclosing context is evaluated.
-fn recurse_into_children(node: &mut HirNode) {
+fn recurse_into_children(node: &mut HirNode, pinned: &BTreeSet<Varnode>) {
     match node {
-        HirNode::Block(children) => hoist_loop_invariants(children),
+        HirNode::Block(children) => hoist_loop_invariants(children, pinned),
         HirNode::If {
             then_body,
             else_body,
             ..
         } => {
-            hoist_loop_invariants(then_body);
+            hoist_loop_invariants(then_body, pinned);
             if let Some(eb) = else_body {
-                hoist_loop_invariants(eb);
+                hoist_loop_invariants(eb, pinned);
             }
         }
         HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
-            hoist_loop_invariants(body);
+            hoist_loop_invariants(body, pinned);
         }
         HirNode::For { body, .. } => {
-            hoist_loop_invariants(body);
+            hoist_loop_invariants(body, pinned);
         }
         HirNode::Switch { cases, default, .. } => {
             for (_, body, _) in cases.iter_mut() {
-                hoist_loop_invariants(body);
+                hoist_loop_invariants(body, pinned);
             }
             if let Some(d) = default {
-                hoist_loop_invariants(d);
+                hoist_loop_invariants(d, pinned);
             }
         }
         HirNode::TryCatch {
             try_body,
             catch_arms,
         } => {
-            hoist_loop_invariants(try_body);
+            hoist_loop_invariants(try_body, pinned);
             for (_, body) in catch_arms.iter_mut() {
-                hoist_loop_invariants(body);
+                hoist_loop_invariants(body, pinned);
             }
         }
         HirNode::TryFinally {
             try_body,
             finally_body,
         } => {
-            hoist_loop_invariants(try_body);
-            hoist_loop_invariants(finally_body);
+            hoist_loop_invariants(try_body, pinned);
+            hoist_loop_invariants(finally_body, pinned);
         }
-        HirNode::Commented { inner, .. } => recurse_into_children(inner),
+        HirNode::Commented { inner, .. } => recurse_into_children(inner, pinned),
         HirNode::GuardedIf {
             then_body,
             else_body,
             ..
         } => {
-            hoist_loop_invariants(then_body);
-            hoist_loop_invariants(else_body);
+            hoist_loop_invariants(then_body, pinned);
+            hoist_loop_invariants(else_body, pinned);
         }
         HirNode::IfCmp {
             then_body,
             else_body,
             ..
         } => {
-            hoist_loop_invariants(then_body);
+            hoist_loop_invariants(then_body, pinned);
             if let Some(eb) = else_body {
-                hoist_loop_invariants(eb);
+                hoist_loop_invariants(eb, pinned);
             }
         }
         // All other variants either contain no `Vec<HirNode>` we'd recurse
@@ -168,7 +173,11 @@ fn recurse_into_children(node: &mut HirNode) {
 /// Scan `loop_body` top-level statements; pull out invariant ones and
 /// return them in source order. `iv_guard` (when `Some(v)`) is the For-loop
 /// induction varnode that must NOT be hoisted as a write target.
-fn extract_invariants(loop_body: &mut Vec<HirNode>, iv_guard: Option<Varnode>) -> Vec<HirNode> {
+fn extract_invariants(
+    loop_body: &mut Vec<HirNode>,
+    iv_guard: Option<Varnode>,
+    pinned: &BTreeSet<Varnode>,
+) -> Vec<HirNode> {
     // Pass 1: compute the "modified inside the loop" varnode set. We
     // conservatively flag the output of every node we walk through —
     // including those inside nested constructs — as modified.
@@ -194,6 +203,7 @@ fn extract_invariants(loop_body: &mut Vec<HirNode>, iv_guard: Option<Varnode>) -
 
     for node in original {
         if let HirNode::Statement(insn) = &node
+            && !insn.output.is_some_and(|out| pinned.contains(&out))
             && is_hoistable(insn, &modified, &write_counts, iv_guard)
         {
             hoisted.push(node);
@@ -372,14 +382,27 @@ fn is_hoistable(
         return false;
     }
 
-    // Refuse if any input is modified inside the loop. Unique temps are
-    // machine-instruction-local: a unique read whose def is not a loop
-    // statement was produced by an instruction that passes rewrote away,
-    // so its value cannot be proven invariant.
-    for input in &insn.inputs {
-        if input.space == SpaceId::Unique || modified.iter().any(|m| overlaps(*m, *input)) {
-            return false;
-        }
+    // Refuse if any input overlaps a location modified inside the loop. A
+    // sub-register read (`r12d`) is written by a full-width write (`r12`),
+    // so exact varnode equality is not enough.
+    if insn
+        .inputs
+        .iter()
+        .any(|input| modified.iter().any(|written| overlaps(written, input)))
+    {
+        return false;
+    }
+
+    // A raw `Unique` input says nothing about where its value comes from:
+    // SSA passes rewrite operands through the SSA var map and delete the
+    // temporaries' original definitions, so the raw name can stand for a
+    // value defined inside the loop even though no loop statement writes it.
+    if insn
+        .inputs
+        .iter()
+        .any(|input| input.space == SpaceId::Unique)
+    {
+        return false;
     }
 
     // Refuse if this lvalue is written multiple times — moving one copy
@@ -407,9 +430,9 @@ fn is_hoistable(
     true
 }
 
-/// Whether two varnodes share storage (e.g. `eax` and a write to `rax`).
-fn overlaps(a: Varnode, b: Varnode) -> bool {
+fn overlaps(a: &Varnode, b: &Varnode) -> bool {
     a.space == b.space
+        && a.space != SpaceId::Const
         && a.offset < b.offset.saturating_add(u64::from(b.size))
         && b.offset < a.offset.saturating_add(u64::from(a.size))
 }
@@ -481,7 +504,7 @@ mod tests {
             body: vec![inv_stmt.clone(), x_stmt.clone()],
         }];
 
-        hoist_loop_invariants(&mut body);
+        hoist_loop_invariants(&mut body, &BTreeSet::new());
 
         // Expected layout:
         //   [inv_stmt, while { [x_stmt] }]
@@ -519,7 +542,7 @@ mod tests {
             body: vec![inc_stmt.clone()],
         }];
 
-        hoist_loop_invariants(&mut body);
+        hoist_loop_invariants(&mut body, &BTreeSet::new());
 
         // Nothing hoisted; loop body unchanged.
         assert_eq!(body.len(), 1, "expected exactly one node (the loop)");
@@ -563,7 +586,7 @@ mod tests {
             cond: dummy_cond(),
         }];
 
-        hoist_loop_invariants(&mut body);
+        hoist_loop_invariants(&mut body, &BTreeSet::new());
 
         assert_eq!(body.len(), 1, "DoWhile must not hoist into parent scope");
         match &body[0] {
@@ -618,7 +641,7 @@ mod tests {
             body: vec![inv_stmt],
         }];
 
-        hoist_loop_invariants(&mut body);
+        hoist_loop_invariants(&mut body, &BTreeSet::new());
 
         assert_eq!(body.len(), 1, "register write must not be hoisted");
         match &body[0] {
@@ -647,7 +670,7 @@ mod tests {
             body: vec![load_stmt],
         }];
 
-        hoist_loop_invariants(&mut body);
+        hoist_loop_invariants(&mut body, &BTreeSet::new());
 
         assert_eq!(body.len(), 1, "load must not be hoisted");
         match &body[0] {
@@ -660,5 +683,66 @@ mod tests {
             },
             other => panic!("expected While, got {other:?}"),
         }
+    }
+
+    fn assert_not_hoisted(body: &[HirNode]) {
+        assert_eq!(body.len(), 1, "nothing should be hoisted: {body:#?}");
+    }
+
+    #[test]
+    fn temporary_input_stays_inside_loop() {
+        // `t1 = t0 + 1` where no loop statement writes `t0`: SSA passes may
+        // have deleted the loop's definition of `t0`, so its raw name proves
+        // nothing.
+        let t0 = Varnode::unique(0, 4);
+        let t1 = Varnode::unique(8, 4);
+        let one = Varnode::constant(1, 4);
+        let mut body = vec![HirNode::While {
+            cond: dummy_cond(),
+            body: vec![stmt(IrOp::IntAdd, t1, vec![t0, one], 0x1000)],
+        }];
+
+        hoist_loop_invariants(&mut body, &BTreeSet::new());
+
+        assert_not_hoisted(&body);
+    }
+
+    #[test]
+    fn subregister_read_of_written_register_stays_inside_loop() {
+        let rax = Varnode::reg(0, 8);
+        let eax = Varnode::reg(0, 4);
+        let t = Varnode::unique(0, 4);
+        let one = Varnode::constant(1, 4);
+        let mut body = vec![HirNode::While {
+            cond: dummy_cond(),
+            body: vec![
+                stmt(IrOp::IntAdd, t, vec![eax, one], 0x1000),
+                stmt(
+                    IrOp::IntAdd,
+                    rax,
+                    vec![rax, Varnode::constant(1, 8)],
+                    0x1004,
+                ),
+            ],
+        }];
+
+        hoist_loop_invariants(&mut body, &BTreeSet::new());
+
+        assert_not_hoisted(&body);
+    }
+
+    #[test]
+    fn pinned_output_stays_inside_loop() {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let t = Varnode::unique(0, 4);
+        let mut body = vec![HirNode::While {
+            cond: dummy_cond(),
+            body: vec![stmt(IrOp::IntAdd, t, vec![a, b], 0x1000)],
+        }];
+
+        hoist_loop_invariants(&mut body, &BTreeSet::from([t]));
+
+        assert_not_hoisted(&body);
     }
 }

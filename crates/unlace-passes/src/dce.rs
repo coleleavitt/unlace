@@ -38,7 +38,8 @@ const fn is_side_effecting(op: IrOp) -> bool {
 /// STORE, CALL, CALLIND, RETURN, BRANCH, CBRANCH, BRANCHIND, NEW,
 /// CALLOTHER, CPOOLREF, INDIRECT, and LOAD (may be volatile / mapped I/O).
 ///
-/// **Phi nodes** (MULTIEQUAL) are left untouched in this MVP pass.
+/// **Phi nodes** (MULTIEQUAL) are left untouched; [`DeadPhiElimPass`] prunes
+/// the unused ones once the IR optimizations have converged.
 ///
 /// A single invocation performs one linear sweep.  Cascading dead code
 /// (an instruction used only by a now-removed instruction) is handled by
@@ -56,20 +57,7 @@ impl Pass for DeadCodeElimPass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let trace = tracing::enabled!(target: "unlace::dce", tracing::Level::DEBUG);
-        let mut used: BTreeSet<SsaVarnode> = BTreeSet::new();
-
-        for (&bid, block) in &func.function.blocks {
-            for (insn_idx, insn) in block.insns.iter().enumerate() {
-                for input_idx in 0..insn.inputs.len() {
-                    if let Some(&sv) =
-                        func.var_map
-                            .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
-                    {
-                        used.insert(sv);
-                    }
-                }
-            }
-        }
+        let mut used = insn_uses(func);
 
         for phis in func.phi_map.values() {
             for phi in phis {
@@ -212,6 +200,113 @@ impl Pass for DeadCodeElimPass {
 
         Ok(changed)
     }
+}
+
+/// SSA varnodes read by at least one instruction (phi inputs excluded).
+fn insn_uses(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
+    let mut used = BTreeSet::new();
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            for input_idx in 0..insn.inputs.len() {
+                if let Some(&sv) = func
+                    .var_map
+                    .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                {
+                    used.insert(sv);
+                }
+            }
+        }
+    }
+    used
+}
+
+/// Dead-phi elimination for `Unique` temporaries, run once the IR
+/// optimizations have converged.
+///
+/// SSA construction places phis at every dominance-frontier block without
+/// consulting liveness, so a temporary defined on one side of a branch gets a
+/// phi at the join even though nothing reads it there. Those phi inputs count
+/// as uses of the temporary, which stops the printer from folding it into its
+/// single real consumer and leaks a `// temp` declaration.
+///
+/// The pass is scheduled after the optimization loop on purpose: LICM treats a
+/// header phi as a loop-carried use, and pruning earlier lets it hoist stack
+/// address arithmetic into preheaders that stack-variable recovery cannot
+/// resolve. Each round prunes phis, then sweeps the instructions that only
+/// those phis read, which can expose further dead phis.
+pub struct DeadPhiElimPass;
+
+impl Pass for DeadPhiElimPass {
+    fn name(&self) -> &str {
+        "dead-phi-elim"
+    }
+
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::FinalCleanup
+    }
+
+    fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        let trace = tracing::enabled!(target: "unlace::dce", tracing::Level::DEBUG);
+        let mut changed = false;
+        while remove_dead_unique_phis(func, &insn_uses(func), trace) {
+            changed = true;
+            if !DeadCodeElimPass.run(func)? {
+                break;
+            }
+        }
+        Ok(changed)
+    }
+}
+
+/// Drops phis over `Unique` temporaries whose output reaches no instruction,
+/// directly or through other live phis. Phis are pure, so an unused one can
+/// always go; register and stack phis stay because they also carry naming and
+/// calling-convention evidance.
+fn remove_dead_unique_phis(
+    func: &mut SsaFunction,
+    insn_uses: &BTreeSet<SsaVarnode>,
+    trace: bool,
+) -> bool {
+    let mut live: BTreeSet<SsaVarnode> = insn_uses.clone();
+    let mut worklist: Vec<SsaVarnode> = insn_uses.iter().copied().collect();
+    let phi_inputs: std::collections::BTreeMap<SsaVarnode, Vec<SsaVarnode>> = func
+        .phi_map
+        .values()
+        .flatten()
+        .map(|phi| (phi.output, phi.inputs.iter().map(|&(_, sv)| sv).collect()))
+        .collect();
+    for phi in func.phi_map.values().flatten() {
+        if phi.output.base.space != SpaceId::Unique && live.insert(phi.output) {
+            worklist.push(phi.output);
+        }
+    }
+    while let Some(sv) = worklist.pop() {
+        for &input in phi_inputs.get(&sv).into_iter().flatten() {
+            if live.insert(input) {
+                worklist.push(input);
+            }
+        }
+    }
+
+    let mut changed = false;
+    for (bid, phis) in &mut func.phi_map {
+        phis.retain(|phi| {
+            let keep = live.contains(&phi.output);
+            if !keep {
+                if trace {
+                    tracing::debug!(
+                        target: "unlace::dce",
+                        "drop-phi block={bid:?} output={:?}",
+                        phi.output
+                    );
+                }
+                changed = true;
+            }
+            keep
+        });
+    }
+    func.phi_map.retain(|_, phis| !phis.is_empty());
+    changed
 }
 
 fn register_output_covers_use(output: &SsaVarnode, used: &SsaVarnode) -> bool {
@@ -691,6 +786,126 @@ mod tests {
             !ssa.var_map
                 .contains_key(&(BlockId(0), 0, VarnodeSlot::Output)),
             "slot 0 must not retain the removed compare's output metadata"
+        );
+    }
+
+    /// Diamond `b0 -> {b1, b2} -> b3`. `b1` writes temporary `t` (read in
+    /// `b1` only) and register `rbx` (returned from `b3`), so SSA places a
+    /// phi for both at `b3`.
+    fn diamond_with_branch_local_temp() -> SsaFunction {
+        let t = Varnode::unique(0, 8);
+        let rbx = Varnode::reg(24, 8);
+        let mut function = Function::new("dead_phi", BlockId(0), 0x1000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![Varnode::constant(0x1010, 8), Varnode::reg(0, 1)],
+            0x1000,
+        ));
+        b0.successors = smallvec![BlockId(1), BlockId(2)];
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            t,
+            smallvec![Varnode::reg(8, 8)],
+            0x1004,
+        ));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            rbx,
+            smallvec![t, Varnode::constant(1, 8)],
+            0x1008,
+        ));
+        b1.successors = smallvec![BlockId(3)];
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1010));
+        b2.successors = smallvec![BlockId(3)];
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![rbx], 0x1014));
+        for block in [b0, b1, b2, b3] {
+            function.insert_block(block);
+        }
+        unlace_ir::ssa::build_ssa(function)
+    }
+
+    fn phi_bases(func: &SsaFunction) -> Vec<Varnode> {
+        func.phi_map
+            .values()
+            .flatten()
+            .map(|phi| phi.output.base)
+            .collect()
+    }
+
+    #[test]
+    fn dead_phi_elim_drops_unread_temporary_phi_and_keeps_register_phi() {
+        let mut func = diamond_with_branch_local_temp();
+        assert!(phi_bases(&func).contains(&Varnode::unique(0, 8)));
+
+        let changed = DeadPhiElimPass.run(&mut func).expect("pass should succeed");
+
+        assert!(changed);
+        assert_eq!(phi_bases(&func), vec![Varnode::reg(24, 8)]);
+    }
+
+    #[test]
+    fn dead_phi_elim_keeps_temporary_phi_with_a_reader() {
+        let mut func = diamond_with_branch_local_temp();
+        let t = Varnode::unique(0, 8);
+        let b3 = func
+            .function
+            .blocks
+            .get_mut(&BlockId(3))
+            .expect("join block");
+        b3.insns.insert(
+            0,
+            IrInsn::without_output(IrOp::Store, smallvec![t, t], 0x1012),
+        );
+        let mut func = unlace_ir::ssa::build_ssa(func.function);
+
+        DeadPhiElimPass.run(&mut func).expect("pass should succeed");
+
+        assert!(phi_bases(&func).contains(&t));
+    }
+
+    #[test]
+    fn dead_phi_elim_sweeps_copies_only_a_dead_phi_read() {
+        let mut func = diamond_with_branch_local_temp();
+        let u = Varnode::unique(1, 8);
+        let b2 = func
+            .function
+            .blocks
+            .get_mut(&BlockId(2))
+            .expect("else block");
+        b2.insns.insert(
+            0,
+            IrInsn::with_output(IrOp::Copy, u, smallvec![Varnode::reg(8, 8)], 0x100c),
+        );
+        let b1 = func
+            .function
+            .blocks
+            .get_mut(&BlockId(1))
+            .expect("then block");
+        b1.insns.insert(
+            0,
+            IrInsn::with_output(IrOp::Copy, u, smallvec![Varnode::reg(16, 8)], 0x1002),
+        );
+        let mut func = unlace_ir::ssa::build_ssa(func.function);
+        assert!(phi_bases(&func).contains(&u));
+
+        DeadPhiElimPass.run(&mut func).expect("pass should succeed");
+
+        assert!(!phi_bases(&func).contains(&u));
+        let writes_u = func
+            .function
+            .blocks
+            .values()
+            .flat_map(|block| &block.insns)
+            .any(|insn| insn.output == Some(u));
+        assert!(
+            !writes_u,
+            "copies feeding only the dead phi should be swept"
         );
     }
 }

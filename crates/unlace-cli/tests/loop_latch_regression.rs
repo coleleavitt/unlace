@@ -32,11 +32,13 @@ fn array_mix_latch_compares_updated_counter() {
         .map(str::trim)
         .find(|line| line.starts_with("} while ("))
         .unwrap_or_else(|| panic!("array_mix should keep its do/while latch:\n{c}"));
+    // The printer may pack several short statements onto one line.
     let increment = c
         .lines()
+        .flat_map(|line| line.split(';'))
         .map(str::trim)
-        .find_map(|line| {
-            let (lhs, rhs) = line.strip_suffix(';')?.split_once(" = ")?;
+        .find_map(|statement| {
+            let (lhs, rhs) = statement.split_once(" = ")?;
             (rhs == format!("{lhs} + 1LL")).then(|| rhs.to_string())
         })
         .unwrap_or_else(|| panic!("array_mix should emit its counter increment:\n{c}"));

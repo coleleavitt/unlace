@@ -2576,7 +2576,9 @@ struct PrintCtx {
     string_table: BTreeMap<u64, String>,
     readonly_scalars: BTreeMap<(u64, u8), u64>,
     ssa_statement_slots: BTreeMap<(u64, IrOp), Vec<SsaStatementSlots>>,
-    ssa_statement_slot_uses: BTreeMap<(u64, IrOp), usize>,
+    /// Indices into `ssa_statement_slots` already claimed by a collected
+    /// statement.
+    ssa_statement_slot_uses: BTreeMap<(u64, IrOp), BTreeSet<usize>>,
     ssa_phi_uses: Vec<SsaVarnode>,
     return_value_aliases: BTreeMap<SsaVarnode, SsaVarnode>,
     /// Base varnodes whose address is taken and passed to a CALL ("BYREF").
@@ -3773,6 +3775,19 @@ fn resolve_static_addr_add(
     None
 }
 
+/// Index of the instruction-pointer operand of a two-operand `IntAdd` whose
+/// other operand is a constant.
+fn instruction_pointer_operand(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> Option<usize> {
+    if insn.inputs.len() != 2 {
+        return None;
+    }
+    (0..2).find(|&idx| {
+        insn.inputs[1 - idx].space == SpaceId::Const
+            && input_or_latest_sv_for_operand(&insn.inputs[idx], Some(idx), stmt_idx, ctx)
+                .is_some_and(|sv| is_instruction_pointer_reg(&sv.base))
+    })
+}
+
 fn is_instruction_pointer_reg(vn: &Varnode) -> bool {
     vn.space == SpaceId::Register
         && matches!(x86_64_register_name(vn.offset, vn.size), "rip" | "eip")
@@ -4012,28 +4027,42 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
     idx
 }
 
+/// Pair a HIR statement with the SSA slots of the IR instruction it came from.
+///
+/// Instructions sharing an address and opcode are claimed in HIR order, but
+/// the HIR does not always visit them in IR order, so any unclaimed match is
+/// eligible. A statement that finds every match already claimed is a copy
+/// the structurer made of one instruction (tail duplication); it gets that
+/// instruction's slots when the match is unambiguous. Without slots the
+/// printer invents its own SSA versions, which name a value no reader uses.
 fn take_annotated_slots_for_insn(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<SsaStatementSlots> {
     let key = (insn.addr, insn.op);
-    let used = ctx.ssa_statement_slot_uses.entry(key).or_insert(0);
     let candidates = ctx.ssa_statement_slots.get(&key)?;
+    let claimed = ctx.ssa_statement_slot_uses.entry(key).or_default();
 
-    let selected_idx = candidates
-        .iter()
-        .enumerate()
-        .skip(*used)
-        .find(|(_, slots)| statement_slots_match_insn(slots, insn, true))
-        .or_else(|| {
-            candidates
-                .iter()
-                .enumerate()
-                .skip(*used)
-                .find(|(_, slots)| statement_slots_match_insn(slots, insn, false))
-        })
-        .map(|(idx, _)| idx)?;
+    let unclaimed_match = |require_input_match: bool| {
+        candidates
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !claimed.contains(idx))
+            .find(|(_, slots)| statement_slots_match_insn(slots, insn, require_input_match))
+            .map(|(idx, _)| idx)
+    };
+    if let Some(idx) = unclaimed_match(true).or_else(|| unclaimed_match(false)) {
+        claimed.insert(idx);
+        return candidates.get(idx).cloned();
+    }
 
-    let slots = candidates.get(selected_idx).cloned();
-    *used = selected_idx + 1;
-    slots
+    let only_match = |require_input_match: bool| {
+        let mut matches = candidates
+            .iter()
+            .filter(|slots| statement_slots_match_insn(slots, insn, require_input_match));
+        match (matches.next(), matches.next()) {
+            (Some(slots), None) => Some(slots.clone()),
+            _ => None,
+        }
+    };
+    only_match(true).or_else(|| only_match(false))
 }
 
 fn statement_slots_match_insn(
@@ -4542,6 +4571,18 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         // eliminating a class of leaked single-use temps.
 
         let use_count = use_counts.get(&output_sv).copied().unwrap_or(0);
+        if use_count > 1
+            && is_temp_varnode(&output_sv.base)
+            && multi_use_temp_inlines_everywhere(&output_sv, stmt_idx, use_count, ctx)
+        {
+            ctx.foldable_stmts.insert(stmt_idx);
+            ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=fold-every-use",
+                insn.op
+            );
+            continue;
+        }
         if use_count != 1 {
             if use_count > 0 && is_temp_varnode(&output_sv.base) {
                 ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
@@ -4595,6 +4636,14 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             .and_then(|cid| ctx.stmt_depths.get(&cid).copied())
             .unwrap_or(u32::MAX);
 
+        if consumer_stmt.is_some_and(|consumer| consumer <= stmt_idx) {
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=consumer-before-def consumer={consumer_stmt:?}",
+                insn.op
+            );
+            continue;
+        }
+
         if def_depth != consumer_depth {
             tracing::debug!(target: "unlace::cprinter",
                 "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=depth-mismatch def_depth={def_depth} consumer_depth={consumer_depth}",
@@ -4630,6 +4679,16 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         {
             tracing::debug!(target: "unlace::cprinter",
                 "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=expr-input-redefined consumer={consumer_stmt}",
+                insn.op
+            );
+            continue;
+        }
+
+        if let Some(consumer_stmt) = consumer_stmt
+            && inlined_read_clobbered_before(stmt_idx, consumer_stmt, false, ctx)
+        {
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} decision=folded-input-redefined consumer={consumer_stmt}",
                 insn.op
             );
             continue;
@@ -4700,7 +4759,7 @@ fn refuse_folds_past_aliased_input_redef(ctx: &mut PrintCtx) {
                     if *candidate == *input_sv {
                         continue;
                     }
-                    if candidate.base == input_sv.base || aliases(candidate.base, input_sv.base) {
+                    if share_printed_storage(*candidate, *input_sv, ctx) {
                         conflict = Some((*input_sv, redef_stmt, *candidate));
                         break;
                     }
@@ -4796,7 +4855,7 @@ fn copy_like_snapshot_source_redefined_before_consumer(
                 return false;
             };
             let redefined = *candidate != source_sv
-                && (candidate.base == source_sv.base || aliases(candidate.base, source_sv.base));
+                && share_printed_storage(*candidate, source_sv, ctx);
             if redefined {
                 tracing::debug!(target: "unlace::cprinter",
                     "snapshot-source-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
@@ -5098,7 +5157,7 @@ fn snapshot_source_expression_input_redefined_before_consumer(
             if *candidate == input_sv {
                 continue;
             }
-            if candidate.base == input_sv.base || aliases(candidate.base, input_sv.base) {
+            if share_printed_storage(*candidate, input_sv, ctx) {
                 tracing::debug!(target: "unlace::cprinter",
                     "snapshot-source-expr-input-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} source={source_sv:?} source_def_stmt={source_def_stmt} input_idx={input_idx} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
                 );
@@ -5158,7 +5217,7 @@ fn expression_inputs_aliased_redefined_before_consumer(
             if *candidate == *input_sv {
                 continue;
             }
-            if candidate.base == input_sv.base || aliases(candidate.base, input_sv.base) {
+            if share_printed_storage(*candidate, *input_sv, ctx) {
                 tracing::debug!(target: "unlace::cprinter",
                     "expr-input-redefined stmt={stmt_idx} consumer={consumer_stmt} output={output_sv:?} input={input_sv:?} redef_stmt={redef_stmt} redef={candidate:?}",
                 );
@@ -5167,6 +5226,120 @@ fn expression_inputs_aliased_redefined_before_consumer(
         }
     }
     false
+}
+
+/// Whether rendering statement `stmt_idx`'s expression at `consumer_stmt`
+/// reads a variable that has been written in between.
+///
+/// The reads are the statement's operands plus, through every operand whose
+/// definition is folded, that definition's operands: inlining moves them all
+/// to the consumer. `t = c8 + a2; c2 = LODWORD(t); <loop writing a2>;
+/// use(c2)` must not render `use(LODWORD(c8 + a2))` after the loop. A write
+/// to a different SSA value that prints under the same name (merged
+/// temporaries) clobbers the read just like a same-register write. When the
+/// statement is also emitted (`def_emitted`), its own assignment counts: after
+/// `v28 = v28 >> 1`, re-rendering `v28 >> 1` reads the new value.
+fn inlined_read_clobbered_before(
+    stmt_idx: u32,
+    consumer_stmt: u32,
+    def_emitted: bool,
+    ctx: &PrintCtx,
+) -> bool {
+    let first_write = if def_emitted { stmt_idx } else { stmt_idx + 1 };
+    if consumer_stmt <= first_write {
+        return false;
+    }
+    let mut reads = BTreeSet::new();
+    let mut reads_memory = false;
+    let mut pending = vec![stmt_idx];
+    let mut visited = BTreeSet::new();
+    while let Some(stmt) = pending.pop() {
+        if !visited.insert(stmt) {
+            continue;
+        }
+        for input_sv in ctx.stmt_inputs.get(&stmt).into_iter().flatten() {
+            let def_stmt = ctx.sv_defining_stmt.get(input_sv).copied();
+            let def_op = def_stmt
+                .and_then(|def| ctx.stmt_insns.get(&def))
+                .map(|insn| insn.op);
+            match (def_stmt, def_op) {
+                (Some(def), _) if ctx.foldable_stmts.contains(&def) => pending.push(def),
+                // A load result renders as the load expression when it is
+                // stable, so the memory read moves to the consumer too.
+                (Some(def), Some(IrOp::Load)) => {
+                    reads.insert(*input_sv);
+                    reads_memory = true;
+                    pending.push(def);
+                }
+                _ => {
+                    reads.insert(*input_sv);
+                }
+            }
+        }
+    }
+    ctx.stmt_insns
+        .range(first_write..consumer_stmt)
+        .any(|(writer, insn)| {
+            if reads_memory && instr_has_side_effects(insn) {
+                return true;
+            }
+            ctx.stmt_outputs
+                .get(writer)
+                .copied()
+                .flatten()
+                .is_some_and(|written| {
+                    reads
+                        .iter()
+                        .any(|read| written != *read && share_printed_storage(written, *read, ctx))
+                })
+        })
+}
+
+/// Whether a temporary read by several statements can be rendered inline at
+/// every read, so its own assignment need not be printed.
+///
+/// A temporary that is not folded is printed as an assignment, yet the
+/// operand renderer still inlines its expression at most reads, which leaves
+/// the assignment dead and the declaration leaked. Folding is safe when every
+/// read is a later statement or condition that sees the same operand values
+/// as the definition. Phi reads need the named variable.
+fn multi_use_temp_inlines_everywhere(
+    output_sv: &SsaVarnode,
+    stmt_idx: u32,
+    use_count: usize,
+    ctx: &PrintCtx,
+) -> bool {
+    if ctx.ssa_phi_uses.contains(output_sv) {
+        return false;
+    }
+    let statement_reads = ctx.stmt_inputs.iter().flat_map(|(&reader, inputs)| {
+        inputs
+            .iter()
+            .filter(|input| *input == output_sv)
+            .map(move |_| reader)
+    });
+    let condition_reads = ctx
+        .cond_use_stmts
+        .iter()
+        .filter(|(sv, _)| sv == output_sv)
+        .map(|&(_, position)| position);
+    let readers: Vec<u32> = statement_reads.chain(condition_reads).collect();
+    readers.len() == use_count
+        && readers.iter().all(|&reader| {
+            reader > stmt_idx && !inlined_read_clobbered_before(stmt_idx, reader, false, ctx)
+        })
+}
+
+/// Whether writing `a` overwrites the C variable that reads of `b` render as:
+/// the same or an overlapping location, or two SSA values the variable merge
+/// gave one name.
+fn share_printed_storage(a: SsaVarnode, b: SsaVarnode, ctx: &PrintCtx) -> bool {
+    a.base == b.base
+        || aliases(a.base, b.base)
+        || ctx
+            .merged_names
+            .get(&a)
+            .is_some_and(|name| ctx.merged_names.get(&b) == Some(name))
 }
 
 fn copy_reads_call_output(stmt_idx: u32, ctx: &PrintCtx) -> bool {
@@ -5343,6 +5516,10 @@ fn propagate_dead_chains(ctx: &mut PrintCtx) {
     // Build a reverse map: input_sv → list of (stmt_idx) that read it.
     // We don't need it for the algorithm — we iterate stmt_outputs directly.
 
+    // A dead statement stays dead in later rounds; it must release its
+    // inputs only once, or every extra round steals a use from a value
+    // that a live statement still reads.
+    let mut retired: BTreeSet<u32> = BTreeSet::new();
     let max_rounds = 8; // safety cap
     for _round in 0..max_rounds {
         let mut changed = false;
@@ -5351,6 +5528,7 @@ fn propagate_dead_chains(ctx: &mut PrintCtx) {
         let dead_stmts: Vec<u32> = ctx
             .stmt_outputs
             .iter()
+            .filter(|(stmt_idx, _)| !retired.contains(stmt_idx))
             .filter_map(|(&stmt_idx, output_sv_opt)| {
                 let out_sv = (*output_sv_opt)?;
                 // Already folded → skip (handled by expression folding).
@@ -5387,6 +5565,7 @@ fn propagate_dead_chains(ctx: &mut PrintCtx) {
             .collect();
 
         for stmt_idx in dead_stmts {
+            retired.insert(stmt_idx);
             let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx).cloned() else {
                 continue;
             };
@@ -13514,15 +13693,20 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         let _ = writeln!(out, "// {}(...) — recognized from {}", canonical, original);
     }
 
+    let out_sv = ctx.stmt_outputs.get(&idx).copied().flatten();
+    if out_sv.is_some_and(|sv| is_x86_frame_base_update(insn, &sv.base)) {
+        trace_flow(format_args!(
+            "emit-statement-skip stmt={idx} reason=frame-base"
+        ));
+        return;
+    }
+    if out_sv.is_some() && is_dead_suppressed_stack_load(insn, idx, ctx) {
+        return;
+    }
+
     indent(depth, ctx.config.tab_width, out);
 
-    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
-        if is_x86_frame_base_update(insn, &sv.base) {
-            trace_flow(format_args!(
-                "emit-statement-skip stmt={idx} reason=frame-base"
-            ));
-            return;
-        }
+    if let Some(sv) = out_sv {
         // A call to a void-returning runtime helper (e.g. `__stack_chk_fail`)
         // may carry a spurious IR output varnode for the clobbered return
         // register, but its C prototype is `void`. Emitting `v = f();` is a
@@ -13534,9 +13718,6 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 emit_direct_call_expr(insn, idx, ctx)
             };
             let _ = writeln!(out, "{};", expr);
-            return;
-        }
-        if is_dead_suppressed_stack_load(insn, idx, ctx) {
             return;
         }
         let lhs = ctx.name_of(&sv);
@@ -14362,6 +14543,13 @@ fn emit_expr_with_prec(
     ));
     let rendered = match insn.op {
         // -- Binary arithmetic/bitwise --
+        IrOp::IntAdd if instruction_pointer_operand(insn, stmt_idx, ctx).is_some() => {
+            // The x86 lifter adds the RIP register to a displacement the
+            // decoder already resolved to the absolute target, so the sum is
+            // that target.
+            let other = 1 - instruction_pointer_operand(insn, stmt_idx, ctx).unwrap_or(0);
+            emit_operand_resolved(&insn.inputs[other], other, stmt_idx, ctx)
+        }
         IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, parent, ctx),
         IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, parent, ctx),
         IrOp::IntMult | IrOp::FloatMult => emit_binop(insn, "*", stmt_idx, parent, ctx),
@@ -16143,6 +16331,19 @@ fn emit_operand_with_prec(
             );
             trace_full(format_args!(
                 "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-cond-name rendered={name:?}",
+                def_insn.op
+            ));
+            return name;
+        }
+        if def_stmt < stmt_idx
+            && !ctx.foldable_stmts.contains(&def_stmt)
+            && !is_dead_suppressible_store(&def_insn, def_stmt, ctx)
+            && !is_dead_suppressed_stack_load(&def_insn, def_stmt, ctx)
+            && inlined_read_clobbered_before(def_stmt, stmt_idx, true, ctx)
+        {
+            let name = ctx.name_of(&sv);
+            trace_full(format_args!(
+                "emit-operand-result stmt={stmt_idx} raw_idx={raw_idx} raw={vn:?} sv={sv:?} def_stmt={def_stmt} op={:?} decision=materialized-read-clobbered rendered={name:?}",
                 def_insn.op
             ));
             return name;

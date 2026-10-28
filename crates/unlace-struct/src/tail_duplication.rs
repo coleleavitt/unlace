@@ -46,6 +46,7 @@ const GOTO_ELIM_THRESHOLD: usize = 32;
 
 /// Per-function cap on the number of duplications performed.
 const MAX_DUPS_PER_FUNC: usize = 5;
+const EXP_MAX_SUCCS: usize = 0;
 
 /// Duplicate small multi-predecessor blocks so each predecessor gets its own
 /// copy. Returns the number of duplications performed.
@@ -87,6 +88,9 @@ fn tail_duplicate_impl(func: &mut Function, threshold: usize, goto_elim: bool) -
                 return None;
             }
 
+            if block.successors.len() > EXP_MAX_SUCCS {
+                return None;
+            }
             let insn_count = block.insns.len();
 
             // Within the standard threshold — always eligible.

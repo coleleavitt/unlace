@@ -54,12 +54,8 @@ void _start(void) {
 void arithmetic_test(void) {
     return;
 }
-/* Function:   logic_test | Address: 0x10134 | Size: 0x24 (36 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   logic_test | Address: 0x10134 | Size: 0x14 (20 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void logic_test(void) {
-    int v4; // reg?
-    if (v4) {
-        return;
-    }
     return;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -79,8 +75,8 @@ void __thiscall memory_test(__int64 this) {
     __int64 v_8;
     __int64 c0; // rdx
     _QWORD v5; // temp
-    _QWORD v11; // temp
-    c0 = c0 - 32; *(_QWORD *)(c0 - 32 + 0x18LL) = v11; v5 = c0 + 0x10LL;
-    *(_QWORD *)(c0 + 0x10LL) = v5; *(_DWORD *)(c0) = LODWORD(0x42LL);
+    __int64 v4 = c0 - 32; // temp
+    c0 = c0 - 32; *(_QWORD *)(c0 - 32 + 0x18LL) = v5; v4 = c0 + 0x10LL;
+    *(_QWORD *)(c0 + 0x10LL) = v4; *(_DWORD *)(c0) = LODWORD(0x42LL);
     return;
 }

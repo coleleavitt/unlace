@@ -59,8 +59,8 @@ void sub_1120(void);
 
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    __int64 field_0;
-    __int64 field_8;
+    void * field_0;
+    void * field_8;
 };
 
 // debug language: C
@@ -134,8 +134,8 @@ int sub(int a, int b) {
     int v_4;
     int c2; // rbp
     v_4 = LODWORD(a);
-    _DWORD v10 = *(_DWORD *)(c2 - 8); // temp
-    return v_4 - v10;
+    _DWORD v11 = *(_DWORD *)(c2 - 8); // temp
+    return v_4 - v11;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -232,7 +232,7 @@ int min(int a, int b) {
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
     int field_0;
-    __int64 field_4;
+    void * field_4;
 };
 
 // debug language: C
@@ -256,7 +256,7 @@ struct __anon0 {
     int field_0;
     int field_4;
     int field_8;
-    __int64 field_12;
+    void * field_12;
 };
 
 // debug language: C
@@ -298,7 +298,7 @@ int compute(int x) {
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    __int64 field_0;
+    void * field_0;
     void * field_8;
 };
 

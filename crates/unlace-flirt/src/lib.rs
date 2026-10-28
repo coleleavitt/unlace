@@ -1,7 +1,8 @@
 //! FLIRT (Fast Library Identification and Recognition Technology) signature matching.
 //!
-//! Provides pattern-based function identification by matching byte sequences
-//! with optional masks and CRC16 checksums against raw function bytes.
+//! [`sig`] reads IDA's `.sig` (IDASGN) files and matches them the way the
+//! IDA kernel does; [`match_pass`] applies them to a loaded image. The
+//! other modules hold unlace's own TOML pattern format.
 
 pub mod builder;
 mod error;
@@ -11,7 +12,9 @@ mod pattern;
 pub mod prologue;
 pub mod sig;
 
-pub use match_pass::{FlirtApplyReport, FlirtMatchDetail, FlirtMatcher};
+pub use match_pass::{FlirtAppliedMatch, FlirtApplyReport, FlirtHit, FlirtMatcher};
+pub use sig::SigFile;
+pub use sig::matching::CodeWindow;
 
 pub use builder::{
     FlirtSignature as SigV2, FlirtSignatureFile, build_from_function_map, build_from_library,

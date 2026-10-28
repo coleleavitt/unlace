@@ -59,8 +59,8 @@ void sub_1120(void);
 
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    __int64 field_0;
-    __int64 field_8;
+    void * field_0;
+    void * field_8;
 };
 
 /* Function:   _start | Address: 0x1040 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */

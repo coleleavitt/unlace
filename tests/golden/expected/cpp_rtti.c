@@ -112,8 +112,8 @@ int main(void) {
 
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    __int64 field_0;
-    __int64 field_8;
+    void * field_0;
+    void * field_8;
 };
 
 /* Function:   _start | Address: 0x1140 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
@@ -160,46 +160,43 @@ void sub_1220(void) {
 /* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xc7 (199 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
 // identify(Animal*)
 char * identify(Animal * a1) {
-    __int64 v12; // temp
+    __int64 v8; // temp
     __int64 v_16;
-    __int64 v30; // rax
-    __int64 v31; // rax
+    __int64 v18; // rax
+    __int64 v19; // rax
     __int64 result; // rax
+    __int64 c1; // rcx
     __int64 c3; // rsp
     __int64 result_1; // temp
     __int64 result_2; // temp
     if (a1 == 0LL) {
-        result_2 = v12 + "unknown"; result = v12 + "unknown"; return v12 + "unknown";
+        result_2 = v8 + "unknown"; result = v8 + "unknown"; return v8 + "unknown";
     } else {
-        __int64 c1 = 0LL; // rcx
-        __int64 c4 = v12 + 0x3d40LL; // rsi
-        __int64 v17 = c3 + 8LL; // temp
+        __int64 c4 = v8 + 0x3d40LL; // rsi
+        __int64 v10 = c3 + 8LL; // temp
         /* dynamic cast */
-        v30 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, c1);
-        v17 = *(_QWORD *)(c3 + 8LL); a1 = v17;
-        __int64 c2 = v30; // rdx
-        if (v30 == 0LL) {
-            c1 = 0LL;
-            c2 = v12 + 0x3d68LL;
-            c4 = v12 + 0x3d40LL;
+        v18 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
+        v10 = *(_QWORD *)(c3 + 8LL); a1 = v10;
+        __int64 c2 = v18; // rdx
+        if (v18 == 0LL) {
+            c2 = v8 + 0x3d68LL; c4 = v8 + 0x3d40LL;
             /* dynamic cast */
-            v31 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, c1);
-            a1 = v31; v17 = v31;
-            if (v31 == 0LL) {
-                result = v12 + "unknown"; return result;
+            v19 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, 0LL);
+            a1 = v19;
+            if (v19 == 0LL) {
+                result = v8 + "unknown"; return result;
             } else {
-                v17 = *(_QWORD *)(result); result = v17; c1 = v12 + 0x1310LL;
-                v17 = *(_QWORD *)(result); c2 = v17; result_1 = v12 + "meow";
-                result = v12 + "meow";
+                v10 = *(_QWORD *)(v19); result = v10; c1 = v8 + 0x1310LL;
+                v10 = *(_QWORD *)(result); c2 = v10; result_1 = v8 + "meow";
+                result = v8 + "meow";
                 if (c2 == c1) {
-                    return v12 + "meow";
+                    return v8 + "meow";
                 } else {
                 }
             }
         } else {
-            _QWORD v19 = *(_QWORD *)(v30); // temp
-            result = v19; c4 = v12 + 0x1300LL; v17 = *(_QWORD *)(result);
-            c1 = v17; result = v12 + "woof";
+            v10 = *(_QWORD *)(v18); result = v10; c4 = v8 + 0x1300LL;
+            v10 = *(_QWORD *)(result); c1 = v10; result = v8 + "woof";
             if (c1 != c4) {
                 a1 = c2;
             } else {

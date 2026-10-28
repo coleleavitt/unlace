@@ -3446,9 +3446,9 @@ impl FlirtConfig {
         let sig_paths = collect_sig_paths(&options)?;
         let mut matcher = unlace_flirt::FlirtMatcher::default();
         for path in sig_paths {
-            let sig = unlace_flirt::sig::SigFile::load(&path)
+            let sig = unlace_flirt::SigFile::load(&path)
                 .with_context(|| format!("loading FLIRT signature {}", path.display()))?;
-            matcher.extend_from_sig(&sig);
+            matcher.push(sig);
         }
 
         Ok(Self {
@@ -3481,14 +3481,37 @@ impl FlirtConfig {
         (self.options.min_confidence as f32) / 100.0
     }
 
-    fn explicit_match(&self, bytes: &[u8]) -> Option<FlirtConfidence> {
-        self.explicit.match_one_detailed(bytes).and_then(|m| {
-            (m.confidence >= self.min_confidence_f32()).then(|| FlirtConfidence {
-                name: m.name.to_string(),
-                confidence: m.confidence,
-                signature_id: m.signature_id,
+    /// Name the functions at `candidates` with the explicit `.sig` files.
+    /// Matching runs over all candidates at once so that modules which
+    /// reference other library functions can use names found meanwhile.
+    fn explicit_hits(
+        &self,
+        image: &BinaryImage,
+        candidates: &[u64],
+    ) -> BTreeMap<u64, FlirtConfidence> {
+        if !self.has_explicit_signatures() || candidates.is_empty() {
+            return BTreeMap::new();
+        }
+        let windows: Vec<unlace_flirt::CodeWindow<'_>> = image
+            .sections
+            .iter()
+            .filter(|section| section.flags.contains(SectionFlags::EXEC))
+            .map(|section| unlace_flirt::CodeWindow::new(section.vaddr, &section.data))
+            .collect();
+        let known = flirt_known_names(image);
+        self.explicit
+            .identify(image.arch, &windows, candidates, &known)
+            .into_iter()
+            .filter(|(_, hit)| hit.confidence >= self.min_confidence_f32())
+            .map(|(addr, hit)| {
+                let confidence = FlirtConfidence {
+                    name: hit.name,
+                    confidence: hit.confidence,
+                    signature_id: hit.signature_id,
+                };
+                (addr, confidence)
             })
-        })
+            .collect()
     }
 }
 
@@ -3597,19 +3620,23 @@ pub fn build_symbol_context_with_config(
     // confidence + signature_id without re-running the matcher.
     if flirt_config.should_scan_for_arch(image.arch) {
         let _span = profiling::phase("symbol-context.flirt-scan");
-        let mut eligible = 0u64;
+        let eligible: Vec<&FunctionEntry> = discovered
+            .iter()
+            .filter(|entry| is_flirt_eligible_name(&entry.name))
+            .collect();
+        let candidates: Vec<u64> = eligible.iter().map(|entry| entry.addr).collect();
+        let mut explicit = flirt_config.explicit_hits(image, &candidates);
+        let resolved = flirt_resolved_names_with_config(image, flirt_config);
         let mut matched = 0u64;
-        for entry in discovered {
-            if !is_flirt_eligible_name(&entry.name) {
-                continue;
-            }
-            eligible += 1;
-            if let Some(fc) = flirt_match_detailed_with_config(image, entry, flirt_config) {
+        for entry in &eligible {
+            let bundled = bundled_flirt_match(image, entry, &resolved, flirt_config);
+            if let Some(fc) = prefer_flirt_match(explicit.remove(&entry.addr), bundled) {
                 table.insert(entry.addr, fc.name.clone());
                 flirt.insert(entry.addr, fc);
                 matched += 1;
             }
         }
+        let eligible = eligible.len() as u64;
         profiling::record_items("symbol-context.flirt-scan", eligible);
         profiling::diagnostic(
             "info",
@@ -4281,32 +4308,37 @@ pub fn flirt_match_detailed_with_config(
     entry: &FunctionEntry,
     config: &FlirtConfig,
 ) -> Option<FlirtConfidence> {
-    if !config.should_scan_for_arch(image.arch) {
+    if !config.should_scan_for_arch(image.arch) || !is_flirt_eligible_name(&entry.name) {
         return None;
     }
+    let explicit = config.explicit_hits(image, &[entry.addr]).remove(&entry.addr);
     let resolved = flirt_resolved_names_with_config(image, config);
-    flirt_match_detailed_with_resolved(image, entry, &resolved, config)
+    prefer_flirt_match(explicit, bundled_flirt_match(image, entry, &resolved, config))
 }
 
-fn flirt_match_with_resolved(
-    image: &BinaryImage,
-    entry: &FunctionEntry,
-    resolved: &BTreeMap<u64, String>,
-    config: &FlirtConfig,
-) -> Option<String> {
-    flirt_match_detailed_with_resolved(image, entry, resolved, config).map(|m| m.name)
+/// Prefer the explicit `.sig` match unless the bundled one is more certain.
+fn prefer_flirt_match(
+    explicit: Option<FlirtConfidence>,
+    bundled: Option<FlirtConfidence>,
+) -> Option<FlirtConfidence> {
+    match (explicit, bundled) {
+        (Some(a), Some(b)) if b.confidence > a.confidence => Some(b),
+        (Some(a), _) => Some(a),
+        (None, b) => b,
+    }
 }
 
-fn flirt_match_detailed_with_resolved(
+/// Match `entry` against the bundled pattern DB.
+fn bundled_flirt_match(
     image: &BinaryImage,
     entry: &FunctionEntry,
     resolved: &BTreeMap<u64, String>,
     config: &FlirtConfig,
 ) -> Option<FlirtConfidence> {
-    if !config.enabled() {
-        return None;
-    }
-    if !is_flirt_eligible_name(&entry.name) {
+    if !config.enabled()
+        || !config.bundled_applicable_to_arch(image.arch)
+        || !is_flirt_eligible_name(&entry.name)
+    {
         return None;
     }
     let text = text_section(image)?;
@@ -4320,48 +4352,36 @@ fn flirt_match_detailed_with_resolved(
         return None;
     }
     let bytes = &text.data[off_start..off_end];
-    let explicit = config
-        .has_explicit_signatures()
-        .then(|| config.explicit_match(bytes))
-        .flatten();
-    let bundled = config
-        .bundled_applicable_to_arch(image.arch)
-        .then(|| {
-            flirt_db()
-                .match_function_with_refs(bytes, resolved)
-                .and_then(|m| {
-                    (m.confidence >= config.min_confidence_f32()).then(|| FlirtConfidence {
-                        name: m.name.to_string(),
-                        confidence: m.confidence,
-                        signature_id: m.signature_id,
-                    })
-                })
-        })
-        .flatten();
-    match (explicit, bundled) {
-        (Some(a), Some(b)) if b.confidence > a.confidence => Some(b),
-        (Some(a), _) => Some(a),
-        (None, Some(b)) => Some(b),
-        (None, None) => None,
+    let matched = flirt_db().match_function_with_refs(bytes, resolved)?;
+    (matched.confidence >= config.min_confidence_f32()).then(|| FlirtConfidence {
+        name: matched.name.to_string(),
+        confidence: matched.confidence,
+        signature_id: matched.signature_id,
+    })
+}
+
+/// Names FLIRT matches can rely on: real function symbols and imports.
+fn flirt_known_names(image: &BinaryImage) -> BTreeMap<u64, String> {
+    let mut known = BTreeMap::new();
+    for (&addr, sym) in &image.symbols {
+        if sym.kind == SymbolKind::Function && !is_flirt_eligible_name(&sym.name) {
+            known.insert(addr, sym.name.clone());
+        }
     }
+    for (&addr, name) in &image.plt_symbols {
+        known.insert(addr, name.clone());
+    }
+    known
 }
 
 fn flirt_resolved_names_with_config(
     image: &BinaryImage,
     config: &FlirtConfig,
 ) -> BTreeMap<u64, String> {
-    let mut resolved = BTreeMap::new();
     if !config.enabled() {
-        return resolved;
+        return BTreeMap::new();
     }
-    for (&addr, sym) in &image.symbols {
-        if sym.kind == SymbolKind::Function && !is_flirt_eligible_name(&sym.name) {
-            resolved.insert(addr, sym.name.clone());
-        }
-    }
-    for (&addr, name) in &image.plt_symbols {
-        resolved.insert(addr, name.clone());
-    }
+    let mut resolved = flirt_known_names(image);
 
     let mut changed = true;
     while changed {
@@ -4380,8 +4400,8 @@ fn flirt_resolved_names_with_config(
                     addr: sym.addr,
                     size: sym.size,
                 };
-                flirt_match_with_resolved(image, &entry, &resolved, config)
-                    .map(|name| (sym.addr, name))
+                bundled_flirt_match(image, &entry, &resolved, config)
+                    .map(|m| (sym.addr, m.name))
             })
             .collect();
         candidates.sort_by_key(|(addr, _)| *addr);
@@ -6000,6 +6020,9 @@ pub fn emit_output(
                         unlace_struct::cleanup_unreachable_labels(&mut hir);
                     }
                 );
+                hir_step!("output.hir.resolve-gotos", "resolve_gotos", {
+                    unlace_struct::resolve_gotos(&mut hir);
+                });
                 hir_step!(
                     "output.hir.recover-guarded-whiles",
                     "recover_guarded_whiles",

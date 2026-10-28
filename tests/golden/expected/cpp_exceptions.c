@@ -87,14 +87,14 @@ struct __anon0 {
 /* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_throw, __printf_chk | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
 _Noreturn int safe_call(void) {
-    __int64 v25; // rax
+    __int64 v14; // rax
     __int64 c2; // rbx
     __int64 c4 = 0x10LL; // rdi
     /* allocate exception */
-    __int64 v23 = __cxa_allocate_exception(c4); // rax
-    c2 = v23; std_runtime_error_runtime_error();
+    __int64 v12 = __cxa_allocate_exception(c4); // rax
+    c2 = v12; std_runtime_error_runtime_error();
     /* throw */
-    v25 = __cxa_throw(c2, 0x3d40LL, qword_3FE0);
+    v14 = __cxa_throw(c2, 0x3d40LL, qword_3FE0);
     return 0;
 }
 
@@ -105,8 +105,8 @@ int main(void) {
 
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    __int64 field_0;
-    __int64 field_8;
+    void * field_0;
+    void * field_8;
 };
 
 /* Function:   _start | Address: 0x1260 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */

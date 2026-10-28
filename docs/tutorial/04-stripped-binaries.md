@@ -36,21 +36,21 @@ quality degrades gracefully rather than catastrophically.
 
 ## Applying FLIRT Signatures
 
-The Fast Library Identification and Recognition Technology (FLIRT) database
-matches known library function byte patterns against the target binary. Unlace
-ships with signature databases for common C runtimes (glibc, musl, MSVC CRT,
-newlib) and lets you supply custom `.sig` files for proprietary SDKs. Applying
-signatures transforms meaningless `sub_XXXXX` names into recognizable library
-calls:
+The Fast Library Identification and Recognition Technology (FLIRT) matches
+known library function byte patterns against the target binary. Unlace
+ships a small pattern database for common C runtimes and reads IDA's `.sig`
+files for anything else (see [FLIRT signatures](../flirt.md)). Applying
+signatures turns `sub_XXXXX` names of statically linked library code into
+the library names:
 
 ```bash
-$ unlace decompile ./hello-stripped --flirt-db /usr/share/unlace/sigs/glibc-2.31-amd64.sig
+$ unlace decompile ./target.exe --sig vc64ucrt.sig --sig vc64rtf.sig
+$ unlace decompile ./target.exe --sig-dir ./sig/pc
 ```
 
-After FLIRT matching, `sub_401050` becomes `printf`, `sub_401030` becomes
-`puts`, and the decompilation reads almost identically to the non-stripped
-version. You can generate custom FLIRT databases from any static library using
-`unlace flirt-gen ./libfoo.a -o libfoo.sig`.
+Matched functions are named in every call site, and their bodies are
+replaced by a `// [flirt]` stub. `unlace siggen ./libfoo.a` generates
+patterns in unlace's own format from a static library.
 
 ## Heuristic Function Discovery
 

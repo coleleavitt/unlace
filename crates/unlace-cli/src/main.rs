@@ -647,7 +647,7 @@ fn run_sigload(
         session
             .load_binary(bin)
             .with_context(|| format!("loading {}", bin.display()))?;
-        let matcher = unlace_flirt::FlirtMatcher::from_sig(&sig);
+        let matcher = unlace_flirt::FlirtMatcher::from_sig(sig);
         let report = matcher.apply_to_session_with_min_confidence(&session, force, min_confidence);
         if json {
             let summary = serde_json::json!({
@@ -688,43 +688,58 @@ fn run_sigload(
         }
         return Ok(());
     }
+    let header = &sig.header;
+    let named = |module: &unlace_flirt::sig::Module| {
+        module
+            .function_name()
+            .map_or("?", |name| name.name.as_str())
+            .to_string()
+    };
     if json {
         let summary = serde_json::json!({
-            "version": sig.version,
-            "arch": sig.arch,
-            "features": sig.features,
-            "file_types": sig.file_types,
-            "os_types": sig.os_types,
-            "app_types": sig.app_types,
-            "library_name": sig.library_name,
-            "n_functions": sig.n_functions,
-            "extracted_functions": sig.functions.len(),
-            "sample": sig.functions.iter()
+            "version": header.version,
+            "arch": header.arch.0,
+            "features": header.features.bits(),
+            "file_types": header.file_types,
+            "os_types": header.os_types,
+            "app_types": header.app_types,
+            "library_name": header.library_name,
+            "pattern_size": header.pattern_size,
+            "declared_modules": header.n_modules,
+            "modules": sig.modules().len(),
+            "sample": sig.modules().iter()
                 .take(limit)
-                .map(|f| serde_json::json!({
-                    "name": f.name,
-                    "pattern_hex": hex::encode(&f.pattern),
+                .map(|m| serde_json::json!({
+                    "name": named(m),
+                    "length": m.length,
+                    "crc_len": m.crc_len,
+                    "crc16": m.crc16,
+                    "tail_bytes": m.tail_bytes.len(),
+                    "reference": m.reference.as_ref().map(|r| &r.name),
                 }))
                 .collect::<Vec<_>>(),
         });
         println!("{}", serde_json::to_string_pretty(&summary)?);
     } else {
         println!(
-            "IDASGN v{} arch={} features={:#x}",
-            sig.version, sig.arch, sig.features
+            "IDASGN v{} arch={} features={:#x} pattern_size={}",
+            header.version,
+            header.arch.0,
+            header.features.bits(),
+            header.pattern_size
         );
-        println!("library: {:?}", sig.library_name);
+        println!("library: {:?}", header.library_name);
         println!(
-            "declared n_functions={}, extracted ascii names={}",
-            sig.n_functions,
-            sig.functions.len()
+            "declared modules={}, decoded modules={}",
+            header.n_modules,
+            sig.modules().len()
         );
         println!(
-            "sample of first {} functions:",
-            limit.min(sig.functions.len())
+            "sample of first {} modules:",
+            limit.min(sig.modules().len())
         );
-        for f in sig.functions.iter().take(limit) {
-            println!("  {} pattern={} bytes", f.name, f.pattern.len());
+        for m in sig.modules().iter().take(limit) {
+            println!("  {} length={} crc_len={}", named(m), m.length, m.crc_len);
         }
     }
     Ok(())

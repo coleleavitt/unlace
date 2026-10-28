@@ -1127,6 +1127,13 @@ impl<'a> StructureCtx<'a> {
         if struct_trace_verbose_enabled() {
             struct_trace!("init back_edges={back_edges:?}");
             struct_trace!("init loop_headers={loop_headers:?}");
+            for (&bid, block) in &func.function.blocks {
+                struct_trace!(
+                    "init cfg block={bid:?} insns={} edges={:?}",
+                    block.insns.len(),
+                    func.cfg.edges_from(bid)
+                );
+            }
             for target in &goto_targets {
                 let preds: Vec<BlockId> = func
                     .cfg

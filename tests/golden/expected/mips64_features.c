@@ -79,9 +79,9 @@ void memory_test(void) {
     __int64 v_8;
     __int64 c0; // r29
     _QWORD v5; // temp
-    _QWORD v12; // temp
-    c0 = c0 - 32; *(_QWORD *)(c0 - 32 + 0x18LL) = v12; v5 = c0 + 0x10LL;
-    *(_QWORD *)(c0 + 0x10LL) = v5; *(_DWORD *)(c0) = LODWORD(0x42LL);
+    __int64 v4 = c0 - 32; // temp
+    c0 = c0 - 32; *(_QWORD *)(c0 - 32 + 0x18LL) = v5; v4 = c0 + 0x10LL;
+    *(_QWORD *)(c0 + 0x10LL) = v4; *(_DWORD *)(c0) = LODWORD(0x42LL);
     _DWORD v7 = *(_DWORD *)(c0); // temp
     if ((_QWORD)(v7 < 0x64LL) == 0LL) {
     }

@@ -74,23 +74,24 @@ int main(void) {
     __int64 v_16;
     char buf_0[64]; // int buf_0[16]
     _QWORD c0; // rax
-    __int64 v769; // rax
-    __int64 v770; // rax
-    __int64 v771; // rax
+    __int64 v678; // rax
+    __int64 v679; // rax
+    __int64 v680; // rax
     _QWORD c3; // rbx
     _QWORD a2; // rsi
     _QWORD a1; // rdi
     _QWORD c8; // r10
-    _DWORD v28; // temp
+    int v28; // temp
     int v29; // temp
-    int v57; // temp
-    __int64 v151; // temp
-    __int64 v215; // temp
-    __int64 v285; // temp
-    __int64 v299; // temp
-    int v432; // temp
-    int v442; // temp
-    int v738; // temp
+    int v30; // temp
+    int v56; // temp
+    _QWORD v150; // temp
+    __int64 v213; // temp
+    __int64 v283; // temp
+    __int64 v297; // temp
+    int v415; // temp
+    int v425; // temp
+    int v641; // temp
     __int64 c2 = 0xaLL; // rdx
     _BOOL c11 = !(__builtin_popcount(LOBYTE(0)) & 1); // PF
     __int64 c1 = 0LL; // rcx
@@ -103,45 +104,45 @@ int main(void) {
     c15 = (((unsigned __int128)0x1500000012ULL << 64) | 0xf0000000cULL); *(_OWORD *)(buf_0 + 16) = c15; c15 = (((unsigned __int128)0x210000001eULL << 64) | 0x1b00000018ULL);
     *(_OWORD *)(buf_0 + 32) = c15; c15 = (((unsigned __int128)0x2d0000002aULL << 64) | 0x2700000024ULL); *(_OWORD *)(buf_0 + 48) = c15;
     do {
-        v28 = LODWORD(c0); a2 = LODWORD(c0); v29 = LODWORD(c0);
-        c0 = a2 + c1;
-        c1 = a2;
+        v28 = c0; a2 = c0; v29 = c0;
+        v30 = c1;
+        c0 = c0 + c1;
+        c1 = v28;
         c12 = c2 == 1;
         c13 = LOBYTE(c2 < 1); c10 = (_DWORD)c2 < (_DWORD)1; c14 = __OFSUB__(c2, 1);
         c11 = !(__builtin_popcount(LOBYTE(c2 - 1)) & 1); c2 = c2 - 1;
     } while (c2 != 0);
-    int v46 = a2; // temp
-    v28 = a2 + 0x38e; c12 = c1 == -910; c13 = LOBYTE(a2 + 0x38e < 0);
-    c10 = (c1 + 0x38e) < c1; c14 = __OFADD__(c1, 0x38e); c11 = !(__builtin_popcount(LOBYTE(a2 + 0x38e)) & 1);
-    c1 = a2 + 0x38e; c2 = 0x24LL; c0 = 0x30LL;
+    v28 = c1; v29 = c1 + 0x38e; c12 = c1 == -910;
+    c13 = LOBYTE(c1 + 0x38e < 0); c10 = (c1 + 0x38e) < c1; c14 = __OFADD__(c1, 0x38e);
+    c11 = !(__builtin_popcount(LOBYTE(c1 + 0x38e)) & 1); c2 = 0x24LL; c0 = 0x30LL;
     do {
         a2 = c2;
-        c2 = LODWORD(c0) % a2;
+        c2 = c0 % a2;
         c0 = a2;
-        v57 = c2; c12 = !c2;
+        v56 = c2; c12 = !c2;
         c13 = LOBYTE(c2 < 0); c10 = 0; c14 = 0;
-        c11 = !(__builtin_popcount(LOBYTE(v57)) & 1);
+        c11 = !(__builtin_popcount(LOBYTE(v56)) & 1);
     } while (c2 != 0);
-    v46 = c1; v28 = a2; v29 = c1 + a2;
-    c12 = c1 + a2 == 0; c13 = LOBYTE(c1 + a2 < 0); c10 = (c1 + c0) < c1;
-    c14 = __OFADD__(c1, c0); c11 = !(__builtin_popcount(LOBYTE(c1 + a2)) & 1); c0 = 0x1bLL;
-    int v87 = c8 & 1; // temp
+    v28 = c1 + 0x38e; v29 = a2; v30 = c1 + 0x38e + a2;
+    c12 = c1 + 0x38e + a2 == 0; c13 = LOBYTE(c1 + 0x38e + a2 < 0); c10 = (c1 + 0x38e + c0) < c1 + 0x38e;
+    c14 = __OFADD__(c1 + 0x38e, c0); c11 = !(__builtin_popcount(LOBYTE(c1 + 0x38e + a2)) & 1); c0 = 0x1bLL;
+    int v84 = c0; // temp
+    int v86 = c8 & 1; // temp
     while (1) {
-        int v85 = LODWORD(c0); // temp
-        c8 = LODWORD(c0);
+        c8 = c0;
         c8 = c8 & 1;
-        if (v87 != 0) {
-            int v69 = LODWORD(c0 + (c0 << 1LL) + 1LL); // temp
+        if (v86 != 0) {
+            int v68 = LODWORD(c0 + (c0 << 1LL) + 1LL); // temp
             c2 = c2 + 2;
-            c12 = v69 >> 1 == 0;
-            c13 = LOBYTE(v69 >> 1 < 0); c10 = 0; c14 = 0;
-            c11 = !(__builtin_popcount(LOBYTE(v69 >> 1)) & 1); c0 = v69 >> 1; continue;
+            c12 = v68 >> 1 == 0;
+            c13 = LOBYTE(v68 >> 1 < 0); c10 = 0; c14 = 0;
+            c11 = !(__builtin_popcount(LOBYTE(v68 >> 1)) & 1); c0 = v68 >> 1; continue;
         } else {
-            c0 = v85 >> 1;
+            c0 = v84 >> 1;
             c2 = c2 + 1;
             c12 = c0 == 1;
             c13 = LOBYTE(c0 < 1); c10 = (_DWORD)c0 < (_DWORD)1; c14 = __OFSUB__(c0, 1);
-            c11 = !(__builtin_popcount(LOBYTE((v85 >> 1) - 1)) & 1);
+            c11 = !(__builtin_popcount(LOBYTE((v84 >> 1) - 1)) & 1);
             if (c0 != 1) {
                 continue;
             } else {
@@ -149,15 +150,14 @@ int main(void) {
             }
         }
     }
-    c1 = c1 + a2 + c2; c12 = 1; c13 = LOBYTE(0);
+    c1 = c1 + 0x38e + a2 + c2; c12 = 1; c13 = LOBYTE(0);
     c10 = 0; c14 = 0; c11 = c11;
     a2 = 0LL; c2 = 0x20LL; c0 = 0xdeadbeefLL;
     do {
-        int v117 = LODWORD(c0); // temp
-        int v118 = LODWORD(c0); // temp
-        c0 = (_DWORD)v118 >> 1;
-        a1 = v117 & 1;
-        a2 = a2 + (v117 & 1);
+        int v116 = c0; // temp
+        c0 = (_DWORD)c0 >> 1;
+        a1 = v116 & 1;
+        a2 = a2 + (v116 & 1);
         c12 = c2 == 1;
         c13 = LOBYTE(c2 < 1); c10 = (_DWORD)c2 < (_DWORD)1; c14 = __OFSUB__(c2, 1);
         c11 = !(__builtin_popcount(LOBYTE(c2 - 1)) & 1); c2 = c2 - 1;
@@ -167,12 +167,12 @@ int main(void) {
     __int64 v8 = (uintptr_t)(buf_0 + 64); // r8
     c0 = (uintptr_t)buf_0; c15 = 0;
     do {
-        _OWORD v150 = *(_OWORD *)(c0); // temp
-        c15 = _mm_add_epi32(c15, v150); v151 = c0 + 0x10LL;
+        _OWORD v149 = *(_OWORD *)(c0); // temp
+        c15 = _mm_add_epi32(c15, v149); v150 = c0 + 0x10LL;
         c0 = c0 + 0x10LL;
-        c12 = (uintptr_t)(buf_0 + 64) == v151;
-        c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v151); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0);
-        c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - v151)) & 1);
+        c12 = (uintptr_t)(buf_0 + 64) == v150;
+        c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v150); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0);
+        c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - v150)) & 1);
     } while ((uintptr_t)(buf_0 + 64) != c0);
     __int128 c16 = c15; // xmm1
     a1 = (uintptr_t)(buf_0 + 4); c0 = 0LL;
@@ -180,11 +180,11 @@ int main(void) {
     __int64 c9 = (uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4); // r11
     a2 = (uintptr_t)(buf_0 + 4); c15 = _mm_add_epi32(c15, c16); c16 = c15;
     c16 = __unlace_psrldq(c15, 4); c15 = _mm_add_epi32(c15, c16); c2 = LODWORD(c15) + c1;
-    v46 = c9 & 4; c12 = !v46; c13 = LOBYTE((c9 & 4) < 0);
+    v28 = c9 & 4; c12 = !v28; c13 = LOBYTE((c9 & 4) < 0);
     c10 = 0; c14 = 0; c11 = !(__builtin_popcount(LOBYTE(c9 & 4)) & 1);
     c9 = c9 & 4; c1 = (uintptr_t)(buf_0 + 4);
-    if (!v46) {
-        goto label_23;
+    if (!v28) {
+        goto label_19;
     } else {
         a2 = *(_DWORD *)(buf_0 + 4);
         c0 = LODWORD(0LL) < a2 ? a2 : LODWORD(0LL);
@@ -194,25 +194,25 @@ int main(void) {
         c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 8))) & 1);
         if ((uintptr_t)(buf_0 + 64) != (uintptr_t)(buf_0 + 8)) {
             do {
-                _DWORD v188 = *(_DWORD *)(a2); // temp
-                c9 = v188;
-                char v199 = LODWORD(c0) < c9; // temp
-                _DWORD v202 = *(_DWORD *)(a2 + 4LL); // temp
-                c9 = v202;
-                char v213 = (v199 ? c9 : LODWORD(c0)) < c9; // temp
-                c0 = v213 ? c9 : v199 ? c9 : LODWORD(c0); v215 = a2 + 8LL;
+                _DWORD v186 = *(_DWORD *)(a2); // temp
+                c9 = v186;
+                char v197 = c0 < c9; // temp
+                _DWORD v200 = *(_DWORD *)(a2 + 4LL); // temp
+                c9 = v200;
+                char v211 = (v197 ? c9 : c0) < c9; // temp
+                c0 = v211 ? c9 : v197 ? c9 : c0; v213 = a2 + 8LL;
                 a2 = a2 + 8LL;
-                c12 = (uintptr_t)(buf_0 + 64) == v215;
-                c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v215); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a2; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), a2);
-                c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - v215)) & 1);
+                c12 = (uintptr_t)(buf_0 + 64) == v213;
+                c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v213); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a2; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), a2);
+                c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - v213)) & 1);
             } while ((uintptr_t)(buf_0 + 64) != a2);
         }
-        v29 = LODWORD(c0) + c2; c0 = LODWORD(c0) + c2; c2 = 0LL;
-        v46 = LODWORD((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4; c12 = !v46; c13 = LOBYTE((LODWORD((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4) < 0);
+        v28 = c0 + c2; c0 = c0 + c2; c2 = 0LL;
+        v30 = LODWORD((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4; c12 = !v30; c13 = LOBYTE((LODWORD((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4) < 0);
         c10 = 0; c14 = 0; c11 = !(__builtin_popcount(LOBYTE(LODWORD((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4)) & 1);
         a2 = LODWORD((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4;
-        if (!v46) {
-            goto label_22;
+        if (!v30) {
+            goto label_18;
         } else {
             c1 = *(_DWORD *)(buf_0 + 4);
             c2 = LODWORD(0LL) != c1 && c1 <= LODWORD(0LL) ? c1 : LODWORD(0LL);
@@ -222,84 +222,75 @@ int main(void) {
             c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 8))) & 1);
             if ((uintptr_t)(buf_0 + 64) != (uintptr_t)(buf_0 + 8)) {
                 do {
-                    _DWORD v252 = *(_DWORD *)(c1); // temp
-                    a2 = v252;
+                    _DWORD v250 = *(_DWORD *)(c1); // temp
+                    a2 = v250;
                     c2 = c2 != a2 && a2 <= c2 ? a2 : c2;
-                    _DWORD v269 = *(_DWORD *)(c1 + 4LL); // temp
-                    a2 = v269;
-                    c2 = c2 != a2 && a2 <= c2 ? a2 : c2; v285 = c1 + 8LL;
+                    _DWORD v267 = *(_DWORD *)(c1 + 4LL); // temp
+                    a2 = v267;
+                    c2 = c2 != a2 && a2 <= c2 ? a2 : c2; v283 = c1 + 8LL;
                     c1 = c1 + 8LL;
-                    c12 = (uintptr_t)(buf_0 + 64) == v285;
-                    c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v285); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c1; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c1);
-                    c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - v285)) & 1);
+                    c12 = (uintptr_t)(buf_0 + 64) == v283;
+                    c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v283); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c1; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c1);
+                    c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - v283)) & 1);
                 } while ((uintptr_t)(buf_0 + 64) != c1);
             }
-            v28 = c2;
-            c12 = c2 + v29 == 0; c13 = LOBYTE(c2 + v29 < 0); c10 = (c2 + c0) < c2;
-            c14 = __OFADD__(c2, c0); c11 = !(__builtin_popcount(LOBYTE(c2 + v29)) & 1);
+            v29 = c2;
+            c12 = c2 + v28 == 0; c13 = LOBYTE(c2 + v28 < 0); c10 = (c2 + c0) < c2;
+            c14 = __OFADD__(c2, c0); c11 = !(__builtin_popcount(LOBYTE(c2 + v28)) & 1); c2 = c2 + v28;
             __int128 c17 = 0; // xmm2
             c0 = (uintptr_t)buf_0;
             do {
-                _OWORD v298 = *(_OWORD *)(c0); // temp
-                c15 = v298; v299 = c0 + 0x10LL;
+                _OWORD v296 = *(_OWORD *)(c0); // temp
+                c15 = v296; v297 = c0 + 0x10LL;
                 c0 = c0 + 0x10LL; c16 = c15; c16 = _mm_mul_epu32(c15, c15);
                 c15 = __unlace_psrlq(c15, 0x20); c15 = _mm_mul_epu32(c15, c15); c16 = _mm_shuffle_epi32(c16, 8);
                 c15 = _mm_shuffle_epi32(c15, 8); c16 = __unlace_punpckldq(c16, c15); c17 = _mm_add_epi32(c17, c16);
-                c12 = (uintptr_t)(buf_0 + 64) == v299;
-                c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v299); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0);
-                c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - v299)) & 1);
+                c12 = (uintptr_t)(buf_0 + 64) == v297;
+                c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v297); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0);
+                c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - v297)) & 1);
             } while ((uintptr_t)(buf_0 + 64) != c0);
             c15 = c17; c0 = 0LL; c15 = __unlace_psrldq(c17, 8);
             c17 = _mm_add_epi32(c17, c15); c15 = c17; c15 = __unlace_psrldq(c17, 4);
-            c17 = _mm_add_epi32(c17, c15); c1 = LODWORD(c17) + c2 + v29; c2 = (uintptr_t)buf_0;
-            v28 = *(_DWORD *)buf_0; c12 = v28 == 0xf;
-            c13 = LOBYTE(*(_DWORD *)buf_0 < 0xf); c10 = (_DWORD)*(_DWORD *)buf_0 < (_DWORD)0xf;
-            c14 = __OFSUB__(*(_DWORD *)buf_0, 0xf);
-            c11 = !(__builtin_popcount(LOBYTE(*(_DWORD *)buf_0 - 0xf)) & 1);
-            if (v28 == 0xf) {
-                goto label_4;
-            } else {
+            c17 = _mm_add_epi32(c17, c15); v28 = LODWORD(c17); v29 = c2;
+            c12 = LODWORD(c17) + c2 == 0; c13 = LOBYTE(LODWORD(c17) + c2 < 0);
+            c10 = (LODWORD(c17) + c2) < LODWORD(c17); c14 = __OFADD__(LODWORD(c17), c2); c11 = !(__builtin_popcount(LOBYTE(LODWORD(c17) + c2)) & 1);
+            c1 = LODWORD(c17) + c2; c2 = (uintptr_t)buf_0;
+            while (1) {
+                _DWORD v310 = *(_DWORD *)(c2); // temp
+                c12 = v310 == 0xf;
+                c13 = LOBYTE(v310 < 0xf); c10 = (_DWORD)v310 < (_DWORD)0xf; c14 = __OFSUB__(v310, 0xf);
+                c11 = !(__builtin_popcount(LOBYTE(v310 - 0xf)) & 1);
+                if (v310 == 0xf) {
+                    break;
+                } else {
+                    int v317 = c0; // temp
+                    c0 = c0 + 1;
+                    c2 = c2 + 4LL;
+                    c12 = c0 == 0x10;
+                    c13 = LOBYTE(c0 < 0x10); c10 = (_DWORD)c0 < (_DWORD)0x10; c14 = __OFSUB__(c0, 0x10);
+                    c11 = !(__builtin_popcount(LOBYTE(v317 - 15)) & 1);
+                    if (c0 != 0x10) {
+                        continue;
+                    } else {
+                        goto label_2;
+                    }
+                }
             }
-        label_2:;
-            int v312 = LODWORD(c0); // temp
-            c0 = LODWORD(c0) + 1;
-            c2 = c2 + 4LL;
-            c12 = c0 == 0x10;
-            c13 = LOBYTE(c0 < 0x10); c10 = (_DWORD)c0 < (_DWORD)0x10; c14 = __OFSUB__(c0, 0x10);
-            c11 = !(__builtin_popcount(LOBYTE(v312 - 15)) & 1);
-            if (c0 != 0x10) {
-            } else {
-                c0 = 0xffffffffLL;
-            }
-            v28 = *(_DWORD *)(c2); c12 = v28 == 0xf;
-            c13 = LOBYTE(v28 < 0xf);
-            c10 = (_DWORD)v28 < (_DWORD)0xf; c14 = __OFSUB__(v28, 0xf);
-            c11 = !(__builtin_popcount(LOBYTE(v28 - 0xf)) & 1);
-            if (v28 == 0xf) {
-                goto label_4;
-            } else {
-                goto label_2;
+            a2 = 2LL; c9 = LODWORD(c0 + c1 + 0x581LL); c1 = 2LL;
+            v28 = LODWORD(2LL); c12 = LODWORD(2LL) == 3; c13 = LOBYTE(LODWORD(2LL) < 3);
+            c10 = (_DWORD)LODWORD(2LL) < (_DWORD)3; c14 = __OFSUB__(LODWORD(2LL), 3); c11 = !(__builtin_popcount(LOBYTE(LODWORD(2LL) - 3)) & 1);
+            if (!(LODWORD(2LL) != 3 && 3 <= LODWORD(2LL))) {
+                goto label_6;
             }
         label_4:;
-            a2 = 2LL;
-            c9 = LODWORD(c0 + c1 + 0x581LL); c1 = 2LL;
-            c12 = LODWORD(2LL) == 3;
-            c13 = LOBYTE(LODWORD(2LL) < 3); c10 = (_DWORD)LODWORD(2LL) < (_DWORD)3; c14 = __OFSUB__(LODWORD(2LL), 3);
-            c11 = !(__builtin_popcount(LOBYTE(LODWORD(2LL) - 3)) & 1);
-            _BOOL cond_63 = LODWORD(2LL) != 3; // temp
-            _BOOL cond_64 = 3 <= LODWORD(2LL); // temp
-            if (!(cond_63 && cond_64)) {
-                goto label_7;
-            }
-        label_5:;
             c0 = a2;
             while (1) {
                 c0 = a2 / c1; c2 = a2 % c1;
-                int v381 = c2; // temp
+                int v372 = c2; // temp
                 c12 = !c2;
                 c13 = LOBYTE(c2 < 0);
-                c11 = !(__builtin_popcount(LOBYTE(v381)) & 1);
-                if (v381 != 0) {
+                c11 = !(__builtin_popcount(LOBYTE(v372)) & 1);
+                if (v372 != 0) {
                     c1 = c1 + 1;
                     c0 = c1 * c1;
                     c12 = c0 == a2;
@@ -308,7 +299,7 @@ int main(void) {
                     _BOOL cond_68 = c0 != a2; // temp
                     _BOOL cond_69 = a2 <= c0; // temp
                     if (cond_68 && cond_69) {
-                        goto label_7;
+                        goto label_6;
                     } else {
                         continue;
                     }
@@ -316,7 +307,7 @@ int main(void) {
                     break;
                 }
             }
-        label_8:;
+        label_7:;
             a2 = a2 + 1; c1 = 2LL;
             c12 = a2 == 3;
             c13 = LOBYTE(a2 < 3); c10 = (_DWORD)a2 < (_DWORD)3; c14 = __OFSUB__(a2, 3);
@@ -324,82 +315,75 @@ int main(void) {
             _BOOL cond_75 = a2 != 3; // temp
             _BOOL cond_76 = 3 <= a2; // temp
             if (cond_75 && cond_76) {
-                goto label_5;
+                goto label_4;
             } else {
             }
-        label_7:;
+        label_6:;
             c8 = c8 + 1;
-            int v415 = c8; // temp
+            int v406 = c8; // temp
             c12 = c8 == 0xa;
             c13 = LOBYTE(c8 < 0xa); c10 = (_DWORD)c8 < (_DWORD)0xa; c14 = __OFSUB__(c8, 0xa);
             c11 = !(__builtin_popcount(LOBYTE(c8 - 0xa)) & 1);
-            if (v415 != 0xa) {
-                goto label_8;
+            if (v406 != 0xa) {
+                goto label_7;
             } else {
-                goto label_9;
             }
-        label_9:;
-            c12 = c9 + a2 == 0;
-            c13 = LOBYTE(c9 + a2 < 0); c10 = (c9 + a2) < c9; c14 = __OFADD__(c9, a2);
-            c11 = !(__builtin_popcount(LOBYTE(c9 + a2)) & 1); c9 = c9 + a2; c1 = 0x12LL;
-            c3 = 0xcLL;
+            v28 = c9; v29 = a2;
+            c12 = c9 + a2 == 0; c13 = LOBYTE(c9 + a2 < 0); c10 = (c9 + a2) < c9;
+            c14 = __OFADD__(c9, a2); c11 = !(__builtin_popcount(LOBYTE(c9 + a2)) & 1); c9 = c9 + a2;
+            c1 = 0x12LL; c3 = 0xcLL;
             do {
-                int v431 = LODWORD(c3); // temp
-                v432 = c1; c3 = c1;
-                int v433 = v431; // temp
-                c0 = v433 / c1; c2 = v433 % c1;
+                int v414 = LODWORD(c3); // temp
+                v415 = c1; c3 = c1;
+                int v416 = v414; // temp
+                c0 = v416 / c1; c2 = v416 % c1;
                 c1 = c2;
-                v442 = c2 & c2; c12 = !(c2 & c2);
+                v425 = c2 & c2; c12 = !(c2 & c2);
                 c13 = LOBYTE((c2 & c2) < 0); c10 = 0; c14 = 0;
                 c11 = !(__builtin_popcount(LOBYTE(c2 & c2)) & 1);
-            } while (v442 != 0);
-            c12 = 1;
-            c13 = LOBYTE(0); c10 = 0; c14 = 0;
-            c11 = c11; a2 = 0LL;
-            c0 = LODWORD(0xd8LL) / v432; c2 = LODWORD(0xd8LL) % v432;
+            } while (v425 != 0);
+            c12 = 1; c13 = LOBYTE(0); c10 = 0;
+            c14 = 0; c11 = c11; a2 = 0LL;
+            v28 = LODWORD(0xd8LL); c0 = LODWORD(0xd8LL) / v415; c2 = LODWORD(0xd8LL) % v415;
             c8 = LODWORD(c0 + c9 - 1218664206);
-            int v487 = a2; // temp
+            int v454 = a2; // temp
             while (1) {
-                _DWORD v507 = *(_DWORD *)(c7); // temp
-                c2 = v507;
-                c0 = v507 * 0x66666667LL;
-                int v510 = c2; // temp
-                int v511 = v738; // temp
-                char v523 = LOBYTE(c0 >> 0x21); // temp
-                int v526 = v523; // temp
-                c0 = v526 - (v511 >> 0x1f);
-                int v536 = LODWORD(c0 + (c0 << 2LL)); // temp
+                _DWORD v474 = *(_DWORD *)(c7); // temp
+                c2 = v474;
+                c0 = v474 * 0x66666667LL;
+                int v477 = c2; // temp
+                int v478 = v641; // temp
+                char v490 = LOBYTE(c0 >> 0x21); // temp
+                int v493 = v490; // temp
+                c0 = v493 - (v478 >> 0x1f);
+                int v503 = LODWORD(c0 + (c0 << 2LL)); // temp
                 c7 = LODWORD(c0 + (c0 << 2LL));
-                c0 = c2 - v536;
+                c0 = c2 - v503;
                 c12 = c0 == 2;
-                char v549 = LOBYTE(c0 < 2); // temp
+                char v516 = LOBYTE(c0 < 2); // temp
                 c14 = __OFSUB__(c0, 2);
                 if (c0 == 2) {
                     c12 = c2 == 5;
                     c13 = LOBYTE(c2 < 5); c10 = (_DWORD)c2 < (_DWORD)5; c14 = __OFSUB__(c2, 5);
                     c11 = !(__builtin_popcount(LOBYTE(c2 - 5)) & 1); c2 = c2 - 5;
                 } else {
-                    _BOOL cond_96 = v549 ^ c14; // temp
-                    if (c12 || cond_96) {
-                        int v469 = c0 & c0; // temp
-                        c12 = !v469;
-                        c13 = LOBYTE((c0 & c0) < 0); c10 = 0; c14 = 0;
-                        c11 = !(__builtin_popcount(LOBYTE(c0 & c0)) & 1);
-                        if (!v469) {
-                            v738 = v510 + v510; c12 = v510 + v510 == 0;
-                            c13 = LOBYTE(v510 + v510 < 0); c10 = (v510 + v510) < v510;
-                            c11 = !(__builtin_popcount(LOBYTE(v510 + v510)) & 1); c2 = v510 + v510;
+                    _BOOL cond_95 = v516 ^ c14; // temp
+                    if (c12 || cond_95) {
+                        int v436 = c0 & c0; // temp
+                        if (!v436) {
+                            v641 = v477 + v477; c12 = v477 + v477 == 0;
+                            c13 = LOBYTE(v477 + v477 < 0); c10 = (v477 + v477) < v477;
+                            c11 = !(__builtin_popcount(LOBYTE(v477 + v477)) & 1); c2 = v477 + v477;
                         } else {
-                            int v476 = LODWORD(c2 + 0xaLL); // temp
+                            int v443 = LODWORD(c2 + 0xaLL); // temp
                             c7 = LODWORD(c2 + 0xaLL);
                             c12 = c0 == 1;
                             c13 = LOBYTE(c0 < 1); c10 = (_DWORD)c0 < (_DWORD)1;
                             c11 = !(__builtin_popcount(LOBYTE(c0 - 1)) & 1);
-                            c2 = c12 ? v476 : c2;
+                            c2 = c12 ? v443 : c2;
                         }
-                        goto label_11;
                     } else {
-                        c2 = c0 == 3 ? -v510 : v510; c7 = a1;
+                        c2 = c0 == 3 ? -v477 : v477; c7 = a1;
                         a2 = a2 + c2;
                         c12 = (uintptr_t)(buf_0 + 64) == a1;
                         c13 = LOBYTE((uintptr_t)(buf_0 + 64) < a1); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a1;
@@ -414,31 +398,27 @@ int main(void) {
                         }
                     }
                 }
-            label_11:;
-                a2 = v487 + c2; c7 = a1;
+                a2 = v454 + c2; c7 = a1;
                 c12 = (uintptr_t)(buf_0 + 64) == a1;
                 c13 = LOBYTE((uintptr_t)(buf_0 + 64) < a1); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a1;
                 c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - a1)) & 1);
                 if ((uintptr_t)(buf_0 + 64) == a1) {
                     break;
                 } else {
-                    c12 = a1 == -4LL;
-                    c13 = LOBYTE(a1 + 4LL < 0LL); c10 = (a1 + 4LL) < a1;
-                    c11 = !(__builtin_popcount(LOBYTE(a1 + 4LL)) & 1); a1 = a1 + 4LL;
-                    continue;
+                    a1 = a1 + 4LL; continue;
                 }
             }
-            c2 = LODWORD(c8 + a2); c12 = 1;
-            c13 = LOBYTE(0); c10 = 0; c14 = 0;
-            c11 = c11; c0 = 0LL;
+            c2 = LODWORD(c8 + a2); c12 = 1; c13 = LOBYTE(0);
+            c10 = 0; c14 = 0; c11 = c11;
+            c0 = 0LL;
             while (1) {
-                c12 = LODWORD(c0) == 9;
-                c13 = LOBYTE(LODWORD(c0) < 9); c10 = (_DWORD)LODWORD(c0) < (_DWORD)9;
-                _BOOL cond_104 = LODWORD(c0) != 9; // temp
-                _BOOL cond_105 = 9 <= LODWORD(c0); // temp
-                if (cond_104 && cond_105) {
+                c12 = c0 == 9;
+                c13 = LOBYTE(c0 < 9); c10 = (_DWORD)c0 < (_DWORD)9;
+                _BOOL cond_103 = c0 != 9; // temp
+                _BOOL cond_104 = 9 <= c0; // temp
+                if (cond_103 && cond_104) {
                     c1 = LODWORD(c1 + c0 - 10);
-                    c0 = LODWORD(c0) + 1;
+                    c0 = c0 + 1;
                     c12 = c0 == 0x14;
                     c13 = LOBYTE(c0 < 0x14); c10 = (_DWORD)c0 < (_DWORD)0x14;
                     if (c0 != 0x14) {
@@ -447,47 +427,46 @@ int main(void) {
                         break;
                     }
                 } else {
-                    int v607 = LODWORD(c0); // temp
-                    if (v607 <= 4) {
+                    int v566 = c0; // temp
+                    if (v566 <= 4) {
                         a2 = LODWORD(c0 + (c0 << 1LL));
-                        c0 = LODWORD(c0) + 1;
+                        c0 = c0 + 1;
                         c12 = c1 + a2 == 0;
                         c13 = LOBYTE(c1 + a2 < 0); c10 = (c1 + a2) < c1;
                         c1 = c1 + a2; continue;
                     } else {
                         c1 = LODWORD(c1 + c0 + 0x14LL);
-                        c0 = v607 + 1;
+                        c0 = v566 + 1;
                         c12 = c0 == 9;
-                        c13 = LOBYTE(c0 < 9);
+                        c13 = LOBYTE(c0 < 9); c10 = (_DWORD)c0 < (_DWORD)9;
                     }
                 }
             }
-            a2 = LODWORD(c2 + c1 + 0x12dLL); c1 = 0x24LL;
-            int v661 = LODWORD(0x30LL); // temp
-            c0 = LODWORD(0x30LL) / 0x24LL; c2 = v661 % 0x24LL;
-            int v667 = c2; // temp
-            if (v667 == 0) {
-                goto label_20;
+            a2 = LODWORD(c2 + c1 + 0x12dLL); c0 = 0x30LL; c1 = 0x24LL;
+            while (1) {
+                c2 = c0 % c1;
+                c0 = c1;
+                int v623 = c2; // temp
+                if (v623 != 0) {
+                    c1 = c2;
+                } else {
+                    break;
+                }
             }
-            c1 = c2;
-            a1 = a1 + 4LL;
-        label_20:;
-            c3 = LODWORD(a2 + c1 + 3LL); v769 = f_rec_fib(8LL);
-            v770 = f_rec_power_constprop_0(8LL); a2 = 3LL; a1 = 2LL;
-            c8 = LODWORD(v769 + c3) + LODWORD(v770); v771 = f_ackermann(a1, a2);
-            int v689 = LODWORD(c8 + v771 + 0xabe0cLL); // temp
-            int v690 = LODWORD(c8 + v771 + 0xabe0cLL); // temp
-            c2 = (_DWORD)v689 >> 0x1f >> 0x18;
-            return LODWORD((_QWORD)(LOBYTE(v690 + c2))) - c2;
+            a1 = 8LL; v678 = f_rec_fib(a1); v679 = f_rec_power_constprop_0(8LL);
+            c8 = LODWORD(v678 + LODWORD(a2 + c1 + 3LL)) + v679; v680 = f_ackermann(2LL, 3LL); v28 = LODWORD(c8 + v680 + 0xabe0cLL);
+            v29 = LODWORD(c8 + v680 + 0xabe0cLL); c2 = (_DWORD)v28 >> 0x1f >> 0x18; c0 = (_QWORD)(LOBYTE(v29 + c2)) - c2;
+            return c0;
         }
     }
-label_22:;
-label_23:;
+label_2:;
+label_18:;
+label_19:;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    __int64 field_0;
-    __int64 field_8;
+    void * field_0;
+    void * field_8;
 };
 
 /* Function:   _start | Address: 0x1480 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
@@ -548,7 +527,6 @@ struct __anon1 {
 
 /* Function:   f_rec_fib | Address: 0x1570 | Size: 0x2ae (686 bytes) | Convention: System V AMD64 | Stack frame: 0x38 (56 bytes) | Xrefs to:   f_rec_fib | Xrefs from: unknown */
 int f_rec_fib(int a1) {
-    int v_12;
     int v_16;
     int v_20;
     int v_24;
@@ -559,13 +537,37 @@ int f_rec_fib(int a1) {
     int v_44;
     char buf_96[48];
     char buf_40[48];
-    _QWORD result; // rax
     __int64 v642; // rax
+    _QWORD result; // rax
+    _QWORD c1; // rcx
+    _QWORD c2; // rdx
     _QWORD c3; // rbx
+    _QWORD c6; // rsi
+    _QWORD c9; // r9
     _QWORD c10; // r10
+    _QWORD c11; // r11
     _QWORD c12; // r12
-    _QWORD c13; // r13
+    __int64 c13; // r13
     _QWORD c15; // r15
+    int v69; // temp
+    int v97; // temp
+    int v167; // temp
+    int v172; // temp
+    int v189; // temp
+    _BOOL cond_24; // temp
+    _BOOL cond_25; // temp
+    _BOOL cond_31; // temp
+    _BOOL cond_32; // temp
+    _BOOL cond_39; // temp
+    _BOOL cond_40; // temp
+    _BOOL cond_54; // temp
+    _BOOL cond_55; // temp
+    _BOOL cond_62; // temp
+    _BOOL cond_63; // temp
+    _BOOL cond_69; // temp
+    _BOOL cond_70; // temp
+    _BOOL cond_76; // temp
+    _BOOL cond_77; // temp
     if (a1 <= 1) {
         return a1;
     } else {
@@ -584,19 +586,262 @@ int f_rec_fib(int a1) {
             c18 = LODWORD(c3) == 1;
             c19 = LOBYTE(LODWORD(c3) < 1); c16 = (_DWORD)LODWORD(c3) < (_DWORD)1;
             c17 = !(__builtin_popcount(LOBYTE(LODWORD(c3) - 1)) & 1);
-            if (v42 <= 1) {
-            } else {
-                c15 = LODWORD(c3);
-                result = LODWORD(c14); c18 = 1;
-                c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                c17 = c17; c3 = 0LL;
-                while (1) {
-                    c5 = LODWORD(c12 - 2);
-                    int v60 = LODWORD(c12); // temp
-                    c18 = LODWORD(c12) == 1;
-                    c19 = LOBYTE(LODWORD(c12) < 1); c16 = (_DWORD)LODWORD(c12) < (_DWORD)1;
-                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(c12) - 1)) & 1);
-                    if (v60 <= 1) {
+            if (v42 > 1) {
+                do {
+                    while (1) {
+                        c5 = LODWORD(c12 - 2);
+                        int v60 = LODWORD(c12); // temp
+                        c18 = LODWORD(c12) == 1;
+                        c19 = LOBYTE(LODWORD(c12) < 1); c16 = (_DWORD)LODWORD(c12) < (_DWORD)1;
+                        c17 = !(__builtin_popcount(LOBYTE(LODWORD(c12) - 1)) & 1);
+                        if (v60 > 1) {
+                            c19 = LOBYTE(0); c17 = c17;
+                            do {
+                                while (1) {
+                                    int v83 = LODWORD((uintptr_t)(buf_40 + 40)); // temp
+                                    c18 = LODWORD((uintptr_t)(buf_40 + 40)) == 1;
+                                    c19 = LOBYTE(LODWORD((uintptr_t)(buf_40 + 40)) < 1); c16 = (_DWORD)LODWORD((uintptr_t)(buf_40 + 40)) < (_DWORD)1;
+                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD((uintptr_t)(buf_40 + 40)) - 1)) & 1);
+                                    if (v83 > 1) {
+                                        do {
+                                            while (1) {
+                                                c3 = LODWORD(c2 - 2);
+                                                int v105 = LODWORD(c2); // temp
+                                                c18 = LODWORD(c2) == 1;
+                                                c19 = LOBYTE(LODWORD(c2) < 1); c16 = (_DWORD)LODWORD(c2) < (_DWORD)1;
+                                                c17 = !(__builtin_popcount(LOBYTE(LODWORD(c2) - 1)) & 1);
+                                                if (v105 > 1) {
+                                                    do {
+                                                        while (1) {
+                                                            c15 = LODWORD(c3 - 2);
+                                                            int v124 = LODWORD(c3); // temp
+                                                            c18 = LODWORD(c3) == 1;
+                                                            c19 = LOBYTE(LODWORD(c3) < 1); c16 = (_DWORD)LODWORD(c3) < (_DWORD)1;
+                                                            c17 = !(__builtin_popcount(LOBYTE(LODWORD(c3) - 1)) & 1);
+                                                            if (v124 > 1) {
+                                                                while (1) {
+                                                                    int v133 = LODWORD(c15); // temp
+                                                                    c18 = LODWORD(c15) == 1;
+                                                                    c19 = LOBYTE(LODWORD(c15) < 1); c16 = (_DWORD)LODWORD(c15) < (_DWORD)1;
+                                                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(c15) - 1)) & 1);
+                                                                    if (v133 > 1) {
+                                                                        c19 = LOBYTE(0); c17 = c17;
+                                                                        do {
+                                                                            while (1) {
+                                                                                _QWORD c8 = LODWORD(c9 - 2); // r8
+                                                                                int v158 = LODWORD(c9); // temp
+                                                                                c18 = LODWORD(c9) == 1;
+                                                                                c19 = LOBYTE(LODWORD(c9) < 1); c16 = (_DWORD)LODWORD(c9) < (_DWORD)1;
+                                                                                c17 = !(__builtin_popcount(LOBYTE(LODWORD(c9) - 1)) & 1);
+                                                                                if (v158 > 1) {
+                                                                                    do {
+                                                                                        while (1) {
+                                                                                            a1 = LODWORD(c8 - 2);
+                                                                                            c18 = LODWORD(c8) == 1;
+                                                                                            c19 = LOBYTE(LODWORD(c8) < 1); c16 = (_DWORD)LODWORD(c8) < (_DWORD)1;
+                                                                                            c17 = !(__builtin_popcount(LOBYTE(LODWORD(c8) - 1)) & 1);
+                                                                                            if (!(c16 || c18)) {
+                                                                                                do {
+                                                                                                    do {
+                                                                                                        v_44 = c11;
+                                                                                                        v_40 = LODWORD(c9);
+                                                                                                        v_36 = LODWORD(c8);
+                                                                                                        v_32 = LODWORD(c10);
+                                                                                                        v_28 = c6;
+                                                                                                        v_24 = LODWORD(c2);
+                                                                                                        v_20 = LODWORD(c1);
+                                                                                                        v_16 = a1; v642 = f_rec_fib(a1);
+                                                                                                        a1 = v_16;
+                                                                                                        c2 = v_24;
+                                                                                                        c6 = v_28;
+                                                                                                        a1 = a1 - 1;
+                                                                                                        c1 = v_20 + v642;
+                                                                                                        c10 = v_32;
+                                                                                                        c8 = v_36;
+                                                                                                        c18 = a1 == -1;
+                                                                                                        c19 = LOBYTE(a1 < -1); c16 = (_DWORD)a1 < (_DWORD)0xffffffffffffffffULL;
+                                                                                                        c17 = !(__builtin_popcount(LOBYTE(a1 - -1)) & 1);
+                                                                                                        c9 = v_40;
+                                                                                                        c11 = v_44;
+                                                                                                    } while (a1 != -1);
+                                                                                                    c8 = v_36 - 1;
+                                                                                                    result = c11;
+                                                                                                    c2 = LODWORD(c1 + c2 + 1LL);
+                                                                                                    _DWORD v259 = *(_DWORD *)(v189); // temp
+                                                                                                    c11 = v259;
+                                                                                                    a1 = LODWORD(c8 - 2);
+                                                                                                    c1 = 0LL;
+                                                                                                    c18 = c8 == 1;
+                                                                                                    c19 = LOBYTE(c8 < 1); c16 = (_DWORD)c8 < (_DWORD)1;
+                                                                                                    c17 = !(__builtin_popcount(LOBYTE(v_36 - 1 - 1)) & 1); cond_24 = (_DWORD)1 <= (_DWORD)c8; cond_25 = c8 != 1;
+                                                                                                    if (cond_24 && cond_25) {
+                                                                                                        continue;
+                                                                                                    } else {
+                                                                                                        break;
+                                                                                                    }
+                                                                                                } while (cond_24 && cond_25);
+                                                                                            }
+                                                                                            c2 = LODWORD(c2) + LODWORD(c8);
+                                                                                            int v287 = LODWORD(c8) & LODWORD(c8); // temp
+                                                                                            if (v287 != 0) {
+                                                                                                c18 = 1;
+                                                                                                c19 = LOBYTE(0); c16 = 0; c20 = 0;
+                                                                                                c17 = c17; c8 = 0LL; continue;
+                                                                                            } else {
+                                                                                                a1 = result;
+                                                                                                result = v172;
+                                                                                                c3 = c15;
+                                                                                                c15 = LODWORD(c9);
+                                                                                                int v299 = LODWORD(a1 - 1); // temp
+                                                                                                c9 = LODWORD(a1 - 1);
+                                                                                                c10 = LODWORD(c2 + c10 + 1LL);
+                                                                                                _DWORD v304 = *(_DWORD *)(v167); // temp
+                                                                                                c1 = v304;
+                                                                                                c2 = 0LL;
+                                                                                                c8 = LODWORD(c9 - 2);
+                                                                                                c18 = c9 == 1;
+                                                                                                c19 = LOBYTE(c9 < 1); c16 = (_DWORD)c9 < (_DWORD)1;
+                                                                                                c17 = !(__builtin_popcount(LOBYTE(v299 - 1)) & 1); cond_31 = c9 != 1;
+                                                                                                cond_32 = 1 <= c9;
+                                                                                                if (cond_31 && cond_32) {
+                                                                                                    goto label_9;
+                                                                                                } else {
+                                                                                                    goto label_7;
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    } while (cond_31 && cond_32);
+                                                                                }
+                                                                            label_7:;
+                                                                                c10 = LODWORD(c10) + LODWORD(c9);
+                                                                                int v333 = LODWORD(c9) & LODWORD(c9); // temp
+                                                                                if (v333 != 0) {
+                                                                                    c18 = 1;
+                                                                                    c19 = LOBYTE(0); c16 = 0; c20 = 0;
+                                                                                    c17 = c17; c9 = 0LL; continue;
+                                                                                } else {
+                                                                                                                                                                        c2 = *(_DWORD *)(buf_40 + 40);
+                                                                                    c15 = LODWORD(c15) - 1;
+                                                                                    c9 = result;
+                                                                                    c2 = LODWORD(c2 + c10 + 1LL);
+                                                                                    c18 = c15 == 1;
+                                                                                    c19 = LOBYTE(c15 < 1); c16 = (_DWORD)c15 < (_DWORD)1;
+                                                                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(c15) - 1 - 1)) & 1); cond_39 = c15 != 1;
+                                                                                    cond_40 = 1 <= c15;
+                                                                                    if (cond_39 && cond_40) {
+                                                                                        goto label_2;
+                                                                                    } else {
+                                                                                        goto label_6;
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        } while (cond_39 && cond_40);
+                                                                    }
+                                                                label_6:;
+                                                                    c2 = LODWORD(c2) + LODWORD(c15);
+                                                                    int v373 = LODWORD(c15) & LODWORD(c15); // temp
+                                                                    if (v373 != 0) {
+                                                                        c18 = 1;
+                                                                        c19 = LOBYTE(0); c16 = 0; c20 = 0;
+                                                                        c17 = c17; c15 = 0LL; continue;
+                                                                    } else {
+                                                                        c3 = LODWORD(c3) - 1;
+                                                                        c5 = LODWORD((uintptr_t)(buf_40 + 40) + c2 + 1LL);
+                                                                        c2 = 0LL;
+                                                                        c15 = LODWORD(c3 - 2);
+                                                                        c18 = c3 == 1;
+                                                                        c19 = LOBYTE(c3 < 1); c16 = (_DWORD)c3 < (_DWORD)1;
+                                                                        c17 = !(__builtin_popcount(LOBYTE(LODWORD(c3) - 1 - 1)) & 1);
+                                                                        _BOOL cond_47 = c3 != 1; // temp
+                                                                        _BOOL cond_48 = 1 <= c3; // temp
+                                                                        if (cond_47 && cond_48) {
+                                                                            continue;
+                                                                        } else {
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            c5 = LODWORD((uintptr_t)(buf_40 + 40)) + LODWORD(c3);
+                                                            int v418 = LODWORD(c3) & LODWORD(c3); // temp
+                                                            if (v418 != 0) {
+                                                                c18 = 1;
+                                                                c19 = LOBYTE(0); c16 = 0; c20 = 0;
+                                                                c17 = c17; c3 = 0LL; continue;
+                                                            } else {
+                                                                int v426 = LODWORD(c6 - 1); // temp
+                                                                c2 = LODWORD(c6 - 1);
+                                                                c14 = LODWORD(c14 + (uintptr_t)(buf_40 + 40) + 1LL);
+                                                                c6 = LODWORD(c9);
+                                                                c5 = 0LL;
+                                                                c9 = c11;
+                                                                c3 = LODWORD(c2 - 2);
+                                                                c18 = c2 == 1;
+                                                                c19 = LOBYTE(c2 < 1); c16 = (_DWORD)c2 < (_DWORD)1;
+                                                                c17 = !(__builtin_popcount(LOBYTE(v426 - 1)) & 1); cond_54 = c2 != 1;
+                                                                cond_55 = 1 <= c2;
+                                                                if (cond_54 && cond_55) {
+                                                                    goto label_2;
+                                                                } else {
+                                                                    goto label_4;
+                                                                }
+                                                            }
+                                                        }
+                                                    } while (cond_54 && cond_55);
+                                                }
+                                            label_4:;
+                                                c14 = LODWORD(c14) + LODWORD(c2);
+                                                int v460 = LODWORD(c2) & LODWORD(c2); // temp
+                                                if (v460 != 0) {
+                                                    c18 = 1;
+                                                    c19 = LOBYTE(0); c16 = 0; c20 = 0;
+                                                    c17 = c17; c2 = 0LL; continue;
+                                                } else {
+                                                    c2 = LODWORD(c9);
+                                                    c12 = LODWORD(c6 + c14 + 1LL);
+                                                    c15 = LODWORD(c1);
+                                                    c5 = v97 - 1;
+                                                    c14 = 0LL;
+                                                    c18 = v97 - 1 == 1;
+                                                    c19 = LOBYTE(v97 - 1 < 1); c16 = (_DWORD)v97 - 1 < (_DWORD)1;
+                                                    c17 = !(__builtin_popcount(LOBYTE(v97 - 1 - 1)) & 1); cond_62 = v97 - 1 != 1;
+                                                    cond_63 = 1 <= v97 - 1;
+                                                    if (cond_62 && cond_63) {
+                                                        goto label_2;
+                                                    } else {
+                                                        goto label_3;
+                                                    }
+                                                }
+                                            }
+                                        } while (cond_62 && cond_63);
+                                    }
+                                label_3:;
+                                    c12 = LODWORD(c12) + LODWORD((uintptr_t)(buf_40 + 40));
+                                    int v506 = LODWORD((uintptr_t)(buf_40 + 40)) & LODWORD((uintptr_t)(buf_40 + 40)); // temp
+                                    if (v506 != 0) {
+                                        c18 = 1;
+                                        c19 = LOBYTE(0); c16 = 0; c20 = 0;
+                                        c17 = c17; c5 = 0LL; continue;
+                                    } else {
+                                        _DWORD v514 = *(_DWORD *)(v69); // temp
+                                        c3 = v514;
+                                        result = LODWORD(c2);
+                                        c3 = LODWORD(c3 + c12 + 1LL);
+                                        int v520 = LODWORD(c13 - 1); // temp
+                                        c12 = LODWORD(c13 - 1);
+                                        c18 = c12 == 1;
+                                        c19 = LOBYTE(c12 < 1); c16 = (_DWORD)c12 < (_DWORD)1;
+                                        c17 = !(__builtin_popcount(LOBYTE(v520 - 1)) & 1); cond_69 = c12 != 1;
+                                        cond_70 = 1 <= c12;
+                                        if (cond_69 && cond_70) {
+                                            goto label_2;
+                                        } else {
+                                            goto label_1;
+                                        }
+                                    }
+                                }
+                            } while (cond_69 && cond_70);
+                        }
                     label_1:;
                         c3 = LODWORD(c3) + LODWORD(c12);
                         int v544 = LODWORD(c12) & LODWORD(c12); // temp
@@ -611,270 +856,16 @@ int f_rec_fib(int a1) {
                             c12 = LODWORD(c3 - 2);
                             c18 = c3 == 1;
                             c19 = LOBYTE(c3 < 1); c16 = (_DWORD)c3 < (_DWORD)1;
-                            c17 = !(__builtin_popcount(LOBYTE(v555 - 1)) & 1);
-                            _BOOL cond_76 = c3 != 1; // temp
-                            _BOOL cond_77 = 1 <= c3; // temp
+                            c17 = !(__builtin_popcount(LOBYTE(v555 - 1)) & 1); cond_76 = c3 != 1;
+                            cond_77 = 1 <= c3;
                             if (cond_76 && cond_77) {
-                                c15 = LODWORD(c3); result = LODWORD(c14); c19 = LOBYTE(0);
-                                c17 = c17;
-                                v_12 = LODWORD(c3);
-                                c13 = LODWORD(c12);
-                                _QWORD c2 = result; // rdx
-                                int v83 = LODWORD((uintptr_t)(buf_40 + 40)); // temp
-                                c18 = LODWORD((uintptr_t)(buf_40 + 40)) == 1;
-                                c19 = LOBYTE(LODWORD((uintptr_t)(buf_40 + 40)) < 1); c16 = (_DWORD)LODWORD((uintptr_t)(buf_40 + 40)) < (_DWORD)1;
-                                c17 = !(__builtin_popcount(LOBYTE(LODWORD((uintptr_t)(buf_40 + 40)) - 1)) & 1);
-                                if (v83 <= 1) {
-                                    goto label_5;
-                                } else {
-                                    _QWORD c9 = LODWORD(c2); // r9
-                                    _QWORD c6 = LODWORD(c12); // rsi
-                                    c2 = LODWORD((uintptr_t)(buf_40 + 38));
-                                    _QWORD c1 = c15; // rcx
-                                    c12 = LODWORD((uintptr_t)(buf_40 + 40));
-                                    c3 = LODWORD(c2 - 2);
-                                    int v105 = LODWORD(c2); // temp
-                                    c18 = LODWORD(c2) == 1;
-                                    c19 = LOBYTE(LODWORD(c2) < 1); c16 = (_DWORD)LODWORD(c2) < (_DWORD)1;
-                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(c2) - 1)) & 1);
-                                    if (v105 <= 1) {
-                                        goto label_5;
-                                    } else {
-                                        _QWORD c11 = c9; // r11
-                                        c9 = c6;
-                                        c6 = LODWORD(c2);
-                                        c15 = LODWORD(c3 - 2);
-                                        int v124 = LODWORD(c3); // temp
-                                        c18 = LODWORD(c3) == 1;
-                                        c19 = LOBYTE(LODWORD(c3) < 1); c16 = (_DWORD)LODWORD(c3) < (_DWORD)1;
-                                        c17 = !(__builtin_popcount(LOBYTE(LODWORD(c3) - 1)) & 1);
-                                        if (v124 <= 1) {
-                                            continue;
-                                        } else {
-                                            int v133 = c15; // temp
-                                            c18 = c15 == 1;
-                                            c19 = LOBYTE(c15 < 1); c16 = (_DWORD)c15 < (_DWORD)1;
-                                            c17 = !(__builtin_popcount(LOBYTE(c15 - 1)) & 1);
-                                            if (v133 <= 1) {
-                                            } else {
-                                                c19 = LOBYTE(0); c17 = c17;
-                                                *(_DWORD *)(buf_40 + 40) = LODWORD(c2);
-                                                result = c9;
-                                                c9 = LODWORD(c15 - 2);
-                                                _QWORD c8 = LODWORD(c9 - 2); // r8
-                                                int v158 = c9; // temp
-                                                c18 = c9 == 1;
-                                                c19 = LOBYTE(c9 < 1); c16 = (_DWORD)c9 < (_DWORD)1;
-                                                c17 = !(__builtin_popcount(LOBYTE(c9 - 1)) & 1);
-                                                if (v158 <= 1) {
-                                                } else {
-                                                    a1 = c9;
-                                                    c9 = c15;
-                                                    c15 = LODWORD(c3);
-                                                    int v172 = result; // temp
-                                                    c3 = result;
-                                                    result = a1;
-                                                    a1 = LODWORD(c8 - 2);
-                                                    c18 = LODWORD(c8) == 1;
-                                                    c19 = LOBYTE(LODWORD(c8) < 1); c16 = (_DWORD)LODWORD(c8) < (_DWORD)1;
-                                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(c8) - 1)) & 1);
-                                                    if (c16 || c18) {
-                                                        goto label_5;
-                                                    } else {
-                                                        *(_DWORD *)(buf_40 + 44) = c11;
-                                                        c11 = result;
-                                                        do {
-                                                            v_44 = c11;
-                                                            v_40 = c9;
-                                                            v_36 = LODWORD(c8);
-                                                            v_32 = LODWORD(c10);
-                                                            v_28 = c6;
-                                                            v_24 = LODWORD(c2);
-                                                            v_20 = LODWORD(c1);
-                                                            v_16 = a1; v642 = f_rec_fib(a1);
-                                                            a1 = v_16;
-                                                            c2 = v_24;
-                                                            c6 = v_28;
-                                                            a1 = a1 - 1;
-                                                            c1 = v_20 + v642;
-                                                            c10 = v_32;
-                                                            c8 = v_36;
-                                                            c18 = a1 == -1;
-                                                            c19 = LOBYTE(a1 < -1); c16 = (_DWORD)a1 < (_DWORD)0xffffffffffffffffULL;
-                                                            c17 = !(__builtin_popcount(LOBYTE(a1 - -1)) & 1);
-                                                            c9 = v_40;
-                                                            c11 = v_44;
-                                                        } while (a1 != -1);
-                                                        c8 = v_36 - 1;
-                                                        result = c11;
-                                                        c2 = LODWORD(c1 + c2 + 1LL);
-                                                        c11 = *(_DWORD *)(buf_40 + 44);
-                                                        a1 = LODWORD(c8 - 2);
-                                                        c1 = 0LL;
-                                                        c18 = c8 == 1;
-                                                        c19 = LOBYTE(c8 < 1); c16 = (_DWORD)c8 < (_DWORD)1;
-                                                        c17 = !(__builtin_popcount(LOBYTE(v_36 - 1 - 1)) & 1);
-                                                        _BOOL cond_24 = (_DWORD)1 <= (_DWORD)c8; // temp
-                                                        _BOOL cond_25 = c8 != 1; // temp
-                                                        if (!(cond_24 && cond_25)) {
-                                                            goto label_10;
-                                                        }
-                                                    }
-                                                label_10:;
-                                                    c2 = LODWORD(c2) + LODWORD(c8);
-                                                    int v287 = LODWORD(c8) & LODWORD(c8); // temp
-                                                    if (v287 != 0) {
-                                                        c18 = 1;
-                                                        c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                                        c17 = c17; c8 = 0LL;
-                                                    } else {
-                                                        a1 = result;
-                                                        result = v172;
-                                                        c3 = c15;
-                                                        c15 = c9;
-                                                        c9 = LODWORD(a1 - 1);
-                                                        c10 = LODWORD(c2 + c10 + 1LL);
-                                                        _DWORD v304 = *(_DWORD *)((uintptr_t)(buf_40 + 48)); // temp
-                                                        c1 = v304;
-                                                        c2 = 0LL;
-                                                        c8 = LODWORD(c9 - 2);
-                                                        c18 = c9 == 1;
-                                                        c19 = LOBYTE(c9 < 1); c16 = (_DWORD)c9 < (_DWORD)1;
-                                                        c17 = !(__builtin_popcount(LOBYTE(c9 - 1)) & 1);
-                                                        _BOOL cond_31 = c9 != 1; // temp
-                                                        _BOOL cond_32 = 1 <= c9; // temp
-                                                        if (!(cond_31 && cond_32)) {
-                                                            goto label_9;
-                                                        }
-                                                        continue;
-                                                    }
-                                                }
-                                            label_9:;
-                                                c10 = LODWORD(c10) + c9;
-                                                int v333 = c9 & c9; // temp
-                                                if (v333 != 0) {
-                                                    c18 = 1;
-                                                    c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                                    c17 = c17; c9 = 0LL;
-                                                } else {
-                                                                                                        c2 = *(_DWORD *)(buf_40 + 40);
-                                                    int v342 = c15 - 1; // temp
-                                                    c15 = c15 - 1;
-                                                    c9 = result;
-                                                    c2 = LODWORD(c2 + c10 + 1LL);
-                                                    int v353 = v342; // temp
-                                                    c18 = c15 == 1;
-                                                    c19 = LOBYTE(c15 < 1); c16 = (_DWORD)c15 < (_DWORD)1;
-                                                    c17 = !(__builtin_popcount(LOBYTE(v353)) & 1);
-                                                    _BOOL cond_39 = c15 != 1; // temp
-                                                    _BOOL cond_40 = 1 <= c15; // temp
-                                                    if (!(cond_39 && cond_40)) {
-                                                        goto label_8;
-                                                    }
-                                                }
-                                                continue;
-                                            }
-                                        label_8:;
-                                            c2 = LODWORD(c2) + c15;
-                                            int v373 = c15 & c15; // temp
-                                            if (v373 != 0) {
-                                                c18 = 1;
-                                                c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                                c17 = c17; c15 = 0LL;
-                                            } else {
-                                                c3 = LODWORD(c3) - 1;
-                                                c5 = LODWORD((uintptr_t)(buf_40 + 40) + c2 + 1LL);
-                                                c2 = 0LL;
-                                                c15 = LODWORD(c3 - 2);
-                                                c18 = c3 == 1;
-                                                c19 = LOBYTE(c3 < 1); c16 = (_DWORD)c3 < (_DWORD)1;
-                                                c17 = !(__builtin_popcount(LOBYTE(LODWORD(c3) - 1 - 1)) & 1);
-                                                _BOOL cond_47 = c3 != 1; // temp
-                                                _BOOL cond_48 = 1 <= c3; // temp
-                                                if (!(cond_47 && cond_48)) {
-                                                    goto label_7;
-                                                }
-                                            }
-                                        }
-                                    label_7:;
-                                        c5 = LODWORD((uintptr_t)(buf_40 + 40)) + LODWORD(c3);
-                                        int v418 = LODWORD(c3) & LODWORD(c3); // temp
-                                        if (v418 != 0) {
-                                            c18 = 1;
-                                            c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                            c17 = c17; c3 = 0LL;
-                                        } else {
-                                            int v426 = LODWORD(c6 - 1); // temp
-                                            c2 = LODWORD(c6 - 1);
-                                            c14 = LODWORD(c14 + (uintptr_t)(buf_40 + 40) + 1LL);
-                                            c6 = c9;
-                                            c5 = 0LL;
-                                            c9 = c11;
-                                            c3 = LODWORD(c2 - 2);
-                                            c18 = c2 == 1;
-                                            c19 = LOBYTE(c2 < 1); c16 = (_DWORD)c2 < (_DWORD)1;
-                                            c17 = !(__builtin_popcount(LOBYTE(v426 - 1)) & 1);
-                                            _BOOL cond_54 = c2 != 1; // temp
-                                            _BOOL cond_55 = 1 <= c2; // temp
-                                            if (!(cond_54 && cond_55)) {
-                                                goto label_6;
-                                            }
-                                        }
-                                    }
-                                label_6:;
-                                    c14 = LODWORD(c14) + LODWORD(c2);
-                                    int v460 = LODWORD(c2) & LODWORD(c2); // temp
-                                    if (v460 != 0) {
-                                        c18 = 1;
-                                        c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                        c17 = c17; c2 = 0LL;
-                                    } else {
-                                        c2 = c9;
-                                        c12 = LODWORD(c6 + c14 + 1LL);
-                                        c15 = LODWORD(c1);
-                                        c5 = c12 - 1;
-                                        c14 = 0LL;
-                                        c18 = c12 - 1 == 1;
-                                        c19 = LOBYTE(c12 - 1 < 1); c16 = (_DWORD)c12 - 1 < (_DWORD)1;
-                                        c17 = !(__builtin_popcount(LOBYTE(c12 - 1 - 1)) & 1);
-                                        _BOOL cond_62 = c12 - 1 != 1; // temp
-                                        _BOOL cond_63 = 1 <= c12 - 1; // temp
-                                        if (!(cond_62 && cond_63)) {
-                                            goto label_4;
-                                        }
-                                        goto label_5;
-                                    }
-                                }
-                            label_4:;
-                                c12 = LODWORD(c12) + LODWORD((uintptr_t)(buf_40 + 40));
-                                int v506 = LODWORD((uintptr_t)(buf_40 + 40)) & LODWORD((uintptr_t)(buf_40 + 40)); // temp
-                                if (v506 != 0) {
-                                    c18 = 1;
-                                    c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                    c17 = c17; c5 = 0LL;
-                                } else {
-                                    c3 = v_12;
-                                    result = LODWORD(c2);
-                                    c3 = LODWORD(c3 + c12 + 1LL);
-                                    int v520 = LODWORD(c13 - 1); // temp
-                                    c12 = LODWORD(c13 - 1);
-                                    c18 = c12 == 1;
-                                    c19 = LOBYTE(c12 < 1); c16 = (_DWORD)c12 < (_DWORD)1;
-                                    c17 = !(__builtin_popcount(LOBYTE(v520 - 1)) & 1);
-                                    _BOOL cond_69 = c12 != 1; // temp
-                                    _BOOL cond_70 = 1 <= c12; // temp
-                                    if (!(cond_69 && cond_70)) {
-                                        goto label_1;
-                                    }
-                                    goto label_5;
-                                }
-                                goto label_5;
+                                goto label_2;
                             } else {
                                 goto label_0;
                             }
                         }
                     }
-                }
+                } while (cond_76 && cond_77);
             }
         label_0:;
             c14 = LODWORD(c14) + LODWORD(c3);
@@ -888,7 +879,8 @@ int f_rec_fib(int a1) {
         result = LODWORD(c14 + 1LL);
         return 0;
     }
-label_5:;
+label_2:;
+label_9:;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -1273,100 +1265,86 @@ int f_rec_power_constprop_0(char a1) {
     char buf_24[16];
     char buf_0[16]; // int buf_0[4]
     _QWORD result; // rax
-    __int64 v87; // rax
+    __int64 v75; // rax
     _QWORD c1; // rcx
     _QWORD c2; // rdx
     _QWORD c4; // rsi
     _QWORD c6; // r8
     __int64 c7; // r9
-    char c8; // CF
-    _BOOL c10; // ZF
-    char c11; // SF
-    char c12; // OF
-    _DWORD v16; // temp
-    _DWORD v23; // temp
-    char v15; // temp
-    char v31; // temp
-    int v36; // temp
-    if (!(LOBYTE(a1) & 1)) {
+    _DWORD v17; // temp
+    _DWORD v18; // temp
+    _DWORD v24; // temp
+    char v15 = LOBYTE(a1) & 1; // temp
+    _BOOL c10 = !v15; // ZF
+    char c11 = (LOBYTE(a1) & 1) < '\0'; // SF
+    char c8 = 0; // CF
+    char c12 = 0; // OF
+    if (!v15) {
         c2 = 1LL;
-        v23 = a1; v15 = 1;
-        a1 = a1 >> 1;
-        result = a1;
-        v31 = LOBYTE(a1) & 1; c10 = !v31;
-        c11 = (LOBYTE(a1) & 1) < '\0'; c8 = 0;
-        c12 = 0;
-        if (v31) {
-        }
-        result = result >> 1;
-        c1 = result; v15 = LOBYTE(result) & 1; c10 = !v15;
-        c11 = (LOBYTE(result) & 1) < '\0'; c8 = 0; c12 = 0;
-        if (!v15) {
-            c6 = 1LL;
-        } else {
-            int v44 = result; // temp
-            c10 = v44 == 1;
-            c11 = LOBYTE(result < 1); c8 = (_DWORD)result < (_DWORD)1;
-            result = result - 1; c6 = 2LL;
-            c1 = result; result = 2LL;
-            if (v44 != 1) {
-                *(_DWORD *)(buf_0 + 12) = LODWORD(c2);
-                *(_DWORD *)(buf_0 + 8) = LODWORD(c4);
-                *(_DWORD *)(buf_0 + 4) = LODWORD(c6); *(_DWORD *)buf_0 = LODWORD(c7); v87 = f_rec_power_constprop_0(a1 >> 1);
-                v16 = *(_DWORD *)(buf_0 + 4); c6 = *(_DWORD *)(buf_0 + 4);
-                c4 = *(_DWORD *)(buf_0 + 8); v23 = v87 * v87; result = v87 * v87;
-                v23 = *(_DWORD *)(buf_0 + 12); c2 = *(_DWORD *)(buf_0 + 12); result = result * *(_DWORD *)buf_0;
-                result = v23 * *(_DWORD *)(buf_0 + 4); result = v23 * *(_DWORD *)(buf_0 + 8); return v23 * *(_DWORD *)(buf_0 + 12);
-            }
-            v16 = result;
-            result = result * result;
-            result = result * LODWORD(c4); result = LODWORD(2LL) * LODWORD(2LL);
-            result = result * LODWORD(c2); return 0;
-        }
     } else {
-        c2 = 2LL; v16 = a1;
+        c2 = 2LL; v17 = a1; v18 = a1 - 1;
+        c10 = v17 == 1;
+        c11 = LOBYTE(a1 < 1); c8 = (_DWORD)a1 < (_DWORD)1;
         a1 = a1 - 1;
-        if (v16 == 1) {
+        if (v17 == 1) {
             return 2;
         } else {
-            a1 = a1 >> 1;
-            result = a1;
-            v31 = LOBYTE(a1) & 1; c10 = !v31;
-            c11 = (LOBYTE(a1) & 1) < '\0'; c8 = 0;
-            c12 = 0;
-            if (!v31) {
-                goto label_0;
+            result = result >> 1; v17 = result; c1 = result;
+            v15 = LOBYTE(result) & 1; c10 = !v15; c11 = (LOBYTE(result) & 1) < '\0';
+            c8 = 0; c12 = 0;
+            if (!v15) {
+                c6 = 1LL;
             } else {
-                goto label_1;
+                int v31 = result; // temp
+                c10 = v31 == 1;
+                c11 = LOBYTE(result < 1); c8 = (_DWORD)result < (_DWORD)1;
+                result = result - 1; c6 = 2LL;
+                c1 = result; result = 2LL;
+                if (v31 != 1) {
+                    *(_DWORD *)(buf_0 + 12) = LODWORD(c2);
+                    *(_DWORD *)(buf_0 + 8) = LODWORD(c4);
+                    *(_DWORD *)(buf_0 + 4) = LODWORD(c6); *(_DWORD *)buf_0 = LODWORD(c7); v75 = f_rec_power_constprop_0(a1 >> 1);
+                    v17 = *(_DWORD *)(buf_0 + 4); c6 = *(_DWORD *)(buf_0 + 4); v18 = *(_DWORD *)(buf_0 + 8);
+                    c4 = *(_DWORD *)(buf_0 + 8); v24 = v75 * v75; result = v75 * v75;
+                    v24 = *(_DWORD *)(buf_0 + 12); c2 = *(_DWORD *)(buf_0 + 12); result = result * *(_DWORD *)buf_0;
+                    result = v24 * *(_DWORD *)(buf_0 + 4); result = v24 * *(_DWORD *)(buf_0 + 8); return v24 * *(_DWORD *)(buf_0 + 12);
+                }
+                v17 = result * result; result = result * result; result = result * LODWORD(c4);
+                v18 = v17; result = v18; result = result * LODWORD(c2);
+                return 0;
             }
         }
     }
-label_1:;
-    c4 = 2LL; v36 = result;
-    c10 = v36 == 1;
-    c11 = LOBYTE(result < 1); c8 = (_DWORD)result < (_DWORD)1;
-    result = result - 1;
-    if (v36 == 1) {
-        result = result * result; result = result * LODWORD(c2);
-        return 0;
+    a1 = a1 >> 1; result = a1; v15 = LOBYTE(a1) & 1;
+    c10 = !v15; c11 = (LOBYTE(a1) & 1) < '\0'; c8 = 0;
+    c12 = 0;
+    if (!v15) {
+        c4 = 1LL;
     } else {
-        c1 = c1 >> 1;
-        a1 = c1;
-        char v62 = LOBYTE(c1) & 1; // temp
-        c10 = !v62;
-        c11 = (LOBYTE(c1) & 1) < '\0'; c8 = 0; c12 = 0;
-        if (!v62) {
-            c7 = 1LL;
+        c10 = result == 1;
+        c11 = LOBYTE(result < 1); c8 = (_DWORD)result < (_DWORD)1;
+        result = a1 - 1;
+        if (result == 1) {
+            v18 = LODWORD(2LL) * LODWORD(2LL); result = v18;
+            result = result * LODWORD(c2); return 0;
         } else {
-            int v67 = c1; // temp
-            c1 = c1 - 1;
+            c1 = c1 >> 1;
             a1 = c1;
-            if (v67 == 1) {
-                result = LODWORD(2LL) * LODWORD(2LL);
+            char v49 = LOBYTE(c1) & 1; // temp
+            c10 = !v49;
+            c11 = (LOBYTE(c1) & 1) < '\0'; c8 = 0; c12 = 0;
+            if (!v49) {
+                c7 = 1LL;
             } else {
+                int v54 = c1; // temp
+                c1 = c1 - 1;
+                a1 = c1;
+                if (v54 == 1) {
+                    result = LODWORD(2LL) * LODWORD(2LL);
+                } else {
+                }
             }
         }
     }
-label_0:;
     return 0;
 }

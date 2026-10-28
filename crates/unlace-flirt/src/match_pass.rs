@@ -1,48 +1,43 @@
-//! FLIRT signature → Session apply pass.
+//! Apply decoded `.sig` files to the functions of a loaded image.
 //!
 //! Mirrors IDA's `plan_to_apply_idasgn` / `apply_idasgn_to` flow
-//! (`research/decompiled-references/ida/idalib/all/apply_idasgn_to.c`):
+//! (`sub_68BA20`, `sub_68B4C0`, `sub_68A440` in libida):
 //!
-//! 1. Load one or more `.sig` files into a [`SigFile`].
-//! 2. Build a fast lookup from the leading byte pattern of each
-//!    signature function to its name.
-//! 3. Walk every function in the loaded binary, grab its leading bytes,
-//!    and match against the signature patterns.
-//! 4. For every hit, record a [`Rename`] in the session so the name
-//!    surfaces in the disassembly / pseudocode / xref views.
+//! 1. Match every candidate function against each signature that targets
+//!    the image's architecture ([`SigFile::match_at`]).
+//! 2. Name the function after the module's public name at offset 0.
+//! 3. Repeat while new names appear: modules that reference other library
+//!    functions only match once those names are known.
 //!
-//! The byte patterns recovered by [`crate::sig::SigFile`] are the 32
-//! bytes that precede each name token in the decompressed trie — i.e.
-//! the function prologue fingerprint. We match a binary function by
-//! requiring its first N bytes to equal the signature pattern's last N
-//! bytes (the part that lines up with the function entry), with `0x00`
-//! treated as a wildcard the same way IDA's variable-byte mask does.
+//! A name is applied once. IDA reports a later match of an already used
+//! name as a "FLAIR COLLISION" and leaves that function alone; so does
+//! this pass.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use unlace_ir::ArchId;
 use unlace_session::{Rename, Session};
 
 use crate::FlirtError;
-use crate::sig::{SigFile, SigFunction};
+use crate::sig::SigFile;
+use crate::sig::matching::{CodeWindow, KnownNames, MatchContext};
 
-/// A signature ready to match: name + the prologue byte fingerprint.
-#[derive(Clone, Debug)]
-struct Sig {
-    name: String,
-    pattern: Vec<u8>,
-}
-
-/// A loaded FLIRT signature set that can be applied to a [`Session`].
+/// A set of loaded signature files.
 #[derive(Clone, Debug, Default)]
 pub struct FlirtMatcher {
-    sigs: Vec<Sig>,
+    sigs: Vec<SigFile>,
 }
 
-/// A single matched signature with confidence metadata.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FlirtMatchDetail<'a> {
-    pub name: &'a str,
+/// One function named by a signature.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FlirtHit {
+    pub name: String,
+    /// `1.0` when the module's referenced name was verified, `0.9` for a
+    /// byte/CRC match alone.
     pub confidence: f32,
+    /// Index of the matched module across all loaded signatures, in load
+    /// order.
     pub signature_id: usize,
 }
 
@@ -68,76 +63,113 @@ pub struct FlirtAppliedMatch {
 }
 
 impl FlirtMatcher {
-    /// Build a matcher from one already-parsed `.sig` file.
-    pub fn from_sig(sig: &SigFile) -> Self {
-        let sigs = sig
-            .functions
-            .iter()
-            .filter(|f| !f.pattern.is_empty())
-            .map(|f: &SigFunction| Sig {
-                name: f.name.clone(),
-                pattern: f.pattern.clone(),
-            })
-            .collect();
-        Self { sigs }
+    pub fn from_sig(sig: SigFile) -> Self {
+        Self { sigs: vec![sig] }
     }
 
-    /// Load + parse a `.sig` file from disk and build a matcher.
+    /// Load and decode a `.sig` file from disk.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, FlirtError> {
-        let sig = SigFile::load(path)?;
-        Ok(Self::from_sig(&sig))
+        Ok(Self::from_sig(SigFile::load(path)?))
     }
 
-    /// Merge another signature file's entries into this matcher.
-    pub fn extend_from_sig(&mut self, sig: &SigFile) {
-        for f in &sig.functions {
-            if !f.pattern.is_empty() {
-                self.sigs.push(Sig {
-                    name: f.name.clone(),
-                    pattern: f.pattern.clone(),
-                });
-            }
-        }
+    pub fn push(&mut self, sig: SigFile) {
+        self.sigs.push(sig);
     }
 
-    /// Number of loaded signatures.
+    pub fn sigs(&self) -> &[SigFile] {
+        &self.sigs
+    }
+
+    /// Number of loaded modules.
     pub fn len(&self) -> usize {
-        self.sigs.len()
+        self.sigs.iter().map(|sig| sig.modules().len()).sum()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.sigs.is_empty()
+        self.sigs.iter().all(|sig| sig.modules().is_empty())
     }
 
-    /// Match a single function's leading bytes, returning the matched
-    /// signature name if any. The signature's pattern is its prologue
-    /// fingerprint; we slide it so its tail aligns with the function
-    /// entry and compare with `0x00` as a wildcard.
-    pub fn match_one(&self, func_bytes: &[u8]) -> Option<&str> {
-        self.match_one_detailed(func_bytes).map(|m| m.name)
-    }
+    /// Name the functions at `candidates`.
+    ///
+    /// `code` holds the image's executable ranges. `known` maps addresses
+    /// to names that already exist (symbols, imports); those names are
+    /// never handed out again and are what referenced names resolve
+    /// against, together with earlier hits.
+    pub fn identify(
+        &self,
+        arch: ArchId,
+        code: &[CodeWindow<'_>],
+        candidates: &[u64],
+        known: &BTreeMap<u64, String>,
+    ) -> BTreeMap<u64, FlirtHit> {
+        let sigs: Vec<(usize, &SigFile)> = self
+            .sigs
+            .iter()
+            .scan(0, |first_id, sig| {
+                let entry = (*first_id, sig);
+                *first_id += sig.modules().len();
+                Some(entry)
+            })
+            .filter(|(_, sig)| sig.header.applies_to(arch))
+            .collect();
+        let mut names = KnownAndFound {
+            known,
+            found: BTreeMap::new(),
+        };
+        let mut used: BTreeSet<String> = known.values().cloned().collect();
+        let mut pending: BTreeSet<u64> = candidates.iter().copied().collect();
+        let mut hits = BTreeMap::new();
 
-    /// Match a single function and return confidence metadata. IDASGN
-    /// prologue matches are exact/wildcard byte matches with no outbound
-    /// reference verifier in this crate, so successful matches are
-    /// treated as confidence 1.0.
-    pub fn match_one_detailed(&self, func_bytes: &[u8]) -> Option<FlirtMatchDetail<'_>> {
-        for (signature_id, sig) in self.sigs.iter().enumerate() {
-            if pattern_matches(&sig.pattern, func_bytes) {
-                return Some(FlirtMatchDetail {
-                    name: &sig.name,
-                    confidence: 1.0,
-                    signature_id,
-                });
+        loop {
+            let mut progressed = false;
+            for &ea in &pending.clone() {
+                let Some(window) = code.iter().find(|w| w.read(ea, 1).is_some()) else {
+                    pending.remove(&ea);
+                    continue;
+                };
+                let cx = MatchContext {
+                    arch,
+                    code: *window,
+                    names: &names,
+                };
+                let Some((first_id, matched)) = sigs
+                    .iter()
+                    .find_map(|&(first_id, sig)| Some((first_id, sig.match_at(&cx, ea)?)))
+                else {
+                    continue;
+                };
+                pending.remove(&ea);
+                progressed = true;
+                let Some(public) = matched.module.function_name() else {
+                    continue;
+                };
+                if !used.insert(public.name.clone()) {
+                    tracing::debug!(
+                        target: "unlace::flirt",
+                        addr = ea,
+                        name = %public.name,
+                        "name already in use; not applied"
+                    );
+                    continue;
+                }
+                let hit = FlirtHit {
+                    name: public.name.clone(),
+                    confidence: if matched.module.reference.is_some() { 1.0 } else { 0.9 },
+                    signature_id: first_id + matched.id.index(),
+                };
+                names.found.insert(ea, hit.name.clone());
+                hits.insert(ea, hit);
+            }
+            if !progressed {
+                return hits;
             }
         }
-        None
     }
 
-    /// Apply the loaded signatures to every function in the session's
-    /// binary, recording a [`Rename`] for each match. Functions that
-    /// already have a non-synthetic name (i.e. not `sub_*`) are skipped
-    /// unless `force` is set, matching IDA's behavior.
+    /// Apply the loaded signatures to every function symbol in the
+    /// session's image, recording a [`Rename`] for each match. Functions
+    /// that already have a non-synthetic name are skipped unless `force`
+    /// is set.
     pub fn apply_to_session(&self, session: &Session, force: bool) -> FlirtApplyReport {
         self.apply_to_session_with_min_confidence(session, force, 0)
     }
@@ -151,75 +183,68 @@ impl FlirtMatcher {
         min_confidence: u8,
     ) -> FlirtApplyReport {
         let mut report = FlirtApplyReport::default();
-        let candidates = session
-            .with_binary(|img| {
-                img.symbols
-                    .iter()
-                    .filter_map(|(&addr, sym)| {
-                        let section = img
-                            .sections
-                            .iter()
-                            .find(|s| addr >= s.vaddr && addr < s.vaddr + s.size)?;
-                        if !section.flags.contains(unlace_loader::SectionFlags::EXEC) {
-                            return None;
-                        }
-                        let off = (addr - section.vaddr) as usize;
-                        let take = 32.min(section.data.len().saturating_sub(off));
-                        let bytes = section.data.get(off..off + take)?.to_vec();
-                        Some((addr, sym.name.clone(), bytes))
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-
-        for (addr, current_name, bytes) in candidates {
-            report.inspected += 1;
-            if !force && !is_synthetic_name(&current_name) {
-                continue;
-            }
-            if let Some(detail) = self.match_one_detailed(&bytes) {
-                let confidence = (detail.confidence * 100.0).round() as u8;
-                if confidence < min_confidence {
+        let Some((hits, old_names)) = session.with_binary(|img| {
+            let windows: Vec<CodeWindow<'_>> = img
+                .sections
+                .iter()
+                .filter(|s| s.flags.contains(unlace_loader::SectionFlags::EXEC))
+                .map(|s| CodeWindow::new(s.vaddr, &s.data))
+                .collect();
+            let mut known: BTreeMap<u64, String> = img.plt_symbols.clone();
+            let mut candidates = Vec::new();
+            let mut old_names = BTreeMap::new();
+            for (&addr, sym) in &img.symbols {
+                if !windows.iter().any(|w| w.read(addr, 1).is_some()) {
                     continue;
                 }
-                session.rename(Rename {
-                    ea: addr,
-                    old_name: current_name,
-                    new_name: detail.name.to_string(),
-                });
-                report.applied.push((addr, detail.name.to_string()));
-                report.applied_details.push(FlirtAppliedMatch {
-                    addr,
-                    name: detail.name.to_string(),
-                    confidence: detail.confidence,
-                    signature_id: detail.signature_id,
-                });
-                report.renamed += 1;
+                if force || is_synthetic_name(&sym.name) {
+                    candidates.push(addr);
+                    old_names.insert(addr, sym.name.clone());
+                } else {
+                    known.insert(addr, sym.name.clone());
+                }
             }
+            let hits = self.identify(img.arch, &windows, &candidates, &known);
+            (hits, old_names)
+        }) else {
+            return report;
+        };
+
+        report.inspected = old_names.len();
+        for (addr, hit) in hits {
+            if (hit.confidence * 100.0).round() < f32::from(min_confidence) {
+                continue;
+            }
+            session.rename(Rename {
+                ea: addr,
+                old_name: old_names.get(&addr).cloned().unwrap_or_default(),
+                new_name: hit.name.clone(),
+            });
+            report.applied.push((addr, hit.name.clone()));
+            report.applied_details.push(FlirtAppliedMatch {
+                addr,
+                name: hit.name,
+                confidence: hit.confidence,
+                signature_id: hit.signature_id,
+            });
+            report.renamed += 1;
         }
-        report.applied.sort_by_key(|(a, _)| *a);
-        report.applied_details.sort_by_key(|m| m.addr);
         report
     }
 }
 
-/// `0x00` in the signature pattern is a "don't care" wildcard byte; all
-/// other bytes must match exactly. The function must be at least as long
-/// as the pattern.
-fn pattern_matches(pattern: &[u8], func_bytes: &[u8]) -> bool {
-    if pattern.is_empty() || func_bytes.len() < pattern.len() {
-        return false;
+struct KnownAndFound<'a> {
+    known: &'a BTreeMap<u64, String>,
+    found: BTreeMap<u64, String>,
+}
+
+impl KnownNames for KnownAndFound<'_> {
+    fn name_at(&self, addr: u64) -> Option<&str> {
+        self.known
+            .get(&addr)
+            .or_else(|| self.found.get(&addr))
+            .map(String::as_str)
     }
-    // Require at least 4 fixed (non-wildcard) bytes so we don't match
-    // everything on an all-zero pattern.
-    let fixed = pattern.iter().filter(|&&b| b != 0).count();
-    if fixed < 4 {
-        return false;
-    }
-    pattern
-        .iter()
-        .zip(func_bytes)
-        .all(|(&p, &f)| p == 0 || p == f)
 }
 
 /// IDA treats `sub_*`, `unknown_*`, and empty names as synthetic — those
@@ -235,86 +260,69 @@ fn is_synthetic_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sig::SigFunction;
+    use crate::sig::tests::encode_flat;
 
-    fn matcher_with(name: &str, pattern: Vec<u8>) -> FlirtMatcher {
-        FlirtMatcher {
-            sigs: vec![Sig {
-                name: name.to_string(),
-                pattern,
-            }],
-        }
+    const STRLEN: &[u8] = &[
+        0x48, 0x89, 0xF8, 0x80, 0x38, 0x00, 0x74, 0x05, 0x48, 0xFF, 0xC0, 0xEB, 0xF6, 0x48,
+        0x29, 0xF8, 0xC3,
+    ];
+    /// `strnlen` wrapper: `mov rsi, -1; jmp strlen`.
+    const TAIL_CALL: &[u8] = &[0x48, 0xC7, 0xC6, 0xFF, 0xFF, 0xFF, 0xFF, 0xE9, 0, 0, 0, 0];
+
+    fn matcher() -> FlirtMatcher {
+        let sig = SigFile::parse(&encode_flat(&[
+            (STRLEN, "strlen", None),
+            (TAIL_CALL, "strlen_wrapper", Some((8, "strlen"))),
+        ]))
+        .unwrap();
+        FlirtMatcher::from_sig(sig)
+    }
+
+    fn image_bytes() -> (Vec<u8>, u64, u64) {
+        let strlen_at = 0x1000u64;
+        let wrapper_at = strlen_at + 0x20;
+        let mut bytes = STRLEN.to_vec();
+        bytes.resize(0x20, 0xCC);
+        let mut wrapper = TAIL_CALL.to_vec();
+        let disp = (strlen_at as i64 - (wrapper_at as i64 + 12)) as i32;
+        wrapper[8..12].copy_from_slice(&disp.to_le_bytes());
+        bytes.extend(wrapper);
+        (bytes, strlen_at, wrapper_at)
     }
 
     #[test]
-    fn test_pattern_exact_match() {
-        let m = matcher_with("memcpy", vec![0x48, 0x89, 0xF8, 0x48, 0x89, 0xF1]);
-        assert_eq!(
-            m.match_one(&[0x48, 0x89, 0xF8, 0x48, 0x89, 0xF1, 0xC3]),
-            Some("memcpy")
-        );
-        let detail = m
-            .match_one_detailed(&[0x48, 0x89, 0xF8, 0x48, 0x89, 0xF1, 0xC3])
-            .expect("detailed match");
-        assert_eq!(detail.name, "memcpy");
-        assert_eq!(detail.confidence, 1.0);
-        assert_eq!(detail.signature_id, 0);
+    fn identify_resolves_references_through_earlier_hits() {
+        let m = matcher();
+        let (bytes, strlen_at, wrapper_at) = image_bytes();
+        let windows = [CodeWindow::new(0x1000, &bytes)];
+        let hits = m.identify(ArchId::X86_64, &windows, &[strlen_at, wrapper_at], &BTreeMap::new());
+        assert_eq!(hits[&strlen_at].name, "strlen");
+        assert_eq!(hits[&strlen_at].confidence, 0.9);
+        assert_eq!(hits[&wrapper_at].name, "strlen_wrapper");
+        assert_eq!(hits[&wrapper_at].confidence, 1.0);
+        assert_eq!(hits[&wrapper_at].signature_id, 1);
+
+        // Without the referenced function among the candidates or known
+        // names, the wrapper stays unnamed.
+        let hits = m.identify(ArchId::X86_64, &windows, &[wrapper_at], &BTreeMap::new());
+        assert!(hits.is_empty());
     }
 
     #[test]
-    fn test_pattern_wildcard_zero_bytes() {
-        // 0x00 in the pattern is a wildcard.
-        let m = matcher_with("f", vec![0x55, 0x48, 0x00, 0x00, 0xE8, 0x90]);
-        assert_eq!(
-            m.match_one(&[0x55, 0x48, 0xAB, 0xCD, 0xE8, 0x90, 0x00]),
-            Some("f")
-        );
+    fn identify_skips_names_already_in_use() {
+        let m = matcher();
+        let (bytes, strlen_at, _) = image_bytes();
+        let windows = [CodeWindow::new(0x1000, &bytes)];
+        let known = BTreeMap::from([(0x5000, "strlen".to_string())]);
+        assert!(m.identify(ArchId::X86_64, &windows, &[strlen_at], &known).is_empty());
     }
 
     #[test]
-    fn test_pattern_rejects_too_few_fixed_bytes() {
-        // Only 2 non-wildcard bytes → must not match (avoids over-broad sigs).
-        let m = matcher_with("x", vec![0x55, 0x00, 0x00, 0x00, 0x00, 0x48]);
-        // 2 fixed bytes (0x55, 0x48) < 4 threshold.
-        assert_eq!(m.match_one(&[0x55, 0x11, 0x22, 0x33, 0x44, 0x48]), None);
-    }
-
-    #[test]
-    fn test_pattern_rejects_short_function() {
-        let m = matcher_with("f", vec![0x48, 0x89, 0xF8, 0x48]);
-        assert_eq!(m.match_one(&[0x48, 0x89]), None);
-    }
-
-    #[test]
-    fn test_pattern_mismatch() {
-        let m = matcher_with("f", vec![0x48, 0x89, 0xF8, 0x48]);
-        assert_eq!(m.match_one(&[0x48, 0x89, 0xF9, 0x48]), None);
-    }
-
-    #[test]
-    fn test_from_sig_drops_empty_patterns() {
-        let sig = SigFile {
-            version: 10,
-            arch: 0,
-            features: 0,
-            file_types: 0,
-            os_types: 0,
-            app_types: 0,
-            library_name: "test".into(),
-            n_functions: 2,
-            functions: vec![
-                SigFunction {
-                    name: "has_pattern".into(),
-                    pattern: vec![0x55, 0x48, 0x89, 0xE5],
-                },
-                SigFunction {
-                    name: "no_pattern".into(),
-                    pattern: vec![],
-                },
-            ],
-        };
-        let m = FlirtMatcher::from_sig(&sig);
-        assert_eq!(m.len(), 1);
+    fn identify_ignores_other_architectures() {
+        let m = matcher();
+        let (bytes, strlen_at, _) = image_bytes();
+        let windows = [CodeWindow::new(0x1000, &bytes)];
+        assert!(m.identify(ArchId::AArch64, &windows, &[strlen_at], &BTreeMap::new()).is_empty());
     }
 
     #[test]
@@ -327,15 +335,14 @@ mod tests {
         assert!(!is_synthetic_name("printf"));
     }
 
-    fn build_test_image(symbol_name: &str, prologue: &[u8]) -> unlace_loader::BinaryImage {
-        use unlace_ir::ArchId;
+    fn build_test_image(symbol_name: &str, bytes: &[u8]) -> unlace_loader::BinaryImage {
         use unlace_loader::{BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind};
         let mut img = BinaryImage::empty(ArchId::X86_64, Endian::Little);
         img.sections.push(Section {
             name: ".text".into(),
             vaddr: 0x1000,
-            size: prologue.len() as u64,
-            data: prologue.to_vec(),
+            size: bytes.len() as u64,
+            data: bytes.to_vec(),
             flags: SectionFlags::READ.union(SectionFlags::EXEC),
         });
         img.symbols.insert(
@@ -343,7 +350,7 @@ mod tests {
             Symbol {
                 name: symbol_name.into(),
                 addr: 0x1000,
-                size: prologue.len() as u64,
+                size: bytes.len() as u64,
                 kind: SymbolKind::Function,
             },
         );
@@ -352,18 +359,13 @@ mod tests {
 
     #[test]
     fn test_apply_to_session_renames_synthetic_funcs() {
-        let prologue = vec![0x55, 0x48, 0x89, 0xE5, 0xE8, 0x11, 0x22, 0x33];
         let session = Session::new();
-        session.set_binary(build_test_image("sub_1000", &prologue));
+        session.set_binary(build_test_image("sub_1000", STRLEN));
 
-        let m = matcher_with("my_func", prologue.clone());
-        let report = m.apply_to_session_with_min_confidence(&session, false, 100);
+        let report = matcher().apply_to_session_with_min_confidence(&session, false, 90);
         assert_eq!(report.renamed, 1);
-        assert_eq!(report.applied, vec![(0x1000, "my_func".to_string())]);
-        assert_eq!(report.applied_details.len(), 1);
-        assert_eq!(report.applied_details[0].addr, 0x1000);
-        assert_eq!(report.applied_details[0].name, "my_func");
-        assert_eq!(report.applied_details[0].confidence, 1.0);
+        assert_eq!(report.applied, vec![(0x1000, "strlen".to_string())]);
+        assert_eq!(report.applied_details[0].confidence, 0.9);
         assert_eq!(report.applied_details[0].signature_id, 0);
         assert_eq!(
             session
@@ -371,22 +373,21 @@ mod tests {
                 .renames
                 .get(&0x1000)
                 .map(|r| r.new_name.as_str()),
-            Some("my_func")
+            Some("strlen")
         );
+
+        let strict = matcher().apply_to_session_with_min_confidence(&session, false, 100);
+        assert_eq!(strict.renamed, 0);
     }
 
     #[test]
     fn test_apply_skips_named_funcs_without_force() {
-        let prologue = vec![0x55, 0x48, 0x89, 0xE5, 0xE8, 0x11, 0x22, 0x33];
         let session = Session::new();
-        session.set_binary(build_test_image("already_named", &prologue));
+        session.set_binary(build_test_image("already_named", STRLEN));
 
-        let m = matcher_with("my_func", prologue.clone());
+        let m = matcher();
         let report = m.apply_to_session(&session, false);
-        assert_eq!(
-            report.renamed, 0,
-            "named funcs must be skipped without force"
-        );
+        assert_eq!(report.renamed, 0, "named funcs must be skipped without force");
 
         let forced = m.apply_to_session(&session, true);
         assert_eq!(forced.renamed, 1, "force must override existing names");

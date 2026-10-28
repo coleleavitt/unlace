@@ -382,7 +382,7 @@ This is a *regression detector*, not a quality score. It catches unintended outp
 
 **Current:** 15 exact-pass, 0 review rows
 
-### 4. Stylistic Score (`scripts/score_parity.sh`)
+### 4. Stylistic Score (`cargo xtask gate`)
 
 **What it measures:** Structural feature presence in decompiled output.
 

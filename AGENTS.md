@@ -42,9 +42,11 @@ Common gates:
 
 ```bash
 RUSTC_WRAPPER= cargo check --workspace
-RUSTC_WRAPPER= cargo test --workspace
-RUSTC_WRAPPER= cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture
-RUSTC_WRAPPER= bash scripts/score_parity.sh
+RUSTC_WRAPPER= cargo nextest run --workspace     # all tests, one process each, in parallel
+RUSTC_WRAPPER= cargo test --workspace --doc      # doctests (nextest does not run them)
+RUSTC_WRAPPER= cargo nextest run -p unlace-test-harness --test golden_fixtures
+RUSTC_WRAPPER= cargo xtask gate                  # every quality gate from one build
+RUSTC_WRAPPER= cargo xtask gate --quick          # golden triage + stylistic score only
 cargo xtask lint-determinism
 RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check

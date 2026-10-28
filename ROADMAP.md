@@ -861,11 +861,10 @@ Pattern frequency from `research/decompiled-references/ida/` — what IDA actual
 ## Verification Commands
 
 ```bash
-# Full quality axis report
-RUSTC_WRAPPER= bash scripts/quality_axes.sh
+# Full quality axis report (`--quick`: golden triage + stylistic score)
+RUSTC_WRAPPER= cargo xtask gate
 
 # Individual metrics
-RUSTC_WRAPPER= bash scripts/score_parity.sh
 RUSTC_WRAPPER= cargo run -p xtask -- golden-triage
 RUSTC_WRAPPER= cargo run -p xtask -- semantic-report
 RUSTC_WRAPPER= cargo run -p xtask -- type-recovery-report

@@ -10,7 +10,7 @@ Default gates:
 
 ```bash
 RUSTC_WRAPPER= cargo check --workspace
-RUSTC_WRAPPER= cargo test -p <crate>
+RUSTC_WRAPPER= cargo nextest run -p <crate>
 cargo xtask lint-determinism
 RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
@@ -20,7 +20,7 @@ Quality, coverage, and benchmark gates when the work touches broad behavior or
 performance claims:
 
 ```bash
-RUSTC_WRAPPER= bash scripts/quality_axes.sh
+RUSTC_WRAPPER= cargo xtask gate
 RUSTC_WRAPPER= cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
 RUSTC_WRAPPER= cargo bench -p unlace-cli --bench decompile_medium
 RUSTC_WRAPPER= cargo bench -p unlace-cli --bench spec_suite
@@ -31,8 +31,7 @@ cargo codspeed build -p unlace-cli --bench decompile_medium --bench spec_suite -
 For output changes, prefer a before/after fixture or function diff plus:
 
 ```bash
-RUSTC_WRAPPER= cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture
-RUSTC_WRAPPER= bash scripts/score_parity.sh
+RUSTC_WRAPPER= cargo xtask gate --quick
 ```
 
 Report exact commands, pass/fail status, and the first useful failing lines. If

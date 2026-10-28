@@ -99,10 +99,10 @@ changes and verify the resulting output is actually better.
 
 ## Current Verified State
 
-Last verified on 2026-06-21 in this checkout with
-`RUSTC_WRAPPER= bash scripts/quality_axes.sh`:
+Last verified on 2026-06-21 in this checkout with the quality-axis run (then
+`scripts/quality_axes.sh`, now `cargo xtask gate`):
 
-- `scripts/score_parity.sh` reports `Stylistic Fixture Parity: 83.0%`.
+- The stylistic score reported `Stylistic Fixture Parity: 83.0%`.
 - `cargo run -p xtask -- golden-triage` reports 15 exact-pass rows and 0
   review rows. The older "18 pass / 14 fail" and "0 exact-pass / 15 review"
   notes are historical; do not use them as current evidence.
@@ -184,13 +184,25 @@ Prefer disabling `sccache` in this environment:
 
 ```bash
 RUSTC_WRAPPER= cargo check --workspace
-RUSTC_WRAPPER= cargo test --workspace
-RUSTC_WRAPPER= cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture
-RUSTC_WRAPPER= bash scripts/score_parity.sh
+RUSTC_WRAPPER= cargo nextest run --workspace     # all tests, one process each, in parallel
+RUSTC_WRAPPER= cargo test --workspace --doc      # doctests (nextest does not run them)
+RUSTC_WRAPPER= cargo nextest run -p unlace-test-harness --test golden_fixtures
+RUSTC_WRAPPER= cargo xtask gate                  # every quality gate from one build
+RUSTC_WRAPPER= cargo xtask gate --quick          # golden triage + stylistic score only
 cargo xtask lint-determinism
 RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
 ```
+
+`cargo xtask gate` builds `unlace` once, decompiles every golden fixture once
+in-process and in parallel, and derives the golden triage ledger, the
+stylistic score, and the fidelity/quality counters from that run. The
+semantic and type-recovery reports and the Rocq axes (skipped without
+`coqc`/`dune`) run concurrently. It prints one table, writes outputs and logs
+to `target/gate/`, and exits non-zero when any check fails. The golden tests
+run the decompiler in-process too, so they need no prior `cargo build`.
+Refresh goldens with `UPDATE_GOLDEN=1 cargo nextest run -p unlace-test-harness
+--test golden_fixtures` only for reviewed, intentional output changes.
 
 Coverage and benchmarking tools are installed locally as of 2026-06-21:
 `cargo-llvm-cov 0.6.18`, `grcov 0.10.5`, `llvm-cov`, `cargo-nextest 0.9.132`,

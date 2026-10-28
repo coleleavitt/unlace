@@ -20,7 +20,7 @@ and what is aspirational in unlace. It is derived from:
 
 - `crates/unlace-ir/src/arch_support.rs` (architecture tier classification).
 - `crates/unlace-cli/src/quality.rs` (output sanity gates).
-- `scripts/quality_axes.sh` and the xtask reports it runs (current measured
+- `cargo xtask gate` and the xtask reports it runs (current measured
   quality-axis verification).
 - `docs/rebaseline-2026-05-17.md` (older full-gate snapshot; historical).
 - `docs/parity-quality-execution-plan-2026-05.md` (quality-axis split).
@@ -147,13 +147,13 @@ The old "aggregate parity" wording is retired. The current gates are:
 
 | axis | gate | current state | caveat |
 |------|------|---------------|--------|
-| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 83.0%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. `cargo run -p xtask -- golden-triage` currently has 15 exact-pass rows and 0 review rows, so exact-line goldens are clean on this checkout. |
+| Stylistic fixture similarity | `cargo xtask gate` (stylistic score row) | `Stylistic Fixture Parity: 83.0%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. `cargo run -p xtask -- golden-triage` currently has 15 exact-pass rows and 0 review rows, so exact-line goldens are clean on this checkout. |
 | Semantic correctness | `cargo run -p xtask -- semantic-report` | 21 host/source-known executable equivalence cases pass; 0 host/source-known cases are tracked as XFAIL; 4 qemu-user non-host executable rows pass; 9 source-known cases also pass shape-only checks; unsupported source-known rows are 0 | Not full-corpus semantic correctness yet; qemu-user execution currently covers AArch64, MIPS64, PPC64, and RISC-V fixture behavior only, and shape checks are not executable equivalence. `debug_cpp_rtti` and `debug_cpp_vtable` are shape-only until behavioral helpers can preserve RTTI/vtable semantics. |
 | Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=29 functions=131 c_functions=113 cpp_functions=18 recovered=960 expected=960 reported=1031 recall=100.0% precision=93.1% raw_precision=92.9% raw_reported=1065 leaked_temp_decls=98 stack_carrier_decls=184 abi_param_carriers=3 duplicate_source_local_decls=35 source_oracle_only_recovered=29 source_oracle_only_expected=86 raw_recovered=989 raw_expected=1046 raw_recall=94.6% source_known=29 source_only=16 source_parsed=16 dwarf_candidates=13 cpp_candidates=7 scored_cpp=7 optimized_scored=15 scored_source_only=16 non_host_candidates=4 scored_non_host=4` | Precision measures *source-grounded* recovery: non-source stack/ABI carriers, ABI parameter carriers, duplicate source-local declarations, leaked temps, and synthetic composite/member placeholders are tracked as output-local debt rather than source facts. Remaining source precision excess is now mostly real type-rendering debt (`local_types=+32`, array/pointer/field type/name excess) rather than missing recoverable facts. The missing ledger still has 0 recoverable recovery gaps and 57 source-oracle-only facts. |
 
-`bash scripts/quality_axes.sh` runs all three reports without treating a
-skipped axis as solved. `scripts/score_parity.sh` reports the stylistic score
-separately from exact-line golden triage. See
+`cargo xtask gate` runs all three reports without treating a skipped axis
+as solved, and reports the stylistic score separately from exact-line golden
+triage. See
 `docs/parity-quality-execution-plan-2026-05.md` for the active metric plan.
 
 ## What is currently NOT shipped

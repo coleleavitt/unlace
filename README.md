@@ -18,8 +18,8 @@ verified end-to-end.
 | Loader support (ELF, PE/COFF, Mach-O, dyld cache, Intel HEX, …) | Per-format parser + symbol/debug-ingest matrix | [`docs/status.md`](docs/status.md) |
 | Expression printer (IDA `cot_*` coverage) | 36 explicit `CExpr` variants pinned by `cexpr_coverage_lists_every_variant`; remaining ~33 dispatch through `Binary` | [`crates/unlace-output/src/COVERAGE.md`](crates/unlace-output/src/COVERAGE.md) |
 | Output quality counters (`nullderef`, `badret`, `badtok`, `empty_bodies`, `impossible_lvalue`, `lost_frame_offsets`) | Pinned at 0 for `hello_world.elf`, `branches.elf`, `loops.elf` | [`docs/status.md`](docs/status.md) §"Output quality counters" |
-| Stylistic fixture score | `Stylistic Fixture Parity: 83.0%` from `bash scripts/score_parity.sh` on the current fixture metric | [`docs/status.md`](docs/status.md) §"Quality axes" |
-| Quality-axis report | `bash scripts/quality_axes.sh` reports stylistic score, `xtask semantic-report` executable equivalence status, and the DWARF/source-backed type/variable score | [`docs/parity-quality-execution-plan-2026-05.md`](docs/parity-quality-execution-plan-2026-05.md) |
+| Stylistic fixture score | `Stylistic Fixture Parity: 83.0%` from `cargo xtask gate` on the current fixture metric | [`docs/status.md`](docs/status.md) §"Quality axes" |
+| Quality-axis report | `cargo xtask gate` reports stylistic score, `xtask semantic-report` executable equivalence status, and the DWARF/source-backed type/variable score | [`docs/parity-quality-execution-plan-2026-05.md`](docs/parity-quality-execution-plan-2026-05.md) |
 | Determinism in output-affecting crates | `cargo xtask lint-determinism` rejects `HashMap` / `HashSet` in `unlace-ir`, `unlace-passes`, `unlace-struct`, `unlace-output` (use `BTreeMap` / `BTreeSet` or `// determinism:allow`) | [`docs/determinism.md`](docs/determinism.md) |
 | Reproducible-build / SBOM tooling | `cargo xtask sbom` emits a CycloneDX 1.4 BOM from `Cargo.lock` | [`crates/unlace-sbom`](crates/unlace-sbom/) |
 
@@ -109,11 +109,8 @@ unlace decompile <binary> --addr <offset>
 # Score recovered output against the IDA-style quality counters.
 unlace quality <binary>
 
-# Stylistic parity score on the current fixture set.
-bash scripts/score_parity.sh
-
-# Report all quality axes honestly.
-bash scripts/quality_axes.sh
+# Report all quality axes honestly (`--quick`: golden triage + stylistic score).
+cargo xtask gate
 
 # Generate a CycloneDX SBOM from Cargo.lock.
 cargo xtask sbom --out sbom.json
@@ -126,12 +123,12 @@ older rebaseline notes are historical once the status matrix has moved.
 
 ```bash
 RUSTC_WRAPPER= cargo check --workspace
-RUSTC_WRAPPER= cargo test --workspace
+RUSTC_WRAPPER= cargo nextest run --workspace
+RUSTC_WRAPPER= cargo test --workspace --doc
 RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
 RUSTC_WRAPPER= cargo xtask lint-determinism
 cargo fmt --all -- --check
-RUSTC_WRAPPER= bash scripts/score_parity.sh
-RUSTC_WRAPPER= bash scripts/quality_axes.sh
+RUSTC_WRAPPER= cargo xtask gate
 ```
 
 Disable `sccache` (`RUSTC_WRAPPER=`) — the workspace builds reliably without

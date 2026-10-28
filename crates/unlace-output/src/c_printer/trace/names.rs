@@ -46,9 +46,7 @@ pub(in crate::c_printer) fn trace_name_decision(
         ctx.var_role_names.get(sv),
         ctx.name_overrides.get(&sv.base)
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
+    tracing::debug!(target: "unlace::cprinter::name", "{text}");
 }
 
 pub(in crate::c_printer) fn trace_operand_resolution(
@@ -66,9 +64,7 @@ pub(in crate::c_printer) fn trace_operand_resolution(
     let text = format!(
         "operand source={source} stmt={stmt_idx} raw_idx={raw_idx:?} raw={vn:?} sv={sv:?} known_name={known:?}"
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
+    tracing::debug!(target: "unlace::cprinter::name", "{text}");
 }
 
 pub(in crate::c_printer) fn trace_assignment_render(
@@ -79,7 +75,7 @@ pub(in crate::c_printer) fn trace_assignment_render(
     rhs: &str,
     ctx: &PrintCtx,
 ) {
-    if !c_printer_trace_enabled() && !c_printer_name_trace_enabled() {
+    if !c_printer_name_trace_enabled() {
         return;
     }
     let inputs = ctx
@@ -102,7 +98,5 @@ pub(in crate::c_printer) fn trace_assignment_render(
         "assign-render stmt={stmt_idx} addr=0x{:x} op={:?} output={sv:?} lhs={lhs:?} rhs={rhs:?} inputs=[{}]",
         insn.addr, insn.op, inputs
     );
-    if trace_text_matches_filter(&text) {
-        eprintln!("[unlace-output] {text}");
-    }
+    tracing::debug!(target: "unlace::cprinter::name", "{text}");
 }

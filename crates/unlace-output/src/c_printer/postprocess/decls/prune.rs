@@ -1,9 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::c_printer::postprocess::{
-    brace_delta, is_ident_byte, output_has_cond_family_temp, prune_trace_enabled,
-};
-use crate::c_printer::trace_text_matches_filter;
+use crate::c_printer::postprocess::{brace_delta, is_ident_byte, output_has_cond_family_temp};
 
 use super::{parse_plain_local_decl_name, parse_shadowing_local_decl_name};
 
@@ -13,23 +10,17 @@ pub(in crate::c_printer) fn prune_unused_plain_local_decls(output: String) -> St
     } else {
         4
     };
-    if prune_trace_enabled() {
-        eprintln!("[unlace-output] decl-prune begin max_passes={max_passes}");
-    }
+    tracing::debug!(target: "unlace::cprinter::prune", "decl-prune begin max_passes={max_passes}");
     let mut current = output;
     for pass in 0..max_passes {
         let next = prune_unused_plain_local_decls_once(&current, pass);
         if next == current {
-            if prune_trace_enabled() {
-                eprintln!("[unlace-output] decl-prune fixpoint reached after pass={pass}");
-            }
+            tracing::debug!(target: "unlace::cprinter::prune", "decl-prune fixpoint reached after pass={pass}");
             return next;
         }
         current = next;
     }
-    if prune_trace_enabled() {
-        eprintln!("[unlace-output] decl-prune hit {max_passes}-pass cap without fixpoint");
-    }
+    tracing::debug!(target: "unlace::cprinter::prune", "decl-prune hit {max_passes}-pass cap without fixpoint");
     current
 }
 
@@ -73,18 +64,13 @@ pub(in crate::c_printer) fn prune_unused_plain_local_decls_once(output: &str, pa
             if !used_later {
                 remove.insert(line_idx);
             }
-            if prune_trace_enabled() {
-                let text = format!(
-                    "decl-prune pass={pass} line={} name={name} block=[{}..{}) decision={}",
-                    line_idx + 1,
-                    body_start + 1,
-                    body_end + 1,
-                    if used_later { "keep" } else { "remove" }
-                );
-                if trace_text_matches_filter(&text) {
-                    eprintln!("[unlace-output] {text}");
-                }
-            }
+            tracing::debug!(target: "unlace::cprinter::prune",
+                "decl-prune pass={pass} line={} name={name} block=[{}..{}) decision={}",
+                line_idx + 1,
+                body_start + 1,
+                body_end + 1,
+                if used_later { "keep" } else { "remove" }
+            );
             used_after.remove(name);
             collect_candidate_identifiers(
                 lines[line_idx],

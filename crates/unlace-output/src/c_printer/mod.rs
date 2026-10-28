@@ -2566,6 +2566,9 @@ struct PrintCtx {
     /// so reusing the anchor statement's scope would make block-local
     /// declarations escape their C scope.
     cond_use_scope_paths: Vec<(SsaVarnode, Vec<u32>)>,
+    /// Conditions of `while`, `do`/`while` and `for` loops, which are read
+    /// once per iteration rather than at one point.
+    loop_cond_uses: BTreeSet<SsaVarnode>,
     collect_depth: u32,
     stmt_depths: BTreeMap<u32, u32>,
     /// Lexical scope path of each statement, recorded during
@@ -2931,6 +2934,7 @@ impl PrintCtx {
             commented_stmts: BTreeSet::new(),
             cond_use_stmts: Vec::new(),
             cond_use_scope_paths: Vec::new(),
+            loop_cond_uses: BTreeSet::new(),
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
             stmt_scope_paths: BTreeMap::new(),
@@ -4173,6 +4177,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
             HirNode::While { cond, body } => {
                 ctx.name_of(cond);
+                ctx.loop_cond_uses.insert(*cond);
                 ctx.cond_uses.push(*cond);
                 ctx.control_cond_uses.push(*cond);
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
@@ -4196,6 +4201,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.current_scope_path.pop();
                 ctx.collect_depth -= 1;
                 ctx.name_of(cond);
+                ctx.loop_cond_uses.insert(*cond);
                 ctx.cond_uses.push(*cond);
                 ctx.control_cond_uses.push(*cond);
                 // do/while reads the cond *after* the body; anchor at the
@@ -4216,6 +4222,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     collect_insn_as_stmt(init_insn, ctx);
                 }
                 ctx.name_of(cond);
+                ctx.loop_cond_uses.insert(*cond);
                 ctx.cond_uses.push(*cond);
                 ctx.control_cond_uses.push(*cond);
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
@@ -16494,9 +16501,9 @@ fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) 
         ));
         return true;
     }
-    if single_use_static_load_expr_is_inlineable(insn, stmt_idx, addr_idx, load_size, ctx) {
+    if single_use_load_expr_is_inlineable(insn, stmt_idx, addr_idx, load_size, ctx) {
         trace_load_text(format_args!(
-            "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=single-use-static"
+            "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=single-use"
         ));
         return true;
     }
@@ -16506,7 +16513,19 @@ fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) 
     false
 }
 
-fn single_use_static_load_expr_is_inlineable(
+/// Whether a load read exactly once renders at its reader instead of being
+/// assigned to a variable first.
+///
+/// This mirrors Hex-Rays' local propagation (hexx64 `sub_17D8C0`): a
+/// definition is substituted into its first use (`sub_129150`,
+/// `mblock_t::find_first_use`) unless an instruction in between writes
+/// memory or redefines one of its operands, and a value read more than once
+/// stays a variable. A static load may move into a nested scope of its
+/// definition because its address cannot change. Any other load must be read
+/// in the scope it is defined in and not by a loop condition, so the moved
+/// read runs exactly when the original one did. When the reader is itsexecutable
+/// folded, the read moves on to where that reader is printed.
+fn single_use_load_expr_is_inlineable(
     insn: &IrInsn,
     stmt_idx: u32,
     addr_idx: usize,
@@ -16516,73 +16535,136 @@ fn single_use_static_load_expr_is_inlineable(
     let Some(addr) = insn.inputs.get(addr_idx) else {
         return false;
     };
-    if try_global_var_name(addr, Some(addr_idx), stmt_idx, load_size, ctx).is_none() {
+    if is_return_address_stack_load_artifact(insn, stmt_idx, ctx) {
         trace_load_text(format_args!(
-            "single-use-static-load stmt={stmt_idx} decision=false reason=not-static addr={addr:?}"
+            "single-use-load stmt={stmt_idx} decision=false reason=return-address"
         ));
         return false;
     }
+    let is_static = try_global_var_name(addr, Some(addr_idx), stmt_idx, load_size, ctx).is_some();
     let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
         trace_load_text(format_args!(
-            "single-use-static-load stmt={stmt_idx} decision=false reason=missing-output"
+            "single-use-load stmt={stmt_idx} decision=false reason=missing-output"
         ));
         return false;
     };
     let use_count = ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0);
     if use_count != 1 {
         trace_load_text(format_args!(
-            "single-use-static-load stmt={stmt_idx} out={out_sv:?} uses={use_count} decision=false reason=not-single-use"
+            "single-use-load stmt={stmt_idx} out={out_sv:?} uses={use_count} decision=false reason=not-single-use"
         ));
         return false;
     }
     let Some(consumer_stmt) = last_consumer_stmt_for_sv(&out_sv, ctx) else {
         trace_load_text(format_args!(
-            "single-use-static-load stmt={stmt_idx} out={out_sv:?} decision=false reason=no-consumer"
+            "single-use-load stmt={stmt_idx} out={out_sv:?} decision=false reason=no-consumer"
         ));
         return false;
     };
     if consumer_stmt <= stmt_idx {
         trace_load_text(format_args!(
-            "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=consumer-before-def"
+            "single-use-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=consumer-before-def"
         ));
         return false;
     }
     if consumer_uses_sv_as_indirect_call_target(&out_sv, consumer_stmt, ctx) {
         trace_load_text(format_args!(
-            "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=call-target"
+            "single-use-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=call-target"
         ));
         return false;
     }
     let def_path = ctx
         .stmt_scope_paths
         .get(&stmt_idx)
-        .cloned()
-        .unwrap_or_default();
-    let consumer_path = ctx
-        .stmt_scope_paths
-        .get(&consumer_stmt)
-        .cloned()
-        .unwrap_or_default();
-    if !consumer_path.starts_with(&def_path) {
-        trace_load_text(format_args!(
-            "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=scope consumer_path={consumer_path:?} def_path={def_path:?}"
-        ));
-        return false;
-    }
+        .map_or(&[][..], Vec::as_slice);
+    let read_stmt = if is_static {
+        let consumer_path = ctx
+            .stmt_scope_paths
+            .get(&consumer_stmt)
+            .map_or(&[][..], Vec::as_slice);
+        if !consumer_path.starts_with(def_path) {
+            trace_load_text(format_args!(
+                "single-use-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=scope consumer_path={consumer_path:?} def_path={def_path:?}"
+            ));
+            return false;
+        }
+        consumer_stmt
+    } else {
+        let Some((read_stmt, read_path)) = printed_read_site(out_sv, consumer_stmt, ctx) else {
+            trace_load_text(format_args!(
+                "single-use-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=loop-or-unknown-read-site"
+            ));
+            return false;
+        };
+        if read_stmt <= stmt_idx || read_path != def_path {
+            trace_load_text(format_args!(
+                "single-use-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} read={read_stmt} decision=false reason=scope read_path={read_path:?} def_path={def_path:?}"
+            ));
+            return false;
+        }
+        if inlined_read_clobbered_before(stmt_idx, read_stmt, false, ctx) {
+            trace_load_text(format_args!(
+                "single-use-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} read={read_stmt} decision=false reason=operand-redefined"
+            ));
+            return false;
+        }
+        read_stmt
+    };
     let first_between = stmt_idx.saturating_add(1);
-    for (&between_stmt, between_insn) in ctx.stmt_insns.range(first_between..consumer_stmt) {
+    for (&between_stmt, between_insn) in ctx.stmt_insns.range(first_between..read_stmt) {
         if instr_has_side_effects(between_insn) {
             trace_load_text(format_args!(
-                "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=false reason=side-effect-between between={between_stmt} op={:?}",
+                "single-use-load stmt={stmt_idx} out={out_sv:?} read={read_stmt} decision=false reason=side-effect-between between={between_stmt} op={:?}",
                 between_insn.op
             ));
             return false;
         }
     }
     trace_load_text(format_args!(
-        "single-use-static-load stmt={stmt_idx} out={out_sv:?} consumer={consumer_stmt} decision=true"
+        "single-use-load stmt={stmt_idx} out={out_sv:?} read={read_stmt} static={is_static} decision=true"
     ));
     true
+}
+
+/// Where the single read of `sv` by `consumer_stmt` is printed: the
+/// statement index it is printed before and the scope it executes in.
+///
+/// A folded consumer is printed where its own value is read, so the walk
+/// follows the fold chain; a folded value read more than once would print
+/// the load at every read and has no single site. A condition of an `if`, `switch` or `return`
+/// executes in the enclosing scope of its anchor statement. A loop condition
+/// runs once per iteration and has no single read site.
+fn printed_read_site(
+    mut sv: SsaVarnode,
+    mut consumer_stmt: u32,
+    ctx: &PrintCtx,
+) -> Option<(u32, &[u32])> {
+    let mut visited = BTreeSet::new();
+    while ctx.foldable_stmts.contains(&consumer_stmt) {
+        if !visited.insert(consumer_stmt) {
+            return None;
+        }
+        sv = ctx.stmt_outputs.get(&consumer_stmt).copied().flatten()?;
+        if ctx.sv_use_counts.get(&sv).copied().unwrap_or(0) != 1 {
+            return None;
+        }
+        consumer_stmt = last_consumer_stmt_for_sv(&sv, ctx)?;
+    }
+    if ctx.loop_cond_uses.contains(&sv) {
+        return None;
+    }
+    if let Some((_, path)) = ctx
+        .cond_use_scope_paths
+        .iter()
+        .find(|(cond, _)| *cond == sv)
+    {
+        return Some((consumer_stmt, path));
+    }
+    let path = ctx
+        .stmt_scope_paths
+        .get(&consumer_stmt)
+        .map_or(&[][..], Vec::as_slice);
+    Some((consumer_stmt, path))
 }
 
 fn consumer_uses_sv_as_indirect_call_target(

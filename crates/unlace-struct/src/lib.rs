@@ -17,7 +17,6 @@ pub mod goto_coalesce;
 pub mod goto_elim;
 pub mod goto_to_break;
 pub mod goto_to_continue;
-pub mod graph_layout;
 pub mod hir;
 pub mod hir_cse;
 pub mod hir_licm;

@@ -68,6 +68,7 @@ fn import_stub_names_arm() {
     check_import_stub_names("plt-arm");
 }
 
+#[cfg(feature = "riscv")]
 #[test]
 fn import_stub_names_riscv64() {
     check_import_stub_names("plt-riscv64");

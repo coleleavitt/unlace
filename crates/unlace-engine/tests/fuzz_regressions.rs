@@ -20,6 +20,7 @@ fn decompiled_text(name: &str) -> (String, String) {
     (expected, actual)
 }
 
+#[cfg(feature = "riscv")]
 #[test]
 fn constant_output_ops_dropped() {
     let (expected, actual) = decompiled_text("constant_output");

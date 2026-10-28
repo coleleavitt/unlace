@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap}; // determinism:allow see TranslatorCache
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -1193,9 +1193,12 @@ impl<T: SleighArchitectureHooks> ArchitectureBuilder for T {
     }
 }
 
-fn parsed_translators() -> &'static Mutex<HashMap<u64, Arc<crate::sleighbase::SleighBase>>> {
-    static TRANSLATORS: OnceLock<Mutex<HashMap<u64, Arc<crate::sleighbase::SleighBase>>>> = OnceLock::new();
-    TRANSLATORS.get_or_init(|| Mutex::new(HashMap::new()))
+/// Translators keyed by `.sla` content hash; only used for keyed lookups.
+type TranslatorCache = HashMap<u64, Arc<crate::sleighbase::SleighBase>>; // determinism:allow never iterated
+
+fn parsed_translators() -> &'static Mutex<TranslatorCache> {
+    static TRANSLATORS: OnceLock<Mutex<TranslatorCache>> = OnceLock::new();
+    TRANSLATORS.get_or_init(|| Mutex::new(TranslatorCache::new()))
 }
 
 fn translator_key(sla: &[u8]) -> u64 {

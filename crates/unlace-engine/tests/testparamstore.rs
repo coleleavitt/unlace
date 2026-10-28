@@ -252,6 +252,7 @@ fn paramstore_x64() {
     assert!(env.test(model, "doubleintintint func(void);", "RAX,RDI"));
 }
 
+#[cfg(feature = "powerpc")]
 #[test]
 fn paramstore_ppc64be_stdcall() {
     let mut env = ParamStoreEnvironment::build_arch("PowerPC:BE:64:default:default");
@@ -264,6 +265,7 @@ fn paramstore_ppc64be_stdcall() {
     assert!(env.test(model, proto, res));
 }
 
+#[cfg(feature = "mips")]
 #[test]
 fn paramstore_mips32be_stdcall() {
     let mut env = ParamStoreEnvironment::build_arch("MIPS:BE:32:default:default");

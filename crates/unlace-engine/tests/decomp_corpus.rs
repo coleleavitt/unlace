@@ -19,6 +19,18 @@ fn corpus_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/decomp")
 }
 
+fn processor_enabled(language: &str) -> bool {
+    match language.split(':').next().unwrap_or_default() {
+        "x86" => cfg!(feature = "x86"),
+        "ARM" => cfg!(feature = "arm"),
+        "AARCH64" => cfg!(feature = "aarch64"),
+        "MIPS" => cfg!(feature = "mips"),
+        "PowerPC" => cfg!(feature = "powerpc"),
+        "RISCV" => cfg!(feature = "riscv"),
+        _ => true,
+    }
+}
+
 fn corpus_binaries() -> Vec<CorpusBinary> {
     let directory = corpus_directory();
     let manifest = std::fs::read_to_string(directory.join("manifest.tsv")).expect("unreadable decomp manifest");
@@ -34,6 +46,7 @@ fn corpus_binaries() -> Vec<CorpusBinary> {
                 expected: directory.join(columns[3]),
             }
         })
+        .filter(|corpus| processor_enabled(&corpus.language))
         .collect()
 }
 

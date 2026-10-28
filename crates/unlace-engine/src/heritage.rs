@@ -18,7 +18,7 @@ use crate::translate::JoinRecord;
 use crate::types::TypeFactory;
 use crate::varnode::VarnodeId;
 
-pub type VariableStack = std::collections::HashMap<AddressKey, Vec<VarnodeId>>;
+pub type VariableStack = std::collections::BTreeMap<AddressKey, Vec<VarnodeId>>;
 
 fn space_matches(candidate: Option<&SpaceRef>, spc: &SpaceRef) -> bool {
     match candidate {

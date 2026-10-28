@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::sync::{Arc, OnceLock};
 
@@ -109,13 +108,16 @@ impl PartialEq<ElementId> for u32 {
     }
 }
 
-fn attribute_lookup() -> &'static HashMap<&'static str, u32> {
-    static LOOKUP: OnceLock<HashMap<&'static str, u32>> = OnceLock::new();
+/// Name-to-id table, only used for keyed lookups.
+type NameIds = std::collections::HashMap<&'static str, u32>; // determinism:allow never iterated
+
+fn attribute_lookup() -> &'static NameIds {
+    static LOOKUP: OnceLock<NameIds> = OnceLock::new();
     LOOKUP.get_or_init(|| ATTRIBUTE_IDS.iter().map(|attrib| (attrib.name, attrib.id)).collect())
 }
 
-fn element_lookup() -> &'static HashMap<&'static str, u32> {
-    static LOOKUP: OnceLock<HashMap<&'static str, u32>> = OnceLock::new();
+fn element_lookup() -> &'static NameIds {
+    static LOOKUP: OnceLock<NameIds> = OnceLock::new();
     LOOKUP.get_or_init(|| ELEMENT_IDS.iter().map(|elem| (elem.name, elem.id)).collect())
 }
 

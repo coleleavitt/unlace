@@ -68,6 +68,7 @@ fn aarch64_decompilation_reference() {
     decompilation_reference_check("aarch64-O0");
 }
 
+#[cfg(all(feature = "mips", feature = "powerpc", feature = "riscv"))]
 #[test]
 fn elf_language_detection() {
     let expectations = [

@@ -95,7 +95,12 @@ fn main() {
         }
         Some("semantic-report") => {
             let root = workspace_root();
-            let code = semantic_report::run(&root);
+            let engine = args
+                .iter()
+                .position(|arg| arg == "--engine")
+                .and_then(|index| args.get(index + 1))
+                .map_or("legacy", String::as_str);
+            let code = semantic_report::run(&root, engine);
             if code != 0 {
                 process::exit(code);
             }

@@ -267,7 +267,7 @@ const CROSS_ARCH_EXEC_CASES: &[NonHostExecCase] = &[
     },
 ];
 
-pub fn run(root: &Path) -> i32 {
+pub fn run(root: &Path, engine: &str) -> i32 {
     let manifest = match read_manifest(root) {
         Ok(m) => m,
         Err(e) => {
@@ -319,7 +319,7 @@ pub fn run(root: &Path) -> i32 {
             continue;
         }
 
-        match run_executable_case(root, &unlace_bin, fixture, case.function) {
+        match run_executable_case(root, &unlace_bin, engine, fixture, case.function) {
             Ok(Observation {
                 exit,
                 stdout,
@@ -427,7 +427,7 @@ pub fn run(root: &Path) -> i32 {
             continue;
         };
 
-        match run_shape_case(root, &unlace_bin, fixture, case) {
+        match run_shape_case(root, &unlace_bin, engine, fixture, case) {
             Ok(ShapeObservation {
                 line_count,
                 callother_count,
@@ -558,6 +558,7 @@ fn non_host_observation_matches(
 fn run_executable_case(
     root: &Path,
     unlace_bin: &Path,
+    engine: &str,
     fixture: &Fixture,
     function: &str,
 ) -> Result<Observation, String> {
@@ -588,7 +589,15 @@ fn run_executable_case(
     ));
 
     let decompile = Command::new(unlace_bin)
-        .args(["decompile", "--emit", "c", "--function", function])
+        .args([
+            "decompile",
+            "--engine",
+            engine,
+            "--emit",
+            "c",
+            "--function",
+            function,
+        ])
         .arg(&binary)
         .env_remove("RUST_LOG")
         .output()
@@ -745,6 +754,7 @@ fn command_available(name: &str) -> bool {
 fn run_shape_case(
     root: &Path,
     unlace_bin: &Path,
+    engine: &str,
     fixture: &Fixture,
     case: &ShapeCase,
 ) -> Result<ShapeObservation, String> {
@@ -754,7 +764,15 @@ fn run_shape_case(
     ));
     let binary = root.join(&fixture.binary_path);
     let decompile = Command::new(unlace_bin)
-        .args(["decompile", "--emit", "c", "--function", case.function])
+        .args([
+            "decompile",
+            "--engine",
+            engine,
+            "--emit",
+            "c",
+            "--function",
+            case.function,
+        ])
         .arg(&binary)
         .env_remove("RUST_LOG")
         .output()

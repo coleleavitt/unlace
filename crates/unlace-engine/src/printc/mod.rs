@@ -13,6 +13,7 @@ use crate::fspec::{CallSpecId, FuncCallSpecs, FuncProto};
 use crate::funcdata::Funcdata;
 use crate::op::{OpId, PcodeOp};
 use crate::opcodes::{OpCode, get_booleanflip};
+use crate::output_style::OutputStyle;
 use crate::prettyprint::{BraceStyle, Emit, FuncMark, PendPrint, PendPrintRef, SymbolMark, SyntaxHighlight};
 use crate::printlanguage::{
     Atom, COMMA_SEPARATE, FALSEBRANCH, FLAT, FORCE_DEC, FORCE_HEX, FORCE_POINTER, FORCE_SCINOTE, HIDE_THISPARAM,
@@ -354,6 +355,48 @@ pub(crate) fn function_display_name(ctx: &PrintContext<'_>, sym: SymbolId) -> (S
         None => Address::default(),
     };
     (symbol.get_display_name().to_string(), addr)
+}
+
+/// For a load from `FS_OFFSET + c` or `GS_OFFSET + c` (x86 segment-base registers, which code
+/// never writes), the IDA intrinsic that reads it (`__readfsqword`, ...) and `c`.
+fn segment_base_read(ctx: &PrintContext<'_>, op: OpId) -> Option<(String, u64)> {
+    let data = ctx.data_ref();
+    let mut pointer = data.vn(op_in(ctx, op, 1));
+    while pointer.is_implied()
+        && let Some(cast) = pointer
+            .get_def()
+            .map(|def| data.op(def))
+            .filter(|def| def.code() == OpCode::Cast)
+    {
+        pointer = data.vn(cast.get_in(0));
+    }
+    let add = pointer
+        .get_def()
+        .map(|def| data.op(def))
+        .filter(|def| pointer.is_implied() && def.code() == OpCode::IntAdd && data.vn(def.get_in(1)).is_constant());
+    let (base, offset) = match add {
+        Some(add) => (data.vn(add.get_in(0)), data.vn(add.get_in(1)).get_offset()),
+        None => (pointer, 0),
+    };
+    let space = base.get_space()?;
+    let register = ctx
+        .glb
+        .translate
+        .as_deref()?
+        .get_register_name(space, base.get_offset(), base.get_size());
+    let segment = match register.as_str() {
+        "FS_OFFSET" => "fs",
+        "GS_OFFSET" => "gs",
+        _ => return None,
+    };
+    let width = match data.vn(op_out(ctx, op)?).get_size() {
+        1 => "byte",
+        2 => "word",
+        4 => "dword",
+        8 => "qword",
+        _ => return None,
+    };
+    Some((format!("__read{segment}{width}"), offset))
 }
 
 pub(crate) fn op_in(ctx: &PrintContext<'_>, op: OpId, slot: i32) -> VarnodeId {
@@ -845,6 +888,24 @@ impl PrintC {
     }
 
     pub fn op_load_c(&mut self, ctx: &mut PrintContext<'_>, op: OpId) -> Result<()> {
+        if ctx.glb.output_style == OutputStyle::Ida
+            && let Some((name, offset)) = segment_base_read(ctx, op)
+        {
+            self.push_op(ctx, OpTokenKey::FunctionCall, Some(op))?;
+            self.push_atom(
+                ctx,
+                &Atom::with_op(&name, PrintTagType::Optoken, SyntaxHighlight::FuncnameColor, Some(op)),
+            )?;
+            return self.push_atom(
+                ctx,
+                &Atom::with_op(
+                    &format!("{offset:#x}u"),
+                    PrintTagType::Syntax,
+                    SyntaxHighlight::ConstColor,
+                    Some(op),
+                ),
+            );
+        }
         let in1 = op_in(ctx, op, 1);
         let usearray = self.check_array_deref(ctx, in1);
         let mut mods = self.mods();

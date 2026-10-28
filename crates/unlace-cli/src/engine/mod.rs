@@ -6,8 +6,9 @@
 //! were decompiled before it or on which worker ran it.
 
 mod prelude;
+mod prototypes;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -15,8 +16,11 @@ use std::time::{Duration, Instant};
 use anyhow::Context as _;
 use rayon::prelude::*;
 use unlace_engine::output_style::OutputStyle;
-use unlace_engine::program::{Program, ProgramOptions, SymbolLoading};
+use unlace_engine::program::{Program, ProgramOptions, Prototypes, SymbolLoading};
+use unlace_passes::libc_signatures;
+use unlace_passes::noreturn::NORETURN_NAMES;
 
+use unlace_ir::data_layout::DataLayout;
 use unlace_loader::{
     BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar,
 };
@@ -24,6 +28,7 @@ use unlace_loader::{
 use crate::pipeline::{self, FunctionEntry};
 
 pub use prelude::prelude_for;
+pub use prototypes::{DataModel, known_prototypes};
 
 /// Settings of an engine run.
 #[derive(Clone, Debug, Default)]
@@ -42,11 +47,13 @@ pub struct FunctionOutput {
 }
 
 /// Decompile `targets` of the image `bytes`. `known` names every function unlace discovered, so
-/// calls to functions without a symbol print with unlace's names. Results are in `targets` order.
+/// calls to functions without a symbol print with unlace's names; `prototypes` are applied to each
+/// target and its callees. Results are in `targets` order.
 pub fn decompile_functions(
     image_name: &str,
     bytes: &[u8],
     known: &[FunctionEntry],
+    prototypes: Prototypes,
     targets: &[FunctionEntry],
     options: &EngineOptions,
 ) -> anyhow::Result<Vec<FunctionOutput>> {
@@ -57,6 +64,9 @@ pub fn decompile_functions(
     let program_options = ProgramOptions {
         style: options.style,
         function_names: Arc::new(names),
+        propagate_readonly: true,
+        prototypes,
+        no_return_names: Arc::new(no_return_names()),
     };
     let decompile = |function: &FunctionEntry| {
         let started = Instant::now();
@@ -112,16 +122,34 @@ pub fn decompile_binary(
     let image =
         load_image(&bytes).with_context(|| format!("failed to load '{}'", path.display()))?;
     let mut known = pipeline::discover_functions(&image, None)?;
-    if let Ok(dwarf) = import_dwarf_with_sidecar(&image, None) {
-        pipeline::drop_dwarf_duplicate_subfunctions(&mut known, &dwarf);
+    let dwarf = import_dwarf_with_sidecar(&image, None).ok();
+    if let Some(dwarf) = &dwarf {
+        pipeline::drop_dwarf_duplicate_subfunctions(&mut known, dwarf);
     }
+    let pointer = u32::from(DataLayout::for_arch(image.arch).pointer_size);
+    let model = DataModel {
+        long: if PeLoader::can_load(&bytes) {
+            4
+        } else {
+            pointer
+        },
+        pointer,
+    };
+    let prototypes = Arc::new(known_prototypes(&known, dwarf.as_ref(), model));
     let mut targets = match filter {
         Some(_) => pipeline::discover_functions(&image, filter)?,
         None => known.clone(),
     };
     targets.sort_by_key(|function| function.addr);
     targets.dedup_by_key(|function| function.addr);
-    decompile_functions(&path.to_string_lossy(), &bytes, &known, &targets, options)
+    decompile_functions(
+        &path.to_string_lossy(),
+        &bytes,
+        &known,
+        prototypes,
+        &targets,
+        options,
+    )
 }
 
 fn load_image(bytes: &[u8]) -> anyhow::Result<BinaryImage> {
@@ -135,6 +163,20 @@ fn load_image(bytes: &[u8]) -> anyhow::Result<BinaryImage> {
         anyhow::bail!("not a recognized format (ELF, Mach-O, or PE)");
     };
     Ok(image?)
+}
+
+/// unlace's roster of functions that never return: the noreturn pass names and the libc
+/// signatures marked noreturn.
+fn no_return_names() -> BTreeSet<String> {
+    let libc = libc_signatures::iter_signatures()
+        .filter(|signature| signature.noreturn)
+        .map(|signature| signature.name);
+    NORETURN_NAMES
+        .iter()
+        .copied()
+        .chain(libc)
+        .map(str::to_string)
+        .collect()
 }
 
 /// Join the per-function results into one C translation unit.

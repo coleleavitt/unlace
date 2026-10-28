@@ -1,5 +1,6 @@
 mod demangle;
 mod discovery;
+mod prototypes;
 mod stubs;
 mod symbols;
 
@@ -23,6 +24,7 @@ use crate::space::SpaceRef;
 use crate::translate::{AddrSpaceManager, AssemblyEmit, PcodeEmit};
 use crate::types::TypeMetatype;
 use crate::xml::DocumentStorage;
+pub use prototypes::{NoReturnNames, Parameter, Prototype, Prototypes, ValueType};
 
 pub struct Program {
     architecture: Box<Architecture>,
@@ -31,6 +33,8 @@ pub struct Program {
     string_sections: Vec<std::ops::Range<u64>>,
     code_sections: Vec<std::ops::Range<u64>>,
     entry: Option<u64>,
+    prototypes: Prototypes,
+    no_return_names: NoReturnNames,
 }
 
 const MIN_STRING_LENGTH: usize = 4;
@@ -42,6 +46,12 @@ pub struct ProgramOptions {
     pub style: OutputStyle,
     /// Names for functions that have no symbol, such as functions an external analysis found.
     pub function_names: FunctionNames,
+    /// Fold loads from read-only sections into constants (Ghidra's `readonly` option).
+    pub propagate_readonly: bool,
+    /// Prototypes by function entry, applied to a function and its callees before decompiling it.
+    pub prototypes: Prototypes,
+    /// Functions that never return, by name; calls to them end control flow.
+    pub no_return_names: NoReturnNames,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -301,6 +311,7 @@ impl Program {
         architecture.function_names = options.function_names.clone();
         let mut store = DocumentStorage::new();
         architecture.init(&mut store)?;
+        architecture.readonlypropagate = options.propagate_readonly;
         let mut program = Program {
             architecture,
             functions: BTreeMap::new(),
@@ -308,6 +319,8 @@ impl Program {
             string_sections: Vec::new(),
             code_sections: Vec::new(),
             entry: None,
+            prototypes: options.prototypes.clone(),
+            no_return_names: options.no_return_names.clone(),
         };
         match symbols {
             SymbolInput::None => {}
@@ -412,12 +425,8 @@ impl Program {
         Ok(())
     }
 
-    fn add_referenced_strings(&mut self, sym: SymbolId) -> Result<()> {
-        if self.string_sections.is_empty() {
-            return Ok(());
-        }
-        let constants = self.flow_facts(sym)?.map(|facts| facts.constants).unwrap_or_default();
-        for constant in constants {
+    fn add_referenced_strings(&mut self, constants: &BTreeSet<u64>) -> Result<()> {
+        for &constant in constants {
             if self.string_sections.iter().any(|section| section.contains(&constant)) {
                 self.add_string_symbol(constant)?;
             }
@@ -804,7 +813,12 @@ impl Program {
 
     fn decompile_unguarded(&mut self, address: u64) -> Result<String> {
         let sym = self.function_at(address)?;
-        self.add_referenced_strings(sym)?;
+        if !self.string_sections.is_empty() || !self.prototypes.is_empty() || !self.no_return_names.is_empty() {
+            if let Some(facts) = self.flow_facts(sym)? {
+                self.add_referenced_strings(&facts.constants)?;
+                self.apply_known_prototypes(address, sym, &facts.call_targets)?;
+            }
+        }
         self.architecture.with_function(sym, |function, architecture| {
             if function.has_no_code() {
                 return Err(Error::Lowlevel(format!("No code for {}", function.get_name())));

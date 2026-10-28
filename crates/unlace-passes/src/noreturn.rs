@@ -21,7 +21,7 @@ use crate::pass::{Pass, PassError};
 /// Names are matched **case-sensitive, exact** against the symbol returned
 /// by the resolver (typically the PLT/import name). For prefix matches see
 /// [`is_noreturn_by_name`].
-const NORETURN_NAMES: &[&str] = &[
+pub const NORETURN_NAMES: &[&str] = &[
     // libc termination
     "exit",
     "_exit",

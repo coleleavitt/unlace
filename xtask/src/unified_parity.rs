@@ -28,7 +28,7 @@ pub fn run(root: &Path) -> i32 {
     let mut sections: Vec<Section> = Vec::new();
 
     banner("semantic-report");
-    let semantic = semantic_report::run(root);
+    let semantic = semantic_report::run(root, "legacy");
     sections.push(Section {
         name: "semantic-report",
         code: Some(semantic),

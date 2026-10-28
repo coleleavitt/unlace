@@ -618,7 +618,8 @@ fn decompile_invalid_file_errors() {
 
 #[test]
 fn decompile_output_to_file() {
-    let tmpfile = "/tmp/unlace_test_output.ir";
+    let dir = tempfile::tempdir().expect("tempdir");
+    let tmpfile = dir.path().join("output.ir");
     let output = unlace_bin()
         .args([
             "decompile",
@@ -627,8 +628,8 @@ fn decompile_output_to_file() {
             "--function",
             "main",
             "--output",
-            tmpfile,
         ])
+        .arg(&tmpfile)
         .arg(fixture("hello_world.elf"))
         .output()
         .expect("failed to run unlace");
@@ -638,12 +639,11 @@ fn decompile_output_to_file() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let content = std::fs::read_to_string(tmpfile).expect("should have written output file");
+    let content = std::fs::read_to_string(&tmpfile).expect("should have written output file");
     assert!(
         content.contains("func main"),
         "file should contain IR: {content}"
     );
-    let _ = std::fs::remove_file(tmpfile);
 }
 
 #[test]

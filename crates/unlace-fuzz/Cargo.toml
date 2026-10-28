@@ -28,3 +28,6 @@ serde_json = { workspace = true }
 [[bin]]
 name = "unlace-fuzz"
 path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = { workspace = true }

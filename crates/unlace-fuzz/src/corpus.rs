@@ -284,12 +284,11 @@ fn sha256_hex(data: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn create_and_add_entries() {
-        let dir = std::env::temp_dir().join("unlace-corpus-test-create");
-        let _ = fs::remove_dir_all(&dir);
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("corpus");
 
         let mut db = CrashCorpusDb::open(&dir).unwrap();
         assert!(db.is_empty());
@@ -312,14 +311,12 @@ mod tests {
             .unwrap();
         assert_eq!(id3, 0);
         assert_eq!(db.len(), 2);
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn mark_fixed_and_stats() {
-        let dir = std::env::temp_dir().join("unlace-corpus-test-fixed");
-        let _ = fs::remove_dir_all(&dir);
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("corpus");
 
         let mut db = CrashCorpusDb::open(&dir).unwrap();
         db.add(b"crash1", "load", "msg1", "aaa").unwrap();
@@ -334,14 +331,12 @@ mod tests {
         let stats = db.stats();
         assert_eq!(stats.new, 1);
         assert_eq!(stats.fixed, 1);
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn persistence_across_reopen() {
-        let dir = std::env::temp_dir().join("unlace-corpus-test-persist");
-        let _ = fs::remove_dir_all(&dir);
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("corpus");
 
         {
             let mut db = CrashCorpusDb::open(&dir).unwrap();
@@ -354,14 +349,12 @@ mod tests {
             let input = db.get_input(0).unwrap();
             assert_eq!(input, b"persist-test");
         }
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn by_status_filter() {
-        let dir = std::env::temp_dir().join("unlace-corpus-test-filter");
-        let _ = fs::remove_dir_all(&dir);
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("corpus");
 
         let mut db = CrashCorpusDb::open(&dir).unwrap();
         db.add(b"a", "load", "m1", "x").unwrap();
@@ -374,7 +367,5 @@ mod tests {
         assert_eq!(db.by_status(TriageStatus::New).len(), 1);
         assert_eq!(db.by_status(TriageStatus::Confirmed).len(), 1);
         assert_eq!(db.by_status(TriageStatus::Fixed).len(), 1);
-
-        let _ = fs::remove_dir_all(&dir);
     }
 }

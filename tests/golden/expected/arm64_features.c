@@ -55,7 +55,7 @@ void __aapcs _start(void) {
     mul_test();
     csel_test();
     bitfield_test();
-    /* CALLOTHER tag=1079 */ 0;
+    __svc(0LL);
     return;
 }
 /* Function:   mul_test | Address: 0x400118 | Size: 0x4 (4 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

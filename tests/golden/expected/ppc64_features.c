@@ -55,12 +55,12 @@ void sub_10000120(void);
 
 /* Function:   _start | Address: 0x10000100 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
-    /* CALLOTHER tag=1024 */ 0;
+    __syscall();
     return;
 }
 /* Function:   sub_10000104 | Address: 0x10000104 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10000104(void) {
-    /* CALLOTHER tag=1024 */ 0;
+    __syscall();
     return;
 }
 /* Function:   ppc_branch | Address: 0x1000011c | Size: 0x18 (24 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

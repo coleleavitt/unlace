@@ -944,6 +944,7 @@ fn print_c_attempt(
         ctx.byref_union_types = ann.byref_union_types.clone();
         ctx.flirt_call_annotations = ann.flirt_call_annotations.clone();
         ctx.stack_spec = ann.arch.and_then(unlace_ir::stack::StackSpec::for_arch);
+        ctx.arch = ann.arch;
         ctx.var_types.extend(
             ann.vector_var_types
                 .iter()
@@ -2569,6 +2570,9 @@ struct PrintCtx {
     /// [`PrinterAnnotations::arch`]). `None` falls back to the legacy hard-coded
     /// x86/AArch64 frame-base offsets.
     stack_spec: Option<unlace_ir::stack::StackSpec>,
+    /// The function's architecture (see [`PrinterAnnotations::arch`]). CALLOTHER
+    /// tags are per-lifter numbering, so non-x86 tags resolve through it.
+    arch: Option<unlace_ir::ArchId>,
     next_var: u32,
     var_names: BTreeMap<SsaVarnode, String>,
     var_types: BTreeMap<SsaVarnode, PrimitiveType>,
@@ -2989,6 +2993,7 @@ impl PrintCtx {
         Self {
             config: PrintConfig::default(),
             stack_spec: None,
+            arch: None,
             next_var: start_next,
             var_names: BTreeMap::new(),
             var_types: BTreeMap::new(),
@@ -15632,6 +15637,21 @@ fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> S
     format!("{}({})", func, arg)
 }
 
+/// Resolve a CALLOTHER tag whose meaning depends on the emitting lifter.
+///
+/// Lifters number their tags independently, so the same value can mean
+/// different instructions on different architectures (PPC `sc` is `0x400`,
+/// the AArch64 `LD1` tag). This table is consulted before the shared
+/// [`callother_intrinsic_name`] table and the AArch64-specific paths.
+fn arch_callother_intrinsic_name(arch: unlace_ir::ArchId, tag: u64) -> Option<&'static str> {
+    use unlace_ir::ArchId;
+    match (arch, tag) {
+        (ArchId::AArch64, 0x437) => Some("__svc"), // SVC #imm
+        (ArchId::Ppc | ArchId::Ppc64, 0x400) => Some("__syscall"), // sc
+        _ => None,
+    }
+}
+
 /// Resolve a CALLOTHER tag to its C intrinsic name.
 ///
 /// Tags are assigned by the lifter (`unlace-lift-x86`) and encode the
@@ -15726,6 +15746,7 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
 
         // ── Trap (0x300) ───────────────────────────────────────
         0x300 => Some("__builtin_trap"), // UD2 / INT3
+        0x301 => Some("__syscall"),      // SYSCALL / SYSENTER
 
         // ── x87 FPU stack pseudo-intrinsics (0x310..0x318) ──────
         0x310 => Some("__fld"),
@@ -16227,6 +16248,18 @@ fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     }
 
     let tag = tag_vn.offset;
+
+    if let Some(name) = ctx
+        .arch
+        .and_then(|arch| arch_callother_intrinsic_name(arch, tag))
+    {
+        let args: Vec<String> = insn.inputs[1..]
+            .iter()
+            .enumerate()
+            .map(|(i, vn)| emit_operand_resolved(vn, i + 1, stmt_idx, ctx))
+            .collect();
+        return format!("{}({})", name, args.join(", "));
+    }
 
     if let Some(expr) = emit_aarch64_atomic_callother(tag, insn, stmt_idx, ctx) {
         return expr;

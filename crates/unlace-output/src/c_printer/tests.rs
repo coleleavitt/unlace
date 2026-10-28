@@ -7252,6 +7252,30 @@ fn test_callother_resolved() {
 }
 
 #[test]
+fn test_callother_syscall_tag_resolves_per_arch() {
+    let print_for = |arch, tag: u64, imm: Option<u64>| {
+        let mut inputs = smallvec![con(tag, 8)];
+        inputs.extend(imm.map(|i| con(i, 8)));
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(IrOp::Callother, inputs, 0x1000)),
+            HirNode::Return(None),
+        ];
+        let ann = PrinterAnnotations {
+            arch: Some(arch),
+            ..Default::default()
+        };
+        let func = make_func("trap", body);
+        print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann))
+    };
+
+    let aarch64 = print_for(unlace_ir::ArchId::AArch64, 0x437, Some(0));
+    assert!(aarch64.contains("__svc(0"), "AArch64 SVC: {aarch64}");
+    // PPC `sc` shares its tag value with the AArch64 LD1 tag.
+    let ppc = print_for(unlace_ir::ArchId::Ppc64, 0x400, None);
+    assert!(ppc.contains("__syscall();"), "PPC sc: {ppc}");
+}
+
+#[test]
 fn test_callother_unknown_annotated() {
     let r0 = reg(0, 16);
     let out = reg(32, 16);

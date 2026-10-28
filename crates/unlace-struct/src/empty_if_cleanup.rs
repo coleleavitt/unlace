@@ -1,11 +1,17 @@
 //! Remove no-op conditional shells after structuring has settled.
-
-use std::sync::OnceLock;
+//!
+//! Diagnostics: enable `unlace::struct::empty_if=debug`.
 
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::hir::{HirFunction, HirNode};
+
+macro_rules! empty_if_debug {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::struct::empty_if", "{}", format_args!($($arg)*))
+    };
+}
 
 /// Drop or simplify conditionals whose branches contain no executable HIR.
 pub fn cleanup_empty_ifs(func: &mut HirFunction) {
@@ -13,45 +19,18 @@ pub fn cleanup_empty_ifs(func: &mut HirFunction) {
     // pipeline has a fixture-level cleanup budget, only run this where the
     // current corpus has known excess if-count headroom.
     if !func.name.contains("identify") {
-        if empty_if_trace_enabled() {
-            eprintln!(
-                "[unlace-empty-if] skip func={} reason=fixture-gated",
-                func.name
-            );
-        }
+        empty_if_debug!("skip func={} reason=fixture-gated", func.name);
         return;
     }
 
-    if empty_if_trace_enabled() {
-        eprintln!(
-            "[unlace-empty-if] start func={} top_nodes={}",
-            func.name,
-            func.body.len()
-        );
-    }
+    empty_if_debug!("start func={} top_nodes={}", func.name, func.body.len());
     let mut synth = SynthBool::new();
     func.body = cleanup_scope(std::mem::take(&mut func.body), func, &mut synth);
-    if empty_if_trace_enabled() {
-        eprintln!(
-            "[unlace-empty-if] done func={} top_nodes={}",
-            func.name,
-            func.body.len()
-        );
-    }
+    empty_if_debug!("done func={} top_nodes={}", func.name, func.body.len());
 }
 
 fn empty_if_trace_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        env_flag("UNLACE_EMPTY_IF_TRACE")
-            || env_flag("UNLACE_STRUCT_TRACE")
-            || env_flag("UNLACE_STRUCT_TRACE_VERBOSE")
-            || env_flag("UNLACE_HIR_TRACE_VERBOSE")
-    })
-}
-
-fn env_flag(name: &str) -> bool {
-    std::env::var(name).map(|v| v != "0").unwrap_or(false)
+    tracing::enabled!(target: "unlace::struct::empty_if", tracing::Level::DEBUG)
 }
 
 struct SynthBool(u64);
@@ -194,8 +173,8 @@ fn emit_simplified_if(
             (false, false, _) => "keep",
             (true, false, false) => "unreachable",
         };
-        eprintln!(
-            "[unlace-empty-if] cond={cond:?} then_len={} else_len={} then_empty={then_empty} else_empty={else_empty} action={action}",
+        empty_if_debug!(
+            "cond={cond:?} then_len={} else_len={} then_empty={then_empty} else_empty={else_empty} action={action}",
             then_body.len(),
             else_body.as_ref().map_or(0, Vec::len)
         );

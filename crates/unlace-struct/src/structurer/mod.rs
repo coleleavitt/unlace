@@ -306,7 +306,9 @@ fn structure_with_arch_inner(
     };
     let mut body = {
         let _span = linkscope::phase("struct.structure-region");
-        ctx.structure_region(entry)
+        let mut body = ctx.structure_region(entry);
+        ctx.emit_pending_goto_targets(&mut body);
+        body
     };
     if ctx.deadline_exceeded() {
         return Err(StructureError::Timeout {
@@ -316,7 +318,8 @@ fn structure_with_arch_inner(
     if goto_resolve::count_gotos(&body) > 0 {
         let _span = linkscope::phase("struct.dominator-structure");
         let mut dom_ctx = StructureCtx::new_with_deadline(func, deadline, options);
-        if let Some(dom_body) = dom_ctx.structure_by_dominators() {
+        if let Some(mut dom_body) = dom_ctx.structure_by_dominators() {
+            dom_ctx.emit_pending_goto_targets(&mut dom_body);
             let mut region_body = body.clone();
             goto_resolve::resolve_body(&mut region_body);
             let dom_gotos = goto_resolve::count_gotos(&dom_body);
@@ -1239,6 +1242,35 @@ impl<'a> StructureCtx<'a> {
         edges
     }
 
+    /// Append the exit paths a `goto` names that no structured path emitted,
+    /// such as the exit of a loop the structurer left by another edge.
+    /// Without them the label has no code and control falls off the end.
+    /// Only self-contained paths are appended: ones that end in a jump and
+    /// do not branch back into the structured body with further `goto`s.
+    fn emit_pending_goto_targets(&mut self, body: &mut Vec<HirNode>) {
+        // Appended code must not become reachable by falling off the end.
+        if !ends_in_jump(body) {
+            return;
+        }
+        let pending: Vec<BlockId> = self
+            .block_labels
+            .keys()
+            .copied()
+            .filter(|block| !self.emitted.contains(block))
+            .collect();
+        for block in pending {
+            if self.emitted.contains(&block) {
+                continue;
+            }
+            let nodes = self.structure_until(block, None);
+            let self_contained = ends_in_jump(&nodes) && goto_resolve::count_gotos(&nodes) == 0;
+            struct_debug!("pending-goto-target block={block:?} appended={self_contained}");
+            if self_contained {
+                body.extend(nodes);
+            }
+        }
+    }
+
     fn alloc_label(&mut self, block: BlockId) -> LabelId {
         if let Some(&label) = self.block_labels.get(&block) {
             return label;
@@ -2002,6 +2034,18 @@ impl<'a> StructureCtx<'a> {
     }
 
     fn try_structure_switch(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
+        self.try_structure_switch_in(bid, None)
+    }
+
+    /// Structure the jump-table dispatch ending `bid`. Inside a loop,
+    /// `in_loop` names the loop header and blocks: case bodies then reach
+    /// the back edge as `continue`, and leave the loop through a `goto` to
+    /// the exit, since a `break` there would only leave the switch.
+    fn try_structure_switch_in(
+        &mut self,
+        bid: BlockId,
+        in_loop: Option<(BlockId, &BTreeSet<BlockId>)>,
+    ) -> Option<(HirNode, Option<BlockId>)> {
         let _span = linkscope::phase("struct.try-switch");
         if self.emitted.contains(&bid) {
             return None;
@@ -2013,36 +2057,53 @@ impl<'a> StructureCtx<'a> {
             return None;
         }
 
-        let table_targets: Vec<(BlockId, u64)> = self
-            .func
-            .resolved_jump_tables
-            .get(&last.addr)
-            .or_else(|| {
-                self.func.resolved_jump_tables.values().find(|table| {
-                    table
-                        .targets
-                        .iter()
-                        .filter_map(|&addr| self.block_starting_at_addr(addr))
-                        .filter(|tgt| !self.synthetic.contains(tgt))
-                        .take(2)
-                        .count()
-                        >= 2
-                })
-            })
-            .map(|table| {
+        // `(block, index)` per table slot. The blocks recorded when the
+        // dispatch edges were wired come first: passes may since have
+        // removed the leading instructions of a target block, after which
+        // it can no longer be found by address.
+        let table = self.func.resolved_jump_tables.get(&last.addr).or_else(|| {
+            self.func.resolved_jump_tables.values().find(|table| {
                 table
                     .targets
                     .iter()
-                    .enumerate()
-                    .filter_map(|(idx, &addr)| {
-                        self.block_starting_at_addr(addr)
-                            .map(|bid| (bid, idx as u64))
-                    })
+                    .filter_map(|&addr| self.block_starting_at_addr(addr))
+                    .filter(|tgt| !self.synthetic.contains(tgt))
+                    .take(2)
+                    .count()
+                    >= 2
+            })
+        });
+        let slot_targets: Vec<(BlockId, u64)> = match table {
+            Some(table)
+                if table.target_blocks.len() == table.targets.len()
+                    && table
+                        .target_blocks
+                        .iter()
+                        .all(|tgt| self.func.function.blocks.contains_key(tgt)) =>
+            {
+                table
+                    .target_blocks
+                    .iter()
+                    .copied()
+                    .zip(0u64..)
                     .filter(|(tgt, _)| !self.synthetic.contains(tgt))
                     .collect()
-            })
-            .unwrap_or_default();
-        let mut targets: Vec<BlockId> = table_targets.iter().map(|(bid, _)| *bid).collect();
+            }
+            Some(table) => table
+                .targets
+                .iter()
+                .zip(0u64..)
+                .filter_map(|(&addr, idx)| self.block_starting_at_addr(addr).map(|bid| (bid, idx)))
+                .filter(|(tgt, _)| !self.synthetic.contains(tgt))
+                .collect(),
+            None => Vec::new(),
+        };
+        let mut targets: Vec<BlockId> = Vec::new();
+        for &(tgt, _) in &slot_targets {
+            if !targets.contains(&tgt) {
+                targets.push(tgt);
+            }
+        }
         if targets.is_empty() {
             targets = block
                 .successors
@@ -2050,6 +2111,7 @@ impl<'a> StructureCtx<'a> {
                 .copied()
                 .filter(|tgt| !self.synthetic.contains(tgt))
                 .collect();
+            targets.dedup();
         }
         if targets.is_empty() {
             let edges = self.func.cfg.edges_from(bid);
@@ -2061,7 +2123,6 @@ impl<'a> StructureCtx<'a> {
                 .map(|(tgt, _)| *tgt)
                 .collect();
         }
-
         if targets.len() < 2 {
             return None;
         }
@@ -2070,9 +2131,10 @@ impl<'a> StructureCtx<'a> {
         let bounds = self.extract_bounds_check(bid, &cond);
         self.emitted.insert(bid);
 
+        let table_math = self.dispatch_only_insns(bid, &cond);
         let mut pre_stmts = Vec::new();
         for (i, insn) in block.insns.iter().enumerate() {
-            if self.is_frame_setup(bid, i) {
+            if self.is_frame_setup(bid, i) || table_math.contains(&i) {
                 continue;
             }
             match insn.op {
@@ -2081,33 +2143,42 @@ impl<'a> StructureCtx<'a> {
             }
         }
 
-        let join = self.find_switch_join(bid, &targets);
+        let join = match in_loop {
+            Some((header, loop_blocks)) => {
+                self.find_loop_switch_join(&targets, header, loop_blocks)
+            }
+            None => self.find_switch_join(bid, &targets),
+        };
 
+        // Table slots that point at the bounds check's out-of-range target
+        // are holes of a sparse switch: they belong to `default`, not to a
+        // case label. Several slots that share one block become stacked
+        // labels over a single body.
         let bounds_default = bounds.and_then(|b| b.default_target);
-        let has_explicit_default = bounds_default
-            .map(|t| targets.contains(&t))
-            .unwrap_or(false);
-
-        let num_cases = targets.len();
-        let case_values: BTreeMap<_, _> = table_targets.iter().copied().collect();
         let mut cases = Vec::new();
         let mut default_body = None;
         for (i, &tgt) in targets.iter().enumerate() {
-            if has_explicit_default && Some(tgt) == bounds_default && default_body.is_none() {
-                default_body = Some(self.structure_until(tgt, join));
+            if Some(tgt) == bounds_default {
+                default_body = Some(self.structure_switch_case(tgt, join, in_loop));
                 continue;
             }
-            let is_fall_through = i + 1 < num_cases && targets[i] == targets[i + 1];
-            let body = if is_fall_through {
-                vec![]
-            } else {
-                self.structure_until(tgt, join)
-            };
-            let value = case_values.get(&tgt).copied().unwrap_or(i as u64);
-            cases.push((SwitchCase::Value(value), body, is_fall_through));
+            let mut values: Vec<u64> = slot_targets
+                .iter()
+                .filter(|(slot_tgt, _)| *slot_tgt == tgt)
+                .map(|&(_, value)| value)
+                .collect();
+            let last_value = values.pop().unwrap_or(i as u64);
+            for value in values {
+                cases.push((SwitchCase::Value(value), Vec::new(), true));
+            }
+            let body = self.structure_switch_case(tgt, join, in_loop);
+            cases.push((SwitchCase::Value(last_value), body, false));
         }
 
-        let jumptable_cases = bounds.map(|b| b.case_count as usize);
+        let jumptable_cases = table
+            .and_then(|table| table.bound)
+            .map(|bound| bound as usize)
+            .or_else(|| bounds.map(|b| b.case_count as usize));
 
         let switch_node = HirNode::Switch {
             cond,
@@ -2117,14 +2188,172 @@ impl<'a> StructureCtx<'a> {
             jumptable_cases,
         };
 
-        let combined = if pre_stmts.is_empty() {
+        let mut combined = if pre_stmts.is_empty() {
             switch_node
         } else {
             pre_stmts.push(switch_node);
             HirNode::Block(pre_stmts)
         };
 
+        // Inside a loop the join may already sit on another path, in which
+        // case the loop walker stops there; the cases that leave the switch
+        // must still reach it.
+        if in_loop.is_some()
+            && let Some(join_bid) = join
+            && self.emitted.contains(&join_bid)
+        {
+            let label = self.alloc_label(join_bid);
+            combined = HirNode::Block(vec![combined, HirNode::Goto(label)]);
+            return Some((combined, None));
+        }
+
         Some((combined, join))
+    }
+
+    fn structure_switch_case(
+        &mut self,
+        target: BlockId,
+        join: Option<BlockId>,
+        in_loop: Option<(BlockId, &BTreeSet<BlockId>)>,
+    ) -> Vec<HirNode> {
+        let Some((header, loop_blocks)) = in_loop else {
+            return self.structure_until(target, join);
+        };
+        let mut body = self.structure_loop_branch_until(target, join, header, loop_blocks);
+        if let Some(exit) = self.find_loop_exit(header) {
+            let label = self.alloc_label(exit);
+            break_to_goto(&mut body, label);
+        }
+        body
+    }
+
+    /// The block where the cases of a switch inside the loop of `header`
+    /// meet again before the back edge: the earliest block that every case
+    /// staying in the loop reaches. Cases that leave the loop or return do
+    /// not constrain it.
+    fn find_loop_switch_join(
+        &self,
+        targets: &[BlockId],
+        header: BlockId,
+        loop_blocks: &BTreeSet<BlockId>,
+    ) -> Option<BlockId> {
+        let mut common: Option<BTreeSet<BlockId>> = None;
+        for &target in targets {
+            let (reached, reaches_header) = self.reach_in_loop(target, header, loop_blocks);
+            if !reaches_header {
+                continue;
+            }
+            common = Some(match common {
+                Some(common) => common.intersection(&reached).copied().collect(),
+                None => reached,
+            });
+        }
+        let common = common?;
+        common.iter().copied().find(|&candidate| {
+            let (reached, _) = self.reach_in_loop(candidate, header, loop_blocks);
+            common.iter().all(|other| reached.contains(other))
+        })
+    }
+
+    /// Loop blocks reachable from `start` without taking the back edge to
+    /// `header`, and whether the back edge is reached.
+    fn reach_in_loop(
+        &self,
+        start: BlockId,
+        header: BlockId,
+        loop_blocks: &BTreeSet<BlockId>,
+    ) -> (BTreeSet<BlockId>, bool) {
+        let mut reached = BTreeSet::new();
+        let mut reaches_header = false;
+        let mut work = vec![start];
+        while let Some(bid) = work.pop() {
+            if bid == header {
+                reaches_header = true;
+                continue;
+            }
+            if !loop_blocks.contains(&bid) || self.synthetic.contains(&bid) || !reached.insert(bid)
+            {
+                continue;
+            }
+            work.extend(
+                self.func
+                    .cfg
+                    .edges_from(bid)
+                    .into_iter()
+                    .map(|(succ, _)| succ),
+            );
+        }
+        (reached, reaches_header)
+    }
+
+    /// Instructions of the dispatch block `bid` whose results only feed the
+    /// indirect jump: the table load and target arithmetic, and flags they
+    /// set. A recovered `switch` replaces the jump, so these would print as
+    /// reads of the table plus a reassignment of the register the index
+    /// lives in. Everything that `index`, a side effect, or another block
+    /// still needs is kept.
+    fn dispatch_only_insns(&self, bid: BlockId, index: &SsaVarnode) -> BTreeSet<usize> {
+        let Some(block) = self.func.function.blocks.get(&bid) else {
+            return BTreeSet::new();
+        };
+        // Values real instructions of other blocks read, plus the inputs of
+        // phis whose result is itself needed. Phis are placed for every
+        // register written on a path, so an unused one must not keep the
+        // table arithmetic alive.
+        let mut live: BTreeSet<SsaVarnode> = self
+            .func
+            .var_map
+            .iter()
+            .filter(|((use_bid, _, slot), _)| {
+                *use_bid != bid && matches!(slot, VarnodeSlot::Input(_))
+            })
+            .map(|(_, sv)| *sv)
+            .collect();
+        let phis: Vec<_> = self.func.phi_map.values().flatten().collect();
+        let mut grew = true;
+        while grew {
+            grew = false;
+            for phi in &phis {
+                if live.contains(&phi.output) {
+                    for (_, input) in &phi.inputs {
+                        grew |= live.insert(*input);
+                    }
+                }
+            }
+        }
+        live.insert(*index);
+
+        let mut dead = BTreeSet::new();
+        for (i, insn) in block.insns.iter().enumerate().rev() {
+            if insn.op == IrOp::Branchind {
+                dead.insert(i);
+                continue;
+            }
+            let side_effect = matches!(
+                insn.op,
+                IrOp::Store
+                    | IrOp::Call
+                    | IrOp::Callind
+                    | IrOp::Callother
+                    | IrOp::Branch
+                    | IrOp::Cbranch
+                    | IrOp::Return
+            );
+            let output_live = self
+                .resolve_ssa_varnode(bid, i, VarnodeSlot::Output)
+                .is_some_and(|out| live.contains(&out));
+            if side_effect || output_live || insn.output.is_none() {
+                for slot in 0..insn.inputs.len() {
+                    if let Some(input) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(slot))
+                    {
+                        live.insert(input);
+                    }
+                }
+            } else {
+                dead.insert(i);
+            }
+        }
+        dead
     }
 
     fn block_starting_at_addr(&self, addr: u64) -> Option<BlockId> {
@@ -3485,6 +3714,16 @@ impl<'a> StructureCtx<'a> {
                 }
             }
 
+            if let Some((switch_node, join)) =
+                self.try_structure_switch_in(bid, Some((header, loop_blocks)))
+            {
+                trace_hir_counts("until-loop-switch-node", std::slice::from_ref(&switch_node));
+                nodes.push(switch_node);
+                current = join;
+                struct_debug!("until-loop switch bid={bid:?} header={header:?} join={current:?}");
+                continue;
+            }
+
             if let Some((if_node, join)) = self.try_structure_if_in_loop(bid, header, loop_blocks) {
                 trace_hir_counts("until-loop-if-node", std::slice::from_ref(&if_node));
                 nodes.push(if_node);
@@ -3727,6 +3966,15 @@ impl<'a> StructureCtx<'a> {
                     );
                     continue;
                 }
+            }
+
+            if let Some((switch_node, join)) =
+                self.try_structure_switch_in(bid, Some((header, loop_blocks)))
+            {
+                struct_debug!("loop-body switch current={bid:?} header={header:?} join={join:?}");
+                nodes.push(switch_node);
+                current = join;
+                continue;
             }
 
             if let Some((if_node, join)) = self.try_structure_if_in_loop(bid, header, loop_blocks) {
@@ -4239,6 +4487,50 @@ fn is_scale_value(v: u64) -> bool {
 /// block, but only blocks actually reached via an irreducible path get a
 /// matching `Goto`. Unreferenced labels would otherwise produce dead
 /// `LABEL_N:` lines in the C output.
+/// Whether control cannot fall off the end of `nodes`.
+fn ends_in_jump(nodes: &[HirNode]) -> bool {
+    match nodes.last() {
+        Some(
+            HirNode::Return(_)
+            | HirNode::Goto(_)
+            | HirNode::TailCall { .. }
+            | HirNode::Break
+            | HirNode::Continue,
+        ) => true,
+        Some(HirNode::Block(children)) => ends_in_jump(children),
+        Some(HirNode::If {
+            then_body,
+            else_body: Some(else_body),
+            ..
+        }) => ends_in_jump(then_body) && ends_in_jump(else_body),
+        _ => false,
+    }
+}
+
+/// Turn the `break`s of a switch case body that would leave the enclosing
+/// loop into `goto label`: inside the switch a `break` only leaves the
+/// switch. Nested loops and switches keep their own `break`s.
+fn break_to_goto(nodes: &mut [HirNode], label: LabelId) {
+    for node in nodes {
+        match node {
+            HirNode::Break => *node = HirNode::Goto(label),
+            HirNode::Block(children) => break_to_goto(children, label),
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                break_to_goto(then_body, label);
+                if let Some(else_body) = else_body {
+                    break_to_goto(else_body, label);
+                }
+            }
+            HirNode::Commented { inner, .. } => break_to_goto(std::slice::from_mut(inner), label),
+            _ => {}
+        }
+    }
+}
+
 fn strip_unused_labels(nodes: &mut Vec<HirNode>) {
     let mut used = BTreeSet::new();
     collect_used_labels(nodes, &mut used);

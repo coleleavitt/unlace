@@ -653,7 +653,7 @@ int f_rec_fib(int a1) {
             } else {
                 result = LODWORD(c14 + 1LL); c3 = v29; c12 = v29;
                 c14 = v29;
-                return 0;
+                return result;
             }
         }
     }
@@ -971,8 +971,7 @@ int f_rec_power_constprop_0(char a1) {
     char buf_24[16];
     char buf_0[16]; // int buf_0[4]
     _QWORD result; // rax
-    __int64 v33; // rax
-    _QWORD v30; // rax
+    __int64 v29; // rax
     _QWORD c2; // rdx
     _QWORD c4; // rsi
     _QWORD c6; // r8
@@ -1018,8 +1017,9 @@ int f_rec_power_constprop_0(char a1) {
         c1 = result - 1; result = 2LL;
         if (result == 1) {
             v17 = result * result; result = v17; v17 = LODWORD(c4);
-            v18 = result * v17; result = v18; result = result * result;
-            v18 = result * LODWORD(c2); result = result * LODWORD(c2); return 0;
+            v18 = result * v17; result = v18; v17 = result * result;
+            result = v17; v17 = LODWORD(c2); v18 = result * v17;
+            result = v18; return result;
         }
     }
     c1 = c1 >> 1; a1 = c1; c10 = !(LOBYTE(c1) & 1);
@@ -1032,14 +1032,15 @@ int f_rec_power_constprop_0(char a1) {
         if (c1 == 1) {
             result = LODWORD(2LL) * LODWORD(2LL); result = result * LODWORD(c6);
             v17 = result * result; result = v17; v17 = LODWORD(c4);
-            v18 = result * v17; result = v18; v30 = v18 * v18;
-            return 0;
+            v18 = result * v17; result = v18; v17 = result * result;
+            result = v17; v17 = LODWORD(c2); v18 = result * v17;
+            result = v18; return result;
         }
     }
     *(_DWORD *)(buf_0 + 12) = LODWORD(c2); *(_DWORD *)(buf_0 + 8) = LODWORD(c4); *(_DWORD *)(buf_0 + 4) = LODWORD(c6);
-    *(_DWORD *)buf_0 = LODWORD(c7); v33 = f_rec_power_constprop_0(a1 >> 1); v17 = *(_DWORD *)(buf_0 + 4);
+    *(_DWORD *)buf_0 = LODWORD(c7); v29 = f_rec_power_constprop_0(a1 >> 1); v17 = *(_DWORD *)(buf_0 + 4);
     v18 = *(_DWORD *)(buf_0 + 8);
-    result = v33 * v33; v21 = *(_DWORD *)(buf_0 + 12);
+    result = v29 * v29; v21 = *(_DWORD *)(buf_0 + 12);
     result = result * *(_DWORD *)buf_0; result = result * result * v17; result = result * result * v18;
     return result * result * v21;
 }

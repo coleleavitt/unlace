@@ -81,6 +81,16 @@ pub(in crate::c_printer) fn collect_function_header_param_names(
     if !trimmed.ends_with('{') {
         return;
     }
+    // Drop annotations such as `/* BYREF */` or `/* // dropped 2 param(s) */`:
+    // their parentheses would be taken for the parameter list's.
+    let mut uncommented = String::with_capacity(trimmed.len());
+    let mut rest = trimmed;
+    while let Some((head, tail)) = rest.split_once("/*") {
+        uncommented.push_str(head);
+        rest = tail.split_once("*/").map_or("", |(_, after)| after);
+    }
+    uncommented.push_str(rest);
+    let trimmed = uncommented.as_str();
     let Some(open) = trimmed.find('(') else {
         return;
     };

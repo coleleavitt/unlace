@@ -982,8 +982,68 @@ pub fn lift_function(
     // zero byte, e.g. ARCompact `arc_branch` whose tail insn is `e0 7f 00 00`).
     let has_known_size = entry.size > 0;
     let lifted_insns = lift_instructions(lifter, code, func_start, has_known_size)?;
-    let function = build_function_from_insns(&entry.name, func_start, &lifted_insns);
+    let function = build_function_from_insns(&entry.name, func_start, &lifted_insns, &[]);
+    // Jump-table targets are block leaders that no direct branch names, and
+    // the dispatch block's successors. A target that follows a `ret` plus
+    // alignment padding would otherwise sit inside the padding's block, and
+    // `merge_linear_blocks` would fold it there. Resolve the tables once,
+    // rebuild with the targets as leaders, and wire the dispatch edges.
+    let tables = resolve_function_jump_tables(image, &function);
+    if tables.is_empty() {
+        return Ok(function);
+    }
+    let leaders: Vec<u64> = tables.values().flatten().copied().collect();
+    let mut function = build_function_from_insns(&entry.name, func_start, &lifted_insns, &leaders);
+    install_dispatch_successors(&mut function, &tables);
     Ok(function)
+}
+
+/// Jump tables of `function` resolved against the image, keyed by the
+/// `Branchind` address. Unresolved candidates are omitted.
+fn resolve_function_jump_tables(
+    image: &BinaryImage,
+    function: &Function,
+) -> BTreeMap<u64, Vec<u64>> {
+    let has_branchind = function
+        .blocks
+        .values()
+        .any(|block| block.insns.iter().any(|insn| insn.op == IrOp::Branchind));
+    if !has_branchind {
+        return BTreeMap::new();
+    }
+    let mut ssa = unlace_ir::ssa::build_ssa(function.clone());
+    ssa.resolved_jump_tables = unlace_passes::collect_jump_table_candidates(&ssa);
+    resolve_jump_table_targets(&mut ssa, image);
+    ssa.resolved_jump_tables
+        .into_iter()
+        .filter(|(_, table)| !table.targets.is_empty())
+        .map(|(branch_addr, table)| (branch_addr, table.targets))
+        .collect()
+}
+
+/// Point each table dispatch block at the blocks its table targets.
+fn install_dispatch_successors(function: &mut Function, tables: &BTreeMap<u64, Vec<u64>>) {
+    let block_at: BTreeMap<u64, BlockId> = function
+        .blocks
+        .iter()
+        .filter_map(|(&bid, block)| block.insns.first().map(|insn| (insn.addr, bid)))
+        .collect();
+    for (branch_addr, targets) in tables {
+        let Some(dispatch) = block_containing_branchind(function, *branch_addr) else {
+            continue;
+        };
+        let mut successors = smallvec::SmallVec::<[BlockId; 2]>::new();
+        for target in targets {
+            if let Some(&bid) = block_at.get(target)
+                && !successors.contains(&bid)
+            {
+                successors.push(bid);
+            }
+        }
+        if let Some(block) = function.blocks.get_mut(&dispatch) {
+            block.successors = successors;
+        }
+    }
 }
 
 fn function_bounds(entry: &FunctionEntry, text: &unlace_loader::Section) -> (u64, u64) {
@@ -1262,7 +1322,12 @@ fn is_padding_byte(arch: ArchId, byte: u8) -> bool {
     }
 }
 
-fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRecord]) -> Function {
+fn build_function_from_insns(
+    name: &str,
+    entry_addr: u64,
+    insns: &[LiftedInsnRecord],
+    extra_leaders: &[u64],
+) -> Function {
     if insns.is_empty() {
         return Function::new(name, BlockId(0), entry_addr);
     }
@@ -1279,6 +1344,11 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
     let insn_addr_set: BTreeSet<u64> = insns.iter().map(|rec| rec.addr).collect();
     let mut block_starts: BTreeMap<u64, u32> = BTreeMap::new();
     block_starts.insert(entry_addr, 0);
+    for &leader in extra_leaders {
+        if insn_addr_set.contains(&leader) {
+            block_starts.entry(leader).or_insert(0);
+        }
+    }
 
     for (i, rec) in insns.iter().enumerate() {
         if rec.is_terminator {
@@ -5484,16 +5554,21 @@ pub fn resolve_jump_table_targets(
         unlace_loader::Endian::Big => TableEndian::Big,
     };
 
-    // Heuristic upper bound on how many entries we'll try to decode: we
-    // don't yet recover the bounds-check at the dispatch site, so cap at
-    // a generous slot count and let xref / size logic shorten later. For
-    // the wiring slice we simply walk until either the base section ends
-    // or we've decoded `MAX_PROBE_ENTRIES` slots.
+    // Without a bound from the dispatch site, probe at most this many slots
+    // and keep the prefix that points into this function's code.
     const MAX_PROBE_ENTRIES: u32 = 64;
 
+    let code_range = function_code_range(&ssa.function);
     let mut updated = std::collections::BTreeMap::new();
     let mut successor_updates: Vec<(u64, Vec<u64>)> = Vec::new();
     for (&branch_addr, cand) in &ssa.resolved_jump_tables {
+        if !cand.targets.is_empty() {
+            // Resolved and wired by an earlier run. Passes may since have
+            // removed the leading instructions of target blocks, so the
+            // address lookup would no longer find them.
+            updated.insert(branch_addr, cand.clone());
+            continue;
+        }
         let entry_size = cand.entry_size;
         if !matches!(entry_size, 4 | 8) {
             // Compressed-offset / byte-secondary tables aren't handled by
@@ -5516,7 +5591,11 @@ pub fn resolve_jump_table_targets(
             .len()
             .saturating_sub((cand.base.saturating_sub(section.vaddr)) as usize);
         let fit_entries = (bytes_left / entry_size as usize) as u32;
-        let probe_entries = fit_entries.min(MAX_PROBE_ENTRIES);
+        let probe_entries = match cand.bound {
+            Some(bound) if bound <= fit_entries => bound,
+            Some(_) => 0,
+            None => fit_entries.min(MAX_PROBE_ENTRIES),
+        };
         if probe_entries == 0 {
             updated.insert(branch_addr, cand.clone());
             continue;
@@ -5537,51 +5616,74 @@ pub fn resolve_jump_table_targets(
                 endian,
                 kind,
             };
-            if let Some(targets) = read_jump_table(&table, section) {
-                // The table bound is often encoded by a preceding compare,
-                // not by the table bytes. Probe a generous upper bound, then
-                // keep the executable prefix and stop at the first non-code
-                // value instead of rejecting the whole candidate.
-                let targets = executable_target_prefix(&targets, &sections);
-                if targets.len() >= 2 {
-                    updated.insert(
-                        branch_addr,
-                        JumpTableInfo {
-                            base: cand.base,
-                            entry_size,
-                            num_entries: targets.len() as u32,
-                            endian_little: matches!(endian, TableEndian::Little),
-                            targets: targets.clone(),
-                        },
-                    );
-                    successor_updates.push((branch_addr, targets));
-                    resolved = true;
-                    break;
+            let Some(targets) = read_jump_table(&table, section) else {
+                continue;
+            };
+            let targets = if cand.bound.is_some() {
+                // A proven bound covers every slot: one slot that is not
+                // code means this entry layout is the wrong one.
+                if !targets
+                    .iter()
+                    .all(|&target| is_executable_target(target, &sections))
+                {
+                    continue;
                 }
+                targets
+            } else {
+                // Past the real end the probe reads the next table or
+                // unrelated data; stop at the first slot that leaves this
+                // function's code.
+                targets
+                    .into_iter()
+                    .take_while(|&target| {
+                        code_range.contains(&target) && is_executable_target(target, &sections)
+                    })
+                    .collect()
+            };
+            if targets.len() >= 2 {
+                updated.insert(
+                    branch_addr,
+                    JumpTableInfo {
+                        base: cand.base,
+                        entry_size,
+                        num_entries: targets.len() as u32,
+                        bound: cand.bound,
+                        endian_little: matches!(endian, TableEndian::Little),
+                        targets: targets.clone(),
+                        target_blocks: Vec::new(),
+                    },
+                );
+                successor_updates.push((branch_addr, targets));
+                resolved = true;
+                break;
             }
         }
         if !resolved {
             updated.insert(branch_addr, cand.clone());
-            if cand.num_entries > 0 && !cand.targets.is_empty() {
-                successor_updates.push((branch_addr, cand.targets.clone()));
-            }
         }
     }
+
     ssa.resolved_jump_tables = updated;
     for (branch_addr, targets) in successor_updates {
-        install_jump_table_successors(ssa, branch_addr, &targets);
+        if let Some(blocks) = install_jump_table_successors(ssa, branch_addr, &targets)
+            && let Some(table) = ssa.resolved_jump_tables.get_mut(&branch_addr)
+        {
+            table.target_blocks = blocks;
+        }
     }
 }
 
-fn executable_target_prefix(
-    targets: &[u64],
-    sections: &[unlace_struct::SectionView<'_>],
-) -> Vec<u64> {
-    targets
-        .iter()
-        .copied()
-        .take_while(|&target| is_executable_target(target, sections))
-        .collect()
+/// Addresses from the first to the last instruction of `function`.
+fn function_code_range(function: &Function) -> std::ops::RangeInclusive<u64> {
+    let addrs = || {
+        function
+            .blocks
+            .values()
+            .flat_map(|block| block.insns.iter().map(|insn| insn.addr))
+    };
+    let lo = addrs().min().unwrap_or(function.addr);
+    let hi = addrs().max().unwrap_or(function.addr);
+    lo..=hi
 }
 
 fn is_executable_target(target: u64, sections: &[unlace_struct::SectionView<'_>]) -> bool {
@@ -5590,29 +5692,54 @@ fn is_executable_target(target: u64, sections: &[unlace_struct::SectionView<'_>]
     })
 }
 
+/// Point the dispatch block at the blocks its table targets. Returns the
+/// block of every table slot when each slot has one.
 fn install_jump_table_successors(
     ssa: &mut unlace_ir::ssa::SsaFunction,
     branch_addr: u64,
     targets: &[u64],
-) {
-    let Some(branch_block) = block_containing_branchind(&ssa.function, branch_addr) else {
-        return;
-    };
+) -> Option<Vec<BlockId>> {
+    let branch_block = block_containing_branchind(&ssa.function, branch_addr)?;
+    let current = ssa
+        .function
+        .blocks
+        .get(&branch_block)
+        .map(|block| block.successors.clone())
+        .unwrap_or_default();
 
+    let mut slot_blocks = Vec::with_capacity(targets.len());
     let mut successors = smallvec::SmallVec::<[BlockId; 2]>::new();
     for &target in targets {
-        let Some(target_block) = block_starting_at(&ssa.function, target) else {
+        // Tail duplication can leave several blocks starting at one
+        // address; keep the copy the dispatch already reaches.
+        let target_block = current
+            .iter()
+            .copied()
+            .find(|&bid| block_starts_at(&ssa.function, bid, target))
+            .or_else(|| block_starting_at(&ssa.function, target));
+        let Some(target_block) = target_block else {
             continue;
         };
-        successors.push(target_block);
+        slot_blocks.push(target_block);
+        if !successors.contains(&target_block) {
+            successors.push(target_block);
+        }
     }
     if successors.len() < 2 {
-        return;
+        return None;
     }
     if let Some(block) = ssa.function.blocks.get_mut(&branch_block) {
         block.successors = successors;
     }
     seed_jump_table_target_return_ssa(ssa, targets);
+    (slot_blocks.len() == targets.len()).then_some(slot_blocks)
+}
+
+fn block_starts_at(func: &Function, bid: BlockId, addr: u64) -> bool {
+    func.blocks
+        .get(&bid)
+        .and_then(|block| block.insns.first())
+        .is_some_and(|insn| insn.addr == addr)
 }
 
 fn block_containing_branchind(func: &Function, branch_addr: u64) -> Option<BlockId> {
@@ -6587,8 +6714,10 @@ mod tests {
                 base: 0x2000,
                 entry_size: 4,
                 num_entries: 0,
+                bound: None,
                 endian_little: true,
                 targets: Vec::new(),
+                target_blocks: Vec::new(),
             },
         );
 

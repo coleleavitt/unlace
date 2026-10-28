@@ -1095,6 +1095,38 @@ fn test_declare_missing_temp_decls_handles_bare_arg_temp() {
 }
 
 #[test]
+fn test_declare_missing_temp_decls_reads_annotated_header_params() {
+    let output = concat!(
+        "int f(void * a1 /* BYREF */, int a2) /* // dropped 1 param(s) (dead in body) */ {\n",
+        "    a1 = a1 + 1LL;\n",
+        "    return a2;\n",
+        "}\n",
+    )
+    .to_string();
+
+    let declared = super::declare_missing_temp_v_decls(output);
+
+    assert!(!declared.contains("__int64 a1; // temp"), "{declared}");
+    assert!(!declared.contains("__int64 a2; // temp"), "{declared}");
+}
+
+#[test]
+fn test_rename_bare_result_keeps_assigned_result_of_any_type() {
+    let output = concat!(
+        "int f(int a1) {\n",
+        "    _QWORD result; // rax\n",
+        "    result = 0xffffffffLL;\n",
+        "    return result;\n",
+        "}\n",
+    )
+    .to_string();
+
+    let repaired = super::rename_unreturned_bare_result(output.clone());
+
+    assert_eq!(repaired, output);
+}
+
+#[test]
 fn test_repair_arg_versioned_address_uses() {
     let output = concat!(
         "int f(void) {\n",

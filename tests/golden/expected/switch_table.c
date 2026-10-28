@@ -105,7 +105,6 @@ int dispatch(int a1) {
         return 0xffffffff;
     } else {
         a1 = a1;
-        __int64 v1 = 0x2004LL; // rdx
         switch (a1) {
         case 0:
             return 0xa;

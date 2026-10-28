@@ -34,11 +34,21 @@
 //!
 //! `Copy` chains are followed transparently. The base may also appear as
 //! the *second* `IntAdd` operand; both orderings are accepted.
+//!
+//! ## Table length
+//!
+//! The table bytes do not say where the table ends; the dispatch site does.
+//! `bound` records how many index values the bounds check guarding the
+//! dispatch block lets through (evaluated, so every flag expansion of
+//! `ja`/`jbe`/`bhi` counts alike), or `mask + 1` for an index masked with
+//! `2^n - 1`. Without it the section-aware step can only probe and stop at
+//! the first slot that leaves the function, and adjacent tables of two
+//! functions read into each other.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{JumpTableInfo, SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{BlockId, IrOp, SpaceId};
+use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{DefIndex, Pass, PassError};
 
@@ -103,8 +113,9 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
 
             // --- Pattern 1: Branchind ← Load (absolute jump table) ---
             if prod_op == IrOp::Load
-                && let Some(cand) = extract_load_candidate(func, &defs, prod_loc)
+                && let Some(mut cand) = extract_load_candidate(func, &defs, prod_loc)
             {
+                cand.bound = table_bound(func, &defs, bid, prod_loc);
                 out.insert(insn.addr, cand);
                 continue;
             }
@@ -125,7 +136,8 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
                     if inner_op != IrOp::Load {
                         continue;
                     }
-                    if let Some(cand) = extract_load_candidate(func, &defs, inner_loc) {
+                    if let Some(mut cand) = extract_load_candidate(func, &defs, inner_loc) {
+                        cand.bound = table_bound(func, &defs, bid, inner_loc);
                         out.insert(insn.addr, cand);
                         break;
                     }
@@ -210,8 +222,200 @@ fn unresolved(base: u64, entry_size: u8) -> JumpTableInfo {
         base,
         entry_size,
         num_entries: 0,
+        bound: None,
         endian_little: true,
         targets: Vec::new(),
+        target_blocks: Vec::new(),
+    }
+}
+
+/// Largest table the bound search accepts. A guard that admits more indices
+/// than this is not treated as a table bound.
+const MAX_TABLE_ENTRIES: u32 = 4096;
+
+/// Entry count proven at the dispatch site of the table read by the `Load`
+/// at `load_loc` (see [`JumpTableInfo::bound`]).
+fn table_bound(
+    func: &SsaFunction,
+    defs: &DefIndex,
+    dispatch: BlockId,
+    load_loc: (BlockId, usize),
+) -> Option<u32> {
+    let addr = input_sv(func, load_loc, 1)?;
+    let index = table_index(func, defs, addr)?;
+    let root = peel_width_casts(func, defs, index);
+    guard_bound(func, defs, dispatch, root).or_else(|| mask_bound(func, defs, root))
+}
+
+/// The SSA value at `slot` of the instruction at `loc`, if it is not a
+/// constant.
+fn input_sv(func: &SsaFunction, loc: (BlockId, usize), slot: usize) -> Option<SsaVarnode> {
+    func.var_map
+        .get(&(loc.0, loc.1, VarnodeSlot::Input(slot)))
+        .copied()
+}
+
+fn def_insn<'f>(
+    func: &'f SsaFunction,
+    defs: &DefIndex,
+    sv: SsaVarnode,
+) -> Option<((BlockId, usize), &'f IrInsn)> {
+    let loc = defs.lookup(sv)?;
+    let insn = func.function.blocks.get(&loc.0)?.insns.get(loc.1)?;
+    Some((loc, insn))
+}
+
+/// The unscaled index of a `base + index * scale` table address.
+fn table_index(func: &SsaFunction, defs: &DefIndex, addr: SsaVarnode) -> Option<SsaVarnode> {
+    let (loc, insn) = def_insn(func, defs, addr)?;
+    match insn.op {
+        IrOp::Copy => table_index(func, defs, input_sv(func, loc, 0)?),
+        IrOp::IntAdd => (0..2).find_map(|slot| {
+            let (scaled_loc, scaled) = def_insn(func, defs, input_sv(func, loc, slot)?)?;
+            let scale = scaled.inputs.get(1)?;
+            (matches!(scaled.op, IrOp::IntMult | IrOp::IntLeft) && scale.space == SpaceId::Const)
+                .then(|| input_sv(func, scaled_loc, 0))
+                .flatten()
+        }),
+        _ => None,
+    }
+}
+
+/// Follow `index` through copies, extensions and low-part truncations to
+/// the value the bounds check compares.
+fn peel_width_casts(func: &SsaFunction, defs: &DefIndex, mut index: SsaVarnode) -> SsaVarnode {
+    for _ in 0..16 {
+        let Some((loc, insn)) = def_insn(func, defs, index) else {
+            break;
+        };
+        let low_part = insn.op != IrOp::Subpiece
+            || insn
+                .inputs
+                .get(1)
+                .is_some_and(|offset| offset.space == SpaceId::Const && offset.offset == 0);
+        if !matches!(
+            insn.op,
+            IrOp::Copy | IrOp::IntZext | IrOp::IntSext | IrOp::Subpiece | IrOp::Cast
+        ) || !low_part
+        {
+            break;
+        }
+        let Some(next) = input_sv(func, loc, 0) else {
+            break;
+        };
+        index = next;
+    }
+    index
+}
+
+/// The number of leading index values `0, 1, ...` for which the conditional
+/// branch guarding `dispatch` takes its edge toward `dispatch`.
+///
+/// The guard condition is evaluated for each index value instead of being
+/// matched against compare shapes, so the flag expansions of `ja`, `jae`,
+/// `jbe`, `bhi`, `bltu` and their folded forms all count alike. Plain
+/// single-successor blocks between the guard and the dispatch are crossed.
+fn guard_bound(
+    func: &SsaFunction,
+    defs: &DefIndex,
+    dispatch: BlockId,
+    root: SsaVarnode,
+) -> Option<u32> {
+    let mut target = dispatch;
+    for _ in 0..4 {
+        let mut preds = func
+            .function
+            .blocks
+            .iter()
+            .filter(|(_, block)| block.successors.contains(&target));
+        let (&pred, block) = preds.next()?;
+        if preds.next().is_some() {
+            return None;
+        }
+        let last_idx = block.insns.len().checked_sub(1)?;
+        if block.insns[last_idx].op != IrOp::Cbranch {
+            if block.successors.len() != 1 {
+                return None;
+            }
+            target = pred;
+            continue;
+        }
+        let in_range_when = match block.successors.as_slice() {
+            [taken, fall] if *taken == target && *fall != target => true,
+            [taken, fall] if *fall == target && *taken != target => false,
+            _ => return None,
+        };
+        let cond = input_sv(func, (pred, last_idx), 1)?;
+        let mut count = 0;
+        while count < MAX_TABLE_ENTRIES {
+            let taken = eval_with(func, defs, cond, root, u64::from(count), 32)? & 1 != 0;
+            if taken != in_range_when {
+                break;
+            }
+            count += 1;
+        }
+        return (count > 0 && count < MAX_TABLE_ENTRIES).then_some(count);
+    }
+    None
+}
+
+/// `index & (2^n - 1)` admits exactly `2^n` entries.
+fn mask_bound(func: &SsaFunction, defs: &DefIndex, root: SsaVarnode) -> Option<u32> {
+    let (_, insn) = def_insn(func, defs, root)?;
+    if insn.op != IrOp::IntAnd {
+        return None;
+    }
+    let mask = insn
+        .inputs
+        .iter()
+        .find(|vn| vn.space == SpaceId::Const)?
+        .offset;
+    let count = mask.checked_add(1)?;
+    (count.is_power_of_two() && count <= u64::from(MAX_TABLE_ENTRIES)).then_some(count as u32)
+}
+
+/// Evaluate `sv` with `root` bound to `value`. `None` when the value
+/// depends on anything other than `root` and constants.
+fn eval_with(
+    func: &SsaFunction,
+    defs: &DefIndex,
+    sv: SsaVarnode,
+    root: SsaVarnode,
+    value: u64,
+    depth: u32,
+) -> Option<u64> {
+    if sv == root {
+        return Some(value & size_mask(sv.base.size));
+    }
+    let depth = depth.checked_sub(1)?;
+    let (loc, insn) = def_insn(func, defs, sv)?;
+    let out_size = insn.output?.size;
+    let mut args = smallvec::SmallVec::<[Varnode; 3]>::new();
+    for (slot, raw) in insn.inputs.iter().enumerate() {
+        let arg = if raw.space == SpaceId::Const {
+            raw.offset
+        } else {
+            eval_with(func, defs, input_sv(func, loc, slot)?, root, value, depth)?
+        };
+        args.push(Varnode::constant(arg, raw.size));
+    }
+    let first = args.first().map(|vn| vn.offset & size_mask(vn.size));
+    match insn.op {
+        IrOp::Copy | IrOp::Cast => first.map(|v| v & size_mask(out_size)),
+        IrOp::Subpiece => {
+            let shift = args.get(1)?.offset.checked_mul(8)?;
+            Some(first?.checked_shr(u32::try_from(shift).ok()?).unwrap_or(0) & size_mask(out_size))
+        }
+        IrOp::Popcount => first.map(|v| u64::from(v.count_ones())),
+        op => crate::const_fold::evaluate(op, &args, out_size),
+    }
+}
+
+fn size_mask(size: u8) -> u64 {
+    if size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (u32::from(size) * 8)) - 1
     }
 }
 
@@ -353,6 +557,139 @@ mod tests {
         assert!(cand.targets.is_empty());
     }
 
+    /// `cmp edi, 5; ja default` before `jmp [rdi*8 + table]`: the guard's
+    /// flag expansion admits indices 0..=5, so the table has six entries.
+    #[test]
+    fn guard_bounds_table_length() {
+        let mut func = Function::new("dispatch", BlockId(0), 0x1000);
+        let rdi = Varnode::reg(56, 8);
+        let low = Varnode::unique(0, 4);
+        let cf = Varnode::unique(1, 1);
+        let zf = Varnode::unique(2, 1);
+        let ncf = Varnode::unique(3, 1);
+        let nzf = Varnode::unique(4, 1);
+        let ja = Varnode::unique(5, 1);
+
+        let mut guard = BasicBlock::new(BlockId(0));
+        guard.insns = vec![
+            IrInsn::with_output(
+                IrOp::Subpiece,
+                low,
+                smallvec![rdi, Varnode::constant(0, 1)],
+                0x1000,
+            ),
+            IrInsn::with_output(
+                IrOp::IntLess,
+                cf,
+                smallvec![low, Varnode::constant(5, 4)],
+                0x1000,
+            ),
+            IrInsn::with_output(
+                IrOp::IntEqual,
+                zf,
+                smallvec![low, Varnode::constant(5, 4)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::BoolNegate, ncf, smallvec![cf], 0x1003),
+            IrInsn::with_output(IrOp::BoolNegate, nzf, smallvec![zf], 0x1003),
+            IrInsn::with_output(IrOp::BoolAnd, ja, smallvec![ncf, nzf], 0x1003),
+            IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![Varnode::constant(0x1020, 8), ja],
+                0x1003,
+            ),
+        ];
+        guard.successors = smallvec![BlockId(2), BlockId(1)];
+
+        let idx32 = Varnode::unique(6, 4);
+        let scaled = Varnode::unique(7, 8);
+        let addr = Varnode::unique(8, 8);
+        let slot = Varnode::unique(9, 8);
+        let mut dispatch = BasicBlock::new(BlockId(1));
+        dispatch.insns = vec![
+            IrInsn::with_output(
+                IrOp::Subpiece,
+                idx32,
+                smallvec![rdi, Varnode::constant(0, 1)],
+                0x1009,
+            ),
+            IrInsn::with_output(IrOp::IntZext, rdi, smallvec![idx32], 0x1009),
+            IrInsn::with_output(
+                IrOp::IntMult,
+                scaled,
+                smallvec![rdi, Varnode::constant(8, 8)],
+                0x100b,
+            ),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                addr,
+                smallvec![scaled, Varnode::constant(0x4000, 8)],
+                0x100b,
+            ),
+            IrInsn::with_output(
+                IrOp::Load,
+                slot,
+                smallvec![Varnode::constant(1, 8), addr],
+                0x100b,
+            ),
+            IrInsn::without_output(IrOp::Branchind, smallvec![slot], 0x100b),
+        ];
+
+        let mut default = BasicBlock::new(BlockId(2));
+        default.insns = vec![IrInsn::without_output(IrOp::Return, smallvec![], 0x1020)];
+
+        func.insert_block(guard);
+        func.insert_block(dispatch);
+        func.insert_block(default);
+        let ssa = build_ssa(func);
+
+        let tables = collect_jump_table_candidates(&ssa);
+        assert_eq!(tables.get(&0x100b).and_then(|table| table.bound), Some(6));
+    }
+
+    /// `jmp [(rdi & 3)*8 + table]` with no guard admits four indices.
+    #[test]
+    fn index_mask_bounds_table_length() {
+        let mut func = Function::new("dispatch", BlockId(0), 0x1000);
+        let masked = Varnode::unique(0, 8);
+        let scaled = Varnode::unique(1, 8);
+        let addr = Varnode::unique(2, 8);
+        let slot = Varnode::unique(3, 8);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns = vec![
+            IrInsn::with_output(
+                IrOp::IntAnd,
+                masked,
+                smallvec![Varnode::reg(56, 8), Varnode::constant(3, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(
+                IrOp::IntMult,
+                scaled,
+                smallvec![masked, Varnode::constant(8, 8)],
+                0x1004,
+            ),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                addr,
+                smallvec![scaled, Varnode::constant(0x4000, 8)],
+                0x1004,
+            ),
+            IrInsn::with_output(
+                IrOp::Load,
+                slot,
+                smallvec![Varnode::constant(1, 8), addr],
+                0x1004,
+            ),
+            IrInsn::without_output(IrOp::Branchind, smallvec![slot], 0x1004),
+        ];
+        func.insert_block(bb);
+        let ssa = build_ssa(func);
+
+        let tables = collect_jump_table_candidates(&ssa);
+        assert_eq!(tables.get(&0x1004).and_then(|table| table.bound), Some(4));
+    }
+
     /// A `Branchind` whose target is a bare register (no feeding Load) is
     /// not a table dispatch — no candidate recorded.
     #[test]
@@ -414,8 +751,10 @@ mod tests {
                 base: 0x4000,
                 entry_size: 4,
                 num_entries: 3,
+                bound: None,
                 endian_little: true,
                 targets: vec![0x1100, 0x1200, 0x1300],
+                target_blocks: Vec::new(),
             },
         );
         let changed = IndirectJumpResolvePass.run(&mut ssa).unwrap();

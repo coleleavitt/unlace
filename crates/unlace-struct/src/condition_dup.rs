@@ -84,6 +84,21 @@ fn find_duplication(nodes: &[HirNode]) -> Option<DuplicationPlan> {
         if starts_with(&goto_pos.scope, &branch.prefix) {
             continue;
         }
+        // Inside a loop or switch the tail does not run to the end of the
+        // branch: it loops back or leaves through `break`, so the guard no
+        // longer describes when the tail runs.
+        if label_pos.scope[branch.prefix.len()..].iter().any(|step| {
+            matches!(
+                step,
+                ScopeStep::While(_)
+                    | ScopeStep::DoWhile(_)
+                    | ScopeStep::For(_)
+                    | ScopeStep::SwitchCase(..)
+                    | ScopeStep::SwitchDefault(_)
+            )
+        }) {
+            continue;
+        }
         let Some(cond) = if_condition(nodes, &branch.parent_scope, branch.if_index) else {
             continue;
         };
@@ -431,5 +446,32 @@ mod tests {
             HirNode::If { cond, then_body, else_body: None }
                 if *cond == guard && then_body == &vec![HirNode::Break]
         ));
+    }
+
+    #[test]
+    fn leaves_goto_to_label_inside_switch_case() {
+        let body = vec![
+            HirNode::If {
+                cond: cond(1),
+                then_body: vec![HirNode::Switch {
+                    cond: cond(2),
+                    cases: vec![(
+                        crate::hir::SwitchCase::Value(0),
+                        vec![HirNode::Label(LabelId(1)), HirNode::Return(None)],
+                        false,
+                    )],
+                    default: None,
+                    jumptable_addr: None,
+                    jumptable_cases: None,
+                }],
+                else_body: None,
+            },
+            HirNode::Goto(LabelId(1)),
+        ];
+        let mut hir = func(body.clone());
+
+        duplicate_goto_conditions(&mut hir);
+
+        assert_eq!(hir.body, body);
     }
 }

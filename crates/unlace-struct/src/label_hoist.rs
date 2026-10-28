@@ -107,6 +107,20 @@ fn find_hoist(nodes: &[HirNode]) -> Option<HoistPlan> {
         let Some(insert_index) = child_index_after_prefix(&label_pos.scope, &insert_scope) else {
             continue;
         };
+        if !hoist_keeps_paths(
+            nodes,
+            &insert_scope,
+            &label_pos.scope,
+            label_pos.index,
+            target,
+        ) {
+            label_hoist_debug!(
+                "skip target={target:?} label_scope={} insert_scope={} reason=changes-other-paths",
+                fmt_scope(&label_pos.scope),
+                fmt_scope(&insert_scope)
+            );
+            continue;
+        }
         label_hoist_debug!(
             "candidate target={target:?} goto_scope={} goto_index={} label_scope={} label_index={} branch_prefix={} common={} insert_index={insert_index}",
             fmt_scope(&goto_pos.scope),
@@ -125,6 +139,183 @@ fn find_hoist(nodes: &[HirNode]) -> Option<HoistPlan> {
     }
 
     None
+}
+
+/// Whether moving the tail at `label_index` of `label_scope` to just after
+/// its enclosing child of `insert_scope` leaves every other path as it was.
+///
+/// After the move, the code before the label reaches the tail by falling
+/// out of each enclosing construct. That is only the same program when
+/// nothing else falls out of those constructs into the tail: every other
+/// `if` arm, switch case and default must end in a jump, no statement may follow the path at an inner level, and no
+/// loop may be crossed, since the end of a loop body goes back to its head.
+/// A `break` in the tail would also rebind when moved out of a switch.
+fn hoist_keeps_paths(
+    nodes: &[HirNode],
+    insert_scope: &[ScopeStep],
+    label_scope: &[ScopeStep],
+    label_index: usize,
+    label: LabelId,
+) -> bool {
+    let Some(mut list) = scope_ref(nodes, insert_scope) else {
+        return false;
+    };
+    let steps = &label_scope[insert_scope.len()..];
+    // When the insert point is already followed by `goto label`, whatever
+    // falls out of the enclosing constructs lands on the tail either way.
+    let others_reach_tail = steps.first().is_some_and(|step| {
+        matches!(list.get(step_index(step) + 1), Some(HirNode::Goto(next)) if *next == label)
+    });
+    let escapes =
+        |arm: &[HirNode], in_switch: bool| !others_reach_tail && falls_out(arm, in_switch);
+    // A `break` below a crossed switch lands after that switch.
+    let mut below_switch = false;
+    for (depth, step) in steps.iter().enumerate() {
+        let index = step_index(step);
+        if depth > 0 && list.len() > index + 1 {
+            return false;
+        }
+        let Some(node) = list.get(index) else {
+            return false;
+        };
+        list = match (step, node) {
+            (ScopeStep::Block(_), HirNode::Block(children)) => children,
+            (
+                ScopeStep::IfThen(_),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                },
+            ) => {
+                if else_body
+                    .as_deref()
+                    .is_none_or(|arm| escapes(arm, below_switch))
+                {
+                    return false;
+                }
+                then_body
+            }
+            (
+                ScopeStep::IfElse(_),
+                HirNode::If {
+                    then_body,
+                    else_body: Some(else_body),
+                    ..
+                },
+            ) => {
+                if escapes(then_body, below_switch) {
+                    return false;
+                }
+                else_body
+            }
+            (
+                ScopeStep::SwitchCase(_, case_index),
+                HirNode::Switch {
+                    cases,
+                    default,
+                    jumptable_cases,
+                    ..
+                },
+            ) => {
+                let Some((_, body, fall_through)) = cases.get(*case_index) else {
+                    return false;
+                };
+                let others_fall_out = cases
+                    .iter()
+                    .enumerate()
+                    .any(|(i, (_, other, _))| i != *case_index && escapes(other, true));
+                // Without a `default`, values no case names leave the switch,
+                // unless the cases cover every slot of the bounded jump table.
+                let default_falls_out = match default {
+                    Some(arm) => escapes(arm, true),
+                    None => !others_reach_tail && *jumptable_cases != Some(cases.len()),
+                };
+                if *fall_through
+                    || others_fall_out
+                    || default_falls_out
+                    || contains_unnested_break(&body[label_index.min(body.len())..])
+                {
+                    return false;
+                }
+                below_switch = true;
+                body
+            }
+            _ => return false,
+        };
+    }
+    true
+}
+
+/// Whether control can reach the end of `nodes` without jumping away.
+/// `in_switch` says a `break` here binds to a switch the moved tail leaves,
+/// so it lands after that switch on the way to the tail; otherwise it binds
+/// to a construct around the insert point and jumps past it. Nested loops
+/// and switches are assumed to fall out.
+fn falls_out(nodes: &[HirNode], in_switch: bool) -> bool {
+    match nodes.last() {
+        None => true,
+        Some(HirNode::Return(_) | HirNode::Continue | HirNode::TailCall { .. }) => false,
+        Some(HirNode::Goto(_)) => false,
+        Some(HirNode::Break) => in_switch,
+        Some(HirNode::Block(children)) => falls_out(children, in_switch),
+        Some(HirNode::Commented { inner, .. }) => falls_out(std::slice::from_ref(inner), in_switch),
+        Some(HirNode::If {
+            then_body,
+            else_body,
+            ..
+        }) => {
+            falls_out(then_body, in_switch)
+                || else_body
+                    .as_deref()
+                    .is_none_or(|arm| falls_out(arm, in_switch))
+        }
+        Some(_) => true,
+    }
+}
+
+fn contains_unnested_break(nodes: &[HirNode]) -> bool {
+    nodes.iter().any(|node| match node {
+        HirNode::Break => true,
+        HirNode::Block(children) => contains_unnested_break(children),
+        HirNode::Commented { inner, .. } => contains_unnested_break(std::slice::from_ref(inner)),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            contains_unnested_break(then_body)
+                || else_body.as_deref().is_some_and(contains_unnested_break)
+        }
+        _ => false,
+    })
+}
+
+fn scope_ref<'a>(nodes: &'a [HirNode], path: &[ScopeStep]) -> Option<&'a [HirNode]> {
+    let mut current = nodes;
+    for step in path {
+        let node = current.get(step_index(step))?;
+        current = match (step, node) {
+            (ScopeStep::Block(_), HirNode::Block(children)) => children,
+            (ScopeStep::IfThen(_), HirNode::If { then_body, .. }) => then_body,
+            (ScopeStep::IfElse(_), HirNode::If { else_body, .. }) => else_body.as_deref()?,
+            (ScopeStep::While(_), HirNode::While { body, .. })
+            | (ScopeStep::DoWhile(_), HirNode::DoWhile { body, .. })
+            | (ScopeStep::For(_), HirNode::For { body, .. }) => body,
+            (ScopeStep::SwitchCase(_, case_index), HirNode::Switch { cases, .. }) => {
+                &cases.get(*case_index)?.1
+            }
+            (ScopeStep::SwitchDefault(_), HirNode::Switch { default, .. }) => default.as_deref()?,
+            (ScopeStep::Try(_), HirNode::TryCatch { try_body, .. })
+            | (ScopeStep::Try(_), HirNode::TryFinally { try_body, .. }) => try_body,
+            (ScopeStep::Catch(_, arm_index), HirNode::TryCatch { catch_arms, .. }) => {
+                &catch_arms.get(*arm_index)?.1
+            }
+            (ScopeStep::Finally(_), HirNode::TryFinally { finally_body, .. }) => finally_body,
+            _ => return None,
+        };
+    }
+    Some(current)
 }
 
 fn collect_positions(
@@ -584,5 +775,50 @@ mod tests {
             ] if then_body == &vec![HirNode::Label(LabelId(5)), HirNode::Break]
                 && else_body == &vec![HirNode::Goto(LabelId(7))]
         ));
+    }
+
+    #[test]
+    fn keeps_label_when_sibling_arm_falls_out() {
+        let body = vec![
+            HirNode::If {
+                cond: cond(),
+                then_body: vec![HirNode::Label(LabelId(1)), HirNode::Return(None)],
+                else_body: None,
+            },
+            HirNode::If {
+                cond: cond(),
+                then_body: vec![HirNode::Goto(LabelId(1))],
+                else_body: None,
+            },
+            HirNode::Break,
+        ];
+        let mut hir = func(body.clone());
+
+        hoist_cross_branch_labels(&mut hir);
+
+        assert_eq!(hir.body, body, "the missing else arm would run the tail");
+    }
+
+    #[test]
+    fn keeps_label_inside_loop() {
+        let body = vec![
+            HirNode::While {
+                cond: cond(),
+                body: vec![HirNode::If {
+                    cond: cond(),
+                    then_body: vec![HirNode::Label(LabelId(1)), HirNode::Return(None)],
+                    else_body: Some(vec![HirNode::Continue]),
+                }],
+            },
+            HirNode::Goto(LabelId(1)),
+        ];
+        let mut hir = func(body.clone());
+
+        hoist_cross_branch_labels(&mut hir);
+
+        assert_eq!(
+            hir.body, body,
+            "the end of a loop body goes back to the loop head"
+        );
     }
 }

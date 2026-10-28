@@ -7,7 +7,6 @@ edition.workspace = true
 unlace-ir = { workspace = true }
 iced-x86 = { workspace = true }
 thiserror = { workspace = true }
-tracing = { workspace = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]

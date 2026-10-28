@@ -2462,26 +2462,20 @@ dependencies = [
 name = "unlace-debugger"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "libc",
  "thiserror",
- "tracing",
- "unlace-ir",
- "unlace-session",
 ]
 
 [[package]]
 name = "unlace-emu"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "smallvec",
  "thiserror",
  "tracing",
  "unlace-ir",
  "unlace-lift",
  "unlace-loader",
- "unlace-session",
 ]
 
 [[package]]
@@ -2624,7 +2618,6 @@ version = "0.1.0"
 dependencies = [
  "capstone",
  "smallvec",
- "tracing",
  "unlace-capstone",
  "unlace-ir",
 ]
@@ -2671,7 +2664,6 @@ version = "0.1.0"
 dependencies = [
  "smallvec",
  "thiserror",
- "tracing",
  "unlace-ir",
 ]
 
@@ -2689,7 +2681,6 @@ version = "0.1.0"
 dependencies = [
  "capstone",
  "smallvec",
- "tracing",
  "unlace-capstone",
  "unlace-ir",
 ]
@@ -2699,7 +2690,6 @@ name = "unlace-lift-msp430"
 version = "0.1.0"
 dependencies = [
  "smallvec",
- "tracing",
  "unlace-ir",
 ]
 
@@ -2855,7 +2845,6 @@ dependencies = [
  "insta",
  "smallvec",
  "thiserror",
- "tracing",
  "unlace-ir",
 ]
 
@@ -2864,7 +2853,6 @@ name = "unlace-lift-xtensa"
 version = "0.1.0"
 dependencies = [
  "smallvec",
- "tracing",
  "unlace-ir",
 ]
 
@@ -3003,7 +2991,6 @@ dependencies = [
  "tracing",
  "unlace-ir",
  "unlace-loader",
- "unlace-passes",
 ]
 
 [[package]]

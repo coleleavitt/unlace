@@ -542,7 +542,7 @@ pub struct HirFunction {
     /// from the demangled name. `None` for free functions or symbols that
     /// don't demangle as member functions.
     pub class_name: Option<String>,
-    /// Per-SSA-varnode names produced by [`unlace_passes::VariableMergePass`]'s
+    /// Per-SSA-varnode names produced by `unlace_passes::VariableMergePass`'s
     /// interference-graph coalescer.
     ///
     /// When non-empty, the C printer prefers this map over its default

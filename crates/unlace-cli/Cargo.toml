@@ -14,7 +14,7 @@ unlace-plugin = { workspace = true }
 unlace-lumina = { workspace = true }
 unlace-session = { workspace = true }
 unlace-emu = { workspace = true }
-unlace-debugger = { workspace = true }
+unlace-debugger = { workspace = true, optional = true }
 unlace-flirt = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
 clap = { workspace = true }
@@ -38,7 +38,7 @@ tempfile = { workspace = true }
 [features]
 default = []
 # Enable the Linux ptrace debugger backend behind `unlace dbg`. Linux-only.
-dbg-ptrace = ["unlace-debugger/linux-ptrace"]
+dbg-ptrace = ["dep:unlace-debugger", "unlace-debugger/linux-ptrace"]
 
 [[bin]]
 name = "unlace"

@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 unlace-ir = { workspace = true }
 smallvec = { workspace = true }
-tracing = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

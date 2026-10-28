@@ -384,7 +384,7 @@ fn record_arg_reg_inputs(
     }
 }
 
-fn calling_convention_for(func: &SsaFunction) -> CallingConvention {
+pub(crate) fn calling_convention_for(func: &SsaFunction) -> CallingConvention {
     if func.calling_convention != CallingConvention::Unknown {
         return func.calling_convention;
     }
@@ -395,7 +395,7 @@ fn calling_convention_for(func: &SsaFunction) -> CallingConvention {
     }
 }
 
-fn arg_regs_for(cc: CallingConvention) -> &'static [u64] {
+pub(crate) fn arg_regs_for(cc: CallingConvention) -> &'static [u64] {
     match cc {
         CallingConvention::SystemV => SYSV_ARG_REGS,
         CallingConvention::MicrosoftX64 => MSX64_ARG_REGS,
@@ -833,7 +833,7 @@ fn stack_offset_from_raw(vn: Varnode) -> Option<i64> {
     (vn.space == SpaceId::Register && matches!(vn.offset, RSP | RBP)).then_some(0)
 }
 
-fn resolve_const_from_ssa(
+pub(crate) fn resolve_const_from_ssa(
     func: &SsaFunction,
     sv: SsaVarnode,
     def_map: &BTreeMap<SsaVarnode, (BlockId, usize)>,

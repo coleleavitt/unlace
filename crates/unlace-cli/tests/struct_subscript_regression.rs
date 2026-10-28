@@ -138,12 +138,26 @@ fn contains_invalid_arrow(line: &str) -> bool {
                     return true;
                 }
             }
-            // `<digit>->` — arrow on a numeric literal.
-            Some(c) if c.is_ascii_digit() => return true,
+            // `<digit>->` — arrow on a numeric literal (not an identifier
+            // that ends in a digit, such as `a1->`).
+            Some(c) if c.is_ascii_digit() && preceding_token_is_number(&line[..idx]) => {
+                return true;
+            }
             _ => {}
         }
     }
     false
+}
+
+/// Whether the identifier-or-number token ending at `before.len()` starts
+/// with a digit.
+fn preceding_token_is_number(before: &str) -> bool {
+    before
+        .trim_end()
+        .rsplit(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .next()
+        .and_then(|token| token.chars().next())
+        .is_some_and(|c| c.is_ascii_digit())
 }
 
 /// Whether the parenthesised group ending at `before.len()` (i.e. the `)` just
@@ -266,4 +280,5 @@ fn structural_violation_detectors_catch_the_known_bad_forms() {
     assert!(structural_violations("    x = buf[i];").is_empty()); // real array local
     assert!(structural_violations("    x = arr2[iv].field_0;").is_empty());
     assert!(structural_violations("    p->field_0 = 1;").is_empty()); // identifier arrow
+    assert!(structural_violations("    return a1->__vftable->method_0();").is_empty());
 }

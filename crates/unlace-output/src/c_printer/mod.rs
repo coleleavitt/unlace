@@ -2726,9 +2726,9 @@ struct PrintCtx {
     synthetic_stack_scalars: BTreeMap<i64, u8>,
     /// C++ vtable call targets keyed by instruction VA.
     ///
-    /// When a `Callind` at `insn.addr` is in this map as
-    /// `TargetSet::VtableSlot { class_name, slot_idx }`, `emit_callind_cast`
-    /// renders the call as `this->__vftable->method_<slot_idx>(args)`.
+    /// A `Callind`/`Branchind` at `insn.addr` mapped to
+    /// `TargetSet::VtableSlot` renders through `emit_virtual_call` as
+    /// `obj->method(args)` or `obj->__vftable->method_<slot_idx>(args)`.
     ///
     /// Lifted from [`HirFunction::vtable_call_targets`] at construction.
     vtable_call_targets: BTreeMap<u64, TargetSet>,
@@ -12704,6 +12704,43 @@ fn format_tail_call_arg(arg: &unlace_struct::hir::HirCallArg, ctx: &mut PrintCtx
 // CALLIND complex cast emission (P7-18)
 // ---------------------------------------------------------------------------
 
+/// Render a recognised C++ virtual dispatch: `obj->speak(args)` when RTTI
+/// named the slot's method, `obj->__vftable->method_N(args)` otherwise.
+///
+/// `inputs[0]` is the method pointer. When the dispatch carries no traced
+/// receiver, `inputs[1]` is taken as the receiver; any further inputs are
+/// ordinary arguments.
+fn emit_virtual_call(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Option<String> {
+    let Some(TargetSet::VtableSlot {
+        receiver,
+        slot_idx,
+        method,
+        ..
+    }) = ctx.vtable_call_targets.get(&insn.addr).cloned()
+    else {
+        return None;
+    };
+    let receiver = match receiver {
+        Some(sv) => resolve_sv_expr(&sv, ctx),
+        None if insn.inputs.len() >= 2 => emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx),
+        None => "this".to_string(),
+    };
+    // `->` binds like `[]`, so a deref/cast receiver needs parentheses.
+    let receiver = paren_if_non_atomic_base(&receiver);
+    let args = insn
+        .inputs
+        .iter()
+        .enumerate()
+        .skip(2)
+        .map(|(i, vn)| emit_operand_resolved(vn, i, stmt_idx, ctx))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(match method {
+        Some(method) => format!("{receiver}->{method}({args})"),
+        None => format!("{receiver}->__vftable->method_{slot_idx}({args})"),
+    })
+}
+
 /// Render a CALLIND in IDA-style function-pointer cast form:
 ///
 /// ```text
@@ -12717,35 +12754,8 @@ fn format_tail_call_arg(arg: &unlace_struct::hir::HirCallArg, ctx: &mut PrintCtx
 fn emit_callind_cast(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     let target = resolve_call_target(insn, stmt_idx, ctx);
 
-    // C++ vtable dispatch: `this->__vftable->method_N(args)`.
-    //
-    // When `CppMethodPass` recognised a virtual call at this site and
-    // stamped `TargetSet::VtableSlot` on `indirect_call_targets`, we
-    // render a semantically meaningful form instead of the raw IDA-style
-    // function-pointer cast. The `this` receiver is `inputs[1]` (inputs[0]
-    // is the indirect call target itself); remaining inputs are ordinary
-    // arguments.
-    if let Some(TargetSet::VtableSlot { slot_idx, .. }) = ctx.vtable_call_targets.get(&insn.addr) {
-        let slot = *slot_idx;
-        // Resolve the `this` expression. inputs[0] is the function pointer,
-        // inputs[1] is the receiver. Fall back to `this` literal when the
-        // call has no explicit receiver input (shouldn't happen for a well-
-        // formed vtable dispatch, but be defensive).
-        let receiver = if insn.inputs.len() >= 2 {
-            emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx)
-        } else {
-            "this".to_string()
-        };
-        // Collect all args after the receiver (inputs[2..]).
-        let args: Vec<String> = insn
-            .inputs
-            .iter()
-            .enumerate()
-            .skip(2)
-            .map(|(i, vn)| emit_operand_resolved(vn, i, stmt_idx, ctx))
-            .collect();
-        let args_str = args.join(", ");
-        return format!("{}->__vftable->method_{}({})", receiver, slot, args_str);
+    if let Some(call) = emit_virtual_call(insn, stmt_idx, ctx) {
+        return call;
     }
 
     // t201: when this call site is in the auth-call annotation table,
@@ -13486,33 +13496,10 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                 })
             }
             IrOp::Branchind => {
-                // If this is a vtable tail-call (e.g. `jmp *(*(this))`),
-                // render as a return of the virtual call rather than JUMPOUT.
-                if let Some(TargetSet::VtableSlot { slot_idx, .. }) =
-                    ctx.vtable_call_targets.get(&insn.addr)
-                {
-                    let slot = *slot_idx;
-                    let receiver = if insn.inputs.len() >= 2 {
-                        emit_operand_resolved(&insn.inputs[1], 1, idx, ctx)
-                    } else if !insn.inputs.is_empty() {
-                        // For BRANCHIND the only explicit input is the target
-                        // function pointer — the receiver was in a register.
-                        "this".to_string()
-                    } else {
-                        "this".to_string()
-                    };
-                    let args: Vec<String> = insn
-                        .inputs
-                        .iter()
-                        .enumerate()
-                        .skip(2)
-                        .map(|(i, vn)| emit_operand_resolved(vn, i, idx, ctx))
-                        .collect();
-                    let args_str = args.join(", ");
-                    return Some(format!(
-                        "return {}->__vftable->method_{}({});",
-                        receiver, slot, args_str
-                    ));
+                // A vtable tail-call (`jmp *(*(obj) + N)`) returns the
+                // virtual call's result.
+                if let Some(call) = emit_virtual_call(insn, idx, ctx) {
+                    return Some(format!("return {call};"));
                 }
                 let target = insn.inputs.first().map_or_else(
                     || "0".to_string(),
@@ -13896,29 +13883,8 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 }
             }
             IrOp::Branchind => {
-                // vtable tail-call: render as `return this->__vftable->method_N(args);`
-                if let Some(TargetSet::VtableSlot { slot_idx, .. }) =
-                    ctx.vtable_call_targets.get(&insn.addr)
-                {
-                    let slot = *slot_idx;
-                    let receiver = if insn.inputs.len() >= 2 {
-                        emit_operand_resolved(&insn.inputs[1], 1, idx, ctx)
-                    } else {
-                        "this".to_string()
-                    };
-                    let args: Vec<String> = insn
-                        .inputs
-                        .iter()
-                        .enumerate()
-                        .skip(2)
-                        .map(|(i, vn)| emit_operand_resolved(vn, i, idx, ctx))
-                        .collect();
-                    let args_str = args.join(", ");
-                    let _ = writeln!(
-                        out,
-                        "return {}->__vftable->method_{}({});",
-                        receiver, slot, args_str
-                    );
+                if let Some(call) = emit_virtual_call(insn, idx, ctx) {
+                    let _ = writeln!(out, "return {call};");
                 } else {
                     let target = if !insn.inputs.is_empty() {
                         emit_operand_resolved(&insn.inputs[0], 0, idx, ctx)

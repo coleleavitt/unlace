@@ -152,16 +152,23 @@ Stale-plan reconciliation:
   Several other lifters are beta/fixture breadth and may intentionally emit
   `IrOp::Unimplemented` / `LiftError::Unsupported`.
 
-### Debugging instrumentation (env-gated, all in `unlace-output`/`unlace-cli`)
+### Debugging instrumentation (`tracing` targets; see `docs/diagnostics.md`)
 
-- `UNLACE_CPRINTER_STAGE_TRACE` — per post-emission cleanup stage:
+Traces are `tracing` events on stderr selected with `RUST_LOG` or `--log`
+(`EnvFilter` syntax); every function runs in a `function{name, addr}` span.
+No `UNLACE_*` environment variables remain; settings and limits are TOML
+config (`unlace.example.toml`, `unlace config show`).
+
+- `unlace::cprinter::stage` — per post-emission cleanup stage:
   changed flag + line-count delta (pins which transform dropped a statement).
-- `UNLACE_CPRINTER_PRUNE_TRACE` — per-segment dead-assignment decisions
+- `unlace::cprinter::prune` — per-segment dead-assignment decisions
   (pass #, cond_family, used_later, keep/remove) + per-decl prune decisions.
-- `UNLACE_CPRINTER_TRACE` — global; fold decisions incl. `multi-def-merge`,
+- `unlace::cprinter` — all printer traces, incl. fold decisions `multi-def-merge`,
   `returned-branch-merge-keep`, `commented-keep`, `line-comment-keep`.
-- `UNLACE_LIFT_BOUNDS_TRACE` — function lift extent: begin/no-fallthrough/stop
+- `unlace::lift_bounds` — function lift extent: begin/no-fallthrough/stop
   with known_size + all_padding flags (pins early-stop truncation).
+- Example: `unlace --log unlace::cprinter::prune=debug decompile --function main fixtures/medium.elf`;
+  `[function{name=main}]=debug` enables every area inside one function's span.
 
 Other durable facts:
 
@@ -315,7 +322,7 @@ Current architecture queue:
 5. Product surfaces exist but remain maturity work: IDAPython xrefs and
    `ida_hexrays::decompile`, Lumina placeholder responses, debugger platform
    breadth, emulator breadth, and lifter coverage honesty all still need
-   focused work. Front-end productization is not part of the active workspace.
+   focused work. Unlace is CLI/headless only; there is no UI frontend.
 
 ### Measure, don't assume (decompiler-behavior changes)
 
@@ -325,21 +332,23 @@ routinely produces a *wrong* mental model (the `t61` design doc is a graveyard o
 **instrument and measure** — do not act on an assumption about what the IR/SSA/names
 look like.
 
-- Reach for the env-gated traces first. The codebase is wired for this:
-  `UNLACE_REG_COALESCE_TRACE`(+`_FILTER`), `UNLACE_PART_DUMP`, `UNLACE_LATTICE_DUMP`,
-  `UNLACE_SEED_TRACE`, `UNLACE_VAR_NAMING_TRACE`, `UNLACE_TYPE_TRACE`,
-  `UNLACE_CALLING_TRACE`, `UNLACE_CFG_BUILD_TRACE`, `UNLACE_SPLIT_TRACE`,
-  `UNLACE_CPRINTER_STAGE_TRACE`/`_PRUNE_TRACE`/`_TRACE`, `UNLACE_LIFT_BOUNDS_TRACE`,
-  and `unlace ir-dump --function <f> <bin>`. Add a temporary `eprintln!`/env-gated
-  probe when no existing trace answers the question, measure, then act. Prefer a
-  permanent env-gated trace when the signal is reusable; revert one-off probes.
+- Reach for the existing traces first (`docs/diagnostics.md` lists every target):
+  `unlace::register_coalesce`, `unlace::var_naming`, `unlace::calling`,
+  `unlace::cfg_build`, `unlace::struct::split`, `unlace::cprinter::{stage,prune}`,
+  `unlace::lift_bounds`, `unlace::pass::ir` (per-pass IR diff), narrowed with
+  `--function <f>` or the `[function{name=<f>}]` span filter, plus `unlace ir-dump --function <f> <bin>` and
+  `passes.diagnostics.maturity_dump`. Add a temporary `tracing::debug!` probe
+  when no existing trace answers the question, measure, then act. Keep a
+  permanent `unlace::<area>` event when the signal is reusable; revert one-off
+  probes. Never add an environment variable.
 - When stuck or behavior is surprising, add MORE tracing — confirm the actual
   version→name map, lattice classes, partition webs, exit codes — rather than
   reasoning forward from the C output (which lies about SSA structure).
 - Validate the real gate after every behavioral edit: `xtask semantic-report`
   (exit-code parity), the focused crate tests, then whole-corpus byte-diff if output
-  could move. Treat a single-binary A/B env toggle (e.g. `UNLACE_T61_SPLIT_OFF`) as
-  the cheapest way to isolate a change's effect without a rebuild.
+  could move. A config A/B (`--config` with one key changed, e.g.
+  `passes.disabled = ["sccp"]`) on a single binary is the cheapest way to
+  isolate a change's effect without a rebuild.
 - **Revert on any regression.** A measured no-win that returns to the clean baseline
   (and a documented finding) beats a speculative edit that drops the gate. Never
   land output that compiles-but-runs-wrong to make something "look" fixed.

@@ -11221,50 +11221,14 @@ fn asm_node_inside_if_and_while() {
 //
 // These tests pin the IDA-aligned defaults documented on
 // [`PrintConfig`] (offsets 592 / 600 / 719 in `module_data`) and
-// verify that the env-var override path and the per-context
-// `tab_width` actually drive `indent()` output.  The env-var tests
-// mutate process state, so each one carefully restores the prior
-// value to keep the suite parallel-safe — but because cargo runs
-// unit tests in a shared process by default we additionally serialise
-// the env-mutating tests via a dedicated mutex.
+// verify that an explicit config passed to `print_c_with_rtti_config`
+// actually drives `indent()` output.
 // ---------------------------------------------------------------------
-
-use std::sync::Mutex;
 
 use super::PrintConfig;
 
-/// Serialises tests that touch the global process environment so
-/// they don't race when cargo schedules them on multiple threads.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-/// RAII guard that snapshots a single env var on construction and
-/// restores it (or removes it) on drop, so a test failure can't
-/// leak state into sibling tests.
-struct EnvGuard {
-    key: &'static str,
-    prev: Option<String>,
-}
-
-impl EnvGuard {
-    fn new(key: &'static str) -> Self {
-        Self {
-            key,
-            prev: std::env::var(key).ok(),
-        }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        // SAFETY: tests are serialised through `ENV_LOCK`; only one
-        // thread mutates the process environment at a time.
-        unsafe {
-            match self.prev.take() {
-                Some(v) => std::env::set_var(self.key, v),
-                None => std::env::remove_var(self.key),
-            }
-        }
-    }
+fn print_c_with_config(func: &HirFunction, config: PrintConfig) -> String {
+    crate::c_printer::print_c_with_rtti_config(func, None, None, None, None, None, Some(config))
 }
 
 /// `PrintConfig::default()` returns the IDA-aligned defaults
@@ -11289,85 +11253,11 @@ fn print_config_defaults_match_ida() {
     );
 }
 
-/// With no `UNLACE_*` env vars set, `PrintConfig::from_env`
-/// reproduces the defaults bit-for-bit.
-#[test]
-fn print_config_from_env_no_vars_yields_defaults() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    // Clear any inherited overrides before sampling.
-    let _g0 = EnvGuard::new("UNLACE_MAX_LINE_WIDTH");
-    let _g1 = EnvGuard::new("UNLACE_TAB_WIDTH");
-    let _g2 = EnvGuard::new("UNLACE_INDENT");
-    let _g3 = EnvGuard::new("UNLACE_WRAP_FLOOR");
-    // SAFETY: tests are serialised through `ENV_LOCK`.
-    unsafe {
-        std::env::remove_var("UNLACE_MAX_LINE_WIDTH");
-        std::env::remove_var("UNLACE_TAB_WIDTH");
-        std::env::remove_var("UNLACE_INDENT");
-        std::env::remove_var("UNLACE_WRAP_FLOOR");
-    }
-    assert_eq!(PrintConfig::from_env(), PrintConfig::default());
-}
-
-/// Each `UNLACE_*` env var, when set to a parseable `usize`,
-/// overrides exactly one [`PrintConfig`] field and leaves the
-/// others at their default.
-#[test]
-fn print_config_env_vars_override_defaults() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let _g0 = EnvGuard::new("UNLACE_MAX_LINE_WIDTH");
-    let _g1 = EnvGuard::new("UNLACE_TAB_WIDTH");
-    let _g2 = EnvGuard::new("UNLACE_INDENT");
-    let _g3 = EnvGuard::new("UNLACE_WRAP_FLOOR");
-    // SAFETY: tests are serialised through `ENV_LOCK`.
-    unsafe {
-        std::env::set_var("UNLACE_MAX_LINE_WIDTH", "132");
-        std::env::set_var("UNLACE_TAB_WIDTH", "8");
-        std::env::set_var("UNLACE_INDENT", "3");
-        std::env::set_var("UNLACE_WRAP_FLOOR", "60");
-    }
-    let cfg = PrintConfig::from_env();
-    assert_eq!(cfg.max_line_width, 132);
-    assert_eq!(cfg.tab_width, 8);
-    assert_eq!(cfg.indent_width, 3);
-    assert_eq!(cfg.wrap_floor, 60);
-}
-
-/// Malformed env values (non-numeric / negative / blank) are
-/// silently ignored — the field falls back to the default.  This
-/// guards against a typo in `UNLACE_TAB_WIDTH=four` panicking the
-/// printer in the middle of a long decompilation run.
-#[test]
-fn print_config_invalid_env_falls_back_to_default() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let _g0 = EnvGuard::new("UNLACE_MAX_LINE_WIDTH");
-    let _g1 = EnvGuard::new("UNLACE_TAB_WIDTH");
-    let _g2 = EnvGuard::new("UNLACE_INDENT");
-    let _g3 = EnvGuard::new("UNLACE_WRAP_FLOOR");
-    // SAFETY: tests are serialised through `ENV_LOCK`.
-    unsafe {
-        std::env::set_var("UNLACE_MAX_LINE_WIDTH", "not-a-number");
-        std::env::set_var("UNLACE_TAB_WIDTH", "");
-        std::env::remove_var("UNLACE_INDENT");
-        std::env::remove_var("UNLACE_WRAP_FLOOR");
-    }
-    let cfg = PrintConfig::from_env();
-    let def = PrintConfig::default();
-    assert_eq!(cfg, def);
-}
-
 /// A custom `tab_width` actually drives the per-line indentation
-/// emitted by the printer — flipping the env var from the default
-/// 4 to 2 halves every body-line's leading-space count.
+/// emitted by the printer — moving from the default 4 to 2 halves
+/// every body-line's leading-space count.
 #[test]
 fn print_ctx_custom_tab_width_drives_indent() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let _g = EnvGuard::new("UNLACE_TAB_WIDTH");
-    // SAFETY: tests are serialised through `ENV_LOCK`.
-    unsafe {
-        std::env::set_var("UNLACE_TAB_WIDTH", "2");
-    }
-
     let r0 = reg(0, 4);
     let c1 = con(1, 4);
     let body = vec![HirNode::If {
@@ -11386,7 +11276,13 @@ fn print_ctx_custom_tab_width_drives_indent() {
     }];
 
     let func = make_func("nested_2sp", body);
-    let output = print_c(&func);
+    let output = print_c_with_config(
+        &func,
+        PrintConfig {
+            tab_width: 2,
+            ..PrintConfig::default()
+        },
+    );
 
     // depth 3 × tab_width 2 = 6 leading spaces (was 12 with default).
     let add_line = output
@@ -11397,23 +11293,28 @@ fn print_ctx_custom_tab_width_drives_indent() {
     assert_eq!(lead, 6, "expected 6 spaces (3 × 2): {add_line:?}");
 }
 
-/// `format_flags` round-trips through both `Default` and the
-/// `UNLACE_FORMAT_FLAGS` env hook. Plumbed for forward compatibility:
-/// no current emit consumes the bits, but the field must travel
-/// through `PrintConfig::from_env` so future flag-driven behaviour
-/// lands without an API break.
+/// `format_flags` is plumbed for forward compatibility: no current emit
+/// consumes the bits, so a non-default value travels through
+/// `print_c_with_rtti_config` without changing the output.
 #[test]
-fn print_config_format_flags_roundtrip() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let _g = EnvGuard::new("UNLACE_FORMAT_FLAGS");
-    unsafe {
-        std::env::remove_var("UNLACE_FORMAT_FLAGS");
-    }
-    assert_eq!(PrintConfig::default().format_flags, 0);
-    unsafe {
-        std::env::set_var("UNLACE_FORMAT_FLAGS", "42");
-    }
-    assert_eq!(PrintConfig::from_env().format_flags, 42);
+fn print_config_format_flags_do_not_change_output() {
+    let r0 = reg(0, 4);
+    let c1 = con(1, 4);
+    let body = vec![HirNode::Statement(IrInsn::with_output(
+        IrOp::IntAdd,
+        r0,
+        smallvec![r0, c1],
+        0x1000,
+    ))];
+    let func = make_func("format_flags", body);
+    let flagged = print_c_with_config(
+        &func,
+        PrintConfig {
+            format_flags: 42,
+            ..PrintConfig::default()
+        },
+    );
+    assert_eq!(flagged, print_c_with_config(&func, PrintConfig::default()));
 }
 
 /// Constructing the printer with `max_line_width=60` (vs the default
@@ -11464,20 +11365,10 @@ fn print_config_explicit_override_reaches_ctx() {
     );
 }
 
-/// Sanity check that the *default* indent (no env vars set) still
-/// produces the historical 4-space-per-level output.  This is a
-/// belt-and-braces guard alongside `test_print_indentation` — that
-/// test runs without ENV_LOCK so it could in principle race with
-/// other env-mutating tests; this one explicitly clears the env.
+/// The default config still produces the historical 4-space-per-level
+/// output.
 #[test]
 fn print_ctx_default_tab_width_is_four() {
-    let _lock = ENV_LOCK.lock().unwrap();
-    let _g = EnvGuard::new("UNLACE_TAB_WIDTH");
-    // SAFETY: tests are serialised through `ENV_LOCK`.
-    unsafe {
-        std::env::remove_var("UNLACE_TAB_WIDTH");
-    }
-
     let r0 = reg(0, 4);
     let c1 = con(1, 4);
     let body = vec![HirNode::If {

@@ -12,28 +12,12 @@ use unlace_struct::HirFunction;
 use unlace_struct::HirNode;
 
 pub(super) fn apply_expression_recovery(hir: &mut HirFunction) {
-    if hir_cse_enabled() {
-        unlace_struct::eliminate_common_subexpressions(&mut hir.body);
-    }
-    if hir_licm_enabled() {
-        apply_loop_invariant_motion(hir);
-    }
+    unlace_struct::eliminate_common_subexpressions(&mut hir.body);
+    apply_loop_invariant_motion(hir);
 }
 
 fn apply_loop_invariant_motion(hir: &mut HirFunction) {
     unlace_struct::hoist_loop_invariants(&mut hir.body);
-}
-
-fn hir_licm_enabled() -> bool {
-    std::env::var_os("UNLACE_HIR_LICM")
-        .map(|value| value != "0")
-        .unwrap_or(true)
-}
-
-fn hir_cse_enabled() -> bool {
-    std::env::var_os("UNLACE_HIR_CSE")
-        .map(|value| value != "0")
-        .unwrap_or(true)
 }
 
 #[cfg(test)]

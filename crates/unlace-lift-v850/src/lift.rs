@@ -714,46 +714,13 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
 }
 
 pub(crate) fn trace_lift(addr: u64, message: &str) {
-    if !lift_trace_enabled() || !lift_trace_filter_matches(addr, message) {
-        return;
-    }
-    eprintln!("[unlace v850-lift] {addr:#x}: {message}");
+    tracing::debug!(target: "unlace::lift::v850", "{addr:#x}: {message}");
 }
 
 pub(crate) fn trace_lift_lazy(addr: u64, make_message: impl FnOnce() -> String) {
-    if !lift_trace_enabled() {
-        return;
+    if tracing::enabled!(target: "unlace::lift::v850", tracing::Level::DEBUG) {
+        trace_lift(addr, &make_message());
     }
-    let message = make_message();
-    if !lift_trace_filter_matches(addr, &message) {
-        return;
-    }
-    eprintln!("[unlace v850-lift] {addr:#x}: {message}");
-}
-
-fn lift_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_V850_LIFT_TRACE")
-        || env_flag_enabled("UNLACE_LIFT_TRACE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn lift_trace_filter_matches(addr: u64, message: &str) -> bool {
-    let Some(filter) = std::env::var("UNLACE_V850_LIFT_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-    else {
-        return true;
-    };
-    let needle = filter.trim();
-    needle.is_empty()
-        || message.contains(needle)
-        || format!("{addr:#x}").contains(needle)
-        || format!("{addr:x}").contains(needle)
-}
-
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name).is_some()
 }
 
 fn lift_binop(ctx: &mut LiftCtx, dst: u8, src: u8, op: IrOp, set_flags: bool) {

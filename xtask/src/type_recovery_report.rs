@@ -387,20 +387,40 @@ impl TypeTrace {
         }
     }
 
-    fn from_env() -> Self {
-        Self {
-            enabled: env_flag_enabled("UNLACE_TYPE_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL"),
-            verbose: env_flag_enabled("UNLACE_TYPE_TRACE_VERBOSE")
-                || env_flag_enabled("UNLACE_TRACE_VERBOSE")
-                || env_flag_enabled("UNLACE_TRACE_ALL"),
-            filter: std::env::var("UNLACE_TYPE_TRACE_FILTER")
-                .ok()
-                .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-                .filter(|s| !s.is_empty()),
-            fixture_filter: std::env::var("UNLACE_TYPE_TRACE_FIXTURE")
-                .ok()
-                .filter(|s| !s.is_empty()),
+    /// Decode `--trace`, `--trace-verbose`, `--trace-filter <text>`, and
+    /// `--trace-fixture <text>` from the subcommand arguments.
+    fn from_args(args: &[String]) -> Result<Self, String> {
+        let mut trace = Self {
+            enabled: false,
+            verbose: false,
+            filter: None,
+            fixture_filter: None,
+        };
+        let mut args = args.iter();
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--trace" => trace.enabled = true,
+                "--trace-verbose" => {
+                    trace.enabled = true;
+                    trace.verbose = true;
+                }
+                "--trace-filter" | "--trace-fixture" => {
+                    let value = args
+                        .next()
+                        .filter(|value| !value.is_empty())
+                        .ok_or_else(|| format!("{arg} needs a value"))?;
+                    trace.enabled = true;
+                    if arg == "--trace-filter" {
+                        trace.filter = Some(value.clone());
+                    } else {
+                        trace.fixture_filter = Some(value.clone());
+                    }
+                }
+                "--no-missing-ledger" => {}
+                other => return Err(format!("unknown argument `{other}`")),
+            }
         }
+        Ok(trace)
     }
 
     fn enabled_for(&self, fixture: Option<&str>, function: Option<&str>, message: &str) -> bool {
@@ -459,12 +479,6 @@ impl TypeTrace {
     }
 }
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false)
-}
-
 /// One unrecovered ground-truth fact, captured the moment scoring decides it is
 /// missing. The ledger separates genuine *recoverable* recovery-gaps (the
 /// producer should be able to derive these from the binary alone) from
@@ -481,10 +495,10 @@ struct MissingFact {
     reason: Option<&'static str>,
 }
 
-/// Always-on collector for every missing fact. Unlike `UNLACE_TYPE_TRACE`
-/// (per-line, opt-in) this aggregates the full corpus into one grouped report
-/// so "what is still missing" is answerable in a single glance. Set
-/// `UNLACE_MISSING_LEDGER=0` to silence it.
+/// Always-on collector for every missing fact. Unlike `--trace` (per-line,
+/// opt-in) this aggregates the full corpus into one grouped report so "what is
+/// still missing" is answerable in a single glance. `--no-missing-ledger`
+/// silences it.
 #[derive(Debug)]
 struct MissingLedger {
     enabled: bool,
@@ -492,12 +506,9 @@ struct MissingLedger {
 }
 
 impl MissingLedger {
-    fn from_env() -> Self {
-        let disabled = std::env::var_os("UNLACE_MISSING_LEDGER")
-            .map(|v| v.is_empty() || v == "0")
-            .unwrap_or(false);
+    fn new(enabled: bool) -> Self {
         Self {
-            enabled: !disabled,
+            enabled,
             facts: RefCell::new(Vec::new()),
         }
     }
@@ -816,9 +827,15 @@ impl TypeScore {
     }
 }
 
-pub fn run(root: &Path) -> i32 {
-    let trace = TypeTrace::from_env();
-    let ledger = MissingLedger::from_env();
+pub fn run(root: &Path, args: &[String]) -> i32 {
+    let trace = match TypeTrace::from_args(args) {
+        Ok(trace) => trace,
+        Err(e) => {
+            eprintln!("type-recovery-report: {e}");
+            return 2;
+        }
+    };
+    let ledger = MissingLedger::new(!args.iter().any(|arg| arg == "--no-missing-ledger"));
     let manifest = match read_manifest(root) {
         Ok(m) => m,
         Err(e) => {

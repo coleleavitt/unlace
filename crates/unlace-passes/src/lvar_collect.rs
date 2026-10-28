@@ -40,38 +40,10 @@ const FLAG_OFFSET_END: u64 = 262;
 /// never a user-visible C declaration.
 const RIP_OFFSET: u64 = 0x288;
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .and_then(|v| v.into_string().ok())
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-        .unwrap_or(false)
-}
-
-fn lvar_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_LVAR_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn lvar_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_LVAR_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
-fn lvar_trace_line(line: &str) {
-    if !lvar_trace_enabled() {
-        return;
-    }
-    if let Some(filter) = lvar_trace_filter()
-        && !line.contains(&filter)
-    {
-        return;
-    }
-    eprintln!("[unlace lvar] {line}");
+macro_rules! lvar_trace_line {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::lvar", "{}", format_args!($($arg)*))
+    };
 }
 
 /// Suppression reason recorded against a candidate `Temp` SSA varnode
@@ -153,7 +125,7 @@ impl Pass for LvarCollectPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        lvar_trace_line(&format!(
+        lvar_trace_line!(
             "start func={} existing_lvars={} merged_names={} stack_vars={} params={} return_type={}",
             func.function.name,
             func.lvars.len(),
@@ -161,22 +133,22 @@ impl Pass for LvarCollectPass {
             func.stack_vars.len(),
             func.inferred_params.len(),
             func.inferred_return_type,
-        ));
+        );
         let new_lvars = collect(func);
         if new_lvars == func.lvars {
-            lvar_trace_line(&format!(
+            lvar_trace_line!(
                 "done func={} changed=false lvars={}",
                 func.function.name,
                 new_lvars.len(),
-            ));
+            );
             return Ok(false);
         }
-        lvar_trace_line(&format!(
+        lvar_trace_line!(
             "done func={} changed=true old_lvars={} new_lvars={}",
             func.function.name,
             func.lvars.len(),
             new_lvars.len(),
-        ));
+        );
         func.lvars = new_lvars;
         Ok(true)
     }
@@ -210,18 +182,20 @@ fn collect(func: &SsaFunction) -> Vec<Lvar> {
         &use_blocks,
         func_range,
     );
-    lvar_trace_line(&format!(
+    lvar_trace_line!(
         "after-stack func={} lvars={} use_blocks={}",
         func.function.name,
         out.len(),
         use_blocks.len(),
-    ));
+    );
     let use_counts = count_var_uses(func);
     for (sv, count) in &use_counts {
-        lvar_trace_line(&format!(
+        lvar_trace_line!(
             "use-count func={} sv={:?} count={}",
-            func.function.name, sv, count
-        ));
+            func.function.name,
+            sv,
+            count
+        );
     }
     collect_temps(
         func,
@@ -232,23 +206,23 @@ fn collect(func: &SsaFunction) -> Vec<Lvar> {
         &use_counts,
         entry,
     );
-    lvar_trace_line(&format!(
+    lvar_trace_line!(
         "after-temps func={} lvars={}",
         func.function.name,
         out.len(),
-    ));
+    );
     collect_params(func, &mut out, &mut next_id, &alloc_id, func_range);
-    lvar_trace_line(&format!(
+    lvar_trace_line!(
         "after-params func={} lvars={}",
         func.function.name,
         out.len(),
-    ));
+    );
     collect_return(func, &mut out, &mut next_id, &alloc_id, func_range);
-    lvar_trace_line(&format!(
+    lvar_trace_line!(
         "after-return func={} lvars={}",
         func.function.name,
         out.len(),
-    ));
+    );
 
     out
 }
@@ -280,10 +254,13 @@ fn collect_stack(
     if let Some(frame) = &func.stack_frame {
         for (&offset, local) in &frame.locals {
             if !matches!(local.kind, unlace_ir::ssa::FrameSlotKind::Local) {
-                lvar_trace_line(&format!(
+                lvar_trace_line!(
                     "suppress-stack func={} offset={} size={} kind={:?} reason=non-source-storage",
-                    func.function.name, offset, local.size, local.kind
-                ));
+                    func.function.name,
+                    offset,
+                    local.size,
+                    local.kind
+                );
                 emitted.insert(offset);
                 continue;
             }
@@ -292,7 +269,7 @@ fn collect_stack(
             let source = stack_source(func, offset);
             let lr = stack_live_range(func, offset, use_blocks, func_range);
             let name = stack_lvar_name(func, offset, local.size);
-            lvar_trace_line(&format!(
+            lvar_trace_line!(
                 "emit-stack func={} offset={} size={} name={} range={:?}->{:?} ty={:?} source={:?} flags={:?}",
                 func.function.name,
                 offset,
@@ -303,7 +280,7 @@ fn collect_stack(
                 ty,
                 source,
                 flags
-            ));
+            );
             let mut lv = Lvar::new(
                 alloc_id(next_id),
                 LvarStorage::Stack { offset },
@@ -330,7 +307,7 @@ fn collect_stack(
             offset,
             primitive_width(sv.ty).map(u64::from).unwrap_or(8),
         );
-        lvar_trace_line(&format!(
+        lvar_trace_line!(
             "emit-stack-legacy func={} offset={} name={} raw_stack_var_name={} range={:?}->{:?} ty={:?} source={:?} flags={:?}",
             func.function.name,
             offset,
@@ -341,7 +318,7 @@ fn collect_stack(
             ty,
             source,
             flags
-        ));
+        );
         let mut lv = Lvar::new(
             alloc_id(next_id),
             LvarStorage::Stack { offset },
@@ -423,14 +400,14 @@ fn collect_temps(
             .filter(|sv| {
                 let uses = use_counts.get(sv).copied().unwrap_or(0);
                 if let Some(reason) = classify_temp_suppression(*sv, uses) {
-                    lvar_trace_line(&format!(
+                    lvar_trace_line!(
                         "suppress-temp func={} sv={:?} name={} uses={} reason={}",
                         func.function.name,
                         sv,
                         name,
                         uses,
                         reason.tag(),
-                    ));
+                    );
                     false
                 } else {
                     true
@@ -460,7 +437,7 @@ fn collect_temps(
             );
         }
         let ty = primitive_to_kind(pty);
-        lvar_trace_line(&format!(
+        lvar_trace_line!(
             "emit-temp func={} sv={:?} name={} members={} range={:?}->{:?} ty={:?}",
             func.function.name,
             representative,
@@ -469,7 +446,7 @@ fn collect_temps(
             lr.start_block,
             lr.end_block,
             ty,
-        ));
+        );
         let mut lv = Lvar::new(
             alloc_id(next_id),
             LvarStorage::Temp {
@@ -571,10 +548,16 @@ fn collect_params(
         if !name.is_empty() {
             lv.name = Some(name.clone());
         }
-        lvar_trace_line(&format!(
+        lvar_trace_line!(
             "emit-param func={} idx={} name={} type={:?} range={:?}->{:?} flags={:?}",
-            func.function.name, idx, name, pty, func_range.start_block, func_range.end_block, flags,
-        ));
+            func.function.name,
+            idx,
+            name,
+            pty,
+            func_range.start_block,
+            func_range.end_block,
+            flags,
+        );
         out.push(lv);
     }
 }
@@ -592,13 +575,13 @@ fn collect_return(
     if func.inferred_return_type != PrimitiveType::Unknown {
         // Return slot can be written from any RETURN block; use the
         // function-wide range.
-        lvar_trace_line(&format!(
+        lvar_trace_line!(
             "emit-return func={} type={:?} range={:?}->{:?}",
             func.function.name,
             func.inferred_return_type,
             func_range.start_block,
             func_range.end_block,
-        ));
+        );
         out.push(Lvar::new(
             alloc_id(next_id),
             LvarStorage::Return,
@@ -709,10 +692,13 @@ fn collect_use_blocks(func: &SsaFunction) -> BTreeMap<SsaVarnode, (BlockId, Bloc
             .or_insert((block, block));
     }
     for (sv, (start, end)) in &out {
-        lvar_trace_line(&format!(
+        lvar_trace_line!(
             "use-blocks func={} sv={:?} range={:?}->{:?}",
-            func.function.name, sv, start, end
-        ));
+            func.function.name,
+            sv,
+            start,
+            end
+        );
     }
     out
 }

@@ -268,7 +268,59 @@ const CROSS_ARCH_EXEC_CASES: &[NonHostExecCase] = &[
     },
 ];
 
-pub fn run(root: &Path) -> i32 {
+/// Command-line options of `xtask semantic-report`.
+#[derive(Debug, Default)]
+struct SemanticOptions {
+    /// `--trace`: log each case's commands and observations to stderr.
+    verbose: bool,
+    /// `--keep-temps` (implied by `--trace`): keep recompiled C sources.
+    keep_temps: bool,
+    /// `--runner <fixture-or-arch>=<path>`: user-mode runner for non-host
+    /// executable cases, keyed by fixture name or architecture.
+    runners: BTreeMap<String, PathBuf>,
+}
+
+impl SemanticOptions {
+    fn from_args(args: &[String]) -> Result<Self, String> {
+        let mut opts = Self::default();
+        let mut args = args.iter();
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--trace" => {
+                    opts.verbose = true;
+                    opts.keep_temps = true;
+                }
+                "--keep-temps" => opts.keep_temps = true,
+                "--runner" => {
+                    let spec = args
+                        .next()
+                        .ok_or("--runner needs <fixture-or-arch>=<path>")?;
+                    let (key, path) = spec.split_once('=').ok_or_else(|| {
+                        format!("--runner `{spec}` is not <fixture-or-arch>=<path>")
+                    })?;
+                    opts.runners.insert(key.to_string(), PathBuf::from(path));
+                }
+                other => return Err(format!("unknown argument `{other}`")),
+            }
+        }
+        Ok(opts)
+    }
+
+    fn trace(&self, message: impl std::fmt::Display) {
+        if self.verbose {
+            eprintln!("[unlace-semantic] {message}");
+        }
+    }
+}
+
+pub fn run(root: &Path, args: &[String]) -> i32 {
+    let opts = match SemanticOptions::from_args(args) {
+        Ok(opts) => opts,
+        Err(e) => {
+            eprintln!("semantic-report: {e}");
+            return 2;
+        }
+    };
     let manifest = match read_manifest(root) {
         Ok(m) => m,
         Err(e) => {
@@ -320,7 +372,7 @@ pub fn run(root: &Path) -> i32 {
             continue;
         }
 
-        match run_executable_case(root, &unlace_bin, fixture, case.function) {
+        match run_executable_case(root, &unlace_bin, fixture, case.function, &opts) {
             Ok(Observation {
                 exit,
                 stdout,
@@ -377,7 +429,7 @@ pub fn run(root: &Path) -> i32 {
             continue;
         };
 
-        match run_non_host_exec_case(root, fixture, case) {
+        match run_non_host_exec_case(root, fixture, case, &opts) {
             Ok(observation) if non_host_observation_matches(&observation, case.expected) => {
                 println!(
                     "[semantic] PASS-NONHOST-EXEC {}:{} expected={} observed={}",
@@ -428,7 +480,7 @@ pub fn run(root: &Path) -> i32 {
             continue;
         };
 
-        match run_shape_case(root, &unlace_bin, fixture, case) {
+        match run_shape_case(root, &unlace_bin, fixture, case, &opts) {
             Ok(ShapeObservation {
                 line_count,
                 callother_count,
@@ -561,8 +613,9 @@ fn run_executable_case(
     unlace_bin: &Path,
     fixture: &Fixture,
     function: &str,
+    opts: &SemanticOptions,
 ) -> Result<Observation, String> {
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "exec case {}:{} arch={:?} bin={}",
         fixture.name, function, fixture.architecture, fixture.binary_path
     ));
@@ -578,7 +631,7 @@ fn run_executable_case(
         .output()
         .map_err(|e| format!("failed to run original {}: {e}", binary.display()))?;
     let original = Observation::from_output(original);
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "original {}:{} status={} exit={} stdout={} stderr={}",
         fixture.name,
         function,
@@ -595,7 +648,7 @@ fn run_executable_case(
         .env_remove("RUST_LOG")
         .output()
         .map_err(|e| format!("failed to spawn unlace: {e}"))?;
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "decompile {}:{} status={} stdout_bytes={} stderr={}",
         fixture.name,
         function,
@@ -615,7 +668,7 @@ fn run_executable_case(
 
     let generated = String::from_utf8(decompile.stdout)
         .map_err(|e| format!("decompiler output was not UTF-8: {e}"))?;
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "generated {}:{} bytes={} lines={} labels={} gotos={}",
         fixture.name,
         function,
@@ -626,8 +679,8 @@ fn run_executable_case(
     ));
     reject_known_bad_shapes(&generated)?;
 
-    let recompiled = compile_and_run_c_subset(root, &generated, fixture, function, &binary)?;
-    semantic_trace(format_args!(
+    let recompiled = compile_and_run_c_subset(root, &generated, fixture, function, &binary, opts)?;
+    opts.trace(format_args!(
         "recompiled {}:{} status={} exit={} stdout={} stderr={}",
         fixture.name,
         function,
@@ -655,8 +708,9 @@ fn run_non_host_exec_case(
     root: &Path,
     fixture: &Fixture,
     case: &NonHostExecCase,
+    opts: &SemanticOptions,
 ) -> Result<NonHostObservation, NonHostExecError> {
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "non-host exec case {}:{} arch={:?} bin={}",
         fixture.name, case.function, fixture.architecture, fixture.binary_path
     ));
@@ -665,16 +719,16 @@ fn run_non_host_exec_case(
             "non-host exec case points at x86_64 fixture".to_string(),
         ));
     }
-    let runner = find_non_host_runner(fixture, case).ok_or_else(|| {
+    let runner = find_non_host_runner(fixture, case, opts).ok_or_else(|| {
         NonHostExecError::Unsupported(format!(
-            "no user-mode runner found; tried env {} / {} and commands {}",
-            fixture_runner_env_key(&fixture.name),
-            arch_runner_env_key(fixture.architecture.as_deref().unwrap_or("unknown")),
+            "no user-mode runner found; tried --runner {} / {} and commands {}",
+            fixture.name,
+            fixture.architecture.as_deref().unwrap_or("unknown"),
             case.runner_names.join(", ")
         ))
     })?;
     let binary = root.join(&fixture.binary_path);
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "non-host runner fixture={} runner={} binary={} timeout_ms={}",
         fixture.name,
         runner.display(),
@@ -685,7 +739,7 @@ fn run_non_host_exec_case(
     command.arg(&binary);
     match run_with_timeout(&mut command, Duration::from_millis(case.timeout_ms)) {
         Ok(Some(output)) => {
-            semantic_trace(format_args!(
+            opts.trace(format_args!(
                 "non-host run fixture={} status={} stdout={} stderr={}",
                 fixture.name,
                 output_status_detail_raw(&output),
@@ -695,7 +749,7 @@ fn run_non_host_exec_case(
             Ok(NonHostObservation::Exit(Observation::from_output(output)))
         }
         Ok(None) => {
-            semantic_trace(format_args!(
+            opts.trace(format_args!(
                 "non-host run fixture={} timed out",
                 fixture.name
             ));
@@ -705,34 +759,22 @@ fn run_non_host_exec_case(
     }
 }
 
-fn find_non_host_runner(fixture: &Fixture, case: &NonHostExecCase) -> Option<PathBuf> {
-    for key in [
-        fixture_runner_env_key(&fixture.name),
-        arch_runner_env_key(fixture.architecture.as_deref().unwrap_or("unknown")),
-    ] {
-        if let Some(path) = std::env::var_os(&key)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-        {
-            return Some(path);
-        }
-    }
-
-    case.runner_names
-        .iter()
-        .find(|name| command_available(name))
-        .map(|name| PathBuf::from(*name))
-}
-
-fn fixture_runner_env_key(fixture_name: &str) -> String {
-    format!(
-        "UNLACE_SEMANTIC_RUNNER_{}",
-        fixture_name.to_ascii_uppercase()
-    )
-}
-
-fn arch_runner_env_key(arch: &str) -> String {
-    format!("UNLACE_SEMANTIC_RUNNER_{}", arch.to_ascii_uppercase())
+fn find_non_host_runner(
+    fixture: &Fixture,
+    case: &NonHostExecCase,
+    opts: &SemanticOptions,
+) -> Option<PathBuf> {
+    let arch = fixture.architecture.as_deref().unwrap_or("unknown");
+    opts.runners
+        .get(&fixture.name)
+        .or_else(|| opts.runners.get(arch))
+        .cloned()
+        .or_else(|| {
+            case.runner_names
+                .iter()
+                .find(|name| command_available(name))
+                .map(|name| PathBuf::from(*name))
+        })
 }
 
 fn command_available(name: &str) -> bool {
@@ -749,8 +791,9 @@ fn run_shape_case(
     unlace_bin: &Path,
     fixture: &Fixture,
     case: &ShapeCase,
+    opts: &SemanticOptions,
 ) -> Result<ShapeObservation, String> {
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "shape case {}:{} arch={:?} bin={}",
         fixture.name, case.function, fixture.architecture, fixture.binary_path
     ));
@@ -762,7 +805,7 @@ fn run_shape_case(
         .env_remove("RUST_LOG")
         .output()
         .map_err(|e| format!("failed to spawn unlace: {e}"))?;
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "shape decompile {}:{} status={} stdout_bytes={} stderr={}",
         fixture.name,
         case.function,
@@ -812,13 +855,14 @@ fn compile_and_run_c_subset(
     fixture: &Fixture,
     function: &str,
     binary: &Path,
+    opts: &SemanticOptions,
 ) -> Result<Observation, String> {
     let stem = &fixture.name;
     let temp = std::env::temp_dir().join(format!("unlace-semantic-{}-{stem}", process::id()));
     let _ = std::fs::remove_dir_all(&temp);
     std::fs::create_dir_all(&temp)
         .map_err(|e| format!("failed to create temp dir {}: {e}", temp.display()))?;
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "compile subset {}:{} temp={}",
         fixture.name,
         function,
@@ -838,7 +882,7 @@ fn compile_and_run_c_subset(
     let driver = c_subset_driver(fixture, function);
     std::fs::write(&source, format!("{prelude}{generated}{driver}"))
         .map_err(|e| format!("failed to write {}: {e}", source.display()))?;
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "wrote subset source {} bytes={}",
         source.display(),
         std::fs::metadata(&source).map(|m| m.len()).unwrap_or(0)
@@ -846,7 +890,7 @@ fn compile_and_run_c_subset(
 
     let helper_object = if let Some(helper_source) = helper_source.as_deref() {
         let object = temp.join(format!("{stem}_helpers.o"));
-        semantic_trace(format_args!(
+        opts.trace(format_args!(
             "compile helper source={} object={}",
             helper_source.display(),
             object.display()
@@ -875,7 +919,7 @@ fn compile_and_run_c_subset(
         std::fs::write(&helper_source, helper_text)
             .map_err(|e| format!("failed to write {}: {e}", helper_source.display()))?;
         let object = temp.join(format!("{stem}_helpers.o"));
-        semantic_trace(format_args!(
+        opts.trace(format_args!(
             "compile generated helper source={} object={}",
             helper_source.display(),
             object.display()
@@ -924,7 +968,7 @@ fn compile_and_run_c_subset(
         .current_dir(root)
         .output()
         .map_err(|e| format!("failed to invoke cc: {e}"))?;
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "compile subset status={} stderr={}",
         compile.status,
         display_bytes(&compile.stderr)
@@ -942,7 +986,7 @@ fn compile_and_run_c_subset(
 
     let run = run_with_timeout(&mut Command::new(&compiled_binary), Duration::from_secs(2))?
         .ok_or_else(|| "recompiled subset timed out".to_string())?;
-    semantic_trace(format_args!(
+    opts.trace(format_args!(
         "run subset binary={} status={} stdout={} stderr={}",
         compiled_binary.display(),
         output_status_detail_raw(&run),
@@ -950,8 +994,8 @@ fn compile_and_run_c_subset(
         display_bytes(&run.stderr)
     ));
     let observation = Observation::from_output(run);
-    if semantic_keep_temps() {
-        semantic_trace(format_args!("keeping semantic temp dir {}", temp.display()));
+    if opts.keep_temps {
+        opts.trace(format_args!("keeping semantic temp dir {}", temp.display()));
     } else {
         let _ = std::fs::remove_dir_all(&temp);
     }
@@ -1249,29 +1293,6 @@ fn display_bytes(bytes: &[u8]) -> String {
     format!("{:?}", s)
 }
 
-fn semantic_trace(message: impl std::fmt::Display) {
-    if semantic_trace_enabled() {
-        eprintln!("[unlace-semantic] {message}");
-    }
-}
-
-fn semantic_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_SEMANTIC_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn semantic_keep_temps() -> bool {
-    semantic_trace_enabled() || env_flag_enabled("UNLACE_SEMANTIC_KEEP_TEMPS")
-}
-
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .map(|value| {
-            let value = value.to_string_lossy();
-            !matches!(value.as_ref(), "" | "0" | "false" | "FALSE" | "off" | "OFF")
-        })
-        .unwrap_or(false)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1390,12 +1411,7 @@ mod tests {
     }
 
     #[test]
-    fn non_host_runner_env_keys_are_predictable() {
-        assert_eq!(
-            fixture_runner_env_key("arm64_features"),
-            "UNLACE_SEMANTIC_RUNNER_ARM64_FEATURES"
-        );
-        assert_eq!(arch_runner_env_key("riscv"), "UNLACE_SEMANTIC_RUNNER_RISCV");
+    fn non_host_timeout_observation_matches_timeout_expectation() {
         assert!(non_host_observation_matches(
             &NonHostObservation::Timeout,
             NonHostExpected::Timeout

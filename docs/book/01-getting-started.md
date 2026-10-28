@@ -64,14 +64,17 @@ unlace/
 └── benches/              # Performance benchmarks
 ```
 
-## Environment Variables
+## Configuration and Logging
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `UNLACE_LOG` | `warn` | Log level (trace/debug/info/warn/error) |
-| `UNLACE_MAX_WIDTH` | `120` | Max line width for C output |
-| `UNLACE_TAB_WIDTH` | `4` | Indentation width |
-| `UNLACE_TIMEOUT` | `30` | Per-function timeout in seconds |
+Settings and analysis limits come from a TOML file: `--config <path>`, else
+`./unlace.toml`, else `$XDG_CONFIG_HOME/unlace/config.toml`. See
+`unlace.example.toml` for every key at its default, and `unlace config show`
+for the effective values. Command-line flags such as `--max-width`,
+`--tab-width`, and `--timeout` override the file.
+
+Diagnostics go to stderr through `tracing`: set `RUST_LOG` or pass
+`--log <filter>` (default `warn`). `docs/diagnostics.md` lists the
+`unlace::<area>` targets.
 
 ## Next Steps
 

@@ -33,26 +33,11 @@ use linkscope::TraceField;
 use unlace_ir::IrOp;
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 
+use crate::options::TypeConstraintLimits;
 use crate::pass::{Pass, PassError};
 
-const DEFAULT_TYPE_CONSTRAINT_MAX_CONSTRAINTS: usize = 30_000;
-
-fn type_constraint_max_constraints() -> usize {
-    type_constraint_max_constraints_from(
-        std::env::var("UNLACE_TYPE_CONSTRAINT_MAX_CONSTRAINTS")
-            .ok()
-            .as_deref(),
-    )
-}
-
-fn type_constraint_max_constraints_from(value: Option<&str>) -> usize {
-    value
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_TYPE_CONSTRAINT_MAX_CONSTRAINTS)
-}
-
-fn type_constraint_over_budget(count: usize) -> bool {
-    let limit = type_constraint_max_constraints();
+fn type_constraint_over_budget(count: usize, limits: TypeConstraintLimits) -> bool {
+    let limit = limits.max_constraints;
     linkscope::record_items("pass.type-constraint.max-constraints", limit as u64);
     let over_budget = limit > 0 && count > limit;
     if over_budget {
@@ -752,7 +737,7 @@ pub fn solve_polymorphic_constraints(
 /// Convenience wrapper used by [`TypeConstraintSolverPass`]: collect, solve,
 /// and merge the solution back into `func.var_types`. Returns `true` when
 /// any entry was added or refined.
-pub fn collect_and_apply(func: &mut SsaFunction) -> bool {
+pub fn collect_and_apply(func: &mut SsaFunction, limits: TypeConstraintLimits) -> bool {
     let _span = linkscope::phase("pass.type-constraint.collect-and-apply");
     let cs = {
         let _span = linkscope::phase("pass.type-constraint.collect");
@@ -760,7 +745,7 @@ pub fn collect_and_apply(func: &mut SsaFunction) -> bool {
         linkscope::record_items("pass.type-constraint.collect", cs.len() as u64);
         cs
     };
-    if type_constraint_over_budget(cs.len()) {
+    if type_constraint_over_budget(cs.len(), limits) {
         return false;
     }
     let solved = solve_constraints(func, cs);
@@ -797,7 +782,10 @@ pub fn collect_and_apply(func: &mut SsaFunction) -> bool {
 ///
 /// `name()` returns `"TypeConstraintSolver"` so the pass appears in
 /// fixed-point traces alongside its siblings.
-pub struct TypeConstraintSolverPass;
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TypeConstraintSolverPass {
+    pub limits: TypeConstraintLimits,
+}
 
 impl Pass for TypeConstraintSolverPass {
     fn name(&self) -> &str {
@@ -809,7 +797,7 @@ impl Pass for TypeConstraintSolverPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        Ok(collect_and_apply(func))
+        Ok(collect_and_apply(func, self.limits))
     }
 }
 
@@ -1155,17 +1143,6 @@ mod tests {
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
-    #[test]
-    fn type_constraint_limit_default_and_override() {
-        assert_eq!(type_constraint_max_constraints_from(None), 30_000);
-        assert_eq!(type_constraint_max_constraints_from(Some("42")), 42);
-        assert_eq!(type_constraint_max_constraints_from(Some("0")), 0);
-        assert_eq!(
-            type_constraint_max_constraints_from(Some("not-a-number")),
-            30_000
-        );
-    }
-
     fn make_ssa(insns: Vec<IrInsn>) -> SsaFunction {
         let mut func = Function::new("test", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
@@ -1234,7 +1211,7 @@ mod tests {
 
         let mut ssa = make_ssa(vec![i0, i1, i2]);
 
-        let changed = collect_and_apply(&mut ssa);
+        let changed = collect_and_apply(&mut ssa, TypeConstraintLimits::default());
         assert!(changed, "should refine at least one var");
 
         // The LOAD's address operand is the SSA renaming of `ptr` at insn 1, input 1.
@@ -1345,7 +1322,7 @@ mod tests {
         _ = make_multi_block_ssa; // keep helper referenced; not used here.
 
         // Run the solver.
-        let changed = collect_and_apply(&mut ssa);
+        let changed = collect_and_apply(&mut ssa, TypeConstraintLimits::default());
         assert!(changed);
 
         // The phi inputs are both produced by INT_ADD over Int(4) constants,
@@ -1391,7 +1368,7 @@ mod tests {
 
         let mut ssa = make_ssa(vec![i0, i1, i2]);
 
-        _ = collect_and_apply(&mut ssa);
+        _ = collect_and_apply(&mut ssa, TypeConstraintLimits::default());
 
         // STORE address operand: insn idx 2, input 1.
         let addr_sv = lookup_in(&ssa, BlockId(0), 2, 1);
@@ -1447,7 +1424,7 @@ mod tests {
 
         // Run the same two passes the CLI pipeline runs.
         TypeInferPass.run(&mut ssa).expect("type infer");
-        TypeConstraintSolverPass
+        TypeConstraintSolverPass::default()
             .run(&mut ssa)
             .expect("type constraint solver");
 
@@ -1557,7 +1534,7 @@ mod tests {
         let i0 = IrInsn::with_output(IrOp::Popcount, x, smallvec![r0], 0x1000);
         let mut ssa = make_ssa(vec![i0]);
 
-        _ = collect_and_apply(&mut ssa);
+        _ = collect_and_apply(&mut ssa, TypeConstraintLimits::default());
 
         let x_sv = lookup_out(&ssa, BlockId(0), 0);
         assert!(

@@ -191,8 +191,8 @@ production form. Tracked so the README doesn't overclaim:
   beyond placeholder or partial protocol behavior.
 - Corpus-scale parity automation against `research/decompiled-references/ida/`:
   pattern counters, address-mapped output diffs, and support-tier scorecards.
-- Interactive/frontend productization is deferred until CLI, SDK, MCP,
-  persistence, and corpus evidence are stable.
+- No UI frontend: unlace is CLI and library only. Graph, xref, and hex data
+  are planned as headless exports (GraphViz dot, JSON).
 - SDK compatibility scoreboard for Rust plugins, WASM plugins, Python bindings,
   IDAPython wrappers, loader samples, decompiler hooks, and debugger/trace
   extensions.

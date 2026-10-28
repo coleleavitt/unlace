@@ -17,7 +17,6 @@ pub mod goto_coalesce;
 pub mod goto_elim;
 pub mod goto_to_break;
 pub mod goto_to_continue;
-pub mod graph_layout;
 pub mod hir;
 pub mod hir_cse;
 pub mod hir_licm;
@@ -30,6 +29,7 @@ pub mod label_tail_dup;
 pub mod loop_classify;
 pub mod loop_normalize;
 pub mod node_split;
+pub mod options;
 pub mod reaching_conditions;
 pub mod region_bridge;
 pub mod region_splice;
@@ -71,6 +71,7 @@ pub use label_tail_dup::duplicate_simple_label_tails;
 pub use loop_classify::{LoopFormCounts, classify_function, classify_loop_form, classify_nodes};
 pub use loop_normalize::{normalize_dowhile_to_while, reverse_loop_rotation};
 pub use node_split::split_irreducible_entries;
+pub use options::StructureOptions;
 pub use region_structurer::{Region, count_gotos, regions_to_hir, structure_regions};
 pub use return_merge::return_merge;
 pub use seh_lower::{
@@ -80,9 +81,10 @@ pub use short_circuit::short_circuit_recovery;
 pub use structurer::{
     StructureError, recover_for_loops, structure, structure_preserve_returns,
     structure_preserve_returns_with_landing_pads, structure_unstructured_fallback,
-    structure_unstructured_fallback_with_arch, structure_until, structure_with_arch,
-    structure_with_arch_until, structure_with_landing_pads, structure_with_landing_pads_and_arch,
-    structure_with_landing_pads_and_arch_until, structure_with_landing_pads_until,
+    structure_unstructured_fallback_with_arch, structure_unstructured_fallback_with_options,
+    structure_until, structure_with_arch, structure_with_arch_until, structure_with_landing_pads,
+    structure_with_landing_pads_and_arch, structure_with_landing_pads_and_arch_until,
+    structure_with_landing_pads_until, structure_with_options,
 };
 pub use switch_cleanup::cleanup_switches;
 pub use switch_recovery::{

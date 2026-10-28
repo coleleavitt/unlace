@@ -18,43 +18,15 @@ use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use crate::lift::LiftCtx;
 use crate::register_file::st_reg;
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false)
-}
-
-fn x87_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_X87_TRACE")
-        || env_flag_enabled("UNLACE_LIFT_TRACE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn x87_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_X87_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_LIFT_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .filter(|s| !s.is_empty())
-}
-
 fn x87_trace_line(ctx: &LiftCtx, insn: &iced_x86::Instruction, message: impl std::fmt::Display) {
-    if !x87_trace_enabled() {
-        return;
-    }
-    let line = format!(
+    tracing::debug!(
+        target: "unlace::lift::x86::x87",
         "{:#x}: {:?}/{:?} op_count={} {message}",
         ctx.addr,
         insn.mnemonic(),
         insn.code(),
         insn.op_count()
     );
-    if let Some(filter) = x87_trace_filter()
-        && !line.contains(&filter)
-    {
-        return;
-    }
-    eprintln!("[unlace x87-lift] {line}");
 }
 
 /// Constant tags for x87 FPU Callother `inputs[0]`.

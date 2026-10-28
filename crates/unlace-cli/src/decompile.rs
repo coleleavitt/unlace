@@ -6,6 +6,7 @@
 //! CLI's output in-process, without spawning the `unlace` binary.
 
 use std::fs;
+use std::io::IsTerminal;
 
 use anyhow::{Context, Result, bail};
 use unlace_ir::ArchId;
@@ -28,8 +29,9 @@ pub struct Decompiled {
     pub output: String,
 }
 
-/// Decompile `binary_path` with the CLI's default configuration, except for
-/// the per-function wall-clock `timeout`, and return the emitted text.
+/// Decompile `binary_path` with the built-in default [`Config`](crate::config::Config)
+/// (no config file is read) and the given per-function wall-clock `timeout`,
+/// and return the emitted text.
 pub fn decompile_to_string(
     binary_path: &std::path::Path,
     function_filter: Option<&str>,
@@ -396,6 +398,9 @@ pub struct DecompileStats {
     goto_tokens: usize,
     readfsqword_tokens: usize,
     stack_chk_fail_tokens: usize,
+    /// The live progress line is redrawn with `\r`, so it is drawn only when
+    /// stderr is a terminal; logs and pipes get the final scorecard alone.
+    draw_progress: bool,
     last_progress_len: usize,
 }
 
@@ -422,6 +427,7 @@ impl DecompileStats {
             goto_tokens: 0,
             readfsqword_tokens: 0,
             stack_chk_fail_tokens: 0,
+            draw_progress: on && std::io::stderr().is_terminal(),
             last_progress_len: 0,
         }
     }
@@ -446,7 +452,7 @@ impl DecompileStats {
     }
 
     fn tick_progress(&mut self, idx: usize, total: usize, name: &str) {
-        if !self.on || total == 0 {
+        if !self.draw_progress || total == 0 {
             return;
         }
         // Only redraw every ~32 functions or for the last one to avoid
@@ -473,7 +479,7 @@ impl DecompileStats {
     }
 
     fn clear_progress(&mut self) {
-        if !self.on || self.last_progress_len == 0 {
+        if !self.draw_progress || self.last_progress_len == 0 {
             return;
         }
         eprint!("\r{}\r", " ".repeat(self.last_progress_len));

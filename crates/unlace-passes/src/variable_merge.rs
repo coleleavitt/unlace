@@ -32,52 +32,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, SpaceId, Varnode};
 
+use crate::options::VariableMergeLimits;
 use crate::pass::{Pass, PassError};
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .and_then(|v| v.into_string().ok())
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-        .unwrap_or(false)
-}
-
-fn var_merge_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_VAR_MERGE_TRACE")
-        || env_flag_enabled("UNLACE_INTERFERENCE_TRACE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn var_merge_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_VAR_MERGE_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_INTERFERENCE_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
 macro_rules! var_merge_trace_line {
-    ($($arg:tt)*) => {{
-        if var_merge_trace_enabled() {
-            var_merge_trace_line_args(format_args!($($arg)*));
-        }
-    }};
-}
-
-fn var_merge_trace_line_args(args: std::fmt::Arguments<'_>) {
-    if !var_merge_trace_enabled() {
-        return;
-    }
-    let line = args.to_string();
-    if let Some(filter) = var_merge_trace_filter()
-        && !line.contains(filter.as_str())
-    {
-        return;
-    }
-    eprintln!("[unlace var-merge] {line}");
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::variable_merge", "{}", format_args!($($arg)*))
+    };
 }
 
 /// A point in the function's program: `(block, instruction index)`.
@@ -162,22 +123,9 @@ struct MergeKey {
 /// interference-graph coalescer that can fold *different* unique varnodes
 /// with disjoint live ranges into a single C variable, mirroring how IDA's
 /// Hex-Rays output reuses `v3`, `v4`, `v5` across unrelated subexpressions.
-pub struct VariableMergePass;
-
-const DEFAULT_VAR_MERGE_MAX_COALESCIBLE_VARS: usize = 5000;
-
-fn variable_merge_max_coalescible_vars() -> usize {
-    variable_merge_max_coalescible_vars_from(
-        std::env::var("UNLACE_VAR_MERGE_MAX_COALESCIBLE_VARS")
-            .ok()
-            .as_deref(),
-    )
-}
-
-fn variable_merge_max_coalescible_vars_from(value: Option<&str>) -> usize {
-    value
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_VAR_MERGE_MAX_COALESCIBLE_VARS)
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VariableMergePass {
+    pub limits: VariableMergeLimits,
 }
 
 impl Pass for VariableMergePass {
@@ -227,7 +175,7 @@ impl Pass for VariableMergePass {
             .copied()
             .filter(|sv| sv.base.space == SpaceId::Unique)
             .collect();
-        let max_coalescible_vars = variable_merge_max_coalescible_vars();
+        let max_coalescible_vars = self.limits.max_coalescible_vars;
         let skip_cross_base_coalescing =
             max_coalescible_vars > 0 && coalescible_vars.len() > max_coalescible_vars;
         if skip_cross_base_coalescing {
@@ -861,17 +809,6 @@ mod tests {
     }
 
     #[test]
-    fn var_merge_coalescible_limit_default_and_override() {
-        assert_eq!(variable_merge_max_coalescible_vars_from(None), 5000);
-        assert_eq!(variable_merge_max_coalescible_vars_from(Some("42")), 42);
-        assert_eq!(variable_merge_max_coalescible_vars_from(Some("0")), 0);
-        assert_eq!(
-            variable_merge_max_coalescible_vars_from(Some("not-a-number")),
-            5000
-        );
-    }
-
-    #[test]
     fn clusters_by_base_groups_versions_without_cross_base_merging() {
         let u0v0 = SsaVarnode {
             base: Varnode::unique(0, 4),
@@ -906,7 +843,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         let changed = pass.run(&mut ssa).expect("pass should succeed");
         assert!(changed, "should produce merged names");
 
@@ -970,7 +907,7 @@ mod tests {
         func.insert_block(bb3);
 
         let mut ssa = build_ssa(func);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let r0_names: BTreeSet<&str> = ssa
@@ -1000,7 +937,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let r0_name = name_of(&ssa, r0, 0);
@@ -1042,7 +979,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
@@ -1075,7 +1012,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
@@ -1132,7 +1069,7 @@ mod tests {
         func.insert_block(bb2);
 
         let mut ssa = build_ssa(func);
-        VariableMergePass
+        VariableMergePass::default()
             .run(&mut ssa)
             .expect("pass should succeed");
 
@@ -1164,7 +1101,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
@@ -1197,7 +1134,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let r0_name = name_of(&ssa, r0, 0).expect("r0 named");
@@ -1232,7 +1169,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
@@ -1283,7 +1220,7 @@ mod tests {
         ssa.var_types.insert(u0_sv, PrimitiveType::Int(4));
         ssa.var_types.insert(u4_sv, PrimitiveType::Float);
 
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
@@ -1310,7 +1247,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         // u0 produces exactly one cluster — pass should always assign a name.
@@ -1336,7 +1273,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let names: BTreeSet<&str> = ssa
@@ -1368,7 +1305,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let r0_name = name_of(&ssa, r0, 0).expect("r0 named");
@@ -1398,7 +1335,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
@@ -1428,7 +1365,7 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let pass = VariableMergePass;
+        let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
         let r0_name = name_of(&ssa, r0, 0).expect("r0 named");

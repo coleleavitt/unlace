@@ -25,6 +25,11 @@
 //! Run **after** [`crate::merge_linear_blocks`] (so we don't duplicate
 //! single-pred chains needlessly) and **before** SSA construction (so phi
 //! nodes get rebuilt cleanly for the new blocks).
+//!
+//! # Diagnostics
+//!
+//! Enable `unlace::struct::split=debug` for per-round region and split counts,
+//! and `=trace` for per-candidate scoring.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -36,70 +41,60 @@ use crate::irreducible::{IrreducibleRegion, detect_irreducible_regions_in_cfg};
 
 const MAX_SPLIT_ROUNDS: usize = 16;
 
+macro_rules! split_debug {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::struct::split", "{}", format_args!($($arg)*))
+    };
+}
+
 /// Split entry nodes of irreducible regions until the CFG is reducible or
 /// the iteration cap is hit. Returns the number of duplications performed.
 ///
 /// Operates on a raw [`Function`] (pre-SSA). The CFG is rebuilt internally
 /// each round.
 pub fn split_irreducible_entries(func: &mut Function) -> usize {
-    let trace = std::env::var_os("UNLACE_SPLIT_TRACE")
-        .map(|v| v != "0")
-        .unwrap_or(false);
     let mut total = 0;
     for round in 0..MAX_SPLIT_ROUNDS {
         let cfg = build_cfg(func);
         let regions = detect_irreducible_regions_in_cfg(&cfg);
-        if trace {
-            eprintln!(
-                "[unlace:split] func={} round={round} blocks={} irreducible_regions={}",
-                func.name,
-                func.blocks.len(),
-                regions.len()
+        split_debug!(
+            "func={} round={round} blocks={} irreducible_regions={}",
+            func.name,
+            func.blocks.len(),
+            regions.len()
+        );
+        for (i, r) in regions.iter().enumerate() {
+            split_debug!(
+                "  region#{i} entries={:?} body_blocks={}",
+                r.entry_blocks,
+                r.body_blocks.len()
             );
-            for (i, r) in regions.iter().enumerate() {
-                eprintln!(
-                    "[unlace:split]   region#{i} entries={:?} body_blocks={}",
-                    r.entry_blocks,
-                    r.body_blocks.len()
-                );
-            }
         }
         if regions.is_empty() {
-            if trace {
-                eprintln!(
-                    "[unlace:split] func={} CONVERGED (reducible) after {round} rounds, {total} splits, blocks={}",
-                    func.name,
-                    func.blocks.len()
-                );
-            }
+            split_debug!(
+                "func={} CONVERGED (reducible) after {round} rounds, {total} splits, blocks={}",
+                func.name,
+                func.blocks.len()
+            );
             return total;
         }
         let split_now = split_one_round(func, &regions);
-        if trace {
-            eprintln!(
-                "[unlace:split] func={} round={round} split_now={split_now}",
-                func.name
-            );
-        }
+        split_debug!("func={} round={round} split_now={split_now}", func.name);
         if split_now == 0 {
-            if trace {
-                eprintln!(
-                    "[unlace:split] func={} STUCK (irreducible, no productive split) after {round} rounds, blocks={}",
-                    func.name,
-                    func.blocks.len()
-                );
-            }
+            split_debug!(
+                "func={} STUCK (irreducible, no productive split) after {round} rounds, blocks={}",
+                func.name,
+                func.blocks.len()
+            );
             return total;
         }
         total += split_now;
     }
-    if trace {
-        eprintln!(
-            "[unlace:split] func={} HIT MAX_SPLIT_ROUNDS={MAX_SPLIT_ROUNDS}, blocks={}, total_splits={total}",
-            func.name,
-            func.blocks.len()
-        );
-    }
+    split_debug!(
+        "func={} HIT MAX_SPLIT_ROUNDS={MAX_SPLIT_ROUNDS}, blocks={}, total_splits={total}",
+        func.name,
+        func.blocks.len()
+    );
     total
 }
 
@@ -113,6 +108,7 @@ fn split_one_round(func: &mut Function, regions: &[IrreducibleRegion]) -> usize 
         };
 
         tracing::trace!(
+            target: "unlace::struct::split",
             entry = ?entry,
             external_preds = ?external,
             body_blocks = region.body_blocks.len(),
@@ -171,6 +167,7 @@ fn pick_split_target(
         let score = simulate_post_split_score(func, region, entry, external);
         if score.largest_body >= region.body_blocks.len() {
             tracing::trace!(
+            target: "unlace::struct::split",
                 entry = ?entry,
                 current_body = region.body_blocks.len(),
                 remaining_largest_body = score.largest_body,
@@ -186,6 +183,7 @@ fn pick_split_target(
         };
 
         tracing::trace!(
+            target: "unlace::struct::split",
             entry = ?candidate.entry,
             external_pred_count = candidate.external.len(),
             remaining_largest_body = candidate.score.largest_body,

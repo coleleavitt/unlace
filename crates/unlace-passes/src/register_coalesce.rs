@@ -21,47 +21,10 @@ use unlace_ir::{BlockId, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .and_then(|v| v.into_string().ok())
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-        .unwrap_or(false)
-}
-
-fn reg_coalesce_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_REG_COALESCE_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn reg_coalesce_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_REG_COALESCE_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
 macro_rules! reg_coalesce_trace_line {
-    ($($arg:tt)*) => {{
-        if reg_coalesce_trace_enabled() {
-            reg_coalesce_trace_line_args(format_args!($($arg)*));
-        }
-    }};
-}
-
-fn reg_coalesce_trace_line_args(args: std::fmt::Arguments<'_>) {
-    if !reg_coalesce_trace_enabled() {
-        return;
-    }
-    let line = args.to_string();
-    if let Some(filter) = reg_coalesce_trace_filter()
-        && !line.contains(filter.as_str())
-    {
-        return;
-    }
-    eprintln!("[unlace reg-coalesce] {line}");
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::register_coalesce", "{}", format_args!($($arg)*))
+    };
 }
 
 pub struct RegisterCoalescePass;

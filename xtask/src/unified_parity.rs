@@ -28,14 +28,14 @@ pub fn run(root: &Path) -> i32 {
     let mut sections: Vec<Section> = Vec::new();
 
     banner("semantic-report");
-    let semantic = semantic_report::run(root, "legacy");
+    let semantic = semantic_report::run(root, &[]);
     sections.push(Section {
         name: "semantic-report",
         code: Some(semantic),
     });
 
     banner("type-recovery-report");
-    let type_recovery = type_recovery_report::run(root);
+    let type_recovery = type_recovery_report::run(root, &[]);
     sections.push(Section {
         name: "type-recovery-report",
         code: Some(type_recovery),

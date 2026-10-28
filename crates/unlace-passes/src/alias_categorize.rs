@@ -150,11 +150,8 @@ impl Pass for AliasCategorizePass {
             }
         }
 
-        // Operational visibility: when `UNLACE_ALIAS_DUMP=1` is set we
-        // emit a per-function histogram of the categories assigned. The
-        // env var is off by default so the pass stays silent in normal
-        // pipeline runs (and tests).
-        if std::env::var_os("UNLACE_ALIAS_DUMP").is_some() {
+        // Per-function histogram of the categories assigned.
+        if tracing::enabled!(target: "unlace::alias", tracing::Level::DEBUG) {
             let mut hist: BTreeMap<&'static str, u64> = BTreeMap::new();
             for block in func.function.blocks.values() {
                 for insn in &block.insns {
@@ -166,7 +163,7 @@ impl Pass for AliasCategorizePass {
                 }
             }
             if !hist.is_empty() {
-                eprintln!("[alias-categorize] fn={} {:?}", func.function.name, hist);
+                tracing::debug!(target: "unlace::alias", "fn={} {:?}", func.function.name, hist);
             }
         }
 

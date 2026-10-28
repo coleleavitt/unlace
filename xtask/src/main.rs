@@ -95,19 +95,14 @@ fn main() {
         }
         Some("semantic-report") => {
             let root = workspace_root();
-            let engine = args
-                .iter()
-                .position(|arg| arg == "--engine")
-                .and_then(|index| args.get(index + 1))
-                .map_or("legacy", String::as_str);
-            let code = semantic_report::run(&root, engine);
+            let code = semantic_report::run(&root, &args[1..]);
             if code != 0 {
                 process::exit(code);
             }
         }
         Some("type-recovery-report") => {
             let root = workspace_root();
-            let code = type_recovery_report::run(&root);
+            let code = type_recovery_report::run(&root, &args[1..]);
             if code != 0 {
                 process::exit(code);
             }

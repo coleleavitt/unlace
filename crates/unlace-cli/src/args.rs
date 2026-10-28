@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 
 /// unlace — a decompiler for reverse engineering.
 #[derive(Parser)]
@@ -10,6 +11,16 @@ use clap::{Parser, Subcommand, ValueEnum};
 pub struct Args {
     #[command(subcommand)]
     pub cmd: Cmd,
+
+    /// Configuration file. Default: `./unlace.toml`, then
+    /// `$XDG_CONFIG_HOME/unlace/config.toml`.
+    #[arg(long, global = true)]
+    pub config: Option<PathBuf>,
+
+    /// Diagnostic filter in `RUST_LOG` syntax, e.g. `unlace::sccp=debug` or
+    /// `unlace=debug,[function{name=main}]=trace`. Overrides `RUST_LOG`.
+    #[arg(long, global = true)]
+    pub log: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -18,6 +29,12 @@ pub enum Cmd {
     Project {
         #[command(subcommand)]
         action: ProjectAction,
+    },
+
+    /// Inspect the effective configuration.
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
     },
 
     /// Decompile a binary file.
@@ -43,7 +60,6 @@ pub enum Cmd {
         output: Option<PathBuf>,
 
         /// Also snapshot this run under DIR/<timestamp>-<uuid>/ for diffing.
-        /// Can also be set with UNLACE_DECOMPILE_CAPTURE_DIR.
         #[arg(long)]
         capture_dir: Option<PathBuf>,
 
@@ -112,13 +128,14 @@ pub enum Cmd {
         #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u8).range(0..=100))]
         flirt_min_confidence: u8,
 
-        /// Analysis engine. `ghidra` is the `unlace-engine` core (Ghidra's decompiler ported to Rust).
-        #[arg(long, value_enum, default_value = "legacy")]
-        engine: Engine,
+        /// Analysis engine (default: `[engine] default` in the config, else `legacy`). `ghidra` is the
+        /// `unlace-engine` core (Ghidra's decompiler ported to Rust).
+        #[arg(long, value_enum)]
+        engine: Option<Engine>,
 
         /// Naming of `--engine ghidra` output: IDA/Hex-Rays (`int`, `_QWORD`, `sub_401000`) or Ghidra's own.
-        #[arg(long, value_enum, default_value = "ida")]
-        engine_style: EngineStyle,
+        #[arg(long, value_enum)]
+        engine_style: Option<EngineStyle>,
     },
 
     /// Generate FLIRT patterns from a compiled static library archive (.a).
@@ -211,15 +228,16 @@ pub enum Cmd {
 
         /// Emit live progress while decompiling. `dump-all` turns this on by
         /// default; `batch` keeps the historical default (off) unless this flag
-        /// or `UNLACE_PROGRESS=1` is set.
+        /// is set.
         #[arg(long)]
         progress: bool,
 
-        /// Progress rendering mode.
+        /// Progress rendering mode. Progress is drawn on stderr only when
+        /// stderr is a terminal; logs and pipes never receive it.
         ///
-        /// - `auto`: color + single-line live updates on TTY, plain lines otherwise
-        /// - `plain`: newline progress updates (safe for logs/CI)
-        /// - `color`: ANSI-colored live updates (falls back to plain when not a TTY)
+        /// - `auto`: same as `color`
+        /// - `plain`: uncolored progress bar
+        /// - `color`: ANSI-colored progress bar
         /// - `off`: disable progress output
         #[arg(long, value_enum, default_value = "auto")]
         progress_style: BatchProgressStyle,
@@ -240,18 +258,19 @@ pub enum Cmd {
         #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u8).range(0..=100))]
         flirt_min_confidence: u8,
 
-        /// Analysis engine. `ghidra` is the `unlace-engine` core (Ghidra's decompiler ported to Rust).
-        #[arg(long, value_enum, default_value = "legacy")]
-        engine: Engine,
+        /// Analysis engine (default: `[engine] default` in the config, else `legacy`). `ghidra` is the
+        /// `unlace-engine` core (Ghidra's decompiler ported to Rust).
+        #[arg(long, value_enum)]
+        engine: Option<Engine>,
 
         /// Naming of `--engine ghidra` output: IDA/Hex-Rays (`int`, `_QWORD`, `sub_401000`) or Ghidra's own.
-        #[arg(long, value_enum, default_value = "ida")]
-        engine_style: EngineStyle,
+        #[arg(long, value_enum)]
+        engine_style: Option<EngineStyle>,
     },
 
     /// Dump end-state SSA IR text for one (or all) functions at a chosen
-    /// pipeline phase. Complementary to `UNLACE_TRACE_PASSES`, which prints
-    /// per-pass diffs *inside* the pipeline — `ir-dump` snapshots the final
+    /// pipeline phase. Complementary to `--log unlace::pass::ir=trace`, which
+    /// prints per-pass diffs *inside* the pipeline — `ir-dump` snapshots the final
     /// IR after a named milestone instead.
     IrDump {
         /// Path to the binary file.
@@ -496,6 +515,13 @@ pub enum Cmd {
     },
 }
 
+/// Sub-actions for `unlace config`.
+#[derive(Subcommand)]
+pub enum ConfigAction {
+    /// Print the effective configuration (file values over defaults) as TOML.
+    Show,
+}
+
 /// Sub-actions for `unlace project`.
 #[derive(Subcommand)]
 pub enum ProjectAction {
@@ -613,18 +639,19 @@ pub enum EmitFormat {
 /// Batch progress rendering mode.
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
 pub enum BatchProgressStyle {
-    /// Auto-detect based on whether stderr is a TTY.
+    /// Colored progress bar when stderr is a terminal.
     Auto,
     /// Disable batch progress output.
     Off,
-    /// Plain text progress lines.
+    /// Uncolored progress bar when stderr is a terminal.
     Plain,
-    /// ANSI-colored live progress.
+    /// ANSI-colored progress bar when stderr is a terminal.
     Color,
 }
 
 /// Analysis engine for `decompile` and `batch`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Engine {
     /// unlace's own lifters, passes, structurer, and C printer.
     #[default]
@@ -634,7 +661,8 @@ pub enum Engine {
 }
 
 /// Naming convention of `--engine ghidra` output.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum EngineStyle {
     #[default]
     Ida,

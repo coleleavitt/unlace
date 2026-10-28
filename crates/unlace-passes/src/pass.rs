@@ -8,17 +8,7 @@ use unlace_ir::BlockId;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 
 use crate::analysis_context::PreservedAnalyses;
-
-fn pass_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_PASS_TRACE")
-        .or_else(|| std::env::var_os("UNLACE_PIPELINE_TRACE"))
-        .and_then(|v| v.into_string().ok())
-        .map(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-        .unwrap_or(false)
-}
+use crate::options::PassOptions;
 
 /// Error type for optimization passes.
 #[derive(Debug, thiserror::Error)]
@@ -293,7 +283,11 @@ impl DefIndex {
 /// Each iteration runs every pass in order. If *any* pass reports a
 /// change the whole sequence is re-run. The loop terminates when a full
 /// sweep produces no changes.
-pub fn run_to_fixedpoint(passes: &[&dyn Pass], func: &mut SsaFunction) -> Result<usize, PassError> {
+pub fn run_to_fixedpoint(
+    passes: &[&dyn Pass],
+    func: &mut SsaFunction,
+    options: &PassOptions,
+) -> Result<usize, PassError> {
     let _linkscope_span = linkscope::phase("pass.fixedpoint");
     let _linkscope_trace = if linkscope::is_enabled() {
         Some(linkscope::trace_fields(
@@ -355,25 +349,20 @@ pub fn run_to_fixedpoint(passes: &[&dyn Pass], func: &mut SsaFunction) -> Result
         let mut changed_passes: Vec<&str> = Vec::new();
         for pass in passes {
             let pass_start = std::time::Instant::now();
-            if pass_trace_enabled() {
-                eprintln!(
-                    "[unlace pass] func={func_name} round={round} pass={} start",
-                    pass.name()
-                );
-            }
-            // `run_instrumented` is a single-atomic-load no-op when
-            // neither `UNLACE_TIMING` nor `UNLACE_TRACE_PASSES` is set,
-            // so this preserves the prior hot-path cost.
-            let changed = crate::instrument::run_instrumented(*pass, func)?;
+            tracing::debug!(
+                target: "unlace::pass",
+                "func={func_name} round={round} pass={} start",
+                pass.name()
+            );
+            let changed = crate::instrument::run_instrumented(*pass, func, options)?;
             let elapsed = pass_start.elapsed();
-            if pass_trace_enabled() {
-                eprintln!(
-                    "[unlace pass] func={func_name} round={round} pass={} done changed={} elapsed_ms={}",
-                    pass.name(),
-                    changed,
-                    elapsed.as_millis(),
-                );
-            }
+            tracing::debug!(
+                target: "unlace::pass",
+                "func={func_name} round={round} pass={} done changed={} elapsed_ms={}",
+                pass.name(),
+                changed,
+                elapsed.as_millis(),
+            );
             if elapsed >= std::time::Duration::from_millis(500) {
                 linkscope::event_fields(
                     "pass.slow",
@@ -674,7 +663,7 @@ pub struct AllowedBackedge {
     pub next_name: &'static str,
     /// Why this backward transition is intentional. One short sentence;
     /// surfaced verbatim by `cargo xtask dump-pipeline` and by the
-    /// `UNLACE_VALIDATE_PIPELINE=1` CLI startup hook.
+    /// `unlace::schedule=info` CLI startup hook.
     pub reason: &'static str,
 }
 
@@ -889,7 +878,7 @@ pub fn validate_named_phase_monotonicity(passes: &[PassDescriptor]) -> Result<()
 /// unit test below.
 ///
 /// Consumers:
-///   * `unlace-cli` startup-time validation when `UNLACE_VALIDATE_PIPELINE=1`
+///   * `unlace-cli` startup-time validation when `unlace::schedule=info`
 ///     (or `cfg!(debug_assertions)`).
 ///   * `cargo xtask dump-pipeline`.
 pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
@@ -1233,7 +1222,7 @@ mod phase_tests {
             }),
             Box::new(crate::junk_code_removal::JunkCodeRemovalPass),
             // ---- LocalOpt ----
-            Box::new(crate::sccp::SccpPass),
+            Box::new(crate::sccp::SccpPass::default()),
             Box::new(crate::copy_prop::CopyPropagationPass),
             Box::new(crate::const_fold::ConstantFoldPass),
             Box::new(crate::dce::DeadCodeElimPass),
@@ -1242,8 +1231,8 @@ mod phase_tests {
             Box::new(crate::condition_simplify::ConditionSimplifyPass),
             Box::new(crate::bool_simplify::BoolSimplifyPass),
             Box::new(crate::known_bits_simplify::KnownBitsSimplifyPass),
-            Box::new(crate::strength_reduce::StrengthReducePass),
-            Box::new(crate::iv_elim::IvElimPass),
+            Box::new(crate::strength_reduce::StrengthReducePass::default()),
+            Box::new(crate::iv_elim::IvElimPass::default()),
             Box::new(crate::idiom_recognition::IdiomRecognitionPass),
             Box::new(crate::bmi_idioms::BmiIdiomPass),
             Box::new(crate::division_idiom::DivisionIdiomPass),
@@ -1270,7 +1259,7 @@ mod phase_tests {
             }),
             // ---- TypeRecovery ----
             Box::new(crate::type_infer::TypeInferPass),
-            Box::new(crate::type_constraint_solver::TypeConstraintSolverPass),
+            Box::new(crate::type_constraint_solver::TypeConstraintSolverPass::default()),
             Box::new(crate::op_type_binding::OpTypeBindingPass),
             Box::new(crate::counterexample_refine::CounterexampleRefinePass),
             Box::new(crate::calling_convention::CallingConventionDetectPass),
@@ -1306,7 +1295,7 @@ mod phase_tests {
             Box::new(crate::stack_vars::StackOffsetSnapshotPass),
             Box::new(crate::stack_vars::StackVarRecoveryPass),
             // ---- LVarAlloc ----
-            Box::new(crate::variable_merge::VariableMergePass),
+            Box::new(crate::variable_merge::VariableMergePass::default()),
             Box::new(crate::lvar_collect::LvarCollectPass),
             // ---- FinalCleanup ----
             Box::new(crate::register_coalesce::RegisterCoalescePass),

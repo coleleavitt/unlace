@@ -6,6 +6,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::config::{LinkscopeOptions, LinkscopeTrace};
+
 pub use linkscope::TraceField;
 
 pub type Span = linkscope::Span;
@@ -18,50 +20,48 @@ pub struct LinkscopeGuard {
     mermaid_path: Option<PathBuf>,
 }
 
-pub fn init_from_env() -> LinkscopeGuard {
-    let json_path = env_path("UNLACE_LINKSCOPE_JSON");
-    let mermaid_path = env_path("UNLACE_LINKSCOPE_MERMAID");
-    let trace_stack_detail = env_flag("UNLACE_LINKSCOPE_TRACE_STACK_DETAIL");
-    let trace_stack = env_flag("UNLACE_LINKSCOPE_TRACE_STACK");
-    let trace_detail = env_flag("UNLACE_LINKSCOPE_TRACE_DETAIL");
-    let trace = env_flag("UNLACE_LINKSCOPE_TRACE");
-    let enabled = env_flag("UNLACE_LINKSCOPE")
-        || trace
-        || trace_stack
-        || trace_detail
-        || trace_stack_detail
-        || json_path.is_some()
-        || mermaid_path.is_some();
-
+/// Start linkscope profiling as configured. The guard writes and prints the
+/// configured outputs when dropped.
+pub fn init(options: &LinkscopeOptions) -> LinkscopeGuard {
+    let enabled = options.active();
     if enabled {
-        if trace_stack_detail {
-            linkscope::trace_stack_detail_enable();
-        } else if trace_stack {
-            linkscope::trace_stack_enable();
-        } else if trace_detail {
-            linkscope::trace_detail_enable();
-        } else if trace {
-            linkscope::trace_enable();
-        } else {
-            linkscope::enable();
+        match options.trace {
+            LinkscopeTrace::Off => linkscope::enable(),
+            LinkscopeTrace::Events => linkscope::trace_enable(),
+            LinkscopeTrace::Stack => linkscope::trace_stack_enable(),
+            LinkscopeTrace::Detail => linkscope::trace_detail_enable(),
+            LinkscopeTrace::StackDetail => linkscope::trace_stack_detail_enable(),
         }
         linkscope::record_rss("startup");
+        let trace = options.trace != LinkscopeTrace::Off;
         eprintln!(
             "[unlace linkscope] enabled trace={} stack={} detail={} json={} mermaid={}",
-            trace || trace_stack || trace_detail || trace_stack_detail,
-            trace_stack || trace_stack_detail,
-            trace_detail || trace_stack_detail,
-            json_path
+            trace,
+            matches!(
+                options.trace,
+                LinkscopeTrace::Stack | LinkscopeTrace::StackDetail
+            ),
+            matches!(
+                options.trace,
+                LinkscopeTrace::Detail | LinkscopeTrace::StackDetail
+            ),
+            options
+                .json
                 .as_ref()
                 .map(|path| path.display().to_string())
                 .unwrap_or_else(|| "-".to_string()),
-            mermaid_path
+            options
+                .mermaid
                 .as_ref()
                 .map(|path| path.display().to_string())
                 .unwrap_or_else(|| "-".to_string()),
         );
 
-        if let Some(interval) = env_interval("UNLACE_LINKSCOPE_REPORT_INTERVAL_SECS") {
+        if let Some(interval) = options
+            .report_interval_secs
+            .filter(|secs| *secs > 0)
+            .map(Duration::from_secs)
+        {
             std::thread::spawn(move || {
                 loop {
                     std::thread::sleep(interval);
@@ -74,9 +74,9 @@ pub fn init_from_env() -> LinkscopeGuard {
 
     LinkscopeGuard {
         enabled,
-        report: enabled && !env_flag("UNLACE_LINKSCOPE_NO_REPORT"),
-        json_path,
-        mermaid_path,
+        report: enabled && options.report,
+        json_path: options.json.clone(),
+        mermaid_path: options.mermaid.clone(),
     }
 }
 
@@ -149,7 +149,7 @@ impl Drop for LinkscopeGuard {
                 .and_then(|json| std::fs::write(path, json).map_err(serde_json::Error::io))
         {
             eprintln!(
-                "warning: UNLACE_LINKSCOPE_JSON write to '{}' failed: {e}",
+                "warning: linkscope.json write to '{}' failed: {e}",
                 path.display()
             );
         }
@@ -157,66 +157,12 @@ impl Drop for LinkscopeGuard {
             && let Err(e) = std::fs::write(path, linkscope::to_mermaid_markdown())
         {
             eprintln!(
-                "warning: UNLACE_LINKSCOPE_MERMAID write to '{}' failed: {e}",
+                "warning: linkscope.mermaid write to '{}' failed: {e}",
                 path.display()
             );
         }
         if self.report {
             linkscope::report();
         }
-    }
-}
-
-fn env_flag(name: &str) -> bool {
-    std::env::var_os(name)
-        .and_then(|value| value.into_string().ok())
-        .map(|value| {
-            let value = value.trim().to_ascii_lowercase();
-            !(value.is_empty()
-                || value == "0"
-                || value == "false"
-                || value == "off"
-                || value == "no")
-        })
-        .unwrap_or(false)
-}
-
-fn env_path(name: &str) -> Option<PathBuf> {
-    std::env::var_os(name)
-        .map(PathBuf::from)
-        .filter(|path| !path.as_os_str().is_empty())
-}
-
-fn env_interval(name: &str) -> Option<Duration> {
-    let secs = std::env::var(name).ok()?.trim().parse::<u64>().ok()?;
-    (secs > 0).then(|| Duration::from_secs(secs))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::env_flag;
-
-    #[test]
-    fn env_flag_parser_accepts_common_false_values() {
-        // Keep this as a direct parser contract; mutating process env in
-        // parallel cargo tests would make the test suite flaky.
-        assert!(!parse_bool(""));
-        assert!(!parse_bool("0"));
-        assert!(!parse_bool("false"));
-        assert!(!parse_bool("off"));
-        assert!(!parse_bool("no"));
-        assert!(parse_bool("1"));
-        assert!(parse_bool("yes"));
-        assert!(parse_bool("trace"));
-    }
-
-    fn parse_bool(value: &str) -> bool {
-        let value = value.trim().to_ascii_lowercase();
-        !(value.is_empty() || value == "0" || value == "false" || value == "off" || value == "no")
-    }
-
-    #[test]
-    fn env_flag_unset_is_false() {
-        assert!(!env_flag("__UNLACE_LINKSCOPE_TEST_UNSET"));
     }
 }

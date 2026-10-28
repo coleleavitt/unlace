@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use unlace_engine::output_style::OutputStyle;
 use unlace_engine::program::{Program, ProgramOptions, Prototypes, SymbolLoading};
 use unlace_passes::libc_signatures;
@@ -25,10 +26,33 @@ use unlace_loader::{
     BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar,
 };
 
+use crate::args::{Engine, EngineStyle};
 use crate::pipeline::{self, FunctionEntry};
 
 pub use prelude::prelude_for;
 pub use prototypes::{DataModel, known_prototypes};
+
+/// The `[engine]` section of the configuration file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct EngineConfig {
+    /// Engine of `decompile` and `batch` when `--engine` is not given.
+    pub default: Engine,
+    /// Naming of `ghidra` engine output when `--engine-style` is not given.
+    pub style: EngineStyle,
+    /// Fold loads from read-only sections into constants.
+    pub propagate_readonly: bool,
+}
+
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self {
+            default: Engine::Legacy,
+            style: EngineStyle::Ida,
+            propagate_readonly: true,
+        }
+    }
+}
 
 /// Settings of an engine run.
 #[derive(Clone, Debug, Default)]
@@ -36,6 +60,18 @@ pub struct EngineOptions {
     /// Worker threads; 0 uses one per CPU.
     pub jobs: usize,
     pub style: OutputStyle,
+    pub propagate_readonly: bool,
+}
+
+impl EngineOptions {
+    /// The options of `config`, with `style` overriding its naming style.
+    pub fn new(config: &EngineConfig, style: Option<EngineStyle>, jobs: usize) -> Self {
+        Self {
+            jobs,
+            style: style.unwrap_or(config.style).into(),
+            propagate_readonly: config.propagate_readonly,
+        }
+    }
 }
 
 /// The result of decompiling one function.
@@ -64,7 +100,7 @@ pub fn decompile_functions(
     let program_options = ProgramOptions {
         style: options.style,
         function_names: Arc::new(names),
-        propagate_readonly: true,
+        propagate_readonly: options.propagate_readonly,
         prototypes,
         no_return_names: Arc::new(no_return_names()),
     };

@@ -1,8 +1,6 @@
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
-use crate::c_printer::c_printer_trace_enabled;
-
 use super::{collect_v_number_names, is_arg_versioned_name, is_ident_byte};
 
 pub(in crate::c_printer) fn rename_unreturned_bare_result(output: String) -> String {
@@ -103,9 +101,7 @@ pub(in crate::c_printer) fn repair_arg_versioned_pointer_casts(
             continue;
         }
         let to = format!("*({ty} *)(uintptr_t)({name})");
-        if c_printer_trace_enabled() {
-            eprintln!("[unlace-output] repair arg-address-cast name={name} ty={ty}");
-        }
+        tracing::debug!(target: "unlace::cprinter", "repair arg-address-cast name={name} ty={ty}");
         output = output.replace(&from, &to);
     }
     output
@@ -135,9 +131,7 @@ pub(in crate::c_printer) fn repair_arg_versioned_arrow_fields(
             continue;
         }
         let offset = &after_prefix[..digits_len];
-        if c_printer_trace_enabled() {
-            eprintln!("[unlace-output] repair arg-arrow-field name={name} offset={offset}");
-        }
+        tracing::debug!(target: "unlace::cprinter", "repair arg-arrow-field name={name} offset={offset}");
         let _ = write!(out, "*(_DWORD *)((uintptr_t){name} + {offset})");
         rest = &after_prefix[digits_len..];
     }

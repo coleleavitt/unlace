@@ -68,6 +68,7 @@ instructions → unlace IR), **optimization** (50+ passes: dead store
 elimination, copy propagation, constant folding, etc.), **structuring**
 (converting the CFG into structured if/else/while/for constructs), and
 **emission** (printing C pseudocode with annotation comments). Each phase
-logged detailed trace output that you can inspect by setting `UNLACE_LOG=debug`.
+can log detailed trace output: pass `--log unlace=debug` (or set `RUST_LOG`);
+`docs/diagnostics.md` lists the per-area targets.
 
 → Next: [Understanding the Output](./03-understanding-output.md)

@@ -9,13 +9,12 @@ tree-sitter-c = "0.23"
 thiserror = { workspace = true }
 
 [dev-dependencies]
+unlace-cli = { workspace = true }
 unlace-lift = { workspace = true }
 unlace-lift-arm = { workspace = true }
 unlace-ir = { workspace = true }
 
-# Tests for experimental architectures run only with their feature. Golden
-# tests drive the `unlace` binary, which must be built with the same feature
-# (`cargo build -p unlace-cli --features all-arches`).
+# Tests for experimental architectures run only with their feature.
 [features]
 default = []
 all-arches = ["arch-arc", "arch-avr", "arch-ebpf", "arch-mips", "arch-ppc", "arch-riscv", "arch-v850"]

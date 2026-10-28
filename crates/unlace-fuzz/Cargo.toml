@@ -29,6 +29,9 @@ serde_json = { workspace = true }
 name = "unlace-fuzz"
 path = "src/main.rs"
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [features]
 # Modules no production code path reaches yet (`cargo xtask status`).
 unwired = []

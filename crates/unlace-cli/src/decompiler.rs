@@ -182,6 +182,25 @@ impl<'img> Decompiler<'img> {
     }
 }
 
+/// Decompile `binary_path` the way `unlace decompile` does with the built-in
+/// default [`Config`](crate::config::Config) (no config file is read), its
+/// default annotation sidecar, and the given per-function wall-clock
+/// `timeout`, and return the emitted text.
+pub fn decompile_path(
+    binary_path: &std::path::Path,
+    filter: Option<&str>,
+    emit: EmitFormat,
+    timeout: std::time::Duration,
+) -> Result<String> {
+    let image = crate::load::open_image(binary_path)?;
+    let config = PipelineConfig {
+        timeout,
+        annotations: crate::annotations::load_default(binary_path)?,
+        ..PipelineConfig::default()
+    };
+    Ok(Decompiler::prepare(&image, filter, &config)?.decompile_all(emit))
+}
+
 /// Whole-output cleanup applied once every function has been emitted.
 pub fn finish_output(emit: EmitFormat, mut output: String) -> String {
     let _span = profiling::phase("decompile.post-process");

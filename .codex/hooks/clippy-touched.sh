@@ -47,8 +47,7 @@ for pkg in "${crates[@]}"; do
     continue
   fi
   log="$(mktemp)"
-  # shellcheck disable=SC1007  # RUSTC_WRAPPER= intentionally empties sccache for this command
-  if ! RUSTC_WRAPPER= cargo clippy -p "$pkg" --quiet -- -D warnings >"$log" 2>&1; then
+  if ! cargo clippy -p "$pkg" --quiet -- -D warnings >"$log" 2>&1; then
     failed="$failed $pkg"
     logs[$pkg]="$log"
   else

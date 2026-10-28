@@ -450,9 +450,8 @@ mod tests {
 
     #[test]
     fn test_sha256_file() {
-        let dir = std::env::temp_dir().join("unlace-release-test");
-        let _ = fs::create_dir_all(&dir);
-        let test_file = dir.join("test.bin");
+        let dir = tempfile::tempdir().unwrap();
+        let test_file = dir.path().join("test.bin");
         let mut f = fs::File::create(&test_file).unwrap();
         f.write_all(b"hello world\n").unwrap();
         drop(f);
@@ -461,8 +460,6 @@ mod tests {
         // sha256("hello world\n") = ecf701f727d9...
         assert_eq!(hash.len(), 64);
         assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
-
-        let _ = fs::remove_file(&test_file);
     }
 
     #[test]

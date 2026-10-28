@@ -21,3 +21,12 @@ unlace-lift-x86 = { workspace = true }
 unlace-passes = { workspace = true }
 unlace-sbom = { workspace = true }
 unlace-session = { workspace = true }
+unlace-test-harness = { workspace = true }
+
+# The gates decompile experimental-architecture fixtures in-process; the
+# `cargo xtask` alias enables this.
+[features]
+all-arches = ["unlace-cli/all-arches"]
+
+[dev-dependencies]
+tempfile = { workspace = true }

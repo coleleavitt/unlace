@@ -185,6 +185,25 @@ checkout, and meaningful type/output debt remains visible in the ledgers. This
 is not full IDA/Hex-Rays parity. Rerun the full workspace gates before claiming
 a source-changing batch is green.
 
+## Product Scope and Feature Gates
+
+The supported scope is x86 (16/32/64), ARM32/Thumb and AArch64 (incl.
+arm64e), with ELF, PE/COFF+PDB, Mach-O (+dyld cache and Apple metadata) and
+DWARF. `unlace_ir::arch_support::product_tier` is the source of truth.
+
+- Other lifters are experimental: optional deps of `unlace-lift` behind
+  `arch-*` features (`all-arches` enables all), forwarded by `unlace-cli`.
+  A default build reports `LifterUnavailable::NotEnabled` for them.
+- Loader formats outside the supported scope sit behind `format-*` features of
+  `unlace-loader` (`all-formats`).
+- Modules no production code reaches are compiled only with a per-crate
+  `unwired` feature. `cargo xtask status` lists tiers, gated/unwired modules,
+  undeclared source files and lifter placeholder counts, and fails when an
+  ungated module is unreferenced.
+- xtask reports and `scripts/score_parity.sh` build `unlace` with
+  `--features all-arches`; experimental-arch tests run only with their feature
+  (`cargo test -p unlace-test-harness --features all-arches`).
+
 ## Standard Commands
 
 Prefer disabling `sccache` in this environment:

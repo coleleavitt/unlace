@@ -44,7 +44,7 @@ for arg in "$@"; do
 done
 
 echo "==> building unlace"
-(cd "$ROOT" && cargo build -q -p unlace-cli)
+(cd "$ROOT" && cargo build -q -p unlace-cli --features all-arches)
 
 UNLACE="${ROOT}/target/debug/unlace"
 mkdir -p "$GOLDEN_DIR"

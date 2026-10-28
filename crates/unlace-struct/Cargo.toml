@@ -16,3 +16,7 @@ linkscope = { path = "../../../linkscope" }
 [dev-dependencies]
 insta = { workspace = true }
 smallvec = { workspace = true }
+
+[features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []

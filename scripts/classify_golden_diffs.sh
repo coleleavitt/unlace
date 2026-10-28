@@ -20,7 +20,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 BIN="target/debug/unlace"
-[ -x "$BIN" ] || { echo "building unlace…" >&2; RUSTC_WRAPPER= cargo build -q -p unlace-cli || exit 1; }
+[ -x "$BIN" ] || { echo "building unlace…" >&2; RUSTC_WRAPPER= cargo build -q -p unlace-cli --features all-arches || exit 1; }
 
 fixtures=("$@")
 if [ ${#fixtures[@]} -eq 0 ]; then

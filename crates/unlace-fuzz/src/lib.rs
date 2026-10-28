@@ -47,6 +47,7 @@ use unlace_loader::{ElfLoader, Loader};
 /// Persistent crash-corpus database. New crashes found by the fuzz
 /// runner are appended here and re-run by the workspace test suite as
 /// regression guards. See [`corpus`] for the storage layout.
+#[cfg(feature = "unwired")]
 pub mod corpus;
 
 /// Maximum number of functions the harness will decompile per iteration.
@@ -160,7 +161,12 @@ pub fn fuzz_iteration(bytes: &[u8]) -> FuzzResult {
     }
 
     let lifter = match catch_unwind(AssertUnwindSafe(|| get_lifter(image.arch))) {
-        Ok(l) => l,
+        Ok(Ok(l)) => l,
+        Ok(Err(_)) => {
+            return FuzzResult::Ok {
+                functions_decompiled: 0,
+            };
+        }
         Err(payload) => {
             return FuzzResult::Panicked {
                 stage: "get_lifter",

@@ -14,9 +14,13 @@ pub mod cache;
 pub mod config;
 pub mod identify_packer;
 pub mod logging;
+#[cfg(feature = "unwired")]
 pub mod lsp;
+#[cfg(feature = "unwired")]
+pub mod parallel;
 pub mod pipeline;
 pub mod profiling;
+#[cfg(feature = "unwired")]
 pub mod project;
 pub mod quality;
 

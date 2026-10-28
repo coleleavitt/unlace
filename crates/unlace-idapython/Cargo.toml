@@ -18,6 +18,8 @@ tracing.workspace = true
 pyo3 = { version = "0.29", features = ["auto-initialize"], optional = true }
 
 [features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []
 default = []
 # Enable the pyo3-backed Python wrapper. Disabled by default so the crate
 # can be built/tested without a Python interpreter installed.

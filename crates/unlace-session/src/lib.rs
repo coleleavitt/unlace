@@ -11,6 +11,7 @@
 pub mod db;
 pub mod patches;
 pub mod project;
+#[cfg(feature = "unwired")]
 pub mod til;
 pub mod til_import;
 pub mod til_parser;

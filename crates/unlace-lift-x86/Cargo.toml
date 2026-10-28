@@ -12,3 +12,6 @@ smallvec = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
+
+[features]
+unwired = []

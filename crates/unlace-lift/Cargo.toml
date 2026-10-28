@@ -7,35 +7,100 @@ edition.workspace = true
 unlace-ir = { workspace = true }
 unlace-lift-x86 = { workspace = true }
 unlace-lift-arm = { workspace = true }
-unlace-lift-riscv = { workspace = true }
-unlace-lift-mips = { workspace = true }
-unlace-lift-ppc = { workspace = true }
-unlace-lift-v850 = { workspace = true }
-unlace-lift-arc = { workspace = true }
-unlace-lift-tricore = { workspace = true }
-unlace-lift-ebpf = { workspace = true }
-unlace-lift-avr = { workspace = true }
-unlace-lift-agx = { workspace = true }
-unlace-lift-msp430 = { workspace = true }
-unlace-lift-m68k = { workspace = true }
-unlace-lift-sass = { workspace = true }
-unlace-lift-xtensa = { workspace = true }
-unlace-lift-superh = { workspace = true }
-unlace-lift-hexagon = { workspace = true }
-unlace-lift-amdgpu = { workspace = true }
-unlace-lift-sharc = { workspace = true }
-unlace-lift-ti = { workspace = true }
-unlace-lift-evm = { workspace = true }
-unlace-lift-sparc = { workspace = true }
-unlace-lift-wasm = { workspace = true }
-smallvec = { workspace = true }
-tracing = { workspace = true }
-unlace-lift-6502 = { workspace = true }
-unlace-lift-stm8 = { workspace = true }
-unlace-lift-8051 = { workspace = true }
-unlace-lift-pic = { workspace = true }
-unlace-lift-rx = { workspace = true }
-unlace-lift-z80 = { workspace = true }
-unlace-lift-spirv = { workspace = true }
-unlace-lift-appleagx = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
+unlace-lift-6502 = { workspace = true, optional = true }
+unlace-lift-8051 = { workspace = true, optional = true }
+unlace-lift-agx = { workspace = true, optional = true }
+unlace-lift-amdgpu = { workspace = true, optional = true }
+unlace-lift-appleagx = { workspace = true, optional = true }
+unlace-lift-arc = { workspace = true, optional = true }
+unlace-lift-avr = { workspace = true, optional = true }
+unlace-lift-ebpf = { workspace = true, optional = true }
+unlace-lift-evm = { workspace = true, optional = true }
+unlace-lift-hexagon = { workspace = true, optional = true }
+unlace-lift-m68k = { workspace = true, optional = true }
+unlace-lift-mips = { workspace = true, optional = true }
+unlace-lift-msp430 = { workspace = true, optional = true }
+unlace-lift-pic = { workspace = true, optional = true }
+unlace-lift-ppc = { workspace = true, optional = true }
+unlace-lift-riscv = { workspace = true, optional = true }
+unlace-lift-rx = { workspace = true, optional = true }
+unlace-lift-sass = { workspace = true, optional = true }
+unlace-lift-sharc = { workspace = true, optional = true }
+unlace-lift-sparc = { workspace = true, optional = true }
+unlace-lift-spirv = { workspace = true, optional = true }
+unlace-lift-stm8 = { workspace = true, optional = true }
+unlace-lift-superh = { workspace = true, optional = true }
+unlace-lift-ti = { workspace = true, optional = true }
+unlace-lift-tricore = { workspace = true, optional = true }
+unlace-lift-v850 = { workspace = true, optional = true }
+unlace-lift-wasm = { workspace = true, optional = true }
+unlace-lift-xtensa = { workspace = true, optional = true }
+unlace-lift-z80 = { workspace = true, optional = true }
+
+# Experimental lifters, outside the supported x86/ARM/Apple scope, are off by
+# default. `unlace_ir::arch_support::product_tier` names the feature for each
+# architecture.
+[features]
+default = []
+all-arches = [
+    "arch-6502",
+    "arch-8051",
+    "arch-agx",
+    "arch-amdgpu",
+    "arch-appleagx",
+    "arch-arc",
+    "arch-avr",
+    "arch-ebpf",
+    "arch-evm",
+    "arch-hexagon",
+    "arch-m68k",
+    "arch-mips",
+    "arch-msp430",
+    "arch-pic",
+    "arch-ppc",
+    "arch-riscv",
+    "arch-rx",
+    "arch-sass",
+    "arch-sharc",
+    "arch-sparc",
+    "arch-spirv",
+    "arch-stm8",
+    "arch-superh",
+    "arch-ti",
+    "arch-tricore",
+    "arch-v850",
+    "arch-wasm",
+    "arch-xtensa",
+    "arch-z80",
+]
+arch-6502 = ["dep:unlace-lift-6502"]
+arch-8051 = ["dep:unlace-lift-8051"]
+arch-agx = ["dep:unlace-lift-agx"]
+arch-amdgpu = ["dep:unlace-lift-amdgpu"]
+arch-appleagx = ["dep:unlace-lift-appleagx"]
+arch-arc = ["dep:unlace-lift-arc"]
+arch-avr = ["dep:unlace-lift-avr"]
+arch-ebpf = ["dep:unlace-lift-ebpf"]
+arch-evm = ["dep:unlace-lift-evm"]
+arch-hexagon = ["dep:unlace-lift-hexagon"]
+arch-m68k = ["dep:unlace-lift-m68k"]
+arch-mips = ["dep:unlace-lift-mips"]
+arch-msp430 = ["dep:unlace-lift-msp430"]
+arch-pic = ["dep:unlace-lift-pic"]
+arch-ppc = ["dep:unlace-lift-ppc"]
+arch-riscv = ["dep:unlace-lift-riscv"]
+arch-rx = ["dep:unlace-lift-rx"]
+arch-sass = ["dep:unlace-lift-sass"]
+arch-sharc = ["dep:unlace-lift-sharc"]
+arch-sparc = ["dep:unlace-lift-sparc"]
+arch-spirv = ["dep:unlace-lift-spirv"]
+arch-stm8 = ["dep:unlace-lift-stm8"]
+arch-superh = ["dep:unlace-lift-superh"]
+arch-ti = ["dep:unlace-lift-ti"]
+arch-tricore = ["dep:unlace-lift-tricore"]
+arch-v850 = ["dep:unlace-lift-v850"]
+arch-wasm = ["dep:unlace-lift-wasm"]
+arch-xtensa = ["dep:unlace-lift-xtensa"]
+arch-z80 = ["dep:unlace-lift-z80"]

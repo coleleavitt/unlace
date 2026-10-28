@@ -19,13 +19,25 @@
 
 use std::panic::catch_unwind;
 
+#[cfg(feature = "format-android")]
+use unlace_loader::{AndroidBootError, parse_android_boot};
 use unlace_loader::{
-    AndroidBootError, ElfLoader, Esp32Error, Img4Error, IntelHexError, JavaError, Loader,
-    MachoLoader, PeLoader, PycError, SRecordError, Stm32DfuError, WasmLoader, detect_clr,
-    is_dyld_shared_cache, is_img4, load_intel_hex, load_s_record, parse_android_boot,
-    parse_chained_fixups, parse_class, parse_clr_header, parse_cor20_header, parse_esp32_image,
-    parse_img4, parse_pyc, parse_pyc_header, parse_stm32_bin, parse_stm32_dfu,
+    ElfLoader, Loader, MachoLoader, PeLoader, WasmLoader, is_dyld_shared_cache,
+    parse_chained_fixups,
 };
+#[cfg(feature = "format-esp32")]
+use unlace_loader::{Esp32Error, parse_esp32_image};
+#[cfg(feature = "unwired")]
+use unlace_loader::{
+    Img4Error, IntelHexError, SRecordError, Stm32DfuError, is_img4, load_intel_hex, load_s_record,
+    parse_img4, parse_stm32_bin, parse_stm32_dfu,
+};
+#[cfg(feature = "format-java")]
+use unlace_loader::{JavaError, parse_class};
+#[cfg(feature = "format-python")]
+use unlace_loader::{PycError, parse_pyc, parse_pyc_header};
+#[cfg(feature = "format-dotnet")]
+use unlace_loader::{detect_clr, parse_clr_header, parse_cor20_header};
 
 /// Drive `load` under `catch_unwind`, asserting no panic. Returns `true`
 /// when `can_load` accepted the input (so `load` was called).
@@ -144,6 +156,7 @@ fn wasm_loader_handles_malformed_inputs_without_panic() {
 // Firmware / container formats.
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "unwired")]
 #[test]
 fn intel_hex_rejects_malformed_streams_with_structured_diagnostics() {
     // Empty stream → no EOF record.
@@ -174,6 +187,7 @@ fn intel_hex_rejects_malformed_streams_with_structured_diagnostics() {
     }
 }
 
+#[cfg(feature = "unwired")]
 #[test]
 fn s_record_rejects_malformed_streams_with_structured_diagnostics() {
     match load_s_record("not srec\n") {
@@ -190,6 +204,7 @@ fn s_record_rejects_malformed_streams_with_structured_diagnostics() {
     }
 }
 
+#[cfg(feature = "unwired")]
 #[test]
 fn stm32_parsers_handle_malformed_inputs() {
     // STM32 plain BIN: parse_stm32_bin returns Option<_> for a heuristic check.
@@ -209,6 +224,7 @@ fn stm32_parsers_handle_malformed_inputs() {
     }
 }
 
+#[cfg(feature = "format-esp32")]
 #[test]
 fn esp32_image_parser_handles_malformed_inputs() {
     // Empty.
@@ -234,6 +250,7 @@ fn esp32_image_parser_handles_malformed_inputs() {
     );
 }
 
+#[cfg(feature = "unwired")]
 #[test]
 fn img4_parsers_handle_malformed_inputs() {
     assert!(!is_img4(&[]));
@@ -252,6 +269,7 @@ fn img4_parsers_handle_malformed_inputs() {
     safe_call("img4-bogus-asn1", || parse_img4(&bogus), Result::is_ok);
 }
 
+#[cfg(feature = "format-android")]
 #[test]
 fn android_boot_parser_handles_malformed_inputs() {
     match parse_android_boot(&[]) {
@@ -313,6 +331,7 @@ fn chained_fixups_parser_handles_malformed_inputs() {
 // Managed / VM bytecode formats.
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "format-java")]
 #[test]
 fn java_class_parser_handles_malformed_inputs() {
     match parse_class(&[]) {
@@ -333,6 +352,7 @@ fn java_class_parser_handles_malformed_inputs() {
     safe_call("java-oversize-cp", || parse_class(&buf), Result::is_ok);
 }
 
+#[cfg(feature = "format-python")]
 #[test]
 fn python_pyc_parser_handles_malformed_inputs() {
     match parse_pyc(&[]) {
@@ -354,6 +374,7 @@ fn python_pyc_parser_handles_malformed_inputs() {
     assert!(parse_pyc_header(&[]).is_none());
 }
 
+#[cfg(feature = "format-lua")]
 #[test]
 fn lua_bytecode_detector_handles_malformed_inputs() {
     assert!(unlace_loader::detect_lua(&[]).is_none());
@@ -374,6 +395,7 @@ fn lua_bytecode_detector_handles_malformed_inputs() {
     );
 }
 
+#[cfg(feature = "format-dotnet")]
 #[test]
 fn clr_dotnet_parsers_handle_malformed_inputs() {
     // detect_clr is a windowed scan: false on empty + on PE-like noise.

@@ -21,8 +21,15 @@ cd "$(dirname "$0")/.."
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 
+# The fixture set includes experimental-architecture fixtures (mips64, ppc64,
+# riscv64, v850, arc), so both the binary and the suite need `all-arches`.
+cargo build -p unlace-cli --bin unlace --features all-arches >"$tmp" 2>&1 || {
+    cat "$tmp" >&2
+    exit 1
+}
+
 cargo_status=0
-cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture >"$tmp" 2>&1 \
+cargo test -p unlace-test-harness --features all-arches --test golden_fixtures -- --nocapture >"$tmp" 2>&1 \
     || cargo_status=$?
 
 grep -F '[score]' "$tmp" \

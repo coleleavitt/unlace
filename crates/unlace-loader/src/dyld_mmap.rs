@@ -17,7 +17,11 @@ pub struct MmapConfig {
 
 impl Default for MmapConfig {
     fn default() -> Self {
-        Self { prefault: false, max_regions: 256, alignment: 4096 }
+        Self {
+            prefault: false,
+            max_regions: 256,
+            alignment: 4096,
+        }
     }
 }
 
@@ -54,7 +58,9 @@ pub fn regions_for_range(
 
             // Align to page boundaries
             let aligned_offset = (file_offset / page_size as u64) * page_size as u64;
-            let aligned_length = ((file_offset - aligned_offset) as usize + length + page_size - 1) / page_size * page_size;
+            let aligned_length = ((file_offset - aligned_offset) as usize + length + page_size - 1)
+                / page_size
+                * page_size;
 
             regions.push(MappedRegion {
                 file_offset: aligned_offset,
@@ -78,7 +84,9 @@ pub fn va_to_file_offset(va: u64, mappings: &[(u64, u64, u64)]) -> Option<u64> {
 
 /// Estimate the memory savings from mmap vs slurp for a given access pattern.
 pub fn estimate_savings(total_cache_size: u64, accessed_regions: &[MappedRegion]) -> f64 {
-    if total_cache_size == 0 { return 0.0; }
+    if total_cache_size == 0 {
+        return 0.0;
+    }
     let mapped_bytes: u64 = accessed_regions.iter().map(|r| r.length as u64).sum();
     1.0 - (mapped_bytes as f64 / total_cache_size as f64)
 }
@@ -91,7 +99,7 @@ mod tests {
     fn va_translation() {
         let mappings = vec![
             (0x180000000, 0x0, 0x1000000),       // __TEXT
-            (0x190000000, 0x1000000, 0x2000000),  // __DATA
+            (0x190000000, 0x1000000, 0x2000000), // __DATA
         ];
         assert_eq!(va_to_file_offset(0x180000100, &mappings), Some(0x100));
         assert_eq!(va_to_file_offset(0x190001000, &mappings), Some(0x1001000));
@@ -108,17 +116,18 @@ mod tests {
 
     #[test]
     fn regions_cross_boundary() {
-        let mappings = vec![
-            (0x1000, 0x0, 0x1000),
-            (0x2000, 0x1000, 0x1000),
-        ];
+        let mappings = vec![(0x1000, 0x0, 0x1000), (0x2000, 0x1000, 0x1000)];
         let regions = regions_for_range(0x1800, 0x1000, &mappings, 4096);
         assert_eq!(regions.len(), 2);
     }
 
     #[test]
     fn savings_estimate() {
-        let regions = vec![MappedRegion { file_offset: 0, length: 1024 * 1024, va_base: 0 }];
+        let regions = vec![MappedRegion {
+            file_offset: 0,
+            length: 1024 * 1024,
+            va_base: 0,
+        }];
         let savings = estimate_savings(6 * 1024 * 1024 * 1024, &regions); // 6 GiB cache, 1 MiB mapped
         assert!(savings > 0.99);
     }

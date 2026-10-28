@@ -336,7 +336,7 @@ fn run_lift_coverage(fixture: &Path) -> Result<CoverageCounts, String> {
         .ok_or_else(|| "binary has no text section (.text / __text)".to_string())?;
     let text_start = text.vaddr;
     let text_end = text_start.saturating_add(text.data.len() as u64);
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter(image.arch).map_err(|e| e.to_string())?;
     let mut counts = CoverageCounts {
         discovered_functions: functions.len(),
         ..CoverageCounts::default()

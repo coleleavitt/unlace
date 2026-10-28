@@ -14,9 +14,14 @@
 //!
 //! # Running
 //!
+//! Fixtures for experimental architectures (mips64, riscv64, ppc64, v850,
+//! arc) run only with their `arch-*` feature; the `unlace` binary must be
+//! built with the same features.
+//!
 //! ```bash
 //! # Verify current output matches stored goldens:
-//! cargo test -p unlace-test-harness --test golden_fixtures
+//! cargo build -p unlace-cli --features all-arches
+//! cargo test -p unlace-test-harness --features all-arches --test golden_fixtures
 //!
 //! # Refresh goldens after intentional output changes:
 //! UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures
@@ -614,26 +619,31 @@ fn golden_arm64_features() {
     run_golden("arm64_features");
 }
 
+#[cfg(feature = "arch-mips")]
 #[test]
 fn golden_mips64_features() {
     run_golden("mips64_features");
 }
 
+#[cfg(feature = "arch-riscv")]
 #[test]
 fn golden_riscv64_features() {
     run_golden("riscv64_features");
 }
 
+#[cfg(feature = "arch-v850")]
 #[test]
 fn golden_v850_features() {
     run_golden("v850_features");
 }
 
+#[cfg(feature = "arch-arc")]
 #[test]
 fn golden_arc_features() {
     run_golden("arc_features");
 }
 
+#[cfg(feature = "arch-ppc")]
 #[test]
 fn golden_ppc64_features() {
     run_golden("ppc64_features");

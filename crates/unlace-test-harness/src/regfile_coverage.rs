@@ -6,7 +6,7 @@ mod tests {
     use unlace_lift::get_lifter;
 
     fn check_register_file(arch: ArchId) {
-        let lifter = get_lifter(arch);
+        let lifter = get_lifter(arch).expect("lifter enabled for this test");
         let rf = lifter.register_file();
         // Must have at least one register
         assert!(!rf.registers.is_empty(), "{arch}: empty register file");
@@ -33,30 +33,37 @@ mod tests {
     fn test_arm() {
         check_register_file(ArchId::AArch64);
     }
+    #[cfg(feature = "arch-riscv")]
     #[test]
     fn test_riscv() {
         check_register_file(ArchId::RiscV64);
     }
+    #[cfg(feature = "arch-mips")]
     #[test]
     fn test_mips() {
         check_register_file(ArchId::Mips64);
     }
+    #[cfg(feature = "arch-ppc")]
     #[test]
     fn test_ppc() {
         check_register_file(ArchId::Ppc);
     }
+    #[cfg(feature = "arch-ppc")]
     #[test]
     fn test_ppc64() {
         check_register_file(ArchId::Ppc64);
     }
+    #[cfg(feature = "arch-avr")]
     #[test]
     fn test_avr() {
         check_register_file(ArchId::Avr);
     }
+    #[cfg(feature = "arch-ebpf")]
     #[test]
     fn test_ebpf() {
         check_register_file(ArchId::Ebpf);
     }
+    #[cfg(feature = "arch-v850")]
     #[test]
     fn test_v850() {
         check_register_file(ArchId::V850);

@@ -78,52 +78,12 @@ const X87_FDIVRP: u64 = 0x365;
 const X87_FCOMP: u64 = 0x366;
 const X87_FCOMPP: u64 = 0x367;
 
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false)
-}
-
-fn sig_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_SIGNATURE_TRACE")
-        || env_flag_enabled("UNLACE_CALLING_TRACE")
-        || env_flag_enabled("UNLACE_TYPE_TRACE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn sig_trace_verbose_enabled() -> bool {
-    env_flag_enabled("UNLACE_SIGNATURE_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_CALLING_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TYPE_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TRACE_VERBOSE")
-        || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn sig_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_SIGNATURE_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_CALLING_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TYPE_TRACE_FILTER").ok())
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .filter(|s| !s.is_empty())
-}
-
 fn sig_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
-    if !sig_trace_enabled() {
-        return;
-    }
-    if let Some(filter) = sig_trace_filter()
-        && !func.function.name.contains(&filter)
-    {
-        return;
-    }
-    eprintln!("[unlace signature] func={} {message}", func.function.name);
+    tracing::debug!(target: "unlace::calling::signature", "func={} {message}", func.function.name);
 }
 
 fn sig_trace_line_verbose(func: &SsaFunction, message: impl std::fmt::Display) {
-    if sig_trace_verbose_enabled() {
-        sig_trace_line(func, message);
-    }
+    tracing::trace!(target: "unlace::calling::signature", "func={} {message}", func.function.name);
 }
 
 /// Finalized prototype emitted for a function.

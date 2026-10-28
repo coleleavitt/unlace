@@ -208,36 +208,18 @@ pub fn verify_ssa_function(func: &SsaFunction) -> Result<(), VerifyError> {
 /// Several long-standing producer passes (LICM preheader insertion among
 /// them) do not yet maintain strict SSA dominance even though the emitted C
 /// is semantically correct — the exit-code parity gate passes. Until those
-/// producers are fixed, the pipeline checkpoint verifies structure strictly
-/// and treats dataflow dominance as opt-in via `UNLACE_VERIFY_STRICT_DOM=1`
-/// (see [`verify_ssa_function_pipeline`]). Aborting the whole pass pipeline
-/// on a dominance nit produces strictly worse output than tolerating it.
+/// producers are fixed, pipeline checkpoints verify structure only (see
+/// [`verify_ssa_function_pipeline`]); [`verify_ssa_function`] remains the
+/// full check for tests. Aborting the whole pass pipeline on a dominance nit
+/// produces strictly worse output than tolerating it.
 pub fn verify_ssa_function_structural(func: &SsaFunction) -> Result<(), VerifyError> {
     verify_ssa_function_inner(func, false)
 }
 
-/// The verification entrypoint for pipeline checkpoints: strict structural
-/// checks always, dataflow dominance checks only when
-/// `UNLACE_VERIFY_STRICT_DOM` is set to a truthy value.
+/// The verification entrypoint for pipeline checkpoints: the strict
+/// structural checks of [`verify_ssa_function_structural`].
 pub fn verify_ssa_function_pipeline(func: &SsaFunction) -> Result<(), VerifyError> {
-    if strict_dominance_enabled() {
-        verify_ssa_function(func)
-    } else {
-        verify_ssa_function_structural(func)
-    }
-}
-
-fn strict_dominance_enabled() -> bool {
-    static CELL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *CELL.get_or_init(|| {
-        std::env::var_os("UNLACE_VERIFY_STRICT_DOM")
-            .and_then(|v| v.into_string().ok())
-            .map(|v| {
-                let v = v.trim().to_ascii_lowercase();
-                !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-            })
-            .unwrap_or(false)
-    })
+    verify_ssa_function_structural(func)
 }
 
 fn verify_ssa_function_inner(func: &SsaFunction, dataflow: bool) -> Result<(), VerifyError> {

@@ -52,6 +52,7 @@ insta = "1"
 tempfile = "3"
 # Observability
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Error handling
 thiserror = "2"
 anyhow = "1"

@@ -18,6 +18,12 @@
 //! leaves before reusing the acyclic condition-refinement engine. The abnormal
 //! cyclic frontier uses real labels/gotos for internal non-header back-edges so
 //! irreducible SCCs can be preserved without a synthetic state dispatcher.
+//!
+//! Every entry point takes the reaching-condition node budget `limit` that it
+//! passes to [`compute_reaching_conditions`].
+//!
+//! Diagnostics: enable `unlace::struct::refine=debug` (or `unlace::struct`)
+//! for nested cyclic-region candidate and rejection decisions.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -201,8 +207,8 @@ fn atomic_factors(cond: &Cond, out: &mut Vec<Cond>) {
 /// acyclic skeleton the existing engine can structure. Back-edges become
 /// synthetic `Continue` leaves. Use [`refine_cyclic_region_with_exits`] when
 /// the caller also has labelled external exits to synthesize as `Break`.
-pub fn refine_cyclic_region(region: &Region) -> StructuredNode {
-    refine_cyclic_region_with_exits(region, &[])
+pub fn refine_cyclic_region(region: &Region, limit: usize) -> StructuredNode {
+    refine_cyclic_region_with_exits(region, &[], limit)
 }
 
 /// Refine a cyclic region and synthesize loop exits as `Break` leaves.
@@ -214,8 +220,9 @@ pub fn refine_cyclic_region(region: &Region) -> StructuredNode {
 pub fn refine_cyclic_region_with_exits(
     region: &Region,
     exits: &[(RegionNode, EdgeLabel)],
+    limit: usize,
 ) -> StructuredNode {
-    refine_cyclic_region_nested(region, exits, 0)
+    refine_cyclic_region_nested(region, exits, 0, limit)
 }
 
 /// Refine a cyclic region with abnormal internal entries.
@@ -228,8 +235,9 @@ pub fn refine_cyclic_region_with_exits(
 pub fn refine_abnormal_cyclic_region_with_exits(
     region: &Region,
     exits: &[(RegionNode, EdgeLabel)],
+    limit: usize,
 ) -> StructuredNode {
-    refine_abnormal_cyclic_region_with_exits_and_sources(region, exits, &BTreeMap::new())
+    refine_abnormal_cyclic_region_with_exits_and_sources(region, exits, &BTreeMap::new(), limit)
 }
 
 /// Refine an abnormal cyclic region with a predicate-id -> source-node map.
@@ -242,39 +250,36 @@ pub fn refine_abnormal_cyclic_region_with_exits_and_sources(
     region: &Region,
     exits: &[(RegionNode, EdgeLabel)],
     predicate_sources: &BTreeMap<u32, RegionNode>,
+    limit: usize,
 ) -> StructuredNode {
-    let rc = compute_reaching_conditions(region);
+    let rc = compute_reaching_conditions(region, limit);
     if rc.limited {
         return StructuredNode::Unsupported;
     }
     if rc.back_edges.is_empty() {
         return StructuredNode::Unsupported;
     }
-    refine_abnormal_cyclic_region(region, exits, &rc, predicate_sources)
+    refine_abnormal_cyclic_region(region, exits, &rc, predicate_sources, limit)
 }
 
 const MAX_NESTED_CYCLIC_DEPTH: usize = 32;
 
-fn cyclic_trace<F>(message: F)
-where
-    F: FnOnce() -> String,
-{
-    if std::env::var_os("UNLACE_STRUCT_TRACE").is_some()
-        || std::env::var_os("UNLACE_STRUCT_TRACE_VERBOSE").is_some()
-    {
-        eprintln!("[unlace-struct] dream cyclic {}", message());
-    }
+macro_rules! cyclic_trace {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::struct::refine", "dream cyclic {}", format_args!($($arg)*))
+    };
 }
 
 fn refine_cyclic_region_nested(
     region: &Region,
     exits: &[(RegionNode, EdgeLabel)],
     depth: usize,
+    limit: usize,
 ) -> StructuredNode {
     if depth > MAX_NESTED_CYCLIC_DEPTH {
         return StructuredNode::Unsupported;
     }
-    let rc = compute_reaching_conditions(region);
+    let rc = compute_reaching_conditions(region, limit);
     if rc.limited {
         return StructuredNode::Unsupported;
     }
@@ -284,15 +289,16 @@ fn refine_cyclic_region_nested(
     }
     // Every back-edge must target the single loop header.
     if rc.back_edges.iter().any(|(_, dst)| *dst != region.header) {
-        return refine_nested_cyclic_region(region, exits, &rc, depth);
+        return refine_nested_cyclic_region(region, exits, &rc, depth, limit);
     }
-    refine_single_header_cyclic_region(region, exits, &rc)
+    refine_single_header_cyclic_region(region, exits, &rc, limit)
 }
 
 fn refine_single_header_cyclic_region(
     region: &Region,
     exits: &[(RegionNode, EdgeLabel)],
     rc: &ReachingConditions,
+    limit: usize,
 ) -> StructuredNode {
     let real_nodes = region_nodes(region);
     if real_nodes
@@ -342,7 +348,7 @@ fn refine_single_header_cyclic_region(
         header: region.header,
         edges: skeleton_edges,
     };
-    let body = refine_region(&skeleton);
+    let body = refine_region(&skeleton, limit);
     if body == StructuredNode::Unsupported {
         return StructuredNode::Unsupported;
     }
@@ -368,6 +374,7 @@ fn refine_nested_cyclic_region(
     exits: &[(RegionNode, EdgeLabel)],
     rc: &ReachingConditions,
     depth: usize,
+    limit: usize,
 ) -> StructuredNode {
     let mut headers: Vec<_> = rc
         .back_edges
@@ -379,23 +386,19 @@ fn refine_nested_cyclic_region(
 
     for header in headers {
         let Some(slice) = build_loop_slice(region, exits, rc, header) else {
-            cyclic_trace(|| {
-                format!(
-                    "skip header={header} reason=slice region_header={} depth={depth}",
-                    region.header
-                )
-            });
+            cyclic_trace!(
+                "skip header={header} reason=slice region_header={} depth={depth}",
+                region.header
+            );
             continue;
         };
-        cyclic_trace(|| {
-            format!(
-                "candidate header={header} nodes={} internal_exits={} external_exits={} successor={:?} depth={depth}",
-                slice.nodes.len(),
-                slice.internal_exits.len(),
-                slice.external_exits.len(),
-                slice.unique_internal_successor
-            )
-        });
+        cyclic_trace!(
+            "candidate header={header} nodes={} internal_exits={} external_exits={} successor={:?} depth={depth}",
+            slice.nodes.len(),
+            slice.internal_exits.len(),
+            slice.external_exits.len(),
+            slice.unique_internal_successor
+        );
         let inner_region = subregion(region, slice.header, &slice.nodes);
         let inner_exits: Vec<_> = slice
             .internal_exits
@@ -408,29 +411,27 @@ fn refine_nested_cyclic_region(
                     .map(|(src, label)| (*src, label.clone())),
             )
             .collect();
-        let inner_tree = refine_cyclic_region_nested(&inner_region, &inner_exits, depth + 1);
+        let inner_tree = refine_cyclic_region_nested(&inner_region, &inner_exits, depth + 1, limit);
         if inner_tree == StructuredNode::Unsupported {
-            cyclic_trace(|| format!("skip header={header} reason=inner-unsupported depth={depth}"));
+            cyclic_trace!("skip header={header} reason=inner-unsupported depth={depth}");
             continue;
         }
         let Some(collapsed) = collapse_loop_slice(region, exits, &slice, inner_tree) else {
-            cyclic_trace(|| format!("skip header={header} reason=collapse depth={depth}"));
+            cyclic_trace!("skip header={header} reason=collapse depth={depth}");
             continue;
         };
-        let collapsed_rc = compute_reaching_conditions(&collapsed.region);
+        let collapsed_rc = compute_reaching_conditions(&collapsed.region, limit);
         if collapsed_rc.limited {
-            cyclic_trace(|| {
-                format!("skip header={header} reason=collapsed-rc-limited depth={depth}")
-            });
+            cyclic_trace!("skip header={header} reason=collapsed-rc-limited depth={depth}");
             continue;
         }
         let outer_tree = if collapsed_rc.back_edges.is_empty() {
-            refine_region(&collapsed.region)
+            refine_region(&collapsed.region, limit)
         } else {
-            refine_cyclic_region_nested(&collapsed.region, &collapsed.exits, depth + 1)
+            refine_cyclic_region_nested(&collapsed.region, &collapsed.exits, depth + 1, limit)
         };
         if outer_tree == StructuredNode::Unsupported {
-            cyclic_trace(|| format!("skip header={header} reason=outer-unsupported depth={depth}"));
+            cyclic_trace!("skip header={header} reason=outer-unsupported depth={depth}");
             continue;
         }
         return replace_subtree_placeholders(outer_tree, &collapsed.subtrees);
@@ -444,6 +445,7 @@ fn refine_abnormal_cyclic_region(
     exits: &[(RegionNode, EdgeLabel)],
     rc: &ReachingConditions,
     predicate_sources: &BTreeMap<u32, RegionNode>,
+    limit: usize,
 ) -> StructuredNode {
     let real_nodes = region_nodes(region);
     let skeleton = Region {
@@ -461,7 +463,7 @@ fn refine_abnormal_cyclic_region(
     {
         StructuredNode::Unsupported
     } else {
-        refine_region_with_source_order(&skeleton, predicate_sources)
+        refine_region_with_source_order(&skeleton, predicate_sources, limit)
     };
     if body == StructuredNode::Unsupported || !mentions_all_region_nodes(&body, &real_nodes) {
         return linearize_abnormal_cyclic_region(region, exits, rc)
@@ -734,29 +736,25 @@ fn build_loop_slice(
         .filter_map(|(src, dst)| (*dst == header).then_some(*src))
         .collect();
     if latches.is_empty() {
-        cyclic_trace(|| format!("slice header={header} reject=no-latches"));
+        cyclic_trace!("slice header={header} reject=no-latches");
         return None;
     }
 
     let mut nodes = initial_loop_nodes(region, header, &latches, &rc.back_edges);
     if nodes.is_empty() || !nodes.contains(&header) {
-        cyclic_trace(|| {
-            format!(
-                "slice header={header} reject=empty-initial nodes={:?} latches={latches:?}",
-                nodes
-            )
-        });
+        cyclic_trace!(
+            "slice header={header} reject=empty-initial nodes={:?} latches={latches:?}",
+            nodes
+        );
         return None;
     }
     refine_loop_successors(region, header, &mut nodes);
 
     if has_abnormal_loop_entry(region, header, &nodes) {
-        cyclic_trace(|| {
-            format!(
-                "slice header={header} reject=abnormal-entry nodes={} latches={latches:?}",
-                nodes.len()
-            )
-        });
+        cyclic_trace!(
+            "slice header={header} reject=abnormal-entry nodes={} latches={latches:?}",
+            nodes.len()
+        );
         return None;
     }
 
@@ -769,13 +767,11 @@ fn build_loop_slice(
     let internal_targets: BTreeSet<_> = internal_exits.iter().map(|(_, dst, _)| *dst).collect();
     let exits_external = !external_exits.is_empty();
     if internal_targets.len() + usize::from(exits_external) > 1 {
-        cyclic_trace(|| {
-            format!(
-                "slice header={header} reject=multiple-successors nodes={} internal_targets={internal_targets:?} external_exits={}",
-                nodes.len(),
-                external_exits.len()
-            )
-        });
+        cyclic_trace!(
+            "slice header={header} reject=multiple-successors nodes={} internal_targets={internal_targets:?} external_exits={}",
+            nodes.len(),
+            external_exits.len()
+        );
         return None;
     }
 
@@ -1197,8 +1193,8 @@ fn inject_abnormal_block_controls(
 
 /// Refine a region into a goto-free [`StructuredNode`]. Returns
 /// [`StructuredNode::Unsupported`] if the region is cyclic (has back-edges).
-pub fn refine_region(region: &Region) -> StructuredNode {
-    let rc = compute_reaching_conditions(region);
+pub fn refine_region(region: &Region, limit: usize) -> StructuredNode {
+    let rc = compute_reaching_conditions(region, limit);
     if rc.limited {
         return StructuredNode::Unsupported;
     }
@@ -1217,8 +1213,9 @@ pub fn refine_region(region: &Region) -> StructuredNode {
 fn refine_region_with_source_order(
     region: &Region,
     predicate_sources: &BTreeMap<u32, RegionNode>,
+    limit: usize,
 ) -> StructuredNode {
-    let rc = compute_reaching_conditions(region);
+    let rc = compute_reaching_conditions(region, limit);
     if rc.limited {
         return StructuredNode::Unsupported;
     }
@@ -1602,7 +1599,12 @@ fn try_switch_source_ordered(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::StructureOptions;
     use crate::reaching_conditions::EdgeLabel;
+
+    fn limit() -> usize {
+        StructureOptions::default().max_reaching_condition_nodes
+    }
 
     fn t(id: u32) -> EdgeLabel {
         EdgeLabel::True(id)
@@ -1617,7 +1619,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, EdgeLabel::Always), (1, 2, EdgeLabel::Always)],
         };
-        let tree = refine_region(&region);
+        let tree = refine_region(&region, limit());
         assert_eq!(tree.goto_count(), 0);
         // All conditions True → a flat sequence of the three blocks.
         assert_eq!(
@@ -1637,7 +1639,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, t(0)), (0, 2, f(0))],
         };
-        let tree = refine_region(&region);
+        let tree = refine_region(&region, limit());
         assert_eq!(tree.goto_count(), 0);
         // Header 0 is True (sequenced); the conditional part is an If on p0.
         let found_if = contains_if_on(&tree, 0);
@@ -1652,7 +1654,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, t(7)), (0, 2, f(7))],
         };
-        let tree = refine_region(&region);
+        let tree = refine_region(&region, limit());
         match tree {
             StructuredNode::Seq(parts) => {
                 assert_eq!(parts.first(), Some(&StructuredNode::Block(0)));
@@ -1669,7 +1671,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, t(0)), (1, 2, t(1))],
         };
-        let tree = refine_region(&region);
+        let tree = refine_region(&region, limit());
         assert_eq!(tree.goto_count(), 0);
         assert!(contains_if_on(&tree, 0));
         assert!(contains_if_on(&tree, 1));
@@ -1687,7 +1689,7 @@ mod tests {
                 (0, 3, EdgeLabel::Case(7, 2)),
             ],
         };
-        let tree = refine_region(&region);
+        let tree = refine_region(&region, limit());
         assert_eq!(tree.goto_count(), 0);
         let sw = find_switch(&tree).expect("expected a Switch node");
         if let StructuredNode::Switch {
@@ -1710,7 +1712,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, t(0)), (1, 2, t(1)), (1, 3, f(1))],
         };
-        let tree = refine_region(&region);
+        let tree = refine_region(&region, limit());
         assert_eq!(tree.goto_count(), 0);
         // p0 factored: there is an If on 0 whose then-arm contains the If on 1.
         assert!(contains_if_on(&tree, 0));
@@ -1758,7 +1760,7 @@ mod tests {
                 (2, 1, EdgeLabel::Always),
             ],
         };
-        assert_eq!(refine_region(&region), StructuredNode::Unsupported);
+        assert_eq!(refine_region(&region, limit()), StructuredNode::Unsupported);
     }
 
     #[test]
@@ -1767,7 +1769,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, EdgeLabel::Always), (1, 0, EdgeLabel::Always)],
         };
-        let tree = refine_cyclic_region(&region);
+        let tree = refine_cyclic_region(&region, limit());
         assert_eq!(tree.goto_count(), 0);
         assert!(contains_loop(&tree), "expected Loop: {tree:?}");
         assert!(mentions_block(&tree, 0));
@@ -1781,7 +1783,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, t(0)), (1, 0, EdgeLabel::Always)],
         };
-        let tree = refine_cyclic_region_with_exits(&region, &[(0, f(0))]);
+        let tree = refine_cyclic_region_with_exits(&region, &[(0, f(0))], limit());
         assert_eq!(tree.goto_count(), 0);
         assert!(contains_loop(&tree), "expected Loop: {tree:?}");
         assert!(contains_continue(&tree), "expected Continue: {tree:?}");
@@ -1795,7 +1797,7 @@ mod tests {
             header: 0,
             edges: vec![(0, 1, EdgeLabel::Always), (1, 0, t(7))],
         };
-        let tree = refine_cyclic_region_with_exits(&region, &[(1, f(7))]);
+        let tree = refine_cyclic_region_with_exits(&region, &[(1, f(7))], limit());
         assert_eq!(tree.goto_count(), 0);
         assert!(contains_loop(&tree), "expected Loop: {tree:?}");
         assert!(contains_continue(&tree), "expected Continue: {tree:?}");
@@ -1813,7 +1815,7 @@ mod tests {
             edges: vec![(0, 1, EdgeLabel::Always), (1, 2, t(1)), (2, 0, t(2))],
         };
 
-        let tree = refine_cyclic_region_with_exits(&region, &[(1, f(1)), (2, f(2))]);
+        let tree = refine_cyclic_region_with_exits(&region, &[(1, f(1)), (2, f(2))], limit());
 
         assert_eq!(tree.goto_count(), 0);
         assert!(contains_loop(&tree), "expected Loop: {tree:?}");
@@ -1851,7 +1853,7 @@ mod tests {
                 (3, 0, t(3)),
             ],
         };
-        let tree = refine_cyclic_region_with_exits(&region, &[(3, f(3))]);
+        let tree = refine_cyclic_region_with_exits(&region, &[(3, f(3))], limit());
         assert_eq!(tree.goto_count(), 0);
         assert!(contains_loop(&tree), "expected outer Loop: {tree:?}");
         assert!(
@@ -1879,7 +1881,7 @@ mod tests {
             ],
         };
         assert_eq!(
-            refine_cyclic_region_with_exits(&region, &[(3, f(3))]),
+            refine_cyclic_region_with_exits(&region, &[(3, f(3))], limit()),
             StructuredNode::Unsupported
         );
     }
@@ -1894,7 +1896,7 @@ mod tests {
                 (2, 1, EdgeLabel::Always),
             ],
         };
-        let tree = refine_cyclic_region(&region);
+        let tree = refine_cyclic_region(&region, limit());
         assert_ne!(tree, StructuredNode::Unsupported);
         assert!(contains_loop(&tree), "expected nested Loop: {tree:?}");
     }
@@ -1912,7 +1914,7 @@ mod tests {
             ],
         };
 
-        let tree = refine_abnormal_cyclic_region_with_exits(&region, &[]);
+        let tree = refine_abnormal_cyclic_region_with_exits(&region, &[], limit());
 
         assert_ne!(tree, StructuredNode::Unsupported);
         assert_eq!(tree.goto_count(), 1, "expected one internal goto: {tree:?}");
@@ -1944,7 +1946,8 @@ mod tests {
             edges: vec![(0, 1, EdgeLabel::Always), (1, 2, t(1)), (1, 0, f(1))],
         };
 
-        let tree = refine_abnormal_cyclic_region_with_exits(&region, &[(2, EdgeLabel::Always)]);
+        let tree =
+            refine_abnormal_cyclic_region_with_exits(&region, &[(2, EdgeLabel::Always)], limit());
 
         assert_ne!(tree, StructuredNode::Unsupported);
         assert_eq!(tree.goto_count(), 0);

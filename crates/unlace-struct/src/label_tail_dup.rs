@@ -6,6 +6,8 @@
 //! A `goto` to one of those labels is equivalent to executing that suffix
 //! directly at the branch site. Duplicating only simple suffixes removes the
 //! abnormal label/goto pair without introducing a synthetic dispatcher.
+//!
+//! Diagnostics: enable `unlace::struct::label_tail_dup=debug`.
 
 use std::collections::BTreeMap;
 
@@ -83,6 +85,12 @@ fn duplicate_in_nodes(nodes: &mut [HirNode], budget: &mut usize) {
     }
 }
 
+macro_rules! label_tail_dup_debug {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::struct::label_tail_dup", "{}", format_args!($($arg)*))
+    };
+}
+
 fn duplicate_loop_body(body: &mut Vec<HirNode>, budget: &mut usize) {
     if *budget == 0 {
         return;
@@ -91,17 +99,15 @@ fn duplicate_loop_body(body: &mut Vec<HirNode>, budget: &mut usize) {
     if candidates.is_empty() {
         return;
     }
-    if label_tail_dup_trace_enabled() {
-        let labels: Vec<_> = candidates.keys().copied().collect();
-        eprintln!(
-            "[unlace-label-tail-dup] loop-candidates={} labels={labels:?} budget={}",
-            labels.len(),
-            *budget
-        );
-    }
+    label_tail_dup_debug!(
+        "loop-candidates={} labels={:?} budget={}",
+        candidates.len(),
+        candidates.keys().collect::<Vec<_>>(),
+        *budget
+    );
     let replaced = replace_gotos_in_same_loop_scope(body, &candidates, budget);
-    if replaced > 0 && label_tail_dup_trace_enabled() {
-        eprintln!("[unlace-label-tail-dup] replacements={replaced} remaining_budget={budget}",);
+    if replaced > 0 {
+        label_tail_dup_debug!("replacements={replaced} remaining_budget={budget}");
     }
 }
 
@@ -169,12 +175,10 @@ fn replace_gotos_in_same_loop_scope(
         if let HirNode::Goto(label) = &nodes[index]
             && let Some(replacement) = candidates.get(label)
         {
-            if label_tail_dup_trace_enabled() {
-                eprintln!(
-                    "[unlace-label-tail-dup] replace goto target={label:?} duplicated_nodes={}",
-                    replacement.len()
-                );
-            }
+            label_tail_dup_debug!(
+                "replace goto target={label:?} duplicated_nodes={}",
+                replacement.len()
+            );
             let replacement = replacement.clone();
             let len = replacement.len();
             nodes.splice(index..=index, replacement);
@@ -227,11 +231,6 @@ fn replace_gotos_in_same_loop_scope(
         index += 1;
     }
     replaced
-}
-
-fn label_tail_dup_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_LABEL_TAIL_DUP_TRACE").is_some()
-        || std::env::var_os("UNLACE_HIR_TRACE_VERBOSE").is_some()
 }
 
 #[cfg(test)]

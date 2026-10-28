@@ -29,10 +29,11 @@ use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader};
 use unlace_struct::{HirFunction, HirNode};
 
+use crate::config::Config;
 use crate::pipeline::{self, FlirtConfidence, FunctionEntry};
 use crate::profiling::{self, TraceField};
-use std::collections::BTreeMap;
-use unlace_ir::SpaceId;
+use std::collections::{BTreeMap, BTreeSet};
+use unlace_ir::{ArchId, SpaceId};
 
 fn null_deref_regex() -> &'static regex::Regex {
     static RE: OnceLock<regex::Regex> = OnceLock::new();
@@ -346,8 +347,9 @@ impl FunctionQuality {
                             CallotherClass::SemanticGap => q.callother_semantic_gap_ops += 1,
                         }
                         if quality_trace_enabled() {
-                            eprintln!(
-                                "[unlace-quality] func={name} callother addr=0x{:x} tag={:?} class={:?}",
+                            tracing::debug!(
+                                target: "unlace::quality",
+                                "func={name} callother addr=0x{:x} tag={:?} class={:?}",
                                 insn.addr,
                                 callother_tag(insn),
                                 classify_callother(insn),
@@ -522,8 +524,9 @@ fn leaked_temp_decl_count(emitted_c: &str) -> usize {
                 // Per-site visibility into the precision-denominator inflation:
                 // shows exactly which declaration each leaked temp came from,
                 // so a leaked-temp regression can be pinned to a single line.
-                eprintln!(
-                    "[unlace-quality] leaked-temp #{count} line={} name={name} decl={decl:?}",
+                tracing::debug!(
+                    target: "unlace::quality",
+                    "leaked-temp #{count} line={} name={name} decl={decl:?}",
                     line_no + 1,
                 );
             }
@@ -849,7 +852,7 @@ fn is_known_callother_tag(tag: u64) -> bool {
 }
 
 fn quality_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_QUALITY_TRACE").is_some()
+    tracing::enabled!(target: "unlace::quality", tracing::Level::DEBUG)
 }
 
 /// Count the leaf fields of a recovered struct/union type, recursing into
@@ -1106,12 +1109,17 @@ impl QualityTotals {
 /// emission, and tolerates per-function failure (the malformed-input safety
 /// gate: one bad function must not abort the report).
 pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
-    analyze_binary_with_flirt(binary_path, &pipeline::FlirtConfig::default())
+    analyze_binary_with_flirt(
+        binary_path,
+        &pipeline::FlirtConfig::default(),
+        &Config::default(),
+    )
 }
 
 pub fn analyze_binary_with_flirt(
     binary_path: &Path,
     flirt_config: &pipeline::FlirtConfig,
+    options: &Config,
 ) -> Result<BinaryQuality> {
     let _profile_command = profiling::phase("quality.analyze-binary");
     let _profile_trace = profiling::trace_fields(
@@ -1179,7 +1187,15 @@ pub fn analyze_binary_with_flirt(
             ],
         );
         profiling::record_items("quality.function", 1);
-        match analyze_function(&image, lifter.as_ref(), entry, &functions, flirt_config) {
+        let _function_span = pipeline::function_span(entry);
+        match analyze_function(
+            &image,
+            lifter.as_ref(),
+            entry,
+            &functions,
+            flirt_config,
+            options,
+        ) {
             Ok(q) => {
                 report.totals.accumulate(&q);
                 report.functions.push(q);
@@ -1243,6 +1259,7 @@ fn analyze_function(
     entry: &FunctionEntry,
     discovered: &[FunctionEntry],
     flirt_config: &pipeline::FlirtConfig,
+    options: &Config,
 ) -> Result<FunctionQuality> {
     let mut ir_func = {
         let _span = profiling::phase("quality.lift");
@@ -1304,7 +1321,7 @@ fn analyze_function(
 
     let pass_result = {
         let _span = profiling::phase("quality.run-passes");
-        pipeline::run_passes_with_resolver(&mut ssa, &resolve_name)
+        pipeline::run_passes_with_resolver(&mut ssa, &resolve_name, &options.passes)
     };
     if let Err(e) = pass_result {
         // Match the pipeline's behaviour: a failed pass run still yields a
@@ -1346,7 +1363,14 @@ fn analyze_function(
 
     let mut hir = {
         let _span = profiling::phase("quality.structure");
-        unlace_struct::structure(&ssa).context("control-flow structuring failed")?
+        unlace_struct::structure_with_options(
+            &ssa,
+            ArchId::X86_64,
+            &BTreeSet::new(),
+            None,
+            &options.structure,
+        )
+        .context("control-flow structuring failed")?
     };
 
     // Run the same post-structuring passes that the main pipeline applies so

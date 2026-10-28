@@ -1,22 +1,26 @@
-use std::sync::OnceLock;
+//! Structurer diagnostics under the `unlace::struct` target: `debug` for
+//! decisions and region walks, `trace` for per-edge and HIR-count detail.
 
 use super::*;
 
+macro_rules! struct_debug {
+    ($($arg:tt)*) => {
+        tracing::debug!(target: "unlace::struct", "{}", format_args!($($arg)*))
+    };
+}
+
+macro_rules! struct_trace {
+    ($($arg:tt)*) => {
+        tracing::trace!(target: "unlace::struct", "{}", format_args!($($arg)*))
+    };
+}
+
 pub(super) fn struct_trace_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED
-        .get_or_init(|| env_flag("UNLACE_STRUCT_TRACE") || env_flag("UNLACE_STRUCT_TRACE_VERBOSE"))
+    tracing::enabled!(target: "unlace::struct", tracing::Level::DEBUG)
 }
 
 pub(super) fn struct_trace_verbose_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        env_flag("UNLACE_STRUCT_TRACE_VERBOSE") || env_flag("UNLACE_HIR_TRACE_VERBOSE")
-    })
-}
-
-fn env_flag(name: &str) -> bool {
-    std::env::var(name).map(|v| v != "0").unwrap_or(false)
+    tracing::enabled!(target: "unlace::struct", tracing::Level::TRACE)
 }
 
 #[derive(Default)]
@@ -135,8 +139,8 @@ pub(super) fn trace_hir_counts(prefix: &str, nodes: &[HirNode]) {
         return;
     }
     let counts = hir_trace_counts(nodes);
-    eprintln!(
-        "[unlace-struct] {prefix} nodes={} stmts={} ifs={} gotos={} labels={} breaks={} continues={} empty_ifs={}",
+    struct_trace!(
+        "{prefix} nodes={} stmts={} ifs={} gotos={} labels={} breaks={} continues={} empty_ifs={}",
         counts.nodes,
         counts.stmts,
         counts.ifs,
@@ -153,8 +157,8 @@ pub(super) fn trace_branch_shape(prefix: &str, nodes: &[HirNode]) {
         return;
     }
     let counts = hir_trace_counts(nodes);
-    eprintln!(
-        "[unlace-struct] {prefix} nodes={} stmts={} ifs={} gotos={} labels={} breaks={} continues={} empty_ifs={}",
+    struct_debug!(
+        "{prefix} nodes={} stmts={} ifs={} gotos={} labels={} breaks={} continues={} empty_ifs={}",
         counts.nodes,
         counts.stmts,
         counts.ifs,
@@ -166,10 +170,7 @@ pub(super) fn trace_branch_shape(prefix: &str, nodes: &[HirNode]) {
     );
     if struct_trace_verbose_enabled() {
         for (idx, node) in nodes.iter().take(8).enumerate() {
-            eprintln!(
-                "[unlace-struct] {prefix} top[{idx}] kind={}",
-                hir_node_kind(node)
-            );
+            struct_trace!("{prefix} top[{idx}] kind={}", hir_node_kind(node));
         }
     }
 }
@@ -179,14 +180,14 @@ pub(super) fn trace_block_edges(func: &SsaFunction, bid: BlockId, prefix: &str) 
         return;
     }
     let edges = func.cfg.edges_from(bid);
-    eprintln!("[unlace-struct] {prefix} block={bid:?} edges={edges:?}");
+    struct_trace!("{prefix} block={bid:?} edges={edges:?}");
     if let Some((kind, target)) = concrete_terminator_edge(func, bid, &edges)
         && !edges
             .iter()
             .any(|(edge_target, edge_kind)| *edge_kind == kind && *edge_target == target)
     {
-        eprintln!(
-            "[unlace-struct] {prefix} block={bid:?} terminator_target kind={kind:?} ir_target={target:?}"
+        struct_trace!(
+            "{prefix} block={bid:?} terminator_target kind={kind:?} ir_target={target:?}"
         );
     }
 }
@@ -195,17 +196,14 @@ pub(super) fn trace_hir_top(stage: &str, nodes: &[HirNode]) {
     if !struct_trace_enabled() {
         return;
     }
-    eprintln!("[unlace-struct] hir stage={stage} nodes={}", nodes.len());
+    struct_debug!("hir stage={stage} nodes={}", nodes.len());
     let start = nodes.len().saturating_sub(12);
     for (idx, node) in nodes.iter().enumerate().skip(start) {
-        eprintln!(
-            "[unlace-struct] hir stage={stage} idx={idx} kind={}",
-            hir_node_kind(node)
-        );
+        struct_debug!("hir stage={stage} idx={idx} kind={}", hir_node_kind(node));
     }
     for (idx, node) in nodes.iter().enumerate() {
         if matches!(node, HirNode::Return(_)) {
-            eprintln!("[unlace-struct] hir stage={stage} return_idx={idx}");
+            struct_debug!("hir stage={stage} return_idx={idx}");
         }
     }
 }

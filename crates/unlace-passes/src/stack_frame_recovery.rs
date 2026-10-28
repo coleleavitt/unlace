@@ -644,35 +644,7 @@ fn detect_arrays(
 }
 
 fn stack_frame_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
-    if !stack_frame_trace_enabled() {
-        return;
-    }
-    if let Some(filter) = stack_frame_trace_filter()
-        && !func.function.name.contains(&filter)
-    {
-        return;
-    }
-    eprintln!("[unlace stack-frame] func={} {message}", func.function.name);
-}
-
-fn stack_frame_trace_enabled() -> bool {
-    env_flag_enabled("UNLACE_STACK_FRAME_TRACE") || env_flag_enabled("UNLACE_TRACE_ALL")
-}
-
-fn stack_frame_trace_filter() -> Option<String> {
-    std::env::var("UNLACE_STACK_FRAME_TRACE_FILTER")
-        .ok()
-        .or_else(|| std::env::var("UNLACE_TRACE_FILTER").ok())
-        .filter(|s| !s.is_empty())
-}
-
-fn env_flag_enabled(name: &str) -> bool {
-    std::env::var_os(name)
-        .map(|value| {
-            let value = value.to_string_lossy();
-            !matches!(value.as_ref(), "" | "0" | "false" | "FALSE" | "off" | "OFF")
-        })
-        .unwrap_or(false)
+    tracing::debug!(target: "unlace::stack::frame", "func={} {message}", func.function.name);
 }
 
 /// Build a map from defined varnode → list of definition sites.

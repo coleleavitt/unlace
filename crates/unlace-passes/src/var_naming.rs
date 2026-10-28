@@ -118,10 +118,6 @@ fn arg_regs_for_func(func: &SsaFunction) -> &'static [(u64, u32)] {
     }
 }
 
-fn var_naming_trace_enabled() -> bool {
-    std::env::var_os("UNLACE_VAR_NAMING_TRACE").is_some()
-}
-
 pub fn classify_variables(func: &SsaFunction) -> VarClassification {
     let mut roles: BTreeMap<SsaVarnode, VarRole> = BTreeMap::new();
     let mut arg_indices: BTreeMap<SsaVarnode, u32> = BTreeMap::new();
@@ -282,15 +278,19 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                         if arg_idx < param_count {
                             arg_indices.insert(*sv, arg_idx);
                             record_role(&mut roles, *sv, argument_role_for_index(func, arg_idx));
-                            if var_naming_trace_enabled() {
-                                eprintln!(
-                                    "[unlace-var-naming] func={} Copy-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count}",
+                            if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG)
+                            {
+                                tracing::debug!(
+                                    target: "unlace::var_naming",
+                                    "func={} Copy-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count}",
                                     func.function.name
                                 );
                             }
-                        } else if var_naming_trace_enabled() {
-                            eprintln!(
-                                "[unlace-var-naming] func={} SKIP Copy-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
+                        } else if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG)
+                        {
+                            tracing::debug!(
+                                target: "unlace::var_naming",
+                                "func={} SKIP Copy-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
                                 func.function.name
                             );
                         }
@@ -324,15 +324,19 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                         if arg_idx < param_count {
                             arg_indices.insert(*sv, arg_idx);
                             record_role(&mut roles, *sv, argument_role_for_index(func, arg_idx));
-                            if var_naming_trace_enabled() {
-                                eprintln!(
-                                    "[unlace-var-naming] func={} direct-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count}",
+                            if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG)
+                            {
+                                tracing::debug!(
+                                    target: "unlace::var_naming",
+                                    "func={} direct-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count}",
                                     func.function.name
                                 );
                             }
-                        } else if var_naming_trace_enabled() {
-                            eprintln!(
-                                "[unlace-var-naming] func={} SKIP direct-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
+                        } else if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG)
+                        {
+                            tracing::debug!(
+                                target: "unlace::var_naming",
+                                "func={} SKIP direct-arg-role sv={sv:?} reg_off={off} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
                                 func.function.name
                             );
                         }
@@ -359,15 +363,17 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
         if arg_idx < param_count {
             arg_indices.insert(sv, arg_idx);
             record_role(&mut roles, sv, argument_role_for_index(func, arg_idx));
-            if var_naming_trace_enabled() {
-                eprintln!(
-                    "[unlace-var-naming] func={} live-in-arg-role sv={sv:?} arg_idx={arg_idx} param_count={param_count}",
+            if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG) {
+                tracing::debug!(
+                    target: "unlace::var_naming",
+                    "func={} live-in-arg-role sv={sv:?} arg_idx={arg_idx} param_count={param_count}",
                     func.function.name
                 );
             }
-        } else if var_naming_trace_enabled() {
-            eprintln!(
-                "[unlace-var-naming] func={} SKIP live-in-arg-role sv={sv:?} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
+        } else if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG) {
+            tracing::debug!(
+                target: "unlace::var_naming",
+                "func={} SKIP live-in-arg-role sv={sv:?} arg_idx={arg_idx} param_count={param_count} (exceeds inferred params)",
                 func.function.name
             );
         }

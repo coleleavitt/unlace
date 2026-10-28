@@ -95,14 +95,14 @@ fn main() {
         }
         Some("semantic-report") => {
             let root = workspace_root();
-            let code = semantic_report::run(&root);
+            let code = semantic_report::run(&root, &args[1..]);
             if code != 0 {
                 process::exit(code);
             }
         }
         Some("type-recovery-report") => {
             let root = workspace_root();
-            let code = type_recovery_report::run(&root);
+            let code = type_recovery_report::run(&root, &args[1..]);
             if code != 0 {
                 process::exit(code);
             }

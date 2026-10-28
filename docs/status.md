@@ -1,7 +1,7 @@
 # Status Matrix (Batch 27)
 
-> **2026-06-21 live verification.** `RUSTC_WRAPPER= bash
-> scripts/quality_axes.sh` reports `Stylistic Fixture Parity: 83.0%`;
+> **2026-06-21 live verification.** The quality-axis run (now
+> `cargo xtask gate`) reports `Stylistic Fixture Parity: 83.0%`;
 > `xtask golden-triage` reports 15 exact-pass rows and 0 review rows;
 > `xtask semantic-report` reports 34 pass rows, 0 XFAIL, 0 failed, 0
 > unsupported; and `xtask type-recovery-report` reports `recall=100.0%

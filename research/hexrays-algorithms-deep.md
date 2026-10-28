@@ -364,3 +364,110 @@ From LVAR (`sub_21B2A0`):
 | `sub_33E140` | 23 | Pass dispatcher |
 | `sub_330F20` | 17 | Maturity setter |
 | `sub_A0950` | 13 | Operand propagation |
+
+
+---
+
+## 8. Ctree Opcode Map (from combiner analysis)
+
+The combiner handles these expression types:
+
+| Opcode | Hex | Name | Category |
+|--------|-----|------|----------|
+| 1 | 0x01 | cot_comma | Sequencing |
+| 2 | 0x02 | cot_asg | Assignment |
+| 4 | 0x04 | cot_tern | Control (ternary) |
+| 5 | 0x05 | cot_lor | Logical (||) |
+| 9 | 0x09 | cot_band | Bitwise (&) |
+| 10 | 0x0A | cot_eq | Comparison (==) |
+| 11 | 0x0B | cot_ne | Comparison (!=) |
+| 12 | 0x0C | cot_sge | Comparison (>= signed) |
+| 13 | 0x0D | cot_uge | Comparison (>= unsigned) |
+| 14 | 0x0E | cot_sle | Comparison (<= signed) |
+| 19 | 0x13 | cot_ult | Comparison (< unsigned) |
+| 23 | 0x17 | cot_add | Arithmetic (+) |
+| 24 | 0x18 | cot_sub | Arithmetic (-) |
+| 29 | 0x1D | cot_umod | Arithmetic (% unsigned) |
+| 30 | 0x1E | cot_fadd | Float (+) |
+| 34 | 0x22 | cot_fneg | Float negate |
+| 35 | 0x23 | cot_neg | Negate |
+| 39 | 0x27 | cot_ptr | Dereference (*) |
+| 40 | 0x28 | cot_ref | Address-of (&) |
+| 42 | 0x2A | cot_postdec | Post-decrement (x--) |
+| 45 | 0x2D | cot_call | Function call |
+| 46 | 0x2E | cot_idx | Array index ([]) |
+| 50 | 0x32 | cot_fnum | Float literal |
+| 51 | 0x33 | cot_str | String literal |
+| 54 | 0x36 | cot_insn | Instruction wrapper |
+| 55 | 0x37 | cot_sizeof | sizeof() |
+| 56 | 0x38 | cot_helper | Helper function |
+| 59 | 0x3B | (internal) | Simplified comma result |
+| 60 | 0x3C | (internal) | Simplified comparison result |
+
+### Optimization Patterns by Opcode
+
+**Case 1 (cot_comma):**
+- Pattern: `(x, x)` where both sides identical → simplify to `x`
+- Fallback: try `sub_9AAF0` or `sub_18AD00`
+
+**Case 4 (cot_tern):**
+- Complex ternary analysis
+- Constant condition folding
+- Type-based simplification
+- Try converting to `cot_band` (case 9) when appropriate
+
+**Case 5 (cot_lor):**
+- Short-circuit optimization via `sub_9ED70`
+- Secondary pattern via `sub_99C40`
+
+**Case 10/11 (cot_eq/cot_ne):**
+- Multiple optimization passes:
+  - `sub_9B160` (pattern 20)
+  - `sub_A02B0` (pattern 25)
+  - `sub_9B2C0` (pattern 43)
+  - `sub_98A40` (pattern 55)
+
+**Case 23/24 (cot_add/cot_sub):**
+- Strength reduction
+- Constant folding
+- Pointer arithmetic simplification
+
+**Case 45 (cot_call):**
+- Inline expansion
+- Pure function optimization
+- Argument simplification
+
+---
+
+## 9. Summary for Unlace Implementation
+
+### Architecture to Replicate
+1. **Pass system:** Linked list + event dispatch (trivial)
+2. **Maturity levels:** Integer + enum (trivial)
+3. **Combiner:** Switch on HIR opcode → per-opcode handlers
+4. **LVAR:** Interference graph → sort → merge → remap
+5. **Printer:** Recursive dispatch on node type
+
+### Key Data Structures
+1. **mba_t:** Main decompilation context (Unlace: `FunctionContext`)
+2. **cexpr_t:** Expression node with opcode + operands (Unlace: `HirExpr`)
+3. **lvar_t:** Local variable with type + location (Unlace: `Local`)
+4. **cfunc_t:** Final ctree function (Unlace: `HirFunction`)
+
+### What Unlace Already Has
+- Pass infrastructure in `unlace-passes`
+- HIR/expression types in `unlace-ir`
+- Printer in `unlace-output`
+- Variable tracking in passes
+
+### What to Port
+1. The specific optimization patterns from `sub_B36D0`
+2. The interference graph algorithm from `sub_21B2A0`
+3. The naming conventions from `sub_2112D0`
+4. The type compatibility checks from `sub_215AC0`
+
+### Implementation Order
+1. **Phase 1:** Map unlace HIR opcodes to IDA ctree equivalents
+2. **Phase 2:** Port combiner cases one at a time, test each
+3. **Phase 3:** Add LVAR coalescing with interference graph
+4. **Phase 4:** Align variable naming with IDA conventions

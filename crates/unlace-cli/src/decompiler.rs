@@ -71,7 +71,7 @@ impl<'img> Decompiler<'img> {
         };
         let mut functions = {
             let _span = profiling::phase("decompile.discover-functions");
-            pipeline::discover_functions(image, filter)?
+            pipeline::discover_functions(image, None)?
         };
         profiling::record_items("decompile.discover-functions", functions.len() as u64);
 
@@ -118,6 +118,11 @@ impl<'img> Decompiler<'img> {
                 &config.flirt,
             ))
         });
+        // The symbol context covers every function, so calls out of a
+        // selected function still get symbol and library (FLIRT) names.
+        if let Some(filter) = filter {
+            functions = pipeline::select_functions(functions, filter)?;
+        }
 
         // Scan RTTI once for the whole binary; the C printer uses it to
         // emit class hierarchy + reconstructed vtable layouts.

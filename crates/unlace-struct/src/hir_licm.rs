@@ -372,9 +372,12 @@ fn is_hoistable(
         return false;
     }
 
-    // Refuse if any input is modified inside the loop.
+    // Refuse if any input is modified inside the loop. Unique temps are
+    // machine-instruction-local: a unique read whose def is not a loop
+    // statement was produced by an instruction that passes rewrote away,
+    // so its value cannot be proven invariant.
     for input in &insn.inputs {
-        if modified.contains(input) {
+        if input.space == SpaceId::Unique || modified.iter().any(|m| overlaps(*m, *input)) {
             return false;
         }
     }
@@ -402,6 +405,13 @@ fn is_hoistable(
     }
 
     true
+}
+
+/// Whether two varnodes share storage (e.g. `eax` and a write to `rax`).
+fn overlaps(a: Varnode, b: Varnode) -> bool {
+    a.space == b.space
+        && a.offset < b.offset.saturating_add(u64::from(b.size))
+        && b.offset < a.offset.saturating_add(u64::from(a.size))
 }
 
 /// Mirror of `unlace_passes::dce::is_side_effecting`. Inlined here to avoid

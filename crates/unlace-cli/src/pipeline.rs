@@ -283,17 +283,25 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         );
     }
 
-    if let Some(filter) = filter {
-        let target = parse_function_filter(filter);
-        funcs.retain(|f| match &target {
-            FunctionTarget::Name(name) => f.name == *name,
-            FunctionTarget::Addr(addr) => f.addr == *addr,
-        });
-        if funcs.is_empty() {
-            bail!("no function matching '{filter}' found in binary");
-        }
+    match filter {
+        Some(filter) => select_functions(funcs, filter),
+        None => Ok(funcs),
     }
+}
 
+/// Keep the functions `filter` names: a symbol name or a hex address.
+pub fn select_functions(
+    mut funcs: Vec<FunctionEntry>,
+    filter: &str,
+) -> Result<Vec<FunctionEntry>> {
+    let target = parse_function_filter(filter);
+    funcs.retain(|f| match &target {
+        FunctionTarget::Name(name) => f.name == *name,
+        FunctionTarget::Addr(addr) => f.addr == *addr,
+    });
+    if funcs.is_empty() {
+        bail!("no function matching '{filter}' found in binary");
+    }
     Ok(funcs)
 }
 

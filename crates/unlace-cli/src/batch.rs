@@ -15,9 +15,7 @@ use serde::{Deserialize, Serialize};
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{ArchId, Lifter};
 use unlace_lift::get_lifter;
-use unlace_loader::{
-    BinaryImage, DwarfInfo, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf_with_sidecar,
-};
+use unlace_loader::{BinaryImage, DwarfInfo, import_dwarf_with_sidecar};
 
 use crate::args::{BatchProgressStyle, EmitFormat};
 use crate::config::Config;
@@ -276,21 +274,10 @@ pub fn run_batch(
     };
     profiling::record_bytes("batch.read-binary", data.len() as u64);
 
+    let preferred_arch = arch_override.map(crate::parse_arch).transpose()?;
     let image = {
         let _span = profiling::phase("batch.load-binary");
-        if ElfLoader::can_load(&data) {
-            ElfLoader::load(&data)
-        } else if MachoLoader::can_load(&data) {
-            MachoLoader::load(&data)
-        } else if PeLoader::can_load(&data) {
-            PeLoader::load(&data)
-        } else {
-            bail!(
-                "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
-                binary_path.display(),
-            );
-        }
-        .with_context(|| format!("failed to parse '{}'", binary_path.display()))?
+        crate::load::parse_image(&data, binary_path, preferred_arch)?
     };
 
     profiling::diagnostic(
@@ -1238,6 +1225,7 @@ fn sanitize_filename(name: &str, addr: u64) -> String {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use unlace_loader::{ElfLoader, Loader};
 
     fn fixture(name: &str) -> PathBuf {
         let manifest = env!("CARGO_MANIFEST_DIR");

@@ -4,17 +4,22 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use unlace_loader::{
-    BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_pdb, import_pdb_types,
+    ArchId, BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_pdb, import_pdb_types,
 };
 
 use crate::profiling::{self, TraceField};
 
 /// Parse `data`, read from `binary_path`, with the first loader that recognizes it.
-pub fn parse_image(data: &[u8], binary_path: &Path) -> Result<BinaryImage> {
+/// `preferred_arch` picks the slice of a universal Mach-O.
+pub fn parse_image(
+    data: &[u8],
+    binary_path: &Path,
+    preferred_arch: Option<ArchId>,
+) -> Result<BinaryImage> {
     if ElfLoader::can_load(data) {
         ElfLoader::load(data)
     } else if MachoLoader::can_load(data) {
-        MachoLoader::load(data)
+        MachoLoader::load_arch(data, preferred_arch)
     } else if PeLoader::can_load(data) {
         PeLoader::load(data)
     } else {
@@ -31,7 +36,7 @@ pub fn parse_image(data: &[u8], binary_path: &Path) -> Result<BinaryImage> {
 pub fn open_image(binary_path: &Path) -> Result<BinaryImage> {
     let data = std::fs::read(binary_path)
         .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
-    let mut image = parse_image(&data, binary_path)?;
+    let mut image = parse_image(&data, binary_path, None)?;
     attach_pdb_sidecar(&mut image, binary_path);
     Ok(image)
 }

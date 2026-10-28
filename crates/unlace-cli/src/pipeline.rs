@@ -212,6 +212,7 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     add_pe_runtime_functions(image, &mut funcs);
     add_pe_tls_callbacks(image, &mut funcs);
     add_go_pclntab_functions(image, &mut funcs);
+    add_macho_function_starts(image, &mut funcs);
 
     if funcs.is_empty() && uses_x86_function_discovery(image.arch) {
         profiling::diagnostic(
@@ -221,8 +222,6 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         );
         funcs = scan_for_prologues(image);
     }
-
-    add_macho_function_starts(image, &mut funcs);
 
     if funcs.is_empty() {
         profiling::diagnostic(
@@ -263,6 +262,16 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     prune_import_thunk_entries(image, &mut funcs);
     prune_padding_function_starts(image, &mut funcs);
 
+    for func in &funcs {
+        tracing::debug!(
+            target: "unlace::discover",
+            addr = format_args!("{:#x}", func.addr),
+            size = func.size,
+            name = %func.name,
+            "function"
+        );
+    }
+
     if let Some(filter) = filter {
         let target = parse_function_filter(filter);
         funcs.retain(|f| match &target {
@@ -297,7 +306,7 @@ fn add_macho_function_starts(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>
         }
         if known.insert(addr) {
             funcs.push(FunctionEntry {
-                name: format!("sub_{addr:x}"),
+                name: symbol_name_or(image, addr, || format!("sub_{addr:x}")),
                 addr,
                 size: 0,
             });
@@ -6842,6 +6851,33 @@ mod tests {
         assert!(
             result.iter().all(|func| func.size > 0),
             "function-start entries should receive inferred sizes: {result:?}",
+        );
+    }
+
+    #[test]
+    fn macho_function_starts_take_unsized_symbol_names() {
+        let base: u64 = 0x1_0000_2480;
+        let mut image = make_text_image(vec![0xc3; 0x40], base);
+        image.sections[0].name = "__text".to_string();
+        image.function_starts = vec![base, base + 0x20];
+        image.symbols.insert(
+            base + 0x20,
+            unlace_loader::Symbol {
+                name: "_mv_end".into(),
+                addr: base + 0x20,
+                size: 0,
+                kind: SymbolKind::Function,
+            },
+        );
+
+        let result = discover_functions(&image, None).expect("discover");
+        let named: Vec<(u64, &str)> = result
+            .iter()
+            .map(|func| (func.addr, func.name.as_str()))
+            .collect();
+        assert_eq!(
+            named,
+            vec![(base, "sub_100002480"), (base + 0x20, "_mv_end")],
         );
     }
 

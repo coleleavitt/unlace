@@ -191,19 +191,33 @@ impl FlirtMatcher {
                 .map(|s| CodeWindow::new(s.vaddr, &s.data))
                 .collect();
             let mut known: BTreeMap<u64, String> = img.plt_symbols.clone();
-            let mut candidates = Vec::new();
             let mut old_names = BTreeMap::new();
+            let in_code = |addr: u64| windows.iter().any(|w| w.read(addr, 1).is_some());
             for (&addr, sym) in &img.symbols {
-                if !windows.iter().any(|w| w.read(addr, 1).is_some()) {
+                if !in_code(addr) {
                     continue;
                 }
                 if force || is_synthetic_name(&sym.name) {
-                    candidates.push(addr);
                     old_names.insert(addr, sym.name.clone());
                 } else {
                     known.insert(addr, sym.name.clone());
                 }
             }
+            // Function starts the loader found without a symbol (`.pdata`,
+            // `LC_FUNCTION_STARTS`) are unnamed candidates too.
+            let unnamed_starts = img
+                .function_starts
+                .iter()
+                .copied()
+                .chain(img.runtime_functions.iter().map(|rf| rf.begin_address));
+            for addr in unnamed_starts {
+                if in_code(addr) && !img.symbols.contains_key(&addr) {
+                    old_names
+                        .entry(addr)
+                        .or_insert_with(|| format!("sub_{addr:X}"));
+                }
+            }
+            let candidates: Vec<u64> = old_names.keys().copied().collect();
             let hits = self.identify(img.arch, &windows, &candidates, &known);
             (hits, old_names)
         }) else {
@@ -378,6 +392,18 @@ mod tests {
 
         let strict = matcher().apply_to_session_with_min_confidence(&session, false, 100);
         assert_eq!(strict.renamed, 0);
+    }
+
+    #[test]
+    fn test_apply_uses_unnamed_function_starts() {
+        let mut img = build_test_image("sub_1000", STRLEN);
+        img.symbols.clear();
+        img.function_starts.push(0x1000);
+        let session = Session::new();
+        session.set_binary(img);
+        let report = matcher().apply_to_session(&session, false);
+        assert_eq!(report.inspected, 1);
+        assert_eq!(report.applied, vec![(0x1000, "strlen".to_string())]);
     }
 
     #[test]

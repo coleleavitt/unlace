@@ -2583,6 +2583,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "tempfile",
  "unlace-cli",
  "unlace-ir",
  "unlace-lift",
@@ -3098,6 +3099,7 @@ dependencies = [
  "thiserror",
  "tree-sitter",
  "tree-sitter-c",
+ "unlace-cli",
  "unlace-ir",
  "unlace-lift",
  "unlace-lift-arm",
@@ -3616,6 +3618,7 @@ dependencies = [
  "iced-x86",
  "serde",
  "serde_json",
+ "tempfile",
  "toml",
  "unlace-cli",
  "unlace-ir",
@@ -3625,6 +3628,7 @@ dependencies = [
  "unlace-passes",
  "unlace-sbom",
  "unlace-session",
+ "unlace-test-harness",
 ]
 
 [[package]]

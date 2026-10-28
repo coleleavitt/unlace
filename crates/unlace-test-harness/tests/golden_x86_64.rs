@@ -25,7 +25,10 @@
 //! should invoke unlace on that binary and compare via `ast_equiv`.
 
 use std::path::Path;
-use std::process::Command;
+
+use unlace_cli::args::EmitFormat;
+use unlace_cli::decompile;
+use unlace_test_harness::fixture_metrics::FIXTURE_DECOMPILE_TIMEOUT;
 
 fn workspace_root() -> &'static Path {
     static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
@@ -42,19 +45,6 @@ fn golden_dir() -> std::path::PathBuf {
     workspace_root().join("tests/golden/x86_64")
 }
 
-fn unlace_bin() -> String {
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| workspace_root().join("target"));
-    let bin_path = target_dir.join("debug").join("unlace");
-
-    assert!(
-        bin_path.exists(),
-        "unlace binary not found at {bin_path:?}. Run `cargo build -p unlace-cli` first."
-    );
-    bin_path.to_string_lossy().to_string()
-}
-
 fn fixture(name: &str) -> String {
     workspace_root()
         .join("fixtures")
@@ -64,39 +54,22 @@ fn fixture(name: &str) -> String {
 }
 
 fn decompile_fixture(fixture_name: &str) -> String {
-    let output = Command::new(unlace_bin())
-        .args(["decompile", "--emit", "c"])
-        .arg(fixture(&format!("{fixture_name}.elf")))
-        .env_remove("RUST_LOG")
-        .output()
-        .unwrap_or_else(|e| panic!("failed to run unlace on {fixture_name}: {e}"));
-
-    assert!(
-        output.status.success(),
-        "unlace failed on {fixture_name}.elf: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    String::from_utf8(output.stdout)
-        .unwrap_or_else(|e| panic!("non-UTF8 output from {fixture_name}: {e}"))
+    decompile_fixture_filtered(fixture_name, None)
 }
 
 fn decompile_fixture_function(fixture_name: &str, func: &str) -> String {
-    let output = Command::new(unlace_bin())
-        .args(["decompile", "--emit", "c", "--function", func])
-        .arg(fixture(&format!("{fixture_name}.elf")))
-        .env_remove("RUST_LOG")
-        .output()
-        .unwrap_or_else(|e| panic!("failed to run unlace on {fixture_name}/{func}: {e}"));
+    decompile_fixture_filtered(fixture_name, Some(func))
+}
 
-    assert!(
-        output.status.success(),
-        "unlace failed on {fixture_name}.elf --function {func}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    String::from_utf8(output.stdout)
-        .unwrap_or_else(|e| panic!("non-UTF8 output from {fixture_name}/{func}: {e}"))
+fn decompile_fixture_filtered(fixture_name: &str, function: Option<&str>) -> String {
+    let binary = fixture(&format!("{fixture_name}.elf"));
+    decompile::decompile_to_string(
+        Path::new(&binary),
+        function,
+        EmitFormat::C,
+        FIXTURE_DECOMPILE_TIMEOUT,
+    )
+    .unwrap_or_else(|e| panic!("unlace failed on {fixture_name} ({function:?}): {e:#}"))
 }
 
 fn assert_parses_as_c(source: &str, label: &str) {

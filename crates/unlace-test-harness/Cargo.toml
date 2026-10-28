@@ -9,6 +9,7 @@ tree-sitter-c = "0.23"
 thiserror = { workspace = true }
 
 [dev-dependencies]
+unlace-cli = { workspace = true }
 unlace-lift = { workspace = true }
 unlace-lift-arm = { workspace = true }
 unlace-ir = { workspace = true }

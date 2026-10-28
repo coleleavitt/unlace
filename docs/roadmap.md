@@ -69,16 +69,13 @@ Decompilation has to be more than a one-shot batch tool:
 - Manual decompiler facts: force/split/map variables, force call type, set
   indirect callee, inline or opaque callee decisions, manual switch patterns,
   custom calling conventions, and injected assertions.
-- IDAPython compatibility as the migration bridge: `idaapi`, `idc`, `idautils`,
-  `ida_funcs`, `ida_bytes`, `ida_name`, `ida_xref`, and `ida_hexrays` backed by
-  real script-corpus tests; `idaapi.decompile`, `ida_hexrays.decompile`,
-  ctree visitors, and microcode/event hooks are adoption-critical.
 - Unlace SDK boundaries from `docs/sdk.md`: stable Rust facade, Rust plugins,
-  WASM sandbox, Python bindings, IDAPython wrappers, decompiler objects, typed
+  WASM sandbox, Python bindings, analyzer objects, typed
   project facts, and validated mutation APIs.
-- `unlace-mcp` from `docs/mcp.md`: stdio-first MCP server over the stable SDK,
-  read-only by default, with tools/resources/prompts for project navigation,
-  decompilation, xrefs, types, diagnostics, quality reports, and corpus reports.
+- `unlace-mcp` from `docs/mcp.md`: stdio MCP server running the pipeline
+  in-process, read-only by default. Binary info, function listing,
+  decompilation, IR dumps, and xrefs exist as typed tools; resources, prompts,
+  types, diagnostics, quality reports, and corpus reports remain.
 - IDA/Hex-Rays reference-dump workflows are an adoption/evidence surface: use
   `idat` for isolated headless jobs, idalib for resumable per-function dumps,
   and normalize both into manifest-backed corpora for codegraph and comparison.
@@ -124,8 +121,7 @@ The work that makes large-scale or adversarial use possible:
 - Stable release contracts for SDK, Python bindings, serialized project state,
   and generated reports.
 - SDK compatibility scoreboard grounded in the local IDA SDK 9.3 CodeGraph,
-  public IDAPython scripts, sample plugins, loader samples, and debugger/trace
-  fixtures.
+  sample plugins, loader samples, and debugger/trace fixtures.
 - MCP compatibility smoke tests grounded in the local Rust MCP SDK/rmcp
   reference, covering tool listing, tool calls, resources, prompts, stdio, and
   optional streamable HTTP. The verified reference checkout is currently

@@ -12,7 +12,10 @@ pub mod batch;
 pub mod binary_input;
 pub mod cache;
 pub mod config;
+pub mod decompiler;
 pub mod identify_packer;
+pub mod ir_dump;
+pub mod load;
 pub mod logging;
 #[cfg(feature = "unwired")]
 pub mod lsp;
@@ -23,6 +26,7 @@ pub mod profiling;
 #[cfg(feature = "unwired")]
 pub mod project;
 pub mod quality;
+pub mod xrefs;
 
 use anyhow::{Result, bail};
 use unlace_ir::ArchId;

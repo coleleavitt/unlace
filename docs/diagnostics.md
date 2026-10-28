@@ -60,6 +60,7 @@ every `unlace::cprinter::*` trace, and `unlace=debug` is the old
 | `unlace::struct` and `unlace::struct::*` | `UNLACE_STRUCT_TRACE`, `UNLACE_SPLIT_TRACE`, `UNLACE_LABEL_*_TRACE`, `UNLACE_GOTO_ELIM_TRACE`, `UNLACE_EMPTY_IF_TRACE` |
 | `unlace::cprinter` and `unlace::cprinter::*` | `UNLACE_CPRINTER_*`, `UNLACE_C_PRINTER_TRACE`, `UNLACE_CPRINTER_PIPELINE` |
 | `unlace::quality` | `UNLACE_QUALITY_TRACE` |
+| `unlace::mcp` | — (`unlace-mcp` server start/stop) |
 
 ## Configuration keys that replaced variables
 
@@ -74,7 +75,6 @@ every `unlace::cprinter::*` trace, and `unlace=debug` is the old
 | `structure.max_phis`, `.fallback_max_blocks`, `.fallback_max_insns`, `.max_reaching_condition_nodes` | `UNLACE_STRUCT_MAX_PHIS`, `UNLACE_STRUCT_FALLBACK_MAX_BLOCKS`, `UNLACE_STRUCT_FALLBACK_MAX_INSNS`, `UNLACE_RC_MAX_COND_NODES` (`UNLACE_STRUCT_FULL_FALLBACK=1` is both fallback limits at `0`) |
 | `printer.*` | `UNLACE_MAX_LINE_WIDTH`, `UNLACE_TAB_WIDTH`, `UNLACE_INDENT`, `UNLACE_WRAP_FLOOR`, `UNLACE_FORMAT_FLAGS` |
 | `batch.worker_stack_mb`, `.large_function_serial_bytes`, `.interproc_max_functions` | `UNLACE_WORKER_STACK_MB`, `UNLACE_BATCH_LARGE_FUNCTION_SERIAL_BYTES`, `UNLACE_INTERPROC_MAX` |
-| `py.max_staged_functions` | `UNLACE_PY_DECOMPILE_MAX` |
 | `linkscope.*` | `UNLACE_LINKSCOPE`, `_TRACE`, `_TRACE_STACK`, `_TRACE_DETAIL`, `_TRACE_STACK_DETAIL`, `_JSON`, `_MERMAID`, `_NO_REPORT`, `_REPORT_INTERVAL_SECS` |
 
 Command-line flags: `decompile --capture-dir` (was also `UNLACE_DECOMPILE_CAPTURE_DIR`),

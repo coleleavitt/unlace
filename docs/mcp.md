@@ -57,6 +57,33 @@ It should let agents and external tools ask unlace to:
 The default mode must be read-only. Mutating tools require an explicit
 capability flag and must record provenance.
 
+## Current State (2026-10-28)
+
+`crates/unlace-mcp` serves MCP over stdio and answers every tool by running the
+`unlace-cli` library in-process (`load`, `decompiler`, `ir_dump`, `xrefs`). It
+does not spawn the `unlace` binary, parse CLI text, or generate scripts. Blocking
+analysis runs on Tokio's blocking pool. Every tool is read-only and reloads the
+binary per call. Pipeline options come from the same `unlace.toml` lookup as
+the CLI, and diagnostics go to stderr through the CLI's `tracing` subscriber.
+
+| Tool | Arguments | Result |
+|------|-----------|--------|
+| `binary_info` | `binary` | arch, byte order, entry, image base, sections, symbol/relocation/function counts |
+| `list_functions` | `binary` | discovered functions: name, address, size |
+| `decompile_function` | `binary`, `function` (name or address) | matched functions plus pseudo-C identical to `unlace decompile --function` |
+| `ir_dump_function` | `binary`, `function`, optional `phase` | text identical to `unlace ir-dump --function --phase` |
+| `xrefs_from` | `binary`, `address` | direct call/branch edges from the instruction, or from the whole function when `address` is an entry |
+| `xrefs_to` | `binary`, `address` | direct call/branch edges targeting `address`, plus relocations patching that slot |
+
+Structured results are JSON objects with output schemas. Addresses are
+lowercase `0x…` strings so 64-bit values survive JSON number precision.
+Argument addresses accept `0x` hex or decimal. Failures return MCP tool errors
+(`isError: true`) with the analysis error chain as text.
+
+Verification: `cargo test -p unlace-mcp` covers argument decoding and an
+in-process stdio session (initialize, `tools/list`, `tools/call`) on
+`fixtures/hello_world.elf`.
+
 ## Target Crate Shape
 
 Proposed crate:
@@ -72,8 +99,10 @@ crates/unlace-mcp/
 ```
 
 This crate should depend on the public Unlace SDK facade from `docs/sdk.md`, not
-on private pipeline modules. If a tool needs data that is not available through
-the SDK, add the SDK capability first.
+on private pipeline modules. Until that facade exists it uses the `unlace-cli`
+library modules that the CLI itself runs, so tool output matches CLI output.
+If a tool needs data that is not available there, add the capability to the
+owning crate first.
 
 ## Tool Groups
 
@@ -181,6 +210,10 @@ Optional later:
 ## Roadmap
 
 ### MCP.1 Read-Only Stdio Server
+
+Status: landed 2026-10-28 for binary info, function listing, decompilation,
+IR dumps, and xrefs (see Current State). Project open, symbols, segments,
+strings, types, and report tools remain.
 
 - Create `crates/unlace-mcp`.
 - Implement `ServerHandler` over a stable SDK-backed service.

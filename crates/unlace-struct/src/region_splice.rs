@@ -177,7 +177,7 @@ fn splice_if(
     let splice = |n: &StructuredNode| {
         splice_structured_with_labels(n, node_to_block, block_bodies, pred_cond, labels)
     };
-    let els_body = |e: Option<&StructuredNode>| e.map(&splice);
+    let els_body = |e: Option<&StructuredNode>| e.map(splice);
     match cond {
         Cond::Pred(id) => match pred_cond.get(id) {
             Some(cv) => vec![HirNode::If {
@@ -192,7 +192,7 @@ fn splice_if(
             // `then` moves to the else_body so nothing is dropped.
             Some(cv) => vec![HirNode::If {
                 cond: *cv,
-                then_body: els.map(&splice).unwrap_or_default(),
+                then_body: els.map(splice).unwrap_or_default(),
                 else_body: Some(splice(then)),
             }],
             None => fallback_if(then, els, &splice),
@@ -260,7 +260,7 @@ fn splice_switch(
     vec![HirNode::Switch {
         cond: *cv,
         cases: hir_cases,
-        default: default.map(&splice),
+        default: default.map(splice),
         jumptable_addr: None,
         jumptable_cases: None,
     }]

@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 unlace-ir = { workspace = true }
-unlace-loader = { workspace = true }
+unlace-loader = { workspace = true, optional = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
@@ -18,4 +18,4 @@ smallvec = { workspace = true }
 
 [features]
 # Modules no production code path reaches yet (`cargo xtask status`).
-unwired = []
+unwired = ["dep:unlace-loader"]

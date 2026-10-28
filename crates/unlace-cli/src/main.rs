@@ -1724,6 +1724,7 @@ fn run_engine_batch(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // one parameter per `batch` flag
 fn run_batch_cmd(
     binary: std::path::PathBuf,
     jobs: usize,

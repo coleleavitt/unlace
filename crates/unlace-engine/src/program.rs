@@ -837,11 +837,11 @@ impl Program {
 
     fn decompile_unguarded(&mut self, address: u64) -> Result<String> {
         let sym = self.function_at(address)?;
-        if !self.string_sections.is_empty() || !self.prototypes.is_empty() {
-            if let Some(facts) = self.flow_facts(sym)? {
-                self.add_referenced_strings(&facts.constants)?;
-                self.apply_known_prototypes(address, sym, &facts.call_targets)?;
-            }
+        if (!self.string_sections.is_empty() || !self.prototypes.is_empty())
+            && let Some(facts) = self.flow_facts(sym)?
+        {
+            self.add_referenced_strings(&facts.constants)?;
+            self.apply_known_prototypes(address, sym, &facts.call_targets)?;
         }
         self.architecture.with_function(sym, |function, architecture| {
             if function.has_no_code() {

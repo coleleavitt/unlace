@@ -223,8 +223,8 @@ fn trim_dead_after_noreturn_call(func: &mut SsaFunction, noreturn_set: &BTreeSet
         let block = func.function.blocks.get_mut(&bid).unwrap();
         let keep = cut_idx + 1;
         if block.insns.len() > keep {
-            for old_idx in keep..block.insns.len() {
-                let n_inputs = block.insns[old_idx].inputs.len();
+            for (old_idx, insn) in block.insns.iter().enumerate().skip(keep) {
+                let n_inputs = insn.inputs.len();
                 for i in 0..n_inputs {
                     func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)));
                 }

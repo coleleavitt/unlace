@@ -222,8 +222,8 @@ pub fn parse_mangled_method(name: &str) -> Option<ParsedMethod> {
     }
 
     let kind = match (tag, variant) {
-        (b'C', b'1' | b'2' | b'3') => CppKind::Ctor,
-        (b'D', b'0' | b'1' | b'2') => CppKind::Dtor,
+        (b'C', b'1'..=b'3') => CppKind::Ctor,
+        (b'D', b'0'..=b'2') => CppKind::Dtor,
         _ => return None,
     };
     let class_name = segments.last().cloned()?;

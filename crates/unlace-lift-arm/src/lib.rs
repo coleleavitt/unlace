@@ -384,11 +384,8 @@ mod tests {
         // some unrecognized instruction
         let result = lifter().lift_insn(&[0xff, 0xff, 0xff, 0xff], 0x1000);
         // Could either decode to something Unimplemented or fail to decode
-        match result {
-            Ok(lifted) => {
-                assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-            }
-            Err(_) => {} // decode failure is acceptable
+        if let Ok(lifted) = result {
+            assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
         }
     }
 

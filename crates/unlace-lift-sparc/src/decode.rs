@@ -153,6 +153,8 @@ fn sign_extend(val: u32, bits: u32) -> i32 {
 }
 
 #[cfg(test)]
+// Test instruction words are spelled field by field, zero fields included.
+#[allow(clippy::identity_op, clippy::unusual_byte_groupings)]
 mod decode_tests {
     use super::*;
 

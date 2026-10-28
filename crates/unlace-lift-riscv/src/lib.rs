@@ -2415,6 +2415,8 @@ impl RiscvExtensions {
 }
 
 #[cfg(test)]
+// Test instruction words are spelled field by field, zero fields included.
+#[allow(clippy::identity_op)]
 mod tests {
     use super::*;
 

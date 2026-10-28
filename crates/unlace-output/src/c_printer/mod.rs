@@ -6347,13 +6347,9 @@ fn stmt_visible_for_hoist(ctx: &PrintCtx, stmt_idx: u32) -> bool {
         // are still visible uses from the C emitter's perspective.
         return true;
     };
-    if ctx.foldable_stmts.contains(&stmt_idx)
+    !(ctx.foldable_stmts.contains(&stmt_idx)
         || is_dead_zero_init(insn, stmt_idx, ctx)
-        || is_dead_suppressible_store(insn, stmt_idx, ctx)
-    {
-        return false;
-    }
-    true
+        || is_dead_suppressible_store(insn, stmt_idx, ctx))
 }
 
 fn stmt_visible_for_hoist_base(
@@ -10388,10 +10384,7 @@ fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) 
                 return false;
             }
             let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
-            if total_uses > 1 {
-                return false;
-            }
-            true
+            total_uses <= 1
         }
         HirNode::Return(None) => {
             let Some(out_vn) = insn.output else {
@@ -10419,10 +10412,7 @@ fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) 
                 return false;
             }
             let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
-            if total_uses > 0 {
-                return false;
-            }
-            true
+            total_uses == 0
         }
         _ => false,
     }

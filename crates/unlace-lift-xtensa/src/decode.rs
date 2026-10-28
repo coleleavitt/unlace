@@ -235,6 +235,8 @@ pub fn decode(bytes: &[u8]) -> Option<XtensaInsn> {
 }
 
 #[cfg(test)]
+// Test instruction words are spelled field by field, zero fields included.
+#[allow(clippy::identity_op, clippy::unusual_byte_groupings)]
 mod tests {
     use super::*;
 

@@ -164,8 +164,8 @@ impl NoreturnDetectPass {
                 let block = func.function.blocks.get_mut(&bid).unwrap();
 
                 if block.insns.len() > keep_count {
-                    for old_idx in keep_count..block.insns.len() {
-                        let input_count = block.insns[old_idx].inputs.len();
+                    for (old_idx, insn) in block.insns.iter().enumerate().skip(keep_count) {
+                        let input_count = insn.inputs.len();
                         for i in 0..input_count {
                             func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)));
                         }

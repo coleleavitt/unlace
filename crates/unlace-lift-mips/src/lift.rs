@@ -919,11 +919,8 @@ mod tests {
         // Try a less common instruction that we don't handle
         // BREAK = 0x0000000D
         let result = l.lift_insn(&[0x00, 0x00, 0x00, 0x0D], 0x1000);
-        match result {
-            Ok(lifted) => {
-                assert!(lifted.ir_ops.iter().any(|op| op.op == IrOp::Unimplemented));
-            }
-            Err(_) => {} // decode failure is also acceptable
+        if let Ok(lifted) = result {
+            assert!(lifted.ir_ops.iter().any(|op| op.op == IrOp::Unimplemented));
         }
     }
 

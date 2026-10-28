@@ -20,11 +20,13 @@ pub fn function_text(function: &FunctionEntry, text: &str) -> String {
         function.name, function.addr
     ));
     let mut depth = 0i32;
+    let mut opened = false;
     let mut signature = Vec::new();
     for line in lines.by_ref() {
+        opened |= line.contains('(');
         depth += line.matches('(').count() as i32 - line.matches(')').count() as i32;
         signature.push(line.trim());
-        if depth <= 0 {
+        if opened && depth <= 0 {
             break;
         }
     }
@@ -50,12 +52,12 @@ mod tests {
             size: 0,
         };
         let text = "\n/* WARNING: Removing unreachable block (ram,0x00001150) */\n\n\
-                    int f(int a1,\n     int a2)\n\n{\n  return a1 + a2;\n}\n\n";
+                    unsigned __int64\nf(int a1,\n     int a2)\n\n{\n  return a1 + a2;\n}\n\n";
         assert_eq!(
             function_text(&function, text),
             "\n/* WARNING: Removing unreachable block (ram,0x00001150) */\n\
              /* Function: f | Address: 0x1140 | Engine: ghidra */\n\
-             int f(int a1, int a2)\n{\n  return a1 + a2;\n}\n"
+             unsigned __int64 f(int a1, int a2)\n{\n  return a1 + a2;\n}\n"
         );
     }
 }

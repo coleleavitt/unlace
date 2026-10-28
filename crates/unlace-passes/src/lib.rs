@@ -308,7 +308,9 @@ pub use builtin_recognize::{
     BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,
 };
 pub use byref_detect::detect_byref;
-pub use call_args::{recover_direct_call_args, recover_direct_call_args_with_param_counts};
+pub use call_args::{
+    CalleeArity, recover_direct_call_args, recover_direct_call_args_with_param_counts,
+};
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 #[cfg(feature = "unwired")]
 pub use call_snapshot::{CallRegisterSnapshot, CallSnapshot, UseSite, collect_call_snapshots};
@@ -543,7 +545,8 @@ pub use var_naming::{
     classify_variables_with_style, suggest_name,
 };
 pub use vararg_detect::{
-    detect_variadic_callees, parse_format_string, parse_printf_format_strings,
+    detect_register_save_area, detect_variadic_callees, detect_variadic_definition,
+    parse_format_string, parse_printf_format_strings,
 };
 pub use variable_merge::VariableMergePass;
 pub use whole_prog_cc::{DEFAULT_WHOLE_PROG_CC_CAP, WholeProgramCcReport, run_whole_prog_cc};

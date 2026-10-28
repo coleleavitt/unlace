@@ -124,7 +124,7 @@ fn dead_params_of(ssa: &SsaFunction) -> Vec<usize> {
 
     // Rule 3: variadic functions may reference declared slots through the
     // varargs machinery; never report any of their parameters.
-    if ssa.is_varargs {
+    if ssa.variadic.is_some() {
         return Vec::new();
     }
 
@@ -310,7 +310,7 @@ mod tests {
             CallingConvention::SystemV,
             vec![("fmt".into(), PrimitiveType::Int(8))],
         );
-        func.is_varargs = true;
+        func.variadic = Some(unlace_ir::ssa::Variadic { fixed_params: 1 });
 
         let mut funcs = BTreeMap::new();
         funcs.insert(addr, func);

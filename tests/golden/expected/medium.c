@@ -121,7 +121,7 @@ int main(void) {
     c12 = c1 + a2 == 0; c13 = LOBYTE(c1 + a2 < 0); c10 = (c1 + c0) < c1;
     c14 = __OFADD__(c1, c0); c11 = !(__builtin_popcount(LOBYTE(c1 + a2)) & 1); c0 = 0x1bLL;
     while (1) {
-        v28 = c0; c8 = c0 & 1;
+        v28 = c0; v29 = c0 & 1; c8 = c0 & 1;
         if (v29 != 0) {
             v28 = LODWORD(c0 + (c0 << 1LL) + 1LL); c2 = c2 + 2; c12 = v28 >> 1 == 0;
             c13 = LOBYTE(v28 >> 1 < 0); c10 = 0; c14 = 0;

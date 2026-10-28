@@ -212,7 +212,7 @@ pub struct FunctionQuality {
     /// (i.e. non-`PrimitiveType::Unknown`) type. Workspace total is the
     /// count of functions with a concrete return type.
     pub inferred_return_present: usize,
-    /// `1` if the function was detected as variadic (`SsaFunction::is_varargs`).
+    /// `1` if the function was detected as variadic (`SsaFunction::variadic`).
     /// Workspace total is the varargs-function count.
     pub inferred_varargs_count: usize,
     /// Libc / runtime call sites annotated with a canonical name
@@ -430,7 +430,7 @@ impl FunctionQuality {
         if ssa.inferred_return_type != PrimitiveType::Unknown {
             q.inferred_return_present = 1;
         }
-        if ssa.is_varargs {
+        if ssa.variadic.is_some() {
             q.inferred_varargs_count = 1;
         }
         q.libc_annotated_calls = ssa.libc_call_annotations.len();

@@ -985,6 +985,75 @@ fn test_expression_inputs_aliased_redefined_detects_same_base_redef() {
 }
 
 #[test]
+fn test_multi_use_temp_not_folded_when_operand_register_is_redefined() {
+    // Collatz regression: `v29 = c8 & 1; c8 = v29; if (v29 != 0)`. The
+    // operand renderer refuses to re-inline `c8 & 1` in the condition after
+    // `c8` is rewritten, so folding the temporary away would leave `v29`
+    // unassigned.
+    let mut ctx = super::PrintCtx::new(
+        None,
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    let r_c8 = reg(80, 8);
+    let r_eax = reg(0, 4);
+    let u_parity = Varnode::unique(0x106, 4);
+    let u_cond = Varnode::unique(0x112, 1);
+    let sv = |base, version| SsaVarnode { base, version };
+
+    ctx.stmt_insns.insert(
+        10,
+        IrInsn::with_output(IrOp::IntZext, r_c8, smallvec![r_eax], 0x1000),
+    );
+    ctx.stmt_insns.insert(
+        11,
+        IrInsn::with_output(IrOp::IntAnd, u_parity, smallvec![r_c8, con(1, 4)], 0x1004),
+    );
+    ctx.stmt_insns.insert(
+        12,
+        IrInsn::with_output(IrOp::IntZext, r_c8, smallvec![u_parity], 0x1004),
+    );
+    ctx.stmt_insns.insert(
+        13,
+        IrInsn::with_output(
+            IrOp::IntNotequal,
+            u_cond,
+            smallvec![u_parity, con(0, 4)],
+            0x1008,
+        ),
+    );
+    ctx.stmt_inputs.insert(10, vec![sv(r_eax, 1)]);
+    ctx.stmt_inputs.insert(11, vec![sv(r_c8, 1)]);
+    ctx.stmt_inputs.insert(12, vec![sv(u_parity, 1)]);
+    ctx.stmt_inputs.insert(13, vec![sv(u_parity, 1)]);
+    ctx.stmt_outputs.insert(10, Some(sv(r_c8, 1)));
+    ctx.stmt_outputs.insert(11, Some(sv(u_parity, 1)));
+    ctx.stmt_outputs.insert(12, Some(sv(r_c8, 2)));
+    ctx.stmt_outputs.insert(13, Some(sv(u_cond, 1)));
+    ctx.foldable_stmts.insert(10);
+    ctx.sv_defining_stmt.insert(sv(r_c8, 1), 10);
+
+    assert!(!super::multi_use_temp_inlines_everywhere(
+        &sv(u_parity, 1),
+        11,
+        2,
+        &ctx
+    ));
+
+    // Without the rewrite of `c8` every read can inline the expression.
+    ctx.stmt_outputs.insert(12, Some(sv(reg(88, 8), 1)));
+    assert!(super::multi_use_temp_inlines_everywhere(
+        &sv(u_parity, 1),
+        11,
+        2,
+        &ctx
+    ));
+}
+
+#[test]
 fn test_materialized_candidate_rejects_redefined_storage_before_consumer() {
     // Collatz regression: a same-source materialized register (`c8`) was
     // reused after a later `c8 = c8 & 1` parity assignment, turning
@@ -1924,6 +1993,7 @@ fn t230_dropped_param_shrinks_header() {
         ("a2".into(), PrimitiveType::Int(8)),
     ];
     func.finalized_signature = Some(FinalizedSignature {
+        variadic: false,
         params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))],
         return_type: Type::Primitive(PrimitiveType::Unknown),
         dropped_param_count: 1,
@@ -1944,6 +2014,35 @@ fn t230_dropped_param_shrinks_header() {
     );
 }
 
+/// A variadic finalized signature closes the header with `...` after the
+/// named parameters, and a variadic function with none prints `(...)`
+/// rather than `(void)`.
+#[test]
+fn variadic_signature_ends_header_with_ellipsis() {
+    use unlace_ir::ssa::FinalizedSignature;
+    use unlace_ir::types::Type;
+
+    let header = |params: Vec<(String, Type)>| {
+        let mut func = make_func("log_line", vec![HirNode::Return(None)]);
+        func.finalized_signature = Some(FinalizedSignature {
+            params,
+            return_type: Type::Primitive(PrimitiveType::Unknown),
+            dropped_param_count: 0,
+            sret: false,
+            variadic: true,
+        });
+        print_c(&func)
+    };
+
+    let output = header(vec![(
+        "a1".into(),
+        Type::Primitive(PrimitiveType::Int(8)),
+    )]);
+    assert!(output.contains("log_line(__int64 a1, ...)"), "{output}");
+    let output = header(Vec::new());
+    assert!(output.contains("log_line(...)"), "{output}");
+}
+
 /// t263 — the dropped-param comment uses the
 /// `// dropped N param(s) (dead in body)` format spelled out in
 /// the task spec, so a downstream tool can grep on the literal
@@ -1962,6 +2061,7 @@ fn t263_dropped_param_comment_uses_dead_in_body_phrasing() {
         ("a3".into(), PrimitiveType::Int(8)),
     ];
     func.finalized_signature = Some(FinalizedSignature {
+        variadic: false,
         params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))],
         return_type: Type::Primitive(PrimitiveType::Unknown),
         dropped_param_count: 2,
@@ -1990,6 +2090,7 @@ fn t230_narrowed_byte_param_renders_as_int8() {
     let mut func = make_func("narrow_byte", body);
     func.params = vec![("a1".into(), PrimitiveType::Int(8))];
     func.finalized_signature = Some(FinalizedSignature {
+        variadic: false,
         params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(1)))],
         return_type: Type::Primitive(PrimitiveType::Unknown),
         dropped_param_count: 0,
@@ -2021,6 +2122,7 @@ fn t230_finalized_return_type_drives_header() {
     func.return_type = PrimitiveType::Unknown;
     // Finalized return type narrowed from consistent caller use to int8.
     func.finalized_signature = Some(FinalizedSignature {
+        variadic: false,
         params: vec![],
         return_type: Type::Primitive(PrimitiveType::Int(1)),
         dropped_param_count: 0,
@@ -2508,6 +2610,7 @@ fn dwarf_with_pointer_param(
     functions.insert(
         0x1000,
         FunctionDebugInfo {
+            variadic: false,
             name: "f".to_string(),
             linkage_name: None,
             low_pc: 0x1000,
@@ -2911,6 +3014,7 @@ fn test_dwarf_function_name_used() {
     functions.insert(
         0x1000,
         FunctionDebugInfo {
+            variadic: false,
             name: "compute".to_string(),
             linkage_name: None,
             low_pc: 0x1000,
@@ -2966,6 +3070,7 @@ fn test_dwarf_param_names_used() {
     functions.insert(
         0x1000,
         FunctionDebugInfo {
+            variadic: false,
             name: "add".to_string(),
             linkage_name: None,
             low_pc: 0x1000,
@@ -3051,6 +3156,7 @@ fn test_dwarf_param_names_override_inferred() {
     functions.insert(
         0x2000,
         FunctionDebugInfo {
+            variadic: false,
             name: "process".to_string(),
             linkage_name: None,
             low_pc: 0x2000,
@@ -3110,6 +3216,7 @@ fn test_dwarf_return_type_used() {
     functions.insert(
         0x1000,
         FunctionDebugInfo {
+            variadic: false,
             name: "get_value".to_string(),
             linkage_name: None,
             low_pc: 0x1000,
@@ -8367,6 +8474,7 @@ fn test_dwarf_local_name_used_for_stack_var() {
     functions.insert(
         0x1000,
         FunctionDebugInfo {
+            variadic: false,
             name: "with_named_local".to_string(),
             linkage_name: None,
             low_pc: 0x1000,
@@ -8444,6 +8552,7 @@ fn test_dwarf_v5_location_list_local_name_used_for_stack_var() {
     functions.insert(
         0x1000,
         FunctionDebugInfo {
+            variadic: false,
             name: "with_loclist_local".to_string(),
             linkage_name: None,
             low_pc: 0x1000,
@@ -13974,6 +14083,7 @@ fn dwarf_local_summary_suppresses_materialized_array_comment() {
     // `// DWARF locals` comment must not also list it (which would
     // double-count the array type fact); other locals stay visible.
     let df = unlace_loader::FunctionDebugInfo {
+        variadic: false,
         name: "main".to_string(),
         linkage_name: None,
         low_pc: 0,

@@ -276,7 +276,7 @@ mod tests {
             cpp_kind: None,
             cpp_class_name: None,
             cpp_this_args: BTreeSet::new(),
-            is_varargs: false,
+            variadic: None,
             inferred_stack_params: BTreeSet::new(),
         }
     }

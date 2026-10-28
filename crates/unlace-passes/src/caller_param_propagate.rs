@@ -197,7 +197,9 @@ pub fn apply_registry_to_callees(
             continue;
         };
 
-        for (slot, &param_ty) in sig.param_types.iter().enumerate() {
+        // Callers of a variadic function pass more arguments than it names.
+        let named = ssa.variadic.map_or(usize::MAX, |v| v.fixed_params);
+        for (slot, &param_ty) in sig.param_types.iter().enumerate().take(named) {
             if param_ty == PrimitiveType::Unknown {
                 continue;
             }

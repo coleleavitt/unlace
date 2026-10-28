@@ -1322,6 +1322,9 @@ pub fn print_c_with_annotations(
                 let _ = write!(out, "{} {}", ty, name);
             }
         }
+        if df.variadic {
+            out.push_str(", ...");
+        }
     } else if force_void_main_params {
         out.push_str("void");
     } else {
@@ -1441,6 +1444,14 @@ pub fn print_c_with_annotations(
                 }
                 param_idx += 1;
             }
+        }
+        if func
+            .finalized_signature
+            .as_ref()
+            .is_some_and(|sig| sig.variadic)
+        {
+            out.push_str(if param_idx == 0 { "..." } else { ", ..." });
+            param_idx += 1;
         }
         if param_idx == 0 && dwarf_func.is_none_or(|df| df.params.is_empty()) {
             out.push_str("void");
@@ -5312,21 +5323,33 @@ fn multi_use_temp_inlines_everywhere(
     if ctx.ssa_phi_uses.contains(output_sv) {
         return false;
     }
+    let Some(insn) = ctx.stmt_insns.get(&stmt_idx) else {
+        return false;
+    };
+    // A statement operand renders as the temporary's name, not its
+    // expression, when one of the expression's register inputs is redefined
+    // before the read; folding the definition away would leave that name
+    // unassigned.
     let statement_reads = ctx.stmt_inputs.iter().flat_map(|(&reader, inputs)| {
         inputs
             .iter()
             .filter(|input| *input == output_sv)
-            .map(move |_| reader)
+            .map(move |_| (reader, true))
     });
     let condition_reads = ctx
         .cond_use_stmts
         .iter()
         .filter(|(sv, _)| sv == output_sv)
-        .map(|&(_, position)| position);
-    let readers: Vec<u32> = statement_reads.chain(condition_reads).collect();
+        .map(|&(_, position)| (position, false));
+    let readers: Vec<(u32, bool)> = statement_reads.chain(condition_reads).collect();
     readers.len() == use_count
-        && readers.iter().all(|&reader| {
-            reader > stmt_idx && !inlined_read_clobbered_before(stmt_idx, reader, false, ctx)
+        && readers.iter().all(|&(reader, is_statement)| {
+            reader > stmt_idx
+                && !inlined_read_clobbered_before(stmt_idx, reader, false, ctx)
+                && !(is_statement
+                    && expression_inputs_aliased_redefined_before_consumer(
+                        output_sv, insn, stmt_idx, reader, ctx,
+                    ))
         })
 }
 

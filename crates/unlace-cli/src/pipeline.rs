@@ -70,7 +70,7 @@ use unlace_loader::{
     BinaryImage, DwarfInfo, Endian, FlirtDb, PdbInfo, PdbLocal, Section, SectionFlags, SymbolKind,
 };
 use unlace_passes::{
-    AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
+    AlgebraicSimplifyPass, CalleeArity, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
     BoolSimplifyPass, CallBoundaryCopyPropPass, CallingConvFinalizePass,
     CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstantFoldPass,
     CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass, CppVariantPass,
@@ -3811,23 +3811,28 @@ pub fn lift_and_run_passes(
             ],
         );
     }
-    let estimated_param_counts = {
+    ssa.variadic = detect_variadic(&ssa, entry, symbols, dwarf);
+    let estimated_arities = {
         let _profile_stage = profile_pipeline_stage("pipeline.estimate-param-counts", entry);
-        let counts = estimate_direct_target_param_counts(image, lifter, discovered, &ssa);
-        profiling::record_items("pipeline.estimate-param-counts", counts.len() as u64);
-        counts
+        let arities = estimate_direct_target_arities(image, lifter, discovered, &ssa);
+        profiling::record_items("pipeline.estimate-param-counts", arities.len() as u64);
+        arities
     };
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
-    let dwarf_param_count = |addr: u64| -> Option<usize> {
+    let callee_arity = |addr: u64| -> Option<CalleeArity> {
         dwarf
-            .and_then(|d| d.functions.get(&addr).map(|f| f.params.len()))
-            .or_else(|| estimated_param_counts.get(&addr).copied())
+            .and_then(|d| d.functions.get(&addr))
+            .map(|f| CalleeArity {
+                params: f.params.len(),
+                variadic: f.variadic,
+            })
+            .or_else(|| estimated_arities.get(&addr).copied())
     };
 
     let _call_args_pre = {
         let _profile_stage = profile_pipeline_stage("pipeline.recover-call-args", entry);
-        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &dwarf_param_count)
+        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &callee_arity)
     };
 
     // Batch 6 (pre-pass): parse printf-family format strings against the
@@ -3875,13 +3880,17 @@ pub fn lift_and_run_passes(
 
 const X86_SYSV_PARAM_REGS: [u64; 6] = [56, 48, 16, 8, 64, 72];
 
-fn estimate_direct_target_param_counts(
+/// Arity of every direct-call target of `ssa`, estimated from the target's
+/// own lifted body: the `va_start` register save area when the target is
+/// variadic, otherwise (x86-64 only) the argument registers it reads before
+/// writing them.
+fn estimate_direct_target_arities(
     image: &BinaryImage,
     lifter: &dyn Lifter,
     discovered: &[FunctionEntry],
     ssa: &SsaFunction,
-) -> BTreeMap<u64, usize> {
-    if image.arch != ArchId::X86_64 {
+) -> BTreeMap<u64, CalleeArity> {
+    if !matches!(image.arch, ArchId::X86_64 | ArchId::AArch64) {
         return BTreeMap::new();
     }
 
@@ -3907,15 +3916,45 @@ fn estimate_direct_target_param_counts(
         let Ok(func) = lift_function(image, lifter, &entry) else {
             continue;
         };
-        let count = estimate_sysv_param_count(&func);
+        let arity = match unlace_passes::detect_register_save_area(&func, image.arch, image.os_abi)
+        {
+            Some(variadic) => CalleeArity {
+                params: variadic.fixed_params,
+                variadic: true,
+            },
+            None if image.arch == ArchId::X86_64 => {
+                CalleeArity::fixed(estimate_sysv_param_count(&func))
+            }
+            None => continue,
+        };
         tracing::debug!(
             target: "unlace::call_args",
-            "estimated-param-count target=0x{target:x} name={} count={count}",
-            entry.name
+            "estimated-arity target=0x{target:x} name={} params={} variadic={}",
+            entry.name,
+            arity.params,
+            arity.variadic
         );
-        out.insert(target, count);
+        out.insert(target, arity);
     }
     out
+}
+
+/// Whether the function being analyzed takes `...`. Debug info states the
+/// prototype outright; without it, a known name (libc, also reached through
+/// FLIRT) or the prologue's register save area decides.
+fn detect_variadic(
+    ssa: &SsaFunction,
+    entry: &FunctionEntry,
+    symbols: &BTreeMap<u64, String>,
+    dwarf: Option<&DwarfInfo>,
+) -> Option<unlace_ir::ssa::Variadic> {
+    if let Some(debug) = dwarf.and_then(|d| d.functions.get(&entry.addr)) {
+        return debug.variadic.then_some(unlace_ir::ssa::Variadic {
+            fixed_params: debug.params.len(),
+        });
+    }
+    let name = symbols.get(&entry.addr).unwrap_or(&entry.name);
+    unlace_passes::detect_variadic_definition(name, &ssa.function, ssa.arch, ssa.os_abi)
 }
 
 fn direct_call_targets(ssa: &SsaFunction) -> BTreeSet<u64> {
@@ -4613,24 +4652,29 @@ pub fn decompile_function_with_symbols(
             ],
         );
     }
-    let estimated_param_counts = {
+    ssa.variadic = detect_variadic(&ssa, entry, symbols, dwarf);
+    let estimated_arities = {
         let _profile_stage = profile_pipeline_stage("pipeline.estimate-param-counts", entry);
-        let counts = estimate_direct_target_param_counts(image, lifter, discovered, &ssa);
-        profiling::record_items("pipeline.estimate-param-counts", counts.len() as u64);
-        counts
+        let arities = estimate_direct_target_arities(image, lifter, discovered, &ssa);
+        profiling::record_items("pipeline.estimate-param-counts", arities.len() as u64);
+        arities
     };
 
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
-    let dwarf_param_count = |addr: u64| -> Option<usize> {
+    let callee_arity = |addr: u64| -> Option<CalleeArity> {
         dwarf
-            .and_then(|d| d.functions.get(&addr).map(|f| f.params.len()))
-            .or_else(|| estimated_param_counts.get(&addr).copied())
+            .and_then(|d| d.functions.get(&addr))
+            .map(|f| CalleeArity {
+                params: f.params.len(),
+                variadic: f.variadic,
+            })
+            .or_else(|| estimated_arities.get(&addr).copied())
     };
 
     let _call_args_pre = {
         let _profile_stage = profile_pipeline_stage("pipeline.recover-call-args", entry);
-        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &dwarf_param_count)
+        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &callee_arity)
     };
 
     // Batch 6 (pre-pass): parse printf-family format strings *before*

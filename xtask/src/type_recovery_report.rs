@@ -1185,6 +1185,7 @@ fn source_truth_from_function_names(names: BTreeSet<String>) -> DwarfInfo {
         functions.insert(
             idx as u64,
             FunctionDebugInfo {
+                variadic: false,
                 name,
                 linkage_name: None,
                 low_pc: idx as u64,
@@ -1381,6 +1382,7 @@ fn parse_source_functions(
             functions.insert(
                 key,
                 FunctionDebugInfo {
+                    variadic: false,
                     linkage_name: source_is_cpp.then(|| format!("__source_cpp::{name}")),
                     name,
                     low_pc: key,
@@ -1473,6 +1475,7 @@ fn parse_methods_in_struct_body(
             let locals = parse_source_locals(&body[open + 1..close], composite_names);
             let key = key_base + out.len() as u64;
             out.push(FunctionDebugInfo {
+                variadic: false,
                 name: format!("{struct_name}_{method}"),
                 linkage_name: Some(format!("{struct_name}::{method}")),
                 low_pc: key,
@@ -3794,6 +3797,7 @@ mod tests {
     #[test]
     fn reported_source_locals_are_deduped_and_stack_carriers_are_separate() {
         let function = FunctionDebugInfo {
+            variadic: false,
             name: "f".to_string(),
             linkage_name: None,
             low_pc: 0,
@@ -3836,6 +3840,7 @@ mod tests {
     #[test]
     fn reported_abi_params_without_ground_truth_are_separate() {
         let function = FunctionDebugInfo {
+            variadic: false,
             name: "f".to_string(),
             linkage_name: None,
             low_pc: 0,
@@ -3869,6 +3874,7 @@ mod tests {
     #[test]
     fn reported_facts_route_source_oracle_only_out_of_recoverable_precision() {
         let function = FunctionDebugInfo {
+            variadic: false,
             name: "f".to_string(),
             linkage_name: None,
             low_pc: 0,
@@ -3931,6 +3937,7 @@ mod tests {
     #[test]
     fn signature_return_matching_ignores_noreturn_annotations() {
         let function = FunctionDebugInfo {
+            variadic: false,
             name: "main".to_string(),
             linkage_name: None,
             low_pc: 0,
@@ -3957,6 +3964,7 @@ mod tests {
     #[test]
     fn cpp_signature_candidates_match_demangled_template_names() {
         let function = FunctionDebugInfo {
+            variadic: false,
             name: "addT<int>(int, int)".to_string(),
             linkage_name: Some("_Z4addTIiET_S0_S0_".to_string()),
             low_pc: 0x401240,
@@ -3978,6 +3986,7 @@ mod tests {
     #[test]
     fn signature_param_type_matching_uses_parameter_position() {
         let function = FunctionDebugInfo {
+            variadic: false,
             name: "sum".to_string(),
             linkage_name: None,
             low_pc: 0,
@@ -4100,6 +4109,7 @@ mod tests {
             trace: &trace,
         };
         let method = FunctionDebugInfo {
+            variadic: false,
             name: "Base_value".to_string(),
             linkage_name: Some("Base::value".to_string()),
             low_pc: 0,
@@ -4112,6 +4122,7 @@ mod tests {
             cfa_to_rbp_delta: None,
         };
         let free_function = FunctionDebugInfo {
+            variadic: false,
             name: "use_base".to_string(),
             linkage_name: Some("_Z8use_baseP4Base".to_string()),
             low_pc: 0,

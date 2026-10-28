@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use unlace_ir::ssa::{CallingConvention, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{ArchId, BlockId, IrOp, SpaceId, Varnode};
 
-use crate::libc_signatures::{LibcSignature, lookup_libc};
+use crate::libc_signatures::{LibcSignature, lookup_libc_normalized};
 
 const RAX: u64 = 0;
 const RCX: u64 = 8;
@@ -56,17 +56,56 @@ pub fn recover_direct_call_args(
     recover_direct_call_args_with_param_counts(func, callee_name_at_addr, &|_| None)
 }
 
+/// Parameter shape of a direct-call target, as far as a caller can know it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CalleeArity {
+    /// Named parameters.
+    pub params: usize,
+    /// Further arguments may follow the named ones (`...`).
+    pub variadic: bool,
+}
+
+impl CalleeArity {
+    /// A prototype with exactly `params` parameters.
+    pub fn fixed(params: usize) -> Self {
+        CalleeArity {
+            params,
+            variadic: false,
+        }
+    }
+
+    /// Arguments to collect at a call site where the first `visible`
+    /// argument registers hold values: the named parameters, plus every
+    /// visible register when the callee is variadic.
+    fn wanted_args(self, visible: usize, max_args: usize) -> usize {
+        let named = self.params.min(max_args);
+        if self.variadic {
+            named.max(visible).min(max_args)
+        } else {
+            named
+        }
+    }
+}
+
+impl From<&LibcSignature> for CalleeArity {
+    fn from(sig: &LibcSignature) -> Self {
+        CalleeArity {
+            params: sig.param_count,
+            variadic: sig.variadic,
+        }
+    }
+}
+
 /// Append visible ABI arguments to direct calls and tail-call branches with
-/// known libc signatures or caller-provided direct-call parameter counts.
+/// known libc signatures or caller-provided callee arities.
 ///
-/// The extra parameter-count resolver lets frontends feed source/debug or
-/// whole-program signature knowledge into the same ABI register scan used for
-/// libc calls. It is intentionally count-only; type refinement stays in the
-/// later signature/type passes.
+/// The arity resolver lets frontends feed debug-info or prologue knowledge
+/// into the same ABI register scan used for libc calls. It is intentionally
+/// count-only; type refinement stays in the later signature/type passes.
 pub fn recover_direct_call_args_with_param_counts(
     func: &mut SsaFunction,
     callee_name_at_addr: &dyn Fn(u64) -> Option<&'static str>,
-    callee_param_count_at_addr: &dyn Fn(u64) -> Option<usize>,
+    callee_arity_at_addr: &dyn Fn(u64) -> Option<CalleeArity>,
 ) -> usize {
     let def_map = build_def_map(func);
     let cc = calling_convention_for(func);
@@ -90,16 +129,14 @@ pub fn recover_direct_call_args_with_param_counts(
                 let visible = visible_arg_count(arg_regs, &reg_state);
                 let wanted = callee_name
                     .and_then(lookup_libc_normalized)
-                    .map(|sig| wanted_arg_count(sig, arg_regs, &reg_state))
-                    .or_else(|| {
-                        callee_param_count_at_addr(target.offset).map(|n| n.min(arg_regs.len()))
-                    })
+                    .map(CalleeArity::from)
+                    .or_else(|| callee_arity_at_addr(target.offset))
                     .or_else(|| {
                         callee_name
                             .and_then(param_count_from_itanium_symbol)
-                            .map(|n| n.min(arg_regs.len()))
+                            .map(CalleeArity::fixed)
                     })
-                    .unwrap_or(0);
+                    .map_or(0, |arity| arity.wanted_args(visible, arg_regs.len()));
                 let existing = insn.inputs.len().saturating_sub(1);
                 if wanted > existing {
                     let mut args = Vec::new();
@@ -403,40 +440,6 @@ fn arg_regs_for(cc: CallingConvention) -> &'static [u64] {
         CallingConvention::Thiscall => &[RCX],
         CallingConvention::Cdecl | CallingConvention::Stdcall | CallingConvention::Unknown => &[],
     }
-}
-
-fn wanted_arg_count(
-    sig: &LibcSignature,
-    arg_regs: &[u64],
-    last_reg_def: &BTreeMap<u64, SsaVarnode>,
-) -> usize {
-    let max_args = arg_regs.len();
-    let fixed = sig.param_count.min(max_args);
-    if !sig.variadic {
-        return fixed;
-    }
-
-    let mut visible = 0usize;
-    for &reg in arg_regs {
-        if last_reg_def.contains_key(&reg) {
-            visible += 1;
-        } else {
-            break;
-        }
-    }
-    fixed.max(visible).min(max_args)
-}
-
-fn lookup_libc_normalized(name: &str) -> Option<&'static LibcSignature> {
-    lookup_libc(name)
-        .or_else(|| name.find('@').and_then(|idx| lookup_libc(&name[..idx])))
-        .or_else(|| {
-            name.strip_prefix("__libc_")
-                .and_then(lookup_libc)
-                .or_else(|| name.strip_prefix("__isoc99_").and_then(lookup_libc))
-                .or_else(|| name.strip_prefix("__isoc23_").and_then(lookup_libc))
-        })
-        .or_else(|| name.strip_prefix('_').and_then(lookup_libc))
 }
 
 fn param_count_from_itanium_symbol(raw_name: &str) -> Option<usize> {
@@ -1013,13 +1016,56 @@ mod tests {
         ssa.arch = ArchId::X86_64;
 
         let changed = recover_direct_call_args_with_param_counts(&mut ssa, &|_| None, &|addr| {
-            (addr == 0x1360).then_some(1)
+            (addr == 0x1360).then_some(CalleeArity::fixed(1))
         });
 
         assert_eq!(changed, 1);
         let branch = &ssa.function.blocks[&BlockId(0)].insns[1];
         assert_eq!(branch.inputs.len(), 2);
         assert_eq!(branch.inputs[1], Varnode::constant(0xffff_ffff, 4));
+    }
+
+    /// A variadic callee receives every visible argument register, not just
+    /// its named parameter (`sum_ints(5, 1, 2)` with `long sum_ints(int, ...)`).
+    #[test]
+    fn variadic_callee_arity_collects_visible_args() {
+        let mut func = Function::new("main", BlockId(0), 0x1250);
+        let mut bb = BasicBlock::new(BlockId(0));
+        for (idx, reg) in [RDI, RSI, RDX].into_iter().enumerate() {
+            bb.insns.push(IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::reg(reg, 4),
+                smallvec![Varnode::constant(5 + idx as u64, 4)],
+                0x1254 + idx as u64,
+            ));
+        }
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![Varnode::constant(0x1360, 8)],
+            0x1260,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+
+        let arity = |addr| {
+            (addr == 0x1360).then_some(CalleeArity {
+                params: 1,
+                variadic: true,
+            })
+        };
+        recover_direct_call_args_with_param_counts(&mut ssa, &|_| None, &arity);
+
+        let call = &ssa.function.blocks[&BlockId(0)].insns[3];
+        assert_eq!(
+            &call.inputs[1..],
+            &[
+                Varnode::constant(5, 4),
+                Varnode::constant(6, 4),
+                Varnode::constant(7, 4),
+            ]
+        );
     }
 
     #[test]

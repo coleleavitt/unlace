@@ -85,8 +85,28 @@ const LIBC_TABLE: &[LibcSignature] = &[
     sig("__fprintf_chk", 3, "int", false, true),
     sig("__sprintf_chk", 4, "int", false, true),
     sig("__snprintf_chk", 5, "int", false, true),
-    sig("__vprintf_chk", 2, "int", false, true),
-    sig("__vsprintf_chk", 4, "int", false, true),
+    // The `v` forms take a `va_list`, not a variadic tail.
+    sig("__vprintf_chk", 3, "int", false, false),
+    sig("__vsprintf_chk", 5, "int", false, false),
+    sig("scanf", 1, "int", false, true),
+    sig("fscanf", 2, "int", false, true),
+    sig("sscanf", 2, "int", false, true),
+    sig("dprintf", 2, "int", false, true),
+    sig("asprintf", 2, "int", false, true),
+    sig("wprintf", 1, "int", false, true),
+    sig("fwprintf", 2, "int", false, true),
+    sig("swprintf", 3, "int", false, true),
+    sig("syslog", 2, "void", false, true),
+    sig("warn", 1, "void", false, true),
+    sig("warnx", 1, "void", false, true),
+    // POSIX prototypes whose trailing argument is optional.
+    sig("open", 2, "int", false, true),
+    sig("openat", 3, "int", false, true),
+    sig("fcntl", 2, "int", false, true),
+    sig("ioctl", 2, "int", false, true),
+    sig("execl", 2, "int", false, true),
+    sig("execle", 2, "int", false, true),
+    sig("execlp", 2, "int", false, true),
     sig("abort", 0, "void", true, false),
     sig("atoi", 1, "int", false, false),
     sig("atol", 1, "long", false, false),
@@ -133,6 +153,22 @@ fn table() -> &'static BTreeMap<&'static str, &'static LibcSignature> {
 /// name first.
 pub fn lookup_libc(name: &str) -> Option<&'static LibcSignature> {
     table().get(name).copied()
+}
+
+/// Look up a libc signature through the spellings symbol tables use:
+/// ELF version suffixes (`printf@GLIBC_2.2.5`), glibc internal and ISO
+/// aliases (`__libc_`, `__isoc99_`, `__isoc23_`), and the Mach-O leading
+/// underscore.
+pub fn lookup_libc_normalized(name: &str) -> Option<&'static LibcSignature> {
+    lookup_libc(name)
+        .or_else(|| name.find('@').and_then(|idx| lookup_libc(&name[..idx])))
+        .or_else(|| {
+            name.strip_prefix("__libc_")
+                .and_then(lookup_libc)
+                .or_else(|| name.strip_prefix("__isoc99_").and_then(lookup_libc))
+                .or_else(|| name.strip_prefix("__isoc23_").and_then(lookup_libc))
+        })
+        .or_else(|| name.strip_prefix('_').and_then(lookup_libc))
 }
 
 /// Iterate over every signature in the database in deterministic

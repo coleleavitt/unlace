@@ -40,8 +40,8 @@ use gimli::{
     DW_TAG_array_type, DW_TAG_base_type, DW_TAG_const_type, DW_TAG_enumeration_type,
     DW_TAG_enumerator, DW_TAG_formal_parameter, DW_TAG_member, DW_TAG_pointer_type,
     DW_TAG_restrict_type, DW_TAG_structure_type, DW_TAG_subprogram, DW_TAG_subrange_type,
-    DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable,
-    DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
+    DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_unspecified_parameters,
+    DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -174,6 +174,9 @@ pub struct FunctionDebugInfo {
     pub high_pc: Option<u64>,
     pub ranges: Vec<gimli::Range>,
     pub params: Vec<ParameterInfo>,
+    /// The prototype ends in `...` (a `DW_TAG_unspecified_parameters`
+    /// child follows the named parameters).
+    pub variadic: bool,
     pub return_type: Option<String>,
     pub decl: Option<SourceLocation>,
     pub locals: Vec<LocalVariable>,
@@ -744,7 +747,11 @@ fn extract_functions_from_unit(
         };
 
         let decl = extract_decl_location(dwarf, unit, entry)?;
-        let (params, locals) = extract_params_and_locals(dwarf, unit, resolver, child)?;
+        let SubprogramChildren {
+            params,
+            variadic,
+            locals,
+        } = extract_params_and_locals(dwarf, unit, resolver, child)?;
         let cfa_to_rbp_delta = cfa_deltas.get(&low_pc).copied();
 
         functions.insert(
@@ -756,6 +763,7 @@ fn extract_functions_from_unit(
                 high_pc,
                 ranges,
                 params,
+                variadic,
                 return_type,
                 decl,
                 locals,
@@ -1038,13 +1046,21 @@ fn pointee_byte_size(
     Ok(None)
 }
 
+/// Parameters and locals declared under one `DW_TAG_subprogram`.
+struct SubprogramChildren {
+    params: Vec<ParameterInfo>,
+    variadic: bool,
+    locals: Vec<LocalVariable>,
+}
+
 fn extract_params_and_locals<'a>(
     dwarf: &gimli::Dwarf<R<'_>>,
     unit: &gimli::Unit<R<'a>>,
     resolver: &DebugLocationResolver,
     func_node: gimli::EntriesTreeNode<'_, '_, R<'a>>,
-) -> Result<(Vec<ParameterInfo>, Vec<LocalVariable>), gimli::Error> {
+) -> Result<SubprogramChildren, gimli::Error> {
     let mut params = Vec::new();
+    let mut variadic = false;
     let mut locals = Vec::new();
     let mut children = func_node.children();
 
@@ -1075,6 +1091,8 @@ fn extract_params_and_locals<'a>(
                 pointee_size,
                 frame_offset,
             });
+        } else if tag == DW_TAG_unspecified_parameters {
+            variadic = true;
         } else if tag == DW_TAG_variable {
             let name = match attr_string(dwarf, unit, entry, DW_AT_name)? {
                 Some(n) => n,
@@ -1104,7 +1122,11 @@ fn extract_params_and_locals<'a>(
         }
     }
 
-    Ok((params, locals))
+    Ok(SubprogramChildren {
+        params,
+        variadic,
+        locals,
+    })
 }
 
 /// Result of a single-opcode-stream evaluation against a `DW_AT_location`.

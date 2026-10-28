@@ -126,7 +126,7 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
         };
 
         let uses = param_register_uses(func, reg);
-        if uses.is_empty() {
+        if uses.is_empty() && func.variadic.is_none() {
             // Rule 1: dead param — drop entirely.
             dropped += 1;
             sig_trace_line(
@@ -212,17 +212,19 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
         return_type,
         dropped_param_count: dropped,
         sret,
+        variadic: func.variadic.is_some(),
     };
     sig_trace_line(
         func,
         format!(
-            "finalize cc={cc:?} inferred_params={:?} inferred_return={:?} params={:?} return={:?} dropped={} sret={}",
+            "finalize cc={cc:?} inferred_params={:?} inferred_return={:?} params={:?} return={:?} dropped={} sret={} variadic={}",
             func.inferred_params,
             func.inferred_return_type,
             sig.params,
             sig.return_type,
             sig.dropped_param_count,
-            sig.sret
+            sig.sret,
+            sig.variadic
         ),
     );
     sig

@@ -26,7 +26,6 @@ const R8: u64 = 64;
 const R9: u64 = 72;
 
 const SYSV_ARG_REGS: &[u64] = &[RDI, RSI, RDX, RCX, R8, R9];
-const SYSV_VARARGS_READ_REGS: &[u64] = &[RDI, RSI, RDX, RCX, R8, R9, RAX];
 const MSX64_ARG_REGS: &[u64] = &[RCX, RDX, R8, R9];
 const SYSV_ONLY_REGS: &[u64] = &[RDI, RSI];
 const AARCH64_ARG_REGS: &[u64] = &[0, 8, 16, 24, 32, 40, 48, 56];
@@ -169,49 +168,6 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
     }
 
     result
-}
-
-/// Collect registers that are read before being written in any block of the
-/// function. This captures argument register usage that has migrated out of
-/// the entry block due to SSA optimisation (copy-prop, DCE, block merging).
-fn collect_whole_function_reads_for(func: &SsaFunction, tracked_regs: &[u64]) -> BTreeSet<u64> {
-    let mut reads = BTreeSet::new();
-    for (bid, block) in &func.function.blocks {
-        let mut defined_in_block: BTreeSet<u64> = BTreeSet::new();
-        if let Some(phis) = func.phi_map.get(bid) {
-            for phi in phis {
-                if phi.output.base.space == SpaceId::Register
-                    && tracked_reg_contains(tracked_regs, phi.output.base.offset)
-                {
-                    defined_in_block.insert(phi.output.base.offset);
-                }
-            }
-        }
-        for (insn_idx, insn) in block.insns.iter().enumerate() {
-            match insn.op {
-                IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
-                _ => {}
-            }
-            for (input_idx, inp) in insn.inputs.iter().enumerate() {
-                if let Some((reg, _size)) =
-                    tracked_input_register(func, *bid, insn_idx, input_idx, inp, tracked_regs)
-                    && !defined_in_block.contains(&reg)
-                {
-                    reads.insert(reg);
-                    if reads.len() == tracked_regs.len() {
-                        return reads;
-                    }
-                }
-            }
-            if let Some(output) = insn.output
-                && output.space == SpaceId::Register
-                && tracked_reg_contains(tracked_regs, output.offset)
-            {
-                defined_in_block.insert(output.offset);
-            }
-        }
-    }
-    reads
 }
 
 /// Collect machine registers that are **live-on-entry** to the function, i.e.
@@ -712,15 +668,6 @@ impl Pass for ParamInferPass {
             changed = true;
         }
 
-        let is_varargs = {
-            let _span = linkscope::phase("pass.param-infer.varargs");
-            detect_varargs(func)
-        };
-        if is_varargs != func.is_varargs {
-            func.is_varargs = is_varargs;
-            changed = true;
-        }
-
         Ok(changed)
     }
 }
@@ -818,9 +765,22 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
     let mut params = Vec::new();
     let mut param_idx = 1u32;
 
-    // Count consecutive integer parameter registers that are used.
+    // A variadic function's `va_start` save area reads every argument
+    // register; only the named prefix are parameters. Named floating-point
+    // parameters cannot be told apart from the saved vector registers.
+    let (int_regs, float_regs) = match func.variadic {
+        Some(variadic) => (
+            &int_regs[..variadic.fixed_params.min(int_regs.len())],
+            &[][..],
+        ),
+        None => (int_regs, float_regs),
+    };
+
+    // Count consecutive integer parameter registers that are used. Every
+    // named parameter of a variadic function is kept, read or not: the
+    // `...` position depends on the count.
     for &reg_off in int_regs {
-        if !read_before_write.contains(&reg_off) {
+        if !read_before_write.contains(&reg_off) && func.variadic.is_none() {
             break;
         }
         let ty = infer_param_type(reg_off, &reg_consumer_ops, &reg_input_sizes);
@@ -1053,78 +1013,6 @@ fn infer_stack_params(func: &SsaFunction) -> BTreeSet<i64> {
         format!("stack-param source=entry-load-scan cc={cc:?} min_off={min_off} params={out:?}"),
     );
     out
-}
-
-// ---------------------------------------------------------------------------
-// Varargs detection
-// ---------------------------------------------------------------------------
-//
-// On SysV AMD64 a variadic call requires the caller to set `%al` to the
-// number of XMM registers it used to pass float args. The callee's
-// `va_start` macro saves all six int arg regs and (conditionally on
-// `%al > 0`) the eight XMM arg regs into a contiguous save area on the
-// stack. The two strongest residual signals after SSA optimisation are:
-//
-// 1. `%rax` is read-before-write in the entry block (the `va_start`
-//    prologue reads it to branch on the XMM count).
-// 2. The function spills XMM0..XMM7 to consecutive stack slots — only
-//    `va_start` produces this exact pattern (regular code spills the
-//    callee-saved XMMs, not the volatile ones).
-//
-// We require BOTH of: `rax` read AND all 6 SysV int arg regs read
-// before-write — the latter is the classic `va_start` register-save-area
-// fingerprint. This avoids false positives on functions that simply use
-// `rax` as a scratch-arg slot before assigning to it.
-
-fn detect_varargs(func: &SsaFunction) -> bool {
-    if func.calling_convention != CallingConvention::SystemV {
-        // MS x64 / Win64 has no `%al`-style varargs marker — varargs there
-        // looks identical to regular calls. We can't tell from the callee.
-        return false;
-    }
-
-    let reads = collect_whole_function_reads_for(func, SYSV_VARARGS_READ_REGS);
-
-    // Signal A: %al / %rax read-before-write somewhere in the function.
-    let reads_rax = reads.contains(&RAX);
-
-    // Signal B: all 6 SysV int arg regs read-before-write. `va_start`'s
-    // register save area spills each one to `gp_offset_save`.
-    let all_int_args_read = SYSV_ARG_REGS.iter().all(|r| reads.contains(r));
-
-    // Signal C: XMM-save-area spill — stores of XMM0..XMM7 to consecutive
-    // stack slots. This is the most specific signal but also the most
-    // expensive; only consult it when A and B aren't both satisfied.
-    let has_xmm_save_area = || -> bool {
-        let mut xmm_spilled = 0u32;
-        for block in func.function.blocks.values() {
-            for insn in &block.insns {
-                if insn.op != IrOp::Store {
-                    continue;
-                }
-                let Some(value) = insn.inputs.get(2) else {
-                    continue;
-                };
-                if value.space == SpaceId::Register && SYSV_FLOAT_REGS.contains(&value.offset) {
-                    xmm_spilled += 1;
-                }
-            }
-        }
-        // The full save area spills all 8; require >= 4 to allow for
-        // DSE-elided slots while still rejecting incidental single-XMM
-        // spills.
-        xmm_spilled >= 4
-    };
-
-    let xmm_save_area = !(reads_rax && all_int_args_read) && has_xmm_save_area();
-    let result = (reads_rax && all_int_args_read) || xmm_save_area;
-    calling_trace_line_verbose(
-        func,
-        format!(
-            "varargs reads_rax={reads_rax} all_int_args_read={all_int_args_read} xmm_save_area={xmm_save_area} result={result} reads={reads:?}"
-        ),
-    );
-    result
 }
 
 fn infer_param_type(
@@ -1502,70 +1390,6 @@ mod tests {
         );
     }
 
-    // -- Varargs detection ----------------------------------------------------
-
-    #[test]
-    fn varargs_detected_when_rax_plus_all_int_args_read() {
-        let insns = vec![
-            read_reg_to_unique(RDI, 0x1001),
-            read_reg_to_unique(RSI, 0x1002),
-            read_reg_to_unique(RDX, 0x1003),
-            read_reg_to_unique(RCX, 0x1004),
-            read_reg_to_unique(R8, 0x1005),
-            read_reg_to_unique(R9, 0x1006),
-            read_reg_to_unique(RAX, 0x1007),
-        ];
-        let mut ssa = make_entry_block_ssa(insns);
-        ssa.calling_convention = CallingConvention::SystemV;
-        assert!(detect_varargs(&ssa));
-    }
-
-    #[test]
-    fn varargs_not_detected_when_rax_alone() {
-        let insns = vec![
-            read_reg_to_unique(RDI, 0x1001),
-            read_reg_to_unique(RAX, 0x1002),
-        ];
-        let mut ssa = make_entry_block_ssa(insns);
-        ssa.calling_convention = CallingConvention::SystemV;
-        assert!(
-            !detect_varargs(&ssa),
-            "RAX read alone should not flag varargs"
-        );
-    }
-
-    #[test]
-    fn varargs_detected_via_xmm_save_area() {
-        // Spilling XMM0..XMM3 to consecutive stack slots — the classic
-        // `va_start` register save area fingerprint.
-        let insns = vec![
-            store_reg_to_stack(XMM0, 0x100, 0x1001),
-            store_reg_to_stack(XMM1, 0x110, 0x1002),
-            store_reg_to_stack(XMM2, 0x120, 0x1003),
-            store_reg_to_stack(XMM3, 0x130, 0x1004),
-        ];
-        let mut ssa = make_entry_block_ssa(insns);
-        ssa.calling_convention = CallingConvention::SystemV;
-        assert!(detect_varargs(&ssa), "XMM0..3 spill should flag varargs");
-    }
-
-    #[test]
-    fn varargs_disabled_for_non_sysv() {
-        let insns = vec![
-            read_reg_to_unique(RDI, 0x1001),
-            read_reg_to_unique(RSI, 0x1002),
-            read_reg_to_unique(RDX, 0x1003),
-            read_reg_to_unique(RCX, 0x1004),
-            read_reg_to_unique(R8, 0x1005),
-            read_reg_to_unique(R9, 0x1006),
-            read_reg_to_unique(RAX, 0x1007),
-        ];
-        let mut ssa = make_entry_block_ssa(insns);
-        ssa.calling_convention = CallingConvention::MicrosoftX64;
-        // The MS x64 ABI has no callee-visible varargs marker.
-        assert!(!detect_varargs(&ssa));
-    }
-
     // -- Return inference -----------------------------------------------------
 
     #[test]
@@ -1645,7 +1469,7 @@ mod tests {
     // -- End-to-end via the pass ---------------------------------------------
 
     #[test]
-    fn param_infer_pass_sets_varargs_flag_and_stack_params_together() {
+    fn param_infer_pass_stops_variadic_params_at_named_prefix() {
         let insns = vec![
             read_reg_to_unique(RDI, 0x1001),
             read_reg_to_unique(RSI, 0x1002),
@@ -1667,17 +1491,14 @@ mod tests {
         ];
         let mut ssa = make_entry_block_ssa(insns);
         ssa.calling_convention = CallingConvention::SystemV;
+        ssa.variadic = Some(unlace_ir::ssa::Variadic { fixed_params: 1 });
         let pass = ParamInferPass;
         pass.run(&mut ssa).unwrap();
-        assert!(ssa.is_varargs, "varargs flag not set");
+        assert_eq!(ssa.inferred_params.len(), 1, "{:?}", ssa.inferred_params);
         assert!(
             ssa.inferred_stack_params.contains(&8),
             "stack param missing: {:?}",
             ssa.inferred_stack_params
-        );
-        assert!(
-            !ssa.inferred_params.is_empty(),
-            "register params should also be populated"
         );
     }
 

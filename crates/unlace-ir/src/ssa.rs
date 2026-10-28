@@ -913,14 +913,12 @@ pub struct SsaFunction {
     /// `CppMethodPass` when the call target is a vtable slot read off
     /// `[this + N]`.
     pub cpp_this_args: BTreeSet<(BlockId, usize)>,
-    /// Whether the function has been detected as variadic (uses C-style
-    /// `...` / `va_arg`). Populated by
-    /// [`ParamInferPass`](https://docs.rs/unlace-passes) when the entry
-    /// block reads `%rax` (SysV's vector-register count) before writing
-    /// it, or when it spills more than one consecutive XMM register to a
-    /// contiguous stack region (the classic `va_arg` save area). Defaults
-    /// to `false`.
-    pub is_varargs: bool,
+    /// `Some` when the function takes C-style `...` arguments. Set before
+    /// the pass pipeline from debug info, a known prototype, or the
+    /// `va_start` register save area in the prologue (see
+    /// `unlace_passes::vararg_detect`). Parameter inference stops at
+    /// [`Variadic::fixed_params`].
+    pub variadic: Option<Variadic>,
     /// Stack-passed parameters detected as positive RSP-relative loads
     /// (`[rsp + 8 + N*8]` on SysV — past the saved return address) in the
     /// entry block, before any matching write. Each entry is the
@@ -1110,6 +1108,14 @@ pub struct CryptoAnnotation {
     pub end_loc: (BlockId, usize),
 }
 
+/// Prototype shape of a variadic function: the named parameters that
+/// precede `...`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Variadic {
+    /// Number of named parameters, counted in calling-convention slot order.
+    pub fixed_params: usize,
+}
+
 /// Finalized function prototype produced by
 /// `unlace_passes::calling_conv_finalize::finalize_signature` (t216).
 ///
@@ -1138,6 +1144,10 @@ pub struct FinalizedSignature {
     /// Detected by [`unlace_passes::calling_conv_finalize::detect_sret`].
     #[serde(default)]
     pub sret: bool,
+    /// When `true`, `params` are the named parameters and the prototype
+    /// ends in `...`.
+    #[serde(default)]
+    pub variadic: bool,
 }
 
 /// Classification of a recovered stack-frame slot (Batch 2 slice 2).
@@ -1677,7 +1687,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         cpp_kind: None,
         cpp_class_name: None,
         cpp_this_args: BTreeSet::new(),
-        is_varargs: false,
+        variadic: None,
         inferred_stack_params: BTreeSet::new(),
     }
 }

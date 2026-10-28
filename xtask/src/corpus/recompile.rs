@@ -42,13 +42,25 @@ pub enum Behaviour {
 }
 
 impl Behaviour {
-    fn describe(&self) -> String {
-        match self {
-            Behaviour::Exited { code, stdout } => {
-                format!("exit {code}, {} stdout bytes", stdout.len())
-            }
-            Behaviour::Signalled => "killed by signal".to_string(),
-            Behaviour::TimedOut => format!("timed out after {}s", RUN_TIMEOUT.as_secs()),
+    /// How `observed` differs from `self`, coarse enough to be stable when
+    /// the decompiled code reads uninitialized (per-run random) values.
+    fn difference(&self, observed: &Behaviour) -> &'static str {
+        match (self, observed) {
+            (_, Behaviour::Signalled) => "recompiled program was killed by a signal",
+            (_, Behaviour::TimedOut) => "recompiled program timed out",
+            (
+                Behaviour::Exited { code, stdout },
+                Behaviour::Exited {
+                    code: observed_code,
+                    stdout: observed_stdout,
+                },
+            ) => match (code == observed_code, stdout == observed_stdout) {
+                (false, false) => "exit status and stdout differ",
+                (false, true) => "exit status differs",
+                (true, false) => "stdout differs",
+                (true, true) => "same behaviour",
+            },
+            _ => "original program did not exit normally",
         }
     }
 }
@@ -301,11 +313,9 @@ impl Harness {
         if observed == self.original {
             Ok(Equivalence::Pass)
         } else {
-            Ok(Equivalence::Mismatch(format!(
-                "original {}; recompiled {}",
-                self.original.describe(),
-                observed.describe()
-            )))
+            Ok(Equivalence::Mismatch(
+                self.original.difference(&observed).to_string(),
+            ))
         }
     }
 }
@@ -407,4 +417,56 @@ fn run_program(target: &Target, binary: &Path) -> Result<Behaviour, String> {
         },
         None => Behaviour::Signalled,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn translation_unit_keeps_own_preamble_and_referenced_prototypes() {
+        let c = r"typedef int T;
+// Recovered composite layouts
+struct __anon0 { long a; };
+/* Function:   f | Address: 0x10 | Size: 0x4 */
+int f(struct __anon0 * a1) {
+    return 0;
+}
+// Recovered composite layouts
+struct __anon0 { int b; };
+/* Function:   g | Address: 0x20 | Size: 0x4 */
+int g(int a1) {
+    return f(0) + a1;
+}
+/* Function:   h | Address: 0x30 | Size: 0x4 */
+int h(void) {
+    return 1;
+}
+";
+        let listing = Listing::parse(c);
+        let g = listing.by_addr(0x20).expect("g is listed");
+        let tu = translation_unit(&listing, g);
+        assert!(tu.contains("typedef int T;\n"));
+        assert!(tu.contains("struct __anon0 { int b; };"));
+        assert!(!tu.contains("struct __anon0 { long a; };"));
+        assert!(tu.contains("int f(struct __anon0 * a1);\n"));
+        assert!(!tu.contains("int h(void);"));
+    }
+
+    #[test]
+    fn mismatch_reasons_ignore_exact_values() {
+        let original = Behaviour::Exited {
+            code: 3,
+            stdout: b"a".to_vec(),
+        };
+        let other = Behaviour::Exited {
+            code: 4,
+            stdout: b"a".to_vec(),
+        };
+        assert_eq!(original.difference(&other), "exit status differs");
+        assert_eq!(
+            original.difference(&Behaviour::Signalled),
+            "recompiled program was killed by a signal"
+        );
+    }
 }

@@ -138,6 +138,16 @@ pub fn measure(root: &Path, unlace: &Path, options: &CorpusOptions) -> Result<Re
         return Err("corpus: no program matches the filter".to_string());
     }
     let jobs = options.jobs();
+    std::fs::create_dir_all(&out_dir)
+        .map_err(|e| format!("failed to create {}: {e}", out_dir.display()))?;
+    let unlace = Decompiler {
+        binary: unlace,
+        config: out_dir.join("unlace-defaults.toml"),
+    };
+    write(
+        &unlace.config,
+        "# Empty on purpose: the corpus measures unlace's default configuration,\n# not ./unlace.toml or the user's config.\n",
+    )?;
     let builder = Builder {
         corpus_dir: &corpus_dir,
         out_dir: &out_dir.join("bin"),
@@ -199,7 +209,7 @@ pub fn measure(root: &Path, unlace: &Path, options: &CorpusOptions) -> Result<Re
                 toolchain: *t,
                 variant: *v,
             };
-            ((p.name.as_str(), config), decompile(unlace, binary, &c))
+            ((p.name.as_str(), config), unlace.decompile(binary, &c))
         })
         .into_iter()
         .collect();
@@ -266,7 +276,7 @@ pub fn measure(root: &Path, unlace: &Path, options: &CorpusOptions) -> Result<Re
         .collect();
 
     let external = match &options.external_corpus {
-        Some(dir) => measure_external(dir, unlace, &out_dir, jobs)?,
+        Some(dir) => measure_external(dir, &unlace, &out_dir, jobs)?,
         None => Vec::new(),
     };
 
@@ -424,7 +434,7 @@ fn program_report(
 
 fn measure_external(
     dir: &Path,
-    unlace: &Path,
+    unlace: &Decompiler<'_>,
     out_dir: &Path,
     jobs: usize,
 ) -> Result<Vec<report::ExternalReport>, String> {
@@ -436,64 +446,74 @@ fn measure_external(
     let c_dir = out_dir.join("c").join("external");
     Ok(parallel_map(&binaries, jobs, |binary| {
         let c = c_dir.join(format!("{}.c", binary.name));
-        external::measure(binary, decompile(unlace, &dir.join(&binary.path), &c))
+        external::measure(binary, unlace.decompile(&dir.join(&binary.path), &c))
     }))
 }
 
-/// Whole-binary `unlace decompile --emit c`, written to `out` and returned.
-fn decompile(unlace: &Path, binary: &Path, out: &Path) -> Result<String, String> {
-    if let Some(parent) = out.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("failed to create {}: {e}", parent.display()))?;
-    }
-    let stderr_path = out.with_extension("stderr");
-    let stderr = File::create(&stderr_path)
-        .map_err(|e| format!("failed to create {}: {e}", stderr_path.display()))?;
-    let mut child = Command::new(unlace)
-        .args([
-            "decompile",
-            "--emit",
-            "c",
-            "--timeout",
-            FUNCTION_TIMEOUT_SECS,
-            "--output",
-        ])
-        .arg(out)
-        .arg(binary)
-        .env_remove("RUST_LOG")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(stderr)
-        .spawn()
-        .map_err(|e| format!("failed to spawn unlace: {e}"))?;
-    let start = Instant::now();
-    let status = loop {
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|e| format!("failed to wait for unlace: {e}"))?
-        {
-            break status;
+/// The unlace binary under measurement, run with an empty configuration.
+struct Decompiler<'a> {
+    binary: &'a Path,
+    config: PathBuf,
+}
+
+impl Decompiler<'_> {
+    /// Whole-binary `unlace decompile --emit c`, written to `out` and returned.
+    fn decompile(&self, binary: &Path, out: &Path) -> Result<String, String> {
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("failed to create {}: {e}", parent.display()))?;
         }
-        if start.elapsed() > DECOMPILE_TIMEOUT {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(format!(
-                "decompile timed out after {}s",
-                DECOMPILE_TIMEOUT.as_secs()
-            ));
+        let stderr_path = out.with_extension("stderr");
+        let stderr = File::create(&stderr_path)
+            .map_err(|e| format!("failed to create {}: {e}", stderr_path.display()))?;
+        let mut child = Command::new(self.binary)
+            .arg("--config")
+            .arg(&self.config)
+            .args([
+                "decompile",
+                "--emit",
+                "c",
+                "--timeout",
+                FUNCTION_TIMEOUT_SECS,
+                "--output",
+            ])
+            .arg(out)
+            .arg(binary)
+            .env_remove("RUST_LOG")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(stderr)
+            .spawn()
+            .map_err(|e| format!("failed to spawn unlace: {e}"))?;
+        let start = Instant::now();
+        let status = loop {
+            if let Some(status) = child
+                .try_wait()
+                .map_err(|e| format!("failed to wait for unlace: {e}"))?
+            {
+                break status;
+            }
+            if start.elapsed() > DECOMPILE_TIMEOUT {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!(
+                    "decompile timed out after {}s",
+                    DECOMPILE_TIMEOUT.as_secs()
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        if !status.success() {
+            let stderr = std::fs::read_to_string(&stderr_path).unwrap_or_default();
+            let last = stderr
+                .lines()
+                .rev()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("no stderr");
+            return Err(format!("unlace exited with {status}: {last}"));
         }
-        std::thread::sleep(Duration::from_millis(20));
-    };
-    if !status.success() {
-        let stderr = std::fs::read_to_string(&stderr_path).unwrap_or_default();
-        let last = stderr
-            .lines()
-            .rev()
-            .find(|l| !l.trim().is_empty())
-            .unwrap_or("no stderr");
-        return Err(format!("unlace exited with {status}: {last}"));
+        std::fs::read_to_string(out).map_err(|e| format!("failed to read {}: {e}", out.display()))
     }
-    std::fs::read_to_string(out).map_err(|e| format!("failed to read {}: {e}", out.display()))
 }
 
 /// Maps `f` over `items` on `jobs` threads, preserving input order.

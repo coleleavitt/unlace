@@ -35,22 +35,22 @@
       "functions": 159,
       "missing": 28,
       "metrics": {
-        "flag_vars": 882,
+        "flag_vars": 880,
         "gotos": 224,
-        "empty_blocks": 40,
-        "dead_stores": 1742,
-        "leaked_temps": 1725,
-        "register_carriers": 1360,
+        "empty_blocks": 41,
+        "dead_stores": 1775,
+        "leaked_temps": 1704,
+        "register_carriers": 1340,
         "raw_stack_accesses": 0,
-        "lines": 11511
+        "lines": 11442
       },
       "source_lines": 1457,
       "arity_checked": 131,
       "arity_mismatches": 25,
       "recompile": {
         "pass": 1,
-        "mismatch": 35,
-        "compile_error": 76,
+        "mismatch": 37,
+        "compile_error": 74,
         "link_error": 19,
         "untestable": 28
       }
@@ -60,22 +60,22 @@
       "functions": 153,
       "missing": 6,
       "metrics": {
-        "flag_vars": 304,
+        "flag_vars": 295,
         "gotos": 206,
-        "empty_blocks": 45,
-        "dead_stores": 1736,
-        "leaked_temps": 1426,
-        "register_carriers": 1018,
+        "empty_blocks": 48,
+        "dead_stores": 2207,
+        "leaked_temps": 1367,
+        "register_carriers": 1015,
         "raw_stack_accesses": 35,
-        "lines": 10140
+        "lines": 10020
       },
       "source_lines": 1588,
       "arity_checked": 147,
       "arity_mismatches": 56,
       "recompile": {
         "pass": 12,
-        "mismatch": 40,
-        "compile_error": 86,
+        "mismatch": 42,
+        "compile_error": 84,
         "link_error": 9,
         "untestable": 6
       }
@@ -85,22 +85,22 @@
       "functions": 153,
       "missing": 0,
       "metrics": {
-        "flag_vars": 319,
+        "flag_vars": 310,
         "gotos": 280,
-        "empty_blocks": 48,
-        "dead_stores": 1930,
-        "leaked_temps": 1563,
-        "register_carriers": 1019,
-        "raw_stack_accesses": 38,
-        "lines": 10714
+        "empty_blocks": 50,
+        "dead_stores": 2388,
+        "leaked_temps": 1500,
+        "register_carriers": 1013,
+        "raw_stack_accesses": 41,
+        "lines": 10585
       },
       "source_lines": 1657,
       "arity_checked": 153,
       "arity_mismatches": 29,
       "recompile": {
         "pass": 10,
-        "mismatch": 40,
-        "compile_error": 100,
+        "mismatch": 42,
+        "compile_error": 98,
         "link_error": 3,
         "untestable": 0
       }
@@ -110,22 +110,22 @@
       "functions": 164,
       "missing": 15,
       "metrics": {
-        "flag_vars": 320,
+        "flag_vars": 311,
         "gotos": 275,
         "empty_blocks": 60,
-        "dead_stores": 1860,
-        "leaked_temps": 1336,
-        "register_carriers": 1195,
-        "raw_stack_accesses": 38,
-        "lines": 10521
+        "dead_stores": 2199,
+        "leaked_temps": 1313,
+        "register_carriers": 1182,
+        "raw_stack_accesses": 39,
+        "lines": 10420
       },
       "source_lines": 1705,
       "arity_checked": 145,
       "arity_mismatches": 60,
       "recompile": {
         "pass": 13,
-        "mismatch": 53,
-        "compile_error": 69,
+        "mismatch": 52,
+        "compile_error": 70,
         "link_error": 7,
         "untestable": 22
       }
@@ -135,14 +135,14 @@
       "functions": 164,
       "missing": 0,
       "metrics": {
-        "flag_vars": 357,
+        "flag_vars": 349,
         "gotos": 290,
         "empty_blocks": 69,
-        "dead_stores": 2133,
-        "leaked_temps": 1468,
-        "register_carriers": 1209,
-        "raw_stack_accesses": 33,
-        "lines": 12163
+        "dead_stores": 2505,
+        "leaked_temps": 1446,
+        "register_carriers": 1197,
+        "raw_stack_accesses": 34,
+        "lines": 12096
       },
       "source_lines": 1934,
       "arity_checked": 159,

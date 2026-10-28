@@ -51,7 +51,9 @@ fn tracked_input_register(
     input: &unlace_ir::Varnode,
     tracked_regs: &[u64],
 ) -> Option<(u64, u8)> {
-    if input.space != SpaceId::Register || !tracked_reg_contains(tracked_regs, input.offset) {
+    // The raw slot may be a unique temp that SSA maps to a register version, so
+    // only constants can be rejected before the SSA lookup.
+    if input.space == SpaceId::Const {
         return None;
     }
     let (reg, size) = input_register(func, bid, insn_idx, input_idx, input)?;

@@ -78,3 +78,9 @@ tmp/
 # mirrors cloned below these paths are local-only unless promoted deliberately.
 research/decompiled-references/iced/
 research/decompiled-references/gcc/gcc/
+
+# Temp files
+eula*.html
+eula*.txt
+.jython_cache/
+.jfc/checkpoints/*.absent

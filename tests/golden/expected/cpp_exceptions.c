@@ -89,10 +89,9 @@ struct __anon0 {
 _Noreturn int safe_call(void) {
     __int64 v25; // rax
     __int64 c2; // rbx
-    __int64 saved_rbx; // rdi
-    saved_rbx = 0x10LL;
+    __int64 c4 = 0x10LL; // rdi
     /* allocate exception */
-    __int64 v23 = __cxa_allocate_exception(saved_rbx); // rax
+    __int64 v23 = __cxa_allocate_exception(c4); // rax
     c2 = v23; std_runtime_error_runtime_error();
     /* throw */
     v25 = __cxa_throw(c2, 0x3d40LL, qword_3FE0);

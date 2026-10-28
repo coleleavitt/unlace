@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::var_naming::VarNamingStyle;
+
 /// Options consumed by [`run_instrumented`](crate::run_instrumented) and the
 /// budget-guarded passes.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +27,8 @@ pub struct PassOptions {
     pub iv_opt: IvOptLimits,
     pub variable_merge: VariableMergeLimits,
     pub type_constraint: TypeConstraintLimits,
+    /// Which role-derived local names `VarNamingPass` assigns.
+    pub var_naming: VarNamingStyle,
     pub diagnostics: PassDiagnostics,
 }
 

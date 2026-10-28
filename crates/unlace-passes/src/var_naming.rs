@@ -15,6 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde::{Deserialize, Serialize};
 use unlace_ir::lvar::LvarStorage;
 use unlace_ir::ssa::{CallingConvention, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::stack::StackSpec;
@@ -76,6 +77,39 @@ pub enum VarRole {
     ReturnValue,
 }
 
+/// Which role-derived names [`VarNamingPass`] assigns.
+///
+/// Both styles name arguments `a1`, `a2`, …, the return value `result`, a
+/// C++ receiver `this`, and loop counters `i`, `j`, `k`; every other local
+/// keeps its `vN` name.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum VarNamingStyle {
+    /// Hex-Rays conventions only. Loop bounds, loop array bases, and
+    /// callee-saved register copies stay generic locals.
+    #[default]
+    Ida,
+    /// Also name loop bounds `len`, loop array bases `buf`, and
+    /// callee-saved register copies `saved_<reg>`.
+    Descriptive,
+}
+
+impl VarNamingStyle {
+    /// Whether this style gives `role` its own name.
+    pub fn names_role(self, role: VarRole) -> bool {
+        match role {
+            VarRole::Temporary => false,
+            VarRole::ThisPointer
+            | VarRole::LoopCounter
+            | VarRole::Argument(_)
+            | VarRole::ReturnValue => true,
+            VarRole::LoopBound | VarRole::LoopArrayBase | VarRole::SavedRegister(_) => {
+                self == VarNamingStyle::Descriptive
+            }
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct VarClassification {
     pub roles: BTreeMap<SsaVarnode, VarRole>,
@@ -118,7 +152,20 @@ fn arg_regs_for_func(func: &SsaFunction) -> &'static [(u64, u32)] {
     }
 }
 
+/// Classify every SSA varnode with the full set of roles.
 pub fn classify_variables(func: &SsaFunction) -> VarClassification {
+    classify_variables_with_style(func, VarNamingStyle::Descriptive)
+}
+
+/// Classify every SSA varnode, recording only the roles `style` names.
+///
+/// Dropping a role during classification, not after it, lets a varnode
+/// that is both an argument and a loop bound keep its `aN` role under
+/// [`VarNamingStyle::Ida`].
+pub fn classify_variables_with_style(
+    func: &SsaFunction,
+    style: VarNamingStyle,
+) -> VarClassification {
     let mut roles: BTreeMap<SsaVarnode, VarRole> = BTreeMap::new();
     let mut arg_indices: BTreeMap<SsaVarnode, u32> = BTreeMap::new();
     let mut loop_counters: BTreeSet<SsaVarnode> = BTreeSet::new();
@@ -172,8 +219,8 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                 let rhs_const = insn.inputs[1].space == SpaceId::Const;
                 if (in0_sv == Some(phi_out) && rhs_const) || (in1_sv == Some(phi_out) && lhs_const)
                 {
-                    record_role(&mut roles, phi_out, VarRole::LoopCounter);
-                    record_role(&mut roles, back_sv, VarRole::LoopCounter);
+                    record_role(&mut roles, style, phi_out, VarRole::LoopCounter);
+                    record_role(&mut roles, style, back_sv, VarRole::LoopCounter);
                     loop_counters.insert(phi_out);
                     loop_counters.insert(back_sv);
                 }
@@ -200,13 +247,13 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                             if traces_to_any_counter(a, &loop_counters, &defs)
                                 && !traces_to_any_counter(b, &loop_counters, &defs) =>
                         {
-                            record_role(&mut roles, b, VarRole::LoopBound);
+                            record_role(&mut roles, style, b, VarRole::LoopBound);
                         }
                         (Some(a), Some(b))
                             if traces_to_any_counter(b, &loop_counters, &defs)
                                 && !traces_to_any_counter(a, &loop_counters, &defs) =>
                         {
-                            record_role(&mut roles, a, VarRole::LoopBound);
+                            record_role(&mut roles, style, a, VarRole::LoopBound);
                         }
                         _ => {}
                     }
@@ -222,13 +269,13 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                             if traces_to_any_counter(idx_sv, &loop_counters, &defs)
                                 && !traces_to_any_counter(base, &loop_counters, &defs) =>
                         {
-                            record_role(&mut roles, base, VarRole::LoopArrayBase);
+                            record_role(&mut roles, style, base, VarRole::LoopArrayBase);
                         }
                         (Some(idx_sv), Some(base))
                             if traces_to_any_counter(idx_sv, &loop_counters, &defs)
                                 && !traces_to_any_counter(base, &loop_counters, &defs) =>
                         {
-                            record_role(&mut roles, base, VarRole::LoopArrayBase);
+                            record_role(&mut roles, style, base, VarRole::LoopArrayBase);
                         }
                         _ => {}
                     }
@@ -266,9 +313,9 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
             continue;
         }
         if let Some(name) = callee_saved_x86_64(src.offset) {
-            record_role(&mut roles, *sv, VarRole::SavedRegister(name));
+            record_role(&mut roles, style, *sv, VarRole::SavedRegister(name));
         } else if let Some(name) = callee_saved_aarch64(src.offset) {
-            record_role(&mut roles, *sv, VarRole::SavedRegister(name));
+            record_role(&mut roles, style, *sv, VarRole::SavedRegister(name));
         } else {
             // Argument: only mark if this Copy is in the entry block's first insns.
             if *bid == func.function.entry && *idx < 8 {
@@ -277,7 +324,12 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                         let param_count = func.inferred_params.len() as u32;
                         if arg_idx < param_count {
                             arg_indices.insert(*sv, arg_idx);
-                            record_role(&mut roles, *sv, argument_role_for_index(func, arg_idx));
+                            record_role(
+                                &mut roles,
+                                style,
+                                *sv,
+                                argument_role_for_index(func, arg_idx),
+                            );
                             if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG)
                             {
                                 tracing::debug!(
@@ -323,7 +375,12 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                         let param_count = func.inferred_params.len() as u32;
                         if arg_idx < param_count {
                             arg_indices.insert(*sv, arg_idx);
-                            record_role(&mut roles, *sv, argument_role_for_index(func, arg_idx));
+                            record_role(
+                                &mut roles,
+                                style,
+                                *sv,
+                                argument_role_for_index(func, arg_idx),
+                            );
                             if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG)
                             {
                                 tracing::debug!(
@@ -362,7 +419,12 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
     for (sv, arg_idx) in collect_live_in_argument_svs(func, arg_regs) {
         if arg_idx < param_count {
             arg_indices.insert(sv, arg_idx);
-            record_role(&mut roles, sv, argument_role_for_index(func, arg_idx));
+            record_role(
+                &mut roles,
+                style,
+                sv,
+                argument_role_for_index(func, arg_idx),
+            );
             if tracing::enabled!(target: "unlace::var_naming", tracing::Level::DEBUG) {
                 tracing::debug!(
                     target: "unlace::var_naming",
@@ -407,7 +469,7 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                     if out.space == SpaceId::Register && out.offset == ret_off {
                         if let Some(&sv) = func.var_map.get(&(*bid, prev_idx, VarnodeSlot::Output))
                         {
-                            record_role(&mut roles, sv, VarRole::ReturnValue);
+                            record_role(&mut roles, style, sv, VarRole::ReturnValue);
                         }
                         break;
                     }
@@ -487,7 +549,15 @@ fn role_priority(role: VarRole) -> u8 {
     }
 }
 
-fn record_role(roles: &mut BTreeMap<SsaVarnode, VarRole>, sv: SsaVarnode, role: VarRole) {
+fn record_role(
+    roles: &mut BTreeMap<SsaVarnode, VarRole>,
+    style: VarNamingStyle,
+    sv: SsaVarnode,
+    role: VarRole,
+) {
+    if !style.names_role(role) {
+        return;
+    }
     roles
         .entry(sv)
         .and_modify(|existing| {
@@ -714,7 +784,14 @@ fn traces_to_any_counter_inner(
 /// Returns `Ok(false)` because the pass writes to side-map state, not
 /// to the IR proper; the fixed-point runner has no reason to re-iterate
 /// once it has been called.
-pub struct VarNamingPass;
+///
+/// [`VarNamingPass::style`] selects which roles get names; under the
+/// default [`VarNamingStyle::Ida`] only `this`, `i`/`j`/`k`, `aN`, and
+/// `result` are assigned.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VarNamingPass {
+    pub style: VarNamingStyle,
+}
 
 impl Pass for VarNamingPass {
     fn name(&self) -> &str {
@@ -727,7 +804,7 @@ impl Pass for VarNamingPass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let preserved_names = func.var_role_names.clone();
-        let cls = classify_variables(func);
+        let cls = classify_variables_with_style(func, self.style);
 
         // Sequence counters per role family. We key each family by a
         // discriminant tag so distinct `SavedRegister("rbx")` /
@@ -1108,12 +1185,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn loop_bound_and_array_base_get_len_and_buf_names() {
+    /// `for (i = 0; i < r_len; i++) r_buf[i];`
+    fn loop_over_buffer(r_len: Varnode, r_buf: Varnode) -> SsaFunction {
         let r_i = reg(0x100, 8);
         let r_i_inc = reg(0x100, 8);
-        let r_len = reg(0x108, 8);
-        let r_buf = reg(0x110, 8);
         let r_cond = reg(0x118, 1);
         let r_addr = reg(0x120, 8);
         let r_val = reg(0x128, 1);
@@ -1164,13 +1239,88 @@ mod tests {
         bb2.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1030));
 
-        let mut func = build_func(vec![bb0, bb1, bb2]);
-        VarNamingPass.run(&mut func).expect("var naming");
+        build_func(vec![bb0, bb1, bb2])
+    }
 
-        let names: BTreeSet<&str> = func.var_role_names.values().map(String::as_str).collect();
+    fn role_names(func: &SsaFunction) -> BTreeSet<&str> {
+        func.var_role_names.values().map(String::as_str).collect()
+    }
+
+    #[test]
+    fn descriptive_style_names_loop_bound_and_array_base() {
+        let mut func = loop_over_buffer(reg(0x108, 8), reg(0x110, 8));
+        VarNamingPass {
+            style: VarNamingStyle::Descriptive,
+        }
+        .run(&mut func)
+        .expect("var naming");
+
+        let names = role_names(&func);
         assert!(names.contains("i"), "missing loop counter name: {names:?}");
         assert!(names.contains("len"), "missing loop bound name: {names:?}");
         assert!(names.contains("buf"), "missing loop buffer name: {names:?}");
+    }
+
+    #[test]
+    fn ida_style_keeps_loop_counter_and_drops_len_and_buf() {
+        let mut func = loop_over_buffer(reg(0x108, 8), reg(0x110, 8));
+        VarNamingPass::default().run(&mut func).expect("var naming");
+
+        let names = role_names(&func);
+        assert!(names.contains("i"), "missing loop counter name: {names:?}");
+        assert!(
+            !names.contains("len") && !names.contains("buf"),
+            "IDA style must not name loop bounds or buffers: {names:?}"
+        );
+    }
+
+    /// An argument that is also the loop bound or buffer keeps its `aN`
+    /// name under the IDA style instead of losing it to the dropped role.
+    #[test]
+    fn ida_style_loop_bound_argument_keeps_argument_name() {
+        let mut func = loop_over_buffer(reg(RSI, 8), reg(RDI, 8));
+        func.calling_convention = CallingConvention::SystemV;
+        func.inferred_params = vec![
+            ("a1".to_string(), PrimitiveType::Ptr),
+            ("a2".to_string(), PrimitiveType::Int(8)),
+        ];
+        VarNamingPass::default().run(&mut func).expect("var naming");
+
+        let names = role_names(&func);
+        assert!(
+            names.contains("a1") && names.contains("a2"),
+            "loop-bound/buffer arguments must keep a1/a2: {names:?}"
+        );
+        assert_eq!(func.inferred_params[0].0, "a1");
+        assert_eq!(func.inferred_params[1].0, "a2");
+    }
+
+    #[test]
+    fn ida_style_does_not_name_saved_registers() {
+        let rbx = reg(0x18, 8);
+        let t = reg(0x100, 8);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Copy, t, smallvec![rbx], 0x1000));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        let mut func = build_func(vec![bb0]);
+
+        VarNamingPass::default().run(&mut func).expect("var naming");
+        assert!(
+            !role_names(&func)
+                .iter()
+                .any(|name| name.starts_with("saved_")),
+            "IDA style must not emit saved_<reg>: {:?}",
+            func.var_role_names
+        );
+
+        VarNamingPass {
+            style: VarNamingStyle::Descriptive,
+        }
+        .run(&mut func)
+        .expect("var naming");
+        assert!(role_names(&func).contains("saved_rbx"));
     }
 
     #[test]
@@ -1193,7 +1343,7 @@ mod tests {
         func.inferred_params = vec![("a1".to_string(), PrimitiveType::Ptr)];
         LvarCollectPass.run(&mut func).expect("lvar collect");
 
-        VarNamingPass.run(&mut func).expect("var naming");
+        VarNamingPass::default().run(&mut func).expect("var naming");
 
         assert!(
             func.var_role_names.values().any(|name| name == "this"),
@@ -1281,7 +1431,7 @@ mod tests {
         func.merged_names.insert(ret_sv, "v1".to_string());
 
         LvarCollectPass.run(&mut func).expect("lvar collect");
-        VarNamingPass.run(&mut func).expect("var naming");
+        VarNamingPass::default().run(&mut func).expect("var naming");
 
         assert_eq!(
             func.var_role_names.get(&this_sv).map(String::as_str),

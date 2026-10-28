@@ -101,15 +101,14 @@ void sub_1120(void) {
     sub_10a0();
 }
 /* Function:   dispatch | Address: 0x1129 | Size: 0x4e (78 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-int dispatch(void) {
+int dispatch(int a1) {
     __int64 v3; // temp
-    _QWORD v2; // rdi
-    if ((_DWORD)7 <= (_DWORD)v2 && v2 != 7) {
+    if ((_DWORD)7 <= (_DWORD)a1 && a1 != 7) {
         return 0xffffffff;
     } else {
-        v2 = v2;
+        a1 = a1;
         __int64 v1 = v3 + 0x2004LL; // rdx
-        switch (v2) {
+        switch (a1) {
         case 0:
             return 0xa;
         case 1:

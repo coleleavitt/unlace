@@ -538,7 +538,10 @@ pub use type_constraint_solver::{
     collect_and_apply as solve_type_constraints, collect_constraints, solve_constraints,
     solve_polymorphic_constraints,
 };
-pub use var_naming::{VarClassification, VarNamingPass, VarRole, classify_variables, suggest_name};
+pub use var_naming::{
+    VarClassification, VarNamingPass, VarNamingStyle, VarRole, classify_variables,
+    classify_variables_with_style, suggest_name,
+};
 pub use vararg_detect::{
     detect_variadic_callees, parse_format_string, parse_printf_format_strings,
 };

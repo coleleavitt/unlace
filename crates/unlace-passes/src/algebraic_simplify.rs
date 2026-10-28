@@ -231,7 +231,8 @@ fn try_simplify(
         return None;
     }
 
-    if insn.op == IrOp::Copy || all_inputs_const(insn) {
+    // A SELECT on a constant condition folds even when its arms are constant too.
+    if insn.op == IrOp::Copy || (insn.op != IrOp::Select && all_inputs_const(insn)) {
         return None;
     }
 
@@ -277,6 +278,7 @@ fn try_simplify(
         IrOp::IntSext => simplify_double_sext(func, defs, bid, insn_idx, insn)
             .or_else(|| simplify_sext_noop(func, bid, insn_idx, insn)),
         IrOp::IntZext => simplify_double_zext(func, defs, bid, insn_idx, insn),
+        IrOp::Select => simplify_select(func, bid, insn_idx, insn),
         _ => None,
     }
 }
@@ -1306,6 +1308,39 @@ fn simplify_multiequal_all_same(
     ))
 }
 
+// ─── Ternary combiner (Hex-Rays `cot_tern`) ─────────────────────────────────
+// `Select(K, a, b)` → `Copy(a)` when `K != 0`, else `Copy(b)`.
+// `Select(c, x, x)` → `Copy(x)` when both arms are the same SSA value or the
+// same constant.
+fn simplify_select(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+) -> Option<Replacement> {
+    insn.output?;
+    let &[cond, on_true, on_false] = insn.inputs.as_slice() else {
+        return None;
+    };
+    if cond.space == SpaceId::Const {
+        let (idx, arm) = if cond.offset & mask_for_size(cond.size) != 0 {
+            (1, on_true)
+        } else {
+            (2, on_false)
+        };
+        return Some(replacement_for_input(func, bid, insn_idx, idx, arm));
+    }
+    let same_arms = match (
+        input_ssa(func, bid, insn_idx, 1),
+        input_ssa(func, bid, insn_idx, 2),
+    ) {
+        (Some(t), Some(f)) => t == f,
+        (None, None) => on_true.space == SpaceId::Const && on_true == on_false,
+        _ => false,
+    };
+    same_arms.then(|| replacement_for_input(func, bid, insn_idx, 1, on_true))
+}
+
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
@@ -2296,5 +2331,78 @@ mod tests {
         assert_eq!(folded.op, IrOp::Copy);
         assert_eq!(folded.inputs.len(), 1);
         assert_eq!(folded.inputs[0], x);
+    }
+
+    // ─── Ternary combiner (Hex-Rays `cot_tern`) ─────────────────────────────
+
+    fn select(cond: Varnode, on_true: Varnode, on_false: Varnode) -> IrInsn {
+        IrInsn::with_output(
+            IrOp::Select,
+            Varnode::unique(0, 4),
+            smallvec![cond, on_true, on_false],
+            0x1000,
+        )
+    }
+
+    #[test]
+    fn select_true_const_cond_picks_true_arm() {
+        let x = Varnode::reg(0, 4);
+        let y = Varnode::reg(8, 4);
+        let ssa = run_pass(vec![select(Varnode::constant(1, 1), x, y)]);
+        assert_copy_var(rewritten_insn(&ssa, 0), x);
+    }
+
+    #[test]
+    fn select_false_const_cond_picks_false_arm() {
+        let x = Varnode::reg(0, 4);
+        let y = Varnode::reg(8, 4);
+        let ssa = run_pass(vec![select(Varnode::constant(0, 1), x, y)]);
+        assert_copy_var(rewritten_insn(&ssa, 0), y);
+    }
+
+    /// All-constant SELECT folds too, even though other ops skip
+    /// all-constant inputs.
+    #[test]
+    fn select_const_cond_with_const_arms_folds_to_const() {
+        let ssa = run_pass(vec![select(
+            Varnode::constant(1, 1),
+            Varnode::constant(7, 4),
+            Varnode::constant(9, 4),
+        )]);
+        assert_copy_const(rewritten_insn(&ssa, 0), 7, 4);
+    }
+
+    #[test]
+    fn select_identical_ssa_arms_collapses() {
+        let cond = Varnode::reg(16, 1);
+        let x = Varnode::reg(0, 4);
+        let ssa = run_pass(vec![select(cond, x, x)]);
+        assert_copy_var(rewritten_insn(&ssa, 0), x);
+    }
+
+    #[test]
+    fn select_identical_const_arms_collapses() {
+        let cond = Varnode::reg(16, 1);
+        let ssa = run_pass(vec![select(
+            cond,
+            Varnode::constant(5, 4),
+            Varnode::constant(5, 4),
+        )]);
+        assert_copy_const(rewritten_insn(&ssa, 0), 5, 4);
+    }
+
+    #[test]
+    fn select_distinct_arms_unknown_cond_is_kept() {
+        let cond = Varnode::reg(16, 1);
+        let mut ssa = make_single_block_ssa(vec![select(
+            cond,
+            Varnode::reg(0, 4),
+            Varnode::constant(5, 4),
+        )]);
+        let changed = AlgebraicSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(!changed);
+        assert_eq!(rewritten_insn(&ssa, 0).op, IrOp::Select);
     }
 }

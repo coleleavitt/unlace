@@ -1276,7 +1276,7 @@ mod phase_tests {
             Box::new(crate::lvar_collect::LvarCollectPass),
             // ---- FinalCleanup ----
             Box::new(crate::register_coalesce::RegisterCoalescePass),
-            Box::new(crate::var_naming::VarNamingPass),
+            Box::new(crate::var_naming::VarNamingPass::default()),
             Box::new(crate::expression_tree::ExpressionTreePass),
             Box::new(crate::calling_conv_finalize::CallingConvFinalizePass),
         ]

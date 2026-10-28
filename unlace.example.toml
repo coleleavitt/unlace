@@ -14,6 +14,9 @@ disabled = []
 # bisect_limit = 100
 # Run the structural SSA verifier after every successful pass.
 verify_each = false
+# Local names: "ida" (a1/v1/result/this/i, Hex-Rays style) or "descriptive"
+# (also len/buf for loops and saved_<reg> for callee-saved copies).
+var_naming = "ida"
 
 [passes.sccp]
 # Lattice work items before a solve is abandoned.

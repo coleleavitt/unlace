@@ -2869,7 +2869,13 @@ fn pipeline_stage_final(
     if let Some(resolve) = resolver {
         RustPanicPass.run_with_resolver(ssa, resolve)?;
     }
-    run_instrumented(&VarNamingPass, ssa, opts)?;
+    run_instrumented(
+        &VarNamingPass {
+            style: opts.var_naming,
+        },
+        ssa,
+        opts,
+    )?;
     run_instrumented(&CallingConvFinalizePass, ssa, opts)?;
 
     Ok(())
@@ -4985,11 +4991,14 @@ fn collect_readonly_scalars_for_ssa(
         let end = section.vaddr.saturating_add(section.data.len() as u64);
         for &addr in candidate_addrs.range(start..end) {
             let section_off = (addr - section.vaddr) as usize;
-            for width in [1usize, 2, 4, 8] {
-                if section_off.saturating_add(width) > section.data.len() {
+            // The trailing (+8, 8) read is the high half of a 128-bit load,
+            // which the printer resolves as two 8-byte scalars.
+            for (delta, width) in [(0usize, 1usize), (0, 2), (0, 4), (0, 8), (8, 8)] {
+                let off = section_off.saturating_add(delta);
+                if off.saturating_add(width) > section.data.len() {
                     continue;
                 }
-                let bytes = &section.data[section_off..section_off + width];
+                let bytes = &section.data[off..off + width];
                 let value = match image.endian {
                     Endian::Little => bytes
                         .iter()
@@ -4999,7 +5008,7 @@ fn collect_readonly_scalars_for_ssa(
                         .iter()
                         .fold(0u64, |acc, byte| (acc << 8) | (*byte as u64)),
                 };
-                out.insert((addr, width as u8), value);
+                out.insert((addr + delta as u64, width as u8), value);
             }
         }
     }

@@ -6715,6 +6715,12 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
             ));
             continue;
         }
+        if is_stack_canary_compare_artifact(&insn, first_stmt, ctx) {
+            trace_hoist_text(format_args!(
+                "skip base={base:?} name={base_name} first_stmt={first_stmt} reason=stack-canary"
+            ));
+            continue;
+        }
         if is_csel_callother(&insn) {
             // CSEL emits an `if (...) { lhs = ...; } else ...` — can't fold.
             trace_hoist_text(format_args!(

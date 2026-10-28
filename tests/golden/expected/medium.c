@@ -70,10 +70,10 @@ struct __anon1 {
 
 /* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: System V AMD64 | Stack frame: 0x58 (88 bytes) | Xrefs to:   __stack_chk_fail, f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 int main(void) {
-    int c0; // temp
     char buf_88[64];
     __int64 v_16;
     char buf_0[64]; // int buf_0[16]
+    _QWORD c0; // rax
     __int64 v769; // rax
     __int64 v770; // rax
     __int64 v771; // rax
@@ -94,14 +94,14 @@ int main(void) {
     __int64 c2 = 0xaLL; // rdx
     _BOOL c11 = !(__builtin_popcount(LOBYTE(0)) & 1); // PF
     __int64 c1 = 0LL; // rcx
-    __int128 c15 = unk_2010; // xmm0
+    __int128 c15 = (((unsigned __int128)0x900000006ULL << 64) | 0x300000000ULL); // xmm0
     char c12 = 1; // ZF
     char c13 = LOBYTE(0); // SF
     char c10 = 0; // CF
     char c14 = 0; // OF
     c11 = c11; c0 = 1LL; *(_OWORD *)buf_0 = c15;
-    c15 = unk_2020; *(_OWORD *)(buf_0 + 16) = c15; c15 = unk_2030;
-    *(_OWORD *)(buf_0 + 32) = c15; c15 = unk_2040; *(_OWORD *)(buf_0 + 48) = c15;
+    c15 = (((unsigned __int128)0x1500000012ULL << 64) | 0xf0000000cULL); *(_OWORD *)(buf_0 + 16) = c15; c15 = (((unsigned __int128)0x210000001eULL << 64) | 0x1b00000018ULL);
+    *(_OWORD *)(buf_0 + 32) = c15; c15 = (((unsigned __int128)0x2d0000002aULL << 64) | 0x2700000024ULL); *(_OWORD *)(buf_0 + 48) = c15;
     do {
         v28 = LODWORD(c0); a2 = LODWORD(c0); v29 = LODWORD(c0);
         c0 = a2 + c1;
@@ -547,7 +547,7 @@ struct __anon1 {
 };
 
 /* Function:   f_rec_fib | Address: 0x1570 | Size: 0x2ae (686 bytes) | Convention: System V AMD64 | Stack frame: 0x38 (56 bytes) | Xrefs to:   f_rec_fib | Xrefs from: unknown */
-int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
+int f_rec_fib(int a1) {
     int v_12;
     int v_16;
     int v_20;
@@ -561,36 +561,35 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
     char buf_40[48];
     _QWORD result; // rax
     __int64 v642; // rax
-    _QWORD saved_rbp; // rbx
+    _QWORD c3; // rbx
     _QWORD c10; // r10
     _QWORD c12; // r12
     _QWORD c13; // r13
     _QWORD c15; // r15
-    _QWORD v589; // temp
     if (a1 <= 1) {
         return a1;
     } else {
         _BOOL c17 = !(__builtin_popcount(LOBYTE(0)) & 1); // PF
         __int64 c14 = 0LL; // r14
         _QWORD c5 = LODWORD(a1 - 2); // rbp
-        *(_QWORD *)(buf_40 + 32) = (uintptr_t)(buf_40 + 40); saved_rbp = (uintptr_t)(buf_40 + 40);
+        *(_QWORD *)(buf_40 + 32) = (uintptr_t)(buf_40 + 40); c3 = (uintptr_t)(buf_40 + 40);
         _BOOL c18 = (uintptr_t)(buf_40 + 40) == 0x38LL; // ZF
         char c19 = LOBYTE((uintptr_t)(buf_40 + 40) < 0x38LL); // SF
         _BOOL c16 = (_QWORD)(uintptr_t)(buf_40 + 40) < (_QWORD)0x38LL; // CF
         _BOOL c20 = __OFSUB__((uintptr_t)(buf_40 + 40), 0x38LL); // OF
         c17 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_96 + 40))) & 1);
         while (1) {
-            c12 = LODWORD(saved_rbp - 2);
-            int v42 = LODWORD(saved_rbp); // temp
-            c18 = LODWORD(saved_rbp) == 1;
-            c19 = LOBYTE(LODWORD(saved_rbp) < 1); c16 = (_DWORD)LODWORD(saved_rbp) < (_DWORD)1;
-            c17 = !(__builtin_popcount(LOBYTE(LODWORD(saved_rbp) - 1)) & 1);
+            c12 = LODWORD(c3 - 2);
+            int v42 = LODWORD(c3); // temp
+            c18 = LODWORD(c3) == 1;
+            c19 = LOBYTE(LODWORD(c3) < 1); c16 = (_DWORD)LODWORD(c3) < (_DWORD)1;
+            c17 = !(__builtin_popcount(LOBYTE(LODWORD(c3) - 1)) & 1);
             if (v42 <= 1) {
             } else {
-                c15 = LODWORD(saved_rbp);
+                c15 = LODWORD(c3);
                 result = LODWORD(c14); c18 = 1;
                 c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                c17 = c17; saved_rbp = 0LL;
+                c17 = c17; c3 = 0LL;
                 while (1) {
                     c5 = LODWORD(c12 - 2);
                     int v60 = LODWORD(c12); // temp
@@ -599,28 +598,28 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
                     c17 = !(__builtin_popcount(LOBYTE(LODWORD(c12) - 1)) & 1);
                     if (v60 <= 1) {
                     label_1:;
-                        saved_rbp = LODWORD(saved_rbp) + LODWORD(c12);
+                        c3 = LODWORD(c3) + LODWORD(c12);
                         int v544 = LODWORD(c12) & LODWORD(c12); // temp
                         if (v544 != 0) {
                             c18 = 1;
                             c19 = LOBYTE(0); c16 = 0; c20 = 0;
                             c17 = c17; c12 = 0LL; continue;
                         } else {
-                            c14 = LODWORD(result + saved_rbp + 1LL);
+                            c14 = LODWORD(result + c3 + 1LL);
                             int v555 = LODWORD(c15 - 1); // temp
-                            saved_rbp = LODWORD(c15 - 1);
-                            c12 = LODWORD(saved_rbp - 2);
-                            c18 = saved_rbp == 1;
-                            c19 = LOBYTE(saved_rbp < 1); c16 = (_DWORD)saved_rbp < (_DWORD)1;
+                            c3 = LODWORD(c15 - 1);
+                            c12 = LODWORD(c3 - 2);
+                            c18 = c3 == 1;
+                            c19 = LOBYTE(c3 < 1); c16 = (_DWORD)c3 < (_DWORD)1;
                             c17 = !(__builtin_popcount(LOBYTE(v555 - 1)) & 1);
-                            _BOOL cond_76 = saved_rbp != 1; // temp
-                            _BOOL cond_77 = 1 <= saved_rbp; // temp
+                            _BOOL cond_76 = c3 != 1; // temp
+                            _BOOL cond_77 = 1 <= c3; // temp
                             if (cond_76 && cond_77) {
-                                c15 = LODWORD(saved_rbp); result = LODWORD(c14); c19 = LOBYTE(0);
+                                c15 = LODWORD(c3); result = LODWORD(c14); c19 = LOBYTE(0);
                                 c17 = c17;
-                                v_12 = LODWORD(saved_rbp);
+                                v_12 = LODWORD(c3);
                                 c13 = LODWORD(c12);
-                                a3 = result;
+                                _QWORD c2 = result; // rdx
                                 int v83 = LODWORD((uintptr_t)(buf_40 + 40)); // temp
                                 c18 = LODWORD((uintptr_t)(buf_40 + 40)) == 1;
                                 c19 = LOBYTE(LODWORD((uintptr_t)(buf_40 + 40)) < 1); c16 = (_DWORD)LODWORD((uintptr_t)(buf_40 + 40)) < (_DWORD)1;
@@ -628,27 +627,27 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
                                 if (v83 <= 1) {
                                     goto label_5;
                                 } else {
-                                    a6 = LODWORD(a3);
-                                    a2 = LODWORD(c12);
-                                    a3 = LODWORD((uintptr_t)(buf_40 + 38));
-                                    a4 = c15;
+                                    _QWORD c9 = LODWORD(c2); // r9
+                                    _QWORD c6 = LODWORD(c12); // rsi
+                                    c2 = LODWORD((uintptr_t)(buf_40 + 38));
+                                    _QWORD c1 = c15; // rcx
                                     c12 = LODWORD((uintptr_t)(buf_40 + 40));
-                                    saved_rbp = LODWORD(a3 - 2);
-                                    int v105 = LODWORD(a3); // temp
-                                    c18 = LODWORD(a3) == 1;
-                                    c19 = LOBYTE(LODWORD(a3) < 1); c16 = (_DWORD)LODWORD(a3) < (_DWORD)1;
-                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(a3) - 1)) & 1);
+                                    c3 = LODWORD(c2 - 2);
+                                    int v105 = LODWORD(c2); // temp
+                                    c18 = LODWORD(c2) == 1;
+                                    c19 = LOBYTE(LODWORD(c2) < 1); c16 = (_DWORD)LODWORD(c2) < (_DWORD)1;
+                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(c2) - 1)) & 1);
                                     if (v105 <= 1) {
                                         goto label_5;
                                     } else {
-                                        _QWORD c11 = a6; // r11
-                                        a6 = a2;
-                                        a2 = LODWORD(a3);
-                                        c15 = LODWORD(saved_rbp - 2);
-                                        int v124 = LODWORD(saved_rbp); // temp
-                                        c18 = LODWORD(saved_rbp) == 1;
-                                        c19 = LOBYTE(LODWORD(saved_rbp) < 1); c16 = (_DWORD)LODWORD(saved_rbp) < (_DWORD)1;
-                                        c17 = !(__builtin_popcount(LOBYTE(LODWORD(saved_rbp) - 1)) & 1);
+                                        _QWORD c11 = c9; // r11
+                                        c9 = c6;
+                                        c6 = LODWORD(c2);
+                                        c15 = LODWORD(c3 - 2);
+                                        int v124 = LODWORD(c3); // temp
+                                        c18 = LODWORD(c3) == 1;
+                                        c19 = LOBYTE(LODWORD(c3) < 1); c16 = (_DWORD)LODWORD(c3) < (_DWORD)1;
+                                        c17 = !(__builtin_popcount(LOBYTE(LODWORD(c3) - 1)) & 1);
                                         if (v124 <= 1) {
                                             continue;
                                         } else {
@@ -659,26 +658,26 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
                                             if (v133 <= 1) {
                                             } else {
                                                 c19 = LOBYTE(0); c17 = c17;
-                                                *(_DWORD *)(buf_40 + 40) = LODWORD(a3);
-                                                result = a6;
-                                                a6 = LODWORD(c15 - 2);
-                                                a5 = LODWORD(a6 - 2);
-                                                int v158 = a6; // temp
-                                                c18 = a6 == 1;
-                                                c19 = LOBYTE(a6 < 1); c16 = (_DWORD)a6 < (_DWORD)1;
-                                                c17 = !(__builtin_popcount(LOBYTE(a6 - 1)) & 1);
+                                                *(_DWORD *)(buf_40 + 40) = LODWORD(c2);
+                                                result = c9;
+                                                c9 = LODWORD(c15 - 2);
+                                                _QWORD c8 = LODWORD(c9 - 2); // r8
+                                                int v158 = c9; // temp
+                                                c18 = c9 == 1;
+                                                c19 = LOBYTE(c9 < 1); c16 = (_DWORD)c9 < (_DWORD)1;
+                                                c17 = !(__builtin_popcount(LOBYTE(c9 - 1)) & 1);
                                                 if (v158 <= 1) {
                                                 } else {
-                                                    a1 = a6;
-                                                    a6 = c15;
-                                                    c15 = LODWORD(saved_rbp);
+                                                    a1 = c9;
+                                                    c9 = c15;
+                                                    c15 = LODWORD(c3);
                                                     int v172 = result; // temp
-                                                    saved_rbp = result;
+                                                    c3 = result;
                                                     result = a1;
-                                                    a1 = LODWORD(a5 - 2);
-                                                    c18 = LODWORD(a5) == 1;
-                                                    c19 = LOBYTE(LODWORD(a5) < 1); c16 = (_DWORD)LODWORD(a5) < (_DWORD)1;
-                                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(a5) - 1)) & 1);
+                                                    a1 = LODWORD(c8 - 2);
+                                                    c18 = LODWORD(c8) == 1;
+                                                    c19 = LOBYTE(LODWORD(c8) < 1); c16 = (_DWORD)LODWORD(c8) < (_DWORD)1;
+                                                    c17 = !(__builtin_popcount(LOBYTE(LODWORD(c8) - 1)) & 1);
                                                     if (c16 || c18) {
                                                         goto label_5;
                                                     } else {
@@ -686,64 +685,64 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
                                                         c11 = result;
                                                         do {
                                                             v_44 = c11;
-                                                            v_40 = a6;
-                                                            v_36 = LODWORD(a5);
+                                                            v_40 = c9;
+                                                            v_36 = LODWORD(c8);
                                                             v_32 = LODWORD(c10);
-                                                            v_28 = a2;
-                                                            v_24 = LODWORD(a3);
-                                                            v_20 = LODWORD(a4);
+                                                            v_28 = c6;
+                                                            v_24 = LODWORD(c2);
+                                                            v_20 = LODWORD(c1);
                                                             v_16 = a1; v642 = f_rec_fib(a1);
                                                             a1 = v_16;
-                                                            a3 = v_24;
-                                                            a2 = v_28;
+                                                            c2 = v_24;
+                                                            c6 = v_28;
                                                             a1 = a1 - 1;
-                                                            a4 = v_20 + v642;
+                                                            c1 = v_20 + v642;
                                                             c10 = v_32;
-                                                            a5 = v_36;
+                                                            c8 = v_36;
                                                             c18 = a1 == -1;
                                                             c19 = LOBYTE(a1 < -1); c16 = (_DWORD)a1 < (_DWORD)0xffffffffffffffffULL;
                                                             c17 = !(__builtin_popcount(LOBYTE(a1 - -1)) & 1);
-                                                            a6 = v_40;
+                                                            c9 = v_40;
                                                             c11 = v_44;
                                                         } while (a1 != -1);
-                                                        a5 = v_36 - 1;
+                                                        c8 = v_36 - 1;
                                                         result = c11;
-                                                        a3 = LODWORD(a4 + a3 + 1LL);
+                                                        c2 = LODWORD(c1 + c2 + 1LL);
                                                         c11 = *(_DWORD *)(buf_40 + 44);
-                                                        a1 = LODWORD(a5 - 2);
-                                                        a4 = 0LL;
-                                                        c18 = a5 == 1;
-                                                        c19 = LOBYTE(a5 < 1); c16 = (_DWORD)a5 < (_DWORD)1;
+                                                        a1 = LODWORD(c8 - 2);
+                                                        c1 = 0LL;
+                                                        c18 = c8 == 1;
+                                                        c19 = LOBYTE(c8 < 1); c16 = (_DWORD)c8 < (_DWORD)1;
                                                         c17 = !(__builtin_popcount(LOBYTE(v_36 - 1 - 1)) & 1);
-                                                        _BOOL cond_24 = (_DWORD)1 <= (_DWORD)a5; // temp
-                                                        _BOOL cond_25 = a5 != 1; // temp
+                                                        _BOOL cond_24 = (_DWORD)1 <= (_DWORD)c8; // temp
+                                                        _BOOL cond_25 = c8 != 1; // temp
                                                         if (!(cond_24 && cond_25)) {
                                                             goto label_10;
                                                         }
                                                     }
                                                 label_10:;
-                                                    a3 = LODWORD(a3) + LODWORD(a5);
-                                                    int v287 = LODWORD(a5) & LODWORD(a5); // temp
+                                                    c2 = LODWORD(c2) + LODWORD(c8);
+                                                    int v287 = LODWORD(c8) & LODWORD(c8); // temp
                                                     if (v287 != 0) {
                                                         c18 = 1;
                                                         c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                                        c17 = c17; a5 = 0LL;
+                                                        c17 = c17; c8 = 0LL;
                                                     } else {
                                                         a1 = result;
                                                         result = v172;
-                                                        saved_rbp = c15;
-                                                        c15 = a6;
-                                                        a6 = LODWORD(a1 - 1);
-                                                        c10 = LODWORD(a3 + c10 + 1LL);
+                                                        c3 = c15;
+                                                        c15 = c9;
+                                                        c9 = LODWORD(a1 - 1);
+                                                        c10 = LODWORD(c2 + c10 + 1LL);
                                                         _DWORD v304 = *(_DWORD *)((uintptr_t)(buf_40 + 48)); // temp
-                                                        a4 = v304;
-                                                        a3 = 0LL;
-                                                        a5 = LODWORD(a6 - 2);
-                                                        c18 = a6 == 1;
-                                                        c19 = LOBYTE(a6 < 1); c16 = (_DWORD)a6 < (_DWORD)1;
-                                                        c17 = !(__builtin_popcount(LOBYTE(a6 - 1)) & 1);
-                                                        _BOOL cond_31 = a6 != 1; // temp
-                                                        _BOOL cond_32 = 1 <= a6; // temp
+                                                        c1 = v304;
+                                                        c2 = 0LL;
+                                                        c8 = LODWORD(c9 - 2);
+                                                        c18 = c9 == 1;
+                                                        c19 = LOBYTE(c9 < 1); c16 = (_DWORD)c9 < (_DWORD)1;
+                                                        c17 = !(__builtin_popcount(LOBYTE(c9 - 1)) & 1);
+                                                        _BOOL cond_31 = c9 != 1; // temp
+                                                        _BOOL cond_32 = 1 <= c9; // temp
                                                         if (!(cond_31 && cond_32)) {
                                                             goto label_9;
                                                         }
@@ -751,18 +750,18 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
                                                     }
                                                 }
                                             label_9:;
-                                                c10 = LODWORD(c10) + a6;
-                                                int v333 = a6 & a6; // temp
+                                                c10 = LODWORD(c10) + c9;
+                                                int v333 = c9 & c9; // temp
                                                 if (v333 != 0) {
                                                     c18 = 1;
                                                     c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                                    c17 = c17; a6 = 0LL;
+                                                    c17 = c17; c9 = 0LL;
                                                 } else {
-                                                                                                        a3 = *(_DWORD *)(buf_40 + 40);
+                                                                                                        c2 = *(_DWORD *)(buf_40 + 40);
                                                     int v342 = c15 - 1; // temp
                                                     c15 = c15 - 1;
-                                                    a6 = result;
-                                                    a3 = LODWORD(a3 + c10 + 1LL);
+                                                    c9 = result;
+                                                    c2 = LODWORD(c2 + c10 + 1LL);
                                                     int v353 = v342; // temp
                                                     c18 = c15 == 1;
                                                     c19 = LOBYTE(c15 < 1); c16 = (_DWORD)c15 < (_DWORD)1;
@@ -776,63 +775,63 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
                                                 continue;
                                             }
                                         label_8:;
-                                            a3 = LODWORD(a3) + c15;
+                                            c2 = LODWORD(c2) + c15;
                                             int v373 = c15 & c15; // temp
                                             if (v373 != 0) {
                                                 c18 = 1;
                                                 c19 = LOBYTE(0); c16 = 0; c20 = 0;
                                                 c17 = c17; c15 = 0LL;
                                             } else {
-                                                saved_rbp = LODWORD(saved_rbp) - 1;
-                                                c5 = LODWORD((uintptr_t)(buf_40 + 40) + a3 + 1LL);
-                                                a3 = 0LL;
-                                                c15 = LODWORD(saved_rbp - 2);
-                                                c18 = saved_rbp == 1;
-                                                c19 = LOBYTE(saved_rbp < 1); c16 = (_DWORD)saved_rbp < (_DWORD)1;
-                                                c17 = !(__builtin_popcount(LOBYTE(LODWORD(saved_rbp) - 1 - 1)) & 1);
-                                                _BOOL cond_47 = saved_rbp != 1; // temp
-                                                _BOOL cond_48 = 1 <= saved_rbp; // temp
+                                                c3 = LODWORD(c3) - 1;
+                                                c5 = LODWORD((uintptr_t)(buf_40 + 40) + c2 + 1LL);
+                                                c2 = 0LL;
+                                                c15 = LODWORD(c3 - 2);
+                                                c18 = c3 == 1;
+                                                c19 = LOBYTE(c3 < 1); c16 = (_DWORD)c3 < (_DWORD)1;
+                                                c17 = !(__builtin_popcount(LOBYTE(LODWORD(c3) - 1 - 1)) & 1);
+                                                _BOOL cond_47 = c3 != 1; // temp
+                                                _BOOL cond_48 = 1 <= c3; // temp
                                                 if (!(cond_47 && cond_48)) {
                                                     goto label_7;
                                                 }
                                             }
                                         }
                                     label_7:;
-                                        c5 = LODWORD((uintptr_t)(buf_40 + 40)) + LODWORD(saved_rbp);
-                                        int v418 = LODWORD(saved_rbp) & LODWORD(saved_rbp); // temp
+                                        c5 = LODWORD((uintptr_t)(buf_40 + 40)) + LODWORD(c3);
+                                        int v418 = LODWORD(c3) & LODWORD(c3); // temp
                                         if (v418 != 0) {
                                             c18 = 1;
                                             c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                            c17 = c17; saved_rbp = 0LL;
+                                            c17 = c17; c3 = 0LL;
                                         } else {
-                                            int v426 = LODWORD(a2 - 1); // temp
-                                            a3 = LODWORD(a2 - 1);
+                                            int v426 = LODWORD(c6 - 1); // temp
+                                            c2 = LODWORD(c6 - 1);
                                             c14 = LODWORD(c14 + (uintptr_t)(buf_40 + 40) + 1LL);
-                                            a2 = a6;
+                                            c6 = c9;
                                             c5 = 0LL;
-                                            a6 = c11;
-                                            saved_rbp = LODWORD(a3 - 2);
-                                            c18 = a3 == 1;
-                                            c19 = LOBYTE(a3 < 1); c16 = (_DWORD)a3 < (_DWORD)1;
+                                            c9 = c11;
+                                            c3 = LODWORD(c2 - 2);
+                                            c18 = c2 == 1;
+                                            c19 = LOBYTE(c2 < 1); c16 = (_DWORD)c2 < (_DWORD)1;
                                             c17 = !(__builtin_popcount(LOBYTE(v426 - 1)) & 1);
-                                            _BOOL cond_54 = a3 != 1; // temp
-                                            _BOOL cond_55 = 1 <= a3; // temp
+                                            _BOOL cond_54 = c2 != 1; // temp
+                                            _BOOL cond_55 = 1 <= c2; // temp
                                             if (!(cond_54 && cond_55)) {
                                                 goto label_6;
                                             }
                                         }
                                     }
                                 label_6:;
-                                    c14 = LODWORD(c14) + LODWORD(a3);
-                                    int v460 = LODWORD(a3) & LODWORD(a3); // temp
+                                    c14 = LODWORD(c14) + LODWORD(c2);
+                                    int v460 = LODWORD(c2) & LODWORD(c2); // temp
                                     if (v460 != 0) {
                                         c18 = 1;
                                         c19 = LOBYTE(0); c16 = 0; c20 = 0;
-                                        c17 = c17; a3 = 0LL;
+                                        c17 = c17; c2 = 0LL;
                                     } else {
-                                        a3 = a6;
-                                        c12 = LODWORD(a2 + c14 + 1LL);
-                                        c15 = LODWORD(a4);
+                                        c2 = c9;
+                                        c12 = LODWORD(c6 + c14 + 1LL);
+                                        c15 = LODWORD(c1);
                                         c5 = c12 - 1;
                                         c14 = 0LL;
                                         c18 = c12 - 1 == 1;
@@ -854,9 +853,9 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
                                     c19 = LOBYTE(0); c16 = 0; c20 = 0;
                                     c17 = c17; c5 = 0LL;
                                 } else {
-                                    saved_rbp = v_12;
-                                    result = LODWORD(a3);
-                                    saved_rbp = LODWORD(saved_rbp + c12 + 1LL);
+                                    c3 = v_12;
+                                    result = LODWORD(c2);
+                                    c3 = LODWORD(c3 + c12 + 1LL);
                                     int v520 = LODWORD(c13 - 1); // temp
                                     c12 = LODWORD(c13 - 1);
                                     c18 = c12 == 1;
@@ -878,15 +877,15 @@ int f_rec_fib(__int64 a1, __int64 a2, int a3, int a4, int a5, __int64 a6) {
                 }
             }
         label_0:;
-            c14 = LODWORD(c14) + LODWORD(saved_rbp);
-            int v579 = LODWORD(saved_rbp) & LODWORD(saved_rbp); // temp
+            c14 = LODWORD(c14) + LODWORD(c3);
+            int v579 = LODWORD(c3) & LODWORD(c3); // temp
             if (v579 != 0) {
-                saved_rbp = 0LL; continue;
+                c3 = 0LL; continue;
             } else {
                 break;
             }
         }
-        result = LODWORD(c14 + 1LL); saved_rbp = v589;
+        result = LODWORD(c14 + 1LL);
         return 0;
     }
 label_5:;
@@ -903,29 +902,22 @@ struct __anon1 {
 };
 
 /* Function:   f_ackermann | Address: 0x1830 | Size: 0x34e (846 bytes) | Convention: System V AMD64 | Stack frame: 0x18 (24 bytes) | Xrefs to:   f_ackermann | Xrefs from: unknown */
-int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 param(s) (dead in body) */ {
-    __int64 a5; // temp
-    __int64 v488; // temp
+int f_ackermann(int a1, int a2) {
     __int64 v659; // temp
     __int64 v670; // temp
-    __int64 v671; // temp
+    __int64 v672; // temp
     int v_4;
     int v_52;
     _QWORD result; // rax
-    __int64 v674; // rax
+    __int64 v675; // rax
+    __int64 v671; // rdx
     _QWORD c3; // rbx
     __int64 c4; // rsp
     _QWORD c5; // rbp
-    _QWORD a5_1; // r8
-    int a5_2; // r8
-    _QWORD a5_3; // r8
-    _QWORD a5_5; // r8
-    __int64 a5_6; // r8
-    _QWORD a5_7; // r8
     _QWORD c9; // r12
     _QWORD c10; // r13
     _QWORD c11; // r14
-    _QWORD saved_rbx; // r15
+    _QWORD c12; // r15
     _DWORD v664; // temp
     result = a2;
     _BOOL c15 = c4 == 0x18LL; // ZF
@@ -938,13 +930,13 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
     __int64 v663 = c4 + 0xcLL; // temp
     while (1) {
         _DWORD v33 = *(_DWORD *)(c4 + 0xcLL); // temp
-        a4 = v33;
-        c5 = LODWORD(a4 - 1);
+        _QWORD c2 = v33; // rdx
+        c5 = LODWORD(c2 - 1);
         int v38 = LODWORD(result); // temp
         c15 = !LODWORD(result);
         c16 = LOBYTE(LODWORD(result) < 0);
         if (v38 != 0) {
-            a4 = c5; v664 = *(_DWORD *)(v663);
+            c2 = c5; v664 = *(_DWORD *)(v663);
             c5 = v664; continue;
         }
         int v45 = c5; // temp
@@ -966,9 +958,9 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         c15 = !LODWORD(result);
         c16 = LOBYTE(LODWORD(result) < 0);
         if (v73 != 0) {
-            a4 = c9; v659 = c5;
+            c2 = c9; v659 = c5;
             c9 = c5; c5 = c9;
-            v670 = v664; a4 = c5; continue;
+            v670 = v664; v671 = c5; continue;
         }
         int v80 = c9; // temp
         if (!v80) {
@@ -986,10 +978,10 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         c15 = !LODWORD(result);
         c16 = LOBYTE(LODWORD(result) < 0);
         if (v106 != 0) {
-            a4 = c10;
+            c2 = c10;
             c10 = c9; c9 = c10;
-            a4 = c9; v659 = v671; v670 = v671;
-            a4 = v671; continue;
+            v671 = c9; v659 = v672; v670 = v672;
+            v671 = v672; continue;
         }
         int v113 = c10; // temp
         if (!v113) {
@@ -1020,14 +1012,14 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         c16 = LOBYTE(LODWORD(result) < 1); c13 = (_DWORD)LODWORD(result) < (_DWORD)1;
         result = LODWORD(result) - 1;
     label_7:;
-        saved_rbx = LODWORD(c11 - 1);
+        c12 = LODWORD(c11 - 1);
         int v172 = LODWORD(result); // temp
         c15 = !LODWORD(result);
         c16 = LOBYTE(LODWORD(result) < 0);
         if (v172 != 0) {
             goto label_37;
         }
-        int v179 = saved_rbx; // temp
+        int v179 = c12; // temp
         if (!v179) {
             goto label_28;
         }
@@ -1038,7 +1030,7 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         c16 = LOBYTE(LODWORD(result) < 1); c13 = (_DWORD)LODWORD(result) < (_DWORD)1;
         result = LODWORD(result) - 1;
     label_9:;
-        c3 = LODWORD(saved_rbx - 1);
+        c3 = LODWORD(c12 - 1);
         int v205 = LODWORD(result); // temp
         c15 = !LODWORD(result);
         c16 = LOBYTE(LODWORD(result) < 0);
@@ -1049,21 +1041,21 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         if (!v212) {
             goto label_27;
         }
-        c15 = saved_rbx == 2;
-        c16 = LOBYTE(saved_rbx < 2); c13 = (_DWORD)saved_rbx < (_DWORD)2;
-        saved_rbx = saved_rbx - 2; result = 1LL;
+        c15 = c12 == 2;
+        c16 = LOBYTE(c12 < 2); c13 = (_DWORD)c12 < (_DWORD)2;
+        c12 = c12 - 2; result = 1LL;
         c15 = LODWORD(result) == 1;
         c16 = LOBYTE(LODWORD(result) < 1); c13 = (_DWORD)LODWORD(result) < (_DWORD)1;
         result = LODWORD(result) - 1;
     label_11:;
-        a5 = LODWORD(c3 - 1);
+        _QWORD c1 = LODWORD(c3 - 1); // rcx
         int v238 = LODWORD(result); // temp
         c15 = !LODWORD(result);
         c16 = LOBYTE(LODWORD(result) < 0);
         if (v238 != 0) {
             goto label_35;
         }
-        int v245 = a5; // temp
+        int v245 = c1; // temp
         if (!v245) {
             goto label_26;
         }
@@ -1074,55 +1066,55 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         c16 = LOBYTE(LODWORD(result) < 1); c13 = (_DWORD)LODWORD(result) < (_DWORD)1;
         result = LODWORD(result) - 1;
     label_13:;
-        a5_1 = LODWORD(a5 - 1);
+        _QWORD c8 = LODWORD(c1 - 1); // r8
         int v271 = LODWORD(result); // temp
         c15 = !LODWORD(result);
         c16 = LOBYTE(LODWORD(result) < 0);
         if (v271 != 0) {
             goto label_34;
         }
-        int v278 = a5_1; // temp
+        int v278 = c8; // temp
         if (!v278) {
             goto label_25;
         }
-        c15 = a5 == 2;
-        c16 = LOBYTE(a5 < 2); c13 = (_DWORD)a5 < (_DWORD)2;
-        a5 = a5 - 2; result = 1LL;
+        c15 = c1 == 2;
+        c16 = LOBYTE(c1 < 2); c13 = (_DWORD)c1 < (_DWORD)2;
+        c1 = c1 - 2; result = 1LL;
         c15 = LODWORD(result) == 1;
         c16 = LOBYTE(LODWORD(result) < 1); c13 = (_DWORD)LODWORD(result) < (_DWORD)1;
         result = LODWORD(result) - 1;
     label_15:;
-        a1 = LODWORD(a5_2 - 1);
+        a1 = LODWORD(c8 - 1);
         int v304 = LODWORD(result); // temp
         c15 = !LODWORD(result);
         c16 = LOBYTE(LODWORD(result) < 0);
         if (v304 != 0) {
             a2 = a1;
-            a1 = a5_2;
-            a5_6 = a1; result = 1LL; break;
+            a1 = c8;
+            c8 = a1; result = 1LL; break;
         }
         int v311 = a1; // temp
         if (!v311) {
             goto label_24;
         }
-        c15 = a5_2 == 2;
-        c16 = LOBYTE(a5_2 < 2); c13 = (_DWORD)a5_2 < (_DWORD)2;
-        a5_3 = a5_2 - 2; result = 1LL;
+        c15 = c8 == 2;
+        c16 = LOBYTE(c8 < 2); c13 = (_DWORD)c8 < (_DWORD)2;
+        c8 = c8 - 2; result = 1LL;
         a2 = LODWORD(result - 1);
-        v_4 = a5; v674 = f_ackermann(a1, a2);
+        v_4 = c1; v675 = f_ackermann(a1, a2);
         _DWORD v333 = *(_DWORD *)(c4 + 8LL); // temp
-        a5_5 = v333;
-        a5 = v_4;
-        int v338 = a5_5; // temp
-        c15 = !a5_5;
-        c16 = LOBYTE(a5_5 < 0); c13 = 0; c17 = 0;
+        c8 = v333;
+        c1 = v_4;
+        int v338 = c8; // temp
+        c15 = !c8;
+        c16 = LOBYTE(c8 < 0); c13 = 0; c17 = 0;
         if (v338 != 0) {
             goto label_15;
         }
-        result = LODWORD(v674) + 1;
-        int v354 = a5; // temp
-        c15 = !a5;
-        c16 = LOBYTE(a5 < 0); c13 = 0; c17 = 0;
+        result = LODWORD(v675) + 1;
+        int v354 = c1; // temp
+        c15 = !c1;
+        c16 = LOBYTE(c1 < 0); c13 = 0; c17 = 0;
         if (v354 != 0) {
             goto label_13;
         }
@@ -1134,9 +1126,9 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
             goto label_11;
         }
         result = LODWORD(result) + 1;
-        int v386 = saved_rbx; // temp
-        c15 = !saved_rbx;
-        c16 = LOBYTE(saved_rbx < 0); c13 = 0; c17 = 0;
+        int v386 = c12; // temp
+        c15 = !c12;
+        c16 = LOBYTE(c12 < 0); c13 = 0; c17 = 0;
         if (v386 != 0) {
             goto label_9;
         }
@@ -1169,11 +1161,11 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
             goto label_1;
         }
         _DWORD v458 = *(_DWORD *)(v457); // temp
-        a4 = v458;
+        c2 = v458;
         result = LODWORD(result) + 1;
-        int v468 = a4; // temp
-        c15 = !a4;
-        c16 = LOBYTE(a4 < 0); c13 = 0; c17 = 0;
+        int v468 = c2; // temp
+        c15 = !c2;
+        c16 = LOBYTE(c2 < 0); c13 = 0; c17 = 0;
         if (v468 != 0) {
             continue;
         } else {
@@ -1181,9 +1173,9 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         }
     label_24:;
         result = LODWORD(1LL) + 1;
-        int v500 = a5; // temp
-        c15 = !a5;
-        c16 = LOBYTE(a5 < 0); c13 = 0; c17 = 0;
+        int v500 = c1; // temp
+        c15 = !c1;
+        c16 = LOBYTE(c1 < 0); c13 = 0; c17 = 0;
         if (v500 != 0) {
             goto label_13;
         }
@@ -1197,9 +1189,9 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         }
     label_26:;
         result = LODWORD(1LL) + 1;
-        int v534 = saved_rbx; // temp
-        c15 = !saved_rbx;
-        c16 = LOBYTE(saved_rbx < 0); c13 = 0; c17 = 0;
+        int v534 = c12; // temp
+        c15 = !c12;
+        c16 = LOBYTE(c12 < 0); c13 = 0; c17 = 0;
         if (v534 != 0) {
             goto label_9;
         }
@@ -1237,37 +1229,36 @@ int f_ackermann(__int64 a1, __int64 a2, __int64 a4, __int64 a5) /* // dropped 1 
         }
     label_31:;
         _DWORD v611 = *(_DWORD *)(v610); // temp
-        a4 = v611;
+        c2 = v611;
         result = LODWORD(1LL) + 1;
-        int v621 = a4; // temp
+        int v621 = c2; // temp
         if (v621 != 0) {
             continue;
         }
         break;
     label_34:;
-        a2 = a5_1;
-        a5_7 = a5;
-        a5 = a5_1;
+        a2 = c8;
+        c8 = c1;
+        c1 = c8;
     label_35:;
-        a2 = a5;
-        a5 = c3;
-        c3 = a5;
+        a2 = c1;
+        c1 = c3;
+        c3 = c1;
     label_36:;
-        a5 = c3;
-        c3 = saved_rbx;
-        saved_rbx = c3;
+        c1 = c3;
+        c3 = c12;
+        c12 = c3;
     label_37:;
-        a4 = saved_rbx;
-        saved_rbx = c11;
-        c11 = saved_rbx;
+        c2 = c12;
+        c12 = c11;
+        c11 = c12;
     label_38:;
-        a4 = c11;
+        c2 = c11;
         c11 = c10;
-        c10 = c11; a4 = c10; c10 = v659;
-        c9 = c10; a4 = c9;
-        a4 = v671;
+        c10 = c11; v671 = c10; c10 = v659;
+        c9 = c10; v671 = c9;
     }
-        saved_rbx = v488; return LODWORD(result) + 1;
+        return LODWORD(result) + 1;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -1278,7 +1269,7 @@ struct __anon0 {
 };
 
 /* Function:   f_rec_power.constprop.0 | Address: 0x1b80 | Size: 0x119 (281 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_rec_power.constprop.0 | Xrefs from: unknown */
-int f_rec_power_constprop_0(void) {
+int f_rec_power_constprop_0(char a1) {
     char buf_24[16];
     char buf_0[16]; // int buf_0[4]
     _QWORD result; // rax
@@ -1286,7 +1277,6 @@ int f_rec_power_constprop_0(void) {
     _QWORD c1; // rcx
     _QWORD c2; // rdx
     _QWORD c4; // rsi
-    _QWORD c5; // rdi
     _QWORD c6; // r8
     __int64 c7; // r9
     char c8; // CF
@@ -1298,13 +1288,13 @@ int f_rec_power_constprop_0(void) {
     char v15; // temp
     char v31; // temp
     int v36; // temp
-    if (!(LOBYTE(c5) & 1)) {
+    if (!(LOBYTE(a1) & 1)) {
         c2 = 1LL;
-        v23 = c5; v15 = 1;
-        c5 = c5 >> 1;
-        result = c5;
-        v31 = LOBYTE(c5) & 1; c10 = !v31;
-        c11 = (LOBYTE(c5) & 1) < '\0'; c8 = 0;
+        v23 = a1; v15 = 1;
+        a1 = a1 >> 1;
+        result = a1;
+        v31 = LOBYTE(a1) & 1; c10 = !v31;
+        c11 = (LOBYTE(a1) & 1) < '\0'; c8 = 0;
         c12 = 0;
         if (v31) {
         }
@@ -1322,7 +1312,7 @@ int f_rec_power_constprop_0(void) {
             if (v44 != 1) {
                 *(_DWORD *)(buf_0 + 12) = LODWORD(c2);
                 *(_DWORD *)(buf_0 + 8) = LODWORD(c4);
-                *(_DWORD *)(buf_0 + 4) = LODWORD(c6); *(_DWORD *)buf_0 = LODWORD(c7); v87 = f_rec_power_constprop_0(c5 >> 1);
+                *(_DWORD *)(buf_0 + 4) = LODWORD(c6); *(_DWORD *)buf_0 = LODWORD(c7); v87 = f_rec_power_constprop_0(a1 >> 1);
                 v16 = *(_DWORD *)(buf_0 + 4); c6 = *(_DWORD *)(buf_0 + 4);
                 c4 = *(_DWORD *)(buf_0 + 8); v23 = v87 * v87; result = v87 * v87;
                 v23 = *(_DWORD *)(buf_0 + 12); c2 = *(_DWORD *)(buf_0 + 12); result = result * *(_DWORD *)buf_0;
@@ -1334,15 +1324,15 @@ int f_rec_power_constprop_0(void) {
             result = result * LODWORD(c2); return 0;
         }
     } else {
-        c2 = 2LL; v16 = c5;
-        c5 = c5 - 1;
+        c2 = 2LL; v16 = a1;
+        a1 = a1 - 1;
         if (v16 == 1) {
             return 2;
         } else {
-            c5 = c5 >> 1;
-            result = c5;
-            v31 = LOBYTE(c5) & 1; c10 = !v31;
-            c11 = (LOBYTE(c5) & 1) < '\0'; c8 = 0;
+            a1 = a1 >> 1;
+            result = a1;
+            v31 = LOBYTE(a1) & 1; c10 = !v31;
+            c11 = (LOBYTE(a1) & 1) < '\0'; c8 = 0;
             c12 = 0;
             if (!v31) {
                 goto label_0;
@@ -1361,7 +1351,7 @@ label_1:;
         return 0;
     } else {
         c1 = c1 >> 1;
-        c5 = c1;
+        a1 = c1;
         char v62 = LOBYTE(c1) & 1; // temp
         c10 = !v62;
         c11 = (LOBYTE(c1) & 1) < '\0'; c8 = 0; c12 = 0;
@@ -1370,6 +1360,7 @@ label_1:;
         } else {
             int v67 = c1; // temp
             c1 = c1 - 1;
+            a1 = c1;
             if (v67 == 1) {
                 result = LODWORD(2LL) * LODWORD(2LL);
             } else {

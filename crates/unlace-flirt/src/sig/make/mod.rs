@@ -94,7 +94,12 @@ impl SigSpec {
     pub const DEFAULT_MIN_FIXED_BYTES: usize = 12;
 
     /// A spec for code of `arch` in files of `file_types` on `os_types`.
-    pub fn new(library_name: impl Into<String>, arch: ArchId, file_types: u32, os_types: u16) -> Option<Self> {
+    pub fn new(
+        library_name: impl Into<String>,
+        arch: ArchId,
+        file_types: u32,
+        os_types: u16,
+    ) -> Option<Self> {
         let (sig_arch, bitness) = match arch {
             ArchId::X86_64 => (SigArch::X86, SigHeader::APPT_64BIT),
             ArchId::X86 => (SigArch::X86, SigHeader::APPT_32BIT),
@@ -147,7 +152,10 @@ pub fn make_sig(
             continue;
         }
         if let Some(name) = function.names.iter().find(|n| !valid_name(&n.name)) {
-            return Err(FlirtError::Sig(format!("unencodable public name {:?}", name.name)));
+            return Err(FlirtError::Sig(format!(
+                "unencodable public name {:?}",
+                name.name
+            )));
         }
         let (key, tail) = Key::of(&function.bytes);
         let fixed_bytes = key.fixed_bytes();
@@ -175,13 +183,14 @@ pub fn make_sig(
             continue;
         }
         report.modules += modules.len();
-        leaves.entry(key.pattern).or_default().extend(modules.into_iter().map(|module| {
-            LeafModule {
+        leaves
+            .entry(key.pattern)
+            .or_default()
+            .extend(modules.into_iter().map(|module| LeafModule {
                 crc_len: key.crc_len,
                 crc16: key.crc16,
                 module,
-            }
-        }));
+            }));
     }
 
     if leaves.is_empty() {

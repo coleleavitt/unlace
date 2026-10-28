@@ -17,12 +17,14 @@ use crate::FlirtError;
 use crate::sig::SigHeader;
 
 type Pattern = Vec<Option<u8>>;
+/// A leaf's full pattern and its modules.
+type Entry<'a> = (&'a [Option<u8>], &'a [LeafModule]);
 
 pub(super) fn encode(
     header: &SigHeader,
     leaves: &BTreeMap<Pattern, Vec<LeafModule>>,
 ) -> Result<Vec<u8>, FlirtError> {
-    let entries: Vec<(&[Option<u8>], &[LeafModule])> = leaves
+    let entries: Vec<Entry<'_>> = leaves
         .iter()
         .map(|(pattern, modules)| (pattern.as_slice(), modules.as_slice()))
         .collect();
@@ -66,8 +68,8 @@ enum Node<'a> {
 }
 
 /// The children of the node at `depth` that all of `entries` share.
-fn children<'a>(entries: &[(&'a [Option<u8>], &'a [LeafModule])], depth: usize) -> Vec<Child<'a>> {
-    let mut groups: BTreeMap<(bool, u8), Vec<(&[Option<u8>], &[LeafModule])>> = BTreeMap::new();
+fn children<'a>(entries: &[Entry<'a>], depth: usize) -> Vec<Child<'a>> {
+    let mut groups: BTreeMap<(bool, u8), Vec<Entry<'a>>> = BTreeMap::new();
     for &entry in entries {
         let first = entry.0[depth];
         groups

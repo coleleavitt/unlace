@@ -159,9 +159,13 @@ fn main() {
             min_function_len,
             verbose: _,
         } => match format {
-            args::SigFormat::Sig => {
-                run_siggen_sig(&inputs, output.as_deref(), name, min_fixed_bytes, &exclude_prefixes)
-            }
+            args::SigFormat::Sig => run_siggen_sig(
+                &inputs,
+                output.as_deref(),
+                name,
+                min_fixed_bytes,
+                &exclude_prefixes,
+            ),
             args::SigFormat::Toml => run_siggen(
                 &inputs,
                 output.as_deref(),
@@ -440,14 +444,12 @@ fn run_siggen(
     let mut patterns = Vec::new();
     for archive_path in inputs {
         patterns.extend(
-            unlace_loader::generate_archive_patterns(archive_path, options).with_context(
-                || {
-                    format!(
-                        "failed to generate signatures from '{}'",
-                        archive_path.display()
-                    )
-                },
-            )?,
+            unlace_loader::generate_archive_patterns(archive_path, options).with_context(|| {
+                format!(
+                    "failed to generate signatures from '{}'",
+                    archive_path.display()
+                )
+            })?,
         );
     }
     let toml = unlace_loader::render_patterns_toml(&patterns);
@@ -501,8 +503,7 @@ fn run_siggen_sig(
         .context("inputs contain no x86, x86-64, ARM or AArch64 objects")?;
     spec.min_fixed_bytes = min_fixed_bytes;
     let (bytes, report) = make_sig(&spec, &objects.functions)?;
-    fs::write(output_path, &bytes)
-        .with_context(|| format!("writing {}", output_path.display()))?;
+    fs::write(output_path, &bytes).with_context(|| format!("writing {}", output_path.display()))?;
     eprintln!(
         "{}: {} modules from {} functions ({} too short, {} duplicates, \
          {} collisions resolved, {} dropped)",

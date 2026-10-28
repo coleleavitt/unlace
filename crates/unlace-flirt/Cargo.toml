@@ -21,6 +21,7 @@ flate2 = { workspace = true }
 iced-x86 = { workspace = true }
 
 [dev-dependencies]
+object = { workspace = true, features = ["write"] }
 
 [features]
 # Modules no production code path reaches yet (`cargo xtask status`).

@@ -49,8 +49,9 @@ $ unlace decompile ./target.exe --sig-dir ./sig/pc
 ```
 
 Matched functions are named in every call site, and their bodies are
-replaced by a `// [flirt]` stub. `unlace siggen ./libfoo.a` generates
-patterns in unlace's own format from a static library.
+replaced by a `// [flirt]` stub. `unlace siggen ./libfoo.a -o libfoo.sig`
+builds a `.sig` file from a static library; ready-made files for x86-64
+Linux runtimes are in `crates/unlace-flirt/sig/linux-x86_64/`.
 
 ## Heuristic Function Discovery
 

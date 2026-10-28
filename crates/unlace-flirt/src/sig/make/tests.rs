@@ -22,12 +22,20 @@ fn function(name: &str, bytes: &[u8]) -> LibraryFunction {
 fn spec() -> SigSpec {
     SigSpec {
         min_fixed_bytes: 4,
-        ..SigSpec::new("test", ArchId::X86_64, SigSpec::FILE_ELF, SigSpec::OSTYPE_UNIX).unwrap()
+        ..SigSpec::new(
+            "test",
+            ArchId::X86_64,
+            SigSpec::FILE_ELF,
+            SigSpec::OSTYPE_UNIX,
+        )
+        .unwrap()
     }
 }
 
 fn body(seed: u8, len: usize) -> Vec<u8> {
-    (0..len).map(|i| seed.wrapping_add((i as u8).wrapping_mul(7))).collect()
+    (0..len)
+        .map(|i| seed.wrapping_add((i as u8).wrapping_mul(7)))
+        .collect()
 }
 
 /// Lay `functions` out back to back and return the start of each.
@@ -80,9 +88,18 @@ fn round_trips_and_matches_shared_prefixes_and_variant_bytes() {
     other_memset[5..9].copy_from_slice(&[1, 2, 3, 4]);
     let (code, starts) = image(&[&strlen, &strcpy, &other_memset]);
     let names = BTreeMap::new();
-    assert_eq!(name_at(&sig, &code, &names, starts[0]).as_deref(), Some("strlen"));
-    assert_eq!(name_at(&sig, &code, &names, starts[1]).as_deref(), Some("strcpy"));
-    assert_eq!(name_at(&sig, &code, &names, starts[2]).as_deref(), Some("memset"));
+    assert_eq!(
+        name_at(&sig, &code, &names, starts[0]).as_deref(),
+        Some("strlen")
+    );
+    assert_eq!(
+        name_at(&sig, &code, &names, starts[1]).as_deref(),
+        Some("strcpy")
+    );
+    assert_eq!(
+        name_at(&sig, &code, &names, starts[2]).as_deref(),
+        Some("memset")
+    );
 
     // A changed byte in the CRC range no longer matches.
     let mut changed = strlen.clone();
@@ -103,8 +120,14 @@ fn tail_byte_tells_identical_prefixes_apart() {
     let sig = SigFile::parse(&bytes).unwrap();
     let (code, starts) = image(&[&a, &b]);
     let names = BTreeMap::new();
-    assert_eq!(name_at(&sig, &code, &names, starts[0]).as_deref(), Some("a"));
-    assert_eq!(name_at(&sig, &code, &names, starts[1]).as_deref(), Some("b"));
+    assert_eq!(
+        name_at(&sig, &code, &names, starts[0]).as_deref(),
+        Some("a")
+    );
+    assert_eq!(
+        name_at(&sig, &code, &names, starts[1]).as_deref(),
+        Some("b")
+    );
 }
 
 #[test]
@@ -113,7 +136,9 @@ fn referenced_name_tells_wrappers_apart() {
     // callee names are longer than a length byte holds.
     let long_a = format!("_ZN{}a", "x".repeat(300));
     let long_b = format!("_ZN{}b", "x".repeat(300));
-    let mut code = vec![0x55, 0x48, 0x89, 0xE5, 0x53, 0x41, 0x54, 0xE8, 0, 0, 0, 0, 0x5D, 0xC3];
+    let mut code = vec![
+        0x55, 0x48, 0x89, 0xE5, 0x53, 0x41, 0x54, 0xE8, 0, 0, 0, 0, 0x5D, 0xC3,
+    ];
     code.extend(body(0x50, 30));
     let wrapper = |name: &str, callee: &str| {
         let mut f = function(name, &code);
@@ -139,7 +164,10 @@ fn referenced_name_tells_wrappers_apart() {
     image_code[8..12].copy_from_slice(&rel.to_le_bytes());
     image_code.resize(0x200, 0xCC);
     let names = BTreeMap::from([(target, long_b.clone())]);
-    assert_eq!(name_at(&sig, &image_code, &names, BASE).as_deref(), Some("call_b"));
+    assert_eq!(
+        name_at(&sig, &image_code, &names, BASE).as_deref(),
+        Some("call_b")
+    );
     let unknown = BTreeMap::new();
     assert_eq!(name_at(&sig, &image_code, &unknown, BASE), None);
 }
@@ -149,10 +177,17 @@ fn identical_code_with_different_names_is_dropped() {
     let code = body(0x60, 50);
     let mut keep = body(0x70, 50);
     keep[0] = 0x90;
-    let functions = vec![function("one", &code), function("two", &code), function("keep", &keep)];
+    let functions = vec![
+        function("one", &code),
+        function("two", &code),
+        function("keep", &keep),
+    ];
     let (bytes, report) = make_sig(&spec(), &functions).unwrap();
     assert_eq!(report.modules, 1);
-    assert_eq!(report.dropped_collisions, vec![vec!["one".to_string(), "two".to_string()]]);
+    assert_eq!(
+        report.dropped_collisions,
+        vec![vec!["one".to_string(), "two".to_string()]]
+    );
     assert_eq!(SigFile::parse(&bytes).unwrap().modules().len(), 1);
 }
 
@@ -168,4 +203,121 @@ fn same_name_twice_is_one_module_and_short_functions_are_skipped() {
     assert_eq!(report.modules, 1);
     assert_eq!(report.duplicates, 1);
     assert_eq!(report.too_short, 1);
+}
+
+/// A relocatable x86-64 ELF object: `puts` (also `_IO_puts`, local
+/// `__GI_puts`) loads `stdout` through the GOT and calls `strlen`; `helper`
+/// tail-calls `puts` with a rel32 field that carries no relocation.
+fn x86_64_object() -> Vec<u8> {
+    use object::write::{Object, Relocation, StandardSection, Symbol, SymbolSection};
+    use object::{
+        Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolKind,
+        SymbolScope,
+    };
+
+    let mut obj = Object::new(BinaryFormat::Elf, Architecture::X86_64, Endianness::Little);
+    let text = obj.section_id(StandardSection::Text);
+    let mut puts = vec![0x53, 0x48, 0x89, 0xFB]; // push rbx; mov rbx, rdi
+    puts.extend([0x48, 0x8B, 0x05, 0, 0, 0, 0]); // mov rax, stdout@GOTPCREL(rip)
+    puts.extend([0xE8, 0, 0, 0, 0]); // call strlen@PLT
+    puts.extend([0x48, 0x01, 0xD8, 0x5B, 0xC3]); // add rax, rbx; pop rbx; ret
+    puts.extend(body(0x90, 40));
+    let helper_at = puts.len() as u64;
+    let mut helper = vec![0x48, 0x83, 0xEC, 0x08, 0x48, 0x83, 0xC4, 0x08];
+    let rel = -(helper_at as i64 + helper.len() as i64 + 5) as i32;
+    helper.push(0xE9); // jmp puts
+    helper.extend(rel.to_le_bytes());
+    helper.extend(body(0xA0, 30));
+    let mut code = puts.clone();
+    code.extend(&helper);
+    obj.append_section_data(text, &code, 16);
+
+    let mut define = |name: &str, value: u64, size: u64, scope: SymbolScope| {
+        obj.add_symbol(Symbol {
+            name: name.as_bytes().to_vec(),
+            value,
+            size,
+            kind: SymbolKind::Text,
+            scope,
+            weak: false,
+            section: SymbolSection::Section(text),
+            flags: SymbolFlags::None,
+        })
+    };
+    define("_IO_puts", 0, puts.len() as u64, SymbolScope::Linkage);
+    define("puts", 0, puts.len() as u64, SymbolScope::Linkage);
+    define("__GI_puts", 0, puts.len() as u64, SymbolScope::Compilation);
+    define(
+        "helper",
+        helper_at,
+        helper.len() as u64,
+        SymbolScope::Linkage,
+    );
+    let mut import = |name: &str, kind: SymbolKind| {
+        obj.add_symbol(Symbol {
+            name: name.as_bytes().to_vec(),
+            value: 0,
+            size: 0,
+            kind,
+            scope: SymbolScope::Unknown,
+            weak: false,
+            section: SymbolSection::Undefined,
+            flags: SymbolFlags::None,
+        })
+    };
+    let stdout = import("stdout", SymbolKind::Data);
+    let strlen = import("strlen", SymbolKind::Text);
+    let reloc = |offset, symbol, r_type| Relocation {
+        offset,
+        symbol,
+        addend: -4,
+        flags: RelocationFlags::Elf { r_type },
+    };
+    obj.add_relocation(text, reloc(7, stdout, object::elf::R_X86_64_REX_GOTPCRELX))
+        .unwrap();
+    obj.add_relocation(text, reloc(12, strlen, object::elf::R_X86_64_PLT32))
+        .unwrap();
+    obj.write().unwrap()
+}
+
+#[test]
+fn reads_functions_variant_bytes_and_references_from_an_object() {
+    let mut objects = LibraryObjects::default();
+    objects.add_file(&x86_64_object()).unwrap();
+    assert_eq!(objects.arch, Some(ArchId::X86_64));
+    let [puts, helper] = objects.functions.as_slice() else {
+        panic!("expected two functions, got {:?}", objects.functions.len());
+    };
+
+    let names: Vec<&str> = puts.names.iter().map(|n| n.name.as_str()).collect();
+    assert_eq!(names, ["puts", "_IO_puts", "__GI_puts"]);
+    assert!(puts.names[2].local);
+    // REX_GOTPCRELX may be relaxed to `mov $stdout, %reg`: REX, opcode and
+    // ModRM are variant along with the field.
+    assert!(puts.bytes[4..11].iter().all(Option::is_none));
+    assert_eq!(puts.bytes[11], Some(0xE8));
+    assert!(puts.bytes[12..16].iter().all(Option::is_none));
+    let refs: Vec<(i32, &str)> = puts
+        .references
+        .iter()
+        .map(|r| (r.offset, r.name.as_str()))
+        .collect();
+    assert_eq!(refs, [(12, "strlen")], "data references are not recorded");
+
+    // The jump to `puts` has no relocation but still leaves the function.
+    assert_eq!(helper.bytes[8], Some(0xE9));
+    assert!(helper.bytes[9..13].iter().all(Option::is_none));
+    assert_eq!(helper.references[0].name, "puts");
+
+    let spec = objects.sig_spec("test").unwrap();
+    assert_eq!(spec.file_types, SigSpec::FILE_ELF);
+    let (bytes, report) = make_sig(&spec, &objects.functions).unwrap();
+    assert_eq!(report.modules, 2);
+    let sig = SigFile::parse(&bytes).unwrap();
+    let puts = sig
+        .modules()
+        .iter()
+        .find(|m| m.function_name().is_some_and(|n| n.name == "puts"))
+        .unwrap();
+    assert_eq!(puts.names.len(), 3);
 }

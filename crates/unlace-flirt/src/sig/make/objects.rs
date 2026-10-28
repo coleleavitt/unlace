@@ -13,8 +13,8 @@ use std::ops::Range;
 use iced_x86::{Decoder, DecoderOptions, OpKind};
 use object::read::archive::ArchiveFile;
 use object::{
-    Architecture, BinaryFormat, Object, ObjectSection, ObjectSymbol, RelocationFlags, RelocationKind,
-    RelocationTarget, SectionKind, SymbolKind,
+    Architecture, BinaryFormat, Object, ObjectSection, ObjectSymbol, RelocationFlags,
+    RelocationKind, RelocationTarget, SectionKind, SymbolKind,
 };
 use unlace_ir::ArchId;
 
@@ -79,8 +79,7 @@ impl LibraryObjects {
         // Function starts per section, with every name defined there.
         let mut starts: BTreeMap<(usize, u64), Start> = BTreeMap::new();
         for symbol in file.symbols() {
-            if symbol.kind() != SymbolKind::Text || !symbol.is_definition() || symbol.size() == 0
-            {
+            if symbol.kind() != SymbolKind::Text || !symbol.is_definition() || symbol.size() == 0 {
                 continue;
             }
             let (Ok(name), Some(section)) = (symbol.name(), symbol.section_index()) else {
@@ -105,7 +104,9 @@ impl LibraryObjects {
         // The name a branch to each function start resolves to.
         let mut function_at: BTreeMap<(usize, u64), String> = BTreeMap::new();
         for (&key, start) in &mut starts {
-            start.names.sort_by(|a, b| a.preference().cmp(&b.preference()));
+            start
+                .names
+                .sort_by(|a, b| a.preference().cmp(&b.preference()));
             function_at.insert(key, start.names[0].name.clone());
         }
 
@@ -347,7 +348,9 @@ fn variant_span(arch: ArchId, relocation: &object::Relocation) -> Range<i64> {
             }
         }
         // Instruction-field relocations: the whole instruction.
-        (ArchId::AArch64 | ArchId::Arm, _) if size != 8 && relocation.kind() != RelocationKind::Absolute => {
+        (ArchId::AArch64 | ArchId::Arm, _)
+            if size != 8 && relocation.kind() != RelocationKind::Absolute =>
+        {
             0..4
         }
         _ => 0..if size == 0 { 4 } else { size },

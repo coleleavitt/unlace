@@ -31,6 +31,86 @@ found without a symbol (PE `.pdata`, Mach-O `LC_FUNCTION_STARTS`). Matched
 names also bring their libc prototypes (argument counts and types) and
 noreturn status.
 
+## Making signatures
+
+`unlace siggen` builds a `.sig` file from static libraries (`.a`, `.rlib`,
+`.lib`) and relocatable objects; this is what IDA's `pelf` + `sigmake` do.
+The code lives in `crates/unlace-flirt/src/sig/make/`.
+
+```bash
+unlace siggen /usr/lib64/libc.a -o glibc.sig --name 'glibc 2.43 x86-64'
+unlace siggen ld/go.o -o go.sig --exclude-prefix main. --exclude-prefix cmd/
+unlace siggen libfoo.a --format toml        # unlace's own pattern format
+```
+
+Ready-made files for x86-64 Linux runtimes (glibc, libgcc, libstdc++,
+compiler-rt, libc++, Go, Rust std per rustc release) and how they were
+made are in `crates/unlace-flirt/sig/linux-x86_64/`.
+
+- Functions: every defined text symbol with a size. Aliases at the same
+  address become extra public names; the preferred one (fewest leading
+  underscores, global, strong, shortest) is first and is the name a match
+  applies.
+- Variant bytes: every byte a relocation patches. On x86-64 also the
+  instruction bytes the linker may rewrite: GOT relaxation (`call
+  *x@GOTPCREL` → `addr32 call x`, `mov x@GOTPCREL` → `lea`/`mov $x`) and TLS
+  model relaxation (GD/LD/IE/TLSDESC sequences). On x86, `call`/`jmp`/`jcc`
+  rel32 fields that leave the function are variant even without a
+  relocation, because Go's `go.o` (one linked text) carries none for them.
+- Referenced names: each call or branch to a named function is recorded
+  (aliases rewritten to the callee's preferred name). They are used only
+  to tell modules apart, and to keep short functions (below
+  `--min-fixed-bytes`, default 12 fixed bytes in pattern + CRC range):
+  such a function is kept only with a referenced name, so it matches only
+  where its callee is already named (`strftime` → `strftime_l`).
+- Functions with fewer than 32 fixed bytes also check up to 8 fixed bytes
+  spread over the rest of the body (tail bytes), so a heavily wildcarded
+  pattern does not name unrelated code that starts alike.
+- Collisions (same pattern, CRC range and CRC, different names) are
+  resolved as a decision list: a tail byte, then a referenced name, where
+  each function's value is unique among those still left; the module order
+  in the leaf makes the earlier checks exclude the later functions. Once a
+  reference split is used, the last function checks a reference too, since
+  an unknown callee does not exclude anything. Functions that stay
+  identical (`labs`/`llabs`, `getpwent`/`getgrent`, ...) are dropped, as
+  `sigmake` does without an exclusion file. `--log unlace::flirt=debug`
+  lists them.
+
+### Measured (2026-10-28)
+
+Stripped static x86-64 test programs, built on this machine, matched with
+the files above; names checked against the unstripped build. "Before" is
+the bundled pattern DB alone.
+
+| binary | functions | named before (correct) | named by `.sig` | wrong |
+|---|---:|---:|---:|---:|
+| C, `gcc -O2 -static` | 1352 | 199 (2) | 1171 | 0 |
+| C, `clang -O2 -static -rtlib=compiler-rt` | 1356 | 197 (2) | 1177 | 0 |
+| C++, `g++ -O2 -static` | 4837 | 768 (1) | 2402 | 2* |
+| C++, `zig c++` (libc++) | 1567 | 10 (0) | 748 | 0 |
+| Rust 1.98.1 `--release` | 834 | 3 (0) | 494 | 0 |
+| Rust 1.96.1 `--release` | 814 | 3 (0) | 483 | 1* |
+
+\* Same body under another symbol: libstdc++'s static copy of libgcc's
+`read_encoded_value_with_base`, and a v0- vs legacy-mangled `<&T as
+Debug>::fmt`.
+
+Most C/C++ misses are `.cold` fragments, functions the discovery pass
+merges away, and functions in dropped collisions. Rust signatures are
+specific to one rustc release: the 1.97.1 file names 391 functions of the
+1.96.1 binary with mostly different monomorphizations, and on a large
+third-party program (`ast-grep`, rustc 1.94, other crates' copies of
+generic std code) about 75% of the 613 names were the same function, 2%
+wrong, and the rest at starts that have no symbol. The Go file named 2291
+of 2899 functions of a held-out Go 1.26 program (`sigload --apply
+--force`, unstripped build), none wrongly. `/sbin/ldconfig` (stripped,
+static glibc 2.43): 211 → 1332 named functions.
+
+The bundled pattern DB (`unlace-loader/src/flirt/signatures.rs`) names
+about 200 functions of each stripped static C binary, almost all wrongly
+(`pthread_create` on `main`, `__cxa_pure_virtual` on small leaf
+functions). An explicit `.sig` match takes precedence over it.
+
 ## File format
 
 ### Header
@@ -173,6 +253,8 @@ because a wrapper only matches once the function it calls is named.
   decoded but not applied.
 - Choosing signature files automatically from the startup signature and
   `autoload.cfg`. Pass the `.sig` files explicitly.
+- `siggen`: an exclusion file to pick a winner among identical functions,
+  and ARM/AArch64 relocation details beyond "the instruction is variant".
 
 ## Validation
 

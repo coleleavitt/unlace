@@ -1083,11 +1083,21 @@ pub struct JumpTableInfo {
     pub entry_size: u8,
     /// Number of entries. `0` means "candidate detected, not yet resolved".
     pub num_entries: u32,
+    /// Entry count proven by the dispatch site: the bounds check guarding
+    /// the dispatch block, or a mask on the index. `None` when neither was
+    /// recognised and the table length must be probed.
+    pub bound: Option<u32>,
     /// `true` for little-endian table entries, `false` for big-endian.
     pub endian_little: bool,
     /// Concrete target addresses, one per entry. Empty until the pipeline's
     /// section-aware resolution step decodes the table bytes.
     pub targets: Vec<u64>,
+    /// Block of each entry of `targets`, recorded when the dispatch edges
+    /// are wired. Passes may later remove the leading instructions of a
+    /// target block, after which it can no longer be found by address.
+    /// Empty until wired.
+    #[serde(default)]
+    pub target_blocks: Vec<BlockId>,
 }
 
 impl CppLambdaCapture {

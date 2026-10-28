@@ -732,9 +732,17 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         .chain(float_regs.iter())
         .any(|r| read_before_write.contains(r));
 
-    let all_param_scan = if !has_arg_reg_in_entry {
-        let _span = linkscope::phase("pass.param-infer.fallback-scan");
-        let scan = collect_param_input_scan(func, tracked_regs);
+    let scan = {
+        let _span = linkscope::phase("pass.param-infer.liveness-scan");
+        collect_param_input_scan(func, tracked_regs)
+    };
+    // Registers whose entry value is read past the entry block, e.g. an
+    // argument only one jump-table case uses.
+    let later_reads: BTreeSet<u64> = entry_value_reads(func, tracked_regs)
+        .difference(&read_before_write)
+        .copied()
+        .collect();
+    if !has_arg_reg_in_entry {
         read_before_write = scan.live_on_entry_reads.clone();
         calling_trace_line(
             func,
@@ -743,24 +751,32 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
                  note=backward liveness from entry; excludes outgoing-call-arg setups dominated by defs"
             ),
         );
-        Some(scan)
-    } else {
-        None
-    };
+    } else if !later_reads.is_empty() {
+        read_before_write.extend(later_reads.iter().copied());
+        calling_trace_line(
+            func,
+            format!("param-extend reason=live-on-entry-past-entry-block regs={later_reads:?}"),
+        );
+    }
 
     // Build a map of which registers feed into which ops for type inference
-    // of each parameter. When we fell back to the whole-function scan, collect
-    // consumer ops across all blocks too.
+    // of each parameter: entry-block consumers for registers the entry block
+    // reads, whole-function consumers for the rest.
     let (reg_consumer_ops, reg_input_sizes) = if has_arg_reg_in_entry {
         let _span = linkscope::phase("pass.param-infer.entry-consumers");
-        (
-            collect_reg_consumer_ops_block(func, entry, tracked_regs),
-            collect_reg_input_size_set_block(func, entry, tracked_regs),
-        )
-    } else if let Some(scan) = all_param_scan {
-        (scan.reg_consumer_ops, scan.reg_input_sizes)
+        let mut ops = collect_reg_consumer_ops_block(func, entry, tracked_regs);
+        let mut sizes = collect_reg_input_size_set_block(func, entry, tracked_regs);
+        for reg in &later_reads {
+            if let Some(reg_ops) = scan.reg_consumer_ops.get(reg) {
+                ops.insert(*reg, reg_ops.clone());
+            }
+            if let Some(reg_sizes) = scan.reg_input_sizes.get(reg) {
+                sizes.insert(*reg, reg_sizes.clone());
+            }
+        }
+        (ops, sizes)
     } else {
-        (BTreeMap::new(), BTreeMap::new())
+        (scan.reg_consumer_ops, scan.reg_input_sizes)
     };
 
     let mut params = Vec::new();
@@ -835,6 +851,32 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
     );
 
     params
+}
+
+/// Tracked registers whose entry value (SSA version 0) a non-call
+/// instruction past the entry block reads directly; the raw
+/// read-before-write scan covers the entry block. Reads through phis do not
+/// count: SSA places phis for every register written on some path, so a
+/// phi can carry the entry value along paths the program never reads it on.
+/// Calls are left out because their inputs list every argument register.
+fn entry_value_reads(func: &SsaFunction, tracked_regs: &[u64]) -> BTreeSet<u64> {
+    func.var_map
+        .iter()
+        .filter(|((bid, idx, slot), sv)| {
+            *bid != func.function.entry
+                && matches!(slot, VarnodeSlot::Input(_))
+                && sv.version == 0
+                && sv.base.space == SpaceId::Register
+                && tracked_reg_contains(tracked_regs, sv.base.offset)
+                && func
+                    .function
+                    .blocks
+                    .get(bid)
+                    .and_then(|block| block.insns.get(*idx))
+                    .is_some_and(|insn| !matches!(insn.op, IrOp::Call | IrOp::Callind))
+        })
+        .map(|(_, sv)| sv.base.offset)
+        .collect()
 }
 
 fn collect_reg_consumer_ops_block(
@@ -1136,6 +1178,13 @@ fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
                     }
                 }
             }
+            if !found_rax
+                && !found_xmm0
+                && let Some(ty) = phi_return_type(func, bid, insn_idx)
+            {
+                calling_trace_line(func, format!("return-infer phi-at-return ty={ty:?}"));
+                return ty;
+            }
             if found_xmm0 {
                 has_xmm0_at_return = true;
             }
@@ -1170,6 +1219,66 @@ fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
     // RETURN exists but no RAX/XMM0 write found — likely void.
     calling_trace_line(func, "return-infer no-return-register-write ty=Unknown");
     PrimitiveType::Unknown
+}
+
+/// Return type when RAX reaches the `RETURN` at `ret_idx` of `bid` through a
+/// phi: every path into a shared return block sets RAX, as in a switch
+/// lowered to a value table (`xor eax, eax; ja ret; mov eax, [tbl+i*4]; ret`)
+/// or a loop that returns its accumulator. `None` unless every value
+/// reaching the phi, through further phis, is written by an instruction of
+/// this function other than a call.
+fn phi_return_type(func: &SsaFunction, bid: BlockId, ret_idx: usize) -> Option<PrimitiveType> {
+    let ret_sv = func.var_map.get(&(bid, ret_idx, VarnodeSlot::Input(0)))?;
+    if ret_sv.base.space != SpaceId::Register || ret_sv.base.offset != RAX {
+        return None;
+    }
+    let phis: BTreeMap<SsaVarnode, &unlace_ir::ssa::PhiNode> = func
+        .phi_map
+        .values()
+        .flatten()
+        .map(|phi| (phi.output, phi))
+        .collect();
+    phis.get(ret_sv)?;
+    let defs = crate::pass::DefIndex::build(func);
+    let mut ty = PrimitiveType::Unknown;
+    let mut seen = BTreeSet::new();
+    let mut work = vec![*ret_sv];
+    while let Some(value) = work.pop() {
+        if !seen.insert(value) {
+            continue;
+        }
+        if let Some(phi) = phis.get(&value) {
+            work.extend(phi.inputs.iter().map(|(_, input)| *input));
+            continue;
+        }
+        let (def_bid, def_idx) = defs.lookup(value)?;
+        let insn = func.function.blocks.get(&def_bid)?.insns.get(def_idx)?;
+        if matches!(insn.op, IrOp::Call | IrOp::Callind) {
+            return None;
+        }
+        // A partial write such as `setcc al` classifies narrow; the widest
+        // integer any path produces is the return width.
+        let def_ty = match insn.inputs.first() {
+            Some(value) if insn.op == IrOp::Copy && value.space == SpaceId::Const => {
+                match value.offset {
+                    0 | 1 => PrimitiveType::Unknown,
+                    v if v <= u64::from(u32::MAX) => PrimitiveType::Int(4),
+                    _ => PrimitiveType::Int(8),
+                }
+            }
+            _ => classify_return_value(insn, &func.var_types, def_bid, func),
+        };
+        ty = match (ty, def_ty) {
+            (PrimitiveType::Int(a), PrimitiveType::Int(b)) => PrimitiveType::Int(a.max(b)),
+            (PrimitiveType::Unknown, def_ty) => def_ty,
+            (ty, _) => ty,
+        };
+    }
+    Some(match ty {
+        PrimitiveType::Unknown if ret_sv.base.size == 4 => PrimitiveType::Int(4),
+        PrimitiveType::Unknown => PrimitiveType::Int(8),
+        ty => ty,
+    })
 }
 
 fn constant_return_type(insn: &unlace_ir::IrInsn) -> Option<PrimitiveType> {
@@ -1244,6 +1353,80 @@ mod tests {
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
+
+    /// `if (c) return 0; return a2 + 1;` lowered to a shared `ret`: RAX
+    /// reaches the return through a phi, and RSI is first read past the
+    /// entry block.
+    fn diamond_into_shared_return() -> SsaFunction {
+        let mut func = Function::new("diamond", BlockId(0), 0x1000);
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.insns.push(read_reg_to_unique(RDI, 0x1000));
+        entry.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![Varnode::constant(0x1010, 8), Varnode::reg(256, 1)],
+            0x1004,
+        ));
+        entry.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut zero = BasicBlock::new(BlockId(1));
+        zero.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(RAX, 8),
+            smallvec![Varnode::constant(0, 8)],
+            0x1010,
+        ));
+        zero.insns.push(IrInsn::without_output(
+            IrOp::Branch,
+            smallvec![Varnode::constant(0x1030, 8)],
+            0x1014,
+        ));
+        zero.successors = smallvec![BlockId(3)];
+
+        let sum = Varnode::unique(0x10, 4);
+        let mut add = BasicBlock::new(BlockId(2));
+        add.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            sum,
+            smallvec![Varnode::reg(RSI, 4), Varnode::constant(1, 4)],
+            0x1020,
+        ));
+        add.insns.push(IrInsn::with_output(
+            IrOp::IntZext,
+            Varnode::reg(RAX, 8),
+            smallvec![sum],
+            0x1020,
+        ));
+        add.successors = smallvec![BlockId(3)];
+
+        let mut ret = BasicBlock::new(BlockId(3));
+        ret.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::reg(RAX, 8)],
+            0x1030,
+        ));
+
+        func.insert_block(entry);
+        func.insert_block(zero);
+        func.insert_block(add);
+        func.insert_block(ret);
+        let mut ssa = build_ssa(func);
+        ssa.calling_convention = CallingConvention::SystemV;
+        ssa
+    }
+
+    #[test]
+    fn return_type_through_phi_takes_the_written_width() {
+        assert_eq!(
+            infer_return_type(&diamond_into_shared_return()),
+            PrimitiveType::Int(4)
+        );
+    }
+
+    #[test]
+    fn argument_read_only_past_entry_block_is_a_param() {
+        let params = infer_params(&diamond_into_shared_return());
+        assert_eq!(params.len(), 2, "{params:?}");
+    }
 
     #[allow(dead_code)]
     fn make_entry_block_ssa(insns: Vec<IrInsn>) -> SsaFunction {

@@ -27,7 +27,7 @@
 use std::collections::BTreeMap;
 
 use smallvec::SmallVec;
-use unlace_ir::{BasicBlock, BlockId, Function, IrOp};
+use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId};
 
 /// Maximum instruction count for a block to be eligible for duplication.
 const MAX_DUP_INSNS: usize = 8;
@@ -87,6 +87,15 @@ fn tail_duplicate_impl(func: &mut Function, max_insns: usize) -> usize {
     }
 
     let mut next_id = func.blocks.keys().last().map_or(0, |b| b.0 + 1);
+    let mut next_unique = func
+        .blocks
+        .values()
+        .flat_map(|block| &block.insns)
+        .flat_map(|insn| insn.output.iter().chain(insn.inputs.iter()))
+        .filter(|vn| vn.space == SpaceId::Unique)
+        .map(|vn| vn.offset.saturating_add(u64::from(vn.size)))
+        .max()
+        .unwrap_or(0);
     let mut total = 0;
 
     for (target_bid, target_preds) in &candidates {
@@ -122,6 +131,7 @@ fn tail_duplicate_impl(func: &mut Function, max_insns: usize) -> usize {
 
             let mut copy_block = BasicBlock::new(copy_id);
             copy_block.insns = orig_insns.clone();
+            rename_uniques(&mut copy_block.insns, &mut next_unique);
             copy_block.successors = orig_succs.clone();
             func.insert_block(copy_block);
 
@@ -140,6 +150,32 @@ fn tail_duplicate_impl(func: &mut Function, max_insns: usize) -> usize {
     }
 
     total
+}
+
+/// Give the unique temporaries of a copied block fresh offsets. Each lifted
+/// instruction owns its uniques, so a verbatim copy would define every one
+/// of them twice, and passes that look definitions up by raw varnode would
+/// then mix the two copies.
+fn rename_uniques(insns: &mut [IrInsn], next_unique: &mut u64) {
+    let mut renamed: BTreeMap<u64, u64> = BTreeMap::new();
+    for output in insns.iter().filter_map(|insn| insn.output) {
+        if output.space == SpaceId::Unique {
+            renamed.entry(output.offset).or_insert_with(|| {
+                let fresh = *next_unique;
+                *next_unique = next_unique.saturating_add(u64::from(output.size).max(1));
+                fresh
+            });
+        }
+    }
+    for insn in insns {
+        for vn in insn.output.iter_mut().chain(insn.inputs.iter_mut()) {
+            if vn.space == SpaceId::Unique
+                && let Some(&fresh) = renamed.get(&vn.offset)
+            {
+                vn.offset = fresh;
+            }
+        }
+    }
 }
 
 /// Compute predecessor map from successor lists.
@@ -276,6 +312,52 @@ mod tests {
             targets.contains(&BlockId(3)) && targets.contains(&copy_id),
             "one pred should target original, other should target copy; got {targets:?}"
         );
+    }
+
+    /// A copy defines its own unique temporaries: a verbatim copy would write
+    /// each of them twice.
+    #[test]
+    fn test_copy_gets_fresh_uniques() {
+        let mut func = Function::new("diamond", BlockId(0), 0x1000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch(0x1000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(branch(0x1010));
+        bb1.successors = smallvec![BlockId(3)];
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(branch(0x1020));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let tmp = Varnode::unique(4, 4);
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            tmp,
+            smallvec![Varnode::reg(8, 4), Varnode::constant(10, 4)],
+            0x1030,
+        ));
+        bb3.insns.push(IrInsn::with_output(
+            IrOp::IntZext,
+            Varnode::reg(0, 8),
+            smallvec![tmp],
+            0x1030,
+        ));
+        bb3.insns.push(ret(0x1034));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        assert_eq!(tail_duplicate_small_blocks(&mut func), 1);
+        let copy = &func.blocks[&BlockId(4)];
+        let copy_tmp = copy.insns[0].output.unwrap();
+        assert_eq!(copy_tmp.space, SpaceId::Unique);
+        assert_ne!(copy_tmp.offset, tmp.offset);
+        assert_eq!(copy.insns[1].inputs[0], copy_tmp);
+        assert_eq!(func.blocks[&BlockId(3)].insns[0].output, Some(tmp));
     }
 
     /// A block with > MAX_DUP_INSNS (8) instructions should NOT be duplicated

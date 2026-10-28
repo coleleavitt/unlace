@@ -322,6 +322,67 @@ fn test_structure_switch_simple() {
     );
 }
 
+/// Table slots that share a block become stacked labels over one body,
+/// each labelled with its own slot index.
+#[test]
+fn test_structure_switch_stacks_shared_table_slots() {
+    let r0 = Varnode::reg(0, 8);
+    let r8 = Varnode::reg(8, 8);
+    let c1 = Varnode::constant(1, 8);
+
+    let mut func = Function::new("switch_shared", BlockId(0), 0x7000);
+    let mut bb0 = BasicBlock::new(BlockId(0));
+    bb0.insns.push(ctrl_insn(IrOp::Branchind, 0x7004));
+    bb0.successors = smallvec![BlockId(1), BlockId(2)];
+    let mut bb1 = BasicBlock::new(BlockId(1));
+    bb1.insns.push(arith_insn(r0, &[r8, c1], 0x7010));
+    bb1.insns.push(ctrl_insn(IrOp::Return, 0x7014));
+    let mut bb2 = BasicBlock::new(BlockId(2));
+    bb2.insns.push(arith_insn(r0, &[r0, c1], 0x7020));
+    bb2.insns.push(ctrl_insn(IrOp::Return, 0x7024));
+    func.insert_block(bb0);
+    func.insert_block(bb1);
+    func.insert_block(bb2);
+
+    let mut ssa = build_ssa(func);
+    ssa.resolved_jump_tables.insert(
+        0x7004,
+        unlace_ir::ssa::JumpTableInfo {
+            base: 0x9000,
+            entry_size: 8,
+            num_entries: 3,
+            bound: Some(3),
+            endian_little: true,
+            targets: vec![0x7010, 0x7020, 0x7010],
+            target_blocks: vec![BlockId(1), BlockId(2), BlockId(1)],
+        },
+    );
+    let hir = structure(&ssa).expect("structuring should succeed");
+
+    fn find_switch(nodes: &[HirNode]) -> Option<&HirNode> {
+        nodes.iter().find_map(|n| match n {
+            HirNode::Switch { .. } => Some(n),
+            HirNode::Block(inner) => find_switch(inner),
+            _ => None,
+        })
+    }
+    let Some(HirNode::Switch { cases, .. }) = find_switch(&hir.body) else {
+        panic!("expected a switch: {:#?}", hir.body);
+    };
+    let labels: Vec<(SwitchCase, bool, bool)> = cases
+        .iter()
+        .map(|(case, body, fall_through)| (case.clone(), body.is_empty(), *fall_through))
+        .collect();
+    assert_eq!(
+        labels,
+        vec![
+            (SwitchCase::Value(0), true, true),
+            (SwitchCase::Value(2), false, false),
+            (SwitchCase::Value(1), false, false),
+        ]
+    );
+}
+
 #[test]
 fn test_structure_switch_with_join() {
     let r0 = Varnode::reg(0, 8);

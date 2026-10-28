@@ -78,7 +78,7 @@ fn sign_extend(val: u64, size: u8) -> i64 {
     ((val as i64) << shift) >> shift
 }
 
-fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
+pub(crate) fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
     // Constants are `u64`. A result or operand wider than that (a 128-bit
     // SSE register lowered to integer IR) is evaluated only when the
     // operation cannot carry bits past bit 63.

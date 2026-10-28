@@ -16,14 +16,17 @@ pub(in crate::c_printer) fn rename_unreturned_bare_result(output: String) -> Str
     //       Rewrite each such return to `return 0;`. Without this every
     //       short-circuit early return through a register-collapsed multi
     //       statement leaks a stale-helper-return.
-    let has_decl = output.contains("int result;") || output.contains("__int64 result; // rax");
     let has_bare_return = output.contains("return result;");
-    if !has_decl && !has_bare_return {
-        return output;
+    if !has_bare_return {
+        let has_legacy_decl =
+            output.contains("int result;") || output.contains("__int64 result; // rax");
+        return if has_legacy_decl {
+            replace_identifier_text(&output, "result", "result_0")
+        } else {
+            output
+        };
     }
-    if has_decl && !has_bare_return {
-        return replace_identifier_text(&output, "result", "result_0");
-    }
+    let has_decl = output.lines().any(is_bare_result_decl);
 
     // has_bare_return is true. Decide whether to drop the decl too.
     let has_assign = output.contains("result =")
@@ -49,12 +52,7 @@ pub(in crate::c_printer) fn rename_unreturned_bare_result(output: String) -> Str
     // present) dead `T result; // rax` declaration line.
     let mut rewritten = String::with_capacity(output.len());
     for line in output.lines() {
-        let trimmed = line.trim_start();
-        if trimmed == "int result; // rax"
-            || trimmed == "__int64 result; // rax"
-            || trimmed == "int result;"
-            || trimmed == "__int64 result;"
-        {
+        if is_bare_result_decl(line) {
             continue;
         }
         if line.contains("return result;") {
@@ -67,6 +65,19 @@ pub(in crate::c_printer) fn rename_unreturned_bare_result(output: String) -> Str
         rewritten.push('\n');
     }
     rewritten
+}
+
+/// `T result;` or `T *result; // rax`, whatever the type.
+fn is_bare_result_decl(line: &str) -> bool {
+    let code = line.split("//").next().unwrap_or_default().trim();
+    let Some(head) = code.strip_suffix("result;") else {
+        return false;
+    };
+    let ty = head.trim_end_matches(['*', ' ']);
+    head.ends_with([' ', '*'])
+        && !ty.is_empty()
+        && ty != "return"
+        && ty.bytes().all(|b| is_ident_byte(b) || b == b' ')
 }
 
 pub(in crate::c_printer) fn repair_arg_versioned_address_uses(output: String) -> String {

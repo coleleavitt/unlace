@@ -1,0 +1,11 @@
+unlace
+Copyright the unlace contributors.
+
+This product includes software from third parties:
+
+- crates/unlace-engine: a fork of ghidra-decompiler (https://github.com/koute/ghidra-decompiler),
+  Copyright Jan Bujak, licensed under the Apache License, Version 2.0. It is a Rust port of the
+  Ghidra decompiler and embeds SLEIGH language files from Ghidra
+  (https://github.com/NationalSecurityAgency/ghidra), developed at the National Security Agency
+  and licensed under the Apache License, Version 2.0. The full notices are in
+  crates/unlace-engine/NOTICE and the license in crates/unlace-engine/LICENSE.

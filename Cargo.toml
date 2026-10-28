@@ -118,6 +118,9 @@ incremental = true
 [profile.dev.package."*"]
 opt-level = 1
 
+[profile.dev.package.unlace-engine]
+opt-level = 1
+
 [profile.test]
 
 [profile.release]

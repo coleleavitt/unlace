@@ -16,3 +16,7 @@ linkscope = { path = "../../../linkscope" }
 gimli = { workspace = true }
 insta = { workspace = true }
 smallvec = { workspace = true }
+
+[features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []

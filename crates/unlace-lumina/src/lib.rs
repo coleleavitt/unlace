@@ -38,8 +38,13 @@ pub use legacy_json::{
 };
 
 // Also surface the additional legacy sub-modules that pre-dated this rewrite.
+#[cfg(feature = "unwired")]
 pub mod collab;
+#[cfg(feature = "unwired")]
 pub mod conflict_ui;
+#[cfg(feature = "unwired")]
 pub mod privacy_client;
+#[cfg(feature = "unwired")]
 pub mod public_db;
+#[cfg(feature = "unwired")]
 pub mod web_ui;

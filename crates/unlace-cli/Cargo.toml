@@ -37,6 +37,8 @@ criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = { workspace = true }
 
 [features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []
 default = []
 # Enable the Linux ptrace debugger backend behind `unlace dbg`. Linux-only.
 dbg-ptrace = ["unlace-debugger/linux-ptrace"]

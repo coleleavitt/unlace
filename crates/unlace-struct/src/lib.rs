@@ -7,16 +7,20 @@ pub mod condition_dup;
 pub mod condition_normalize;
 pub mod condition_refinement;
 pub mod continue_break;
+#[cfg(feature = "unwired")]
 pub mod cpp_eh;
+#[cfg(feature = "unwired")]
 pub mod cross_jump_revert;
 pub mod eager_returns;
 pub mod empty_if_cleanup;
 pub mod flatten_if_else;
+#[cfg(feature = "unwired")]
 pub mod goto_classify;
 pub mod goto_coalesce;
 pub mod goto_elim;
 pub mod goto_to_break;
 pub mod goto_to_continue;
+#[cfg(feature = "unwired")]
 pub mod graph_layout;
 pub mod hir;
 pub mod hir_cse;
@@ -49,11 +53,14 @@ pub use cmov_switch::recover_cmov_switches;
 pub use condition_dup::duplicate_goto_conditions;
 pub use condition_normalize::normalize_conditions;
 pub use continue_break::detect_continue_break;
+#[cfg(feature = "unwired")]
 pub use cpp_eh::cpp_eh_regions_to_seh;
+#[cfg(feature = "unwired")]
 pub use cross_jump_revert::cross_jump_revert;
 pub use eager_returns::eager_returns;
 pub use empty_if_cleanup::cleanup_empty_ifs;
 pub use flatten_if_else::{flatten_if_else_chains, simplify_chain_conditions};
+#[cfg(feature = "unwired")]
 pub use goto_classify::{GotoClassification, classify as classify_gotos};
 pub use goto_coalesce::coalesce_goto_chains;
 pub use goto_elim::eliminate_forward_gotos;

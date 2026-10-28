@@ -15,12 +15,14 @@
 //! rows below exercise. (The loader's deeper Itanium typeinfo parser
 //! `rtti::parse_itanium_name` is private and not part of the public API.)
 
+#[cfg(feature = "unwired")]
 use unlace_loader::demangle_rust::try_demangle_rust;
 use unlace_loader::demangle_swift::try_demangle_swift;
 use unlace_loader::msvc_rtti::demangle_rtti_name;
 
 /// `(mangled, expected_substring)` rows for the `rustc-demangle`-backed
 /// Rust demangler. Covers both v0 (`_R…`) and legacy hashed (`_ZN…17h…E`).
+#[cfg(feature = "unwired")]
 const RUST_CASES: &[(&str, &str)] = &[
     // v0 scheme (RFC 2603): `hash::foo`.
     ("_RNvCs2bWZRtgL14g_4hash3foo", "hash"),
@@ -53,6 +55,7 @@ const CPP_RTTI_CASES: &[(&str, &str)] = &[
     (".?AVNamespaced@@", "Namespaced"),
 ];
 
+#[cfg(feature = "unwired")]
 #[test]
 fn rust_corpus_round_trips() {
     for (mangled, expected) in RUST_CASES {
@@ -91,6 +94,7 @@ fn cpp_rtti_corpus_round_trips() {
 /// Sanity guard: the demanglers must reject names that belong to another
 /// language's scheme, so corpus rows can't accidentally pass via the wrong
 /// demangler.
+#[cfg(feature = "unwired")]
 #[test]
 fn demanglers_reject_foreign_schemes() {
     // A Swift symbol is not Rust, and vice-versa.

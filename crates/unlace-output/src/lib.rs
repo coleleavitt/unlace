@@ -2,12 +2,15 @@
 
 pub mod c_printer;
 pub mod cfg_dot;
+#[cfg(feature = "unwired")]
 pub mod cpp_class;
 pub mod cpp_stl;
 pub mod demangle;
 pub mod expr_ast;
+#[cfg(feature = "unwired")]
 pub mod instruction_annotations;
 pub mod ir_dump;
+#[cfg(feature = "unwired")]
 pub mod stream;
 
 pub use c_printer::{
@@ -18,6 +21,7 @@ pub use c_printer::{
     stack_lvar_annotations_from_ssa, strip_ida_typedefs,
 };
 pub use cfg_dot::emit_cfg_dot;
+#[cfg(feature = "unwired")]
 pub use cpp_class::annotate_cpp_class_info;
 pub use cpp_stl::{
     StlType, looks_like_function_sbo_layout, looks_like_shared_ptr_layout,
@@ -29,5 +33,6 @@ pub use expr_ast::{
     CExpr, CExprCoverageRow, COT_NAMES, CoerceKind, cexpr_coverage_markdown, cexpr_coverage_rows,
     cot_name,
 };
+#[cfg(feature = "unwired")]
 pub use instruction_annotations::collect_function_annotations;
 pub use ir_dump::{dump_ir, dump_lvars, dump_type_audit};

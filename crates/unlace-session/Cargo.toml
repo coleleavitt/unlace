@@ -17,3 +17,7 @@ flate2 = { workspace = true }
 sha2 = { workspace = true }
 parking_lot = "0.12"
 tracing.workspace = true
+
+[features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []

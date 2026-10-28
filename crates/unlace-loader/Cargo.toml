@@ -10,7 +10,7 @@ pdb = { workspace = true }
 fallible-iterator = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-rustc-demangle = "0.1"
+rustc-demangle = { version = "0.1", optional = true }
 unlace-ir = { workspace = true }
 wasmparser = { workspace = true }
 ureq = { version = "2.10", default-features = false, features = ["tls"], optional = true }
@@ -19,6 +19,19 @@ ureq = { version = "2.10", default-features = false, features = ["tls"], optiona
 default = []
 # Enable symbol-server HTTP fetch (debuginfod + MSFT symstore).
 http-symfetch = ["dep:ureq"]
+# Experimental container formats outside the supported ELF/PE/Mach-O scope.
+# None of them is reachable from the `unlace` loaders yet.
+all-formats = ["format-android", "format-dotnet", "format-esp32", "format-java", "format-lua", "format-python", "format-wasm", "format-xcoff"]
+format-android = []
+format-dotnet = []
+format-esp32 = []
+format-java = []
+format-lua = []
+format-python = []
+format-wasm = []
+format-xcoff = []
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = ["dep:rustc-demangle"]
 
 [dev-dependencies]
 insta = { workspace = true }

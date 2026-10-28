@@ -30,7 +30,9 @@
 pub mod ida_bytes;
 pub mod ida_funcs;
 pub mod ida_hexrays;
+#[cfg(feature = "unwired")]
 pub mod ida_hexrays_ctree;
+#[cfg(feature = "unwired")]
 pub mod ida_hexrays_micro;
 pub mod ida_name;
 pub mod ida_segment;

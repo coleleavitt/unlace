@@ -9,10 +9,14 @@ unlace-loader = { workspace = true }
 petgraph = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
-postcard = { workspace = true }
+postcard = { workspace = true, optional = true }
 serde = { workspace = true }
 linkscope = { path = "../../../linkscope" }
 
 [dev-dependencies]
 insta = { workspace = true }
 smallvec = { workspace = true }
+
+[features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = ["dep:postcard"]

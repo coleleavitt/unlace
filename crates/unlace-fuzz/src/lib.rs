@@ -47,6 +47,7 @@ use unlace_loader::{ElfLoader, Loader};
 /// Persistent crash-corpus database. New crashes found by the fuzz
 /// runner are appended here and re-run by the workspace test suite as
 /// regression guards. See [`corpus`] for the storage layout.
+#[cfg(feature = "unwired")]
 pub mod corpus;
 
 /// Maximum number of functions the harness will decompile per iteration.

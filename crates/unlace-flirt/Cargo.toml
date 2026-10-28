@@ -20,3 +20,7 @@ zstd = { workspace = true }
 flate2 = { workspace = true }
 
 [dev-dependencies]
+
+[features]
+# Modules no production code path reaches yet (`cargo xtask status`).
+unwired = []

@@ -12,9 +12,11 @@ pub mod batch;
 pub mod binary_input;
 pub mod cache;
 pub mod identify_packer;
+#[cfg(feature = "unwired")]
 pub mod lsp;
 pub mod pipeline;
 pub mod profiling;
+#[cfg(feature = "unwired")]
 pub mod project;
 pub mod quality;
 

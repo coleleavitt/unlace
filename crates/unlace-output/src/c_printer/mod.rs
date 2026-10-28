@@ -2402,7 +2402,8 @@ struct HoistPlan {
 ///
 /// Values that fail to parse as `usize` (or that are absent) leave the
 /// corresponding field at its IDA-aligned default.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct PrintConfig {
     /// IDA `module_data + 600` — soft right margin (default 100).
     pub max_line_width: usize,

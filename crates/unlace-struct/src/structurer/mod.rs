@@ -19,6 +19,7 @@ use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::eager_returns::eager_returns;
 use crate::hir::{HirCallArg, HirFunction, HirNode, LabelId, SwitchCase};
+use crate::options::StructureOptions;
 use crate::reaching_conditions::{Cond, dream_structuring_enabled};
 use crate::switch_recovery::{IndirectBranchKind, classify_indirect_branch};
 use crate::{condition_refinement, irreducible, reaching_conditions, region_bridge, region_splice};
@@ -42,56 +43,13 @@ pub enum StructureError {
     Timeout { function: String },
 }
 
-const DEFAULT_STRUCT_MAX_PHIS: usize = 12288;
-const DEFAULT_UNSTRUCTURED_FALLBACK_MAX_BLOCKS: usize = 256;
-const DEFAULT_UNSTRUCTURED_FALLBACK_MAX_INSNS: usize = 4096;
-
-fn structure_phi_limit() -> usize {
-    structure_phi_limit_from(std::env::var("UNLACE_STRUCT_MAX_PHIS").ok().as_deref())
-}
-
-fn structure_phi_limit_from(value: Option<&str>) -> usize {
-    value
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_STRUCT_MAX_PHIS)
-}
-
-fn unstructured_fallback_full_enabled() -> bool {
-    std::env::var("UNLACE_STRUCT_FULL_FALLBACK")
-        .ok()
-        .is_some_and(|value| {
-            let value = value.trim().to_ascii_lowercase();
-            !(value.is_empty()
-                || value == "0"
-                || value == "false"
-                || value == "off"
-                || value == "no")
-        })
-}
-
-fn unstructured_fallback_block_limit() -> usize {
-    std::env::var("UNLACE_STRUCT_FALLBACK_MAX_BLOCKS")
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_UNSTRUCTURED_FALLBACK_MAX_BLOCKS)
-}
-
-fn unstructured_fallback_insn_limit() -> usize {
-    std::env::var("UNLACE_STRUCT_FALLBACK_MAX_INSNS")
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(DEFAULT_UNSTRUCTURED_FALLBACK_MAX_INSNS)
-}
-
 fn should_emit_full_unstructured_fallback(
     blocks: usize,
     insns: usize,
-    force_full: bool,
     block_limit: usize,
     insn_limit: usize,
 ) -> bool {
-    force_full
-        || ((block_limit == 0 || blocks <= block_limit) && (insn_limit == 0 || insns <= insn_limit))
+    (block_limit == 0 || blocks <= block_limit) && (insn_limit == 0 || insns <= insn_limit)
 }
 
 fn hir_contains_label_or_goto(nodes: &[HirNode]) -> bool {
@@ -254,7 +212,7 @@ pub fn structure_with_arch(
     func: &SsaFunction,
     arch: ArchId,
 ) -> Result<HirFunction, StructureError> {
-    structure_with_arch_inner(func, arch, None)
+    structure_with_arch_inner(func, arch, None, StructureOptions::default())
 }
 
 /// [`structure_with_arch`] with a hard deadline.
@@ -263,7 +221,21 @@ pub fn structure_with_arch_until(
     arch: ArchId,
     deadline: Instant,
 ) -> Result<HirFunction, StructureError> {
-    structure_with_arch_inner(func, arch, Some(deadline))
+    structure_with_arch_inner(func, arch, Some(deadline), StructureOptions::default())
+}
+
+/// Structure `func` under explicit complexity budgets, wrapping regions at
+/// `landing_pad_addrs` in `TryCatch` nodes and aborting past `deadline`.
+pub fn structure_with_options(
+    func: &SsaFunction,
+    arch: ArchId,
+    landing_pad_addrs: &BTreeSet<u64>,
+    deadline: Option<Instant>,
+    options: &StructureOptions,
+) -> Result<HirFunction, StructureError> {
+    let mut hir = structure_with_arch_inner(func, arch, deadline, *options)?;
+    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
+    Ok(hir)
 }
 
 /// Conservative unstructured fallback for functions whose structured recovery
@@ -281,7 +253,18 @@ pub fn structure_unstructured_fallback_with_arch(
     arch: ArchId,
     reason: impl Into<String>,
 ) -> HirFunction {
-    let mut ctx = StructureCtx::new_with_deadline(func, None);
+    structure_unstructured_fallback_with_options(func, arch, reason, &StructureOptions::default())
+}
+
+/// [`structure_unstructured_fallback_with_arch`] under explicit fallback
+/// size budgets.
+pub fn structure_unstructured_fallback_with_options(
+    func: &SsaFunction,
+    arch: ArchId,
+    reason: impl Into<String>,
+    options: &StructureOptions,
+) -> HirFunction {
+    let mut ctx = StructureCtx::new_with_deadline(func, None, *options);
     let body = {
         let _span = linkscope::phase("struct.unstructured-fallback");
         ctx.unstructured_fallback_body(reason.into())
@@ -293,6 +276,7 @@ fn structure_with_arch_inner(
     func: &SsaFunction,
     arch: ArchId,
     deadline: Option<Instant>,
+    options: StructureOptions,
 ) -> Result<HirFunction, StructureError> {
     let entry = func.function.entry;
 
@@ -301,7 +285,7 @@ fn structure_with_arch_inner(
     }
 
     let phi_count: usize = func.phi_map.values().map(Vec::len).sum();
-    let phi_limit = structure_phi_limit();
+    let phi_limit = options.max_phis;
     if phi_limit > 0 && phi_count > phi_limit {
         return Err(StructureError::ComplexityLimit {
             kind: "phi nodes",
@@ -312,7 +296,7 @@ fn structure_with_arch_inner(
 
     let mut ctx = {
         let _span = linkscope::phase("struct.ctx-new");
-        StructureCtx::new_with_deadline(func, deadline)
+        StructureCtx::new_with_deadline(func, deadline, options)
     };
     let mut body = {
         let _span = linkscope::phase("struct.structure-region");
@@ -489,12 +473,7 @@ pub fn structure_with_landing_pads_and_arch(
     arch: ArchId,
 ) -> Result<HirFunction, StructureError> {
     let mut hir = structure_with_arch(func, arch)?;
-    if !landing_pad_addrs.is_empty() {
-        let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
-        if !confirmed.is_empty() {
-            hir.body = wrap_try_catch(hir.body, &confirmed, func);
-        }
-    }
+    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
     Ok(hir)
 }
 
@@ -506,13 +485,18 @@ pub fn structure_with_landing_pads_and_arch_until(
     deadline: Instant,
 ) -> Result<HirFunction, StructureError> {
     let mut hir = structure_with_arch_until(func, arch, deadline)?;
-    if !landing_pad_addrs.is_empty() {
-        let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
-        if !confirmed.is_empty() {
-            hir.body = wrap_try_catch(hir.body, &confirmed, func);
-        }
-    }
+    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
     Ok(hir)
+}
+
+fn wrap_landing_pads(hir: &mut HirFunction, func: &SsaFunction, landing_pad_addrs: &BTreeSet<u64>) {
+    if landing_pad_addrs.is_empty() {
+        return;
+    }
+    let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
+    if !confirmed.is_empty() {
+        hir.body = wrap_try_catch(std::mem::take(&mut hir.body), &confirmed, func);
+    }
 }
 
 /// Apply [`eager_returns`] before structuring, so functions with multiple
@@ -714,6 +698,7 @@ fn recurse_try_catch_children(
 
 struct StructureCtx<'a> {
     func: &'a SsaFunction,
+    options: StructureOptions,
     /// Optional wall-clock deadline for structuring.
     deadline: Option<Instant>,
     /// Set once a deadline overrun is observed.
@@ -1085,10 +1070,14 @@ fn dream_predicate_source_nodes(
 impl<'a> StructureCtx<'a> {
     #[cfg(test)]
     fn new(func: &'a SsaFunction) -> Self {
-        Self::new_with_deadline(func, None)
+        Self::new_with_deadline(func, None, StructureOptions::default())
     }
 
-    fn new_with_deadline(func: &'a SsaFunction, deadline: Option<Instant>) -> Self {
+    fn new_with_deadline(
+        func: &'a SsaFunction,
+        deadline: Option<Instant>,
+        options: StructureOptions,
+    ) -> Self {
         let mut back_edges = BTreeSet::new();
         let mut loop_headers = BTreeSet::new();
         let synthetic = BTreeSet::from([func.cfg.exit_block(), func.cfg.unknown_block()]);
@@ -1154,6 +1143,7 @@ impl<'a> StructureCtx<'a> {
 
         Self {
             func,
+            options,
             deadline,
             deadline_exceeded: false,
             emitted: BTreeSet::new(),
@@ -1264,9 +1254,8 @@ impl<'a> StructureCtx<'a> {
         if !should_emit_full_unstructured_fallback(
             block_ids.len(),
             insn_count,
-            unstructured_fallback_full_enabled(),
-            unstructured_fallback_block_limit(),
-            unstructured_fallback_insn_limit(),
+            self.options.fallback_max_blocks,
+            self.options.fallback_max_insns,
         ) {
             linkscope::record_items("struct.unstructured-fallback.summary", 1);
             return self.unstructured_summary_body(reason, block_ids.len(), insn_count);

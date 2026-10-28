@@ -1,58 +1,34 @@
-//! Pass instrumentation: per-pass timing and IR trace.
+//! Pass instrumentation: per-pass timing, schedule audit, IR diffs, and
+//! post-pass verification.
 //!
-//! Three opt-in observability layers, all controlled by environment
-//! variables and gated behind a single `OnceLock<bool>` read so the
-//! common (env-unset) path costs **one atomic load** per pass invocation
-//! — no allocation, no string compare, no env lookup.
+//! [`run_instrumented`] wraps one [`Pass::run`]. What it records is decided by
+//! [`PassOptions`] and the active `tracing` filter:
 //!
-//! # `UNLACE_TIMING=1`
+//! * `unlace::timing=info` accumulates per-pass wall-clock samples that the
+//!   CLI renders with [`dump_pass_timings`] when the command finishes.
+//! * [`PassDiagnostics::timing_csv`](crate::PassDiagnostics::timing_csv)
+//!   additionally keeps one sample per (function, pass, iteration) for
+//!   [`dump_pass_timings_csv`].
+//! * [`PassDiagnostics::schedule_audit`](crate::PassDiagnostics::schedule_audit)
+//!   records every run/skip decision for [`dump_schedule_audit_csv`].
+//! * `unlace::pass=debug` logs each pass start and end with IR shape counts.
+//! * `unlace::pass::ir=trace` logs a line diff of the `{:#?}` IR snapshot
+//!   before and after each pass. Every pass runs inside a `pass{name=...}`
+//!   span, so `unlace::pass::ir[pass{name=sccp}]=trace` narrows it to one pass.
 //!
-//! Wraps every [`Pass::run`] dispatched through [`run_instrumented`] (or
-//! the [`run_to_fixedpoint`](crate::pass::run_to_fixedpoint) runner) with
-//! an [`Instant::now`] / [`elapsed`] pair, accumulating into a global
-//! [`BTreeMap`] keyed by pass name. [`dump_pass_timings`] renders the
-//! accumulator as a markdown table sorted by total time desc — useful
-//! at the end of CLI commands so users can spot hot passes.
-//!
-//! [`elapsed`]: std::time::Instant::elapsed
-//!
-//! # `UNLACE_TIMING_CSV=<path>`
-//!
-//! Batch 17 slice 2: when set (independently of `UNLACE_TIMING`), every
-//! [`run_instrumented`] call additionally appends one row to a
-//! per-(function, pass, iteration) accumulator. `iteration` is the
-//! zero-based call index for that (function, pass) pair within the
-//! process. [`dump_pass_timings_csv`] renders the accumulator as a CSV
-//! body (`function,pass,iteration,ms`) sorted by `(function, pass,
-//! iteration)` so the output is deterministic across runs of the same
-//! input. The CLI driver writes this to the path named in the env var
-//! at end-of-pipeline.
-//!
-//! Like `UNLACE_TIMING`, the per-function knob is cached once via
-//! `OnceLock`, so when the env var is unset the hot path is a single
-//! atomic load — no allocation, no string formatting.
-//!
-//! # `UNLACE_TRACE_PASSES=<csv>`
-//!
-//! Comma-separated list of pass names to dump pre/post IR snapshots for
-//! on stderr. The literal value `*` enables tracing for *all* passes.
-//! The IR snapshot uses [`std::fmt::Debug`] (`{:#?}`) on the
-//! [`SsaFunction`](unlace_ir::ssa::SsaFunction), and a line-by-line diff
-//! is emitted between the snapshots so unchanged lines stay quiet.
-//!
-//! Both knobs are observation-only: pass semantics are not affected and
-//! the IR is never mutated by the wrapper.
+//! The wrapper only observes: pass semantics and the IR are never changed by it.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use linkscope::TraceField;
+use tracing::Level;
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::verify_ssa_function_pipeline;
 
+use crate::options::PassOptions;
 use crate::pass::{Pass, PassError, PassPhase};
 
 /// Per-pass accumulated wall-clock samples. Keyed by pass name so the
@@ -81,96 +57,12 @@ fn func_timings() -> &'static Mutex<BTreeMap<(String, String), Vec<u64>>> {
     CELL.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
-/// Cached `UNLACE_TIMING_CSV` path. `None` means the env var is unset
-/// (zero work in the hot path); `Some(path)` is the destination file
-/// for [`dump_pass_timings_csv`].
-fn timing_csv_cell() -> &'static Option<PathBuf> {
-    static CELL: OnceLock<Option<PathBuf>> = OnceLock::new();
-    CELL.get_or_init(|| std::env::var_os("UNLACE_TIMING_CSV").map(PathBuf::from))
-}
+/// Instrumented pass invocations so far in this process, for
+/// [`PassOptions::bisect_limit`].
+static BISECT_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-/// Cached `UNLACE_TIMING=1` decision. Read **once** per process so the
-/// common (unset) path is a single relaxed atomic load.
-fn timing_flag() -> bool {
-    static CELL: OnceLock<bool> = OnceLock::new();
-    *CELL.get_or_init(|| {
-        std::env::var_os("UNLACE_TIMING")
-            .map(|v| v == "1")
-            .unwrap_or(false)
-    })
-}
-
-/// Cached `UNLACE_VERIFY_EACH` decision. Any non-empty value except common
-/// false spellings enables structural IR verification after successful passes.
-fn verify_each_flag() -> bool {
-    static CELL: OnceLock<bool> = OnceLock::new();
-    *CELL.get_or_init(|| {
-        std::env::var_os("UNLACE_VERIFY_EACH")
-            .and_then(|v| v.into_string().ok())
-            .map(|v| {
-                let v = v.trim().to_ascii_lowercase();
-                !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-            })
-            .unwrap_or(false)
-    })
-}
-
-fn pass_run_trace_flag() -> bool {
-    static CELL: OnceLock<bool> = OnceLock::new();
-    *CELL.get_or_init(|| {
-        std::env::var_os("UNLACE_PASS_TRACE")
-            .or_else(|| std::env::var_os("UNLACE_PIPELINE_TRACE"))
-            .and_then(|v| v.into_string().ok())
-            .map(|v| {
-                let v = v.trim().to_ascii_lowercase();
-                !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-            })
-            .unwrap_or(false)
-    })
-}
-
-fn linkscope_trace_flag() -> bool {
-    static CELL: OnceLock<bool> = OnceLock::new();
-    *CELL.get_or_init(|| {
-        [
-            "UNLACE_LINKSCOPE_TRACE",
-            "UNLACE_LINKSCOPE_TRACE_STACK",
-            "UNLACE_LINKSCOPE_TRACE_DETAIL",
-            "UNLACE_LINKSCOPE_TRACE_STACK_DETAIL",
-        ]
-        .into_iter()
-        .filter_map(std::env::var_os)
-        .filter_map(|v| v.into_string().ok())
-        .any(|v| {
-            let v = v.trim().to_ascii_lowercase();
-            !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-        })
-    })
-}
-
-fn linkscope_trace_enabled() -> bool {
-    linkscope::is_enabled() && linkscope_trace_flag()
-}
-
-fn linkscope_pass_name_spans_enabled() -> bool {
-    static CELL: OnceLock<bool> = OnceLock::new();
-    linkscope::is_enabled()
-        && *CELL.get_or_init(|| {
-            std::env::var_os("UNLACE_LINKSCOPE_PASS_NAMES")
-                .and_then(|v| v.into_string().ok())
-                .map(|v| {
-                    let v = v.trim().to_ascii_lowercase();
-                    !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
-                })
-                .unwrap_or(false)
-        })
-}
-
-fn linkscope_pass_name_span(name: &str) -> Option<linkscope::Span> {
-    if !linkscope_pass_name_spans_enabled() {
-        return None;
-    }
-    Some(match name {
+fn linkscope_pass_name_span(name: &str) -> linkscope::Span {
+    match name {
         "StackOffsetSnapshotPass" | "stack-offset-snapshot" => {
             linkscope::phase("pass.name.StackOffsetSnapshotPass")
         }
@@ -285,26 +177,7 @@ fn linkscope_pass_name_span(name: &str) -> Option<linkscope::Span> {
         "VarNamingPass" => linkscope::phase("pass.name.VarNamingPass"),
         "CallingConvFinalizePass" => linkscope::phase("pass.name.CallingConvFinalizePass"),
         _ => linkscope::phase("pass.name.other"),
-    })
-}
-
-fn disabled_passes() -> &'static Option<Vec<String>> {
-    static CELL: OnceLock<Option<Vec<String>>> = OnceLock::new();
-    CELL.get_or_init(|| parse_pass_csv_env("UNLACE_DISABLE_PASSES"))
-}
-
-fn opt_bisect_limit() -> Option<usize> {
-    static CELL: OnceLock<Option<usize>> = OnceLock::new();
-    *CELL.get_or_init(|| {
-        std::env::var("UNLACE_OPT_BISECT_LIMIT")
-            .ok()
-            .and_then(|raw| raw.trim().parse::<usize>().ok())
-    })
-}
-
-fn opt_bisect_counter() -> &'static AtomicUsize {
-    static CELL: OnceLock<AtomicUsize> = OnceLock::new();
-    CELL.get_or_init(|| AtomicUsize::new(0))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -314,8 +187,8 @@ fn opt_bisect_counter() -> &'static AtomicUsize {
 /// One row of the pass-schedule audit log.
 ///
 /// Captured for every [`run_instrumented`] invocation when
-/// `UNLACE_SCHEDULE_AUDIT` is non-empty (the value is the destination
-/// file path). Holds the function name, pass name, declared phase, the
+/// [`PassDiagnostics::schedule_audit`](crate::PassDiagnostics::schedule_audit)
+/// is set. Holds the function name, pass name, declared phase, the
 /// scheduler decision, optional skip reason, pass-reported `changed` flag,
 /// and the per-(function, pass) iteration index so out-of-order invocations
 /// and oscillations are visible after the fact.
@@ -356,27 +229,6 @@ fn schedule_iteration_counts() -> &'static Mutex<BTreeMap<(String, String), u32>
     CELL.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
-fn schedule_audit_path_cell() -> &'static Option<PathBuf> {
-    static CELL: OnceLock<Option<PathBuf>> = OnceLock::new();
-    CELL.get_or_init(|| {
-        std::env::var_os("UNLACE_SCHEDULE_AUDIT")
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-    })
-}
-
-/// Configured destination path for the schedule audit, or `None` when
-/// the env var is unset (the common hot-path case).
-#[inline]
-pub fn schedule_audit_path() -> Option<PathBuf> {
-    schedule_audit_path_cell().clone()
-}
-
-#[inline]
-fn schedule_audit_enabled() -> bool {
-    schedule_audit_path_cell().is_some()
-}
-
 fn next_schedule_iteration(function: &str, pass: &str) -> u32 {
     let mut counts = schedule_iteration_counts()
         .lock()
@@ -409,35 +261,10 @@ fn push_schedule_row(
     });
 }
 
-/// Append one row to the schedule audit. Cheap when the env var is unset
-/// (a single atomic load), so callers don't need to gate.
-fn record_schedule_event(function: &str, pass: &str, phase: PassPhase, changed: bool) {
-    if !schedule_audit_enabled() {
-        return;
-    }
-    push_schedule_row(function, pass, phase, ScheduleDecision::Run, changed, "");
-}
-
-/// Append one scheduler skip row to the audit. The reason string is a
-/// stable diagnostic contract for consumers diffing missing pass rows.
-fn record_schedule_skip_event(function: &str, pass: &str, phase: PassPhase, reason: &'static str) {
-    if !schedule_audit_enabled() {
-        return;
-    }
-    push_schedule_row(
-        function,
-        pass,
-        phase,
-        ScheduleDecision::Skipped,
-        false,
-        reason,
-    );
-}
-
 /// Render the accumulated schedule audit as a CSV body, including the
 /// header row. Stable order: insertion order, which is the same as
-/// dispatch order. Use this from `unlace-cli` when writing the file
-/// named by `UNLACE_SCHEDULE_AUDIT`.
+/// dispatch order. `unlace-cli` writes this to the configured
+/// `passes.diagnostics.schedule_audit` path.
 pub fn dump_schedule_audit_csv() -> String {
     let rows: Vec<ScheduleRow> = {
         let log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
@@ -496,113 +323,23 @@ pub fn schedule_audit_oscillations() -> Vec<String> {
     violations
 }
 
-/// Cached, parsed `UNLACE_TRACE_PASSES` set. `None` means env-unset
-/// (zero work in the hot path); `Some(set)` is the parsed CSV. The
-/// special token `*` is stored as a single-element set and matched
-/// explicitly in [`pass_should_trace`].
-fn trace_set() -> &'static Option<Vec<String>> {
-    static CELL: OnceLock<Option<Vec<String>>> = OnceLock::new();
-    CELL.get_or_init(|| parse_pass_csv_env("UNLACE_TRACE_PASSES"))
-}
-
-fn parse_pass_csv_env(name: &str) -> Option<Vec<String>> {
-    let raw = std::env::var(name).ok()?;
-    let parts: Vec<String> = raw
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-    if parts.is_empty() { None } else { Some(parts) }
-}
-
-/// `true` iff `UNLACE_TIMING=1` is set in the environment.
-///
-/// Cached after the first call — subsequent invocations are a single
-/// atomic load.
+/// `true` iff the `unlace::timing` target is enabled at `info`, which makes
+/// [`run_instrumented`] accumulate the per-pass table.
 #[inline]
 pub fn pass_timing_enabled() -> bool {
-    timing_flag()
-}
-
-/// `true` iff per-pass structural IR verification is enabled.
-#[inline]
-pub fn verify_each_enabled() -> bool {
-    verify_each_flag()
-}
-
-/// `true` iff direct pass start/end tracing is enabled.
-#[inline]
-pub fn pass_run_trace_enabled() -> bool {
-    pass_run_trace_flag()
-}
-
-/// Configured path for `UNLACE_TIMING_CSV` (Batch 17 slice 2), or `None`
-/// when the env var is unset.
-///
-/// Cached after the first call so the hot path stays branch-predictable
-/// — a `None` result is a single atomic load and skips all per-function
-/// accounting in [`run_instrumented`].
-#[inline]
-pub fn pass_timing_csv_path() -> Option<PathBuf> {
-    timing_csv_cell().clone()
-}
-
-/// Cached predicate: `true` iff per-function CSV recording should run.
-///
-/// Equivalent to `pass_timing_csv_path().is_some()` but avoids the
-/// `PathBuf::clone` on the hot path — every [`run_instrumented`] call
-/// consults this.
-#[inline]
-fn func_timing_enabled() -> bool {
-    timing_csv_cell().is_some()
-}
-
-/// `true` iff this pass name should be IR-traced this process.
-///
-/// Reads `UNLACE_TRACE_PASSES` once and caches the parsed CSV. The
-/// special token `*` matches every pass.
-#[inline]
-pub fn pass_should_trace(name: &str) -> bool {
-    match trace_set() {
-        Some(set) => pass_name_matches(set, name),
-        None => false,
-    }
-}
-
-pub fn pass_is_disabled(name: &str) -> bool {
-    match disabled_passes() {
-        Some(set) => pass_name_matches(set, name),
-        None => false,
-    }
-}
-
-fn pass_name_matches(set: &[String], name: &str) -> bool {
-    set.iter().any(|s| s == "*" || s == name)
-}
-
-fn pass_allowed_by_opt_bisect() -> bool {
-    let Some(limit) = opt_bisect_limit() else {
-        return true;
-    };
-    let ordinal = opt_bisect_counter().fetch_add(1, Ordering::Relaxed) + 1;
-    ordinal <= limit
+    tracing::enabled!(target: "unlace::timing", Level::INFO)
 }
 
 /// Append one timing sample for the `(function, pass)` pair.
 ///
-/// Records into two accumulators:
-///
-/// * The legacy per-pass aggregate (rendered by [`dump_pass_timings`]).
-///   This is always updated when called.
-/// * The per-(function, pass) sample vector — but **only** when
-///   `UNLACE_TIMING_CSV` is set, so the CSV path is fully zero-overhead
-///   when the env var is unset (the `func_timing_enabled` guard avoids
-///   even the `to_string()` allocations for the key).
-///
-/// Callers are expected to gate on [`pass_timing_enabled`] or
-/// [`pass_timing_csv_path`] first so the no-op path stays free of
-/// allocations.
-pub fn record_pass_timing(function_name: &str, pass_name: &str, elapsed_ns: u64) {
+/// Always updates the per-pass aggregate rendered by [`dump_pass_timings`];
+/// `per_function` also keeps the sample for [`dump_pass_timings_csv`].
+pub fn record_pass_timing(
+    function_name: &str,
+    pass_name: &str,
+    elapsed_ns: u64,
+    per_function: bool,
+) {
     {
         let mut map = match timings().lock() {
             Ok(g) => g,
@@ -616,13 +353,223 @@ pub fn record_pass_timing(function_name: &str, pass_name: &str, elapsed_ns: u64)
         }
     }
 
-    if func_timing_enabled() {
+    if per_function {
         let mut map = match func_timings().lock() {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
         let key = (function_name.to_string(), pass_name.to_string());
         map.entry(key).or_default().push(elapsed_ns);
+    }
+}
+
+fn pass_allowed_by_opt_bisect(limit: Option<usize>) -> bool {
+    let Some(limit) = limit else {
+        return true;
+    };
+    let ordinal = BISECT_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+    ordinal <= limit
+}
+
+fn ir_shape_fields(func: &SsaFunction) -> [TraceField; 3] {
+    [
+        TraceField::text("maturity", format!("{:?}", func.maturity)),
+        TraceField::count("blocks", func.function.blocks.len() as u64),
+        TraceField::count(
+            "insns",
+            func.function
+                .blocks
+                .values()
+                .map(|b| b.insns.len() as u64)
+                .sum(),
+        ),
+    ]
+}
+
+fn linkscope_pass_fields(pass: &dyn Pass, func: &SsaFunction) -> Vec<TraceField> {
+    let mut fields = vec![
+        TraceField::text("function", func.function.name.clone()),
+        TraceField::text("pass", pass.name().to_string()),
+        TraceField::text("phase", format!("{:?}", pass.phase())),
+    ];
+    fields.extend(ir_shape_fields(func));
+    fields
+}
+
+fn trace_pass_start(pass: &dyn Pass, func: &SsaFunction) {
+    let insns: usize = func.function.blocks.values().map(|b| b.insns.len()).sum();
+    let phis: usize = func.phi_map.values().map(|phis| phis.len()).sum();
+    tracing::debug!(
+        target: "unlace::pass",
+        "func={} pass={} phase={:?} start maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={} foldable={} lvars={}",
+        func.function.name,
+        pass.name(),
+        pass.phase(),
+        func.maturity,
+        func.function.blocks.len(),
+        insns,
+        phis,
+        func.var_map.len(),
+        func.merged_names.len(),
+        func.foldable_exprs.len(),
+        func.lvars.len(),
+    );
+}
+
+fn trace_pass_done(
+    pass: &dyn Pass,
+    func_name: &str,
+    func: &SsaFunction,
+    res: &Result<bool, PassError>,
+) {
+    let blocks = func.function.blocks.len();
+    let insns: usize = func.function.blocks.values().map(|b| b.insns.len()).sum();
+    let phis: usize = func.phi_map.values().map(|phis| phis.len()).sum();
+    match res {
+        Ok(changed) => tracing::debug!(
+            target: "unlace::pass",
+            "func={func_name} pass={} done changed={} maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={} foldable={} lvars={}",
+            pass.name(),
+            changed,
+            func.maturity,
+            blocks,
+            insns,
+            phis,
+            func.var_map.len(),
+            func.merged_names.len(),
+            func.foldable_exprs.len(),
+            func.lvars.len(),
+        ),
+        Err(err) => tracing::debug!(
+            target: "unlace::pass",
+            "func={func_name} pass={} error={err:?} maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={}",
+            pass.name(),
+            func.maturity,
+            blocks,
+            insns,
+            phis,
+            func.var_map.len(),
+            func.merged_names.len(),
+        ),
+    }
+}
+
+/// Run `pass` against `func`, instrumenting per `options` and the active
+/// `tracing` filter.
+///
+/// With no diagnostics configured and tracing filtered out this is a few
+/// relaxed atomic loads plus the underlying [`Pass::run`] call.
+pub fn run_instrumented(
+    pass: &dyn Pass,
+    func: &mut SsaFunction,
+    options: &PassOptions,
+) -> Result<bool, PassError> {
+    let audit = options.diagnostics.schedule_audit.is_some();
+    if options.is_disabled(pass.name()) {
+        if audit {
+            push_schedule_row(
+                &func.function.name,
+                pass.name(),
+                pass.phase(),
+                ScheduleDecision::Skipped,
+                false,
+                "disabled by passes.disabled",
+            );
+        }
+        return Ok(false);
+    }
+    if !pass_allowed_by_opt_bisect(options.bisect_limit) {
+        if audit {
+            push_schedule_row(
+                &func.function.name,
+                pass.name(),
+                pass.phase(),
+                ScheduleDecision::Skipped,
+                false,
+                "skipped by passes.bisect_limit",
+            );
+        }
+        return Ok(false);
+    }
+
+    let _span = tracing::debug_span!(target: "unlace::pass", "pass", name = pass.name()).entered();
+    // A per-pass linkscope span attributes wall-clock to the pass runner.
+    let _linkscope_span = linkscope::phase("pass.run");
+    let _linkscope_trace = linkscope::is_enabled().then(|| {
+        linkscope::event_fields("pass.start", linkscope_pass_fields(pass, func));
+        linkscope::trace_fields("pass.run", linkscope_pass_fields(pass, func))
+    });
+    linkscope::record_items("pass.run", 1);
+    let name_span_enabled = options.diagnostics.linkscope_pass_names && linkscope::is_enabled();
+
+    let ir_diff = tracing::enabled!(target: "unlace::pass::ir", Level::TRACE);
+    let timing = pass_timing_enabled();
+    let csv = options.diagnostics.timing_csv.is_some();
+    let verify = options.verify_each;
+    let pass_trace = tracing::enabled!(target: "unlace::pass", Level::DEBUG);
+
+    if !ir_diff && !timing && !csv && !audit && !verify && !pass_trace {
+        let _pass_name_span = name_span_enabled.then(|| linkscope_pass_name_span(pass.name()));
+        return pass.run(func);
+    }
+
+    if pass_trace {
+        trace_pass_start(pass, func);
+    }
+
+    let before = ir_diff.then(|| format!("{:#?}", func));
+
+    let start = (timing || csv).then(Instant::now);
+    // Snapshot the function name *before* `pass.run` mutates the IR. Most
+    // passes don't rename functions, but a few (e.g. RustPanicPass) can
+    // touch the name — record against the pre-pass identity so the CSV
+    // groups behave like a stable key.
+    let func_name = func.function.name.clone();
+    let res = {
+        let _pass_name_span = name_span_enabled.then(|| linkscope_pass_name_span(pass.name()));
+        pass.run(func)
+    };
+    if audit {
+        let changed = matches!(res, Ok(true));
+        push_schedule_row(
+            &func_name,
+            pass.name(),
+            pass.phase(),
+            ScheduleDecision::Run,
+            changed,
+            "",
+        );
+    }
+    if let Some(t0) = start {
+        let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        record_pass_timing(&func_name, pass.name(), ns, csv);
+    }
+
+    if pass_trace {
+        trace_pass_done(pass, &func_name, func, &res);
+    }
+
+    if let Some(pre) = before {
+        let post = format!("{:#?}", func);
+        emit_trace_diff(pass.name(), &pre, &post);
+    }
+
+    match res {
+        Ok(changed) => {
+            if verify {
+                verify_ssa_function_pipeline(func).map_err(|err| {
+                    PassError::InvariantViolation {
+                        message: format!(
+                            "{} after {} failed IR verification: {err}",
+                            func.function.name,
+                            pass.name()
+                        ),
+                    }
+                })?;
+            }
+            Ok(changed)
+        }
+        Err(err) => Err(err),
     }
 }
 
@@ -700,211 +647,7 @@ pub fn dump_pass_timings_csv() -> String {
     out
 }
 
-/// Run `pass` against `func`, instrumenting per the active env flags.
-///
-/// In the common case (no knob set) this is exactly one pair of
-/// `OnceLock` loads + the underlying [`Pass::run`] call — no allocation,
-/// no string formatting, no clock read.
-pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool, PassError> {
-    if pass_is_disabled(pass.name()) {
-        record_schedule_skip_event(
-            &func.function.name,
-            pass.name(),
-            pass.phase(),
-            "disabled by UNLACE_DISABLE_PASSES",
-        );
-        return Ok(false);
-    }
-    if !pass_allowed_by_opt_bisect() {
-        record_schedule_skip_event(
-            &func.function.name,
-            pass.name(),
-            pass.phase(),
-            "skipped by UNLACE_OPT_BISECT_LIMIT",
-        );
-        return Ok(false);
-    }
-
-    // A per-pass linkscope span attributes wall-clock to the pass runner.
-    let _linkscope_span = linkscope::phase("pass.run");
-    let _linkscope_trace = if linkscope_trace_enabled() {
-        linkscope::event_fields(
-            "pass.start",
-            [
-                TraceField::text("function", func.function.name.clone()),
-                TraceField::text("pass", pass.name().to_string()),
-                TraceField::text("phase", format!("{:?}", pass.phase())),
-                TraceField::text("maturity", format!("{:?}", func.maturity)),
-                TraceField::count("blocks", func.function.blocks.len() as u64),
-                TraceField::count(
-                    "insns",
-                    func.function
-                        .blocks
-                        .values()
-                        .map(|b| b.insns.len() as u64)
-                        .sum(),
-                ),
-            ],
-        );
-        Some(linkscope::trace_fields(
-            "pass.run",
-            [
-                TraceField::text("function", func.function.name.clone()),
-                TraceField::text("pass", pass.name().to_string()),
-                TraceField::text("phase", format!("{:?}", pass.phase())),
-                TraceField::text("maturity", format!("{:?}", func.maturity)),
-                TraceField::count("blocks", func.function.blocks.len() as u64),
-                TraceField::count(
-                    "insns",
-                    func.function
-                        .blocks
-                        .values()
-                        .map(|b| b.insns.len() as u64)
-                        .sum(),
-                ),
-            ],
-        ))
-    } else {
-        None
-    };
-    linkscope::record_items("pass.run", 1);
-
-    let trace = pass_should_trace(pass.name());
-    let timing = pass_timing_enabled();
-    let csv = func_timing_enabled();
-    let audit = schedule_audit_enabled();
-    let verify = verify_each_enabled();
-    let pass_trace = pass_run_trace_enabled();
-
-    if !trace && !timing && !csv && !audit && !verify && !pass_trace {
-        let _pass_name_span = linkscope_pass_name_span(pass.name());
-        return pass.run(func);
-    }
-
-    if pass_trace {
-        let blocks = func.function.blocks.len();
-        let insns: usize = func.function.blocks.values().map(|b| b.insns.len()).sum();
-        let phis: usize = func.phi_map.values().map(|phis| phis.len()).sum();
-        eprintln!(
-            "[unlace pass] func={} pass={} phase={:?} start maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={} foldable={} lvars={}",
-            func.function.name,
-            pass.name(),
-            pass.phase(),
-            func.maturity,
-            blocks,
-            insns,
-            phis,
-            func.var_map.len(),
-            func.merged_names.len(),
-            func.foldable_exprs.len(),
-            func.lvars.len(),
-        );
-    }
-
-    let before = if trace {
-        Some(format!("{:#?}", func))
-    } else {
-        None
-    };
-
-    // Both timing flavours share the same clock read, so a single
-    // `Instant::now()` covers `UNLACE_TIMING=1`, `UNLACE_TIMING_CSV=...`,
-    // or both at once.
-    let start = if timing || csv {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    // Snapshot the function name *before* `pass.run` mutates the IR. Most
-    // passes don't rename functions, but a few (e.g. RustPanicPass) can
-    // touch the name — record against the pre-pass identity so the CSV
-    // groups behave like a stable key.
-    let func_name_owned = if csv || audit || pass_trace {
-        Some(func.function.name.clone())
-    } else {
-        None
-    };
-    let res = {
-        let _pass_name_span = linkscope_pass_name_span(pass.name());
-        pass.run(func)
-    };
-    if audit {
-        let changed = matches!(res, Ok(true));
-        let func_name = func_name_owned.as_deref().unwrap_or("");
-        record_schedule_event(func_name, pass.name(), pass.phase(), changed);
-    }
-    if let Some(t0) = start {
-        let ns = t0.elapsed().as_nanos();
-        // saturating cast — a single pass call exceeding ~584 years is
-        // not a realistic measurement target.
-        let ns_u64 = if ns > u128::from(u64::MAX) {
-            u64::MAX
-        } else {
-            ns as u64
-        };
-        // Use the captured pre-pass name when CSV recording is active;
-        // otherwise an empty string — the aggregate branch ignores it.
-        let func_name = func_name_owned.as_deref().unwrap_or("");
-        record_pass_timing(func_name, pass.name(), ns_u64);
-    }
-
-    if pass_trace {
-        let blocks = func.function.blocks.len();
-        let insns: usize = func.function.blocks.values().map(|b| b.insns.len()).sum();
-        let phis: usize = func.phi_map.values().map(|phis| phis.len()).sum();
-        let func_name = func_name_owned.as_deref().unwrap_or(&func.function.name);
-        match &res {
-            Ok(changed) => eprintln!(
-                "[unlace pass] func={func_name} pass={} done changed={} maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={} foldable={} lvars={}",
-                pass.name(),
-                changed,
-                func.maturity,
-                blocks,
-                insns,
-                phis,
-                func.var_map.len(),
-                func.merged_names.len(),
-                func.foldable_exprs.len(),
-                func.lvars.len(),
-            ),
-            Err(err) => eprintln!(
-                "[unlace pass] func={func_name} pass={} error={err:?} maturity={:?} blocks={} insns={} phis={} var_map={} merged_names={}",
-                pass.name(),
-                func.maturity,
-                blocks,
-                insns,
-                phis,
-                func.var_map.len(),
-                func.merged_names.len(),
-            ),
-        }
-    }
-
-    if let Some(pre) = before {
-        let post = format!("{:#?}", func);
-        emit_trace_diff(pass.name(), &pre, &post);
-    }
-
-    match res {
-        Ok(changed) => {
-            if verify {
-                verify_ssa_function_pipeline(func).map_err(|err| {
-                    PassError::InvariantViolation {
-                        message: format!(
-                            "{} after {} failed IR verification: {err}",
-                            func.function.name,
-                            pass.name()
-                        ),
-                    }
-                })?;
-            }
-            Ok(changed)
-        }
-        Err(err) => Err(err),
-    }
-}
-
-/// Emit a minimal pre/post IR diff to stderr.
+/// Emit a minimal pre/post IR diff as `unlace::pass::ir` trace events.
 ///
 /// Not a full LCS diff (the cost would dwarf the pass for big IRs);
 /// instead we line up the snapshots and emit only the lines that
@@ -913,10 +656,10 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
 /// so users know the pass ran but was a no-op.
 fn emit_trace_diff(pass: &str, before: &str, after: &str) {
     if before == after {
-        eprintln!("=== pass-trace {pass}: (no IR change) ===");
+        tracing::trace!(target: "unlace::pass::ir", "=== pass-trace {pass}: (no IR change) ===");
         return;
     }
-    eprintln!("=== pass-trace {pass}: BEGIN ===");
+    tracing::trace!(target: "unlace::pass::ir", "=== pass-trace {pass}: BEGIN ===");
     let before_lines: Vec<&str> = before.lines().collect();
     let after_lines: Vec<&str> = after.lines().collect();
     let max_len = before_lines.len().max(after_lines.len());
@@ -926,15 +669,15 @@ fn emit_trace_diff(pass: &str, before: &str, after: &str) {
         match (b, a) {
             (Some(bl), Some(al)) if bl == al => {}
             (Some(bl), Some(al)) => {
-                eprintln!("- {bl}");
-                eprintln!("+ {al}");
+                tracing::trace!(target: "unlace::pass::ir", "- {bl}");
+                tracing::trace!(target: "unlace::pass::ir", "+ {al}");
             }
-            (Some(bl), None) => eprintln!("- {bl}"),
-            (None, Some(al)) => eprintln!("+ {al}"),
+            (Some(bl), None) => tracing::trace!(target: "unlace::pass::ir", "- {bl}"),
+            (None, Some(al)) => tracing::trace!(target: "unlace::pass::ir", "+ {al}"),
             (None, None) => {}
         }
     }
-    eprintln!("=== pass-trace {pass}: END ===");
+    tracing::trace!(target: "unlace::pass::ir", "=== pass-trace {pass}: END ===");
 }
 
 /// **Test-only** reset of *both* timing accumulators. Not exposed
@@ -962,34 +705,8 @@ fn reset_timings_for_test() {
     }
 }
 
-/// **Test-only** direct write into the schedule audit log, bypassing the
-/// `UNLACE_SCHEDULE_AUDIT` env gate. Lets the formatter be tested without
-/// mutating process-global env state.
-#[cfg(test)]
-fn record_schedule_event_for_test(function: &str, pass: &str, phase: PassPhase, changed: bool) {
-    push_schedule_row(function, pass, phase, ScheduleDecision::Run, changed, "");
-}
-
-#[cfg(test)]
-fn record_schedule_skip_event_for_test(
-    function: &str,
-    pass: &str,
-    phase: PassPhase,
-    reason: &'static str,
-) {
-    push_schedule_row(
-        function,
-        pass,
-        phase,
-        ScheduleDecision::Skipped,
-        false,
-        reason,
-    );
-}
-
 /// **Test-only** direct write into the per-function accumulator,
-/// bypassing the `UNLACE_TIMING_CSV` env-var gate so tests can exercise
-/// the CSV formatter without mutating process-global env state.
+/// bypassing [`run_instrumented`] so tests can exercise the CSV formatter.
 #[cfg(test)]
 fn record_func_timing_for_test(function: &str, pass: &str, elapsed_ns: u64) {
     let mut map = func_timings().lock().unwrap_or_else(|p| p.into_inner());
@@ -1003,19 +720,34 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    // Tests touch process-global state (env vars + the timing map), so
+    // Tests touch process-global state (the timing and audit logs), so
     // they must run serially. A module-local Mutex enforces that without
     // an extra dev-dep.
     static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn record_run_for_test(function: &str, pass: &str, phase: PassPhase, changed: bool) {
+        push_schedule_row(function, pass, phase, ScheduleDecision::Run, changed, "");
+    }
+
+    fn record_skip_for_test(function: &str, pass: &str, phase: PassPhase, reason: &'static str) {
+        push_schedule_row(
+            function,
+            pass,
+            phase,
+            ScheduleDecision::Skipped,
+            false,
+            reason,
+        );
+    }
 
     #[test]
     fn record_pass_timing_accumulates() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         reset_timings_for_test();
 
-        record_pass_timing("test_fn", "alpha", 1_000_000); // 1 ms
-        record_pass_timing("test_fn", "alpha", 3_000_000); // 3 ms
-        record_pass_timing("test_fn", "beta", 2_000_000); // 2 ms
+        record_pass_timing("test_fn", "alpha", 1_000_000, false); // 1 ms
+        record_pass_timing("test_fn", "alpha", 3_000_000, false); // 3 ms
+        record_pass_timing("test_fn", "beta", 2_000_000, false); // 2 ms
 
         let table = dump_pass_timings();
         // alpha: 2 samples, total 4ms, avg 2ms, max 3ms
@@ -1042,7 +774,7 @@ mod tests {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         reset_timings_for_test();
 
-        record_pass_timing("test_fn", "only", 5_500_000); // 5.5 ms
+        record_pass_timing("test_fn", "only", 5_500_000, false); // 5.5 ms
 
         let table = dump_pass_timings();
         let expected = "\
@@ -1060,36 +792,23 @@ mod tests {
         assert_eq!(dump_pass_timings(), "");
     }
 
-    // NOTE: `pass_should_trace` / `pass_timing_enabled` cache the env
-    // var read in a `OnceLock` for the entire process lifetime — that's
-    // a *requirement* for zero overhead in the hot path, but it makes
-    // them awkward to test directly. We assert the no-knob path is a
-    // no-op (no panic) without mutating the environment.
     #[test]
-    fn pass_should_trace_unset_is_false() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        // Must not panic. The literal `false` cannot be asserted without
-        // controlling the env, but the call itself must be safe.
-        _ = pass_should_trace("totally_made_up_pass_name_xyzzy");
+    fn disabled_passes_support_wildcard_and_exact_names() {
+        let options = PassOptions {
+            disabled: vec!["alpha".to_string(), "beta".to_string()],
+            ..PassOptions::default()
+        };
+        assert!(options.is_disabled("alpha"));
+        assert!(!options.is_disabled("gamma"));
+
+        let wildcard = PassOptions {
+            disabled: vec!["*".to_string()],
+            ..PassOptions::default()
+        };
+        assert!(wildcard.is_disabled("anything"));
     }
 
-    #[test]
-    fn pass_timing_enabled_no_panic() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        _ = pass_timing_enabled();
-    }
-
-    #[test]
-    fn pass_name_matches_supports_wildcard_and_exact_names() {
-        let set = vec!["alpha".to_string(), "beta".to_string()];
-        assert!(pass_name_matches(&set, "alpha"));
-        assert!(!pass_name_matches(&set, "gamma"));
-
-        let wildcard = vec!["*".to_string()];
-        assert!(pass_name_matches(&wildcard, "anything"));
-    }
-
-    // ---- UNLACE_TIMING_CSV (Batch 17 slice 2) ----
+    // ---- passes.diagnostics.timing_csv (Batch 17 slice 2) ----
 
     /// The per-function accumulator records `(function, pass)` tuples
     /// and orders successive samples for the same key by call index, so
@@ -1151,27 +870,16 @@ main,cse,0,12.346
         assert_eq!(csv, expected);
     }
 
-    /// `pass_timing_csv_path` reads the env once via `OnceLock` so it
-    /// can't be mutated mid-test; we only assert the call doesn't panic
-    /// and that the unset path returns `None` *in this test process*.
-    /// The CLI integration test in `unlace-cli` exercises the set path
-    /// end-to-end with a real env var.
-    #[test]
-    fn pass_timing_csv_path_no_panic() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        _ = pass_timing_csv_path();
-    }
-
-    // ---- UNLACE_SCHEDULE_AUDIT (Batch 16) ----
+    // ---- passes.diagnostics.schedule_audit (Batch 16) ----
 
     #[test]
     fn schedule_audit_records_iterations_and_phases() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         reset_timings_for_test();
 
-        record_schedule_event_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, true);
-        record_schedule_event_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, false);
-        record_schedule_event_for_test("f", "TypeInferPass", PassPhase::TypeRecovery, true);
+        record_run_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, true);
+        record_run_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, false);
+        record_run_for_test("f", "TypeInferPass", PassPhase::TypeRecovery, true);
 
         let csv = dump_schedule_audit_csv();
         let expected = "\
@@ -1188,19 +896,19 @@ f,TypeInferPass,TypeRecovery,0,run,1,
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         reset_timings_for_test();
 
-        record_schedule_event_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, true);
-        record_schedule_skip_event_for_test(
+        record_run_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, true);
+        record_skip_for_test(
             "f",
             "CopyPropagationPass",
             PassPhase::LocalOpt,
-            "disabled by UNLACE_DISABLE_PASSES",
+            "disabled by passes.disabled",
         );
 
         let csv = dump_schedule_audit_csv();
         let expected = "\
 function,pass,phase,iteration,decision,changed,reason
 f,ConstantFoldPass,LocalOpt,0,run,1,
-f,CopyPropagationPass,LocalOpt,0,skipped,0,disabled by UNLACE_DISABLE_PASSES
+f,CopyPropagationPass,LocalOpt,0,skipped,0,disabled by passes.disabled
 ";
         assert_eq!(csv, expected);
     }
@@ -1210,12 +918,12 @@ f,CopyPropagationPass,LocalOpt,0,skipped,0,disabled by UNLACE_DISABLE_PASSES
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         reset_timings_for_test();
 
-        record_schedule_event_for_test("g", "TypeInferPass", PassPhase::TypeRecovery, true);
-        record_schedule_skip_event_for_test(
+        record_run_for_test("g", "TypeInferPass", PassPhase::TypeRecovery, true);
+        record_skip_for_test(
             "g",
             "ConstantFoldPass",
             PassPhase::LocalOpt,
-            "skipped by UNLACE_OPT_BISECT_LIMIT",
+            "skipped by passes.bisect_limit",
         );
 
         assert!(
@@ -1234,9 +942,9 @@ f,CopyPropagationPass,LocalOpt,0,skipped,0,disabled by UNLACE_DISABLE_PASSES
         // 3. ConstantFoldPass (iter 1, LocalOpt) — backward AND iteration>0
         //    → oscillation, because the pass already ran once at the earlier
         //    phase and is now re-running after a later phase.
-        record_schedule_event_for_test("g", "ConstantFoldPass", PassPhase::LocalOpt, true);
-        record_schedule_event_for_test("g", "TypeInferPass", PassPhase::TypeRecovery, true);
-        record_schedule_event_for_test("g", "ConstantFoldPass", PassPhase::LocalOpt, false);
+        record_run_for_test("g", "ConstantFoldPass", PassPhase::LocalOpt, true);
+        record_run_for_test("g", "TypeInferPass", PassPhase::TypeRecovery, true);
+        record_run_for_test("g", "ConstantFoldPass", PassPhase::LocalOpt, false);
 
         let osc = schedule_audit_oscillations();
         assert_eq!(
@@ -1254,7 +962,7 @@ f,CopyPropagationPass,LocalOpt,0,skipped,0,disabled by UNLACE_DISABLE_PASSES
     fn schedule_audit_quiet_when_disabled() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         reset_timings_for_test();
-        // No env-driven recording, no test recording: the dump must just be
+        // No recording at all: the dump must just be
         // the header so consumers can rely on a stable shape.
         assert_eq!(
             dump_schedule_audit_csv(),

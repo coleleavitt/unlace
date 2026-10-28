@@ -9,6 +9,7 @@ unlace-loader = { workspace = true }
 unlace-passes = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
 tracing = { workspace = true }
 linkscope = { path = "../../../linkscope" }
 

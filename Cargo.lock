@@ -2518,6 +2518,9 @@ dependencies = [
  "smallvec",
  "tempfile",
  "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
  "unlace-debugger",
  "unlace-emu",
  "unlace-flirt",
@@ -2614,6 +2617,7 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -2622,6 +2626,7 @@ version = "0.1.0"
 dependencies = [
  "smallvec",
  "thiserror",
+ "tracing",
  "unlace-ir",
  "unlace-lift-6502",
  "unlace-lift-8051",
@@ -2805,6 +2810,7 @@ version = "0.1.0"
 dependencies = [
  "capstone",
  "smallvec",
+ "tracing",
  "unlace-capstone",
  "unlace-ir",
 ]
@@ -2922,6 +2928,7 @@ name = "unlace-lift-v850"
 version = "0.1.0"
 dependencies = [
  "smallvec",
+ "tracing",
  "unlace-ir",
 ]
 
@@ -3016,9 +3023,11 @@ dependencies = [
  "gimli",
  "insta",
  "linkscope",
+ "serde",
  "smallvec",
  "symbolic-demangle",
  "thiserror",
+ "tracing",
  "unlace-ir",
  "unlace-loader",
  "unlace-passes",
@@ -3036,6 +3045,7 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror",
+ "tracing",
  "unlace-ir",
  "unlace-loader",
 ]
@@ -3083,6 +3093,7 @@ version = "0.1.0"
 dependencies = [
  "insta",
  "linkscope",
+ "serde",
  "smallvec",
  "thiserror",
  "tracing",

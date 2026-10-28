@@ -79,7 +79,7 @@ use unlace_passes::{
     ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IndirectCallResolvePass,
     IndirectJumpResolvePass, IvElimPass, KnownBitsSimplifyPass, LicmPass, LvarCollectPass,
     MemorySsaDsePass, ModuloIdiomPass, NoreturnDetectPass, ObjcDispatchPass, OpTypeBindingPass,
-    OuterFixedpointReport, ParamInferPass, PassAdapter, PassWithContext, PathSensitivePass,
+    OuterFixedpointReport, ParamInferPass, PassAdapter, PassOptions, PassWithContext,
     PrologueElimPass, RedundantFlagElimPass, RegisterCoalescePass, RepStringIdiomPass,
     ReturnTypeInferPass, RustAsyncPass, RustEnumPass, RustPanicPass, RustVtablePass, SccpPass,
     SignatureSnapshot, SizeofRecognitionPass, StackOffsetSnapshotPass, StackPointerTrackingPass,
@@ -1401,8 +1401,8 @@ fn cfg_build_trace_enabled() -> bool {
         .unwrap_or(false)
 }
 
-pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
-    let report = run_passes_with_report(ssa)?;
+pub fn run_passes(ssa: &mut SsaFunction, opts: &PassOptions) -> Result<usize> {
+    let report = run_passes_with_report_inner(ssa, None, None, opts)?;
     Ok(report.ir_changes)
 }
 
@@ -1414,8 +1414,9 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
 pub fn run_passes_with_resolver(
     ssa: &mut SsaFunction,
     resolver: &dyn Fn(u64) -> Option<&'static str>,
+    opts: &PassOptions,
 ) -> Result<usize> {
-    let report = run_passes_with_report_inner(ssa, Some(resolver), None)?;
+    let report = run_passes_with_report_inner(ssa, Some(resolver), None, opts)?;
     Ok(report.ir_changes)
 }
 
@@ -1440,12 +1441,13 @@ fn run_passes_with_resolver_until(
     ssa: &mut SsaFunction,
     resolver: &dyn Fn(u64) -> Option<&'static str>,
     deadline: Instant,
+    opts: &PassOptions,
 ) -> Result<usize> {
     let deadline = PassDeadline {
         deadline,
         func_name: ssa.function.name.clone(),
     };
-    let report = run_passes_with_report_inner(ssa, Some(resolver), Some(deadline))?;
+    let report = run_passes_with_report_inner(ssa, Some(resolver), Some(deadline), opts)?;
     Ok(report.ir_changes)
 }
 
@@ -1471,6 +1473,7 @@ fn run_passes_with_resolver_until(
 pub fn run_whole_program_interproc(
     funcs: &mut std::collections::BTreeMap<u64, SsaFunction>,
     cap: usize,
+    opts: &PassOptions,
 ) -> Result<unlace_passes::InterprocReport> {
     let cap = if cap == 0 {
         unlace_passes::DEFAULT_INTERPROC_CAP
@@ -1478,16 +1481,19 @@ pub fn run_whole_program_interproc(
         cap
     };
     unlace_passes::run_interproc_fixpoint(funcs, cap, |ssa| {
-        run_interproc_analysis_passes(ssa).map(|_| ()).map_err(|e| {
-            unlace_passes::PassError::InvariantViolation {
+        run_interproc_analysis_passes(ssa, opts)
+            .map(|_| ())
+            .map_err(|e| unlace_passes::PassError::InvariantViolation {
                 message: format!("per-function analysis failed: {e:#}"),
-            }
-        })
+            })
     })
     .context("interprocedural fixed-point loop failed")
 }
 
-fn run_interproc_analysis_passes(ssa: &mut SsaFunction) -> Result<PassesReport> {
+fn run_interproc_analysis_passes(
+    ssa: &mut SsaFunction,
+    opts: &PassOptions,
+) -> Result<PassesReport> {
     maybe_validate_pipeline_once();
     let pre_pipeline_sig = SignatureSnapshot::of(ssa);
     let mut changed = false;
@@ -1510,7 +1516,7 @@ fn run_interproc_analysis_passes(ssa: &mut SsaFunction) -> Result<PassesReport> 
                 ssa.function.name, ssa.maturity
             );
         }
-        pipeline_stage_type_recovery(ssa, None).context("interproc type refresh failed")?;
+        pipeline_stage_type_recovery(ssa, None, opts).context("interproc type refresh failed")?;
         changed = bump_if_signature_changed(ssa, &pre_pipeline_sig);
         if trace {
             eprintln!(
@@ -1617,6 +1623,7 @@ pub struct WholeProgramQualityReport {
 pub fn run_whole_program_quality_refinement(
     funcs: &mut std::collections::BTreeMap<u64, SsaFunction>,
     cap: usize,
+    opts: &PassOptions,
 ) -> Result<WholeProgramQualityReport> {
     let trace = std::env::var_os("UNLACE_INTERPROC_TRACE")
         .map(|v| v != "0")
@@ -1698,7 +1705,7 @@ pub fn run_whole_program_quality_refinement(
                 ssa.function.name, ssa.maturity
             );
         }
-        pipeline_stage_lvar(ssa).context("whole-program lvar refresh failed")?;
+        pipeline_stage_lvar(ssa, opts).context("whole-program lvar refresh failed")?;
         ssa.maturity = Maturity::Final;
         if trace {
             eprintln!(
@@ -1706,7 +1713,7 @@ pub fn run_whole_program_quality_refinement(
                 ssa.function.name, ssa.maturity
             );
         }
-        pipeline_stage_final(ssa, None).context("whole-program final refresh failed")?;
+        pipeline_stage_final(ssa, None, opts).context("whole-program final refresh failed")?;
 
         if ssa.lvars != before_lvars
             || ssa.merged_names != before_names
@@ -1799,7 +1806,7 @@ pub fn run_whole_program_quality_refinement(
 ///    presentation-layer concerns and re-running them inside the loop
 ///    would either be redundant or risk oscillation.
 pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
-    run_passes_with_report_inner(ssa, None, None)
+    run_passes_with_report_inner(ssa, None, None, &PassOptions::default())
 }
 
 /// Inner driver shared by [`run_passes_with_report`] (no resolver) and
@@ -1813,6 +1820,7 @@ fn run_passes_with_report_inner(
     ssa: &mut SsaFunction,
     resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
     deadline: Option<PassDeadline>,
+    opts: &PassOptions,
 ) -> Result<PassesReport> {
     let _profile_pass_pipeline = profile_ssa_stage("pipeline.passes", ssa, 0);
     maybe_validate_pipeline_once();
@@ -1821,7 +1829,8 @@ fn run_passes_with_report_inner(
     // (1) One-time pre-pass: snapshot pre-optimization stack offsets.
     {
         let _profile_stage = profile_ssa_stage("pipeline.pre-stack-snapshot", ssa, 0);
-        run_instrumented(&StackOffsetSnapshotPass, ssa).context("stack offset snapshot failed")?;
+        run_instrumented(&StackOffsetSnapshotPass, ssa, opts)
+            .context("stack offset snapshot failed")?;
     }
     check_pass_deadline(deadline.as_ref())?;
 
@@ -1844,7 +1853,7 @@ fn run_passes_with_report_inner(
     // `UNLACE_MATURITY_DUMP=<dir>` and one file per
     // (function, maturity-stage, outer-iter) is written into that directory
     // as a text dump of [`unlace_output::dump_ir`].
-    maturity_snapshot(ssa, "M_ZERO", 0);
+    maturity_snapshot(ssa, "M_ZERO", 0, opts);
 
     // (2) Outer fixed-point loop. Each iteration runs the staged pipeline;
     // the outer loop re-runs when type recovery discovers new facts.
@@ -1871,10 +1880,10 @@ fn run_passes_with_report_inner(
             let stage_start = Instant::now();
             let ir_changes = {
                 let _profile_stage = profile_ssa_stage("pipeline.maturity.generated", ssa, _iter);
-                pipeline_stage_ir_fixedpoint(ssa)?
+                pipeline_stage_ir_fixedpoint(ssa, opts)?
             };
             total_ir_changes = total_ir_changes.saturating_add(ir_changes);
-            maturity_snapshot(ssa, "M_GENERATED", _iter);
+            maturity_snapshot(ssa, "M_GENERATED", _iter, opts);
             pipeline_trace_maturity_stage(
                 ssa,
                 "M_GENERATED",
@@ -1890,9 +1899,9 @@ fn run_passes_with_report_inner(
             {
                 let _profile_stage =
                     profile_ssa_stage("pipeline.maturity.preoptimized", ssa, _iter);
-                pipeline_stage_cleanup(ssa)?;
+                pipeline_stage_cleanup(ssa, opts)?;
             }
-            maturity_snapshot(ssa, "M_PREOPTIMIZED", _iter);
+            maturity_snapshot(ssa, "M_PREOPTIMIZED", _iter, opts);
             pipeline_trace_maturity_stage(ssa, "M_PREOPTIMIZED", _iter, stage_start, "");
             check_pass_deadline(deadline.as_ref())?;
 
@@ -1901,9 +1910,9 @@ fn run_passes_with_report_inner(
             let stage_start = Instant::now();
             {
                 let _profile_stage = profile_ssa_stage("pipeline.maturity.localopt", ssa, _iter);
-                pipeline_stage_structural(ssa)?;
+                pipeline_stage_structural(ssa, opts)?;
             }
-            maturity_snapshot(ssa, "M_LOCOPT", _iter);
+            maturity_snapshot(ssa, "M_LOCOPT", _iter, opts);
             pipeline_trace_maturity_stage(ssa, "M_LOCOPT", _iter, stage_start, "");
             check_pass_deadline(deadline.as_ref())?;
 
@@ -1912,9 +1921,9 @@ fn run_passes_with_report_inner(
             let stage_start = Instant::now();
             {
                 let _profile_stage = profile_ssa_stage("pipeline.maturity.calls", ssa, _iter);
-                pipeline_stage_call_resolution(ssa)?;
+                pipeline_stage_call_resolution(ssa, opts)?;
             }
-            maturity_snapshot(ssa, "M_CALLS", _iter);
+            maturity_snapshot(ssa, "M_CALLS", _iter, opts);
             pipeline_trace_maturity_stage(ssa, "M_CALLS", _iter, stage_start, "");
             check_pass_deadline(deadline.as_ref())?;
 
@@ -1923,9 +1932,9 @@ fn run_passes_with_report_inner(
             let stage_start = Instant::now();
             {
                 let _profile_stage = profile_ssa_stage("pipeline.maturity.globalopt", ssa, _iter);
-                pipeline_stage_type_recovery(ssa, resolver)?;
+                pipeline_stage_type_recovery(ssa, resolver, opts)?;
             }
-            maturity_snapshot(ssa, "M_GLBOPT", _iter);
+            maturity_snapshot(ssa, "M_GLBOPT", _iter, opts);
             pipeline_trace_maturity_stage(ssa, "M_GLBOPT", _iter, stage_start, "");
             check_pass_deadline(deadline.as_ref())?;
 
@@ -1951,23 +1960,16 @@ fn run_passes_with_report_inner(
     let stage_start = Instant::now();
     {
         let _profile_stage = profile_ssa_stage("pipeline.maturity.lvars-post-loop", ssa, 0);
-        pipeline_stage_post_loop(ssa)?;
+        pipeline_stage_post_loop(ssa, opts)?;
     }
     pipeline_trace_maturity_stage(ssa, "M_LVARS_POST_LOOP", 0, stage_start, "");
     check_pass_deadline(deadline.as_ref())?;
     let stage_start = Instant::now();
     {
-        let _profile_stage = profile_ssa_stage("pipeline.maturity.experimental-old", ssa, 0);
-        pipeline_stage_experimental_old(ssa, resolver)?;
-    }
-    pipeline_trace_maturity_stage(ssa, "M_LVARS_EXPERIMENTAL_OLD", 0, stage_start, "");
-    check_pass_deadline(deadline.as_ref())?;
-    let stage_start = Instant::now();
-    {
         let _profile_stage = profile_ssa_stage("pipeline.maturity.lvars", ssa, 0);
-        pipeline_stage_lvar(ssa)?;
+        pipeline_stage_lvar(ssa, opts)?;
     }
-    maturity_snapshot(ssa, "M_LVARS", 0);
+    maturity_snapshot(ssa, "M_LVARS", 0, opts);
     pipeline_trace_maturity_stage(ssa, "M_LVARS", 0, stage_start, "");
     check_pass_deadline(deadline.as_ref())?;
 
@@ -1976,9 +1978,9 @@ fn run_passes_with_report_inner(
     let stage_start = Instant::now();
     {
         let _profile_stage = profile_ssa_stage("pipeline.maturity.final", ssa, 0);
-        pipeline_stage_final(ssa, resolver)?;
+        pipeline_stage_final(ssa, resolver, opts)?;
     }
-    maturity_snapshot(ssa, "M_FINAL", 0);
+    maturity_snapshot(ssa, "M_FINAL", 0, opts);
     pipeline_trace_maturity_stage(ssa, "M_FINAL", 0, stage_start, "");
     check_pass_deadline(deadline.as_ref())?;
 
@@ -2003,29 +2005,14 @@ fn run_passes_with_report_inner(
     })
 }
 
-/// Cached destination directory for [`maturity_snapshot`]. `None` when
-/// `UNLACE_MATURITY_DUMP` is unset (the common hot-path case). Read once
-/// per process via `OnceLock` so the no-op path is a single atomic load.
-fn maturity_dump_dir() -> Option<&'static std::path::Path> {
-    use std::path::PathBuf;
-    use std::sync::OnceLock;
-    static CELL: OnceLock<Option<PathBuf>> = OnceLock::new();
-    CELL.get_or_init(|| {
-        std::env::var_os("UNLACE_MATURITY_DUMP")
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-    })
-    .as_deref()
-}
-
-/// Write an IR snapshot for `ssa` to `<UNLACE_MATURITY_DUMP>/<func>-<stage>-<iter>.txt`.
+/// Write an IR snapshot for `ssa` to `<maturity_dump>/<func>-<stage>-<iter>.txt`.
 ///
-/// Noop when the env var is unset. On write error we log a tracing
+/// Noop unless `passes.diagnostics.maturity_dump` is configured. On write error we log a tracing
 /// warning but do not propagate — snapshots are observability, not
 /// correctness. `iter` is the outer-fixedpoint iteration this stage ran
 /// in; for stages that live outside the outer loop pass `0`.
-fn maturity_snapshot(ssa: &SsaFunction, stage: &str, iter: usize) {
-    let Some(dir) = maturity_dump_dir() else {
+fn maturity_snapshot(ssa: &SsaFunction, stage: &str, iter: usize, opts: &PassOptions) {
+    let Some(dir) = opts.diagnostics.maturity_dump.as_deref() else {
         return;
     };
     if let Err(e) = std::fs::create_dir_all(dir) {
@@ -2374,10 +2361,6 @@ fn pipeline_trace_ssa_details(func_name: &str, stage: &str, ssa: &SsaFunction) {
     }
 }
 
-fn old_experimental_passes_enabled() -> bool {
-    env_flag_enabled("UNLACE_EXPERIMENTAL_OLD_PASSES")
-}
-
 fn known_struct_types(ssa: &SsaFunction) -> Vec<Type> {
     let mut structs: Vec<Type> = ssa.composite_var_types.values().cloned().collect();
     structs.extend(ssa.inferred_structs.values().cloned());
@@ -2387,18 +2370,25 @@ fn known_struct_types(ssa: &SsaFunction) -> Vec<Type> {
 /// Stage 1 (M_GENERATED): IR-level fixed-point cluster.
 /// Runs ConstFold, CopyProp, SCCP, CSE, GVN, LICM, IV-elim, idioms,
 /// and condition simplification to convergence.
-fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_passes::PassError> {
+fn pipeline_stage_ir_fixedpoint(
+    ssa: &mut SsaFunction,
+    opts: &PassOptions,
+) -> Result<usize, unlace_passes::PassError> {
     let alias_pass = AliasCategorizePass::new();
     let fold_pass = ConstantFoldPass;
     let prop_pass = CopyPropagationPass;
     let gprop_pass = GlobalCopyPropPass;
     let dce_pass = DeadCodeElimPass;
-    let sccp_pass = SccpPass;
+    let sccp_pass = SccpPass { limits: opts.sccp };
     let cse_pass = CsePass;
     let gvn_pass = GvnPass;
     let licm_pass = LicmPass;
-    let iv_elim_pass = IvElimPass;
-    let strength_reduce_pass = StrengthReducePass;
+    let iv_elim_pass = IvElimPass {
+        limits: opts.iv_opt,
+    };
+    let strength_reduce_pass = StrengthReducePass {
+        limits: opts.iv_opt,
+    };
     let idiom_pass = IdiomRecognitionPass;
     let bmi_pass = BmiIdiomPass;
     let cond_pass = ConditionSimplifyPass;
@@ -2408,37 +2398,85 @@ fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_p
     let call_bound_pass = CallBoundaryCopyPropPass;
     let red_flag_pass = RedundantFlagElimPass;
     let algebraic_pass = AlgebraicSimplifyPass;
-    let alias = PassAdapter { inner: &alias_pass };
-    let fold = PassAdapter { inner: &fold_pass };
-    let prop = PassAdapter { inner: &prop_pass };
-    let gprop = PassAdapter { inner: &gprop_pass };
-    let dce = PassAdapter { inner: &dce_pass };
-    let sccp = PassAdapter { inner: &sccp_pass };
-    let cse = PassAdapter { inner: &cse_pass };
-    let gvn = PassAdapter { inner: &gvn_pass };
-    let bmi = PassAdapter { inner: &bmi_pass };
-    let licm = PassAdapter { inner: &licm_pass };
+    let alias = PassAdapter {
+        inner: &alias_pass,
+        options: opts,
+    };
+    let fold = PassAdapter {
+        inner: &fold_pass,
+        options: opts,
+    };
+    let prop = PassAdapter {
+        inner: &prop_pass,
+        options: opts,
+    };
+    let gprop = PassAdapter {
+        inner: &gprop_pass,
+        options: opts,
+    };
+    let dce = PassAdapter {
+        inner: &dce_pass,
+        options: opts,
+    };
+    let sccp = PassAdapter {
+        inner: &sccp_pass,
+        options: opts,
+    };
+    let cse = PassAdapter {
+        inner: &cse_pass,
+        options: opts,
+    };
+    let gvn = PassAdapter {
+        inner: &gvn_pass,
+        options: opts,
+    };
+    let bmi = PassAdapter {
+        inner: &bmi_pass,
+        options: opts,
+    };
+    let licm = PassAdapter {
+        inner: &licm_pass,
+        options: opts,
+    };
     let iv_elim = PassAdapter {
         inner: &iv_elim_pass,
+        options: opts,
     };
     let strength_reduce = PassAdapter {
         inner: &strength_reduce_pass,
+        options: opts,
     };
-    let idiom = PassAdapter { inner: &idiom_pass };
-    let cond = PassAdapter { inner: &cond_pass };
-    let bool_simplify = PassAdapter { inner: &bool_pass };
+    let idiom = PassAdapter {
+        inner: &idiom_pass,
+        options: opts,
+    };
+    let cond = PassAdapter {
+        inner: &cond_pass,
+        options: opts,
+    };
+    let bool_simplify = PassAdapter {
+        inner: &bool_pass,
+        options: opts,
+    };
     let known_bits = PassAdapter {
         inner: &known_bits_pass,
+        options: opts,
     };
-    let cmov = PassAdapter { inner: &cmov_pass };
+    let cmov = PassAdapter {
+        inner: &cmov_pass,
+        options: opts,
+    };
     let call_bound = PassAdapter {
         inner: &call_bound_pass,
+        options: opts,
     };
     let red_flag = PassAdapter {
         inner: &red_flag_pass,
+        options: opts,
     };
     let algebraic = PassAdapter {
         inner: &algebraic_pass,
+        options: opts,
     };
     let passes: &[&dyn PassWithContext] = &[
         &alias,
@@ -2468,25 +2506,31 @@ fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_p
 
 /// Stage 2 (M_PREOPTIMIZED): single-run cleanup passes.
 /// DSE (intra + cross-block), dead flags, division/modulo idioms.
-fn pipeline_stage_cleanup(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
-    run_instrumented(&DeadStoreElimPass, ssa)?;
-    run_instrumented(&DeadFlagElimPass, ssa)?;
-    run_instrumented(&MemorySsaDsePass, ssa)?;
-    run_instrumented(&CfgRepairPass, ssa)?;
-    run_instrumented(&DeadStoreElimGlobalPass, ssa)?;
-    run_instrumented(&DivisionIdiomPass, ssa)?;
-    run_instrumented(&ModuloIdiomPass, ssa)?;
-    run_instrumented(&unlace_passes::SixtyFourBitDemotePass, ssa)?;
+fn pipeline_stage_cleanup(
+    ssa: &mut SsaFunction,
+    opts: &PassOptions,
+) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&DeadStoreElimPass, ssa, opts)?;
+    run_instrumented(&DeadFlagElimPass, ssa, opts)?;
+    run_instrumented(&MemorySsaDsePass, ssa, opts)?;
+    run_instrumented(&CfgRepairPass, ssa, opts)?;
+    run_instrumented(&DeadStoreElimGlobalPass, ssa, opts)?;
+    run_instrumented(&DivisionIdiomPass, ssa, opts)?;
+    run_instrumented(&ModuloIdiomPass, ssa, opts)?;
+    run_instrumented(&unlace_passes::SixtyFourBitDemotePass, ssa, opts)?;
     Ok(())
 }
 
 /// Stage 3 (M_LOCOPT): structural detection + stack/frame recovery.
 /// Prologue elim, tail-call, SP tracking, stack vars, frame layout.
-fn pipeline_stage_structural(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
-    run_instrumented(&PrologueElimPass, ssa)?;
-    run_instrumented(&TailCallDetectPass, ssa)?;
-    run_instrumented(&StackPointerTrackingPass, ssa)?;
-    run_instrumented(&StackVarRecoveryPass, ssa)?;
+fn pipeline_stage_structural(
+    ssa: &mut SsaFunction,
+    opts: &PassOptions,
+) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&PrologueElimPass, ssa, opts)?;
+    run_instrumented(&TailCallDetectPass, ssa, opts)?;
+    run_instrumented(&StackPointerTrackingPass, ssa, opts)?;
+    run_instrumented(&StackVarRecoveryPass, ssa, opts)?;
     // Calibrate the CFA-relative DWARF local/param offsets onto the real
     // resolved stack slots now that `stack_offset_hints` / `stack_vars`
     // expose the offsets the decompiler observes. This re-keys
@@ -2494,7 +2538,7 @@ fn pipeline_stage_structural(ssa: &mut SsaFunction) -> Result<(), unlace_passes:
     // and type land on the same slot (avoiding the historical desync).
     calibrate_dwarf_offsets(ssa);
     ssa.stack_frame = Some(recover_stack_frame(ssa));
-    run_instrumented(&StackPointerTrackingPass, ssa)?;
+    run_instrumented(&StackPointerTrackingPass, ssa, opts)?;
     Ok(())
 }
 
@@ -2683,10 +2727,13 @@ fn dwarf_map_trace_enabled() -> bool {
 }
 
 /// Stage 4 (M_CALLS): indirect call resolution + vtable detection.
-fn pipeline_stage_call_resolution(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
-    run_instrumented(&IndirectCallResolvePass, ssa)?;
-    run_instrumented(&CppVtablePass, ssa)?;
-    run_instrumented(&CppMethodPass, ssa)?;
+fn pipeline_stage_call_resolution(
+    ssa: &mut SsaFunction,
+    opts: &PassOptions,
+) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&IndirectCallResolvePass, ssa, opts)?;
+    run_instrumented(&CppVtablePass, ssa, opts)?;
+    run_instrumented(&CppMethodPass, ssa, opts)?;
     Ok(())
 }
 
@@ -2696,69 +2743,55 @@ fn pipeline_stage_call_resolution(ssa: &mut SsaFunction) -> Result<(), unlace_pa
 fn pipeline_stage_type_recovery(
     ssa: &mut SsaFunction,
     resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
+    opts: &PassOptions,
 ) -> Result<(), unlace_passes::PassError> {
-    run_instrumented(&CallingConventionDetectPass, ssa)?;
-    run_instrumented(&ParamInferPass, ssa)?;
-    run_instrumented(&ReturnTypeInferPass, ssa)?;
-    run_instrumented(&StructFieldDetectPass, ssa)?;
+    run_instrumented(&CallingConventionDetectPass, ssa, opts)?;
+    run_instrumented(&ParamInferPass, ssa, opts)?;
+    run_instrumented(&ReturnTypeInferPass, ssa, opts)?;
+    run_instrumented(&StructFieldDetectPass, ssa, opts)?;
     ssa.byref_info = Some(detect_byref(ssa));
     ssa.array_struct_layouts = recover_structs(ssa);
-    run_instrumented(&unlace_passes::type_infer::TypeInferPass, ssa)?;
-    run_instrumented(&TypeConstraintSolverPass, ssa)?;
+    run_instrumented(&unlace_passes::type_infer::TypeInferPass, ssa, opts)?;
+    run_instrumented(
+        &TypeConstraintSolverPass {
+            limits: opts.type_constraint,
+        },
+        ssa,
+        opts,
+    )?;
     if let Some(resolve) = resolver {
         let structs = known_struct_types(ssa);
         let _ = unlace_passes::recognize_with_resolver(ssa, resolve, &structs);
     } else {
-        run_instrumented(&SizeofRecognitionPass::default(), ssa)?;
+        run_instrumented(&SizeofRecognitionPass::default(), ssa, opts)?;
     }
-    run_instrumented(&CppVariantPass, ssa)?;
-    run_instrumented(&CppLambdaCapturePass, ssa)?;
-    run_instrumented(&CppCoroutinePass, ssa)?;
-    run_instrumented(&RustAsyncPass, ssa)?;
+    run_instrumented(&CppVariantPass, ssa, opts)?;
+    run_instrumented(&CppLambdaCapturePass, ssa, opts)?;
+    run_instrumented(&CppCoroutinePass, ssa, opts)?;
+    run_instrumented(&RustAsyncPass, ssa, opts)?;
     Ok(())
 }
 
 /// Stage 6a (M_LVARS): post-loop one-shot annotation passes.
 /// Pattern-recognition that doesn't influence the outer fixedpoint.
-fn pipeline_stage_post_loop(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
-    run_instrumented(&RepStringIdiomPass, ssa)?;
-    run_instrumented(&BitfieldIdiomPass, ssa)?;
-    run_instrumented(&CryptoIdiomPass, ssa)?;
-    run_instrumented(&IndirectCallResolvePass, ssa)?;
-    run_instrumented(&IndirectJumpResolvePass, ssa)?;
-    run_instrumented(&OpTypeBindingPass, ssa)?;
-    Ok(())
-}
-
-/// Optional one-shot bridge for older analysis/prototype passes.
-///
-/// This tier is intentionally outside the default fixedpoint and only runs old
-/// passes that currently write stable SSA metadata. Detection-only helpers and
-/// passes with stale side-table maintenance are kept as library code, but are
-/// not scheduled here until they gain a real output field.
-fn pipeline_stage_experimental_old(
+fn pipeline_stage_post_loop(
     ssa: &mut SsaFunction,
-    resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
+    opts: &PassOptions,
 ) -> Result<(), unlace_passes::PassError> {
-    if !old_experimental_passes_enabled() {
-        return Ok(());
-    }
-
-    run_instrumented(&PathSensitivePass, ssa)?;
-
-    if resolver.is_some() {
-        profiling::diagnostic(
-            "debug",
-            "experimental old-pass tier ran with resolver available",
-            [TraceField::text("function", ssa.function.name.clone())],
-        );
-    }
-
+    run_instrumented(&RepStringIdiomPass, ssa, opts)?;
+    run_instrumented(&BitfieldIdiomPass, ssa, opts)?;
+    run_instrumented(&CryptoIdiomPass, ssa, opts)?;
+    run_instrumented(&IndirectCallResolvePass, ssa, opts)?;
+    run_instrumented(&IndirectJumpResolvePass, ssa, opts)?;
+    run_instrumented(&OpTypeBindingPass, ssa, opts)?;
     Ok(())
 }
 
 /// Stage 6b (M_LVARS): lvar allocation and variable merging.
-fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+fn pipeline_stage_lvar(
+    ssa: &mut SsaFunction,
+    opts: &PassOptions,
+) -> Result<(), unlace_passes::PassError> {
     let trace = std::env::var_os("UNLACE_INTERPROC_TRACE")
         .map(|v| v != "0")
         .unwrap_or(false);
@@ -2768,7 +2801,7 @@ fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassE
             ssa.function.name
         );
     }
-    run_instrumented(&ExpressionTreePass, ssa)?;
+    run_instrumented(&ExpressionTreePass, ssa, opts)?;
     if trace {
         eprintln!(
             "[unlace interproc] lvar-pass-done name={} pass=ExpressionTreePass",
@@ -2779,7 +2812,13 @@ fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassE
             ssa.function.name
         );
     }
-    run_instrumented(&VariableMergePass, ssa)?;
+    run_instrumented(
+        &VariableMergePass {
+            limits: opts.variable_merge,
+        },
+        ssa,
+        opts,
+    )?;
     if trace {
         eprintln!(
             "[unlace interproc] lvar-pass-done name={} pass=VariableMergePass",
@@ -2790,7 +2829,7 @@ fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassE
             ssa.function.name
         );
     }
-    run_instrumented(&LvarCollectPass, ssa)?;
+    run_instrumented(&LvarCollectPass, ssa, opts)?;
     if trace {
         eprintln!(
             "[unlace interproc] lvar-pass-done name={} pass=LvarCollectPass",
@@ -2801,7 +2840,7 @@ fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassE
             ssa.function.name
         );
     }
-    run_instrumented(&RegisterCoalescePass, ssa)?;
+    run_instrumented(&RegisterCoalescePass, ssa, opts)?;
     if trace {
         eprintln!(
             "[unlace interproc] lvar-pass-done name={} pass=RegisterCoalescePass",
@@ -2815,14 +2854,15 @@ fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassE
 fn pipeline_stage_final(
     ssa: &mut SsaFunction,
     resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
+    opts: &PassOptions,
 ) -> Result<(), unlace_passes::PassError> {
-    run_instrumented(&RustEnumPass, ssa)?;
-    run_instrumented(&RustVtablePass, ssa)?;
+    run_instrumented(&RustEnumPass, ssa, opts)?;
+    run_instrumented(&RustVtablePass, ssa, opts)?;
     if let Some(resolve) = resolver {
         RustPanicPass.run_with_resolver(ssa, resolve)?;
     }
-    run_instrumented(&VarNamingPass, ssa)?;
-    run_instrumented(&CallingConvFinalizePass, ssa)?;
+    run_instrumented(&VarNamingPass, ssa, opts)?;
+    run_instrumented(&CallingConvFinalizePass, ssa, opts)?;
 
     Ok(())
 }
@@ -3309,9 +3349,8 @@ impl SymbolContext {
 #[derive(Clone)]
 pub struct PipelineConfig {
     pub timeout: Duration,
-    /// Optional explicit C-printer configuration. When `None` the printer
-    /// derives its config from `UNLACE_*` environment variables.
-    pub print_config: Option<unlace_output::PrintConfig>,
+    /// Pass, structuring, and printer options from the configuration file.
+    pub options: Arc<crate::config::Config>,
     /// User-authored annotations (function comments, custom names, …) loaded
     /// from a sidecar JSON file.  `None` when no sidecar was found.
     pub annotations: Option<crate::annotations::AnnotationDb>,
@@ -3332,7 +3371,7 @@ impl Default for PipelineConfig {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(30),
-            print_config: None,
+            options: Arc::default(),
             annotations: None,
             flirt: FlirtConfig::default(),
             dwarf_sidecar: None,
@@ -3634,6 +3673,18 @@ pub fn build_symbol_context_with_config(
 /// collect all results into a `BTreeMap<u64, SsaFunction>`, run
 /// [`run_whole_program_interproc`] over the map, and then call
 /// [`emit_function_interproc`] on each entry.
+/// Enter the `function{name, addr}` span that scopes all tracing for one
+/// function's analysis, so `[function{name=...}]` filter directives select it.
+pub fn function_span(entry: &FunctionEntry) -> tracing::span::EnteredSpan {
+    tracing::info_span!(
+        target: "unlace::function",
+        "function",
+        name = %entry.name,
+        addr = %format_args!("{:#x}", entry.addr),
+    )
+    .entered()
+}
+
 pub fn lift_and_run_passes(
     image: &BinaryImage,
     lifter: &dyn Lifter,
@@ -3643,6 +3694,7 @@ pub fn lift_and_run_passes(
     rtti: Option<&unlace_loader::RttiInfo>,
     discovered: &[FunctionEntry],
 ) -> Result<SsaFunction> {
+    let _function_span = function_span(entry);
     let _profile_function = profile_pipeline_stage("interproc.lift-and-run-passes", entry);
     let deadline = Instant::now() + config.timeout;
 
@@ -3751,12 +3803,12 @@ pub fn lift_and_run_passes(
 
     {
         let _profile_stage = profile_pipeline_stage("pipeline.jump-table-pre", entry);
-        resolve_jump_tables_for_pipeline(&mut ssa, image);
+        resolve_jump_tables_for_pipeline(&mut ssa, image, &config.options.passes);
     }
 
     let pass_result = {
         let _profile_stage = profile_pipeline_stage("pipeline.run-passes", entry);
-        run_passes_with_resolver_until(&mut ssa, &resolve_name, deadline)
+        run_passes_with_resolver_until(&mut ssa, &resolve_name, deadline, &config.options.passes)
     };
     if let Err(e) = pass_result {
         profiling::diagnostic(
@@ -3878,6 +3930,7 @@ pub fn emit_function_interproc(
     discovered: &[FunctionEntry],
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Result<String> {
+    let _function_span = function_span(entry);
     let _profile_function = profile_pipeline_stage("interproc.emit-function", entry);
     let profile_post_annotations = profile_pipeline_stage("pipeline.post-pass-annotations", entry);
     let owned_symbol_context = config
@@ -3904,7 +3957,11 @@ pub fn emit_function_interproc(
     }
     {
         let _profile_stage = profile_pipeline_stage("pipeline.objc-dispatch", entry);
-        run_objc_dispatch_pass(ssa, symbol_context.objc_dispatch_pass.as_deref());
+        run_objc_dispatch_pass(
+            ssa,
+            symbol_context.objc_dispatch_pass.as_deref(),
+            &config.options.passes,
+        );
     }
     if !symbols.is_empty() {
         let _profile_stage = profile_pipeline_stage("pipeline.detect-go-defer", entry);
@@ -3990,7 +4047,7 @@ pub fn emit_function_interproc(
     drop(profile_post_annotations);
     let jt_sections = {
         let _profile_stage = profile_pipeline_stage("pipeline.jump-table-post", entry);
-        resolve_jump_tables_for_pipeline(ssa, image);
+        resolve_jump_tables_for_pipeline(ssa, image, &config.options.passes);
         build_jump_table_section_views(image)
     };
     {
@@ -4002,7 +4059,7 @@ pub fn emit_function_interproc(
             symbols,
             &image.string_table,
             rtti,
-            config.print_config,
+            &config.options,
             printer_annotations.as_ref(),
             &jt_sections,
             None,
@@ -4135,14 +4192,7 @@ pub fn decompile_one_function_cached(
         ],
     );
 
-    let config = PipelineConfig {
-        timeout: Duration::from_secs(30),
-        print_config: None,
-        annotations: None,
-        flirt: FlirtConfig::default(),
-        dwarf_sidecar: None,
-        symbol_context: None,
-    };
+    let config = PipelineConfig::default();
     let rendered = {
         let _profile_stage = profile_pipeline_stage("pipeline.lazy-run-function", entry);
         decompile_function(image, lifter.as_ref(), entry, emit, &config, None)?
@@ -4368,6 +4418,7 @@ pub fn decompile_function_with_symbols(
     discovered: &[FunctionEntry],
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Result<String> {
+    let _function_span = function_span(entry);
     let _profile_function = profile_pipeline_stage("pipeline.function", entry);
     profiling::record_items("pipeline.function", 1);
     let deadline = Instant::now() + config.timeout;
@@ -4558,7 +4609,7 @@ pub fn decompile_function_with_symbols(
     pipeline_trace_start(&entry.name, "jump-table-pre");
     {
         let _profile_stage = profile_pipeline_stage("pipeline.jump-table-pre", entry);
-        resolve_jump_tables_for_pipeline(&mut ssa, image);
+        resolve_jump_tables_for_pipeline(&mut ssa, image, &config.options.passes);
     }
     pipeline_trace_ssa(&entry.name, "jump-table-pre", t_jt_pre, deadline, &ssa);
 
@@ -4566,7 +4617,7 @@ pub fn decompile_function_with_symbols(
     pipeline_trace_start(&entry.name, "run-passes");
     let pass_result = {
         let _profile_stage = profile_pipeline_stage("pipeline.run-passes", entry);
-        run_passes_with_resolver_until(&mut ssa, &resolve_name, deadline)
+        run_passes_with_resolver_until(&mut ssa, &resolve_name, deadline, &config.options.passes)
     };
     if let Err(e) = pass_result {
         profiling::diagnostic(
@@ -4601,7 +4652,11 @@ pub fn decompile_function_with_symbols(
 
     {
         let _profile_stage = profile_pipeline_stage("pipeline.objc-dispatch", entry);
-        run_objc_dispatch_pass(&mut ssa, symbol_context.objc_dispatch_pass.as_deref());
+        run_objc_dispatch_pass(
+            &mut ssa,
+            symbol_context.objc_dispatch_pass.as_deref(),
+            &config.options.passes,
+        );
     }
 
     if !symbols.is_empty() {
@@ -4721,7 +4776,7 @@ pub fn decompile_function_with_symbols(
     pipeline_trace_start(&entry.name, "jump-table-post");
     let jt_sections = {
         let _profile_stage = profile_pipeline_stage("pipeline.jump-table-post", entry);
-        resolve_jump_tables_for_pipeline(&mut ssa, image);
+        resolve_jump_tables_for_pipeline(&mut ssa, image, &config.options.passes);
         build_jump_table_section_views(image)
     };
     pipeline_trace_ssa(&entry.name, "jump-table-post", t_jt_post, deadline, &ssa);
@@ -4737,7 +4792,7 @@ pub fn decompile_function_with_symbols(
             symbols,
             &image.string_table,
             rtti,
-            config.print_config,
+            &config.options,
             printer_annotations.as_ref(),
             &jt_sections,
             Some(deadline),
@@ -5240,11 +5295,15 @@ fn collect_cxx_eh_actions(
     unlace_passes::cxx_eh::collect_eh_sites(&calls)
 }
 
-fn run_objc_dispatch_pass(ssa: &mut SsaFunction, pass: Option<&ObjcDispatchPass>) {
+fn run_objc_dispatch_pass(
+    ssa: &mut SsaFunction,
+    pass: Option<&ObjcDispatchPass>,
+    opts: &PassOptions,
+) {
     let Some(pass) = pass else {
         return;
     };
-    if let Err(e) = run_instrumented(pass, ssa) {
+    if let Err(e) = run_instrumented(pass, ssa, opts) {
         profiling::diagnostic(
             "warn",
             "objc dispatch pass failed",
@@ -5286,9 +5345,10 @@ pub fn build_jump_table_section_views(
 fn resolve_jump_tables_for_pipeline(
     ssa: &mut unlace_ir::ssa::SsaFunction,
     image: &unlace_loader::BinaryImage,
+    opts: &PassOptions,
 ) {
-    let trace = env_flag_enabled("UNLACE_JUMPTABLE_TRACE");
-    if let Err(e) = run_instrumented(&IndirectJumpResolvePass, ssa) {
+    let trace = tracing::enabled!(target: "unlace::jump_table", tracing::Level::DEBUG);
+    if let Err(e) = run_instrumented(&IndirectJumpResolvePass, ssa, opts) {
         profiling::diagnostic(
             "warn",
             "jump-table candidate recovery failed",
@@ -5299,15 +5359,17 @@ fn resolve_jump_tables_for_pipeline(
         );
     }
     if trace {
-        eprintln!(
-            "[unlace jt] after-candidate func={} tables={:?}",
+        tracing::debug!(
+            target: "unlace::jump_table",
+            "after-candidate func={} tables={:?}",
             ssa.function.name, ssa.resolved_jump_tables
         );
     }
     resolve_jump_table_targets(ssa, image);
     if trace {
-        eprintln!(
-            "[unlace jt] after-resolve func={} tables={:?}",
+        tracing::debug!(
+            target: "unlace::jump_table",
+            "after-resolve func={} tables={:?}",
             ssa.function.name, ssa.resolved_jump_tables
         );
     }
@@ -5325,7 +5387,7 @@ fn resolve_jump_tables_for_pipeline(
                     .then_some((bid, block.successors.clone()))
             })
             .collect();
-        eprintln!("[unlace jt] branchind-successors={branch_edges:?}");
+        tracing::debug!(target: "unlace::jump_table", "branchind-successors={branch_edges:?}");
     }
 }
 
@@ -5610,7 +5672,7 @@ pub fn emit_output(
     symbols: &BTreeMap<u64, String>,
     string_table: &BTreeMap<u64, String>,
     rtti: Option<&unlace_loader::RttiInfo>,
-    print_config: Option<unlace_output::PrintConfig>,
+    options: &crate::config::Config,
     annotations: Option<&unlace_output::PrinterAnnotations>,
     jump_table_sections: &[unlace_struct::SectionView<'_>],
     deadline: Option<Instant>,
@@ -5623,23 +5685,13 @@ pub fn emit_output(
             // plain `structure` (no TryCatch wrapping) when the set is empty.
             let mut hir = {
                 let _span = profiling::phase("output.structure");
-                let structured = if ssa.eh_landing_pads.is_empty() {
-                    if let Some(deadline) = deadline {
-                        unlace_struct::structure_until(ssa, deadline)
-                    } else {
-                        unlace_struct::structure(ssa)
-                    }
-                } else {
-                    if let Some(deadline) = deadline {
-                        unlace_struct::structure_with_landing_pads_until(
-                            ssa,
-                            &ssa.eh_landing_pads,
-                            deadline,
-                        )
-                    } else {
-                        unlace_struct::structure_with_landing_pads(ssa, &ssa.eh_landing_pads)
-                    }
-                };
+                let structured = unlace_struct::structure_with_options(
+                    ssa,
+                    ArchId::X86_64,
+                    &ssa.eh_landing_pads,
+                    deadline,
+                    &options.structure,
+                );
                 match structured {
                     Ok(hir) => hir,
                     Err(err @ unlace_struct::StructureError::ComplexityLimit { .. }) => {
@@ -5654,7 +5706,12 @@ pub fn emit_output(
                         );
                         {
                             let _span = profiling::phase("output.structure-unstructured-fallback");
-                            unlace_struct::structure_unstructured_fallback(ssa, reason)
+                            unlace_struct::structure_unstructured_fallback_with_options(
+                                ssa,
+                                ArchId::X86_64,
+                                reason,
+                                &options.structure,
+                            )
                         }
                     }
                     Err(err) => return Err(err).context("control-flow structuring failed"),
@@ -6016,7 +6073,7 @@ pub fn emit_output(
                     Some(&print_symbols),
                     Some(&print_string_table),
                     rtti,
-                    print_config,
+                    Some(options.printer),
                     ann_ref,
                 )
             };
@@ -6359,6 +6416,7 @@ mod tests {
             &mut ssa,
             &resolver,
             Instant::now() - Duration::from_millis(1),
+            &PassOptions::default(),
         )
         .expect_err("deadline in the past should force timeout");
         assert!(
@@ -6392,7 +6450,7 @@ mod tests {
             &BTreeMap::new(),
             &BTreeMap::new(),
             None,
-            None,
+            &crate::config::Config::default(),
             None,
             &[],
             Some(Instant::now() - Duration::from_millis(1)),
@@ -6538,7 +6596,7 @@ mod tests {
         funcs.insert(0x1000, empty_ssa_with_struct("a", 0x1000, "local_a"));
         funcs.insert(0x2000, empty_ssa_with_struct("b", 0x2000, "local_b"));
 
-        let report = run_whole_program_quality_refinement(&mut funcs, 0)
+        let report = run_whole_program_quality_refinement(&mut funcs, 0, &PassOptions::default())
             .expect("whole-program quality refinement");
 
         assert_eq!(report.canonical_struct_layouts, 1);
@@ -7403,7 +7461,8 @@ mod tests {
         let mut ssa = build_ssa(func);
 
         // Run the full pass pipeline.
-        super::run_passes(&mut ssa).expect("pipeline must not crash on a synthetic SsaFunction");
+        super::run_passes(&mut ssa, &PassOptions::default())
+            .expect("pipeline must not crash on a synthetic SsaFunction");
 
         // (1) stack_frame populated — t209 wired.
         assert!(

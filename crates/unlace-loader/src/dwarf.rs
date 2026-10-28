@@ -40,8 +40,9 @@ use gimli::{
     DW_TAG_array_type, DW_TAG_base_type, DW_TAG_const_type, DW_TAG_enumeration_type,
     DW_TAG_enumerator, DW_TAG_formal_parameter, DW_TAG_member, DW_TAG_pointer_type,
     DW_TAG_restrict_type, DW_TAG_structure_type, DW_TAG_subprogram, DW_TAG_subrange_type,
-    DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_unspecified_parameters,
-    DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
+    DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type,
+    DW_TAG_unspecified_parameters, DW_TAG_variable, DW_TAG_volatile_type, EndianSlice,
+    RunTimeEndian,
 };
 
 use crate::error::LoadError;

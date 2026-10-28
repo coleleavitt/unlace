@@ -70,8 +70,8 @@ use unlace_loader::{
     BinaryImage, DwarfInfo, Endian, FlirtDb, PdbInfo, PdbLocal, Section, SectionFlags, SymbolKind,
 };
 use unlace_passes::{
-    AlgebraicSimplifyPass, CalleeArity, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
-    BoolSimplifyPass, CallBoundaryCopyPropPass, CallingConvFinalizePass,
+    AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
+    BoolSimplifyPass, CallBoundaryCopyPropPass, CalleeArity, CallingConvFinalizePass,
     CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstantFoldPass,
     CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass, CppVariantPass,
     CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,

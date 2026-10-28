@@ -1158,4 +1158,73 @@ mod tests {
             None
         );
     }
+
+    /// A fully understood format bounds the variadic arguments: registers
+    /// live past them are not arguments of `printf("%d\n", x)`.
+    #[test]
+    fn format_string_trims_extra_call_args() {
+        let printf_addr: u64 = 0x4040;
+        let fmt_addr: u64 = 0x5000;
+        let call_inputs = |fmt: u64| -> smallvec::SmallVec<[Varnode; 3]> {
+            smallvec![
+                Varnode::constant(printf_addr, 8),
+                Varnode::constant(fmt, 8),
+                Varnode::constant(7, 4),
+                Varnode::constant(8, 4),
+                Varnode::constant(9, 4),
+            ]
+        };
+        let mut func = Function::new("caller", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            call_inputs(fmt_addr),
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            call_inputs(fmt_addr + 0x10),
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = build_ssa(func);
+        ssa.calling_convention = CallingConvention::SystemV;
+
+        let formats = BTreeMap::from([
+            (fmt_addr, "%d\n".to_string()),
+            // A positional format cannot be counted in order; keep the args.
+            (fmt_addr + 0x10, "%1$d\n".to_string()),
+        ]);
+        let resolver = |addr: u64| (addr == printf_addr).then_some("printf");
+        assert!(parse_printf_format_strings(&mut ssa, &resolver, &formats));
+
+        let insns = &ssa.function.blocks[&BlockId(0)].insns;
+        assert_eq!(insns[0].inputs.len(), 3);
+        assert_eq!(insns[1].inputs.len(), 5);
+    }
+
+    /// `open` is variadic but has no format string to read.
+    #[test]
+    fn non_format_variadic_call_is_left_alone() {
+        let open_addr: u64 = 0x4040;
+        let path_addr: u64 = 0x5000;
+        let mut func = Function::new("caller", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![
+                Varnode::constant(open_addr, 8),
+                Varnode::constant(path_addr, 8),
+                Varnode::constant(0x41, 4),
+                Varnode::constant(0o644, 4),
+            ],
+            0x1000,
+        ));
+        func.insert_block(bb);
+        let mut ssa = build_ssa(func);
+        let paths = BTreeMap::from([(path_addr, "/tmp/100%".to_string())]);
+        let resolver = |addr: u64| (addr == open_addr).then_some("open");
+        assert!(!parse_printf_format_strings(&mut ssa, &resolver, &paths));
+        assert_eq!(ssa.function.blocks[&BlockId(0)].insns[0].inputs.len(), 4);
+    }
 }

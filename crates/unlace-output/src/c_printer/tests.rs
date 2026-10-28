@@ -2034,10 +2034,7 @@ fn variadic_signature_ends_header_with_ellipsis() {
         print_c(&func)
     };
 
-    let output = header(vec![(
-        "a1".into(),
-        Type::Primitive(PrimitiveType::Int(8)),
-    )]);
+    let output = header(vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))]);
     assert!(output.contains("log_line(__int64 a1, ...)"), "{output}");
     let output = header(Vec::new());
     assert!(output.contains("log_line(...)"), "{output}");

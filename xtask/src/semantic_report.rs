@@ -271,7 +271,7 @@ const CROSS_ARCH_EXEC_CASES: &[NonHostExecCase] = &[
 #[derive(Debug, Default)]
 struct SemanticOptions {
     /// `--trace`: log each case's commands and observations to stderr.
-    trace: bool,
+    verbose: bool,
     /// `--keep-temps` (implied by `--trace`): keep recompiled C sources.
     keep_temps: bool,
     /// `--runner <fixture-or-arch>=<path>`: user-mode runner for non-host
@@ -286,7 +286,7 @@ impl SemanticOptions {
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--trace" => {
-                    opts.trace = true;
+                    opts.verbose = true;
                     opts.keep_temps = true;
                 }
                 "--keep-temps" => opts.keep_temps = true,
@@ -303,6 +303,12 @@ impl SemanticOptions {
             }
         }
         Ok(opts)
+    }
+
+    fn trace(&self, message: impl std::fmt::Display) {
+        if self.verbose {
+            eprintln!("[unlace-semantic] {message}");
+        }
     }
 }
 
@@ -608,13 +614,10 @@ fn run_executable_case(
     function: &str,
     opts: &SemanticOptions,
 ) -> Result<Observation, String> {
-    semantic_trace(
-        opts,
-        format_args!(
-            "exec case {}:{} arch={:?} bin={}",
-            fixture.name, function, fixture.architecture, fixture.binary_path
-        ),
-    );
+    opts.trace(format_args!(
+        "exec case {}:{} arch={:?} bin={}",
+        fixture.name, function, fixture.architecture, fixture.binary_path
+    ));
     if fixture.architecture.as_deref() != Some("x86_64") {
         return Err(format!(
             "unsupported host architecture {:?}",
@@ -627,18 +630,15 @@ fn run_executable_case(
         .output()
         .map_err(|e| format!("failed to run original {}: {e}", binary.display()))?;
     let original = Observation::from_output(original);
-    semantic_trace(
-        opts,
-        format_args!(
-            "original {}:{} status={} exit={} stdout={} stderr={}",
-            fixture.name,
-            function,
-            output_status_detail(&original),
-            original.exit,
-            display_bytes(&original.stdout),
-            display_bytes(&original.stderr)
-        ),
-    );
+    opts.trace(format_args!(
+        "original {}:{} status={} exit={} stdout={} stderr={}",
+        fixture.name,
+        function,
+        output_status_detail(&original),
+        original.exit,
+        display_bytes(&original.stdout),
+        display_bytes(&original.stderr)
+    ));
 
     let decompile = Command::new(unlace_bin)
         .args(["decompile", "--emit", "c", "--function", function])
@@ -646,17 +646,14 @@ fn run_executable_case(
         .env_remove("RUST_LOG")
         .output()
         .map_err(|e| format!("failed to spawn unlace: {e}"))?;
-    semantic_trace(
-        opts,
-        format_args!(
-            "decompile {}:{} status={} stdout_bytes={} stderr={}",
-            fixture.name,
-            function,
-            decompile.status,
-            decompile.stdout.len(),
-            display_bytes(&decompile.stderr)
-        ),
-    );
+    opts.trace(format_args!(
+        "decompile {}:{} status={} stdout_bytes={} stderr={}",
+        fixture.name,
+        function,
+        decompile.status,
+        decompile.stdout.len(),
+        display_bytes(&decompile.stderr)
+    ));
     if !decompile.status.success() {
         return Err(format!(
             "unlace failed: {}",
@@ -669,33 +666,27 @@ fn run_executable_case(
 
     let generated = String::from_utf8(decompile.stdout)
         .map_err(|e| format!("decompiler output was not UTF-8: {e}"))?;
-    semantic_trace(
-        opts,
-        format_args!(
-            "generated {}:{} bytes={} lines={} labels={} gotos={}",
-            fixture.name,
-            function,
-            generated.len(),
-            generated.lines().count(),
-            generated.matches("label_").count(),
-            generated.matches("goto label_").count()
-        ),
-    );
+    opts.trace(format_args!(
+        "generated {}:{} bytes={} lines={} labels={} gotos={}",
+        fixture.name,
+        function,
+        generated.len(),
+        generated.lines().count(),
+        generated.matches("label_").count(),
+        generated.matches("goto label_").count()
+    ));
     reject_known_bad_shapes(&generated)?;
 
     let recompiled = compile_and_run_c_subset(root, &generated, fixture, function, &binary, opts)?;
-    semantic_trace(
-        opts,
-        format_args!(
-            "recompiled {}:{} status={} exit={} stdout={} stderr={}",
-            fixture.name,
-            function,
-            output_status_detail(&recompiled),
-            recompiled.exit,
-            display_bytes(&recompiled.stdout),
-            display_bytes(&recompiled.stderr)
-        ),
-    );
+    opts.trace(format_args!(
+        "recompiled {}:{} status={} exit={} stdout={} stderr={}",
+        fixture.name,
+        function,
+        output_status_detail(&recompiled),
+        recompiled.exit,
+        display_bytes(&recompiled.stdout),
+        display_bytes(&recompiled.stderr)
+    ));
     if original == recompiled {
         Ok(original)
     } else {
@@ -717,13 +708,10 @@ fn run_non_host_exec_case(
     case: &NonHostExecCase,
     opts: &SemanticOptions,
 ) -> Result<NonHostObservation, NonHostExecError> {
-    semantic_trace(
-        opts,
-        format_args!(
-            "non-host exec case {}:{} arch={:?} bin={}",
-            fixture.name, case.function, fixture.architecture, fixture.binary_path
-        ),
-    );
+    opts.trace(format_args!(
+        "non-host exec case {}:{} arch={:?} bin={}",
+        fixture.name, case.function, fixture.architecture, fixture.binary_path
+    ));
     if fixture.architecture.as_deref() == Some("x86_64") {
         return Err(NonHostExecError::Failed(
             "non-host exec case points at x86_64 fixture".to_string(),
@@ -738,37 +726,31 @@ fn run_non_host_exec_case(
         ))
     })?;
     let binary = root.join(&fixture.binary_path);
-    semantic_trace(
-        opts,
-        format_args!(
-            "non-host runner fixture={} runner={} binary={} timeout_ms={}",
-            fixture.name,
-            runner.display(),
-            binary.display(),
-            case.timeout_ms
-        ),
-    );
+    opts.trace(format_args!(
+        "non-host runner fixture={} runner={} binary={} timeout_ms={}",
+        fixture.name,
+        runner.display(),
+        binary.display(),
+        case.timeout_ms
+    ));
     let mut command = Command::new(&runner);
     command.arg(&binary);
     match run_with_timeout(&mut command, Duration::from_millis(case.timeout_ms)) {
         Ok(Some(output)) => {
-            semantic_trace(
-                opts,
-                format_args!(
-                    "non-host run fixture={} status={} stdout={} stderr={}",
-                    fixture.name,
-                    output_status_detail_raw(&output),
-                    display_bytes(&output.stdout),
-                    display_bytes(&output.stderr)
-                ),
-            );
+            opts.trace(format_args!(
+                "non-host run fixture={} status={} stdout={} stderr={}",
+                fixture.name,
+                output_status_detail_raw(&output),
+                display_bytes(&output.stdout),
+                display_bytes(&output.stderr)
+            ));
             Ok(NonHostObservation::Exit(Observation::from_output(output)))
         }
         Ok(None) => {
-            semantic_trace(
-                opts,
-                format_args!("non-host run fixture={} timed out", fixture.name),
-            );
+            opts.trace(format_args!(
+                "non-host run fixture={} timed out",
+                fixture.name
+            ));
             Ok(NonHostObservation::Timeout)
         }
         Err(e) => Err(NonHostExecError::Failed(e)),
@@ -809,13 +791,10 @@ fn run_shape_case(
     case: &ShapeCase,
     opts: &SemanticOptions,
 ) -> Result<ShapeObservation, String> {
-    semantic_trace(
-        opts,
-        format_args!(
-            "shape case {}:{} arch={:?} bin={}",
-            fixture.name, case.function, fixture.architecture, fixture.binary_path
-        ),
-    );
+    opts.trace(format_args!(
+        "shape case {}:{} arch={:?} bin={}",
+        fixture.name, case.function, fixture.architecture, fixture.binary_path
+    ));
     let binary = root.join(&fixture.binary_path);
     let decompile = Command::new(unlace_bin)
         .args(["decompile", "--emit", "c", "--function", case.function])
@@ -823,17 +802,14 @@ fn run_shape_case(
         .env_remove("RUST_LOG")
         .output()
         .map_err(|e| format!("failed to spawn unlace: {e}"))?;
-    semantic_trace(
-        opts,
-        format_args!(
-            "shape decompile {}:{} status={} stdout_bytes={} stderr={}",
-            fixture.name,
-            case.function,
-            decompile.status,
-            decompile.stdout.len(),
-            display_bytes(&decompile.stderr)
-        ),
-    );
+    opts.trace(format_args!(
+        "shape decompile {}:{} status={} stdout_bytes={} stderr={}",
+        fixture.name,
+        case.function,
+        decompile.status,
+        decompile.stdout.len(),
+        display_bytes(&decompile.stderr)
+    ));
     if !decompile.status.success() {
         return Err(format!(
             "unlace failed: {}",
@@ -883,15 +859,12 @@ fn compile_and_run_c_subset(
     let _ = std::fs::remove_dir_all(&temp);
     std::fs::create_dir_all(&temp)
         .map_err(|e| format!("failed to create temp dir {}: {e}", temp.display()))?;
-    semantic_trace(
-        opts,
-        format_args!(
-            "compile subset {}:{} temp={}",
-            fixture.name,
-            function,
-            temp.display()
-        ),
-    );
+    opts.trace(format_args!(
+        "compile subset {}:{} temp={}",
+        fixture.name,
+        function,
+        temp.display()
+    ));
 
     let source = temp.join(format!("{stem}.c"));
     let compiled_binary = temp.join(stem);
@@ -906,25 +879,19 @@ fn compile_and_run_c_subset(
     let driver = c_subset_driver(fixture, function);
     std::fs::write(&source, format!("{prelude}{generated}{driver}"))
         .map_err(|e| format!("failed to write {}: {e}", source.display()))?;
-    semantic_trace(
-        opts,
-        format_args!(
-            "wrote subset source {} bytes={}",
-            source.display(),
-            std::fs::metadata(&source).map(|m| m.len()).unwrap_or(0)
-        ),
-    );
+    opts.trace(format_args!(
+        "wrote subset source {} bytes={}",
+        source.display(),
+        std::fs::metadata(&source).map(|m| m.len()).unwrap_or(0)
+    ));
 
     let helper_object = if let Some(helper_source) = helper_source.as_deref() {
         let object = temp.join(format!("{stem}_helpers.o"));
-        semantic_trace(
-            opts,
-            format_args!(
-                "compile helper source={} object={}",
-                helper_source.display(),
-                object.display()
-            ),
-        );
+        opts.trace(format_args!(
+            "compile helper source={} object={}",
+            helper_source.display(),
+            object.display()
+        ));
         let compile_helper = Command::new("cc")
             .args(["-std=c99", "-Dmain=unlace_original_main", "-Dstatic=", "-c"])
             .arg(helper_source)
@@ -949,14 +916,11 @@ fn compile_and_run_c_subset(
         std::fs::write(&helper_source, helper_text)
             .map_err(|e| format!("failed to write {}: {e}", helper_source.display()))?;
         let object = temp.join(format!("{stem}_helpers.o"));
-        semantic_trace(
-            opts,
-            format_args!(
-                "compile generated helper source={} object={}",
-                helper_source.display(),
-                object.display()
-            ),
-        );
+        opts.trace(format_args!(
+            "compile generated helper source={} object={}",
+            helper_source.display(),
+            object.display()
+        ));
         let compile_helper = Command::new("cc")
             .args(["-std=c99", "-c"])
             .arg(&helper_source)
@@ -1001,14 +965,11 @@ fn compile_and_run_c_subset(
         .current_dir(root)
         .output()
         .map_err(|e| format!("failed to invoke cc: {e}"))?;
-    semantic_trace(
-        opts,
-        format_args!(
-            "compile subset status={} stderr={}",
-            compile.status,
-            display_bytes(&compile.stderr)
-        ),
-    );
+    opts.trace(format_args!(
+        "compile subset status={} stderr={}",
+        compile.status,
+        display_bytes(&compile.stderr)
+    ));
     if !compile.status.success() {
         return Err(format!(
             "cc failed (source={}): {}",
@@ -1022,22 +983,16 @@ fn compile_and_run_c_subset(
 
     let run = run_with_timeout(&mut Command::new(&compiled_binary), Duration::from_secs(2))?
         .ok_or_else(|| "recompiled subset timed out".to_string())?;
-    semantic_trace(
-        opts,
-        format_args!(
-            "run subset binary={} status={} stdout={} stderr={}",
-            compiled_binary.display(),
-            output_status_detail_raw(&run),
-            display_bytes(&run.stdout),
-            display_bytes(&run.stderr)
-        ),
-    );
+    opts.trace(format_args!(
+        "run subset binary={} status={} stdout={} stderr={}",
+        compiled_binary.display(),
+        output_status_detail_raw(&run),
+        display_bytes(&run.stdout),
+        display_bytes(&run.stderr)
+    ));
     let observation = Observation::from_output(run);
     if opts.keep_temps {
-        semantic_trace(
-            opts,
-            format_args!("keeping semantic temp dir {}", temp.display()),
-        );
+        opts.trace(format_args!("keeping semantic temp dir {}", temp.display()));
     } else {
         let _ = std::fs::remove_dir_all(&temp);
     }
@@ -1333,12 +1288,6 @@ fn display_bytes(bytes: &[u8]) -> String {
     }
     let s = String::from_utf8_lossy(bytes);
     format!("{:?}", s)
-}
-
-fn semantic_trace(opts: &SemanticOptions, message: impl std::fmt::Display) {
-    if opts.trace {
-        eprintln!("[unlace-semantic] {message}");
-    }
 }
 
 #[cfg(test)]

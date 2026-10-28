@@ -93,6 +93,7 @@ int main(void) {
     __int64 v7; // temp
     __int64 v_8;
     __int64 v_16;
+    __int64 v_32;
     __int64 v14; // rax
     __int64 v15; // rax
     __int64 result_0; // rax
@@ -118,30 +119,63 @@ struct __anon0 {
 /* Function:   _start | Address: 0x1140 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
 void _start(void) {
     __int64 v_8;
-    __int64 v_0;
     _QWORD pfn; // temp
-        v_8 = (uintptr_t)&v_0; pfn = qword_3FE0;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FE0; ((__int64 (*)())pfn)();
+    __builtin_trap(); return;
+}
+
+/* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1170(void) {
+    int v7; // reg?
+    if (v7) {
+        return;
+    } else {
+        if (qword_3FE8 == 0LL) {
+            return;
+        }
+    }
+    return;
+}
+
+/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
+__int64 sub_11e0(void) /* // dropped 1 param(s) (dead in body) */ {
+    __int64 result; // rax
+    if (byte_4010 != '\0') {
+        return result;
+    } else {
+        if (qword_3FD8 != 0LL) {
+            _QWORD v13 = qword_4008; // temp
+            __int64 c3 = v13; // rdi
+            result = sub_1070();
+        }
+        result = sub_1170(); byte_4010 = 1; return result;
+    }
+}
+
+/* Function:   sub_1220 | Address: 0x1220 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1220(void) {
+    sub_11a0();
 }
 
 /* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xc7 (199 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
 // identify(Animal*)
 char * identify(Animal * a1) {
     __int64 v12; // temp
+    __int64 v_16;
     __int64 v30; // rax
     __int64 v31; // rax
     __int64 result; // rax
-    __int64 c1; // rcx
     __int64 c3; // rsp
     __int64 result_1; // temp
     __int64 result_2; // temp
     if (a1 == 0LL) {
         result_2 = v12 + "unknown"; result = v12 + "unknown"; return v12 + "unknown";
     } else {
+        __int64 c1 = 0LL; // rcx
         __int64 c4 = v12 + 0x3d40LL; // rsi
         __int64 v17 = c3 + 8LL; // temp
         /* dynamic cast */
-        v30 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
+        v30 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, c1);
         v17 = *(_QWORD *)(c3 + 8LL); a1 = v17;
         __int64 c2 = v30; // rdx
         if (v30 == 0LL) {
@@ -150,7 +184,7 @@ char * identify(Animal * a1) {
             c4 = v12 + 0x3d40LL;
             /* dynamic cast */
             v31 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, c1);
-            a1 = v31;
+            a1 = v31; v17 = v31;
             if (v31 == 0LL) {
                 result = v12 + "unknown"; return result;
             } else {
@@ -212,39 +246,4 @@ void Cat_Cat(Cat *this) {
 // Dog::~Dog()
 void Dog_Dog(Dog *this) {
     delete();
-}
-
-/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
-__int64 sub_11e0(void) /* // dropped 1 param(s) (dead in body) */ {
-    __int64 v_0;
-    __int64 result; // rax
-    if (byte_4010 != '\0') {
-        return result;
-    } else {
-        if (qword_3FD8 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
-            result = sub_1070();
-        }
-        result = sub_1170(); byte_4010 = 1;
-                        return result;
-    }
-}
-
-/* Function:   sub_1220 | Address: 0x1220 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1220(void) {
-    sub_11a0();
-}
-
-/* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1170(void) {
-    int v7; // reg?
-    if (v7) {
-        return;
-    } else {
-        if (qword_3FE8 == 0LL) {
-            return;
-        }
-    }
-    return;
 }

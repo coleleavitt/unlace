@@ -46,7 +46,9 @@ the maturity dumps.
 ## Determinism
 
 Functions are processed in address order, JSON keys are sorted, and no
-timestamps are written. Hex-Rays reuses information from functions it already
-decompiled in the same session (callee prototypes), so a run that resumed after
-a timeout can differ slightly from an uninterrupted one; `status.json` records
-`restarts`.
+timestamps are written. Each run starts from a fresh copy of the analysed
+database and does not save it, so earlier decompilations do not leak into later
+runs. Spot check (2026-10-28): 10 functions from `debug_medium` and corpus `cat`
+dumped alone (`dump_functions.py --functions ...`) were byte-identical, facts
+and microcode, to the full run. `status.json` records `restarts` after
+timeouts or crashes.

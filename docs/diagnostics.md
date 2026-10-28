@@ -41,6 +41,7 @@ every `unlace::cprinter::*` trace, and `unlace=debug` is the old
 | `unlace::lift::x86`, `unlace::lift::x86::x87` | `UNLACE_LIFT_TRACE`, `UNLACE_X87_TRACE` (lifter) |
 | `unlace::lift::ppc`, `unlace::lift::v850` | `UNLACE_PPC_LIFT_TRACE`, `UNLACE_V850_LIFT_TRACE` |
 | `unlace::lift_bounds` | `UNLACE_LIFT_BOUNDS_TRACE` |
+| `unlace::discover` | — (one event per discovered function: addr, size, name; dropped starts and why) |
 | `unlace::cfg_build` | `UNLACE_CFG_BUILD_TRACE` |
 | `unlace::ssa` | `UNLACE_SSA_TRACE` |
 | `unlace::pipeline` (`trace` = details) | `UNLACE_PIPELINE_TRACE`, `_VERBOSE` |

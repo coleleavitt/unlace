@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use object::macho;
 use object::read::macho::{LoadCommandVariant, MachHeader, MachOFatFile, MachOFile};
-use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
+use object::{Object, ObjectSection, ObjectSegment, ObjectSymbol, ObjectSymbolTable};
 
 use crate::Loader;
 use crate::error::LoadError;
@@ -51,6 +51,17 @@ impl Loader for MachoLoader {
     }
 
     fn load(data: &[u8]) -> Result<BinaryImage, LoadError> {
+        Self::load_arch(data, None)
+    }
+}
+
+impl MachoLoader {
+    /// Load `data`, taking the `preferred_arch` slice of a universal binary when present
+    /// (otherwise the ranked default: arm64, x86_64, arm, x86).
+    pub fn load_arch(
+        data: &[u8],
+        preferred_arch: Option<ArchId>,
+    ) -> Result<BinaryImage, LoadError> {
         if !Self::can_load(data) {
             return Err(LoadError::InvalidMagic);
         }
@@ -59,7 +70,7 @@ impl Loader for MachoLoader {
 
         match magic {
             // Fat/universal — pick the preferred slice.
-            FAT_MAGIC_32 | FAT_MAGIC_64 => load_fat(data, None),
+            FAT_MAGIC_32 | FAT_MAGIC_64 => load_fat(data, preferred_arch),
             // 64-bit single-arch (either endianness).
             MH_MAGIC_64_LE | MH_MAGIC_64_BE => {
                 load_macho::<macho::MachHeader64<object::Endianness>>(data)
@@ -877,7 +888,7 @@ where
         Err(_) => return starts,
     };
 
-    let text_vmaddr = match find_text_segment_vmaddr::<Mach>(file, endian) {
+    let text_vmaddr = match find_text_segment_vmaddr::<Mach>(file) {
         Some(v) => v,
         None => return starts,
     };
@@ -990,18 +1001,15 @@ where
     None
 }
 
-fn find_text_segment_vmaddr<Mach>(file: &MachOFile<Mach>, endian: object::Endianness) -> Option<u64>
+/// `LC_FUNCTION_STARTS` offsets are relative to the `__TEXT` segment's
+/// vmaddr (the Mach header), not to the `__text` section.
+fn find_text_segment_vmaddr<Mach>(file: &MachOFile<Mach>) -> Option<u64>
 where
     Mach: MachHeader<Endian = object::Endianness>,
 {
-    for sec in file.sections() {
-        let name = sec.name().ok()?;
-        if name == "__text" || name.starts_with("__TEXT,__text") {
-            return Some(sec.address() & !0xFFFu64);
-        }
-    }
-    let _ = endian;
-    None
+    file.segments()
+        .find(|seg| seg.name().ok().flatten() == Some("__TEXT"))
+        .map(|seg| seg.address())
 }
 
 fn collect_segment_vmaddrs<Mach>(file: &MachOFile<Mach>, data: &[u8]) -> Vec<(u64, u64, u64)>
@@ -3115,6 +3123,28 @@ mod tests {
     }
 
     #[test]
+    fn load_arch_selects_requested_fat_slice() {
+        let x86 = minimal_macho64();
+        let mut arm = minimal_macho64();
+        arm[4..8].copy_from_slice(&(macho::CPU_TYPE_ARM64 as i32).to_le_bytes());
+        arm[8..12].copy_from_slice(&0u32.to_le_bytes());
+        let (x86_off, arm_off) = (0x1000u32, 0x2000u32);
+        let mut data = synthetic_fat32_header(&[
+            (macho::CPU_TYPE_X86_64, 3, x86_off, x86.len() as u32, 12),
+            (macho::CPU_TYPE_ARM64, 0, arm_off, arm.len() as u32, 12),
+        ]);
+        data.resize(arm_off as usize + arm.len(), 0);
+        data[x86_off as usize..x86_off as usize + x86.len()].copy_from_slice(&x86);
+        data[arm_off as usize..].copy_from_slice(&arm);
+
+        let default = MachoLoader::load(&data).expect("default slice loads");
+        assert_eq!(default.arch, ArchId::AArch64);
+        let requested =
+            MachoLoader::load_arch(&data, Some(ArchId::X86_64)).expect("x86_64 slice loads");
+        assert_eq!(requested.arch, ArchId::X86_64);
+    }
+
+    #[test]
     fn non_fat_returns_none() {
         let data = minimal_macho64();
         assert!(parse_fat_arches(&data).is_none());
@@ -3270,6 +3300,68 @@ mod tests {
         for addr in &img.function_starts {
             assert!(img.symbols.contains_key(addr));
         }
+    }
+
+    /// `__TEXT` at 0x1_0000_0000 with `__text` two pages in (0x1_0000_2480), as
+    /// ld64 lays out `tar`. The first `LC_FUNCTION_STARTS` delta (0x2480) is
+    /// relative to the segment, so the first start is the `__text` address.
+    fn macho64_with_text_section_inside_segment() -> Vec<u8> {
+        let text_off: usize = 0x2480;
+        let mut buf = vec![0u8; 0x2600];
+
+        let seg_cmdsize: u32 = 152;
+        let funcstarts_cmdsize: u32 = 16;
+        let sizeofcmds: u32 = seg_cmdsize + funcstarts_cmdsize;
+        let funcstarts_dataoff: u32 = 0x2500;
+        let funcstarts_datasize: u32 = 8;
+        let seg_vmaddr: u64 = 0x1_0000_0000;
+
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes());
+        buf[16..20].copy_from_slice(&2u32.to_le_bytes());
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&seg_vmaddr.to_le_bytes());
+        buf[seg + 32..seg + 40].copy_from_slice(&0x3000u64.to_le_bytes());
+        buf[seg + 48..seg + 56].copy_from_slice(&0x2600u64.to_le_bytes());
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes());
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&(seg_vmaddr + text_off as u64).to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&0x40u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&(text_off as u32).to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        let fs_cmd = seg + seg_cmdsize as usize;
+        buf[fs_cmd..fs_cmd + 4].copy_from_slice(&macho::LC_FUNCTION_STARTS.to_le_bytes());
+        buf[fs_cmd + 4..fs_cmd + 8].copy_from_slice(&funcstarts_cmdsize.to_le_bytes());
+        buf[fs_cmd + 8..fs_cmd + 12].copy_from_slice(&funcstarts_dataoff.to_le_bytes());
+        buf[fs_cmd + 12..fs_cmd + 16].copy_from_slice(&funcstarts_datasize.to_le_bytes());
+
+        buf[text_off..text_off + 0x40].fill(0xC3);
+
+        // ULEB128 deltas 0x2480 (0x80 0x49) and 0x20, then the terminator.
+        let fs = funcstarts_dataoff as usize;
+        buf[fs..fs + 4].copy_from_slice(&[0x80, 0x49, 0x20, 0x00]);
+
+        buf
+    }
+
+    #[test]
+    fn function_starts_are_relative_to_text_segment_not_text_section() {
+        let bin = macho64_with_text_section_inside_segment();
+        let img = MachoLoader::load(&bin).expect("Mach-O must load");
+        assert_eq!(img.function_starts, vec![0x1_0000_2480, 0x1_0000_24a0]);
     }
 
     #[test]

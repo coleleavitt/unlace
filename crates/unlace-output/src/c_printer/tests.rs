@@ -13969,3 +13969,33 @@ fn dwarf_local_summary_suppresses_materialized_array_comment() {
         "baseline comment present: {out2:?}"
     );
 }
+
+/// `win64_remote.exe`: two loop-carried copies (`x = y`, `y = x`) made the
+/// index-term walk recurse until the stack overflowed.
+#[test]
+fn index_term_walk_stops_on_copy_cycle() {
+    use super::{PrintCtx, extract_index_term};
+
+    let (x, y) = (reg(56, 8), reg(48, 8));
+    let sv = |base, version| SsaVarnode { base, version };
+    let mut ctx = PrintCtx::new(
+        None,
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    for (stmt, dst, src) in [(1, x, y), (2, y, x)] {
+        ctx.stmt_insns.insert(
+            stmt,
+            IrInsn::with_output(IrOp::Copy, dst, smallvec![src], 0x1000 + u64::from(stmt)),
+        );
+        ctx.stmt_inputs.insert(stmt, vec![sv(src, 1)]);
+        ctx.stmt_outputs.insert(stmt, Some(sv(dst, 1)));
+        ctx.sv_defining_stmt.insert(sv(dst, 1), stmt);
+    }
+
+    assert_eq!(extract_index_term(&x, None, 3, &ctx), None);
+}

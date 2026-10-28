@@ -3453,16 +3453,28 @@ fn extract_index_term(
     stmt_idx: u32,
     ctx: &PrintCtx,
 ) -> Option<(Varnode, u32, Option<usize>, u64)> {
-    if vn.space == SpaceId::Const {
-        return None;
-    }
-    let sv = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx)?;
-    let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
-    let def = ctx.stmt_insns.get(&def_stmt)?.clone();
-    match def.op {
-        IrOp::Copy if !def.inputs.is_empty() => {
-            extract_index_term(&def.inputs[0], Some(0), def_stmt, ctx)
+    let (mut vn, mut raw_idx, mut stmt_idx) = (*vn, raw_idx, stmt_idx);
+    // Copy chains can be cyclic (loop-carried copies resolved by statement
+    // order), so stop at the first revisited definition.
+    let mut visited = BTreeSet::new();
+    let (def, def_stmt) = loop {
+        if vn.space == SpaceId::Const {
+            return None;
         }
+        let sv = input_or_latest_sv_for_operand(&vn, raw_idx, stmt_idx, ctx)?;
+        let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
+        if !visited.insert(def_stmt) {
+            return None;
+        }
+        let def = ctx.stmt_insns.get(&def_stmt)?.clone();
+        match def.op {
+            IrOp::Copy if !def.inputs.is_empty() => {
+                (vn, raw_idx, stmt_idx) = (def.inputs[0], Some(0), def_stmt);
+            }
+            _ => break (def, def_stmt),
+        }
+    };
+    match def.op {
         IrOp::IntMult if def.inputs.len() == 2 => {
             let (idx_vn, stride) = if def.inputs[1].space == SpaceId::Const {
                 (&def.inputs[0], def.inputs[1].offset)

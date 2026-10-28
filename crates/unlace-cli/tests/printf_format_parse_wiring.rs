@@ -84,7 +84,9 @@ fn printf_wiring_cpp_exceptions_reports_two_sites() {
 /// Direct API smoke for the new whole-program driver. Lifts every
 /// discovered function in `cpp_exceptions.elf`, runs
 /// `run_whole_program_printf_parse`, and asserts the returned aggregate
-/// count is `>= 2`. Lower-bounded rather than exact because future
+/// count is `>= 1`: the binary has one `__printf_chk` call (0x1207, in
+/// `safe_call(int).cold`); a second count came from a false function start
+/// inside that cold split. Lower-bounded rather than exact because future
 /// pattern-recovery improvements (e.g. recovering format strings from
 /// jump-table-fed call sites) are improvements we don't want this test
 /// to penalise.
@@ -134,8 +136,8 @@ fn whole_program_driver_populates_variadic_call_types() {
 
     let total = pipeline::run_whole_program_printf_parse(&mut ssa_map, &image, &functions);
     assert!(
-        total >= 2,
-        "whole-program printf parse should populate at least 2 variadic_call_types entries on cpp_exceptions.elf, got {total}"
+        total >= 1,
+        "whole-program printf parse should populate at least 1 variadic_call_types entries on cpp_exceptions.elf, got {total}"
     );
 
     // Spot-check: at least one function must have a non-empty

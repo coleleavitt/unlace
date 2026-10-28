@@ -455,7 +455,7 @@ fn run_ir_dump(
 
     let image = {
         let _span = profiling::phase("ir-dump.load-binary");
-        unlace_cli::load::parse_image(data, binary_path)?
+        unlace_cli::load::parse_image(data, binary_path, None)?
     };
 
     let out = unlace_cli::ir_dump::dump_functions(&image, function_filter, phase, &options.passes)?;
@@ -1119,9 +1119,10 @@ fn run_decompile(
     };
     profiling::record_bytes("decompile.read-binary", data.len() as u64);
 
+    let preferred_arch = arch_override.map(unlace_cli::parse_arch).transpose()?;
     let mut image = {
         let _span = profiling::phase("decompile.load-binary");
-        unlace_cli::load::parse_image(&data, binary_path)?
+        unlace_cli::load::parse_image(&data, binary_path, preferred_arch)?
     };
     sw.phase("load+parse", t_load.elapsed());
     sw.set_input_size(data.len() as u64);

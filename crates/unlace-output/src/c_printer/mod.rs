@@ -40,8 +40,8 @@
 //! | `cot_postdec` (54)     | `x--`               | `try_emit_postfix_inc_dec`   | ✅ |
 //! | `cot_preinc` (55)      | `++x`               | folded into postinc form     | ⚠️ deferred — see note |
 //! | `cot_predec` (56)      | `--x`               | folded into postdec form     | ⚠️ deferred — see note |
-//! | `cot_idx` (57)         | `arr[i]`            | `try_array_subscript`, `try_struct_field_access` | ✅ |
-//! | `cot_memref` (58)      | `s.m`               | `try_struct_field_access`    | ✅ |
+//! | `cot_idx` (57)         | `arr[i]`            | `try_array_subscript`, `member_path` | ✅ |
+//! | `cot_memref` (58)      | `s.m`               | `member_path` (nested members) | ✅ |
 //! | `cot_memptr` (59)      | `p->m`              | `try_resolve_field_from_addr`| ✅ |
 //! | `cot_call` (60)        | `f(...)`            | `Call`/`Callind`             | ✅ |
 //! | `cot_var/obj/num/...`  | name / literal      | `emit_operand_with_prec`     | ✅ |
@@ -124,10 +124,12 @@ use crate::expr_ast::CExpr;
 mod member_path;
 mod postprocess;
 mod trace;
+mod typed_access;
 
 use member_path::StructLayouts;
 use postprocess::*;
 use trace::*;
+use typed_access::{Pointee, try_typed_access, typed_access_is_stable};
 
 fn cprinter_detail_phase(name: &'static str) -> Option<linkscope::Span> {
     linkscope::trace_detail_enabled().then(|| linkscope::phase(name))
@@ -873,7 +875,6 @@ pub fn print_c_with_annotations(
         func.panic_sites.clone(),
         sym_owned,
         str_owned,
-        func.composite_var_types.clone(),
         func.merged_names.clone(),
         func.var_role_names.clone(),
     );
@@ -962,7 +963,7 @@ pub fn print_c_with_annotations(
     {
         let _span = linkscope::phase("cprinter.precompute.param-register-names");
         compute_param_register_names(func, dwarf_func, header, &mut ctx);
-        compute_param_pointee_structs(dwarf_func, header, &mut ctx);
+        compute_param_pointees(dwarf_func, header, &mut ctx);
     }
     trace_ctx_snapshot("param-register-names", &ctx);
     {
@@ -1888,9 +1889,9 @@ fn compute_param_register_names(
     }
 }
 
-/// Record the entry value of each DWARF struct-pointer parameter so accesses
-/// through it render as `param->member`.
-fn compute_param_pointee_structs(
+/// Record the entry value of each DWARF pointer parameter with its declared
+/// pointee, so accesses through it render as `param->member` / `param[i]`.
+fn compute_param_pointees(
     dwarf_func: Option<&FunctionDebugInfo>,
     header: Option<&FunctionHeaderInfo>,
     ctx: &mut PrintCtx,
@@ -1902,18 +1903,20 @@ fn compute_param_pointee_structs(
         return;
     };
     for (param, &reg) in df.params.iter().zip(regs) {
-        let Some(pointee) = param
+        let pointee = param
             .type_name
             .as_deref()
             .and_then(|ty| ctx.struct_layouts.pointee_struct(ty))
-        else {
+            .map(|name| Pointee::Struct(name.to_string()))
+            .or_else(|| param.pointee_size.map(Pointee::Scalar));
+        let Some(pointee) = pointee else {
             continue;
         };
         let entry_value = SsaVarnode {
             base: Varnode::new(SpaceId::Register, reg, 8),
             version: 0,
         };
-        ctx.pointee_structs.insert(entry_value, pointee.to_string());
+        ctx.pointees.insert(entry_value, pointee);
     }
 }
 
@@ -2563,9 +2566,9 @@ struct PrintCtx {
     frame_size: Option<u64>,
     /// DWARF struct layouts for typed `base->member` rendering.
     struct_layouts: StructLayouts,
-    /// Pointer values whose pointee is a known DWARF struct (entry values of
-    /// struct-pointer parameters), keyed to that struct's name.
-    pointee_structs: BTreeMap<SsaVarnode, String>,
+    /// Pointer values whose pointee type is declared (entry values of DWARF
+    /// pointer parameters).
+    pointees: BTreeMap<SsaVarnode, Pointee>,
     panic_sites: BTreeMap<u64, PanicKind>,
     /// Merged symbol table: address → symbol name (PLT + function symbols).
     symbols: BTreeMap<u64, String>,
@@ -2584,9 +2587,6 @@ struct PrintCtx {
     /// DWARF local variable type overrides keyed by the same base varnode used
     /// by `name_overrides`.
     dwarf_local_types: BTreeMap<Varnode, String>,
-    /// Composite (struct/array) type annotations from SSA-level type inference.
-    /// Used by `try_struct_field_access` to emit `base->field_<offset>` syntax.
-    composite_var_types: BTreeMap<SsaVarnode, Type>,
     source_map: BTreeMap<u64, unlace_loader::SourceLocation>,
     /// `true` when the enclosing function returns `void` (or the inferred
     /// return type is `Unknown`, which we render as `void`). Used by
@@ -2855,7 +2855,6 @@ impl PrintCtx {
         panic_sites: BTreeMap<u64, PanicKind>,
         symbols: BTreeMap<u64, String>,
         string_table: BTreeMap<u64, String>,
-        composite_var_types: BTreeMap<SsaVarnode, Type>,
         merged_names: BTreeMap<SsaVarnode, String>,
         var_role_names: BTreeMap<SsaVarnode, String>,
     ) -> Self {
@@ -2907,7 +2906,7 @@ impl PrintCtx {
             hoist_decl_plan: BTreeMap::new(),
             frame_size: None,
             struct_layouts,
-            pointee_structs: BTreeMap::new(),
+            pointees: BTreeMap::new(),
             panic_sites,
             symbols,
             string_table,
@@ -2919,7 +2918,6 @@ impl PrintCtx {
             byref_bases: BTreeSet::new(),
             name_overrides: BTreeMap::new(),
             dwarf_local_types: BTreeMap::new(),
-            composite_var_types,
             source_map: dwarf.map(|d| d.source_map.clone()).unwrap_or_default(),
             parent_returns_void: false,
             merged_names,
@@ -3027,175 +3025,9 @@ impl PrintCtx {
     }
 }
 
-/// `true` when `vn` traces (through `Copy`/`IntAdd`/`IntSub` of constants) back
-/// to a stack/frame-pointer register. Such an address is a frame-relative access
-/// and must NOT be rendered as `base->field` (the frame pointer is a scalar, so
-/// `(c0 - 32)->field` is invalid C — "invalid type argument of '->'"); the
-/// caller should fall through to the raw `*(T *)(base + off)` deref form.
-/// Bounded depth; const-displacement chains only.
-fn traces_to_frame_base(
-    vn: &Varnode,
-    raw_idx: Option<usize>,
-    stmt_idx: u32,
-    ctx: &PrintCtx,
-    depth: u8,
-) -> bool {
-    if depth > 8 {
-        return false;
-    }
-    if is_frame_base_reg_ctx(vn, ctx) {
-        return true;
-    }
-    let Some(sv) = input_or_latest_sv_for_operand(vn, raw_idx, stmt_idx, ctx) else {
-        return false;
-    };
-    let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) else {
-        return false;
-    };
-    let Some(def) = ctx.stmt_insns.get(&def_stmt) else {
-        return false;
-    };
-    match def.op {
-        IrOp::Copy if !def.inputs.is_empty() => {
-            traces_to_frame_base(&def.inputs[0], Some(0), def_stmt, ctx, depth + 1)
-        }
-        IrOp::IntAdd | IrOp::IntSub if def.inputs.len() >= 2 => {
-            // A frame-relative displacement: one operand is the frame chain, the
-            // other a constant.
-            let (a, b) = (&def.inputs[0], &def.inputs[1]);
-            (b.space == SpaceId::Const
-                && traces_to_frame_base(a, Some(0), def_stmt, ctx, depth + 1))
-                || (a.space == SpaceId::Const
-                    && traces_to_frame_base(b, Some(1), def_stmt, ctx, depth + 1))
-        }
-        _ => false,
-    }
-}
-
-/// Render `*(T *)(base + off)` as `base->member` when `base` points to a known
-/// DWARF struct and the access lands exactly on one leaf member.
-fn try_resolve_struct_field(
-    addr_insn: &IrInsn,
-    addr_stmt_idx: u32,
-    access_size: u8,
-    ctx: &mut PrintCtx,
-) -> Option<String> {
-    if addr_insn.op != IrOp::IntAdd || addr_insn.inputs.len() < 2 {
-        return None;
-    }
-    let (base_input, const_offset) = if addr_insn.inputs[1].space == SpaceId::Const {
-        (&addr_insn.inputs[0], addr_insn.inputs[1].offset)
-    } else if addr_insn.inputs[0].space == SpaceId::Const {
-        (&addr_insn.inputs[1], addr_insn.inputs[0].offset)
-    } else {
-        return None;
-    };
-    if base_input.space == SpaceId::Const {
-        return None;
-    }
-    let base_sv = ctx
-        .stmt_inputs
-        .get(&addr_stmt_idx)
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_input).copied())?;
-    let path = typed_member_path(base_sv, const_offset, access_size, ctx)?;
-    let base_expr = fallback_field_base_name(ctx, &base_sv)?;
-    path.through_pointer(CExpr::Lit(base_expr))
-        .map(|expr| expr.to_string())
-}
-
-/// The member an access of `access_size` bytes at `offset` from `base_sv`
-/// reads, when `base_sv` points to a known struct.
-fn typed_member_path(
-    base_sv: SsaVarnode,
-    offset: u64,
-    access_size: u8,
-    ctx: &PrintCtx,
-) -> Option<member_path::MemberPath> {
-    let pointee = ctx.pointee_structs.get(&base_sv)?;
-    let path = ctx
-        .struct_layouts
-        .member_path(pointee, offset, u64::from(access_size));
-    if path.is_none() {
-        tracing::debug!(target: "unlace::cprinter::types",
-            "struct-field no-member pointee={pointee} off={offset} size={access_size}"
-        );
-    }
-    path
-}
-
-/// Printable name of a typed struct-pointer base, or `None` for a generic
-/// `aN` argument name (which would hide the pointer type the member implies).
-fn fallback_field_base_name(ctx: &mut PrintCtx, base_sv: &SsaVarnode) -> Option<String> {
-    let name = ctx.name_of(base_sv);
-    meaningful_field_base_name(&name)
-}
-
-fn meaningful_field_base_name(name: &str) -> Option<String> {
-    let mut chars = name.chars();
-    if chars.next() == Some('a') && chars.all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    Some(name.to_string())
-}
-
-fn is_generic_address_expr(expr: &str) -> bool {
-    let trimmed = expr.trim();
-    let trimmed = trimmed
-        .strip_prefix('(')
-        .and_then(|s| s.strip_suffix(')'))
-        .unwrap_or(trimmed)
-        .trim();
-    let mut chars = trimmed.chars();
-    chars.next() == Some('a') && chars.all(|c| c.is_ascii_digit())
-}
-
-/// Typed member access for a load/store whose address operand is `addr_vn`:
-/// either `base + const` or the struct pointer itself (offset 0).
-fn try_resolve_field_from_addr(
-    addr_vn: &Varnode,
-    _idx: usize,
-    stmt_idx: u32,
-    access_size: u8,
-    ctx: &mut PrintCtx,
-) -> Option<String> {
-    if ctx.pointee_structs.is_empty() || addr_vn.space == SpaceId::Const {
-        return None;
-    }
-    let addr_sv = ctx
-        .stmt_inputs
-        .get(&stmt_idx)
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
-    if ctx.pointee_structs.contains_key(&addr_sv) {
-        let path = typed_member_path(addr_sv, 0, access_size, ctx)?;
-        let base_expr = fallback_field_base_name(ctx, &addr_sv)?;
-        return path
-            .through_pointer(CExpr::Lit(base_expr))
-            .map(|expr| expr.to_string());
-    }
-    let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
-    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
-    try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx)
-}
-
 // ---------------------------------------------------------------------------
 // Array subscript recovery
 // ---------------------------------------------------------------------------
-
-/// True when a constant varnode encodes a negative displacement at its own
-/// operand width (high bit set). `0xffffffffffff9c30` at 8 bytes is `-25552`;
-/// `0xffff9c30` at 4 bytes is likewise negative. Such constants are `base - N`
-/// stack/struct displacements, never positive array offsets, so the
-/// array-subscript matcher must reject them rather than divide the wrapped
-/// magnitude by the stride.
-fn const_offset_is_negative(vn: &Varnode) -> bool {
-    debug_assert!(vn.space == SpaceId::Const);
-    let bits = (vn.size as u32) * 8;
-    if bits == 0 || bits >= 64 {
-        return (vn.offset as i64) < 0;
-    }
-    let sign_bit = 1u64 << (bits - 1);
-    vn.offset & sign_bit != 0
-}
 
 /// Result of array subscript pattern matching on an address expression.
 struct ArraySubscript {
@@ -3247,44 +3079,6 @@ fn paren_if_non_atomic_base(base: &str) -> String {
     } else {
         format!("({base})")
     }
-}
-
-/// `true` when the subscript base is a dereference expression (`*(_T *)(...)`).
-/// Such a base is a loaded scalar *value* (typed `_QWORD`/`_DWORD`, …), so
-/// `base[i]` is invalid C ("subscripted value is neither array nor pointer") —
-/// the printer cannot recover the correct pointer element type for a cast.
-/// Returning `None` from the subscript matcher in this case lets the caller fall
-/// through to the always-valid raw `*(T *)(addr)` deref rendering (the IR's
-/// literal form). Narrow: only `*`-prefixed (deref) bases are rejected; real
-/// array/pointer identifiers and `(addr)` forms still take the subscript path.
-fn is_scalar_deref_base(base: &str) -> bool {
-    base.trim_start().starts_with('*')
-}
-
-/// `true` when the subscript base resolves to a *named* `Load` output (a loaded
-/// scalar value, e.g. `v7 = *(_QWORD *)(v11)`). Such a value holds a pointer but
-/// is declared a scalar (`_QWORD v7`), so `v7[i]` is invalid C; returning `None`
-/// falls through to the always-valid raw `*(T *)(v7 + i*stride)` deref form.
-///
-/// Structural (no type aggregation): the defining instruction of the base SV is
-/// a `Load`. This is unambiguous and avoids the rsp type-inconsistency that
-/// defeats a declared-type guard. A genuine array/pointer local that was loaded
-/// would already be declared a pointer and rendered with a pointer cast
-/// upstream; the bail only removes the *uncompilable* `scalar[i]` form.
-fn base_vn_is_scalar_load_output(base_vn: &Varnode, def_stmt: u32, ctx: &PrintCtx) -> bool {
-    let Some(base_sv) = ctx
-        .stmt_inputs
-        .get(&def_stmt)
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_vn).copied())
-    else {
-        return false;
-    };
-    let Some(&base_def) = ctx.sv_defining_stmt.get(&base_sv) else {
-        return false;
-    };
-    ctx.stmt_insns
-        .get(&base_def)
-        .is_some_and(|insn| insn.op == IrOp::Load)
 }
 
 /// Try to recognise an array subscript pattern in the address computation of a
@@ -3550,6 +3344,12 @@ fn try_frame_local_indexed_subscript(
     })
 }
 
+/// `buf[i]` for a variable-indexed access into a recovered stack local.
+///
+/// Pointer bases are subscripted only through a declared element type (see
+/// `typed_access`); an untyped `base + k*i` stays a raw `*(T *)(...)`, as in
+/// Hex-Rays, because the base is declared as a scalar and `base[i]` would
+/// neither compile nor say which width it reads.
 fn try_array_subscript(
     addr_vn: &Varnode,
     stmt_idx: u32,
@@ -3559,267 +3359,7 @@ fn try_array_subscript(
     if access_size == 0 || addr_vn.space == SpaceId::Const {
         return None;
     }
-
-    // Frame-base-relative variable-indexed access:
-    //   addr = frame_base + index*stride (+/- const C)
-    // where the recovered stack frame has a local at the resolved offset. This
-    // is the `buf[i]` write whose address never resolves to a single constant
-    // stack slot (the index term defeats `resolve_stack_offset_for_addr`), so
-    // the legacy patterns below would either bail on the frame-base trace guard
-    // or leak the raw frame-pointer register through the deref fallback. Rebase
-    // it onto the recovered local's address so it renders as a real subscript on
-    // the same `&v_N` base the address-taken reads use.
-    if let Some(sub) = try_frame_local_indexed_subscript(addr_vn, stmt_idx, access_size, ctx) {
-        return Some(sub);
-    }
-
-    // Resolve the SSA varnode for the address operand.
-    let addr_sv = ctx
-        .stmt_inputs
-        .get(&stmt_idx)
-        .cloned()
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
-
-    // The address must be defined by a foldable statement.
-    let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
-    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
-
-    let stride = access_size as u64;
-
-    match def_insn.op {
-        // Pattern 1: INT_ADD(base, INT_MULT(index, Const(stride)))
-        IrOp::IntAdd if def_insn.inputs.len() == 2 => {
-            // One operand must be an INT_MULT producing index*stride.
-            // Check which operand is the multiply (it could be either).
-            for (mult_pos, base_pos) in [(0, 1), (1, 0)] {
-                let mult_vn = &def_insn.inputs[mult_pos];
-                let base_vn = &def_insn.inputs[base_pos];
-
-                // The multiply operand must not be a constant and must have
-                // a foldable defining statement.
-                if mult_vn.space == SpaceId::Const {
-                    continue;
-                }
-
-                let mult_sv = ctx
-                    .stmt_inputs
-                    .get(&def_stmt)
-                    .cloned()
-                    .and_then(|inputs| inputs.iter().find(|sv| sv.base == *mult_vn).copied());
-                let mult_sv = match mult_sv {
-                    Some(sv) => sv,
-                    None => continue,
-                };
-                let mult_def = match ctx.sv_defining_stmt.get(&mult_sv) {
-                    Some(&s) => s,
-                    None => continue,
-                };
-                let mult_insn = match ctx.stmt_insns.get(&mult_def) {
-                    Some(i) => i.clone(),
-                    None => continue,
-                };
-
-                if mult_insn.op != IrOp::IntMult || mult_insn.inputs.len() != 2 {
-                    continue;
-                }
-
-                // One operand of the multiply must be Const(stride).
-                let (idx_vn, const_vn) = if mult_insn.inputs[1].space == SpaceId::Const {
-                    (&mult_insn.inputs[0], &mult_insn.inputs[1])
-                } else if mult_insn.inputs[0].space == SpaceId::Const {
-                    (&mult_insn.inputs[1], &mult_insn.inputs[0])
-                } else {
-                    continue;
-                };
-
-                if const_vn.offset != stride {
-                    continue;
-                }
-
-                let idx_expr = emit_operand_resolved(idx_vn, 0, mult_def, ctx);
-                let base_expr = emit_operand_resolved(base_vn, base_pos, def_stmt, ctx);
-                if is_generic_address_expr(&base_expr) {
-                    continue;
-                }
-                if is_scalar_deref_base(&base_expr)
-                    || rendered_base_is_scalar(&base_expr, ctx)
-                    || is_subscript_unsafe_frame_base_ctx(base_vn, ctx)
-                    || traces_to_frame_base(base_vn, None, def_stmt, ctx, 0)
-                    || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
-                {
-                    return None;
-                }
-
-                return Some(ArraySubscript {
-                    base: paren_if_non_atomic_base(&base_expr),
-                    index: idx_expr,
-                });
-            }
-
-            // Pattern 3: INT_ADD(base, Const(offset)) → base[offset / stride]
-            let (base_vn, const_vn) = if def_insn.inputs[1].space == SpaceId::Const {
-                (&def_insn.inputs[0], &def_insn.inputs[1])
-            } else if def_insn.inputs[0].space == SpaceId::Const {
-                (&def_insn.inputs[1], &def_insn.inputs[0])
-            } else {
-                return None;
-            };
-            if base_vn.space == SpaceId::Const {
-                return None;
-            }
-            let offset = const_vn.offset;
-            // A negative displacement (high bit set when interpreted at the
-            // operand width) is a `*(base - N)` stack-frame / struct access, not
-            // a positive `base[i]` array subscript. Dividing the wrapped u64 by
-            // the stride otherwise yields a garbage index like
-            // `v1[4611686018427384710]` (= -25552/8 reinterpreted). Bail so the
-            // caller falls through to the pointer-deref / stack-slot rendering.
-            if const_offset_is_negative(const_vn) {
-                return None;
-            }
-            if offset == 0 || offset % stride != 0 {
-                return None;
-            }
-            let computed_idx = offset / stride;
-            let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
-            if is_generic_address_expr(&base_expr)
-                || is_scalar_deref_base(&base_expr)
-                || rendered_base_is_scalar(&base_expr, ctx)
-                || is_subscript_unsafe_frame_base_ctx(base_vn, ctx)
-                || traces_to_frame_base(base_vn, None, def_stmt, ctx, 0)
-                || base_vn_is_scalar_load_output(base_vn, def_stmt, ctx)
-            {
-                return None;
-            }
-            Some(ArraySubscript {
-                base: paren_if_non_atomic_base(&base_expr),
-                index: format!("{}", computed_idx),
-            })
-        }
-
-        // Pattern 2: PTRADD(base, index, Const(stride))
-        IrOp::Ptradd if def_insn.inputs.len() >= 3 => {
-            let stride_vn = &def_insn.inputs[2];
-            if stride_vn.space != SpaceId::Const || stride_vn.offset != stride {
-                return None;
-            }
-            let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
-            if is_generic_address_expr(&base_expr)
-                || is_scalar_deref_base(&base_expr)
-                || rendered_base_is_scalar(&base_expr, ctx)
-                || is_subscript_unsafe_frame_base_ctx(&def_insn.inputs[0], ctx)
-                || traces_to_frame_base(&def_insn.inputs[0], None, def_stmt, ctx, 0)
-                || base_vn_is_scalar_load_output(&def_insn.inputs[0], def_stmt, ctx)
-            {
-                return None;
-            }
-            let idx_expr = emit_operand_resolved(&def_insn.inputs[1], 1, def_stmt, ctx);
-            Some(ArraySubscript {
-                base: paren_if_non_atomic_base(&base_expr),
-                index: idx_expr,
-            })
-        }
-
-        _ => None,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Struct field access recovery (from SSA composite_var_types)
-// ---------------------------------------------------------------------------
-
-/// Try to recognise a struct field access pattern: `INT_ADD(base, Const(offset))`
-/// where `base` has a `Type::Struct` in `composite_var_types`.
-///
-/// Emits `base->field_<offset>` when a matching field is found at the given
-/// offset, or `base->field_<offset>` with a synthetic name when the struct
-/// type is known but no field matches exactly.
-fn try_struct_field_access(
-    addr_vn: &Varnode,
-    stmt_idx: u32,
-    _access_size: u8,
-    ctx: &mut PrintCtx,
-) -> Option<String> {
-    if ctx.composite_var_types.is_empty() || addr_vn.space == SpaceId::Const {
-        return None;
-    }
-
-    let addr_sv = ctx
-        .stmt_inputs
-        .get(&stmt_idx)
-        .cloned()
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
-
-    let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
-    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
-
-    if def_insn.op != IrOp::IntAdd || def_insn.inputs.len() < 2 {
-        return None;
-    }
-
-    let (base_vn, const_offset) = if def_insn.inputs[1].space == SpaceId::Const {
-        (&def_insn.inputs[0], def_insn.inputs[1].offset)
-    } else if def_insn.inputs[0].space == SpaceId::Const {
-        (&def_insn.inputs[1], def_insn.inputs[0].offset)
-    } else {
-        return None;
-    };
-
-    if base_vn.space == SpaceId::Const {
-        return None;
-    }
-
-    let base_sv = ctx
-        .stmt_inputs
-        .get(&def_stmt)
-        .cloned()
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_vn).copied())?;
-
-    let base_type = ctx.composite_var_types.get(&base_sv)?;
-
-    let struct_fields = match base_type {
-        Type::Struct { fields, .. } => fields,
-        Type::Ptr(inner) => match inner.as_ref() {
-            Type::Struct { fields, .. } => fields,
-            _ => return None,
-        },
-        _ => return None,
-    };
-
-    // The composite `Struct` entry can be stale relative to the base's actual
-    // declaration. When the base is declared as a non-pointer scalar (e.g. a
-    // coalesced register `_QWORD c5`), `c5->field` is "invalid type argument of
-    // '->'"; bail so the caller emits the equivalent raw `*(T *)(base + off)`.
-    if base_name_decl_is_scalar(&base_sv, ctx) {
-        return None;
-    }
-
-    let field_name = struct_fields
-        .iter()
-        .find(|f| f.offset == const_offset)
-        .map(|f| f.name.clone())
-        .unwrap_or_else(|| format!("field_{:X}", const_offset));
-
-    // A frame-relative access (`(frame - N)->field`) must render as a raw deref,
-    // not `base->field` — the frame pointer is a scalar, so the arrow is invalid
-    // C ("invalid type argument of '->'"). Bail to the raw `*(T *)(addr)` form.
-    if traces_to_frame_base(base_vn, None, def_stmt, ctx, 0) {
-        return None;
-    }
-    let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
-    if is_generic_address_expr(&base_expr) {
-        return None;
-    }
-    // Batch 11 slice 1: route this one emit path through the semantic
-    // `CExpr` AST so we get correct precedence handling for free.
-    // For a simple identifier base this renders byte-identically to
-    // the legacy `format!("{}->{}", base, field)` form; for a more
-    // complex base (e.g. a cast or deref produced by a future pass)
-    // the `Member` printer will insert parens as needed. `CExpr::Lit` is
-    // treated as atomic, so a non-atomic base string is pre-parenthesised
-    // here (`->` is postfix and would otherwise bind tighter than `-`/`+`).
-    let member = CExpr::arrow(CExpr::Lit(paren_if_non_atomic_base(&base_expr)), field_name);
-    Some(member.to_string())
+    try_frame_local_indexed_subscript(addr_vn, stmt_idx, access_size, ctx)
 }
 
 // ---------------------------------------------------------------------------
@@ -3986,8 +3526,8 @@ fn walk_print_addr(
 /// layout in `ctx.array_struct_layouts`.
 ///
 /// Returns `Some("arr<N>[<iv>].field_<offset>")` when the access matches.
-/// `None` falls through to the existing `try_struct_field_access` /
-/// `try_array_subscript` / raw `*(T*)(addr)` ladder.
+/// `None` falls through to the `try_array_subscript` / raw `*(T*)(addr)`
+/// ladder.
 fn try_array_struct_field_access(
     addr_vn: &Varnode,
     stmt_idx: u32,
@@ -7909,43 +7449,6 @@ fn is_x86_frame_base(vn: &Varnode) -> bool {
     vn.space == SpaceId::Register && vn.size == 8 && matches!(vn.offset, RSP_REG_OFF | RBP_REG_OFF)
 }
 
-/// `true` when `vn` is a stack/frame-pointer register on any supported arch —
-/// the x86 RSP/RBP *or* the AArch64 SP (`r31`, reg offset 248) / FP (`x29`, reg
-/// offset 232). A stack/frame pointer is never a valid array-subscript base, so
-/// `frame[i]` must fall through to the raw `*(T *)(frame + off)` deref form.
-///
-/// Arch-agnostic by register offset: the offsets 232/248 are AArch64 FP/SP and
-/// are never argument registers on any supported arch (x86 arg regs are all
-/// low: rdi=56, rsi=48, rdx=16, rcx=8, r8=64, r9=72), so including them never
-/// suppresses a legitimate pointer-argument array access.
-fn is_subscript_unsafe_frame_base(vn: &Varnode) -> bool {
-    const AARCH64_FP_REG_OFF: u64 = 232; // x29
-    const AARCH64_SP_REG_OFF: u64 = 248; // r31/sp
-    is_x86_frame_base(vn)
-        || (vn.space == SpaceId::Register
-            && vn.size == 8
-            && matches!(vn.offset, AARCH64_FP_REG_OFF | AARCH64_SP_REG_OFF))
-}
-
-/// Arch-aware form of [`is_subscript_unsafe_frame_base`]: when the printer knows
-/// the function's architecture (`ctx.stack_spec`), the per-arch SP/FP register
-/// offsets are recognised as frame bases in addition to the legacy hard-coded
-/// x86/AArch64 set. Frame offsets that collide with x86 argument registers on
-/// other arches (e.g. RISC-V SP at offset 16 == x86 RDX) are only treated as
-/// frame bases when the arch actually matches — preventing x86 `rdx[i]` from
-/// being wrongly suppressed.
-fn is_subscript_unsafe_frame_base_ctx(vn: &Varnode, ctx: &PrintCtx) -> bool {
-    if is_subscript_unsafe_frame_base(vn) {
-        return true;
-    }
-    if let Some(spec) = ctx.stack_spec.as_ref()
-        && vn.space == SpaceId::Register
-    {
-        return spec.is_frame_base(vn);
-    }
-    false
-}
-
 /// Size-agnostic stack/frame-pointer register check (any access width). The
 /// frame pointer can be read at a sub-register width (e.g. MIPS `r29d`, a 4-byte
 /// view of `r29`), which `is_subscript_unsafe_frame_base` (8-byte-only) misses.
@@ -9172,88 +8675,6 @@ fn prefer_decl_type(existing: PrimitiveType, candidate: PrimitiveType) -> Primit
         (Bool, other) => other,
         (other, Bool) => other,
     }
-}
-
-/// Aggregate the declared [`PrimitiveType`] for a printed variable NAME,
-/// joining every `SsaVarnode` that shares the name via [`prefer_decl_type`].
-/// Mirrors the `preferred_decl_types` aggregation at decl-emission time: the
-/// printer declares ONE variable per name. Returns `None` when a DWARF local
-/// type is present for any contributing varnode (the decl trusts the DWARF
-/// type, which may be a real struct pointer) or when no variable matches.
-fn aggregated_decl_type_for_name(name: &str, ctx: &PrintCtx) -> Option<PrimitiveType> {
-    let mut aggregated: Option<PrimitiveType> = None;
-    let mut matched = false;
-    for (sv, n) in &ctx.var_names {
-        if n != name {
-            continue;
-        }
-        if ctx.dwarf_local_types.contains_key(&sv.base) {
-            return None;
-        }
-        matched = true;
-        let ty = ctx
-            .var_types
-            .get(sv)
-            .copied()
-            .unwrap_or(PrimitiveType::Unknown);
-        aggregated = Some(match aggregated {
-            Some(existing) => prefer_decl_type(existing, ty),
-            None => ty,
-        });
-    }
-    matched.then_some(aggregated).flatten()
-}
-
-/// `true` for a declared type on which `base->field` / `base[i]` is invalid C
-/// ("invalid type argument of '->'" / "subscripted value is neither array nor
-/// pointer"). A non-pointer scalar declaration cannot be dereferenced as an
-/// aggregate; the caller must fall through to the always-valid raw
-/// `*(T *)(base + off)` form. Pointers (`prefer_decl_type` makes `Ptr` dominate
-/// the join) and `Unknown` are left alone.
-fn decl_type_is_nonpointer_scalar(ty: PrimitiveType) -> bool {
-    matches!(
-        ty,
-        PrimitiveType::Int(_)
-            | PrimitiveType::UnsignedInt(_)
-            | PrimitiveType::Bool
-            | PrimitiveType::Float
-            | PrimitiveType::Double
-    )
-}
-
-/// `true` when the variable `base_sv` is printed as will be **declared** with a
-/// non-pointer scalar type, so a `base->field` arrow is invalid C. Used by
-/// `try_struct_field_access`: a `composite_var_types` `Struct` entry can be
-/// stale relative to the actual declaration (a coalesced register `c5`/`c1`
-/// declared `_QWORD`/`__int64`); the declaration wins.
-fn base_name_decl_is_scalar(base_sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
-    ctx.var_names
-        .get(base_sv)
-        .and_then(|name| aggregated_decl_type_for_name(name, ctx))
-        .is_some_and(decl_type_is_nonpointer_scalar)
-}
-
-/// String-keyed counterpart for the subscript paths, which have already
-/// rendered the base as an expression. When the rendered base is a plain
-/// identifier naming a scalar-declared variable, `base[i]` is invalid C; bail
-/// to the raw deref. Works on the rendered string (sidestepping emit-site SV
-/// re-resolution), matching the validated guard from the t61 investigation.
-fn rendered_base_is_scalar(base_expr: &str, ctx: &PrintCtx) -> bool {
-    let name = base_expr.trim();
-    let name = name
-        .strip_prefix('(')
-        .and_then(|s| s.strip_suffix(')'))
-        .unwrap_or(name)
-        .trim();
-    let mut chars = name.chars();
-    let plain_identifier = chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-    if !plain_identifier {
-        return false;
-    }
-    aggregated_decl_type_for_name(name, ctx).is_some_and(decl_type_is_nonpointer_scalar)
 }
 
 #[allow(dead_code)]
@@ -13823,7 +13244,7 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                 {
                     Some(format!("{} = {};", global, val))
                 } else if let Some(field_expr) =
-                    try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
+                    try_typed_access(&insn.inputs[1], idx, store_size, ctx)
                 {
                     Some(format!("{} = {};", field_expr, val))
                 } else if let Some(field_expr) =
@@ -13832,10 +13253,6 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                     // t231: see the matching hook in `emit_statement` —
                     // `inline_statement_text` is the parallel codepath
                     // used when adjacent stmts get grouped on one line.
-                    Some(format!("{} = {};", field_expr, val))
-                } else if let Some(field_expr) =
-                    try_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
-                {
                     Some(format!("{} = {};", field_expr, val))
                 } else if let Some(sub) = try_array_subscript(&insn.inputs[1], idx, store_size, ctx)
                 {
@@ -14207,7 +13624,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     {
                         let _ = writeln!(out, "{} = {};", global, val);
                     } else if let Some(field_expr) =
-                        try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
+                        try_typed_access(&insn.inputs[1], idx, store_size, ctx)
                     {
                         let _ = writeln!(out, "{} = {};", field_expr, val);
                     } else if let Some(field_expr) =
@@ -14217,10 +13634,6 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                         // both the generic struct-field and array-subscript
                         // paths so per-element field stores render as
                         // `arr<N>[i].field_<offset> = val;`.
-                        let _ = writeln!(out, "{} = {};", field_expr, val);
-                    } else if let Some(field_expr) =
-                        try_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
-                    {
                         let _ = writeln!(out, "{} = {};", field_expr, val);
                     } else if let Some(sub) =
                         try_array_subscript(&insn.inputs[1], idx, store_size, ctx)
@@ -15187,13 +14600,9 @@ fn emit_expr_with_prec(
                     );
                     return global;
                 }
-                if let Some(resolved) = try_resolve_field_from_addr(
-                    &insn.inputs[addr_idx],
-                    addr_idx,
-                    stmt_idx,
-                    load_size,
-                    ctx,
-                ) {
+                if let Some(resolved) =
+                    try_typed_access(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
+                {
                     trace_load_render(
                         "field-from-addr",
                         stmt_idx,
@@ -15215,23 +14624,6 @@ fn emit_expr_with_prec(
                 {
                     trace_load_render(
                         "array-struct-field",
-                        stmt_idx,
-                        insn,
-                        addr_idx,
-                        load_size,
-                        None,
-                        Some(field.as_str()),
-                    );
-                    return field;
-                }
-                if let Some(field) =
-                    try_struct_field_access(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
-                {
-                    trace_pipeline(format!(
-                        "emit-load stmt={stmt_idx} size={load_size} form=struct-arrow text={field:?}"
-                    ));
-                    trace_load_render(
-                        "struct-field",
                         stmt_idx,
                         insn,
                         addr_idx,
@@ -16881,7 +16273,7 @@ fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) 
         ));
         return true;
     }
-    if field_load_expr_is_stable(addr, stmt_idx, load_size, ctx) {
+    if typed_access_is_stable(addr, stmt_idx, load_size, ctx) {
         trace_load_text(format_args!(
             "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=field"
         ));
@@ -17003,49 +16395,6 @@ fn consumer_uses_sv_as_indirect_call_target(
             .get(&consumer_stmt)
             .and_then(|inputs| inputs.first())
             .is_some_and(|target| target == sv)
-}
-
-fn field_load_expr_is_stable(
-    addr_vn: &Varnode,
-    stmt_idx: u32,
-    load_size: u8,
-    ctx: &PrintCtx,
-) -> bool {
-    if ctx.pointee_structs.is_empty() || addr_vn.space == SpaceId::Const {
-        return false;
-    }
-    let Some(addr_sv) = ctx
-        .stmt_inputs
-        .get(&stmt_idx)
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())
-    else {
-        return false;
-    };
-    if ctx.pointee_structs.contains_key(&addr_sv) {
-        return typed_member_path(addr_sv, 0, load_size, ctx).is_some();
-    }
-    let Some(def_insn) = ctx
-        .sv_defining_stmt
-        .get(&addr_sv)
-        .and_then(|def_stmt| ctx.stmt_insns.get(def_stmt).map(|insn| (*def_stmt, insn)))
-    else {
-        return false;
-    };
-    let (def_stmt, def_insn) = def_insn;
-    if def_insn.op != IrOp::IntAdd || def_insn.inputs.len() < 2 {
-        return false;
-    }
-    let (base_input, const_offset) = if def_insn.inputs[1].space == SpaceId::Const {
-        (&def_insn.inputs[0], def_insn.inputs[1].offset)
-    } else if def_insn.inputs[0].space == SpaceId::Const {
-        (&def_insn.inputs[1], def_insn.inputs[0].offset)
-    } else {
-        return false;
-    };
-    ctx.stmt_inputs
-        .get(&def_stmt)
-        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_input).copied())
-        .is_some_and(|base_sv| typed_member_path(base_sv, const_offset, load_size, ctx).is_some())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

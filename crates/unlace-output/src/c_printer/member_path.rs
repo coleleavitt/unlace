@@ -30,18 +30,26 @@ pub(super) struct MemberPath(Vec<MemberStep>);
 
 impl MemberPath {
     /// Render the access through a pointer `base`: `base->size.x`.
-    pub(super) fn through_pointer(&self, base: CExpr) -> Option<CExpr> {
-        let (MemberStep::Field(first), rest) = self.0.split_first()? else {
-            return None;
-        };
-        let mut expr = CExpr::arrow(base, first.clone());
-        for step in rest {
+    pub(super) fn through_pointer(&self, base: CExpr) -> CExpr {
+        self.render(base, true)
+    }
+
+    /// Render the access on a struct value `base`: `base.size.x`.
+    pub(super) fn through_value(&self, base: CExpr) -> CExpr {
+        self.render(base, false)
+    }
+
+    fn render(&self, base: CExpr, mut arrow: bool) -> CExpr {
+        let mut expr = base;
+        for step in &self.0 {
             expr = match step {
+                MemberStep::Field(name) if arrow => CExpr::arrow(expr, name.clone()),
                 MemberStep::Field(name) => CExpr::dot(expr, name.clone()),
                 MemberStep::Index(idx) => CExpr::index(expr, CExpr::lit(idx.to_string())),
             };
+            arrow = false;
         }
-        Some(expr)
+        expr
     }
 }
 
@@ -53,6 +61,11 @@ pub(super) struct StructLayouts {
 impl StructLayouts {
     pub(super) fn new(structs: BTreeMap<String, StructType>) -> Self {
         Self { structs }
+    }
+
+    /// Byte size of the named struct.
+    pub(super) fn size_of(&self, struct_name: &str) -> Option<u64> {
+        self.structs.get(struct_name).map(|layout| layout.size)
     }
 
     /// The struct a value of DWARF type `type_name` points to, when it is a
@@ -179,7 +192,7 @@ mod tests {
     }
 
     fn render(path: &MemberPath) -> String {
-        path.through_pointer(CExpr::lit("p")).unwrap().to_string()
+        path.through_pointer(CExpr::lit("p")).to_string()
     }
 
     #[test]

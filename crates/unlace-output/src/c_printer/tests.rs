@@ -7,41 +7,6 @@ use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
 
 #[test]
-fn is_scalar_deref_base_rejects_deref_expressions() {
-    use super::is_scalar_deref_base;
-    // Deref bases (loaded scalar values) cannot be subscripted.
-    assert!(is_scalar_deref_base("*(_QWORD *)(buf + 8)"));
-    assert!(is_scalar_deref_base("  *p"));
-    // Identifiers and parenthesised address forms can.
-    assert!(!is_scalar_deref_base("buf"));
-    assert!(!is_scalar_deref_base("v2"));
-    assert!(!is_scalar_deref_base("(buf + 8)"));
-    assert!(!is_scalar_deref_base("a1"));
-}
-
-#[test]
-fn frame_base_subscript_guard_covers_x86_and_aarch64() {
-    use super::is_subscript_unsafe_frame_base;
-    use unlace_ir::SpaceId;
-    let reg = |off| Varnode {
-        space: SpaceId::Register,
-        offset: off,
-        size: 8,
-    };
-    // x86 RSP(32) / RBP(40).
-    assert!(is_subscript_unsafe_frame_base(&reg(32)));
-    assert!(is_subscript_unsafe_frame_base(&reg(40)));
-    // AArch64 FP x29(232) / SP r31(248).
-    assert!(is_subscript_unsafe_frame_base(&reg(232)));
-    assert!(is_subscript_unsafe_frame_base(&reg(248)));
-    // Argument registers (low offsets) are NOT frame bases — a genuine
-    // pointer-arg array access must still take the subscript path.
-    assert!(!is_subscript_unsafe_frame_base(&reg(56))); // rdi
-    assert!(!is_subscript_unsafe_frame_base(&reg(48))); // rsi
-    assert!(!is_subscript_unsafe_frame_base(&reg(8))); // rcx
-}
-
-#[test]
 fn frame_base_update_suppression_keeps_rbp_accumulator_init() {
     use super::is_x86_frame_base_update;
 
@@ -92,7 +57,6 @@ fn frame_base_register_is_suppressible_storage() {
 
     let ctx = PrintCtx::new(
         None,
-        BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -790,7 +754,6 @@ fn test_dedupe_var_names_keeps_alias_param_versions_together() {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
-        BTreeMap::new(),
     );
     ctx.name_overrides.insert(full.base, "a3".to_string());
     ctx.name_overrides.insert(low.base, "a3".to_string());
@@ -936,7 +899,6 @@ fn test_select_parenthesizes_when_used_as_comparison_operand() {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
-        BTreeMap::new(),
     );
     let select = IrInsn::with_output(
         IrOp::Select,
@@ -967,7 +929,6 @@ fn test_expression_inputs_aliased_redefined_detects_same_base_redef() {
     // back to the captured temp's name instead of re-inlining the SLESS.
     let mut ctx = super::PrintCtx::new(
         None,
-        BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -1031,7 +992,6 @@ fn test_materialized_candidate_rejects_redefined_storage_before_consumer() {
     // valid until its visible storage is rewritten.
     let mut ctx = super::PrintCtx::new(
         None,
-        BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -1692,7 +1652,6 @@ fn test_hoist_plan_rejects_loop_body_decl_read_by_do_while_condition() {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
-        BTreeMap::new(),
     );
 
     ctx.var_names.insert(cond_sv, "v57".to_string());
@@ -1731,7 +1690,6 @@ fn test_hoist_plan_rejects_shared_name_with_outer_scope_touch() {
     };
     let mut ctx = super::PrintCtx::new(
         None,
-        BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -2536,11 +2494,14 @@ fn test_print_ternary_compiles() {
     );
 }
 
-/// DWARF info declaring `struct_name` and a function at 0x1000 whose single
-/// parameter `param` points to it.
-fn dwarf_with_struct_param(
-    struct_ty: unlace_loader::StructType,
+/// DWARF info for a function at 0x1000 whose single parameter `param` has
+/// pointer type `type_name`, plus a System V header so the parameter maps to
+/// `rdi`.
+fn dwarf_with_pointer_param(
     param: &str,
+    type_name: &str,
+    pointee_size: u64,
+    structs: Vec<unlace_loader::StructType>,
 ) -> (unlace_loader::DwarfInfo, super::FunctionHeaderInfo) {
     use unlace_loader::{DwarfInfo, FunctionDebugInfo, ParameterInfo};
     let mut functions = BTreeMap::new();
@@ -2554,7 +2515,8 @@ fn dwarf_with_struct_param(
             ranges: vec![],
             params: vec![ParameterInfo {
                 name: Some(param.to_string()),
-                type_name: Some(format!("{} *", struct_ty.name)),
+                type_name: Some(type_name.to_string()),
+                pointee_size: Some(pointee_size),
                 frame_offset: None,
             }],
             return_type: Some("int".to_string()),
@@ -2563,12 +2525,10 @@ fn dwarf_with_struct_param(
             cfa_to_rbp_delta: None,
         },
     );
-    let mut structs = BTreeMap::new();
-    structs.insert(struct_ty.name.clone(), struct_ty);
     let dwarf = DwarfInfo {
         functions,
         source_map: BTreeMap::new(),
-        structs,
+        structs: structs.into_iter().map(|s| (s.name.clone(), s)).collect(),
         enums: BTreeMap::new(),
         unions: BTreeMap::new(),
         macros: vec![],
@@ -2585,6 +2545,16 @@ fn dwarf_with_struct_param(
         dynamic_sp: false,
     };
     (dwarf, header)
+}
+
+/// [`dwarf_with_pointer_param`] for a pointer to `struct_ty`.
+fn dwarf_with_struct_param(
+    struct_ty: unlace_loader::StructType,
+    param: &str,
+) -> (unlace_loader::DwarfInfo, super::FunctionHeaderInfo) {
+    let type_name = format!("{} *", struct_ty.name);
+    let size = struct_ty.size;
+    dwarf_with_pointer_param(param, &type_name, size, vec![struct_ty])
 }
 
 #[test]
@@ -2646,6 +2616,109 @@ fn test_struct_field_access() {
         "untyped base must stay raw: {untyped}"
     );
 }
+#[test]
+fn typed_subscript_folds_shift_scale_and_element_offset() {
+    // *(int *)(buf + (i << 2) - 4) → buf[i - 1]
+    let space = con(0, 8);
+    let buf = reg(56, 8);
+    let i = reg(8, 8);
+    let shl = Varnode::unique(100, 8);
+    let sum = Varnode::unique(200, 8);
+    let addr = Varnode::unique(300, 8);
+    let load_out = reg(16, 4);
+    let body = vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntLeft,
+            shl,
+            smallvec![i, con(2, 8)],
+            0x1000,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            sum,
+            smallvec![buf, shl],
+            0x1004,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![sum, con(0xffff_ffff_ffff_fffc, 8)],
+            0x1008,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![space, addr],
+            0x100c,
+        )),
+        HirNode::Return(Some(SsaVarnode {
+            base: load_out,
+            version: 0,
+        })),
+    ];
+    let func = make_func("shift_index", body);
+    let (dwarf, header) = dwarf_with_pointer_param("buf", "int *", 4, vec![]);
+    let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
+    assert!(
+        output.contains("buf[") && output.contains(" - 1]"),
+        "shift-scaled index with -4 byte offset should be buf[i - 1]: {output}",
+    );
+}
+
+#[test]
+fn typed_struct_access_past_first_element_indexes_the_pointer() {
+    use unlace_loader::{StructField, StructType};
+    // *(int *)(p + 12) through `Point *p` → p[1].y
+    let space = con(0, 8);
+    let p = reg(56, 8);
+    let addr = Varnode::unique(100, 8);
+    let load_out = reg(16, 4);
+    let body = vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![p, con(12, 8)],
+            0x1000,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![space, addr],
+            0x1004,
+        )),
+        HirNode::Return(Some(SsaVarnode {
+            base: load_out,
+            version: 0,
+        })),
+    ];
+    let func = make_func("point_array", body);
+    let point = StructType {
+        name: "Point".to_string(),
+        size: 8,
+        template_params: vec![],
+        fields: vec![
+            StructField {
+                name: "x".to_string(),
+                offset: 0,
+                size: 4,
+                type_name: "int".to_string(),
+            },
+            StructField {
+                name: "y".to_string(),
+                offset: 4,
+                size: 4,
+                type_name: "int".to_string(),
+            },
+        ],
+    };
+    let (dwarf, header) = dwarf_with_struct_param(point, "p");
+    let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
+    assert!(
+        output.contains("p[1].y"),
+        "should index the pointer: {output}"
+    );
+}
+
 #[test]
 fn test_struct_field_store_writes_arrow_syntax() {
     use unlace_loader::{StructField, StructType};
@@ -2759,15 +2832,14 @@ fn test_struct_field_no_match() {
     };
     let output = super::print_c_with_dwarf(&func, Some(&dwarf));
     assert!(!output.contains("->"), "should NOT contain ->: {output}");
-    // With array subscript recovery: INT_ADD(base, 48) with 4-byte load → base[12]
     assert!(
-        output.contains("v1[12]"),
-        "should recover array subscript v1[12]: {output}"
+        output.contains("*(_DWORD *)(") && !output.contains("[12]"),
+        "untyped base keeps the raw dereference: {output}"
     );
 }
 
 #[test]
-fn test_composite_var_types_struct_field_access() {
+fn composite_struct_on_undeclared_base_stays_raw() {
     use unlace_ir::types::{StructFieldType, Type};
 
     let r0 = reg(0, 8);
@@ -2818,62 +2890,12 @@ fn test_composite_var_types_struct_field_access() {
         },
     );
 
+    // Nothing declares `rax` as `MyStruct *` (and nothing declares
+    // `MyStruct`), so `->beta` would not compile; the access stays raw.
     let output = super::print_c(&func);
     assert!(
-        output.contains("->beta"),
-        "should emit ->beta for struct field at offset 16: {output}"
-    );
-}
-
-#[test]
-fn test_composite_var_types_synthetic_field_name() {
-    use unlace_ir::types::{StructFieldType, Type};
-
-    let r0 = reg(0, 8);
-    let r8 = reg(8, 4);
-    let c24 = con(24, 8);
-    let space = con(0, 8);
-
-    let addr_add = IrInsn::with_output(
-        IrOp::IntAdd,
-        Varnode::unique(0, 8),
-        smallvec![r0, c24],
-        0x1000,
-    );
-    let load = IrInsn::with_output(
-        IrOp::Load,
-        r8,
-        smallvec![space, Varnode::unique(0, 8)],
-        0x1004,
-    );
-    let body = vec![
-        HirNode::Statement(addr_add),
-        HirNode::Statement(load),
-        HirNode::Return(Some(sv(8, 4))),
-    ];
-
-    let mut func = make_func("test_synthetic_field", body);
-
-    let base_sv = SsaVarnode {
-        base: r0,
-        version: 0,
-    };
-    func.composite_var_types.insert(
-        base_sv,
-        Type::Struct {
-            name: "Foo".into(),
-            fields: vec![StructFieldType {
-                name: "first".into(),
-                ty: Type::int(8),
-                offset: 0,
-            }],
-        },
-    );
-
-    let output = super::print_c(&func);
-    assert!(
-        output.contains("->field_18"),
-        "should emit synthetic ->field_18 for unknown offset 24 (0x18): {output}"
+        !output.contains("->"),
+        "undeclared struct base must stay raw: {output}"
     );
 }
 
@@ -2953,11 +2975,13 @@ fn test_dwarf_param_names_used() {
                 ParameterInfo {
                     name: Some("a".to_string()),
                     type_name: Some("int".to_string()),
+                    pointee_size: None,
                     frame_offset: None,
                 },
                 ParameterInfo {
                     name: Some("b".to_string()),
                     type_name: Some("int".to_string()),
+                    pointee_size: None,
                     frame_offset: None,
                 },
             ],
@@ -3036,11 +3060,13 @@ fn test_dwarf_param_names_override_inferred() {
                 ParameterInfo {
                     name: Some("count".to_string()),
                     type_name: Some("int".to_string()),
+                    pointee_size: None,
                     frame_offset: None,
                 },
                 ParameterInfo {
                     name: Some("buf".to_string()),
                     type_name: Some("char *".to_string()),
+                    pointee_size: None,
                     frame_offset: None,
                 },
             ],
@@ -6614,9 +6640,9 @@ fn test_stdcall_and_thiscall_annotation() {
 
 #[test]
 fn test_array_subscript_basic() {
-    // LOAD with INT_ADD(base, INT_MULT(i, 4)), size=4 → base[i]
+    // LOAD with INT_ADD(buf, INT_MULT(i, 4)), size=4, `int *buf` → buf[i]
     let space = con(0, 8);
-    let base = reg(0, 8);
+    let base = reg(56, 8);
     let idx = reg(8, 8);
     let stride = con(4, 8);
     let mult_out = Varnode::unique(100, 8);
@@ -6649,12 +6675,9 @@ fn test_array_subscript_basic() {
     ];
 
     let func = make_func("array_basic", body);
-    let output = print_c(&func);
-
-    assert!(
-        output.contains("v3[v1]"),
-        "should emit base[index] (base=v3, idx=v1): {output}",
-    );
+    let (dwarf, header) = dwarf_with_pointer_param("buf", "int *", 4, vec![]);
+    let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
+    assert!(output.contains("buf["), "should emit buf[index]: {output}");
     assert!(
         !output.contains("*(_DWORD *)"),
         "should NOT fall back to pointer dereference: {output}",
@@ -6663,9 +6686,9 @@ fn test_array_subscript_basic() {
 
 #[test]
 fn test_array_subscript_ptradd() {
-    // PTRADD(base, i, 4) used as LOAD address, size=4 → base[i]
+    // PTRADD(buf, i, 4) used as LOAD address, size=4, `int *buf` → buf[i]
     let space = con(0, 8);
-    let base = reg(0, 8);
+    let base = reg(56, 8);
     let idx = reg(8, 8);
     let stride = con(4, 8);
     let ptradd_out = Varnode::unique(100, 8);
@@ -6691,19 +6714,19 @@ fn test_array_subscript_ptradd() {
     ];
 
     let func = make_func("array_ptradd", body);
-    let output = print_c(&func);
-
+    let (dwarf, header) = dwarf_with_pointer_param("buf", "int *", 4, vec![]);
+    let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
     assert!(
-        output.contains("v1[v2]"),
-        "PTRADD should emit base[index]: {output}",
+        output.contains("buf["),
+        "PTRADD should emit buf[index]: {output}"
     );
 }
 
 #[test]
 fn test_array_constant_index() {
-    // *(base + 16) load 4 bytes → base[4]
+    // *(buf + 16) load 4 bytes through `int *buf` → buf[4]
     let space = con(0, 8);
-    let base = reg(0, 8);
+    let base = reg(56, 8);
     let offset = con(16, 8);
     let add_out = Varnode::unique(100, 8);
     let load_out = reg(8, 4);
@@ -6728,11 +6751,18 @@ fn test_array_constant_index() {
     ];
 
     let func = make_func("array_const_idx", body);
-    let output = print_c(&func);
-
+    let (dwarf, header) = dwarf_with_pointer_param("buf", "int *", 4, vec![]);
+    let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
     assert!(
-        output.contains("v1[4]"),
-        "constant offset 16 / stride 4 should emit base[4]: {output}",
+        output.contains("buf[4]"),
+        "constant offset 16 through int * should emit buf[4]: {output}",
+    );
+
+    // An untyped base is declared as a scalar; `v1[4]` would not compile.
+    let untyped = print_c(&func);
+    assert!(
+        untyped.contains("*(_DWORD *)(") && !untyped.contains("[4]"),
+        "untyped base must keep the raw dereference: {untyped}",
     );
 }
 
@@ -6779,22 +6809,6 @@ fn test_array_negative_const_offset_not_subscript() {
         !output.contains("[1]") && !output.contains("[4]"),
         "negative displacement must not become any positive subscript: {output}",
     );
-}
-
-#[test]
-fn test_const_offset_is_negative_width_aware() {
-    // 8-byte: high bit set => negative.
-    assert!(super::const_offset_is_negative(&con(
-        0xffff_ffff_ffff_9c30,
-        8
-    )));
-    assert!(!super::const_offset_is_negative(&con(16, 8)));
-    // 4-byte: 0xffff9c30 is negative at 32 bits.
-    assert!(super::const_offset_is_negative(&con(0xffff_9c30, 4)));
-    assert!(!super::const_offset_is_negative(&con(0x10, 4)));
-    // 0x80000000 at 4 bytes is the minimum negative i32.
-    assert!(super::const_offset_is_negative(&con(0x8000_0000, 4)));
-    assert!(!super::const_offset_is_negative(&con(0x7fff_ffff, 4)));
 }
 
 #[test]
@@ -8800,7 +8814,6 @@ fn test_start_stack_alignment_temp_is_not_suppressed_as_frame_setup() {
     let copy_back = IrInsn::with_output(IrOp::Copy, rsp, smallvec![align_tmp], 0x1052);
     let mut ctx = PrintCtx::new(
         None,
-        BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -11605,7 +11618,6 @@ fn empty_ctx() -> super::PrintCtx {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
-        BTreeMap::new(),
     )
 }
 
@@ -14018,7 +14030,6 @@ fn index_term_walk_stops_on_copy_cycle() {
     let sv = |base, version| SsaVarnode { base, version };
     let mut ctx = PrintCtx::new(
         None,
-        BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),

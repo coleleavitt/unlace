@@ -194,6 +194,9 @@ pub struct FunctionDebugInfo {
 pub struct ParameterInfo {
     pub name: Option<String>,
     pub type_name: Option<String>,
+    /// Byte size of the pointed-to type when the parameter is a pointer to a
+    /// sized type (`int *` -> 4, `struct Rect *` -> 16); `None` otherwise.
+    pub pointee_size: Option<u64>,
     /// Signed CFA-relative frame offset when the parameter's `DW_AT_location`
     /// is a single `DW_OP_fbreg` opcode (a spilled home slot in `-O0`
     /// prologues). `None` for register-resident or location-list params.
@@ -1000,6 +1003,41 @@ fn resolve_type_size(
         .and_then(|v| v.udata_value())
 }
 
+/// Byte size of the type a `DW_TAG_pointer_type` points to, looking through
+/// typedefs and cv-qualifiers. `None` for non-pointers and `void *`.
+fn pointee_byte_size(
+    unit: &gimli::Unit<R<'_>>,
+    type_attr: AttributeValue<R<'_>>,
+) -> Result<Option<u64>, gimli::Error> {
+    let AttributeValue::UnitRef(offset) = type_attr else {
+        return Ok(None);
+    };
+    let pointer = unit.entry(offset)?;
+    if pointer.tag() != DW_TAG_pointer_type {
+        return Ok(None);
+    }
+    let mut next = pointer.attr_value(DW_AT_type);
+    for _ in 0..MAX_ORIGIN_HOPS {
+        let Some(AttributeValue::UnitRef(offset)) = next else {
+            return Ok(None);
+        };
+        let die = unit.entry(offset)?;
+        let tag = die.tag();
+        if tag == DW_TAG_typedef
+            || tag == DW_TAG_const_type
+            || tag == DW_TAG_volatile_type
+            || tag == DW_TAG_restrict_type
+        {
+            next = die.attr_value(DW_AT_type);
+            continue;
+        }
+        return Ok(die
+            .attr_value(DW_AT_byte_size)
+            .and_then(|v| v.udata_value()));
+    }
+    Ok(None)
+}
+
 fn extract_params_and_locals<'a>(
     dwarf: &gimli::Dwarf<R<'_>>,
     unit: &gimli::Unit<R<'a>>,
@@ -1019,8 +1057,13 @@ fn extract_params_and_locals<'a>(
                 Some(val) => Some(dwarf.attr_string(unit, val)?.to_string_lossy().into_owned()),
                 None => None,
             };
-            let type_name = match described_attr(unit, entry, DW_AT_type)? {
+            let type_attr = described_attr(unit, entry, DW_AT_type)?;
+            let type_name = match type_attr {
                 Some(val) => resolve_type_name(dwarf, unit, val)?,
+                None => None,
+            };
+            let pointee_size = match type_attr {
+                Some(val) => pointee_byte_size(unit, val)?,
                 None => None,
             };
             let frame_offset = entry
@@ -1029,6 +1072,7 @@ fn extract_params_and_locals<'a>(
             params.push(ParameterInfo {
                 name,
                 type_name,
+                pointee_size,
                 frame_offset,
             });
         } else if tag == DW_TAG_variable {

@@ -1466,6 +1466,7 @@ fn parse_methods_in_struct_body(
                 ParameterInfo {
                     name: Some("this".to_string()),
                     type_name: Some(format!("{struct_name} *")),
+                    pointee_size: None,
                     frame_offset: None,
                 },
             );
@@ -1583,6 +1584,7 @@ fn parse_source_params(params_text: &str) -> Vec<ParameterInfo> {
             Some(ParameterInfo {
                 name,
                 type_name: Some(clean_source_type(&ty)),
+                pointee_size: None,
                 frame_offset: None,
             })
         })
@@ -3985,11 +3987,13 @@ mod tests {
                 ParameterInfo {
                     name: Some("len".to_string()),
                     type_name: Some("int".to_string()),
+                    pointee_size: None,
                     frame_offset: None,
                 },
                 ParameterInfo {
                     name: Some("values".to_string()),
                     type_name: Some("long *".to_string()),
+                    pointee_size: None,
                     frame_offset: None,
                 },
             ],

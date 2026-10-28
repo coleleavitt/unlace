@@ -75,13 +75,13 @@ struct __anon0 {
     __int64 field_8;
 };
 
+// debug language: C
 /* Function:   _start | Address: 0x1060 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
 void _start(void) {
     __int64 v_8;
-    __int64 v_0;
     _QWORD pfn; // temp
-        v_8 = (uintptr_t)&v_0; pfn = qword_3FD8;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8; ((__int64 (*)())pfn)();
+    __builtin_trap(); return;
 }
 // DWARF composite types
 typedef struct Point Point;
@@ -95,6 +95,76 @@ struct Rect {
     Point size;
 };
 
+// debug language: C
+/* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1090(void) {
+    int v7; // reg?
+    if (v7) {
+        return;
+    } else {
+        if (qword_3FE0 == 0LL) {
+            return;
+        }
+    }
+    return;
+}
+// DWARF composite types
+typedef struct Point Point;
+typedef struct Rect Rect;
+struct Point {
+    int x;
+    int y;
+};
+struct Rect {
+    Point origin;
+    Point size;
+};
+
+// debug language: C
+/* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
+__int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */ {
+    __int64 result; // rax
+    if (byte_4010 != '\0') {
+        return result;
+    } else {
+        if (qword_3FF8 != 0LL) {
+            _QWORD v13 = qword_4008; // temp
+            __int64 c3 = v13; // rdi
+            result = sub_1040();
+        }
+        result = sub_1090(); byte_4010 = 1; return result;
+    }
+}
+// DWARF composite types
+typedef struct Point Point;
+typedef struct Rect Rect;
+struct Point {
+    int x;
+    int y;
+};
+struct Rect {
+    Point origin;
+    Point size;
+};
+
+// debug language: C
+/* Function:   sub_1140 | Address: 0x1140 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1140(void) {
+    sub_10c0();
+}
+// DWARF composite types
+typedef struct Point Point;
+typedef struct Rect Rect;
+struct Point {
+    int x;
+    int y;
+};
+struct Rect {
+    Point origin;
+    Point size;
+};
+
+// debug language: C
 /* Function:   area | Address: 0x1149 | Size: 0xb (11 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 int area(__int64 a1) {
     __int64 result; // temp
@@ -116,6 +186,7 @@ struct Rect {
     Point size;
 };
 
+// debug language: C
 /* Function:   offset | Address: 0x1155 | Size: 0x15 (21 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 Point offset(Point p, int dx, int dy) {
     __int64 result_1; // temp
@@ -136,77 +207,10 @@ struct Rect {
     Point size;
 };
 
+// debug language: C
 /* Function:   main | Address: 0x116e | Size: 0x2c (44 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   __printf_chk | Xrefs from: unknown */
 int main(void) {
     // DWARF locals
     //   Rect r;
         printf(0x2004LL, 0xc8LL); return 0;
-}
-// DWARF composite types
-typedef struct Point Point;
-typedef struct Rect Rect;
-struct Point {
-    int x;
-    int y;
-};
-struct Rect {
-    Point origin;
-    Point size;
-};
-
-/* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
-__int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */ {
-    __int64 v_0;
-    __int64 result; // rax
-    if (byte_4010 != '\0') {
-        return result;
-    } else {
-        if (qword_3FF8 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
-            result = sub_1040();
-        }
-        result = sub_1090(); byte_4010 = 1;
-                        return result;
-    }
-}
-// DWARF composite types
-typedef struct Point Point;
-typedef struct Rect Rect;
-struct Point {
-    int x;
-    int y;
-};
-struct Rect {
-    Point origin;
-    Point size;
-};
-
-/* Function:   sub_1140 | Address: 0x1140 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1140(void) {
-    sub_10c0();
-}
-// DWARF composite types
-typedef struct Point Point;
-typedef struct Rect Rect;
-struct Point {
-    int x;
-    int y;
-};
-struct Rect {
-    Point origin;
-    Point size;
-};
-
-/* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1090(void) {
-    int v7; // reg?
-    if (v7) {
-        return;
-    } else {
-        if (qword_3FE0 == 0LL) {
-            return;
-        }
-    }
-    return;
 }

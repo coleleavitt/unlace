@@ -70,35 +70,9 @@ struct __anon0 {
 /* Function:   _start | Address: 0x1090 | Size: 0x20 (32 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs from: unknown */
 void _start(void) {
     __int64 v_8;
-    __int64 v_0;
     _QWORD pfn; // temp
-        v_8 = (uintptr_t)&v_0; pfn = qword_3FE0;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
-}
-/* Function:   use_base(Base*) | Address: 0x1180 | Size: 0x7 (7 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-// use_base(Base*)
-int use_base(Base * a1) {
-    return this->__vftable->method_0();
-}
-/* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
-__int64 sub_1130(void) /* // dropped 1 param(s) (dead in body) */ {
-    __int64 v_0;
-    __int64 result; // rax
-    if (byte_4010 != '\0') {
-        return result;
-    } else {
-        if (qword_3FD8 != 0LL) {
-            _QWORD v13 = qword_4008; // temp
-            __int64 c3 = v13; // rdi
-            result = sub_1040();
-        }
-        result = sub_10c0(); byte_4010 = 1;
-                        return result;
-    }
-}
-/* Function:   sub_1170 | Address: 0x1170 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1170(void) {
-    sub_10f0();
+    v_8 = (uintptr_t)&v_8; pfn = qword_3FE0; ((__int64 (*)())pfn)();
+    __builtin_trap(); return;
 }
 /* Function:   sub_10c0 | Address: 0x10c0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10c0(void) {
@@ -111,4 +85,27 @@ void sub_10c0(void) {
         }
     }
     return;
+}
+/* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
+__int64 sub_1130(void) /* // dropped 1 param(s) (dead in body) */ {
+    __int64 result; // rax
+    if (byte_4010 != '\0') {
+        return result;
+    } else {
+        if (qword_3FD8 != 0LL) {
+            _QWORD v13 = qword_4008; // temp
+            __int64 c3 = v13; // rdi
+            result = sub_1040();
+        }
+        result = sub_10c0(); byte_4010 = 1; return result;
+    }
+}
+/* Function:   sub_1170 | Address: 0x1170 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1170(void) {
+    sub_10f0();
+}
+/* Function:   use_base(Base*) | Address: 0x1180 | Size: 0x7 (7 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+// use_base(Base*)
+int use_base(Base * a1) {
+    return this->__vftable->method_0();
 }

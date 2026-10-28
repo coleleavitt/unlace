@@ -74,13 +74,14 @@ struct __anon1 {
 
 /* Function:   memory_test | Address: 0x120000170 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x28 (40 bytes) | Xrefs from: unknown */
 void memory_test(void) {
-    int v_8;
-    int v_0;
-    int c0; // r29d
+    int v_32;
+    __int64 v_16;
+    __int64 v_8;
+    __int64 c0; // r29
     _QWORD v5; // temp
     _QWORD v12; // temp
-    c0 = c0 - 32; *(_DWORD *)(c0 - 32 + 0x18LL) = v12; v5 = c0 + 0x10LL;
-    *(_DWORD *)(c0 + 0x10LL) = v5; *(_DWORD *)(c0) = LODWORD(0x42LL);
+    c0 = c0 - 32; *(_QWORD *)(c0 - 32 + 0x18LL) = v12; v5 = c0 + 0x10LL;
+    *(_QWORD *)(c0 + 0x10LL) = v5; *(_DWORD *)(c0) = LODWORD(0x42LL);
     _DWORD v7 = *(_DWORD *)(c0); // temp
     if ((_QWORD)(v7 < 0x64LL) == 0LL) {
     }

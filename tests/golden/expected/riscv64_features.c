@@ -74,8 +74,9 @@ struct __anon1 {
 
 /* Function:   memory_test | Address: 0x10164 | Size: 0x34 (52 bytes) | Convention: thiscall | Stack frame: 0x28 (40 bytes) | Xrefs from: unknown */
 void __thiscall memory_test(__int64 this) {
+    int v_32;
+    __int64 v_16;
     __int64 v_8;
-    int v_0;
     __int64 c0; // rdx
     _QWORD v5; // temp
     _QWORD v11; // temp

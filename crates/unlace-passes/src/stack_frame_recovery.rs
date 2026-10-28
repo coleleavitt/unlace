@@ -521,6 +521,7 @@ fn pending_debug_local_width(func: &SsaFunction, offset: i64) -> Option<u8> {
         .iter()
         .find(|pending| {
             !pending.is_param
+                && !pending.is_aggregate
                 && pending.name == *name
                 && (pending.frame_offset == offset
                     || pending
@@ -1242,6 +1243,37 @@ mod tests {
             .expect("DWARF-only int local should seed a frame slot");
         assert_eq!(local.size, 4);
         assert_eq!(local.access_widths, vec![4]);
+    }
+
+    /// Aggregate DWARF names stay at their raw (uncalibrated) offset, so their
+    /// byte size does not describe storage there. Widening the raw slot would
+    /// swallow the neighbouring real slot and split the calibrated aggregate
+    /// (type_stack_o2 `main` passed a non-contiguous `values` to `array_mix`).
+    #[test]
+    fn aggregate_debug_local_byte_size_does_not_widen_raw_slot() {
+        let mut ssa = make_single_block_ssa(vec![]);
+        ssa.dwarf_local_names.insert(-40, "values".to_string());
+        ssa.dwarf_aggregate_offsets.insert(-40);
+        ssa.pending_dwarf_locals
+            .push(unlace_ir::ssa::PendingDwarfLocal {
+                frame_offset: -40,
+                name: "values".to_string(),
+                type_name: Some("int[3]".to_string()),
+                byte_size: Some(12),
+                raw_span: None,
+                calibrated_span: None,
+                cfa_to_rbp_delta: Some(16),
+                is_aggregate: true,
+                is_param: false,
+            });
+
+        let frame = recover_stack_frame(&ssa);
+
+        let local = frame
+            .locals
+            .get(&-40)
+            .expect("aggregate debug name should still seed a slot");
+        assert_eq!(local.size, 8);
     }
 
     #[test]

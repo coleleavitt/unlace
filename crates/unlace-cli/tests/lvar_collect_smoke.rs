@@ -1,6 +1,7 @@
 //! End-to-end smoke test for Batch 3 slice 1: every analyzed function
 //! in `medium.elf` must have a non-empty `lvars` candidate list after
-//! the per-function pipeline runs.
+//! the per-function pipeline runs. A pure jump thunk
+//! (`frame_dummy`: `endbr64; jmp register_tm_clones`) defines nothing.
 //!
 //! Goldens are intentionally untouched — the collector is metadata-only
 //! and the C printer ignores `lvars` in this slice.
@@ -38,6 +39,15 @@ fn medium_elf_collects_lvars_for_every_function() {
         let mut ssa = build_ssa(ir);
         ssa.arch = image.arch;
         if pipeline::run_passes(&mut ssa, &unlace_passes::PassOptions::default()).is_err() {
+            continue;
+        }
+        let defines_nothing = ssa
+            .function
+            .blocks
+            .values()
+            .flat_map(|block| &block.insns)
+            .all(|insn| insn.output.is_none());
+        if defines_nothing {
             continue;
         }
         analyzed += 1;

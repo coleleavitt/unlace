@@ -2621,6 +2621,7 @@ name = "unlace-lift"
 version = "0.1.0"
 dependencies = [
  "thiserror",
+ "tracing",
  "unlace-ir",
  "unlace-lift-6502",
  "unlace-lift-8051",

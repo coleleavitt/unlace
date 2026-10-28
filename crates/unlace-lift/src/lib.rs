@@ -174,30 +174,13 @@ pub fn get_lifter(arch: ArchId) -> Result<Box<dyn Lifter>, LifterUnavailable> {
 }
 
 fn lift_trace(message: &str) {
-    if std::env::var_os("UNLACE_LIFT_TRACE").is_none()
-        && std::env::var_os("UNLACE_TRACE_ALL").is_none()
-    {
-        return;
-    }
-    if let Ok(filter) =
-        std::env::var("UNLACE_LIFT_TRACE_FILTER").or_else(|_| std::env::var("UNLACE_TRACE_FILTER"))
-    {
-        let needle = filter.trim();
-        if !needle.is_empty() && !message.contains(needle) {
-            return;
-        }
-    }
-    eprintln!("[unlace lift] {message}");
+    tracing::debug!(target: "unlace::lift", "{message}");
 }
 
 fn lift_trace_lazy(make_message: impl FnOnce() -> String) {
-    if std::env::var_os("UNLACE_LIFT_TRACE").is_none()
-        && std::env::var_os("UNLACE_TRACE_ALL").is_none()
-    {
-        return;
+    if tracing::enabled!(target: "unlace::lift", tracing::Level::DEBUG) {
+        lift_trace(&make_message());
     }
-    let message = make_message();
-    lift_trace(&message);
 }
 
 #[cfg(test)]

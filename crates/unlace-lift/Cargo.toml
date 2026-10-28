@@ -8,6 +8,7 @@ unlace-ir = { workspace = true }
 unlace-lift-x86 = { workspace = true }
 unlace-lift-arm = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 unlace-lift-6502 = { workspace = true, optional = true }
 unlace-lift-8051 = { workspace = true, optional = true }
 unlace-lift-agx = { workspace = true, optional = true }

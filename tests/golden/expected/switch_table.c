@@ -76,8 +76,8 @@ void _start(void) {
 }
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
-    int v5; // reg?
-    if (v5) {
+    int v0; // reg?
+    if (v0) {
         return;
     } else {
         if (qword_3FE0 == 0LL) {
@@ -93,7 +93,7 @@ __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FF8 != 0LL) {
-            __int64 c3 = qword_4008; // rdi
+            __int64 v1 = qword_4008; // rdi
             result = sub_1030();
         }
         result = sub_1070(); byte_4010 = 1; return result;
@@ -138,13 +138,13 @@ struct __anon0 {
 
 /* Function:   main | Address: 0x117b | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   dispatch | Xrefs from: unknown */
 int main(void) /* // dropped 1 param(s) (dead in body) */ {
-    __int64 v22; // rax
-    _QWORD c1; // rbx
-    c1 = 0LL;
-    __int64 c3 = 0LL; // rbp
+    __int64 v0; // rax
+    _QWORD v1; // rbx
+    v1 = 0LL;
+    __int64 v2 = 0LL; // rbp
     do {
-        _QWORD c4 = LODWORD(c1); // rdi
-        v22 = dispatch(c4); c3 = LODWORD(c3) + v22; c1 = LODWORD(c1) + 1;
-    } while (c1 != 8);
-    return (_QWORD)(LOBYTE(c3));
+        _QWORD v3 = LODWORD(v1); // rdi
+        v0 = dispatch(v3); v2 = LODWORD(v2) + v0; v1 = LODWORD(v1) + 1;
+    } while (v1 != 8);
+    return (_QWORD)(LOBYTE(v2));
 }

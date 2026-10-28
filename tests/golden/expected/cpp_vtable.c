@@ -80,8 +80,8 @@ void _start(void) {
 }
 /* Function:   sub_10c0 | Address: 0x10c0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10c0(void) {
-    int v5; // reg?
-    if (v5) {
+    int v0; // reg?
+    if (v0) {
         return;
     } else {
         if (qword_3FE8 == 0LL) {
@@ -97,7 +97,7 @@ __int64 sub_1130(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FD8 != 0LL) {
-            __int64 c3 = qword_4008; // rdi
+            __int64 v1 = qword_4008; // rdi
             result = sub_1040();
         }
         result = sub_10c0(); byte_4010 = 1; return result;

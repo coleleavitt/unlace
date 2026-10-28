@@ -97,18 +97,18 @@ int main(void) {
     __int64 v_8;
     __int64 v_16;
     __int64 v_32;
-    __int64 v14; // rax
-    __int64 v15; // rax
+    __int64 v0; // rax
+    __int64 v1; // rax
     __int64 result_0; // rax
-    __int64 v16; // rax
-    __int64 c1; // rbx
-    _QWORD v9; // temp
-    result_0 = v9; result_0 = 0x3d00LL;
-    __int64 c3 = (uintptr_t)&v_16; // rdi
+    __int64 v2; // rax
+    __int64 v3; // rbx
+    _QWORD v4; // temp
+    result_0 = v4; result_0 = 0x3d00LL;
+    __int64 v5 = (uintptr_t)&v_16; // rdi
     v_8 = result_0; result_0 = 0x3d28LL; v_16 = result_0;
-    v14 = identify(&v_16); c1 = v14; v15 = identify(&v_8);
-    __int64 v3 = v15; // rdx
-    v16 = printf("%s %s\n", (char *)v3, (char *)c1);
+    v0 = identify(&v_16); v3 = v0; v1 = identify(&v_8);
+    __int64 v6 = v1; // rdx
+    v2 = printf("%s %s\n", (char *)v6, (char *)v3);
     return 0;
     return 0;
 }
@@ -129,8 +129,8 @@ void _start(void) {
 
 /* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1170(void) {
-    int v5; // reg?
-    if (v5) {
+    int v0; // reg?
+    if (v0) {
         return;
     } else {
         if (qword_3FE8 == 0LL) {
@@ -147,7 +147,7 @@ __int64 sub_11e0(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FD8 != 0LL) {
-            __int64 c3 = qword_4008; // rdi
+            __int64 v1 = qword_4008; // rdi
             result = sub_1070();
         }
         result = sub_1170(); byte_4010 = 1; return result;
@@ -163,40 +163,40 @@ void sub_1220(void) {
 // identify(Animal*)
 char * identify(Animal *a1) {
     __int64 v_16;
-    __int64 v14; // rax
-    __int64 v15; // rax
+    __int64 v1; // rax
+    __int64 v2; // rax
     __int64 result; // rax
-    __int64 c1; // rcx
-    __int64 c3; // rsp
+    __int64 v4; // rcx
+    __int64 v5; // rsp
     if (a1 == 0LL) {
         result = "unknown"; return "unknown";
     } else {
-        __int64 c4 = 0x3d40LL; // rsi
+        __int64 v6 = 0x3d40LL; // rsi
         /* dynamic cast */
-        v14 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
-        a1 = *(_QWORD *)(c3 + 8LL);
-        __int64 c2 = v14; // rdx
-        if (v14 == 0LL) {
-            c2 = 0x3d68LL; c4 = 0x3d40LL;
+        v1 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
+        a1 = *(_QWORD *)(v5 + 8LL);
+        __int64 v7 = v1; // rdx
+        if (v1 == 0LL) {
+            v7 = 0x3d68LL; v6 = 0x3d40LL;
             /* dynamic cast */
-            v15 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, 0LL);
-            a1 = v15;
-            if (v15 == 0LL) {
+            v2 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, 0LL);
+            a1 = v2;
+            if (v2 == 0LL) {
                 result = "unknown"; return result;
             } else {
-                result = *(_QWORD *)(v15); c1 = 0x1310LL; c2 = *(_QWORD *)(result);
+                result = *(_QWORD *)(v2); v4 = 0x1310LL; v7 = *(_QWORD *)(result);
                 result = "meow";
-                if (c2 == c1) {
+                if (v7 == v4) {
                     return "meow";
                 } else {
-                    return v15->speak();
+                    return v2->speak();
                 }
             }
         } else {
-            result = *(_QWORD *)(v14); c4 = 0x1300LL; c1 = *(_QWORD *)(result);
+            result = *(_QWORD *)(v1); v6 = 0x1300LL; v4 = *(_QWORD *)(result);
             result = "woof";
-            if (c1 != c4) {
-                a1 = c2; return v14->speak();
+            if (v4 != v6) {
+                a1 = v7; return v1->speak();
             } else {
                 return result;
             }

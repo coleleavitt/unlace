@@ -63,15 +63,15 @@ void sub_10000104(void) {
 }
 /* Function:   ppc_branch | Address: 0x1000011c | Size: 0x18 (24 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void ppc_branch(void) {
-    __int64 c0 = 5LL; // rbx
+    __int64 v0 = 5LL; // rbx
     if (LODWORD(5LL) != LODWORD(3LL)) {
     }
     return;
 }
 /* Function:   sub_10000120 | Address: 0x10000120 | Size: 0x14 (20 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10000120(void) {
-    __int64 c0; // rbx
-    if (LODWORD(c0) != LODWORD(3LL)) {
+    __int64 v0; // rbx
+    if (LODWORD(v0) != LODWORD(3LL)) {
     }
     return;
 }

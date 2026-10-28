@@ -1838,7 +1838,7 @@ fn print_c_attempt(
         output
     };
 
-    // MUST be the final stage: emptiness of an if-body is only known after every
+    // MUST be the final pruning-aware stage: emptiness of an if-body is only known after every
     // pruning pass above has removed dead stores/decls. Flip `if (!(X)) {}` to
     // the positive `if (X) {}` form once the body is provably empty.
     let output = run_cleanup_stage(
@@ -1847,8 +1847,8 @@ fn print_c_attempt(
         output,
         depolarize_empty_negated_ifs,
     );
-    drop(cleanup_span);
-    linkscope::record_bytes("cprinter.print", output.len() as u64);
+    // Folded-call texts carry the pipeline's names, so confirm them before
+    // the locals get their final names.
     let unconfirmed = ctx
         .folded_calls
         .iter()
@@ -1859,6 +1859,14 @@ fn print_c_attempt(
         })
         .copied()
         .collect();
+    let output = run_cleanup_stage(
+        func_label,
+        "number-synthetic-locals",
+        output,
+        number_synthetic_locals,
+    );
+    drop(cleanup_span);
+    linkscope::record_bytes("cprinter.print", output.len() as u64);
     (output, unconfirmed)
 }
 
@@ -1890,6 +1898,9 @@ fn run_cleanup_stage(
         )),
         "triangular-sum" => Some(linkscope::phase("cprinter.cleanup.triangular-sum")),
         "depolarize-empty-if" => Some(linkscope::phase("cprinter.cleanup.depolarize-empty-if")),
+        "number-synthetic-locals" => {
+            Some(linkscope::phase("cprinter.cleanup.number-synthetic-locals"))
+        }
         _ => Some(linkscope::phase("cprinter.cleanup.other")),
     };
     let want_counts = tracing::enabled!(target: "unlace::cprinter::stage", tracing::Level::DEBUG);

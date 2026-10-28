@@ -70,15 +70,15 @@ void sub_1340(void);
 // may_throw(int) [clone .cold]
 _Noreturn void may_throw(void) {
     __int64 v_8;
-    __int64 c0; // rax
-    __int64 v12; // rax
-    v_8 = c0;
+    __int64 v0; // rax
+    __int64 v1; // rax
+    v_8 = v0;
     /* allocate exception */
-    c0 = __cxa_allocate_exception(0x10LL);
-    __int64 v3 = c0; // rbx
+    v0 = __cxa_allocate_exception(0x10LL);
+    __int64 v2 = v0; // rbx
     std_runtime_error_runtime_error();
     /* throw */
-    v12 = __cxa_throw(v3, 0x3d40LL, qword_3FE0);
+    v1 = __cxa_throw(v2, 0x3d40LL, qword_3FE0);
     return;
 }
 
@@ -91,14 +91,14 @@ struct __anon0 {
 /* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_throw, __printf_chk | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
 _Noreturn int safe_call(void) {
-    __int64 v13; // rax
-    __int64 c2; // rbx
-    __int64 c4 = 0x10LL; // rdi
+    __int64 v0; // rax
+    __int64 v1; // rbx
+    __int64 v2 = 0x10LL; // rdi
     /* allocate exception */
-    __int64 v11 = __cxa_allocate_exception(c4); // rax
-    c2 = v11; std_runtime_error_runtime_error();
+    __int64 v3 = __cxa_allocate_exception(v2); // rax
+    v1 = v3; std_runtime_error_runtime_error();
     /* throw */
-    v13 = __cxa_throw(c2, 0x3d40LL, qword_3FE0);
+    v0 = __cxa_throw(v1, 0x3d40LL, qword_3FE0);
     return 0;
 }
 
@@ -123,8 +123,8 @@ void _start(void) {
 
 /* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1290(void) {
-    int v5; // reg?
-    if (v5) {
+    int v0; // reg?
+    if (v0) {
         return;
     } else {
         if (qword_3FE8 == 0LL) {
@@ -141,7 +141,7 @@ __int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
         return result;
     } else {
         if (qword_3FD0 != 0LL) {
-            __int64 c3 = qword_4008; // rdi
+            __int64 v1 = qword_4008; // rdi
             result = sub_10b0();
         }
         result = sub_1290(); byte_4020 = 1; return result;

@@ -88,10 +88,10 @@ fn function_body<'a>(output: &'a str, name: &str) -> &'a str {
 
 #[cfg(test)]
 fn common_add_expr(body: &str) -> &'static str {
-    ["a1 + a2", "v1 + v2"]
+    ["a1 + a2", "v2 + v3"]
         .into_iter()
         .find(|expr| body.contains(expr))
-        .expect("common add expression should render")
+        .unwrap_or_else(|| panic!("common add expression should render:\n{body}"))
 }
 
 #[test]

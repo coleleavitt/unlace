@@ -1,3 +1,4 @@
+mod combine;
 mod dead_assign;
 mod decls;
 mod idents;
@@ -5,6 +6,7 @@ mod idioms;
 mod labels;
 mod repair;
 
+pub(in crate::c_printer) use combine::{combine_expressions, remove_self_assignments};
 pub(in crate::c_printer) use dead_assign::*;
 pub(in crate::c_printer) use decls::*;
 pub(in crate::c_printer) use idents::*;

@@ -269,7 +269,7 @@ fn decompiled_hello_world_compileable_subset_runs() {
 
     let generated = String::from_utf8(output.stdout).expect("C output should be utf8");
     assert!(
-        generated.contains("puts(\"Hello\"); return 0;"),
+        generated.contains("    puts(\"Hello\");\n    return 0;\n"),
         "compileable subset currently expects the recovered hello-world shape: {generated}"
     );
     assert_no_known_bad_subset_shapes(&generated, "hello_world.elf:main");

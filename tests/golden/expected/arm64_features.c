@@ -52,8 +52,11 @@ unsigned long long atomic_exchange_explicit(_Atomic unsigned long long *obj, uns
 _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, unsigned long long *expected, unsigned long long desired, memory_order success, memory_order failure);
 /* Function:   _start | Address: 0x400100 | Size: 0x18 (24 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   bitfield_test, csel_test, mul_test | Xrefs from: unknown */
 void __aapcs _start(void) {
-    mul_test(); csel_test(); bitfield_test();
-    /* CALLOTHER tag=1079 */ 0; return;
+    mul_test();
+    csel_test();
+    bitfield_test();
+    /* CALLOTHER tag=1079 */ 0;
+    return;
 }
 /* Function:   mul_test | Address: 0x400118 | Size: 0x4 (4 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void __aapcs mul_test(void) {
@@ -83,7 +86,8 @@ void __aapcs bitfield_test(void) {
     __int64 v_16;
     int v1; // rcx
     int v4; // r31
-    *(_QWORD *)(v4 - 16) = v2; *(_QWORD *)(v4 - 24) = v3;
+    *(_QWORD *)(v4 - 16) = v2;
+    *(_QWORD *)(v4 - 24) = v3;
     __int64 v7 = __isb__(v1, 4LL, 8LL); // temp
     __dmb__();
     return;

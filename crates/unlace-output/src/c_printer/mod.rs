@@ -18,7 +18,7 @@
 //! |---|---|---|---|
 //! | `cot_comma` (1)        | `a, b`              | n/a (lifter inlines) | implicit |
 //! | `cot_asg` (2)          | `a = b`             | `emit_statement` (assignment) | ✅ |
-//! | `cot_asgXxx` (3..15)   | `a += b` etc.       | `try_emit_compound_assign`   | ✅ |
+//! | `cot_asgXxx` (3..15)   | `a += b` etc.       | `try_emit_compound_assign`, `postprocess::combine` | ✅ |
 //! | `cot_tern` (16)        | `c ? a : b`         | branch-collapse pass         | ✅ |
 //! | `cot_lor`/`cot_land`   | `||` / `&&`         | `BoolOr` / `BoolAnd` binop   | ✅ |
 //! | `cot_bor`/`cot_xor`/`cot_band` | `\|`/`^`/`&` | `IntOr`/`IntXor`/`IntAnd`   | ✅ |
@@ -36,10 +36,10 @@
 //! | `cot_lnot`/`cot_bnot`  | `!x` / `~x`         | `BoolNegate`/`IntNegate`     | ✅ |
 //! | `cot_ptr` (52)         | `*p`                | `Load` (with field/array recovery) | ✅ |
 //! | `cot_ref` (51)         | `&x`                | stack-var address-taken path | ✅ |
-//! | `cot_postinc` (53)     | `x++`               | `try_emit_postfix_inc_dec`   | ✅ |
-//! | `cot_postdec` (54)     | `x--`               | `try_emit_postfix_inc_dec`   | ✅ |
-//! | `cot_preinc` (55)      | `++x`               | folded into postinc form     | ⚠️ deferred — see note |
-//! | `cot_predec` (56)      | `--x`               | folded into postdec form     | ⚠️ deferred — see note |
+//! | `cot_postinc` (53)     | `x++`               | not emitted (statement position uses `++x`) | n/a |
+//! | `cot_postdec` (54)     | `x--`               | not emitted (statement position uses `--x`) | n/a |
+//! | `cot_preinc` (55)      | `++x`               | `try_emit_increment_form`, `postprocess::combine` | ✅ |
+//! | `cot_predec` (56)      | `--x`               | `try_emit_increment_form`, `postprocess::combine` | ✅ |
 //! | `cot_idx` (57)         | `arr[i]`            | `try_array_subscript`, `member_path` | ✅ |
 //! | `cot_memref` (58)      | `s.m`               | `member_path` (nested members) | ✅ |
 //! | `cot_memptr` (59)      | `p->m`              | `try_resolve_field_from_addr`| ✅ |
@@ -51,17 +51,10 @@
 //! | `cot_sizeof` (66)      | `sizeof(x)`         | helper [`emit_sizeof_expr`] / [`emit_sizeof_type`] available; no IR producer yet | ⚠️ deferred |
 //! | `cot_alignof` (67)     | `_Alignof(T)`       | helper [`emit_alignof_type`] available; no IR producer yet | ⚠️ deferred |
 //! | `cot_label` (68)       | `&&label` (GCC ext) | not emitted (no computed-goto in IR)         | ❌ out-of-scope |
-//! | `cot_type` (69)        | bare type-as-expr   | only meaningful inside `sizeof`/`offsetof` arg | ❌ out-of-scope |
-//!
-//! ## Deferred items
-//!
-//! * **`cot_preinc` / `cot_predec`**: Hex-Rays distinguishes pre- and post-
-//!   increment by examining the surrounding statement context (whether the
-//!   pre-bump value is consumed). Unlace's IR-level recognizer
-//!   ([`try_emit_postfix_inc_dec`]) treats `x = x + 1` uniformly as `x++`.
-//!   Producing the prefix form would require a use-before-definition check
-//!   on the same statement; the resulting C is semantically identical for
-//!   statement-position increments, so we defer.
+//! | `cot_type` (69)        | bare type-as-expr   | only meaningful inside `sizeof`/`offseto//! * **`cot_preinc` / `cot_predec`**: Hex-Rays prints a statement-level
+//!   increment in prefix form (`++v7;`, `for (...; ++i)`); only an increment
+//!   whose old value is consumed is postfix. Unlace never consumes the old
+//!   value, so every increment it emits is prefix.
 //!
 //! * **`cot_sizeof`, `cot_alignof`, `cot_type`**: These require a HIR-level
 //!   `Sizeof(Type)` / `Alignof(Type)` / `Sizeof(Expr)` node. Today the IR has
@@ -1779,6 +1772,12 @@ fn print_c_attempt(
     );
     let output = run_cleanup_stage(
         func_label,
+        "self-assignments",
+        output,
+        remove_self_assignments,
+    );
+    let output = run_cleanup_stage(
+        func_label,
         "dead-plain-assignments",
         output,
         prune_dead_plain_assignments,
@@ -1847,8 +1846,6 @@ fn print_c_attempt(
         output,
         depolarize_empty_negated_ifs,
     );
-    drop(cleanup_span);
-    linkscope::record_bytes("cprinter.print", output.len() as u64);
     let unconfirmed = ctx
         .folded_calls
         .iter()
@@ -1859,6 +1856,13 @@ fn print_c_attempt(
         })
         .copied()
         .collect();
+    // Hex-Rays-style expression combining (`x += y`, `++x`, `if (!x)`) runs
+    // last: the pruning and repair stages above match the plain
+    // `x = x op y` spelling, and the folded-call check above matches call
+    // text before combining rewrites its arguments.
+    let output = run_cleanup_stage(func_label, "combine", output, combine_expressions);
+    drop(cleanup_span);
+    linkscope::record_bytes("cprinter.print", output.len() as u64);
     (output, unconfirmed)
 }
 
@@ -1890,6 +1894,8 @@ fn run_cleanup_stage(
         )),
         "triangular-sum" => Some(linkscope::phase("cprinter.cleanup.triangular-sum")),
         "depolarize-empty-if" => Some(linkscope::phase("cprinter.cleanup.depolarize-empty-if")),
+        "self-assignments" => Some(linkscope::phase("cprinter.cleanup.self-assignments")),
+        "combine" => Some(linkscope::phase("cprinter.cleanup.combine")),
         _ => Some(linkscope::phase("cprinter.cleanup.other")),
     };
     let want_counts = tracing::enabled!(target: "unlace::cprinter::stage", tracing::Level::DEBUG);
@@ -9480,7 +9486,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 parts.last()
             ));
             i += 1;
-            while !first_is_terminal && i < nodes.len() && parts.len() < 3 {
+            while !first_is_terminal && i < nodes.len() && parts.is_empty() {
                 if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
                     trace_flow(format_args!(
                         "inline-merge-assign-return depth={depth} idx={i} stmt={} expr={}",
@@ -13186,9 +13192,10 @@ fn try_emit_increment_form(
     if const_in.offset != 1 {
         return None;
     }
+    // Hex-Rays writes a statement-level increment in prefix form.
     match insn.op {
-        IrOp::IntAdd => Some(format!("{}++", lhs)),
-        IrOp::IntSub if insn.inputs[1].space == SpaceId::Const => Some(format!("{}--", lhs)),
+        IrOp::IntAdd => Some(format!("++{}", lhs)),
+        IrOp::IntSub if insn.inputs[1].space == SpaceId::Const => Some(format!("--{}", lhs)),
         _ => None,
     }
 }

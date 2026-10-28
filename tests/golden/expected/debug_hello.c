@@ -72,8 +72,11 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8;
+    pfn = qword_3FD8;
+    ((__int64 (*)())pfn)();
+    __builtin_trap();
+    return;
 }
 // debug language: C
 /* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
@@ -82,7 +85,7 @@ void sub_1090(void) {
     if (v5) {
         return;
     } else {
-        if (qword_3FE0 == 0LL) {
+        if (!qword_3FE0) {
             return;
         }
     }
@@ -92,14 +95,16 @@ void sub_1090(void) {
 /* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
 __int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
-    if (byte_4010 != '\0') {
+    if (byte_4010) {
         return result;
     } else {
-        if (qword_3FF8 != 0LL) {
+        if (qword_3FF8) {
             __int64 c3 = qword_4008; // rdi
             result = sub_1040();
         }
-        result = sub_1090(); byte_4010 = 1; return result;
+        result = sub_1090();
+        byte_4010 = 1;
+        return result;
     }
 }
 // debug language: C
@@ -110,5 +115,6 @@ void sub_1140(void) {
 // debug language: C
 /* Function:   main | Address: 0x1149 | Size: 0x1d (29 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   puts | Xrefs from: unknown */
 int main(void) {
-    puts("Hello"); return 0;
+    puts("Hello");
+    return 0;
 }

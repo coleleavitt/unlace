@@ -23,8 +23,10 @@ pub(in crate::c_printer) fn split_plain_statement_segments(
             segments.push(segment.trim());
         }
     }
-    (segments.len() > 1 || parse_plain_assignment_lhs(segments[0]).is_some())
-        .then_some((indent, segments))
+    (segments.len() > 1
+        || parse_plain_assignment_lhs(segments[0]).is_some()
+        || parse_dead_compound_assignment_lhs(segments[0]).is_some())
+    .then_some((indent, segments))
 }
 
 pub(in crate::c_printer) fn parse_plain_assignment_lhs(segment: &str) -> Option<&str> {

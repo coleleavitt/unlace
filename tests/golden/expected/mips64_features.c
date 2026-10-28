@@ -52,7 +52,9 @@ unsigned long long atomic_exchange_explicit(_Atomic unsigned long long *obj, uns
 _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, unsigned long long *expected, unsigned long long desired, memory_order success, memory_order failure);
 /* Function:   _start | Address: 0x120000100 | Size: 0x1c (28 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   arithmetic_test, logic_test, memory_test | Xrefs from: unknown */
 void _start(void) {
-    arithmetic_test(); logic_test(); memory_test();
+    arithmetic_test();
+    logic_test();
+    memory_test();
     return;
 }
 /* Function:   arithmetic_test | Address: 0x120000120 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
@@ -81,6 +83,8 @@ void memory_test(void) {
     __int64 v_8;
     __int64 v3; // r31
     __int64 c0 = c0 - 32; // r29
-    *(_QWORD *)(c0 - 32 + 0x18LL) = v3; *(_QWORD *)(c0 + 0x10LL) = v2; *(_DWORD *)(c0) = LODWORD(0x42LL);
+    *(_QWORD *)(c0 - 32 + 0x18LL) = v3;
+    *(_QWORD *)(c0 + 0x10LL) = v2;
+    *(_DWORD *)c0 = 0x42;
     return;
 }

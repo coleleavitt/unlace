@@ -72,8 +72,11 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8;
+    pfn = qword_3FD8;
+    ((__int64 (*)())pfn)();
+    __builtin_trap();
+    return;
 }
 // debug language: C
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
@@ -82,7 +85,7 @@ void sub_1070(void) {
     if (v5) {
         return;
     } else {
-        if (qword_3FE0 == 0LL) {
+        if (!qword_3FE0) {
             return;
         }
     }
@@ -92,14 +95,16 @@ void sub_1070(void) {
 /* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
-    if (byte_4010 != '\0') {
+    if (byte_4010) {
         return result;
     } else {
-        if (qword_3FF8 != 0LL) {
+        if (qword_3FF8) {
             __int64 c3 = qword_4008; // rdi
             result = sub_1030();
         }
-        result = sub_1070(); byte_4010 = 1; return result;
+        result = sub_1070();
+        byte_4010 = 1;
+        return result;
     }
 }
 // debug language: C
@@ -119,7 +124,7 @@ int add(int a, int b) {
     int v_4;
     int c2; // rbp
     _DWORD v11; // temp
-    v_4 = LODWORD(a);
+    v_4 = (_DWORD)a;
     // fixtures/src/calls.c:1
     _QWORD v2 = v_4; // rdx
     v11 = *(_DWORD *)(c2 - 8);
@@ -136,7 +141,7 @@ struct __anon0 {
 int sub(int a, int b) {
     int v_4;
     int c2; // rbp
-    v_4 = LODWORD(a);
+    v_4 = (_DWORD)a;
     int v10 = v_4; // temp
     _DWORD v11 = *(_DWORD *)(c2 - 8); // temp
     return v10 - v11;
@@ -154,7 +159,7 @@ int mul(int a, int b) {
     int v_4;
     int c2; // rbp
     _DWORD v10; // temp
-    v_4 = LODWORD(a);
+    v_4 = (_DWORD)a;
     // fixtures/src/calls.c:3
     result = v_4;
     v10 = *(_DWORD *)(c2 - 8);
@@ -165,7 +170,8 @@ int mul(int a, int b) {
 int square(int x) {
     int v_4;
     v_4 = x;
-    x = v_4; return mul(x, v_4);
+    x = v_4;
+    return mul(x, v_4);
 }
 // debug language: C
 /* Function:   cube | Address: 0x118e | Size: 0x28 (40 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   mul, square | Xrefs from: unknown */
@@ -173,7 +179,7 @@ int cube(int x) {
     int v_4;
     v_4 = x;
     x = v_4;
-    int v9 = LODWORD(square(x)); // temp
+    int v9 = (_DWORD)square(x); // temp
     return mul(v9, v_4);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -187,11 +193,11 @@ struct __anon0 {
 int abs_val(int x) {
     int v_4;
     _QWORD result; // rax
-    v_4 = LODWORD(x);
+    v_4 = (_DWORD)x;
     // fixtures/src/calls.c:6
     result = v_4;
     _QWORD c1 = result; // rdx
-    return !LOBYTE(result < 0) ? c1 : result;
+    return !(_BYTE)(result < 0) ? c1 : result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -205,7 +211,7 @@ int max(int a, int b) {
     int v_4;
     _QWORD result; // rax
     int c2; // rbp
-    v_4 = LODWORD(a);
+    v_4 = (_DWORD)a;
     // fixtures/src/calls.c:7
     _QWORD v2 = *(_DWORD *)(c2 - 8); // rdx
     result = v_4;
@@ -223,7 +229,7 @@ int min(int a, int b) {
     int v_4;
     _QWORD result; // rax
     int c2; // rbp
-    v_4 = LODWORD(a);
+    v_4 = (_DWORD)a;
     // fixtures/src/calls.c:8
     _QWORD v2 = *(_DWORD *)(c2 - 8); // rdx
     result = v_4;
@@ -241,10 +247,13 @@ int clamp(int x, int lo, int hi) {
     int v_4;
     int v_12;
     int c3; // rbp
-    v_4 = x; v_12 = hi;
+    v_4 = x;
+    v_12 = hi;
     // fixtures/src/calls.c:9
     hi = *(_DWORD *)(c3 - 8);
-    lo = hi; x = v_4; hi = LODWORD(max(x, lo));
+    lo = hi;
+    x = v_4;
+    hi = (_DWORD)max(x, lo);
     return min(hi, v_12);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -277,13 +286,17 @@ int compute(int x) {
     __int64 v16; // rax
     __int64 v17; // rax
     a = x;
-    x = a; e = LODWORD(add(x, 0xaLL));
-    v14 = sub(e, 3LL); v_16 = LODWORD(v14);
-    v15 = square(v_16); v_12 = LODWORD(v15);
+    x = a;
+    e = (_DWORD)add(x, 0xaLL);
+    v14 = sub(e, 3LL);
+    v_16 = (_DWORD)v14;
+    v15 = square(v_16);
+    v_12 = (_DWORD)v15;
     v16 = cube(2LL);
     // fixtures/src/calls.c:16
     _QWORD c1 = *(_DWORD *)((uintptr_t)&a - 8); // rdx
-    v17 = sub(v_12, c1); v_4 = LODWORD(abs_val(LODWORD(v17)));
+    v17 = sub(v_12, c1);
+    v_4 = (_DWORD)abs_val((_DWORD)v17);
     return clamp(v_4, 0LL, 0x64LL);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)

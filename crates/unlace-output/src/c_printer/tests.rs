@@ -414,7 +414,7 @@ fn test_empty_then_else_prints_inverted_condition() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("if (!(v1)) {"),
+        output.contains("if (!v1) {"),
         "empty then-branch should render as an inverted guard: {output}"
     );
     assert!(
@@ -1461,7 +1461,7 @@ fn test_print_while() {
     let output = print_c(&func);
 
     assert!(output.contains("while (v1)"), "while: {output}");
-    assert!(output.contains("v1--;"), "body: {output}");
+    assert!(output.contains("--v1;"), "body: {output}");
     assert!(output.contains("return 0;"), "return: {output}");
 }
 
@@ -1489,7 +1489,7 @@ fn test_control_condition_assignment_inlines_when_control_only() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("if (v1 == 0)"),
+        output.contains("if (!v1)"),
         "control-only condition should inline its comparison: {output}",
     );
     assert!(
@@ -1524,7 +1524,7 @@ fn test_control_condition_inlines_latest_same_base_version() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("} while (v1 == 0);"),
+        output.contains("} while (!v1);"),
         "do/while condition should inline the latest same-base comparison: {output}",
     );
     assert!(
@@ -2436,7 +2436,7 @@ fn test_print_indentation() {
     // Depth 3: function body (1) + outer if (2) + inner if (3) = 12 spaces.
     let add_line = output
         .lines()
-        .find(|l| l.contains("v1++;"))
+        .find(|l| l.contains("++v1;"))
         .expect("should find add line");
     assert!(
         add_line.starts_with("            "),
@@ -4000,8 +4000,8 @@ fn test_for_loop_simple_emit() {
 
     assert!(output.contains("for ("), "should contain 'for (': {output}",);
     assert!(
-        output.contains("i++"),
-        "increment should be rendered as i++ (loop counter renamed): {output}",
+        output.contains("++i"),
+        "increment should be rendered as ++i (loop counter renamed): {output}",
     );
     assert!(
         !output.contains("while ("),
@@ -4076,11 +4076,11 @@ fn test_for_loop_nested_counter_naming() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("i++"),
+        output.contains("++i"),
         "outer counter should be `i`: {output}",
     );
     assert!(
-        output.contains("j++"),
+        output.contains("++j"),
         "inner counter should be `j`: {output}",
     );
     assert!(
@@ -4109,8 +4109,8 @@ fn test_for_loop_decrement_emit() {
     let output = print_c(&func);
 
     assert!(
-        output.contains("--)"),
-        "decrement should render as `<var>--`: {output}",
+        output.contains("; --"),
+        "decrement should render as `--<var>`: {output}",
     );
     assert!(output.contains("for ("), "should be a for-loop: {output}",);
 }
@@ -6065,8 +6065,8 @@ fn test_inline_group_merges_assignment_return_after_call() {
     let output = super::print_c_full(&func, None, None, Some(&symbols), None);
 
     assert!(
-        output.contains("puts(); return 0;"),
-        "assignment feeding an immediate return should merge inside inline groups: {output}",
+        output.contains("puts();\n    return 0;"),
+        "assignment feeding an immediate return should merge into the return: {output}",
     );
     assert!(
         !output.contains("result = 0; return result;"),
@@ -11513,7 +11513,7 @@ fn print_ctx_custom_tab_width_drives_indent() {
     // depth 3 × tab_width 2 = 6 leading spaces (was 12 with default).
     let add_line = output
         .lines()
-        .find(|l| l.contains("v1++;"))
+        .find(|l| l.contains("++v1;"))
         .expect("should find add line");
     let lead = add_line.len() - add_line.trim_start().len();
     assert_eq!(lead, 6, "expected 6 spaces (3 × 2): {add_line:?}");
@@ -11583,7 +11583,7 @@ fn print_config_explicit_override_reaches_ctx() {
     );
     // tab_width=2 forced through config: depth-2 body line indents by
     // 4 spaces (2 × 2), not the default 8 (2 × 4).
-    let body_line = out.lines().find(|l| l.contains("v1++;")).expect("body");
+    let body_line = out.lines().find(|l| l.contains("++v1;")).expect("body");
     let lead = body_line.len() - body_line.trim_start().len();
     assert_eq!(
         lead, 4,
@@ -11613,7 +11613,7 @@ fn print_ctx_default_tab_width_is_four() {
     // depth 2 × tab_width 4 = 8 leading spaces.
     let add_line = output
         .lines()
-        .find(|l| l.contains("v1++;"))
+        .find(|l| l.contains("++v1;"))
         .expect("should find add line");
     let lead = add_line.len() - add_line.trim_start().len();
     assert_eq!(lead, 8, "expected 8 spaces (2 × 4 default): {add_line:?}");
@@ -13556,7 +13556,7 @@ fn test_single_use_static_load_inlines_into_condition() {
     let body = function_body_text(&output, "single_use_static_load_cond");
 
     assert!(
-        body.contains("if (g_flag == 0LL)"),
+        body.contains("if (!g_flag)"),
         "condition should read the static symbol directly:\n{body}"
     );
     assert!(
@@ -13608,15 +13608,15 @@ fn test_materialized_static_load_snapshot_is_not_reloaded_in_condition() {
         "multi-use static load should be materialized as a snapshot:\n{body}"
     );
     assert!(
-        body.contains("g_flag = 7LL;"),
+        body.contains("g_flag = 7;"),
         "test should include the intervening write to the global:\n{body}"
     );
     assert!(
-        body.contains("if (v1 == 0LL)") || body.contains("if (v2 == 0LL)"),
+        body.contains("if (!v1)") || body.contains("if (!v2)"),
         "condition must use the materialized snapshot, not reload g_flag:\n{body}"
     );
     assert!(
-        !body.contains("if (g_flag == 0LL)"),
+        !body.contains("if (!g_flag)"),
         "condition must not reload a global after an intervening store:\n{body}"
     );
 }
@@ -13679,15 +13679,15 @@ fn test_materialized_stack_load_snapshot_is_not_reloaded_in_condition() {
         "multi-use stack load should be materialized as a snapshot:\n{body}"
     );
     assert!(
-        body.contains("v_8 = 7LL;"),
+        body.contains("v_8 = 7;"),
         "test should include the intervening stack write:\n{body}"
     );
     assert!(
-        body.contains("if (v1 == 0LL)") || body.contains("if (v2 == 0LL)"),
+        body.contains("if (!v1)") || body.contains("if (!v2)"),
         "condition must use the materialized stack snapshot, not reload v_8:\n{body}"
     );
     assert!(
-        !body.contains("if (v_8 == 0LL)"),
+        !body.contains("if (!v_8)"),
         "condition must not reload the stack slot after an intervening store:\n{body}"
     );
 }

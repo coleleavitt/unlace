@@ -63,7 +63,8 @@ void sub_1170(void);
 
 /* Function:   main | Address: 0x1060 | Size: 0x26 (38 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   __printf_chk | Xrefs from: unknown */
 int main(void) {
-    printf(0x2004LL, 0x2aLL); return 0;
+    printf(0x2004LL, 0x2aLL);
+    return 0;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -75,8 +76,11 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FE0;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8;
+    pfn = qword_3FE0;
+    ((__int64 (*)())pfn)();
+    __builtin_trap();
+    return;
 }
 /* Function:   sub_10c0 | Address: 0x10c0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10c0(void) {
@@ -84,7 +88,7 @@ void sub_10c0(void) {
     if (v5) {
         return;
     } else {
-        if (qword_3FE8 == 0LL) {
+        if (!qword_3FE8) {
             return;
         }
     }
@@ -93,14 +97,16 @@ void sub_10c0(void) {
 /* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
 __int64 sub_1130(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
-    if (byte_4010 != '\0') {
+    if (byte_4010) {
         return result;
     } else {
-        if (qword_3FD8 != 0LL) {
+        if (qword_3FD8) {
             __int64 c3 = qword_4008; // rdi
             result = sub_1040();
         }
-        result = sub_10c0(); byte_4010 = 1; return result;
+        result = sub_10c0();
+        byte_4010 = 1;
+        return result;
     }
 }
 /* Function:   sub_1170 | Address: 0x1170 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

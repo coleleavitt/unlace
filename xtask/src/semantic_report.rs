@@ -193,11 +193,11 @@ const SOURCE_KNOWN_SHAPE_CASES: &[ShapeCase] = &[
         function: "dispatch",
         required_fragments: &[
             "fixtures/src/switch_table.c:6",
-            "0xaLL",
+            "= 0xa;",
             "fixtures/src/switch_table.c:13",
-            "0x57LL",
+            "= 0x57;",
             "fixtures/src/switch_table.c:14",
-            "0xffffffffLL",
+            "= 0xffffffff;",
         ],
     },
     ShapeCase {
@@ -1369,11 +1369,11 @@ mod tests {
 
         for fragment in [
             "fixtures/src/switch_table.c:6",
-            "0xaLL",
+            "= 0xa;",
             "fixtures/src/switch_table.c:13",
-            "0x57LL",
+            "= 0x57;",
             "fixtures/src/switch_table.c:14",
-            "0xffffffffLL",
+            "= 0xffffffff;",
         ] {
             assert!(
                 case.required_fragments.contains(&fragment),

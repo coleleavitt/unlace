@@ -71,8 +71,11 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8;
+    pfn = qword_3FD8;
+    ((__int64 (*)())pfn)();
+    __builtin_trap();
+    return;
 }
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
@@ -80,7 +83,7 @@ void sub_1070(void) {
     if (v5) {
         return;
     } else {
-        if (qword_3FE0 == 0LL) {
+        if (!qword_3FE0) {
             return;
         }
     }
@@ -89,14 +92,16 @@ void sub_1070(void) {
 /* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
-    if (byte_4010 != '\0') {
+    if (byte_4010) {
         return result;
     } else {
-        if (qword_3FF8 != 0LL) {
+        if (qword_3FF8) {
             __int64 c3 = qword_4008; // rdi
             result = sub_1030();
         }
-        result = sub_1070(); byte_4010 = 1; return result;
+        result = sub_1070();
+        byte_4010 = 1;
+        return result;
     }
 }
 /* Function:   sub_1120 | Address: 0x1120 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
@@ -108,8 +113,11 @@ long double sum_squares_x87(long double a1, long double a2) {
     int v2; // rsp
     int c1 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
     int c0 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
-    c0 = __fmul(c0, c0); __fxch(c0, c1); c0 = __fmul(c0, c0);
-    c1 = __faddp(c1, c0); return 0;
+    c0 = __fmul(c0, c0);
+    __fxch(c0, c1);
+    c0 = __fmul(c0, c0);
+    c1 = __faddp(c1, c0);
+    return 0;
 }
 /* Function:   compare_floats_x87 | Address: 0x113e | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0x1a (26 bytes) | Xrefs from: unknown */
 int compare_floats_x87(long double a1, long double a2) {
@@ -119,11 +127,15 @@ int compare_floats_x87(long double a1, long double a2) {
     int v4; // ZF
     int c2 = __fld(*(_QWORD *)(v2 + 8LL)); // reg?
     int c1 = __fld(*(_QWORD *)(v2 + 0x18LL)); // reg?
-    c0 = 0xffffffffLL; __fcom(c1, c2);
+    c0 = 0xffffffff;
+    __fcom(c1, c2);
     if (!v3 && !v4) {
-        c1 = __fstp(c1); c2 = __fstp(c2);
+        c1 = __fstp(c1);
+        c2 = __fstp(c2);
     } else {
-        __fxch(c1, c2); __fcomp(c1, c2); c2 = __fstp(c2);
+        __fxch(c1, c2);
+        __fcomp(c1, c2);
+        c2 = __fstp(c2);
         c0 = (_QWORD)(0xffffff00LL | (_QWORD)(!v3 && !v4));
     }
     return c0;
@@ -136,7 +148,9 @@ long double mix_ops_x87(long double a1, long double a2, long double a3) {
     int c0 = __fld(v5); // reg?
     c0 = __fadd(c0, v5);
     int v3 = __fld(*(_QWORD *)(v2 + 0x28LL)); // reg?
-    c0 = __fmulp(c0, v3); c1 = __fsubrp(c0, c1); c1 = __fdivp(c1, v5);
+    c0 = __fmulp(c0, v3);
+    c1 = __fsubrp(c0, c1);
+    c1 = __fdivp(c1, v5);
     return 0;
 }
 /* Function:   main | Address: 0x1181 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

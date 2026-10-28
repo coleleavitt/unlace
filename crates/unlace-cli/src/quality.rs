@@ -574,6 +574,8 @@ fn result_variable_is_assigned(emitted_c: &str) -> bool {
         || emitted_c.contains("result ^=")
         || emitted_c.contains("result <<=")
         || emitted_c.contains("result >>=")
+        || emitted_c.contains("++result")
+        || emitted_c.contains("--result")
 }
 
 /// Populate `byref_args`, `simd_typed_vars`, `call_resolution_rate`, and

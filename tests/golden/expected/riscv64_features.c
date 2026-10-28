@@ -80,6 +80,8 @@ void memory_test(void) {
     __int64 v_16;
     __int64 v_8;
     __int64 c0 = c0 - 32; // rdx
-    *(_QWORD *)(c0 - 32 + 0x18LL) = v1; *(_QWORD *)(c0 + 0x10LL) = v3; *(_DWORD *)(c0) = LODWORD(0x42LL);
+    *(_QWORD *)(c0 - 32 + 0x18LL) = v1;
+    *(_QWORD *)(c0 + 0x10LL) = v3;
+    *(_DWORD *)c0 = 0x42;
     return;
 }

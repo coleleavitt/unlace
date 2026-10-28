@@ -40,7 +40,9 @@ pub(in crate::c_printer) fn rename_unreturned_bare_result(output: String) -> Str
         || output.contains("result <<=")
         || output.contains("result >>=")
         || output.contains("result++")
-        || output.contains("result--");
+        || output.contains("result--")
+        || output.contains("++result")
+        || output.contains("--result");
     if has_decl && has_assign {
         // Path-sensitive use-before-def. Leaving alone is the safer
         // behaviour; a later domination-aware pass can refine this.

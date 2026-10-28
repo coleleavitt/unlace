@@ -55,23 +55,25 @@ void sub_10000120(void);
 
 /* Function:   _start | Address: 0x10000100 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
-    /* CALLOTHER tag=1024 */ 0; return;
+    /* CALLOTHER tag=1024 */ 0;
+    return;
 }
 /* Function:   sub_10000104 | Address: 0x10000104 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10000104(void) {
-    /* CALLOTHER tag=1024 */ 0; return;
+    /* CALLOTHER tag=1024 */ 0;
+    return;
 }
 /* Function:   ppc_branch | Address: 0x1000011c | Size: 0x18 (24 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void ppc_branch(void) {
-    __int64 c0 = 5LL; // rbx
-    if (LODWORD(5LL) != LODWORD(3LL)) {
+    __int64 c0 = 5; // rbx
+    if (5u != 3u) {
     }
     return;
 }
 /* Function:   sub_10000120 | Address: 0x10000120 | Size: 0x14 (20 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10000120(void) {
     __int64 c0; // rbx
-    if (LODWORD(c0) != LODWORD(3LL)) {
+    if ((_DWORD)c0 != 3u) {
     }
     return;
 }

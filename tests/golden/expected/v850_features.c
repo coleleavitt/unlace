@@ -67,7 +67,7 @@ void sub_10104(void) {
 void v850_branch(void) {
     int v4; // reg?
     int c0 = 5; // r10d
-    if (!(v4)) {
+    if (!v4) {
         c0 = 0;
     }
     return;

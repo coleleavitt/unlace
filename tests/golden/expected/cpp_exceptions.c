@@ -93,10 +93,11 @@ struct __anon0 {
 _Noreturn int safe_call(void) {
     __int64 v13; // rax
     __int64 c2; // rbx
-    __int64 c4 = 0x10LL; // rdi
+    __int64 c4 = 0x10; // rdi
     /* allocate exception */
     __int64 v11 = __cxa_allocate_exception(c4); // rax
-    c2 = v11; std_runtime_error_runtime_error();
+    c2 = v11;
+    std_runtime_error_runtime_error();
     /* throw */
     v13 = __cxa_throw(c2, 0x3d40LL, qword_3FE0);
     return 0;
@@ -117,8 +118,11 @@ struct __anon0 {
 void _start(void) {
     __int64 v_8;
     _QWORD pfn; // temp
-    v_8 = (uintptr_t)&v_8; pfn = qword_3FD8;
-    ((__int64 (*)())pfn)(); __builtin_trap(); return;
+    v_8 = (uintptr_t)&v_8;
+    pfn = qword_3FD8;
+    ((__int64 (*)())pfn)();
+    __builtin_trap();
+    return;
 }
 
 /* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
@@ -127,7 +131,7 @@ void sub_1290(void) {
     if (v5) {
         return;
     } else {
-        if (qword_3FE8 == 0LL) {
+        if (!qword_3FE8) {
             return;
         }
     }
@@ -137,14 +141,16 @@ void sub_1290(void) {
 /* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
 __int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
-    if (byte_4020 != '\0') {
+    if (byte_4020) {
         return result;
     } else {
-        if (qword_3FD0 != 0LL) {
+        if (qword_3FD0) {
             __int64 c3 = qword_4008; // rdi
             result = sub_10b0();
         }
-        result = sub_1290(); byte_4020 = 1; return result;
+        result = sub_1290();
+        byte_4020 = 1;
+        return result;
     }
 }
 

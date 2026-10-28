@@ -6,6 +6,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::address::Address;
+use crate::architecture::Architecture;
+use crate::database::{ScopeId, Symbol, SymbolId};
+use crate::error::Result;
+use crate::funcdata::Funcdata;
 use crate::types::TypeMetatype;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -105,4 +109,45 @@ impl OutputStyle {
             OutputStyle::Ida => format!("sub_{:x}", addr.get_offset()),
         }
     }
+}
+
+/// Rename the variables of `function` IDA-style after analysis: parameters `a1, a2, ...` in
+/// prototype order and locals `v1, v2, ...` in declaration order. Locked names (from the user or
+/// debug information) and the register artifacts Ghidra names `in_*`, `unaff_*` and `extraout_*`
+/// keep their names.
+pub(crate) fn assign_ida_variable_names(function: &Funcdata, glb: &mut Architecture) -> Result<()> {
+    let Some(local) = function.get_scope_local() else {
+        return Ok(());
+    };
+    let db = glb.symboltab_mut()?;
+    let params = db.scope_declared_symbols(local, i32::from(Symbol::FUNCTION_PARAMETER))?;
+    let mut locals: Vec<(ScopeId, SymbolId)> = db
+        .scope_declared_symbols(local, i32::from(Symbol::NO_CATEGORY))?
+        .into_iter()
+        .map(|sym| (local, sym))
+        .collect();
+    let children: Vec<ScopeId> = db.scope(local).children().values().copied().collect();
+    for child in children {
+        let declared = db.scope_declared_symbols(child, i32::from(Symbol::NO_CATEGORY))?;
+        locals.extend(declared.into_iter().map(|sym| (child, sym)));
+    }
+    let renamable = |sym: &SymbolId| {
+        let symbol = db.symbol(*sym);
+        !symbol.is_name_locked() && !is_register_artifact(symbol.get_name())
+    };
+    let params: Vec<SymbolId> = params.into_iter().filter(renamable).collect();
+    let locals: Vec<(ScopeId, SymbolId)> = locals.into_iter().filter(|(_, sym)| renamable(sym)).collect();
+    for (index, sym) in params.into_iter().enumerate() {
+        db.scope_rename_symbol(local, sym, &format!("a{}", index + 1))?;
+    }
+    for (index, (scope, sym)) in locals.into_iter().enumerate() {
+        db.scope_rename_symbol(scope, sym, &format!("v{}", index + 1))?;
+    }
+    Ok(())
+}
+
+fn is_register_artifact(name: &str) -> bool {
+    ["in_", "unaff_", "extraout_"]
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
 }

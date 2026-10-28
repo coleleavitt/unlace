@@ -806,93 +806,11 @@ impl PrintC {
         sym_scope: ScopeId,
         cat: i32,
     ) -> Result<bool> {
-        let mut notempty = false;
-        if cat >= 0 {
-            let sz = symboltab(ctx.glb).scope_get_category_size(sym_scope, cat);
-            for index in 0..sz {
-                let sym = match symboltab(ctx.glb).scope_get_category_symbol(sym_scope, cat, index) {
-                    Some(sym) => sym,
-                    None => continue,
-                };
-                {
-                    let symbol = symboltab(ctx.glb).symbol(sym);
-                    if symbol.get_name().is_empty() {
-                        continue;
-                    }
-                    if symbol.is_name_undefined() {
-                        continue;
-                    }
-                }
-                notempty = true;
-                self.emit_var_decl_statement_c(ctx, sym)?;
-            }
-            return Ok(notempty);
-        }
-        let mut entries: Vec<crate::database::EntryId> = Vec::new();
-        {
-            let db = symboltab(ctx.glb);
-            let scope = db.scope(sym_scope);
-            let mut iter = db.scope_begin(sym_scope);
-            let enditer = db.scope_end(sym_scope);
-            while !iter.equals(&enditer, scope) {
-                entries.push(iter.get(scope));
-                iter.advance(scope);
-            }
-        }
-        for entry in entries {
-            let sym = {
-                let db = symboltab(ctx.glb);
-                let record = db.entry(entry);
-                if record.is_piece() {
-                    continue;
-                }
-                let sym = record.get_symbol();
-                let symbol = db.symbol(sym);
-                if symbol.get_category() as i32 != cat {
-                    continue;
-                }
-                if symbol.get_name().is_empty() {
-                    continue;
-                }
-                if matches!(symbol.kind, SymbolKind::Function { .. }) {
-                    continue;
-                }
-                if matches!(symbol.kind, SymbolKind::Label) {
-                    continue;
-                }
-                if symbol.is_multi_entry() && db.symbol_get_first_whole_map(sym)? != entry {
-                    continue;
-                }
-                sym
-            };
-            notempty = true;
+        let symbols = symboltab(ctx.glb).scope_declared_symbols(sym_scope, cat)?;
+        for &sym in &symbols {
             self.emit_var_decl_statement_c(ctx, sym)?;
         }
-        let dynamic: Vec<crate::database::EntryId> = symboltab(ctx.glb).scope_dynamic_entries(sym_scope).to_vec();
-        for entry in dynamic {
-            let sym = {
-                let db = symboltab(ctx.glb);
-                let record = db.entry(entry);
-                if record.is_piece() {
-                    continue;
-                }
-                let sym = record.get_symbol();
-                let symbol = db.symbol(sym);
-                if symbol.get_category() as i32 != cat {
-                    continue;
-                }
-                if symbol.get_name().is_empty() {
-                    continue;
-                }
-                if symbol.is_multi_entry() && db.symbol_get_first_whole_map(sym)? != entry {
-                    continue;
-                }
-                sym
-            };
-            notempty = true;
-            self.emit_var_decl_statement_c(ctx, sym)?;
-        }
-        Ok(notempty)
+        Ok(!symbols.is_empty())
     }
 
     pub(crate) fn emit_function_declaration_c(&mut self, ctx: &mut PrintContext<'_>) -> Result<()> {

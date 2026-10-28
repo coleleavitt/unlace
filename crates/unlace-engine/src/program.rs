@@ -16,7 +16,7 @@ use crate::error::{Error, Result};
 use crate::loadimage::LoadImageFunc;
 use crate::object_arch::{ObjectArchitecture, is_object_file};
 use crate::opcodes::{OpCode, get_opname};
-use crate::output_style::{FunctionNames, OutputStyle};
+use crate::output_style::{FunctionNames, OutputStyle, assign_ida_variable_names};
 use crate::pcoderaw::VarnodeData;
 use crate::raw_arch::RawBinaryArchitecture;
 use crate::space::SpaceRef;
@@ -812,10 +812,15 @@ impl Program {
             if function.is_proc_started() {
                 architecture.clear_analysis(function);
             }
-            let analysis = architecture.with_current_action(|action, architecture| {
-                action.reset(function, architecture);
-                action.perform(function, architecture)
-            });
+            let analysis = architecture
+                .with_current_action(|action, architecture| {
+                    action.reset(function, architecture);
+                    action.perform(function, architecture)
+                })
+                .and_then(|_| match architecture.output_style {
+                    OutputStyle::Ghidra => Ok(()),
+                    OutputStyle::Ida => assign_ida_variable_names(function, architecture),
+                });
             let printed = analysis.and_then(|_| {
                 architecture
                     .with_printer(Some(&mut *function), |printer, context| printer.doc_function(context))

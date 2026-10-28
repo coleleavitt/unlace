@@ -3123,6 +3123,64 @@ impl Database {
         list[ind as usize]
     }
 
+    /// The symbols of `scope` that a declaration list shows, in printing order: for a category
+    /// (`cat >= 0`) its named symbols by index; otherwise the uncategorized variables in map
+    /// order, then the dynamic ones.
+    pub fn scope_declared_symbols(&self, scope: ScopeId, cat: i32) -> Result<Vec<SymbolId>> {
+        if cat >= 0 {
+            return Ok((0..self.scope_get_category_size(scope, cat))
+                .filter_map(|index| self.scope_get_category_symbol(scope, cat, index))
+                .filter(|sym| {
+                    let symbol = self.symbol(*sym);
+                    !symbol.get_name().is_empty() && !symbol.is_name_undefined()
+                })
+                .collect());
+        }
+        let mut mapped = Vec::new();
+        {
+            let record = self.scope(scope);
+            let mut iter = self.scope_begin(scope);
+            let enditer = self.scope_end(scope);
+            while !iter.equals(&enditer, record) {
+                mapped.push(iter.get(record));
+                iter.advance(record);
+            }
+        }
+        let mut symbols = Vec::new();
+        for entry in mapped {
+            let record = self.entry(entry);
+            if record.is_piece() {
+                continue;
+            }
+            let sym = record.get_symbol();
+            let symbol = self.symbol(sym);
+            if symbol.get_category() as i32 != cat
+                || symbol.get_name().is_empty()
+                || matches!(symbol.kind, SymbolKind::Function { .. } | SymbolKind::Label)
+                || (symbol.is_multi_entry() && self.symbol_get_first_whole_map(sym)? != entry)
+            {
+                continue;
+            }
+            symbols.push(sym);
+        }
+        for &entry in self.scope_dynamic_entries(scope) {
+            let record = self.entry(entry);
+            if record.is_piece() {
+                continue;
+            }
+            let sym = record.get_symbol();
+            let symbol = self.symbol(sym);
+            if symbol.get_category() as i32 != cat
+                || symbol.get_name().is_empty()
+                || (symbol.is_multi_entry() && self.symbol_get_first_whole_map(sym)? != entry)
+            {
+                continue;
+            }
+            symbols.push(sym);
+        }
+        Ok(symbols)
+    }
+
     pub fn scope_set_category(&mut self, scope: ScopeId, sym: SymbolId, cat: i32, ind: i32) {
         let oldcat = self.symbol(sym).category;
         if oldcat >= 0 {

@@ -229,6 +229,80 @@ fn test_structure_while() {
 }
 
 #[test]
+fn test_loop_header_join_requires_both_arms_to_reach_it() {
+    // BB0 either enters the loop at BB3 directly or runs a peeled iteration
+    // (BB1) whose own guard can exit straight to BB4, bypassing the loop.
+    // The loop header must not be chosen as BB0's if-join: that strands the
+    // goto from BB0 on a label with no code behind it.
+    let r0 = Varnode::reg(0, 8);
+    let c1 = Varnode::constant(1, 8);
+    let cond0 = Varnode::reg(256, 1);
+    let cond1 = Varnode::reg(257, 1);
+    let cond3 = Varnode::reg(258, 1);
+
+    let mut func = Function::new("peel_then_loop", BlockId(0), 0x5000);
+
+    let mut bb0 = BasicBlock::new(BlockId(0));
+    bb0.insns.push(cbranch_insn(cond0, 0x5000));
+    bb0.successors = smallvec![BlockId(3), BlockId(1)];
+
+    let mut bb1 = BasicBlock::new(BlockId(1));
+    bb1.insns.push(arith_insn(r0, &[r0, c1], 0x5010));
+    bb1.insns.push(cbranch_insn(cond1, 0x5014));
+    bb1.successors = smallvec![BlockId(4), BlockId(2)];
+
+    let mut bb2 = BasicBlock::new(BlockId(2));
+    bb2.insns.push(ctrl_insn(IrOp::Branch, 0x5020));
+    bb2.successors = smallvec![BlockId(3)];
+
+    let mut bb3 = BasicBlock::new(BlockId(3));
+    bb3.insns.push(arith_insn(r0, &[r0, c1], 0x5030));
+    bb3.insns.push(cbranch_insn(cond3, 0x5034));
+    bb3.successors = smallvec![BlockId(3), BlockId(4)];
+
+    let mut bb4 = BasicBlock::new(BlockId(4));
+    bb4.insns.push(ctrl_insn(IrOp::Return, 0x5040));
+
+    for bb in [bb0, bb1, bb2, bb3, bb4] {
+        func.insert_block(bb);
+    }
+
+    let ssa = build_ssa(func);
+    let hir = structure(&ssa).expect("structuring should succeed");
+
+    fn collect_labels(nodes: &[HirNode], gotos: &mut Vec<LabelId>, labels: &mut Vec<LabelId>) {
+        for node in nodes {
+            match node {
+                HirNode::Goto(label) => gotos.push(*label),
+                HirNode::Label(label) => labels.push(*label),
+                HirNode::Block(inner) => collect_labels(inner, gotos, labels),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_labels(then_body, gotos, labels);
+                    if let Some(else_body) = else_body {
+                        collect_labels(else_body, gotos, labels);
+                    }
+                }
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                    collect_labels(body, gotos, labels);
+                }
+                _ => {}
+            }
+        }
+    }
+    let (mut gotos, mut labels) = (Vec::new(), Vec::new());
+    collect_labels(&hir.body, &mut gotos, &mut labels);
+    assert!(
+        gotos.iter().all(|goto| labels.contains(goto)),
+        "a goto targets a label that was never placed: {:#?}",
+        hir.body
+    );
+}
+
+#[test]
 fn test_structure_irreducible_goto() {
     // Build an irreducible CFG: BB0 -> BB1, BB0 -> BB2, BB1 -> BB2, BB2 -> BB1
     // (BB1 and BB2 form a cycle where neither dominates the other)

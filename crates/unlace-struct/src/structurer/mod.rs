@@ -4359,14 +4359,31 @@ impl<'a> StructureCtx<'a> {
         // join instead lets both branches end at the loop header, and the
         // outer `structure_until` emits the loop exactly once after the
         // if-then-else.
+        //
+        // When an arm can bypass the loop (a peel whose own guard exits
+        // straight past it), the header is not a join: the loop would be
+        // emitted inside that arm and the other arm's goto would target a
+        // label with no code behind it.
         if let Some(bfs) = bfs_join
             && self.loop_headers.contains(&bfs)
             && Some(bfs) != postdom_join
         {
+            // Inside the header's own loop, arms reach it through back edges
+            // (continue) or leave the loop (break), so it stays a valid join.
+            let cond_in_loop = dominates(&self.func.dom_tree, bfs, cond_block);
+            let header_joins_both_arms = cond_in_loop
+                || self.func.post_dom_tree.as_ref().is_some_and(|pdom| {
+                    dominates(pdom, bfs, true_blk) && dominates(pdom, bfs, false_blk)
+                });
+            if header_joins_both_arms {
+                struct_debug!(
+                    "join cond={cond_block:?} true={true_blk:?} false={false_blk:?} source=loop-header-bfs join={bfs:?} postdom_was={postdom_join:?}"
+                );
+                return Some(bfs);
+            }
             struct_debug!(
-                "join cond={cond_block:?} true={true_blk:?} false={false_blk:?} source=loop-header-bfs join={bfs:?} postdom_was={postdom_join:?}"
+                "join-reject cond={cond_block:?} loop_header={bfs:?} reason=not-post-dominating-both-arms"
             );
-            return Some(bfs);
         }
 
         if let Some(join) = postdom_join {

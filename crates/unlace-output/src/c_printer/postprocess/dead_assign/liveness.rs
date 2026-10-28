@@ -1,4 +1,6 @@
-use crate::c_printer::postprocess::{contains_identifier, is_cond_number_name};
+use crate::c_printer::postprocess::{
+    contains_identifier, is_cond_number_name, parse_goto_target, parse_label_definition,
+};
 
 /// True for the synthetic flag/condition temporaries (`cond`, `cond_N`) whose
 /// re-assignment chains are pure dead scaffolding emitted by the x86 flag
@@ -119,4 +121,44 @@ pub(in crate::c_printer) fn is_loop_carried_use_above(
         j += 1;
     }
     false
+}
+
+/// `true` when a `goto` below `idx` jumps back to a label above it and `lhs`
+/// is read between that label and `idx`. The forward-only `used_later` scan
+/// cannot see that path: a loop recovered as label/goto (an irreducible region,
+/// or a loop tail the structurer placed after the function's `return`) carries
+/// the store back to the earlier read.
+pub(in crate::c_printer) fn is_backward_goto_use_above(
+    lines: &[&str],
+    idx: usize,
+    lhs: &str,
+) -> bool {
+    lines[idx + 1..]
+        .iter()
+        .filter_map(|line| parse_goto_target(line))
+        .any(|target| {
+            lines[..idx]
+                .iter()
+                .position(|line| parse_label_definition(line).as_deref() == Some(target.as_str()))
+                .is_some_and(|label_idx| {
+                    lines[label_idx..idx]
+                        .iter()
+                        .any(|line| identifier_used_as_rvalue(line, lhs))
+                })
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::prune_dead_plain_assignments;
+
+    #[test]
+    fn keeps_store_read_through_backward_goto() {
+        let input = "int f(int a1) {\n    _QWORD c1; // rcx\n    c1 = 2;\nlabel_1:;\n    if (c1 > a1) {\n        return c1;\n    }\n    c1 = 7;\n    goto label_1;\n}\n";
+        let output = prune_dead_plain_assignments(input.to_string());
+        assert!(
+            output.contains("c1 = 7;"),
+            "store read via backward goto was pruned: {output}"
+        );
+    }
 }

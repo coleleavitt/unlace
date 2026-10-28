@@ -4,9 +4,10 @@ use crate::c_printer::postprocess::{contains_identifier, parse_shadowing_local_d
 use crate::c_printer::{c_printer_pipeline_trace_enabled, trace_pipeline};
 
 use super::{
-    identifier_used_as_rvalue, is_cond_family_local, is_loop_carried_use_above,
-    parse_dead_compound_assignment_lhs, parse_plain_assignment_lhs, segment_rhs_is_pure_flag_store,
-    split_plain_statement_segments, trace_prune_plain_assignment_full,
+    identifier_used_as_rvalue, is_backward_goto_use_above, is_cond_family_local,
+    is_loop_carried_use_above, parse_dead_compound_assignment_lhs, parse_plain_assignment_lhs,
+    segment_rhs_is_pure_flag_store, split_plain_statement_segments,
+    trace_prune_plain_assignment_full,
 };
 
 pub(in crate::c_printer) fn prune_dead_plain_assignments_once(output: &str, pass: u32) -> String {
@@ -80,7 +81,8 @@ pub(in crate::c_printer) fn prune_dead_plain_assignments_once(output: &str, pass
                     .any(|later| is_real_use(later));
                 let used_later = used_later_on_line
                     || lines.iter().skip(idx + 1).any(|later| is_real_use(later));
-                let loop_carried_live_in = is_loop_carried_use_above(&lines, idx, lhs);
+                let loop_carried_live_in = is_loop_carried_use_above(&lines, idx, lhs)
+                    || is_backward_goto_use_above(&lines, idx, lhs);
                 let remove = !used_later && !loop_carried_live_in;
                 trace_prune_plain_assignment_full(
                     pass,
@@ -131,7 +133,9 @@ pub(in crate::c_printer) fn prune_dead_plain_assignments_once(output: &str, pass
                             .iter()
                             .skip(idx + 1)
                             .any(|later| contains_identifier(later, lhs));
-                        let dead = !used_on_line && !used_below;
+                        let dead = !used_on_line
+                            && !used_below
+                            && !is_backward_goto_use_above(&lines, idx, lhs);
                         tracing::debug!(target: "unlace::cprinter::prune",
                             "plain-prune pass={pass} line={} lhs={lhs} decision=remove segment={:?} kind=dead-compound",
                             idx + 1,

@@ -4576,6 +4576,77 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
     }
 }
 
+/// Number of statement slots [`collect_varnodes`] allocates for `nodes`.
+///
+/// Emission must advance `emit_stmt` in lockstep with collection. When the
+/// emitter drops a subtree (a canary-fail branch, nodes after a terminal
+/// statement), it skips that subtree's slots with this count so later
+/// statements still read their own collected names.
+fn hir_stmt_count(nodes: &[HirNode]) -> u32 {
+    nodes
+        .iter()
+        .map(|node| match node {
+            HirNode::Block(children) => hir_stmt_count(children),
+            HirNode::Statement(_) | HirNode::CselTernary { .. } => 1,
+            HirNode::Ternary { .. } | HirNode::GuardedTernary { .. } => 2,
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            }
+            | HirNode::IfCmp {
+                then_body,
+                else_body,
+                ..
+            } => hir_stmt_count(then_body) + else_body.as_deref().map_or(0, hir_stmt_count),
+            HirNode::GuardedIf {
+                then_body,
+                else_body,
+                ..
+            } => hir_stmt_count(then_body) + hir_stmt_count(else_body),
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => hir_stmt_count(body),
+            HirNode::For { init, body, .. } => u32::from(init.is_some()) + hir_stmt_count(body) + 1,
+            HirNode::Switch { cases, default, .. } => {
+                cases
+                    .iter()
+                    .map(|(_, body, _)| hir_stmt_count(body))
+                    .sum::<u32>()
+                    + default.as_deref().map_or(0, hir_stmt_count)
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                hir_stmt_count(try_body)
+                    + catch_arms
+                        .iter()
+                        .map(|(_, body)| hir_stmt_count(body))
+                        .sum::<u32>()
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => hir_stmt_count(try_body) + hir_stmt_count(finally_body),
+            HirNode::Commented { inner, .. } => {
+                hir_stmt_count(std::slice::from_ref(inner.as_ref()))
+            }
+            HirNode::Return(_)
+            | HirNode::Goto(_)
+            | HirNode::Label(_)
+            | HirNode::TailCall { .. }
+            | HirNode::Continue
+            | HirNode::Break
+            | HirNode::ObjcBlock { .. }
+            | HirNode::Asm { .. } => 0,
+        })
+        .sum()
+}
+
+/// Skip the statement slots of a subtree the emitter does not print.
+fn skip_unemitted_nodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
+    ctx.emit_stmt += hir_stmt_count(nodes);
+}
+
 const fn is_never_foldable_op(op: IrOp) -> bool {
     matches!(
         op,
@@ -9457,6 +9528,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "return {};", canonicalize_return_expr(expr));
             if !has_later_sibling_label(nodes, i + 1) {
+                skip_unemitted_nodes(&nodes[i + 1..], ctx);
                 break;
             }
             i += 1;
@@ -9565,6 +9637,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     "inline-terminal-break depth={depth} next_idx={i} stmt={}",
                     ctx.emit_stmt
                 ));
+                skip_unemitted_nodes(&nodes[i..], ctx);
                 break;
             }
             last_dowhile_stmt_range = None;
@@ -9589,6 +9662,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             // unreachable cleanup/statements between a terminal branch and a
             // later target label; suppressing that label leaves dangling gotos.
             if !has_later_sibling_label(nodes, i + 1) {
+                skip_unemitted_nodes(&nodes[i + 1..], ctx);
                 break;
             }
         }
@@ -11981,16 +12055,18 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 else_body.as_ref().map_or(0, |body| body.len())
             ));
             if body_is_stack_chk_fail_only(then_body, ctx) {
+                skip_unemitted_nodes(then_body, ctx);
                 if let Some(eb) = else_body {
                     emit_nodes(eb, depth, ctx, out);
                 }
                 return;
             }
-            if else_body
+            if let Some(eb) = else_body
                 .as_deref()
-                .is_some_and(|eb| body_is_stack_chk_fail_only(eb, ctx))
+                .filter(|eb| body_is_stack_chk_fail_only(eb, ctx))
             {
                 emit_nodes(then_body, depth, ctx, out);
+                skip_unemitted_nodes(eb, ctx);
                 return;
             }
             // Stack-canary guard `if (canary != reloaded) { __stack_chk_fail();
@@ -12001,16 +12077,18 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             // body-only check above.
             if cond_sv_is_stack_canary_compare(cond, ctx) {
                 if body_contains_stack_chk_fail_call(then_body, ctx) {
+                    skip_unemitted_nodes(then_body, ctx);
                     if let Some(eb) = else_body {
                         emit_nodes(eb, depth, ctx, out);
                     }
                     return;
                 }
-                if else_body
+                if let Some(eb) = else_body
                     .as_deref()
-                    .is_some_and(|eb| body_contains_stack_chk_fail_call(eb, ctx))
+                    .filter(|eb| body_contains_stack_chk_fail_call(eb, ctx))
                 {
                     emit_nodes(then_body, depth, ctx, out);
+                    skip_unemitted_nodes(eb, ctx);
                     return;
                 }
             }

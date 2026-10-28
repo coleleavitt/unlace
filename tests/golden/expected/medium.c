@@ -96,54 +96,55 @@ int main(void) {
     __int64 v16; // temp
     int v17; // temp
     int v18; // temp
-    __int64 v19 = 0xa; // rdx
-    _BOOL v20 = !(__builtin_popcount(0) & 1); // PF
-    __int64 v21 = 0; // rcx
-    __m128i v22 = (((unsigned __int128)0x900000006ULL << 64) | 0x300000000ULL); // xmm0
-    char v23 = 1; // ZF
-    char v24 = 0; // SF
-    char v25 = 0; // CF
-    char v26 = 0; // OF
+    _QWORD v19; // temp
+    __int64 v20 = 0xa; // rdx
+    _BOOL v21 = !(__builtin_popcount(0) & 1); // PF
+    __int64 v22 = 0; // rcx
+    __m128i v23 = (((unsigned __int128)0x900000006ULL << 64) | 0x300000000ULL); // xmm0
+    char v24 = 1; // ZF
+    char v25 = 0; // SF
+    char v26 = 0; // CF
+    char v27 = 0; // OF
     result = 1;
-    *(_OWORD *)buf_0 = v22;
-    v22 = (((unsigned __int128)0x1500000012ULL << 64) | 0xf0000000cULL);
-    *(_OWORD *)(buf_0 + 16) = v22;
-    v22 = (((unsigned __int128)0x210000001eULL << 64) | 0x1b00000018ULL);
-    *(_OWORD *)(buf_0 + 32) = v22;
-    v22 = (((unsigned __int128)0x2d0000002aULL << 64) | 0x2700000024ULL);
-    *(_OWORD *)(buf_0 + 48) = v22;
+    *(_OWORD *)buf_0 = v23;
+    v23 = (((unsigned __int128)0x1500000012ULL << 64) | 0xf0000000cULL);
+    *(_OWORD *)(buf_0 + 16) = v23;
+    v23 = (((unsigned __int128)0x210000001eULL << 64) | 0x1b00000018ULL);
+    *(_OWORD *)(buf_0 + 32) = v23;
+    v23 = (((unsigned __int128)0x2d0000002aULL << 64) | 0x2700000024ULL);
+    *(_OWORD *)(buf_0 + 48) = v23;
     do {
         v14 = result;
         v10 = result;
-        result += v21;
-        v21 = v14;
-        v14 = v19;
-        v23 = v19 == 1;
-        v24 = (_BYTE)(v19 < 1);
-        v25 = (_DWORD)v19 < 1;
-        v26 = __OFSUB__(v19, 1);
-        --v19;
-    } while (v19);
-    v23 = v21 == -910;
-    v24 = (_BYTE)(v21 + 0x38e < 0);
-    v25 = (v21 + 0x38e) < v21;
-    v26 = __OFADD__(v21, 0x38e);
-    v21 += 0x38e;
-    v19 = 0x24;
+        result += v22;
+        v22 = v14;
+        v14 = v20;
+        v24 = v20 == 1;
+        v25 = (_BYTE)(v20 < 1);
+        v26 = (_DWORD)v20 < 1;
+        v27 = __OFSUB__(v20, 1);
+        --v20;
+    } while (v20);
+    v24 = v22 == -910;
+    v25 = (_BYTE)(v22 + 0x38e < 0);
+    v26 = (v22 + 0x38e) < v22;
+    v27 = __OFADD__(v22, 0x38e);
+    v22 += 0x38e;
+    v20 = 0x24;
     result = 0x30;
     do {
-        v10 = v19;
-        v19 = result % v10;
+        v10 = v20;
+        v20 = result % v10;
         result = v10;
-        v23 = !v19;
-        v24 = (_BYTE)(v19 < 0);
-        v25 = 0;
+        v24 = !v20;
+        v25 = (_BYTE)(v20 < 0);
         v26 = 0;
-    } while (v19);
-    v23 = v21 + v10 == 0;
-    v24 = (_BYTE)(v21 + v10 < 0);
-    v25 = (v21 + result) < v21;
-    v26 = __OFADD__(v21, result);
+        v27 = 0;
+    } while (v20);
+    v24 = v22 + v10 == 0;
+    v25 = (_BYTE)(v22 + v10 < 0);
+    v26 = (v22 + result) < v22;
+    v27 = __OFADD__(v22, result);
     result = 0x1b;
     while (1) {
         v14 = result;
@@ -151,34 +152,31 @@ int main(void) {
         v12 = result & 1;
         if (v15) {
             v14 = (_DWORD)(result + (result << 1LL) + 1LL);
-            v19 += 2;
-            v23 = v14 >> 1 == 0;
-            v24 = (_BYTE)(v14 >> 1 < 0);
-            v25 = 0;
+            v20 += 2;
+            v24 = v14 >> 1 == 0;
+            v25 = (_BYTE)(v14 >> 1 < 0);
             v26 = 0;
+            v27 = 0;
             result = v14 >> 1;
-            continue;
         } else {
             result = v14 >> 1;
-            ++v19;
-            v23 = result == 1;
-            v24 = (_BYTE)(result < 1);
-            v25 = (_DWORD)result < 1;
-            v26 = __OFSUB__(result, 1);
-            if (result != 1) {
-                continue;
-            } else {
+            ++v20;
+            v24 = result == 1;
+            v25 = (_BYTE)(result < 1);
+            v26 = (_DWORD)result < 1;
+            v27 = __OFSUB__(result, 1);
+            if (result == 1) {
                 break;
             }
         }
     }
-    v21 = v21 + v10 + v19;
-    v23 = 1;
-    v24 = 0;
+    v22 = v22 + v10 + v20;
+    v24 = 1;
     v25 = 0;
     v26 = 0;
+    v27 = 0;
     v10 = 0;
-    v19 = 0x20;
+    v20 = 0x20;
     result = 0xdeadbeef;
     do {
         v14 = result;
@@ -186,391 +184,410 @@ int main(void) {
         v15 = v14 & 1;
         v11 = v14 & 1;
         v10 += v15;
-        v14 = v19;
-        v23 = v19 == 1;
-        v24 = (_BYTE)(v19 < 1);
-        v25 = (_DWORD)v19 < 1;
-        v26 = __OFSUB__(v19, 1);
-        --v19;
-    } while (v19);
-    v21 = (_DWORD)(v10 + v21 + 0x46LL);
-    __int64 v27 = (uintptr_t)buf_0; // r9
-    __int64 v28 = (uintptr_t)(buf_0 + 64); // r8
+        v14 = v20;
+        v24 = v20 == 1;
+        v25 = (_BYTE)(v20 < 1);
+        v26 = (_DWORD)v20 < 1;
+        v27 = __OFSUB__(v20, 1);
+        --v20;
+    } while (v20);
+    v22 = (_DWORD)(v10 + v22 + 0x46LL);
+    __int64 v28 = (uintptr_t)buf_0; // r9
+    __int64 v29 = (uintptr_t)(buf_0 + 64); // r8
     result = (uintptr_t)buf_0;
-    v22 = 0;
+    v23 = 0;
     do {
-        v22 = _mm_add_epi32(v22, *(_OWORD *)result);
+        v23 = _mm_add_epi32(v23, *(_OWORD *)result);
         v16 = result + 0x10LL;
         result += 0x10LL;
-        v23 = (uintptr_t)(buf_0 + 64) == v16;
-        v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
-        v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)result;
-        v26 = __OFSUB__((uintptr_t)(buf_0 + 64), result);
+        v24 = (uintptr_t)(buf_0 + 64) == v16;
+        v25 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
+        v26 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)result;
+        v27 = __OFSUB__((uintptr_t)(buf_0 + 64), result);
     } while ((uintptr_t)(buf_0 + 64) != result);
     v11 = (uintptr_t)(buf_0 + 4);
     result = 0;
-    __int64 v29 = (uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4); // r11
+    __int64 v30 = (uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4); // r11
     v10 = (uintptr_t)(buf_0 + 4);
-    v22 = _mm_add_epi32(v22, (_OWORD)v22 >> 0x40);
-    v13 = (_OWORD)v22 >> 0x20;
-    v22 = _mm_add_epi32(v22, v13);
-    v19 = (_DWORD)v22 + v21;
-    v23 = !(v29 & 4);
-    v24 = (_BYTE)((v29 & 4) < 0);
-    v25 = 0;
+    v23 = _mm_add_epi32(v23, (_OWORD)v23 >> 0x40);
+    v13 = (_OWORD)v23 >> 0x20;
+    v23 = _mm_add_epi32(v23, v13);
+    v20 = (_DWORD)v23 + v22;
+    v24 = !(v30 & 4);
+    v25 = (_BYTE)((v30 & 4) < 0);
     v26 = 0;
-    v29 &= 4;
-    v21 = (uintptr_t)(buf_0 + 4);
-    if (!(v29 & 4)) {
-        goto label_19;
+    v27 = 0;
+    v30 &= 4;
+    v22 = (uintptr_t)(buf_0 + 4);
+    if (!(v30 & 4)) {
+        goto label_14;
     } else {
         v10 = *(_DWORD *)(buf_0 + 4);
         result = 0u < v10 ? v10 : 0u;
         v10 = (uintptr_t)(buf_0 + 8);
-        v23 = (uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8);
-        v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < (uintptr_t)(buf_0 + 8));
-        v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)(uintptr_t)(buf_0 + 8);
-        v26 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8));
-        if ((uintptr_t)(buf_0 + 64) != (uintptr_t)(buf_0 + 8)) {
-            do {
-                v29 = *(_DWORD *)v10;
-                v14 = result < v29 ? v29 : result;
-                v29 = *(_DWORD *)(v10 + 4LL);
-                v15 = v14;
-                v17 = v15 - v29;
-                result = v15 < v29 ? v29 : v15;
-                v16 = v10 + 8LL;
-                v10 += 8LL;
-                v4 = (uintptr_t)(buf_0 + 64) - v16;
-                v23 = (uintptr_t)(buf_0 + 64) == v16;
-                v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
-                v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v10;
-                v26 = __OFSUB__((uintptr_t)(buf_0 + 64), v10);
-            } while ((uintptr_t)(buf_0 + 64) != v10);
+        v24 = (uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8);
+        v25 = (_BYTE)((uintptr_t)(buf_0 + 64) < (uintptr_t)(buf_0 + 8));
+        v26 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)(uintptr_t)(buf_0 + 8);
+        v27 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8));
+        if ((uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8)) {
+            goto label_15;
+        } else {
+            goto label_14;
         }
-        v14 = result + v19;
-        result += v19;
-        v19 = 0;
-        v23 = !((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4);
-        v24 = (_BYTE)(((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4) < 0);
-        v25 = 0;
-        v26 = 0;
-        v10 = (_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4;
-        if (!((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4)) {
+    }
+    do {
+    label_14:;
+        v30 = *(_DWORD *)v10;
+        v14 = result < v30 ? v30 : result;
+        v30 = *(_DWORD *)(v10 + 4LL);
+        v15 = v14;
+        v17 = v15 - v30;
+        result = v15 < v30 ? v30 : v15;
+        v16 = v10 + 8LL;
+        v10 += 8LL;
+        v4 = (uintptr_t)(buf_0 + 64) - v16;
+        v24 = (uintptr_t)(buf_0 + 64) == v16;
+        v25 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
+        v26 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v10;
+        v27 = __OFSUB__((uintptr_t)(buf_0 + 64), v10);
+    } while ((uintptr_t)(buf_0 + 64) != v10);
+label_15:;
+    v14 = result + v20;
+    result += v20;
+    v20 = 0;
+    v24 = !((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4);
+    v25 = (_BYTE)(((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4) < 0);
+    v26 = 0;
+    v27 = 0;
+    v10 = (_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4;
+    if (!((_DWORD)((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4)) & 4)) {
+        goto label_17;
+    } else {
+        v22 = *(_DWORD *)(buf_0 + 4);
+        v20 = 0u != v22 && v22 <= 0u ? v22 : 0u;
+        v22 = (uintptr_t)(buf_0 + 8);
+        v24 = (uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8);
+        v25 = (_BYTE)((uintptr_t)(buf_0 + 64) < (uintptr_t)(buf_0 + 8));
+        v26 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)(uintptr_t)(buf_0 + 8);
+        v27 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8));
+        if ((uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8)) {
             goto label_18;
         } else {
-            v21 = *(_DWORD *)(buf_0 + 4);
-            v19 = 0u != v21 && v21 <= 0u ? v21 : 0u;
-            v21 = (uintptr_t)(buf_0 + 8);
-            v23 = (uintptr_t)(buf_0 + 64) == (uintptr_t)(buf_0 + 8);
-            v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < (uintptr_t)(buf_0 + 8));
-            v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)(uintptr_t)(buf_0 + 8);
-            v26 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8));
-            if ((uintptr_t)(buf_0 + 64) != (uintptr_t)(buf_0 + 8)) {
-                do {
-                    v10 = *(_DWORD *)v21;
-                    v19 = v19 != v10 && v10 <= v19 ? v10 : v19;
-                    v10 = *(_DWORD *)(v21 + 4LL);
-                    v19 = v19 != v10 && v10 <= v19 ? v10 : v19;
-                    v16 = v21 + 8LL;
-                    v21 += 8LL;
-                    v23 = (uintptr_t)(buf_0 + 64) == v16;
-                    v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
-                    v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v21;
-                    v26 = __OFSUB__((uintptr_t)(buf_0 + 64), v21);
-                } while ((uintptr_t)(buf_0 + 64) != v21);
+            goto label_17;
+        }
+    }
+    do {
+    label_17:;
+        v10 = *(_DWORD *)v22;
+        v20 = v20 != v10 && v10 <= v20 ? v10 : v20;
+        v10 = *(_DWORD *)(v22 + 4LL);
+        v20 = v20 != v10 && v10 <= v20 ? v10 : v20;
+        v16 = v22 + 8LL;
+        v22 += 8LL;
+        v24 = (uintptr_t)(buf_0 + 64) == v16;
+        v25 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
+        v26 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v22;
+        v27 = __OFSUB__((uintptr_t)(buf_0 + 64), v22);
+    } while ((uintptr_t)(buf_0 + 64) != v22);
+label_18:;
+    v24 = v20 + v14 == 0;
+    v25 = (_BYTE)(v20 + v14 < 0);
+    v26 = (v20 + result) < v20;
+    v27 = __OFADD__(v20, result);
+    v20 += v14;
+    __m128i v31 = 0; // xmm2
+    result = (uintptr_t)buf_0;
+    do {
+        v23 = *(_OWORD *)result;
+        v16 = result + 0x10LL;
+        result += 0x10LL;
+        v13 = v23;
+        v13 = _mm_mul_epu32(v23, v23);
+        v23 = _mm_srli_epi64(v23, 0x20);
+        v23 = _mm_mul_epu32(v23, v23);
+        v13 = _mm_shuffle_epi32(v13, 8);
+        v23 = _mm_shuffle_epi32(v23, 8);
+        v13 = _mm_unpacklo_epi32(v13, v23);
+        v31 = _mm_add_epi32(v31, v13);
+        v24 = (uintptr_t)(buf_0 + 64) == v16;
+        v25 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
+        v26 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)result;
+        v27 = __OFSUB__((uintptr_t)(buf_0 + 64), result);
+    } while ((uintptr_t)(buf_0 + 64) != result);
+    result = 0;
+    v31 = _mm_add_epi32(v31, (_OWORD)v31 >> 0x40);
+    v31 = _mm_add_epi32(v31, (_OWORD)v31 >> 0x20);
+    v24 = (_DWORD)v31 + v20 == 0;
+    v25 = (_BYTE)((_DWORD)v31 + v20 < 0);
+    v26 = ((_DWORD)v31 + v20) < (_DWORD)v31;
+    v27 = __OFADD__((_DWORD)v31, v20);
+    v22 = (_DWORD)v31 + v20;
+    v20 = (uintptr_t)buf_0;
+    while (1) {
+        v14 = *(_DWORD *)v20;
+        v15 = v14 - 0xf;
+        v24 = v14 == 0xf;
+        v25 = (_BYTE)(v14 < 0xf);
+        v26 = (_DWORD)v14 < 0xf;
+        v27 = __OFSUB__(v14, 0xf);
+        if (v14 == 0xf) {
+            break;
+        } else {
+            v14 = result;
+            v15 = result + 1;
+            ++result;
+            v20 += 4LL;
+            v17 = v15;
+            v24 = result == 0x10;
+            v25 = (_BYTE)(result < 0x10);
+            v26 = (_DWORD)result < 0x10;
+            v27 = __OFSUB__(result, 0x10);
+            if (result == 0x10) {
+                result = 0xffffffff;
+                break;
             }
-            v23 = v19 + v14 == 0;
-            v24 = (_BYTE)(v19 + v14 < 0);
-            v25 = (v19 + result) < v19;
-            v26 = __OFADD__(v19, result);
-            v19 += v14;
-            __m128i v30 = 0; // xmm2
-            result = (uintptr_t)buf_0;
-            do {
-                v22 = *(_OWORD *)result;
-                v16 = result + 0x10LL;
-                result += 0x10LL;
-                v13 = v22;
-                v13 = _mm_mul_epu32(v22, v22);
-                v22 = _mm_srli_epi64(v22, 0x20);
-                v22 = _mm_mul_epu32(v22, v22);
-                v13 = _mm_shuffle_epi32(v13, 8);
-                v22 = _mm_shuffle_epi32(v22, 8);
-                v13 = _mm_unpacklo_epi32(v13, v22);
-                v30 = _mm_add_epi32(v30, v13);
-                v23 = (uintptr_t)(buf_0 + 64) == v16;
-                v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v16);
-                v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)result;
-                v26 = __OFSUB__((uintptr_t)(buf_0 + 64), result);
-            } while ((uintptr_t)(buf_0 + 64) != result);
-            result = 0;
-            v30 = _mm_add_epi32(v30, (_OWORD)v30 >> 0x40);
-            v30 = _mm_add_epi32(v30, (_OWORD)v30 >> 0x20);
-            v23 = (_DWORD)v30 + v19 == 0;
-            v24 = (_BYTE)((_DWORD)v30 + v19 < 0);
-            v25 = ((_DWORD)v30 + v19) < (_DWORD)v30;
-            v26 = __OFADD__((_DWORD)v30, v19);
-            v21 = (_DWORD)v30 + v19;
-            v19 = (uintptr_t)buf_0;
-            while (1) {
-                v14 = *(_DWORD *)v19;
-                v15 = v14 - 0xf;
-                v23 = v14 == 0xf;
-                v24 = (_BYTE)(v14 < 0xf);
-                v25 = (_DWORD)v14 < 0xf;
-                v26 = __OFSUB__(v14, 0xf);
-                if (v14 == 0xf) {
-                    break;
+        }
+    }
+    v10 = 2;
+    v30 = (_DWORD)(result + v22 + 0x581LL);
+    v22 = 2;
+    v24 = 2u == 3;
+    v25 = (_BYTE)(2u < 3);
+    v26 = (_DWORD)2u < 3;
+    v27 = __OFSUB__(2u, 3);
+    if (!(2u != 3 && 3 <= 2u)) {
+        goto label_28;
+    }
+label_53:;
+    result = v10;
+    while (1) {
+        result = v10 / v22;
+        v20 = v10 % v22;
+        v24 = !v20;
+        v25 = (_BYTE)(v20 < 0);
+        if (v20) {
+            ++v22;
+            result = v22 * v22;
+            v24 = result == v10;
+            v25 = (_BYTE)(result < v10);
+            v26 = (_DWORD)result < (_DWORD)v10;
+            v27 = __OFSUB__(result, v10);
+            if (result != v10 && v10 <= result) {
+                break;
+            }
+        } else {
+            goto label_27;
+        }
+    }
+label_28:;
+    ++v12;
+    v24 = v12 == 0xa;
+    v25 = (_BYTE)(v12 < 0xa);
+    v26 = (_DWORD)v12 < 0xa;
+    v27 = __OFSUB__(v12, 0xa);
+    if (v12 == 0xa) {
+        v24 = v30 + v10 == 0;
+        v25 = (_BYTE)(v30 + v10 < 0);
+        v26 = (v30 + v10) < v30;
+        v27 = __OFADD__(v30, v10);
+        v30 += v10;
+        v22 = 0x12;
+        v9 = 0xc;
+        do {
+            v14 = (_DWORD)v9;
+            v18 = v22;
+            v9 = v22;
+            v15 = v14;
+            v17 = v15 / v22;
+            result = v17;
+            v20 = v15 % v22;
+            v22 = v20;
+            v24 = !v20;
+            v25 = (_BYTE)(v20 < 0);
+            v26 = 0;
+            v27 = 0;
+        } while (v20);
+        v24 = 1;
+        v25 = 0;
+        v26 = 0;
+        v27 = 0;
+        v10 = 0;
+        result = 0xd8u / v18;
+        v20 = 0xd8u % v18;
+        v12 = (_DWORD)(result + v30 - 1218664206);
+        while (1) {
+            v14 = *(_DWORD *)v28;
+            v20 = v14;
+            result = v14 * 0x66666667LL;
+            v17 = v20;
+            result = (_DWORD)(result >> 0x21) - (v20 >> 0x1f);
+            v28 = (_DWORD)(result + (result << 2LL));
+            result = v20 - (_DWORD)(result + (result << 2LL));
+            v24 = result == 2;
+            char v32 = (_BYTE)(result < 2); // temp
+            v27 = __OFSUB__(result, 2);
+            if (result == 2) {
+                v24 = v20 == 5;
+                v25 = (_BYTE)(v20 < 5);
+                v26 = (_DWORD)v20 < 5;
+                v27 = __OFSUB__(v20, 5);
+                v20 -= 5;
+            } else {
+                if (v24 || v32 ^ v27) {
+                    if (!result) {
+                        v24 = v17 + v17 == 0;
+                        v25 = (_BYTE)(v17 + v17 < 0);
+                        v26 = (v17 + v17) < v17;
+                        v27 = __OFADD__(v17, v17);
+                        v20 = v17 + v17;
+                    } else {
+                        v28 = (_DWORD)(v20 + 0xaLL);
+                        v24 = result == 1;
+                        v25 = (_BYTE)(result < 1);
+                        v26 = (_DWORD)result < 1;
+                        v27 = __OFSUB__(result, 1);
+                        v20 = v24 ? (_DWORD)(v20 + 0xaLL) : v20;
+                    }
                 } else {
                     v14 = result;
-                    v15 = result + 1;
-                    ++result;
-                    v19 += 4LL;
-                    v17 = v15;
-                    v23 = result == 0x10;
-                    v24 = (_BYTE)(result < 0x10);
-                    v25 = (_DWORD)result < 0x10;
-                    v26 = __OFSUB__(result, 0x10);
-                    if (result != 0x10) {
-                        continue;
-                    } else {
-                        goto label_2;
-                    }
-                }
-            }
-            v10 = 2;
-            v29 = (_DWORD)(result + v21 + 0x581LL);
-            v21 = 2;
-            v23 = 2u == 3;
-            v24 = (_BYTE)(2u < 3);
-            v25 = (_DWORD)2u < 3;
-            v26 = __OFSUB__(2u, 3);
-            if (!(2u != 3 && 3 <= 2u)) {
-                goto label_6;
-            }
-        label_4:;
-            result = v10;
-            while (1) {
-                result = v10 / v21;
-                v19 = v10 % v21;
-                v23 = !v19;
-                v24 = (_BYTE)(v19 < 0);
-                if (v19) {
-                    ++v21;
-                    result = v21 * v21;
-                    v23 = result == v10;
-                    v24 = (_BYTE)(result < v10);
-                    v25 = (_DWORD)result < (_DWORD)v10;
-                    v26 = __OFSUB__(result, v10);
-                    if (result != v10 && v10 <= result) {
-                        goto label_6;
-                    } else {
-                        continue;
-                    }
-                } else {
-                    break;
-                }
-            }
-        label_7:;
-            ++v10;
-            v21 = 2;
-            v23 = v10 == 3;
-            v24 = (_BYTE)(v10 < 3);
-            v25 = (_DWORD)v10 < 3;
-            v26 = __OFSUB__(v10, 3);
-            if (v10 != 3 && 3 <= v10) {
-                goto label_4;
-            } else {
-            }
-        label_6:;
-            ++v12;
-            v23 = v12 == 0xa;
-            v24 = (_BYTE)(v12 < 0xa);
-            v25 = (_DWORD)v12 < 0xa;
-            v26 = __OFSUB__(v12, 0xa);
-            if (v12 != 0xa) {
-                goto label_7;
-            } else {
-            }
-            v23 = v29 + v10 == 0;
-            v24 = (_BYTE)(v29 + v10 < 0);
-            v25 = (v29 + v10) < v29;
-            v26 = __OFADD__(v29, v10);
-            v29 += v10;
-            v21 = 0x12;
-            v9 = 0xc;
-            do {
-                v14 = (_DWORD)v9;
-                v18 = v21;
-                v9 = v21;
-                v15 = v14;
-                v17 = v15 / v21;
-                result = v17;
-                v19 = v15 % v21;
-                v21 = v19;
-                v23 = !v19;
-                v24 = (_BYTE)(v19 < 0);
-                v25 = 0;
-                v26 = 0;
-            } while (v19);
-            v23 = 1;
-            v24 = 0;
-            v25 = 0;
-            v26 = 0;
-            v10 = 0;
-            result = 0xd8u / v18;
-            v19 = 0xd8u % v18;
-            v12 = (_DWORD)(result + v29 - 1218664206);
-            while (1) {
-                v14 = *(_DWORD *)v27;
-                v19 = v14;
-                result = v14 * 0x66666667LL;
-                v17 = v19;
-                result = (_DWORD)(result >> 0x21) - (v19 >> 0x1f);
-                v27 = (_DWORD)(result + (result << 2LL));
-                result = v19 - (_DWORD)(result + (result << 2LL));
-                v23 = result == 2;
-                char v31 = (_BYTE)(result < 2); // temp
-                v26 = __OFSUB__(result, 2);
-                if (result == 2) {
-                    v23 = v19 == 5;
-                    v24 = (_BYTE)(v19 < 5);
-                    v25 = (_DWORD)v19 < 5;
-                    v26 = __OFSUB__(v19, 5);
-                    v19 -= 5;
-                } else {
-                    if (v23 || v31 ^ v26) {
-                        if (!result) {
-                            v23 = v17 + v17 == 0;
-                            v24 = (_BYTE)(v17 + v17 < 0);
-                            v25 = (v17 + v17) < v17;
-                            v19 = v17 + v17;
-                        } else {
-                            v27 = (_DWORD)(v19 + 0xaLL);
-                            v23 = result == 1;
-                            v24 = (_BYTE)(result < 1);
-                            v25 = (_DWORD)result < 1;
-                            v19 = v23 ? (_DWORD)(v19 + 0xaLL) : v19;
-                        }
-                    } else {
-                        v14 = result;
-                        v23 = v14 == 3;
-                        v19 = v23 ? -v17 : v17;
-                        v27 = v11;
-                        v10 += v19;
-                        v23 = (uintptr_t)(buf_0 + 64) == v11;
-                        v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v11);
-                        v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v11;
-                        if ((uintptr_t)(buf_0 + 64) != v11) {
-                            v16 = v11 + 4LL;
-                            v23 = v11 == -4LL;
-                            v0 = v16 < 0;
-                            v3 = (_BYTE)v0;
-                            v24 = v3;
-                            v25 = (v11 + 4LL) < v11;
-                            v3 = (_BYTE)v16;
-                            v1 = __builtin_popcount(v3);
-                            v2 = v1 & 1;
-                            v20 = !v2;
-                            v11 = v16;
-                            continue;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                v10 += v19;
-                v27 = v11;
-                v23 = (uintptr_t)(buf_0 + 64) == v11;
-                v24 = (_BYTE)((uintptr_t)(buf_0 + 64) < v11);
-                v25 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v11;
-                if ((uintptr_t)(buf_0 + 64) == v11) {
-                    break;
-                } else {
-                    v16 = v11 + 4LL;
-                    v23 = v11 == -4LL;
-                    v0 = v16 < 0;
-                    v3 = (_BYTE)v0;
-                    v24 = v3;
-                    v25 = (v11 + 4LL) < v11;
-                    v3 = (_BYTE)v16;
-                    v1 = __builtin_popcount(v3);
-                    v2 = v1 & 1;
-                    v20 = !v2;
-                    v11 = v16;
-                    continue;
-                }
-            }
-            v19 = (_DWORD)(v12 + v10);
-            v23 = 1;
-            v24 = 0;
-            v25 = 0;
-            v26 = 0;
-            result = 0;
-            while (1) {
-                v23 = result == 9;
-                v24 = (_BYTE)(result < 9);
-                v25 = (_DWORD)result < 9;
-                if (result != 9 && 9 <= result) {
-                    v21 = (_DWORD)(v21 + result - 10);
-                    v14 = result;
-                    v15 = result + 1;
-                    ++result;
-                    v23 = result == 0x14;
-                    v24 = (_BYTE)(result < 0x14);
-                    v25 = (_DWORD)result < 0x14;
-                    if (result != 0x14) {
+                    v24 = v14 == 3;
+                    v20 = v24 ? -v17 : v17;
+                    v28 = v11;
+                    v10 += v20;
+                    v24 = (uintptr_t)(buf_0 + 64) == v11;
+                    v25 = (_BYTE)((uintptr_t)(buf_0 + 64) < v11);
+                    v26 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v11;
+                    v27 = __OFSUB__((uintptr_t)(buf_0 + 64), v11);
+                    if ((uintptr_t)(buf_0 + 64) != v11) {
+                        v16 = v11 + 4LL;
+                        v24 = v11 == -4LL;
+                        v0 = v16 < 0;
+                        v3 = (_BYTE)v0;
+                        v25 = v3;
+                        v26 = (v11 + 4LL) < v11;
+                        v27 = __OFADD__(v11, 4LL);
+                        v3 = (_BYTE)v16;
+                        v1 = __builtin_popcount(v3);
+                        v2 = v1 & 1;
+                        v21 = !v2;
+                        v11 = v16;
                         continue;
                     } else {
                         break;
                     }
-                } else {
+                }
+            }
+            v10 += v20;
+            v28 = v11;
+            v24 = (uintptr_t)(buf_0 + 64) == v11;
+            v25 = (_BYTE)((uintptr_t)(buf_0 + 64) < v11);
+            v26 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)v11;
+            v27 = __OFSUB__((uintptr_t)(buf_0 + 64), v11);
+            if ((uintptr_t)(buf_0 + 64) == v11) {
+                break;
+            }
+            v16 = v11 + 4LL;
+            v24 = v11 == -4LL;
+            v0 = v16 < 0;
+            v3 = (_BYTE)v0;
+            v25 = v3;
+            v26 = (v11 + 4LL) < v11;
+            v27 = __OFADD__(v11, 4LL);
+            v3 = (_BYTE)v16;
+            v1 = __builtin_popcount(v3);
+            v2 = v1 & 1;
+            v21 = !v2;
+            v11 = v16;
+        }
+        v20 = (_DWORD)(v12 + v10);
+        v24 = 1;
+        v25 = 0;
+        v26 = 0;
+        v27 = 0;
+        result = 0;
+        while (1) {
+            v24 = result == 9;
+            v25 = (_BYTE)(result < 9);
+            v26 = (_DWORD)result < 9;
+            v27 = __OFSUB__(result, 9);
+            if (!(result != 9 && 9 <= result)) {
+                while (1) {
                     v14 = result;
                     if (v14 <= 4) {
-                        v10 = (_DWORD)(result + (result << 1LL));
-                        ++result;
-                        v23 = v21 + v10 == 0;
-                        v24 = (_BYTE)(v21 + v10 < 0);
-                        v25 = (v21 + v10) < v21;
-                        v21 += v10;
-                        continue;
+                        break;
                     } else {
-                        v21 = (_DWORD)(v21 + result + 0x14LL);
-                        result = v14 + 1;
-                        v23 = result == 9;
-                        v24 = (_BYTE)(result < 9);
-                        v25 = (_DWORD)result < 9;
+                        v22 = (_DWORD)(v22 + result + 0x14LL);
+                        ++result;
+                        v24 = result == 9;
+                        v25 = (_BYTE)(result < 9);
+                        v26 = (_DWORD)result < 9;
+                        v27 = __OFSUB__(result, 9);
+                        if (result > 9) {
+                            goto label_43;
+                        }
                     }
                 }
+                v10 = (_DWORD)(result + (result << 1LL));
+                result = v14 + 1;
+                v24 = v22 + v10 == 0;
+                v25 = (_BYTE)(v22 + v10 < 0);
+                v26 = (v22 + v10) < v22;
+                v27 = __OFADD__(v22, v10);
+                v22 += v10;
+                continue;
             }
-            v10 = (_DWORD)(v19 + v21 + 0x12dLL);
-            result = 0x30;
-            v21 = 0x24;
-            while (1) {
-                v19 = result % v21;
-                result = v21;
-                if (v19) {
-                    v21 = v19;
-                } else {
-                    break;
-                }
+        label_43:;
+            v22 = (_DWORD)(v22 + result - 10);
+            v14 = result;
+            v15 = result + 1;
+            ++result;
+            v17 = v15;
+            v24 = result == 0x14;
+            v25 = (_BYTE)(result < 0x14);
+            v26 = (_DWORD)result < 0x14;
+            v27 = __OFSUB__(result, 0x14);
+            if (result == 0x14) {
+                break;
             }
-            v6 = f_rec_fib(8LL);
-            v12 = (_DWORD)(v6 + (_DWORD)(v10 + v21 + 3LL));
-            v7 = f_rec_power_constprop_0(8LL);
-            v12 += v7;
-            v8 = f_ackermann(2LL, 3LL);
-            v15 = (_DWORD)(v12 + v8 + 0xabe0cLL);
-            v19 = (_DWORD)(v12 + v8 + 0xabe0cLL) >> 0x1f >> 0x18;
-            v14 = v15;
-            result = (_QWORD)(_BYTE)(v14 + v19) - v19;
-            return result;
         }
+        v10 = (_DWORD)(v20 + v22 + 0x12dLL);
+        result = 0x30;
+        v22 = 0x24;
+        while (1) {
+            v20 = result % v22;
+            result = v22;
+            v24 = !v20;
+            v25 = (_BYTE)(v20 < 0);
+            v26 = 0;
+            v27 = 0;
+            if (v20) {
+                v22 = v20;
+            } else {
+                break;
+            }
+        }
+        v6 = f_rec_fib(8LL);
+        v12 = (_DWORD)(v6 + (_DWORD)(v10 + v22 + 3LL));
+        v7 = f_rec_power_constprop_0(8LL);
+        v12 += v7;
+        v8 = f_ackermann(2LL, 3LL);
+        v15 = (_DWORD)(v12 + v8 + 0xabe0cLL);
+        v20 = (_DWORD)(v12 + v8 + 0xabe0cLL) >> 0x1f >> 0x18;
+        v14 = v15;
+        result = (_QWORD)(_BYTE)(v14 + v20) - v20;
+        v9 = v19;
+        return result;
     }
-label_2:;
-label_18:;
-label_19:;
+label_27:;
+    ++v10;
+    v22 = 2;
+    v24 = v10 == 3;
+    v27 = __OFSUB__(v10, 3);
+    if (v10 != 3 && 3 <= v10) {
+        goto label_53;
+    } else {
+        goto label_28;
+    }
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {

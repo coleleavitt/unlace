@@ -12204,6 +12204,65 @@ fn canary_stack_spill_reload_is_suppressed() {
 }
 
 #[test]
+fn dropped_canary_branch_keeps_later_statement_names_in_sync() {
+    use super::tests::{con, make_func, reg, sv};
+    let rdi = reg(56, 8);
+    let rbx = reg(24, 8);
+    let cmp = Varnode::unique(0x118, 1);
+    let ret = reg(0, 4);
+    let fail_addr = 0x401030;
+    let body = vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntNotequal,
+            cmp,
+            smallvec![rdi, con(0, 8)],
+            0x1000,
+        )),
+        HirNode::If {
+            cond: sv(0x118, 1),
+            then_body: vec![HirNode::Statement(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![con(fail_addr, 8)],
+                0x1001,
+            ))],
+            else_body: None,
+        },
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            rbx,
+            smallvec![rdi, con(5, 8)],
+            0x1002,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::Store,
+            Varnode::unique(0x200, 8),
+            smallvec![con(0, 8), con(0x4000, 8), rbx],
+            0x1003,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::Copy,
+            ret,
+            smallvec![con(33, 4)],
+            0x1004,
+        )),
+        HirNode::Return(Some(sv(0, 4))),
+    ];
+    let func = make_func("canary_then_body", body);
+    let mut symbols = std::collections::BTreeMap::new();
+    symbols.insert(fail_addr, "__stack_chk_fail".to_string());
+    let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+    assert!(
+        !output.contains("__stack_chk_fail"),
+        "canary fail branch should be suppressed: {output}"
+    );
+    assert!(
+        output.contains("+ 5"),
+        "statement after the dropped branch lost its operands: {output}"
+    );
+    assert!(output.contains("return 0x21;"), "missing return: {output}");
+}
+
+#[test]
 fn canary_load_macos_renders_as_stack_chk_guard() {
     use super::tests::{con, make_func, reg, sv};
     let guard_addr: u64 = 0x100008000;

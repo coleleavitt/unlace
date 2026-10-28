@@ -145,9 +145,10 @@ Stale-plan reconciliation:
   reassembly. The remaining gap is broad real-world cache coverage,
   kernel-cache/fileset handling, and subcache edge cases.
 - `unlace-session`, `unlace-emu`, `unlace-debugger`, `unlace-lumina`, and
-  `unlace-idapython` crates exist. Treat platform UX as integration/API
-  maturity work, not absence of crates. IDAPython xrefs and
-  `ida_hexrays::decompile` are still partial.
+  `unlace-mcp` crates exist. Treat platform UX as integration/API
+  maturity work, not absence of crates. The IDAPython compatibility layer
+  was removed on 2026-10-28; do not reintroduce IDA-shaped scripting APIs.
+  `unlace-mcp` runs the `unlace-cli` library in-process (no `UNLACE_BIN`).
 - Production architecture claims remain limited to x86, x86_64, and AArch64.
   Several other lifters are beta/fixture breadth and may intentionally emit
   `IrOp::Unimplemented` / `LiftError::Unsupported`.
@@ -300,8 +301,8 @@ Current architecture queue:
    output assembly while preserving CLI behavior.
 4. Treat loader file size as format-domain pressure. Split Mach-O, dyld cache,
    PE/PDB, and DWARF files by subdomain only when changing those behaviors.
-5. Product surfaces exist but remain maturity work: IDAPython xrefs and
-   `ida_hexrays::decompile`, Lumina placeholder responses, debugger platform
+5. Product surfaces exist but remain maturity work: `unlace-mcp` tool
+   breadth, Lumina placeholder responses, debugger platform
    breadth, emulator breadth, and lifter coverage honesty all still need
    focused work. Front-end productization is not part of the active workspace.
 

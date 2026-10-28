@@ -1178,68 +1178,19 @@ Acceptance:
 - A new user can tell what works, what is experimental, and what is aspirational
   without reading source code.
 
-## Batch 27 - IDAPython Compatibility Layer
+## Batch 27 - IDAPython Compatibility Removed
 
-**Goal**: Run unmodified IDA Pro Python scripts on top of unlace's domain API.
-This is the single highest-leverage feature for hobbyist/academic adoption —
-every published IDA script (FindCrypt, IDArling, malware unpackers, FLIRT
-generators) assumes the `idaapi` / `idc` / `idautils` API surface.
-
-**Reference material already in tree**:
-
-- `research/ida-hexrays-docs/scripting/idapython/` — 55 actual IDAPython
-  modules from IDA 9.3sp1 (`idc.py`, `idautils.py`, `idaapi.py`,
-  `ida_bytes.py`, `ida_funcs.py`, `ida_hexrays.py`, `ida_dbg.py`, ...)
-- `research/ida-hexrays-docs/sdk/idapython-swig/` — 52 SWIG `.i` files —
-  the authoritative C++↔Python binding spec for every IDAPython symbol
-- `research/ida-hexrays-docs/sdk/idapython-pywraps/` — 85 C++ wrapper
-  source files
-- `research/ida-hexrays-docs/sdk/idapython-examples/` — 152 real IDAPython
-  scripts that act as the compat test corpus
-
-### Tasks
-
-- [ ] Create new crate `crates/unlace-idapython/`. It exposes `idc`,
-      `idautils`, `idaapi`, `ida_bytes`, `ida_funcs`, `ida_name`,
-      `ida_xref`, `ida_kernwin`, `ida_typeinf`, `ida_dbg`, `ida_hexrays`,
-      `ida_segment`, `ida_loader`, `ida_lumina` modules to Python via
-      `pyo3`. Implementation backs each call onto the unlace domain
-      types in `unlace-ir` / `unlace-passes` / `unlace-struct` /
-      `unlace-loader`.
-- [ ] Implement the 25 most-used APIs first (per `idautils.py` usage
-      survey from the example corpus):
-      - `idautils.Functions()`, `idautils.Heads()`,
-        `idautils.Segments()`, `idautils.XrefsTo()`, `idautils.XrefsFrom()`
-      - `idc.get_func_name(ea)`, `idc.get_func_attr(ea, attr)`,
-        `idc.set_name(ea, name)`, `idc.get_segm_name(ea)`,
-        `idc.get_bytes(ea, n)`, `idc.SetType(ea, decl)`
-      - `idaapi.get_func(ea)`, `idaapi.decompile(ea)`,
-        `idaapi.get_imagebase()`
-      - `ida_bytes.get_byte(ea)`, `ida_bytes.get_word(ea)`,
-        `ida_bytes.get_dword(ea)`, `ida_bytes.get_qword(ea)`,
-        `ida_bytes.get_strlit_contents(ea)`
-      - `ida_hexrays.decompile(ea)` returning a ctree-shaped object
-      - `ida_funcs.get_func_qty()`, `ida_funcs.getn_func(idx)`
-- [ ] Wire `unlace py <script.py>` CLI subcommand that initializes the
-      shim, opens the input binary, and execs the user's script in a
-      sandboxed Python process.
-- [ ] Add a regression suite that runs N example IDAPython scripts from
-      `research/ida-hexrays-docs/sdk/idapython-examples/` against
-      golden binaries and snapshot-compares the textual output (where
-      possible) with IDA's own output.
-- [ ] Document supported / unsupported APIs in
-      `docs/idapython-compat.md`. Be honest about coverage; mark each
-      API row as Supported / Stub / Unsupported.
+The IDAPython compatibility layer (`crates/unlace-idapython`, the `unlace py`
+subcommand, and the `python` feature) was deleted on 2026-10-28. Unlace is its
+own examiner; automation goes through the Rust library, the CLI, and
+`unlace-mcp`, which runs the pipeline in-process with typed tools.
 
 Acceptance:
 
-- `unlace py research/ida-hexrays-docs/sdk/idapython-examples/<script>.py
-  <binary>` runs without import errors for ≥ 25 of the 152 example
-  scripts.
-- The compat-coverage table in `docs/idapython-compat.md` lists exactly
-  which APIs work and which return `NotImplementedError`.
-- The shim crate uses BTreeMap-based storage in any output-affecting
-  path; determinism lint stays clean.
+- No workspace crate, CLI command, or feature depends on an IDA-shaped
+  scripting API.
+- Xref and decompilation queries are served natively (`unlace_cli::xrefs`,
+  `unlace_cli::decompiler`, `BinaryImage::relocations_at`).
 
 ## Batch 28 - Frontend Productization Removed
 
@@ -1582,9 +1533,8 @@ Product surface (from competitive-parity audit, derived from reading 55 IDA
 changelogs + 33 reference PDFs + 238K decompiled IDA functions and from the
 external reviewer's "what would make this a real tool" feedback):
 
-7. **Batch 27: IDAPython Compatibility Layer** (4-6 weeks). Single highest-
-   leverage item for hobbyist/academic adoption. All reference material is
-   already in `research/ida-hexrays-docs/scripting/` and `sdk/idapython-swig/`.
+7. **Batch 27: IDAPython Compatibility Layer** — removed 2026-10-28; see
+   Batch 27 above.
 8. **Batch 29: Database Persistence (.unldb)** (1-2 weeks). Without this,
    every run is a from-scratch analysis. Bincode + zstd format.
 9. **Batch 30: FLIRT Signature Library Shipping** (1-2 weeks). The matcher

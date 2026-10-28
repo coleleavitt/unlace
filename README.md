@@ -44,8 +44,6 @@ today.
   Standalone Mach-O reassembly from dyld cache images exists.
 - FLIRT/SIG library-quality coverage and confidence propagation beyond the
   currently wired CLI matching path.
-- IDAPython xrefs and `ida_hexrays::decompile` compatibility beyond the current
-  partial shim.
 - Switch / EH structuring on broad real-binary corpora.
 - Cross-statement expression folding and IDA-style helper macros
   (`LOBYTE`, `HIDWORD`, `COERCE_*`).

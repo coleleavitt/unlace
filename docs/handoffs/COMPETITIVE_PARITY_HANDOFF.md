@@ -150,6 +150,9 @@ pub struct MemoryRegion {
 
 ## Workstream 1: IDAPython Compatibility
 
+Dropped 2026-10-28: unlace is its own examiner and no longer carries an
+IDAPython compatibility layer. This workstream is kept only as history.
+
 ### Goal
 
 Let common IDA scripts run with minimal changes.

@@ -14,7 +14,6 @@ flowchart TB
 
     subgraph Output["Output Layer"]
         output[unlace-output]
-        idapython[unlace-idapython]
     end
 
     subgraph Analysis["Analysis Layer"]
@@ -50,6 +49,7 @@ flowchart TB
         emu[unlace-emu]
         lumina[unlace-lumina]
         plugin[unlace-plugin]
+        mcp[unlace-mcp]
         ai[AI-assisted analysis]
     end
 
@@ -62,7 +62,7 @@ flowchart TB
 
     output --> struct
     output --> ir
-    idapython --> output
+    mcp --> cli
 
     struct --> ir
     passes --> ir
@@ -570,7 +570,6 @@ mindmap
             Postprocessing
         Integration
             CLI
-            IDAPython
             Debugger
             Emulator
             Lumina

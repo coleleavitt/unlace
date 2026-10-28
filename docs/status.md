@@ -176,7 +176,9 @@ production form. Tracked so the README doesn't overclaim:
 - Stable Unlace SDK facade for project/session facts, analysis reads,
   decompiler objects, validated mutations, plugin runtimes, and IDA-SDK-inspired
   compatibility. See `docs/sdk.md`.
-- `unlace-mcp` CLI-first MCP server over the stable SDK. See `docs/mcp.md`.
+- `unlace-mcp` breadth beyond its six in-process read-only tools (binary info,
+  function list, decompile, IR dump, xrefs from/to): resources, prompts, and
+  project/report tools. See `docs/mcp.md`.
 - Manual analysis facts: force/split/map variables, force call type, manual
   switches, custom calling conventions, skippable instructions, injected
   assertions, and propagation barriers.
@@ -184,9 +186,6 @@ production form. Tracked so the README doesn't overclaim:
   Windows Debug API, macOS Mach, GDB/RSP remote, hardware/watch breakpoints,
   trace/coverage export, robust unwinding, and analysis integration.
 - Emulator production breadth beyond the current starter opcode/syscall model.
-- IDAPython xrefs and `ida_hexrays::decompile` compatibility beyond the
-  current partial shim; `idaapi.decompile`, ctree/microcode hooks, and real
-  public-script compatibility tests are still missing.
 - Lumina decompile/backend integration and confidence-aware signature sharing
   beyond placeholder or partial protocol behavior.
 - Corpus-scale parity automation against `research/decompiled-references/ida/`:
@@ -194,10 +193,9 @@ production form. Tracked so the README doesn't overclaim:
 - Interactive/frontend productization is deferred until CLI, SDK, MCP,
   persistence, and corpus evidence are stable.
 - SDK compatibility scoreboard for Rust plugins, WASM plugins, Python bindings,
-  IDAPython wrappers, loader samples, decompiler hooks, and debugger/trace
-  extensions.
-- MCP compatibility smoke tests for stdio tool listing, tool calls, resources,
-  prompts, read-only policy, and optional streamable HTTP.
+  loader samples, analyzer hooks, and debugger/trace extensions.
+- MCP tests for resources, prompts, read-only policy, and optional streamable
+  HTTP. Stdio initialize/list/call is covered by an in-process smoke test.
 - Reproducible signed releases + SBOM publishing.
 - Full semantic recompile-and-compare across the source-known fixture corpus.
   The current report covers 21 passing host executable cases, 0 known failing

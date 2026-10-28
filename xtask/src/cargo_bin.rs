@@ -6,7 +6,9 @@ use std::process::Command;
 /// reports cover the experimental-architecture fixtures as well.
 pub fn build_unlace_bin(root: &Path) -> Result<PathBuf, String> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
-    let output = Command::new(cargo)
+    let mut command = Command::new(cargo);
+    clear_package_env(&mut command);
+    let output = command
         .args([
             "build",
             "-p",
@@ -23,7 +25,7 @@ pub fn build_unlace_bin(root: &Path) -> Result<PathBuf, String> {
 
     if !output.status.success() {
         return Err(format!(
-            "cargo build -p unlace-cli --bin unlace --features all-arches failed: {}",
+            "cargo build of the unlace binary failed: {}",
             first_diagnostic_line(&output.stderr)
         ));
     }
@@ -39,10 +41,30 @@ pub fn build_unlace_bin(root: &Path) -> Result<PathBuf, String> {
     })
 }
 
+/// Remove the variables `cargo run` sets for the running xtask package.
+///
+/// Build scripts such as ring's declare `rerun-if-env-changed=CARGO_PKG_NAME`;
+/// a nested `cargo build` that inherits `CARGO_PKG_NAME=xtask` reruns them
+/// and recompiles everything downstream, then the next build from a shell
+/// recompiles it all back.
+fn clear_package_env(command: &mut Command) {
+    for (name, _) in std::env::vars_os() {
+        let is_package_var = name.to_str().is_some_and(|name| {
+            name.starts_with("CARGO_PKG_")
+                || name.starts_with("CARGO_MANIFEST_")
+                || matches!(
+                    name,
+                    "CARGO_CRATE_NAME" | "CARGO_BIN_NAME" | "CARGO_PRIMARY_PACKAGE" | "OUT_DIR"
+                )
+        });
+        if is_package_var {
+            command.env_remove(name);
+        }
+    }
+}
+
 pub fn find_unlace_binary(root: &Path) -> Option<PathBuf> {
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| root.join("target"));
+    let target_dir = target_dir(root);
     let debug_bin = target_dir.join("debug").join(executable_name("unlace"));
     if debug_bin.exists() {
         return Some(debug_bin);
@@ -52,6 +74,12 @@ pub fn find_unlace_binary(root: &Path) -> Option<PathBuf> {
         return Some(release_bin);
     }
     None
+}
+
+pub fn target_dir(root: &Path) -> PathBuf {
+    std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("target"))
 }
 
 fn executable_from_cargo_json(root: &Path, stdout: &[u8]) -> Option<PathBuf> {

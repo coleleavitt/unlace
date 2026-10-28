@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=$(jq -r '.tool_input.file_path // empty'); if echo \"$f\" | grep -qE '(^|/)(fixtures|tests/golden)/|reference_metrics\\.toml'; then echo 'Blocked: fixtures and goldens are protected by CLAUDE.md. Refresh goldens only via the sanctioned path (UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures, or cargo xtask regen-goldens) as a reviewed update -- never a hand edit. If this IS a reviewed fixture/golden task, regenerate through that path instead.' >&2; exit 2; fi"
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); if echo \"$f\" | grep -qE '(^|/)(fixtures|tests/golden)/|reference_metrics\\.toml'; then echo 'Blocked: fixtures and goldens are protected by CLAUDE.md. Refresh goldens only via the sanctioned path (UPDATE_GOLDEN=1 cargo nextest run -p unlace-test-harness --features all-arches --test golden_fixtures golden_<name>, or cargo xtask regen-goldens) as a reviewed update -- never a hand edit. If this IS a reviewed fixture/golden task, regenerate through that path instead.' >&2; exit 2; fi"
           }
         ]
       }
@@ -21,7 +21,7 @@
           },
           {
             "type": "command",
-            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *crates/unlace-ir/*.rs|*crates/unlace-passes/*.rs|*crates/unlace-struct/*.rs|*crates/unlace-output/*.rs) out=$(cd \"${CLAUDE_PROJECT_DIR:-.}\" && RUSTC_WRAPPER= cargo xtask lint-determinism 2>&1) || { echo \"$out\" | grep -E 'FAIL|:[0-9]+:' >&2; echo 'determinism: justify with // determinism:allow <reason> or use BTreeMap/BTreeSet (see docs/determinism.md).' >&2; exit 2; } ;; esac"
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *crates/unlace-ir/*.rs|*crates/unlace-passes/*.rs|*crates/unlace-struct/*.rs|*crates/unlace-output/*.rs) out=$(cd \"${CLAUDE_PROJECT_DIR:-.}\" && cargo xtask lint-determinism 2>&1) || { echo \"$out\" | grep -E 'FAIL|:[0-9]+:' >&2; echo 'determinism: justify with // determinism:allow <reason> or use BTreeMap/BTreeSet (see docs/determinism.md).' >&2; exit 2; } ;; esac"
           }
         ]
       }

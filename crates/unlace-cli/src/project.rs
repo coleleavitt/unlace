@@ -334,12 +334,11 @@ mod tests {
         proj.carve_function(0x401200, 128, Some("hidden_helper"));
         proj.record_source(0x401000, AnnotationSource::User);
 
-        let tmp = std::env::temp_dir().join("unlace_project_test.unlace");
-        let _ = std::fs::remove_file(&tmp);
+        let dir = tempfile::tempdir().expect("tempdir");
+        let tmp = dir.path().join("unlace_project_test.unlace");
         proj.save_to(&tmp).expect("save");
 
         let recovered = ProjectFile::load_from(&tmp).expect("load");
-        let _ = std::fs::remove_file(&tmp);
 
         assert_eq!(recovered, proj);
         assert_eq!(recovered.source_of(0x401000), AnnotationSource::User);
@@ -351,12 +350,11 @@ mod tests {
     #[test]
     fn load_and_verify_rejects_mismatched_sha() {
         let proj = ProjectFile::new("/tmp/example.elf", "deadbeef");
-        let tmp = std::env::temp_dir().join("unlace_project_sha_test.unlace");
-        let _ = std::fs::remove_file(&tmp);
+        let dir = tempfile::tempdir().expect("tempdir");
+        let tmp = dir.path().join("unlace_project_sha_test.unlace");
         proj.save_to(&tmp).expect("save");
 
         let err = ProjectFile::load_and_verify(&tmp, "cafebabe").expect_err("must reject");
-        let _ = std::fs::remove_file(&tmp);
         assert!(
             matches!(err, ProjectError::Sha256Mismatch { .. }),
             "wrong error variant: {err:?}"
@@ -397,15 +395,14 @@ mod tests {
             },
         );
 
-        let tmp = std::env::temp_dir().join("unlace_dod_rerun.unlace");
-        let _ = std::fs::remove_file(&tmp);
+        let dir = tempfile::tempdir().expect("tempdir");
+        let tmp = dir.path().join("unlace_dod_rerun.unlace");
         proj.save_to(&tmp).expect("save");
 
         // Simulate "rerun analysis": re-load the project as a fresh
         // pipeline would, then apply edits onto a freshly populated
         // symbol table (as if the analyser had just re-discovered names).
         let recovered = ProjectFile::load_and_verify(&tmp, "feedface").expect("load");
-        let _ = std::fs::remove_file(&tmp);
 
         let mut fresh_symbols: BTreeMap<u64, String> = BTreeMap::new();
         fresh_symbols.insert(0x401000, "sub_401000".into());

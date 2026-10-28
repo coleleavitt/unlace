@@ -152,7 +152,7 @@ oracle_driver   →  oracle_vectors.txt    (run the extracted proof)
 cargo test extraction_oracle             (Rust == extracted proof)
 ```
 
-It runs as a fifth axis in `scripts/quality_axes.sh` and skips gracefully when
+It runs as the `extraction oracle` row of `cargo xtask gate` and is skipped when
 the Rocq/OCaml toolchain is absent (the property fuzzer still guards the same
 laws unconditionally). Generated files (`*.ml`, `_build/`, `oracle_vectors.txt`)
 are gitignored — the source of truth is `Extract.v` + `oracle_driver.ml`.
@@ -251,10 +251,10 @@ Each `.v` documents its own scope; the load-bearing ones:
 
 ```bash
 bash scripts/verify_proofs.sh                          # build + coqchk, no admits/axioms
-RUSTC_WRAPPER= cargo test -p unlace-ir --test coq_conformance   # pin the mirror
+cargo test -p unlace-ir --test coq_conformance   # pin the mirror
 ```
 
-Both are wired into `scripts/quality_axes.sh` as a fourth "formal" axis.
+Both are wired into `cargo xtask gate` as the `rocq proofs` row.
 
 ## Novel results (beyond spec-mirroring)
 

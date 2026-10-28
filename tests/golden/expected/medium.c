@@ -93,7 +93,6 @@ int main(void) {
     __m128i c16; // xmm1
     _DWORD v28; // temp
     _DWORD v29; // temp
-    __m128i v37; // temp
     __int64 v27; // temp
     int v30; // temp
     int v44; // temp
@@ -156,10 +155,9 @@ int main(void) {
     __int64 v8 = (uintptr_t)(buf_0 + 64); // r8
     c0 = (uintptr_t)buf_0; c15 = 0;
     do {
-        v37 = *(_OWORD *)(c0); c15 = _mm_add_epi32(c15, v37); v27 = c0 + 0x10LL;
-        c0 = c0 + 0x10LL; v39 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27;
-        c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0);
-        c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
+        c15 = _mm_add_epi32(c15, *(_OWORD *)(c0)); v27 = c0 + 0x10LL; c0 = c0 + 0x10LL;
+        v39 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27);
+        c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0); c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
     } while ((uintptr_t)(buf_0 + 64) != c0);
     a1 = (uintptr_t)(buf_0 + 4); c0 = 0LL;
     __int64 c9 = (uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 4); // r11
@@ -175,12 +173,11 @@ int main(void) {
         c14 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8)); c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 8))) & 1);
         if ((uintptr_t)(buf_0 + 64) != (uintptr_t)(buf_0 + 8)) {
             do {
-                v28 = *(_DWORD *)(a2); c9 = v28; v28 = c0 < c9 ? c9 : c0;
-                v29 = *(_DWORD *)(a2 + 4LL); c9 = v29; v29 = v28;
-                v30 = v29 - c9; c0 = v29 < c9 ? c9 : v29; v27 = a2 + 8LL;
-                a2 = a2 + 8LL; v40 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27;
-                c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a2; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), a2);
-                c11 = !(__builtin_popcount(LOBYTE(v40)) & 1);
+                c9 = *(_DWORD *)(a2); v28 = c0 < c9 ? c9 : c0; c9 = *(_DWORD *)(a2 + 4LL);
+                v29 = v28; v30 = v29 - c9; c0 = v29 < c9 ? c9 : v29;
+                v27 = a2 + 8LL; a2 = a2 + 8LL; v40 = (uintptr_t)(buf_0 + 64) - v27;
+                c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)a2;
+                c14 = __OFSUB__((uintptr_t)(buf_0 + 64), a2); c11 = !(__builtin_popcount(LOBYTE(v40)) & 1);
             } while ((uintptr_t)(buf_0 + 64) != a2);
         }
         v28 = c0 + c2; c0 = c0 + c2; c2 = 0LL;
@@ -194,11 +191,10 @@ int main(void) {
             c14 = __OFSUB__((uintptr_t)(buf_0 + 64), (uintptr_t)(buf_0 + 8)); c11 = !(__builtin_popcount(LOBYTE((uintptr_t)(buf_0 + 64) - (uintptr_t)(buf_0 + 8))) & 1);
             if ((uintptr_t)(buf_0 + 64) != (uintptr_t)(buf_0 + 8)) {
                 do {
-                    v29 = *(_DWORD *)(c1); a2 = v29; c2 = c2 != a2 && a2 <= c2 ? a2 : c2;
-                    v29 = *(_DWORD *)(c1 + 4LL); a2 = v29; c2 = c2 != a2 && a2 <= c2 ? a2 : c2;
-                    v27 = c1 + 8LL; c1 = c1 + 8LL; v39 = (uintptr_t)(buf_0 + 64) - v27;
-                    c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c1;
-                    c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c1); c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
+                    a2 = *(_DWORD *)(c1); c2 = c2 != a2 && a2 <= c2 ? a2 : c2; a2 = *(_DWORD *)(c1 + 4LL);
+                    c2 = c2 != a2 && a2 <= c2 ? a2 : c2; v27 = c1 + 8LL; c1 = c1 + 8LL;
+                    v39 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27);
+                    c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c1; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c1); c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
                 } while ((uintptr_t)(buf_0 + 64) != c1);
             }
             c12 = c2 + v28 == 0; c13 = LOBYTE(c2 + v28 < 0); c10 = (c2 + c0) < c2;
@@ -206,12 +202,12 @@ int main(void) {
             __m128i c17 = 0; // xmm2
             c0 = (uintptr_t)buf_0;
             do {
-                v37 = *(_OWORD *)(c0); c15 = v37; v27 = c0 + 0x10LL;
-                c0 = c0 + 0x10LL; c16 = c15; c16 = _mm_mul_epu32(c15, c15);
-                c15 = _mm_srli_epi64(c15, 0x20); c15 = _mm_mul_epu32(c15, c15); c16 = _mm_shuffle_epi32(c16, 8);
-                c15 = _mm_shuffle_epi32(c15, 8); c16 = _mm_unpacklo_epi32(c16, c15); c17 = _mm_add_epi32(c17, c16);
-                v39 = (uintptr_t)(buf_0 + 64) - v27; c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27);
-                c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0; c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0); c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
+                c15 = *(_OWORD *)(c0); v27 = c0 + 0x10LL; c0 = c0 + 0x10LL;
+                c16 = c15; c16 = _mm_mul_epu32(c15, c15); c15 = _mm_srli_epi64(c15, 0x20);
+                c15 = _mm_mul_epu32(c15, c15); c16 = _mm_shuffle_epi32(c16, 8); c15 = _mm_shuffle_epi32(c15, 8);
+                c16 = _mm_unpacklo_epi32(c16, c15); c17 = _mm_add_epi32(c17, c16); v39 = (uintptr_t)(buf_0 + 64) - v27;
+                c12 = (uintptr_t)(buf_0 + 64) == v27; c13 = LOBYTE((uintptr_t)(buf_0 + 64) < v27); c10 = (_QWORD)(uintptr_t)(buf_0 + 64) < (_QWORD)c0;
+                c14 = __OFSUB__((uintptr_t)(buf_0 + 64), c0); c11 = !(__builtin_popcount(LOBYTE(v39)) & 1);
             } while ((uintptr_t)(buf_0 + 64) != c0);
             c0 = 0LL; c17 = _mm_add_epi32(c17, (_OWORD)c17 >> 0x40); c17 = _mm_add_epi32(c17, (_OWORD)c17 >> 0x20);
             c12 = LODWORD(c17) + c2 == 0; c13 = LOBYTE(LODWORD(c17) + c2 < 0); c10 = (LODWORD(c17) + c2) < LODWORD(c17);
@@ -560,9 +556,9 @@ int f_rec_fib(int a1) {
                                                                                         }
                                                                                         a1 = result; result = v33; c3 = c15;
                                                                                         c15 = LODWORD(c9); c9 = LODWORD(a1 - 1); c10 = LODWORD(c2 + c10 + 1LL);
-                                                                                        v36 = *(_DWORD *)((uintptr_t)(buf_40 + 48)); c1 = v36; c2 = 0LL;
-                                                                                        c8 = LODWORD(c9 - 2); c18 = c9 == 1; c19 = LOBYTE(c9 < 1);
-                                                                                        c16 = (_DWORD)c9 < (_DWORD)1; c17 = !(__builtin_popcount(LOBYTE(LODWORD(a1 - 1) - 1)) & 1);
+                                                                                        c1 = *(_DWORD *)((uintptr_t)(buf_40 + 48)); c2 = 0LL; c8 = LODWORD(c9 - 2);
+                                                                                        c18 = c9 == 1; c19 = LOBYTE(c9 < 1); c16 = (_DWORD)c9 < (_DWORD)1;
+                                                                                        c17 = !(__builtin_popcount(LOBYTE(LODWORD(a1 - 1) - 1)) & 1);
                                                                                     } while (c9 != 1 && 1 <= c9);
                                                                                 }
                                                                                 c10 = LODWORD(c10) + LODWORD(c9);
@@ -694,11 +690,10 @@ int f_ackermann(int a1, int a2) {
     _BOOL c13 = (_QWORD)c4 < (_QWORD)0x18LL; // CF
     _BOOL c17 = __OFSUB__(c4, 0x18LL); // OF
     while (1) {
-        v27 = *(_DWORD *)(c4 + 0xcLL);
-        _QWORD c2 = v27; // rdx
+        _QWORD c2 = *(_DWORD *)(c4 + 0xcLL); // rdx
         c5 = LODWORD(c2 - 1); c15 = !LODWORD(result); c16 = LOBYTE(LODWORD(result) < 0);
         if (LODWORD(result) != 0) {
-            c2 = c5; v27 = *(_DWORD *)(c4 + 0xcLL); c5 = v27;
+            c2 = c5; c5 = *(_DWORD *)(c4 + 0xcLL);
         } else {
             v29 = c5; c15 = !c5; c16 = LOBYTE(c5 < 0);
             c13 = 0; c17 = 0;
@@ -839,9 +834,8 @@ int f_ackermann(int a1, int a2) {
                                             }
                                         }
                                         a2 = LODWORD(result - 1); v_4 = c1; v35 = f_ackermann(a1, a2);
-                                        v27 = *(_DWORD *)(c4 + 8LL); c8 = v27; c1 = v_4;
-                                        c15 = !c8; c16 = LOBYTE(c8 < 0); c13 = 0;
-                                        c17 = 0;
+                                        c8 = *(_DWORD *)(c4 + 8LL); c1 = v_4; c15 = !c8;
+                                        c16 = LOBYTE(c8 < 0); c13 = 0; c17 = 0;
                                         if (c8 == 0) {
                                             goto label_37;
                                         }
@@ -944,16 +938,15 @@ int f_ackermann(int a1, int a2) {
                 break;
             }
         }
-        v27 = *(_DWORD *)(c4 + 0xcLL); c2 = v27; result = LODWORD(result) + 1;
-        c15 = !c2; c16 = LOBYTE(c2 < 0); c13 = 0;
-        c17 = 0;
+        c2 = *(_DWORD *)(c4 + 0xcLL); result = LODWORD(result) + 1; c15 = !c2;
+        c16 = LOBYTE(c2 < 0); c13 = 0; c17 = 0;
         if (c2 != 0) {
             continue;
         } else {
             break;
         }
     label_53:;
-        v27 = *(_DWORD *)(c4 + 0xcLL); c2 = v27; result = LODWORD(1LL) + 1;
+        c2 = *(_DWORD *)(c4 + 0xcLL); result = LODWORD(1LL) + 1;
         if (c2 == 0) {
             break;
         }

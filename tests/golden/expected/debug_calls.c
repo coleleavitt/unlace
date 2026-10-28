@@ -171,10 +171,9 @@ int square(int x) {
 /* Function:   cube | Address: 0x118e | Size: 0x28 (40 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   mul, square | Xrefs from: unknown */
 int cube(int x) {
     int v_4;
-    __int64 v10; // rax
     v_4 = x;
-    x = v_4; v10 = square(x);
-    int v9 = LODWORD(v10); // temp
+    x = v_4;
+    int v9 = LODWORD(square(x)); // temp
     return mul(v9, v_4);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -208,9 +207,7 @@ int max(int a, int b) {
     int c2; // rbp
     v_4 = LODWORD(a);
     // fixtures/src/calls.c:7
-    _DWORD v11 = *(_DWORD *)(c2 - 8); // temp
-    // fixtures/src/calls.c:7
-    _QWORD v2 = v11; // rdx
+    _QWORD v2 = *(_DWORD *)(c2 - 8); // rdx
     result = v_4;
     return result <= v2 ? v2 : result;
 }
@@ -228,9 +225,7 @@ int min(int a, int b) {
     int c2; // rbp
     v_4 = LODWORD(a);
     // fixtures/src/calls.c:8
-    _DWORD v11 = *(_DWORD *)(c2 - 8); // temp
-    // fixtures/src/calls.c:8
-    _QWORD v2 = v11; // rdx
+    _QWORD v2 = *(_DWORD *)(c2 - 8); // rdx
     result = v_4;
     return v2 <= result ? v2 : result;
 }
@@ -245,15 +240,12 @@ struct __anon0 {
 int clamp(int x, int lo, int hi) {
     int v_4;
     int v_12;
-    __int64 v13; // rax
     int c3; // rbp
     v_4 = x; v_12 = hi;
     // fixtures/src/calls.c:9
-    _DWORD v12 = *(_DWORD *)(c3 - 8); // temp
-    // fixtures/src/calls.c:9
-    hi = v12;
-    lo = hi; x = v_4; v13 = max(x, lo);
-    hi = LODWORD(v13); return min(hi, v_12);
+    hi = *(_DWORD *)(c3 - 8);
+    lo = hi; x = v_4; hi = LODWORD(max(x, lo));
+    return min(hi, v_12);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -280,22 +272,18 @@ int compute(int x) {
     int e;
     int v_16;
     int v_12;
-    __int64 v13; // rax
     __int64 v14; // rax
     __int64 v15; // rax
     __int64 v16; // rax
     __int64 v17; // rax
-    __int64 v18; // rax
     a = x;
-    x = a; v13 = add(x, 0xaLL); e = LODWORD(v13);
+    x = a; e = LODWORD(add(x, 0xaLL));
     v14 = sub(e, 3LL); v_16 = LODWORD(v14);
     v15 = square(v_16); v_12 = LODWORD(v15);
     v16 = cube(2LL);
     // fixtures/src/calls.c:16
-    _DWORD v9 = *(_DWORD *)((uintptr_t)&a - 8); // temp
-    // fixtures/src/calls.c:16
-    _QWORD c1 = v9; // rdx
-    v17 = sub(v_12, c1); v18 = abs_val(LODWORD(v17)); v_4 = LODWORD(v18);
+    _QWORD c1 = *(_DWORD *)((uintptr_t)&a - 8); // rdx
+    v17 = sub(v_12, c1); v_4 = LODWORD(abs_val(LODWORD(v17)));
     return clamp(v_4, 0LL, 0x64LL);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)

@@ -168,14 +168,13 @@ char * identify(Animal *a1) {
     __int64 result; // rax
     __int64 c1; // rcx
     __int64 c3; // rsp
-    _QWORD v10; // temp
     if (a1 == 0LL) {
         result = "unknown"; return "unknown";
     } else {
         __int64 c4 = 0x3d40LL; // rsi
         /* dynamic cast */
         v14 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
-        v10 = *(_QWORD *)(c3 + 8LL); a1 = v10;
+        a1 = *(_QWORD *)(c3 + 8LL);
         __int64 c2 = v14; // rdx
         if (v14 == 0LL) {
             c2 = 0x3d68LL; c4 = 0x3d40LL;
@@ -185,8 +184,8 @@ char * identify(Animal *a1) {
             if (v15 == 0LL) {
                 result = "unknown"; return result;
             } else {
-                v10 = *(_QWORD *)(v15); result = v10; c1 = 0x1310LL;
-                v10 = *(_QWORD *)(result); c2 = v10; result = "meow";
+                result = *(_QWORD *)(v15); c1 = 0x1310LL; c2 = *(_QWORD *)(result);
+                result = "meow";
                 if (c2 == c1) {
                     return "meow";
                 } else {
@@ -194,8 +193,8 @@ char * identify(Animal *a1) {
                 }
             }
         } else {
-            v10 = *(_QWORD *)(v14); result = v10; c4 = 0x1300LL;
-            v10 = *(_QWORD *)(result); c1 = v10; result = "woof";
+            result = *(_QWORD *)(v14); c4 = 0x1300LL; c1 = *(_QWORD *)(result);
+            result = "woof";
             if (c1 != c4) {
                 a1 = c2; return v14->speak();
             } else {

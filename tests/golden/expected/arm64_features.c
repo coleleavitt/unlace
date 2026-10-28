@@ -85,5 +85,6 @@ void __aapcs bitfield_test(void) {
     int v4; // r31
     *(_QWORD *)(v4 - 16) = v2; *(_QWORD *)(v4 - 24) = v3;
     __int64 v7 = __isb__(v1, 4LL, 8LL); // temp
-    __dmb__(); return;
+    __dmb__();
+    return;
 }

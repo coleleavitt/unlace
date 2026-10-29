@@ -1,0 +1,23 @@
+__int64 (__fastcall *__fastcall sub_30E040(__m128i *a1, __int64 a2))(__int64, __m128i *)
+{
+  __int64 v3; // rdi
+  __int64 (__fastcall *result)(__int64, __m128i *); // rax
+  __m128i v5; // xmm0
+
+  v3 = *(_QWORD *)(a2 + 112);
+  result = *(__int64 (__fastcall **)(__int64, __m128i *))(*(_QWORD *)v3 + 392LL);
+  if ( (char *)result != (char *)sub_30DB60 )
+  {
+    result = (__int64 (__fastcall *)(__int64, __m128i *))result(v3, a1 + 2);
+    if ( (_BYTE)result )
+    {
+      v5 = _mm_loadu_si128(a1 + 3);
+      return (__int64 (__fastcall *)(__int64, __m128i *))sub_30DE90(
+                                                           a1,
+                                                           "runtime.duffzero",
+                                                           _mm_add_epi64(v5, _mm_srli_si128(v5, 8)).m128i_i64[0]);
+    }
+  }
+  return result;
+}
+

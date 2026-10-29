@@ -60,11 +60,18 @@ pub fn detect_irreducible_regions_in_cfg(cfg: &ControlFlowGraph) -> Vec<Irreduci
     let synthetic: BTreeSet<BlockId> = [cfg.exit_block(), cfg.unknown_block()]
         .into_iter()
         .collect();
+    // A block no path from the entry reaches cannot enter a region, so its
+    // edges must not count as entries (lifter padding falls through into
+    // whatever follows it, often a loop header).
+    let reachable = cfg.reachable_blocks();
 
     let sccs = tarjan_scc(cfg, &synthetic);
     let mut regions = Vec::new();
 
     for scc in sccs {
+        if scc.is_disjoint(&reachable) {
+            continue;
+        }
         if scc.len() == 1 {
             let only = *scc.iter().next().expect("singleton SCC has one block");
             let has_self_loop = cfg
@@ -76,7 +83,7 @@ pub fn detect_irreducible_regions_in_cfg(cfg: &ControlFlowGraph) -> Vec<Irreduci
             }
         }
 
-        let entry_blocks = collect_entry_blocks(&scc, cfg, &synthetic);
+        let entry_blocks = collect_entry_blocks(&scc, cfg, &reachable);
 
         // A natural loop has exactly one entry. > 1 entry → irreducible.
         if entry_blocks.len() > 1 {
@@ -90,19 +97,16 @@ pub fn detect_irreducible_regions_in_cfg(cfg: &ControlFlowGraph) -> Vec<Irreduci
     regions
 }
 
-/// Blocks of `scc` that have at least one predecessor outside `scc`.
+/// Blocks of `scc` that have at least one reachable predecessor outside `scc`.
 fn collect_entry_blocks(
     scc: &BTreeSet<BlockId>,
     cfg: &ControlFlowGraph,
-    synthetic: &BTreeSet<BlockId>,
+    reachable: &BTreeSet<BlockId>,
 ) -> BTreeSet<BlockId> {
     let mut entries = BTreeSet::new();
     for &bid in scc {
         for (pred, _) in cfg.edges_to(bid) {
-            if synthetic.contains(&pred) {
-                continue;
-            }
-            if !scc.contains(&pred) {
+            if reachable.contains(&pred) && !scc.contains(&pred) {
                 entries.insert(bid);
                 break;
             }
@@ -417,6 +421,57 @@ mod tests {
 
         let regions = detect_irreducible_regions(&ssa);
         assert!(regions.is_empty(), "natural loop has 1 entry: {regions:?}");
+    }
+
+    /// A natural loop whose latch is preceded in address order by an
+    /// unreachable padding block (`BB_1`, no terminator) that falls through
+    /// into it:
+    ///
+    ///     BB_0 ──→ BB_3 (header) ⇄ BB_2 (latch) ←── BB_1 (padding, no preds)
+    ///                │
+    ///                └→ BB_4
+    ///
+    /// The padding edge must not make the latch a second loop entry.
+    #[test]
+    fn unreachable_fallthrough_predecessor_is_not_an_entry() {
+        let cond = Varnode::reg(256, 1);
+        let mut func = Function::new("padded_loop", BlockId(0), 0x4000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0x4000));
+        bb0.successors = smallvec![BlockId(3)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::unique(0, 1),
+            smallvec![Varnode::constant(0, 1)],
+            0x4010,
+        ));
+        bb1.successors = smallvec![BlockId(2)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x4020));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(cbranch_insn(cond, 0x4030));
+        bb3.successors = smallvec![BlockId(2), BlockId(4)];
+
+        let mut bb4 = BasicBlock::new(BlockId(4));
+        bb4.insns.push(ctrl_insn(IrOp::Return, 0x4040));
+
+        for block in [bb0, bb1, bb2, bb3, bb4] {
+            func.insert_block(block);
+        }
+        let ssa = build_ssa(func);
+        assert_eq!(
+            ssa.cfg.predecessors(BlockId(2)),
+            vec![BlockId(1), BlockId(3)]
+        );
+
+        let regions = detect_irreducible_regions(&ssa);
+        assert!(regions.is_empty(), "padding is not an entry: {regions:?}");
     }
 
     #[test]

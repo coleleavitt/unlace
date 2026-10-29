@@ -6,6 +6,8 @@
 //! handles a different code path via the `object` crate. These standalone
 //! parsers exist for synthetic / fuzzing use and future raw-RVA decode paths.
 
+use unlace_ir::eh::SehFilter;
+
 pub const UNW_FLAG_EHANDLER: u8 = 0x1;
 pub const UNW_FLAG_UHANDLER: u8 = 0x2;
 pub const UNW_FLAG_CHAININFO: u8 = 0x4;
@@ -22,12 +24,103 @@ pub struct SehInfo {
     pub functions: Vec<SehFunction>,
 }
 
+impl SehInfo {
+    /// The entry of the function whose range starts at `addr`.
+    pub fn function_at(&self, addr: u64) -> Option<&SehFunction> {
+        self.functions.iter().find(|f| f.begin == addr)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SehFunction {
     pub begin: u64,
     pub end: u64,
     pub unwind_info: UnwindInfo,
+    /// VA of the language-specific handler (`__C_specific_handler`,
+    /// `__CxxFrameHandler3`, `__GSHandlerCheck`, ...).
     pub handler: Option<u64>,
+    /// The `__C_specific_handler` scope table, when the handler data decodes
+    /// as one. Empty for C++ EH, GS-only handlers, and chained entries.
+    pub scopes: Vec<SehScope>,
+}
+
+/// One `__C_specific_handler` scope record (`SCOPE_TABLE::ScopeRecord[i]`)
+/// with its RVAs rebased to VAs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SehScope {
+    /// First instruction of the `__try` body.
+    pub begin: u64,
+    /// One past the last instruction of the `__try` body.
+    pub end: u64,
+    pub handler: SehScopeHandler,
+}
+
+/// What a scope record protects its `__try` body with.
+///
+/// The record's `JumpTarget` discriminates: zero means a termination
+/// handler (`__finally`) whose funclet is `HandlerAddress`; otherwise it is
+/// the `__except` body and `HandlerAddress` is the filter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SehScopeHandler {
+    /// `__except (filter) { }` with the handler body at `target`, inside
+    /// the function.
+    Except { filter: SehFilter, target: u64 },
+    /// `__finally { }`, outlined into the funclet at `funclet`.
+    Finally { funclet: u64 },
+}
+
+/// Most scope records a function is allowed before the table is rejected
+/// as not being a scope table at all.
+const MAX_SCOPE_RECORDS: usize = 4096;
+
+/// Decode the `__C_specific_handler` data (`u32 Count` then 16-byte scope
+/// records) that starts at `buf[0]`, for the function `func` (VA range).
+///
+/// Other language handlers put different data here (`__CxxFrameHandler3`
+/// a `FuncInfo` RVA, `__GSHandlerCheck` a cookie offset), so the table is
+/// accepted only when every record is a well-formed sub-range of the
+/// function with a non-zero handler. `None` rejects the data.
+pub fn parse_scope_table(
+    buf: &[u8],
+    image_base: u64,
+    func: std::ops::Range<u64>,
+) -> Option<Vec<SehScope>> {
+    let count = read_u32(buf, 0)? as usize;
+    if count == 0 || count > MAX_SCOPE_RECORDS {
+        return None;
+    }
+    let mut scopes = Vec::with_capacity(count);
+    for i in 0..count {
+        let off = 4 + i * 16;
+        let begin = image_base + u64::from(read_u32(buf, off)?);
+        let end = image_base + u64::from(read_u32(buf, off + 4)?);
+        let handler_address = read_u32(buf, off + 8)?;
+        let jump_target = read_u32(buf, off + 12)?;
+        if begin >= end || begin < func.start || end > func.end || handler_address == 0 {
+            return None;
+        }
+        let handler = if jump_target == 0 {
+            SehScopeHandler::Finally {
+                funclet: image_base + u64::from(handler_address),
+            }
+        } else {
+            let target = image_base + u64::from(jump_target);
+            if !func.contains(&target) {
+                return None;
+            }
+            let filter = match handler_address {
+                1 => SehFilter::ExecuteHandler,
+                rva => SehFilter::Funclet(image_base + u64::from(rva)),
+            };
+            SehScopeHandler::Except { filter, target }
+        };
+        scopes.push(SehScope {
+            begin,
+            end,
+            handler,
+        });
+    }
+    Some(scopes)
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +133,17 @@ pub struct UnwindInfo {
     pub frame_offset: u8,
     pub unwind_codes_raw: Vec<u16>,
     pub handler_rva: Option<u32>,
+}
+
+impl UnwindInfo {
+    /// Byte offset of the language-specific handler data from the start of
+    /// the record: the fixed header, the unwind codes padded to a `u32`
+    /// boundary, and the handler RVA. `None` without a handler.
+    pub fn handler_data_offset(&self) -> Option<usize> {
+        self.handler_rva?;
+        let padded_codes = (usize::from(self.count_of_codes) + 1) & !1;
+        Some(4 + padded_codes * 2 + 4)
+    }
 }
 
 fn read_u32(buf: &[u8], off: usize) -> Option<u32> {
@@ -565,6 +669,90 @@ mod tests {
         assert_eq!(ui.version, 1);
         assert_eq!(ui.flags, UNW_FLAG_EHANDLER);
         assert_eq!(ui.handler_rva, Some(0xABCD_1234));
+    }
+
+    fn scope_table(records: &[(u32, u32, u32, u32)]) -> Vec<u8> {
+        let mut buf = (records.len() as u32).to_le_bytes().to_vec();
+        for &(begin, end, handler, target) in records {
+            for field in [begin, end, handler, target] {
+                buf.extend_from_slice(&field.to_le_bytes());
+            }
+        }
+        buf
+    }
+
+    #[test]
+    fn handler_data_follows_padded_codes_and_handler_rva() {
+        let mut buf = vec![0x01 | (UNW_FLAG_EHANDLER << 3), 0x0a, 0x03, 0x05];
+        buf.extend_from_slice(&[0u8; 8]); // three codes, padded to four
+        buf.extend_from_slice(&0x1000u32.to_le_bytes());
+        let ui = parse_unwind_info(&buf).unwrap();
+        assert_eq!(ui.handler_data_offset(), Some(buf.len()));
+
+        let plain = parse_unwind_info(&[0x01, 0x05, 0x00, 0x00]).unwrap();
+        assert_eq!(plain.handler_data_offset(), None);
+    }
+
+    #[test]
+    fn parse_scope_table_except_and_finally_records() {
+        // clang-cl output: `__except (1)`, `__except (filter)`, `__finally`.
+        let buf = scope_table(&[
+            (0x1022, 0x1028, 1, 0x102e),
+            (0x1042, 0x1048, 0x1058, 0x1051),
+            (0x107e, 0x1084, 0x109b, 0),
+        ]);
+        let base = 0x1_4000_0000;
+        let scopes = parse_scope_table(&buf, base, base + 0x1018..base + 0x10c0).unwrap();
+        assert_eq!(
+            scopes,
+            vec![
+                SehScope {
+                    begin: base + 0x1022,
+                    end: base + 0x1028,
+                    handler: SehScopeHandler::Except {
+                        filter: SehFilter::ExecuteHandler,
+                        target: base + 0x102e,
+                    },
+                },
+                SehScope {
+                    begin: base + 0x1042,
+                    end: base + 0x1048,
+                    handler: SehScopeHandler::Except {
+                        filter: SehFilter::Funclet(base + 0x1058),
+                        target: base + 0x1051,
+                    },
+                },
+                SehScope {
+                    begin: base + 0x107e,
+                    end: base + 0x1084,
+                    handler: SehScopeHandler::Finally {
+                        funclet: base + 0x109b,
+                    },
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_scope_table_rejects_other_handler_data() {
+        let func = 0x1000..0x1100;
+        // `__CxxFrameHandler3`: a FuncInfo RVA where the count would be.
+        let mut funcinfo_rva = 0x2340u32.to_le_bytes().to_vec();
+        funcinfo_rva.extend_from_slice(&[0u8; 32]);
+        assert_eq!(parse_scope_table(&funcinfo_rva, 0, func.clone()), None);
+        // `__GSHandlerCheck`: a small cookie offset, then nothing.
+        assert_eq!(
+            parse_scope_table(&0x20u32.to_le_bytes(), 0, func.clone()),
+            None
+        );
+        // A record outside the function, or an empty one.
+        let outside = scope_table(&[(0x1200, 0x1210, 1, 0x1220)]);
+        assert_eq!(parse_scope_table(&outside, 0, func.clone()), None);
+        let empty = scope_table(&[(0x1020, 0x1020, 1, 0x1030)]);
+        assert_eq!(parse_scope_table(&empty, 0, func.clone()), None);
+        // An `__except` body outside the function.
+        let far_target = scope_table(&[(0x1020, 0x1030, 1, 0x1200)]);
+        assert_eq!(parse_scope_table(&far_target, 0, func), None);
     }
 
     // -----------------------------------------------------------------

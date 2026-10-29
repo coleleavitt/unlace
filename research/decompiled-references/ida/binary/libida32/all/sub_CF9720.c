@@ -1,0 +1,35 @@
+__int64 __fastcall sub_CF9720(__int64 a1, __int64 a2)
+{
+  __int64 v2; // r13
+  __int64 v3; // rbx
+  __int64 v4; // rbx
+  unsigned int v5; // ebp
+  __int64 v6; // rbx
+  _BYTE v8[48]; // [rsp+0h] [rbp-68h] BYREF
+  __int64 v9; // [rsp+30h] [rbp-38h]
+  int v10; // [rsp+38h] [rbp-30h]
+
+  v2 = *(_QWORD *)(a1 + 176);
+  v3 = sub_DFDA20(v2, 64);
+  sub_DFF520(v8);
+  v9 = *(_QWORD *)(v3 + 48);
+  v10 = *(_DWORD *)(v3 + 56);
+  sub_DFDA50(v2, 64);
+  v4 = sub_DFDA20(*(_QWORD *)(a1 + 176), 48);
+  v5 = sub_DA8220(a1, a2, v4);
+  if ( (_BYTE)v5 )
+  {
+    if ( !*(_DWORD *)(v4 + 24) && *(_QWORD *)(v4 + 32) && *(_DWORD *)(v4 + 40) )
+    {
+      sub_E00FC0(v4);
+      sub_DFFFB0(v4);
+    }
+    v6 = sub_CEB200(v4);
+    sub_DFF5C0(v6, v8);
+    *(_QWORD *)(v6 + 48) = v9;
+    *(_DWORD *)(v6 + 56) = v10;
+  }
+  sub_DFF560(v8);
+  return v5;
+}
+

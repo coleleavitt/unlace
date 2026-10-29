@@ -1,0 +1,16 @@
+__int64 __fastcall sub_4CC980(__int64 a1)
+{
+  __int64 v2; // rdi
+  __int64 v3; // rdi
+  __int64 result; // rax
+
+  v2 = *(_QWORD *)(a1 + 40);
+  if ( v2 )
+  {
+    sub_4C6530(v2);
+    v3 = *(_QWORD *)(a1 + 40);
+    *(_DWORD *)(a1 + 152) = 0;
+    return sub_4C6A50(v3);
+  }
+  return result;
+}

@@ -1,0 +1,26 @@
+/* Split from IDA decompile_many output for CodeGraph indexing. */
+// Name: sub_7CE34
+// Address: 0x0007CE34
+
+//----- (0007CE34) --------------------------------------------------------
+int __fastcall sub_7CE34(void **a1, __int64 *a2)
+{
+  __int64 v2; // r4
+  int v5; // r0
+
+  v2 = *a2;
+  HIDWORD(v2) = 8 * *((_DWORD *)a2 + 1);
+  if ( HIDWORD(v2) )
+  {
+    HIDWORD(v2) = 0;
+    do
+    {
+      v5 = sub_7C1B4(a1, (unsigned int *)v2);
+      LODWORD(v2) = v2 + 8;
+      if ( v5 )
+        HIDWORD(v2) = v5;
+    }
+    while ( (_DWORD)v2 != *(_DWORD *)a2 + 8 * *((_DWORD *)a2 + 1) );
+  }
+  return HIDWORD(v2);
+}

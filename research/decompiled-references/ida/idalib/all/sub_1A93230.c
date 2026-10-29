@@ -1,0 +1,36 @@
+__int64 __fastcall sub_1A93230(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5, __int64 a6)
+{
+  __int64 v6; // rax
+  unsigned __int64 v7; // rax
+  __int64 result; // rax
+  __int64 v9; // rdx
+
+  v6 = *(_QWORD *)(a1 + 120);
+  if ( !v6 )
+  {
+    sub_A794E0((__int64 *)(*(_QWORD *)(a1 + 96) + 88LL), *(_QWORD *)(a1 + 96), a3, a4, a5, a6);
+    v7 = *(_QWORD *)(a1 + 120) & 0xFFFFFFFFFFFFFFF8LL;
+    if ( v7 )
+      goto LABEL_3;
+    return 0;
+  }
+  v7 = v6 & 0xFFFFFFFFFFFFFFF8LL;
+  if ( !v7 )
+    return 0;
+LABEL_3:
+  if ( (*(_BYTE *)(v7 + 72) & 1) != 0 )
+  {
+    sub_BA8900(a1);
+    v7 = *(_QWORD *)(a1 + 120) & 0xFFFFFFFFFFFFFFF8LL;
+  }
+  for ( result = *(_QWORD *)(v7 + 56); result; result = *(_QWORD *)(result + 128) )
+  {
+    if ( *(char *)(result + 28) >= 0 )
+    {
+      v9 = *(_QWORD *)(result + 40);
+      if ( (v9 & 7) != 0 || (v9 & 0xFFFFFFFFFFFFFFF8LL) == 0 )
+        break;
+    }
+  }
+  return result;
+}

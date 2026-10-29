@@ -1,0 +1,31 @@
+char *__fastcall sub_FF7BF0(int a1)
+{
+  char **v1; // rax
+
+  v1 = (char **)&unk_2B54A00;
+  while ( a1 != *(_DWORD *)v1 )
+  {
+    if ( a1 == *((_DWORD *)v1 + 6) )
+    {
+      v1 += 3;
+      goto LABEL_9;
+    }
+    if ( a1 == *((_DWORD *)v1 + 12) )
+    {
+      v1 += 6;
+      goto LABEL_9;
+    }
+    if ( a1 == *((_DWORD *)v1 + 18) )
+    {
+      v1 += 9;
+LABEL_9:
+      if ( v1 == &off_2B551E0 )
+        return "unknown";
+      return v1[2];
+    }
+    v1 += 12;
+    if ( v1 == &off_2B551E0 )
+      return "unknown";
+  }
+  return v1[2];
+}

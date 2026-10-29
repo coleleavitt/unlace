@@ -30,6 +30,7 @@ use unlace_ir::stack::StackSpec;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
+use crate::stack_address::FrameCoordinates;
 
 pub struct StackPointerTrackingPass;
 
@@ -53,26 +54,37 @@ impl Pass for StackPointerTrackingPass {
         let (sp_delta_at, block_entry_sp_delta, dynamic_sp, min_depth) =
             walk_sp_deltas(func, &spec);
         let stack_holes = compute_stack_holes(func, min_depth);
-        let saved_register_slots =
-            classify_saved_register_slots(func, &spec, &block_entry_sp_delta, &sp_delta_at);
+
+        let mut changed = sp_delta_at != func.sp_delta_at
+            || stack_holes != func.stack_holes
+            || dynamic_sp != func.dynamic_sp
+            || block_entry_sp_delta != func.block_entry_sp_delta;
+        func.sp_delta_at = sp_delta_at;
+        func.stack_holes = stack_holes;
+        func.dynamic_sp = dynamic_sp;
+        func.block_entry_sp_delta = block_entry_sp_delta;
+
+        // Everything below is expressed in the frame coordinates the deltas
+        // stored just above define.
+        let coords = FrameCoordinates::of(func, &spec);
+        let saved_register_slots = classify_saved_register_slots(func, &spec, &coords);
         let frame_holes = compute_frame_holes(func, &spec, &saved_register_slots);
-        let stack_accesses = collect_stack_accesses(func, &spec, &sp_delta_at);
+        changed |= frame_holes != func.frame_holes
+            || saved_register_slots != func.saved_register_slots;
+        func.frame_holes = frame_holes;
+        func.saved_register_slots = saved_register_slots;
+
+        let stack_accesses = collect_stack_accesses(func, &spec, &coords);
+        changed |= stack_accesses != func.stack_accesses;
         stack_access_trace_line(
             func,
             format_args!(
-                "summary changed_pending={} sp_points={} block_entries={} stack_holes={} frame_holes={} saved_slots={} accesses={} resolved={} lost={} frame_present={}",
-                sp_delta_at != func.sp_delta_at
-                    || stack_holes != func.stack_holes
-                    || dynamic_sp != func.dynamic_sp
-                    || block_entry_sp_delta != func.block_entry_sp_delta
-                    || frame_holes != func.frame_holes
-                    || saved_register_slots != func.saved_register_slots
-                    || stack_accesses != func.stack_accesses,
-                sp_delta_at.len(),
-                block_entry_sp_delta.len(),
-                stack_holes.len(),
-                frame_holes.len(),
-                saved_register_slots.len(),
+                "summary changed_pending={changed} sp_points={} block_entries={} stack_holes={} frame_holes={} saved_slots={} accesses={} resolved={} lost={} frame_present={}",
+                func.sp_delta_at.len(),
+                func.block_entry_sp_delta.len(),
+                func.stack_holes.len(),
+                func.frame_holes.len(),
+                func.saved_register_slots.len(),
                 stack_accesses.len(),
                 stack_accesses
                     .iter()
@@ -85,21 +97,6 @@ impl Pass for StackPointerTrackingPass {
                 func.stack_frame.is_some(),
             ),
         );
-
-        let changed = sp_delta_at != func.sp_delta_at
-            || stack_holes != func.stack_holes
-            || dynamic_sp != func.dynamic_sp
-            || block_entry_sp_delta != func.block_entry_sp_delta
-            || frame_holes != func.frame_holes
-            || saved_register_slots != func.saved_register_slots
-            || stack_accesses != func.stack_accesses;
-
-        func.sp_delta_at = sp_delta_at;
-        func.stack_holes = stack_holes;
-        func.dynamic_sp = dynamic_sp;
-        func.block_entry_sp_delta = block_entry_sp_delta;
-        func.frame_holes = frame_holes;
-        func.saved_register_slots = saved_register_slots;
         func.stack_accesses = stack_accesses;
 
         Ok(changed)
@@ -114,7 +111,7 @@ impl Pass for StackPointerTrackingPass {
 fn collect_stack_accesses(
     func: &SsaFunction,
     spec: &StackSpec,
-    sp_delta_at: &BTreeMap<(BlockId, usize), i64>,
+    coords: &FrameCoordinates,
 ) -> Vec<StackAccess> {
     let mut out = Vec::new();
     for (&bid, block) in &func.function.blocks {
@@ -138,7 +135,7 @@ fn collect_stack_accesses(
                 continue;
             }
             let addr = &insn.inputs[addr_idx];
-            let Some(delta) = resolve_addr_to_sp_offset(func, bid, idx, addr, spec, sp_delta_at)
+            let Some(delta) = resolve_addr_to_sp_offset(func, bid, idx, addr, spec, coords)
             else {
                 stack_access_trace_line(
                     func,
@@ -232,9 +229,9 @@ fn resolve_addr_to_sp_offset(
     insn_idx: usize,
     addr: &Varnode,
     spec: &StackSpec,
-    sp_delta_at: &BTreeMap<(BlockId, usize), i64>,
+    coords: &FrameCoordinates,
 ) -> Option<i64> {
-    let entry_delta = sp_delta_at.get(&(bid, insn_idx)).copied().unwrap_or(0);
+    let entry_delta = coords.sp_offset(func, (bid, insn_idx));
     if spec.is_sp(addr) {
         return Some(entry_delta);
     }
@@ -285,33 +282,58 @@ fn resolve_addr_to_sp_offset(
     None
 }
 
-/// Dominator-order traversal of all blocks reachable from the dom-tree
-/// root, with unreachable blocks appended deterministically.
-fn dom_order(func: &SsaFunction) -> Vec<BlockId> {
-    let mut out = Vec::new();
-    let mut q = VecDeque::new();
-    q.push_back(func.dom_tree.root());
-    while let Some(b) = q.pop_front() {
-        if !func.function.blocks.contains_key(&b) {
-            continue;
-        }
-        out.push(b);
-        for child in func.dom_tree.children(b) {
-            q.push_back(*child);
+/// Reverse postorder over the CFG from the entry block, so every forward
+/// predecessor of a block is walked before the block itself (a loop header
+/// still follows its entry edge); unreachable blocks are appended in id
+/// order.
+fn reverse_postorder(func: &SsaFunction) -> Vec<BlockId> {
+    let entry = func.dom_tree.root();
+    let mut seen: BTreeSet<BlockId> = BTreeSet::new();
+    let mut postorder = Vec::new();
+    let mut stack: Vec<(BlockId, VecDeque<BlockId>)> = Vec::new();
+    let successors = |bid: BlockId| -> VecDeque<BlockId> {
+        let mut succs: Vec<BlockId> = func
+            .cfg
+            .edges_from(bid)
+            .into_iter()
+            .map(|(succ, _)| succ)
+            .filter(|succ| func.function.blocks.contains_key(succ))
+            .collect();
+        succs.sort();
+        succs.dedup();
+        succs.into_iter().collect()
+    };
+    if func.function.blocks.contains_key(&entry) {
+        seen.insert(entry);
+        stack.push((entry, successors(entry)));
+    }
+    while let Some((bid, succs)) = stack.last_mut() {
+        match succs.pop_front() {
+            Some(succ) if seen.insert(succ) => {
+                let next = successors(succ);
+                stack.push((succ, next));
+            }
+            Some(_) => {}
+            None => {
+                postorder.push(*bid);
+                stack.pop();
+            }
         }
     }
+    let mut out: Vec<BlockId> = postorder.into_iter().rev().collect();
     for &bid in func.function.blocks.keys() {
-        if !out.contains(&bid) {
+        if !seen.contains(&bid) {
             out.push(bid);
         }
     }
     out
 }
 
-/// Walk every block in dom-order, threading the SP delta through every
-/// instruction. Returns `(sp_delta_at, block_entry_sp_delta, dynamic_sp,
-/// min_depth_seen)`. The block-entry map starts with `0` for the entry
-/// block and propagates per-block deltas to CFG successors fall-through.
+/// Walk every block in reverse postorder, threading the SP delta through
+/// every instruction. Returns `(sp_delta_at, block_entry_sp_delta,
+/// dynamic_sp, min_depth_seen)`. The block-entry map starts with `0` for the
+/// entry block; each block's exit delta seeds its CFG successors, and the
+/// first predecessor walked wins.
 fn walk_sp_deltas(
     func: &SsaFunction,
     spec: &StackSpec,
@@ -328,7 +350,7 @@ fn walk_sp_deltas(
     let mut dynamic_sp = false;
     let mut min_depth: i64 = 0;
 
-    for bid in dom_order(func) {
+    for bid in reverse_postorder(func) {
         let block = match func.function.blocks.get(&bid) {
             Some(b) => b,
             None => continue,
@@ -498,10 +520,10 @@ fn callee_saved_x86_64(cc: CallingConvention, reg_offset: u64) -> Option<&'stati
     let sysv = match reg_offset {
         0x18 => Some("rbx"),
         0x28 => Some("rbp"),
-        0x80 => Some("r12"),
-        0x88 => Some("r13"),
-        0x90 => Some("r14"),
-        0x98 => Some("r15"),
+        0x60 => Some("r12"),
+        0x68 => Some("r13"),
+        0x70 => Some("r14"),
+        0x78 => Some("r15"),
         _ => None,
     };
     if sysv.is_some() {
@@ -534,15 +556,12 @@ fn callee_saved_x86_64(cc: CallingConvention, reg_offset: u64) -> Option<&'stati
 fn classify_saved_register_slots(
     func: &SsaFunction,
     spec: &StackSpec,
-    block_entry_sp_delta: &BTreeMap<BlockId, i64>,
-    sp_delta_at: &BTreeMap<(BlockId, usize), i64>,
+    coords: &FrameCoordinates,
 ) -> BTreeSet<i64> {
     const PROLOGUE_WINDOW: usize = 32;
     let mut slots: BTreeSet<i64> = BTreeSet::new();
     let cc = func.calling_convention;
-    let frame_pointer_delta = frame_pointer_entry_delta(func, spec, sp_delta_at);
     for (&bid, block) in &func.function.blocks {
-        let block_delta = block_entry_sp_delta.get(&bid).copied().unwrap_or(0);
         for (idx, insn) in block.insns.iter().take(PROLOGUE_WINDOW).enumerate() {
             if insn.op != IrOp::Store || insn.inputs.len() < 3 {
                 continue;
@@ -556,36 +575,18 @@ fn classify_saved_register_slots(
             if callee_saved_x86_64(cc, value.offset).is_none() {
                 continue;
             }
+            // The saved frame pointer sits at frame-pointer offset 0, which
+            // no frame-pointer-relative local can use; its push is frame
+            // setup, so there is nothing to hide.
+            if coords.has_frame_pointer() && spec.is_fp(value) {
+                continue;
+            }
             let addr = &insn.inputs[1];
-            if let Some(fp_delta) = frame_pointer_delta {
-                // The saved frame pointer sits at frame-pointer offset 0, which
-                // no frame-pointer-relative local can use; its push is frame
-                // setup, so there is nothing to hide.
-                if spec.is_fp(value) {
-                    continue;
-                }
-                if let Some((offset, StackBase::Register { reg, idx: read_idx })) =
-                    resolve_stack_addr_in_block(&block.insns, idx, addr, spec, 0)
-                {
-                    let base_delta = if spec.is_fp(&reg) {
-                        fp_delta
-                    } else {
-                        sp_delta_at
-                            .get(&(bid, read_idx))
-                            .copied()
-                            .unwrap_or(block_delta)
-                    };
-                    slots.insert(base_delta + offset - fp_delta);
-                }
-                continue;
-            }
-            if let Some(&offset) = func.stack_offset_hints.get(&(bid, idx)) {
-                slots.insert(offset);
-                continue;
-            }
-            if let Some((offset, _)) = resolve_stack_addr_in_block(&block.insns, idx, addr, spec, 0)
+            if let Some((offset, StackBase::Register { reg, idx: read_idx })) =
+                resolve_stack_addr_in_block(&block.insns, idx, addr, spec, 0)
+                && let Some(base) = coords.base_offset(func, spec, (bid, read_idx), &reg)
             {
-                slots.insert(block_delta + offset);
+                slots.insert(base + offset);
             }
         }
     }
@@ -594,7 +595,7 @@ fn classify_saved_register_slots(
 
 /// Entry-relative SP delta at which the prologue copies SP into the frame
 /// pointer, or `None` when the function does not establish one.
-fn frame_pointer_entry_delta(
+pub(crate) fn frame_pointer_entry_delta(
     func: &SsaFunction,
     spec: &StackSpec,
     sp_delta_at: &BTreeMap<(BlockId, usize), i64>,
@@ -1233,6 +1234,7 @@ mod tests {
         );
         ssa.stack_frame = Some(StackFrame {
             locals,
+            sp_offset_at_addr: std::collections::BTreeMap::new(),
             frame_size: 8,
             max_pos_offset: 0,
             min_neg_offset: -8,
@@ -1410,7 +1412,7 @@ mod tests {
     }
 
     /// `sub rsp, 0x18; mov [rsp+8], rdi`: the spill is below the entry SP,
-    /// so it is a local, not an incoming stack argument at `+8`.
+    /// so it is the local at `-16`, not an incoming stack argument at `+8`.
     #[test]
     fn spill_above_moved_rsp_is_local_not_stack_arg() {
         let adjusted = Varnode::unique(0, 8);
@@ -1438,10 +1440,15 @@ mod tests {
         StackPointerTrackingPass.run(&mut ssa).unwrap();
 
         let frame = recover_stack_frame(&ssa);
+        assert!(
+            !frame.locals.contains_key(&8),
+            "the spill must not be keyed by its rsp-relative offset: {:?}",
+            frame.locals
+        );
         let slot = frame
             .locals
-            .get(&8)
-            .expect("spill slot recovered at its rsp offset");
+            .get(&-16)
+            .expect("spill slot recovered at its frame offset");
         assert_eq!(slot.kind, unlace_ir::ssa::FrameSlotKind::Local);
     }
 

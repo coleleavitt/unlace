@@ -1,0 +1,349 @@
+IDA 4.7 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 4.7
+Highlights
+Support for non contiguous, fragmented, multiple chunks functions has been added. The analysis of theses functions has been greatly improved.
+a LINUX console version of IDA is now available. The source code of the TVision library used for the interface will be freely
+downloadable
+!
+REMOTE DEBUGGING between Linux and Windows systems. (only singlethreaded linux applications are supported by the debugger). Source code will also be
+available
+.
+Changelist
+Processor Modules
+DSP561XX: new processor (in the Professional version)
+TMS320C3: new processor (in the Professional version)
+Angstrem KR1878: new processor
+Motorola HCS12: new processor
+6502: immediate instruction operands are unsigned by default (were signed)
+6812 debugger: beta test version is ready and included in the distribution
+6812: better configuration file; CASM assembler is added
+6812: pc relative references are resolved and displayed as comments; cross references for them are created
+ARM: ADD PC, ... stops execution flow
+ARM: ADD Rn, SP, #offset is automatically converted to a stack variable
+ARM: ARM processor module has been improved in many aspects thanks to Willem Hengeveld <
+[email protected]
+>
+ARM: IDA knows that LDM Rx, {reg} spoils the register
+ARM: IDA knows that some BL instructions should be treated as B instructions
+ARM: MOV PC,... and LDR PC,... instructions are handled better
+ARM: RVA32 relocation type is supported
+ARM: arm <-> thumb thunks are recognized
+ARM: better reaction to the execution flow going to an unexisting address: before there was an error message that it is impossible to assign the segment register T, now the offending address is stored in the problem list.
+ARM: better register tracing to detect the target of the BX instructions
+ARM: better support for the thumb mode relocations
+ARM: glue code is recognized as a jump function
+ARM: improved the analysis of the jump tables and the glue code
+ARM: modifying the T register reanalyzes the current instruction
+ARM: the following sequence does not stop execution: MOV LR, PC; MOV PC, ... or BX Rx
+ARM: thumb instruction can be converted to macros too
+HPPA: basic blocks are detected properly; added type system; better analysis in general
+HPPA: option to use mnemonic register names is added. off by default.
+HPPA: stw/ldw instructions have ",ma/b" completers; unused %sr0 registers are not displayed
+IA64: better detection of operand sizes
+IA64: multibyte character constants are allowed for GNU as (desipte the fact that it does not support them)
+IBM PC: type information for functions called indirectly with complex offset expressions is propagated properly
+IBM PC: push ##/pop eax is recognized as a sequence equal to "mov eax, ##"
+PPC: addi instruction is taken into account when tracing the stack pointer
+PPC: operands are converted to offsets only if the target is present in the program
+PPC: support for GNU assembler is added
+PPC: support for R_PPC_ADDR16_HI relocation type is added
+PPC: type system support is added
+Kernel
+Mulitple chunk functions are supported. IDA will automatically create function tails if this option is turned on. The option is turned on by default for the new databases, for the old database, it is turned off.
+the idc engine does not use disk files anymore and is now faster.
+created subdirectories for input file loaders, processor modules, configuration files.
+Added an option to allow the recognition several copies of the same function
+Added an option to comment anonymous library functions with the description of the FLIRT signature
+Argument type information is propagated more actively
+flair application collisions are marked with comments
+improved handling of spoiled structure and function frame definitions
+renaming a function as "exit" stops the execution flow
+type information is saved for the structure members coming from the type libraries
+better handling of trivial jump functions
+slight improvement of jump table handling: .got entries are never considered to be big jump tables
+the function boundary determination algorithm has been improved
+File Formats
+ELF: added an option to force PHT instead of SHT (useful for viruses and malicious programs)
+ELF: ARM relocations are supported properly
+ELF: HPPA relocation information is processed. Since there is enormous number of relocation records, we process only a limited number of them
+ELF: IDA knows about some internal symbols generated by the ARM compiler
+ELF: a bad section declaration is not considered as a fatal error during loading; PHT manual load is supported
+ELF: pressing cancel in the manual mode aborts the whole loading process
+ELF: introduced environment variable IDA_ELF_PATCH_MODE which can be used to override the patching made by IDA to the database when a new elf file is loaded
+EPOC: condition and option lines in SIS files are properly recognized and skipped
+HPSOM: $DLT$ entries are ignored during loading imports
+AR libraries with '\n' embedded in the file names are processed correctly
+MS DOS COM files use the metapc processor by default
+MACH-O: MAC OSX support for the type system is added
+User Interface
+support for multiple selections in various lists has been added
+debugger: '0', '+' and '-' keys can now be used to quickly zero, increment or decrement register values
+debugger: 'Toggle value' command added to registers window (useful to quickly toggle flags)
+debugger: added 'Add breakpoints', 'Enable breakpoints', 'Disable breakpoints' and 'Delete breakpoints' commands in popup menu of various lists (functions, names, ...) - these commands also accept multiple selection
+debugger: during debugging, addresses in import section are now displayed as data: allows to easily view and jump to the target
+debugger: Cancel is now the default button in the debugger warning message (appearing the first time the debugger is started)
+tracing: added an option in the 'Tracing options' window to suspend tracing over library functions (enabled by default)
+tracing: can now browse in Trace window even if process is not suspended
+tracing: green arrow (target arrow) is refreshed during backtracing
+tracing: in the trace window, a trace event selection is conserved (while it is in the trace buffer) - if the last trace event is selected, the selection will continuously remain on the last inserted trace event
+added option to turn off the autoappend feature
+can open more than one hex view - these hex views aren't anymore synchronized with IDA Views by default (to synchronize a hex view with an existing IDA View, use the 'Synchronize with' command in the hex view's popup menu)
+command line status is now saved in the desktops
+improved the 'offsets en masse' command: now ida verifies if the offset can be applied
+it is possible to hide the question about a debug file from MSDN
+most Jump and Search commands now work in hex views
+positions of dialog boxes related to database are now saved to desktops
+jumping to a problem does not delete the problem from the list anymore
+it was not possible to choose an xref to a structure, so this command has been disabled
+wrong values for the -z switch are catched and reported properly
+'dump to idc' can dump a selected part of the database
+the offset in the 'Structure offsets' dialog box can be specified as a decimal or hexadecimal value
+Scripts & SDK
+IDC: loadsym.idc is improved to support VisualAge (thanks to Dietrich Teickner)
+IDC: #import directive can be used instead of #include
++ IDC: SegByName() returns the segment selector instead of its base address. The base address can be calculated from the selector by using the AskSelector(x)<<4 expression.
+IDC: Set/GetFunctionAttr(), SetSegmentAttr() functions are added; existing functions are converted to macros using these new functions
+IDC: added a comment about the color coding
+IDC: added a flag to generate HTML files for GenerateFile()
+IDC: loaddef.idc is donated by Dietrich Teickner; loadsym.idc has also been improved.
+IDC: long running IDC scripts can be cancelled
+IDC: optimization: idc.idc is parsed only once at the database loading time (used for inline expressions and the calculator; idc scripts including idc.idc will parse it at each compilation)
+IDC: ord() function to get code of a character is added
+IDC: removed the 64K limit for the compiled function length
+IDC: rotate_left() function to rotate bit field is added
+IDC: the built-in parser looks for the include files in the directory of the current file as well as in the directory of the main input file for '"' includes
+IDC: SegAlign() and SegComb() functions are converted to macros; fixed a bug with SEGATTR_DEF_.. constants
+SDK: HIGH22 and LOW10 offset types are generalised to be VHIGH and VLOW. The processor module can specify the widths of these fixups in the ph.high_fixup_bits field. Currently they are used in the SPARC and HPPA processors.
+SDK: NULL value may be passed as the tester function to the nexthat, prevthat functions. It means that any address satisfies the criterium.
+SDK: PR_FULL_HIFXP is introduced. It means: VHIGH fixup type expects the operand value to be equal to the full address of the target, not only the high bits. Used for HPPA HIGH21 fixup types.
+SDK: UI list functions (choose(), choose2(), ...) now support multiple selection => the delete callback prototype was changed accordingly (older plugins can simply return 'true' to remain compatible)
+SDK: added possibility to pass command line options to plugins (get_plugin_options)
+SDK: added set/get_idc_func_body() to avoid frequent recompilation of IDC functions
+SDK: debugger: enable_XXX_trace() functions can now disable tracing but conserve trace-over breakpoints
+SDK: gen_use_arg_types() is added
+SDK: lread() function is added; this function should be used in the loaders instead of eread(). The lread() function verifies if the read is ok, if not, it informs the user about it and asks if he wants to continue. If the user does not want to continue, the loader_failure() function is called
+SDK: regex_match() to match regular expressions is added
+SDK: removed support for the watcom compiler
+SDK: set_idc_func() to add/remove IDC functions written in C++
+SDK: the kernel knows about macroinstructions (cmd.flags |= INSN_MACRO); fixup information for macroinstructions is handled in a special way: partial fixups are combined into one full fixup
+SDK: AS2_BYTE1CHAR is added: for wide byte processors, one character per byte
+SDK: added the FILE option to the AUTOHIDE keyword for message boxes, to save hidden message box results to IDAMSG.CFG
+SDK: get_next/prev_member_idx() functions are added; guess_func_type() understands stacks growing up (not tested yet)
+Bugfixes
+BUGFIX: 'Attach to process...' and 'Detach from process' commands were sometimes not visible
+BUGFIX: 'Change stack pointer...' command in context menu was sometimes displayed 2 times + we now always display it if Stack pointer is visible
+BUGFIX: 'Reset desktop' command was not resetting settings from default hidden windows
+BUGFIX: -b command line switch was broken
+BUGFIX: AMD64 RIP addressing was decoded incorrectly if the second operand of the instruction was an immediate value
+BUGFIX: ARM thumb BLX direct-addr could not be disassembled
+BUGFIX: AS_STRINV flag could revert the value of 'inf.wide_high_byte_first' if the input string for the get_ascii_contents() function was too long to be stored in the buffer.
+BUGFIX: C166 exts instruction was not emulated properly
+BUGFIX: EIP was sometimes not properly invalidated on the screen when the debugger was running
+BUGFIX: HPPA stack frame is created correctly
+BUGFIX: IDA could enter an endless loop if a data item with an offset was visible on the screen along this the referenced instruction which was leading to the reanalysis of the data item (in other words, the data item causes the reanalysis of the instruction; the instruction leads to the reanalysis of the data). Scrolling aways from such a place would break the loop.
+BUGFIX: IDA was loading some elf sections even if the user asked not to load them in the manual mode
+BUGFIX: IDA would report not enough disk space on Windows98 if started in a directory with a double extension (like c:\dir\4.3.2\)
+BUGFIX: IDC conditions (for breakpoints and tracing) referencing memory bytes were sometimes not properly evaluated
+BUGFIX: IDC: ltoa() function was broken
+BUGFIX: IP view was not properly refreshed if IP was not visible and the user switched between threads with same IP (for example 2 sleeping threads)
+BUGFIX: Intel 8051: IDA crashes if at the loading time the user clears the "create segments" checkbox.
+BUGFIX: MC6816 module: offset xrefs were not properly created for some operands
+BUGFIX: PE loader would crash if only the PE header was loaded into the database and all other segments were skipped; made many PE loader messages hideable
+BUGFIX: PrevHead() IDC function was returning wrong results
+BUGFIX: R_PPC_ADDR16_LO relocation type was processed incorrectly for object files
+BUGFIX: TXT: a segfault could occur after closing the Structures or Enums window
+BUGFIX: TXT: on Windows 9X, it was not possible to enter some characters (like the @ character by pressing AltGr+Q on a German keyboard) => define the TV_IGNORE_RIGHT_ALT_PRESSED environment variable to let IDA ignore such key combinations on Windows 9X
+BUGFIX: TXT: segfault when you grab the lower right corner of the disassembly window with the mouse and drag it to the left, shrinking the window (qsnprintf() should never return -1)
+BUGFIX: an xref window would become empty if a modal window with xrefs to the same ea is opened and closed
+BUGFIX: better handling of thread suspends/resumes for multi-threaded debugging
+BUGFIX: closing Enums window by pressing ALT-F3 was causing a segfault
+BUGFIX: colors of hidden areas were restored incorrectly
+BUGFIX: column widths for the function list were wrong for 64-bit version
+BUGFIX: epoc: the export table was located incorrectly
+BUGFIX: debugger: DLL rebasing was not working properly in some cases
+BUGFIX: debugger: FPU registers were sometimes not properly printed and detected as modified
+BUGFIX: debugger: IDA was displaying non-readable memory as 0xFF bytes (for example in PAGE_GUARD and PAGE_NOACCESS pages on Windows)
+BUGFIX: debugger: a breakpoint at address 0 was added if pressing Enter from the Insert command in the Breakpoints window
+BUGFIX: debugger: addresses in the Breakpoints list were not properly resolved because lists refresh was initialized before the process was properly suspended
+BUGFIX: debugger: after a suspend, breakpoint conditions containing registers couldn't be evaluated properly
+BUGFIX: debugger: breakpoints were not properly handled during library loading (if 'Stop on library load' option was enabled)
+BUGFIX: debugger: database desktop was sometimes overwritten by debugger desktop when process was not properly stopped
+BUGFIX: debugger: debugger status in the main window titlebar was sometimes not accurate
+BUGFIX: debugger: exported names (from loaded DLLs) were sometimes not properly displayed during debugging
+BUGFIX: debugger: fixed minor disassembly view refresh issues when adding or editing breakpoints
+BUGFIX: debugger: if a user forced a process termination and a pause request was already pending, the 'Pause process' command wasn't working anymore in new debugger sessions
+BUGFIX: debugger: in some particular cases, segment reorganisation was not working properly after a debugger event
+BUGFIX: debugger: it was not possible to add a hardware breakpoint at once from the breakpoints window
+BUGFIX: debugger: it was sometimes impossible to disable hardware breakpoints at runtime
+BUGFIX: debugger: the 'Clear trace' command was not properly refreshing some information like register views, arrows, ...
+BUGFIX: debugger: the 'Detach from process' command was sometimes not properly resuming threads
+BUGFIX: debugger: thread related segments (stack & PAGE_GUARD) were sometimes not properly named - Segments view was not properly updated in some cases
+BUGFIX: deleting a record from a non-leave leads to a move of another record from a leave page to the freed place, an underflow occurs in the leave page, some records from the sibling of the underflowed page are moved to it, doing so leads to the modification of another record in the parent page, which leads to the overflow of the parent and the parent gets split. At this moment because of the bug we work with a freed page and the database gets corrupted. A bug with a similar situation had been corrected ten years ago.
+BUGFIX: disassembly paint function was leaking GDI resources
+BUGFIX: dsp56k ports are attached to the X space, not P space. dsp561xx: better version
+BUGFIX: entering a long comment with tabulations could crash ida
+BUGFIX: fixed a typo in sparc autocomments
+BUGFIX: get_original_long() was wrong
+BUGFIX: hardware breakpoint (with a size bigger than 1) background color was not red for additionnal lines (like a multi-line comment)
+BUGFIX: in navigation bar, it was impossible to 'Zoom in' if 'Zoom out' was disabled (because maximum range was reached)
+BUGFIX: in some really rare cases get_next_fcref() could never return BADADDR
+BUGFIX: increased the width of the segment register window columns to fit narrow register values
+BUGFIX: it was impossible to rename or double-click on a structure stack variable
+BUGFIX: it was impossible to use function local vars/args in breakpoint conditions
+BUGFIX: it was not possible to rename bitfield members from the interface
+BUGFIX: jump tables were not analyzed correctly after Changelist 979
+BUGFIX: jump to near addresses (which were not visible on the screen but already cached) was not working anymore, probably since Changelist 2655
+BUGFIX: maximized windows in a saved desktop were sometimes restored as non-maximized
+BUGFIX: mc6812 module did not know about the "wavr" pseudo-instruction
+BUGFIX: mc6812 module was not disassembling "etbl", "tbl" instructions
+BUGFIX: multiline instructions were not displayed correctly in the graphs
+BUGFIX: nextaddr(BADADDR) was returning the first address of the program
+BUGFIX: number of applied functions of a flirt signature takes into account all functions (before some function types were ignored)
+BUGFIX: patching bytes during debugging would make IDA memorizes the database was patched
+BUGFIX: register views creation was sometimes leaking GDI resources
+BUGFIX: repetitive rebasing of the database might lead to a crash
+BUGFIX: scroll buttons in IDA view scrollbars were not working properly
+BUGFIX: scrolling the disassembly view using the mouse whlle with the hex view open could lead to an access violation at the beginning and end of the file
+BUGFIX: segfault when typing an address into the search toolbar if no disassembly view was open
+BUGFIX: set_debug_name() might cause an access violation
+BUGFIX: some PE files with bad relocation table could not be loaded
+BUGFIX: some Visual Age and GNU C++ names were not demangled correctly
+BUGFIX: some strings couldn't be typed in the search toolbar due to auto-completion
+BUGFIX: text version was not displaying error messages about the configuration file
+BUGFIX: text version: the disassembly window was not refreshed immediately after renaming a stack variable and similar
+BUGFIX: the Batch() IDC function does not disable the auto-analysis in TXT version anymore
+BUGFIX: the elf loader was complaining about unusual usage of relocations for some incorrectly stripped executables
+BUGFIX: the kernel was not saving the current instruction data before calling ph.create_func_frame(); this might lead to worse analysis (mostly for the arm processor)
+BUGFIX: tracing: addresses not available in database were not displayed during backtracing
+BUGFIX: tracing: if 'Trace over debugger segments' was enabled, tracing in KiUserCallbackDispatcher() function (used for kernel -> userland callbacks) was sometimes stopping with a "Breakpoint instruction reached (not inserted by the debugger)" message
+BUGFIX: tracing: if the process is running, tracing is started while EIP is in a debugger segment, and 'Trace over debug segment' option is enabled, IDA will not add anymore trace events for these debugger segment instructions
+BUGFIX: tracing: properly log modified register values over debug segments (when 'Trace over' option is active)
+BUGFIX: unloading some corrupted databases to idc would lead to a crash, now ida should complain and continue
+BUGFIX: unwanted hint of the address zero was displayed in the stack variables window for the processors with ':' after the data labels
+BUGFIX: when closing a database, last address in IDA view was sometimes continuously saved on the previous addresses stack
+BUGFIX: Z80 was not allowing to modify the out, in, and similar instruction operands
+BUGFIX: creating an item crossing a hidden area boundaries would pose display problems in the future
+BUGFIX: deleting a structure element at the end of the structure might lead to a wrong display (one superfluous data definition line beyond the end of the structure)
+BUGFIX: if the 'Print flow chart labels' option was enabled, labels without valid names were preceded by a '7' character + IDA now uses the prefix line color for these labels
+BUGFIX: sometimes the application title was not reflecting the database name correctly
+BUGFIX: using the navigation band with all IDAViews closed could lead to crashes
+BUGFIX: when creating a flow graph, local labels were redefined as globals
+BUGFIX: H8: the '@' character was erroneously highlighted as a valid identifier character
+BUGFIX: debugger: the destination arrow (green arrow) was not properly updated for JLE/JNG instructions
+BUGFIX: if the database was created in the directory other than the input file directory, the input file name would be replaced by the database name
+BUGFIX: it was not possible to search with Ctrl-T after pressing Esc in the Alt-T dialog even if the old search string was existing
+BUGFIX: the stack tracing could be spoiled if the function end was moved back and forth
+BUGFIX: when creating a new structure, the proposed structure name was incremented if the Cancel button was pressed
+BUGFIX: when opcode bytes were displayed with a '+', IDA was not extracting the following name properly (if any) => it was then impossible to change this name
+Discontinued
+OS/2 and DOS4GW versions are discontinued. Please make a backup copy if you plan to use them in the future.
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Was this helpful?

@@ -1,0 +1,26 @@
+__int64 __fastcall sub_9B6CB0(__int64 a1, __int64 a2)
+{
+  __m128i *v2; // rdx
+  __int64 v4; // rdi
+  __int64 result; // rax
+  _WORD *v6; // rcx
+
+  v2 = *(__m128i **)(a2 + 32);
+  v4 = a2;
+  if ( *(_QWORD *)(a2 + 24) - (_QWORD)v2 > 0xFu )
+  {
+    *v2 = _mm_load_si128((const __m128i *)&xmmword_23A8CA0);
+    *(_QWORD *)(a2 + 32) += 16LL;
+  }
+  else
+  {
+    v4 = sub_227BF10(a2, "Expire (LoanID: ", 16);
+  }
+  result = sub_227B910(v4, *(unsigned int *)(a1 + 12));
+  v6 = *(_WORD **)(result + 32);
+  if ( *(_QWORD *)(result + 24) - (_QWORD)v6 <= 1u )
+    return sub_227BF10(result, ")\n", 2);
+  *v6 = 2601;
+  *(_QWORD *)(result + 32) += 2LL;
+  return result;
+}

@@ -1,0 +1,21 @@
+bool __fastcall sub_3697C0(
+        const char *a1,
+        __int64 a2,
+        int a3,
+        double a4,
+        double a5,
+        __m128 a6,
+        __m128 a7,
+        double a8,
+        double a9,
+        __m128 a10,
+        double a11)
+{
+  __int64 module_data; // rax
+  double v13; // xmm4_8
+  double v14; // xmm5_8
+
+  module_data = get_module_data();
+  return sub_368F10(*(__m128i **)(module_data + 800), nullptr, a1, a2, a3, a4, a5, a6, a7, v13, v14, a10, a11);
+}
+

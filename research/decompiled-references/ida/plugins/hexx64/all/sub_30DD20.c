@@ -1,0 +1,43 @@
+_QWORD *__fastcall sub_30DD20(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5)
+{
+  __int64 v7; // r15
+  _QWORD *v10; // rax
+  __int64 v11; // rsi
+  _QWORD *v12; // rbx
+  unsigned __int8 *v13; // r14
+  __int64 v14; // rax
+  __m128i v15; // xmm0
+  unsigned int v16; // [rsp+8h] [rbp-70h]
+  __int64 v17; // [rsp+10h] [rbp-68h]
+  unsigned __int8 v18[24]; // [rsp+20h] [rbp-58h] BYREF
+  unsigned __int64 v19; // [rsp+38h] [rbp-40h]
+
+  v16 = a4;
+  v19 = __readfsqword(0x28u);
+  if ( !a5 )
+    return (_QWORD *)a3;
+  v7 = *(_QWORD *)(a2 + 480);
+  v10 = (_QWORD *)j__qalloc_or_throw(80, a2, a3, a4);
+  v11 = *(_QWORD *)(a3 + 24);
+  v12 = v10;
+  v13 = (unsigned __int8 *)(v10 + 4);
+  v17 = (__int64)(v10 + 6);
+  v10[4] = 0xFFFFFFFF00000000LL;
+  v10[5] = 0;
+  v10[6] = 0xFFFFFFFF00000000LL;
+  v10[7] = 0;
+  v10[8] = 0xFFFFFFFF00000000LL;
+  v10[9] = 0;
+  sub_330970((__int64)v10, v11);
+  *(_DWORD *)v12 = 12;
+  v14 = *(_QWORD *)(v7 + 112);
+  *(_QWORD *)v18 = 1;
+  v15 = _mm_cvtsi32_si128(v16);
+  *(_QWORD *)&v18[4] = _mm_unpacklo_epi32(_mm_cvtsi32_si128(*(_DWORD *)(v14 + 84)), v15).m128i_u64[0];
+  sub_125180(v13, v18);
+  sub_11CDA0((__int64)v18);
+  sub_120A10(v17, *(unsigned __int64 **)(v7 + 112), a5, *((_DWORD *)v12 + 9), *(_QWORD *)(a3 + 24), 0);
+  sub_125180((unsigned __int8 *)v12 + 64, v13);
+  return sub_A3160(a2, v12, a3, *(double *)v15.m128i_i64);
+}
+

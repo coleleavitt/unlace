@@ -1,0 +1,20 @@
+_DWORD *__fastcall sub_C6150(int a1)
+{
+  _DWORD *result; // rax
+  __int64 v2; // rdx
+
+  if ( !a1 )
+    return nullptr;
+  result = (_DWORD *)qword_252590;
+  v2 = qword_252590 + ((_QWORD)xmmword_252598 << 8);
+  if ( qword_252590 == v2 )
+    return nullptr;
+  while ( *result != a1 )
+  {
+    result += 64;
+    if ( result == (_DWORD *)v2 )
+      return nullptr;
+  }
+  return result;
+}
+

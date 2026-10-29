@@ -79,7 +79,225 @@ impl Pass for TempHomePass {
             while DeadCodeElimPass.run(func)? {}
         }
         changed |= rehome_views(func, trace);
+        changed |= copy_before_clobber(func, trace);
         Ok(changed)
+    }
+}
+
+/// Put back the copy that propagation carried a read past.
+///
+/// `mov ebp, r12d; ...; lea r12d, [...]; sub ebp, 1` lifts to
+/// `rbp = ZEXT r12:i32; ...; r12 = ...; rbp = ZEXT (SUBPIECE rbp - 1)`.
+/// Copy propagation reads the temp `r12d` was written from (`u`, defined in
+/// an earlier block) at the `sub`, and the first `mov` dies. `r12` no longer
+/// holds `u` at the read, but it did when the block was entered, and the
+/// `sub` writes `rbp`, which nothing touches between the clobber of `r12`
+/// and that write. Hex-Rays never deletes that `mov` (its propagation
+/// stops at the redefinition of `r12`); here it comes back as
+/// `rbp = ZEXT r12:i32` right before the clobber, and the read moves to
+/// `rbp`.
+fn copy_before_clobber(func: &mut SsaFunction, trace: bool) -> bool {
+    let facts = collect_facts(func);
+    let Values { holders, .. } = collect_values(func);
+    let mut uses: BTreeMap<SsaVarnode, Vec<(BlockId, usize, usize)>> = BTreeMap::new();
+    // Temps computed from the stack pointer: the printer resolves their
+    // reads to the stack slot through the definition, so a copy would only
+    // add a statement.
+    let mut stack_addresses: BTreeSet<SsaVarnode> = BTreeSet::new();
+    for (&(bid, idx, ref slot), &sv) in &func.var_map {
+        match *slot {
+            VarnodeSlot::Input(input) if sv.base.space == SpaceId::Unique => {
+                uses.entry(sv).or_default().push((bid, idx, input));
+            }
+            VarnodeSlot::Input(_)
+                if sv.base.space == SpaceId::Register && sv.base.offset == X86_RSP_OFFSET =>
+            {
+                if let Some(&out) = func.var_map.get(&(bid, idx, VarnodeSlot::Output))
+                    && out.base.space == SpaceId::Unique
+                {
+                    stack_addresses.insert(out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    struct Plan {
+        block: BlockId,
+        /// The first clobber of the holder's register: the copy goes here.
+        clobber: usize,
+        holder: SsaVarnode,
+        /// The register the read's value chain is written to.
+        destination: Varnode,
+        temp: SsaVarnode,
+        read: (usize, usize),
+    }
+    let mut plans: Vec<Plan> = Vec::new();
+    let mut claims: BTreeMap<(BlockId, u64), Vec<(usize, usize)>> = BTreeMap::new();
+    for (&bid, block) in &func.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            for (input, raw) in insn.inputs.iter().enumerate() {
+                let Some(&temp) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(input))) else {
+                    continue;
+                };
+                if temp.base.space != SpaceId::Unique
+                    || raw.size != temp.base.size
+                    || stack_addresses.contains(&temp)
+                {
+                    continue;
+                }
+                let width = temp.base.size;
+                let Some((destination, end)) = written_register(func, &uses, bid, idx) else {
+                    continue;
+                };
+                if !is_home_register(&destination) || !exact_register_read(width, destination.size)
+                {
+                    continue;
+                }
+                let Some(candidates) = holders.get(&temp) else {
+                    continue;
+                };
+                // A holder that held at block entry and was clobbered before
+                // the read.
+                let found = candidates.iter().find_map(|holder| {
+                    if holder.from.0 == bid || !holds_until(&facts, holder, (bid, 0)) {
+                        return None;
+                    }
+                    let clobber = facts.defs.get(&bid)?.iter().find_map(|&(at, vn)| {
+                        at.filter(|&at| at < idx && overlaps(&vn, &holder.register.base))
+                    })?;
+                    Some((holder.register, clobber))
+                });
+                let Some((holder, clobber)) = found else {
+                    continue;
+                };
+                if overlaps(&destination, &holder.base)
+                    || register_touched_between(func, bid, clobber, end, &destination, temp)
+                {
+                    continue;
+                }
+                let claimed = claims.entry((bid, destination.offset)).or_default();
+                if claimed
+                    .iter()
+                    .any(|&(from, to)| from <= end && clobber <= to)
+                {
+                    continue;
+                }
+                claimed.push((clobber, end));
+                plans.push(Plan {
+                    block: bid,
+                    clobber,
+                    holder,
+                    destination,
+                    temp,
+                    read: (idx, input),
+                });
+            }
+        }
+    }
+    if plans.is_empty() {
+        return false;
+    }
+
+    let mut next_version: BTreeMap<Varnode, u32> = BTreeMap::new();
+    for sv in func
+        .var_map
+        .values()
+        .chain(func.phi_map.values().flatten().map(|phi| &phi.output))
+    {
+        let next = next_version.entry(sv.base).or_default();
+        *next = (*next).max(sv.version + 1);
+    }
+    // Later insertions first, so earlier ones keep their indices.
+    plans.sort_by_key(|plan| (plan.block, std::cmp::Reverse(plan.clobber)));
+    for plan in plans {
+        let width = plan.temp.base.size;
+        let next = next_version.entry(plan.destination).or_default();
+        let home = SsaVarnode {
+            base: plan.destination,
+            version: *next,
+        };
+        *next += 1;
+        if trace {
+            tracing::debug!(
+                target: "unlace::temp_home",
+                "func={} copy-before-clobber block={:?} insn={} temp={:?} holder={:?} -> {home:?}",
+                func.function.name,
+                plan.block,
+                plan.clobber,
+                plan.temp,
+                plan.holder,
+            );
+        }
+        let op = if width == plan.destination.size {
+            IrOp::Copy
+        } else {
+            IrOp::IntZext
+        };
+        shift_insn_keys(func, plan.block, plan.clobber);
+        let Some(block) = func.function.blocks.get_mut(&plan.block) else {
+            continue;
+        };
+        let copy = unlace_ir::IrInsn::with_output(
+            op,
+            plan.destination,
+            smallvec::smallvec![Varnode::reg(plan.holder.base.offset, width)],
+            block.insns[plan.clobber].addr,
+        );
+        block.insns.insert(plan.clobber, copy);
+        func.var_map
+            .insert((plan.block, plan.clobber, VarnodeSlot::Output), home);
+        func.var_map.insert(
+            (plan.block, plan.clobber, VarnodeSlot::Input(0)),
+            plan.holder,
+        );
+        if let Some(&ty) = func.var_types.get(&plan.temp) {
+            func.var_types.insert(home, ty);
+        }
+        let (idx, input) = (plan.read.0 + 1, plan.read.1);
+        block.insns[idx].inputs[input] = Varnode::reg(plan.destination.offset, width);
+        func.var_map
+            .insert((plan.block, idx, VarnodeSlot::Input(input)), home);
+    }
+    true
+}
+
+/// Move the per-instruction tables of `bid` up by one from `from` on, making
+/// room for an instruction inserted at `from`.
+fn shift_insn_keys(func: &mut SsaFunction, bid: BlockId, from: usize) {
+    let moved: Vec<_> = func
+        .var_map
+        .range((bid, from, VarnodeSlot::Output)..)
+        .take_while(|&(&(b, _, _), _)| b == bid)
+        .map(|(k, &v)| (k.clone(), v))
+        .collect();
+    for (key, _) in moved.iter() {
+        func.var_map.remove(key);
+    }
+    for ((b, idx, slot), sv) in moved {
+        func.var_map.insert((b, idx + 1, slot), sv);
+    }
+    let hints: Vec<_> = func
+        .stack_offset_hints
+        .range((bid, from)..=(bid, usize::MAX))
+        .map(|(&k, &v)| (k, v))
+        .collect();
+    for &(key, _) in hints.iter() {
+        func.stack_offset_hints.remove(&key);
+    }
+    for ((b, idx), offset) in hints {
+        func.stack_offset_hints.insert((b, idx + 1), offset);
+    }
+    let setup: Vec<_> = func
+        .frame_setup_insns
+        .range((bid, from)..=(bid, usize::MAX))
+        .copied()
+        .collect();
+    for key in setup.iter() {
+        func.frame_setup_insns.remove(key);
+    }
+    for (b, idx) in setup {
+        func.frame_setup_insns.insert((b, idx + 1));
     }
 }
 
@@ -305,7 +523,7 @@ fn rehome_views(func: &mut SsaFunction, trace: bool) -> bool {
             let width = temp.base.size;
             if !is_home_register(&register)
                 || !(width == register.size || (width == 4 && register.size == 8))
-                || register_touched_between(func, bid, def, end, &register, temp)
+                || register_touched_between(func, bid, def + 1, end, &register, temp)
             {
                 continue;
             }
@@ -444,12 +662,12 @@ fn written_register(
         .then_some((stored.base, *next))
 }
 
-/// Whether anything other than reads of `view` touches `register` after
-/// `def`: a read up to and including `end`, or a write before `end`.
+/// Whether anything other than reads of `view` touches `register` from
+/// `from` on: a read up to and including `end`, or a write before `end`.
 fn register_touched_between(
     func: &SsaFunction,
     bid: BlockId,
-    def: usize,
+    from: usize,
     end: usize,
     register: &Varnode,
     view: SsaVarnode,
@@ -457,7 +675,7 @@ fn register_touched_between(
     let Some(block) = func.function.blocks.get(&bid) else {
         return true;
     };
-    (def + 1..=end).any(|idx| {
+    (from..=end).any(|idx| {
         let insn = &block.insns[idx];
         let reads = insn.inputs.iter().enumerate().any(|(input, raw)| {
             let sv = func.var_map.get(&(bid, idx, VarnodeSlot::Input(input)));
@@ -561,16 +779,22 @@ struct Facts {
     predecessors: BTreeMap<BlockId, Vec<BlockId>>,
 }
 
-fn plan_rewrites(func: &SsaFunction) -> Vec<Rewrite> {
-    let facts = collect_facts(func);
-    // Register versions holding a temp's value.
+/// Where the temps' values live in registers.
+struct Values {
+    /// Register versions holding a temp's value.
+    holders: BTreeMap<SsaVarnode, Vec<Holder>>,
+    /// `d = v + delta` for a temp `d`, keyed by the canonical value `v`.
+    offsets: BTreeMap<SsaVarnode, Vec<(SsaVarnode, u64)>>,
+    /// A view temp's register value and width (`u = SUBPIECE r#j` → `(r#j, 4)`).
+    views: BTreeMap<SsaVarnode, (SsaVarnode, u8)>,
+}
+
+fn collect_values(func: &SsaFunction) -> Values {
     let mut holders: BTreeMap<SsaVarnode, Vec<Holder>> = BTreeMap::new();
     // Register versions holding the low `width` bytes of another register
     // version (`rsi#1 = ZEXT rax#3:i32`), keyed by `(rax#3, width)`.
     let mut value_holders: BTreeMap<(SsaVarnode, u8), Vec<Holder>> = BTreeMap::new();
-    // `d = v + delta` for a temp `d`, keyed by the canonical value `v`.
     let mut offsets: BTreeMap<SsaVarnode, Vec<(SsaVarnode, u64)>> = BTreeMap::new();
-    // A view temp's register value and width (`u = SUBPIECE r#j` → `(r#j, 4)`).
     let mut views: BTreeMap<SsaVarnode, (SsaVarnode, u8)> = BTreeMap::new();
 
     // Raw varnodes are not authoritative this late (operands may be renamed);
@@ -650,6 +874,20 @@ fn plan_rewrites(func: &SsaFunction) -> Vec<Rewrite> {
                 .extend(copies.iter().copied());
         }
     }
+    Values {
+        holders,
+        offsets,
+        views,
+    }
+}
+
+fn plan_rewrites(func: &SsaFunction) -> Vec<Rewrite> {
+    let facts = collect_facts(func);
+    let Values {
+        holders,
+        offsets,
+        views,
+    } = collect_values(func);
 
     let mut rewrites = Vec::new();
     for (&bid, block) in &func.function.blocks {
@@ -1035,5 +1273,114 @@ mod tests {
             .position(|i| i.op == IrOp::IntNotequal)
             .expect("compare kept");
         assert_eq!(input_sv(&ssa, compare, 0).base.space, SpaceId::Unique);
+    }
+
+    const RBP: u64 = 40;
+
+    /// Block 0: `u = SUBPIECE rbp`. Block 1: `rbp = 5; d = u - 1;
+    /// rbx = ZEXT d`, plus `extra` before the read.
+    fn view_read_past_clobber(extra: Vec<IrInsn>) -> SsaFunction {
+        let u = Varnode::unique(0x100, 4);
+        let d = Varnode::unique(0x104, 4);
+        let mut func = Function::new("test", BlockId(0), 0x1000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns = vec![
+            IrInsn::with_output(
+                IrOp::Subpiece,
+                u,
+                smallvec![Varnode::reg(RBP, 8), Varnode::constant(0, 1)],
+                0x1000,
+            ),
+            IrInsn::without_output(IrOp::Branch, smallvec![], 0x1003),
+        ];
+        bb0.successors = smallvec![BlockId(1)];
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns = vec![IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(RBP, 8),
+            smallvec![Varnode::constant(5, 8)],
+            0x1010,
+        )];
+        bb1.insns.extend(extra);
+        bb1.insns.extend([
+            IrInsn::with_output(
+                IrOp::IntSub,
+                d,
+                smallvec![u, Varnode::constant(1, 4)],
+                0x1020,
+            ),
+            IrInsn::with_output(IrOp::IntZext, Varnode::reg(RBX, 8), smallvec![d], 0x1020),
+            IrInsn::without_output(IrOp::Return, smallvec![], 0x1023),
+        ]);
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+        ssa
+    }
+
+    /// The read of `u` after `rbp` is clobbered gets `rbx = ZEXT rbp:i32`
+    /// before the clobber and reads `rbx`: the `mov` propagation deleted.
+    #[test]
+    fn clobbered_holder_is_copied_to_the_destination_first() {
+        let mut ssa = view_read_past_clobber(vec![]);
+        let rbp_entry = input_sv(&ssa, 0, 0);
+        assert!(TempHomePass.run(&mut ssa).expect("pass runs"));
+        let block = &ssa.function.blocks[&BlockId(1)];
+        let ops: Vec<IrOp> = block.insns.iter().map(|i| i.op).collect();
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::IntZext,
+                IrOp::Copy,
+                IrOp::IntSub,
+                IrOp::IntZext,
+                IrOp::Return
+            ]
+        );
+        assert_eq!(block.insns[0].output, Some(Varnode::reg(RBX, 8)));
+        assert_eq!(block.insns[0].inputs[0], Varnode::reg(RBP, 4));
+        assert_eq!(
+            ssa.var_map[&(BlockId(1), 0, VarnodeSlot::Input(0))],
+            rbp_entry
+        );
+        let home = ssa.var_map[&(BlockId(1), 0, VarnodeSlot::Output)];
+        assert_eq!(home.base, Varnode::reg(RBX, 8));
+        assert_eq!(block.insns[2].inputs[0], Varnode::reg(RBX, 4));
+        assert_eq!(ssa.var_map[&(BlockId(1), 2, VarnodeSlot::Input(0))], home);
+        // The clobber and the final write kept their SSA names.
+        assert_eq!(
+            ssa.var_map[&(BlockId(1), 1, VarnodeSlot::Output)].base,
+            Varnode::reg(RBP, 8)
+        );
+        assert_eq!(
+            ssa.var_map[&(BlockId(1), 3, VarnodeSlot::Input(0))],
+            ssa.var_map[&(BlockId(1), 2, VarnodeSlot::Output)]
+        );
+    }
+
+    /// A destination read between the clobber and the write is live there,
+    /// so the temp keeps its own storage.
+    #[test]
+    fn destination_in_use_blocks_the_copy() {
+        let mut ssa = view_read_past_clobber(vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::reg(RDX, 8),
+            smallvec![Varnode::reg(RBX, 8), Varnode::constant(1, 8)],
+            0x1014,
+        )]);
+        TempHomePass.run(&mut ssa).expect("pass runs");
+        let block = &ssa.function.blocks[&BlockId(1)];
+        let sub = block
+            .insns
+            .iter()
+            .position(|i| i.op == IrOp::IntSub)
+            .expect("sub kept");
+        assert_eq!(
+            ssa.var_map[&(BlockId(1), sub, VarnodeSlot::Input(0))]
+                .base
+                .space,
+            SpaceId::Unique
+        );
     }
 }

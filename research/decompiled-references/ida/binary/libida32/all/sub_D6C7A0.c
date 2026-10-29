@@ -1,0 +1,17 @@
+void __fastcall sub_D6C7A0(_QWORD *a1, unsigned __int8 a2, unsigned __int64 a3, __int64 a4, __int64 a5)
+{
+  void *v5; // [rsp+0h] [rbp-18h] BYREF
+  unsigned int v6; // [rsp+8h] [rbp-10h]
+  char v7; // [rsp+Ch] [rbp-Ch]
+
+  v5 = (void *)a2;
+  v6 = 8;
+  v7 = 1;
+  sub_D6C2A0(a1, (__int64)&v5, a3, a4, a5);
+  if ( v6 > 0x40 )
+  {
+    if ( v5 )
+      operator delete[](v5);
+  }
+}
+

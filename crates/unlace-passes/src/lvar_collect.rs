@@ -817,6 +817,7 @@ mod tests {
         );
         ssa.stack_frame = Some(StackFrame {
             locals,
+            sp_offset_at_addr: std::collections::BTreeMap::new(),
             frame_size: 4,
             max_pos_offset: -4,
             min_neg_offset: -8,
@@ -848,6 +849,7 @@ mod tests {
         );
         ssa.stack_frame = Some(StackFrame {
             locals,
+            sp_offset_at_addr: std::collections::BTreeMap::new(),
             frame_size: 16,
             max_pos_offset: -16,
             min_neg_offset: -32,
@@ -886,6 +888,7 @@ mod tests {
         );
         ssa.stack_frame = Some(StackFrame {
             locals,
+            sp_offset_at_addr: std::collections::BTreeMap::new(),
             frame_size: 32,
             max_pos_offset: -16,
             min_neg_offset: -48,
@@ -992,6 +995,7 @@ mod tests {
         );
         ssa.stack_frame = Some(StackFrame {
             locals,
+            sp_offset_at_addr: std::collections::BTreeMap::new(),
             frame_size: 8,
             max_pos_offset: 8,
             min_neg_offset: 0,
@@ -1022,6 +1026,7 @@ mod tests {
         );
         ssa.stack_frame = Some(StackFrame {
             locals,
+            sp_offset_at_addr: std::collections::BTreeMap::new(),
             frame_size: 8,
             max_pos_offset: 24,
             min_neg_offset: 16,

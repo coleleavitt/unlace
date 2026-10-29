@@ -1,0 +1,95 @@
+__int64 __fastcall sub_D34410(__int64 a1, __int64 a2)
+{
+  __int64 v3; // rax
+  __int64 v4; // rdi
+  __int64 v5; // rdx
+  __int64 v6; // rbx
+  int v7; // eax
+  unsigned int v8; // r12d
+  __int64 v9; // rax
+  __int64 v10; // rbp
+  unsigned int v11; // r14d
+  __int64 v12; // rax
+  __int64 v14; // rbp
+  __int64 v15; // rax
+  __int64 v16; // rax
+  __int64 v17[2]; // [rsp+0h] [rbp-B8h] BYREF
+  _QWORD v18[6]; // [rsp+10h] [rbp-A8h] BYREF
+  void *v19; // [rsp+40h] [rbp-78h] BYREF
+  unsigned int v20; // [rsp+48h] [rbp-70h]
+  unsigned __int8 v21; // [rsp+70h] [rbp-48h]
+
+  v3 = sub_D01480(*(_QWORD *)(a1 + 176));
+  v4 = *(_QWORD *)(a1 + 176);
+  v17[0] = v3;
+  v17[1] = v5;
+  v6 = sub_DFDA20(v4, 48);
+  v7 = *(_DWORD *)(v6 + 24);
+  if ( !v7 || v7 == 2 )
+  {
+    if ( !*(_QWORD *)(v6 + 32) )
+      goto LABEL_6;
+  }
+  else if ( v7 != 3 && !*(_QWORD *)(v6 + 40) && !*(_QWORD *)v6 )
+  {
+    goto LABEL_6;
+  }
+  if ( !(unsigned __int8)sub_D29E30(v17) )
+  {
+    v8 = sub_DA4610(a1, a2, v6);
+    if ( !(_BYTE)v8 )
+      return v8;
+  }
+LABEL_6:
+  sub_D279E0((__int64)&v19, v17);
+  v8 = v20;
+  if ( v20 <= 0x40 )
+  {
+    LOBYTE(v8) = v19 == nullptr;
+    if ( !v19 )
+    {
+LABEL_10:
+      v9 = sub_CDA220(v6);
+      v10 = *(_QWORD *)(a1 + 176);
+      v11 = *(unsigned __int8 *)(v9 + 60);
+      if ( (_BYTE)v11 && !sub_CDA8F0((unsigned int *)v6) )
+      {
+        sub_CDA6F0((__int64)v18, v6, 0);
+        sub_CDAA60((__int64)&v19, v18);
+        v16 = sub_DFD980(v10, 48);
+        sub_DFF520(v16);
+        sub_DFF560(&v19);
+        v8 = v11;
+        sub_DFF560(v18);
+      }
+      else
+      {
+        v12 = sub_DFD980(v10, 48);
+        sub_DFF4A0(v12, v6);
+      }
+      return v8;
+    }
+  }
+  else
+  {
+    LOBYTE(v8) = v8 == (unsigned int)sub_21E2A40(&v19);
+    if ( v19 )
+      operator delete[](v19);
+    if ( (_BYTE)v8 )
+      goto LABEL_10;
+  }
+  sub_D33C80((__int64)&v19, a1, a2, v17, v6, 0);
+  v8 = v21;
+  if ( v21 )
+  {
+    v14 = *(_QWORD *)(a1 + 176);
+    sub_CDAA60((__int64)v18, &v19);
+    v15 = sub_DFD980(v14, 48);
+    sub_DFF520(v15);
+    sub_DFF560(v18);
+    if ( v21 )
+      sub_DFF560(&v19);
+  }
+  return v8;
+}
+

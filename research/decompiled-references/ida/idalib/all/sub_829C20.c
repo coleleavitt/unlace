@@ -1,0 +1,6 @@
+void __noreturn sub_829C20()
+{
+  if ( !under_debugger )
+    interr(3295);
+  BUG();
+}

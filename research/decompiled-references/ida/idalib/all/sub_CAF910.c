@@ -1,0 +1,42 @@
+__int64 __fastcall sub_CAF910(__int64 *a1)
+{
+  __int64 v2; // rax
+  __int64 v3; // rdi
+  __int64 v4; // rsi
+  __int64 result; // rax
+  unsigned int v6; // eax
+  unsigned int v7; // edx
+  _QWORD v8[2]; // [rsp+8h] [rbp-10h] BYREF
+
+  v2 = *a1;
+  v3 = a1[1];
+  if ( (*(_BYTE *)(*(_QWORD *)v2 + 1LL) & 6) != 0 )
+  {
+    v4 = 13;
+    if ( !*(_BYTE *)(v3 + 1360) )
+    {
+LABEL_3:
+      v8[0] = *(_QWORD *)v2 | 4LL;
+      return sub_D2FA60(v3, 10, (unsigned int)v4, v8);
+    }
+LABEL_6:
+    v8[0] = *(_QWORD *)v2 | 4LL;
+    return sub_D25200(v3, v4, v8);
+  }
+  v6 = sub_CE6180(*(_QWORD *)(v3 + 1264), *(_QWORD *)(*(_QWORD *)v2 + 8LL));
+  v3 = a1[1];
+  v7 = v6;
+  v4 = v6;
+  if ( *(_BYTE *)(v3 + 1360) )
+  {
+    v2 = *a1;
+    goto LABEL_6;
+  }
+  result = 1;
+  if ( v7 != 10 )
+  {
+    v2 = *a1;
+    goto LABEL_3;
+  }
+  return result;
+}

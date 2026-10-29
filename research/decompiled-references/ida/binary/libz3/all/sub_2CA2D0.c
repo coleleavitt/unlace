@@ -1,0 +1,12 @@
+__int64 __fastcall sub_2CA2D0(__int64 *a1)
+{
+  __int64 v1; // rbp
+  __int64 v2; // rax
+  __int64 numeral_sign_bv; // rax
+
+  v1 = sub_26B5C0(a1, 1);
+  v2 = sub_26B5C0(a1, 0);
+  numeral_sign_bv = Z3_fpa_get_numeral_sign_bv(v2, v1);
+  return sub_26B3D0(a1, numeral_sign_bv);
+}
+

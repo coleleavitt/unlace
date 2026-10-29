@@ -1,0 +1,7 @@
+void __fastcall __noreturn sub_23E340(double a1)
+{
+  if ( !under_debugger )
+    sub_383060(0xCDEFu, a1);
+  BUG();
+}
+

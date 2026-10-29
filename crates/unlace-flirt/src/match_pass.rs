@@ -15,6 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::Arc;
 
 use unlace_ir::ArchId;
 use unlace_session::{Rename, Session};
@@ -26,7 +27,7 @@ use crate::sig::matching::{CodeWindow, KnownNames, MatchContext};
 /// A set of loaded signature files.
 #[derive(Clone, Debug, Default)]
 pub struct FlirtMatcher {
-    sigs: Vec<SigFile>,
+    sigs: Vec<Arc<SigFile>>,
 }
 
 /// One function named by a signature.
@@ -64,7 +65,9 @@ pub struct FlirtAppliedMatch {
 
 impl FlirtMatcher {
     pub fn from_sig(sig: SigFile) -> Self {
-        Self { sigs: vec![sig] }
+        Self {
+            sigs: vec![Arc::new(sig)],
+        }
     }
 
     /// Load and decode a `.sig` file from disk.
@@ -73,10 +76,16 @@ impl FlirtMatcher {
     }
 
     pub fn push(&mut self, sig: SigFile) {
+        self.sigs.push(Arc::new(sig));
+    }
+
+    /// Add a signature file shared with other matchers (the bundled
+    /// files are parsed once per process).
+    pub fn push_shared(&mut self, sig: Arc<SigFile>) {
         self.sigs.push(sig);
     }
 
-    pub fn sigs(&self) -> &[SigFile] {
+    pub fn sigs(&self) -> &[Arc<SigFile>] {
         &self.sigs
     }
 
@@ -105,6 +114,7 @@ impl FlirtMatcher {
         let sigs: Vec<(usize, &SigFile)> = self
             .sigs
             .iter()
+            .map(Arc::as_ref)
             .scan(0, |first_id, sig| {
                 let entry = (*first_id, sig);
                 *first_id += sig.modules().len();

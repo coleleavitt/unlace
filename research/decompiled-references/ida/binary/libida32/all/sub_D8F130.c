@@ -1,0 +1,16 @@
+__int64 __fastcall sub_D8F130(_QWORD *a1)
+{
+  __int64 v1; // rbx
+  int v2; // r13d
+  __int64 v3; // r12
+
+  v1 = *a1;
+  v2 = *(_DWORD *)sub_DFDA20(*a1, 8);
+  sub_DFDA50(v1, 8);
+  v3 = *a1;
+  LODWORD(v1) = *(_DWORD *)sub_DFDA20(*a1, 8);
+  sub_DFDA50(v3, 8);
+  *(_DWORD *)sub_DFD980(*a1, 8) = v1 - v2;
+  return 1;
+}
+

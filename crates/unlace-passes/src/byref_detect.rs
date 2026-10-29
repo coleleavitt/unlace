@@ -22,12 +22,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{ByrefInfo, CallingConvention, PrimitiveType, SsaFunction, VarnodeSlot};
-use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
+use unlace_ir::stack::StackSpec;
+use unlace_ir::{ArchId, BlockId, IrOp, SpaceId, Varnode};
+
+use crate::stack_address::FrameCoordinates;
 
 /// AMD64 register-space offsets used by the address-trace.
-const RSP_OFFSET: u64 = 32;
-const RBP_OFFSET: u64 = 40;
-
 const RDI: u64 = 56;
 const RSI: u64 = 48;
 const RDX: u64 = 16;
@@ -47,7 +47,7 @@ type DefMap = BTreeMap<Varnode, Vec<(BlockId, usize)>>;
 /// function's parameter registers (identified by index).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AddrRoot {
-    /// Resolved to an `RSP`/`RBP`-relative byte offset.
+    /// Resolved to a frame offset ([`FrameCoordinates`]).
     Stack(i64),
     /// Resolved to the initial value of parameter register `idx` (0-based).
     Param(u32),
@@ -78,10 +78,20 @@ pub fn detect_byref(func: &SsaFunction) -> ByrefInfo {
         .collect();
 
     let def_map = build_def_map(func);
+    let spec = StackSpec::for_arch(func.arch)
+        .or_else(|| StackSpec::for_arch(ArchId::X86_64))
+        .expect("x86_64 always has a StackSpec");
+    let trace = AddrTrace {
+        func,
+        spec: &spec,
+        coords: FrameCoordinates::of(func, &spec),
+        def_map: &def_map,
+        active_param_regs: &active_param_regs,
+    };
 
     // ---- Rule 1: scan every IntAdd/IntSub for `param + K` shape ----
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
             if !matches!(insn.op, IrOp::IntAdd | IrOp::IntSub) {
                 continue;
             }
@@ -108,12 +118,11 @@ pub fn detect_byref(func: &SsaFunction) -> ByrefInfo {
                 continue;
             }
             // Or resolve through a Copy chain.
-            if let Some(AddrRoot::Param(idx)) =
-                resolve_root(base_vn, func, &def_map, &active_param_regs, 0).filter(|root| {
-                    match root {
-                        AddrRoot::Param(idx) => param_is_pointer(func, *idx),
-                        AddrRoot::Stack(_) => true,
-                    }
+            if let Some(AddrRoot::Param(idx)) = trace
+                .resolve_root(base_vn, (bid, insn_idx), 0)
+                .filter(|root| match root {
+                    AddrRoot::Param(idx) => param_is_pointer(func, *idx),
+                    AddrRoot::Stack(_) => true,
                 })
             {
                 info.byref_params.insert(idx);
@@ -134,14 +143,9 @@ pub fn detect_byref(func: &SsaFunction) -> ByrefInfo {
                     info.byref_locals.insert(arg_vn.offset as i64);
                     continue;
                 }
-                // 2b: argument is RSP/RBP itself (offset 0).
-                if is_rsp_or_rbp(&arg_vn) {
-                    info.byref_locals.insert(0);
-                    continue;
-                }
-                // 2c: resolve through Copy / IntAdd / IntSub chain.
-                if let Some(AddrRoot::Stack(k)) =
-                    resolve_root(&arg_vn, func, &def_map, &active_param_regs, 0)
+                // 2b: argument is RSP/RBP itself, or resolves through a
+                // Copy / IntAdd / IntSub chain.
+                if let Some(AddrRoot::Stack(k)) = trace.resolve_root(&arg_vn, (bid, insn_idx), 0)
                 {
                     info.byref_locals.insert(k);
                 }
@@ -198,83 +202,92 @@ fn param_index_for_input(
 /// Resolve `addr` through `Copy` / `IntAdd` / `IntSub` chains to its
 /// ultimate symbolic root.  Returns `None` if the trace doesn't bottom
 /// out at RSP/RBP or one of this function's parameter registers.
-fn resolve_root(
-    addr: &Varnode,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    active_param_regs: &[u64],
-    depth: u32,
-) -> Option<AddrRoot> {
-    if depth > MAX_RESOLVE_DEPTH {
-        return None;
-    }
+/// Address-trace state shared by every [`AddrRoot`] query of one function.
+struct AddrTrace<'a> {
+    func: &'a SsaFunction,
+    spec: &'a StackSpec,
+    coords: FrameCoordinates,
+    def_map: &'a DefMap,
+    active_param_regs: &'a [u64],
+}
 
-    if addr.space == SpaceId::Stack {
-        return Some(AddrRoot::Stack(addr.offset as i64));
-    }
-    if is_rsp_or_rbp(addr) {
-        return Some(AddrRoot::Stack(0));
-    }
-    if addr.space == SpaceId::Register
-        && let Some(idx) = active_param_regs.iter().position(|&r| r == addr.offset)
-    {
-        return Some(AddrRoot::Param(idx as u32));
-    }
-    if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
-        return None;
-    }
-
-    let defs = def_map.get(addr)?;
-    for &(bid, idx) in defs {
-        let block = func.function.blocks.get(&bid)?;
-        let def = block.insns.get(idx)?;
-        match def.op {
-            IrOp::Copy => {
-                if def.inputs.is_empty() {
-                    continue;
-                }
-                return resolve_root(&def.inputs[0], func, def_map, active_param_regs, depth + 1);
-            }
-            IrOp::IntAdd => {
-                if def.inputs.len() < 2 {
-                    continue;
-                }
-                let (a, b) = (&def.inputs[0], &def.inputs[1]);
-                if b.space == SpaceId::Const {
-                    match resolve_root(a, func, def_map, active_param_regs, depth + 1)? {
-                        AddrRoot::Stack(k) => {
-                            return Some(AddrRoot::Stack(k.wrapping_add(b.offset as i64)));
-                        }
-                        AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
-                    }
-                }
-                if a.space == SpaceId::Const {
-                    match resolve_root(b, func, def_map, active_param_regs, depth + 1)? {
-                        AddrRoot::Stack(k) => {
-                            return Some(AddrRoot::Stack(k.wrapping_add(a.offset as i64)));
-                        }
-                        AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
-                    }
-                }
-            }
-            IrOp::IntSub => {
-                if def.inputs.len() < 2 {
-                    continue;
-                }
-                let (a, b) = (&def.inputs[0], &def.inputs[1]);
-                if b.space == SpaceId::Const {
-                    match resolve_root(a, func, def_map, active_param_regs, depth + 1)? {
-                        AddrRoot::Stack(k) => {
-                            return Some(AddrRoot::Stack(k.wrapping_sub(b.offset as i64)));
-                        }
-                        AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
-                    }
-                }
-            }
-            _ => {}
+impl AddrTrace<'_> {
+    /// Root of the value `addr` holds as read by the instruction at `site`.
+    fn resolve_root(&self, addr: &Varnode, site: (BlockId, usize), depth: u32) -> Option<AddrRoot> {
+        if depth > MAX_RESOLVE_DEPTH {
+            return None;
         }
+
+        if addr.space == SpaceId::Stack {
+            return Some(AddrRoot::Stack(addr.offset as i64));
+        }
+        if let Some(base) = self.coords.base_offset(self.func, self.spec, site, addr) {
+            return Some(AddrRoot::Stack(base));
+        }
+        if addr.space == SpaceId::Register
+            && let Some(idx) = self
+                .active_param_regs
+                .iter()
+                .position(|&r| r == addr.offset)
+        {
+            return Some(AddrRoot::Param(idx as u32));
+        }
+        if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
+            return None;
+        }
+
+        let defs = self.def_map.get(addr)?;
+        for &(bid, idx) in defs {
+            let block = self.func.function.blocks.get(&bid)?;
+            let def = block.insns.get(idx)?;
+            match def.op {
+                IrOp::Copy => {
+                    if def.inputs.is_empty() {
+                        continue;
+                    }
+                    return self.resolve_root(&def.inputs[0], (bid, idx), depth + 1);
+                }
+                IrOp::IntAdd => {
+                    if def.inputs.len() < 2 {
+                        continue;
+                    }
+                    let (a, b) = (&def.inputs[0], &def.inputs[1]);
+                    if b.space == SpaceId::Const {
+                        match self.resolve_root(a, (bid, idx), depth + 1)? {
+                            AddrRoot::Stack(k) => {
+                                return Some(AddrRoot::Stack(k.wrapping_add(b.offset as i64)));
+                            }
+                            AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
+                        }
+                    }
+                    if a.space == SpaceId::Const {
+                        match self.resolve_root(b, (bid, idx), depth + 1)? {
+                            AddrRoot::Stack(k) => {
+                                return Some(AddrRoot::Stack(k.wrapping_add(a.offset as i64)));
+                            }
+                            AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
+                        }
+                    }
+                }
+                IrOp::IntSub => {
+                    if def.inputs.len() < 2 {
+                        continue;
+                    }
+                    let (a, b) = (&def.inputs[0], &def.inputs[1]);
+                    if b.space == SpaceId::Const {
+                        match self.resolve_root(a, (bid, idx), depth + 1)? {
+                            AddrRoot::Stack(k) => {
+                                return Some(AddrRoot::Stack(k.wrapping_sub(b.offset as i64)));
+                            }
+                            AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
-    None
 }
 
 /// Collect the [`Varnode`]s that feed into each argument register at a
@@ -337,10 +350,6 @@ fn collect_call_arg_sources(
     out
 }
 
-fn is_rsp_or_rbp(v: &Varnode) -> bool {
-    v.space == SpaceId::Register && (v.offset == RSP_OFFSET || v.offset == RBP_OFFSET)
-}
-
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
@@ -350,7 +359,7 @@ mod tests {
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn};
 
     fn rsp() -> Varnode {
-        Varnode::reg(RSP_OFFSET, 8)
+        Varnode::reg(32, 8)
     }
     fn rdi() -> Varnode {
         Varnode::reg(RDI, 8)

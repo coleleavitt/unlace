@@ -1,0 +1,20 @@
+__int64 __fastcall sub_9E1CE0(__int64 a1, __int64 a2)
+{
+  __int64 v2; // r12
+  int v3; // r13d
+  __int64 v4; // r14
+  int v5; // r12d
+  unsigned int v6; // ebp
+
+  v2 = *(_QWORD *)(a1 + 184);
+  v3 = *(_DWORD *)sub_A1A5A0(v2, 8);
+  sub_A1A5E0(v2, 8);
+  v4 = *(_QWORD *)(a1 + 184);
+  v5 = *(_DWORD *)sub_A1A5A0(v4, 8);
+  sub_A1A5E0(v4, 8);
+  v6 = sub_9E1A40(a1, a2, v5, v3);
+  if ( (_BYTE)v6 )
+    *(_DWORD *)sub_A1A4E0(*(_QWORD *)(a1 + 184), 8) = v5 / v3;
+  return v6;
+}
+

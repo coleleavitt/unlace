@@ -27,9 +27,9 @@ use unlace_ir::ssa::{
     VarnodeSlot,
 };
 use unlace_ir::stack::StackSpec;
-use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
+use unlace_ir::{ArchId, BlockId, IrOp, SpaceId};
 
-const MAX_RESOLVE_DEPTH: u32 = 16;
+use crate::stack_address::{AddressResolver, FrameCoordinates, defining_site_for_sv};
 
 /// Fusion-sweep decision: does a stack access at `offset` land *strictly inside*
 /// the previously-kept slot at `prev_off` of size `prev_size` (so it should be
@@ -57,9 +57,6 @@ fn resolve_spec(func: &SsaFunction) -> StackSpec {
         .expect("x86_64 always has a StackSpec")
 }
 
-type DefMap = BTreeMap<Varnode, Vec<(BlockId, usize)>>;
-type ResolveCache = BTreeMap<(Varnode, u32), Option<i64>>;
-type SsaResolveCache = BTreeMap<(unlace_ir::ssa::SsaVarnode, u32), Option<i64>>;
 type HeuristicStackAccessKey = (u64, i64, u8, bool);
 
 /// Recover the logical stack-frame layout of `func`.
@@ -77,9 +74,7 @@ type HeuristicStackAccessKey = (u64, i64, u8, bool);
 /// detected.
 pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     let spec = resolve_spec(func);
-    let def_map = build_def_map(func);
-    let mut resolve_cache: ResolveCache = BTreeMap::new();
-    let mut ssa_resolve_cache: SsaResolveCache = BTreeMap::new();
+    let mut resolver = AddressResolver::new(func, &spec);
     stack_frame_trace_line(
         func,
         format_args!(
@@ -117,15 +112,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                     if insn.inputs.len() < 3 {
                         continue;
                     }
-                    if let Some(offset) = extract_stack_offset(
-                        (bid, insn_idx),
-                        insn,
-                        func,
-                        &def_map,
-                        &mut resolve_cache,
-                        &mut ssa_resolve_cache,
-                        &spec,
-                    ) {
+                    if let Some(offset) = resolver.stack_offset((bid, insn_idx), insn) {
                         let width = insn.inputs[2].size;
                         if bid == func.function.entry
                             && stores_incoming_arg_register(func, (bid, insn_idx))
@@ -166,15 +153,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                     if insn.inputs.len() < 2 {
                         continue;
                     }
-                    if let Some(offset) = extract_stack_offset(
-                        (bid, insn_idx),
-                        insn,
-                        func,
-                        &def_map,
-                        &mut resolve_cache,
-                        &mut ssa_resolve_cache,
-                        &spec,
-                    ) {
+                    if let Some(offset) = resolver.stack_offset((bid, insn_idx), insn) {
                         let width = insn.output.map(|o| o.size).unwrap_or(0);
                         if width > 0 {
                             record_observation(offset, width, &mut observations);
@@ -203,15 +182,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                 _ => {}
             }
 
-            if let Some(offset) = taken_stack_address(
-                (bid, insn_idx),
-                insn,
-                func,
-                &def_map,
-                &mut resolve_cache,
-                &mut ssa_resolve_cache,
-                &spec,
-            ) {
+            if let Some(offset) = resolver.taken_stack_address((bid, insn_idx), insn) {
                 address_taken.insert(offset);
             }
 
@@ -383,8 +354,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
         frame_size = (hi - lo).max(0) as u64;
     }
 
-    let below_entry_sp = offsets_below_entry_sp(func, &heuristic_stack_accesses);
-    classify_slot_kinds(func, &spec, &below_entry_sp, &mut locals);
+    classify_slot_kinds(func, &spec, &resolver.coords, &mut locals);
     for (&offset, local) in &locals {
         stack_frame_trace_line(
             func,
@@ -404,30 +374,31 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
 
     StackFrame {
         locals,
+        sp_offset_at_addr: resolver.coords.sp_offset_by_addr(func),
         frame_size,
         max_pos_offset,
         min_neg_offset,
     }
 }
 
-/// Tag every recovered slot with a [`FrameSlotKind`] using the
-/// post-prologue SP delta and the calling convention (Batch 2 slice 2).
+/// Tag every recovered slot with a [`FrameSlotKind`] from its position
+/// relative to the return address and the calling convention (Batch 2
+/// slice 2).
 ///
-/// Conventions used here (consistent with [`recover_stack_frame`]'s
-/// offset model): the recovered offset is relative to **function-entry
-/// RSP**, i.e. the value of RSP *before* the prologue. On x86_64 the
-/// return address occupies `[entry_rsp + 0 .. entry_rsp + ptr_size)`,
-/// so:
+/// Offsets are frame coordinates ([`FrameCoordinates`]): without a frame
+/// pointer the return address occupies `[0, ptr_size)`; with one it sits
+/// `ptr_size` above the saved frame pointer at 0. Relative to the return
+/// address slot `ret`:
 ///
-/// * negative offsets → callee-local storage (default
+/// * offsets below `ret` → callee-local storage (default
 ///   [`FrameSlotKind::Local`])
-/// * offsets in `[0, ptr_size)` → the saved return-address slot, tagged as
-///   non-source control-flow storage.
-/// * offsets `>= ptr_size` → caller-pushed stack arguments
+/// * offsets in `[ret, ret + ptr_size)` → the saved return-address slot,
+///   tagged as non-source control-flow storage.
+/// * offsets `>= ret + ptr_size` → caller-pushed stack arguments
 ///   (SysV / cdecl) — tagged [`FrameSlotKind::StackArg`].
 /// * for Microsoft x64 the 32-byte shadow region at
-///   `[ptr_size, ptr_size + 32)` is tagged [`FrameSlotKind::ShadowSpace`];
-///   slots at `>= ptr_size + 32` are real stack args.
+///   `[ret + ptr_size, ret + ptr_size + 32)` is tagged
+///   [`FrameSlotKind::ShadowSpace`]; slots past it are real stack args.
 ///
 /// Slot offsets that also appear in [`SsaFunction::saved_register_slots`]
 /// are tagged [`FrameSlotKind::SavedRegister`] regardless of sign; that
@@ -436,10 +407,11 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
 fn classify_slot_kinds(
     func: &SsaFunction,
     spec: &StackSpec,
-    below_entry_sp: &BTreeSet<i64>,
+    coords: &FrameCoordinates,
     locals: &mut BTreeMap<i64, StackLocal>,
 ) {
     let ptr = spec.ptr_size as i64;
+    let ret = coords.return_address_offset();
     let cc = func.calling_convention;
     let shadow_size: i64 = match cc {
         CallingConvention::MicrosoftX64 => 32,
@@ -453,58 +425,27 @@ fn classify_slot_kinds(
             slot.kind = FrameSlotKind::SavedRegister;
             continue;
         }
-        if offset < 0 {
+        if offset < ret {
             slot.kind = FrameSlotKind::Local;
             continue;
         }
-        if offset < ptr
+        if offset < ret + ptr
             && slot.size <= ptr as u64
             && slot.access_widths.iter().all(|w| i64::from(*w) <= ptr)
         {
             slot.kind = FrameSlotKind::ReturnAddress;
             continue;
         }
-        if offset == 0 {
+        if offset == ret {
             slot.kind = FrameSlotKind::Local;
             continue;
         }
-        let end = offset.saturating_add(slot.size as i64);
-        if below_entry_sp.range(offset..end).next().is_some() {
-            slot.kind = FrameSlotKind::Local;
-            continue;
-        }
-        if shadow_size > 0 && offset < ptr + shadow_size {
+        if shadow_size > 0 && offset < ret + ptr + shadow_size {
             slot.kind = FrameSlotKind::ShadowSpace;
             continue;
         }
         slot.kind = FrameSlotKind::StackArg;
     }
-}
-
-/// Offsets of accesses that are relative to a moved stack pointer
-/// (`[rsp+8]` after `sub rsp, 0x18`) and land below the entry SP.
-///
-/// The heuristic offsets are relative to the base register's value at the
-/// access, so a non-negative one is not by itsexecutable an incoming stack argument;
-/// the entry-relative delta that [`SsaFunction::stack_accesses`] tracks for
-/// the same instruction tells the two apart.
-fn offsets_below_entry_sp(
-    func: &SsaFunction,
-    heuristic_stack_accesses: &BTreeSet<HeuristicStackAccessKey>,
-) -> BTreeSet<i64> {
-    let mut out = BTreeSet::new();
-    for acc in func.stack_accesses.iter().filter(|acc| acc.delta < 0) {
-        for &(addr, offset, width, is_store) in heuristic_stack_accesses {
-            if offset >= 0
-                && addr == acc.source_addr
-                && width == acc.width
-                && is_store == acc.is_store
-            {
-                out.insert(offset);
-            }
-        }
-    }
-    out
 }
 
 fn record_observation(off: i64, width: u8, obs: &mut BTreeMap<i64, Vec<u8>>) {
@@ -524,12 +465,10 @@ fn seed_recorded_stack_accesses(
 ) {
     for acc in &func.stack_accesses {
         if heuristic_stack_accesses.iter().any(
-            |(source_addr, heuristic_delta, heuristic_width, heuristic_is_store)| {
+            |(source_addr, _heuristic_delta, heuristic_width, heuristic_is_store)| {
                 *source_addr == acc.source_addr
                     && *heuristic_width == acc.width
                     && *heuristic_is_store == acc.is_store
-                    && (*heuristic_delta == acc.delta
-                        || heuristic_delta.is_negative() == acc.delta.is_negative())
             },
         ) {
             stack_frame_trace_line(
@@ -725,376 +664,6 @@ fn stack_frame_trace_line(func: &SsaFunction, message: impl std::fmt::Display) {
     tracing::debug!(target: "unlace::stack::frame", "func={} {message}", func.function.name);
 }
 
-/// Build a map from defined varnode → list of definition sites.
-///
-/// Mirrors [`crate::stack_vars::build_def_map`] but kept local so this
-/// module can stand alone if the older pass is ever removed.
-fn build_def_map(func: &SsaFunction) -> DefMap {
-    let mut def_map: DefMap = BTreeMap::new();
-    for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
-        if *slot == VarnodeSlot::Output {
-            def_map.entry(sv.base).or_default().push((bid, insn_idx));
-        }
-    }
-    def_map
-}
-
-/// Resolve a LOAD/STORE address operand to a frame offset, returning
-/// `None` if the trace doesn't terminate at RSP or RBP.
-fn extract_stack_offset(
-    site: (BlockId, usize),
-    insn: &IrInsn,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    resolve_cache: &mut ResolveCache,
-    ssa_resolve_cache: &mut SsaResolveCache,
-    spec: &StackSpec,
-) -> Option<i64> {
-    let hint = func.stack_offset_hints.get(&site).copied();
-    let fresh = extract_stack_offset_fresh(
-        site,
-        insn,
-        func,
-        def_map,
-        resolve_cache,
-        ssa_resolve_cache,
-        spec,
-    );
-
-    if let (Some(fresh), Some(hint)) = (fresh, hint)
-        && fresh != hint
-    {
-        stack_frame_trace_line(
-            func,
-            format_args!(
-                "stale-hint site={:?} addr={:#x} fresh={} hint={}",
-                site, insn.addr, fresh, hint
-            ),
-        );
-    }
-
-    fresh.or(hint)
-}
-
-fn extract_stack_offset_fresh(
-    site: (BlockId, usize),
-    insn: &IrInsn,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    resolve_cache: &mut ResolveCache,
-    ssa_resolve_cache: &mut SsaResolveCache,
-    spec: &StackSpec,
-) -> Option<i64> {
-    let addr = &insn.inputs[1];
-
-    if addr.space == SpaceId::Stack {
-        return Some(addr.offset as i64);
-    }
-    if spec.is_frame_base(addr) {
-        return Some(0);
-    }
-    if addr.space == SpaceId::Unique || addr.space == SpaceId::Register {
-        if let Some(&addr_sv) = func.var_map.get(&(site.0, site.1, VarnodeSlot::Input(1))) {
-            return find_relative_offset_ssa(
-                &addr_sv,
-                func,
-                def_map,
-                resolve_cache,
-                ssa_resolve_cache,
-                0,
-                spec,
-            );
-        }
-        return find_relative_offset(addr, func, def_map, resolve_cache, 0, spec);
-    }
-    None
-}
-
-fn find_relative_offset(
-    addr: &Varnode,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    resolve_cache: &mut ResolveCache,
-    depth: u32,
-    spec: &StackSpec,
-) -> Option<i64> {
-    if depth > MAX_RESOLVE_DEPTH {
-        return None;
-    }
-    if let Some(&cached) = resolve_cache.get(&(*addr, depth)) {
-        return cached;
-    }
-    let resolved = find_relative_offset_uncached(addr, func, def_map, resolve_cache, depth, spec);
-    resolve_cache.insert((*addr, depth), resolved);
-    resolved
-}
-
-fn find_relative_offset_uncached(
-    addr: &Varnode,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    resolve_cache: &mut ResolveCache,
-    depth: u32,
-    spec: &StackSpec,
-) -> Option<i64> {
-    let defs = def_map.get(addr)?;
-    for &(bid, insn_idx) in defs {
-        let block = func.function.blocks.get(&bid)?;
-        let def = block.insns.get(insn_idx)?;
-        match def.op {
-            IrOp::IntAdd => {
-                if def.inputs.len() < 2 {
-                    continue;
-                }
-                let (a, b) = (&def.inputs[0], &def.inputs[1]);
-                if spec.is_frame_base(a) && b.space == SpaceId::Const {
-                    return Some(b.offset as i64);
-                }
-                if spec.is_frame_base(b) && a.space == SpaceId::Const {
-                    return Some(a.offset as i64);
-                }
-                if b.space == SpaceId::Const
-                    && let Some(base) =
-                        find_relative_offset(a, func, def_map, resolve_cache, depth + 1, spec)
-                {
-                    return Some(base.wrapping_add(b.offset as i64));
-                }
-                if a.space == SpaceId::Const
-                    && let Some(base) =
-                        find_relative_offset(b, func, def_map, resolve_cache, depth + 1, spec)
-                {
-                    return Some(base.wrapping_add(a.offset as i64));
-                }
-            }
-            IrOp::IntSub => {
-                if def.inputs.len() < 2 {
-                    continue;
-                }
-                let (a, b) = (&def.inputs[0], &def.inputs[1]);
-                if spec.is_frame_base(a) && b.space == SpaceId::Const {
-                    return Some(-(b.offset as i64));
-                }
-                if b.space == SpaceId::Const
-                    && let Some(base) =
-                        find_relative_offset(a, func, def_map, resolve_cache, depth + 1, spec)
-                {
-                    return Some(base.wrapping_sub(b.offset as i64));
-                }
-            }
-            IrOp::Copy => {
-                if def.inputs.is_empty() {
-                    continue;
-                }
-                let src = &def.inputs[0];
-                if spec.is_frame_base(src) {
-                    return Some(0);
-                }
-                if src.space == SpaceId::Stack {
-                    return Some(src.offset as i64);
-                }
-                return find_relative_offset(src, func, def_map, resolve_cache, depth + 1, spec);
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn find_relative_offset_ssa(
-    addr_sv: &unlace_ir::ssa::SsaVarnode,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    resolve_cache: &mut ResolveCache,
-    ssa_resolve_cache: &mut SsaResolveCache,
-    depth: u32,
-    spec: &StackSpec,
-) -> Option<i64> {
-    if depth > MAX_RESOLVE_DEPTH {
-        return None;
-    }
-    if let Some(&cached) = ssa_resolve_cache.get(&(*addr_sv, depth)) {
-        return cached;
-    }
-    let resolved = find_relative_offset_ssa_uncached(
-        addr_sv,
-        func,
-        def_map,
-        resolve_cache,
-        ssa_resolve_cache,
-        depth,
-        spec,
-    );
-    ssa_resolve_cache.insert((*addr_sv, depth), resolved);
-    resolved
-}
-
-fn find_relative_offset_ssa_uncached(
-    addr_sv: &unlace_ir::ssa::SsaVarnode,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    resolve_cache: &mut ResolveCache,
-    ssa_resolve_cache: &mut SsaResolveCache,
-    depth: u32,
-    spec: &StackSpec,
-) -> Option<i64> {
-    if addr_sv.base.space == SpaceId::Stack {
-        return Some(addr_sv.base.offset as i64);
-    }
-    if spec.is_frame_base(&addr_sv.base) {
-        return Some(0);
-    }
-
-    let (bid, insn_idx) = defining_site_for_sv(func, addr_sv)?;
-    let block = func.function.blocks.get(&bid)?;
-    let def = block.insns.get(insn_idx)?;
-    match def.op {
-        IrOp::IntAdd => {
-            if def.inputs.len() < 2 {
-                return None;
-            }
-            let (a, b) = (&def.inputs[0], &def.inputs[1]);
-            if b.space == SpaceId::Const
-                && let Some(base) = resolve_operand_offset(
-                    (bid, insn_idx),
-                    0,
-                    a,
-                    func,
-                    def_map,
-                    resolve_cache,
-                    ssa_resolve_cache,
-                    depth + 1,
-                    spec,
-                )
-            {
-                return Some(base.wrapping_add(b.offset as i64));
-            }
-            if a.space == SpaceId::Const
-                && let Some(base) = resolve_operand_offset(
-                    (bid, insn_idx),
-                    1,
-                    b,
-                    func,
-                    def_map,
-                    resolve_cache,
-                    ssa_resolve_cache,
-                    depth + 1,
-                    spec,
-                )
-            {
-                return Some(base.wrapping_add(a.offset as i64));
-            }
-            None
-        }
-        IrOp::IntSub => {
-            if def.inputs.len() < 2 {
-                return None;
-            }
-            let (a, b) = (&def.inputs[0], &def.inputs[1]);
-            if b.space == SpaceId::Const
-                && let Some(base) = resolve_operand_offset(
-                    (bid, insn_idx),
-                    0,
-                    a,
-                    func,
-                    def_map,
-                    resolve_cache,
-                    ssa_resolve_cache,
-                    depth + 1,
-                    spec,
-                )
-            {
-                return Some(base.wrapping_sub(b.offset as i64));
-            }
-            None
-        }
-        IrOp::Copy => {
-            let src = def.inputs.first()?;
-            resolve_operand_offset(
-                (bid, insn_idx),
-                0,
-                src,
-                func,
-                def_map,
-                resolve_cache,
-                ssa_resolve_cache,
-                depth + 1,
-                spec,
-            )
-        }
-        _ => None,
-    }
-}
-
-fn resolve_operand_offset(
-    site: (BlockId, usize),
-    input_idx: usize,
-    vn: &Varnode,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    resolve_cache: &mut ResolveCache,
-    ssa_resolve_cache: &mut SsaResolveCache,
-    depth: u32,
-    spec: &StackSpec,
-) -> Option<i64> {
-    if vn.space == SpaceId::Stack {
-        return Some(vn.offset as i64);
-    }
-    if spec.is_frame_base(vn) {
-        return Some(0);
-    }
-    if vn.space == SpaceId::Const {
-        return None;
-    }
-    if let Some(&input_sv) = func
-        .var_map
-        .get(&(site.0, site.1, VarnodeSlot::Input(input_idx)))
-    {
-        return find_relative_offset_ssa(
-            &input_sv,
-            func,
-            def_map,
-            resolve_cache,
-            ssa_resolve_cache,
-            depth,
-            spec,
-        );
-    }
-    if vn.space == SpaceId::Unique || vn.space == SpaceId::Register {
-        return find_relative_offset(vn, func, def_map, resolve_cache, depth, spec);
-    }
-    None
-}
-
-/// The stack offset whose address `insn` materializes into a register
-/// (`lea rdi, [rsp+0x10]` lifts to `rdi = rsp + 0x10`), if any.
-fn taken_stack_address(
-    site: (BlockId, usize),
-    insn: &IrInsn,
-    func: &SsaFunction,
-    def_map: &DefMap,
-    resolve_cache: &mut ResolveCache,
-    ssa_resolve_cache: &mut SsaResolveCache,
-    spec: &StackSpec,
-) -> Option<i64> {
-    let out = insn.output?;
-    if out.space != SpaceId::Register
-        || spec.is_frame_base(&out)
-        || !matches!(insn.op, IrOp::IntAdd | IrOp::IntSub | IrOp::Copy)
-    {
-        return None;
-    }
-    let out_sv = func.var_map.get(&(site.0, site.1, VarnodeSlot::Output))?;
-    find_relative_offset_ssa(
-        out_sv,
-        func,
-        def_map,
-        resolve_cache,
-        ssa_resolve_cache,
-        0,
-        spec,
-    )
-}
-
 /// Does the STORE at `site` write a value the function received in an
 /// argument register (one nothing in the function defines, possibly narrowed
 /// or extended on the way)?
@@ -1131,24 +700,13 @@ fn stores_incoming_arg_register(func: &SsaFunction, site: (BlockId, usize)) -> b
     false
 }
 
-fn defining_site_for_sv(
-    func: &SsaFunction,
-    needle: &unlace_ir::ssa::SsaVarnode,
-) -> Option<(BlockId, usize)> {
-    func.var_map
-        .iter()
-        .find_map(|(&(bid, insn_idx, ref slot), sv)| {
-            (*slot == VarnodeSlot::Output && sv == needle).then_some((bid, insn_idx))
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
 
     use super::*;
     use unlace_ir::ssa::build_ssa;
-    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn};
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
 
     fn rsp() -> Varnode {
         Varnode::reg(32, 8)

@@ -246,7 +246,7 @@ pub mod sroa;
 pub mod sroa_plan;
 #[cfg(feature = "unwired")]
 pub mod ssa_cache;
-#[cfg(feature = "unwired")]
+pub mod stack_address;
 pub mod stack_context;
 pub mod stack_frame_recovery;
 pub mod stack_pointer_tracking;
@@ -281,6 +281,7 @@ pub mod type_infer;
 pub mod type_vote;
 #[cfg(feature = "unwired")]
 pub mod union_recovery;
+pub mod unreachable_block_elim;
 pub mod var_naming;
 pub mod vararg_detect;
 pub mod variable_merge;
@@ -552,6 +553,7 @@ pub use type_constraint_solver::{
     collect_and_apply as solve_type_constraints, collect_constraints, solve_constraints,
     solve_polymorphic_constraints,
 };
+pub use unreachable_block_elim::UnreachableBlockElimPass;
 pub use var_naming::{
     VarClassification, VarNamingPass, VarNamingStyle, VarRole, classify_variables,
     classify_variables_with_style, suggest_name,

@@ -349,6 +349,21 @@ fn walk_node(
             walk_list(finally_body, end, try_ctx, analysis, rewrites);
             Point::Node(id)
         }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            let try_ctx = Ctx {
+                in_try: true,
+                ..Ctx::default()
+            };
+            let end = Point::Opaque(analysis.fresh_id());
+            walk_list(try_body, end, try_ctx, analysis, rewrites);
+            let end = Point::Opaque(analysis.fresh_id());
+            walk_list(except_body, end, try_ctx, analysis, rewrites);
+            Point::Node(id)
+        }
         HirNode::Ternary { .. }
         | HirNode::TailCall { .. }
         | HirNode::ObjcBlock { .. }
@@ -412,6 +427,14 @@ pub(crate) fn for_each_body(node: &HirNode, f: &mut impl FnMut(&[HirNode])) {
             f(try_body);
             f(finally_body);
         }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            f(try_body);
+            f(except_body);
+        }
         _ => {}
     }
 }
@@ -469,6 +492,14 @@ pub(crate) fn for_each_body_mut(node: &mut HirNode, f: &mut impl FnMut(&mut Vec<
         } => {
             f(try_body);
             f(finally_body);
+        }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            f(try_body);
+            f(except_body);
         }
         _ => {}
     }

@@ -15,14 +15,21 @@
 //!    the pad.
 //! 2. [`recover_try_catch`] runs on the structured HIR and rewrites each
 //!    `if` on an [`EhHelper::Try`] flag into [`HirNode::TryCatch`].
+//!
+//! A cleanup-only landing pad ([`LandingPadKind::Cleanup`]) gets the same
+//! dispatch on an [`EhHelper::Wind`] flag and becomes
+//! [`HirNode::TryFinally`]; an MSVC `__except` scope
+//! ([`LandingPadKind::SehExcept`]) dispatches on [`EhHelper::Except`] and
+//! becomes [`HirNode::TryExcept`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use smallvec::smallvec;
-use unlace_ir::eh::EhHelper;
+use unlace_ir::cfg::EdgeKind;
+use unlace_ir::eh::{EhHelper, SehFilter};
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::types::Type;
-use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
+use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::hir::HirNode;
 
@@ -30,28 +37,66 @@ use crate::hir::HirNode;
 /// numbered from zero per function, far below this.
 const FLAG_UNIQUE_BASE: u64 = 0x4548_0000;
 
-/// A catch landing pad from the LSDA call-site table.
+/// A handler the unwinder enters: an Itanium landing pad from the LSDA
+/// call-site table, or an MSVC `__except` body from the scope table.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CatchLandingPad {
-    /// First instruction of the landing pad.
+pub struct LandingPad {
+    /// First instruction of the handler.
     pub addr: u64,
-    /// Start of the first call-site range that unwinds to `addr`.
+    /// Start of the first protected range that unwinds to `addr`.
     pub try_start: u64,
-    /// The type filter the pad always receives, when every call site that
-    /// unwinds to it names exactly one catch clause and no cleanup.
-    pub selector: Option<u64>,
+    pub kind: LandingPadKind,
+}
+
+/// What the unwinder enters a [`LandingPad`] for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LandingPadKind {
+    /// A C++ catch handler.
+    Catch {
+        /// The type filter the pad always receives, when every call site
+        /// that unwinds to it names exactly one catch clause and no cleanup.
+        selector: Option<u64>,
+    },
+    /// Destructors (and `__cxa_end_catch`) that run on unwind, ending in
+    /// `_Unwind_Resume`.
+    Cleanup,
+    /// An MSVC `__except (filter) { }` body.
+    SehExcept { filter: SehFilter },
+}
+
+impl LandingPadKind {
+    /// The dispatch helper whose flag sends control to the pad.
+    fn dispatch_helper(&self) -> EhHelper {
+        match self {
+            Self::Catch { .. } => EhHelper::Try,
+            Self::Cleanup => EhHelper::Wind,
+            Self::SehExcept { .. } => EhHelper::Except,
+        }
+    }
+
+    /// The selector an Itanium pad receives: a known type filter, `0` for
+    /// a cleanup, or `None` inside the option when only the personality
+    /// routine knows. `None` for an MSVC handler, which receives nothing.
+    fn itanium_selector(&self) -> Option<Option<u64>> {
+        match self {
+            Self::Catch { selector } => Some(*selector),
+            Self::Cleanup => Some(Some(0)),
+            Self::SehExcept { .. } => None,
+        }
+    }
 }
 
 /// Insert one dispatch block per landing pad of `pads` and define the
 /// exception and selector registers (`data_regs`, see
-/// [`unlace_ir::eh::landing_pad_data_regs`]) at each pad.
+/// [`unlace_ir::eh::landing_pad_data_regs`]) at each Itanium pad. An MSVC
+/// `__except` body receives no such registers.
 ///
 /// `func` must have block leaders at every `try_start` and `addr`. Pads
 /// whose blocks are missing, or whose try start is the function entry, are
 /// skipped. Returns the number of dispatch blocks inserted.
 pub fn install_eh_dispatch(
     func: &mut Function,
-    pads: &[CatchLandingPad],
+    pads: &[LandingPad],
     data_regs: (Varnode, Varnode),
 ) -> usize {
     let mut installed = 0;
@@ -95,9 +140,15 @@ pub fn install_eh_dispatch(
         }
 
         let flag = Varnode::unique(FLAG_UNIQUE_BASE + installed as u64, 1);
+        let dispatch_insn = match &pad.kind {
+            LandingPadKind::SehExcept { filter } => {
+                EhHelper::except_insn(flag, *filter, pad.try_start)
+            }
+            kind => kind.dispatch_helper().insn(flag, pad.try_start),
+        };
         let mut block = BasicBlock::new(dispatch);
         block.insns = vec![
-            EhHelper::Try.insn(flag, pad.try_start),
+            dispatch_insn,
             IrInsn::without_output(
                 IrOp::Cbranch,
                 smallvec![Varnode::constant(pad.addr, 8), flag],
@@ -107,10 +158,39 @@ pub fn install_eh_dispatch(
         block.successors = smallvec![pad_block, try_block];
         func.insert_block(block);
 
-        define_landing_pad_data(func, pad_block, pad, data_regs);
+        detach_fallthrough_into_pad(func, pad_block, pad.addr);
+        if let Some(selector) = pad.kind.itanium_selector() {
+            define_landing_pad_data(func, pad_block, pad.addr, selector, data_regs);
+        }
         installed += 1;
     }
     installed
+}
+
+/// Take `pad_block` out of the successor lists of the blocks that only
+/// fall into it by layout. Only the unwinder enters a handler; the code
+/// laid out before it ends in a call the lifter does not know is noreturn
+/// (`__cxa_throw`, `_Unwind_Resume`), and a successor edge from there would
+/// make the pad's registers and stores look live along a path that does not
+/// exist. Explicit branches to the pad (the dispatch block's) stay. The
+/// CFG builder still adds a layout fall-through edge for such a block;
+/// the structurer discounts it (`StructureCtx::eh_handlers`).
+fn detach_fallthrough_into_pad(func: &mut Function, pad_block: BlockId, pad_addr: u64) {
+    for block in func.blocks.values_mut() {
+        if !block.successors.contains(&pad_block) {
+            continue;
+        }
+        let branches_to_pad = block.insns.last().is_some_and(|insn| {
+            matches!(insn.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind)
+                && insn
+                    .inputs
+                    .iter()
+                    .any(|vn| vn.space == SpaceId::Const && vn.offset == pad_addr)
+        });
+        if !branches_to_pad {
+            block.successors.retain(|succ| *succ != pad_block);
+        }
+    }
 }
 
 fn block_at(func: &Function, addr: u64) -> Option<BlockId> {
@@ -124,7 +204,8 @@ fn block_at(func: &Function, addr: u64) -> Option<BlockId> {
 fn define_landing_pad_data(
     func: &mut Function,
     pad_block: BlockId,
-    pad: &CatchLandingPad,
+    pad_addr: u64,
+    pad_selector: Option<u64>,
     (exception, selector): (Varnode, Varnode),
 ) {
     let block = func.blocks.get_mut(&pad_block).expect("pad block exists");
@@ -135,22 +216,51 @@ fn define_landing_pad_data(
     {
         return;
     }
-    let selector_def = match pad.selector {
+    let selector_def = match pad_selector {
         Some(filter) => IrInsn::with_output(
             IrOp::Copy,
             selector,
             smallvec![Varnode::constant(filter, selector.size)],
-            pad.addr,
+            pad_addr,
         ),
-        None => EhHelper::Selector.insn(selector, pad.addr),
+        None => EhHelper::Selector.insn(selector, pad_addr),
     };
-    let exception_def = EhHelper::Exception.insn(exception, pad.addr);
+    let exception_def = EhHelper::Exception.insn(exception, pad_addr);
     block.insns.splice(0..0, [exception_def, selector_def]);
 }
 
-/// Rewrite every `if` on an [`EhHelper::Try`] flag in `body` into a
-/// [`HirNode::TryCatch`]: the false arm is the try body, the true arm the
-/// handler.
+/// Whether `bid` is a dispatch block [`install_eh_dispatch`] inserted: its
+/// branch flag comes from a [`EhHelper::Try`], [`EhHelper::Wind`], or
+/// [`EhHelper::Except`] helper, and its true arm is a handler.
+pub fn is_dispatch_block(func: &SsaFunction, bid: BlockId) -> bool {
+    func.function.blocks.get(&bid).is_some_and(|block| {
+        block.insns.iter().any(|insn| {
+            matches!(
+                EhHelper::of(insn),
+                Some(EhHelper::Try | EhHelper::Wind | EhHelper::Except)
+            )
+        })
+    })
+}
+
+/// The handler blocks of `func`: the true successors of its dispatch
+/// blocks.
+pub fn handler_blocks(func: &SsaFunction) -> BTreeSet<BlockId> {
+    func.function
+        .blocks
+        .keys()
+        .filter(|&&bid| is_dispatch_block(func, bid))
+        .flat_map(|&bid| func.cfg.edges_from(bid))
+        .filter(|(_, kind)| *kind == EdgeKind::ConditionalTrue)
+        .map(|(target, _)| target)
+        .collect()
+}
+
+/// Rewrite every `if` on a dispatch flag in `body` into the try construct
+/// its helper stands for: the false arm is the try body, the true arm the
+/// handler. [`EhHelper::Try`] gives [`HirNode::TryCatch`],
+/// [`EhHelper::Wind`] [`HirNode::TryFinally`], and [`EhHelper::Except`]
+/// [`HirNode::TryExcept`].
 pub fn recover_try_catch(body: &mut Vec<HirNode>, func: &SsaFunction) {
     let flags = try_flags(func);
     if !flags.is_empty() {
@@ -158,34 +268,59 @@ pub fn recover_try_catch(body: &mut Vec<HirNode>, func: &SsaFunction) {
     }
 }
 
-/// SSA flags defined by an [`EhHelper::Try`], with the pad address their
-/// dispatch branches to.
+/// The handler a dispatch flag sends control to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Dispatch {
+    /// A catch pad at this address.
+    Catch {
+        pad: u64,
+    },
+    Cleanup,
+    Except {
+        filter: SehFilter,
+    },
+}
+
+/// SSA flags defined by a dispatch helper, with the handler each one
+/// branches to.
 fn try_flags(func: &SsaFunction) -> TryFlags {
     let mut flags = TryFlags::new();
     for (&bid, block) in &func.function.blocks {
-        let Some(def_idx) = block
-            .insns
-            .iter()
-            .position(|i| EhHelper::of(i) == Some(EhHelper::Try))
-        else {
+        let Some((def_idx, insn, helper)) = block.insns.iter().enumerate().find_map(|(idx, i)| {
+            let helper = EhHelper::of(i)?;
+            matches!(helper, EhHelper::Try | EhHelper::Wind | EhHelper::Except)
+                .then_some((idx, i, helper))
+        }) else {
             continue;
         };
         let Some(&flag) = func.var_map.get(&(bid, def_idx, VarnodeSlot::Output)) else {
             continue;
         };
-        let pad = block
-            .insns
-            .iter()
-            .rev()
-            .find(|i| i.op == IrOp::Cbranch)
-            .and_then(|i| i.inputs.first())
-            .map_or(0, |vn| vn.offset);
-        flags.insert(flag, pad);
+        let dispatch = match helper {
+            EhHelper::Wind => Dispatch::Cleanup,
+            EhHelper::Except => {
+                let Some(filter) = EhHelper::seh_filter(insn) else {
+                    continue;
+                };
+                Dispatch::Except { filter }
+            }
+            _ => {
+                let pad = block
+                    .insns
+                    .iter()
+                    .rev()
+                    .find(|i| i.op == IrOp::Cbranch)
+                    .and_then(|i| i.inputs.first())
+                    .map_or(0, |vn| vn.offset);
+                Dispatch::Catch { pad }
+            }
+        };
+        flags.insert(flag, dispatch);
     }
     flags
 }
 
-type TryFlags = BTreeMap<SsaVarnode, u64>;
+type TryFlags = BTreeMap<SsaVarnode, Dispatch>;
 
 fn rewrite_body(body: &mut Vec<HirNode>, func: &SsaFunction, flags: &TryFlags) {
     let mut converted = Vec::new();
@@ -195,7 +330,7 @@ fn rewrite_body(body: &mut Vec<HirNode>, func: &SsaFunction, flags: &TryFlags) {
     // A converted flag has no use left; drop its definition.
     body.retain(|node| {
         !matches!(node, HirNode::Statement(insn)
-            if EhHelper::of(insn) == Some(EhHelper::Try)
+            if EhHelper::of(insn).is_some()
                 && insn.output.is_some_and(|out| converted.contains(&out)))
     });
 }
@@ -244,6 +379,14 @@ fn rewrite_node(node: &mut HirNode, func: &SsaFunction, flags: &TryFlags) -> Vec
             rewrite_body(try_body, func, flags);
             rewrite_body(finally_body, func, flags);
         }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            rewrite_body(try_body, func, flags);
+            rewrite_body(except_body, func, flags);
+        }
         HirNode::Commented { inner, .. } => return rewrite_node(inner, func, flags),
         _ => {}
     }
@@ -256,15 +399,26 @@ fn rewrite_node(node: &mut HirNode, func: &SsaFunction, flags: &TryFlags) -> Vec
     else {
         return Vec::new();
     };
-    let Some(&pad) = flags.get(cond) else {
+    let Some(&dispatch) = flags.get(cond) else {
         return Vec::new();
     };
     let flag = cond.base;
     let handler = std::mem::take(then_body);
     let try_body = else_body.take().unwrap_or_default();
-    *node = HirNode::TryCatch {
-        try_body,
-        catch_arms: catch_arms(func, pad, handler),
+    *node = match dispatch {
+        Dispatch::Catch { pad } => HirNode::TryCatch {
+            try_body,
+            catch_arms: catch_arms(func, pad, handler),
+        },
+        Dispatch::Cleanup => HirNode::TryFinally {
+            try_body,
+            finally_body: handler,
+        },
+        Dispatch::Except { filter } => HirNode::TryExcept {
+            try_body,
+            filter,
+            except_body: handler,
+        },
     };
     vec![flag]
 }
@@ -340,17 +494,19 @@ mod tests {
         func
     }
 
-    fn pad() -> CatchLandingPad {
-        CatchLandingPad {
+    fn pad() -> LandingPad {
+        LandingPad {
             addr: 0x1020,
             try_start: 0x1004,
-            selector: Some(1),
+            kind: LandingPadKind::Catch { selector: Some(1) },
         }
     }
 
     fn find_try_catch(nodes: &[HirNode]) -> Option<&HirNode> {
         nodes.iter().find_map(|node| match node {
-            HirNode::TryCatch { .. } => Some(node),
+            HirNode::TryCatch { .. } | HirNode::TryFinally { .. } | HirNode::TryExcept { .. } => {
+                Some(node)
+            }
             HirNode::Block(inner) => find_try_catch(inner),
             _ => None,
         })
@@ -425,13 +581,102 @@ mod tests {
     }
 
     #[test]
+    fn cleanup_pad_structures_as_try_finally() {
+        let mut func = lifted_try_catch();
+        let cleanup = LandingPad {
+            kind: LandingPadKind::Cleanup,
+            ..pad()
+        };
+        assert_eq!(install_eh_dispatch(&mut func, &[cleanup], DATA_REGS), 1);
+        assert_eq!(
+            EhHelper::of(&func.blocks[&BlockId(4)].insns[0]),
+            Some(EhHelper::Wind)
+        );
+        let pad_insns = &func.blocks[&BlockId(3)].insns;
+        assert_eq!(EhHelper::of(&pad_insns[0]), Some(EhHelper::Exception));
+        assert_eq!(pad_insns[1].inputs[0], Varnode::constant(0, 8));
+
+        let hir = structure(&build_ssa(func)).expect("structuring succeeds");
+        let Some(HirNode::TryFinally {
+            try_body,
+            finally_body,
+        }) = find_try_catch(&hir.body)
+        else {
+            panic!("expected a try/finally: {:#?}", hir.body);
+        };
+        assert!(has_call(try_body), "try body holds the call: {try_body:#?}");
+        assert!(!finally_body.is_empty());
+        assert!(!format!("{:?}", hir.body).contains("If {"));
+    }
+
+    /// The try body throws (no successors), so the pad post-dominates the
+    /// dispatch. It must still structure as the handler arm, not as the code
+    /// after an `if` with an empty arm.
+    #[test]
+    fn handler_stays_the_arm_when_the_try_body_never_returns() {
+        let mut func = lifted_try_catch();
+        {
+            let try_block = func.blocks.get_mut(&BlockId(1)).unwrap();
+            try_block.insns.pop();
+            try_block.successors.clear();
+        }
+        let cleanup = LandingPad {
+            kind: LandingPadKind::Cleanup,
+            ..pad()
+        };
+        install_eh_dispatch(&mut func, &[cleanup], DATA_REGS);
+        let hir = structure(&build_ssa(func)).expect("structuring succeeds");
+        let Some(HirNode::TryFinally {
+            try_body,
+            finally_body,
+        }) = find_try_catch(&hir.body)
+        else {
+            panic!("expected a try/finally: {:#?}", hir.body);
+        };
+        assert!(has_call(try_body), "try body holds the call: {try_body:#?}");
+        assert!(
+            finally_body
+                .iter()
+                .any(|n| matches!(n, HirNode::Statement(i) if i.addr == 0x1020)),
+            "finally body holds the pad: {finally_body:#?}"
+        );
+    }
+
+    #[test]
+    fn seh_except_scope_structures_as_try_except_without_pad_registers() {
+        let mut func = lifted_try_catch();
+        let filter = SehFilter::Funclet(0x1058);
+        let except = LandingPad {
+            kind: LandingPadKind::SehExcept { filter },
+            ..pad()
+        };
+        assert_eq!(install_eh_dispatch(&mut func, &[except], DATA_REGS), 1);
+        let dispatch = &func.blocks[&BlockId(4)].insns[0];
+        assert_eq!(EhHelper::seh_filter(dispatch), Some(filter));
+        assert!(EhHelper::of(&func.blocks[&BlockId(3)].insns[0]).is_none());
+
+        let hir = structure(&build_ssa(func)).expect("structuring succeeds");
+        let Some(HirNode::TryExcept {
+            try_body,
+            filter: recovered,
+            except_body,
+        }) = find_try_catch(&hir.body)
+        else {
+            panic!("expected a try/except: {:#?}", hir.body);
+        };
+        assert_eq!(*recovered, filter);
+        assert!(has_call(try_body), "try body holds the call: {try_body:#?}");
+        assert!(!except_body.is_empty());
+    }
+
+    #[test]
     fn try_start_at_entry_or_without_leader_is_skipped() {
         let mut func = lifted_try_catch();
-        let at_entry = CatchLandingPad {
+        let at_entry = LandingPad {
             try_start: 0x1000,
             ..pad()
         };
-        let mid_block = CatchLandingPad {
+        let mid_block = LandingPad {
             try_start: 0x1009,
             ..pad()
         };

@@ -152,46 +152,66 @@ where
     Ok(image)
 }
 
-/// Walk `image.runtime_functions` and the corresponding `.xdata` entries to
-/// build a `SehInfo` from the parsed PE. Returns `None` if the binary has no
-/// runtime function table.
+/// Walk `image.runtime_functions` and the corresponding `.xdata` records to
+/// build a `SehInfo` from the decoded PE: the full `UNWIND_INFO` of every
+/// entry, its language-specific handler, and the `__C_specific_handler`
+/// scope table when the handler data decodes as one. Returns `None` if the
+/// compiled code has no runtime function table.
 fn collect_seh_from_image(image: &BinaryImage) -> Option<crate::seh::SehInfo> {
     if image.runtime_functions.is_empty() {
         return None;
     }
-    let mut functions = Vec::with_capacity(image.runtime_functions.len());
-    for rf in &image.runtime_functions {
-        let unwind_info_raw = rf.unwind_info.map(|ui| crate::seh::UnwindInfo {
-            version: ui.version,
-            flags: ui.flags,
-            size_of_prolog: ui.size_of_prolog,
-            count_of_codes: ui.count_of_codes,
-            frame_register: ui.frame_register,
-            frame_offset: ui.frame_offset,
-            unwind_codes_raw: Vec::new(),
-            handler_rva: None,
-        });
-        let handler = unwind_info_raw
-            .as_ref()
-            .and_then(|ui| ui.handler_rva)
-            .map(u64::from);
-        functions.push(crate::seh::SehFunction {
-            begin: rf.begin_address,
-            end: rf.end_address,
-            unwind_info: unwind_info_raw.unwrap_or(crate::seh::UnwindInfo {
-                version: 0,
-                flags: 0,
-                size_of_prolog: 0,
-                count_of_codes: 0,
-                frame_register: 0,
-                frame_offset: 0,
-                unwind_codes_raw: Vec::new(),
-                handler_rva: None,
-            }),
-            handler,
-        });
-    }
+    let image_base = image.image_base.unwrap_or(0);
+    let functions = image
+        .runtime_functions
+        .iter()
+        .map(|rf| {
+            let record = section_bytes_from(image, rf.unwind_info_address);
+            let unwind_info = record
+                .and_then(crate::seh::parse_unwind_info)
+                .unwrap_or_else(|| crate::seh::UnwindInfo {
+                    version: 0,
+                    flags: 0,
+                    size_of_prolog: 0,
+                    count_of_codes: 0,
+                    frame_register: 0,
+                    frame_offset: 0,
+                    unwind_codes_raw: Vec::new(),
+                    handler_rva: None,
+                });
+            let handler = unwind_info
+                .handler_rva
+                .map(|rva| image_base + u64::from(rva));
+            let scopes = record
+                .zip(unwind_info.handler_data_offset())
+                .and_then(|(record, off)| record.get(off..))
+                .and_then(|data| {
+                    crate::seh::parse_scope_table(
+                        data,
+                        image_base,
+                        rf.begin_address..rf.end_address,
+                    )
+                })
+                .unwrap_or_default();
+            crate::seh::SehFunction {
+                begin: rf.begin_address,
+                end: rf.end_address,
+                unwind_info,
+                handler,
+                scopes,
+            }
+        })
+        .collect();
     Some(crate::seh::SehInfo { functions })
+}
+
+/// The bytes of the section that contains `va`, from `va` to the section's
+/// end.
+fn section_bytes_from(image: &BinaryImage, va: u64) -> Option<&[u8]> {
+    image.sections.iter().find_map(|section| {
+        let offset = va.checked_sub(section.vaddr)?;
+        section.data.get(usize::try_from(offset).ok()?..)
+    })
 }
 
 /// Scan `.rdata` for MSVC vtables and recover the per-class hierarchy.

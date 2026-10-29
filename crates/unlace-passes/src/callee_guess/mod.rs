@@ -15,4 +15,4 @@ mod guess;
 mod site;
 
 pub use guess::guess_from_call_sites;
-pub use site::{CallSite, CallSiteArgs, collect_call_sites};
+pub use site::{CallSite, CallSiteArgs, call_window, collect_call_sites};

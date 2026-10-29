@@ -2189,6 +2189,7 @@ mod tests {
                     kind: Default::default(),
                 },
             )]),
+            sp_offset_at_addr: BTreeMap::new(),
             frame_size: 4,
             max_pos_offset: 0,
             min_neg_offset: -8,

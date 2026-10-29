@@ -98,6 +98,13 @@ fn predecessors(func: &Function) -> BTreeMap<BlockId, Vec<BlockId>> {
 }
 
 /// The instructions that run between the previous call and the call at
+/// `(bid, idx)` of `func`, in program order: the call's block and any chain
+/// of single-predecessor blocks leading into it.
+pub fn call_window(func: &Function, bid: BlockId, idx: usize) -> Vec<&IrInsn> {
+    window_before(func, &predecessors(func), bid, idx)
+}
+
+/// The instructions that run between the previous call and the call at
 /// `(bid, idx)`, in program order.
 fn window_before<'f>(
     func: &'f Function,
@@ -124,10 +131,12 @@ fn window_before<'f>(
             Some([pred]) => *pred,
             _ => break,
         };
+        // An exception dispatch block runs nothing of the program: the
+        // setup before it still belongs to the call that starts the try.
         let falls_only_here = func
             .blocks
             .get(&single_pred)
-            .is_some_and(|pred| pred.successors.len() == 1);
+            .is_some_and(|pred| pred.successors.len() == 1 || is_eh_dispatch(pred));
         if !falls_only_here || visited.contains(&single_pred) || visited.len() >= MAX_WINDOW_BLOCKS
         {
             break;
@@ -136,6 +145,23 @@ fn window_before<'f>(
         end = func.blocks.get(&current).map_or(0, |b| b.insns.len());
     }
     reversed.into_iter().rev().collect()
+}
+
+/// Whether `block` ends in an exception dispatch: a branch on a flag an
+/// [`unlace_ir::eh::EhHelper`] in the block defines. The dispatch block
+/// `install_eh_dispatch` inserts may since have been merged into the block
+/// before it.
+fn is_eh_dispatch(block: &unlace_ir::BasicBlock) -> bool {
+    let Some(branch) = block.insns.last().filter(|insn| insn.op == IrOp::Cbranch) else {
+        return false;
+    };
+    let Some(flag) = branch.inputs.get(1) else {
+        return false;
+    };
+    block
+        .insns
+        .iter()
+        .any(|insn| insn.output == Some(*flag) && unlace_ir::eh::EhHelper::of(insn).is_some())
 }
 
 fn scan_window(window: &[&IrInsn], cc: CallingConvention, sp: u64) -> CallSiteArgs {
@@ -365,6 +391,39 @@ mod tests {
             call(0x2000),
         ]);
         assert_eq!(sites(&func)[0].args.int_args(), 1);
+    }
+
+    /// The setup block ends in an exception dispatch (`flag = __eh_wind();
+    /// if (flag) goto pad`) that `install_eh_dispatch` merged into it; the
+    /// call starting the protected code still sees the setup.
+    #[test]
+    fn scan_crosses_an_exception_dispatch() {
+        let flag = Varnode::unique(0, 1);
+        let mut func = Function::new("f", BlockId(0), 0x1000);
+        let mut setup = BasicBlock::new(BlockId(0));
+        setup.insns = vec![
+            set(RDI, 1),
+            set(RSI, 2),
+            unlace_ir::eh::EhHelper::Wind.insn(flag, 0x1008),
+            IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![Varnode::constant(0x1020, 8), flag],
+                0x1008,
+            ),
+        ];
+        setup.successors = smallvec![BlockId(2), BlockId(1)];
+        let mut protected = BasicBlock::new(BlockId(1));
+        protected.insns = vec![call(0x2000)];
+        let mut pad = BasicBlock::new(BlockId(2));
+        pad.insns = vec![call(0x3000)];
+        for block in [setup, protected, pad] {
+            func.insert_block(block);
+        }
+        let found = sites(&func);
+        let protected_call = found.iter().find(|s| s.target == 0x2000).unwrap();
+        assert_eq!(protected_call.args.int_args(), 2);
+        let pad_call = found.iter().find(|s| s.target == 0x3000).unwrap();
+        assert_eq!(pad_call.args.int_args(), 2);
     }
 
     #[test]

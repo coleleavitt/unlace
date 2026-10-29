@@ -72,21 +72,21 @@ use unlace_loader::{
 use unlace_passes::{
     AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
     BoolSimplifyPass, CallBoundaryCopyPropPass, CalleeArity, CallingConvFinalizePass,
-    CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass,
-    ConstantFoldPass,
-    CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass, CppVariantPass,
-    CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadPhiElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,
-    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
-    IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, KnownBitsSimplifyPass, LicmPass,
-    LvarCollectPass, MemorySsaDsePass, ModuloIdiomPass, NoreturnDetectPass, ObjcDispatchPass,
-    OpTypeBindingPass, OuterFixedpointReport, ParamInferPass, PassAdapter, PassOptions,
-    PassWithContext, PrologueElimPass, RedundantFlagElimPass, RegisterCoalescePass,
-    RepStringIdiomPass, ReturnTypeInferPass, RustAsyncPass, RustEnumPass, RustPanicPass,
-    RustVtablePass, SccpPass, SignatureSnapshot, SizeofRecognitionPass, StackOffsetSnapshotPass,
-    StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    TailCallDetectPass, TempHomePass, TypeConstraintSolverPass, VarNamingPass, VariableMergePass,
-    annotate_libc_calls, bump_if_signature_changed, canonical_pipeline_backedge_exceptions,
+    CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstBranchFoldPass,
+    ConstantFoldPass, CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass,
+    CppVariantPass, CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
+    DeadCodeElimPass, DeadFlagElimPass, DeadPhiElimPass, DeadStoreElimGlobalPass,
+    DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass,
+    IdiomRecognitionPass, IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass,
+    KnownBitsSimplifyPass, LicmPass, LvarCollectPass, MemorySsaDsePass, ModuloIdiomPass,
+    NoreturnDetectPass, ObjcDispatchPass, OpTypeBindingPass, OuterFixedpointReport, ParamInferPass,
+    PassAdapter, PassOptions, PassWithContext, PrologueElimPass, RedundantFlagElimPass,
+    RegisterCoalescePass, RepStringIdiomPass, ReturnTypeInferPass, RustAsyncPass, RustEnumPass,
+    RustPanicPass, RustVtablePass, SccpPass, SignatureSnapshot, SizeofRecognitionPass,
+    StackOffsetSnapshotPass, StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass,
+    StructFieldDetectPass, TailCallDetectPass, TempHomePass, TypeConstraintSolverPass,
+    UnreachableBlockElimPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
+    bump_if_signature_changed, canonical_pipeline_backedge_exceptions,
     canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
     recover_direct_call_args_with_param_counts, recover_stack_frame, recover_structs,
     run_instrumented, run_outer_fixedpoint, run_to_fixedpoint_with_context,
@@ -984,11 +984,11 @@ pub fn lift_function(
     // zero byte, e.g. ARCompact `arc_branch` whose tail insn is `e0 7f 00 00`).
     let has_known_size = entry.size > 0;
     let lifted_insns = lift_instructions(lifter, code, func_start, has_known_size)?;
-    // Catch handlers are entered by the unwinder, not by a branch: their
+    // Exception handlers are entered by the unwinder, not by a branch: their
     // pads and try starts become block leaders so the dispatch edges below
     // can attach to them.
-    let catch_pads = catch_landing_pads(image, entry.addr);
-    let eh_leaders: Vec<u64> = catch_pads
+    let pads = landing_pads(image, entry.addr);
+    let eh_leaders: Vec<u64> = pads
         .iter()
         .flat_map(|pad| [pad.try_start, pad.addr])
         .collect();
@@ -1010,9 +1010,9 @@ pub fn lift_function(
         function
     };
     if let Some(data_regs) = unlace_ir::eh::landing_pad_data_regs(image.arch)
-        && !catch_pads.is_empty()
+        && !pads.is_empty()
     {
-        unlace_struct::install_eh_dispatch(&mut function, &catch_pads, data_regs);
+        unlace_struct::install_eh_dispatch(&mut function, &pads, data_regs);
     }
     unlace_passes::trim_syscall_args(&mut function);
     Ok(function)
@@ -1884,7 +1884,7 @@ pub fn run_whole_program_quality_refinement(
 /// |               | StrengthReduce, IvElim, IdiomRec, BMI, Cond/Bool      |
 /// | `GlobalOpt`   | GVN, CSE, LICM, GlobalCopyProp, DseGlobal,            |
 /// |               | TailCall, TailDup, IndirectCall/JumpResolve,          |
-/// |               | MsvcSEH                                               |
+/// |               | MsvcSEH, ConstBranchFold                              |
 /// | `TypeRecovery`| TypeInfer, TypeConstraintSolver, TypeVote,            |
 /// |               | OpTypeBinding,                                        |
 /// |               | CC detect/param/return, Struct/Sizeof, Cpp/Rust/Objc, |
@@ -1907,10 +1907,12 @@ pub fn run_whole_program_quality_refinement(
 ///
 /// # Schedule
 ///
-/// 1. **One-time pre-pass.** [`StackOffsetSnapshotPass`] (StackRecovery)
-///    captures the pre-optimization stack-offset map, used later by
-///    stack var recovery. Followed by [`NoreturnDetectPass`] (PreOpt)
-///    when a resolver is supplied.
+/// 1. **One-time pre-pass.** [`StackPointerTrackingPass`] (StackRecovery)
+///    records the stack-pointer deltas that define the frame coordinates,
+///    then [`StackOffsetSnapshotPass`] (StackRecovery) captures the
+///    pre-optimization stack-offset map in them, used later by stack var
+///    recovery. Followed by [`NoreturnDetectPass`] (PreOpt) when a
+///    resolver is supplied.
 /// 2. **Outer fixed-point loop** (capped at [`DEFAULT_OUTER_FIXEDPOINT_CAP`]).
 ///    Each outer iteration runs:
 ///      - the inner IR-level fixed-point cluster — mostly LocalOpt /
@@ -1955,9 +1957,13 @@ fn run_passes_with_report_inner(
     maybe_validate_pipeline_once();
     check_pass_deadline(deadline.as_ref())?;
 
-    // (1) One-time pre-pass: snapshot pre-optimization stack offsets.
+    // (1) One-time pre-pass: snapshot pre-optimization stack offsets. The
+    // snapshot is keyed in frame coordinates, which need the stack-pointer
+    // deltas first.
     {
         let _profile_stage = profile_ssa_stage("pipeline.pre-stack-snapshot", ssa, 0);
+        run_instrumented(&StackPointerTrackingPass, ssa, opts)
+            .context("stack pointer tracking failed")?;
         run_instrumented(&StackOffsetSnapshotPass, ssa, opts)
             .context("stack offset snapshot failed")?;
     }
@@ -2471,6 +2477,7 @@ fn pipeline_stage_ir_fixedpoint(
     let gprop_pass = GlobalCopyPropPass;
     let dce_pass = DeadCodeElimPass;
     let sccp_pass = SccpPass { limits: opts.sccp };
+    let branch_fold_pass = ConstBranchFoldPass;
     let cse_pass = CsePass;
     let gvn_pass = GvnPass;
     let licm_pass = LicmPass;
@@ -2511,6 +2518,10 @@ fn pipeline_stage_ir_fixedpoint(
     };
     let sccp = PassAdapter {
         inner: &sccp_pass,
+        options: opts,
+    };
+    let branch_fold = PassAdapter {
+        inner: &branch_fold_pass,
         options: opts,
     };
     let cse = PassAdapter {
@@ -2576,6 +2587,7 @@ fn pipeline_stage_ir_fixedpoint(
         &gprop,
         &dce,
         &sccp,
+        &branch_fold,
         &cse,
         &gvn,
         &bmi,
@@ -3517,8 +3529,9 @@ impl Default for FlirtOptions {
 }
 
 /// Loaded FLIRT state ready for hot-path matching. External `.sig` files
-/// are parsed once when the command starts; bundled signatures remain the
-/// process-wide loader DB.
+/// are decoded once when the command starts. The shipped `.sig` files
+/// (`unlace_flirt::bundled`) are chosen per image from its toolchain, and
+/// the hand-checked startup-code table stays the process-wide loader DB.
 #[derive(Clone, Debug)]
 pub struct FlirtConfig {
     options: FlirtOptions,
@@ -3569,6 +3582,7 @@ impl FlirtConfig {
         !self.options.sig_paths.is_empty() || !self.options.sig_dirs.is_empty()
     }
 
+    /// The startup-code table and every shipped `.sig` file describe x86.
     fn bundled_applicable_to_arch(&self, arch: ArchId) -> bool {
         matches!(arch, ArchId::X86 | ArchId::X86_64)
     }
@@ -3581,15 +3595,48 @@ impl FlirtConfig {
         (self.options.min_confidence as f32) / 100.0
     }
 
-    /// Name the functions at `candidates` with the explicit `.sig` files.
-    /// Matching runs over all candidates at once so that modules which
-    /// reference other library functions can use names found meanwhile.
-    fn explicit_hits(
-        &self,
-        image: &BinaryImage,
-        candidates: &[u64],
-    ) -> BTreeMap<u64, FlirtConfidence> {
-        if !self.has_explicit_signatures() || candidates.is_empty() {
+    /// The `.sig` files to apply to `image`: the explicit files first,
+    /// then the shipped files for the image's toolchain.
+    fn sig_matcher(&self, image: &BinaryImage) -> unlace_flirt::FlirtMatcher {
+        let mut matcher = (*self.explicit).clone();
+        let selection = unlace_flirt::select_bundled(image);
+        let files: Vec<&str> = selection.sigs.iter().map(|sig| sig.file).collect();
+        let missing: Vec<String> = selection
+            .missing
+            .iter()
+            .map(|release| format!("{:?} {}", release.library, release.version))
+            .collect();
+        tracing::info!(
+            target: "unlace::flirt",
+            toolchain = %selection.toolchain,
+            sigs = ?files,
+            missing = ?missing,
+            "bundled signature selection"
+        );
+        for bundled in &selection.sigs {
+            match bundled.sig() {
+                Ok(sig) => matcher.push_shared(sig),
+                Err(err) => tracing::warn!(
+                    target: "unlace::flirt",
+                    file = bundled.file,
+                    error = %err,
+                    "bundled signature file does not parse"
+                ),
+            }
+        }
+        matcher
+    }
+
+    /// Name the functions at `candidates` with the explicit and shipped
+    /// `.sig` files. Matching runs over all candidates at once so that
+    /// modules which reference other library functions can use names found
+    /// meanwhile.
+    fn sig_hits(&self, image: &BinaryImage, candidates: &[u64]) -> BTreeMap<u64, FlirtConfidence> {
+        if candidates.is_empty() {
+            return BTreeMap::new();
+        }
+        let matcher = self.sig_matcher(image);
+        if matcher.is_empty() {
             return BTreeMap::new();
         }
         let windows: Vec<unlace_flirt::CodeWindow<'_>> = image
@@ -3599,7 +3646,7 @@ impl FlirtConfig {
             .map(|section| unlace_flirt::CodeWindow::new(section.vaddr, &section.data))
             .collect();
         let known = flirt_known_names(image);
-        self.explicit
+        matcher
             .identify(image.arch, &windows, candidates, &known)
             .into_iter()
             .filter(|(_, hit)| hit.confidence >= self.min_confidence_f32())
@@ -3743,7 +3790,7 @@ pub fn build_symbol_context_with_config(
             .filter(|entry| is_flirt_eligible_name(&entry.name))
             .collect();
         let candidates: Vec<u64> = eligible.iter().map(|entry| entry.addr).collect();
-        let mut explicit = flirt_config.explicit_hits(image, &candidates);
+        let mut explicit = flirt_config.sig_hits(image, &candidates);
         let resolved = flirt_resolved_names_with_config(image, flirt_config);
         let mut matched = 0u64;
         for entry in &eligible {
@@ -4273,6 +4320,10 @@ pub fn emit_function_interproc(
         build_jump_table_section_views(image)
     };
     {
+        let _profile_stage = profile_pipeline_stage("pipeline.unreachable-block-elim", entry);
+        remove_unreachable_blocks_for_pipeline(ssa, &config.options.passes);
+    }
+    {
         let _profile_stage = profile_pipeline_stage("pipeline.emit-output", entry);
         emit_output(
             emit,
@@ -4490,9 +4541,7 @@ pub fn flirt_match_detailed_with_config(
     if !config.should_scan_for_arch(image.arch) || !is_flirt_eligible_name(&entry.name) {
         return None;
     }
-    let explicit = config
-        .explicit_hits(image, &[entry.addr])
-        .remove(&entry.addr);
+    let explicit = config.sig_hits(image, &[entry.addr]).remove(&entry.addr);
     let resolved = flirt_resolved_names_with_config(image, config);
     prefer_flirt_match(
         explicit,
@@ -4992,6 +5041,20 @@ pub fn decompile_function_with_symbols(
     };
     pipeline_trace_ssa(&entry.name, "jump-table-post", t_jt_post, deadline, &ssa);
 
+    let t_unreachable = Instant::now();
+    pipeline_trace_start(&entry.name, "unreachable-block-elim");
+    {
+        let _profile_stage = profile_pipeline_stage("pipeline.unreachable-block-elim", entry);
+        remove_unreachable_blocks_for_pipeline(&mut ssa, &config.options.passes);
+    }
+    pipeline_trace_ssa(
+        &entry.name,
+        "unreachable-block-elim",
+        t_unreachable,
+        deadline,
+        &ssa,
+    );
+
     let t_emit = Instant::now();
     pipeline_trace_start(&entry.name, "emit-output");
     let result = {
@@ -5043,15 +5106,17 @@ fn function_lsda(image: &BinaryImage, addr: u64) -> Option<unlace_loader::Functi
     info.functions.remove(&addr)
 }
 
-/// The catch landing pads of the function starting at `addr`, grouped from
-/// its LSDA call-site table for [`unlace_struct::install_eh_dispatch`].
+/// The handlers the unwinder can enter in the function starting at
+/// `addr`, for [`unlace_struct::install_eh_dispatch`]: the landing pads of
+/// its LSDA call-site table (Itanium C++), or the `__except` bodies of its
+/// `__C_specific_handler` scope table (PE).
 ///
-/// A pad is a catch pad when some call site that unwinds to it names a
-/// catch clause (positive type filter); cleanup-only pads stay unreachable.
-/// The try start is the first such call site.
-fn catch_landing_pads(image: &BinaryImage, addr: u64) -> Vec<unlace_struct::CatchLandingPad> {
+/// An LSDA pad is a catch pad when some call site that unwinds to it names
+/// a catch clause (positive type filter), and a cleanup pad otherwise. The
+/// try start is the first call site that unwinds to the pad.
+fn landing_pads(image: &BinaryImage, addr: u64) -> Vec<unlace_struct::LandingPad> {
     let Some(lsda) = function_lsda(image, addr) else {
-        return Vec::new();
+        return seh_except_pads(image, addr);
     };
     let mut by_pad: BTreeMap<u64, Vec<&unlace_loader::TryRegion>> = BTreeMap::new();
     for region in &lsda.try_regions {
@@ -5061,28 +5126,56 @@ fn catch_landing_pads(image: &BinaryImage, addr: u64) -> Vec<unlace_struct::Catc
     }
     by_pad
         .into_iter()
-        .filter(|(_, regions)| {
-            regions
-                .iter()
-                .any(|r| r.type_filters.iter().any(|&f| f > 0))
-        })
         .map(|(pad, regions)| {
             let try_start = regions
                 .iter()
                 .map(|r| r.pc_range.start)
                 .min()
                 .unwrap_or(pad);
-            let selector = match regions[0].type_filters.as_slice() {
-                &[filter] if filter > 0 && regions.iter().all(|r| r.type_filters == [filter]) => {
-                    Some(filter as u64)
-                }
-                _ => None,
+            let catches = regions
+                .iter()
+                .any(|r| r.type_filters.iter().any(|&f| f > 0));
+            let kind = if catches {
+                let selector = match regions[0].type_filters.as_slice() {
+                    &[filter]
+                        if filter > 0 && regions.iter().all(|r| r.type_filters == [filter]) =>
+                    {
+                        Some(filter as u64)
+                    }
+                    _ => None,
+                };
+                unlace_struct::LandingPadKind::Catch { selector }
+            } else {
+                unlace_struct::LandingPadKind::Cleanup
             };
-            unlace_struct::CatchLandingPad {
+            unlace_struct::LandingPad {
                 addr: pad,
                 try_start,
-                selector,
+                kind,
             }
+        })
+        .collect()
+}
+
+/// The `__except` bodies of the PE function starting at `addr`, from its
+/// `__C_specific_handler` scope table. A `__finally` scope has no body in
+/// this function (its funclet is outlined) and is not a pad.
+fn seh_except_pads(image: &BinaryImage, addr: u64) -> Vec<unlace_struct::LandingPad> {
+    let Some(function) = image.seh.as_ref().and_then(|seh| seh.function_at(addr)) else {
+        return Vec::new();
+    };
+    function
+        .scopes
+        .iter()
+        .filter_map(|scope| match scope.handler {
+            unlace_loader::seh::SehScopeHandler::Except { filter, target } => {
+                Some(unlace_struct::LandingPad {
+                    addr: target,
+                    try_start: scope.begin,
+                    kind: unlace_struct::LandingPadKind::SehExcept { filter },
+                })
+            }
+            unlace_loader::seh::SehScopeHandler::Finally { .. } => None,
         })
         .collect()
 }
@@ -5645,6 +5738,25 @@ pub fn build_jump_table_section_views(
     out
 }
 
+/// Drop the blocks no edge reaches. Runs after the last jump-table
+/// resolution, when every block a dispatch targets already has its edge, so
+/// only lifter padding and other genuinely dead blocks remain unreachable.
+pub(crate) fn remove_unreachable_blocks_for_pipeline(
+    ssa: &mut unlace_ir::ssa::SsaFunction,
+    opts: &PassOptions,
+) {
+    if let Err(e) = run_instrumented(&UnreachableBlockElimPass, ssa, opts) {
+        profiling::diagnostic(
+            "warn",
+            "unreachable-block elimination failed",
+            [
+                TraceField::text("function", ssa.function.name.clone()),
+                TraceField::text("err", e.to_string()),
+            ],
+        );
+    }
+}
+
 fn resolve_jump_tables_for_pipeline(
     ssa: &mut unlace_ir::ssa::SsaFunction,
     image: &unlace_loader::BinaryImage,
@@ -6120,259 +6232,7 @@ pub fn emit_output(
                     }
                 }
             }
-            {
-                let _span = profiling::phase("output.hir-post-process");
-                macro_rules! hir_step {
-                    ($phase:literal, $stage:literal, $body:block) => {{
-                        {
-                            let _step = profiling::phase($phase);
-                            $body
-                        }
-                        check_output_deadline(deadline, &ssa.function.name, $phase)?;
-                        trace_hir_pipeline($stage, &hir);
-                    }};
-                }
-
-                hir_step!("output.hir.ternary", "ternary", {
-                    unlace_struct::ternary_recovery(&mut hir);
-                });
-                hir_step!("output.hir.short-circuit", "short_circuit", {
-                    unlace_struct::short_circuit_recovery(&mut hir);
-                });
-                hir_step!("output.hir.flatten-if-else", "flatten_if_else", {
-                    unlace_struct::flatten_if_else_chains(&mut hir);
-                });
-                hir_step!(
-                    "output.hir.simplify-chain-conditions",
-                    "simplify_chain_conditions",
-                    {
-                        unlace_struct::simplify_chain_conditions(&mut hir, ssa);
-                    }
-                );
-                hir_step!(
-                    "output.hir.normalize-conditions1",
-                    "normalize_conditions1",
-                    {
-                        unlace_struct::normalize_conditions(&mut hir);
-                    }
-                );
-                hir_step!("output.hir.if-chain-to-switch", "if_chain_to_switch", {
-                    unlace_struct::if_chain_to_switch(&mut hir, ssa);
-                });
-                hir_step!(
-                    "output.hir.recover-cmov-switches",
-                    "recover_cmov_switches",
-                    {
-                        unlace_struct::recover_cmov_switches(&mut hir, ssa);
-                    }
-                );
-                hir_step!("output.hir.goto-to-break", "goto_to_break", {
-                    unlace_struct::goto_to_break(&mut hir);
-                });
-                hir_step!("output.hir.goto-to-continue", "goto_to_continue", {
-                    unlace_struct::goto_to_continue(&mut hir);
-                });
-                hir_step!(
-                    "output.hir.detect-continue-break1",
-                    "detect_continue_break1",
-                    {
-                        unlace_struct::detect_continue_break(&mut hir.body);
-                    }
-                );
-                hir_step!(
-                    "output.hir.reverse-loop-rotation",
-                    "reverse_loop_rotation",
-                    {
-                        unlace_struct::reverse_loop_rotation(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.normalize-dowhile-to-while",
-                    "normalize_dowhile_to_while",
-                    {
-                        unlace_struct::normalize_dowhile_to_while(&mut hir);
-                    }
-                );
-                hir_step!("output.hir.while-to-for", "while_to_for", {
-                    unlace_struct::while_to_for(&mut hir);
-                });
-                hir_step!(
-                    "output.hir.eliminate-forward-gotos1",
-                    "eliminate_forward_gotos1",
-                    {
-                        unlace_struct::eliminate_forward_gotos(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.hoist-cross-branch-labels",
-                    "hoist_cross_branch_labels",
-                    {
-                        unlace_struct::hoist_cross_branch_labels(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.coalesce-goto-chains1",
-                    "coalesce_goto_chains1",
-                    {
-                        unlace_struct::coalesce_goto_chains(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.collapse-label-fallthroughs1",
-                    "collapse_label_fallthroughs1",
-                    {
-                        unlace_struct::collapse_label_fallthroughs(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.duplicate-goto-conditions",
-                    "duplicate_goto_conditions",
-                    {
-                        unlace_struct::duplicate_goto_conditions(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.duplicate-simple-label-tails1",
-                    "duplicate_simple_label_tails1",
-                    {
-                        unlace_struct::duplicate_simple_label_tails(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.normalize-conditions2",
-                    "normalize_conditions2",
-                    {
-                        unlace_struct::normalize_conditions(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.detect-continue-break2",
-                    "detect_continue_break2",
-                    {
-                        unlace_struct::detect_continue_break(&mut hir.body);
-                    }
-                );
-                hir_step!(
-                    "output.hir.eliminate-forward-gotos2",
-                    "eliminate_forward_gotos2",
-                    {
-                        unlace_struct::eliminate_forward_gotos(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.coalesce-goto-chains2",
-                    "coalesce_goto_chains2",
-                    {
-                        unlace_struct::coalesce_goto_chains(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.collapse-label-fallthroughs2",
-                    "collapse_label_fallthroughs2",
-                    {
-                        unlace_struct::collapse_label_fallthroughs(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.cleanup-unreachable-labels1",
-                    "cleanup_unreachable_labels",
-                    {
-                        unlace_struct::cleanup_unreachable_labels(&mut hir);
-                    }
-                );
-                hir_step!("output.hir.return-merge", "return_merge", {
-                    unlace_struct::return_merge(&mut hir);
-                });
-                hir_step!(
-                    "output.hir.duplicate-simple-label-tails2",
-                    "duplicate_simple_label_tails2",
-                    {
-                        unlace_struct::duplicate_simple_label_tails(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.detect-continue-break3",
-                    "detect_continue_break3",
-                    {
-                        unlace_struct::detect_continue_break(&mut hir.body);
-                    }
-                );
-                hir_step!(
-                    "output.hir.eliminate-forward-gotos3",
-                    "eliminate_forward_gotos3",
-                    {
-                        unlace_struct::eliminate_forward_gotos(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.coalesce-goto-chains3",
-                    "coalesce_goto_chains3",
-                    {
-                        unlace_struct::coalesce_goto_chains(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.collapse-label-fallthroughs3",
-                    "collapse_label_fallthroughs3",
-                    {
-                        unlace_struct::collapse_label_fallthroughs(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.cleanup-unreachable-labels-final1",
-                    "cleanup_unreachable_labels_final",
-                    {
-                        unlace_struct::cleanup_unreachable_labels(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.eliminate-forward-gotos4",
-                    "eliminate_forward_gotos4",
-                    {
-                        unlace_struct::eliminate_forward_gotos(&mut hir);
-                    }
-                );
-                hir_step!(
-                    "output.hir.cleanup-unreachable-labels-final2",
-                    "cleanup_unreachable_labels_final2",
-                    {
-                        unlace_struct::cleanup_unreachable_labels(&mut hir);
-                    }
-                );
-                hir_step!("output.hir.resolve-gotos", "resolve_gotos", {
-                    unlace_struct::resolve_gotos(&mut hir);
-                });
-                hir_step!(
-                    "output.hir.recover-guarded-whiles",
-                    "recover_guarded_whiles",
-                    {
-                        unlace_struct::recover_guarded_whiles(&mut hir);
-                    }
-                );
-                hir_step!("output.hir.cleanup-empty-ifs", "cleanup_empty_ifs", {
-                    unlace_struct::cleanup_empty_ifs(&mut hir);
-                });
-                hir_step!(
-                    "output.hir.expression-recovery",
-                    "batch19_expression_recovery",
-                    {
-                        hir_recovery::apply_expression_recovery(&mut hir);
-                    }
-                );
-                // Batch 9 slice 2: collapse consecutive cases with equal
-                // bodies and drop redundant `default:` arms so the printer
-                // emits IDA-style stacked case labels.
-                hir_step!("output.hir.cleanup-switches", "cleanup_switches", {
-                    unlace_struct::cleanup_switches(&mut hir);
-                });
-                hir_step!(
-                    "output.hir.repair-missing-goto-labels",
-                    "repair_missing_goto_labels",
-                    {
-                        unlace_struct::repair_missing_goto_labels(&mut hir);
-                    }
-                );
-            }
+            post_process_hir(&mut hir, ssa, deadline)?;
             let header = {
                 let _span = profiling::phase("output.function-header");
                 unlace_output::FunctionHeaderInfo::from_ssa(ssa, symbols)
@@ -6451,6 +6311,272 @@ pub fn emit_output(
             Ok(rendered)
         }
     }
+}
+
+/// The HIR cleanup every C emission applies after structuring: control-flow
+/// recovery passes, goto elimination and label repair, in the order the
+/// printed output depends on. `unlace quality` measures through the same
+/// sequence so its counters describe the emitted C.
+pub(crate) fn post_process_hir(
+    hir: &mut unlace_struct::HirFunction,
+    ssa: &SsaFunction,
+    deadline: Option<Instant>,
+) -> Result<()> {
+    let _span = profiling::phase("output.hir-post-process");
+    macro_rules! hir_step {
+        ($phase:literal, $stage:literal, $body:block) => {{
+            {
+                let _step = profiling::phase($phase);
+                $body
+            }
+            check_output_deadline(deadline, &ssa.function.name, $phase)?;
+            trace_hir_pipeline($stage, hir);
+        }};
+    }
+
+    hir_step!("output.hir.ternary", "ternary", {
+        unlace_struct::ternary_recovery(hir);
+    });
+    hir_step!("output.hir.short-circuit", "short_circuit", {
+        unlace_struct::short_circuit_recovery(hir);
+    });
+    hir_step!("output.hir.flatten-if-else", "flatten_if_else", {
+        unlace_struct::flatten_if_else_chains(hir);
+    });
+    hir_step!(
+        "output.hir.simplify-chain-conditions",
+        "simplify_chain_conditions",
+        {
+            unlace_struct::simplify_chain_conditions(hir, ssa);
+        }
+    );
+    hir_step!(
+        "output.hir.normalize-conditions1",
+        "normalize_conditions1",
+        {
+            unlace_struct::normalize_conditions(hir);
+        }
+    );
+    hir_step!("output.hir.if-chain-to-switch", "if_chain_to_switch", {
+        unlace_struct::if_chain_to_switch(hir, ssa);
+    });
+    hir_step!(
+        "output.hir.recover-cmov-switches",
+        "recover_cmov_switches",
+        {
+            unlace_struct::recover_cmov_switches(hir, ssa);
+        }
+    );
+    hir_step!("output.hir.goto-to-break", "goto_to_break", {
+        unlace_struct::goto_to_break(hir);
+    });
+    hir_step!("output.hir.goto-to-continue", "goto_to_continue", {
+        unlace_struct::goto_to_continue(hir);
+    });
+    hir_step!("output.hir.merge-loop-exits", "merge_loop_exits", {
+        unlace_struct::merge_loop_exits(hir, ssa);
+    });
+    hir_step!(
+        "output.hir.detect-continue-break1",
+        "detect_continue_break1",
+        {
+            unlace_struct::detect_continue_break(&mut hir.body);
+        }
+    );
+    hir_step!(
+        "output.hir.reverse-loop-rotation",
+        "reverse_loop_rotation",
+        {
+            unlace_struct::reverse_loop_rotation(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.normalize-dowhile-to-while",
+        "normalize_dowhile_to_while",
+        {
+            unlace_struct::normalize_dowhile_to_while(hir);
+        }
+    );
+    hir_step!("output.hir.while-to-for", "while_to_for", {
+        unlace_struct::while_to_for(hir);
+    });
+    hir_step!(
+        "output.hir.eliminate-forward-gotos1",
+        "eliminate_forward_gotos1",
+        {
+            unlace_struct::eliminate_forward_gotos(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.hoist-cross-branch-labels",
+        "hoist_cross_branch_labels",
+        {
+            unlace_struct::hoist_cross_branch_labels(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.coalesce-goto-chains1",
+        "coalesce_goto_chains1",
+        {
+            unlace_struct::coalesce_goto_chains(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.collapse-label-fallthroughs1",
+        "collapse_label_fallthroughs1",
+        {
+            unlace_struct::collapse_label_fallthroughs(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.duplicate-goto-conditions",
+        "duplicate_goto_conditions",
+        {
+            unlace_struct::duplicate_goto_conditions(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.duplicate-simple-label-tails1",
+        "duplicate_simple_label_tails1",
+        {
+            unlace_struct::duplicate_simple_label_tails(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.normalize-conditions2",
+        "normalize_conditions2",
+        {
+            unlace_struct::normalize_conditions(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.detect-continue-break2",
+        "detect_continue_break2",
+        {
+            unlace_struct::detect_continue_break(&mut hir.body);
+        }
+    );
+    hir_step!(
+        "output.hir.eliminate-forward-gotos2",
+        "eliminate_forward_gotos2",
+        {
+            unlace_struct::eliminate_forward_gotos(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.coalesce-goto-chains2",
+        "coalesce_goto_chains2",
+        {
+            unlace_struct::coalesce_goto_chains(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.collapse-label-fallthroughs2",
+        "collapse_label_fallthroughs2",
+        {
+            unlace_struct::collapse_label_fallthroughs(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.cleanup-unreachable-labels1",
+        "cleanup_unreachable_labels",
+        {
+            unlace_struct::cleanup_unreachable_labels(hir);
+        }
+    );
+    hir_step!("output.hir.return-merge", "return_merge", {
+        unlace_struct::return_merge(hir);
+    });
+    hir_step!(
+        "output.hir.duplicate-simple-label-tails2",
+        "duplicate_simple_label_tails2",
+        {
+            unlace_struct::duplicate_simple_label_tails(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.detect-continue-break3",
+        "detect_continue_break3",
+        {
+            unlace_struct::detect_continue_break(&mut hir.body);
+        }
+    );
+    hir_step!(
+        "output.hir.eliminate-forward-gotos3",
+        "eliminate_forward_gotos3",
+        {
+            unlace_struct::eliminate_forward_gotos(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.coalesce-goto-chains3",
+        "coalesce_goto_chains3",
+        {
+            unlace_struct::coalesce_goto_chains(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.collapse-label-fallthroughs3",
+        "collapse_label_fallthroughs3",
+        {
+            unlace_struct::collapse_label_fallthroughs(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.cleanup-unreachable-labels-final1",
+        "cleanup_unreachable_labels_final",
+        {
+            unlace_struct::cleanup_unreachable_labels(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.eliminate-forward-gotos4",
+        "eliminate_forward_gotos4",
+        {
+            unlace_struct::eliminate_forward_gotos(hir);
+        }
+    );
+    hir_step!(
+        "output.hir.cleanup-unreachable-labels-final2",
+        "cleanup_unreachable_labels_final2",
+        {
+            unlace_struct::cleanup_unreachable_labels(hir);
+        }
+    );
+    hir_step!("output.hir.resolve-gotos", "resolve_gotos", {
+        unlace_struct::resolve_gotos(hir);
+    });
+    hir_step!(
+        "output.hir.recover-guarded-whiles",
+        "recover_guarded_whiles",
+        {
+            unlace_struct::recover_guarded_whiles(hir);
+        }
+    );
+    hir_step!("output.hir.cleanup-empty-ifs", "cleanup_empty_ifs", {
+        unlace_struct::cleanup_empty_ifs(hir);
+    });
+    hir_step!(
+        "output.hir.expression-recovery",
+        "batch19_expression_recovery",
+        {
+            hir_recovery::apply_expression_recovery(hir);
+        }
+    );
+    // Batch 9 slice 2: collapse consecutive cases with equal
+    // bodies and drop redundant `default:` arms so the printer
+    // emits IDA-style stacked case labels.
+    hir_step!("output.hir.cleanup-switches", "cleanup_switches", {
+        unlace_struct::cleanup_switches(hir);
+    });
+    hir_step!(
+        "output.hir.repair-missing-goto-labels",
+        "repair_missing_goto_labels",
+        {
+            unlace_struct::repair_missing_goto_labels(hir);
+        }
+    );
+    Ok(())
 }
 
 fn trace_hir_pipeline(stage: &str, hir: &unlace_struct::hir::HirFunction) {
@@ -6591,6 +6717,14 @@ fn count_hir_nodes(nodes: &[unlace_struct::hir::HirNode], counts: &mut HirTraceC
                 count_hir_nodes(try_body, counts);
                 count_hir_nodes(finally_body, counts);
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                count_hir_nodes(try_body, counts);
+                count_hir_nodes(except_body, counts);
+            }
             HirNode::Commented { inner, .. } => {
                 count_hir_nodes(std::slice::from_ref(inner.as_ref()), counts)
             }
@@ -6694,6 +6828,14 @@ fn collect_hir_trace_details(
             } => {
                 collect_hir_trace_details(try_body, format!("{here}.try"), details);
                 collect_hir_trace_details(finally_body, format!("{here}.finally"), details);
+            }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                collect_hir_trace_details(try_body, format!("{here}.try"), details);
+                collect_hir_trace_details(except_body, format!("{here}.except"), details);
             }
             HirNode::Commented { inner, .. } => {
                 collect_hir_trace_details(
@@ -8248,6 +8390,7 @@ mod tests {
         );
         ssa.stack_frame = Some(StackFrame {
             locals: ssa_locals,
+            sp_offset_at_addr: std::collections::BTreeMap::new(),
             frame_size: 4,
             max_pos_offset: -4,
             min_neg_offset: -8,

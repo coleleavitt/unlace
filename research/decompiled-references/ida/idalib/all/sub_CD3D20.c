@@ -1,0 +1,77 @@
+__int64 __fastcall sub_CD3D20(_QWORD *a1, __int64 a2, __int64 a3, __int64 a4)
+{
+  __int64 v5; // rbp
+  __int64 v6; // rbx
+  __int64 v7; // r12
+  __int64 v8; // r13
+  __int64 v9; // [rsp-10h] [rbp-88h]
+  unsigned int v10; // [rsp+8h] [rbp-70h]
+  __int64 v11; // [rsp+20h] [rbp-58h]
+  __int64 v12; // [rsp+28h] [rbp-50h]
+  __int64 v13[8]; // [rsp+38h] [rbp-40h] BYREF
+
+  if ( (unsigned int)*(unsigned __int8 *)(*(_QWORD *)(*(_QWORD *)(*(_QWORD *)(*(_QWORD *)(a2 + 8) & 0xFFFFFFFFFFFFFFF0LL)
+                                                                + 8LL)
+                                                    & 0xFFFFFFFFFFFFFFF0LL)
+                                        + 16LL)
+     - 57 <= 1 )
+    return sub_CD3010((__int64)a1, a2, a3, a4);
+  v5 = *(_QWORD *)(a2 + 16);
+  v6 = *(_QWORD *)(a2 + 24);
+  v11 = sub_CE6180(a1[158], *(_QWORD *)(a2 + 32));
+  v12 = sub_CE6180(a1[158], *(_QWORD *)(v5 + 8));
+  v7 = sub_CE6180(a1[158], *(_QWORD *)(v6 + 8));
+  v8 = sub_CE6180(a1[158], *(_QWORD *)(a2 + 8));
+  if ( (*(_BYTE *)(sub_CE6170(a1[158]) + 1) & 0x20) != 0 )
+  {
+    if ( !BYTE4(v12) || !BYTE4(v7) || !BYTE4(v8) || !BYTE4(v11) )
+      return 0;
+    if ( (_DWORD)v7 == 12 || (_DWORD)v8 == 12 )
+    {
+      return sub_CD3A30((__int64)a1, a2);
+    }
+    else
+    {
+      if ( *(_BYTE *)(*(_QWORD *)(*(_QWORD *)(*(_QWORD *)(*(_QWORD *)(a2 + 8) & 0xFFFFFFFFFFFFFFF0LL) + 8LL)
+                                & 0xFFFFFFFFFFFFFFF0LL)
+                    + 16LL) != 42 )
+      {
+        if ( (*(unsigned __int8 (__fastcall **)(_QWORD *, __int64))(*a1 + 48LL))(a1, v6) )
+        {
+          v13[0] = a2 | 2;
+          v10 = sub_CD2220((__int64)a1, v13, v7, 1u, 0, 1, 0);
+          v13[0] = a2 | 4;
+          if ( (unsigned __int8)sub_D256A0(a1, (unsigned int)v7, v10, v13) )
+          {
+            if ( (*(unsigned __int8 (__fastcall **)(_QWORD *, __int64, __int64))(*a1 + 48LL))(a1, v5, v9) )
+            {
+              v13[0] = a2 | 4;
+              if ( (unsigned __int8)sub_D347E0(a1, (unsigned int)v12, v13) )
+              {
+                if ( (_DWORD)v11 == (_DWORD)v12
+                  || (v13[0] = a2 | 4, (unsigned __int8)sub_D2FA60(a1, (unsigned int)v12, (unsigned int)v11, v13)) )
+                {
+                  v13[0] = a2 | 4;
+                  if ( (unsigned __int8)sub_D32BF0(a1, (unsigned int)v7, v10, v13) )
+                    __asm { jmp     rax }
+                }
+              }
+            }
+          }
+        }
+        return 0;
+      }
+      return sub_CB40D0((__int64)a1, a2);
+    }
+  }
+  else
+  {
+    if ( !(*(unsigned __int8 (__fastcall **)(_QWORD *, __int64))(*a1 + 48LL))(a1, v6)
+      || !(*(unsigned __int8 (__fastcall **)(_QWORD *, __int64))(*a1 + 48LL))(a1, v5) )
+    {
+      return 0;
+    }
+    v13[0] = a2 | 4;
+    return sub_D00D60(a1, v13);
+  }
+}

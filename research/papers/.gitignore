@@ -1,0 +1,2 @@
+# Keep extracted text (small, reviewable); ignore the large source PDFs.
+*.pdf

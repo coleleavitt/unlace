@@ -5,6 +5,7 @@
 //! other modules hold unlace's own TOML pattern format.
 
 pub mod builder;
+pub mod bundled;
 mod error;
 pub mod match_pass;
 mod pattern;
@@ -12,6 +13,7 @@ mod pattern;
 pub mod prologue;
 pub mod sig;
 
+pub use bundled::{BundledSig, Selection as BundledSelection, select as select_bundled};
 pub use match_pass::{FlirtAppliedMatch, FlirtApplyReport, FlirtHit, FlirtMatcher};
 pub use sig::SigFile;
 pub use sig::matching::CodeWindow;

@@ -1,0 +1,9 @@
+__int64 __fastcall sub_D8CC70(__int64 a1)
+{
+  _QWORD *v1; // rbp
+
+  v1 = (_QWORD *)sub_DFDA20(a1, 8);
+  *(_QWORD *)sub_DFD980(a1, 8) = *v1;
+  return 1;
+}
+

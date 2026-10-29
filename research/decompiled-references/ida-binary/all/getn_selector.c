@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x8D9A10
+// Name:     getn_selector
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to getn_selector are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void getn_selector(/* see import library declaration */);
+

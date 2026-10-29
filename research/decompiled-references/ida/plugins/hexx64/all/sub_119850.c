@@ -1,0 +1,46 @@
+__int64 __fastcall sub_119850(_DWORD *a1, const __m128i *a2, __int64 a3)
+{
+  __int64 v4; // rax
+  __int64 v5; // rbx
+  __int64 v6; // r15
+  int v7; // ecx
+  unsigned int v8; // r12d
+  const __m128i *v10; // rax
+  unsigned __int8 *v11; // rsi
+  __m128i v12; // xmm0
+  __int64 v13; // [rsp+8h] [rbp-70h] BYREF
+  __m128i v14[2]; // [rsp+10h] [rbp-68h] BYREF
+  unsigned __int64 v15; // [rsp+38h] [rbp-40h]
+
+  v15 = __readfsqword(0x28u);
+  v4 = sub_11C8E0((__int64)a1, &v13, 33);
+  if ( !v4 )
+    return 0;
+  v5 = v4;
+  if ( (*(_BYTE *)(v4 + 4) & 0x10) != 0 )
+    return 0;
+  v6 = -1;
+  v7 = 8 * *(_DWORD *)(v13 + 4);
+  if ( (unsigned __int64)v7 <= 0x3F )
+    v6 = (1LL << v7) - 1;
+  if ( (unsigned __int8)sub_11FD80((char *)(v4 + 48), v14, 0)
+    && v6 == v14[0].m128i_i64[0]
+    && (v8 = sub_12EA80(*(_QWORD *)(a2[30].m128i_i64[0] + 112), a2, a3, v13, a3, v5 + 32, 0), (_BYTE)v8) )
+  {
+    v10 = *(const __m128i **)(v5 + 56);
+    v11 = (unsigned __int8 *)v13;
+    v14[0] = _mm_loadu_si128(v10);
+    v12 = _mm_loadu_si128(v10 + 1);
+    *a1 = 17;
+    v14[1] = v12;
+    if ( a1 + 8 != (_DWORD *)v11 )
+      sub_125180((__int64)(a1 + 8), v11);
+    sub_11D2F0((__int64)(a1 + 12), v14, a1[9]);
+  }
+  else
+  {
+    return 0;
+  }
+  return v8;
+}
+

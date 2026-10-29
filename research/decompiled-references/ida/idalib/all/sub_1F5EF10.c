@@ -1,0 +1,44 @@
+__int64 __fastcall sub_1F5EF10(__int64 *a1, __int64 a2)
+{
+  __int64 v3; // rax
+  __int64 v4; // rdx
+  __int64 v5; // r13
+  __int64 v6; // rdi
+  bool v7; // zf
+  unsigned __int64 v8; // rbp
+  int v9; // eax
+  unsigned __int64 v10; // rbp
+  __int64 v11; // rdx
+  __int64 v12; // rcx
+  __int64 v13; // rdx
+  __int64 v14; // rax
+  __int64 result; // rax
+
+  sub_1F58FC0(a1, a2);
+  v3 = *a1;
+  v4 = *(unsigned int *)(*a1 + 24);
+  v5 = *(_QWORD *)(*a1 + 16);
+  v6 = *(_QWORD *)(*a1 + 8);
+  v7 = *(_QWORD *)(v5 + 856) == 0;
+  *(_DWORD *)(v3 + 24) = v4 + 1;
+  v8 = *(_QWORD *)(*(_QWORD *)(v3 + 32) + 8 * v4);
+  if ( !v7 )
+    sub_1EDF870(v6, v5);
+  v9 = __ROR4__(v8, 1);
+  v10 = HIDWORD(v8);
+  if ( v10 )
+    v5 = *(_QWORD *)(*(_QWORD *)(v5 + 3320) + 8LL * (unsigned int)(v10 - 1));
+  if ( v9 )
+    v9 = v9 + *(_DWORD *)(v5 + 1648) - 2;
+  *(_DWORD *)(a2 + 4) = v9;
+  v11 = *(_QWORD *)(*a1 + 8);
+  v12 = *(_QWORD *)(*(_QWORD *)(v11 + 13064) + 8LL * (unsigned int)(*(_DWORD *)(v11 + 13072))-- - 8);
+  *(_QWORD *)(a2 + 16) = v12;
+  v13 = *a1;
+  v14 = *(unsigned int *)(*a1 + 24);
+  *(_DWORD *)(v13 + 24) = v14 + 1;
+  LODWORD(v13) = 8 * (*(_QWORD *)(*(_QWORD *)(v13 + 32) + 8 * v14) & 1);
+  result = (unsigned int)v13 | *(_BYTE *)(a2 + 2) & 0xF7;
+  *(_BYTE *)(a2 + 2) = v13 | *(_BYTE *)(a2 + 2) & 0xF7;
+  return result;
+}

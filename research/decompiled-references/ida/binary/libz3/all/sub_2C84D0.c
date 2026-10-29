@@ -1,0 +1,12 @@
+__int64 __fastcall sub_2C84D0(__int64 *a1)
+{
+  __int64 v1; // rbp
+  __int64 v2; // rax
+  __int64 statistics; // rax
+
+  v1 = sub_26B5C0(a1, 1);
+  v2 = sub_26B5C0(a1, 0);
+  statistics = Z3_fixedpoint_get_statistics(v2, v1);
+  return sub_26B3D0(a1, statistics);
+}
+

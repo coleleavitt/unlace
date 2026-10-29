@@ -106,6 +106,14 @@ fn hir_trace_counts(nodes: &[HirNode]) -> HirTraceCounts {
                 merge_hir_trace_counts(&mut counts, hir_trace_counts(try_body));
                 merge_hir_trace_counts(&mut counts, hir_trace_counts(finally_body));
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                merge_hir_trace_counts(&mut counts, hir_trace_counts(try_body));
+                merge_hir_trace_counts(&mut counts, hir_trace_counts(except_body));
+            }
             HirNode::Commented { inner, .. } => merge_hir_trace_counts(
                 &mut counts,
                 hir_trace_counts(std::slice::from_ref(inner.as_ref())),
@@ -230,6 +238,7 @@ pub(super) fn hir_node_kind(node: &HirNode) -> &'static str {
         HirNode::Break => "break",
         HirNode::TryCatch { .. } => "try-catch",
         HirNode::TryFinally { .. } => "try-finally",
+        HirNode::TryExcept { .. } => "try-except",
         HirNode::Commented { .. } => "commented",
         HirNode::ObjcBlock { .. } => "objc-block",
         HirNode::Asm { .. } => "asm",

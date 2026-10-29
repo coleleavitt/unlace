@@ -1,0 +1,23 @@
+__int64 __fastcall sub_30AF0(const __m128i *a1, __int64 a2)
+{
+  __int64 *v2; // rax
+  __int64 v3; // rax
+  __int64 v4; // rax
+  __int64 v6; // [rsp+8h] [rbp-40h] BYREF
+  __int64 v7; // [rsp+10h] [rbp-38h] BYREF
+  __m128i v8; // [rsp+18h] [rbp-30h]
+  __int64 v9; // [rsp+28h] [rbp-20h]
+  unsigned __int64 v10; // [rsp+38h] [rbp-10h]
+
+  v10 = __readfsqword(0x28u);
+  v2 = (__int64 *)a1[2].m128i_i64[0];
+  LOBYTE(v7) = 1;
+  v8 = _mm_loadu_si128(a1 + 1);
+  v3 = *v2;
+  v6 = -1;
+  v9 = v3;
+  v4 = sub_135E0(a1, a2);
+  sub_2CA10((_QWORD *)(v4 + 1040), &v6, &v7);
+  return v6;
+}
+

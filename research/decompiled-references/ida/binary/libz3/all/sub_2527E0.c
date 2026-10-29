@@ -1,0 +1,144 @@
+__int64 __fastcall sub_2527E0(__int64 a1, __int64 a2)
+{
+  __m128i si128; // xmm0
+  __int64 v3; // rax
+  __m128i v4; // xmm0
+  __m128i v5; // xmm0
+  __m128i v6; // xmm0
+  __m128i v7; // xmm0
+  __int64 v9; // [rsp+10h] [rbp-48h] BYREF
+  _QWORD v10[8]; // [rsp+18h] [rbp-40h] BYREF
+
+  *(_QWORD *)a1 = 0x100000001LL;
+  *(_QWORD *)(a1 + 32) = 0x1FFFFFFFFLL;
+  v9 = 0;
+  v10[0] = 0;
+  sub_15B6DB0(a1, v10);
+  sub_18572D0(v10);
+  si128 = _mm_load_si128((const __m128i *)&xmmword_18B64A0);
+  *(_WORD *)(a1 + 38) = 0;
+  *(_QWORD *)(a1 + 40) = 0;
+  *(_WORD *)(a1 + 64) = 1;
+  *(_BYTE *)(a1 + 66) = 1;
+  *(__m128i *)(a1 + 48) = si128;
+  sub_15B7800(a1, &v9);
+  sub_18572D0(&v9);
+  *(_QWORD *)(a1 + 72) = 1;
+  *(_QWORD *)(a1 + 80) = 0x3FB999999999999ALL;
+  v10[0] = 0;
+  *(_QWORD *)(a1 + 88) = 0x7D00000000ALL;
+  *(_QWORD *)(a1 + 96) = 0x3FE999999999999ALL;
+  sub_15B81B0(a1 + 72, v10);
+  sub_18572D0(v10);
+  v10[0] = 0;
+  *(_QWORD *)(a1 + 104) = a1 + 120;
+  v3 = operator new(0x16u);
+  v4 = _mm_load_si128((const __m128i *)&xmmword_18B6520);
+  *(_QWORD *)(a1 + 104) = v3;
+  *(__m128i *)v3 = v4;
+  strcpy((char *)(v3 + 13), "eration)");
+  *(_QWORD *)(a1 + 136) = a1 + 152;
+  *(_QWORD *)(a1 + 120) = 21;
+  *(_QWORD *)(a1 + 184) = 0x200000000LL;
+  *(_QWORD *)(a1 + 112) = 21;
+  *(_QWORD *)(a1 + 196) = 0xFFFFFFFFLL;
+  *(_QWORD *)(a1 + 208) = 0x1000000FFFFFFFFLL;
+  strcpy((char *)(a1 + 152), "cost");
+  *(_QWORD *)(a1 + 144) = 4;
+  *(_BYTE *)(a1 + 192) = 0;
+  *(_WORD *)(a1 + 204) = 257;
+  *(_QWORD *)(a1 + 216) = 0x100000001LL;
+  *(_DWORD *)(a1 + 224) = 1000;
+  *(_BYTE *)(a1 + 228) = 0;
+  *(_DWORD *)(a1 + 232) = 10;
+  *(_QWORD *)(a1 + 240) = 0;
+  *(_OWORD *)(a1 + 168) = xmmword_18B64B0;
+  sub_15AFF30(a1 + 104, v10);
+  sub_18572D0(v10);
+  *(_QWORD *)(a1 + 248) = 0x600000000LL;
+  *(_QWORD *)(a1 + 256) = 0x3E800000000LL;
+  *(_QWORD *)(a1 + 264) = 0x200000001LL;
+  *(_QWORD *)(a1 + 328) = 0x200000001LL;
+  *(_QWORD *)(a1 + 344) = 0xFFFFFFFFLL;
+  *(_QWORD *)(a1 + 368) = 0x20000000101LL;
+  *(_QWORD *)(a1 + 272) = 0x8000000101LL;
+  *(_QWORD *)(a1 + 376) = 0x600000100LL;
+  *(_QWORD *)(a1 + 280) = 0x100000010LL;
+  *(_QWORD *)(a1 + 288) = 0;
+  *(_QWORD *)(a1 + 296) = 0xFFFFFC1800000000LL;
+  *(_QWORD *)(a1 + 304) = 1000;
+  *(_QWORD *)(a1 + 336) = 0x10000;
+  *(_QWORD *)(a1 + 352) = 0;
+  *(_QWORD *)(a1 + 360) = 1;
+  *(_QWORD *)(a1 + 384) = 0x40000000001LL;
+  *(_WORD *)(a1 + 392) = 257;
+  *(_BYTE *)(a1 + 394) = 1;
+  *(_OWORD *)(a1 + 312) = xmmword_18B64C0;
+  v10[0] = 0;
+  sub_15B26B0(a1 + 248, v10);
+  sub_18572D0(v10);
+  *(_BYTE *)(a1 + 420) = 0;
+  *(_DWORD *)(a1 + 400) = 3;
+  *(_QWORD *)(a1 + 408) = 0x1000100000001LL;
+  *(_QWORD *)(a1 + 424) = 0x10000000001LL;
+  *(_WORD *)(a1 + 396) = 256;
+  *(_WORD *)(a1 + 404) = 256;
+  *(_DWORD *)(a1 + 416) = 10;
+  *(_QWORD *)(a1 + 432) = 0x100017FFFFFFFLL;
+  *(_DWORD *)(a1 + 440) = 0;
+  v10[0] = 0;
+  sub_15B7350(a1 + 424, v10);
+  sub_18572D0(v10);
+  *(_DWORD *)(a1 + 444) = 0;
+  *(_QWORD *)(a1 + 448) = 0x13FFFFFFFLL;
+  v10[0] = 0;
+  sub_15B3AA0(a1 + 444, v10);
+  sub_18572D0(v10);
+  *(_BYTE *)(a1 + 460) = 1;
+  *(_DWORD *)(a1 + 456) = 1000;
+  v10[0] = 0;
+  sub_15B6C70(a1 + 456, v10);
+  sub_18572D0(v10);
+  *(_QWORD *)(a1 + 556) = 0x10100000003E8LL;
+  *(_OWORD *)(a1 + 488) = xmmword_18B64D0;
+  v5 = _mm_load_si128((const __m128i *)&xmmword_18B64E0);
+  *(_QWORD *)(a1 + 588) = 0x2000000000LL;
+  *(__m128i *)(a1 + 504) = v5;
+  v6 = _mm_load_si128((const __m128i *)&xmmword_18B64F0);
+  *(_QWORD *)(a1 + 600) = 0x6400000001LL;
+  *(__m128i *)(a1 + 536) = v6;
+  *(_QWORD *)(a1 + 464) = 1;
+  *(_QWORD *)(a1 + 608) = 0x3FF199999999999ALL;
+  *(_WORD *)(a1 + 472) = 257;
+  *(_DWORD *)(a1 + 476) = 2;
+  *(_BYTE *)(a1 + 480) = 0;
+  *(_DWORD *)(a1 + 484) = 0;
+  *(_DWORD *)(a1 + 520) = 100;
+  *(_BYTE *)(a1 + 524) = 1;
+  *(_DWORD *)(a1 + 528) = -1;
+  *(_BYTE *)(a1 + 552) = 1;
+  *(_BYTE *)(a1 + 564) = 0;
+  *(_QWORD *)(a1 + 568) = 0;
+  *(_WORD *)(a1 + 576) = 256;
+  *(_QWORD *)(a1 + 580) = 1;
+  *(_BYTE *)(a1 + 596) = 0;
+  *(_BYTE *)(a1 + 616) = 1;
+  *(_DWORD *)(a1 + 640) = 0;
+  *(_BYTE *)(a1 + 644) = 0;
+  *(_OWORD *)(a1 + 624) = xmmword_18B6500;
+  *(_QWORD *)(a1 + 648) = 0x138800000064LL;
+  *(_QWORD *)(a1 + 656) = 0x3FF199999999999ALL;
+  v7 = _mm_load_si128((const __m128i *)&xmmword_18B6510);
+  *(_QWORD *)(a1 + 688) = 0x3FF0000000000000LL;
+  *(_DWORD *)(a1 + 680) = 6;
+  *(_DWORD *)(a1 + 696) = 0;
+  *(_DWORD *)(a1 + 712) = 0x1000000;
+  *(_QWORD *)(a1 + 704) = 0;
+  *(_WORD *)(a1 + 716) = 0;
+  *(_DWORD *)(a1 + 720) = 0;
+  *(_QWORD *)(a1 + 724) = 0x100000000000100LL;
+  *(__m128i *)(a1 + 664) = v7;
+  sub_180C5A0(a1 + 752, "auto");
+  return sub_15B65B0(a1, a2);
+}
+

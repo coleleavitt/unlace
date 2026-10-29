@@ -1,0 +1,20 @@
+__int64 __fastcall sub_170800(_QWORD *a1)
+{
+  _QWORD *v1; // rbx
+
+  v1 = a1 + 19;
+  a1[23] = &off_235880;
+  *a1 = &stru_236898;
+  do
+  {
+    if ( *v1 )
+    {
+      v1[1] = 0;
+      qfree();
+    }
+    v1 -= 3;
+  }
+  while ( v1 != a1 + 7 );
+  return qfree();
+}
+

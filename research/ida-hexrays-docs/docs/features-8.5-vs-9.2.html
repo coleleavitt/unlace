@@ -1,0 +1,1883 @@
+<!doctype html><html lang="en"><head>
+    <meta charset="utf-8">
+    <title>Feature overview: IDA 8.5 vs 9.1</title>
+    
+    <link rel="shortcut icon" href="https://hex-rays.com/hubfs/Ico-logo.png">
+    <meta name="description" content="Discover the key differences between IDA 8.5 and IDA 9.2. Explore new features like Microcode Viewer, open-source Domain API and IDA SDK, and more.">
+    
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:description" content="Discover the key differences between IDA 8.5 and IDA 9.2. Explore new features like Microcode Viewer, open-source Domain API and IDA SDK, and more.">
+    <meta property="og:title" content="Feature overview: IDA 8.5 vs 9.1">
+    <meta name="twitter:description" content="Discover the key differences between IDA 8.5 and IDA 9.2. Explore new features like Microcode Viewer, open-source Domain API and IDA SDK, and more.">
+    <meta name="twitter:title" content="Feature overview: IDA 8.5 vs 9.1">
+
+    
+
+    
+    <style>
+a.cta_button{-moz-box-sizing:content-box !important;-webkit-box-sizing:content-box !important;box-sizing:content-box !important;vertical-align:middle}.hs-breadcrumb-menu{list-style-type:none;margin:0px 0px 0px 0px;padding:0px 0px 0px 0px}.hs-breadcrumb-menu-item{float:left;padding:10px 0px 10px 10px}.hs-breadcrumb-menu-divider:before{content:'›';padding-left:10px}.hs-featured-image-link{border:0}.hs-featured-image{float:right;margin:0 0 20px 20px;max-width:50%}@media (max-width: 568px){.hs-featured-image{float:none;margin:0;width:100%;max-width:100%}}.hs-screen-reader-text{clip:rect(1px, 1px, 1px, 1px);height:1px;overflow:hidden;position:absolute !important;width:1px}
+</style>
+
+<link rel="stylesheet" href="https://hex-rays.com/hubfs/hub_generated/template_assets/1/92947691201/1748869255562/template_main.min.css">
+<link rel="stylesheet" href="https://hex-rays.com/hubfs/hub_generated/template_assets/1/92947691196/1744246078901/template_theme.min.css">
+<link rel="stylesheet" href="https://hex-rays.com/hubfs/hub_generated/module_assets/1/193029509339/1744273629957/module_Link_List.min.css">
+<link rel="stylesheet" href="https://hex-rays.com/hubfs/hub_generated/module_assets/1/95555202292/1749541377019/module_FAQs.min.css">
+<link rel="stylesheet" href="https://hex-rays.com/hubfs/hub_generated/module_assets/1/193035772123/1744273631013/module_Slim_Footer.min.css">
+<style>
+  @font-face {
+    font-family: "Inter";
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+    src: url("/_hcms/googlefonts/Inter/700.woff2") format("woff2"), url("/_hcms/googlefonts/Inter/700.woff") format("woff");
+  }
+  @font-face {
+    font-family: "Inter";
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+    src: url("/_hcms/googlefonts/Inter/300.woff2") format("woff2"), url("/_hcms/googlefonts/Inter/300.woff") format("woff");
+  }
+  @font-face {
+    font-family: "Inter";
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+    src: url("/_hcms/googlefonts/Inter/500.woff2") format("woff2"), url("/_hcms/googlefonts/Inter/500.woff") format("woff");
+  }
+  @font-face {
+    font-family: "Inter";
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    src: url("/_hcms/googlefonts/Inter/regular.woff2") format("woff2"), url("/_hcms/googlefonts/Inter/regular.woff") format("woff");
+  }
+  @font-face {
+    font-family: "Ubuntu Mono";
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    src: url("/_hcms/googlefonts/Ubuntu_Mono/regular.woff2") format("woff2"), url("/_hcms/googlefonts/Ubuntu_Mono/regular.woff") format("woff");
+  }
+  @font-face {
+    font-family: "Ubuntu Mono";
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+    src: url("/_hcms/googlefonts/Ubuntu_Mono/700.woff2") format("woff2"), url("/_hcms/googlefonts/Ubuntu_Mono/700.woff") format("woff");
+  }
+  @font-face {
+    font-family: "IBM Plex Mono";
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    src: url("/_hcms/googlefonts/IBM_Plex_Mono/regular.woff2") format("woff2"), url("/_hcms/googlefonts/IBM_Plex_Mono/regular.woff") format("woff");
+  }
+  @font-face {
+    font-family: "IBM Plex Mono";
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+    src: url("/_hcms/googlefonts/IBM_Plex_Mono/700.woff2") format("woff2"), url("/_hcms/googlefonts/IBM_Plex_Mono/700.woff") format("woff");
+  }
+</style>
+
+<!-- Editor Styles -->
+<style id="hs_editor_style" type="text/css">
+.dnd_area_1-row-0-force-full-width-section > .row-fluid {
+  max-width: none !important;
+}
+/* HubSpot Non-stacked Media Query Styles */
+@media (min-width:768px) {
+  .dnd_area_1-row-0-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-1-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-2-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-3-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-4-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-5-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-6-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-7-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-8-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-row-9-vertical-alignment > .row-fluid {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: row;
+    display: flex !important;
+    flex-direction: row;
+  }
+  .dnd_area_1-dnd_partial-1-column-1-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: center !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+  }
+  .dnd_area_1-dnd_partial-1-column-1-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-column-2-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+  }
+  .dnd_area_1-column-2-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-column-5-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+  }
+  .dnd_area_1-column-5-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-column-7-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+  }
+  .dnd_area_1-column-7-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-column-9-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+  }
+  .dnd_area_1-column-9-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-column-11-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+  }
+  .dnd_area_1-column-11-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-column-13-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+  }
+  .dnd_area_1-column-13-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-column-15-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+  }
+  .dnd_area_1-column-15-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-column-17-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+  }
+  .dnd_area_1-column-17-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+  .dnd_area_1-dnd_partial-19-column-1-vertical-alignment {
+    display: -ms-flexbox !important;
+    -ms-flex-direction: column !important;
+    -ms-flex-pack: center !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+  }
+  .dnd_area_1-dnd_partial-19-column-1-vertical-alignment > div {
+    flex-shrink: 0 !important;
+  }
+}
+/* HubSpot Styles (default) */
+.dnd_area_1-row-0-margin {
+  margin-top: 0px !important;
+  margin-bottom: 0px !important;
+}
+.dnd_area_1-row-0-padding {
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+}
+.dnd_area_1-row-1-margin {
+  margin-top: 0px !important;
+  margin-bottom: 0px !important;
+}
+.dnd_area_1-row-1-padding {
+  padding-top: 40px !important;
+  padding-bottom: 40px !important;
+}
+.dnd_area_1-row-3-padding {
+  padding-top: 32px !important;
+  padding-bottom: 64px !important;
+}
+.dnd_area_1-row-3-background-layers {
+  background-image: linear-gradient(rgba(247, 247, 248, 1), rgba(247, 247, 248, 1)) !important;
+  background-position: left top !important;
+  background-size: auto !important;
+  background-repeat: no-repeat !important;
+}
+.dnd_area_1-row-6-margin {
+  margin-top: 16px !important;
+}
+.dnd_area_1-row-8-margin {
+  margin-top: 16px !important;
+}
+.dnd_area_1-dnd_partial-19-column-1-row-1-margin {
+  margin-top: 60px !important;
+}
+</style>
+    <script src="https://code.jquery.com/jquery-3.7.1.js"></script>
+
+    
+<!--  Added by GoogleAnalytics4 integration -->
+<script>
+var _hsp = window._hsp = window._hsp || [];
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+
+var useGoogleConsentModeV2 = true;
+var waitForUpdateMillis = 1000;
+
+
+if (!window._hsGoogleConsentRunOnce) {
+  window._hsGoogleConsentRunOnce = true;
+
+  gtag('consent', 'default', {
+    'ad_storage': 'denied',
+    'analytics_storage': 'denied',
+    'ad_user_data': 'denied',
+    'ad_personalization': 'denied',
+    'wait_for_update': waitForUpdateMillis
+  });
+
+  if (useGoogleConsentModeV2) {
+    _hsp.push(['useGoogleConsentModeV2'])
+  } else {
+    _hsp.push(['addPrivacyConsentListener', function(consent){
+      var hasAnalyticsConsent = consent && (consent.allowed || (consent.categories && consent.categories.analytics));
+      var hasAdsConsent = consent && (consent.allowed || (consent.categories && consent.categories.advertisement));
+
+      gtag('consent', 'update', {
+        'ad_storage': hasAdsConsent ? 'granted' : 'denied',
+        'analytics_storage': hasAnalyticsConsent ? 'granted' : 'denied',
+        'ad_user_data': hasAdsConsent ? 'granted' : 'denied',
+        'ad_personalization': hasAdsConsent ? 'granted' : 'denied'
+      });
+    }]);
+  }
+}
+
+gtag('js', new Date());
+gtag('set', 'developer_id.dZTQ1Zm', true);
+gtag('config', 'G-Y2G1VBHRDB');
+</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-Y2G1VBHRDB"></script>
+
+<!-- /Added by GoogleAnalytics4 integration -->
+
+    <link rel="canonical" href="https://hex-rays.com/feature-overview-ida-8.5-vs-9.2">
+
+<!-- Hotjar Tracking Code for https://hex-rays.com -->
+<script>
+  $(document).ready(function() { 
+    if ($('.hs-inline-edit').length === 0) {
+      (function(h,o,t,j,a,r){
+        h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};
+        h._hjSettings={hjid:5130713,hjsv:6};
+        a=o.getElementsByTagName('head')[0];
+        r=o.createElement('script');r.async=1;
+        r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;
+        a.appendChild(r);
+      })(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');
+    }
+  });
+</script>
+<link rel="stylesheet" href="https://sets.hugeicons.com/thkf3wo4kl.css" crossorigin="anonymous">
+<meta property="og:url" content="https://hex-rays.com/feature-overview-ida-8.5-vs-9.2">
+<meta name="twitter:card" content="summary">
+<meta http-equiv="content-language" content="en">
+
+
+
+
+
+
+    
+    
+    
+<!--     <script src=""></script> -->
+<!--     <script src="https://unpkg.com/scrollreveal"></script> -->
+    <script src=""></script>
+    
+    
+  <meta name="generator" content="HubSpot"></head>
+
+  <body>
+    <div class="page-wrapper lp-layout">
+      <div class="body-wrapper   hs-content-id-267158361274 hs-site-page page ">
+        
+<div class="body-container-wrapper">
+  
+  <div class="container-fluid">
+<div class="row-fluid-wrapper">
+<div class="row-fluid">
+<div class="span12 widget-span widget-type-cell " style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-1 dnd_area_1-row-0-vertical-alignment dnd-section dnd_area_1-row-0-force-full-width-section dnd_area_1-row-0-margin dnd_area_1-row-0-padding">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd_area_1-dnd_partial-1-column-1-vertical-alignment dnd-column" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-2 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-dnd_partial-1-module-2" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module"><div class="hero-wrapper">
+  <div class="hero hero-dnd_area_1-dnd_partial-1-module-2">
+    
+    <div class="overlay " style="background:linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0))">
+    </div>
+    
+    
+  </div>
+</div>
+
+<style>
+  .hero-wrapper {
+    position: relative;
+    z-index: -1;
+  }
+  .hero-dnd_area_1-dnd_partial-1-module-2 {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 28px;
+    border: 1px solid #C6CCD0;
+
+    
+    background-image: url('https://hex-rays.com/hubfs/lp-hero.png');
+background-size: cover;
+background-position: center center;
+
+    background-repeat: no-repeat;
+    
+    ;
+    
+    height: 388px;
+    
+  }
+  .hero video {
+    position: absolute;
+    min-width: 100%;
+    height: auto;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%,-50%);
+    z-index: -1;
+  }
+  .hero .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0; 
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var video = document.getElementById('backgroundVideo-dnd_area_1-dnd_partial-1-module-2');
+    if (video) {
+      video.muted = true;
+      video.autoplay = true;
+      video.loop = true;
+      video.playsinline = true;
+      
+      // Try to play the video programmatically
+      var promise = video.play();
+      if (promise !== undefined) {
+        promise.then(_ => {
+          // Autoplay started!
+        }).catch(error => {
+          // Autoplay was prevented.
+          // Show a UI element to let the user manually start playback.
+          console.log('Autoplay prevented, user interaction required.');
+        });
+      }
+    }
+  });
+</script>
+
+<div style="display: none">
+  {background_position=MIDDLE_CENTER, background_size=cover, css=background-image: url('https://hex-rays.com/hubfs/lp-hero.png');
+background-size: cover;
+background-position: center center;
+, src=https://hex-rays.com/hubfs/lp-hero.png}<br>
+    background-image: url('https://hex-rays.com/hubfs/lp-hero.png');
+background-size: cover;
+background-position: center center;
+
+</div></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-3 dnd_area_1-row-1-padding dnd-section dnd_area_1-row-1-vertical-alignment dnd_area_1-row-1-margin">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd_area_1-column-2-vertical-alignment dnd-column" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-4 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-3" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module widget-type-logo widget-type-logo" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module">
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <span id="hs_cos_wrapper_dnd_area_1-module-3_hs_logo_widget" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_logo" style="" data-hs-cos-general-type="widget" data-hs-cos-type="logo"><a href="https://hex-rays.com" id="hs-link-dnd_area_1-module-3_hs_logo_widget" style="border-width:0px;border:0px;"><img src="https://hex-rays.com/hubfs/logo-negative-2.svg" class="hs-image-widget " height="56" style="height: auto;width:177px;border-width:0px;border:0px;" width="177" alt="" title=""></a></span>
+</div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-5 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-4" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module">
+<div class="text-section text-section-dnd_area_1-module-4">
+  
+  
+  <h1 class="title">Feature overview: IDA 8.5 vs 9.2</h1>
+  
+  
+  
+  <div class="buttons">
+    
+    
+    
+    <a href="https://hex-rays.com/pricing" class="secondary-button  ">
+      <span>Explore 9.2 plans</span>
+      <i class="icon icon-arrow-narrow-right"></i>
+    </a>
+    
+  </div>
+  
+</div>
+
+<style>
+  .text-section-dnd_area_1-module-4 {
+    display:flex;
+    flex-direction: column;
+      
+    justify-content: center;
+    
+      
+    align-items: center;
+    
+    text-align: LEFT
+;
+  }
+  .text-section-dnd_area_1-module-4 .title-label {
+    margin: 0 0 20px;
+    display: inline-block;
+  }
+  .text-section-dnd_area_1-module-4 p {
+    margin: 24px 0 0;
+  }
+  .text-section-dnd_area_1-module-4 .title {
+    margin: 0;
+  }
+  .text-section-dnd_area_1-module-4 .buttons {
+      
+    justify-content: center;
+    
+    width: 100%;
+    margin: 32px 0 0;
+  }
+  .text-section-dnd_area_1-module-4 a span {
+      font-size: inherit;
+    color: inherit;
+  }
+  .text-section-dnd_area_1-module-4 .link span {
+    text-decoration: underline;
+  }
+  @media (max-width: 767px) {
+    .text-section-dnd_area_1-module-4 .buttons,
+    .text-section-dnd_area_1-module-4 {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+</style></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-6 dnd-section dnd_area_1-row-2-vertical-alignment">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd_area_1-column-5-vertical-alignment dnd-column" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-7 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-6" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module widget-type-rich_text widget-type-rich_text" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module"><span id="hs_cos_wrapper_dnd_area_1-module-6_" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_rich_text" style="" data-hs-cos-general-type="widget" data-hs-cos-type="rich_text"><p style="margin: 0; font-size: 20px;">Explore the key differences between IDA 8.5 and IDA 9.2&nbsp;in this concise feature comparison. This overview highlights just major improvements, for a deeper dive into what’s new, don’t hesitate to reach out to our sales team at <a href="mailto:sales@hex-rays.com">sales@hex-rays.com</a>.</p></span></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-8 dnd_area_1-row-3-vertical-alignment dnd-section dnd_area_1-row-3-background-layers dnd_area_1-row-3-background-color dnd_area_1-row-3-padding">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd-column dnd_area_1-column-7-vertical-alignment" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-9 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-8" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module"><div class="comparison-table-text-wrapper">
+  <div class="comparison-table-text">
+    
+    <div class="row row-1 table-header">
+      
+      <div class="column column-1">
+        Feature
+      </div>
+      
+      <div class="column column-2">
+        Summary
+      </div>
+      
+      <div class="column column-3">
+        IDA 9.2
+      </div>
+      
+      <div class="column column-4">
+        IDA 8.5
+      </div>
+      
+    </div>
+    
+    <div class="row row-2 table-body">
+      
+      <div class="column column-1">
+        <span><b>Open-Source Tools</b><br> IDA SDK &amp; IDA Python<br> IDA Domain API</span>
+      </div>
+      
+      <div class="column column-2">
+        IDA SDK &amp; IDA Python - Users can build and adapt the SDK to integrate IDA into a custom workflow, extend its capabilities, or maintain tooling across teams.<br><br> IDA Domain API - a new open-source Python API designed to make scripting in IDA simpler, more consistent, and more approachable. 
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-3 table-body">
+      
+      <div class="column column-1">
+        <span><b>Mircocode Viewer</b> </span>
+      </div>
+      
+      <div class="column column-2">
+        Hook into the pipeline and intercept microcode generation, so plugins can reshape the hierarchy however they see fit. This new microcode view syncs with disassembly, pseudocode, or other microcode views at any stage in the decompilation process
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-4 table-body">
+      
+      <div class="column column-1">
+        <span><b>idalib</b><br>Headless Processing</span>
+      </div>
+      
+      <div class="column column-2">
+        Run scripts directly using IDA as a library. Both the C++ and Python APIs can be used from outside IDA to form standalone applications. If configured correctly, you get auto-completion and debugging in your favorite C++/Python IDE.<br><br>Now you can pass IDA's command-line arguments to the open_database() function. This allows, for example, processing raw binaries for non-x86 using idalib.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-5 table-body">
+      
+      <div class="column column-1">
+        <span><b>RISC-V and ARM</b> Decompiler &amp; Disassembler Extensions</span>
+      </div>
+      
+      <div class="column column-2">
+        New decompilers targeting 32- and 64-bit RISC-V code (HEXRV and HEXRV64). There is now an extended RISC-V processor module to support T-Head extension instructions (used in Xuantie and Allwinner processors).<br><br> Automatic switch detection for both RISC-V and ARM<br>
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-6 table-body">
+      
+      <div class="column column-1">
+        <span><b>Visualization</b><br> Xref Graph &amp; Xref Tree</span>
+      </div>
+      
+      <div class="column column-2">
+        These new views bring clarity to function relationships and data flows, making it easier to trace code paths and understand complex binaries.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-7 table-body">
+      
+      <div class="column column-1">
+        <span><b>Decompiler</b> Improvements</span>
+      </div>
+      
+      <div class="column column-2">
+        ARM64 – Now supports ILP32 mode, making decompilation more accurate for systems like Apple’s watchOS.ARM64 – Displaying of symbolic system register names in pseudocode means better, more readable decompilation for OS-level applications.<br><br>PPC – Support for EFP (Embedded Floating Point) extension instructions of the Signal Processing Engine (SPE), expanding your analysis capabilities.<br><br>RISC-V – Added more intrinsics, reducing the number of __asm fragments in your pseudocode for a cleaner view. The decompiler now also handles Atomic Memory operation (AMO) instructions seamlessly.<br><br>GO - Cleaner Golang decompilation with tuple types.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-8 table-body">
+      
+      <div class="column column-1">
+        <span><b>Processor Module</b> Updates</span>
+      </div>
+      
+      <div class="column column-2">
+        <span>TMS320C6 – The compact (16-bit) encodings from TMS320C66x and TMS320C674x series are now disassembled.<br><br>RISC-V &amp; RH850 – Improved switch table recognition, broader relocation handling, and extended register tracking.<br><br>TriCore – mfcr/mtcr instructions now use symbolic names for Core Special Function Registers (CSFRs) when known, making code easier to read. <br>50+ new instructions from TC1.8 are now supported, expanded chip definitions (TC1765, TC1724, TC128, TC1130, ane more), and global address registers (A0, A1, A8, A9) can now be configured as segment registers..<br></span>
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-9 table-body">
+      
+      <div class="column column-1">
+        <span><b>C++ Exceptions</b> Support in the Decompiler</span>
+      </div>
+      
+      <div class="column column-2">
+        The Decompiler can now emit try/catch blocks. There is now support for the C++ exception scheme in binaries compiled for x64 using Microsoft VC++.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-10 table-body">
+      
+      <div class="column column-1">
+        <span><b>Debugger</b> Register Subview &amp; Call Stack Recon</span>
+      </div>
+      
+      <div class="column column-2">
+        A redesigned register subview that provides a much richer context.  <br>A more accurate call stack reconstruction mechanism for certain x64 PE files.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-11 table-body">
+      
+      <div class="column column-1">
+        <span><b>FLIRT Manager</b> Updates</span>
+      </div>
+      
+      <div class="column column-2">
+        Extensive update includes modernized and extended number of FLIRT signatures available for modern languages like Golang and Rust.<br><br>A new plugin (FLIRT Manager) allows easy application of multiple signatures to the database and lets you see which one gives the best results.<br><br>Updates for classic compilers (MSVC for Windows, GCC for Linux).<br><br>IDA now detects the Rust version of the loaded binary, enabling the automated creation of custom, version-specific FLIRT signatures.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-12 table-body">
+      
+      <div class="column column-1">
+        <span><b>zstd Compression</b></span>
+      </div>
+      
+      <div class="column column-2">
+        IDA now uses zstd compression in IDB files. The higher compression results in smaller IDBs for faster saving and loading, especially when working with large databases.<br><br>This also improves performance when working with remote storage or syncing with version control.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-13 table-body">
+      
+      <div class="column column-1">
+        <span><b>IDA Teams</b><br>Improvements</span>
+      </div>
+      
+      <div class="column column-2">
+        IDA Teams versioning functionality can now send and receive small binary delta files instead of whole IDBs, delivering faster version management operations and less network traffic by only sending what has changed.<br><br>The delta files can also be stored on the Vault server, keeping down disk usage.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-14 table-body">
+      
+      <div class="column column-1">
+        <span><b>Metadata Descriptors</b> Plugins</span>
+      </div>
+      
+      <div class="column column-2">
+        ida-plugin.json now offers a standardized entrypoint for plugins allowing authors to follow their own plugin directory structure.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-15 table-body">
+      
+    </div>
+    
+    <div class="row row-16 table-body">
+      
+      <div class="column column-1">
+        <span><b>License Flexibility</b></span>
+      </div>
+      
+      <div class="column column-2">
+        Licenses are no longer bound to a specific platform. After buying one IDA license, it can be used on all supported platforms (Windows/Linux/macOS). <br><br>IDA Teams &amp; Lumina are now add-ons and can be added to any subscription plan. <br><br>A custom Hex-Rays licensing server replaces the FlexNet licensing server for floating licenses.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-red"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-17 table-body">
+      
+      <div class="column column-1">
+        <span><b>WASM Disassembler</b><br> and <b>File Format Loader</b></span>
+      </div>
+      
+      <div class="column column-2">
+        The new disassembler for Web Assembly (WASM) supports client-side browser applications.<br><br>WASM code is embedded into its own binary file format so we include a file loader that decodes the WASM file format.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-18 table-body">
+      
+      <div class="column column-1">
+        <span><b>IDAPython</b> Improvements</span>
+      </div>
+      
+      <div class="column column-2">
+        Most IDAPython APIs now have type annotations.<br><br>Python virtual environments (venvs) are now supported.<br><br>Objects returned in the Python API are properly zero-initialized.<br><br>idapyswitch can now be used with read-only IDA installations.<br><br>Auto-completion in IDA's CLI now disregards __magic_methods__ and auto-generated SWIG methods.<br><br>Auto-completing a method call shows its prototype with type annotations and docstring (if available) in a pop-up hint.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-19 table-body">
+      
+    </div>
+    
+    <div class="row row-20 table-body">
+      
+      <div class="column column-1">
+        <span><b>nanoMIPS</b> Decompiler &amp; Support</span>
+      </div>
+      
+      <div class="column column-2">
+        Both the MIPS disassembler and decompiler now support nanoMIPS instructions.<br><br>This is not a simple extension of the MIPS ISA but a completely new encoding of the existing MIPS instructions and addition of new ones, as well as a brand new calling convention.<br><br>nanoMIPS support is included in the MIPS decompiler (HEXMIPS), there is no need for an extra license.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-x-square text-green"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-21 table-body">
+      
+      <div class="column column-1">
+        <span><b>UI</b><br>Improvements</span>
+      </div>
+      
+      <div class="column column-2">
+        <span>Modernized look and feel with updated icons, added crosshair effect in minigraph, higher-res fonts, and more.<br><br>Replacement functionality for both headers/modules is now located (mostly) in typeinf.hpp / ida_typeinf. A porting guide <a href="https://docs.hex-rays.com/developer-guide">is available</a>.<br><br>It is now possible to specify fixed size for structures and to enable field packing easily.<br><br>The function prototype editor (aka Y shortcut on a function name) now can toggle between the classic free-text one-line editor and a new multi-line editor featuring the usual shortcuts and controls.<br><br>The basic function prototype editor now indicates invalid prototypes via a red rectangle while typing.<br><br>A refreshed set of shortcuts that better matches the modern OS conventions can now be selected instead of the traditional shortcuts.</span>
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-22 table-body">
+      
+      <div class="column column-1">
+        <span><b>Unified type storage</b><br> (ASMTIL)</span>
+      </div>
+      
+      <div class="column column-2">
+        Reestablished features to Local Types, such as structure field representation and all type manipulations. New databases only have Local Types by default and Structures and Enums are deprecated.<br><br>The new Local Types Widget allows editing structures like the classic Structures widget, or via a free-text editor.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-23 table-body">
+      
+      <div class="column column-1">
+        <span><b>ARM/iOS</b> Improvements</span>
+      </div>
+      
+      <div class="column column-2">
+        Added support for common Apple-specific instructions and system registers commonly encountered in iOS and macOS software to see fewer instances of undefined bytes breaking disassembly and more understandable code when working with these files.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+    </div>
+    
+    <div class="row row-24 table-body">
+      
+      <div class="column column-1">
+        <span><b>Debugger</b> Improvements</span>
+      </div>
+      
+      <div class="column column-2">
+        Added support for recent Android versions and made it more robust when working with apps without debug information. If running on a recent (API28+) Android, IDA will try to guess the variable type automatically. Since in the Dalvik VM the value of a variable cannot be displayed without knowing its type, this boosts the debugging experience significantly.
+      </div>
+      
+      <div class="column column-3">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+      <div class="column column-4">
+        <i class="icon-check-square text-green"></i>
+      </div>
+      
+    </div>
+    
+  </div>
+</div>
+
+<style>
+  .comparison-table-text .row {
+    display: flex;
+    gap: 32px;
+    justify-content: space-between;
+  }
+
+  .comparison-table-text .column-1 {
+    width: 250px;
+  }
+
+  .comparison-table-text .column-4,
+  .comparison-table-text .column-3,
+  .comparison-table-text .column-2 {
+    width: 240px;
+  }
+
+  .comparison-table-text .column-5 {
+    width: 315px;
+  }
+
+  .comparison-table-text .table-header .column {
+    color: rgba(38, 46, 53, 1.0);
+    font-weight: 600;
+    font-size: 20px;
+  }
+  
+  .comparison-table-text .row .column {
+    min-height: 64px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+  }
+  
+  .comparison-table-text .table-body .column {
+    font-size: 14px;
+    border-bottom: 1px solid rgba(210, 210, 210, 1.0);
+  }
+  
+  @media (max-width: 1024px) {
+    .comparison-table-text-wrapper {
+      overflow: auto;
+    }
+    .comparison-table-text {
+      width: 996px;
+    }
+    .comparison-table-text .table-header .column {
+      font-size: inherit;
+      align-items: flex-start;
+    }
+    .comparison-table-text .row .column {
+      text-align: left;
+    }
+  }
+</style></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-10 dnd-section dnd_area_1-row-4-vertical-alignment">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd-column dnd_area_1-column-9-vertical-alignment" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-11 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-10" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module"><div class="text-section text-section-dnd_area_1-module-10">
+  
+  <div class="buttons">
+    
+    
+    
+    <a href="https://my.hex-rays.com/shop" class="primary-button  ">
+      Purchase 9.2
+      <i class="icon icon-arrow-narrow-right"></i>
+    </a>
+    
+  </div>
+  
+</div>
+
+<style>
+  .text-section-dnd_area_1-module-10 {
+    display:flex;
+    flex-direction: column;
+      
+    justify-content: center;
+    
+      
+    align-items: center;
+    
+    text-align: LEFT
+;
+  }
+  .text-section-dnd_area_1-module-10 .buttons {
+      
+    justify-content: center;
+    
+    width: 100%;
+    margin: 0;
+  }
+  @media (max-width: 767px) {
+    .text-section-dnd_area_1-module-10 .buttons,
+    .text-section-dnd_area_1-module-10 {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+</style></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-12 dnd-section dnd_area_1-row-5-vertical-alignment">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd_area_1-column-11-vertical-alignment dnd-column" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-13 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-12" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module">
+<div class="text-section text-section-dnd_area_1-module-12">
+  
+  
+  <h2 class="title">For IDA 9.1</h2>
+  
+  
+  
+</div>
+
+<style>
+  .text-section-dnd_area_1-module-12 {
+    display:flex;
+    flex-direction: column;
+    
+    justify-content: flex-start;
+    
+    
+    text-align: LEFT
+;
+  }
+  .text-section-dnd_area_1-module-12 .title-label {
+    margin: 0 0 20px;
+    display: inline-block;
+  }
+  .text-section-dnd_area_1-module-12 p {
+    margin: 24px 0 0;
+  }
+  .text-section-dnd_area_1-module-12 .title {
+    margin: 0;
+  }
+  .text-section-dnd_area_1-module-12 .buttons {
+    
+    justify-content: flex-start;
+    
+    width: 100%;
+    margin: 32px 0 0;
+  }
+  .text-section-dnd_area_1-module-12 a span {
+      font-size: inherit;
+    color: inherit;
+  }
+  .text-section-dnd_area_1-module-12 .link span {
+    text-decoration: underline;
+  }
+  @media (max-width: 767px) {
+    .text-section-dnd_area_1-module-12 .buttons,
+    .text-section-dnd_area_1-module-12 {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+</style></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-14 dnd_area_1-row-6-margin dnd_area_1-row-6-vertical-alignment dnd-section">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd-column dnd_area_1-column-13-vertical-alignment" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-15 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-14" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module"><div class="link-list link-list-dnd_area_1-module-14 columns-1  ">
+  
+  
+  
+  
+  
+
+  
+  <a href="https://docs.hex-rays.com/release-notes/9_1" class="card border-gray-6 bg-gray-1 card-shadow-hover" target="_blank" rel="noopener">
+
+
+    <div>
+      <h2>Release Notes IDA 9.2</h2>
+    </div>
+
+    
+      <div class="primary-button-arrow">
+        <i class="icon-arrow-narrow-right"></i>
+      </div>
+    
+
+
+  </a>
+
+
+  
+  
+  
+  
+  
+  
+
+  
+  <a href="https://hex-rays.com/blog" class="card border-gray-6 bg-gray-1 card-shadow-hover" target="_blank" rel="noopener">
+
+
+    <div>
+      <h2>What’s New with IDA 9.2 - Read Detailed Blogs</h2>
+    </div>
+
+    
+      <div class="primary-button-arrow">
+        <i class="icon-arrow-narrow-right"></i>
+      </div>
+    
+
+
+  </a>
+
+
+  
+  
+</div></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-16 dnd_area_1-row-7-vertical-alignment dnd-section">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd-column dnd_area_1-column-15-vertical-alignment" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-17 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-16" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module">
+<div class="text-section text-section-dnd_area_1-module-16">
+  
+  
+  <h2 class="title">For IDA 8.5</h2>
+  
+  
+  
+</div>
+
+<style>
+  .text-section-dnd_area_1-module-16 {
+    display:flex;
+    flex-direction: column;
+    
+    justify-content: flex-start;
+    
+    
+    text-align: LEFT
+;
+  }
+  .text-section-dnd_area_1-module-16 .title-label {
+    margin: 0 0 20px;
+    display: inline-block;
+  }
+  .text-section-dnd_area_1-module-16 p {
+    margin: 24px 0 0;
+  }
+  .text-section-dnd_area_1-module-16 .title {
+    margin: 0;
+  }
+  .text-section-dnd_area_1-module-16 .buttons {
+    
+    justify-content: flex-start;
+    
+    width: 100%;
+    margin: 32px 0 0;
+  }
+  .text-section-dnd_area_1-module-16 a span {
+      font-size: inherit;
+    color: inherit;
+  }
+  .text-section-dnd_area_1-module-16 .link span {
+    text-decoration: underline;
+  }
+  @media (max-width: 767px) {
+    .text-section-dnd_area_1-module-16 .buttons,
+    .text-section-dnd_area_1-module-16 {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+</style></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-18 dnd_area_1-row-8-vertical-alignment dnd-section dnd_area_1-row-8-margin">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd_area_1-column-17-vertical-alignment dnd-column" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-19 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-module-18" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module"><div class="link-list link-list-dnd_area_1-module-18 columns-1  ">
+  
+  
+  
+  
+  
+
+  
+  <a href="https://docs.hex-rays.com/release-notes/8_5" class="card border-gray-6 bg-gray-1 card-shadow-hover" target="_blank" rel="noopener">
+
+
+    <div>
+      <h2>Release Notes IDA 8.5</h2>
+    </div>
+
+    
+      <div class="primary-button-arrow">
+        <i class="icon-arrow-narrow-right"></i>
+      </div>
+    
+
+
+  </a>
+
+
+  
+  
+</div></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-20 dnd-section dnd_area_1-row-9-vertical-alignment">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-cell dnd_area_1-dnd_partial-19-column-1-vertical-alignment dnd-column" style="" data-widget-type="cell" data-x="0" data-w="12">
+
+<div class="row-fluid-wrapper row-depth-1 row-number-21 dnd-row">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-dnd_partial-19-module-2" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module">
+<div class="text-section text-section-dnd_area_1-dnd_partial-19-module-2">
+  
+  <span class="title-label">FAQs</span>
+  
+  
+  <h2 class="title">Frequently asked questions</h2>
+  
+  
+  
+  <p class="description">You’ve got questions. We have answers!</p>
+  
+  
+  
+</div>
+
+<style>
+  .text-section-dnd_area_1-dnd_partial-19-module-2 {
+    display:flex;
+    flex-direction: column;
+      
+    justify-content: center;
+    
+      
+    align-items: center;
+    
+    text-align: CENTER
+;
+  }
+  .text-section-dnd_area_1-dnd_partial-19-module-2 .title-label {
+    margin: 0 0 20px;
+    display: inline-block;
+  }
+  .text-section-dnd_area_1-dnd_partial-19-module-2 p {
+    margin: 24px 0 0;
+  }
+  .text-section-dnd_area_1-dnd_partial-19-module-2 .title {
+    margin: 0;
+  }
+  .text-section-dnd_area_1-dnd_partial-19-module-2 .buttons {
+      
+    justify-content: center;
+    
+    width: 100%;
+    margin: 32px 0 0;
+  }
+  .text-section-dnd_area_1-dnd_partial-19-module-2 a span {
+      font-size: inherit;
+    color: inherit;
+  }
+  .text-section-dnd_area_1-dnd_partial-19-module-2 .link span {
+    text-decoration: underline;
+  }
+  @media (max-width: 767px) {
+    .text-section-dnd_area_1-dnd_partial-19-module-2 .buttons,
+    .text-section-dnd_area_1-dnd_partial-19-module-2 {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+</style></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+<div class="row-fluid-wrapper row-depth-1 row-number-22 dnd-row dnd_area_1-dnd_partial-19-column-1-row-1-margin">
+<div class="row-fluid ">
+<div class="span12 widget-span widget-type-custom_widget dnd-module" style="" data-widget-type="custom_widget" data-x="0" data-w="12">
+<div id="hs_cos_wrapper_dnd_area_1-dnd_partial-19-module-3" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_module" style="" data-hs-cos-general-type="widget" data-hs-cos-type="module"><div class="faq-short border-gray-6">
+  
+  <div class="qa-card border-gray-6" id="i_currently_have_ida_pro_8.x,_what_are_my_options_to_get_to_ida_9">
+    <h3 class="question">I currently have IDA Pro 8.x, what are my options to get to IDA 9? <i class="icon-plus-square"></i></h3>
+    <div class="answer"><p>You have two options:</p>
+<ul>
+<li>If your perpetual license is in active support, you do not need to purchase a subscription to access IDA 9 under the new subscription model. Your active license allows you to receive a free subscription to IDA 9! To start using IDA 9 today you can access the installer in the new customer portal at<span>&nbsp;</span><a href="https://my.hex-rays.com/login" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://my.hex-rays.com/login&amp;source=gmail&amp;ust=1731607614351000&amp;usg=AOvVaw1tqfb9O28R2ZHhtzyyzw7w">my.hex-rays.com</a>. There you can request a license key for your free subscription. Please note that the license key for your free IDA 9 subscription will expire at the end of your active support period. You can find detailed instructions on how to upgrade to IDA 9<span>&nbsp;</span><a href="https://hex-rays.com/faqs/how-do-i-upgrade-to-ida-9" data-saferedirecturl="https://www.google.com/url?q=https://hex-rays.com/faqs/how-do-i-upgrade-to-ida-9&amp;source=gmail&amp;ust=1731607614351000&amp;usg=AOvVaw2tdTJ8EImNcoD1tZiwQ5Vz">here</a>.&nbsp;</li>
+</ul>
+<ul>
+<li>If your perpetual license has run out of support, or your support period is about to end, you can select a plan<span>&nbsp;</span><a href="https://hex-rays.com/pricing" data-saferedirecturl="https://www.google.com/url?q=https://hex-rays.com/pricing&amp;source=gmail&amp;ust=1731607614351000&amp;usg=AOvVaw3CNkA_paCbHgohzwfmEGQh">here</a>&nbsp;and upgrade within our customer portal,<span>&nbsp;</span><a href="https://my.hex-rays.com/login" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://my.hex-rays.com/login&amp;source=gmail&amp;ust=1731607614351000&amp;usg=AOvVaw1tqfb9O28R2ZHhtzyyzw7w">my.hex-rays.com</a>. For any questions or doubt, do not hesitate to contact<span>&nbsp;</span><a href="mailto:sales@hex-rays.com">sales@hex-rays.com</a></li>
+</ul></div>
+  </div>
+  
+  <div class="qa-card border-gray-6" id="can_i_get_ida_pro_with_a_monthly_subscription">
+    <h3 class="question">Can I get IDA Pro with a monthly subscription? <i class="icon-plus-square"></i></h3>
+    <div class="answer"><p><span>We offer solely yearly subscriptions.</span></p></div>
+  </div>
+  
+  <div class="qa-card border-gray-6" id="can_i_purchase_ida_with_a_perpetual_license">
+    <h3 class="question">Can I purchase IDA with a perpetual license? <i class="icon-plus-square"></i></h3>
+    <div class="answer"><p><strong>Perpetual licenses are no longer offered as from September 30, 2024</strong>&nbsp;as Hex-Rays adopts a subscription-based licensing model.</p>
+<p>Any perpetual licenses bought before September 30, 2024 will remain valid and continue working according to their licensing terms. This means that you can continue to use indefinitely the specific IDA Pro version that you purchased before that date.</p>
+<p>Please bear in mind that updates and support for previous versions will be discontinued after one year of the activation date.</p></div>
+  </div>
+  
+</div></div>
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div><!--end row-->
+</div><!--end row-wrapper -->
+
+</div><!--end widget-span -->
+</div>
+</div>
+</div>
+  
+  <style>
+    #hs_cos_wrapper_dnd_area_1-module-3 .hs_cos_wrapper_type_logo {
+      display: flex;
+      margin: 0 auto 72px;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
+    }
+    .text-section-dnd_area_1-module-4 .buttons {
+      margin: 72px 0 0;
+    }
+    h1 {
+      color: #fff;
+    }
+    .dnd-section:last-child {
+      margin-bottom: 0;
+    }
+    .dnd-section {
+      margin-top: 64px;
+    }
+    .comparison-table-text .table-header .column.column-2,
+    .comparison-table-text .table-body .column.column-2 {
+      width: 100%;
+    }
+
+    .comparison-table-text .table-header .column.column-4,
+    .comparison-table-text .table-body .column.column-4,
+    .comparison-table-text .table-header .column.column-3,
+    .comparison-table-text .table-body .column.column-3 {
+      justify-content: center;
+    }
+    .comparison-table-text .row .column i {
+      font-size: 24px;
+    }
+    .comparison-table-text .row .column a {
+      font-size: inherit;
+      text-decoration: underline;
+      transition: .2s ease;
+    }
+    .comparison-table-text .row .column a:hover {
+      opacity: .6;
+    }
+    .comparison-table-text .row.row-11 .column-1 {
+      border-bottom: none;
+    }
+  </style>
+  <script>
+    $(document).ready(function () {
+      function setHeroHeight() {
+        // Delay execution by 200ms
+        setTimeout(function () {
+          // Get the outerHeight of the target element
+          let targetHeight = $('.dnd_area_1-row-1-vertical-alignment').outerHeight();
+          // Apply the height to the hero element
+          $('.hero-wrapper .hero').css('height', targetHeight + 'px');
+        }, 500); // 200ms delay
+      }
+
+      // Run on page load
+      setHeroHeight();
+
+      // Run on window resize
+      $(window).on('resize', function () {
+        setHeroHeight();
+      });
+    });
+
+  </script>
+
+        <div class="scroll-top-button primary-button">
+          <svg xmlns="http://www.w3.org/2000/svg" width="8.065" height="11.667" viewbox="0 0 8.065 11.667">
+            <g id="Group_11299" data-name="Group 11299" transform="translate(12.033 13.833) rotate(180)">
+              <path id="Path_3437" data-name="Path 3437" d="M8,13.334V2.667" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1" opacity="1" />
+              <path id="Path_3438" data-name="Path 3438" d="M11.334,10S8.879,13.333,8,13.333,4.667,10,4.667,10" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1" />
+            </g>
+          </svg>
+        </div>
+      </div>
+      
+<!-- HubSpot performance collection script -->
+<script defer src="/hs/hsstatic/content-cwv-embed/static-1.1293/embed.js"></script>
+<script src="https://hex-rays.com/hubfs/hub_generated/template_assets/1/98328955327/1744246086180/template_main.min.js"></script>
+<script src="https://hex-rays.com/hubfs/hub_generated/template_assets/1/113828857035/1744246088575/template_scrollreveal.min.js"></script>
+<script>
+var hsVars = hsVars || {}; hsVars['language'] = 'en';
+</script>
+
+<script src="/hs/hsstatic/cos-i18n/static-1.53/bundles/project.js"></script>
+<script src="https://hex-rays.com/hubfs/hub_generated/module_assets/1/95555202292/1749541377019/module_FAQs.min.js"></script>
+<script src="https://hex-rays.com/hubfs/hub_generated/module_assets/1/193035772123/1744273631013/module_Slim_Footer.min.js"></script>
+
+<!-- Start of HubSpot Analytics Code -->
+<script type="text/javascript">
+var _hsq = _hsq || [];
+_hsq.push(["setContentType", "standard-page"]);
+_hsq.push(["setCanonicalUrl", "https:\/\/hex-rays.com\/feature-overview-ida-8.5-vs-9.2"]);
+_hsq.push(["setPageId", "267158361274"]);
+_hsq.push(["setContentMetadata", {
+    "contentPageId": 267158361274,
+    "legacyPageId": "267158361274",
+    "contentFolderId": null,
+    "contentGroupId": null,
+    "abTestId": null,
+    "languageVariantId": 267158361274,
+    "languageCode": "en",
+    
+    
+}]);
+</script>
+
+<script type="text/javascript" id="hs-script-loader" async defer src="/hs/scriptloader/143552897.js"></script>
+<!-- End of HubSpot Analytics Code -->
+
+
+<script type="text/javascript">
+var hsVars = {
+    render_id: "305e7cb1-96f7-4dfb-bed5-43f7969d6d67",
+    ticks: 1778124650835,
+    page_id: 267158361274,
+    
+    content_group_id: 0,
+    portal_id: 143552897,
+    app_hs_base_url: "https://app-eu1.hubspot.com",
+    cp_hs_base_url: "https://cp-eu1.hubspot.com",
+    language: "en",
+    analytics_page_type: "standard-page",
+    scp_content_type: "",
+    
+    analytics_page_id: "267158361274",
+    category_id: 1,
+    folder_id: 0,
+    is_hubspot_user: false
+}
+</script>
+
+
+<script defer src="/hs/hsstatic/HubspotToolsMenu/static-1.640/js/index.js"></script>
+
+
+
+
+      
+      <div data-global-resource-path="hex-rays-corporate-website/templates/partials/slim_footer.html"><!-- Begin partial -->
+<div class="footer">
+  <div class="container">
+    <div class="sm-wrapper">
+      <p>Connect with the community on</p>
+      <div class="sm-links">
+        
+        
+        
+        <a href="https://twitter.com/hexrayssa?lang=en">
+          
+          
+          
+          
+          <img src="https://hex-rays.com/hubfs/website-resources/images/social-media-icons/x.svg" alt="X" loading="">
+          
+        </a>
+        
+        
+        
+        <a href="https://infosec.exchange/@HexRaysSA">
+          
+          
+          
+          
+          <img src="https://hex-rays.com/hubfs/website-resources/images/social-media-icons/mastodon.svg" alt="Mastodon" loading="">
+          
+        </a>
+        
+        
+        
+        <a href="https://www.linkedin.com/company/hex-rays-sa">
+          
+          
+          
+          
+          <img src="https://hex-rays.com/hubfs/website-resources/images/social-media-icons/linkedin.svg" alt="LinkedIn" loading="">
+          
+        </a>
+        
+        
+        
+        <a href="https://www.youtube.com/channel/UCqNQfYIIJw1L4ou5ej6iysw/featured">
+          
+          
+          
+          
+          <img src="https://hex-rays.com/hubfs/website-resources/images/social-media-icons/youtube.svg" alt="YouTube" loading="">
+          
+        </a>
+        
+      </div>
+    </div>
+    <div class="footer-copyrights-row border-gray-4">
+      
+      <div class="logo">
+        <span id="hs_cos_wrapper_footer_" class="hs_cos_wrapper hs_cos_wrapper_widget hs_cos_wrapper_type_logo" style="" data-hs-cos-general-type="widget" data-hs-cos-type="logo"><a href="https://hex-rays.com" id="hs-link-footer_" style="border-width:0px;border:0px;"><img src="https://hex-rays.com/hubfs/logo-website.svg" class="hs-image-widget " height="48" style="height: auto;width:144px;border-width:0px;border:0px;" width="144" alt="logo-website" title="logo-website" loading=""></a></span>
+      </div>
+      <div class="links">
+        
+        
+        
+        <a href="https://hex-rays.com/privacy-policy">
+          Privacy policy
+        </a>
+        
+        
+        
+        <a href="https://hex-rays.com/terms">
+          Terms of use
+        </a>
+        
+        <p>© 2026 Copyright Hex-Rays</p>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- End partial --></div>
+      
+    </div>
+    <script>
+      $(document).ready(function() {
+        
+        function handleScrollTopButton() {
+          if ($(window).width() > 767) {
+            // Scroll event listener
+            $(window).scroll(function() {
+              if ($(window).scrollTop() > $(window).height()) {
+                $('.scroll-top-button').addClass('visible');
+              } else {
+                $('.scroll-top-button').removeClass('visible');
+              }
+            });
+
+            // Click event to animate scroll to top
+            $('.scroll-top-button').on('click', function() {
+              $('html, body').animate({ scrollTop: 0 }, 'slow');
+            });
+          } else {
+            // Remove the scroll and click events if window width is <= 767px
+            $(window).off('scroll');
+            $('.scroll-top-button').off('click').removeClass('visible');
+          }
+        }
+
+        // Initial check on page load
+        handleScrollTopButton();
+
+        // Resize event to re-check window width and toggle functionality
+        $(window).resize(function() {
+          handleScrollTopButton();
+        });
+
+        // Select each DnD area
+        $('.dnd-section').each(function(index) {
+
+          if (index === 0) {
+            return;
+          }
+
+          const columns = $(this).find('.row-fluid > [class*=span]');
+
+          if (columns.length > 1) {
+            // Animate columns one after another
+            columns.each(function(index) {
+              ScrollReveal().reveal(this, {
+                delay: 50 * index,
+//                 distance: '8px',
+//                 origin: 'bottom',
+                reset: false
+              });
+            });
+          } else if (columns.length === 1) {
+            // Animate a single column
+            ScrollReveal().reveal(columns[0], {
+              duration: 50,
+//               distance: '8px',
+//               origin: 'bottom',
+              reset: false
+            });
+          }
+        });
+      });
+    </script>
+    
+  
+</div></body></html>

@@ -109,6 +109,7 @@ pub mod strings;
 pub mod swift_metadata;
 #[cfg(feature = "unwired")]
 pub mod til;
+pub mod toolchain;
 #[cfg(feature = "unwired")]
 pub mod ttd_trace;
 #[cfg(feature = "unwired")]
@@ -198,6 +199,9 @@ pub use rtti::{
 pub use swift_metadata::{
     SwiftBuiltinAsyncFunction, SwiftConformance, SwiftInfo, SwiftProtocolDescriptor,
     SwiftTypeDescriptor, scan_swift_metadata,
+};
+pub use toolchain::{
+    Libc, Tool, ToolVersion, Toolchain, ToolchainReport, Version as ToolVersionNumber,
 };
 pub use wasm_component::{
     WasmCanonicalFunction, WasmComponentExport, WasmComponentImport, WasmComponentInfo,

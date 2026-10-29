@@ -1,0 +1,15 @@
+int *sub_E9E0()
+{
+  int *result; // rax
+
+  result = (int *)find_ioport();
+  if ( result )
+  {
+    if ( *((_QWORD *)result + 2) )
+      return *((int **)result + 1);
+    else
+      return &dword_1157C;
+  }
+  return result;
+}
+

@@ -1000,8 +1000,8 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let r0_name = name_of(&ssa, r0, 0);
-        let r8_name = name_of(&ssa, r8, 0);
+        let r0_name = name_of(&ssa, r0, 1);
+        let r8_name = name_of(&ssa, r8, 1);
 
         assert!(r0_name.is_some(), "r0 should have a merged name");
         assert!(r8_name.is_some(), "r8 should have a merged name");
@@ -1042,8 +1042,8 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
-        let u4_name = name_of(&ssa, u4, 0).expect("u4 named");
+        let u0_name = name_of(&ssa, u0, 1).expect("u0 named");
+        let u4_name = name_of(&ssa, u4, 1).expect("u4 named");
 
         assert_eq!(
             u0_name, u4_name,
@@ -1075,8 +1075,8 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
-        let u4_name = name_of(&ssa, u4, 0).expect("u4 named");
+        let u0_name = name_of(&ssa, u0, 1).expect("u0 named");
+        let u4_name = name_of(&ssa, u4, 1).expect("u4 named");
         assert_ne!(
             u0_name, u4_name,
             "overlapping unique varnodes must NOT coalesce: {} vs {}",
@@ -1133,8 +1133,8 @@ mod tests {
             .run(&mut ssa)
             .expect("pass should succeed");
 
-        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
-        let u4_name = name_of(&ssa, u4, 0).expect("u4 named");
+        let u0_name = name_of(&ssa, u0, 1).expect("u0 named");
+        let u4_name = name_of(&ssa, u4, 1).expect("u4 named");
         assert_ne!(
             u0_name, u4_name,
             "cross-block live ranges that overlap in bb1 must not coalesce: {u0_name} vs {u4_name}",
@@ -1164,8 +1164,8 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
-        let u4_name = name_of(&ssa, u4, 0).expect("u4 named");
+        let u0_name = name_of(&ssa, u0, 1).expect("u0 named");
+        let u4_name = name_of(&ssa, u4, 1).expect("u4 named");
         assert_ne!(
             u0_name, u4_name,
             "different-width uniques must keep distinct names: {} vs {}",
@@ -1197,8 +1197,8 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let r0_name = name_of(&ssa, r0, 0).expect("r0 named");
-        let r8_name = name_of(&ssa, r8, 0).expect("r8 named");
+        let r0_name = name_of(&ssa, r0, 1).expect("r0 named");
+        let r8_name = name_of(&ssa, r8, 1).expect("r8 named");
         assert_ne!(
             r0_name, r8_name,
             "different physical registers must never coalesce \
@@ -1232,9 +1232,9 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
-        let u4_name = name_of(&ssa, u4, 0).expect("u4 named");
-        let u8_name = name_of(&ssa, u8, 0).expect("u8 named");
+        let u0_name = name_of(&ssa, u0, 1).expect("u0 named");
+        let u4_name = name_of(&ssa, u4, 1).expect("u4 named");
+        let u8_name = name_of(&ssa, u8, 1).expect("u8 named");
 
         assert_eq!(u0_name, u4_name, "u0 and u4 disjoint → same name");
         assert_eq!(u4_name, u8_name, "u4 and u8 disjoint → same name");
@@ -1283,8 +1283,8 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
-        let u4_name = name_of(&ssa, u4, 0).expect("u4 named");
+        let u0_name = name_of(&ssa, u0, 1).expect("u0 named");
+        let u4_name = name_of(&ssa, u4, 1).expect("u4 named");
         assert_ne!(
             u0_name, u4_name,
             "different inferred types must keep distinct names: {} vs {}",
@@ -1311,7 +1311,7 @@ mod tests {
         pass.run(&mut ssa).expect("pass should succeed");
 
         // u0 produces exactly one cluster — pass should always assign a name.
-        assert!(name_of(&ssa, u0, 0).is_some(), "u0 must receive a name");
+        assert!(name_of(&ssa, u0, 1).is_some(), "u0 must receive a name");
     }
 
     // ------------------------------------------------------------------
@@ -1368,7 +1368,7 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let r0_name = name_of(&ssa, r0, 0).expect("r0 named");
+        let r0_name = name_of(&ssa, r0, 1).expect("r0 named");
         assert!(
             r0_name.starts_with('v'),
             "single-version register must keep a vN name, got {r0_name}",
@@ -1398,7 +1398,7 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let u0_name = name_of(&ssa, u0, 0).expect("u0 named");
+        let u0_name = name_of(&ssa, u0, 1).expect("u0 named");
         assert!(
             u0_name.starts_with('v'),
             "coalesced Unique cluster must use a vN name, got {u0_name}",
@@ -1428,8 +1428,8 @@ mod tests {
         let pass = VariableMergePass::default();
         pass.run(&mut ssa).expect("pass should succeed");
 
-        let r0_name = name_of(&ssa, r0, 0).expect("r0 named");
-        let r8_name = name_of(&ssa, r8, 0).expect("r8 named");
+        let r0_name = name_of(&ssa, r0, 1).expect("r0 named");
+        let r8_name = name_of(&ssa, r8, 1).expect("r8 named");
         assert_eq!(r0_name, "c0", "coalesced r0 → c0, got {r0_name}");
         assert_eq!(
             r8_name, "v2",

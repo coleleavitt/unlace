@@ -1260,10 +1260,21 @@ pub struct StackAccess {
 /// Produced by [`unlace_passes::stack_frame_recovery::recover_stack_frame`].
 /// `locals` is keyed by signed frame offset so iteration order matches
 /// the slot's lexical position in the frame.
+///
+/// Frame offsets are relative to the frame pointer when the prologue
+/// establishes one, otherwise to the stack pointer at function entry (the
+/// return address then sits at offset 0 and locals below it are negative).
+/// `sp_offset_at_addr` carries the stack pointer's own frame offset at each
+/// machine instruction, so a consumer that sees `sp + k` at some address
+/// lands on the same `locals` key as the recovery pass did.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StackFrame {
     /// All recovered locals, keyed by frame offset.
     pub locals: BTreeMap<i64, StackLocal>,
+    /// Frame offset of the stack pointer's value when the machine instruction
+    /// at each address starts executing.
+    #[serde(default)]
+    pub sp_offset_at_addr: BTreeMap<u64, i64>,
     /// Total local-frame size in bytes: `max_pos_offset - min_neg_offset`
     /// (clamped at 0 when no locals were recovered).
     pub frame_size: u64,
@@ -1915,12 +1926,17 @@ fn rename_variables(
     let mut phi_map: BTreeMap<BlockId, Vec<PhiNode>> = BTreeMap::new();
     let mut var_map = VarMap::new();
 
+    // Version 0 names the value live on entry (`current_version` of a base
+    // nothing defined yet), so definitions count from 1; otherwise the
+    // entry value and the first definition of a register would be one SSA
+    // name and value numbering could fold `rsp - 8` after a push into the
+    // `rsp - 8` that computed the push's own address.
     fn new_version(
         base: Varnode,
         counter: &mut BTreeMap<Varnode, u32>,
         stack: &mut BTreeMap<Varnode, Vec<u32>>,
     ) -> u32 {
-        let ver = counter.entry(base).or_insert(0);
+        let ver = counter.entry(base).or_insert(1);
         let v = *ver;
         *ver += 1;
         stack.entry(base).or_default().push(v);
@@ -2258,6 +2274,28 @@ mod tests {
                 versions,
             );
         }
+    }
+
+    /// The value live on entry keeps version 0 for itself: `rsp = rsp - 8`
+    /// reads version 0 and defines version 1, so the two are never one name.
+    #[test]
+    fn test_live_in_and_first_definition_get_distinct_versions() {
+        let rsp = Varnode::reg(32, 8);
+        let c8 = Varnode::constant(8, 8);
+
+        let mut func = Function::new("entry_value", BlockId(0), 0x4100);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(def_insn(rsp, &[rsp, c8], 0x4100));
+        bb0.insns.push(def_insn(rsp, &[rsp, c8], 0x4104));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0x4108));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let at = |idx, slot| ssa.var_map[&(BlockId(0), idx, slot)].version;
+        assert_eq!(at(0, VarnodeSlot::Input(0)), 0, "entry value");
+        assert_eq!(at(0, VarnodeSlot::Output), 1, "first definition");
+        assert_eq!(at(1, VarnodeSlot::Input(0)), 1);
+        assert_eq!(at(1, VarnodeSlot::Output), 2);
     }
 
     #[test]

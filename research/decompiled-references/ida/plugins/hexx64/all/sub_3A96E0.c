@@ -1,0 +1,34 @@
+__int64 (__fastcall **__fastcall sub_3A96E0(_QWORD *a1))()
+{
+  __int64 (__fastcall **result)(); // rax
+  __int64 v3; // rdi
+  __int64 v4; // r12
+  __int64 i; // rbx
+  __int64 v6; // rdi
+
+  result = &off_4E7328;
+  *a1 = &off_4E7328;
+  v3 = a1[6];
+  if ( v3 )
+  {
+    v4 = a1[7];
+    if ( v4 )
+    {
+      for ( i = 0; i != v4; ++i )
+      {
+        clear_tinfo_t();
+        v3 = a1[6];
+      }
+    }
+    a1[7] = 0;
+    result = (__int64 (__fastcall **)())qfree(v3);
+  }
+  v6 = a1[3];
+  if ( v6 )
+  {
+    a1[4] = 0;
+    return (__int64 (__fastcall **)())qfree(v6);
+  }
+  return result;
+}
+

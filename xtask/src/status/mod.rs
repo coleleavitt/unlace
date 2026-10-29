@@ -50,7 +50,6 @@ const KNOWN_ORPHAN_FILES: &[&str] = &[
     "crates/unlace-lift-x86/src/ops/tsx.rs",
     "crates/unlace-loader/src/eh_frame_test.rs",
     "crates/unlace-loader/src/sbpf_evm.rs",
-    "crates/unlace-loader/src/toolchain.rs",
     "crates/unlace-output/src/semantic_diff.rs",
     "crates/unlace-struct/src/compound_assign.rs",
     "xtask/src/release.rs",

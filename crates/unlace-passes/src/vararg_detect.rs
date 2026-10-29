@@ -32,7 +32,7 @@ use unlace_ir::xref::CallGraph;
 use unlace_ir::{ArchId, BlockId, Function, IrInsn, IrOp, OsAbi, SpaceId, Varnode};
 
 use crate::call_args::calling_convention_for;
-use crate::callee_guess::{CallSiteArgs, collect_call_sites, guess_from_call_sites};
+use crate::callee_guess::{CallSiteArgs, call_window, collect_call_sites, guess_from_call_sites};
 use crate::libc_signatures::lookup_libc_normalized;
 
 const RAX: u64 = 0;
@@ -160,12 +160,16 @@ pub fn parse_printf_format_strings(
                 .get(1 + format_arg_index)
                 .filter(|vn| vn.space == SpaceId::Const)
                 .and_then(|vn| string_table.get(&vn.offset).cloned())
-                .or_else(
-                    || match find_constant_arg(&insns_snapshot, idx, format_arg_index, cc) {
-                        Some(addr) => string_table.get(&addr).cloned(),
-                        None => None,
-                    },
-                );
+                .or_else(|| {
+                    // The setup may sit before an exception dispatch block
+                    // that splits the call off into its own block.
+                    let window: Vec<IrInsn> = call_window(&ssa.function, bid, idx)
+                        .into_iter()
+                        .cloned()
+                        .collect();
+                    find_constant_arg(&window, window.len(), format_arg_index, cc)
+                        .and_then(|addr| string_table.get(&addr).cloned())
+                });
             let Some(fmt) = format_string else { continue };
             let FormatScan { args, complete } = scan_format(&fmt);
             // The format decides how many variadic arguments the call

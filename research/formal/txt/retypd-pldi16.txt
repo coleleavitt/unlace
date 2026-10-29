@@ -1,0 +1,3850 @@
+Polymorphic Type Inference for Machine Code ∗
+Matthew Noonan
+
+Alexey Loginov
+
+David Cok
+
+arXiv:1603.05495v2 [cs.PL] 18 Mar 2016
+
+GrammaTech, Inc.
+Ithaca NY, USA
+{mnoonan,alexey,dcok}@grammatech.com
+
+Abstract
+For many compiled languages, source-level types are erased
+very early in the compilation process. As a result, further compiler passes may convert type-safe source into type-unsafe
+machine code. Type-unsafe idioms in the original source and
+type-unsafe optimizations mean that type information in a
+stripped binary is essentially nonexistent. The problem of recovering high-level types by performing type inference over
+stripped machine code is called type reconstruction, and offers a useful capability in support of reverse engineering and
+decompilation.
+In this paper, we motivate and develop a novel type system and algorithm for machine-code type inference. The
+features of this type system were developed by surveying a
+wide collection of common source- and machine-code idioms,
+building a catalog of challenging cases for type reconstruction. We found that these idioms place a sophisticated set
+of requirements on the type system, inducing features such
+as recursively-constrained polymorphic types. Many of the
+features we identify are often seen only in expressive and powerful type systems used by high-level functional languages.
+Using these type-system features as a guideline, we have
+developed Retypd: a novel static type-inference algorithm for
+machine code that supports recursive types, polymorphism,
+and subtyping. Retypd yields more accurate inferred types
+than existing algorithms, while also enabling new capabilities
+∗ This research was developed with funding from the Defense Advanced
+
+Research Projects Agency (DARPA). The views, opinions, and/or findings
+contained in this material are those of the authors and should not be
+interpreted as representing the official views or policies of the Department
+of Defense or the U.S. Government.
+D ISTRIBUTION A. Approved for public release; distribution unlimited.
+
+such as reconstruction of pointer const annotations with 98%
+recall. Retypd can operate on weaker program representations
+than the current state of the art, removing the need for highquality points-to information that may be impractical to
+compute.
+Categories and Subject Descriptors F.3.2 [Logics and
+Meanings of Programs]: Semantics of Programming Languages; D.2.7 [Software Engineering]: Distribution, Maintenance, and Enhancement; D.3.3 [Programming Languages]:
+Language Constructs and Features; F.4.3 [Mathematical
+Logic and Formal Languages]: Formal Languages
+Keywords Reverse Engineering, Type Systems, Polymorphism, Static Analysis, Binary Analysis, Pushdown Automata
+
+1.
+
+Introduction
+
+In this paper we introduce Retypd, a machine-code typeinference tool that finds regular types using pushdown systems. Retypd includes several novel features targeted at improved types for reverse engineering, decompilation, and
+high-level program analyses. These features include:
+• Inference of most-general type schemes (§5)
+• Inference of recursive structure types (Figure 2)
+• Sound analysis of pointer subtyping (§3.3)
+• Tracking of customizable, high-level information such as
+
+purposes and typedef names (§3.5)
+
+• Inference of type qualifiers such as const (§6.4)
+• No dependence on high-quality points-to data (§6)
+• More accurate recovery of source-level types (§6)
+
+Retypd continues in the tradition of SecondWrite [10] and
+TIE [17] by introducing a principled static type-inference
+algorithm applicable to stripped binaries. Diverging from
+previous work on machine-code type reconstruction, we use
+a rich type system that supports polymorphism, mutable
+references, and recursive types. The principled type-inference
+phase is followed by a second phase that uses heuristics to
+“downgrade” the inferred types to human-readable C types
+before display. By factoring type inference into two phases,
+we can sequester unsound heuristics and quirks of the C type
+systems from the sound core of the type-inference engine.
+This adds a degree of freedom to the design space so that we
+may leverage a relatively complex type system during type
+
+analysis, yet still emit familiar C types for the benefit of the
+reverse engineer.
+Retypd operates on an intermediate representation (IR)
+recovered by automatically disassembling a binary using
+GrammaTech’s static analysis tool CodeSurfer® for Binaries
+[5]. By generating type constraints from a TSL-based abstract
+interpreter [18], Retypd can operate uniformly on binaries
+for any platform supported by CodeSurfer, including x86,
+x86-64, and ARM.
+During the development of Retypd, we carried out an extensive investigation of common machine-code idioms in
+compiled C and C++ code that create challenges for existing
+type-inference methods. For each challenging case, we identified requirements for any type system that could correctly
+type the idiomatic code. The results of this investigation appear in §2. The type system used by Retypd was specifically
+designed to satisfy these requirements. These common idioms pushed us into a far richer type system than we had first
+expected, including features like recursively constrained type
+schemes that have not previously been applied to machinecode type inference.
+Due to space limitations, details of the proofs and algorithms appear in the appendices, which are available in the online version of this paper at arXiv:1603.05495 [22]. Scripts
+and data sets used for evaluation also appear there.
+
+2.
+
+Challenges
+
+There are many challenges to carrying out type inference
+on machine code, and many common idioms that lead to
+sophisticated demands on the feature set of a type system.
+In this section, we describe several of the challenges seen
+during the development of Retypd that led to our particular
+combination of type-system features.
+2.1
+
+Optimizations after Type Erasure
+
+Since type erasure typically happens early in the compilation
+process, many compiler optimizations may take well-typed
+machine code and produce functionally equivalent but illtyped results. We found that there were three common optimization techniques that required special care: the use of
+a variable as a syntactic constant, early returns along error
+paths, and the re-use of stack slots.
+Semi-syntactic constants: Suppose a function with signature
+void f(int x, char* y) is invoked as f(0, NULL). This
+will usually be compiled to x86 machine code similar to
+xor
+push
+push
+call
+
+eax , eax
+eax
+eax
+f
+
+; y := NULL
+; x := 0
+
+This represents a code-size optimization, since push eax can
+be encoded in one byte instead of the five bytes needed to
+push an immediate value (0). We must be careful that the
+type variables for x and y are not unified; here, eax is being
+
+T * get_T ( void )
+{
+S * s = get_S ();
+if ( s == NULL ) {
+return NULL ;
+}
+T * t = S2T ( s );
+return t ;
+}
+
+get_T :
+call get_S
+test eax , eax
+jz
+local_exit
+push eax
+call S2T
+add esp , 4
+local_exit :
+ret
+
+Figure 1. A common fortuitous re-use of a known value.
+used more like a syntactic constant than a dynamic value that
+should be typed.
+Fortuitous re-use of values: A related situation appears in the
+common control-flow pattern represented by the snippet of C
+and the corresponding machine code in Figure 1. Note that
+on procedure exit, the return value in eax may have come
+from either the return value of S2T or from the return value
+of get_S (if NULL). If this situation is not detected, we will
+see a false relationship between the incompatible return types
+of get_T and get_S.
+Re-use of stack slots: If a function uses two variables of the
+same size in disjoint scopes, there is no need to allocate two
+separate stack slots for those variables. Often the optimizer
+will reuse a stack slot from a variable that has dropped out
+of scope. This is true even if the new variable has a different
+type. This optimization even applies to the stack slots used to
+store formal-in parameters, as in Figure 2; once the function’s
+argument is no longer needed, the optimizer can overwrite it
+with a local variable of an incompatible type.
+More generally, we cannot assume that the map from
+program variables to physical locations is one-to-one. We
+cannot even make the weaker assumption that the program
+variables inhabiting a single physical location at different
+times will all belong to a single type.
+We handle these issues through a combination of typesystem features (subtyping instead of unification) and program analyses (reaching definitions for stack variables and
+trace partitioning [21]).
+2.2
+
+Polymorphic Functions
+
+We discovered that, although not directly supported by the
+C type system, most programs define or make use of functions that are effectively polymorphic. The most well-known
+example is malloc: the return value is expected to be immediately cast to some other type T*. Each call to malloc may
+be thought of as returning some pointer of a different type.
+The type of malloc is effectively not size_t → void*, but
+rather ∀τ.size_t → τ *.
+The problem of a polymorphic malloc could be mitigated
+by treating each call site p as a call to a distinct function
+mallocp , each of which may have a distinct return type Tp *.
+Unfortunately, it is not sufficient to treat a handful of special
+functions like malloc this way: it is common to see binaries
+
+# include < stdlib .h >
+struct LL
+{
+struct LL * next ;
+int handle ;
+};
+int close_last ( struct LL * list )
+{
+while ( list - > next != NULL )
+{
+list = list - > next ;
+}
+return close ( list - > handle );
+}
+
+close_last :
+push
+ebp
+mov
+ebp , esp
+sub
+esp ,8
+mov
+edx , dword [ ebp + arg_0 ]
+jmp
+loc_8048402
+loc_8048400 :
+mov
+edx , eax
+loc_8048402 :
+mov
+eax , dword [ edx ]
+test
+eax , eax
+jnz
+loc_8048400
+mov
+eax , dword [ edx +4]
+mov
+dword [ ebp + arg_0 ] , eax
+leave
+jmp
+__thunk_ . close
+
+∀F. (∃τ.C) ⇒ F
+
+where
+
+F.instack0 v τ
+
+C=
+
+τ.load.σ32@0 v τ
+
+τ.load.σ32@4 v int ∧# FileDescriptor
+
+int ∨# SuccessZ v F.outeax
+
+typedef struct {
+Struct_0 * field_0 ;
+int // # FileDescriptor
+field_4 ;
+} Struct_0 ;
+int // # SuccessZ
+close_last ( const Struct_0 *);
+
+Figure 2. Example C code (compiled with gcc 4.5.4 on Linux with flags -m32 -O2), disassembly, type scheme inferred from
+the machine code, and reconstructed C type. The tags #FileDescriptor and #SuccessZ encode inferred higher-level purposes.
+that use user-defined allocators and wrappers to malloc. All
+of these functions would also need to be accurately identified
+and duplicated for each callsite.
+A similar problem exists for functions like free, which
+is polymorphic in its lone parameter. Even more complex
+are functions like memcpy, which is polymorphic in its first
+two parameters and its return type, though the three types are
+not independent of each other. Furthermore, the polymorphic
+type signatures
+malloc : ∀τ.size_t → τ *
+free : ∀τ.τ * → void
+
+memcpy : ∀α, β.(β v α) ⇒ (α* × β* × size_t) → α*
+are all strictly more informative to the reverse engineer than
+the standard C signatures. How else could one know that
+the void* returned by malloc is not meant to be an opaque
+handle, but rather should be cast to some other pointer type?
+In compiled C++ binaries, polymorphic functions are even
+more common. For example, a class member function must
+potentially accept both base_t* and derived_t* as types
+for this.
+Foster et al. [11] noted that using bounded polymorphic
+type schemes for libc functions increased the precision
+of type-qualifier inference, at the level of source code. To
+advance the state of the art in machine-code type recovery,
+we believe it is important to also embrace polymorphic
+functions as a natural and common feature of machine code.
+Significant improvements to static type reconstruction—even
+for monomorphic types—will require the capability to infer
+polymorphic types of some nontrivial complexity.
+2.3
+
+Recursive Types
+
+The relevance of recursive types for decompilation was
+recently discussed by Schwartz et al. [30], where lack of
+a recursive type system for machine code was cited as
+
+an important source of imprecision. Since recursive data
+structures are relatively common, it is desirable that a typeinference scheme for machine code be able to represent and
+infer recursive types natively.
+2.4
+
+Offset and Reinterpreted Pointers
+
+Unlike in source code, there is no syntactic distinction in
+machine code between a pointer-to-struct and a pointer-tofirst-member-of-struct. For example, if X has type struct
+{ char*, FILE*, size_t }* on a 32-bit platform, then it
+should be possible to infer that X + 4 can be safely passed
+to fclose; conversely, if X + 4 is passed to fclose we may
+need to infer that X points to a structure that, at offset 4,
+contains a FILE*. This affects the typing of local structures,
+as well: a structure on the stack may be manipulated using a
+pointer to its starting address or by manipulating the members
+directly, e.g., through the frame pointer.
+These idioms, along with casts from derived* to base*,
+fall under the general class of physical [31] or non-structural
+[24] subtyping. In Retypd, we model these forms of subtyping
+using type scheme specialization (§ 3.5). Additional hints
+about the extent of local variables are found using datadelineation analysis [13].
+2.5
+
+Disassembly Failures
+
+The problem of producing correct disassembly for stripped
+binaries is equivalent to the halting problem. As a result, we
+can never assume that our reconstructed program representation will be perfectly correct. Even sound analyses built
+on top of an unsound program representation may exhibit
+inconsistencies and quirks.
+Thus, we must be careful that incorrect disassembly or
+analysis results from one part of the binary will not influence
+the correct type results we may have gathered for the rest of
+the binary. Type systems that model value assignments as type
+unifications are vulnerable to over-unification issues caused
+
+by bad IR. Since unification is non-local, bad constraints in
+one part of the binary can degrade all type results.
+Another instance of this problem arises from the use of
+register parameters. Although the x86 cdecl calling convention uses the stack for parameter passing, most optimized
+binaries will include many functions that pass parameters in
+registers for speed. Often, these functions do not conform to
+any standard calling convention. Although we work hard to
+ensure that only true register parameters are reported, conservativeness demands the occasional false positive.
+Type-reconstruction methods that are based on unification
+are generally sensitive to precision loss due to false-positive
+register parameters. A common case is the “push ecx” idiom
+that reserves space for a single local variable in the stack
+frame of a function f . If ecx is incorrectly viewed as a register
+parameter of f in a unification-based scheme, whatever
+type variables are bound to ecx at each callsite to f will
+be mistakenly unified. In our early experiments, we found
+these overunifications to be a persistent and hard-to-diagnose
+source of imprecision.
+In our early unification-based experiments, mitigation
+heuristics against overunification quickly ballooned into a
+disproportionately large and unprincipled component of type
+analysis. We designed Retypd’s subtype-based constraint
+system to avoid the need for such ad-hoc prophylactics
+against overunification.
+
+Table 1. Example field labels (type capabilities) in Σ.
+Label
+
+Variance
+
+.inL
+.outL
+.load
+.store
+.σN@k
+
+⊕
+⊕
+
+2.7
+
+⊕
+
+Capability
+Function with input in location L.
+Function with output in location L.
+Readable pointer.
+Writable pointer.
+Has N -bit field at offset k.
+
+Incomplete Points-to Information
+
+Degradation of points-to accuracy on large programs has
+been identified as a source of type-precision loss in other
+systems [10]. Our algorithm can provide high-quality types
+even in the absence of points-to information. Precision can
+be further improved by increasing points-to knowledge via
+machine-code analyses such as VSA [6], but good results
+are already attained with no points-to analysis beyond the
+simpler problem of tracking the stack pointer.
+2.8
+
+Ad-hoc Subtyping
+
+• reducing the storage requirements of a doubly-linked list
+
+Programs may define an ad-hoc type hierarchy via typedefs.
+This idiom appears in the Windows API, where a variety of
+handle types are all defined as typedefs of void*. Some of
+the handle types are to be used as subtypes of other handles;
+for example, a GDI handle (HGDI) is a generic handle used to
+represent any one of the more specific HBRUSH, HPEN, etc. In
+other cases, a typedef may indicate a supertype, as in LPARAM
+or DWORD; although these are typedefs of int, they have the
+intended semantics of a generic 32-bit type, which in different
+contexts may be used as a pointer, an integer, a flag set, and
+so on.
+To accurately track ad-hoc hierarchies requires a type system based around subtyping rather than unification. Models
+for common API type hierarchies are useful; still better is the
+ability for the end user to define or adjust the initial type hierarchy at run time. We support this feature by parameterizing
+the main type representation by an uninterpreted lattice Λ, as
+described in §3.5.
+
+• directly manipulating the bit representation of another
+
+3.
+
+2.6
+
+Cross-casting and Bit Twiddling
+
+Even at the level of source code, there are already many
+type-unsafe idioms in common use. Most of these idioms
+operate by directly manipulating the bit representation of a
+value, either to encode additional information or to perform
+computations that are not possible using the type’s usual
+interface. Some common examples include
+• hashing values by treating them as untyped bit blocks [1],
+• stealing unused bits of a pointer for tag information, such
+
+as whether a thunk has been evaluated [20],
+
+by XOR-combining the next and prev pointers, and
+
+type, as in the quake3 inverse square root trick [29].
+
+Because of these type-unsafe idioms, it is important that
+a type-inference scheme continues to produce useful results
+even in the presence of apparently contradictory constraints.
+We handle this situation in three ways:
+1. separating the phases of constraint entailment, solving,
+and consistency checking,
+2. modeling types with sketches (§ 3.5) that carry more
+information than C types, and
+3. using unions to combine types with otherwise incompatible capabilities (e.g., τ is both int-like and pointer-like).
+
+The Type System
+
+The type system used by Retypd is based around the inference
+of recursively constrained type schemes (§3.1). Solutions to
+constraint sets are modeled by sketches (§ 3.5); the sketch
+associated to a value consists of a record of capabilities
+which that value holds, such as whether it can be stored to,
+called, or accessed at a certain offset. Sketches also include
+markings drawn from a customizable lattice (Λ, ∨, ∧, <:),
+used to propagate high-level information such as typedef
+names and domain-specific purposes during type inference.
+Retypd also supports recursively constrained type schemes
+that abstract over the set of types subject to a constraint set
+C. The language of type constraints used by Retypd is weak
+enough that for any constraint set C, satisfiability of C can be
+
+Subtyping
+
+Derived Type Variable Formation
+αvβ
+(T-L EFT )
+VAR α
+
+α v β, VAR α.`
+(T-I NHERIT L)
+VAR β.`
+
+αvβ
+(T-R IGHT )
+VAR β
+
+α v β, VAR β.`
+(T-I NHERIT R)
+VAR α.`
+
+VAR α.`
+(T-P REFIX )
+VAR α
+
+VAR α
+(S-R EFL )
+αvα
+α v β, β v γ
+(S-T RANS )
+αvγ
+
+α v β,
+α v β,
+
+VAR β.`, h`i = ⊕
+(S-F IELD⊕ )
+α.` v β.`
+VAR β.`, h`i =
+β.` v α.`
+
+(S-F IELD )
+
+VAR α.load, VAR α.store
+(S-P OINTER )
+α.store v α.load
+
+Figure 3. Deduction rules for the type system. α, β, γ represent derived type variables; ` represents a label in Σ.
+reduced (in cubic time) to checking a set of scalar constraints
+κ1 <: κ2 , where κi are constants belonging to Λ.
+Thanks to the reduction of constraint satisfiability to scalar
+constraint checking, we can omit expensive satisfiability
+checks during type inference. Instead, we delay the check
+until the final stage when internal types are converted to
+C types for display, providing a natural place to instantiate
+union types that resolve any inconsistencies. Since compiler
+optimizations and type-unsafe idioms in the original source
+frequently lead to program fragments with unsatisfiable type
+constraints (§2.5, §2.6), this trait is particularly desirable.
+3.1
+
+Syntax: the Constraint Type System
+
+Throughout this section, we fix a set V of type variables, an
+alphabet Σ of field labels, and a function h·i : Σ → {⊕, }
+denoting the variance (Definition 3.2) of each label. We do
+not require the set Σ to be finite. Retypd makes use of a large
+set of labels; for simplicity, we will focus on those in Table 1.
+Within V, we assume there is a distinguished set of type
+constants. These type constants are symbolic representations
+κ of elements κ belonging to some lattice, but are otherwise
+uninterpreted. It is usually sufficient to think of the type
+constants as type names or semantic tags.
+Definition 3.1. A derived type variable is an expression of
+the form αw with α ∈ V and w ∈ Σ∗ .
+
+Definition 3.2. The variance of a label ` encodes the subtype
+relationship between α.` and β.` when α is a subtype of β,
+formalized in rules S-F IELD⊕ and S-F IELD of Figure 3.
+The variance function h·i can be extended to Σ∗ by defining
+hεi = ⊕ and hxwi = hxi · hwi, where {⊕, } is the sign
+monoid with ⊕ · ⊕ = · = ⊕ and ⊕ · = · ⊕ =
+. A word w ∈ Σ∗ is called covariant if hwi = ⊕, or
+contravariant if hwi = .
+
+Definition 3.3. Let V = {αi } be a set of base type variables.
+A constraint is an expression of the form VAR X (“existence
+of the derived type variable X”) or X v Y (“X is a subtype
+of Y ”), where X and Y are derived type variables. A constraint set over V is a finite collection C of constraints, where
+the type variables in each constraint are either type constants
+or members of V. We will say that C entails c, denoted C ` c,
+if c can be derived from the constraints in C using the de-
+
+duction rules of Figure 3. We also allow projections: given
+a constraint set C with free variable τ , the projection ∃τ.C
+binds τ as an “internal” variable in the constraint set. See τ
+in Figure 2 for an example or, for a more in-depth treatment
+of constraint projection, see Su et al. [34].
+The field labels used to form derived type variables are
+meant to represent capabilities of a type. For example, the
+constraint VAR α.load means α is a readable pointer, and
+the derived type variable α.load represents the type of the
+memory region obtained by loading from α.
+Let us briefly see how operations in the original program
+translate to type constraints, using C-like pseudocode for clarity. The full conversion from disassembly to type constraints
+is described in Appendix A.
+Value copies: When a value is moved between program variables in an assignment like x := y, we make the conservative
+assumption that the type of x may be upcast to a supertype of
+y. We will generate a constraint of the form Y v X.
+Loads and stores: Suppose that p is a pointer to a 32bit type, and a value is loaded into x by the assignment
+x := *p. Then we will generate a constraint of the form
+P.load.σ32@0 v X. Similarly, a store *q := y results in
+the constraint Y v Q.store.σ32@0.
+In some of the pointer-based examples in this paper we
+omit the final .σN@k access after a .load or .store to simplify
+the presentation.
+Function calls: Suppose the function f is invoked by
+y := f(x). We will generate the constraints X v F.in and
+F.out v Y , reflecting the flow of actuals to and from formals.
+Note that if we define A.in = X and A.out = Y then the two
+constraints are equivalent to F v A by the rules of Figure 3.
+This encodes the fact that the called function’s type must be
+at least as specific as the type used at the callsite.
+One of the primary goals of our type-inference engine is
+to associate to each procedure a most-general type scheme.
+Definition 3.4. A type scheme is an expression of the form
+∀α. C ⇒ α1 where ∀α = ∀α1 . . . ∀αn is quantification over a
+set of type variables, and C is a constraint set over {αi }i=1..n .
+Type schemes provide a way of encoding the pre- and postconditions that a function places on the types in its calling
+context. Without the constraint sets, we would only be able
+
+to represent conditions of the form “the input must be a
+subtype of X” and “the output must be a supertype of Y ”.
+The constraint set C can be used to encode more interesting
+type relations between inputs and outputs, as in the case
+of memcpy (§2.2). For example, a function that returns the
+second 4-byte element from a struct* may have the type
+scheme ∀τ. (τ.in.load.σ32@4 v τ.out) ⇒ τ .
+3.2
+
+f () {
+p = q;
+*p = x;
+y = *q;
+}
+
+g () {
+p = q;
+*q = x;
+y = *p;
+}
+
+Figure 4. Two programs, each mediating a copy from x to y
+through a pair of aliased pointers.
+
+Deduction Rules
+
+The deduction rules for our type system appear in Figure 3.
+Most of the rules are self-evident under the interpretation in
+Definition 3.3, but a few require some additional motivation.
+S-F IELD⊕ and S-F IELD : These rules ensure that field
+labels act as co- or contra-variant type operators, generating subtype relations between derived type variables from
+subtype relations between the original variables.
+T-I NHERIT L and T-I NHERIT R: The rule T-I NHERIT L
+should be uncontroversial, since a subtype should have all
+capabilities of its supertype. The rule T-I NHERIT R is more
+unusual since it moves capabilities in the other direction;
+taken together, these rules require that two types in a subtype
+relation must have exactly the same set of capabilities. This
+is a form of structural typing, ensuring that comparable types
+have the same shape.
+Structural typing appears to be at odds with the need to
+cast more capable objects to less capable ones, as described
+in §2.4. Indeed, T-I NHERIT R eliminates the possibility of
+forgetting capabilities during value assignments. But we still
+maintain this capability at procedure invocations due to our
+use of polymorphic type schemes. An explanation of how
+type-scheme instantiation enables us to forget fields of an
+object appears in §3.4, with more details in §E.1.2.
+These rules ensure that Retypd can perform “iterative
+variable recovery”; lack of iterative variable recovery was
+cited by the creators of the Phoenix decompiler [30] as a
+common cause of incorrect decompilation when using TIE
+[17] for type recovery.
+S-P OINTER: This rule is a consistency condition ensuring
+that the type that can be loaded from a pointer is a supertype
+of the type that can be stored to a pointer. Without this rule,
+pointers would provide a channel for subverting the type
+system. An example of how this rule is used in practice
+appears in §3.3.
+The deduction rules of Figure 3 are simple enough that
+each proof may be reduced to a normal form (see Theorem B.1). An encoding of the normal forms as transition
+sequences in a modified pushdown system is used to provide a compact representation of the entailment closure
+C = {c | C ` c}. The pushdown system modeling C is
+queried and manipulated to provide most of the interesting
+type-inference functionality. An outline of this functionality
+appears in §5.2.
+
+3.3
+
+Modeling Pointers
+
+To model pointers soundly in the presence of subtyping, we
+found that our initial naïve approach suffered from unexpected difficulties when combined with subtyping. Following
+the C type system, it seemed natural to model pointers by
+introducing an injective unary type constructor Ptr, so that
+Ptr(T ) is the type of pointers to T . In a unification-based
+type system, this approach works as expected.
+In the presence of subtyping, a new issue arises. Consider
+the two programs in Figure 4. Since the type variables P and
+Q associated to p, q can be seen to be pointers, we can begin
+by writing P = Ptr(α), Q = Ptr(β). The first program will
+generate the constraint set C1 = {Ptr(β) v Ptr(α), X v α,
+β v Y } while the second generates C2 = {Ptr(β) v Ptr(α),
+X v β, α v Y }. Since each program has the effect of copying the value in x to y, both constraint sets should satisfy
+Ci ` X v Y . To do this, the pointer subtype constraint must
+entail some constraint on α and β, but which one?
+If we assume that Ptr is covariant, then Ptr(β) v Ptr(α)
+entails β v α and so C2 ` X v Y , but C1 6 ` X v Y . On the
+other hand, if we make Ptr contravariant then C1 ` X v Y
+but C2 6 ` X v Y .
+It seems that our only recourse is to make subtyping
+degenerate to type equality under Ptr: we are forced to
+declare that Ptr(β) v Ptr(α) ` α = β, which of course
+means that Ptr(β) = Ptr(α) already. This is a catastrophe
+for subtyping as used in machine code, since many natural
+subtype relations are mediated through pointers. For example,
+the unary Ptr constructor cannot handle the simplest kind
+of C++ class subtyping, where a derived class physically
+extends a base class by appending new member variables.
+The root cause of the difficulty seems to be in conflating
+two capabilities that (most) pointers have: the ability to be
+written through and the ability to be read through. In Retypd,
+these two capabilities are modeled using different field labels
+.store and .load. The .store label is contravariant, while the
+.load label is covariant.
+To see how the separation of pointer capabilities avoids the
+loss of precision suffered by Ptr, we revisit the two example
+programs. The first generates the constraint set
+C10 = {Q v P,
+
+X v P .store,
+
+Q.load v Y }
+
+By rule T-I NHERIT R we may conclude that Q also has
+a field of type .store. By S-P OINTER we can infer that
+Q.store v Q.load. Finally, since .store is contravariant and
+
+Q v P , S-F IELD says we also have P .store v Q.store.
+Putting these parts together gives the subtype chain
+X v P .store v Q.store v Q.load v Y
+The second program generates the constraint set
+C20 = {Q v P,
+
+X v Q.store,
+
+P .load v Y }
+
+X v Q.store v Q.load v P .load v Y
+By splitting out the read- and write-capabilities of a
+pointer, we can achieve a sound account of pointer subtyping
+that does not degenerate to type equality. Note the importance
+of the consistency condition S-P OINTER: this rule ensures
+that writing through a pointer and reading the result cannot
+subvert the type system.
+The need for separate handling of read- and writecapabilities in a mutable reference has been rediscovered
+multiple times. A well-known instance is the covariance of
+the array type constructor in Java and C#, which can cause
+runtime type errors if the array is mutated; in these languages,
+the read capabilities are soundly modeled only by sacrificing
+soundness for the write capabilities.
+Non-structural Subtyping and T-I NHERIT R
+
+It was noted in § 3.2 that the rule T-I NHERIT R leads to a
+system with a form of structural typing: any two types in
+a subtype relation must have the same capabilities. Superficially, this seems problematic for modeling typecasts that
+forget about fields, such as a cast from derived* to base*
+when derived* has additional fields (§2.4).
+The missing piece that allows us to effectively forget capabilities is instantiation of callee type schemes at a callsite.
+To demonstrate how polymorphism enables forgetfulness,
+consider the example type scheme ∀F. (∃τ.C) ⇒ F from Figure 2. The function close_last can be invoked by providing
+any actual-in type α, such that α v F.instack0 ; in particular,
+α can have more fields than those required by C. We simply
+select a more capable type for the existentially-quantified
+type variable τ in C. In effect, we have used specialization of
+polymorphic types to model non-structural subtyping idioms,
+while subtyping is used only to model structural subtyping
+idioms. This restricts our introduction of non-structural subtypes to points where a type scheme is instantiated, such as
+at a call site.
+3.5
+
+ck0
+
+in sta
+>
+
+out
+
+eax
+
+Since Q v P and P has a field .load, we conclude that Q
+has a .load field as well. Next, S-P OINTER requires that
+Q.store v Q.load. Since .load is covariant, Q v P implies
+that Q.load v P .load. This gives the subtype chain
+
+3.4
+
+α = int ∨# SuccessZ
+β = int ∧# FileDescriptor
+
+Semantics: the Poset of Sketches
+
+The simple type system defined by the deduction rules of
+Figure 3 defines the syntax of legal derivations in our type
+system. The constraint solver of §5.2 is designed to find a
+simple representation for all conclusions that can be derived
+
+>
+
+load
+
+0
+2@
+σ3
+>
+
+σ3
+
+2@
+4
+
+α
+
+>
+
+load
+
+A
+
+β
+
+A
+
+Figure 5. A sketch instantiating the type scheme in Figure 2.
+from a set of type constraints. Yet there is no notion of what
+a type is inherent to the deduction rules of Figure 3. We have
+defined the rules of the game, but not the equipment with
+which it should be played.
+We found that introducing C-like entities at the level of
+constraints or types resulted in too much loss of precision
+when working with the challenging examples described in §
+2. Consequently we developed the notion of a sketch, a kind
+of regular tree labeled with elements of an auxiliary lattice Λ.
+Sketches are related to the recursive types studied by Amadio
+and Cardelli [3] and Kozen et al. [16], but do not depend on a
+priori knowledge of the ranked alphabet of type constructors.
+Definition 3.5. A sketch is a (possibly infinite) tree T with
+edges labeled by elements of Σ and nodes marked with elements of a lattice Λ, such that T only has finitely many subtrees up to labeled isomorphism. By collapsing isomorphic
+subtrees, we can represent sketches as deterministic finite
+state automata with each state labeled by an element of Λ.
+The set of sketches admits a lattice structure, with operations
+described by Figure 18.
+The lattice of sketches serves as the model in which we
+interpret type constraints. The interpretation of the constraint
+VAR α.u is “the sketch Sα admits a path from the root with
+label sequence u”, and α.u v β.v is interpreted as “the sketch
+obtained from Sα by traversing the label sequence u is a
+subsketch (in the lattice order) of the sketch obtained from
+Sβ by traversing the sequence v.”
+The main utility of sketches is that they are nearly a free
+tree model [25] of the constraint language. Any constraint
+set C is satisfiable over the lattice of sketches, as long as C
+cannot prove an impossible subtype relation in the auxiliary
+lattice Λ. In particular, we can always solve the fragment of
+C that does not reference constants in Λ. Stated operationally,
+we can always recover the tree structure of sketches that
+potentially solve C. This observation is formalized by the
+following theorem:
+Theorem 3.1. Suppose that C is a constraint set over the
+variables {τi }i∈I . Then there exist sketches {Si }i∈I , such
+that w ∈ Si if and only if C ` VAR τi .w.
+Proof. The idea is to symmetrize v using an algorithm that
+is similar in spirit to Steensgaard’s method of almost-lineartime pointer analysis [33]. Begin by forming a graph with
+one node n(α) for each derived type variable appearing
+
+in C, along with each of its prefixes. Add a labeled edge
+`
+n(α) → n(α.`) for each derived type variable α.` to form
+a graph G. Now quotient G by the equivalence relation ∼
+defined by n(α) ∼ n(β) if α v β ∈ C, and n(α0 ) ∼ n(β 0 )
+`
+
+`0
+
+whenever there are edges n(α) → n(α0 ) and n(β) → n(β 0 )
+in G with n(α) ∼ n(β) where either ` = `0 or ` = .load and
+`0 = .store.
+By construction, there exists a path through G/∼ with
+label sequence u starting at the equivalence class of τi if and
+only if C ` VAR τi .u; the (regular) set of all such paths yields
+the tree structure of Si .
+Working out the lattice elements that should label Si is a
+trickier problem; the basic idea is to use the same automaton
+Q constructed during constraint simplification (Theorem 5.1)
+to answer queries about which type constants are upper and
+lower bounds on a given derived type variable. The full
+algorithm is listed in §D.4.
+In Retypd, we use a large auxiliary lattice Λ containing
+hundreds of elements that includes a collection of standard
+C type names, common typedefs for popular APIs, and
+user-specified semantic classes such as #FileDescriptor in
+Figure 2. This lattice helps model ad-hoc subtyping and
+preserve high-level semantic type names, as discussed in
+§2.8.
+Note. Sketches are just one of many possible models for the
+deduction rules that could be proposed. A general approach
+is to fix a poset (T , <:) of types, interpret v as <:, and
+interpret co- and contra-variant field labels as monotone (resp.
+antimonotone) functions T → T .
+The separation of syntax from semantics allows for a
+simple way to parameterize the type-inference engine by
+a model of types. By choosing a model (T , ≡) with a
+symmetric relation ≡ ⊆ T × T , a unification-based type
+system similar to SecondWrite [10] is generated. On the
+other hand, by forming a lattice of type intervals and interval
+inclusion, we would obtain a type system similar to TIE [17]
+that outputs upper and lower bounds on each type variable.
+
+4.
+
+Analysis Framework
+
+4.1
+
+IR Reconstruction
+
+Retypd is built on top of GrammaTech’s machine-codeanalysis tool CodeSurfer for Binaries. CodeSurfer carries
+out common program analyses on binaries for multiple CPU
+architectures, including x86, x86-64, and ARM. CodeSurfer
+is used to recover a high-level IR from the raw machine
+code; type constraints are generated directly from this IR, and
+resolved types are applied back to the IR and become visible
+to the GUI and later analysis phases.
+CodeSurfer achieves platform independence through TSL
+[18], a language for defining a processor’s concrete semantics
+in terms of concrete numeric types and mapping types that
+model flag, register, and memory banks. Interpreters for
+a given abstract domain are automatically created from
+
+the concrete semantics simply by specifying the abstract
+domain A and an interpretation of the concrete numeric and
+mapping types. Retypd uses CodeSurfer’s recovered IR to
+determine the number and location of inputs and outputs
+to each procedure, as well as the program’s call graph and
+per-procedure control-flow graphs. An abstract interpreter
+then generates sets of type constraints from the concrete
+TSL instruction semantics. A detailed account of the abstract
+semantics for constraint generation appears in Appendix A.
+4.2
+
+Approach to Type Resolution
+
+After the initial IR is recovered, type inference proceeds
+in two stages: first, type-constraint sets are generated in a
+bottom-up fashion over the strongly-connected components
+of the callgraph. Pre-computed type schemes for externally
+linked functions may be inserted at this stage. Each constraint set is simplified by eliminating type variables that do
+not belong to the SCC’s interface; the simplification algorithm is outlined in § 5. Once type schemes are available,
+the callgraph is traversed bottom-up, assigning sketches to
+type variables as outlined in § 3.5. During this stage, type
+schemes are specialized based on the calling contexts of each
+function. Appendix F lists the full algorithms for constraint
+simplification (F.1) and solving (F.2).
+4.3
+
+Translation to C Types
+
+The final phase of type resolution converts the inferred
+sketches to C types for presentation to the user. Since C
+types and sketches are not directly comparable, this resolution phase necessarily involves the application of heuristic
+conversion policies. Restricting the heuristic policies to a
+single post-inference phase provides us with the flexibility to
+generate high-quality, human-readable C types while maintaining soundness and generality during type reconstruction.
+Example 4.1. A simple example involves the generation of
+const annotations on pointers. We decided on a policy that
+only introduced const annotations on function parameters,
+by annotating the parameter at location L when the constraint
+set C for procedure p satisfies C ` VAR p.inL .load and
+C6 ` VAR p.inL .store. Retypd appears to be the first machinecode type-inference system to infer const annotations; a
+comparison of our recovered annotations to the original
+source code appears in §6.4.
+Example 4.2. A more complex policy is used to decide
+between union types and generic types when incompatible
+scalar constraints must be resolved. Retypd merges comparable scalar constraints to form antichains in Λ; the elements of
+these antichains are then used for the resulting C union type.
+Example 4.3. The initial type-simplification stage results in
+types that are as general as possible. Often, this means that
+types are found to be more general than is strictly helpful
+to a (human) observer. A policy is applied that specializes
+type schemes to the most specific scheme that is compatible
+with all statically-discovered uses. For example, a C++ object
+
+may include a getter function with a highly polymorphic type
+scheme, since it could operate equally well on any structure
+with a field of the correct type at the correct offset. But we
+expect that in every calling context, the getter will be called
+on a specific object type (or perhaps its derived types). We can
+specialize the getter’s type by choosing the least polymorphic
+specialization that is compatible with the observed uses. By
+specializing the function signature before presenting a final
+C type to the user, we trade some generality for types that are
+more likely to match the original source.
+
+5.
+
+The Simplification Algorithm
+
+In this section, we sketch an outline of the simplification
+algorithm at the core of the constraint solver. The complete
+algorithm appears in Appendix D.
+5.1
+
+Inferring a Type Scheme
+
+The goal of the simplification algorithm is to take an inferred
+type scheme ∀α. C ⇒ τ for a procedure and create a smaller
+constraint set C 0 , such that any constraint on τ implied by C
+is also implied by C 0 .
+Let C denote the constraint set generated by abstract
+interpretation of the procedure being analyzed, and let α
+be the set of free type variables in C. We could already
+use ∀α. C ⇒ τ as the constraint set in the procedure’s type
+scheme, since the input and output types used in a valid
+invocation of f are tautologically those that satisfy C. Yet, as
+a practical matter, we cannot use the constraint set directly,
+since this would result in constraint sets with many useless
+free variables and a high growth rate over nested procedures.
+Instead, we seek to generate a simplified constraint set C 0 ,
+such that if c is an “interesting” constraint and C ` c then
+C 0 ` c as well. But what makes a constraint interesting?
+Definition 5.1. For a type variable τ , a constraint is called
+interesting if it has one of the following forms:
+
+• A capability constraint of the form VAR τ.u
+• A recursive subtype constraint of the form τ.u v τ.v
+• A subtype constraint of the form τ.u v κ or κ v τ.u
+
+where κ is a type constant.
+
+We will call a constraint set C 0 a simplification of C if C 0 ` c
+for every interesting constraint c, such that C ` c. Since both
+C and C 0 entail the same set of constraints on τ , it is valid to
+replace C with C 0 in any valid type scheme for τ .
+Simplification heuristics for set-constraint systems were
+studied by Fähndrich and Aiken [12]; our simplification
+algorithm encompasses all of these heuristics.
+5.2
+
+Unconstrained Pushdown Systems
+
+The constraint-simplification algorithm works on a constraint
+set C by building a pushdown system PC whose transition sequences represent valid derivations of subtyping judgements.
+We briefly review pushdown systems and some necessary
+generalizations here.
+
+Definition 5.2. An unconstrained pushdown system is a triple
+P = (V, Σ, ∆) where V is the set of control locations,
+Σ is the set of stack symbols, and ∆ ⊆ (V × Σ∗ )2 is a
+(possibly infinite) set of transition rules. We will denote a
+transition rule by hX; ui ,→ hY ; vi where X, Y ∈ V and
+u, v ∈ Σ∗ . We define the set of configurations to be V × Σ∗ .
+In a configuration (p, w), p is called the control state and w
+the stack state.
+Note that we require neither the set of stack symbols,
+nor the set of transition rules, to be finite. This freedom is
+required to model the derivation S-P OINTER of Figure 3,
+which corresponds to an infinite set of transition rules.
+Definition 5.3. An unconstrained pushdown system P determines a transition relation −→ on the set of configurations: (X, w) −→ (Y, w0 ) if there is a suffix s and a rule
+hX; ui ,→ hY ; vi, such that w = us and w0 = vs. The
+∗
+transitive closure of −→ is denoted −→.
+With this definition, we can state the primary theorem
+behind our simplification algorithm.
+
+Theorem 5.1. Let C be a constraint set and V a set of base
+type variables. Define a subset SC of (V ∪ Σ)∗ × (V ∪ Σ)∗
+by (Xu, Y v) ∈ SC if and only if C ` X.u v Y.v. Then SC
+is a regular set, and an automaton Q to recognize SC can be
+constructed in O(|C|3 ) time.
+Proof. The basic idea is to treat each X.u v Y.v ∈ C as a
+transition rule hX; ui ,→ hY ; vi in the pushdown system P.
+In addition, we add control states # S TART, # E ND with transitions h# S TART; Xi ,→ hX; εi and hX; εi ,→ h# E ND; Xi
+for each X ∈ V. For the moment, assume that (1) all labels are covariant, and (2) the rule S-P OINTER is ignored.
+∗
+By construction, (# S TART, Xu) −→ (# E ND, Y v) in P if
+and only if C ` X.u v Y.v. A theorem of Büchi [27] ensures
+that for any two control states A and B in a standard (not
+unconstrained) pushdown system, the set of all pairs (u, v)
+∗
+with (A, u) −→ (B, v) is a regular language; Caucal [8]
+gives a saturation algorithm that constructs an automaton to
+recognize this language.
+In the full proof, we add two novelties: first, we support
+contravariant stack symbols by encoding variance data into
+the control states and transition rules. The second novelty
+involves the rule S-P OINTER; this rule is problematic since
+the natural encoding would result in infinitely many transition
+rules. We extend Caucal’s construction to lazily instantiate
+all necessary applications of S-P OINTER during saturation.
+For details, see Appendix D.
+Since C will usually entail an infinite number of constraints, this theorem is particularly useful: it tells us that
+the full set of constraints entailed by C has a finite encoding
+by an automaton Q. Further manipulations on the constraint
+closure, such as efficient minimization, can be carried out
+on Q. By restricting the transitions to and from # S TART and
+
+E ND, the same algorithm is used to eliminate type variables,
+producing the desired constraint simplifications.
+#
+
+5.3
+
+Overall Complexity of Inference
+
+The saturation algorithm used to perform constraint-set simplification and type-scheme construction is, in the worst case,
+cubic in the number of subtype constraints to simplify. Since
+some well-known pointer analysis methods also have cubic
+complexity (such as Andersen [4]), it is reasonable to wonder
+if Retypd’s “points-to free” analysis really offers a benefit
+over a type-inference system built on top of points-to analysis
+data.
+To understand where Retypd’s efficiencies are found, first
+consider the n in O(n3 ). Retypd’s core saturation algorithm
+is cubic in the number of subtype constraints; due to the
+simplicity of machine-code instructions, there is roughly one
+subtype constraint generated per instruction. Furthermore,
+Retypd applies constraint simplification on each procedure
+in isolation to eliminate the procedure-local type variables,
+resulting in constraint sets that only relate procedure formalins, formal-outs, globals, and type constants. In practice, these
+simplified constraint sets are small.
+Since each procedure’s constraint set is simplified independently, the n3 factor is controlled by the largest procedure
+size, not the overall size of the binary. By contrast, sourcecode points-to analysis such as Andersen’s are generally cubic
+in the overall number of pointer variables, with exponential
+duplication of variables depending on the call-string depth
+used for context sensitivity. The situation is even more difficult for machine-code points-to analyses such as VSA, since
+there is no syntactic difference between a scalar and a pointer
+in machine code. In effect, every program variable must be
+treated as a potential pointer.
+On our benchmark suite of real-world programs, we found
+that execution time for Retypd scales slightly below O(N 1.1 ),
+where N is the number of program instructions. The following back-of-the-envelope calculation can heuristically explain
+much of the disparity between the O(N 3 ) theoretical complexity and the O(N 1.1 ) measured complexity. On our benchmark suite, the maximum procedure size n grew roughly like
+n ≈ N 2/5 . We could then expect that a per-procedure analysis would perform worst when the program is partitioned
+into N 3/5 procedures of size N 2/5 . On such a program, a perprocedure O(nk ) analysis may be expected to behave more
+like an O(N 3/5 · (N 2/5 )k ) = O(N (3+2k)/5 ) analysis overall.
+In particular, a per-procedure cubic analysis like Retypd could
+be expected to scale like a global O(N 1.8 ) analysis. The remaining differences in observed versus theoretical execution
+time can be explained by the facts that real-world constraint
+graphs do not tend to exercise the simplification algorithm’s
+worst-case behavior, and that the distribution of procedure
+sizes is heavily weighted towards small procedures.
+
+INT_PTR Proto_EnumAccounts ( WPARAM wParam ,
+LPARAM lParam )
+{
+*( int * ) wParam = accounts . getCount ();
+*( PROTOACCOUNT *** ) lParam =
+accounts . getArray ();
+return 0;
+}
+
+Figure 6. Ground-truth types declared in the original source
+do not necessarily reflect program semantics. Example from
+miranda32.
+
+6.
+
+Evaluation
+
+6.1
+
+Implementation
+
+Retypd is implemented as a module within CodeSurfer
+for Binaries. By leveraging the multi-platform disassembly
+capabilities of CodeSurfer, it can operate on x86, x86-64,
+and ARM code. We performed the evaluation using minimal
+analysis settings, disabling value-set analysis (VSA) but
+computing affine relations between the stack and frame
+pointers. Enabling additional CodeSurfer phases such as VSA
+can greatly improve the reconstructed IR, at the expense of
+increased analysis time.
+Existing type-inference algorithms such as TIE [17] and
+SecondWrite [10] require some modified form of VSA to
+resolve points-to data. Our approach shows that high-quality
+types can be recovered in the absence of points-to information, allowing type inference to proceed even when computing points-to data is too unreliable or expensive.
+6.2
+
+Evaluation Setup
+
+Our benchmark suite consists of 160 32-bit x86 binaries for
+both Linux and Windows, compiled with a variety of gcc
+and Microsoft Visual C/C++ versions. The benchmark suite
+includes a mix of executables, static libraries, and DLLs. The
+suite includes the same coreutils and SPEC2006 benchmarks used to evaluate REWARDS, TIE, and SecondWrite
+[10, 17, 19]; additional benchmarks came from a standard
+suite of real-world programs used for precision and performance testing of CodeSurfer for Binaries. All binaries were
+built with optimizations enabled and debug information disabled.
+Ground truth is provided by separate copies of the binaries
+that have been built with the same settings, but with debug
+information included (DWARF on Linux, PDB on Windows).
+We used IdaPro [15] to read the debug information, which
+allowed us to use the same scripts for collecting ground-truth
+types from both DWARF and PDB data.
+All benchmarks were evaluated on a 2.6 GHz Intel Xeon
+E5-2670 CPU, running on a single logical core. RAM utilization by CodeSurfer and Retypd combined was capped at
+10GB.
+
+Benchmark
+
+Description
+
+Instructions
+
+CodeSurfer benchmarks
+libidn
+Tutorial00
+zlib
+ogg
+distributor
+libbz2
+glut
+pngtest
+freeglut
+miranda
+XMail
+yasm
+python21
+quake3
+TinyCad
+Shareaza
+
+Domain name translator
+Direct3D tutorial
+Compression library
+Multimedia library
+UltraVNC repeater
+BZIP library, as a DLL
+The glut32.dll library
+A test of libpng
+The freeglut.dll library
+IRC client
+Email server
+Modular assembler
+Python 2.1
+Quake 3
+Computed-aided design
+Peer-to-peer file sharing
+
+7K
+9K
+14K
+20K
+22K
+37K
+40K
+42K
+77K
+100K
+137K
+190K
+202K
+281K
+544K
+842K
+
+SPEC2006 benchmarks
+470.lbm
+429.mcf
+462.libquantum
+401.bzip2
+458.sjeng
+433.milc
+482.sphinx3
+456.hmmer
+464.h264ref
+445.gobmk
+400.perlbench
+403.gcc
+
+Lattice Boltzmann Method
+Vehicle scheduling
+Quantum computation
+Compression
+Chess AI
+Quantum field theory
+Speech recognition
+Protein sequence analysis
+Video compression
+GNU Go AI
+Perl core
+C/C++/Fortran compiler
+
+3K
+3K
+11K
+13K
+25K
+28K
+43K
+71K
+113K
+203K
+261K
+751K
+
+Figure 7. Benchmarks used for evaluation. All binaries were
+compiled from source using optimized release configurations.
+The SPEC2006 benchmarks were chosen to match the benchmarks used to evaluate SecondWrite [10].
+Our benchmark suite includes the individual binaries in
+Figure 7 as well as the collections of related binaries shown in
+Figure 10. We found that programs from a single collection
+tended to share a large amount of common code, leading
+to highly correlated benchmark results. For example, even
+though the coreutils benchmarks include many tools with
+very disparate purposes, all of the tools make use of a large,
+common set of statically linked utility routines. Over 80%
+of the .text section in tail consists of such routines; for
+yes, the number is over 99%. The common code and specific
+idioms appearing in coreutils make it a particularly lowvariance benchmark suite.
+In order to avoid over-representing these program collections in our results, we treated these collections as clusters
+in the data set. For each cluster, we computed the average of
+each metric over the cluster, then inserted the average as a
+
+single data point to the final data set. Because Retypd performs well on many clusters, this averaging procedure tends
+to reduce our overall precision and conservativeness measurements. Still, we believe that it gives a less biased depiction
+of the algorithm’s expected real-world behavior than does an
+average over all benchmarks.
+
+6.3
+
+Sources of Imprecision
+
+Although Retypd is built around a sound core of constraint
+simplification and solving, there are several ways that imprecision can occur. As described in §2.5, disassembly failures
+can lead to unsound constraint generation. Second, the heuristics for converting from sketches to C types are lossy by
+necessity. Finally, we treat the source types as ground truth,
+leading to “failures” whenever Retypd recovers an accurate
+type that does not match the original program—a common
+situation with type-unsafe source code.
+A representative example of this last source of imprecision appears in Figure 6. This source code belongs to
+the miranda32 IRC client, which uses a plugin-based architecture; most of miranda32’s functionality is implemented by “service functions” with the fixed signature
+int ServiceProc(WPARAM,LPARAM). The types WPARAM
+and LPARAM are used in certain Windows APIs for generic
+16- and 32-bit values. The two parameters are immediately
+cast to other types in the body of the service functions, as in
+Figure 6.
+
+6.4
+
+const Correctness
+
+As a side-effect of separately modeling .load and .store
+capabilities, Retypd is easily able to recover information
+about how pointer parameters are used for input and/or
+output. We take this into account when converting sketches
+to C types; if a function’s sketch includes .inL .load but
+not .inL .store then we annotate the parameter at L with
+const, as in Figure 5 and Figure 2. Retypd appears to be
+the first machine-code type-inference system to infer const
+annotations directly.
+On our benchmark suite, we found that 98% of parameter
+const annotations in the original source code were recovered
+by Retypd. Furthermore, Retypd inferred const annotations
+on many other parameters; unfortunately, since most C and
+C++ code does not use const in every possible situation, we
+do not have a straightforward way to detect how many of
+Retypd’s additional const annotations are correct.
+Manual inspection of the missed const annotations shows
+that most instances are due to imprecision when analyzing
+one or two common statically linked library functions. This
+imprecision then propagates outward to callers, leading to
+decreased const correctness overall. Still, we believe the 98%
+recovery rate shows that Retypd offers a useful approach to
+const inference.
+
+Distance to source type
+
+coreutils
+
+2
+
+Interval size
+
+SPEC2006
+
+All
+
+Conservativeness
+
+Pointer accuracy
+
+coreutils
+
+SPEC2006
+
+All
+
+0.5
+
+70%
+
+70%
+
+0
+
+0
+
+RE
+
+Se
+
+ty
+
+pd
+
+100%
+
+Re
+
+ty
+p
+
+Re
+
+co
+nd
+W
+
+TI
+
+Re
+t
+
+TI
+
+c*
+SW
+A
+
+RD
+
+Re
+t
+
+ty
+
+rit
+
+e
+
+Re
+
+on
+dW
+
+ty
+p
+
+Se
+c
+
+Re
+
+TI
+
+TI
+
+SW
+A
+RD
+RE
+
+∗ Dynamic
+
+d
+
+0.5
+
+rit
+e
+
+80%
+
+yp
+d
+
+80%
+
+E
+
+1
+
+E*
+
+1
+
+yp
+d
+
+90%
+
+pd
+
+90%
+
+d
+
+1.5
+
+E
+
+1.5
+
+E*
+
+100%
+
+c*
+
+2
+
+∗ Dynamic
+
+Figure 8. Distance to ground-truth types and size of the
+interval between inferred upper and lower bounds. Smaller
+distances represent more accurate types; smaller interval
+sizes represent increased confidence.
+
+Figure 9. Conservativeness and pointer accuracy metric.
+Perfect type reconstruction would be 100% conservative
+and match on 100% of pointer levels. Note that the y axis
+begins at 70%.
+
+6.5
+
+Multi-level pointer accuracy: ElWazeer et al. [10] also
+introduced a multi-level pointer-accuracy rate that attempts
+to quantify how many “levels” of pointers were correctly
+inferred. On SecondWrite’s benchmark suite, Retypd attained
+a mean multi-level pointer accuracy of 91%, compared with
+SecondWrite’s reported 73%. Across all benchmarks, Retypd
+averages 88% pointer accuracy.
+Conservativeness: The best type system would have a high
+conservativeness rate (few unsound decisions) coupled with
+a low interval size (tightly specified results) and low distance (inferred types are close to ground-truth types). In each
+of these metrics, Retypd performs about as well or better
+than existing approaches. Retypd’s mean conservativeness
+rate is 95%, compared to 94% for TIE. But note that TIE
+was evaluated only on coreutils; on that cluster, Retypd’s
+conservativeness was 98%. SecondWrite’s overall conservativeness is 96%, measured on a subset of the SPEC2006
+benchmarks; Retypd attained a slightly lower 94% on this
+subset.
+It is interesting to note that Retypd’s conservativeness
+rate on coreutils is comparable to that of REWARDS, even
+though REWARDS’ use of dynamic execution traces suggests
+it would be more conservative than a static analysis by virtue
+of only generating feasible type constraints.
+
+Comparisons to Other Tools
+
+We gathered results over several metrics that have been used
+to evaluate SecondWrite, TIE, and REWARDS. These metrics
+were defined by Lee et al. [17] and are briefly reviewed here.
+TIE infers upper and lower bounds on each type variable,
+with the bounds belonging to a lattice of C-like types. The
+lattice is naturally stratified into levels, with the distance
+between two comparable types roughly being the difference
+between their levels in the lattice, with a maximum distance
+of 4. A recursive formula for computing distances between
+pointer and structural types is also used. TIE also determines
+a policy that selects between the upper and lower bounds on
+a type variable for the final displayed type.
+TIE considers three metrics based on this lattice: the conservativeness rate, the interval size, and the distance. A type
+interval is conservative if the interval bounds overapproximate the declared type of a variable. The interval size is the
+lattice distance from the upper to the lower bound on a type
+variable. The distance measures the lattice distance from the
+final displayed type to the ground-truth type. REWARDS and
+SecondWrite both use unification-based algorithms, and have
+been evaluated using the same TIE metrics. The evaluation
+of REWARDS using TIE metrics appears in Lee et al. [17].
+Distance and interval size: Retypd shows substantial improvements over other approaches in the distance and intervalsize metrics, indicating that it generates more accurate types
+with less uncertainty. The mean distance to the ground-truth
+type was 0.54 for Retypd, compared to 1.15 for dynamic TIE,
+1.53 for REWARDS, 1.58 for static TIE, and 1.70 for SecondWrite. The mean interval size shrunk to 1.2 with Retypd,
+compared to 1.7 for SecondWrite and 2.0 for TIE.
+
+6.6
+
+Performance
+
+Although the core simplification algorithm of Retypd has
+cubic worst-case complexity, it only needs to be applied on a
+per-procedure basis. This suggests that the real-world scaling
+behavior will depend on the distribution of procedure sizes,
+not on the whole-program size.
+
+Cluster
+
+Count
+
+Description
+
+freeglut-demos
+coreutils
+vpx-d
+vpx-e
+sphinx2
+putty
+
+3
+107
+8
+6
+4
+4
+
+freeglut samples
+GNU coreutils 8.23
+VPx decoders
+VPx encoders
+Speech recognition
+SSH utilities
+
+Instructions
+2K
+10K
+36K
+78K
+83K
+97K
+
+Retypd, as reported
+Retypd, without clustering
+
+Distance
+
+Interval
+
+Conserv.
+
+Ptr. Acc.
+
+Const
+
+0.66
+0.51
+0.63
+0.63
+0.42
+0.51
+
+1.49
+1.19
+1.68
+1.53
+1.09
+1.05
+
+97%
+98%
+98%
+96%
+94%
+94%
+
+83%
+82%
+92%
+90%
+91%
+86%
+
+100%
+96%
+100%
+100%
+99%
+99%
+
+0.54
+0.53
+
+1.20
+1.22
+
+95%
+97%
+
+88%
+84%
+
+98%
+97%
+
+Figure 10. Clusters in the benchmark suite. For each metric, the average over the cluster is given. If a cluster average is worse
+than Retypd’s overall average for a certain metric, a box is drawn around the entry.
+
+4GB
+
+1000
+
+Type inference memory usage
+
+Type inference time (seconds)
+
+3 · 103
+
+100
+
+10
+
+1
+1K
+
+10K
+100K
+Program size (number of CFG nodes)
+
+1M
+
+2GB
+1GB
+500MB
+
+100MB
+50MB
+1K
+
+10K
+100K
+Program size (number of CFG nodes)
+
+1M
+
+Figure 11. Type-inference time on benchmarks. The line
+indicates the best-fit exponential t = 0.000725 · N 1.098 ,
+demonstrating slightly superlinear real-world scaling behavior. The coefficient of determination is R2 = 0.977.
+
+Figure 12. Type-inference memory usage on benchmarks. The line indicates the best-fit exponential m =
+0.037 · N 0.846 , with coefficient of determination R2 =
+0.959.
+
+In practice, Figure 11 suggests that Retypd gives nearly
+linear performance over the benchmark suite, which ranges
+in size from 2K to 840K instructions. To measure Retypd’s
+performance, we used numerical regression to find the best-fit
+model T = αN β relating execution time T to program size
+N . This results in the relation T = 0.000725·N 1.098 with coefficient of determination R2 = 0.977, suggesting that nearly
+98% of the variation in performance data can be explained by
+this model. In other words, on real-world programs Retypd
+demonstrates nearly linear scaling of execution time. The cubic worst-case per-procedure behavior of the constraint solver
+does not translate to cubic behavior overall. Similarly, we
+found that the sub-linear model m = 0.037 · N 0.846 explains
+96% of the memory usage in Retypd.
+Note. The regressions above were performed by numerically
+fitting exponential models in (N, T ) and (N, m) space, rather
+than analytically fitting linear models in log-log space. Our
+
+models then minimize the error in the predicted values
+of T and m, rather than minimizing errors in log T or
+log m. Linear regression in log-log space results in the lesspredicative models T = 0.0003 · N 1.14 (R2 = 0.92) and
+m = 0.08 · N 0.77 (R2 = 0.88).
+The constraint-simplification workload of Retypd would
+be straightforward to parallelize over the directed acyclic
+graph of strongly-connected components in the callgraph, further reducing the scaling constant. If a reduction in memory
+usage is required, Retypd could swap constraint sets to disk;
+the current implementation keeps all working sets in RAM.
+
+7.
+
+Related Work
+
+Machine-code type recovery: Hex-Ray’s reverse engineering tool IdaPro [15] is an early example of type reconstruction
+via static analysis. The exact algorithm is proprietary, but it
+appears that IdaPro propagates types through unification from
+
+library functions of known signature, halting the propagation
+when a type conflict appears. IdaPro’s reconstructed IR is
+relatively sparse, so the type propagation fails to produce
+useful information in many common cases, falling back to
+the default int type. However, the analysis is very fast.
+SecondWrite [10] is an interesting approach to static
+IR reconstruction with a particular emphasis on scalability.
+The authors combine a best-effort VSA variant for pointsto analysis with a unification-based type-inference engine.
+Accurate types in SecondWrite depend on high-quality pointsto data; the authors note that this can cause type accuracy
+to suffer on larger programs. In contrast, Retypd is not
+dependent on points-to data for type recovery and makes use
+of subtyping rather than unification for increased precision.
+TIE [17] is a static type-reconstruction tool used as part
+of Carnegie Mellon University’s binary-analysis platform
+(BAP). TIE was the first machine-code type-inference system
+to track subtype constraints and explicitly maintain upper and
+lower bounds on each type variable. As an abstraction of the
+C type system, TIE’s type lattice is relatively simple; missing
+features, such as recursive types, were later identified by the
+authors as an important target for future research [30].
+HOWARD [32] and REWARDS [19] both take a dynamic
+approach, generating type constraints from execution traces.
+Through a comparison with HOWARD, the creators of TIE
+showed that static type analysis can produce higher-precision
+types than dynamic type analysis, though a small penalty
+must be paid in conservativeness of constraint-set generation.
+TIE also showed that type systems designed for static analysis
+can be easily modified to work on dynamic traces; we expect
+the same is true for Retypd, though we have not yet performed
+these experiments.
+Most previous work on machine-code type recovery, including TIE and SecondWrite, either disallows recursive
+types or only supports recursive types by combining typeinference results with a points-to oracle. For example, to infer
+that x has a the type struct S { struct S *, ...}* in a
+unification-based approach like SecondWrite, first we must
+have resolved that x points to some memory region M , that
+M admits a 4-byte abstract location α at offset 0, and that
+the type of α should be unified with the type of x. If pointer
+analysis has failed to compute an explicit memory region
+pointed to by x, it will not be possible to determine the type
+of x correctly. The complex interplay between type inference,
+points-to analysis, and abstract-location delineation leads to
+a relatively fragile method for inferring recursive types. In
+contrast, our type system can infer recursive types even when
+points-to facts are completely absent.
+Robbins et al. [28] developed an SMT solver equipped
+with a theory of rational trees and applied it to type reconstruction. Although this allows for recursive types, the lack
+of subtyping and the performance of the SMT solver make it
+difficult to scale this approach to real-world binaries. Except
+for test cases on the order of 500 instructions, precision of
+the recovered types was not assessed.
+
+Related type systems: The type system used by Retypd is
+related to the recursively constrained types (rc types) of
+Eifrig, Smith, and Trifonov [9]. Retypd generalizes the rc
+type system by building up all types using flexible records;
+even the function-type constructor →, taken as fundamental
+in the rc type system, is decomposed into a record with in
+and out fields. This allows Retypd to operate without the
+knowledge of a fixed signature from which type constructors
+are drawn, which is essential for analysis of stripped machine
+code.
+The use of CFL reachability to perform polymorphic subtyping first appeared in Rehof and Fähndrich [26], extending
+previous work relating simpler type systems to graph reachability [2, 23]. Retypd continues by adding type-safe handling
+of pointers and a simplification algorithm that allows us to
+compactly represent the type scheme for each function.
+CFL reachability has also been used to extend the type
+system of Java [14] and C++ [11] with support for additional
+type qualifiers. Our reconstructed const annotations can
+be seen as an instance of this idea, although our qualifier
+inference is not separated from type inference.
+To the best of our knowledge, no prior work has applied
+polymorphic type systems with subtyping to machine code.
+
+8.
+
+Future Work
+
+One interesting avenue for future research could come from
+the application of dependent and higher-rank type systems to
+machine-code type inference, although we rapidly approach
+the frontier where type inference is undecidable. A natural
+example of dependent types appearing in machine code is
+malloc, which could be typed as malloc : (n : size_t) →
+>n where >n denotes the common supertype of all n-byte
+types. The key feature is that the value of a parameter
+determines the type of the result.
+Higher-rank types are needed to properly model functions
+that accept pointers to polymorphic functions as parameters.
+Such functions are not entirely uncommon; for example,
+any function that is parameterized by a custom polymorphic
+allocator will have rank ≥ 2.
+Retypd was implemented as an inference phase that runs
+after CodeSurfer’s main analysis loop. We expect that by
+moving Retypd into CodeSurfer’s analysis loop, there will
+be an opportunity for interesting interactions between IR
+generation and type reconstruction.
+
+9.
+
+Conclusion
+
+By examining a diverse corpus of optimized binaries, we
+have identified a number of common idioms that are stumbling blocks for machine-code type inference. For each of
+these idioms, we identified a type-system feature that could
+enable the difficult code to be properly typed. We gathered
+these features into a type system and implemented the inference algorithm in the tool Retypd. Despite removing the
+requirement for points-to data, Retypd is able to accurately
+and conservatively type a wide variety of real-world binaries.
+
+We assert that Retypd demonstrates the utility of high-level
+type systems for reverse engineering and binary analysis.
+
+[17] J. Lee, T. Avgerinos, and D. Brumley. TIE: Principled reverse
+engineering of types in binary programs. In Network and
+Distributed System Security Symposium, pages 251–268, 2011.
+
+Acknowledgments
+
+[18] J. Lim and T. Reps. TSL: A system for generating abstract
+interpreters and its application to machine-code analysis. ACM
+Transactions on Programming Languages and Systems , 35(1):
+4, 2013.
+
+The authors would like to thank Vineeth Kashyap and the
+anonymous reviewers for their many useful comments on this
+manuscript, and John Phillips, David Ciarletta, and Tim Clark
+for their help with test automation.
+
+References
+[1] ISO/IEC TR 19768:2007: Technical report on C++ library
+extensions, 2007.
+[2] O. Agesen. Constraint-based type inference and parametric
+polymorphism. In Static Analysis Symposium, pages 78–100,
+1994.
+[3] R. M. Amadio and L. Cardelli. Subtyping recursive types.
+ACM Transactions on Programming Languages and Systems,
+15(4):575–631, 1993.
+[4] L. O. Andersen. Program analysis and specialization for
+the C programming language. PhD thesis, University of
+Cophenhagen, 1994.
+[5] G. Balakrishnan, R. Gruian, T. Reps, and T. Teitelbaum.
+CodeSurfer/x86 – a platform for analyzing x86 executables. In
+Compiler Construction, pages 250–254, 2005.
+[6] G. Balakrishnan and T. Reps. Analyzing Memory Accesses in
+x86 Executables, in Compiler Construction, pages 5–23, 2004.
+[7] A. Carayol and M. Hague. Saturation algorithms for modelchecking pushdown systems. In International Conference on
+Automata and Formal Languages, pages 1–24, 2014.
+[8] D. Caucal. On the regular structure of prefix rewriting. Theoretical Computer Science, 106(1):61–86, 1992.
+[9] J. Eifrig, S. Smith, and V. Trifonov. Sound polymorphic
+type inference for objects. In Object-Oriented Programming,
+Systems, Languages, and Applications, pages 169–184, 1995.
+[10] K. ElWazeer, K. Anand, A. Kotha, M. Smithson, and R. Barua.
+Scalable variable and data type detection in a binary rewriter.
+In Programming Language Design and Implementation, pages
+51–60, 2013.
+[11] J. S. Foster, R. Johnson, J. Kodumal, and A. Aiken. Flowinsensitive type qualifiers. ACM Transactions on Programming
+Languages and Systems, 28(6):1035–1087, 2006.
+[12] M. Fähndrich and A. Aiken. Making set-constraint program
+analyses scale. In Workshop on Set Constraints, 1996.
+[13] D. Gopan, E. Driscoll, D. Nguyen, D. Naydich, A. Loginov,
+and D. Melski. Data-delineation in software binaries and
+its application to buffer-overrun discovery. In International
+Conference on Software Engineering, pages 145–155, 2015.
+[14] D. Greenfieldboyce and J. S. Foster. Type qualifier inference for
+Java. In Object-Oriented Programming, Systems, Languages,
+and Applications, pages 321–336, 2007.
+[15] Hex-Rays. Hex-Rays IdaPro. http://www.hex-rays.com/
+products/ida/, 2015.
+[16] D. Kozen, J. Palsberg, and M. I. Schwartzbach. Efficient
+recursive subtyping. Mathematical Structures in Computer
+Science, 5(01):113–125, 1995.
+
+[19] Z. Lin, X. Zhang, and D. Xu. Automatic reverse engineering
+of data structures from binary execution. In Network and
+Distributed System Security Symposium, 2010.
+[20] S. Marlow, A. R. Yakushev, and S. Peyton Jones. Faster laziness using dynamic pointer tagging. In International Conference on Functional Programming, pages 277–288, 2007.
+[21] L. Mauborgne and X. Rival. Trace partitioning in abstract interpretation based static analyzers. In Programming Languages
+and Systems, pages 5–20, 2005.
+[22] M. Noonan, A. Loginov, and D. Cok. Polymorphic type
+inference for machine code (extended version). URL http:
+//arxiv.org/abs/1603.05495.
+[23] J. Palsberg and P. O’Keefe. A type system equivalent to flow
+analysis. ACM Transactions on Programming Languages and
+Systems , 17(4):576–599, 1995.
+[24] J. Palsberg, M. Wand, and P. O’Keefe. Type inference with
+non-structural subtyping. Formal Aspects of Computing, 9(1):
+49–67, 1997.
+[25] F. Pottier and D. Rémy. The essence of ML type inference. In
+B. C. Pierce, editor, Advanced Topics in Types and Programming Languages, chapter 10. MIT Press, 2005.
+[26] J. Rehof and M. Fähndrich. Type-based flow analysis: From
+polymorphic subtyping to cfl-reachability. In Principles of
+Programming Languages, pages 54–66, 2001.
+[27] J. Richard Büchi. Regular canonical systems. Archive for
+Mathematical Logic, 6(3):91–111, 1964.
+[28] E. Robbins, J. M. Howe, and A. King. Theory propagation
+and rational-trees. In Principles and Practice of Declarative
+Programming, pages 193–204, 2013.
+[29] M. Robertson. A Brief History of InvSqrt.
+University of New Brunswick, 2012.
+
+PhD thesis,
+
+[30] E. J. Schwartz, J. Lee, M. Woo, and D. Brumley. Native x86
+decompilation using semantics-preserving structural analysis
+and iterative control-flow structuring. In USENIX Security
+Symposium, pages 353–368, 2013.
+[31] M. Siff, S. Chandra, T. Ball, K. Kunchithapadam, and
+T. Reps. Coping with type casts in C. In Software Engineering—ESEC/FSE’99, pages 180–198, 1999.
+[32] A. Slowinska, T. Stancescu, and H. Bos. Howard: A dynamic
+excavator for reverse engineering data structures. In Network
+and Distributed System Security Symposium, 2011.
+[33] B. Steensgaard. Points-to analysis in almost linear time. In
+Principles of Programming Languages, pages 32–41, 1996.
+[34] Z. Su, A. Aiken, J. Niehren, T. Priesnitz, and R. Treinen. The
+first-order theory of subtyping constraints. In Principles of
+Programming Languages, pages 203–216, 2002.
+
+A.
+
+Constraint Generation
+
+Type constraint generation is performed by a parameterized
+abstract interpretation T YPE A ; the parameter A is itself
+an abstract interpreter that is used to transmit additional
+analysis information such as reaching definitions, propagated
+constants, and value-sets (when available).
+Let V denote the set of type variables and C the set of type
+constraints. Then the primitive TSL value- and map- types
+for T YPE A are given by
+V
+
+C
+
+BASETYPET YPEA = BASETYPEA × 2 × 2
+MAP[α, β]T YPEA = MAP[α, β]A × 2C
+
+Since type constraint generation is a syntactic, flowinsensitive process, we can regain flow sensitivity by pairing with an abstract semantics that carries a summary of
+flow-sensitive information. Parameterizing the type abstract
+interpretation by A allows us to factor out the particular way
+in which program variables should be abstracted to types (e.g.
+SSA form, reaching definitions, and so on).
+A.1
+
+Register Loads and Stores
+
+The basic reinterpretations proceed by pairing with the abstract interpreter A. For example,
+regUpdate (s , reg , v ) =
+let ( v ’ , t , c ) = v
+(s’, m)
+= s
+s ’ ’ = regUpdate ( s ’ , reg , v ’)
+(u , c ’) = A ( reg , s ’ ’)
+in
+( s’’, m ∪ c ∪ { t v u } )
+
+where A(reg, s) produces a type variable from the register
+reg and the A-abstracted register map s”.
+Register loads are handled similarly:
+regAccess ( reg , s ) =
+let ( s ’ , c ) = s
+(t , c ’) = A ( reg , s ’)
+in
+( regAccess ( reg , s ’) , t , c ∪ c ’ )
+
+Example A.1. Suppose that A represents the concrete
+semantics for x86 and A(reg, ·) yields a type variable
+(reg, {}) and no additional constraints. Then the x86 expression mov ebx, eax is represented by the TSL expression
+regUpdate(S, EBX(), regAccess(EAX(), S)), where S
+is the initial state (Sconc , C). After abstract interpretation, C
+will become C ∪ {eax v ebx}.
+By changing the parametric interpreter A, the generated
+type constraints may be made more precise.
+
+Example A.2. We continue with the example of mov ebx, eax
+above. Suppose that A represents an abstract semantics that is
+
+aware of register reaching definitions, and define A(reg, s)
+by
+A ( reg , s ) =
+case reaching - defs ( reg , s ) of
+{ p } → (regp , {})
+defs →
+let t = fresh
+c = { regp v t | p ∈ defs }
+in (t , c )
+
+where reaching-defs yields the set of definitions of reg
+that are visible from state s. Then T YPE A at program point q
+will update the constraint set C to
+C ∪ {eaxp v ebxq }
+if p is the lone reaching definition of EAX. If there are multiple
+reaching definitions P , then the constraint set will become
+C ∪ {eaxp v t | p ∈ P } ∪ {t v ebxq }
+A.2
+
+Addition and Subtraction
+
+It is useful to track translations of a value through additions
+or subtraction of a constant. To that end, we overload the
+add(x,y) and sub(x,y) operations in the cases where x or
+y have statically-determined constant values. For example, if
+INT32(n) is a concrete numeric value then
+add (v , INT32 ( n )) =
+let ( v ’ , t , c ) = v in
+( add ( v ’ , INT32 ( n )) , t .+ n , c )
+
+In the case where neither operand is a statically-determined
+constant, we generate a fresh type variable representing the
+result and a 3-place constraint on the type variables:
+add (x , y ) =
+let ( x ’ , t 1 , c 1 ) = x
+( y ’ , t2 , c2 ) = y
+t = fresh
+in
+( add ( x ’ , y ’) ,
+t,
+c 1 ∪ c 2 ∪ { Add( t 1 , t 2 , t ) } )
+
+Similar interpretations are used for sub(x,y).
+A.3
+
+Memory Loads and Stores
+
+Memory accesses are treated similarly to register accesses,
+except for the use of dereference accesses and the handling
+of points-to sets. For any abstract A-value a and A-state s, let
+A(a,s) denote a set of type variables representing the address
+A in the context s. Furthermore, define PtsToA (a, s) to be a
+set of type variables representing the values pointed to by a
+in the context s.
+The semantics of the N-bit load and store functions
+memAccessN and memUpdateN are given by
+
+memAccess N (s , a ) =
+let ( s 0 , c s )
+= s
+( a0 , t , ct ) = a
+c pt = { x v t . load .σ N@0
+| x ∈ PtsTo ( a 0 ,s 0 ) }
+in
+( memAccess N ( s 0 , a 0 ) ,
+t . load .σN@0 ,
+c s ∪ c t ∪ c pt )
+memUpdate N (s , a , v ) =
+let ( s 0 , c s )
+= s
+( a0 , t , ct ) = a
+( v0 , v , cv ) = v
+c pt = { t . store .σ N@0 v x
+| x ∈ PtsTo ( a 0 ,s 0 ) }
+in
+( memUpdate N ( s 0 , a 0 , v 0 ) ,
+c s ∪ c t ∪ c v ∪ c pt
+∪ { v v t . store .σ N@0 } )
+
+We achieved acceptable results by using a bare minimum
+points-to analysis that only tracks constant pointers to the
+local activation record or the data section. The use of the
+.load / .store accessors allows us to track multi-level pointer
+information without the need for explicit points-to data. The
+minimal approach tracks just enough points-to information
+to resolve references to local and global variables.
+A.4
+
+Procedure Invocation
+
+Earlier analysis phases are responsible for delineating procedures and gathering data about each procedure’s formal-in
+and formal-out variables, including information about how
+parameters are stored on the stack or in registers. This data is
+transformed into a collection of locators associated to each
+function. Each locator is bound to a type variable representing
+the formal; the locator is responsible for finding an appropriate set of type variables representing the actual at a callsite,
+or the corresponding local within the procedure itself.
+Example A.3. Consider this simple program that invokes a
+32-bit identity function.
+p:
+q:
+id :
+r:
+
+push ebx ; writes to local ext4
+call id
+...
+; begin procedure id ()
+mov eax , [ esp + arg0 ]
+ret
+
+The procedure id will have two locators:
+
+Within procedure id, the locator Li returns the type variable arg0id and Lo returns eaxr , resulting in the constraint
+set
+{idi v arg0id , eaxr v ido }
+A procedure may also be associated with a set of type
+constraints between the locator type variables, called the
+procedure summary; these type constraints may be inserted at
+function calls to model the known behavior of a function. For
+example, invocation of fopen will result in the constraints
+{fopeni0 v char∗, fopeni1 v char∗, FILE∗ v fopeno }
+To support polymorphic function invocation, we instantiate fresh versions of the locator type variables that are tagged
+with the current callsite; this prevents type variables from multiple invocations of the same procedure from being linked.
+Example A.4 (cont’d). When using callsite tagging, the
+callsite constraints generated by the locators would be
+{ext4p v idqi ,
+
+idqo v eaxq }
+
+The callsite tagging must also be applied to any procedure
+summary. For example, a call to malloc will result in the
+constraints
+{mallocpi v size_t,
+
+void∗ v mallocpo }
+
+If malloc is used twice within a single procedure, we see
+an effect like let-polymorphism: each use will be typed
+independently.
+A.5
+
+Other Operations
+
+A.5.1
+
+Floating-point
+
+Floating point types are produced by calls to known library
+functions and through an abstract interpretation of reads
+to and writes from the floating point register bank. We do
+not track register-to-register moves between floating point
+registers, though it would be straightforward to add this
+ability. In theory, this causes us to lose precision when
+attempting to distinguish between typedefs of floating point
+values; in practice, such typedefs appear to be extremely rare.
+A.5.2
+
+Bit Manipulation
+
+• A locator Li for the single parameter, bound to a type
+
+We assume that the operands and results of most bitmanipulation operations are integral, with some special
+exceptions:
+
+• A locator Lo for the single return value, bound to a type
+
+• Common idioms like xor reg,reg and or reg,-1 are
+
+variable idi .
+
+variable ido .
+
+At the procedure call site, the locator Li will return the type
+variable ext4p representing the stack location ext4 tagged
+by its reaching definition. Likewise, Lo will return the type
+variable eaxq to indicate that the actual-out is held in the
+version of eax that is defined at point q. The locator results
+are combined with the locator’s type variables, resulting in
+the constraint set
+{ext4p v idi ,
+
+ido v eaxq }
+
+used to initialize registers to certain constants. On x86
+these instructions can be encoded with 8-bit immediates,
+saving space relative to the equivalent versions mov reg,0
+and mov reg,-1. We do not assume that the results of
+these operations are of integral type.
+
+• We discard any constraints generated while computing a
+
+value that is only used to update a flag status. In particular,
+on x86 the operation test reg1,reg2 is implemented
+like a bitwise-AND that discards its result, only retaining
+the effect on the flags.
+
+• For specific operations such as y := x AND 0xfffffffc
+
+and y := x OR 1, we act as if they were equivalent to
+y := x. This is because these specific operations are often
+used for bit-stealing; for example, requiring pointers to be
+aligned on 4-byte boundaries frees the lower two bits of
+a pointer for other purposes such as marking for garbage
+collection.
+
+A.6
+
+Additive Constraints
+
+The special constraints A DD and S UB are used to conditionally propagate information about which type variables represent pointers and which represent integers when the variables
+are related through addition or subtraction. The deduction
+rules for additive constraints are summarized in Figure 13.
+We obtained good results by inspecting the unification graph
+used for computing L(Si ); the graph can be used to quickly
+determine whether a variable has pointer- or integer-like capabilities. In practice, the constraint set also should be updated
+with new subtype constraints as the additive constraints are
+applied, and a fully applied constraint can be dropped from
+C. We omit these details for simplicity.
+
+B.
+
+Normal Forms of Proofs
+
+A finite constraint set with recursive constraints can have an
+infinite entailment closure. In order to manipulate entailment
+closures efficiently, we need finite (and small) representations
+of infinite constraint sets. The first step towards achieving a
+finite representation of entailment is to find a normal form for
+every derivation. In Appendix D, finite models of entailment
+closure will be constructed that manipulate representations
+of these normal forms.
+Lemma B.1. For any statement P provable from C, there
+exists a derivation of C ` P that does not use rules S-R EFL
+or T-I NHERIT.
+Proof. The redundancy of S-R EFL is immediate. As for
+T-I NHERIT, any use of that rule in a proof can be replaced by
+S-F IELD⊕ followed by T-L EFT, or S-F IELD followed by
+T-R IGHT.
+In the following, we make the simplifying assumption
+that C is closed under T-L EFT, T-R IGHT, and T-P REFIX.
+Concretely, we are requiring that
+1. if C contains a subtype constraint α v β as an axiom, it
+also contains the axioms VAR α and VAR β.
+2. if C contains a term declaration VAR α, it also contains
+term declarations for all prefixes of α.
+Lemma B.2. If C is closed under T-L EFT, T-R IGHT, and
+T-P REFIX then any statement provable from C can be proven
+without use of T-P REFIX.
+
+Proof. By the previous lemma, we may assume that S-R EFL
+and T-I NHERIT are not used in the proof. We will prove the
+lemma by transforming all subproofs that end in a use of
+T-P REFIX to remove that use. To that end, assume we have
+a proof ending with the derivation of VAR α from VAR α.`
+using T-P REFIX. We then enumerate the ways that VAR α.`
+may have been proven.
+• If VAR α.` ∈ C then VAR α ∈ C already, so the entire
+
+proof tree leading to VAR α may be replaced with an
+axiom from C.
+• The only other way a VAR α.` could be introduced is
+through T-L EFT or T-R IGHT. For simplicity, let us only
+consider the T-L EFT case; T-R IGHT is similar. At this
+point, we have a derivation tree that looks like
+α.` v ϕ
+VAR α.`
+VAR α
+How was α.` v ϕ introduced? If it were an axiom of C
+then our assumed closure property would imply already
+that VAR α ∈ C. The other cases are:
+ϕ = β.` and α.` v ϕ was introduced through one of
+the S-F IELD axioms. In either case, α is the left- or
+right-hand side of one of the antecedents to S-F IELD,
+so the whole subderivation including the T-P REFIX
+axiom can be replaced with a single use of T-L EFT or
+T-R IGHT.
+` = .store and ϕ = α.load, with α.` v ϕ introduced
+via S-P OINTER. In this case, VAR α.` is already
+an antecedent to S-P OINTER, so we may elide the
+subproof up to T-P REFIX to inductively reduce the
+problem to a simpler proof tree.
+Finally, we must have α.` v ϕ due to S-T RANS. But
+in this case, the left antecedent is of the form α.` v β;
+so once again, we may elide a subproof to get a simpler
+proof tree.
+Each of these cases either removes an instance of
+T-P REFIX or results in a strictly smaller proof tree. It
+follows that iterated application of these simplification
+rules results in a proof of VAR α with no remaining
+instances of T-P REFIX.
+
+Corollary B.1. If C ` VAR α, then either VAR α ∈ C, or
+C ` α v β, β v α for some β.
+
+To simplify the statement of our normal-form theorem,
+recall that we defined the variadic rule S-T RANS ’ to remove
+the degrees of freedom from regrouping repeated application
+of S-T RANS:
+α1 v α2 , α2 v α3 , . . . αn−1 v αn
+(S-T RANS ’)
+α1 v αn
+
+X
+Y
+Z
+
+i
+i
+I
+
+I
+I
+i
+
+p
+I
+P
+
+A DD
+P
+i
+p
+
+I
+p
+P
+
+i
+P
+p
+
+i
+I
+I
+
+I
+i
+i
+
+P
+i
+p
+
+S UB
+P p
+p P
+I
+i
+
+p
+i
+P
+
+p
+I
+p
+
+Figure 13. Inference rules for A DD(X, Y ; Z) and S UB(X, Y ; Z). Lower case letters denote known integer or pointer types.
+Upper case letters denote inferred types. For example, the first column says that if X and Y are integral types in an A DD(X, Y ; Z)
+constraint, then Z is integral as well.
+Theorem B.1 (Normal form of proof trees). Let C be a
+constraint set that is closed under T-L EFT, T-R IGHT, and
+T-P REFIX. Then any statement provable from C has a derivation such that
+
+We also can eliminate the need for the subderivations Q
+and S except for the very first and very last antecedents of
+S-T RANS ’ by pulling the term out of the neighboring subtype
+relation; schematically, we can always replace
+
+• There are no uses of the rules T-P REFIX, T-I NHERIT, or
+
+S
+P
+α v β VAR β.`
+···
+α.` v β.`
+T
+
+S-R EFL.
+• For every instance of S-T RANS ’ and every pair of adjacent antecedents, at least one is not the result of a S-F IELD
+application.
+Proof. The previous lemmas already handled the first point.
+As to the second, suppose that we had two adjacent antecedents that were the result of S-F IELD⊕ :
+P
+Q
+α v β VAR β.`
+···
+α.` v β.`
+
+T
+
+R
+S
+β v γ VAR γ.`
+···
+β.` v γ.`
+
+First, note that the neighboring applications of S-F IELD⊕
+must both use the same field label `, or else S-T RANS would
+not be applicable. But now observe that we may move a
+S-F IELD application upwards, combining the two S-F IELD
+applications into one:
+P
+R
+S
+αvβ βvγ
+αvγ
+VAR γ.`
+···
+···
+α.` v γ.`
+T
+For completeness, we also compute the simplifying transformation for adjacent uses of S-F IELD : the derivation
+P
+Q
+β v α VAR α.`
+···
+α.` v β.`
+
+T
+
+R
+S
+γ v β VAR β.`
+···
+β.` v γ.`
+
+can be simplified to
+R
+P
+γvβ βvα
+VAR α.`
+γvα
+···
+···
+α.` v γ.`
+T
+Q
+
+U
+···
+β.` v γ
+
+by
+U
+β.` v γ
+P
+α v β VAR β.`
+···
+α.` v β.`
+T
+
+U
+···
+β.` v γ
+
+This transformation even works if there are several S-F IELD
+applications in a row, as in
+P
+Q
+α v β VAR β.`
+R
+α.` v β.`
+VAR β.`.`0
+···
+0
+α.`.` v β.`.`0
+T
+
+U
+···
+β.`.`0 v γ
+
+which can be simplified to
+U
+β.`.`0 v γ
+P
+VAR β.`.`0
+U
+αvβ
+VAR β.`
+β.`.`0 v γ
+α.` v β.`
+VAR β.`.`0
+···
+α.`.`0 v β.`.`0
+T
+
+U
+···
+β.`.`0 v γ
+
+Taken together, this demonstrates that the VAR β.` antecedents to S-F IELD are automatically satisfied if the consequent is eventually used in an S-T RANS application where
+β.` is a “middle” variable. This remains true even if there are
+several S-F IELD applications in sequence.
+
+Since the S-F IELD VAR antecedents are automatically
+satisfiable, we can use a simplified schematic depiction of
+proof trees that omits the intermediate VAR subtrees. In this
+simplified depiction, the previous proof tree fragment would
+be written as
+P
+αvβ
+α.` v β.`
+···
+α.`.`0 v β.`.`0
+T
+
+U
+···
+β.`.`0 v γ
+
+Algebraic Representation
+
+Finally, consider the form of the simplified proof tree that
+elides the VAR subderivations. Each leaf of the tree is a
+subtype constraint ci ∈ C, and there is a unique way to
+fill in necessary VAR antecedents and S-F IELD applications
+to glue the constraints {ci } into a proof tree in normal form.
+In other words, the normal form proof tree is completely
+determined by the sequence of leaf constraints {ci } and the
+sequence of S-F IELD applications applied to the final tree. In
+effect, we have a term algebra with constants Ci representing
+the constraints ci ∈ C, an associative binary operator that
+combines two compatible constraints via S-T RANS, inserting
+appropriate S-F IELD applications, and a unary operator S`
+for each ` ∈ Σ that represents an application of S-F IELD.
+The proof tree manipulations provide additional relations on
+this term algebra, such as
+(
+S`(R1 R2 ) when h`i = ⊕
+S` (R1 ) S` (R2 ) =
+S`(R2 R1 ) when h`i =
+The normalization rules described in this section demonstrate
+that every proof of a subtype constraint entailed by C can be
+represented by a term of the form
+S`1 (S`2 (· · · S`n (R1
+
+C.
+
+pop u = pop u1 ⊗ · · · ⊗ pop un
+and
+push u = push un ⊗ · · · ⊗ push u1
+
+Any such fragment can be automatically converted to a full
+proof by re-generating VAR subderivations from the results
+of the input derivations P and/or U .
+B.1
+
+To simplify the presentation, when u = u1 · · · un we will
+sometimes write
+
+···
+
+Rk ) · · · ))
+
+The StackOp Weight Domain
+
+In this section, we develop a weight domain StackOpΣ that
+will be useful for modeling constraint sets by pushdown systems. This weight domain is generated by symbolic constants
+representing actions on a stack.
+Definition C.1. The weight domain StackOpΣ is the idempotent ∗-semiring generated by the symbols pop x, push x
+for all x ∈ Σ, subject only to the relation
+(
+1 if x = y
+push x ⊗ pop y = δ(x, y) =
+0 if x 6= y
+
+Definition C.2. A monomial in StackOpΣ is called reduced
+if its length cannot be shortened through applications of the
+push x ⊗ pop y = δ(x, y) rule. Every reduced monomial has
+the form
+pop u1 · · · pop un ⊗ push vm · · · push v1
+for some ui , vj ∈ Σ.
+
+Elements of StackOpΣ can be understood to denote
+possibly-failing functions operating on a stack of symbols
+from Σ:
+[[0]] = λs . fail
+[[1]] = λs . s
+[[push x]] = λs . cons(x, s)
+[[pop x]] = λs . case s of
+nil → fail
+
+cons(x0 , s0 ) → if x = x0 then s0
+
+else fail
+
+Under this interpretation, the semiring operations are interpreted as
+[[X ⊕ Y ]] = nondeterministic choice of [[X]] or [[Y ]]
+[[X ⊗ Y ]] = [[Y ]] ◦ [[X]]
+
+[[X ∗ ]] = nondeterministic iteration of [[X]]
+
+Note that the action of a pushdown rule R = hP ; ui ,→
+hQ; vi on a stack configuration c = (X, w) is given by the
+application
+[[pop P ⊗ pop u ⊗ push v ⊗ push Q]] (cons(X, w))
+The result will either be cons(X 0 , w0 ) where (X 0 , w0 ) is the
+configuration obtained by applying rule R to configuration c,
+or fail if the rule cannot be applied to c.
+Lemma C.1. There is a one-to-one correspondence between
+elements of StackOpΣ and regular sets of pushdown system
+rules over Σ.
+Definition C.3. The variance operator h·i can be extended to
+StackOpΣ by defining
+hpop xi = hpush xi = hxi
+
+D.
+
+Constructing the Transducer for a
+Constraint Set
+
+D.1
+
+Building the Pushdown System
+
+Let V be a set of type variables and Σ a set of field labels,
+equipped with a variance operator h·i. Furthermore, suppose
+that we have fixed a set C of constraints over V. Finally,
+suppose that we can partition V into a set of interesting and
+uninteresting variables:
+V = Vi q Vu
+Definition D.1. Suppose that X, Y ∈ Vi are interesting type
+variables, and there is a proof C ` X.u v Y.v. We will call
+the proof elementary if the normal form of its proof tree only
+involves uninteresting variables on internal leaves. We write
+i
+C`V
+elem X.u v Y.v
+
+when C has an elementary proof of X.u v Y.v.
+
+Our goal is to construct a finite state transducer that
+0
+0
+i
+recognizes the relation v V
+elem ⊆ Vi × Vi between derived
+type variables defined by
+n
+o
+Vi
+i
+vV
+elem = (X.u, Y.v) | C ` elem X.u v Y.v
+
+We proceed by constructing an unconstrained pushdown system PC whose derivations model proofs in C; a modification
+of Caucal’s saturation algorithm [8] is then used to build the
+transducer representing DerivPC .
+Definition D.2. Define the left- and right-hand tagging rules
+lhs, rhs by
+(
+xL if x ∈ Vi
+lhs(x) =
+x if x ∈ Vo
+(
+xR if x ∈ Vi
+rhs(x) =
+x
+if x ∈ Vo
+
+Definition D.3. The unconstrained pushdown system PC
+associated to a constraint set C is given by the triple ( e
+V, e
+Σ, ∆)
+where
+e = (lhs(Vi ) q rhs(Vi ) q Vo ) × {⊕, }
+V
+∪ {# S TART, # E ND}
+
+e as v .
+We will write an element (v, ) ∈ V
+e
+The stack alphabet Σ is essentially the same as Σ, with a
+few extra tokens added to represent interesting variables:
+e = Σ ∪ {v ⊕ | v ∈ Vi } ∪ {v | v ∈ Vi }
+Σ
+To define the transition rules, we first introduce the helper
+functions:
+rule⊕ (p.u v q.v) = hlhs(p)hui ; ui ,→ hrhs(q)hvi ; vi
+
+rule (p.u v q.v) = hlhs(q) ·hvi ; vi ,→ hrhs(p) ·hui ; ui
+rules(c) = {rule⊕ (c), rule (c)}
+
+The transition rules ∆ are partitioned into four parts ∆ =
+∆C q ∆ptr q ∆start q ∆end where
+[
+∆C =
+rules(c)
+c∈C
+
+∆ptr =
+
+[
+v∈V 0
+#
+
+rules(v.store v v.load)
+
+∆start = h S TART; v ⊕ i ,→ hvL⊕ ; εi | v ∈ Vi
+
+∪ h# S TART; v i ,→ hvL ; εi | v ∈ Vi
+
+∆end = hvR⊕ ; εi ,→ h# E ND; v ⊕ i | v ∈ Vi
+
+∪ hvR ; εi ,→ h# E ND; v i | v ∈ Vi
+Note 1. The {⊕, } superscripts on the control states are
+used to track the current variance of the stack state, allowing
+us to distinguish between uses of an axiom in co- and contravariant position. The tagging operations lhs, rhs are used
+to prevent derivations from making use of variables from
+Vi , preventing PC from admitting derivations that represent
+non-elementary proofs.
+Note 2. Note that although ∆C is finite, ∆ptr contains rules
+for every derived type variable and is therefore infinite. We
+carefully adjust for this in the saturation rules below so that
+rules from ∆ptr are only considered lazily as DerivPC is
+constructed.
+Lemma D.1. For any pair (X a u, Y b v) in DerivPC , we also
+have (Y ·b v, X ·a u) ∈ DerivPC .
+Proof. Immediate due to the symmetries in the construction
+of ∆.
+Lemma D.2. For any pair (X a u, Y b v) in DerivPC , the
+relation
+a · hui = b · hvi
+must hold.
+
+Proof. This is an inductive consequence of how ∆ is defined:
+the relation holds for every rule in ∆C ∪∆ptr due to the use of
+the rules function, and the sign in the exponent is propagated
+from the top of the stack during an application of a rule
+from ∆start and back to the stack during an application of a
+rule from ∆end . Since every derivation will begin with a rule
+from ∆start , proceed by applying rules from ∆C ∪ ∆ptr , and
+conclude with a rule from ∆end , this completes the proof.
+Definition D.4. Let Deriv0PC ⊆ Vi0 × Vi0 be the relation on
+derived type variables induced by DerivPC as follows:
+n
+o
+Deriv0PC = (X.u, Y.v) | (X hui u, Y hvi v) ∈ DerivPC
+Lemma D.3. If (p, q) ∈ Deriv0PC and σ ∈ Σ has hσi =
+⊕, then (pσ, qσ) ∈ Deriv0PC as well. If hσi = , then
+(qσ, pσ) ∈ Deriv0PC instead.
+
+Proof. Immediate, from symmetry considerations.
+Lemma D.4. DerivPC can be partitioned into Deriv⊕
+PC q
+DerivPC where
+n
+o
+hui
+Deriv⊕
+u, Y hvi v) | (X.u, Y.v) ∈ Deriv0PC
+PC = (X
+n
+o
+DerivPC = (Y ·hvi v, X ·hui u) | (X.u, Y.v) ∈ Deriv0PC
+In particular, DerivPC can be entirely reconstructed from the
+simpler set Deriv0PC .
+
+Theorem D.1. C has an elementary proof of the constraint
+X.u v Y.v if and only if (X.u, Y.v) ∈ Deriv0PC .
+Proof. We will prove the theorem by constructing a bijection
+between elementary proof trees and derivations in PC .
+Call a configuration (pa , u) positive if a = hui. By
+∗
+Lemma D.2, if (pa , u) is positive and (pa , u) −→ (q b , v)
+b
+then (q , v) is positive as well. We will also call a transition
+rule positive when the configurations appearing in the rule are
+positive. Note that by construction, every positive transition
+rule from ∆C ∪ ∆ptr is of the form rule⊕ (c) for some axiom
+c ∈ C or load/store constraint c = (p.store v p.load).
+For any positive transition rule R = rule⊕ (p.u v q.v) and
+` ∈ Σ, let S` (R) denote the positive rule
+(
+hphu`i ; u`i ,→ hq hv`i ; v`i if h`i = ⊕
+S` (R) =
+hq hv`i ; v`i ,→ hphu`i ; u`i if h`i =
+Note that by the construction of ∆, each S` (R) is redundant, being a restriction of one of the existing transition
+rules rule⊕ (p.u v q.v) or rule (p.u v q.v) to a more specific stack configuration. In particular, adding S` (R) to the
+set of rules does not affect DerivPC .
+Suppose we are in the positive state (phwi , w) and are
+about to apply a transition rule R = hphui ; ui ,→ hq hvi ; vi.
+Then we must have w = u`1 `2 · · · `n , so that the left-hand
+side of the rule S`n (· · · (S`1 (R)) · · · ) is exactly hphwi ; wi.
+Let Rstart , R1 , · · · , Rn , Rend be the sequence of rule appli∗
+cations used in an arbitrary derivation (# S TART, phui u) −→
+#
+hvi
+0
+( E ND, q v) and let R R denote the application of rule
+R followed by rule R0 , with the right-hand side of R exactly matching the left-hand side of R0 . Given the initial
+stack state phui u and the sequence of rule applications, for
+each Rk there is a unique rule Rk0 = S`kn (· · · (S`k1 (Rk )) · · · )
+0
+0
+such that ∂ = Rstart
+R10
+· · · Rn0
+Rend
+describes
+the derivation exactly. Now normalize ∂ using the rule
+S` (Ri ) S` (Rj ) 7→ S` (Ri Rj ); this process is clearly
+reversible, producing a bijection between these normalized
+expressions and derivations in Deriv⊕
+PC .
+To complete the proof, we obtain a bijection between
+normalized expressions and the normal forms of elementary
+proof trees. The bijection is straightforward: Ri represents the
+introduction of an axiom from C, represents an application
+of the rule S-T RANS, and S` represents an application of
+
+the rule S-F IELD` . This results in an algebraic expression
+describing the normalized proof tree as in § B.1, which
+completes the proof.
+D.2
+
+Constructing the Initial Graph
+
+In this section, we will construct a finite state automaton that
+accepts strings that encode some of the behavior of PC ; the
+next section describes a saturation algorithm that modifies
+the initial automaton to create a finite state transducer for
+Deriv0PC .
+The automaton AC is constructed as follows:
+
+1. Add an initial state # S TART and an accepting state # E ND.
+
+2. For each left-hand side hpa ; u1 · · · un i of a rule in ∆C ,
+add the transitions
+#
+
+S TART
+
+pop pa·hu1 ...un i
+
+pa·hu1 ...un i
+
+−→
+
+pop u1
+
+pa·hu1 ...un i −→ pa·hu2 ...un i u1
+..
+.
+pop un
+
+pa·hun i u1 . . . un−1 −→ pa u1 . . . un
+3. For each right-hand side hq b ; v1 · · · vn i of a rule in ∆C ,
+add the transitions
+push vn
+
+q b v1 . . . vn −→ q b·hvn i v1 . . . vn−1
+..
+.
+push v1
+
+q b·hv2 ...vn i v1 −→ q b·hv1 ...vn i
+q b·hv1 ...vn i
+
+push q b·hv1 ...vn i #
+
+−→
+
+E ND
+
+4. For each rule hpa ; ui ,→ hq b ; vi, add the transition
+1
+
+pa u −→ q b v
+Definition D.5. Following Carayol and Hague [7], we call a
+sequence of transitions p1 · · · pn productive if the corresponding element p1 ⊗ · · · ⊗ pn in StackOpΣ is not 0. A sequence
+is productive if and only if it contains no adjacent terms of
+the form pop y, push x with x 6= y.
+Lemma D.5. There is a one-to-one correspondence between
+productive transition sequences accepted by AC and elementary proofs in C that do not use the axiom S-P OINTER.
+
+Proof. A productive transition sequence must consist of a
+sequence of pop edges followed by a sequence of push
+edges, possibly with insertions of unit edges or intermediate
+sequences of the form
+push (un ) ⊗ · · · ⊗ push (u1 ) ⊗ pop (u1 ) ⊗ · · · ⊗ pop (un )
+Following a push or pop edge corresponds to observing or
+forgetting part of the stack. Following a 1 edge corresponds
+to applying a PDS rule from PC .
+
+Algorithm D.1 Converting a transducer from a set of pushdown system rules
+1: procedure A LL PATHS (V, E, x, y)
+. Tarjan’s path algorithm. Return a finite state automaton recognizing the
+label sequence for all paths from x to y in the graph (V, E).
+2:
+...
+3:
+return Q
+4: end procedure
+5: procedure T RANSDUCER (∆C )
+. ∆C is a set of pushdown system rules hpa ; ui ,→ hq b ; vi
+#
+#
+6:
+V ← { S TART, E ND}
+7:
+E←∅
+8:
+for all hpa ; u1 · · · un i ,→ hq b ; v1 · · · vm i ∈ ∆C do
+9:
+V ← V ∪ {pa·hu1 ···un i , q b·hv1 ···vm i }
+10:
+E ← E ∪ {(# S TART, pa·hu1 ···un i , pop pa·hu1 ···un i )}
+11:
+E ← E ∪ {(q b·hv1 ···vm i , # E ND, push q b·hv1 ···vm i )}
+12:
+for i ← 1 . . . n − 1 do
+13:
+V ← V ∪ {pa·hui+1 ···un i u1 . . . ui }
+14:
+E ← E ∪ {(pa·hui ···un i u1 . . . ui−1 , pa·hui+1 ···un i u1 . . . ui , pop ui )}
+15:
+end for
+16:
+for j ← 1 . . . m − 1 do
+17:
+V ← V ∪ {q b·hvj+1 ···um i v1 . . . vj }
+
+18:
+E ← E ∪ {(q b·hvj+1 ···vm i v1 . . . vj , q b·hvj ···vm i v1 . . . vj−1 , push vj )}
+19:
+end for
+20:
+E ← E ∪ {(pa u1 . . . un , q b v1 . . . vm , 1)}
+21:
+end for
+22:
+E ← S ATURATED(V, E)
+23:
+Q ← A LL PATHS(V, E, # S TART, # E ND)
+24:
+return Q
+25: end procedure
+
+D.3
+
+Saturation
+
+The label sequences appearing in Lemma D.5 are tantalizingly close to having the simple structure of building up a
+pop sequence representing an initial state of the pushdown
+automaton, then building up a push sequence representing a
+final state. But the intermediate terms of the form “push u,
+then pop it again” are unwieldy. To remove the necessity for
+those sequences, we can saturate AC by adding additional
+1-labeled transitions providing shortcuts to the push/pop subsequences. We modify the standard saturation algorithm to
+also lazily instantiate transitions which correspond to uses of
+the S-P OINTER-derived rules in ∆ptr .
+Lemma D.6. The reachable states of the automaton AC can
+be partitioned into covariant and contravariant states, where
+a state’s variance is defined to be the variance of any sequence
+reaching the state from # S TART.
+Proof. By construction of ∆C and AC .
+Lemma D.7. There is an involution n 7→ n on AC defined
+by
+xa u = x ·a u
+# S TART = # E ND
+# E ND = # S TART
+
+Proof. Immediate due to the use of the rule constructors rule⊕
+and rule when forming ∆C .
+In this section, the automaton AC will be saturated by
+adding transitions to create a new automaton Asat
+C .
+
+Definition D.6. A sequence is called reduced if it is productive and contains no factors of the form pop x ⊗ push x.
+
+Reduced productive sequences all have the form of a
+sequence of pops, followed by a sequence of pushes.
+The goal of the saturation algorithm is twofold:
+
+1. Ensure that for any productive sequence accepted by AC
+there is an equivalent reduced sequence accepted by Asat
+C .
+
+2. Ensure that Asat
+C can represent elementary proofs that use
+S-P OINTER.
+
+The saturation algorithm D.2 proceeds by maintaining, for
+each state q ∈ AC , a set of reaching-pushes R(q). The
+reaching push set R(q) will contain the pair (`, p) only
+if there is a transition sequence in AC from p to q with
+weight push `. When q has an outgoing pop ` edge to q 0
+1
+and (`, p) ∈ R(q), we add a new transition p → q 0 to AC .
+
+A special propagation clause is responsible for propagating reaching-push facts as if rules from ∆ptr were instantiated,
+allowing the saturation algorithm to work even though the
+corresponding unconstrained pushdown system has infinitely
+many rules. This special clause is justified by considering the
+standard saturation rule when x.store v x.load is added as
+an axiom in C. An example appears in Figure 14: a saturation
+edge is added from x⊕ .store to y ⊕ .load due to the pointer
+saturation rule, but the same edge would also have been added
+if the states and transitions corresponding to p.store v p.load
+(depicted with dotted edges and nodes) were added to AC .
+Once the saturation algorithm completes, the automaton
+Asat
+C has the property that, if there is a transition sequence
+from p to q with weight equivalent to
+pop u1 ⊗ · · · ⊗ pop un ⊗ push vm ⊗ · · · ⊗ push v1 ,
+
+then there is a path from p to q that has, ignoring 1 edges,
+exactly the label sequence
+pop u1 , . . . , pop un , push vm , . . . , push v1 .
+D.4
+
+Shadowing
+
+The automaton Asat
+C now accepts push/pop sequences representing the changes in the stack during any legal derivation in
+the pushdown system ∆. After saturation, we can guarantee
+that every derivation is represented by a path which first pops
+a sequence of tokens, then pushes another sequence of tokens.
+Unfortunately, Asat
+C still accepts unproductive transition
+sequences which push and then immediately pop token sequences. To complete the construction, we form an automaton
+Q by intersecting Asat
+C with an automaton for the language of
+words consisting of only pops, followed by only pushes.
+This final transformation yields an automaton Q with the
+property that for every transition sequence s accepted by Asat
+C ,
+Q accepts a sequence s0 such that [[s]] = [[s0 ]] in StackOp and
+s0 consists of a sequence of pops followed by a sequence
+of pushes. This ensures that Q only accepts the productive
+transition sequences in Asat
+C . Finally, we can treat Q as a
+finite-state transducer by treating transitions labeled pop ` as
+reading the symbol ` from the input tape, push ` as writing `
+to the output tape, and 1 as an ε-transition.
+Q can be further manipulated through determinization
+and/or minimization to produce a compact transducer representing the valid transition sequences through PC . Taken as
+Q
+a whole, we have shown that Xu 7→ Y v if and only if X
+and Y are interesting variables and there is an elementary
+derivation of C ` X.u v Y.v.
+We make use of this process in two places during type
+analysis: first, by computing Q relative to the type variable of
+a function, we get a transducer that represents all elementary
+derivations of relationships between the function’s inputs
+and outputs. D.3 is used to convert the transducer Q back
+to a pushdown system P, such that Q describes all valid
+derivations in P. Then the rules in P can be interpreted
+as subtype constraints, resulting in a simplification of the
+constraint set relative to the formal type variables.
+
+Second, by computing Q relative to the set of type constants we obtain a transducer that can be efficiently queried
+to determine which derived type variables are bound above
+or below by which type constants. This is used by the S OLVE
+procedure in F.2 to populate lattice elements decorating the
+inferred sketches.
+Algorithm D.3 Converting a transducer to a pushdown system
+procedure T YPE S CHEME(Q)
+∆ ← new PDS
+∆.states ← Q.states
+t
+for all p → q ∈ Q.transitions do
+if t = pop ` then
+A DD PDSRULE(∆, hp; `i ,→ hq; εi)
+else
+A DD PDSRULE(∆, hp; εi ,→ hq; `i)
+end if
+end for
+return ∆
+end procedure
+
+E.
+
+The Lattice of Sketches
+
+Throughout this section, we fix a lattice (Λ, <:, ∨, ∧) of
+atomic types. We do not assume anything about Λ except
+that it should have finite height so that infinite subtype chains
+eventually stabilize. For example purposes, we will take Λ to
+be the lattice of semantic classes depicted in Figure 15.
+Our initial implementation of sketches did not use the
+auxiliary lattice Λ. We found that adding these decorations to
+the sketches helped preserve high-level types of interest to the
+end user during type inference. This allows us to recover highlevel C and Windows typedefs such as size_t, FILE, HANDLE,
+and SOCKET that are useful for program understanding and
+reverse engineering, as noted by Lin et al. [19].
+Decorations also enable a simple mechanism by which
+the user can extend Retypd’s type system, adding semantic
+purposes to the types for known functions. For example,
+we can extend Λ to add seeds for a tag #signal-number
+attached to the less-informative int parameter to signal().
+This approach also allows us to distinguish between opaque
+typedefs and the underlying type, as in HANDLE and void*.
+Since the semantics of a HANDLE are quite distinct from those
+of a void*, it is important to have a mechanism that can
+preserve the typedef name.
+E.1
+
+Basic Definitions
+
+Definition E.1. A sketch is a regular tree with edges labeled
+by elements of Σ and nodes labeled with elements of Λ.
+The set of all sketches, with Σ and Λ implicitly fixed, will
+be denoted Sk. We may alternately think of a sketch as a
+prefix-closed regular language L(S) ⊆ Σ∗ and a function
+
+Algorithm D.2 Saturation algorithm
+1: procedure S ATURATED (V, E)
+2:
+E0 ← E
+3:
+for all x ∈ V do
+4:
+R(x) ← ∅
+5:
+end for
+6:
+for all (x, y, e) ∈ E with e = push ` do
+7:
+R(y) ← R(y) ∪ {(`, x)}
+8:
+end for
+9:
+repeat
+10:
+Rold ← R
+0
+11:
+Eold
+← E0
+12:
+for all (x, y, e) ∈ E 0 with e = 1 do
+13:
+R(y) ← R(y) ∪ R(x)
+14:
+end for
+15:
+for all (x, y, e) ∈ E 0 with e = pop ` do
+16:
+for all (`, z) ∈ R(x) do
+17:
+E 0 ← E 0 ∪ {(z, y, 1)}
+18:
+end for
+19:
+end for
+20:
+for all x ∈ V do
+21:
+for all (`, z) ∈ R(x) with ` = .store do
+22:
+R(x) ← R(x) ∪ {(.load, z)}
+23:
+end for
+24:
+for all (`, z) ∈ R(x) with ` = .load do
+25:
+R(x) ← R(x) ∪ {(.store, z)}
+26:
+end for
+27:
+end for
+0
+28:
+until R = Rold and E 0 = Eold
+0
+29:
+return E
+30: end procedure
+
+. V is a set of vertices partitioned into V = V ⊕ q V
+. E is a set of edges, represented as triples (src, tgt, label)
+
+. Initialize the reaching-push sets R(x)
+
+. The standard saturation rule.
+
+. Lazily apply saturation rules corresponding to S-P OINTER.
+. See Figure 14 for an example.
+
+#S TART
+pop AL
+
+A⊕
+L
+1
+
+push store x
+
+pop store
+
+{
+
+1
+
+1
+
+y.load⊕
+
+BR⊕
+
+pop load
+
+p.store⊕ p.load
+
+x.store⊕
+
+1
+
+p
+
+1
+
+1
+
+p.load⊕ p.store
+pop load
+
+y⊕
+
+}
+
+push store
+
+push load
+1
+
+p = y;
+x = p;
+*x = A;
+B = *y;
+
+p⊕
+
+push BR
+
+#E ND
+Figure 14. Saturation using an implicit application of p.store v p.load. The initial constraint set was
+{y v p, p v x, A v x.store, y.load v B}, modeling the simple program on the right. The dashed edge was
+added by a saturation rule that only fires because of the lazy handling in D.2. The dotted states and edges show how the graph
+would look if the corresponding rule from ∆ptr were explicitly instantiated.
+
+.σ32@4
+
+>
+
+.load
+
+.store
+
+⊥
+
+>
+
+.σ32@0
+
+str
+
+is the sketch corresponding to the subtree reached by
+following the path v from the root of SX .
+
+.store
+
+.load
+
+⊥
+
+.σ32@0
+
+str
+
+.σ32@4
+
+Figure 16. Sketch representing a linked list of strings
+struct LL { str s; struct LL* a; }*.
+
+>
+
+.store
+
+⊥
+
+.σ32@0
+
+url
+
+Figure 17. Sketch for Y representing _Out_ url * u;
+>
+num
+
+str
+url
+⊥
+
+Figure 15. The sample lattice Λ of atomic types.
+ν : S → Λ such that each fiber ν −1 (λ) is regular. It will be
+convenient to write νS (w) for the value of ν at the node of S
+reached by following the word w ∈ Σ∗ .
+By collapsing equal subtrees, we can represent sketches as
+deterministic finite state automata with each state labeled by
+an element of Λ, as in Figure 16. Since the regular language
+associated with a sketch is prefix-closed, all states of the
+associated automaton are accepting.
+Lemma E.1. The set of sketches Sk forms a lattice with meet
+and join operations u, t defined according to Figure 18. Sk
+has a top element given by the sketch accepting the language
+{ε}, with the single node labeled by > ∈ Λ.
+If Σ is finite, Sk also has a bottom element accepting the
+language Σ∗ , with label function ν⊥ (w) = ⊥ when hwi = ⊕,
+or ν⊥ (w) = > when hwi = .
+We will use X E Y to denote the partial order on sketches
+compatible with the lattice operations, so that X u Y = X if
+and only if X E Y .
+E.1.1
+
+• If κ is a type constant, L(Sκ ) = {ε} and νSκ (ε) = κ.
+• If C ` VAR X.v then v ∈ L(X).
+• If C ` X.u v Y.v then νX (u) <: νY (v).
+• If C ` X.u v Y.v then u−1 SX E v −1 SY , where v −1 SX
+
+Modeling Constraint Solutions with Sketches
+
+Sketches are our choice of entity for modeling solutions to
+the constraint sets of §3.1.
+Definition E.2. A solution to a constraint set C over the type
+variables V is a set of bindings S : V → Sk such that
+
+The main utility of sketches is that they are almost a free
+tree model of the constraint language. Any constraint set C
+is satisfiable over the lattice of sketches, as long as C cannot
+prove an impossible subtype relation in Λ.
+Theorem E.1. Suppose that C is a constraint set over the
+variables {τi }i∈I . Then there exist sketches {Si }i∈I such
+that w ∈ Si if and only if C ` VAR τi .w.
+Proof. The languages L(Si ) can be computed an algorithm
+that is similar in spirit to Steensgaard’s method of almostlinear-time pointer analysis [33]. Begin by forming a graph
+with one node n(α) for each derived type variable appearing
+in C, along with each of its prefixes. Add a labeled edge
+`
+n(α) → n(α.`) for each derived type variable α.` to form
+a graph G. Now quotient G by the equivalence relation ∼
+defined by n(α) ∼ n(β) if α v β ∈ C, and n(α0 ) ∼ n(β 0 )
+`
+
+`0
+
+whenever there are edges n(α) → n(α0 ) and n(β) → n(β 0 )
+in G with n(α) ∼ n(β) where either ` = `0 or ` = .load and
+`0 = .store.
+The relation ∼ is the symmetrization of v , with the
+first defining rule roughly corresponding to T-I NHERIT L
+and T-I NHERIT R, and the second rule corresponding to
+S-F IELD⊕ and S-F IELD . The unusual condition on ` and
+`0 is due to the S-P OINTER rule.
+By construction, there exists a path with label sequence
+u through G/∼ starting at the equivalence class of τi if and
+only if C ` VAR τi .u. We can take this as the definition of
+the language accepted by Si .
+
+Working out the lattice elements that should label Si
+is a trickier problem; the basic idea is to use the same
+pushdown system construction that appears during constraint
+simplification to answer queries about which type constants
+are upper and lower bounds on a given derived type variable.
+The computation of upper and lower lattice bounds on a
+derived type variable appears in §D.4.
+E.1.2
+
+Sketch Narrowing at Function Calls
+
+It was noted in § 3.2 that the rule T-I NHERIT R leads to a
+system with structural typing: any two types in a subtype
+relation must have the same fields. In the language of sketches,
+this means that if two type variables are in a subtype relation
+then the corresponding sketches accept exactly the same
+languages. Superficially, this seems problematic for modeling
+typecasts that narrow a pointed-to object as motivated by the
+idioms in §2.4.
+The missing piece that allows us to effectively narrow
+objects is instantiation of callee type schemes at a callsite. To
+
+Algorithm E.1 Computing sketches from constraint sets
+procedure I NFER S HAPES(Cinitial , B)
+C ← S UBSTITUTE(Cinitial , B)
+G←∅
+. Compute constraint graph modulo ∼
+for all p.`1 . . . `n ∈ C.derivedTypeVars do
+for i ← 1 . . . n do
+s ← F IND E QUIV R EP(p.`1 . . . `i−1 , G)
+t ← F IND E QUIV R EP(p.`1 . . . `i , G)
+G.edges ← G.edges ∪ (s, t, `i )
+end for
+end for
+for all x v y ∈ C do
+X ← F IND E QUIV R EP(x, G)
+Y ← F IND E QUIV R EP(y, G)
+U NIFY(X, Y, G)
+end for
+repeat
+. Apply additive constraints and update G
+Cold ← C
+for all c ∈ Cold with c = A DD(_) or S UB(_) do
+D ← A PPLYA DD S UB(c, G, C)
+for all δ ∈ D with δ = X v Y do
+U NIFY(X, Y, B)
+end for
+end for
+until Cold = C
+for all v ∈ C.typeVars do
+. Infer initial sketches
+S ← new Sketch
+L(S) ← A LL PATHS F ROM(v, G)
+for all states w ∈ S do
+if hwi = ⊕ then
+νS (w) ← >
+else
+νS (w) ← ⊥
+end if
+end for
+B[v] ← S
+end for
+end procedure
+procedure U NIFY(X, Y, G)
+. Make X ∼ Y in G
+if X 6= Y then
+M AKE E QUIV(X, Y, G)
+for all (X 0 , `) ∈ G.outEdges(X) do
+if (Y 0 , `) ∈ G.outEdges(Y ) for some Y 0 then
+U NIFY(X 0 , Y 0 , G)
+end if
+end for
+end if
+end procedure
+demonstrate how polymorphism enables narrowing, consider
+the example type scheme ∀F. C ⇒ F from Figure 2. The
+
+function close_last can be invoked by providing any actualin type α such that α v F.instack0 ; in particular, α can have
+more capabilities than F.instack0 itself. That is, we can pass a
+more constrainted (“more capable”) type as an actual-in to a
+function that expected a less constrained input. In this way,
+we recover aspects of the physical, nonstructural subtyping
+utilized by many C and C++ programs via the pointer-tomember or pointer-to-substructure idioms described in §2.4.
+Example E.1. Suppose we have a reverse DNS lookup function reverse_dns with C type signature void reverse_dns
+(num addr,url* result). Furthermore, assume that the
+implementation of reverse_dns works by writing the resulting URL to the location pointed to by result, yielding a constraint of the form url v result.store.σ32@0. So
+reverse_dns will have an inferred type scheme of the form
+∀α, β.(α v num, url v β.store.σ32@0) ⇒ α × β → void
+Now suppose we have the structure LL of Figure 16 representing a linked list of strings, with instance LL * myList. Can
+we safely invoke reverse_dns(addr, (url*) myList)?
+Intuitively, we can see that this should be possible: since
+the linked list’s payload is in its first field, a value of type LL*
+also looks like a value of type str*. Furthermore, myList is
+not const, so it can be used to store the function’s output.
+Is this intuition borne out by Retypd’s type system?
+The answer is yes, though it takes a bit of work to see
+why. Let us write Sβ for the instantiated sketch of β at
+the callsite of reverse_dns in question; the constraints C
+require that Sβ satisfy .store.σ32@0 ∈ L(Sβ ) and url <:
+νSβ (.store.σ32@0). The actual-in has the type sketch SX
+seen in Figure 16, and the copy from actual-in to formal-in
+will generate the constraint X v β.
+Since we have already satisfied the two constraints on Sβ
+coming from its use in reverse_dns, we can freely add other
+words to L(Sβ ), and can freely set their node labels to almost
+any value we please subject only to the constraint SX E Sβ .
+This is simple enough: we just add every word in L(SX ) to
+L(Sβ ). If w is a word accepted by L(SX ) that must be added
+to L(Sβ ), we will define νSβ (w) := νSX (w). Thus, both the
+shape and the node labeling on SX and Sβ match, with one
+possible exception: we must check that X has a nested field
+.store.σ32@0, and that the node labels satisfy the relation
+νSβ (.store.σ32@0) <: νSX (.store.σ32@0)
+since .store.σ32@0 is contravariant and SX E Sβ . X does
+indeed have the required field, and url <: str; the function
+invocation is judged to be type-safe.
+
+F.
+
+Additional Algorithms
+
+This appendix holds a few algorithms referenced in the main
+text and other appendices.
+
+Algorithm F.2 C type inference
+procedure I NFERT YPES(CallGraph, T )
+B←∅
+. B is a map from type variable to sketch.
+for all S ∈ R EVERSE P OSTORDER(CallGraph.sccs)
+do
+C←∅
+for all P ∈ S do
+T [P ] ← ∅
+end for
+for all P ∈ S do
+C∂ ← T [P ]
+S OLVE(C∂ , B)
+R EFINE PARAMETERS(P, B)
+C ← C ONSTRAINTS(P, T )
+S OLVE(C, B)
+end for
+end for
+A←∅
+for all x ∈ B.keys do
+A[x] ← S KETCH T OA PPX CT YPE(B[x])
+end for
+return A
+end procedure
+procedure S OLVE(C, B)
+C ← I NFER S HAPES(C, B)
+Q ←T RANSDUCER(C, Λ)
+for all λ ∈ Λ do
+Q
+for all Xu such that λ 7→ Xu do
+νB[X] (u) ← νB[X] (u) ∨ λ
+end for
+Q
+for all Xu such that Xu 7→ λ do
+νB[X] (u) ← νB[X] (u) ∧ λ
+end for
+end for
+end procedure
+Algorithm F.3 Procedure specialization
+procedure R EFINE PARAMETERS(P, B)
+for all i ∈ P.formalIns do
+λ←>
+for all a ∈ P.actualIns(i) do
+λ ← λ t B[a]
+end for
+B[i] ← B[i] u λ
+end for
+for all o ∈ P.formalOuts do
+λ←⊥
+for all a ∈ P.actualOuts(o) do
+λ ← λ u B[a]
+end for
+B[o] ← B[o] t λ
+end for
+end procedure
+
+Algorithm F.1 Type scheme inference
+procedure I NFER P ROC T YPES(CallGraph)
+T ← ∅ . T is a map from procedure to type scheme.
+for all S ∈ P OSTORDER(CallGraph.sccs) do
+C←∅
+for all P ∈ S do
+T [P ] ← ∅
+end for
+for all P ∈ S do
+C ← C ∪ C ONSTRAINTS(P, T )
+end for
+C ← I NFER S HAPES(C, ∅)
+for all P ∈ S do
+V ← P.formalIns ∪ P.formalOuts
+Q ←T RANSDUCER(C, V ∪ Λ)
+T [P ] ←T YPE S CHEME(Q)
+end for
+end for
+end procedure
+procedure C ONSTRAINTS(P, T )
+C←∅
+for all i ∈ P.instructions do
+C ← C ∪ A BSTRACT I NTERP(TypeInterp, i)
+if i calls Q then
+C ← C ∪ I NSTANTIATE(T [Q], i)
+end if
+end for
+return C
+end procedure
+
+Language
+L(X u Y ) = L(X) ∪ L(Y )
+L(X t Y ) = L(X) ∩ L(Y )
+Node labels
+(
+νX (w) ∧ νY (w) if hwi = ⊕
+νXuY (w) =
+νX (w) ∨ νY (w) if hwi =
+
+
+νX (w)
+
+
+
+
+νY (w)
+
+
+
+ν (w) ∨ ν (w)
+X
+Y
+νXtY (w) =
+
+
+
+
+
+
+νX (w) ∧ νY (w)
+
+
+
+
+if w ∈ L(X) \ L(Y )
+if w ∈ L(Y ) \ L(X)
+if w ∈ L(X) ∩ L(Y ),
+hwi = ⊕
+if w ∈ L(X) ∩ L(Y ),
+hwi =
+
+Figure 18. Lattice operations on the set of sketches.
+
+G.
+
+Other C Type Resolution Policies
+
+Example G.1. The initial type-simplification stage results in
+types that are as general as possible. Often, this means that
+types are found to be more general than is strictly helpful to a
+(human) observer. A policy called R EFINE PARAMETERS is
+used to specialize type schemes to the most specific scheme
+that is compatible with all uses. For example, a C++ object
+may include a getter function with a highly polymorphic
+type scheme, since it could operate equally well on any
+structure with a field of the right type at the right offset.
+But we expect that in every calling context, the getter will
+be called on a specific object type (or perhaps its derived
+types). By specializing the function signature, we make use of
+contextual clues in exchange for generality before presenting
+a final C type to the user.
+Example G.2. Suppose we have a C++ class
+class MyFile
+{
+public :
+char * filename () const {
+return m_filename ;
+}
+private :
+FILE * m_handle ;
+char * m_filename ;
+};
+
+In a 32-bit binary, the implementation of MyFile::filename
+(if not inlined) will be roughly equivalent to the C code
+typedef int32_t dword ;
+dword get_filename ( const void * this )
+{
+char * raw_ptr = ( char *) this ;
+dword * field_ptr =
+( dword *) ( raw_ptr + 4);
+return * field_ptr ;
+}
+
+Accordingly, we would expect the most-general inferred type
+scheme for MyFile::filename to be
+∀α, β.(β v dword, α.load.σ32@4 v β) ⇒ α → β
+indicating that get_filename will accept a pointer to anything which has a value of some 32-bit type β at offset 4, and
+will return a value of that same type. If the function is truly
+used polymorphically, this is exactly the kind of precision
+that we wanted our type system to maintain.
+But in the more common case, get_filename will only be
+called with values where this has type MyFile* (or perhaps
+a subtype, if we include inheritance). If every callsite to
+get_filename passes it a pointer to MyFile*, it may be best
+to specialize the type of get_function to the monomorphic
+type
+get_filename : const MyFile* → char*
+The function R EFINE PARAMETERS in F.3 is used to specialize each function’s type just enough to match how the
+function is actually used in a program, at the cost of reduced
+generality.
+Example G.3. A useful but less sound heuristic is represented by the reroll policy for handling types which look
+like unrolled recursive types:
+reroll (x ):
+if there are u and ` with x.`u = x.`,
+and sketch (x) E sketch (x.`):
+replace x with x.`
+else :
+policy does not apply
+
+In practice, we often need to add other guards which inspect
+the shape of x to determine if the application of reroll appears
+to be appropriate or not. For example, we may require x
+to have at least one field other than ` to help distinguish a
+pointer-to-linked-list from a pointer-to-pointer-to-linked-list.
+
+H.
+
+Details of the Figure 2 Example
+
+The results of constraint generation for the example program
+in Figure 2 appears in Figure 20. The constraint-simplification
+algorithm builds the automaton Q (Figure 19) to recognize
+the simplified entailment closure of the constraint set. Q
+recognizes exactly the input/output pairs of the form
+
+Finally, the two remaining transitions from start to end
+generate
+int v close_last.outeax
+
+#SuccessZ v close_last.outeax
+
+To generate the simplified constraint set, we gather up these
+constraints (applying some lattice operations to combine
+(close_last.instack0 (.load.σ32@0) .load.σ32@4, (int | #FileDescriptor))
+inequalities that only differ by a lattice constant) and close
+over the introduced τ by introducing an ∃τ quantifier. The
+and
+result is the constraint set of Figure 2.
+((int | #SuccessZ), close_last.outeax )
+∗
+
+To generate the simplified constraint set, a type variable τ
+is synthesized for the single internal state in Q. The path
+leading from the start state to τ generates the constraint
+close_last.instack0 v τ
+The loop transition generates
+τ.load.σ32@0 v τ
+and the two transitions out of τ generate
+
+.load.32@0 / ε
+close_last.in / ε
+
+.load.32@4 / #FileDescriptor
+
+.load.32@4 / int
+#SuccessZ / close_last.out
+int / close_last.out
+
+τ.load.σ32@4 v int
+
+τ.load.σ32@4 v #FileDescriptor
+
+Figure 19. The automaton Q for the constraint system in
+Figure 2.
+
+_text :08048420
+_text :08048420
+_text :08048420
+
+_text :08048424
+_text :08048426
+_text :0804842 C
+_text :08048430
+_text :08048430
+_text :08048430
+_text :08048432
+_text :08048432
+_text :08048432
+
+_text :08048434
+_text :08048436
+_text :08048438
+
+_text :0804843 B
+_text :0804843 F
+
+_text :08048443
+_text :08048443
+
+close_last proc near
+close_last :
+mov
+edx , dword [ esp + fd ]
+AR_close_last_INITIAL [4:7] <: EDX_8048420_close_last [0:3]
+close_last . in@stack0 <: AR_close_last_INITIAL [4:7]
+EAX_804843F_close_last [0:3] <: close_last . out@eax
+jmp
+loc_8048432
+db 141 , 118 , 0 , 141 , 188 , 39
+times 4 db 0
+loc_8048430 :
+mov
+edx , eax
+EAX_8048432_close_last [0:3] <: EDX_8048430_close_last [0:3]
+loc_8048432 :
+mov
+eax , dword [ edx ]
+EDX_8048420_close_last [0:3] <: unknown_loc_106
+EDX_8048430_close_last [0:3] <: unknown_loc_106
+unknown_loc_106 . load .32 @0 <: EAX_8048432_close_last [0:3]
+test
+eax , eax
+jnz
+loc_8048430
+mov
+eax , dword [ edx +4]
+EDX_8048420_close_last [0:3] <: unknown_loc_111
+EDX_8048430_close_last [0:3] <: unknown_loc_111
+unknown_loc_111 . load .32 @4 <: EAX_8048438_close_last [0:3]
+mov
+dword [ esp + fd ] , eax
+EAX_8048438_close_last [0:3] <: AR_close_last_804843B [4:7]
+jmp
+__thunk_ . close
+AR_close_last_804843B [4:7] <: close :0 x804843F . in@stack0
+close :0 x804843F . in@stack0 <: # FileDescriptor
+close :0 x804843F . in@stack0 <: int
+close :0 x804843F . out@eax <: EAX_804843F_close_last [0:3]
+int <: close :0 x804843F . out@eax
+close_last endp
+
+Figure 20. The constraints obtained by abstract interpretation of the example code in Figure 2.
+
+

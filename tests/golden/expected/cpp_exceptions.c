@@ -62,19 +62,31 @@ __int64 sub_12c0();
  * C++ Class Hierarchy (from RTTI):
  *   .2.1_p20260214 ::) 15.::.1
  */
-/* Function:   may_throw(int) [clone .cold] | Address: 0x1140 | Size: 0x35 (53 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_throw | Xrefs from: unknown */
+/* Function:   may_throw(int) [clone .cold] | Address: 0x1140 | Size: 0x4c (76 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_free_exception, __cxa_throw | Xrefs from: unknown */
 // may_throw(int) [clone .cold]
 _Noreturn void may_throw(void) {
     __int64 v_8;
     __int64 v0; // rax
     __int64 v1; // rax
+    __int64 v2; // rax
+    __int64 v3; // rax
+    __int64 v4; // rdi
     v_8 = v0;
     /* allocate exception */
     v0 = __cxa_allocate_exception(0x10LL);
-    __int64 v2 = v0; // rbx
-    std_runtime_error_runtime_error(v2, "negative");
-    /* throw */
-    v1 = __cxa_throw(v2, 0x3d40LL, qword_3FE0);
+    v4 = v0;
+    __int64 v5 = v0; // rbx
+    __try {
+        v1 = std_runtime_error_runtime_error(v4, "negative");
+        /* throw */
+        v2 = __cxa_throw(v5, 0x3d40LL, qword_3FE0);
+    } __finally {
+        v0 = __eh_exception();
+        __int64 v6 = v0; // r14
+        /* free exception */
+        v3 = __cxa_free_exception(v5);
+        _Unwind_Resume(v6);
+    }
     return;
 }
 
@@ -85,7 +97,7 @@ struct __anon0 {
     __int64 field_16;
 };
 
-/* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: System V AMD64 | Stack frame: 0x18 (24 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_free_exception, __cxa_throw, __printf_chk | Xrefs from: unknown */
+/* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0xb3 (179 bytes) | Convention: System V AMD64 | Stack frame: 0x18 (24 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_free_exception, __cxa_throw, __printf_chk | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
 _Noreturn int safe_call(void) {
     __int64 v_24;
@@ -97,49 +109,59 @@ _Noreturn int safe_call(void) {
     __int64 v2; // rax
     __int64 v3; // rax
     __int64 v4; // rax
-    __int64 v5; // rdx
-    __int64 v6; // rbx
-    __int64 v7; // rdi
-    _QWORD v8; // temp
+    __int64 v5; // rax
+    __int64 v6; // rax
+    __int64 v7; // rdx
+    __int64 v8; // rbx
+    __int64 v9; // rdi
+    _QWORD v10; // temp
     /* allocate exception */
-    __int64 v9 = __cxa_allocate_exception(0x10LL); // rax
-    __int64 v10 = "negative"; // rsi
-    v7 = v9;
-    v6 = v9;
+    __int64 v11 = __cxa_allocate_exception(0x10LL); // rax
+    __int64 v12 = "negative"; // rsi
+    v9 = v11;
+    v8 = v11;
     try {
-        v0 = std_runtime_error_runtime_error(v7, "negative");
-        v5 = qword_3FE0;
-        v10 = 0x3d40;
-        v7 = v6;
+        v0 = std_runtime_error_runtime_error(v9, "negative");
+        v7 = qword_3FE0;
+        v12 = 0x3d40;
+        v9 = v8;
         try {
             /* throw */
-            v1 = __cxa_throw(v7, 0x3d40LL, v5);
+            v1 = __cxa_throw(v9, 0x3d40LL, v7);
         } catch (struct std__exception e) {
             result_0 = __eh_exception();
-            v5 = 1;
-            v7 = result_0;
+            v7 = 1;
+            v9 = result_0;
             result_0 = 1;
         }
     } catch (struct std__exception e) {
         result_0 = __eh_exception();
-        v5 = __eh_selector();
-        v_8 = v5;
+        v7 = __eh_selector();
+        v_8 = v7;
         /* free exception */
-        v2 = __cxa_free_exception(v6);
-        v7 = v8;
+        v2 = __cxa_free_exception(v8);
+        v9 = v10;
         result_0 = v_8;
     }
     --result_0;
     if (result_0 != 1) {
-        _Unwind_Resume(v7);
+        _Unwind_Resume(v9);
     } else {
         /* catch */
-        v3 = __cxa_begin_catch(v7);
-        v5 = v3->__vftable->method_2();
-        printf("caught: %s\n", (char *)v5);
-        /* end catch */
-        v4 = __cxa_end_catch();
-        return 0xffffffff;
+        v3 = __cxa_begin_catch(v9);
+        v7 = v3->__vftable->method_2();
+        __try {
+            v4 = printf("caught: %s\n", (char *)v7);
+            /* end catch */
+            v5 = __cxa_end_catch();
+            return 0xffffffff;
+        } __finally {
+            result_0 = __eh_exception();
+            v8 = result_0;
+            /* end catch */
+            v6 = __cxa_end_catch();
+            _Unwind_Resume(v8);
+        }
     }
     return 0;
 }

@@ -270,10 +270,26 @@ fn plan(
         return None;
     };
     let reads = condition_reads(*cond, foldable, ssa, index)?;
-    if writes_any(then_body, &reads)? || writes_any(else_body.as_deref().unwrap_or(&[]), &reads)? {
-        exit_merge_debug!("skip goto={label:?}: an arm writes condition input {reads:?}");
-        return None;
-    }
+    let arms_write =
+        writes_any(then_body, &reads)? || writes_any(else_body.as_deref().unwrap_or(&[]), &reads)?;
+    let (cond, goto_on_true) = if arms_write {
+        let Some(guard) = goto_guard_excluding_breaks(
+            root,
+            &path,
+            idx,
+            if_depth,
+            *cond,
+            goto_on_true,
+            ssa,
+            index,
+        ) else {
+            exit_merge_debug!("skip goto={label:?}: an arm writes condition input {reads:?}");
+            return None;
+        };
+        guard
+    } else {
+        (*cond, goto_on_true)
+    };
 
     let loop_scope = path[..loop_depth].to_vec();
     let loop_idx = path[loop_depth].0;
@@ -289,7 +305,7 @@ fn plan(
     Some(Rewrite {
         goto: (path, idx),
         loop_pos: (loop_scope, loop_idx),
-        cond: *cond,
+        cond,
         goto_on_true,
         after_loop,
     })
@@ -376,6 +392,198 @@ fn writes_any(nodes: &[HirNode], reads: &[Varnode]) -> Option<bool> {
     Some(false)
 }
 
+/// The goto's own guard as the condition to re-test after the loop, when
+/// the arms of `if (c)` change what `c` reads.
+///
+/// The goto sits alone in one arm of `if (g)`, so `g` still holds right
+/// after it; the loop's `break` is alone in the other arm of `if (c)`, so
+/// `c` still holds right after it. When `c` and `g` compare the same
+/// register or stack slot against constants and no value satisfies both,
+/// `g` is false on the break path, so `if (g)` after the loop tells the two
+/// exits apart: `if (i <= 4) break; ...; i++; if (i > 9) goto L;`.
+#[allow(clippy::too_many_arguments)]
+fn goto_guard_excluding_breaks(
+    root: &[HirNode],
+    path: &[(usize, Slot)],
+    goto_idx: usize,
+    if_depth: usize,
+    cond: SsaVarnode,
+    goto_on_true: bool,
+    ssa: &SsaFunction,
+    index: &SsaIndex,
+) -> Option<(SsaVarnode, bool)> {
+    let &(_, guard_slot) = path.last()?;
+    if path.len() - 1 <= if_depth || goto_idx != 0 || scope(root, path).len() != 1 {
+        return None;
+    }
+    let HirNode::If { cond: guard, .. } = node_at(root, path) else {
+        return None;
+    };
+    let guard_on_true = match guard_slot {
+        Slot::Then => true,
+        Slot::Else => false,
+        Slot::Body => return None,
+    };
+    let HirNode::If {
+        then_body,
+        else_body,
+        ..
+    } = node_at(root, &path[..=if_depth])
+    else {
+        return None;
+    };
+    let break_arm: &[HirNode] = if goto_on_true {
+        else_body.as_deref().unwrap_or(&[])
+    } else {
+        then_body
+    };
+    if break_arm != [HirNode::Break] {
+        return None;
+    }
+    let at_break = ConstCompare::of(cond, !goto_on_true, ssa, index)?;
+    let at_goto = ConstCompare::of(*guard, guard_on_true, ssa, index)?;
+    at_break
+        .excludes(&at_goto)
+        .then_some((*guard, guard_on_true))
+}
+
+/// A printed condition of the form `storage <op> constant` (or its
+/// negation), with `storage` a register or stack slot.
+#[derive(Debug)]
+struct ConstCompare {
+    storage: Varnode,
+    op: IrOp,
+    constant: u64,
+    negated: bool,
+}
+
+impl ConstCompare {
+    /// The comparison `cond` evaluates to when it is `when_true`, following
+    /// the pure unary chain the printer folds into the condition.
+    fn of(cond: SsaVarnode, when_true: bool, ssa: &SsaFunction, index: &SsaIndex) -> Option<Self> {
+        const MAX_DEPTH: u32 = 8;
+        let mut sv = cond;
+        let mut negated = !when_true;
+        for _ in 0..MAX_DEPTH {
+            let (bid, idx) = (*index.defs.get(&sv)?)?;
+            let insn = ssa.function.blocks.get(&bid)?.insns.get(idx)?;
+            let input = |slot: usize| {
+                ssa.var_map
+                    .get(&(bid, idx, VarnodeSlot::Input(slot)))
+                    .copied()
+            };
+            match insn.op {
+                IrOp::BoolNegate => {
+                    negated = !negated;
+                    sv = input(0)?;
+                }
+                IrOp::Copy | IrOp::IntZext => sv = input(0)?,
+                IrOp::IntEqual
+                | IrOp::IntNotequal
+                | IrOp::IntLess
+                | IrOp::IntSless
+                | IrOp::IntLessequal
+                | IrOp::IntSlessequal => {
+                    let [lhs, rhs] = insn.inputs.as_slice() else {
+                        return None;
+                    };
+                    // Only `storage <op> constant`; a constant on the left
+                    // would need the mirrored operator.
+                    if rhs.space != SpaceId::Const
+                        || !matches!(lhs.space, SpaceId::Register | SpaceId::Stack)
+                    {
+                        return None;
+                    }
+                    return Some(Self {
+                        storage: *lhs,
+                        op: insn.op,
+                        constant: rhs.offset,
+                        negated,
+                    });
+                }
+                _ => return None,
+            }
+        }
+        None
+    }
+
+    fn signed(&self) -> Option<bool> {
+        match self.op {
+            IrOp::IntSless | IrOp::IntSlessequal => Some(true),
+            IrOp::IntLess | IrOp::IntLessequal => Some(false),
+            _ => None,
+        }
+    }
+
+    /// Whether no value of the shared storage satisfies both comparisons.
+    fn excludes(&self, other: &Self) -> bool {
+        if self.storage != other.storage || self.storage.size > 8 {
+            return false;
+        }
+        let signed = match (self.signed(), other.signed()) {
+            (Some(a), Some(b)) if a != b => return false,
+            (Some(s), _) | (_, Some(s)) => s,
+            (None, None) => true,
+        };
+        let bits = u32::from(self.storage.size) * 8;
+        let (lo, hi) = if signed {
+            (-(1i128 << (bits - 1)), (1i128 << (bits - 1)) - 1)
+        } else {
+            (0, (1i128 << bits) - 1)
+        };
+        let a = self.values(signed, lo, hi);
+        let b = other.values(signed, lo, hi);
+        a.iter()
+            .all(|&(a_lo, a_hi)| b.iter().all(|&(b_lo, b_hi)| a_hi < b_lo || b_hi < a_lo))
+    }
+
+    /// The values in `[lo, hi]` satisfying the comparison, as disjoint
+    /// closed intervals.
+    fn values(&self, signed: bool, lo: i128, hi: i128) -> Vec<(i128, i128)> {
+        let bits = u32::from(self.storage.size) * 8;
+        let k = if signed {
+            let k = i128::from(self.constant) & ((1i128 << bits) - 1);
+            if k >= 1i128 << (bits - 1) {
+                k - (1i128 << bits)
+            } else {
+                k
+            }
+        } else {
+            i128::from(self.constant) & ((1i128 << bits) - 1)
+        };
+        let holds: Vec<(i128, i128)> = match self.op {
+            IrOp::IntEqual => vec![(k, k)],
+            IrOp::IntNotequal => vec![(lo, k - 1), (k + 1, hi)],
+            IrOp::IntLess | IrOp::IntSless => vec![(lo, k - 1)],
+            IrOp::IntLessequal | IrOp::IntSlessequal => vec![(lo, k)],
+            _ => return Vec::new(),
+        };
+        let clamp = |ranges: Vec<(i128, i128)>| -> Vec<(i128, i128)> {
+            ranges
+                .into_iter()
+                .map(|(a, b)| (a.max(lo), b.min(hi)))
+                .filter(|(a, b)| a <= b)
+                .collect()
+        };
+        if !self.negated {
+            return clamp(holds);
+        }
+        // Complement within [lo, hi].
+        let mut complement = Vec::new();
+        let mut next = lo;
+        for (a, b) in clamp(holds) {
+            if a > next {
+                complement.push((next, a - 1));
+            }
+            next = b + 1;
+        }
+        if next <= hi {
+            complement.push((next, hi));
+        }
+        complement
+    }
+}
+
 /// Where each SSA value is defined and how many instruction operands read
 /// it. A value defined twice (version-0 aliasing) has no definition.
 struct SsaIndex {
@@ -396,6 +604,11 @@ impl SsaIndex {
                 }
                 VarnodeSlot::Input(_) => *uses.entry(sv).or_default() += 1,
             }
+        }
+        // A value a phi merges stays a named variable: the printer cannot
+        // inline it into its one instruction use.
+        for (_, sv) in ssa.phi_map.values().flatten().flat_map(|phi| &phi.inputs) {
+            *uses.entry(*sv).or_default() += 1;
         }
         Self { defs, uses }
     }
@@ -633,7 +846,7 @@ mod tests {
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
         func.insert_block(b0);
         let ssa = build_ssa(func);
-        let sv = |base| SsaVarnode { base, version: 0 };
+        let sv = |base| SsaVarnode { base, version: 1 };
         (ssa, sv(c), sv(d))
     }
 
@@ -734,6 +947,127 @@ mod tests {
             HirNode::Label(LabelId(7)),
         ];
         assert_eq!(func.body, expected);
+    }
+
+    /// `while (1) { if (c) break; else { x = 1; if (g) goto L; } } rest; L:`
+    /// with `c = x <= 4` and `g = !(x <= 9)`. The arm writes `x`, so `c`
+    /// cannot be re-tested; but `x <= 4` at the break makes `g` false there,
+    /// so `g` picks the path after the loop: `if (!g) { rest; }`.
+    #[test]
+    fn retests_the_goto_guard_when_the_arms_write_the_break_condition() {
+        let mut func = Function::new("t", BlockId(0), 0x1000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        let (c, le9, g) = (
+            Varnode::unique(0x10, 1),
+            Varnode::unique(0x20, 1),
+            Varnode::unique(0x30, 1),
+        );
+        b0.insns.push(IrInsn::with_output(
+            IrOp::IntSlessequal,
+            c,
+            smallvec![X, Varnode::constant(4, 4)],
+            0x1000,
+        ));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::IntSlessequal,
+            le9,
+            smallvec![X, Varnode::constant(9, 4)],
+            0x1004,
+        ));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::BoolNegate,
+            g,
+            smallvec![le9],
+            0x1008,
+        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
+        func.insert_block(b0);
+        let ssa = build_ssa(func);
+        let sv = |base| SsaVarnode { base, version: 1 };
+        let (c, g) = (sv(c), sv(g));
+
+        let l = LabelId(7);
+        let inner = |exit| {
+            forever(vec![when(
+                c,
+                vec![HirNode::Break],
+                Some(vec![write(X), when(g, vec![exit], None)]),
+            )])
+        };
+        let mut func = hir(vec![
+            when(
+                g,
+                vec![inner(HirNode::Goto(l)), write(Y), HirNode::Return(None)],
+                None,
+            ),
+            HirNode::Label(l),
+        ]);
+        merge_loop_exits(&mut func, &ssa);
+
+        let expected = vec![
+            when(
+                g,
+                vec![
+                    inner(HirNode::Break),
+                    when(g, vec![], Some(vec![write(Y), HirNode::Return(None)])),
+                ],
+                None,
+            ),
+            HirNode::Label(l),
+        ];
+        assert_eq!(func.body, expected);
+    }
+
+    /// Two comparisons that some value satisfies (`x <= 4` and `x > 2`) do
+    /// not tell the exits apart: the goto stays.
+    #[test]
+    fn keeps_the_goto_when_the_guard_overlaps_the_break_condition() {
+        let mut func = Function::new("t", BlockId(0), 0x1000);
+        let mut b0 = BasicBlock::new(BlockId(0));
+        let (c, le2, g) = (
+            Varnode::unique(0x10, 1),
+            Varnode::unique(0x20, 1),
+            Varnode::unique(0x30, 1),
+        );
+        b0.insns.push(IrInsn::with_output(
+            IrOp::IntSlessequal,
+            c,
+            smallvec![X, Varnode::constant(4, 4)],
+            0x1000,
+        ));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::IntSlessequal,
+            le2,
+            smallvec![X, Varnode::constant(2, 4)],
+            0x1004,
+        ));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::BoolNegate,
+            g,
+            smallvec![le2],
+            0x1008,
+        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
+        func.insert_block(b0);
+        let ssa = build_ssa(func);
+        let sv = |base| SsaVarnode { base, version: 1 };
+        let (c, g) = (sv(c), sv(g));
+
+        let l = LabelId(7);
+        let inner = forever(vec![when(
+            c,
+            vec![HirNode::Break],
+            Some(vec![write(X), when(g, vec![HirNode::Goto(l)], None)]),
+        )]);
+        let mut func = hir(vec![
+            when(g, vec![inner, write(Y), HirNode::Return(None)], None),
+            HirNode::Label(l),
+        ]);
+        let before = func.body.clone();
+        merge_loop_exits(&mut func, &ssa);
+        assert_eq!(func.body, before);
     }
 
     #[test]

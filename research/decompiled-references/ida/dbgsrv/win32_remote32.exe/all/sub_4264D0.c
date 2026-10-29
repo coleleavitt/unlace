@@ -1,0 +1,19 @@
+/* Split from IDA decompile_many output for CodeGraph indexing. */
+// Name: sub_4264D0
+// Address: 0x004264D0
+
+//----- (004264D0) --------------------------------------------------------
+bool __thiscall sub_4264D0(const char **this, int a2)
+{
+  const char *v2; // edx
+  const char *v3; // eax
+
+  if ( *(_DWORD *)(a2 + 4) )
+    v2 = *(const char **)a2;
+  else
+    v2 = MultiByteStr;
+  v3 = MultiByteStr;
+  if ( *(this + 1) )
+    v3 = *this;
+  return strcmp(v3, v2) == 0;
+}

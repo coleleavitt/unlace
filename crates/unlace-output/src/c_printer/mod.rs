@@ -102,6 +102,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
+use unlace_ir::eh::SehFilter;
 use unlace_ir::lvar::{LvarFlags, LvarSource, LvarStorage};
 use unlace_ir::reg_alias::aliases;
 use unlace_ir::ssa::{
@@ -987,6 +988,11 @@ fn print_c_attempt(
         ctx.config = cfg;
     }
     ctx.frame_size = header.map(|h| h.stack_frame);
+    ctx.sp_frame_offsets = func
+        .stack_frame
+        .as_ref()
+        .map(|frame| frame.sp_offset_at_addr.clone())
+        .unwrap_or_default();
     ctx.objc_dispatch_calls = func.objc_dispatch_calls.clone();
     ctx.byref_boxes = func.byref_boxes.clone();
     ctx.go_defer_sites = func.go_defer_sites.clone();
@@ -2892,6 +2898,10 @@ struct PrintCtx {
     /// render accesses inside wide buffers as `buf_N + delta` instead of
     /// falling through to raw pointer arithmetic.
     stack_frame_slots: BTreeMap<i64, StackSlotName>,
+    /// Frame offset of the stack pointer at the start of each machine
+    /// instruction ([`StackFrame::sp_offset_at_addr`]), so `sp + k` resolves
+    /// to the slot the recovery pass keyed, wherever the stack pointer stood.
+    sp_frame_offsets: BTreeMap<u64, i64>,
     /// Stack lvar metadata keyed by recovered frame offset. This is the
     /// printer-side copy of [`PrinterAnnotations::stack_lvars`].
     stack_lvars: BTreeMap<i64, StackLvarAnnotation>,
@@ -3151,6 +3161,7 @@ impl PrintCtx {
             canary_stack_offsets: BTreeSet::new(),
             has_stack_address_targets: false,
             stack_frame_slots: BTreeMap::new(),
+            sp_frame_offsets: BTreeMap::new(),
             stack_lvars: BTreeMap::new(),
             dwarf_array_locals: Vec::new(),
             dwarf_array_buffer_decls: BTreeMap::new(),
@@ -3348,7 +3359,7 @@ fn decompose_frame_indexed(
     // a higher frame must supply the index for this to be a valid array access.
     if is_frame_base_reg_ctx(vn, ctx) || is_x86_frame_base(vn) {
         return Some(FrameIndexedDecomp {
-            frame_offset: 0,
+            frame_offset: frame_base_offset_ctx(vn, stmt_idx, ctx),
             index_vn: *vn,
             index_stmt: stmt_idx,
             index_raw_idx: raw_idx,
@@ -4605,6 +4616,24 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.current_scope_path.pop();
                 ctx.collect_depth -= 1;
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                ctx.collect_depth += 1;
+                let try_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(try_scope);
+                collect_varnodes(try_body, ctx);
+                ctx.current_scope_path.pop();
+                let finally_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(finally_scope);
+                collect_varnodes(except_body, ctx);
+                ctx.current_scope_path.pop();
+                ctx.collect_depth -= 1;
+            }
 
             HirNode::Commented { inner, .. } => {
                 // Comments are pass-through for varnode collection — recurse
@@ -4696,6 +4725,11 @@ fn hir_stmt_count(nodes: &[HirNode]) -> u32 {
                 try_body,
                 finally_body,
             } => hir_stmt_count(try_body) + hir_stmt_count(finally_body),
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => hir_stmt_count(try_body) + hir_stmt_count(except_body),
             HirNode::Commented { inner, .. } => {
                 hir_stmt_count(std::slice::from_ref(inner.as_ref()))
             }
@@ -7434,6 +7468,9 @@ fn promote_stack_address_call_arrays(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 HirNode::Block(children)
                 | HirNode::TryFinally {
                     try_body: children, ..
+                }
+                | HirNode::TryExcept {
+                    try_body: children, ..
                 } => walk(children, ctx),
                 HirNode::If {
                     then_body,
@@ -8011,6 +8048,7 @@ fn resolve_stack_offset_for_addr(
         return Some(offset);
     }
     if is_x86_frame_base_ctx(vn, ctx) {
+        let offset = frame_base_offset_ctx(vn, stmt_idx, ctx);
         trace_stack_offset_step(
             "frame-base",
             stmt_idx,
@@ -8019,9 +8057,9 @@ fn resolve_stack_offset_for_addr(
             depth,
             None,
             None,
-            Some(0),
+            Some(offset),
         );
-        return Some(0);
+        return Some(offset);
     }
     if vn.space == SpaceId::Const {
         trace_stack_offset_step(
@@ -8285,6 +8323,27 @@ fn rbp_is_general_register(ctx: &PrintCtx) -> bool {
                         .first()
                         .is_some_and(|src| is_reg(src, RSP_REG_OFF))))
     })
+}
+
+/// Frame offset of the value the frame-base register `vn` holds when the
+/// statement `stmt_idx` reads it: 0 for the frame pointer, the recorded
+/// stack-pointer offset at the statement's machine address for the stack
+/// pointer (0 when the frame carries no record, e.g. in unit tests).
+fn frame_base_offset_ctx(vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> i64 {
+    const RSP_REG_OFF: u64 = 32;
+    let is_sp = vn.space == SpaceId::Register
+        && (ctx
+            .stack_spec
+            .as_ref()
+            .map_or(vn.offset == RSP_REG_OFF, |spec| spec.is_sp(vn)));
+    if !is_sp {
+        return 0;
+    }
+    ctx.stmt_insns
+        .get(&stmt_idx)
+        .and_then(|insn| ctx.sp_frame_offsets.get(&insn.addr))
+        .copied()
+        .unwrap_or(0)
 }
 
 /// [`is_x86_frame_base`] that leaves out `rbp` where it holds data.
@@ -8813,6 +8872,14 @@ fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCt
                 compute_loop_counter_names(try_body, depth, ctx);
                 compute_loop_counter_names(finally_body, depth, ctx);
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                compute_loop_counter_names(try_body, depth, ctx);
+                compute_loop_counter_names(except_body, depth, ctx);
+            }
             _ => {}
         }
     }
@@ -9140,6 +9207,14 @@ fn walk_collect_roles(nodes: &[HirNode], ctx: &PrintCtx, roles: &mut BTreeMap<Va
                 walk_collect_roles(try_body, ctx, roles);
                 walk_collect_roles(finally_body, ctx, roles);
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                walk_collect_roles(try_body, ctx, roles);
+                walk_collect_roles(except_body, ctx, roles);
+            }
             HirNode::Ternary { select, .. } => {
                 for cond in select.conds() {
                     if cond_is_comparison(&cond, ctx) {
@@ -9202,6 +9277,14 @@ fn collect_return_svs(nodes: &[HirNode], ctx: &PrintCtx, return_svs: &mut BTreeS
             } => {
                 collect_return_svs(try_body, ctx, return_svs);
                 collect_return_svs(finally_body, ctx, return_svs);
+            }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                collect_return_svs(try_body, ctx, return_svs);
+                collect_return_svs(except_body, ctx, return_svs);
             }
             HirNode::GuardedIf {
                 then_body,
@@ -10129,6 +10212,14 @@ fn collect_merged_assign_return_stmt_indices(
                 collect_merged_assign_return_stmt_indices(try_body, ctx, next_stmt, out);
                 collect_merged_assign_return_stmt_indices(finally_body, ctx, next_stmt, out);
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                collect_merged_assign_return_stmt_indices(try_body, ctx, next_stmt, out);
+                collect_merged_assign_return_stmt_indices(except_body, ctx, next_stmt, out);
+            }
             HirNode::Commented { inner, .. } => {
                 collect_merged_assign_return_stmt_indices(
                     std::slice::from_ref(inner.as_ref()),
@@ -10247,6 +10338,14 @@ fn collect_merged_call_return_svs(
                 collect_merged_call_return_svs(try_body, ctx, next_stmt, out);
                 collect_merged_call_return_svs(finally_body, ctx, next_stmt, out);
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                collect_merged_call_return_svs(try_body, ctx, next_stmt, out);
+                collect_merged_call_return_svs(except_body, ctx, next_stmt, out);
+            }
             HirNode::Commented { inner, .. } => {
                 collect_merged_call_return_svs(
                     std::slice::from_ref(inner.as_ref()),
@@ -10361,6 +10460,14 @@ fn collect_post_dowhile_recovered_return_svs(
             } => {
                 collect_post_dowhile_recovered_return_svs(try_body, ctx, next_stmt, out);
                 collect_post_dowhile_recovered_return_svs(finally_body, ctx, next_stmt, out);
+            }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                collect_post_dowhile_recovered_return_svs(try_body, ctx, next_stmt, out);
+                collect_post_dowhile_recovered_return_svs(except_body, ctx, next_stmt, out);
             }
             HirNode::Commented { inner, .. } => {
                 collect_post_dowhile_recovered_return_svs(
@@ -12389,6 +12496,7 @@ fn emit_node_phase(node: &HirNode) -> Option<linkscope::Span> {
         HirNode::ObjcBlock { .. } => cprinter_detail_phase("cprinter.emit.node.objc-block"),
         HirNode::TryCatch { .. } => cprinter_detail_phase("cprinter.emit.node.try-catch"),
         HirNode::TryFinally { .. } => cprinter_detail_phase("cprinter.emit.node.try-finally"),
+        HirNode::TryExcept { .. } => cprinter_detail_phase("cprinter.emit.node.try-except"),
         HirNode::Asm { .. } => cprinter_detail_phase("cprinter.emit.node.asm"),
         HirNode::Commented { .. } => cprinter_detail_phase("cprinter.emit.node.commented"),
     }
@@ -12855,6 +12963,21 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "}}");
         }
 
+        HirNode::TryExcept {
+            try_body,
+            filter,
+            except_body,
+        } => {
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "__try {{");
+            emit_nodes(try_body, depth + 1, ctx, out);
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "}} __except ({}) {{", render_seh_filter(*filter, ctx));
+            emit_nodes(except_body, depth + 1, ctx, out);
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "}}");
+        }
+
         HirNode::Commented { pre, post, inner } => {
             let tab = ctx.config.tab_width;
             for line in pre {
@@ -13133,6 +13256,18 @@ fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Stri
         return format!("sub_{:x}", target_vn.offset);
     }
     emit_operand_resolved(target_vn, 0, stmt_idx, ctx)
+}
+
+/// The `__except (...)` filter: the `EXCEPTION_EXECUTE_HANDLER` constant,
+/// or a call of the filter funclet, named like any other call target.
+fn render_seh_filter(filter: SehFilter, ctx: &PrintCtx) -> String {
+    match filter {
+        SehFilter::ExecuteHandler => "EXCEPTION_EXECUTE_HANDLER".to_string(),
+        SehFilter::Funclet(addr) => match ctx.symbols.get(&addr) {
+            Some(name) => format!("{}()", demangle_callee_name(name)),
+            None => format!("sub_{addr:x}()"),
+        },
+    }
 }
 
 fn demangle_callee_name(raw: &str) -> String {

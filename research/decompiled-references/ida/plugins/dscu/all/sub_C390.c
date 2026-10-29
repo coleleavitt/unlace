@@ -1,0 +1,131 @@
+__int64 __fastcall sub_C390(__int64 a1)
+{
+  __m128i v1; // xmm0
+  __m128i v3; // xmm0
+  __m128i v4; // xmm0
+  __m128i v5; // xmm0
+  __m128i v6; // xmm0
+  __m128i v7; // xmm0
+  __m128i v8; // xmm0
+  __m128i v9; // xmm0
+
+  *(_QWORD *)(a1 + 8) = get_ph();
+  *(_QWORD *)(a1 + 16) = get_ash();
+  *(_QWORD *)(a1 + 24) = get_eah();
+  *(_QWORD *)(a1 + 96) = 0;
+  *(_QWORD *)a1 = off_1EA00;
+  *(_OWORD *)(a1 + 32) = 0;
+  *(_OWORD *)(a1 + 48) = 0;
+  *(_OWORD *)(a1 + 64) = 0;
+  *(_OWORD *)(a1 + 80) = 0;
+  netnode_check(a1 + 104, "$ dscu", 0, 0);
+  *(_QWORD *)(a1 + 112) = 0;
+  *(_QWORD *)(a1 + 128) = off_1E928;
+  *(_QWORD *)(a1 + 152) = off_1E950;
+  *(_QWORD *)(a1 + 176) = off_1E9A8;
+  *(_QWORD *)(a1 + 200) = off_1E9D0;
+  *(_QWORD *)(a1 + 232) = off_1E9D0;
+  *(_QWORD *)(a1 + 264) = off_1E9D0;
+  *(_QWORD *)(a1 + 296) = off_1E9D0;
+  *(_QWORD *)(a1 + 328) = off_1E9D0;
+  *(_DWORD *)(a1 + 120) = 4096;
+  *(_QWORD *)(a1 + 136) = 0;
+  *(_QWORD *)(a1 + 144) = a1;
+  *(_QWORD *)(a1 + 160) = 0;
+  *(_QWORD *)(a1 + 168) = a1;
+  *(_QWORD *)(a1 + 184) = 0;
+  *(_QWORD *)(a1 + 192) = a1;
+  *(_DWORD *)(a1 + 208) = 1;
+  *(_QWORD *)(a1 + 216) = a1;
+  *(_DWORD *)(a1 + 224) = 1;
+  *(_DWORD *)(a1 + 240) = 1;
+  *(_QWORD *)(a1 + 248) = a1;
+  *(_DWORD *)(a1 + 256) = 5;
+  *(_DWORD *)(a1 + 272) = 1;
+  *(_QWORD *)(a1 + 280) = a1;
+  *(_DWORD *)(a1 + 288) = 2;
+  *(_DWORD *)(a1 + 304) = 1;
+  *(_QWORD *)(a1 + 312) = a1;
+  *(_DWORD *)(a1 + 320) = 4;
+  *(_DWORD *)(a1 + 336) = 1;
+  *(_QWORD *)(a1 + 344) = a1;
+  *(_DWORD *)(a1 + 352) = 7;
+  *(_DWORD *)(a1 + 368) = 1;
+  *(_QWORD *)(a1 + 360) = off_1E9D0;
+  v1 = _mm_loadl_epi64((const __m128i *)off_1EAD0);
+  *(_QWORD *)(a1 + 392) = off_1E9D0;
+  *(_QWORD *)(a1 + 424) = off_1E9D0;
+  *(_QWORD *)(a1 + 544) = a1 + 232;
+  *(_QWORD *)(a1 + 480) = a1 + 200;
+  *(__m128i *)(a1 + 464) = _mm_unpacklo_epi64(v1, (__m128i)(unsigned __int64)"Load module...");
+  v3 = _mm_loadl_epi64((const __m128i *)off_1EAD8);
+  *(_QWORD *)(a1 + 608) = a1 + 264;
+  *(_QWORD *)(a1 + 376) = a1;
+  *(__m128i *)(a1 + 528) = _mm_unpacklo_epi64(v3, (__m128i)(unsigned __int64)"Load dependency...");
+  v4 = _mm_loadl_epi64((const __m128i *)off_1EAE0);
+  *(_DWORD *)(a1 + 384) = 9;
+  *(_DWORD *)(a1 + 400) = 1;
+  *(__m128i *)(a1 + 592) = _mm_unpacklo_epi64(v4, (__m128i)(unsigned __int64)"Load section...");
+  *(_QWORD *)(a1 + 408) = a1;
+  *(_DWORD *)(a1 + 416) = 8;
+  *(_DWORD *)(a1 + 432) = 1;
+  *(_QWORD *)(a1 + 440) = a1;
+  *(_DWORD *)(a1 + 448) = 6;
+  *(_DWORD *)(a1 + 456) = 64;
+  *(_QWORD *)(a1 + 488) = a1;
+  *(_QWORD *)(a1 + 496) = "";
+  *(_QWORD *)(a1 + 504) = 0;
+  *(_QWORD *)(a1 + 512) = 0x4FFFFFFFFLL;
+  *(_DWORD *)(a1 + 520) = 64;
+  *(_QWORD *)(a1 + 552) = a1;
+  *(_QWORD *)(a1 + 560) = "";
+  *(_QWORD *)(a1 + 568) = 0;
+  *(_QWORD *)(a1 + 576) = 0x4FFFFFFFFLL;
+  *(_DWORD *)(a1 + 584) = 64;
+  *(_QWORD *)(a1 + 616) = a1;
+  *(_QWORD *)(a1 + 624) = "";
+  v5 = _mm_loadl_epi64((const __m128i *)off_1EAE8);
+  *(_QWORD *)(a1 + 672) = a1 + 296;
+  *(_QWORD *)(a1 + 632) = 0;
+  *(__m128i *)(a1 + 656) = _mm_unpacklo_epi64(v5, (__m128i)(unsigned __int64)"Load branch island...");
+  v6 = _mm_loadl_epi64((const __m128i *)off_1EAF0);
+  *(_QWORD *)(a1 + 736) = a1 + 328;
+  *(_QWORD *)(a1 + 640) = 0x4FFFFFFFFLL;
+  *(__m128i *)(a1 + 720) = _mm_unpacklo_epi64(v6, (__m128i)(unsigned __int64)"Load branch mapping...");
+  v7 = _mm_loadl_epi64((const __m128i *)off_1EAF8);
+  *(_QWORD *)(a1 + 800) = a1 + 360;
+  *(_DWORD *)(a1 + 648) = 64;
+  *(__m128i *)(a1 + 784) = _mm_unpacklo_epi64(v7, (__m128i)(unsigned __int64)"Load global offset table...");
+  v8 = _mm_loadl_epi64((const __m128i *)off_1EB00);
+  *(_QWORD *)(a1 + 864) = a1 + 392;
+  *(_QWORD *)(a1 + 680) = a1;
+  *(__m128i *)(a1 + 848) = _mm_unpacklo_epi64(v8, (__m128i)(unsigned __int64)"Load gap...");
+  *(_QWORD *)(a1 + 688) = "";
+  *(_QWORD *)(a1 + 696) = 0;
+  *(_QWORD *)(a1 + 704) = 0x4FFFFFFFFLL;
+  *(_DWORD *)(a1 + 712) = 64;
+  *(_QWORD *)(a1 + 744) = a1;
+  *(_QWORD *)(a1 + 752) = "";
+  *(_QWORD *)(a1 + 760) = 0;
+  *(_QWORD *)(a1 + 768) = 0x4FFFFFFFFLL;
+  *(_DWORD *)(a1 + 776) = 64;
+  *(_QWORD *)(a1 + 808) = a1;
+  *(_QWORD *)(a1 + 816) = "";
+  *(_QWORD *)(a1 + 824) = 0;
+  *(_QWORD *)(a1 + 832) = 0x4FFFFFFFFLL;
+  *(_DWORD *)(a1 + 840) = 64;
+  *(_QWORD *)(a1 + 872) = a1;
+  *(_QWORD *)(a1 + 880) = "";
+  *(_QWORD *)(a1 + 888) = 0;
+  v9 = _mm_loadl_epi64((const __m128i *)&off_1EB08);
+  *(_QWORD *)(a1 + 896) = 0x4FFFFFFFFLL;
+  *(_QWORD *)(a1 + 928) = a1 + 424;
+  *(_DWORD *)(a1 + 904) = 64;
+  *(_QWORD *)(a1 + 936) = a1;
+  *(_QWORD *)(a1 + 944) = "";
+  *(_QWORD *)(a1 + 952) = 0;
+  *(_QWORD *)(a1 + 960) = 0x4FFFFFFFFLL;
+  *(__m128i *)(a1 + 912) = _mm_unpacklo_epi64(v9, (__m128i)(unsigned __int64)"Load dyld header");
+  return 0x4FFFFFFFFLL;
+}
+

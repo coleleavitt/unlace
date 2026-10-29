@@ -1,0 +1,5 @@
+__int64 __fastcall sub_81B280(__int64 a1, __int64 a2, double a3)
+{
+  return sub_7E6250((_QWORD *)(a1 + 48), *(_QWORD *)(a1 + 72), a2, 0, 0, a3);
+}
+

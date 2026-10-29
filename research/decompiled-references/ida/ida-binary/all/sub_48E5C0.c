@@ -1,0 +1,9 @@
+const char *sub_48E5C0(__int64 *a1, ...)
+{
+  gcc_va_list va; // [rsp+0h] [rbp-D8h] BYREF
+  unsigned __int64 v3; // [rsp+18h] [rbp-C0h]
+
+  va_start(va, a1);
+  v3 = __readfsqword(0x28u);
+  return sub_48E350(a1, (int *)va);
+}

@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x2442C8
+// Name:     crc32
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to crc32 are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void crc32(/* see import library declaration */);
+

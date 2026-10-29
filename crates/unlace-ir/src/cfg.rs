@@ -6,7 +6,7 @@
 //! Synthetic "exit" and "unknown" sink blocks handle `RETURN` edges and
 //! unresolved indirect jumps respectively.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use petgraph::Direction;
@@ -143,6 +143,29 @@ impl ControlFlowGraph {
         preds.dedup();
         preds
     }
+
+    /// Blocks reachable from the entry, excluding the synthetic sinks.
+    ///
+    /// The lifter keeps blocks no edge enters (alignment padding after a
+    /// jump, for instance); they still fall through into their sequential
+    /// neighbour, so analyses that count predecessors consult this set to
+    /// ignore them.
+    pub fn reachable_blocks(&self) -> BTreeSet<BlockId> {
+        let mut reachable = BTreeSet::new();
+        let mut stack = vec![self.entry];
+        while let Some(block) = stack.pop() {
+            if block == self.exit || block == self.unknown || !reachable.insert(block) {
+                continue;
+            }
+            stack.extend(
+                self.edges_from(block)
+                    .into_iter()
+                    .map(|(succ, _)| succ)
+                    .filter(|succ| !reachable.contains(succ)),
+            );
+        }
+        reachable
+    }
 }
 
 /// Builds a [`ControlFlowGraph`] from a [`Function`] by inspecting terminators.
@@ -178,9 +201,18 @@ pub fn build_cfg(func: &Function) -> ControlFlowGraph {
     let unknown_ni = graph.add_node(unknown_id);
     node_map.insert(unknown_id, unknown_ni);
 
+    // A block falls through to the next block by id. Exception dispatch
+    // blocks (`crate::eh`) are appended after the lifted blocks and are
+    // entered only by the edges that were wired to them, so the last lifted
+    // block does not fall into one.
     let next_sequential = |bid: BlockId| -> Option<BlockId> {
         let pos = block_ids.binary_search(&bid).ok()?;
-        block_ids.get(pos + 1).copied()
+        let next = *block_ids.get(pos + 1)?;
+        let is_dispatch = func.blocks[&next]
+            .insns
+            .first()
+            .is_some_and(|insn| crate::eh::EhHelper::of(insn).is_some());
+        (!is_dispatch).then_some(next)
     };
 
     for &bid in &block_ids {
@@ -456,6 +488,39 @@ mod tests {
         func.insert_block(bb2);
         func.insert_block(bb3);
         func
+    }
+
+    /// The last lifted block (a noreturn call the lifter does not know
+    /// about) does not fall through into the exception dispatch block
+    /// appended after it.
+    #[test]
+    fn no_fallthrough_into_an_exception_dispatch_block() {
+        let mut func = make_test_function_linear();
+        func.blocks
+            .get_mut(&BlockId(1))
+            .unwrap()
+            .insns
+            .push(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![Varnode::constant(0x3000, 8)],
+                0x1014,
+            ));
+        let flag = Varnode::unique(0, 1);
+        let mut dispatch = BasicBlock::new(BlockId(2));
+        dispatch.insns = vec![
+            crate::eh::EhHelper::Try.insn(flag, 0x1010),
+            IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![Varnode::constant(0x1010, 8), flag],
+                0x1010,
+            ),
+        ];
+        dispatch.successors = smallvec![BlockId(1), BlockId(1)];
+        func.insert_block(dispatch);
+
+        let cfg = build_cfg(&func);
+        assert!(cfg.edges_from(BlockId(1)).is_empty());
+        assert_eq!(cfg.edges_from(BlockId(0)).len(), 1);
     }
 
     #[test]

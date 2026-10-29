@@ -2259,7 +2259,7 @@ fn bitwise_chain_int_and_resolves_to_source() {
     let ctx = StructureCtx::new(leaked);
     let scaled_sv = SsaVarnode {
         base: scaled,
-        version: 0,
+        version: 1,
     };
     let out = ctx
         .extract_index_from_scale(BlockId(0), &scaled_sv)
@@ -2301,7 +2301,7 @@ fn bitwise_chain_int_right_resolves_to_source() {
     let ctx = StructureCtx::new(leaked);
     let scaled_sv = SsaVarnode {
         base: scaled,
-        version: 0,
+        version: 1,
     };
     let out = ctx
         .extract_index_from_scale(BlockId(0), &scaled_sv)
@@ -2352,7 +2352,7 @@ fn bitwise_chain_shift_then_mask_resolves_to_source() {
     let ctx = StructureCtx::new(leaked);
     let scaled_sv = SsaVarnode {
         base: scaled,
-        version: 0,
+        version: 1,
     };
     let out = ctx
         .extract_index_from_scale(BlockId(0), &scaled_sv)

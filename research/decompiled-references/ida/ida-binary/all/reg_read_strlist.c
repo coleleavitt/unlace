@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x8D76B0
+// Name:     reg_read_strlist
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to reg_read_strlist are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void reg_read_strlist(/* see import library declaration */);
+

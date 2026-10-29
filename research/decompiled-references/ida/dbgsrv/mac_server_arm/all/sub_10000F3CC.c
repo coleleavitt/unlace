@@ -1,0 +1,24 @@
+/* Split from IDA decompile_many output for CodeGraph indexing. */
+// Name: sub_10000F3CC
+// Address: 0x000000010000F3CC
+
+//----- (000000010000F3CC) ----------------------------------------------------
+__int64 __fastcall sub_10000F3CC(__int64 a1)
+{
+  unsigned __int64 v2; // x0
+  unsigned __int64 *v3; // x1
+  __int64 v4; // x2
+  int v5; // w3
+
+  if ( *(_QWORD *)(a1 + 120) != -1 )
+    return a1 + 164;
+  if ( under_debugger == 1 )
+    __break(1u);
+  interr(20005);
+  return sub_10000F408(v2, v3, v4, v5);
+}
+// 10000F405: variable 'v2' is possibly undefined
+// 10000F405: variable 'v3' is possibly undefined
+// 10000F405: variable 'v4' is possibly undefined
+// 10000F405: variable 'v5' is possibly undefined
+// 10009D90D: using guessed type char under_debugger;

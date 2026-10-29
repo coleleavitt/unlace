@@ -98,6 +98,7 @@ pub(in crate::c_printer) fn hir_node_trace_kind(node: &HirNode) -> &'static str 
         HirNode::Break => "Break",
         HirNode::TryCatch { .. } => "TryCatch",
         HirNode::TryFinally { .. } => "TryFinally",
+        HirNode::TryExcept { .. } => "TryExcept",
         HirNode::GuardedIf { .. } => "GuardedIf",
         HirNode::Commented { .. } => "Commented",
         HirNode::ObjcBlock { .. } => "ObjcBlock",

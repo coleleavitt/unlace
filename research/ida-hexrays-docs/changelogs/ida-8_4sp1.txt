@@ -1,0 +1,156 @@
+IDA 8.4sp1 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 8.4sp1
+IDA 8.4.240320 (SP1)
+March 20, 2024
+This Service Pack of IDA 8.4 is primarily a bugfix release.
+Improvements:
++ PC: improve AVX-512 instructions support (BF16, BITALG, FP16, GFNI, VBMI2, VNNI, VP2INTERSECT, VPCLMULQDQ)
++ TEAMS: don't match types from LOCAL and REMOTE databases by ordinal if they're not present in BASE
++ UI: renamed 'Copy struct type' action to 'Duplicate struct type' to better represent its behavior
+Bugfixes:
+BUGFIX: cvt64: idb->i64 conversion didn't work if WORKDIR was set in ida.cfg
+BUGFIX: cvt64: some ASM struct member records were not handled when convering .idb to .i64
+BUGFIX: debugger: "Disable ASLR" didn't behave properly in UI on Windows
+BUGFIX: decompiler: fixed interr 50898 when editing structure member types from Pseudocode view
+BUGFIX: eh_parse: loading PE files with functions having 0 unwind codes could cause IDA to crash on macOS
+BUGFIX: ELF: relocations were sometimes not processed for PIE files without dynamic symbols
+BUGFIX: golang: loading files with corrupted metadata could lead to hanging/frozen IDA
+BUGFIX: IDA could crash if decompiler intialization failed for current database
+BUGFIX: IDAPython: reintroduce dummy ida_kernwin.CH_NOIDB for backwards compatibility with old scripts
+BUGFIX: IDC: IDA could crash when calling a non-existing IDC function
+BUGFIX: installer: IDA Demo and Free would not display SVG action icons
+BUGFIX: installer: IDA Home ARM did not include arm_sys_reg.cfg which would lead to missing symbolic names for A64 MSRs
+BUGFIX: installer: private Lumina server installer now offers to specify a port to listen on
+BUGFIX: installer: uninstaller was not deleting libpython3.link.dylib and pycache files on macOS, leaving empty .app bundle behind
+BUGFIX: kernel: __ptr32/__ptr64 modifiers were rejected in function prototypes when used for the function return type
+BUGFIX: objc: fixed potential crash on exit
+BUGFIX: PC: function prologs using VEX-encoded SSE instructions were not analyzed properly
+BUGFIX: PDB: IDA could produce "Failed to calculate struct member alignment" and "the maximum recursion level was reached" warnings on large PDBs
+BUGFIX: plugins: correctly pass the argument from plugins.cfg to plugmod_t::run when there are no flags defined for the entry
+BUGFIX: teams: fixed interr 1846 in some situations
+BUGFIX: teams: fixed multiple issues when merging types
+BUGFIX: teams: hvui: in Local files and Vault files the first line could be empty after opening
+BUGFIX: teams: it was possible to edit types in Local Types during merging, which could lead to corrupted idb
+BUGFIX: TRICORE: not16 instruction was being incorrectly disassembled as nor16
+BUGFIX: UI: correcly retrieve library name for custom signatures files
+BUGFIX: UI: fixed several cases where IDA would open the deprecated Structures view instead of Local Types
+BUGFIX: UI: IDA could crash when enabling "merge environment" in instant debugger (without database)
+BUGFIX: UI: IDA could crash when opening Debugger > Process Options dialog
+BUGFIX: UI: it was not possible to jump from IDA View to Local Types for types with name longer than 23 characters
+BUGFIX: UI: jumping to a structure from IDA View would end up at the end of the structure instead of the start
+BUGFIX: UI: Load SIG and Load TIL buttons would open a "Save file..." instead of "Open file..." dialog
+BUGFIX: UI: Local Types bookmarks could not be organized in folders
+BUGFIX: UI: Local Types editor didn't support ymmword and zmmword in MakeData
+BUGFIX: UI: MakeData (D) carousel would stop working if some steps were disabled
+BUGFIX: UI: MakeData (D) on a 'full' bitfield would lead to interr
+BUGFIX: windbg: IDA UI could lock up when attaching to kernel debugger on a blocked port
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Was this helpful?

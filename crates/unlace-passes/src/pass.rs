@@ -689,9 +689,11 @@ impl AllowedBackedge {
 /// transitions in the current schedule. They cluster into four
 /// well-understood patterns:
 ///
-/// 1. **One-time pre-pass cluster** — `StackOffsetSnapshotPass` runs
-///    *before* phase-zero `NoreturnDetectPass` because it has to snapshot
-///    pre-optimization RSP/RBP offsets before any rewrite touches them.
+/// 1. **One-time pre-pass cluster** — `StackPointerTrackingPass` and
+///    `StackOffsetSnapshotPass` run *before* phase-zero `NoreturnDetectPass`
+///    because the snapshot has to record pre-optimization stack offsets (in
+///    the frame coordinates the deltas define) before any rewrite touches
+///    them.
 /// 2. **Inner outer-fixedpoint cluster** — IDA's GLBOPT loops co-iterate
 ///    PreOpt cleanups, LocalOpt simplifiers and GlobalOpt analyses
 ///    inside one `run_to_fixedpoint`. We mirror that, so a few
@@ -885,6 +887,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
     use PassPhase::*;
     vec![
         // (1) one-time pre-pass
+        PassDescriptor::new("StackPointerTrackingPass", StackRecovery),
         PassDescriptor::new("StackOffsetSnapshotPass", StackRecovery),
         PassDescriptor::new("NoreturnDetectPass", PreOpt),
         // (2) outer fixed-point body — IR-level cluster
@@ -1407,6 +1410,7 @@ mod phase_tests {
         // See the matching comment in unlace-cli/src/pipeline.rs.
         vec![
             // (1) one-time pre-pass
+            StackRecovery, // StackPointerTrackingPass (frame coordinates for the snapshot)
             StackRecovery, // StackOffsetSnapshotPass
             PreOpt,        // NoreturnDetectPass (resolver-gated, once)
             // (2) outer fixed-point body — IR-level cluster
@@ -1535,7 +1539,7 @@ mod phase_tests {
 
     /// Pinned count, kept as a separate fn so the diff is obvious when
     /// it changes. Counted from `canonical_pipeline_phases()` above:
-    /// 11 backward transitions across 60 windows, 61 scheduled passes total.
+    /// 11 backward transitions across 61 windows, 62 scheduled passes total.
     pub(super) const fn canonical_pipeline_transgression_count() -> usize {
         11
     }

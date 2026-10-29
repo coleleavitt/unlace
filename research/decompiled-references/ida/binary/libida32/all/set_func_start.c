@@ -1,0 +1,40 @@
+__int64 __fastcall set_func_start(
+        int a1,
+        int a2,
+        __int64 a3,
+        __int64 a4,
+        __int64 a5,
+        __int64 a6,
+        int a7,
+        int a8,
+        int a9,
+        int a10,
+        int a11,
+        void *a12,
+        __int64 a13,
+        int a14,
+        int a15,
+        void *a16,
+        __int64 a17,
+        int a18,
+        __int64 a19)
+{
+  return sub_5B3800(
+           *(_QWORD *)(qword_2CA1698 + 1480),
+           a1,
+           a2,
+           a7,
+           a8,
+           a9,
+           a10,
+           a11,
+           a12,
+           a13,
+           a14,
+           a15,
+           a16,
+           a17,
+           a18,
+           a19);
+}
+

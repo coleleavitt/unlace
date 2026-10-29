@@ -102,6 +102,11 @@ fn hir_contains_label_or_goto(nodes: &[HirNode]) -> bool {
             try_body,
             finally_body,
         } => hir_contains_label_or_goto(try_body) || hir_contains_label_or_goto(finally_body),
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => hir_contains_label_or_goto(try_body) || hir_contains_label_or_goto(except_body),
         HirNode::Commented { inner, .. } => {
             hir_contains_label_or_goto(std::slice::from_ref(inner.as_ref()))
         }
@@ -512,6 +517,10 @@ struct StructureCtx<'a> {
     /// non-structured paths and gets a pre-allocated label so a `goto`
     /// emitted later can refer to it.
     goto_targets: BTreeSet<BlockId>,
+    /// Exception handlers: the true successors of the dispatch blocks
+    /// [`crate::eh_dispatch::install_eh_dispatch`] inserted. Only the
+    /// unwinder enters them, so they are neither goto targets nor joins.
+    eh_handlers: BTreeSet<BlockId>,
 }
 
 fn structured_predicates_resolve(
@@ -886,9 +895,13 @@ impl<'a> StructureCtx<'a> {
         // two or more real predecessors. These are the join points of
         // irreducible CFG regions where the structurer's `if`/`while`
         // patterns cannot encode all incoming control edges.
+        // A handler block is entered by its dispatch block alone; the edge
+        // from the protected code laid out before it is a lifter artifact,
+        // so the handler is never a goto target.
+        let eh_handlers = crate::eh_dispatch::handler_blocks(func);
         let mut goto_targets = BTreeSet::new();
         for &bid in func.function.blocks.keys() {
-            if loop_headers.contains(&bid) {
+            if loop_headers.contains(&bid) || eh_handlers.contains(&bid) {
                 continue;
             }
             let real_preds: Vec<BlockId> = func
@@ -934,7 +947,7 @@ impl<'a> StructureCtx<'a> {
             }
         }
 
-        Self {
+        let mut ctx = Self {
             func,
             options,
             deadline,
@@ -947,6 +960,33 @@ impl<'a> StructureCtx<'a> {
             next_label: 0,
             synthetic,
             goto_targets,
+            eh_handlers,
+        };
+        ctx.mark_reentered_loop_headers();
+        ctx
+    }
+
+    /// A loop header entered by two or more edges from outside its natural
+    /// loop (a peeled iteration joining the loop, or an irreducible
+    /// re-entry) is a `goto` target too: only one of those edges can be the
+    /// structured entry, the others need a label in front of the loop.
+    fn mark_reentered_loop_headers(&mut self) {
+        let headers: Vec<BlockId> = self.loop_headers.iter().copied().collect();
+        for header in headers {
+            let loop_blocks = self.collect_loop_blocks(header);
+            let external_preds = self
+                .func
+                .cfg
+                .edges_to(header)
+                .into_iter()
+                .filter(|(src, _)| !self.synthetic.contains(src) && !loop_blocks.contains(src))
+                .count();
+            if external_preds >= 2 {
+                struct_debug!(
+                    "init reentered-loop-header header={header:?} external_preds={external_preds}"
+                );
+                self.goto_targets.insert(header);
+            }
         }
     }
 
@@ -2885,6 +2925,34 @@ impl<'a> StructureCtx<'a> {
     }
 
     fn try_structure_loop(&mut self, header: BlockId) -> Option<HirNode> {
+        let node = self.try_structure_loop_inner(header)?;
+        // The header's label has to stand in front of the loop statement. It
+        // exists when the header is re-entered from outside its loop (see
+        // `mark_reentered_loop_headers`) or when a `goto` to it was
+        // allocated while the body was built (an inner loop leaving to the
+        // enclosing header, which C has no `continue outer` for). The
+        // `do`-`while` paths already put it at the top of the body, where
+        // the header's statements are.
+        if self.goto_targets.contains(&header) {
+            self.alloc_label(header);
+        }
+        let Some(&label) = self.block_labels.get(&header) else {
+            return Some(node);
+        };
+        let labelled_in_body = match &node {
+            HirNode::DoWhile { body, .. } | HirNode::While { body, .. } => {
+                matches!(body.first(), Some(HirNode::Label(first)) if *first == label)
+            }
+            _ => false,
+        };
+        if labelled_in_body {
+            return Some(node);
+        }
+        struct_debug!("loop-header-label header={header:?} label={label:?}");
+        Some(HirNode::Block(vec![HirNode::Label(label), node]))
+    }
+
+    fn try_structure_loop_inner(&mut self, header: BlockId) -> Option<HirNode> {
         let _span = linkscope::phase("struct.try-loop");
         if !self.check_deadline() {
             return None;
@@ -3250,11 +3318,38 @@ impl<'a> StructureCtx<'a> {
         if target == header {
             return HirNode::Continue;
         }
-        if self.synthetic.contains(&target) || Some(target) == self.find_loop_exit(header) {
+        if self.synthetic.contains(&target)
+            || self
+                .find_loop_exit(header)
+                .is_some_and(|exit| self.exit_landing(exit) == self.exit_landing(target))
+        {
             return HirNode::Break;
         }
         let label = self.alloc_label(target);
         HirNode::Goto(label)
+    }
+
+    /// The first block with statements or a decision that `target` leads
+    /// to. A conditional branch often leaves a loop through an empty block
+    /// that only forwards to the real exit (`merge_linear_blocks` cannot
+    /// fold it into a block that ends in a `CBRANCH`); two such exits land
+    /// on the same block and are one exit of the loop.
+    fn exit_landing(&self, target: BlockId) -> BlockId {
+        let mut current = target;
+        let mut seen = BTreeSet::new();
+        while seen.insert(current) {
+            if self.synthetic.contains(&current)
+                || self.loop_headers.contains(&current)
+                || !self.non_control_block_statements(current).is_empty()
+            {
+                break;
+            }
+            let Some(next) = self.single_successor(current) else {
+                break;
+            };
+            current = next;
+        }
+        current
     }
 
     fn emit_latch_decision(&mut self, bid: BlockId, header: BlockId, nodes: &mut Vec<HirNode>) {
@@ -3323,9 +3418,18 @@ impl<'a> StructureCtx<'a> {
 
         let mut replay = self.non_control_block_statements(bid);
         let stmt_count = replay.len();
-        replay.push(HirNode::Continue);
+        // A latch that tests before looping back keeps its exit edge:
+        // replaying only its statements plus `continue` would drop the
+        // loop's exit test on this path.
+        self.emit_latch_decision(bid, header, &mut replay);
+        let action = if replay.len() > stmt_count {
+            "replay-latch-decision"
+        } else {
+            replay.push(HirNode::Continue);
+            "replay-continue"
+        };
         struct_debug!(
-            "emitted-latch-path block={bid:?} header={header:?} action=replay-continue stmts={stmt_count} real_edges={real_edges:?} known_back_edge={known_back_edge}"
+            "emitted-latch-path block={bid:?} header={header:?} action={action} stmts={stmt_count} real_edges={real_edges:?} known_back_edge={known_back_edge}"
         );
         trace_hir_counts(
             &format!("emitted-latch-path block={bid:?} header={header:?}"),
@@ -3449,7 +3553,10 @@ impl<'a> StructureCtx<'a> {
             if self.emitted.contains(&bid) {
                 if self.try_emit_emitted_latch_path(bid, header, loop_blocks, &mut nodes) {
                     break;
-                } else if self.goto_targets.contains(&bid) {
+                } else if self.goto_targets.contains(&bid) || self.loop_headers.contains(&bid) {
+                    // An emitted loop header other than ours is entered
+                    // again from outside its body (the back edge of an inner
+                    // loop this walk did not structure as a loop).
                     let label = self.alloc_label(bid);
                     nodes.push(HirNode::Goto(label));
                     struct_debug!("until-loop emitted-target goto block={bid:?} label={label:?}");
@@ -3460,15 +3567,14 @@ impl<'a> StructureCtx<'a> {
             }
 
             if bid != header && self.loop_headers.contains(&bid) {
-                if self.loop_has_multiple_exits(bid) {
-                    if struct_trace_enabled() {
-                        let nested_blocks = self.collect_loop_blocks(bid);
-                        let exits = self.loop_exit_targets(&nested_blocks);
-                        struct_debug!(
-                            "until-loop nested-loop-skip-multiexit bid={bid:?} outer_header={header:?} exits={exits:?}"
-                        );
-                    }
-                } else if let Some(loop_node) = self.try_structure_loop(bid) {
+                if struct_trace_enabled() && self.loop_has_multiple_exits(bid) {
+                    let nested_blocks = self.collect_loop_blocks(bid);
+                    let exits = self.loop_exit_targets(&nested_blocks);
+                    struct_debug!(
+                        "until-loop nested-loop-multiexit bid={bid:?} outer_header={header:?} exits={exits:?}"
+                    );
+                }
+                if let Some(loop_node) = self.try_structure_loop(bid) {
                     trace_hir_counts("until-loop-nested-loop", std::slice::from_ref(&loop_node));
                     nodes.push(loop_node);
                     current = self.find_loop_exit(bid);
@@ -3645,12 +3751,13 @@ impl<'a> StructureCtx<'a> {
         false
     }
 
+    /// Where the loop's exit edges land, see [`Self::exit_landing`].
     fn loop_exit_targets(&self, loop_blocks: &BTreeSet<BlockId>) -> BTreeSet<BlockId> {
         let mut exits = BTreeSet::new();
         for &bid in loop_blocks {
             for (target, _) in self.func.cfg.edges_from(bid) {
                 if !self.synthetic.contains(&target) && !loop_blocks.contains(&target) {
-                    exits.insert(target);
+                    exits.insert(self.exit_landing(target));
                 }
             }
         }
@@ -3698,7 +3805,17 @@ impl<'a> StructureCtx<'a> {
             }
 
             if self.emitted.contains(&bid) {
-                struct_debug!("loop-body stop already-emitted current={bid:?} header={header:?}");
+                if bid != header
+                    && (self.goto_targets.contains(&bid) || self.loop_headers.contains(&bid))
+                {
+                    let label = self.alloc_label(bid);
+                    nodes.push(HirNode::Goto(label));
+                    struct_debug!("loop-body emitted-target goto block={bid:?} label={label:?}");
+                } else {
+                    struct_debug!(
+                        "loop-body stop already-emitted current={bid:?} header={header:?}"
+                    );
+                }
                 break;
             }
 
@@ -3711,15 +3828,14 @@ impl<'a> StructureCtx<'a> {
             }
 
             if bid != header && self.loop_headers.contains(&bid) {
-                if self.loop_has_multiple_exits(bid) {
-                    if struct_trace_enabled() {
-                        let nested_blocks = self.collect_loop_blocks(bid);
-                        let exits = self.loop_exit_targets(&nested_blocks);
-                        struct_debug!(
-                            "loop-body nested-loop-skip-multiexit current={bid:?} outer_header={header:?} exits={exits:?}"
-                        );
-                    }
-                } else if let Some(loop_node) = self.try_structure_loop(bid) {
+                if struct_trace_enabled() && self.loop_has_multiple_exits(bid) {
+                    let nested_blocks = self.collect_loop_blocks(bid);
+                    let exits = self.loop_exit_targets(&nested_blocks);
+                    struct_debug!(
+                        "loop-body nested-loop-multiexit current={bid:?} outer_header={header:?} exits={exits:?}"
+                    );
+                }
+                if let Some(loop_node) = self.try_structure_loop(bid) {
                     struct_debug!("loop-body nested-loop current={bid:?} outer_header={header:?}");
                     trace_hir_counts("loop-body-nested-loop", std::slice::from_ref(&loop_node));
                     nodes.push(loop_node);
@@ -3806,12 +3922,13 @@ impl<'a> StructureCtx<'a> {
                 break;
             }
             if self.emitted.contains(&bid) {
-                // Already-emitted target: candidate `goto` site. Only emit
-                // a goto when this block was pre-flagged as a goto target
-                // (irreducible CFG region: 2+ preds, not a loop header).
-                // For loop headers / structured joins, the existing
-                // structurer logic handles control transfer via while/break.
-                if self.goto_targets.contains(&bid) {
+                // Already-emitted target: candidate `goto` site. A goto is
+                // emitted when this block was pre-flagged as a goto target
+                // (irreducible CFG region: 2+ preds, not a loop header) or
+                // is a loop header reached from outside its loop: structured
+                // joins are the `stop` block and never get here, so any other
+                // emitted block is a control transfer only a goto expresses.
+                if self.goto_targets.contains(&bid) || self.loop_headers.contains(&bid) {
                     let label = self.alloc_label(bid);
                     nodes.push(HirNode::Goto(label));
                     struct_debug!("until emitted-target goto block={bid:?} label={label:?}");
@@ -4107,6 +4224,37 @@ impl<'a> StructureCtx<'a> {
         true_blk: BlockId,
         false_blk: BlockId,
     ) -> Option<BlockId> {
+        // An exception dispatch joins where its protected code (the false
+        // arm) continues; the handler (the true arm) is never the join. The
+        // lifter does not know the calls around a handler are noreturn
+        // (`__cxa_throw` before it, `_Unwind_Resume` at its end), so the
+        // layout edges into and out of the handler make it the dispatch's
+        // post-dominator, or make the code after the whole region the first
+        // block both arms reach. Either choice leaves the handler outside
+        // the `if` or pulls the outer join into the protected arm.
+        if crate::eh_dispatch::is_dispatch_block(self.func, cond_block) {
+            let after_region = [
+                self.find_join_point_postdom(false_blk),
+                self.find_join_point_of_arms(cond_block, true_blk, false_blk),
+                self.find_join_point_postdom(true_blk),
+            ]
+            .into_iter()
+            .flatten()
+            .find(|candidate| !self.eh_handlers.contains(candidate));
+            struct_debug!(
+                "join cond={cond_block:?} handler={true_blk:?} source=eh-dispatch join={after_region:?}"
+            );
+            return after_region;
+        }
+        self.find_join_point_of_arms(cond_block, true_blk, false_blk)
+    }
+
+    fn find_join_point_of_arms(
+        &self,
+        cond_block: BlockId,
+        true_blk: BlockId,
+        false_blk: BlockId,
+    ) -> Option<BlockId> {
         let postdom_join = self.find_join_point_postdom(cond_block);
         let bfs_join = self.find_join_point_bfs(true_blk, false_blk);
         struct_debug!(
@@ -4362,6 +4510,14 @@ fn collect_used_labels(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
                 collect_used_labels(try_body, used);
                 collect_used_labels(finally_body, used);
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                collect_used_labels(try_body, used);
+                collect_used_labels(except_body, used);
+            }
             _ => {}
         }
     }
@@ -4412,6 +4568,14 @@ fn remove_labels_not_in(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
             } => {
                 remove_labels_not_in(try_body, used);
                 remove_labels_not_in(finally_body, used);
+            }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                remove_labels_not_in(try_body, used);
+                remove_labels_not_in(except_body, used);
             }
             _ => {}
         }
@@ -4497,6 +4661,14 @@ fn fold_guarded_ternary_in_children(node: &mut HirNode) {
         } => {
             fold_guarded_ternary(try_body);
             fold_guarded_ternary(finally_body);
+        }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            fold_guarded_ternary(try_body);
+            fold_guarded_ternary(except_body);
         }
         HirNode::Commented { inner, .. } => fold_guarded_ternary_in_children(inner),
         HirNode::GuardedIf {
@@ -4780,6 +4952,14 @@ fn fold_csel_ternary_in_children(node: &mut HirNode) {
         } => {
             fold_csel_ternary(try_body);
             fold_csel_ternary(finally_body);
+        }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            fold_csel_ternary(try_body);
+            fold_csel_ternary(except_body);
         }
         HirNode::Commented { inner, .. } => fold_csel_ternary_in_children(inner),
         HirNode::GuardedIf {
@@ -5092,6 +5272,14 @@ fn fold_aarch64_bcc_if_in_children(node: &mut HirNode) {
             fold_aarch64_bcc_if(try_body);
             fold_aarch64_bcc_if(finally_body);
         }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            fold_aarch64_bcc_if(try_body);
+            fold_aarch64_bcc_if(except_body);
+        }
         HirNode::Commented { inner, .. } => fold_aarch64_bcc_if_in_children(inner),
         HirNode::GuardedIf {
             then_body,
@@ -5294,6 +5482,14 @@ fn collect_hir_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, HirDef
                 collect_hir_defs_inner(try_body, defs);
                 collect_hir_defs_inner(finally_body, defs);
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                collect_hir_defs_inner(try_body, defs);
+                collect_hir_defs_inner(except_body, defs);
+            }
             _ => {}
         }
     }
@@ -5339,6 +5535,14 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         } => {
             recover_for_loops(try_body);
             recover_for_loops(finally_body);
+        }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            recover_for_loops(try_body);
+            recover_for_loops(except_body);
         }
         HirNode::Commented { inner, .. } => recover_for_loops_in_children(inner),
         HirNode::GuardedIf {

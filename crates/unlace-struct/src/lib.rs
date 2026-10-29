@@ -63,7 +63,7 @@ pub use cpp_eh::cpp_eh_regions_to_seh;
 #[cfg(feature = "unwired")]
 pub use cross_jump_revert::cross_jump_revert;
 pub use eager_returns::eager_returns;
-pub use eh_dispatch::{CatchLandingPad, install_eh_dispatch, recover_try_catch};
+pub use eh_dispatch::{LandingPad, LandingPadKind, install_eh_dispatch, recover_try_catch};
 pub use empty_if_cleanup::cleanup_empty_ifs;
 pub use flatten_if_else::{flatten_if_else_chains, simplify_chain_conditions};
 #[cfg(feature = "unwired")]

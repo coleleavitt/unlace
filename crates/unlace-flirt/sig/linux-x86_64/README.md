@@ -1,21 +1,25 @@
 # Runtime library signatures (x86-64 Linux)
 
 IDASGN v10 files made with `unlace siggen` from the static libraries and
-objects listed below. Load them with `--sig-dir` (or one at a time with
-`--sig`):
+objects listed below. They are compiled into `unlace-flirt`
+(`src/bundled.rs`), which picks the files for an image from its detected
+toolchain (`unlace_loader::ToolchainReport`: `.comment` entries, Go build
+info, the PE Rich header, `.interp`). Extra files load with `--sig-dir` or
+`--sig`:
 
 ```bash
-unlace analyze ./stripped --sig-dir crates/unlace-flirt/sig/linux-x86_64
+unlace examine ./stripped --sig-dir /path/to/more/sigs
 ```
 
-Signatures only match the exact library build they were made from. Pick the
-files for the toolchain that built the target (`readelf -p .comment` shows
-the GCC/clang/rustc version); a Rust signature of another rustc release
-names few functions and some of them wrongly.
+Signatures only match the exact library build they were made from
+(`readexecutable -p .comment` shows the GCC/clang/rustc version). A Rust signature
+of another rustc release names few functions and some of them wrongly, so
+`rust-*.sig` is applied only when the release matches.
 
 | file | made from |
 |---|---|
 | `glibc-2.43-x86_64.sig` | glibc 2.43 (Gentoo): `libc.a`, `libm-2.43.a`, `libmvec.a`, `libresolv.a`, `crt1.o` |
+| `musl-1.2.5-zig0.15-x86_64.sig` | musl 1.2.5 as built by zig 0.15.2: `libc.a` |
 | `libgcc-15-x86_64.sig` | GCC 15.3: `libgcc.a`, `libgcc_eh.a`, `crtbeginT.o`, `crtend.o` |
 | `libstdc++-15-x86_64.sig` | GCC 15.3: `libstdc++.a` |
 | `compiler-rt-22-x86_64.sig` | LLVM 22: `libclang_rt.builtins.a` |

@@ -49,6 +49,8 @@ enum ScopeStep {
     Catch(usize, usize),
     /// Finally block of a [`HirNode::TryFinally`] at `node_index`.
     Finally(usize),
+    /// Handler block of a [`HirNode::TryExcept`] at `node_index`.
+    Except(usize),
 }
 
 type ScopePath = Vec<ScopeStep>;
@@ -307,11 +309,13 @@ fn scope_ref<'a>(nodes: &'a [HirNode], path: &[ScopeStep]) -> Option<&'a [HirNod
             }
             (ScopeStep::SwitchDefault(_), HirNode::Switch { default, .. }) => default.as_deref()?,
             (ScopeStep::Try(_), HirNode::TryCatch { try_body, .. })
-            | (ScopeStep::Try(_), HirNode::TryFinally { try_body, .. }) => try_body,
+            | (ScopeStep::Try(_), HirNode::TryFinally { try_body, .. })
+            | (ScopeStep::Try(_), HirNode::TryExcept { try_body, .. }) => try_body,
             (ScopeStep::Catch(_, arm_index), HirNode::TryCatch { catch_arms, .. }) => {
                 &catch_arms.get(*arm_index)?.1
             }
             (ScopeStep::Finally(_), HirNode::TryFinally { finally_body, .. }) => finally_body,
+            (ScopeStep::Except(_), HirNode::TryExcept { except_body, .. }) => except_body,
             _ => return None,
         };
     }
@@ -409,6 +413,18 @@ fn collect_positions(
                 collect_positions(finally_body, scope, labels, gotos);
                 scope.pop();
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                scope.push(ScopeStep::Try(index));
+                collect_positions(try_body, scope, labels, gotos);
+                scope.pop();
+                scope.push(ScopeStep::Except(index));
+                collect_positions(except_body, scope, labels, gotos);
+                scope.pop();
+            }
             _ => {}
         }
     }
@@ -450,7 +466,8 @@ fn step_index(step: &ScopeStep) -> usize {
         | ScopeStep::SwitchCase(index, _)
         | ScopeStep::SwitchDefault(index)
         | ScopeStep::Try(index)
-        | ScopeStep::Finally(index) => *index,
+        | ScopeStep::Finally(index)
+        | ScopeStep::Except(index) => *index,
         ScopeStep::Catch(index, _) => *index,
     }
 }
@@ -577,6 +594,14 @@ fn node_stats(nodes: &[HirNode]) -> NodeStats {
                 merge_stats(&mut stats, node_stats(try_body));
                 merge_stats(&mut stats, node_stats(finally_body));
             }
+            HirNode::TryExcept {
+                try_body,
+                except_body,
+                ..
+            } => {
+                merge_stats(&mut stats, node_stats(try_body));
+                merge_stats(&mut stats, node_stats(except_body));
+            }
             HirNode::Commented { inner, .. } => {
                 merge_stats(&mut stats, node_stats(std::slice::from_ref(inner.as_ref())));
             }
@@ -623,6 +648,7 @@ fn fmt_scope(scope: &[ScopeStep]) -> String {
             ScopeStep::Try(index) => format!("try[{index}]"),
             ScopeStep::Catch(index, arm_index) => format!("catch[{index}][{arm_index}]"),
             ScopeStep::Finally(index) => format!("finally[{index}]"),
+            ScopeStep::Except(index) => format!("except[{index}]"),
         })
         .collect::<Vec<_>>()
         .join("/")
@@ -667,6 +693,7 @@ fn scope_mut<'a>(nodes: &'a mut Vec<HirNode>, path: &[ScopeStep]) -> Option<&'a 
             ScopeStep::Try(index) => match current.get_mut(*index)? {
                 HirNode::TryCatch { try_body, .. } => try_body,
                 HirNode::TryFinally { try_body, .. } => try_body,
+                HirNode::TryExcept { try_body, .. } => try_body,
                 _ => return None,
             },
             ScopeStep::Catch(index, arm_index) => match current.get_mut(*index)? {
@@ -675,6 +702,10 @@ fn scope_mut<'a>(nodes: &'a mut Vec<HirNode>, path: &[ScopeStep]) -> Option<&'a 
             },
             ScopeStep::Finally(index) => match current.get_mut(*index)? {
                 HirNode::TryFinally { finally_body, .. } => finally_body,
+                _ => return None,
+            },
+            ScopeStep::Except(index) => match current.get_mut(*index)? {
+                HirNode::TryExcept { except_body, .. } => except_body,
                 _ => return None,
             },
         };

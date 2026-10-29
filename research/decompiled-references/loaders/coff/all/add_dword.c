@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x23808
+// Name:     add_dword
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to add_dword are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void add_dword(/* see import library declaration */);
+

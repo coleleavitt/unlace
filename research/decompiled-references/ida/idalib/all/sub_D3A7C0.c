@@ -1,0 +1,123 @@
+__int64 __fastcall sub_D3A7C0(__int64 a1, __int64 a2, unsigned __int8 *a3, int *a4, __int64 a5)
+{
+  __int64 v8; // rax
+  int v9; // ecx
+  unsigned __int8 **v10; // rax
+  unsigned __int64 v11; // rdx
+  __int64 result; // rax
+  __int64 v13; // rax
+  unsigned __int64 v14; // rdx
+  __int64 v15; // r12
+  int v16; // edx
+  int v17; // eax
+  int v18; // esi
+  int v19; // ecx
+  int v20; // ecx
+  __int64 v21; // [rsp+10h] [rbp-48h] BYREF
+  unsigned __int8 **v22; // [rsp+18h] [rbp-40h] BYREF
+  void *v23; // [rsp+20h] [rbp-38h] BYREF
+  unsigned int v24; // [rsp+28h] [rbp-30h]
+  char v25; // [rsp+2Ch] [rbp-2Ch]
+
+  v8 = sub_E32240(a1);
+  v9 = *a4;
+  if ( (*(_BYTE *)(v8 + 47) & 0x20) != 0 )
+  {
+    v9 = *a4 & 7;
+    *a4 = v9;
+    goto LABEL_11;
+  }
+  if ( v9 < 0 )
+  {
+    v21 = sub_E1EEA0(*(_QWORD *)(a1 + 400), a2);
+    v10 = (unsigned __int8 **)sub_E33D20(a1, &v21, 2444, 0);
+    v11 = (unsigned int)*a4;
+    v25 = 0;
+    v22 = v10;
+    v24 = 32;
+    v23 = (void *)v11;
+    if ( v10 )
+    {
+      sub_CF8A40(&v22, (__int64)&v23);
+      if ( v24 > 0x40 )
+      {
+        if ( v23 )
+          operator delete[](v23);
+      }
+    }
+    result = (*(__int64 (__fastcall **)(_QWORD))(**(_QWORD **)(a1 + 24) + 32LL))(*(_QWORD *)(a1 + 24));
+    if ( (_BYTE)result )
+    {
+      *a4 = -*a4;
+      return sub_D3A5B0(a1, a2, a3, a4, a5);
+    }
+    return result;
+  }
+  if ( v9 <= 7 )
+    goto LABEL_11;
+  v13 = sub_E1EF60(*(_QWORD *)(a1 + 400));
+  v14 = (unsigned int)*a4;
+  v24 = 32;
+  v23 = (void *)v14;
+  v25 = 0;
+  v15 = *(_QWORD *)(v13 + 8);
+  v22 = (unsigned __int8 **)sub_E33C90(a1, v13, 2422, 0);
+  if ( v22 )
+  {
+    sub_CF8A40(&v22, (__int64)&v23);
+    if ( v22 )
+    {
+      sub_AE9DF0(v22, v15, 8u);
+      if ( v22 )
+        sub_AE9DF0(v22, 8, 3u);
+    }
+  }
+  result = (*(__int64 (__fastcall **)(_QWORD))(**(_QWORD **)(a1 + 24) + 32LL))(*(_QWORD *)(a1 + 24));
+  if ( (_BYTE)result )
+  {
+    if ( v24 > 0x40 && v23 )
+      operator delete[](v23);
+    v9 = *a4;
+    if ( *a4 > 7 )
+    {
+      v16 = *a3;
+      if ( (_BYTE)v16 )
+      {
+        v17 = (unsigned __int8)v16;
+        v18 = 4;
+        v19 = (int)(unsigned __int8)v16 >> 4;
+        if ( v19 )
+        {
+          v16 = (unsigned __int8)v19;
+          v18 = 0;
+        }
+        if ( v16 >> 2 )
+          v16 >>= 2;
+        else
+          v18 |= 2u;
+        v20 = v18 | 1;
+        if ( (unsigned int)v16 >> 1 )
+          v20 = v18;
+      }
+      else
+      {
+        v20 = 8;
+        v17 = 0;
+      }
+      *a4 = v20;
+      LOBYTE(a4) = v17 << v20;
+      goto LABEL_12;
+    }
+LABEL_11:
+    LODWORD(a4) = *a3 << v9;
+LABEL_12:
+    *(_BYTE *)sub_E216C0(*(_QWORD *)(a1 + 176), 8) = (_BYTE)a4;
+    return 1;
+  }
+  if ( v24 > 0x40 && v23 )
+  {
+    operator delete[](v23);
+    return 0;
+  }
+  return result;
+}

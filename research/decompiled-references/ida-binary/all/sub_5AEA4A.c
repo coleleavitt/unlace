@@ -1,0 +1,46 @@
+void *__fastcall sub_5AEA4A(__int64 a1, __int64 a2)
+{
+  *(_DWORD *)(a2 + 48) = 1048591;
+  *(_WORD *)(a2 + 56) = *(_QWORD *)(a1 + 152);
+  *(_WORD *)(a2 + 58) = *(_QWORD *)(a1 + 200);
+  *(_WORD *)(a2 + 60) = *(_QWORD *)(a1 + 208);
+  *(_WORD *)(a2 + 62) = *(_QWORD *)(a1 + 216);
+  *(_WORD *)(a2 + 64) = *(_QWORD *)(a1 + 224);
+  *(_WORD *)(a2 + 66) = *(_QWORD *)(a1 + 176);
+  *(_DWORD *)(a2 + 68) = *(_QWORD *)(a1 + 160);
+  *(_QWORD *)(a2 + 72) = *(_QWORD *)(a1 + 744);
+  *(_QWORD *)(a2 + 80) = *(_QWORD *)(a1 + 752);
+  *(_QWORD *)(a2 + 88) = *(_QWORD *)(a1 + 760);
+  *(_QWORD *)(a2 + 96) = *(_QWORD *)(a1 + 768);
+  *(_QWORD *)(a2 + 104) = *(_QWORD *)(a1 + 792);
+  *(_QWORD *)(a2 + 112) = *(_QWORD *)(a1 + 800);
+  *(_QWORD *)(a2 + 120) = *(_QWORD *)(a1 + 96);
+  *(_QWORD *)(a2 + 128) = *(_QWORD *)(a1 + 104);
+  *(_QWORD *)(a2 + 136) = *(_QWORD *)(a1 + 112);
+  *(_QWORD *)(a2 + 144) = *(_QWORD *)(a1 + 56);
+  *(_QWORD *)(a2 + 152) = *(_QWORD *)(a1 + 168);
+  *(_QWORD *)(a2 + 160) = *(_QWORD *)(a1 + 48);
+  *(_QWORD *)(a2 + 168) = *(_QWORD *)(a1 + 120);
+  *(_QWORD *)(a2 + 176) = *(_QWORD *)(a1 + 128);
+  *(_QWORD *)(a2 + 184) = *(_QWORD *)(a1 + 88);
+  *(_QWORD *)(a2 + 192) = *(_QWORD *)(a1 + 80);
+  *(_QWORD *)(a2 + 200) = *(_QWORD *)(a1 + 72);
+  *(_QWORD *)(a2 + 208) = *(_QWORD *)(a1 + 64);
+  *(_QWORD *)(a2 + 216) = *(_QWORD *)(a1 + 40);
+  *(_QWORD *)(a2 + 224) = *(_QWORD *)(a1 + 32);
+  *(_QWORD *)(a2 + 232) = *(_QWORD *)(a1 + 24);
+  *(_QWORD *)(a2 + 240) = *(_QWORD *)(a1 + 16);
+  *(_QWORD *)(a2 + 248) = *(_QWORD *)(a1 + 144);
+  *(_WORD *)(a2 + 256) = *(_WORD *)(a1 + 232);
+  *(_WORD *)(a2 + 258) = *(_WORD *)(a1 + 234);
+  *(_BYTE *)(a2 + 260) = *(_WORD *)(a1 + 236);
+  *(_WORD *)(a2 + 262) = *(_WORD *)(a1 + 238);
+  *(_DWORD *)(a2 + 264) = *(_QWORD *)(a1 + 240);
+  *(_WORD *)(a2 + 268) = 0;
+  *(_DWORD *)(a2 + 272) = *(_QWORD *)(a1 + 248);
+  *(_WORD *)(a2 + 276) = 0;
+  *(_DWORD *)(a2 + 280) = *(_DWORD *)(a1 + 256);
+  *(_DWORD *)(a2 + 284) = *(_DWORD *)(a1 + 260);
+  memcpy((void *)(a2 + 288), (const void *)(a1 + 264), 0x80u);
+  return memcpy((void *)(a2 + 416), (const void *)(a1 + 392), 0x100u);
+}

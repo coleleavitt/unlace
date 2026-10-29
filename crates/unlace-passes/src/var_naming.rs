@@ -31,10 +31,10 @@ fn callee_saved_x86_64(reg_offset: u64) -> Option<&'static str> {
     match reg_offset {
         0x18 => Some("rbx"),
         0x28 => Some("rbp"),
-        0x80 => Some("r12"),
-        0x88 => Some("r13"),
-        0x90 => Some("r14"),
-        0x98 => Some("r15"),
+        0x60 => Some("r12"),
+        0x68 => Some("r13"),
+        0x70 => Some("r14"),
+        0x78 => Some("r15"),
         _ => None,
     }
 }

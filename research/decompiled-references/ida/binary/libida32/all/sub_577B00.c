@@ -1,0 +1,291 @@
+__int64 __fastcall sub_577B00(
+        __int64 a1,
+        __int64 (__fastcall ***a2)(__int64 a1, __int64 a2, __int64 a3, __int64 a4, const char *a5),
+        int a3)
+{
+  __int64 v4; // rax
+  __int64 v5; // r14
+  __int64 v6; // rax
+  __int64 v7; // r15
+  __int64 v8; // rdx
+  char *v9; // rsi
+  char v10; // al
+  char *v11; // rax
+  char *v12; // r15
+  unsigned int v13; // edi
+  __int64 v14; // r13
+  __int64 v15; // r15
+  __int64 v16; // rax
+  char *v17; // r14
+  __int64 v18; // rax
+  int v19; // eax
+  __int64 v20; // rcx
+  __int64 v21; // r15
+  __int64 (__fastcall *v22)(__int64, __int64, __int64, __int64, const char *); // rax
+  const char *v23; // rax
+  __int64 v24; // rax
+  char *v26; // rsi
+  const char *v27; // r14
+  __int64 (__fastcall *v28)(__int64, __int64, __int64, __int64, const char *); // rax
+  __int64 v29; // rax
+  unsigned int v30; // edx
+  char v31; // cl
+  char *v32; // rcx
+  char *v33; // r15
+  __int64 v34; // rsi
+  __int64 v35; // rax
+  char v36; // dl
+  unsigned int v37; // edi
+  __int64 v38; // [rsp+8h] [rbp-4F8h]
+  __int64 v39; // [rsp+10h] [rbp-4F0h]
+  __int64 v40; // [rsp+10h] [rbp-4F0h]
+  __int64 v42; // [rsp+20h] [rbp-4E0h]
+  char *v44; // [rsp+30h] [rbp-4D0h]
+  __int64 v45; // [rsp+38h] [rbp-4C8h]
+  char v46[48]; // [rsp+60h] [rbp-4A0h] BYREF
+  char nptr[10]; // [rsp+90h] [rbp-470h] BYREF
+  __int16 v48; // [rsp+9Ah] [rbp-466h]
+  char v49[2]; // [rsp+A0h] [rbp-460h] BYREF
+  char v50; // [rsp+A2h] [rbp-45Eh]
+  char v51[29]; // [rsp+A3h] [rbp-45Dh] BYREF
+  _BYTE v52[1032]; // [rsp+C0h] [rbp-440h] BYREF
+  unsigned __int64 v53; // [rsp+4C8h] [rbp-38h]
+
+  v53 = __readfsqword(0x28u);
+  v38 = 0;
+  v44 = nullptr;
+  v42 = a3;
+  while ( 1 )
+  {
+    do
+    {
+      while ( 1 )
+      {
+        v4 = qlseek(a1, 0, 1);
+        v5 = v4;
+        if ( (v4 & 1) != 0 )
+          qlseek(a1, v4 + 1, 0);
+        if ( a3 >= 0 && v42 <= v5 )
+        {
+          v7 = 5;
+          goto LABEL_43;
+        }
+        v6 = qlread(a1, v46, 60);
+        v7 = v6;
+        if ( !v6 )
+          goto LABEL_43;
+        if ( v6 != 60 )
+          goto LABEL_42;
+        if ( v48 != 2656 )
+        {
+          v7 = 3;
+          goto LABEL_43;
+        }
+        v8 = 0;
+        v9 = v49;
+        do
+        {
+          v10 = v46[v8];
+          if ( v10 == 10 )
+          {
+            *v9 = 0;
+            v11 = v9;
+            goto LABEL_14;
+          }
+          *v9 = v10;
+          if ( !v10 )
+            break;
+          ++v8;
+          ++v9;
+        }
+        while ( v8 != 16 );
+        v11 = v9;
+LABEL_14:
+        v12 = v11;
+        if ( v49 < v11 )
+        {
+          while ( 1 )
+          {
+            v13 = *(v12 - 1);
+            if ( v13 > 0x7F || !isspace(v13) )
+              break;
+            *--v12 = 0;
+            if ( v12 == v49 )
+              goto LABEL_19;
+          }
+          if ( v49 < v12 && *(v12 - 1) == 47 )
+            *(v12 - 1) = 0;
+        }
+LABEL_19:
+        v45 = strtoll(nptr, nullptr, 10);
+        v14 = qlseek(a1, 0, 1);
+        if ( !v44 && v49[0] == 47 )
+          break;
+        if ( *(_WORD *)v49 != 12579 || v50 != 47 )
+        {
+          if ( !v49[0] )
+            goto LABEL_22;
+          if ( !v44 || v49[0] != 47 )
+          {
+LABEL_46:
+            v26 = v49;
+            goto LABEL_47;
+          }
+          v29 = strtol(&v49[1], nullptr, 10);
+          v30 = v49[1];
+          v26 = &v49[1];
+          v31 = v49[1];
+          if ( (unsigned int)v49[1] > 0x7F )
+            goto LABEL_47;
+          while ( v30 - 48 <= 9 )
+          {
+            v30 = *++v26;
+            v31 = v30;
+            if ( v30 > 0x7F )
+              goto LABEL_47;
+          }
+          if ( v31 )
+          {
+LABEL_47:
+            v27 = v52;
+            qstrncpy(v52, v26, 1024);
+          }
+          else if ( v29 < 0 )
+          {
+            v27 = v52;
+            qstrncpy(v52, "?", 1024);
+          }
+          else
+          {
+            v27 = v52;
+            v32 = &v44[v29];
+            if ( &v44[v29] < &v44[v38] )
+            {
+              v27 = v52;
+              v33 = v52;
+              v34 = v38 - v29;
+              v35 = 0;
+              while ( 1 )
+              {
+                v36 = v32[v35];
+                if ( v36 == 10 || v35 == 1023 )
+                  break;
+                *v33 = v36;
+                if ( v36 )
+                {
+                  ++v35;
+                  ++v33;
+                  if ( v35 != v34 )
+                    continue;
+                }
+                goto LABEL_78;
+              }
+              *v33 = 0;
+LABEL_78:
+              if ( v52 < v33 )
+              {
+                while ( 1 )
+                {
+                  v37 = *(v33 - 1);
+                  if ( v37 > 0x7F || !isspace(v37) )
+                    break;
+                  *--v33 = 0;
+                  if ( v33 == v52 )
+                    goto LABEL_48;
+                }
+                if ( v52 < v33 && *(v33 - 1) == 47 )
+                  *(v33 - 1) = 0;
+              }
+            }
+          }
+LABEL_48:
+          v28 = **a2;
+          if ( v28 == sub_5766D0 )
+          {
+            if ( !(unsigned __int8)is_valid_utf8(v52) && (unsigned __int8)idb_utf8() )
+              v27 = haystack;
+            v7 = ((int (__fastcall *)(__int64 (__fastcall **)(__int64, __int64, __int64, __int64, const char *), __int64, _QWORD, __int64, __int64, _QWORD, const char *))a2[1])(
+                   a2[2],
+                   v14,
+                   0,
+                   v45,
+                   v45,
+                   0,
+                   v27);
+          }
+          else
+          {
+            v7 = v28((__int64)a2, v14, (__int64)v46, v45, v52);
+          }
+          if ( v7 )
+            goto LABEL_43;
+          goto LABEL_22;
+        }
+LABEL_28:
+        v15 = strtol(v51, nullptr, 10);
+        v16 = qalloc(v15 + 1);
+        v17 = (char *)v16;
+        if ( !v16 )
+          goto LABEL_87;
+        v18 = qlread(a1, v16, v15);
+        if ( v18 != v15 )
+        {
+LABEL_42:
+          v7 = 2;
+          goto LABEL_43;
+        }
+        v17[v18] = 0;
+        v39 = v18;
+        v19 = strncmp(v17, "__.SYMDEF", 9u);
+        v20 = v39;
+        if ( v19 )
+        {
+          v40 = v39 + v14;
+          v21 = v45 - v20;
+          v22 = **a2;
+          if ( v22 == sub_5766D0 )
+          {
+            v23 = (unsigned __int8)is_valid_utf8(v17) || !(unsigned __int8)idb_utf8() ? v17 : haystack;
+            v7 = ((int (__fastcall *)(__int64 (__fastcall **)(__int64, __int64, __int64, __int64, const char *), __int64, _QWORD, __int64, __int64, _QWORD, const char *))a2[1])(
+                   a2[2],
+                   v40,
+                   0,
+                   v21,
+                   v21,
+                   0,
+                   v23);
+          }
+          else
+          {
+            v7 = v22((__int64)a2, v40, (__int64)v46, v45 - v20, v17);
+          }
+          if ( v7 )
+            goto LABEL_43;
+        }
+        qfree(v17);
+LABEL_22:
+        qlseek(a1, v14 + v45, 0);
+      }
+      if ( v49[1] )
+      {
+        if ( *(_WORD *)v49 != 12579 || v50 != 47 )
+          goto LABEL_46;
+        goto LABEL_28;
+      }
+    }
+    while ( !v45 );
+    v44 = (char *)qalloc(v45);
+    if ( !v44 )
+      break;
+    v24 = qlread(a1, v44, v45);
+    if ( v24 != v45 )
+      goto LABEL_42;
+    v38 = v24;
+  }
+LABEL_87:
+  v7 = 4;
+LABEL_43:
+  qfree(v44);
+  return v7;
+}
+

@@ -1395,6 +1395,10 @@ fn analyze_function(
         let _span = profiling::phase("quality.resolve-jump-tables");
         pipeline::resolve_jump_table_targets(&mut ssa, image);
     }
+    {
+        let _span = profiling::phase("quality.unreachable-block-elim");
+        pipeline::remove_unreachable_blocks_for_pipeline(&mut ssa, &options.passes);
+    }
 
     // Batch 6: mirror the main pipeline's post-pass annotation step so
     // variadic_call_types lands in the SSA we measure. Without this, the
@@ -1418,49 +1422,7 @@ fn analyze_function(
             .context("control-flow structuring failed")?
     };
 
-    // Run the same post-structuring passes that the main pipeline applies so
-    // the quality metric reflects the actual emitted output (not the raw
-    // pre-pass HIR which is pessimistic on goto counts).
-    {
-        let _span = profiling::phase("quality.hir-post-process");
-        unlace_struct::ternary_recovery(&mut hir);
-        unlace_struct::flatten_if_else_chains(&mut hir);
-        unlace_struct::simplify_chain_conditions(&mut hir, &ssa);
-        unlace_struct::normalize_conditions(&mut hir);
-        unlace_struct::if_chain_to_switch(&mut hir, &ssa);
-        unlace_struct::recover_cmov_switches(&mut hir, &ssa);
-        unlace_struct::goto_to_break(&mut hir);
-        unlace_struct::goto_to_continue(&mut hir);
-        unlace_struct::detect_continue_break(&mut hir.body);
-        unlace_struct::reverse_loop_rotation(&mut hir);
-        unlace_struct::normalize_dowhile_to_while(&mut hir);
-        unlace_struct::while_to_for(&mut hir);
-        unlace_struct::eliminate_forward_gotos(&mut hir);
-        unlace_struct::hoist_cross_branch_labels(&mut hir);
-        unlace_struct::coalesce_goto_chains(&mut hir);
-        unlace_struct::collapse_label_fallthroughs(&mut hir);
-        unlace_struct::duplicate_goto_conditions(&mut hir);
-        unlace_struct::duplicate_simple_label_tails(&mut hir);
-        unlace_struct::normalize_conditions(&mut hir);
-        unlace_struct::detect_continue_break(&mut hir.body);
-        unlace_struct::eliminate_forward_gotos(&mut hir);
-        unlace_struct::coalesce_goto_chains(&mut hir);
-        unlace_struct::collapse_label_fallthroughs(&mut hir);
-        unlace_struct::cleanup_unreachable_labels(&mut hir);
-        unlace_struct::return_merge(&mut hir);
-        unlace_struct::duplicate_simple_label_tails(&mut hir);
-        unlace_struct::detect_continue_break(&mut hir.body);
-        unlace_struct::eliminate_forward_gotos(&mut hir);
-        unlace_struct::coalesce_goto_chains(&mut hir);
-        unlace_struct::collapse_label_fallthroughs(&mut hir);
-        unlace_struct::cleanup_unreachable_labels(&mut hir);
-        unlace_struct::eliminate_forward_gotos(&mut hir);
-        unlace_struct::cleanup_unreachable_labels(&mut hir);
-        unlace_struct::recover_guarded_whiles(&mut hir);
-        unlace_struct::cleanup_empty_ifs(&mut hir);
-        unlace_struct::cleanup_switches(&mut hir);
-        unlace_struct::repair_missing_goto_labels(&mut hir);
-    }
+    pipeline::post_process_hir(&mut hir, &ssa, None)?;
 
     let annotations = unlace_output::PrinterAnnotations {
         ssa_statement_slots: pipeline::collect_ssa_statement_slots(&ssa),

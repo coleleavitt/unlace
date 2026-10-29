@@ -1,0 +1,152 @@
+__int64 __fastcall sub_D50890(__int64 a1, int a2, _QWORD *a3)
+{
+  __int64 result; // rax
+  __int64 v4; // rsi
+  __int64 v5; // rdi
+  __int64 v6; // rdi
+  __int64 v7; // rdi
+  __int64 v8; // rdi
+  __int64 v9; // rdi
+  __int64 v10; // rdi
+  __int64 v11; // rdi
+  __int64 v12; // rdi
+  __int64 v13; // rdi
+  __int64 v14; // rdi
+  __int64 v15; // rdi
+  __int64 v16; // rdi
+  __int64 v17; // rdi
+  __int64 v18; // rdi
+  _BYTE v19[9]; // [rsp+Fh] [rbp-9h] BYREF
+
+  switch ( a2 )
+  {
+    case 0:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v6 = a1 + 384;
+        *(_QWORD *)(v6 + 856) = *a3;
+        result = sub_CF5570(v6, (__int64 (__fastcall *)(__int64, __int64))sub_CF0630, (__int64)v19);
+      }
+      break;
+    case 1:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v7 = a1 + 384;
+        *(_QWORD *)(v7 + 856) = *a3;
+        result = sub_CF5150(v7, (__int64 (__fastcall *)(__int64, __int64))sub_CF0640, (__int64)v19);
+      }
+      break;
+    case 2:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v8 = a1 + 384;
+        *(_QWORD *)(v8 + 856) = *a3;
+        result = sub_CF5410(v8, (__int64 (__fastcall *)(__int64, __int64))sub_CF0650, (__int64)v19);
+      }
+      break;
+    case 3:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v9 = a1 + 384;
+        *(_QWORD *)(v9 + 856) = *a3;
+        result = sub_CF52B0(v9, (__int64 (__fastcall *)(__int64, __int64))sub_CF0660, (__int64)v19);
+      }
+      break;
+    case 4:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v10 = a1 + 384;
+        *(_QWORD *)(v10 + 856) = *a3;
+        result = sub_CF5360(v10, (__int64 (__fastcall *)(__int64, __int64))sub_CF0670, (__int64)v19);
+      }
+      break;
+    case 5:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v11 = a1 + 384;
+        *(_QWORD *)(v11 + 856) = *a3;
+        result = sub_CF5200(v11, (__int64 (__fastcall *)(__int64, __int64))sub_CF0680, (__int64)v19);
+      }
+      break;
+    case 6:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v12 = a1 + 384;
+        *(_QWORD *)(v12 + 856) = *a3;
+        result = sub_CF54C0(v12, (__int64 (__fastcall *)(__int64, __int64))sub_CF0690, (__int64)v19);
+      }
+      break;
+    case 7:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v13 = a1 + 384;
+        *(_QWORD *)(v13 + 856) = *a3;
+        result = sub_CF50A0(v13, (__int64 (__fastcall *)(__int64, __int64))sub_CF06A0, (__int64)v19);
+      }
+      break;
+    case 8:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v14 = a1 + 384;
+        *(_QWORD *)(v14 + 856) = *a3;
+        result = sub_D4AC70(v14, (__int64 (__fastcall *)(__int64, _QWORD))sub_CF06B0, (__int64)v19);
+      }
+      break;
+    case 9:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v15 = a1 + 384;
+        *(_QWORD *)(v15 + 856) = *a3;
+        result = sub_D50760(v15, (__int64 (__fastcall *)(__int64, _QWORD))sub_CF06C0, (__int64)v19);
+      }
+      break;
+    case 10:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v16 = a1 + 384;
+        *(_QWORD *)(v16 + 856) = *a3;
+        result = sub_CF4FF0(v16, (__int64 (__fastcall *)(__int64, __int64))sub_CF06D0, (__int64)v19);
+      }
+      break;
+    case 11:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v17 = a1 + 384;
+        *(_QWORD *)(v17 + 856) = *a3;
+        result = sub_D0AFD0(v17, (__int64 (__fastcall *)(__int64, __int64))sub_CF06E0, (__int64)v19);
+      }
+      break;
+    case 12:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v18 = a1 + 384;
+        *(_QWORD *)(v18 + 856) = *a3;
+        result = sub_CFEBF0(v18, (__int64 (__fastcall *)(__int64, _QWORD))sub_CF0700, (__int64)v19);
+      }
+      break;
+    case 13:
+      result = 1;
+      if ( *(_DWORD *)(a1 + 1252) == *(_DWORD *)(a1 + 1256) )
+      {
+        v4 = *(_QWORD *)(a1 + 1232);
+        v5 = a1 + 384;
+        *(_QWORD *)(v5 + 856) = *a3;
+        result = sub_D09050(v5, v4, (__int64 (__fastcall *)(__int64, __int64))sub_CF06F0, (__int64)v19);
+      }
+      break;
+  }
+  return result;
+}

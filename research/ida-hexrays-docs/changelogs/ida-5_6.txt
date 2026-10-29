@@ -1,0 +1,271 @@
+IDA 5.6 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 5.6
+Debuggers for
+MIPS
+and
+PowerPC
+Since the Bochs debugger was warmly received, we added two more debuggers: for MIPS and PowerPC. They use the GDBServer protocol to communicate with the target computer.
+For the users who do not have a real MIPS or PowerPC machine handy, we added support for emulating debuggers based on the QEMU processor emulator. As usual, any code snippet can be executed from any arbitrary address: if you wonder what an obscure function does, just position at its beginning and press F4.
+By the way, ARM code can be emulated too!
+64-bit debuggers for Linux and Mac OS X 64-bit systems become more and more widespread. We too add more 64-bit support to IDA. This release includes full 64-bit support for Linux and Mac OS X. While we are at it, let us mention the ARM Linux debugger server, for easy debugging of ARM Linux executables.
+Appcall: facility to call any function from the debugged application While debugging, sometimes there is a need to divert the normal execution flow and to execute a function of your choice in the target application. It could be a debug print function, or a repeated function call with modified arguments... With the new Appcall feature, it is a piece of cake: just enter the function call with arguments in the command line, and it will be called. For example: _printf("Hello world!\n") will print the greeting in the application console window. The possibilities opened by this facility are endless but intelligent fuzzing of selected functions is the one that comes into mind immediately.
+Significantly improved the speed of the crash dump loader The crash dump loader introduced in IDA v5.5 was quite good but had one major drawback: it was slow. The new release addresses this problem and makes it almost as fast as WinDbg. If a local symbol cache is present, the loading takes just a few seconds. Our user who work a lot with crash dumps will appreciate this feature. We like it ourselves :)
+Improved Python The Python plugin was greatly improved. Firstly, Python support is now available on all platforms, including Linux and Mac OS X. Secondly, Python scripts can do a lot more now. The graphing API, choosers, appcall are only some of the new features to mention. We will blog about it soon.
+Improved IDC While we were improving the scripting support, we decided to give another chance to IDC. The new IDC is a object oriented language with references, exceptions and so on. See the help file for more info.
+Scriptable loaders Before IDA v5.6, file loader modules could be implemented only as C++ DLL modules. This meant that in order to create a file loader, one had to install a C++ compiler, learn how to set up an IDA module project (quite a feat, there are even specialized programs to help programmers with this task), then learn the IDA API, and finally implement a loader.
+Now things are much easier: open your favorite editor and write down a script, either in Python or IDC. If you put your script in the loaders subdirectory, IDA will automatically find and use it, as simple as that. Our SDK has a few scripted loader samples, they are very simple to learn. Who knows, if we implement something similar for processor modules, programming for IDA will finally become manageable.
+Other, probably less visible, improvements include a new processor module (NEC V850), more SDK functions, better debugger, etc. The full list is below:
+Changelist
+Processor Modules
+6812: added support for HCS12X XGATE coprocessor instructions (thanks to Alex Bratovic)
+6812: support for page registers PPAGE, RPAGE, EPAGE, GPAGE (thanks to Alex Bratovic)
+ARM: added support for more switches
+ARM: sequence ADR LR, retaddr ... MOV PC, Rx is recognized as a call
+AVR: accept -DAVR_MCPU option to set preferred device
+CLI (.NET): added CLI 2.0 instructions
+M32R: added support for floating-point constants
+M7700: better tracking of m and x processor bits
+PC: added recognition of gcc64 variadic function prologs
+PPC: conditional branch instructions with hints were not simplified. now we show + or - if the hint overrides default behavior
+TMS320C55: added several more undocumented dual instructions
+V850: new processor (with source code). Includes V850E1 variant.
+File Formats
+file loaders can be written in any scripting language (Python, IDC, etc)
+ELF,AVR: Can load ELF-32 for AVR CPU.
+ELF: better handling of relocations and symbols in SuperH files
+ELF: some imports were not renamed in Solaris 10 SPARC files (dlopen etc)
+ELF: support for ARM TLS relocations
+MACHO: information about dylibs (when available) is added to the imports list
+MS DOS: added support for rebasing databases (thanks to Jeremy Cooper)
+Kernel
+a local type can be mapped (redirected) to another local type. this feature can be used if a type was created twice
+added FLIRT signatures for ICL v11.1
+updated Mac OS X type libraries (and added macosx64.til)
+updated many Windows .ids files to the latest SDK and DDK
+IDAPython is now available in 64-bit version of IDA
+Scripts & SDK
+IDC: added comma operator
+IDC: added hasattr(), setattr(), getattr(), delattr() function to work with IDC objects
+IDC: added SetTargetAssembler()
+IDC: added DecodeInstruction()
+IDC: added support for 64-bit numbers (64-bit constants are declared with i64 suffix: 1234i64)
+IDC: embedded zeroes are allowed in strings; simple Unicode strings can be created using L"string"; added strset() to create strings filled with the specified character
+IDC: functions are first class citizens in IDC: they can be passed as arguments, pointers to functions are possible, etc.
+IDC: renamed form() to sprintf() and removed the result length limit
+SDK: added "const" keywords to many public arguments and structure fields (to suppress frequent compiler warnings)
+SDK: added a new idc_value_t type: VT_STR2. It is similar to VT_STR but keeps its value in a qstring. This allows us to store strings with embedded zeroes
+SDK: added appcall() to call functions from the debugged application
+SDK: added debugger_t.update_call_stack() for debugger module specific stack tracing mechanisms
+SDK: added functions to manipulate IDC classes and class methods
+SDK: added get_strmem_by_name()
+SDK: added PR_DEFSEG64 (if set, segments are 64-bit by default)
+SDK: added set_chooser_attribute_cb(). It can be used to specify colors and font attributes for each chooser line (GUI).
+SDK: added set_dock_pos() to control the docking position of forms
+SDK: added support for custom fixup types
+SDK: added til_symbol_t structure and choose_named_type2() function
+SDK: added user2qstr() and qstr2user() functions
+SDK: choose_ioport_device() can filter device names and display a shorter list
+SDK: If choose_ioport_device() with a filter callback generates a list of only one entry, that entry is returned without showing the dialog
+SDK: It is possible to create persistent forms (which are not closed when switching to and from debug mode) with the FORM_PERSIST flag and open_tform()
+SDK: multiple external languages can be installed; IDC is installed as an external language too
+SDK: redefined new/delete operators in pro.h so that all plugins use common memory allocation functions
+SDK: the dbg_suspend_process event is generated after synchronizing IDA state with the process state
+User Interface
+GUI: Added search facility to Notepad
+GUI: Show function name in the stack trace window
+GUI: Tab style can be configured in idagui.cfg
+UI: "Add standard structure/enum" dialogs now show in which type library each symbol is defined
+UI: fixups (relocations) are ignored while debugging since they are already applied by the system loader; this gives better disassembly
+UI: hex dump and stack view scroll one line on mouse wheel turn
+UI: show structure sizes in "Choose structure for offset" window
+Debugger
+added ARM Linux debugger backend
+added Linux x64 debugger backend
+added Mac OS X 64-bit debugger backend
+OSX: mac_server debug server support for OSX 10.6 (Snow Leopard)
+BOCHS: Bochs debugger plugin SDK now allows users to execute their initialization code from ring0
+BOCHS: Bochs PE loader now supports DllMain() to run DLLs without a DLL loader program
+debugger: debugger can now step through and over macro instructions. When stepping over, the whole macro is skipped; when single stepping, we still step one instruction at a time.
+debugger: OSX: added support for hardware breakpoints
+WINDBG: It is now possible to select which type of messages from the debugger engine to show in IDA log window
+Bugfixes
+BUGFIX: "edit, string, dos string" was creating a zero terminated string, not a dos string
+BUGFIX: 8051: IDA could crash if "8051 Cross-Assembler by MetaLink Corporation" was selected
+BUGFIX: address expression in the hint title could be incorrect for 16-bit programs
+BUGFIX: array index was always displayed in decimal in case of array of structures
+BUGFIX: big-endian SuperH ELF files could not be loaded
+BUGFIX: Breakpoints added inside bochs_startup() were not being triggered unless the debugger is suspended at least once.
+BUGFIX: build_funcarg_info(): retloc for EDX:EAX was incorrect for x86
+BUGFIX: chooser was computing wrong width / heights in some cases (when themes are enabled), resulting is unnecessary scrollbars in e.g. cross references list
+BUGFIX: cli: defined but not disassembled bytes were not displayed in the listing
+BUGFIX: cli: some instructions could display garbage if token operand was not defined in the metadata
+BUGFIX: clp.dll could raise exceptions
+BUGFIX: debugger: DLL breakpoints didn't work if the DLL was unloaded and then loaded again
+BUGFIX: debugger: the run to command (F4) could fail if the application was rebased; the queued debugger commands were using wrong (non-rebased) addresses
+BUGFIX: division by zero when zooming in/out an empty graph view
+BUGFIX: Dump typeinfo to IDC was not restoring struct members comment properly
+BUGFIX: ELF/ARM: Thumb functions were not detected properly in some newer EABI files
+BUGFIX: ELF: handle the case when DYNAMIC segment is longer than the actual .dynamic section and no section table is present
+BUGFIX: ELF: some files with segments near the top of address space could not be loaded; if there is no space for externs after the highest segment, we try to find a hole somewhere else
+BUGFIX: even if the AF2_NORET flag was clear, IDA was still marking functions from noret.cfg as not returning
+BUGFIX: get_max_ascii_length() could fail because of a missing segment while the debugger is running because of stale segment information
+BUGFIX: get_nsec_stamp() was returning wrong values on long-running Windows systems
+BUGFIX: get_struc_id() could return bogus value if the name existed in database (e.g. as an enumeration)
+BUGFIX: GUI could crash in some cases
+BUGFIX: GUI: toolbars were not restored as part of the default desktop layout
+BUGFIX: IDA could crash if processor module returned bogus itype values
+BUGFIX: IDA could crash trying to display some insane ARM instructions
+BUGFIX: IDA could endlessly loop analyzing functions with erroneously detected >gt;2GB stack frame
+BUGFIX: IDA could interr because of failed attempt to switch to graph mode on a too complex function
+BUGFIX: idag would not change the current directory to the input file directory if the file was selected using the File,Open menu item
+BUGFIX: idaw could crash if a fixed plugin tried to add a menu item
+BUGFIX: if the input file was not readable, idag would exit silently
+BUGFIX: if the instant debugger failed to set a temporary breakpoint at the entry point, it would still resume the process
+BUGFIX: if the program got rebased because of a debugger event, the active breakpoints would not be moved to the new addresses
+BUGFIX: if was impossible to enter expressions in the IDC command line after installing an extlang, they would be interpreted by the extlang, not by IDC
+BUGFIX: in some cases, a form could have wrong menu items if activated from a closing form
+BUGFIX: in some cases, IDA could crash while switching desktops
+BUGFIX: it was impossible to add/edit hardware breakpoints without an active debugger if a remote host was specified
+BUGFIX: it was impossible to change the memory model from the user interface (Options, Compiler)
+BUGFIX: it was impossible to specify string parameters with the -D/-d command line options
+BUGFIX: it was impossible to use user-defined breakpoints in ntdll_LdrInit... functions on Windows 7
+BUGFIX: it was not possible to create a 64-bit segment using the GUI in idag64
+BUGFIX: Linux debugger was not using names from loaded modules
+BUGFIX: Linux debugger: sometimes debug server could exit with message "td_ta_set_event: generic error"
+BUGFIX: M32R: FPU instructions were decoded incorrectly
+BUGFIX: M7700: immediate operands were improperly converted into I/O register names
+BUGFIX: Notepad window cursor was being reset each time the notepad is docked or undocked
+BUGFIX: PDB: enum values -1, -2 etc were not converted properly when importing PDB types
+BUGFIX: PDB: IDA could crash when parsing PDBs using msdia71.dll (from VS2003)
+BUGFIX: PE: IDA could hang on some PE files with corrupted export table
+BUGFIX: PE: TLS directory was not handled if it had size of 0 (Windows loader ignores the size field).
+BUGFIX: rebasing the database could lead to the loss of the information about the first function of each segment, except the first segment provided that there are no gaps between segments
+BUGFIX: refreshing stack trace window could crash in some cases
+BUGFIX: resolving ordinal types would not return their names and this would lead to superfluous casts in the decompiler
+BUGFIX: SDK: get_next_module() was buggy
+BUGFIX: SDK: the width field of edge_info_t struct was ignored for custom graphs
+BUGFIX: single stepping would break even if an event unrelated to stepping occurred
+BUGFIX: some information about address 00000000 could be lost when upgrading database to 5.4+ format.
+BUGFIX: some tms320c64+ instructions were not recognized
+BUGFIX: the navigation bar was not using the full width of the window without having to undock, enlarge and redock it every time
+BUGFIX: The register window was not being restored properly all the time
+BUGFIX: the user could not edit the exception list before starting the instant debugger
+BUGFIX: TMS320C55: some instructions were disassembled incorrectly
+BUGFIX: UI: IDA sometimes displayed "Failed to set data for ''" message under Vista
+BUGFIX: UI: the current item indicator in choosers could disappear on resizing the window
+BUGFIX: under Linux/OSX, the ~/.idapro/ida.cfd file could get corrupted if multiple copies of IDA were run simultaneously
+BUGFIX: viewer_set_titlebar_height() was not refreshing the graph with the new titlebar height. now it happens automatically
+BUGFIX: Windbg and Bochs/diskimg loader were returning stale memory layout information in some cases
+BUGFIX: Windbg debugger module would report wrong number of loaded modules when attaching to kernel target
+BUGFIX: windbg/bochs CLI handlers could fail a legit command if the previous command failed.
+BUGFIX: Windbg: the ".hh" command was not working
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Was this helpful?

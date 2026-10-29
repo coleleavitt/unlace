@@ -77,9 +77,15 @@ impl LibraryObjects {
         self.format.get_or_insert(file.format());
 
         // Function starts per section, with every name defined there.
+        // COFF symbols carry no size: a function runs to the next symbol
+        // of its section, or to the section end (IDA's `pcf` rule).
+        let sized_symbols = file.format() != BinaryFormat::Coff;
         let mut starts: BTreeMap<(usize, u64), Start> = BTreeMap::new();
         for symbol in file.symbols() {
-            if symbol.kind() != SymbolKind::Text || !symbol.is_definition() || symbol.size() == 0 {
+            if symbol.kind() != SymbolKind::Text
+                || !symbol.is_definition()
+                || (sized_symbols && symbol.size() == 0)
+            {
                 continue;
             }
             let (Ok(name), Some(section)) = (symbol.name(), symbol.section_index()) else {
@@ -95,6 +101,21 @@ impl LibraryObjects {
                 local: symbol.is_local(),
                 weak: symbol.is_weak(),
             });
+        }
+        if !sized_symbols {
+            let mut next_start: Option<(usize, u64)> = None;
+            for (&(index, address), start) in starts.iter_mut().rev() {
+                let end = match next_start {
+                    Some((next_index, next_address)) if next_index == index => next_address,
+                    _ => file
+                        .section_by_index(object::SectionIndex(index))
+                        .map(|section| section.address() + section.size())
+                        .unwrap_or(address),
+                };
+                start.size = end.saturating_sub(address);
+                next_start = Some((index, address));
+            }
+            starts.retain(|_, start| start.size != 0);
         }
 
         let parse_error = |err: object::Error| FlirtError::ObjectParse {

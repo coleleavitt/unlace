@@ -1,0 +1,155 @@
+IDA 7.6sp1 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 7.6sp1
+The Service Pack 1 of IDA 7.6 is primarily a bug fixes release that provides fixes for a few errors that might affect many users.
+Complete changelist:
+Installer:
+IDA Installers for Apple Silicon (arm64) don't require Rosetta2 anymore and refuse to install on Intel Macs
+golang:
+verify correctness of function boundary metadata before using it
+Bugfixes
+UI: QTreeWidget elements created from PyQt could fail to show any content
+Decompiler: in some cases IDA crashed on right-click in the pseudocode window
+UI: the string list cache was not restored in ida64
+DOS: when rebasing a DOS executable using full rebase (MSF_NETNODES), segment register change points were not properly updated to the new segment bases
+IDAPython: IDA could crash if ida_kernwin.twinpos_t.place was called for an invalid selection
+Decompiler: 'remove return value' command could spoil the __userpurge calling convention
+UI: In the "Structures" widget, 'Create before current structure' option wouldn't be honored anymore
+ARM: some CSNEG instructions were incorrectly simplified to CINV or CSETM instead of CNEG
+DWARF: When processing global variables, the DWARF plugin could erroneously delete items it shouldn't
+UI: IDA could crash instead of showing a proper error when it detected too many copies running on the local network
+iOS debugger could interr when querying the list of loaded dylibs
+UI: IDA could crash when using full screen mode (F11) without a loaded database
+UI: pressing Tab from the decompiler, to switch to a freshly-deleted disassembly view, could crash IDA
+UI: IDA could crash when opening the shortcuts editor on macOS when some window-managing programs were running
+UI: editing floating-point values in the hex view could fail
+IDAPython: ida_graph.abstract_graph_t.get_edge() could crash IDA
+UI: change accelerator for the "Optimize single stepping" option ('O' was already taken)
+kernel: some event_listener_t hooks would not be unregistered on plugin unload which could lead to a crash later on
+Decompiler: fixed interr 50464
+Decompiler: fixed interr 50194
+Decompiler: fixed interr 52379
+Decompiler: fixed interr 50873
+Decompiler: fixed interr 52369
+Decompiler: fixed interr 50659
+An explicitly specified calling convention of a virtual function would be ignored when the compiler was set to Visual Studio
+IDA could hang on startup when running under Windows 10 Subsystem for Linux (WSL)
+Decompiler: IDA 7.6 could crash when using 7.5 decompilers
+UI: revert to the behavior of "create struct from data" to that of IDA 7.5 (use mangled names for struct members)
+IDA raised interr 1827 for fixed (i.e. having PLUGIN_FIX flag) plugins with postponed init
+golang: handle go1.16 filenames and linenumbers metadata
+source-level debugging was broken on arm64 macOS
+UI: the navigator wouldn't remain hidden across IDB loads
+UI: in the "Structures" window, jumping to a type (e.g., through xref) that's not currently visible because it's not part of the selection in the left-hand list, could fail to make it visible
+UI: if no disassembly view is available at IDB load-time, some actions (e.g., UnHide) could be unavailable in certain widgets such as "Structures"
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Complete changelist:
+Bugfixes
+Was this helpful?

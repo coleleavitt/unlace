@@ -1,0 +1,12 @@
+__int64 __fastcall sub_113CAB0(__int64 a1, __int64 a2)
+{
+  unsigned int v3; // edx
+  _QWORD v4[3]; // [rsp+0h] [rbp-18h] BYREF
+
+  v4[0] = a1;
+  v4[1] = a2;
+  if ( sub_2246AB0(v4, "crypto", 6, 0) != -1 )
+    return 1;
+  LOBYTE(v3) = sub_2246AB0(v4, "sha2", 4, 0) != -1;
+  return v3;
+}

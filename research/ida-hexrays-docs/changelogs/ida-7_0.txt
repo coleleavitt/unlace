@@ -1,0 +1,551 @@
+IDA 7.0 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+Internationalization (i18n)
+Automatic discovery of string literals
+API 7.0 Porting Guide
+IDAPython backward compatibility
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 7.0
+Highlights
+Welcome to IDA 7.0!
+The biggest news is that IDA is a native 64-bit application! First of all it means that now it can eat all memory of your computer and thrash it :) But jokes aside, switching to 64-bit aligns IDA with other modern software and makes it more compatible with the rest of the world. For example, IDAPython integration will be easier and more streamlined because many operating systems nowadays come with the 64-bit Python preinstalled (32-bit Python won't work anymore).
+Second, we took this change as an opportunity (since old 32-bit plugins won't work with 64-bit IDA anyway) to clean up the IDA API, make it more consistent and less confusing. If we failed or succeeded is to be seen, but we ourselves like the new API much more. The fundamental concepts remain the same and IDA did not lose any bit of its functionality during the cleanup. We minutely tested all changes and ensured that all our tests continue to pass as before or better. We also tried to make our 3 APIs: C++, Python, and IDC, to be closer to each other. Function names and their functionality are the same in most cases, but we tried to stay pythonic in Python and C++-ish in the C++ interface. Since the changes are huge and it is easy to lose your way, we prepared a
+Porting guide from the IDA 4.9-6.x API to the IDA 7.0 API
+which explains what has changed and how. We hope that it will greatly help you when porting your plugins to the new 7.0 API.
+For Python and IDC we implemented a compatibility layer that will help you with your scripts. Most of them should run fine on 7.0 with very minor or no changes. We plan to turn off the compatibility layer in the next release, so please dedicate some of your time to port your scripts to run without it. See the
+IDA 7.0: IDAPython backward-compatibility with 6.95 APIs
+page for more info.
+To make the transition even smoother, we are also publishing a 32-bit version of IDA. It can (and should) be only used to run old 32-bit plugins while you are porting them to 64-bit. The 32-bit version of IDA can read v7 databases but it lacks some very nice new features. Let us introduce them now.
+Now IDA is a truly international application that can speak all languages of the world because it uses UTF-8 everywhere. All scripts and plugins can use it. You can use UTF-8 in the disassembly listing, including comments or even the function names. This is not what we advise, therefore odd characters in names require some fine tuning. See the
+IDA 7.0: Automatic discovery of string literals during auto-analysis
+page for all the gory details.
+By the way, the existing databases will have to be upgraded to benefit from the UTF-8 encoding. We tried to make the upgrade process as simple as before but there is a catch: since old databases could use any encoding, IDA has to guess the old encoding on the fly. To learn how to help IDA with this error prone task, see the
+IDA 7.0: Internationalization
+page.
+IDA now parses and annotates exception handling information and RTTI. We plan to improve the decompiler and IDA to take advantage of this information in the future.
+We greatly improved Objective C support both in IDA and the Decompiler. Now the metadata can be parsed on demand, not only at the loading time. The decompiler produces much nicer output:
+We improved the OSX and iOS debuggers to handle OSX 10.13 and iOS 11. There are many changes under the hood but your experience should be the same as before or even better.
+Complete changelist
+Processor Modules
+ARM: added one more pattern of thumb->arm transition
+ARM: arm64: use simplified aliases for UBFM/SBFM instructions when applicable
+ARM: handle vfp instructions: VMOV immediate, VCVTB, VCVTT, VCVT with a fixed point operand
+ARM: reduced complexity of the SP-analysis from quadratic to linear;
+ARM: added a fix for Thumb switches with full addresses
+ARM: added support of the new clang's switch pattern for arm64
+ARM: extended LDRB switch pattern
+ARM64: take into account instruction STP can load callee arguments into stack - add corresponding comments to such instructions
+MIPS: recover more cross-references from stripped statically-linked PIC ELF files
+MSP430: added simplification "movx @SP+, dst" -> "popx dst"
+PC: added decoding of Control-flow Enforcement extension
+PC: added decoding of newer AVX-512 extensions (4FMAPS, 4VNNIW, and VPOPCNTDQ)
+PC: added new switch pattern
+PC: decode PTWRITE instruction
+PC: decode VMFUNC instruction
+PC: detect more switch patterns from clang
+PC: improved epilog detection
+PC: improved prolog detection
+PC: improved stack frame analysis in x64 files
+PC: support another variation of x64 table-based switch with switch variable stored on the stack
+PPC: added missed extended mnemonics 'rotld'
+PPC: added new config flag PPC_ABI_EMBEDDED/ISA_EABI;
+PPC: added support of PowerPC64 ELF V2 ABI
+PPC: improved switch patterns;
+PPC: r13-based operands are printed using simplified @sda suffix
+SuperH: improved detection of functions when addresses are calculated with movi20s + add/sub
+SuperH: added register definitions for SH7256
+TMS320C3: improved stack tracing
+tricore: added TRICORE_DEVICE and TRICODE_IORESP config parameters so that they can be set from scripts
+File Formats
+DWARF: Store file/line number information in IDB (only if requested, since it comes with a performance penalty)
+ELF: added processing of many previously unsupported PPC64 relocations
+ELF: annotate headers (ELF, PHT, SHT) and convert more known data to structs (symtab, strtab, relocations, dynamic information)
+ELF: annotate preinit/init/fini function arrays
+ELF: convert all strtab entries to ascii strings (even the ones that are not referenced)
+ELF: describe DT_HASH and DT_GNU_HASH
+ELF: describe symbols using symtab from DYNAMIC section
+ELF: detect overlapping sections in SHT and prevent them from processing data (but still load them in the database)
+ELF: don't obliterate data when patching PLT
+ELF: don't skip processing relocations if symbol index is 0 (happens with IRELATIVE relocs)
+ELF: IDA now uses the PHT by default instead of the SHT to load segments from ELF files
+ELF: improved support for TLS variables in relocatable files
+ELF: load symbols using symtab from DYNAMIC section when .dynamic section yields no symbols
+ELF: PLT relocations for pc are now processed at relocation-application-time, instead of relying on the presence of a .plt section
+ELF: ppc: added new ida.cfg variable PPC_FIX_GNU_VLEADRELOC_BUG to work around binutils bug 20744
+ELF: process .ctors/.dtors sections for all architectures
+ELF: recognize PLT stub functions from R_386_GLOB_DAT relocations
+MACHO: support dyld_shared_cache files from OSX 10.13 and iOS 11
+MACHO: support dyld cache slide info v2. This should improve analysis for dyld_shared_cache files from iOS 10 and OSX 10.12
+MACHO: improved analysis of single modules within dyld_shared_cache files that have slide info
+MACHO: added an option to load for single module plus its dependencies for dyld cache
+MACHO: fixed incorrect resolution of Mach-O import table entries in files using both LC_DYLD_INFO_ONLY and LC_SYMTAB
+MACHO: improved speed of objc metadata parsing
+MACHO: support for apple-protected binaries from OSX versions < 10.6
+MACHO: support x64 macOS kernelcaches with ketxs relocated at runtime
+MACHO: added processing of the ARM64_RELOC_ADDEND relocation;
+MACHO: allow the user to override the ASLR slide for dyld_shared_cache files
+OBJC: added Objective-C Analysis Plugin; the plugin tries to create an xref between calls to objc_msgSend and the function that will ultimately be called by msgSend
+OBJC: perform Objective-C specific analysis on the decompiler output
+OBJC: implemented a "step into" action for Objective-C (Debugger>Run until message received)
+OBJC: allow user to jump to a method definition given a selector string (Jump>Jump by selector)
+OBJC/MACHO: IDA can now extract Objective-C type info via 'Load debug info' in the Modules view during debugging
+OBJC: now objc metadata can be parsed on demand, not just at load time
+OBJC: implement demangling of objective-C methods in Swift classes
+TDS: added support for executable with debug info appended to the end of the file
+PDB: added an explicit check for odd paths (e.g. UNC) of pdb files; if such a path is detected, we display one more warning to the user
+Debugger
+debugger: iOS: support debugging on iOS 11
+debugger: iOS: support source-level debugging in Remote iOS Debugger
+debugger: iOS: support Appcalls in Remote iOS Debugger
+debugger: iOS: added support for ARM(64) FPU/NEON registers
+debugger: iOS: identify regions of process memory in greater detail
+debugger: iOS: always allow the user to specify a pid when attaching to a process
+debugger: OSX: support debugging on OSX 10.13
+debugger: OSX: improved support for debugging system libs from /usr/lib and /System/Library/Frameworks (any libs included in the dyld_shared_cache)
+debugger: OSX: identify regions of process memory in greater detail
+debugger: remote mac debuggers are signed and don't have to be run as root
+debugger: BOCHS: added support for Bochs 2.6.9
+debugger: LINUX: added environment variable IDA_SKIP_SYMS to ignore the exported names from the main module
+debugger: LINUX: try to load separate debug info file for libpthread.so, if environment variable DEBUG_FILE_DIRECTORY is set
+debugger: GDB: added software breakpoint for powerpc
+debugger: GDB: added support for banked ARM register layouts
+debugger: GDB: added support for no-acknowledgment mode (QStartNoAckMode) for reliable connections (set by default; unset by changing the stub options)
+debugger: GDB: added support for uploading files to the server
+debugger: GDB: enable "run a program before starting debugging" option and "Choose a configuration" for all processors including x86/x64
+debugger: GDB: fetch processes list from gdbserver if supported
+debugger: GDB: fetch target description from gdb stub as early as possible (mimic GDB behavior)
+debugger: GDB: show the full path to be run if the user enabled "Run external program before debugging" before actually executing it
+debugger: PIN: added support for appcall
+debugger: debug servers can now be launched with '-kk' to specify that in case the connection between IDA & them is broken, the process should be terminated immediately
+ios_deploy: added "codesign" and "appify" phases
+ios_deploy: added "usbproxy" phase
+ios_deploy: added "launch" phase
+ios_deploy: added "kill" and "proclist" phases
+ios_deploy: added "install_ex" phase
+Kernel/Misc
+kernel: switched to PCRE2 for the regular expression engine. Now Perl extensions (\s, \d, \w and so on) can be used in regular expressions
+kernel: improved handling of 'noret' function attribute (fix endless looping in some cases);
+kernel: documented ABANDON_DATABASE in ida.cfg
+kernel: added separate "mingw" abi name; it can be specified for the visual studio compiler
+kernel: renamed environment variable NONAMES to be IDA_NONAMES
+FLIRT: Added detection of 32-bit mingw/mingw-w64 startup functions
+FLIRT: Added detection of 64-bit mingw-w64 startup functions
+FLIRT: Added detection of Android Bionic libc startup for ARM
+FLIRT: Added MFC signatures for vc1410 (Visual Studio 2017)
+FLIRT: Added MFC signatures for vc143 (Visual Studio 2015 Update 3)
+FLIRT: Added signatures for Android NDK/ARM (up to version 13b)
+FLIRT: BC: added signatures for xe102 (RAD Studio 10.2 Tokyo)
+FLIRT: DM: added signatures for Digital Mars 2.073.0
+FLIRT: ICL: Added signatures for icl164 (Intel C++ 16.4)
+FLIRT: ICL: Added signatures for icl170 (Intel C++ 17.0)
+FLIRT: ICL: Added signatures for icl171 (Intel C++ 17.1)
+FLIRT: ICL: Added signatures for icl174 (Intel C++ 17.4)
+FLIRT: VC: Added signatures for vc1410 (Visual Studio 2017)
+FLIRT: VC/VC64: added signatures for ucrt 15063 (Windows 10 Creators Update SDK)
+FLIRT: pcf/pelf/plb/...: added option to modify pattern using regex (-E)
+FLIRT: pcf/pelf/plb/...: added option to skip bytes before first label at pattern beginning
+FLIRT: remove __ehhandler and __unwindfunclet pseudo-functions from signatures
+FLIRT: the parser tools now remove by default any bytes before the first label (unset with -L)
+FLIRT: mingw, mingw-w64: added detection of 32- and 64-bit mingw-w64 startup functions from the sourceforge builds (7.1.0rev2 and 7.2.0rev0)
+FLIRT: sigmake: document -v (verbose) switch
+FLIRT: upgraded ulink signatures
+IDS: Added IDS files for MFC120 and MFC140
+PCF: added option to specify startup segment name
+PCF: the -s option (skip unknown relocations) has been renamed to -k
+SIG: added signatures for VS ucrt 14393 (Windows 10 Anniversary Update SDK)
+TIL: Updated UEFI TILs to version 2.5
+TIL: Updated NTAPI type library
+TIL: Added type library for Android NDK
+RTTI: new plugin for parsing RTTI (run-time type information) produced by MSVC, GCC and LLVM in PE, COFF and ELF files
+RTTI: added detection for MSVC's ThrowInfo and related sub structures
+RTTI: added type information to comment for catchable types
+EH_PARSE: new plugin to parse EH (exception handling) information present in ELF, COFF, Mach-O, and PE files. NOTE: enable display in Options-General-Try block lines
+User Interface
+UI/qt: ability to delete breakpoints by group
+UI/qt: ability to toggle between mangled & demangled versions of "Imports" & "Exports"
+UI/qt: added fuzzy-searching in choosers
+UI/qt: implemented ability to write custom actions for individual registers in the "General registers" (and similar) view (E.g., during a debugging session)
+UI/qt: on Windows, text in message boxes (and warnings, errors, ...) can now be selected with the mouse, and copied to clipboard (it was already the case on OSX & Linux)
+UI/qt: when copying tabular data (e.g. from choosers) to the clipboard, IDA now generates tab-separated values instead of aligning the text with spaces
+UI/qt: when running on Linux/X11, selecting parts of the disassembly with the mouse (or Shift+navigation), will update the X11 'selection' clipboard (limited to what's visible on the screen.)
+UI/qt: the Python/IDC command line auto-completion now responds to "Shift+Tab" appropriately, and goes back in history
+UI/debugging: improve the formatting of the Call Stack window
+UI/txt: decompiler can now be used interactively in the text version of IDA
+UI: create/add/delete segment messages could be mixed up in the log
+UI: do not ask permission to overwrite empty files, no info will be lost anyway
+UI: pressing F9 with no debugger selected now starts the process automatically after user selects a debugger
+UI: added a new action "copy field info to pointers"; it copies name and type info from a struct definition to the pointed locations for the current struct variable;
+UI: all navigation actions are now proper actions, allowing their shortcuts to be overriden (and to be triggered programmatically.)
+UI: many cursor movement actions can now be assigned another user-defined shortcuts
+UI: mention that selector values are in paragraphs
+UI: proximity view: added option to not show the collapsed nodes
+UI: script snippets are now automatically saved to the database (and thus persisted to disk when the user presses Ctrl+W)
+UI: script snippets: Pressing <Tab> or <Shift+Tab> while there is a selection, will cause that selection to be "block indented" (or unindented)
+UI: on Windows, use Consolas font by default, as the venerable FixedSys is lacking glyphs for many Unicode characters
+Scripts & SDK
+IDAPython: ability to programmatically query or set the graph position + zoom level
+IDAPython: ability to store attributes on tinfo_t objects
+IDAPython: added example showing how to synchronize two graph views (i.e., IDA View-B follows IDA View-A, at another zoom level)
+IDAPython: added IDAPython module ida_dex to access loaded DEX file information
+IDAPython: hexrays: cexpr_t & cinsn_t are now writeable, allowing many modifications of the C tree
+IDAPython: opened many low-level graphviewer-related functions (those were previously unavailable)
+IDAPython: support for microcode_filter_t (see vds8.py example)
+IDAPython: added View_Hooks for hooking IDAView events
+IDAPython: fix idaapi.py dependencies
+IDAPython: exposed get_predef_insn_cmt()
+IDC: fix documentation for the StepUntilRet() function
+IDC: support 64bit file/linput size/offset
+SDK: numerous changes. see
+this page
+for details.
+BUGFIXES
+BUGFIX: "Dump to IDC" command could create incorrect idc files (the entry point of some functions would not be marked as code)
+BUGFIX: "step into" debugger action would fail for ARM64 BR/BLR instructions
+BUGFIX: 32-bit iOS targets would erroneously segfault on iOS 10
+BUGFIX: AD218X: Direct Instruction Type 27 was being incorrectly decoded
+BUGFIX: AD218X: some branch instructions would refer to data instead of code memory
+BUGFIX: AskUsingForm could crash if a space was present in the form's description, before the field type
+BUGFIX: COFF (mips): the relocations REL_MIPS_REFHI, REL_MIPS_PAIR, REL_MIPS_REFLO was processed incorrectly when the relocation value (addend) is non zero;
+BUGFIX: COFF: fixed recognition of files produced by TI's Code Composer Studio 6
+BUGFIX: DWARF could erroneously deduce calling conventions as __fastcall even if some registers that take part in a __fastcall were skipped
+BUGFIX: DWARF could fail to set the function prototype in some Mach-O files, in case Obj-C parser already typed it
+BUGFIX: DWARF: Better handling of types whose DW_AT_byte_size is a (improper) unsigned 32-bit 0xffffffff value
+BUGFIX: DWARF: Could fail with INTERR 782 with some variable-sized structures constructs
+BUGFIX: DWARF: Do not apply TINFO_DEFINITE to __usercall prototypes
+BUGFIX: DWARF: Do not mark function prototypes as TINFO_DEFINITE if producer is clang <= clang-500.2.79 (it produces bogus info)
+BUGFIX: DWARF: Do not rename function F with name N, if there is already an item with name N of type data+offset pointing to F
+BUGFIX: DWARF: During debugging, performing "Load module symbols" on multiple modules could cause the DWARF plugin to complain about invalid types
+BUGFIX: DWARF: MinGW/Cygwin-produced PE x64 files could show __fastcall's as __usercall, even though the code does respect Microsoft's x64 ABI convention
+BUGFIX: DWARF: Support for scattered arglocs was broken
+BUGFIX: DWARF: When it encountered certain DWARF attributes (only used by LLVM8 so far) which it couldn't handle, the DWARF plugin would stop
+BUGFIX: DWARF: clang 3.8.0 emits DWARF relocations to symbols of type 'STT_NOTYPE' in relocatable files. Those were not properly handled for relocations to DWARF sections
+BUGFIX: DWARF: could fail loading DWARF info with 'R_X86_64_DTPOFF32' relocations
+BUGFIX: DWARF: could override '__noreturn' attribute of functions
+BUGFIX: DWARF: handle gcc's bogus "typedef __va_list_tag __va_list_tag" structure names
+BUGFIX: DWARF: some register aliases could be lost because complex location descriptors were improperly handled
+BUGFIX: ELF: IDA could fail to apply relative relocations for FreeBSD
+BUGFIX: ELF: ida could hang trying to load a ppc64 elf file with unknown bits in the elf flags
+BUGFIX: ExportData action would silently overwite the output file if it already existed
+BUGFIX: Fixed DWARF->IDA register mappings for ARM64
+BUGFIX: For processor modules that aren't capable of reporting the minEA/maxEA, IDA wouldn't show scrollbars to scroll through the disassembly
+BUGFIX: GDB: the 64-bit ELF files created by IDA for snippet debugging were using incorrect layout of program header entries
+BUGFIX: GDB: the ELF files created by IDA for snippet debugging were missing information about BSS segments
+BUGFIX: GDB: the GDB plugin would not activate for big-endian ARM binaries
+BUGFIX: IDA could crash at startup on OSX 10.8
+BUGFIX: IDA could crash when editing code in the "Scripts snippets" dialog
+BUGFIX: IDA could crash when parsing corrupted codeview data
+BUGFIX: IDA could crash when saving types with attributes
+BUGFIX: IDA could crash while in proximity view, when performing path-related operations
+BUGFIX: IDA could die with a fatal error during sp analysis
+BUGFIX: IDA could fail to display first lines of disassembly for IDBs created in pre-4.0 IDA versions
+BUGFIX: IDA could fail to distinguish between ARM VCVT/VCVTR instructions
+BUGFIX: IDA could fail to load some elf core files
+BUGFIX: IDA could fail to set a breakpoint at an address inside dyld_shared_cache
+BUGFIX: IDA could fail to step over ARM TBZ/TBNZ instructions
+BUGFIX: IDA could fail with interr 1263 if 2 different definitions of the same enum group were encountered
+BUGFIX: IDA could hang momentarily at startup when many iOS devices were connected, even if the iOS Debugger was not being used
+BUGFIX: IDA could hang trying to load a corrupted elf file
+BUGFIX: IDA could hang trying to load a corrupted pe file
+BUGFIX: IDA could hang while loading corrupted macho files
+BUGFIX: IDA could interr 20016 on corrupted dyld_shared_cache files
+BUGFIX: IDA could interr when loading pdb info for mozilla's xul.dll
+BUGFIX: IDA could sometimes crash at startup (or after a debugging session) when the IDA View-A is a graph
+BUGFIX: IDA would display a not-so-useful error message when trying to attach to a process on iOS 10 if fetching process list failed; now user can enter a PID to attachh
+BUGFIX: IDA would fail to launch on OSX case-sensitive volumes because it couldn't find the cocoa plugin
+BUGFIX: IDA would fail to step over ARM BR/BLR instructions
+BUGFIX: IDA32 could try to load PE+ files and fail; now we explicitly advise to use ida64 for these files
+BUGFIX: IDA64 could accept invalid files correctly rejected by ida32
+BUGFIX: IDAPython: "atoa" was returning erroneous results for programs with a real segmentation
+BUGFIX: IDAPython: 'delay_slot_insn' was not usable
+BUGFIX: IDAPython: 6.95 introduced a regression in idc.GetMarkedPos()
+BUGFIX: IDAPython: FindImmediate() was broken and could not be called
+BUGFIX: IDAPython: IDA could crash at exit-time when no IDB was opened, and a timer fires right during the closing sequence
+BUGFIX: IDAPython: IDA could crash if a simplecustviewer_t subclass closed itself by reacting to the "Escape" key
+BUGFIX: IDAPython: back/front in qvector's were not usable
+BUGFIX: IDAPython: don't rely on internal qcp.sh tool for building on OSX
+BUGFIX: IDAPython: hexrays callbacks could not handle the 'hxe_create_hint' notification
+BUGFIX: IDAPython: ida_idaapi.require() would set a binding to the imported module as attribute on the importing module's globals(), only if no the imported module was not already present (and possibly require()d by another module.)
+BUGFIX: IDAPython: ida_ua.get_dtyp_by_size() would return a python 'str', incompatible with the 'dt_*' enumeration
+BUGFIX: IDAPython: ida_ua.get_operand_immvals() wasn't functional
+BUGFIX: IDAPython: idc.ExtLinA() & idc.ExtLinB() were broken
+BUGFIX: IDAPython: idc.GetMarkedPos() & idc.GetMarkComment() couldn't be called with '-1' to prompt for the position
+BUGFIX: IDAPython: idc.GetStringType() could return something other than None for locations that have offsets (but no strings.)
+BUGFIX: IDAPython: netnode.get_name() was broken
+BUGFIX: IDAPython: remove_tinfo_pointer() was unusable
+BUGFIX: IDAPython: simplecustviewer_t::AddLine wouldn't apply the fg/bg colors unless they were provided as long
+BUGFIX: IDAPython: simplecustviewer_t::RefreshCurrent() was not refreshing the view
+BUGFIX: IDAPython: some ARM-specific operand type definitions were incorrect
+BUGFIX: IDAPython: some SDK functions could cause IDA to crash if NULL pointers were passed (through 'None'.)
+BUGFIX: IDAPython: the makefile was unconditionally trying to build the hexrays module, even when no '--with-hexrays' was specified to build.py
+BUGFIX: IDAPython: use_regarg_type3 was impossible to use
+BUGFIX: IDAPython: using ida_graph.GraphViewer with 'close_open=True' would cause an error because '_ida_kernwin' wasn't imported
+BUGFIX: IDAPython: was not exposing ida_bytes.update_hidden_area() anymore (on which idc.SetHiddenArea relies)
+BUGFIX: It was impossible to change the font for the 'Execute script' window
+BUGFIX: Launching remote debug sessions could fail at the second attempt (and later ones) in some cases
+BUGFIX: MACHO: IDA could crash on bad data in dyld export info
+BUGFIX: MACHO: IDA could hang on corrupted bind info
+BUGFIX: MACHO: analysis of dyld_shared_cache files could fail due to miscalculated dyld slide values
+BUGFIX: MACHO: classic relocations could be applied incorrectly for x86_64 MH_BUNDLE files
+BUGFIX: MACHO: corrupted macho-o files could hang ida
+BUGFIX: MACHO: dyld pcrel32 relocations were applied incorrectly in some cases
+BUGFIX: MACHO: fixed incorrect handling of ARM64_RELOC_PAGEOFF12 and ARM64_RELOC_PAGE21
+BUGFIX: MACHO: fixed processing of the ARM64_RELOC_SUBTRACTOR relocation;
+BUGFIX: MACHO: ida could loop endlessly when loading corrupted files
+BUGFIX: MACHO: objc class structure could be reconstructed incorrectly
+BUGFIX: MACHO: stubs for weak imports could be incorrectly converted to infinite loops
+BUGFIX: MSP430: fixed display of 20-bit values from instructions with extension word
+BUGFIX: NTAPI: the wrong calling convention was used for InterlockedIncrement() from ntdll.dll
+BUGFIX: OBJC: objc parser did not handle anonymous structures properly
+BUGFIX: OMF: corrupted omf file could lead to interr 20066
+BUGFIX: On Windows, "File > Produce file > Create XXX file" would fail to add the extension to a file name that is entered without it
+BUGFIX: Opening a stack frame and programmatically changing the function stack's extents, would not update the scroller of the view nor allow jumping to the new beginning/endings of the stack frame
+BUGFIX: Opening decompilation for small functions whose body fits in the view, could cause the first few lines to not be shown until manually scrolled to
+BUGFIX: PC: fixed "mov sreg, r/m16" to always uses 16-bit memory references
+BUGFIX: PC: some XOP instructions could be incorrectly decoded in 32-bit mode
+BUGFIX: PC: some invalid VEX/EVEX/XOP instructions would be decoded as if they were valid
+BUGFIX: PC: the crc32 instruction could be incorrectly decoded in 64-bit mode
+BUGFIX: PC: the rdmsr and wrmsr instructions were decoded by "Intel Pentium real with MMX" (they're only available in protected mode)
+BUGFIX: PCF: the "skip unknown relocations" option was being ignored
+BUGFIX: PDB: could cause IDA to crash on some files
+BUGFIX: PDB: in some situations IDA did not release PDB symbols after debugging sessions
+BUGFIX: PDB: the pdb plugin could cause _guard_dispatch_icall_nop to be incorrectly marked as noreturn, leading to broken code flow in some x64 PE files with PDB information
+BUGFIX: PDB: the remote win32 server could crash when closing connections while opening pdb files
+BUGFIX: PE: IDA would ask about loading segments twice in manual loading mode
+BUGFIX: PE: fixed endless loop when analyzing SEH handlers
+BUGFIX: PPC: a conversion of the pair of immediates value to the dword which is displayed as a comment did not work after the initial phase of the analysis;
+BUGFIX: PPC: incorrect call of add_dref occurred when emulating an indexed access to an array;
+BUGFIX: PPC: restored displaying a comment for xrefs from the current instruction as it was done in IDA 6.9
+BUGFIX: PPC: segments registers incorrectly converted from v.6.8 (from v.6.9 everything is OK);
+BUGFIX: PPC: some instructions were incorrectly disassembled (r0 should be treated as zero instead of a register)
+BUGFIX: PPC: the referencing address (from) in the call of add_dref should be a head
+BUGFIX: Pressing Shift+Up/Down while at a listing boundary, wouldn't move the cursor's X position to the beginning or end of the line (for start & end of listings, respectively, allowing selection of text to comfortably reach the beginning or end of the view.)
+BUGFIX: Pressing left or right while in Pseudocode view and auto-analysis was not finished, could eat the key and not move the cursor
+BUGFIX: Proximity: collapsing children of nodes that are part of a 'path' could cause IDA to INTERR
+BUGFIX: SDK: arm.hpp was attempting to include non-existent files
+BUGFIX: TMS32028: fixed the plain binary file loading, the bytes in the word were swapped
+BUGFIX: TMS320C28: added tracking of DP register value in 'mov DP,#10bit' instruction
+BUGFIX: TMS320C28: do not create a redundant variable at the start of DP page
+BUGFIX: TMS320C28: removed the obsolete hints when reanalazing a program
+BUGFIX: TMS320C28x: added decoding for 'CLRC/SETC CNF' instructions
+BUGFIX: TMS320C28x: instruction 'MPY ACC,loc16,#16bit' was wrongly decoded
+BUGFIX: TMS320C3: graph view could be wrong
+BUGFIX: TMS320C3: instructions LDI||LDI and LDF||LDF were incorrectly decoded
+BUGFIX: Toggling fullscreen (F11) in a disassembly view and back, could result in IDA not realizing that the number of displayed lines became smaller and make the cursor invisible
+BUGFIX: Using enums (or names) in IDC snippets could lead to a compilation error, while it would work if the same code was run from an .idc file
+BUGFIX: Using the "Shortcuts" editor to save a shortcut such as '\', will cause IDA to complain at next startup
+BUGFIX: WINDBG: double-clicking on an empty line in output window during a windbg session would crash IDA
+BUGFIX: When evaluating low-level conditions, the debugger module could fail reporting some events
+BUGFIX: When no enumerations were present in the "Enums" view, pressing 'PageDown' would result in the comment being duplicated
+BUGFIX: WinDbg: when run under text IDA (idaw.exe), console processes could share the same stdout as idaw.exe itself, causing a possible deadlock any time a debug event happens
+BUGFIX: accessing Aarch64 decompiler plugin (hexarm64) in a script passed with '-S' would crash IDA, because that plugin wasn't pre-loaded
+BUGFIX: ad218x: the "Modify Flag Out" (ena/dis) instruction was disassembled incorrectly
+BUGFIX: analysis of dyld_shared_cache files could fail due to miscalculated dyld slide values
+BUGFIX: analyze_area() would hang if analysis was enabled
+BUGFIX: arm64: request calc_arglocs3 could return wrong size of stack arguments
+BUGFIX: arm64: request calc_arglocs3 did not reject functions with wrong argument types
+BUGFIX: arm: IDA could generate incorrect instruction VMOV Rt, Rt2, S31, CF
+BUGFIX: arm: analysis could loop endlessly on a trivial "b self" loop
+BUGFIX: backward binary search would hang on debugger segments
+BUGFIX: base2file() could hang when given erroneous input
+BUGFIX: calling ida_dbg.enable_[func|insn]_trace() with no debugger loaded, could crash IDA
+BUGFIX: choose_enum_by_value() should display symbols that correspond to the sign extended value in addition to the specified value
+BUGFIX: corrupted mach-o files could hang ida
+BUGFIX: dalvik: xref from the call instruction was wrongly marked as jump xref
+BUGFIX: dbg: dalvik: get method accessibility flags from DEX-method description, not from Java properties
+BUGFIX: dbg: fixed the value of ptrace request for ARM architecture
+BUGFIX: debugger: win32: IDA would fail to properly restore page breakpoints when restarting a process
+BUGFIX: debugger: win32: read/write breakpoints of length 8 were not supported on x64
+BUGFIX: dwarf plugin could fail to retrieve the register number from a location entry (off by 1 error)
+BUGFIX: elf files with wrong arm attribute section could not be loaded
+BUGFIX: elf, ppc: fixed processing relocation R_PPC_JMP_SLOT from the dynamic table;
+BUGFIX: elf: in some cases reloc R_ARM_THM_PC8 could be computed incorrectly
+BUGFIX: fix processoing of the R_AARCH64_ADR_GOT_PAGE/R_AARCH64_LD64_GOT_LO12_NC relocations
+BUGFIX: fixed a crash in some rare cases
+BUGFIX: fixed a potential vulnerability in davlik_debmod
+BUGFIX: fixed display of required DIA SDK for x64
+BUGFIX: fixed vulnerability in davlik_debmod
+BUGFIX: floating licesense build of IDA could crash on systems using the latest glibc compiled with SSE optimizations enabled
+BUGFIX: gdb: ARM: IDA could fail to stop while single-stepping in Thumb mode
+BUGFIX: gdb: ARM: software breakpoints in Thumb mode could fail with SIGBUS signal
+BUGFIX: gdb: IDA could fail to start debugging a 64-bit process with error "unknown register 'rax'" if "Intel x64" wasn't explicitly set in the gdb options
+BUGFIX: gdb: IDA would not remember some options set in the gdb configuration dialog
+BUGFIX: gdb: IDA would use stepping by default for non-x86 if the options dialog wasn't used
+BUGFIX: gdb: start gdb connection by sending an ack for any possible packet sent by the remote side (mimic GDB)
+BUGFIX: gdb: the PacketSize feature was not being respected
+BUGFIX: gdb: the gdb debugger could misdetect some files as 64-bit for some architectures
+BUGFIX: get_import_module_name() could return true and empty module name
+BUGFIX: hexview: rendering, and synchronization between an IDA View & an Hex View, could be erroneous for processors with bytes that consist of more than 8 bits
+BUGFIX: hexview: when a line starts by blanks (because it is the beginning of a segment, and that segment is not aligned on the same alignment of the view), the line contents could be shifted
+BUGFIX: hexview: when scrolling, some lines could be duplicated if they started at an unaligned address
+BUGFIX: hexview: when standing on an invalid position (i.e., BADADDR), pressing <F2> twice in a row would successfully enter edit mode (it should not)
+BUGFIX: iOS Debugger could fail to retrieve the remote process list in some cases
+BUGFIX: iOS debugger could produce incomplete stack traces when the process was stopped in the epilogue of a function
+BUGFIX: iOS debugger would demand a remote hostname, even when AUTOLAUNCH was enabled in dbg_ios.cfg
+BUGFIX: iOS debugger would fail to step after attaching to a process that needed to be rebased
+BUGFIX: idaq64: IDC's SetCharPrm(INF_TRIBYTE_ORDER, ...) was not working
+BUGFIX: idc expression "GetLocalTinfo(-1)" would cause interr 952
+BUGFIX: idc: %f format specifier was not honoring the width and precision
+BUGFIX: idc: ida could crash when adding a struct member which is a pointer to the struct itself
+BUGFIX: if the same enum member was present in different tils but it had different values, it was not always possible to select it
+BUGFIX: if the user cancels the attach-process selection dialog and then terminates the debugger server, then ida would continue to assume that the connection to the debugger server is intact
+BUGFIX: in rare cases IDA could crash during rebasing
+BUGFIX: in the "Structures" view, allow changing the type of an array of elements, if that type can fit in the size of the array
+BUGFIX: installer: installation on a Windows machine without installed Python would fail to install Python
+BUGFIX: kernel: search_* functions were not honoring the SEARCH_NOSHOW flag
+BUGFIX: load_plugin(<name>) could fail to load a plugin from an alternate plugin directory
+BUGFIX: loading of some PE+ files was taking too long time
+BUGFIX: mac debugger was broken on OSX Sierra
+BUGFIX: move_segm() would not move a segment into a free area under debugger in some cases
+BUGFIX: moving the vertical scrollbar's thumb in Hex-Rays (or source-level debugging) views, could cause the view to jump to unexpected locations
+BUGFIX: moving the vertical scrollbar's thumb to the very bottom in Hex-Rays (or source-level debugging) views, could fail to show the last line of code
+BUGFIX: nec v850: IDA could generate wrong xrefs for some of reg+N operands
+BUGFIX: noType() on an instruction operand, could remove the 'sign' or 'bitwise-negation' representation of the other operand in the process
+BUGFIX: objc parser would not decode long types properly
+BUGFIX: on Linux, the installer would unpack most of the precompiled Python runtime, even when asked not to
+BUGFIX: on some versions of OSX, large stack traces could be incomplete
+BUGFIX: pc: SP analysis could fail in functions with basic blocks unreachable from entry point such as exception handlers
+BUGFIX: Linux/OS X: search results in the help viewer were always labelled "Untitled"
+BUGFIX: set_member_type() was not checking for recursive struct nesting and could crash
+BUGFIX: setting a breakpoint condition through "update_bpt()" could cause the condition to be unusable at breakpoint trigger-time
+BUGFIX: setting a struct member type as an array without explicit size (like int[]) would set the member size to be zero; this is not what we usually want
+BUGFIX: source debugging: the line number printed in the status bar was off by 1 from the number printed in the leftmost column
+BUGFIX: source debugging: the status bar would show the file offset, but not the current address
+BUGFIX: stack tracing was broken for x86_64
+BUGFIX: the PDB plugin could cause internal error if called with invalid data (now it only results in a non-fatal warning)
+BUGFIX: the SNES loader could interfere and cause IDA to exit on very large files (> 2GB)
+BUGFIX: the decompiler would not take into account wide user-specified variables and would create additional variables that would overlap with them
+BUGFIX: the navband could disappear when using a debugger that uses manual memory regions (e.g. iOS or GDB)
+BUGFIX: the presence of the decompiler plugin on the disk without a license in ida.key would lead to error
+BUGFIX: tms320c6: branch detection for bnop instructions was flawed
+BUGFIX: type information propagation from unnamed array function parameters would result in incorrectly named data
+BUGFIX: ui/qt: "Jump in new hex window" wouldn't jump to the right address
+BUGFIX: ui/qt: IDA could leave F11-style fullscreen while navigating around and/or performing other actions
+BUGFIX: ui/qt: If IDA encountered an error at startup, it might not have had time to create the taskbar icon yet, sometimes leaving that error/warning dialog hard to reach
+BUGFIX: ui/qt: Using special mouse buttons 4 & 5 to move forward & backward in history, would change the cursor coordinates
+BUGFIX: ui/qt: deleting a script snippet would mark the one that gets selected afterwards as 'modified'
+BUGFIX: ui/qt: double-clicking on the 1st member of a struct, would cause the view to jump
+BUGFIX: ui/qt: it was impossible to select the font from some listing widgets
+BUGFIX: ui/qt: on Windows or OSX when a screen reader is used (e.g., JAWS or VoiceOver), the IDA View-A will automatically switch to flat listing since graph views are not accessible
+BUGFIX: ui: ExportData action would silently overwite the output file if it already existed
+BUGFIX: ui: IDA could lose the preferences for synchronization between views (and possibly registers, in case of debugging.)
+BUGFIX: ui: OSX: idaq64 would always launch idaq if a file was dragged onto the dock icon
+BUGFIX: ui: On Windows, the "Load a new file" dialog wouldn't create a taskbar entry, meaning it could be hard to find it on the desktop if another window showed up in front
+BUGFIX: ui: Renaming an unsaved script snippet could lose its contents
+BUGFIX: ui: The 'Default CLI' wouldn't be applied if IDA opened w/o a database
+BUGFIX: ui: re-enabled building graph of code and data xrefs to current address
+BUGFIX: ui: the "Functions window" could spend too much time refreshing the list of function names, even when no functions were modified
+BUGFIX: ui: the "Segment registers" view had fixed minimum size, meaning it was impossible to resize other tabs in case it was opened in a tabbed view
+BUGFIX: version info in idaq for windows was stored incorrectly
+BUGFIX: when debugging a macho shared lib, IDA could throw INTERR(40201) if the application exited prematurely
+BUGFIX: when debugging, toggling breakpoints could become impossible if the last closed widget was a hex view or stack view
+BUGFIX: windbg: some registers (typically ST0) could lose their value after stepping
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Highlights
+Complete changelist
+Was this helpful?

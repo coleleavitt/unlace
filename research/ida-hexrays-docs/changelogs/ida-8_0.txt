@@ -1,0 +1,166 @@
+IDA 8.0 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 8.0
+IDA 8.0.220729
+July 29, 2022
+IDA 8.0 Highlights
+As usual, IDA has improved on many fronts, but the most important feature this time around - and the one that justifies the major version bump - is the introduction of the brand-new link:IDA Teams. (FIXME: primer.pdf, or mkt.pdf?)
+IDA Teams is out!
+We've been hard at work putting the finishing touches to our new product: an integrated set of tools to bring seamless collaboration among teams of [reverse-]engineers.
+Inspired by the best revision control tools out there, IDA Teams brings their key concepts to IDA databases & workflows:
+revision control,
+changes attribution,
+diffing & merging
+We're very proud - and excited! - by what IDA Teams can accomplish, and hope you will appreciate its potential. But we won't stop there: we already have great ideas for the next versions!
+iOS 16 dyld shared cache support
+Once again, Apple has modified the internal format of the system files on their mobile operating systems to improve performance and memory usage, so we have updated IDA to support the new tweaks.
+iOS16
+Outlined functions
+Another new trick used by Apple on recent iOS versions is outlined functions. This is a code size optimization where the compiler extracts common instruction sequences used in several functions into a new pseudo-function which is then "called" from multiple places. This behavior tends to make decompiled pseudocode ugly, especially when the outlined functions use arbitrary registers or stack variables from the parent function. Now you can mark such functions with a special attribute and the decompiled code will look much nicer.
+For example, here's a fragment of a file which has been compiled with such optimization:
+before
+In initial pseudocode, we can see explicit calls to the compiler-generated _OUTLINED_FUNCTION_NN fragments, and some variables marked in orange because the decompiler considers them to be spoiled by the calls (which is the case with calls to regular functions). After marking those pseudo-functions with 'outline' attribute and refreshing the pseudocode, the decompiler inlines everything and there are no more orange variables:
+after
+Golang 1.18
+The new version of the language introduced changes to the layout of the metadata. New IDA version can parse it and nicely recover function names.
+For example, here's a stripped golang 1.18 binary in IDA 7.7:
+before
+And the same binary in IDA 8.0:
+after
+ARC decompiler
+ARC processors are used in many embedded devices such as SSD drives or Wi-Fi chipsets. It was also the core used in the infamous Intel ME until several years ago. The new decompiler supports all ARC instruction set variants currently supported by IDA: classic 32-bit ISA, 32/16-bit ARCompact and the new ARCv2. Delay slots, conditional instructions and zero-overhead loops are supported out of the box.
+hexarc
+No more Python 2
+It's been over two years since Python 2.7 support has ended, and it's time to let go. IDA 8.0 will support only Python 3.x, including the latest 3.10 (Windows installer includes Python 3.10.5).
+Better firmware analysis thanks to the function finder plugin (patfind)
+Firmware binaries usually do not have any symbols or other metadata which would help IDA to find code in the unmarked loaded data, so users had to do it manually. In the new release, we've added a plugin which makes use of the pattern format used in Ghidra (with minor extensions). This plugin is enabled by default for binary and binary-like formats and helps IDA discover more code automatically. It can also be invoked manually for normal structured files to find otherwise unreferenced code.
+patfind
+Comparison of the number of functions discovered after initial autoanalysis with default settings:
+file type | IDA 7.7 | IDA 8.0 + patfind ------------------------+---------+----- Cortex-M0 firmware (8KB)| 0 | 59 ARM9 firmware (23KB) | 0 | 97 ARM11 firmware (300KB) | 84 | 1697 PowerPC firmware (2MB) | 0 | 2223
+FLAIR pattern generator (makepat)
+The FLAIR toolkit, available to all IDA Pro customers, allows creating
+FLIRT signatures
+from static libraries. However, such libraries are not always available - sometimes all you have is just the final linked binary. The makepat plugin supports creating .pat files for functions in an arbitrary IDA database. It uses the functionality added for
+Lumina
+to mark variable bytes in the patterns. The .pat can then be compiled to a signature file using
+sigmake
+and applied to other files.
+makepat
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+IDA 8.0 Highlights
+IDA Teams is out!
+iOS 16 dyld shared cache support
+Outlined functions
+Golang 1.18
+ARC decompiler
+No more Python 2
+Better firmware analysis thanks to the function finder plugin (patfind)
+FLAIR pattern generator (makepat)
+Was this helpful?

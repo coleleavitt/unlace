@@ -1,0 +1,71 @@
+__int64 __fastcall sub_280710(_QWORD *a1, __int64 a2)
+{
+  __int64 *v2; // r14
+  unsigned int v3; // ebp
+  _QWORD *v5; // rax
+  __int64 v6; // r15
+  __int64 v8; // rsi
+  __int64 v9; // rax
+  __int64 v10; // r12
+  int v11; // [rsp+4h] [rbp-94h]
+  __int64 v12; // [rsp+8h] [rbp-90h]
+  __int64 v13; // [rsp+10h] [rbp-88h] BYREF
+  int v14; // [rsp+18h] [rbp-80h]
+  __int64 v15; // [rsp+1Ch] [rbp-7Ch]
+  __int64 v16; // [rsp+40h] [rbp-58h]
+  int v17; // [rsp+48h] [rbp-50h]
+  unsigned __int64 v18; // [rsp+58h] [rbp-40h]
+
+  v18 = __readfsqword(0x28u);
+  v2 = *(__int64 **)(a2 + 24);
+  if ( !v2[9]
+    && (v5 = *(_QWORD **)(v2[8] + 24), v5[2] == 1)
+    && (v6 = *v5, *(_QWORD *)(*v5 + 24LL) == -4294967220LL)
+    && (v8 = *(_QWORD *)(v6 + 40),
+        v13 = -1,
+        v14 = 0,
+        v15 = -1,
+        v16 = 0,
+        v17 = 0,
+        sub_253C70((__int64)&v13, v8),
+        v3 = sub_2803B0(a1, a2, v2, (__int64)&v13),
+        sub_24E2B0((__int64)&v13),
+        clear_tinfo_t(),
+        (_BYTE)v3) )
+  {
+    v11 = *(_DWORD *)(a2 + 12);
+    v12 = *(_QWORD *)a2;
+    v9 = j__qalloc_or_throw();
+    *(_QWORD *)v9 = -1;
+    v10 = v9;
+    *(_DWORD *)(v9 + 8) = 70;
+    *(_QWORD *)(v9 + 12) = -1;
+    sub_2536F0(v9, v6 + 16);
+    sub_24E200((__int64 *)a2, v10);
+    if ( v2 )
+    {
+      if ( v2[8] )
+      {
+        sub_24DCD0(v2[8]);
+        j__qfree();
+      }
+      if ( v2[9] )
+      {
+        sub_24DCD0(v2[9]);
+        j__qfree();
+      }
+      sub_24E2B0((__int64)v2);
+      clear_tinfo_t();
+      j__qfree();
+    }
+    *(_DWORD *)(a2 + 8) = 75;
+    *(_QWORD *)a2 = v12;
+    *(_DWORD *)(a2 + 12) = v11;
+  }
+  else
+  {
+    return 0;
+  }
+  return v3;
+}
+

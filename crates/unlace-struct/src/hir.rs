@@ -8,6 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use unlace_ir::eh::SehFilter;
 use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaVarnode, TargetSet};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, Varnode};
@@ -261,16 +262,30 @@ pub enum HirNode {
         catch_arms: Vec<(Type, Vec<HirNode>)>,
     },
 
-    /// An MSVC `__try { } __finally { }` construct.
+    /// A `__try { } __finally { }` construct.
     ///
-    /// Recovered by [`crate::structurer::wrap_seh_try_finally`] from the
-    /// MSVC SEH unwind-map metadata decoded in
-    /// [`unlace_loader::seh`]. Distinct from [`HirNode::TryCatch`] because
-    /// `__finally` always runs (normal flow *or* exception flow) and so
-    /// has no exception-type parameter.
+    /// Recovered by [`crate::eh_dispatch::recover_try_catch`] from an
+    /// [`unlace_ir::eh::EhHelper::Wind`] dispatch: the finally body is the
+    /// cleanup landing pad (destructors, `__cxa_end_catch`, then
+    /// `_Unwind_Resume`) that unwinding through the try body enters.
+    /// Distinct from [`HirNode::TryCatch`] because the body has no
+    /// exception-type parameter.
     TryFinally {
         try_body: Vec<HirNode>,
         finally_body: Vec<HirNode>,
+    },
+
+    /// An MSVC `__try { } __except (filter) { }` construct.
+    ///
+    /// Recovered by [`crate::eh_dispatch::recover_try_catch`] from an
+    /// [`unlace_ir::eh::EhHelper::Except`] dispatch, which the pipeline
+    /// installs from the `__C_specific_handler` scope table of a PE
+    /// function. The filter is the scope record's, not an expression in
+    /// this function: the filter funclet is its own code.
+    TryExcept {
+        try_body: Vec<HirNode>,
+        filter: SehFilter,
+        except_body: Vec<HirNode>,
     },
 
     /// A wrapper that attaches free-form C comments to an inner node.

@@ -1,0 +1,20 @@
+/* Split from IDA decompile_many output for CodeGraph indexing. */
+// Name: sub_8B88C
+// Address: 0x0008B88C
+
+//----- (0008B88C) --------------------------------------------------------
+void __fastcall sub_8B88C(int a1)
+{
+  _DWORD *v2; // r6
+  int v3; // r0
+  _DWORD v4[3]; // [sp+0h] [bp-Ch] BYREF
+
+  sub_8B258(v4, &byte_8DFE8);
+  ITM_memcpyRnWt(a1, v4, 8);
+  v2 = (_DWORD *)sub_8B550(a1);
+  v3 = sub_8B520();
+  sub_8B4CC(v2, v3);
+  std::out_of_range::~out_of_range((std::out_of_range *)v4);
+}
+// 144D8: using guessed type int __fastcall ITM_memcpyRnWt(_DWORD, _DWORD, _DWORD);
+// 8DFE8: using guessed type char byte_8DFE8;

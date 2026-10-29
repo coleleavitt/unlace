@@ -1,0 +1,13 @@
+__int64 __fastcall sub_B71CA0(__int64 a1)
+{
+  __int64 *v1; // rax
+  __int64 v2; // rdx
+  _QWORD v4[3]; // [rsp+0h] [rbp-18h] BYREF
+
+  v1 = *(__int64 **)(a1 + 64);
+  v2 = *v1;
+  v4[1] = v1 + 1;
+  v4[0] = v2;
+  return (sub_F490E0(v4) << 32) | *(unsigned int *)(a1 + 56);
+}
+

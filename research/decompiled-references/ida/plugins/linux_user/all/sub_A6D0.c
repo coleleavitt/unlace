@@ -1,0 +1,56 @@
+void sub_A6D0()
+{
+  xmmword_46E40 = (__int128)_mm_load_si128((const __m128i *)&off_48020);
+  xmmword_46E50 = (__int128)_mm_load_si128((const __m128i *)&xmmword_48030);
+  xmmword_46E60 = (__int128)_mm_load_si128((const __m128i *)&off_48000);
+  xmmword_46E70 = (__int128)_mm_load_si128((const __m128i *)&xmmword_48010);
+  xmmword_46E80 = (__int128)_mm_load_si128((const __m128i *)&off_47FE0);
+  xmmword_46E90 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47FF0);
+  xmmword_46EA0 = (__int128)_mm_load_si128((const __m128i *)&off_47FC0);
+  xmmword_46EB0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47FD0);
+  xmmword_46EC0 = (__int128)_mm_load_si128((const __m128i *)&off_47FA0);
+  xmmword_46ED0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47FB0);
+  xmmword_46EE0 = (__int128)_mm_load_si128((const __m128i *)&off_47F80);
+  xmmword_46EF0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47F90);
+  xmmword_46F00 = (__int128)_mm_load_si128((const __m128i *)&off_47F60);
+  xmmword_46F10 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47F70);
+  xmmword_46F20 = (__int128)_mm_load_si128((const __m128i *)&off_47F40);
+  xmmword_46F30 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47F50);
+  xmmword_46F40 = (__int128)_mm_load_si128((const __m128i *)&off_47F20);
+  xmmword_46F50 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47F30);
+  xmmword_46F60 = (__int128)_mm_load_si128((const __m128i *)&off_47F00);
+  xmmword_46F70 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47F10);
+  xmmword_46F80 = (__int128)_mm_load_si128((const __m128i *)&off_47EE0);
+  xmmword_46F90 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47EF0);
+  xmmword_46FA0 = (__int128)_mm_load_si128((const __m128i *)&off_47EC0);
+  xmmword_46FB0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47ED0);
+  xmmword_46FC0 = (__int128)_mm_load_si128((const __m128i *)&off_47EA0);
+  xmmword_46FD0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47EB0);
+  xmmword_46FE0 = (__int128)_mm_load_si128((const __m128i *)&off_47E80);
+  xmmword_46FF0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47E90);
+  xmmword_47000 = (__int128)_mm_load_si128((const __m128i *)&off_47E60);
+  xmmword_47010 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47E70);
+  xmmword_47020 = (__int128)_mm_load_si128((const __m128i *)&off_47E40);
+  xmmword_47030 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47E50);
+  xmmword_47040 = (__int128)_mm_load_si128((const __m128i *)&off_47E20);
+  xmmword_47050 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47E30);
+  xmmword_467C0 = (__int128)_mm_load_si128((const __m128i *)&off_47E00);
+  xmmword_467D0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47E10);
+  xmmword_467E0 = (__int128)_mm_load_si128((const __m128i *)&off_47DE0);
+  xmmword_467F0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47DF0);
+  xmmword_46800 = (__int128)_mm_load_si128((const __m128i *)&off_47DC0);
+  xmmword_46810 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47DD0);
+  xmmword_46820 = (__int128)_mm_load_si128((const __m128i *)&off_47DA0);
+  xmmword_46830 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47DB0);
+  xmmword_46840 = (__int128)_mm_load_si128((const __m128i *)&off_47D80);
+  xmmword_46850 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47D90);
+  xmmword_46860 = (__int128)_mm_load_si128((const __m128i *)&off_47D60);
+  xmmword_46870 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47D70);
+  xmmword_46880 = (__int128)_mm_load_si128((const __m128i *)&off_47D40);
+  xmmword_46890 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47D50);
+  xmmword_468A0 = (__int128)_mm_load_si128((const __m128i *)&off_47D20);
+  xmmword_468B0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47D30);
+  xmmword_468C0 = (__int128)_mm_load_si128((const __m128i *)&off_47D00);
+  xmmword_468D0 = (__int128)_mm_load_si128((const __m128i *)&xmmword_47D10);
+}
+

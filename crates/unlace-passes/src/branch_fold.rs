@@ -290,12 +290,22 @@ impl<'a> Evaluator<'a> {
 
     /// The definition a use at `(bid, idx)` reads: `Some(None)` for the
     /// live-in value, `None` when the SSA naming is ambiguous.
+    ///
+    /// A read at a width the register was never defined at carries version 0
+    /// whatever reaches it (SSA renames per exact varnode); it is matched to
+    /// the register's definition only when there is exactly one.
     fn reaching_def(&self, bid: BlockId, idx: usize, sv: SsaVarnode) -> Option<Option<DefSite>> {
-        let Some(sites) = self.defs.get(&def_key(sv)) else {
-            return Some(None);
+        let sites: Vec<DefSite> = match self.defs.get(&def_key(sv)) {
+            Some(sites) => sites.clone(),
+            None if sv.version == 0 => self
+                .defs
+                .range((sv.base.space, sv.base.offset, 0)..=(sv.base.space, sv.base.offset, u32::MAX))
+                .flat_map(|(_, sites)| sites.iter().copied())
+                .collect(),
+            None => return Some(None),
         };
         let [site] = sites.as_slice() else {
-            return None;
+            return (sites.is_empty()).then_some(None);
         };
         let dominates_use = match *site {
             DefSite::Insn(def_bid, def_idx) => {
@@ -480,8 +490,9 @@ mod tests {
         assert!(!func.function.blocks.contains_key(&BlockId(2)));
     }
 
-    /// `sp` read before and after `sp = sp - 8` share SSA version 0 but are
-    /// different values: `sp_in == sp_new` is false, not true.
+    /// `sp` read before and after `sp = sp - 8` are different values (the
+    /// live-in is version 0, the definition version 1): `sp_in == sp_new` is
+    /// false, not true.
     #[test]
     fn live_in_and_first_definition_are_distinct() {
         let (old, cond) = (reg(0x60, 8), reg(0x103, 1));

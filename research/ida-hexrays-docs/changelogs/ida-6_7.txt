@@ -1,0 +1,464 @@
+IDA 6.7 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 6.7
+Highlights
+A lot of work was done on the UI internals to improve the speed and responsiveness, and reduce unnecessary screen redrawing
+UI: no more resetting to the default desktop layout when moving your IDB to another PC/monitor - the saved layout is scaled to fit the new resolution
+SDK/UI: new set of functions for dealing with user-provided actions
+[un]register_action
+[at|de]tach_action_[to|from]_menu
+attach_action_to_custom_viewer_popup
+attach_action_to_output_popup
+[at|de]tach_action_[to|from]_toolbar
+All of them are also available in IDAPython
+DWARF: much improved support for DWARF4, and added support for DWZ (compressed DWARF) files
+MIPS: support for microMIPS, DSP extensions and Cavium Octeon II instructions
+PIN and Dalvik debuggers were improved considerably to be faster, more robust and easier to use
+Position-independent build of ARM Android remote debugger server (required for Android Lollipop)
+UEFI type libraries and TE (Terse Executable) file format support
+Many vulnerabilities fixed thanks to the submissions to our
+bug bounty
+program
+Complete changelist
+Processor Modules
+6809: added support for data page segment register (DP)
+ARM: detect several additional variations of the __rt_switch8 helper in binaries produced by the ARM compiler (armcc)
+ARM: improve no-ret analysis for calls performed using BX and BLX instructions
+Dalvik: 'T' can be used to apply structure offsets to odex "quick" instruction operands
+Dalvik: decode return-void-barrier (opcode 0xf1) instruction
+f2mc: Added PCB to the list of segment registers
+m740: added I/O port definitions for m3804x
+Mach-O: add init pointers as entrypoints (similar to PE's TLS callbacks)
+Mach-O: improve the loader to handle unusual and deliberately modified files
+Mach-O: use the LC_MAIN command, if present, to determine the program entrypoint
+MIPS: added support for Cavium Octeon II instructions
+MIPS: added DSP ASE support
+MIPS: added MSA ASE support
+MIPS: added microMIPS instruction set support
+MIPS: provide auto-comment for floating point and dword-sized stack args
+MIPS: resolve gp-relative references on N64 ABI
+MIPS: simplify some instruction sequences to dla/dli on N32/N64 ABIs
+MIPS: Support for R_MIPS_TLS_TPREL relocations
+PC/PE/kernel: define entrypoint prototype for UEFI files NB: DXE entrypoint is used for all UEFI files, since it's impossible to distingish PEI and DXE files by the header flags
+PC: decode FMA4 instructions
+PC: handle switches produced by the Sun C compiler
+PC: improve recognition of GCC switches in non-PIC x64 binaries
+PC: improve switch analysis (again)
+PC: improved frame analysis (some 'lea ebp' insns were recognized as part of prolog while they were not)
+PC: improved prolog recognition
+PE: handle unwind info version 2 in x64 .pdata sections
+PE: support ARM64 files
+PE: when applying relocations, mark relocations which apply to code as such (improves autoanalysis)
+PPC: PPC_TOC, PPC_SDA_BASE, PPC_MMIO_BASE can now be set from IDC scripts
+PPC: support for SPE 2.0 instructions
+Tricore: apply mapping to offsets recognized in standard instruction sequences
+File Formats
+IDA automatically uses sparse storage for uninitialized segments
+ELF: add support for R_MIPS_64 reloc
+ELF: DT_MIPS_LOCAL_GOTNO-declared relocations in MIPS shared libraries will now be properly handled on rebasing/segment move
+ELF: handle x86/x64 files with bogus EI_CLASS and EI_DATA values (these fields are ignored by Linux kernel)
+ELF: if a dynamic shared object file has ".interp" section, do not mark it as DLL (it's a position-independent executable)
+ELF: MIPS: detect microMIPS functions
+ELF: MIPS: try to find initial gp value even when DT_MIPS_GP_VALUE is missing
+ELF: PPC: handle R_PPC_ADDR24 relocation
+ELF: support files that use bogus R_ARM_REL32 relocations for self-decryption
+ELF: Support for R_386_TLS_TPOFF32 relocation
+HEX: split the file being loaded into several segments if there are big gaps in addressing
+Java: support loading of .class files produced by Java 8
+CLI: IDA on Windows can now make use of the built-in CLI metadata loader, if the environment variable 'PE_CLI_FORCE_RAW' is set
+TE: added support for TE (Terse Executable) file format, used in UEFI firmwares
+Debugger
+BOCHS: enabled manual memory regions in disk image mode
+BOCHS: support for Bochs 2.6.6
+debugger: Android: added a position-independent build of the debugging server (android_server_pie); necessary for Android Lollipop
+Debugger: Dalvik: added an ability to preset breakpoints at methods of Activity to start with, controlled by Debug specific options
+Debugger: linux: try to detect if the dynamic interpreter (ld.so) is loaded at runtime and start reporting shared libraries at that time This helps with debugging of compressed programs
+DWARF: Don't try and use DWARF info from files that have a .gnu_debugaltlink companion file
+DWARF: Golang: Better handling of some poorly-defined arrays dimensions
+DWARF: Initial support for CFA(Call Frame Activation)-based stack arguments
+DWARF: Moved to libdwarf 20140805, which provides much better DWARF V4 support
+DWARF: Support for decimal floating point values
+DWARF: Support for ELF files with a companion 'DWZ' file (i.e., "compressed" DWARF information.)
+DWARF: Support for Free Pascal-style UDT-member-as-subroutine (lacks a '*' DIE)
+PIN: implemented write memory request
+PIN: print PIN toolkit version when starting pintool
+PIN: provide access to FPU/XMM registers
+PIN: support PIN toolkin version 2.14
+PIN: support register modification
+Kernel/Misc
+demangler: added support for the .eh suffix
+demangler: handle rvalue reference and nullptr_t in VC++ mangled names
+generate a xref to the target struct type when 'struct offset' applied to a struct member
+installer: enable SEHOP and Force ASLR mitigations on Windows at install time
+kernel: reimplemented storage of segment register changepoints. Now ARM files with many ARM-Thumb changepoints consume much less memory
+Linux installer will warn the user about missing 32-bit support instead of failing silently on pure x64 distros
+show string tail as a comment if cross-refence points into the middle of the string
+sync all imported types from loaded tils to the local til file; we need this to ensure that an imported type does not suddently change because of til manipulations
+PELF: add support for ARCompact relocations
+TIL: added a type library for UEFI (x86 and x64, version 2.4)
+kernel: virtual array was flushing pages to the disk every time we changed its size; removed that
+User Interface
+UI/QT: When holding Shift or Ctrl while mouse wheel scrolling, entire pages are scrolled at once. When doing so in hint windows, they are grown/reduced faster, too
+UI: add 'Undefine operand', and 'Alignment' to the context menu, when applicable
+UI: Added "Copy to clipboard" functionality to "Export Data"
+UI: added a setting for the number of xrefs for structs/enums in the Options dialog
+UI: distinguish the main entrypoint in the list of exports/entry points
+UI: double-clicking on a register value during debugging allows to edit it
+UI: force randomization of Python DLLs load addresses, to reduce the risk of vulnerabilities; also enable Force ASLR if available (Windows 8 or later)
+UI: handle gracefully lack of disk space when trying to save the database - allow the user to retry saving
+UI: if one of the recent file entries in the File menu is selected while Shift key is held down, the file is opened in a new IDA instance
+UI: improved the "Edit Segment" form; segment access permissions can be edited now
+UI: on Windows, offer to create a minidump in case of an internal error
+UI: options dialog: added a "graph" or "nongraph" suffix to the settings which are mode-specific
+UI: print detailed function argument information when the user presses 'F'
+UI: QT: remove requirement for compatible screen resolution when loading desktop from IDB. If some floating windows do not fit into the screen, they're resized
+UI: remember the last used directory for the "Script file..." dialog (if OPEN_DEFAULT_IDC_PATH is not set)
+Scripts & SDK
+IDAPython: add idaapi.get_kernel_version()
+IDAPython: added ability to build IDAPython with Hex-Rays bindings by specifying a path to a directory where to find the 'hexrays.hpp' file
+IDAPython: added APIs for accessing the registry
+IDAPython: added APIs for working with breakpoint groups
+IDAPython: added umsg() for printing UTF-8 text into the Output Window
+IDAPython: construct_macro() is now available to IDAPython processor modules
+IDAPython: export get_custom_viewer_place(), and allow place_t clone() & related functions
+IDAPython: expose QueueDel(qtype_t, ea_t), to complete APIs for manipulating entries from the "known list of problems"
+IDAPython: get_tform_type()/get_tform_title(), & current_tform_changed callback
+IDAPython: give users the ability to access the underlying TForm/TCutsomControl objects that back higher-level Pythony wrappers, so that the rest of the SDK API can be used as well
+IDAPython: improve stability and error reporting for Python processor modules
+IDAPython: Scripts can use OnViewMouseMoved() callback to be notified of mouse movement on views (both user-created, as well as core IDA views)
+IDAPython: User graphs: double-clicking on a graph edge, will (by default) jump to the node on the other side of that edge
+IDC: Added UMessage(), to print UTF-8 strings
+IDC: 'Dump Database to IDC' now exports function comments too
+IDC: SetType/ApplyType can be used with struct member IDs
+SDK: Added 'umsg', which is in all aspects similar to 'msg', except that it works exclusively with UTF-8 strings
+SDK: added build_stkvar_xrefs(), to get a list of all the xrefs in a function for a given argument/variable in that function's stack frame
+SDK: added function to retrieve action attributes
+SDK: added lower_type2(), that accepts a helper capable of providing additional information about the function, that lower_type2() itself doesn't know about
+SDK: Added patch_qword(), (and PatchQword for IDC.)
+SDK: added qfindclose64() to the destructor of qffblk64_t; there is no need to call it explicitly anymore
+SDK: added qfstat64()
+SDK: added unpack_xleb128() to read sleb/uleb128 values
+SDK: attach_action_to_popup()/detach_action_from_popup() can now be used to register and remove 'permanent' popup actions
+SDK: deprecated 32-bit findfirst/findnext functions and qstat()
+SDK: deprecated guess_func_tinfo2 (use guess_tinfo2)
+SDK: deprecated ui_showauto and ui_setstate
+SDK: extend APIs for working with breakpoint groups
+SDK: extended set_dock_pos usage. Now it can be applied for the complex widgets by specifying the window title, f.e. "IDA View-B, Enums, Exports"
+SDK: extensive reworking of comments in the headers (converted to Doxygen format). HTML documentation is avilable for
+SDK: introduced debugger_t::set_resume_mode to be able to specify various resuming kinds (it replaces 'thread_set_step')
+SDK: new set of functions for dealing with user-provided actions
+SDK: qfileexist() now returns false if the specified path is a directory (use qisdir() for directories)
+SDK: since the return value of malloc/calloc with zero size is implementation dependent, the qalloc/qcalloc functions check for zero and return NULL
+SDK: added qgetcwd()
+BUGFIXES
+BUGFIX: IDAPython: made 'extract_name' available again
+BUGFIX: 32bit offsets in 16-bit segments were interpreted as seg:off pairs for all processors (should happen only for x86)
+BUGFIX: 64bit windows debugger: read/write of FPU/MMX was handled incorrectly
+BUGFIX: 6809: low/high offset expressions were displayed incorrectly
+BUGFIX: a signed comparison was used to validate the 'maxord' field of .til files; this is a vulnerability that can be exploited by creating a specially crafted .idb file, at least in theory
+BUGFIX: AOF: AOF loader could access out-of-bounds memory
+BUGFIX: AOUT: IDA could crash trying to load a corrupted a.out file
+BUGFIX: ARC: ARC4 ld/st were incorrectly treated as having delay slots
+BUGFIX: ARC: brCC and bbitX instructions were printed incorrectly (no delay slot and unnecessary period)
+BUGFIX: ARC: some ARCompact instructions were missing flag-setting bits
+BUGFIX: ARM: IDA could hang if there were three or more thunk functions calling each other in a loop
+BUGFIX: ARM: IDA could loop endlessly on some files (if the byte sequence would be resemble valid code but still had many inconsistencies)
+BUGFIX: ARM: instructions belonging to TBH/TBB switches were not properly marked
+BUGFIX: ARM: instructions inside IT blocks would lose their condition suffixes on rebasing
+BUGFIX: ARM: single stepping inside IT blocks was broken
+BUGFIX: autoanalysis could endlessly loop in some (rare) cases
+BUGFIX: BOCHS: IDA could fail to start debugging in snippet mode (IDB mode) if there was a big .bss segment at the end of address space in the database
+BUGFIX: BOCHS: IDB mode would work incorrectly with files that have many small, non-page-aligned segments (e.g. many ELF files)
+BUGFIX: BOCHS: in protected mode (disk image mode), mappping of segment selectors that use LDT (and not GDT) was done incorrectly
+BUGFIX: check_process_exit() could not handle the processes that were terminated by a signal (unix)
+BUGFIX: choose2() in batch mode could return wrong answer (if the default answer was wrong)
+BUGFIX: CLI: IDA could crash when loading a corrupted .NET file on Linux/OS X (double free)
+BUGFIX: CLI: IDA could hang on some corrupted .net files
+BUGFIX: CLI: IDA could spend enormous amount of time trying to load some corrupted .net files
+BUGFIX: CLI: Incorrect .net metadata could cause IDA to quit on Linux & OSX
+BUGFIX: CLI: specially crafted .net file could crash IDA on unix
+BUGFIX: Closing the IDB and calling 'get_import_module_name()' (e.g., through a PLUGIN_FIX plugin) would crash IDA
+BUGFIX: COFF: corrupted file could crash IDA
+BUGFIX: COFF: IDA could crash on some corrupted files
+BUGFIX: COFF: truncated string tables could lead to memory corruption
+BUGFIX: Dalvik debugger could crash when switching to the debugger desktop
+BUGFIX: Dalvik: move/16 and move-object/16 instructions were decoded incorrectly
+BUGFIX: DBG/COFF: IDA could crash when parsing a COFF symbol with bogus count of aux records
+BUGFIX: debugger: Android debugger could miss some memory areas (if the same starting address was listed twice in 'maps')
+BUGFIX: debugger: in some cases debugger could not continue execution after suspending on 'start process' event
+BUGFIX: debugger: it was impossible to read MMX registers from 64bit linux debugger
+BUGFIX: debugger: mac: IDA would fail to read debuggee's memory at or close to address 0 even when it was valid
+BUGFIX: Debugger: some debugger modules could still send BREAKPOINT events after receiving the termination request; IDA should ignore them
+BUGFIX: DEX: a specially crafted DEX could crash ida
+BUGFIX: DEX: fixed a buffer overflow in the DEX loader
+BUGFIX: DEX: IDA could crash trying to load a corrupted DEX file
+BUGFIX: DOS: MZ EXE relocations with values >0x8000 were processed incorrectly
+BUGFIX: DWARF: could fail recognizing some types as being equivalent, and end up in an INTERR
+BUGFIX: DWARF: could crash when generating some variations of a type, to make its size suitable for inheritance
+BUGFIX: DWARF: some badly corrupted DWARF data could cause IDA to quit
+BUGFIX: ELF: bogus PT_NOTE entries could cause IDA to hang for a long time
+BUGFIX: ELF: could crash on corrupted elf files
+BUGFIX: ELF: IDA could crash when loading a specially crafted ELF file
+BUGFIX: ELF: MIPS HI16 RELA relocations were incorrectly applied
+BUGFIX: ELF: specially crafted file could result in stack buffer overrun
+BUGFIX: ELF: STB_WEAK symbols were not listed in the 'exports' window
+BUGFIX: EPOC: handcrafted EPOC files could cause an endless recursion and eventual crash (but IDA would ask for a confirmation at each iteration)
+BUGFIX: EPOC: IDA could crash trying to load corrupted EPOC files
+BUGFIX: EPOC: malicious deflate-compressed EPOC files could crash IDA
+BUGFIX: EPOC: specially crafted .sis file may cause memory corruption
+BUGFIX: fixed behavior of highlight + scrolling to be like IDA pre-6.6
+BUGFIX: Fixed exporting to C header file of types with fileds of referenced by name type
+BUGFIX: GDB: the "Use CS:IP in real mode" option was treated as always active, leading to incorrect EIP values in real mode in some stubs (e.g. VMWare)
+BUGFIX: HPSOM: HP-UX SOM loader could access out-of-boundary memory
+BUGFIX: IDA could crash at the exit time if tinfo_t objects were leaked by a plugin or script
+BUGFIX: IDA could crash if an attempt to match a jump table instruction sequence was made on an ea without a segment
+BUGFIX: IDA could crash on specially crafted DEX file (trying to allocate a huge segment)
+BUGFIX: IDA could crash trying to guess a function type (stack overflow)
+BUGFIX: IDA could crash trying to load corrupted PharLap extender files
+BUGFIX: IDA could hang trying to move a segment from the top of the addressing space
+BUGFIX: IDA could interr if the program was rebased in the presence of orphan bytes (bytes that do not belong to any segment)
+BUGFIX: IDA could not parse 'static int inline x;'
+BUGFIX: IDAPython Decompiler bindings could abort IDA because of some uncaught C++ exception
+BUGFIX: IDAPython processor modules' outop-produced op_t references were leaked
+BUGFIX: IDAPython: Activate() callback was not functional
+BUGFIX: IDAPython: Exceptions in GraphViewer.OnRefresh() were silently ignored
+BUGFIX: IDAPython: exceptions thrown inside the code called by SWIG wrappers must be caught, or IDA might abort
+BUGFIX: IDAPython: Form.Close() was not working in most cases
+BUGFIX: IDAPython: gen_disasm_text() was expecting a 'text_t' instance, which is not exposed
+BUGFIX: IDAPython: get_ascii_contents2() was not honoring the possible output encoding request
+BUGFIX: IDAPython: GetLocalType() could produce errors with some local types
+BUGFIX: IDAPython: GraphViewer would not allow grouping of nodes, unless OnCreatingGroup was implemented
+BUGFIX: IDAPython: GraphViewer.Select() method was always selecting node 0 regardless of the argument
+BUGFIX: IDAPython: It was not possible to use 'tag' and 'reg' functions of a segreg_t instance returned by get_srarea()
+BUGFIX: IDAPython: Some char arrays-derived Python strings could contain garbage in some cases
+BUGFIX: IDAPython: some functions which returned a ssize_t, were wrapped incorrectly and were unusable
+BUGFIX: IDAPython: udt_type_data_t was not exposed as a qvector, and thus couldn't be iterated on
+BUGFIX: IDAPython: When using the Strings() class, bytes could be erroneously retrieved
+BUGFIX: IDC's SetShortPrm(INF_BINPREF, <nbytes>) would not properly change the current renderer's amount of displayed bytes
+BUGFIX: IDC: GetLocalTinfo() would return a non-zero number upon failure (must return 0)
+BUGFIX: IDC: IDA could interr if an IDC function was called with wrong number of arguments
+BUGFIX: IDC: SetMemberType() with struct offset would use wrong struct offset delta
+BUGFIX: IDC: the function SetRegValue() could set incorrect value for FPU registers
+BUGFIX: it was possible to create an item across function chunk boundaries (only in some cases)
+BUGFIX: kernel: instruction emulator could destroy the current insn in some cases and this would cause an interr later
+BUGFIX: LE: LE files without the MZ header could not be loaded
+BUGFIX: linux debmod could interr on low-level conditions
+BUGFIX: Mach-O: __stubs section was processed incorrectly for x64 files
+BUGFIX: Mach-O: corrupted export data could cause buffer overflow and crash IDA
+BUGFIX: Mach-O: Fixed crash in Mach-O loader (endless recursion)
+BUGFIX: Mach-O: fixed off-by-one bug in many places; efd was crashing on the sample files we received today; probably IDA too
+BUGFIX: Mach-O: Fixed potential endless recursion
+BUGFIX: Mach-O: IDA could crash on some corrupted Mach-O files the number of sections or section boundaries are bad
+BUGFIX: Mach-O: IDA could crash when loading Mach-O files with malformed LC_LOAD_DYLIB commands
+BUGFIX: Mach-O: IDA could not load files with over-sized sections
+BUGFIX: MIPS: building mips16 macro instructions could consume too many bytes, preventing some following instructions from being decoded
+BUGFIX: MIPS: registers could be tracked incorrectly for mips16 code
+BUGFIX: MIPS: some references to local symbols loaded from the GOT could not be converted to offsets
+BUGFIX: msp430: was using 16-bit segments by default
+BUGFIX: MSP430: some BRA instructions were decoded incorrectly
+BUGFIX: NE: IDA could crash on specially crafted NE file (zero pointer dereference)
+BUGFIX: on Linux some of concurrently started instances of IDA could fail to load the registry
+BUGFIX: our C parser was supporting only "ui64" suffix for 64-bit constants; the 'll' prefix was silently skipped
+BUGFIX: Patched bytes are now reverted before the segment and its data are deleted
+BUGFIX: PC: 'ymmword' keyword was not defined for PC module which caused 32-byte data items to be displayed with (null) prefix
+BUGFIX: PC: AVX instructions that refer to r8..r15 should not be decoded in 32-bit mode
+BUGFIX: PC: some instructions using repeated 66 and 67 prefixes (operand/address size override) were not decoded correctly
+BUGFIX: PDB: IDA could fail to load a PDB file when using File->gt;Load additional file->gt;PDB file... dialog
+BUGFIX: PE: files with corrupted CodeView debug info could trigger a double free
+BUGFIX: PE: heap overwrite in processing of x64 .pdata entries
+BUGFIX: PE: IDA could access invalid memory when a corrupted COFF symbol table was present
+BUGFIX: PE: IDA could take a very long time loading a file with bad debug directory
+BUGFIX: PE: specially crafted PE file could lead to memory corruption
+BUGFIX: PEF: fixed multiple vulnerabilities
+BUGFIX: PEF: specially crafted PEF files could crash IDA
+BUGFIX: PIN: get rid of duplicates in trace buffer (basic block tracing mode)
+BUGFIX: PIN: in some cases IDA tried to launch pintool even if 'autolaunch' option was disabled by the user
+BUGFIX: PIN: in some cases pintool could provide incorrect memory configuration
+BUGFIX: PIN: incorrect tooltips for memory operands in the disassembly window
+BUGFIX: PIN: not all threads appeared in IDA after initial attach to a process
+BUGFIX: PIN: register values/threads could be lost when debugger stops on "Process start"/"Library loaded" events (in case 'Suspend on debugging start' or "Suspend on library load/unload' option is enabled)
+BUGFIX: PIN: take into account actual flags of segments/function when enabled options 'Trace over debugger segments', 'Trace over library functions'
+BUGFIX: PPC: undecorating a name could yield an empty name and that could cause a crash
+BUGFIX: PPC: VLE instruction se_addi was incorrectly simplified into se_li when r0 was used as a source operand
+BUGFIX: Producing files with only structures/enums gave erroneous feedback on the line count
+BUGFIX: Proximity view could crash when asked to expand/collapse multiple nodes, when some of those are "(+)" nodes
+BUGFIX: qrealloc() with BADMEMSIZE could succeed on some flavors of linux64 (it should fail)
+BUGFIX: qwingraph: could crash on some huge graphs; now we nicely display a message and exit
+BUGFIX: references to unexisting types would be saved with explicit struct/union/enum keywords even if the reference was simply by name; the keyword would be derived on the fly from the forward declaration, if it existed
+BUGFIX: renaming a struct/enum would break references to it because IDA was using references by name instead of by ordinal
+BUGFIX: SDK: tinfo_t::is_forward_decl() could incorrectly return false in some cases
+BUGFIX: searching for the next unknown byte in sparse storage was buggy
+BUGFIX: some -D command line options could be effectively ignored because IDA could load a new processor module immediately after applying them; now we apply -D switches after loading the input file
+BUGFIX: some anonymous unions of bitfields could be handled incorrectly in pdb files
+BUGFIX: some register names were duplicated by some debugger backends
+BUGFIX: SPARC: IDA would miss delay slots in little endian mode
+BUGFIX: structure alignment was incorrectly calculated when copying from the struct window to the local types;
+BUGFIX: switch idioms that had the default jump target inside (but unmarked) would still be decompiled incorrectly
+BUGFIX: Syncing a Hex-View to the value of a register would cause an interr
+BUGFIX: the 'local types' window was not refreshed after importing some types to the IDB
+BUGFIX: tilib: could interr when trying to calculate the alignment of a 'long double' type when the compiler is set to 'Borland' (long double is 10 bytes but has alignment of 8)
+BUGFIX: tinfo_t::print() could crash if PRTYPE_DEF was passed for a trivial type
+BUGFIX: tracing, basic block tracing mode: broken order of instructions in the trace buffer
+BUGFIX: Tricore: some ld16/st16 instructions were decoded incorrectly
+BUGFIX: UI: after switching Hex View to one-column it was not displaying anything
+BUGFIX: UI: IDA could confuse structs with members when renaming in the structures view
+BUGFIX: UI: IDA could crash when showing proximity graph coming from a trace
+BUGFIX: UI: IDA could crash when trying to display a proximity view graph for a newly opened file, if that graph exceeded the max node limit
+BUGFIX: UI: IDA could show "undefined type" message when loading some PE files into IDB
+BUGFIX: UI: IDA was generating bogus idb_event::op_type_changed when showing the context menu
+BUGFIX: UI: in some cases picking a standard numeric constants (enum) for the value in the disassembly did not work
+BUGFIX: UI: load-time warnings could be shown again even if the user checked "Don't show again in current session"
+BUGFIX: UI: Pressing '.' when in the "Output window"'s messages widget wouldn't switch control to the CLI widget
+BUGFIX: ui: qt: Changed meaning of 'width' field parameter in forms descriptions. Now it is buffer size -1 for text fields and the number of characters for digital fields
+BUGFIX: UI: QT: Open... file dialog was displaying only "All files(*)"; now extensions idagui.cfg are used
+BUGFIX: UI: Right-clicking on a graph view, and then clicking on the "Zoom 100%" action could lead the view to zoom to the wrong place
+BUGFIX: UI: Right-clicking on an edge, and requesting a grouping of nodes while none are selected could crash IDA
+BUGFIX: UI: some IDBs created on Windows and used on Unix could have problems with the 'struct offset' command in the gui verion
+BUGFIX: UI: switching from graph view to flat view and back would change the current disassembly position if the current node was a group node
+BUGFIX: UI: the import window would display wrong library names if a new database was opened without quitting IDA
+BUGFIX: UI: tracing actions (Instruction tracing etc.) were not enabled for some debuggers which do support tracing (e.g. Bochs)
+BUGFIX: UI: TXT: Changed meaning of 'width' field parameter in forms descriptions. Now it is buffer size -1 for text fields and the number of characters for digital fields
+BUGFIX: UI: Using IDA in a Windows 8 RDP session might cause a freeze of the session when dragging & dropping widgets
+BUGFIX: UI: When animations were turned off, IDA could temporarily freeze
+BUGFIX: UI: when creating 32-bit segments with base 0, a selector was not allocated for it, leading to various issues
+BUGFIX: UI: when creating a new script snippet, the previous snippet text was not always cleared from text field
+BUGFIX: UI: When double-clicking a result in a non-modal "Xrefs to ..." view, in order to jump in the (previously hidden) tabbed graph view, the graph view might center on an incorrect place
+BUGFIX: uiswitch: it was impossible to specify a switch with zero elbase but nonzero shift
+BUGFIX: unreachable meaningless fpu instructions could hinder fpu stack analysis
+BUGFIX: User graphs: paint nodes background even when text is not painted (i.e., zoom level is too far away.)
+BUGFIX: when a struct was deleted, the corresponding type was not always deleted from the local types
+BUGFIX: When changing a variable/argument type in a function frame, 'Structures' xrefs might not be updated
+BUGFIX: when debugging, the cursor could be positioned on a multiline comment line in the pseudocode view, instead of the line with the real code
+BUGFIX: When horizontally scrolled, IDA View-A could fail to highlight the word on which the cursor is currently placed
+BUGFIX: When in graph view, jumping to the current function's call sites through the node title's "Jump to xref" icon could focus on the wrong node in the calling function
+BUGFIX: when opening an old IDB for a processor without the type system there could be a significant delay (a dozen of seconds or more)
+BUGFIX: When performing some keyboard shortcut sequences very fast, and then moving up/down with the keyboard's line up/down, or page up/down, the disassembly listing could show a single line (or jump one page off)
+BUGFIX: While grouping/ungrouping some nodes, IDA could freeze until 'Esc' is pressed
+BUGFIX: WinDbg: windbg debugger could not write FPU register values
+BUGFIX: 64bit linux debugger: Incorrect reading of FPU registers
+BUGFIX: ARM: arm module would display 'LDR R0, =0xFFFFFFFF' or similar in case the LDR instruction was referrring to a non-existing or uninitialized memory address
+BUGFIX: DWARF: Could misinterpret very large types (> 0x1fffffff bytes-large)
+BUGFIX: GDB: a malicious GDB stub could cause heap memory overwrite in IDA during debugging
+BUGFIX: IDA could abort with message "index file is bad" when compressing database
+BUGFIX: IDA could crash at DWARF-loading time, because the DWARF plugin would try and retrieve too many bytes from the file
+BUGFIX: IDA could crash/hang on corrupted databases
+BUGFIX: IDA could hang trying to load corrupted input files
+BUGFIX: IDA could hang trying to read symbols from an erroneously-large symbols table
+BUGFIX: IDAPython: internal_get_sreg_base() wasn't usable
+BUGFIX: IDAPython: set_nav_colorizer() was not accepting Python callables as implementation. Issue 1370
+BUGFIX: PC: some FPU instructions were not decoded if they had a REX prefix
+BUGFIX: Pressing 'p' to create a procedure, then keyboard-navigating to another piece of code and pressing 'p' again could not work (unless something caused the actions to be updated again; e.g., opening a dialog.)
+BUGFIX: IDA could interr when guessing a function prototype if the stack was growing up for the current processor
+BUGFIX: IDA could spend too much time generating the listing if there were too many lines in .net files
+BUGFIX: kernel: handling of switches with SWI_JMP_INV flag set was broken
+BUGFIX: specially crafted .sig files could crash IDA
+BUGFIX: PPC: some simplified instruction forms were missed
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Was this helpful?

@@ -1,0 +1,42 @@
+unsigned __int64 __fastcall sub_10B410(__int64 a1, __int64 a2, int a3, double a4)
+{
+  __int64 v5; // rcx
+  char v6; // dl
+  __m128i *v7; // rdi
+  const __m128i *v9; // [rsp+8h] [rbp-40h] BYREF
+  __int64 v10; // [rsp+10h] [rbp-38h] BYREF
+  char v11; // [rsp+18h] [rbp-30h]
+  unsigned __int64 v12; // [rsp+28h] [rbp-20h]
+
+  v12 = __readfsqword(0x28u);
+  if ( *(_BYTE *)a2 == 1 )
+    goto LABEL_4;
+  if ( *(_BYTE *)a2 != 5
+    || !(unsigned __int8)sub_1026C0(**(_QWORD ***)(a2 + 8), *(_QWORD *)(*(_QWORD *)(a2 + 8) + 8LL), 1u) )
+  {
+    sub_101D90(a4);
+  }
+  v6 = *(_BYTE *)a2;
+  v11 = 0;
+  if ( v6 == 1 )
+  {
+LABEL_4:
+    v5 = *(int *)(a2 + 8);
+    v6 = 1;
+  }
+  else
+  {
+    v5 = -1;
+    if ( v6 != 5 )
+      goto LABEL_6;
+    v5 = *(_QWORD *)(*(_QWORD *)(a2 + 8) + 8LL);
+  }
+  v11 = v6;
+LABEL_6:
+  v7 = *(__m128i **)(a1 + 48);
+  v9 = (const __m128i *)&v10;
+  v10 = v5 + a3;
+  sub_10B0E0(v7, (__int64)&v10, &v9);
+  return v12 - __readfsqword(0x28u);
+}
+

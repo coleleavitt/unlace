@@ -105,6 +105,14 @@ fn cleanup_node(node: &mut HirNode, modified: &mut usize) {
             cleanup_nodes(try_body, modified);
             cleanup_nodes(finally_body, modified);
         }
+        HirNode::TryExcept {
+            try_body,
+            except_body,
+            ..
+        } => {
+            cleanup_nodes(try_body, modified);
+            cleanup_nodes(except_body, modified);
+        }
         HirNode::Commented { inner, .. } => cleanup_node(inner, modified),
         HirNode::GuardedIf {
             then_body,

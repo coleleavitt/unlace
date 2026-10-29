@@ -8990,6 +8990,7 @@ fn test_t232_stack_frame_emits_named_local_decls() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 16,
         max_pos_offset: 0,
         min_neg_offset: -16,
@@ -9023,6 +9024,7 @@ fn test_t232_single_int_stack_buffer_emits_int_array_buf() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 64,
         max_pos_offset: 64,
         min_neg_offset: 0,
@@ -9118,6 +9120,7 @@ fn test_t232_stack_frame_access_uses_recovered_name() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 8,
         max_pos_offset: 12,
         min_neg_offset: 0,
@@ -9167,6 +9170,7 @@ fn test_t232_rsp_derived_store_uses_recovered_stack_name() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 4,
         max_pos_offset: -4,
         min_neg_offset: -8,
@@ -9295,6 +9299,7 @@ fn test_t232_stack_lvar_annotation_supplies_name_and_decl_type() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 4,
         max_pos_offset: -4,
         min_neg_offset: -8,
@@ -9468,6 +9473,7 @@ fn test_t232_aggregate_annotation_marks_buffer_decl_with_source_type() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 32,
         max_pos_offset: 0,
         min_neg_offset: -48,
@@ -9545,6 +9551,7 @@ fn test_t232_multi_use_rsp_derived_store_uses_recovered_stack_name() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 4,
         max_pos_offset: -4,
         min_neg_offset: -8,
@@ -9597,6 +9604,7 @@ fn test_t232_saved_register_stack_store_is_suppressed() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 8,
         max_pos_offset: 0,
         min_neg_offset: -8,
@@ -9630,6 +9638,7 @@ fn stack_arg_stack_frame_slot_is_not_declared_as_local() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 8,
         max_pos_offset: 24,
         min_neg_offset: 16,
@@ -9680,6 +9689,7 @@ fn accessed_stack_arg_slot_is_not_synthesized_as_local() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 8,
         max_pos_offset: 24,
         min_neg_offset: 16,
@@ -9730,6 +9740,7 @@ fn stack_param_slot_reads_print_as_the_parameter() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 8,
         max_pos_offset: 16,
         min_neg_offset: 8,
@@ -9787,6 +9798,7 @@ fn store_to_stack_arg_slot_is_not_dropped() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 8,
         max_pos_offset: 16,
         min_neg_offset: 8,
@@ -9876,6 +9888,7 @@ fn test_t232_array_slot_renders_as_buf() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 32,
         max_pos_offset: 0,
         min_neg_offset: -32,
@@ -9930,6 +9943,7 @@ fn test_t233_byref_local_renders_annotation() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 8,
         max_pos_offset: 0,
         min_neg_offset: -8,
@@ -14120,6 +14134,7 @@ fn test_materialized_stack_load_snapshot_is_not_reloaded_in_condition() {
     );
     func.stack_frame = Some(StackFrame {
         locals,
+        sp_offset_at_addr: std::collections::BTreeMap::new(),
         frame_size: 8,
         max_pos_offset: 16,
         min_neg_offset: 0,

@@ -932,7 +932,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("StructFieldDetectPass", TypeRecovery),
         PassDescriptor::new("TypeInferPass", TypeRecovery),
         PassDescriptor::new("TypeConstraintSolverPass", TypeRecovery),
-PassDescriptor::new("TypeVotePass", TypeRecovery),
+        PassDescriptor::new("TypeVotePass", TypeRecovery),
         PassDescriptor::new("ObjectWidenPass", TypeRecovery),
         PassDescriptor::new("SizeofRecognitionPass", TypeRecovery),
         PassDescriptor::new("CppVariantPass", TypeRecovery),
@@ -1450,7 +1450,7 @@ mod phase_tests {
             TypeRecovery, // StructFieldDetectPass
             TypeRecovery, // TypeInferPass
             TypeRecovery, // TypeConstraintSolverPass
-TypeRecovery, // TypeVotePass
+            TypeRecovery, // TypeVotePass
             TypeRecovery, // ObjectWidenPass
             TypeRecovery, // SizeofRecognitionPass
             TypeRecovery, // CppVariantPass

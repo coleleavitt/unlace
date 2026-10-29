@@ -69,10 +69,11 @@ pub(super) struct Term<L> {
     pub(super) coef: i64,
 }
 
-/// `root + Σ terms + constant`, in bytes.
+/// `root + Σ terms + constant`, in bytes. `R` is `Option<L>` for an address
+/// whose root may be missing (see [`decompose_unrooted`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct LinearForm<L> {
-    pub(super) root: L,
+pub(super) struct LinearForm<L, R = L> {
+    pub(super) root: R,
     /// Distinct leaves with nonzero coefficients, largest coefficient first.
     pub(super) terms: Vec<Term<L>>,
     pub(super) constant: i64,
@@ -84,9 +85,18 @@ pub(super) struct LinearForm<L> {
 /// difference, not an address), when the root is scaled or negated, or when
 /// the arithmetic overflows.
 pub(super) fn decompose<G: AddrGraph>(graph: &G, addr: G::Leaf) -> Option<LinearForm<G::Leaf>> {
+    decompose_unrooted(graph, Operand::Value(addr))?.rooted()
+}
+
+/// Decompose `addr` around at most one root. A global object's address has
+/// none: its root is the constant.
+pub(super) fn decompose_unrooted<G: AddrGraph>(
+    graph: &G,
+    addr: Operand<G::Leaf>,
+) -> Option<LinearForm<G::Leaf, Option<G::Leaf>>> {
     let mut acc = Accumulator::default();
-    acc.walk(graph, Operand::Value(addr), 1, 0)?;
-    acc.finish()
+    acc.walk(graph, addr, 1, 0)?;
+    Some(acc.finish())
 }
 
 /// [`decompose`] for an address computed by `node` itself rather than read
@@ -97,7 +107,17 @@ pub(super) fn decompose_node<G: AddrGraph>(
 ) -> Option<LinearForm<G::Leaf>> {
     let mut acc = Accumulator::default();
     acc.walk_node(graph, node, 1, 0)?;
-    acc.finish()
+    acc.finish().rooted()
+}
+
+impl<L> LinearForm<L, Option<L>> {
+    fn rooted(self) -> Option<LinearForm<L>> {
+        Some(LinearForm {
+            root: self.root?,
+            terms: self.terms,
+            constant: self.constant,
+        })
+    }
 }
 
 struct Accumulator<L> {
@@ -117,7 +137,7 @@ impl<L> Default for Accumulator<L> {
 }
 
 impl<L: Copy + Ord> Accumulator<L> {
-    fn finish(self) -> Option<LinearForm<L>> {
+    fn finish(self) -> LinearForm<L, Option<L>> {
         let mut terms: Vec<_> = self
             .coefs
             .into_iter()
@@ -125,11 +145,11 @@ impl<L: Copy + Ord> Accumulator<L> {
             .map(|(leaf, coef)| Term { leaf, coef })
             .collect();
         terms.sort_by_key(|term| std::cmp::Reverse(term.coef));
-        Some(LinearForm {
-            root: self.root?,
+        LinearForm {
+            root: self.root,
             terms,
             constant: self.constant,
-        })
+        }
     }
 
     fn walk<G: AddrGraph<Leaf = L>>(

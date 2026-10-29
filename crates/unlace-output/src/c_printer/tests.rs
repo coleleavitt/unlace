@@ -14923,3 +14923,191 @@ fn cpa_typed_pointer_difference_is_taken_in_bytes() {
     let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
     assert!(output.contains("(char *)p - (char *)q"), "{output}");
 }
+
+// ---------------------------------------------------------------------
+// ObjectWidenPass object types: accesses print through the object's type
+// ---------------------------------------------------------------------
+
+fn object_field(
+    name: &str,
+    offset: u64,
+    ty: unlace_ir::types::Type,
+) -> unlace_ir::types::StructFieldType {
+    unlace_ir::types::StructFieldType {
+        name: name.to_string(),
+        ty,
+        offset,
+    }
+}
+
+fn object_array(element: unlace_ir::types::Type, size: u64) -> unlace_ir::types::Type {
+    unlace_ir::types::Type::Array {
+        element: Box::new(element),
+        size: Some(size),
+    }
+}
+
+/// `struct { int fld_0; _BYTE fld_1[4]; _QWORD fld_2; }[count]`
+fn record_array(name: &str, count: u64) -> unlace_ir::types::Type {
+    use unlace_ir::types::Type;
+    let element = Type::Struct {
+        name: name.to_string(),
+        fields: vec![
+            object_field("fld_0", 0, Type::int(4)),
+            object_field("fld_1", 4, object_array(Type::uint(1), 4)),
+            object_field("fld_2", 8, Type::uint(8)),
+        ],
+    };
+    object_array(element, count)
+}
+
+fn object_annotations(
+    objects: &[(unlace_ir::mem_object::MemObject, unlace_ir::types::Type)],
+) -> super::PrinterAnnotations {
+    super::PrinterAnnotations {
+        object_types: objects.iter().cloned().collect(),
+        arch: Some(unlace_ir::ArchId::X86_64),
+        ..Default::default()
+    }
+}
+
+/// `return *(width *)(base + index * stride + offset)`, the address built
+/// from single-use temporaries.
+fn indexed_load_func(
+    name: &str,
+    base: Varnode,
+    stride: u64,
+    offset: u64,
+    width: u8,
+) -> HirFunction {
+    let index = reg(56, 8);
+    let scaled = IrInsn::with_output(
+        IrOp::IntMult,
+        Varnode::unique(0, 8),
+        smallvec![index, con(stride, 8)],
+        0x1000,
+    );
+    let based = IrInsn::with_output(
+        IrOp::IntAdd,
+        Varnode::unique(8, 8),
+        smallvec![base, Varnode::unique(0, 8)],
+        0x1004,
+    );
+    let addr = IrInsn::with_output(
+        IrOp::IntAdd,
+        Varnode::unique(16, 8),
+        smallvec![Varnode::unique(8, 8), con(offset, 8)],
+        0x1008,
+    );
+    let load = IrInsn::with_output(
+        IrOp::Load,
+        reg(0, width),
+        smallvec![con(0, 8), Varnode::unique(16, 8)],
+        0x100c,
+    );
+    make_func(
+        name,
+        vec![
+            HirNode::Statement(scaled),
+            HirNode::Statement(based),
+            HirNode::Statement(addr),
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(0, width))),
+        ],
+    )
+}
+
+#[test]
+fn global_array_of_structs_prints_indexed_member() {
+    use unlace_ir::mem_object::MemObject;
+    let func = indexed_load_func("object_global", con(0, 8), 16, 0x404088, 8);
+    let ann = object_annotations(&[(MemObject::Global(0x404080), record_array("obj_404080", 8))]);
+    let output =
+        super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+    let body = function_body_text(&output, "object_global");
+    assert!(body.contains("return stru_404080[v0].fld_2;"), "{body}");
+    assert!(!body.contains("0x404088"), "raw address survived: {body}");
+    assert!(
+        output.contains(
+            "struct obj_404080 { int fld_0; _BYTE fld_1[4]; _QWORD fld_2; };\nstruct obj_404080 stru_404080[8];\n"
+        ),
+        "{output}"
+    );
+}
+
+#[test]
+fn constant_access_into_a_scalar_array_prints_its_element() {
+    use unlace_ir::mem_object::MemObject;
+    use unlace_ir::types::Type;
+    let load = IrInsn::with_output(
+        IrOp::Load,
+        reg(0, 4),
+        smallvec![con(0, 8), con(0x40404c, 8)],
+        0x1000,
+    );
+    let store = IrInsn::without_output(
+        IrOp::Store,
+        smallvec![con(0, 8), con(0x404040, 8), con(5, 4)],
+        0x1004,
+    );
+    let func = make_func(
+        "object_const",
+        vec![
+            HirNode::Statement(load),
+            HirNode::Statement(store),
+            HirNode::Return(Some(sv(0, 4))),
+        ],
+    );
+    let ann = object_annotations(&[(MemObject::Global(0x404040), object_array(Type::int(4), 16))]);
+    let output =
+        super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+    let body = function_body_text(&output, "object_const");
+    assert!(body.contains("dword_404040[3]"), "{body}");
+    assert!(body.contains("dword_404040[0] = 5;"), "{body}");
+    assert!(output.contains("\nint dword_404040[16];\n"), "{output}");
+    // The array keeps its own declaration in a translation unit.
+    let unit = super::declare_pseudo_c_externals(&output);
+    assert!(!unit.contains("_DWORD dword_404040;"), "{unit}");
+}
+
+#[test]
+fn frame_array_of_structs_is_declared_and_indexed() {
+    use unlace_ir::mem_object::MemObject;
+    let rsp = reg(32, 8);
+    let func = indexed_load_func("object_frame", rsp, 16, (-0x90i64) as u64, 4);
+    let ann = object_annotations(&[(MemObject::Frame(-0x90), record_array("obj_frame_m90", 8))]);
+    let output =
+        super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+    let body = function_body_text(&output, "object_frame");
+    assert!(body.contains("struct obj_frame_m90 buf_144[8];"), "{body}");
+    assert!(body.contains("return buf_144[v0].fld_0;"), "{body}");
+    assert!(
+        output.contains("struct obj_frame_m90 { int fld_0;"),
+        "{output}"
+    );
+}
+
+#[test]
+fn misaligned_access_is_rebased_on_the_object() {
+    use unlace_ir::mem_object::MemObject;
+    let func = indexed_load_func("object_bytes", con(0, 8), 16, 0x404082, 2);
+    let ann = object_annotations(&[(MemObject::Global(0x404080), record_array("obj_404080", 8))]);
+    let output =
+        super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+    let body = function_body_text(&output, "object_bytes");
+    assert!(
+        body.contains("return *(_WORD *)((char *)&stru_404080 + 16 * v0 + 2);"),
+        "{body}"
+    );
+}
+
+#[test]
+fn objects_without_a_printed_access_are_not_declared() {
+    use unlace_ir::mem_object::MemObject;
+    use unlace_ir::types::Type;
+    let func = make_func("object_unused", vec![HirNode::Return(None)]);
+    let ann = object_annotations(&[(MemObject::Global(0x2004), object_array(Type::int(4), 8))]);
+    let output =
+        super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+    assert!(!output.contains("dword_2004"), "{output}");
+}

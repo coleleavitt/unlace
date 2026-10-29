@@ -116,13 +116,17 @@ use unlace_struct::{HirFunction, HirNode, SwitchCase};
 use crate::expr_ast::CExpr;
 
 mod cpa;
+mod mem_objects;
 mod member_path;
 mod postprocess;
 mod trace;
 
 use cpa::{
-    Pointee, try_typed_access, try_typed_pointer_sum, typed_access_is_stable, typed_pointer_update,
+    Pointee, object_access_is_stable, try_object_access, try_typed_access, try_typed_pointer_sum,
+    typed_access_is_stable, typed_pointer_update,
 };
+use mem_objects::MemObjects;
+pub use mem_objects::dedupe_object_declarations;
 use member_path::StructLayouts;
 use postprocess::*;
 use trace::*;
@@ -294,18 +298,20 @@ pub fn declare_pseudo_c_externals(output: &str) -> String {
         }
     }
 
-    collect_prefixed_identifiers(output, "byte_", |name| {
-        decls.insert(format!("_BYTE {};", name));
-    });
-    collect_prefixed_identifiers(output, "word_", |name| {
-        decls.insert(format!("_WORD {};", name));
-    });
-    collect_prefixed_identifiers(output, "dword_", |name| {
-        decls.insert(format!("_DWORD {};", name));
-    });
-    collect_prefixed_identifiers(output, "qword_", |name| {
-        decls.insert(format!("_QWORD {};", name));
-    });
+    // Objects the output declares itself (typed globals) keep their type.
+    let declared: BTreeSet<&str> = output.lines().filter_map(file_scope_object_name).collect();
+    for (prefix, ty) in [
+        ("byte_", "_BYTE"),
+        ("word_", "_WORD"),
+        ("dword_", "_DWORD"),
+        ("qword_", "_QWORD"),
+    ] {
+        collect_prefixed_identifiers(output, prefix, |name| {
+            if !declared.contains(name) {
+                decls.insert(format!("{ty} {name};"));
+            }
+        });
+    }
 
     collect_prefixed_identifiers(output, "sub_", |name| {
         if !defined_subs.contains(name) {
@@ -351,6 +357,21 @@ fn parse_function_definition_prototype(line: &str) -> Option<(&str, String)> {
         return None;
     }
     Some((name, format!("{};", header)))
+}
+
+/// The object a file-scope declaration line such as `int dword_404040[16];`
+/// or `struct obj_4040 stru_4040[8];` declares.
+fn file_scope_object_name(line: &str) -> Option<&str> {
+    if line.starts_with(char::is_whitespace) || line.contains('(') || line.contains('{') {
+        return None;
+    }
+    let declarator = line.strip_suffix(';')?;
+    let declarator = declarator.split('[').next()?.trim_end();
+    let start = declarator
+        .rfind(|c: char| !is_ident_byte(c as u8))
+        .map_or(0, |idx| idx + 1);
+    let name = &declarator[start..];
+    (start > 0 && is_c_identifier(name)).then_some(name)
 }
 
 fn collect_prefixed_identifiers(mut text: &str, prefix: &str, mut f: impl FnMut(&str)) {
@@ -653,6 +674,11 @@ pub struct PrinterAnnotations {
     /// otherwise types values from their defining opcode alone, which sees
     /// a 16-byte register as a plain `__int128`.
     pub vector_var_types: BTreeMap<SsaVarnode, unlace_ir::types::VectorType>,
+    /// Types `ObjectWidenPass` synthesised for whole memory objects, from
+    /// [`SsaFunction::object_types`]. Accesses into these objects print
+    /// through the type (`stru_404080[i].fld_1`) and the objects are
+    /// declared with it.
+    pub object_types: BTreeMap<unlace_ir::mem_object::MemObject, Type>,
 }
 
 /// Convert final SSA lvar metadata into the stack-name side channel consumed
@@ -948,6 +974,7 @@ fn print_c_attempt(
         ctx.flirt_call_annotations = ann.flirt_call_annotations.clone();
         ctx.stack_spec = ann.arch.and_then(unlace_ir::stack::StackSpec::for_arch);
         ctx.arch = ann.arch;
+        ctx.mem_objects = MemObjects::new(&ann.object_types, ann.arch, &ctx.symbols);
         ctx.var_types.extend(
             ann.vector_var_types
                 .iter()
@@ -1035,6 +1062,10 @@ fn print_c_attempt(
         promote_stack_address_call_arrays(&func.body, &mut ctx);
     }
     trace_ctx_snapshot("promote-stack-address-call-arrays", &ctx);
+    {
+        let _span = linkscope::phase("cprinter.precompute.claim-frame-objects");
+        mem_objects::claim_frame_objects(func, &mut ctx);
+    }
     {
         let _span = linkscope::phase("cprinter.precompute.foldable");
         compute_foldable(&mut ctx);
@@ -1219,6 +1250,10 @@ fn print_c_attempt(
         out.push_str(preamble);
         out.push('\n');
     }
+
+    // The object declarations go here, but which globals need one is known
+    // only once the body has printed its accesses.
+    let object_decls_at = out.len();
 
     if let Some(dwarf) = dwarf
         && !dwarf.languages.is_empty()
@@ -1769,6 +1804,9 @@ fn print_c_attempt(
     let body_span = linkscope::phase("cprinter.emit-body");
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
     drop(body_span);
+    if let Some(preamble) = mem_objects::preamble(&ctx.mem_objects) {
+        out.insert_str(object_decls_at, &format!("{preamble}\n"));
+    }
 
     out.push_str("}\n");
 
@@ -2871,6 +2909,8 @@ struct PrintCtx {
     /// [`flirt_call_comment`] to emit `/* flirt: <name>@<conf> */` at
     /// Call sites whose target was recognised by signature matching.
     flirt_call_annotations: BTreeMap<u64, (String, f32)>,
+    /// Memory objects with synthesised types; see [`mem_objects`].
+    mem_objects: MemObjects,
 }
 
 #[derive(Clone, Debug)]
@@ -3095,6 +3135,7 @@ impl PrintCtx {
             synthetic_stack_scalars: BTreeMap::new(),
             vtable_call_targets: BTreeMap::new(),
             flirt_call_annotations: BTreeMap::new(),
+            mem_objects: MemObjects::default(),
         }
     }
 
@@ -8195,6 +8236,14 @@ fn emit_stack_frame_decls(
 ) -> std::collections::BTreeSet<String> {
     use unlace_ir::ssa::FrameSlotKind;
     let mut emitted = std::collections::BTreeSet::new();
+    for (offset, end, info) in ctx.mem_objects.frame_ranges() {
+        trace_stack_text(format_args!(
+            "emit-frame-object-decl offset={offset} end={end} name={}",
+            info.name
+        ));
+        let _ = writeln!(out, "{}", mem_objects::local_declaration(info));
+        emitted.insert(info.name.clone());
+    }
     for (&offset, &size) in &ctx.promoted_stack_buffers {
         if !stack_frame_offset_is_visible_local(func, offset) {
             trace_stack_text(format_args!(
@@ -8295,6 +8344,13 @@ fn emit_stack_frame_decls(
         if absorbed_offsets.contains(&local.offset) {
             trace_stack_text(format_args!(
                 "emit-frame-slot-skip offset={} size={} reason=absorbed-by-buffer",
+                local.offset, local.size
+            ));
+            continue;
+        }
+        if ctx.mem_objects.frame_covers(local.offset) {
+            trace_stack_text(format_args!(
+                "emit-frame-slot-skip offset={} size={} reason=frame-object",
                 local.offset, local.size
             ));
             continue;
@@ -13884,7 +13940,9 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                 }
                 let store_size = insn.inputs[2].size;
                 let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-                if let Some(local) =
+                if let Some(object) = try_object_access(&insn.inputs[1], idx, store_size, ctx) {
+                    Some(format!("{} = {};", object, val))
+                } else if let Some(local) =
                     try_stack_frame_access_name(&insn.inputs[1], Some(1), idx, store_size, ctx)
                 {
                     Some(format!("{} = {};", local, val))
@@ -14245,7 +14303,9 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     }
                     let store_size = insn.inputs[2].size;
                     let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-                    if let Some(local) =
+                    if let Some(object) = try_object_access(&insn.inputs[1], idx, store_size, ctx) {
+                        let _ = writeln!(out, "{} = {};", object, val);
+                    } else if let Some(local) =
                         try_stack_frame_access_name(&insn.inputs[1], Some(1), idx, store_size, ctx)
                     {
                         let _ = writeln!(out, "{} = {};", local, val);
@@ -15188,6 +15248,20 @@ fn emit_expr_with_prec(
                         Some(value.as_str()),
                     );
                     return value;
+                }
+                if let Some(object) =
+                    try_object_access(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
+                {
+                    trace_load_render(
+                        "object",
+                        stmt_idx,
+                        insn,
+                        addr_idx,
+                        load_size,
+                        None,
+                        Some(object.as_str()),
+                    );
+                    return object;
                 }
                 if let Some(local) = try_stack_frame_access_name(
                     &insn.inputs[addr_idx],
@@ -16950,6 +17024,12 @@ fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) 
         let offset = resolve_stack_offset_for_addr(addr, Some(addr_idx), stmt_idx, ctx, 0);
         trace_load_text(format_args!(
             "stable-load stmt={stmt_idx} addr={addr:?} offset={offset:?} expr={stack_expr:?} decision=true reason=stack-frame"
+        ));
+        return true;
+    }
+    if object_access_is_stable(addr, stmt_idx, load_size, ctx) {
+        trace_load_text(format_args!(
+            "stable-load stmt={stmt_idx} addr={addr:?} decision=true reason=object"
         ));
         return true;
     }

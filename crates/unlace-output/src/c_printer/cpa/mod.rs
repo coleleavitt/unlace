@@ -23,12 +23,15 @@
 
 mod build;
 mod linear;
+mod object;
 mod scale;
 
 use super::member_path::MemberPath;
 use super::*;
 use linear::{AddrGraph, AddrNode, LinearForm, Operand, Term};
 use scale::Unit;
+
+pub(super) use object::{object_access_is_stable, try_object_access};
 
 /// What a pointer variable points to, as declared by debug info.
 #[derive(Debug, Clone, PartialEq, Eq)]

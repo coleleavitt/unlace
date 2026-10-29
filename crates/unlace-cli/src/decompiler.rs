@@ -226,6 +226,7 @@ pub fn finish_output(emit: EmitFormat, mut output: String) -> String {
     let _span = profiling::phase("decompile.post-process");
     if matches!(emit, EmitFormat::C) {
         output = unlace_output::dedupe_ida_typedefs(&output);
+        output = unlace_output::dedupe_object_declarations(&output);
         output = unlace_output::declare_pseudo_c_externals(&output);
         output = unlace_output::dedupe_rtti_hierarchy(&output);
     }

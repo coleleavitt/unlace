@@ -89,7 +89,7 @@ fn index_expr(terms: &[Term<ValueUse>], constant: i64, ctx: &mut PrintCtx) -> Op
 
 /// `start + Σ coefᵢ·termᵢ + constant` as one left-associated sum, or `None`
 /// when it is empty.
-fn sum(
+pub(super) fn sum(
     start: Option<CExpr>,
     terms: &[Term<ValueUse>],
     constant: i64,
@@ -134,7 +134,7 @@ fn render_leaf(leaf: ValueUse, ctx: &mut PrintCtx) -> String {
 
 /// `*(T *)ptr`, reading `width` bytes. `*(T *)&x` keeps the `&` so the
 /// reinterpreted lvalue stays visible, as Hex-Rays prints it.
-fn sized_deref(width: u64, ptr: CExpr) -> CExpr {
+pub(super) fn sized_deref(width: u64, ptr: CExpr) -> CExpr {
     CExpr::deref(prefix_cast(int_pointer_type(width), &ptr))
 }
 
@@ -143,7 +143,7 @@ fn sized_deref(width: u64, ptr: CExpr) -> CExpr {
 /// The result is a prefix expression wrapped as a leaf. It is only placed
 /// where a cast already binds tightly enough: under `*` and as an operand of
 /// `+`/`-`, never under a postfix operator.
-fn prefix_cast(ty: &str, inner: &CExpr) -> CExpr {
+pub(super) fn prefix_cast(ty: &str, inner: &CExpr) -> CExpr {
     let operand = match inner {
         // `&` over a member or subscript chain needs no parentheses.
         CExpr::AddrOf(_) => inner.to_string(),

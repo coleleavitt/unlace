@@ -2842,7 +2842,7 @@ fn pipeline_stage_type_recovery(
         ssa,
         opts,
     )?;
-run_instrumented(&unlace_passes::type_vote::TypeVotePass, ssa, opts)?;
+    run_instrumented(&unlace_passes::type_vote::TypeVotePass, ssa, opts)?;
     run_instrumented(&unlace_passes::ObjectWidenPass, ssa, opts)?;
     if let Some(resolve) = resolver {
         let structs = known_struct_types(ssa);
@@ -6394,6 +6394,7 @@ pub fn emit_output(
             }
             check_output_deadline(deadline, &ssa.function.name, "output.annotation-maps")?;
             ann_clone.arch = Some(ssa.arch);
+            ann_clone.object_types = ssa.object_types.clone();
             let ann_owned = Some(ann_clone);
             let ann_ref = ann_owned.as_ref();
 

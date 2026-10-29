@@ -233,7 +233,9 @@ const SOURCE_KNOWN_SHAPE_CASES: &[ShapeCase] = &[
     ShapeCase {
         fixture: "ppc64_features",
         function: "ppc_branch",
-        required_fragments: &["if (", "return"],
+        // `cmpw 5, 3; beq` is a constant branch: the folded body must keep
+        // the fall-through `add` result (5 + 3), not the comparison.
+        required_fragments: &["= 8", "return"],
     },
 ];
 

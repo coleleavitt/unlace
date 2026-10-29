@@ -62,6 +62,8 @@ struct ChildReport {
     command: ChildCommand,
     /// Tools that must be on `PATH`; the check is skipped without them.
     requires: &'static [&'static str],
+    /// Reported as `info` when it succeeds: a measurement, not a pass/fail check.
+    informational: bool,
     summary_prefix: &'static str,
     /// `key=value` fields kept from the summary line; empty keeps the line.
     summary_keys: &'static [&'static str],
@@ -72,11 +74,12 @@ enum ChildCommand {
     Script(&'static str),
 }
 
-const CHILD_REPORTS: [ChildReport; 4] = [
+const CHILD_REPORTS: [ChildReport; 5] = [
     ChildReport {
         name: "semantic-report",
         command: ChildCommand::Xtask("semantic-report"),
         requires: &[],
+        informational: false,
         summary_prefix: "semantic-report: passed=",
         summary_keys: &["passed", "xfailed", "failed", "unsupported"],
     },
@@ -84,13 +87,32 @@ const CHILD_REPORTS: [ChildReport; 4] = [
         name: "type-recovery-report",
         command: ChildCommand::Xtask("type-recovery-report"),
         requires: &[],
+        informational: false,
         summary_prefix: "Type/Variable Recovery: MEASURED",
         summary_keys: &["recall", "precision", "raw_precision"],
+    },
+    ChildReport {
+        name: "corpus parity",
+        command: ChildCommand::Xtask("corpus-parity"),
+        requires: &[],
+        informational: true,
+        summary_prefix: "corpus-parity:",
+        summary_keys: &[
+            "functions",
+            "decompiled",
+            "failed",
+            "line_sim",
+            "ast_sim",
+            "worse",
+            "gotos",
+            "leaktemp",
+        ],
     },
     ChildReport {
         name: "rocq proofs",
         command: ChildCommand::Script("scripts/verify_proofs.sh"),
         requires: &["coqc"],
+        informational: false,
         summary_prefix: "verify_proofs:",
         summary_keys: &[],
     },
@@ -98,6 +120,7 @@ const CHILD_REPORTS: [ChildReport; 4] = [
         name: "extraction oracle",
         command: ChildCommand::Script("scripts/extraction_oracle.sh"),
         requires: &["coqc", "dune"],
+        informational: false,
         summary_prefix: "extraction_oracle:",
         summary_keys: &[],
     },
@@ -380,10 +403,12 @@ fn run_child_report(root: &Path, gate_dir: &Path, report: &ChildReport) -> Row {
         .rfind(|line| line.starts_with(report.summary_prefix))
         .map(|line| summary_fields(line, report.summary_keys))
         .unwrap_or_else(|| format!("no summary line; see {}", log_path.display()));
-    let status = if output.status.success() {
-        Status::Pass
-    } else {
+    let status = if !output.status.success() {
         Status::Fail
+    } else if report.informational {
+        Status::Info
+    } else {
+        Status::Pass
     };
     Row::new(report.name, status, summary, t.elapsed())
 }
@@ -393,18 +418,22 @@ fn on_path(tool: &str) -> bool {
         .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(tool).is_file()))
 }
 
+/// The `key=value` tokens of `line` whose key is in `keys`; the whole line
+/// when `keys` is empty or none of them occur (a `skipped` summary).
 fn summary_fields(line: &str, keys: &[&str]) -> String {
-    if keys.is_empty() {
-        return line.to_string();
-    }
-    line.split_whitespace()
+    let fields = line
+        .split_whitespace()
         .filter(|token| {
             token
                 .split_once('=')
                 .is_some_and(|(key, _)| keys.contains(&key))
         })
-        .collect::<Vec<_>>()
-        .join(" ")
+        .collect::<Vec<_>>();
+    if fields.is_empty() {
+        line.to_string()
+    } else {
+        fields.join(" ")
+    }
 }
 
 fn print_table(rows: &[Row], total: Duration) {
@@ -439,5 +468,11 @@ mod tests {
             summary_fields(line, &["recall", "precision", "raw_precision"]),
             "recall=100.0% precision=93.1% raw_precision=92.9%"
         );
+    }
+
+    #[test]
+    fn summary_fields_keeps_a_line_without_requested_keys() {
+        let line = "corpus-parity: skipped (hexrays/ida-9.3sp1/hexx64.so not found)";
+        assert_eq!(summary_fields(line, &["functions"]), line);
     }
 }

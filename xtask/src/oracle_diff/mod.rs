@@ -11,9 +11,9 @@
 //! Usage: `cargo xtask oracle-diff [--oracle-dir DIR] [--out DIR] [--only SUBSTR] [--reuse-unlace]`
 
 mod hexrays;
-mod pseudo_c;
+pub mod pseudo_c;
 mod report;
-mod unlace;
+pub mod unlace;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

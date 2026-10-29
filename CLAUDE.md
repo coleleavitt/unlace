@@ -395,10 +395,24 @@ research sessions. This ignores stale Sisyphus task state.
    explicitly asks for exploratory code.
 
 3. Honest parity measurement.
-   The current fixture score counts a small set of features. Add metrics for switch, break/continue, loops, ternary, short-circuit, struct field access, array access, casts, compound assignments, function signatures, string/symbol resolution, comments, stack annotations, BYREF, SIMD, call quality, and type quality before claiming broader parity.
+   `cargo xtask corpus-parity` counts switch, break/continue, loops, ternary,
+   short-circuit, field/array access, casts, compound assignments,
+   calling-convention sigils, named vs `sub_` calls, gotos, leaked temps,
+   BYREF, SIMD and more on both sides (`xtask/src/corpus_parity/features.rs`;
+   `compare-corpus` uses the same catalogue). Still missing: comments, stack
+   annotations, call-argument quality, and type quality beyond spellings.
 
 4. Full-corpus parity gate.
-   The x86_64 golden corpus has 150 IDA reference files, but the fixture metric gate only checks 14 internal fixture outputs. Add a corpus-level report that compares actual output against IDA-style pattern counts and, where address mapping exists, AST/line diffs.
+   The x86_64 corpus (`tests/golden/x86_64/`, 150 IDA files) was dumped from
+   `hexx64.so`; `tests/golden/corpus_binaries.toml` names the binary and
+   `cargo xtask corpus-parity` decompiles those functions from it and
+   compares each pair by feature counts, normalized line LCS, tree-sitter
+   node-kind LCS, and the goto/line verdict. `cargo xtask gate` shows it as
+   an informational `corpus parity` row (skipped when the binary is absent).
+   2026-10-29 numbers: `line_sim=35.8% ast_sim=63.3% better=54 equivalent=13
+   worse=82 gotos=286/210 leaktemp=184 lines=10693/7637 arity_match=124/149`.
+   Not yet a failing check; a baseline file and regression thresholds are the
+   next step.
 
 5. Lifters and call resolution.
    Older gap sessions found missing branches, unresolved calls, `CALLOTHER` placeholders, raw address calls, exception edges, SIMD gaps, and architecture-specific semantics. Verify current code before fixing, but do not assume printer work can compensate for incomplete lifting.

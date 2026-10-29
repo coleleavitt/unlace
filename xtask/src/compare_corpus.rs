@@ -1,12 +1,16 @@
 //! `cargo xtask compare-corpus` — IDA-vs-Unlace pattern coverage report.
 //!
-//! Walks `tests/golden/x86_64/` (IDA Hex-Rays reference output) and counts the
-//! occurrences of a fixed list of stylistic / structural patterns. Then walks
+//! Walks `tests/golden/x86_64/` (IDA Hex-Rays reference output) and counts
+//! the pseudo-C features of [`features::FEATURES`]. Then walks
 //! `fixtures/*.elf`, decompiles each via the locally built `unlace` binary,
-//! and counts the same patterns in the resulting C output.
+//! and counts the same features in the resulting C output.
+//!
+//! The two corpora are different programs, so this is a style-coverage
+//! audit; `cargo xtask corpus-parity` compares the same functions when the
+//! corpus binary is available.
 //!
 //! Emits a markdown table to stdout and to `target/corpus-compare.md`.
-//! Columns: pattern, IDA aggregate count, Unlace aggregate count, coverage %
+//! Columns: feature, IDA aggregate count, Unlace aggregate count, coverage %
 //! (Unlace/IDA, capped at 100).
 //!
 //! This is a reporting / audit tool — it always exits 0 unless the golden
@@ -17,251 +21,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::cargo_bin;
-
-/// How a pattern's needle should be matched against source text.
-#[derive(Clone, Copy)]
-enum PatternKind {
-    /// Plain substring match.
-    Substring,
-    /// Whole-word identifier match (alphanumeric/`_` boundaries on both sides).
-    Word,
-    /// Identifier prefix: `<needle><one-or-more-digits>` as a whole word
-    /// (e.g. needle="a" matches `a1`, `a23`, but not `abc`).
-    IdentPrefixDigits,
-    /// `switch` keyword followed by optional whitespace and `(`.
-    SwitchParen,
-}
-
-struct PatternSpec {
-    label: &'static str,
-    needle: &'static str,
-    kind: PatternKind,
-}
-
-const PATTERNS: &[PatternSpec] = &[
-    PatternSpec {
-        label: "__fastcall",
-        needle: "__fastcall",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "__usercall",
-        needle: "__usercall",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "__noreturn",
-        needle: "__noreturn",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "_QWORD",
-        needle: "_QWORD",
-        kind: PatternKind::Word,
-    },
-    PatternSpec {
-        label: "_DWORD",
-        needle: "_DWORD",
-        kind: PatternKind::Word,
-    },
-    PatternSpec {
-        label: "_WORD",
-        needle: "_WORD",
-        kind: PatternKind::Word,
-    },
-    PatternSpec {
-        label: "_BYTE",
-        needle: "_BYTE",
-        kind: PatternKind::Word,
-    },
-    PatternSpec {
-        label: "__int64",
-        needle: "__int64",
-        kind: PatternKind::Word,
-    },
-    PatternSpec {
-        label: "aN params (a1..)",
-        needle: "a",
-        kind: PatternKind::IdentPrefixDigits,
-    },
-    PatternSpec {
-        label: "vN locals (v1..)",
-        needle: "v",
-        kind: PatternKind::IdentPrefixDigits,
-    },
-    PatternSpec {
-        label: "result",
-        needle: "result",
-        kind: PatternKind::Word,
-    },
-    PatternSpec {
-        label: "LOBYTE",
-        needle: "LOBYTE",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "HIDWORD",
-        needle: "HIDWORD",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "HIWORD",
-        needle: "HIWORD",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "LOWORD",
-        needle: "LOWORD",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "__readfsqword",
-        needle: "__readfsqword",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "__readgsqword",
-        needle: "__readgsqword",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "goto LABEL_",
-        needle: "goto LABEL_",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "switch (",
-        needle: "switch",
-        kind: PatternKind::SwitchParen,
-    },
-    PatternSpec {
-        label: "case",
-        needle: "case",
-        kind: PatternKind::Word,
-    },
-    PatternSpec {
-        label: "if (",
-        needle: "if (",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "else",
-        needle: "else",
-        kind: PatternKind::Word,
-    },
-    PatternSpec {
-        label: "for (",
-        needle: "for (",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "while (",
-        needle: "while (",
-        kind: PatternKind::Substring,
-    },
-    PatternSpec {
-        label: "do {",
-        needle: "do {",
-        kind: PatternKind::Substring,
-    },
-];
-
-fn count_pattern(text: &str, spec: &PatternSpec) -> usize {
-    match spec.kind {
-        PatternKind::Substring => text.matches(spec.needle).count(),
-        PatternKind::Word => count_word(text, spec.needle),
-        PatternKind::IdentPrefixDigits => count_ident_prefix_digits(text, spec.needle),
-        PatternKind::SwitchParen => count_switch_paren(text),
-    }
-}
-
-fn is_ident_char(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
-}
-
-fn count_word(text: &str, word: &str) -> usize {
-    let bytes = text.as_bytes();
-    let wlen = word.len();
-    if wlen == 0 || bytes.len() < wlen {
-        return 0;
-    }
-    let mut count = 0;
-    let mut i = 0;
-    while i + wlen <= bytes.len() {
-        if let Some(pos) = text[i..].find(word) {
-            let abs = i + pos;
-            let before_ok = abs == 0 || !is_ident_char(bytes[abs - 1]);
-            let end = abs + wlen;
-            let after_ok = end >= bytes.len() || !is_ident_char(bytes[end]);
-            if before_ok && after_ok {
-                count += 1;
-            }
-            i = abs + wlen;
-        } else {
-            break;
-        }
-    }
-    count
-}
-
-fn count_ident_prefix_digits(text: &str, prefix: &str) -> usize {
-    let bytes = text.as_bytes();
-    let plen = prefix.len();
-    if plen == 0 || bytes.len() < plen + 1 {
-        return 0;
-    }
-    let mut count = 0;
-    let mut i = 0;
-    while i + plen < bytes.len() {
-        if let Some(pos) = text[i..].find(prefix) {
-            let abs = i + pos;
-            let before_ok = abs == 0 || !is_ident_char(bytes[abs - 1]);
-            let mut j = abs + plen;
-            let digit_start = j;
-            while j < bytes.len() && bytes[j].is_ascii_digit() {
-                j += 1;
-            }
-            let has_digits = j > digit_start;
-            let after_ok = j >= bytes.len() || !is_ident_char(bytes[j]);
-            if before_ok && has_digits && after_ok {
-                count += 1;
-            }
-            i = abs + plen;
-        } else {
-            break;
-        }
-    }
-    count
-}
-
-fn count_switch_paren(text: &str) -> usize {
-    let bytes = text.as_bytes();
-    let kw = "switch";
-    let klen = kw.len();
-    let mut count = 0;
-    let mut i = 0;
-    while i + klen <= bytes.len() {
-        if let Some(pos) = text[i..].find(kw) {
-            let abs = i + pos;
-            let before_ok = abs == 0 || !is_ident_char(bytes[abs - 1]);
-            let after = abs + klen;
-            let mut j = after;
-            // skip whitespace
-            while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
-                j += 1;
-            }
-            let has_paren = j < bytes.len() && bytes[j] == b'(';
-            let after_kw_ok = after >= bytes.len() || !is_ident_char(bytes[after]);
-            if before_ok && after_kw_ok && has_paren {
-                count += 1;
-            }
-            i = abs + klen;
-        } else {
-            break;
-        }
-    }
-    count
-}
+use crate::corpus_parity::features::{self, FEATURES, FeatureCounts};
 
 fn collect_golden_files(golden_dir: &Path) -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = match std::fs::read_dir(golden_dir) {
@@ -324,8 +84,8 @@ fn decompile_elf(unlace_bin: &Path, elf_path: &Path) -> Result<String, String> {
 
 /// Build the markdown report. Returns `(report_text, refs_compared, fixtures_compared)`.
 fn build_report(
-    ida_counts: &[usize],
-    unlace_counts: &[usize],
+    ida_counts: &FeatureCounts,
+    unlace_counts: &FeatureCounts,
     refs_compared: usize,
     fixtures_compared: usize,
     fixture_failures: &[(String, String)],
@@ -349,15 +109,15 @@ fn build_report(
     let _ = writeln!(s);
     let _ = writeln!(
         s,
-        "| pattern | IDA aggregate count | Unlace aggregate count | coverage % |"
+        "| feature | IDA aggregate count | Unlace aggregate count | coverage % |"
     );
     let _ = writeln!(
         s,
         "|---------|--------------------:|-----------------------:|-----------:|"
     );
-    for (i, spec) in PATTERNS.iter().enumerate() {
-        let ida = ida_counts[i];
-        let unl = unlace_counts[i];
+    for (i, feature) in FEATURES.iter().enumerate() {
+        let ida = ida_counts.0[i];
+        let unl = unlace_counts.0[i];
         let coverage = if ida == 0 {
             "n/a".to_string()
         } else {
@@ -368,7 +128,7 @@ fn build_report(
         let _ = writeln!(
             s,
             "| `{label}` | {ida} | {unl} | {coverage} |",
-            label = spec.label,
+            label = feature.label,
         );
     }
     if !fixture_failures.is_empty() {
@@ -409,21 +169,19 @@ pub fn run(root: &Path) {
     // ── Phase 1: IDA corpus ──
     let golden_files = collect_golden_files(&golden_dir);
     eprintln!("scanning {} IDA reference .c files...", golden_files.len());
-    let mut ida_counts: Vec<usize> = vec![0; PATTERNS.len()];
+    let mut ida_counts = FeatureCounts::zero();
     for path in &golden_files {
         let Ok(src) = std::fs::read_to_string(path) else {
             continue;
         };
-        for (i, spec) in PATTERNS.iter().enumerate() {
-            ida_counts[i] += count_pattern(&src, spec);
-        }
+        ida_counts.add(&features::count(&src));
     }
     let refs_compared = golden_files.len();
 
     // ── Phase 2: Unlace corpus ──
     let fixtures = collect_fixture_elfs(&fixtures_dir);
     eprintln!("decompiling {} fixture ELFs...", fixtures.len());
-    let mut unlace_counts: Vec<usize> = vec![0; PATTERNS.len()];
+    let mut unlace_counts = FeatureCounts::zero();
     let mut fixtures_compared = 0usize;
     let mut failures: Vec<(String, String)> = Vec::new();
     for fx in &fixtures {
@@ -434,9 +192,7 @@ pub fn run(root: &Path) {
         eprint!("  {name} ... ");
         match decompile_elf(&unlace_bin, fx) {
             Ok(src) => {
-                for (i, spec) in PATTERNS.iter().enumerate() {
-                    unlace_counts[i] += count_pattern(&src, spec);
-                }
+                unlace_counts.add(&features::count(&src));
                 fixtures_compared += 1;
                 eprintln!("ok ({} bytes)", src.len());
             }
@@ -468,31 +224,4 @@ pub fn run(root: &Path) {
 
     // Print to stdout.
     print!("{report}");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn word_match_basic() {
-        assert_eq!(count_word("int _QWORD x;", "_QWORD"), 1);
-        assert_eq!(count_word("int _QWORDS;", "_QWORD"), 0);
-        assert_eq!(count_word("a _QWORD b _QWORD", "_QWORD"), 2);
-    }
-
-    #[test]
-    fn ident_prefix_digits_basic() {
-        assert_eq!(count_ident_prefix_digits("a1 = a2 + a23;", "a"), 3);
-        assert_eq!(count_ident_prefix_digits("abc1 a1;", "a"), 1);
-        assert_eq!(count_ident_prefix_digits("v1 v2 vN", "v"), 2);
-    }
-
-    #[test]
-    fn switch_paren_basic() {
-        assert_eq!(count_switch_paren("switch (x) {"), 1);
-        assert_eq!(count_switch_paren("switch(x)"), 1);
-        assert_eq!(count_switch_paren("switchx(y)"), 0);
-        assert_eq!(count_switch_paren("// switch (x)"), 1);
-    }
 }

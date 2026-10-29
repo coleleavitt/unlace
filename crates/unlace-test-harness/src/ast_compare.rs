@@ -116,6 +116,19 @@ pub fn ast_equiv(expected: &str, actual: &str) -> Result<(), AstDivergence> {
     }
 }
 
+/// The pre-order node-kind sequence of `source`'s C syntax tree, skipping
+/// [`SKIP_KINDS`]: the structural fingerprint [`ast_equiv`] compares exactly,
+/// for callers that want a similarity measure instead of a verdict. `None`
+/// when the source does not parse at all.
+pub fn ast_kinds(source: &str) -> Option<Vec<&'static str>> {
+    let tree = parse_c(source)?;
+    Some(
+        StructuralIter::new(tree.root_node())
+            .map(|(kind, _, _)| kind)
+            .collect(),
+    )
+}
+
 fn parse_c(source: &str) -> Option<Tree> {
     let mut parser = Parser::new();
     parser
@@ -157,7 +170,7 @@ impl<'tree> StructuralIter<'tree> {
 }
 
 impl<'tree> Iterator for StructuralIter<'tree> {
-    type Item = (&'tree str, usize, Node<'tree>);
+    type Item = (&'static str, usize, Node<'tree>);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {

@@ -8,6 +8,7 @@ mod cargo_bin;
 mod compare_corpus;
 mod compare_golden;
 mod corpus;
+mod corpus_parity;
 mod dump_pipeline;
 mod fixture_outputs;
 mod fuzz;
@@ -63,6 +64,12 @@ fn main() {
         Some("compare-corpus") => {
             let root = workspace_root();
             compare_corpus::run(&root);
+        }
+        Some("corpus-parity") => {
+            let code = corpus_parity::run(&workspace_root(), &args[1..]);
+            if code != 0 {
+                process::exit(code);
+            }
         }
         Some("goto-count") => {
             let root = workspace_root();
@@ -167,7 +174,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, corpus, compare-corpus, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, oracle-diff, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, status, fuzz"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, golden-triage, corpus, compare-corpus, corpus-parity, goto-count, lifter-coverage, lift-trace, register-alias-report, validate-corpus-toml, semantic-report, type-recovery-report, unified-parity, oracle-diff, loader-scorecard, arch-scorecard, address-diff, project-roundtrip, dump-pipeline, sbom, status, fuzz"
             );
             process::exit(1);
         }

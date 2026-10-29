@@ -1,0 +1,14 @@
+# Binaries the IDA Hex-Rays reference corpora under tests/golden/<arch>/ were
+# dumped from (`scripts/idalib-bulk-dump/`). They are Hex-Rays decompiler
+# plugins and are not redistributed. `cargo xtask corpus-parity` looks for
+# `path` under the workspace root (or takes `--binary`), checks the SHA-256,
+# and maps every `sub_<addr>.c` reference file to the function at that
+# address; reference files named otherwise are listed under `functions`.
+
+[x86_64]
+path = "hexrays/ida-9.3sp1/hexx64.so"
+sha256 = "adf473c6c292e67bb115043cd955978c1674f97b4df44bea76f9847589a4802a"
+ida = "9.3sp1"
+
+[x86_64.functions]
+func = 0x7BF80

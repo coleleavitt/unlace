@@ -1427,6 +1427,7 @@ fn analyze_function(
     // pre-pass HIR which is pessimistic on goto counts).
     {
         let _span = profiling::phase("quality.hir-post-process");
+        unlace_struct::ternary_recovery(&mut hir);
         unlace_struct::flatten_if_else_chains(&mut hir);
         unlace_struct::simplify_chain_conditions(&mut hir, &ssa);
         unlace_struct::normalize_conditions(&mut hir);

@@ -119,6 +119,7 @@ mod cpa;
 mod mem_objects;
 mod member_path;
 mod postprocess;
+mod ternary;
 mod trace;
 
 use cpa::{
@@ -129,6 +130,7 @@ use mem_objects::MemObjects;
 pub use mem_objects::dedupe_object_declarations;
 use member_path::StructLayouts;
 use postprocess::*;
+use ternary::{collect_ternary, emit_ternary, ternary_text};
 use trace::*;
 
 fn cprinter_detail_phase(name: &'static str) -> Option<linkscope::Span> {
@@ -4433,23 +4435,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 }
             }
 
-            HirNode::Ternary {
-                cond,
-                then_insn,
-                else_insn,
-                output: _,
-            } => {
-                ctx.name_of(cond);
-                ctx.cond_uses.push(*cond);
-                ctx.control_cond_uses.push(*cond);
-
-                ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
-                ctx.cond_use_scope_paths
-                    .push((*cond, ctx.current_scope_path.clone()));
-
-                collect_insn_as_stmt(then_insn, ctx);
-                collect_insn_as_stmt(else_insn, ctx);
-            }
+            HirNode::Ternary { select, .. } => collect_ternary(select, ctx),
 
             HirNode::GuardedTernary {
                 cond_code: _,
@@ -4652,7 +4638,8 @@ fn hir_stmt_count(nodes: &[HirNode]) -> u32 {
         .map(|node| match node {
             HirNode::Block(children) => hir_stmt_count(children),
             HirNode::Statement(_) | HirNode::CselTernary { .. } => 1,
-            HirNode::Ternary { .. } | HirNode::GuardedTernary { .. } => 2,
+            HirNode::Ternary { select, .. } => select.insns().len() as u32,
+            HirNode::GuardedTernary { .. } => 2,
             HirNode::If {
                 then_body,
                 else_body,
@@ -8944,9 +8931,11 @@ fn walk_collect_roles(nodes: &[HirNode], ctx: &PrintCtx, roles: &mut BTreeMap<Va
                 walk_collect_roles(try_body, ctx, roles);
                 walk_collect_roles(finally_body, ctx, roles);
             }
-            HirNode::Ternary { cond, .. } => {
-                if cond_is_comparison(cond, ctx) {
-                    record_role(roles, cond.base, VarRole::Cond);
+            HirNode::Ternary { select, .. } => {
+                for cond in select.conds() {
+                    if cond_is_comparison(&cond, ctx) {
+                        record_role(roles, cond.base, VarRole::Cond);
+                    }
                 }
             }
             _ => {}
@@ -9819,29 +9808,7 @@ fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
         HirNode::TailCall { target, args } => Some(format_tail_call_text(*target, args, ctx)),
         HirNode::Continue => Some("continue;".to_string()),
         HirNode::Break => Some("break;".to_string()),
-        HirNode::Ternary {
-            cond,
-            then_insn,
-            else_insn,
-            output: _,
-        } => {
-            let then_idx = ctx.emit_stmt;
-            ctx.emit_stmt += 1;
-            let else_idx = ctx.emit_stmt;
-            ctx.emit_stmt += 1;
-            let lhs = if let Some(Some(sv)) = ctx.stmt_outputs.get(&then_idx).cloned() {
-                ctx.name_of(&sv)
-            } else {
-                "/* ternary */".to_string()
-            };
-            Some(format!(
-                "{} = {} ? {} : {};",
-                lhs,
-                resolve_sv_expr(cond, ctx),
-                emit_expr(then_insn, then_idx, ctx),
-                emit_expr(else_insn, else_idx, ctx)
-            ))
-        }
+        HirNode::Ternary { select, .. } => ternary_text(select, ctx),
         _ => None,
     }
 }
@@ -9902,7 +9869,10 @@ fn collect_merged_assign_return_stmt_indices(
                     collect_merged_assign_return_stmt_indices(default, ctx, next_stmt, out);
                 }
             }
-            HirNode::Ternary { .. } | HirNode::GuardedTernary { .. } => {
+            HirNode::Ternary { select, .. } => {
+                *next_stmt += select.insns().len() as u32;
+            }
+            HirNode::GuardedTernary { .. } => {
                 *next_stmt += 2;
             }
             HirNode::CselTernary { .. } => {
@@ -10017,7 +9987,10 @@ fn collect_merged_call_return_svs(
                     collect_merged_call_return_svs(default, ctx, next_stmt, out);
                 }
             }
-            HirNode::Ternary { .. } | HirNode::GuardedTernary { .. } => {
+            HirNode::Ternary { select, .. } => {
+                *next_stmt += select.insns().len() as u32;
+            }
+            HirNode::GuardedTernary { .. } => {
                 *next_stmt += 2;
             }
             HirNode::CselTernary { .. } => {
@@ -10139,7 +10112,10 @@ fn collect_post_dowhile_recovered_return_svs(
                     collect_post_dowhile_recovered_return_svs(default, ctx, next_stmt, out);
                 }
             }
-            HirNode::Ternary { .. } | HirNode::GuardedTernary { .. } => {
+            HirNode::Ternary { select, .. } => {
+                *next_stmt += select.insns().len() as u32;
+            }
+            HirNode::GuardedTernary { .. } => {
                 *next_stmt += 2;
             }
             HirNode::CselTernary { .. } => {
@@ -12557,34 +12533,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "{}:;", label);
         }
 
-        HirNode::Ternary {
-            cond,
-            then_insn,
-            else_insn,
-            output: _,
-        } => {
-            let then_idx = ctx.emit_stmt;
-            ctx.emit_stmt += 1;
-            let else_idx = ctx.emit_stmt;
-            ctx.emit_stmt += 1;
-
-            let lhs = if let Some(Some(sv)) = ctx.stmt_outputs.get(&then_idx).cloned() {
-                ctx.name_of(&sv)
-            } else {
-                "/* ternary */".to_string()
-            };
-
-            let then_expr = emit_expr(then_insn, then_idx, ctx);
-            let else_expr = emit_expr(else_insn, else_idx, ctx);
-            let cond_name = resolve_control_cond_expr(cond, ctx);
-
-            indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(
-                out,
-                "{} = {} ? {} : {};",
-                lhs, cond_name, then_expr, else_expr
-            );
-        }
+        HirNode::Ternary { select, .. } => emit_ternary(select, depth, ctx, out),
 
         HirNode::TailCall { target, args } => {
             indent(depth, ctx.config.tab_width, out);

@@ -4,7 +4,7 @@ use smallvec::smallvec;
 
 use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
-use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
+use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase, TernaryArm, TernarySelect};
 
 #[test]
 fn frame_base_update_suppression_keeps_rbp_accumulator_init() {
@@ -2576,15 +2576,28 @@ fn test_print_ternary() {
 
     let body = vec![
         HirNode::Ternary {
-            cond: sv(0, 4),
-            then_insn: IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000),
-            else_insn: IrInsn::with_output(IrOp::Copy, r0, smallvec![c2], 0x1010),
+            select: TernarySelect {
+                cond: sv(0, 4),
+                then_arm: TernaryArm::Value(vec![IrInsn::with_output(
+                    IrOp::Copy,
+                    r0,
+                    smallvec![c1],
+                    0x1000,
+                )]),
+                else_arm: TernaryArm::Value(vec![IrInsn::with_output(
+                    IrOp::Copy,
+                    r0,
+                    smallvec![c2],
+                    0x1010,
+                )]),
+            },
             output: r0,
         },
         HirNode::Return(Some(sv(0, 4))),
     ];
 
-    let func = make_func("ternary_func", body);
+    let mut func = make_func("ternary_func", body);
+    merge_versions(&mut func, r0, "x");
     let output = print_c(&func);
 
     // Scope to the function body — the shared IDA/SSE prelude legitimately
@@ -2608,6 +2621,90 @@ fn test_print_ternary() {
 }
 
 #[test]
+fn test_print_nested_ternary() {
+    let r0 = reg(0, 4);
+    let value = |n: u64, addr: u64| {
+        TernaryArm::Value(vec![IrInsn::with_output(
+            IrOp::Copy,
+            r0,
+            smallvec![con(n, 4)],
+            addr,
+        )])
+    };
+    let body = vec![
+        HirNode::Ternary {
+            select: TernarySelect {
+                cond: sv(16, 1),
+                then_arm: value(1, 0x1000),
+                else_arm: TernaryArm::Select(Box::new(TernarySelect {
+                    cond: sv(24, 1),
+                    then_arm: value(2, 0x1010),
+                    else_arm: value(3, 0x1020),
+                })),
+            },
+            output: r0,
+        },
+        HirNode::Return(Some(sv(0, 4))),
+    ];
+
+    let mut func = make_func("nested_ternary", body);
+    merge_versions(&mut func, r0, "x");
+    let output = print_c(&func);
+    let body_text = function_body_text(&output, "nested_ternary");
+    let line = body_text
+        .lines()
+        .find(|l| l.contains(" ? "))
+        .unwrap_or_else(|| panic!("no ternary line: {body_text}"));
+    let (lhs, rhs) = line.trim().split_once(" = ").expect("an assignment");
+    let rhs = rhs.strip_suffix(';').expect("a statement");
+    let (cond1, rest) = rhs.split_once(" ? 1 : ").expect("outer select");
+    let (cond2, last) = rest.split_once(" ? 2 : ").expect("inner select");
+    assert_eq!(lhs, "x", "{line}");
+    assert!(!cond1.is_empty() && !cond2.is_empty(), "{line}");
+    assert_eq!(last, "3", "{line}");
+}
+
+/// Name every SSA version of `base` that a small test function can define
+/// `name`, as the variable coalescer does for the arms of an `if`/`else`.
+fn merge_versions(func: &mut HirFunction, base: Varnode, name: &str) {
+    for version in 0..4 {
+        func.merged_names
+            .insert(SsaVarnode { base, version }, name.to_string());
+    }
+}
+
+#[test]
+fn test_ternary_over_differently_named_values_prints_as_if_else() {
+    let r0 = reg(0, 4);
+    let body = vec![
+        HirNode::Ternary {
+            select: TernarySelect {
+                cond: sv(16, 1),
+                then_arm: TernaryArm::Value(vec![IrInsn::with_output(
+                    IrOp::Copy,
+                    r0,
+                    smallvec![con(1, 4)],
+                    0x1000,
+                )]),
+                else_arm: TernaryArm::Value(vec![IrInsn::with_output(
+                    IrOp::Copy,
+                    r0,
+                    smallvec![con(2, 4)],
+                    0x1010,
+                )]),
+            },
+            output: r0,
+        },
+        HirNode::Return(Some(sv(0, 4))),
+    ];
+
+    let output = print_c(&make_func("split_names", body));
+    let body_text = function_body_text(&output, "split_names");
+    assert!(!body_text.contains(" ? "), "{body_text}");
+    assert!(body_text.contains("} else {"), "{body_text}");
+}
+
+#[test]
 fn test_print_ternary_compiles() {
     let gcc_available = std::process::Command::new("gcc")
         .arg("--version")
@@ -2624,15 +2721,28 @@ fn test_print_ternary_compiles() {
 
     let body = vec![
         HirNode::Ternary {
-            cond: sv(0, 4),
-            then_insn: IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000),
-            else_insn: IrInsn::with_output(IrOp::Copy, r0, smallvec![c2], 0x1010),
+            select: TernarySelect {
+                cond: sv(0, 4),
+                then_arm: TernaryArm::Value(vec![IrInsn::with_output(
+                    IrOp::Copy,
+                    r0,
+                    smallvec![c1],
+                    0x1000,
+                )]),
+                else_arm: TernaryArm::Value(vec![IrInsn::with_output(
+                    IrOp::Copy,
+                    r0,
+                    smallvec![c2],
+                    0x1010,
+                )]),
+            },
             output: r0,
         },
         HirNode::Return(Some(sv(0, 4))),
     ];
 
-    let func = make_func("ternary_compile_test", body);
+    let mut func = make_func("ternary_compile_test", body);
+    merge_versions(&mut func, r0, "x");
     let source = print_c(&func);
 
     let result = std::process::Command::new("gcc")

@@ -117,11 +117,11 @@ fn combine(e: Expr, place: Place) -> Expr {
             combine(*lhs, Place::Rvalue),
             combine(*rhs, Place::Rvalue),
         ),
-        Expr::Ternary { cond, then, els } => Expr::Ternary {
-            cond: Box::new(combine(*cond, Place::Rvalue)),
-            then: Box::new(combine(*then, Place::Rvalue)),
-            els: Box::new(combine(*els, Place::Rvalue)),
-        },
+        Expr::Ternary { cond, then, els } => ternary(
+            combine(*cond, Place::Rvalue),
+            combine(*then, Place::Rvalue),
+            combine(*els, Place::Rvalue),
+        ),
         Expr::Assign { op, lhs, rhs } => Expr::Assign {
             op,
             lhs: Box::new(combine(*lhs, Place::Lvalue)),
@@ -196,6 +196,48 @@ fn small_signed_literal(e: Expr) -> Expr {
 }
 
 // ---------------------------------------------------------------------------
+// cot_tern
+// ---------------------------------------------------------------------------
+
+/// `1 ? a : b` is `a` and `0 ? a : b` is `b`: only the taken arm would be
+/// evaluated.
+fn ternary(cond: Expr, then: Expr, els: Expr) -> Expr {
+    let Some(lit) = cond.as_atom().and_then(int_literal) else {
+        return Expr::Ternary {
+            cond: Box::new(cond),
+            then: Box::new(then),
+            els: Box::new(els),
+        };
+    };
+    let taken = if lit.value == 0 { els } else { then };
+    match taken {
+        // The middle operand may be a comma expression.
+        Expr::Comma { .. } | Expr::Assign { .. } => Expr::Paren(Box::new(taken)),
+        other => other,
+    }
+}
+
+/// The arms of a ternary whose value converts to a fixed type, without
+/// width suffixes on literals that fit `int`. Unlike [`plain_literal`] this
+/// keeps negative and wide literals: an arm also fixes the type the other
+/// arm converts to, so only a literal that every integer type represents
+/// may change type.
+fn plain_ternary_arms(e: Expr) -> Expr {
+    match e {
+        Expr::Ternary { cond, then, els } => Expr::Ternary {
+            cond,
+            then: Box::new(plain_ternary_arms(*then)),
+            els: Box::new(plain_ternary_arms(*els)),
+        },
+        Expr::Paren(inner) if matches!(*inner, Expr::Ternary { .. }) => {
+            Expr::Paren(Box::new(plain_ternary_arms(*inner)))
+        }
+        other => small_signed_literal(other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IDA part macros: LOBYTE / LOWORD / LODWORD / HIDWORD / BYTEn
 // IDA part macros: LOBYTE / BYTEn / LOWORD / HIWORD / LODWORD / HIDWORD
 // ---------------------------------------------------------------------------
 
@@ -500,6 +542,7 @@ fn plain_literal(e: Expr) -> Expr {
             op: PrefixOp::Neg,
             expr: Box::new(plain_literal(*expr)),
         },
+        Expr::Ternary { .. } => plain_ternary_arms(e),
         other => other,
     }
 }

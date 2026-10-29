@@ -70,7 +70,10 @@ pub use goto_elim::eliminate_forward_gotos;
 pub use goto_resolve::resolve_gotos;
 pub use goto_to_break::goto_to_break;
 pub use goto_to_continue::goto_to_continue;
-pub use hir::{HirFunction, HirNode, LabelId, LoopForm, ObjcBlockCapture, SwitchCase};
+pub use hir::{
+    HirFunction, HirNode, LabelId, LoopForm, ObjcBlockCapture, SwitchCase, TernaryArm,
+    TernarySelect,
+};
 pub use hir_cse::eliminate_common_subexpressions;
 pub use hir_licm::hoist_loop_invariants;
 pub use if_to_switch::{if_chain_to_switch, range_chain_to_switch};

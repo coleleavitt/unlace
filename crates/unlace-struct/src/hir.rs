@@ -84,6 +84,62 @@ impl fmt::Display for SwitchCase {
     }
 }
 
+/// The `cond ? then_arm : else_arm` selection of a [`HirNode::Ternary`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TernarySelect {
+    pub cond: SsaVarnode,
+    pub then_arm: TernaryArm,
+    pub else_arm: TernaryArm,
+}
+
+/// One arm of a [`TernarySelect`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TernaryArm {
+    /// The instructions computing the arm's value: `Unique` temporaries
+    /// that fold into the last instruction, which writes the ternary's
+    /// output. Never empty.
+    Value(Vec<IrInsn>),
+    /// A nested selection over the same output.
+    Select(Box<TernarySelect>),
+}
+
+impl TernarySelect {
+    /// The conditions the selection tests in source order, nested ones
+    /// included.
+    pub fn conds(&self) -> Vec<SsaVarnode> {
+        let mut conds = Vec::new();
+        self.walk(&mut |select| conds.push(select.cond), &mut |_| {});
+        conds
+    }
+
+    /// The value arms in source order: the then arm before the else
+    /// arm, recursively.
+    pub fn values(&self) -> Vec<&[IrInsn]> {
+        let mut values = Vec::new();
+        self.walk(&mut |_| {}, &mut |value| values.push(value));
+        values
+    }
+
+    /// The instructions of every value arm in source order.
+    pub fn insns(&self) -> Vec<&IrInsn> {
+        self.values().into_iter().flatten().collect()
+    }
+
+    fn walk<'a>(
+        &'a self,
+        on_select: &mut impl FnMut(&'a TernarySelect),
+        on_value: &mut impl FnMut(&'a [IrInsn]),
+    ) {
+        on_select(self);
+        for arm in [&self.then_arm, &self.else_arm] {
+            match arm {
+                TernaryArm::Value(insns) => on_value(insns),
+                TernaryArm::Select(select) => select.walk(on_select, on_value),
+            }
+        }
+    }
+}
+
 /// A structured control-flow node in the HIR.
 ///
 /// The structurer emits a tree of these nodes from the SSA CFG. Irreducible
@@ -163,15 +219,14 @@ pub enum HirNode {
     /// A label target for goto (irreducible fallback).
     Label(LabelId),
 
-    /// A ternary conditional expression: `output = cond ? then_val : else_val`.
+    /// A ternary assignment: `output = cond ? then_val : else_val`.
     ///
-    /// Recovered from `If { then_body: [Statement(copy → V)], else_body: [Statement(copy → V)] }`
-    /// patterns where both branches are single COPY assignments to the same output varnode.
+    /// Recovered by [`crate::ternary_recovery`] from an `If` whose arms each
+    /// assign `output` exactly once with a side-effect-free value, or hold a
+    /// nested select over the same `output` (`a ? x : b ? y : z`).
     Ternary {
-        cond: SsaVarnode,
-        then_insn: IrInsn,
-        else_insn: IrInsn,
-        /// The output varnode that both branches write to.
+        select: TernarySelect,
+        /// The output varnode every value of `select` writes to.
         output: Varnode,
     },
 

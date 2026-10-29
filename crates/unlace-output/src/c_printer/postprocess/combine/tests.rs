@@ -242,3 +242,27 @@ fn goldens_round_trip_and_combine_is_idempotent() {
     }
     assert!(checked > 0);
 }
+
+#[test]
+fn ternary_with_literal_condition_keeps_the_taken_arm() {
+    assert_eq!(combine("x = 0 ? a : b;"), "x = b;");
+    assert_eq!(combine("x = 1 ? a : b;"), "x = a;");
+    assert_eq!(
+        combine("c7 = LOBYTE(0LL) ? 0x59d1a8LL : 0x5a3c38LL;"),
+        "c7 = 0x5a3c38;"
+    );
+    assert_eq!(combine("x = 0 ? a : (b, c);"), "x = (b, c);");
+}
+
+#[test]
+fn assigned_ternary_drops_suffixes_only_from_int_literals() {
+    assert_eq!(combine("x = c ? 5LL : 0x10LL;"), "x = c ? 5 : 0x10;");
+    assert_eq!(
+        combine("x = c ? 1LL : d ? 2LL : 3LL;"),
+        "x = c ? 1 : d ? 2 : 3;"
+    );
+    assert_eq!(
+        combine("x = c ? -1LL : 0x80000000LL;"),
+        "x = c ? -1LL : 0x80000000LL;"
+    );
+}

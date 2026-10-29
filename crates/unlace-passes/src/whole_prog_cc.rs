@@ -26,9 +26,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use unlace_ir::signature::FunctionSignatureRegistry;
 use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction};
 use unlace_ir::xref::{CallGraph, build_call_graph};
 use unlace_ir::{IrOp, SpaceId};
+
+use crate::interproc_types::{
+    CallTarget, ValueFlow, call_sites, entry_value_reads, result_is_returned, result_use,
+};
 
 /// Maximum number of fixpoint iterations before bailing.
 pub const DEFAULT_WHOLE_PROG_CC_CAP: usize = 5;
@@ -247,8 +252,12 @@ fn collect_arg_types_before_call(
 }
 
 /// Returns true if `reg_offset` is read anywhere in the function body
-/// *before* its first redefinition in each block.
+/// *before* its first redefinition in each block: by the SSA reads of its
+/// entry value, or by a raw operand.
 fn is_param_read_in_body(ssa: &SsaFunction, reg_offset: u64) -> bool {
+    if !entry_value_reads(ssa, reg_offset).is_empty() {
+        return true;
+    }
     for block in ssa.function.blocks.values() {
         let mut written = false;
         for insn in &block.insns {
@@ -377,9 +386,27 @@ fn void_unused_return(funcs: &mut BTreeMap<u64, SsaFunction>, addr: u64, cg: &Ca
     true
 }
 
-/// Returns true if `caller` reads the return register after calling `callee_addr`
-/// before writing it.
+/// Returns true if `caller` uses the value a call to `callee_addr` returns,
+/// counting a caller that returns it as its own value.
+///
+/// Late passes rename raw register operands, so the SSA reads of the call's
+/// result decide first; the raw post-call scan of the return register
+/// covers calls whose result has no SSA value.
 fn caller_uses_return_of(caller: &SsaFunction, callee_addr: u64, ret_reg: u64) -> bool {
+    let flow = ValueFlow::build(caller);
+    let registry = FunctionSignatureRegistry::new();
+    let returns_value = caller.inferred_return_type != PrimitiveType::Unknown;
+    let ssa_used = call_sites(caller).into_iter().any(|site| {
+        site.target == CallTarget::Function(callee_addr)
+            && site.result.is_some_and(|result| {
+                result_use(caller, &flow, &registry, result).is_some()
+                    || (returns_value && result_is_returned(caller, &flow, result))
+            })
+    });
+    ssa_used || raw_return_register_read(caller, callee_addr, ret_reg)
+}
+
+fn raw_return_register_read(caller: &SsaFunction, callee_addr: u64, ret_reg: u64) -> bool {
     for block in caller.function.blocks.values() {
         let mut after_call = false;
         for insn in &block.insns {
@@ -460,7 +487,7 @@ fn unify_convention(funcs: &mut BTreeMap<u64, SsaFunction>, addr: u64, cg: &Call
 mod tests {
     use super::*;
     use smallvec::smallvec;
-    use unlace_ir::ssa::{CallingConvention, PrimitiveType, build_ssa};
+    use unlace_ir::ssa::{CallingConvention, PrimitiveType, VarnodeSlot, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     /// Build a one-block function with given insns followed by RETURN.
@@ -695,6 +722,56 @@ mod tests {
             funcs[&callee_addr].inferred_return_type,
             PrimitiveType::Int(4)
         );
+    }
+
+    /// Rule 2: a use the raw operands no longer show — a late pass renamed
+    /// the read of RAX into a temporary — still keeps the return value.
+    #[test]
+    fn return_not_voided_when_only_ssa_shows_the_use() {
+        let callee_addr = 0x2000;
+        let caller_addr = 0x1000;
+
+        let mut callee = make_func(
+            "callee",
+            callee_addr,
+            vec![],
+            CallingConvention::SystemV,
+            vec![],
+        );
+        callee.inferred_return_type = PrimitiveType::Int(4);
+
+        let renamed = Varnode::unique(0x40, 8);
+        let mut caller = make_func(
+            "caller",
+            caller_addr,
+            vec![
+                IrInsn::with_output(
+                    IrOp::Call,
+                    rax(),
+                    smallvec![Varnode::constant(callee_addr, 8)],
+                    caller_addr,
+                ),
+                IrInsn::with_output(
+                    IrOp::IntAdd,
+                    Varnode::unique(0x48, 8),
+                    smallvec![renamed, Varnode::constant(1, 8)],
+                    caller_addr + 4,
+                ),
+            ],
+            CallingConvention::SystemV,
+            vec![],
+        );
+        let result = caller.var_map[&(BlockId(0), 0, VarnodeSlot::Output)];
+        caller
+            .var_map
+            .insert((BlockId(0), 1, VarnodeSlot::Input(0)), result);
+
+        let mut funcs = BTreeMap::new();
+        funcs.insert(caller_addr, caller);
+        funcs.insert(callee_addr, callee);
+
+        let report = run_whole_prog_cc(&mut funcs, 5);
+        assert_eq!(report.returns_voided, 0);
     }
 
     /// Rule 3: Single-caller convention adoption from Unknown.

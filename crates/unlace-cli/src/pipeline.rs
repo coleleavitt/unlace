@@ -1751,15 +1751,9 @@ pub fn run_whole_program_quality_refinement(
         );
     }
 
-    let ir_funcs: BTreeMap<u64, Function> = funcs
-        .iter()
-        .map(|(&addr, ssa)| (addr, ssa.function.clone()))
-        .collect();
-    let call_graph = unlace_ir::xref::build_call_graph(&ir_funcs);
-
-    report.caller_param_changed =
-        unlace_passes::propagate_caller_params(funcs, &call_graph, &mut registry);
+    report.caller_param_changed = unlace_passes::propagate_caller_params(funcs, &mut registry);
     report.registry_applied = unlace_passes::apply_registry_to_callees(funcs, &registry);
+    report.registry_applied |= unlace_passes::apply_registry_to_callers(funcs, &registry);
 
     let cc_cap = if cap == 0 {
         unlace_passes::DEFAULT_WHOLE_PROG_CC_CAP

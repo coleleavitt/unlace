@@ -24,6 +24,7 @@ use unlace_ir::xref::{CallGraph, build_call_graph};
 use crate::caller_param_propagate::{
     apply_registry_to_callees, body_signature, propagate_caller_params, seed_registry_from_funcs,
 };
+use crate::interproc_types::apply_registry_to_callers;
 use crate::pass::PassError;
 
 pub const DEFAULT_INTERPROC_CAP: usize = 5;
@@ -156,8 +157,9 @@ where
         }
 
         seed_registry_from_funcs(funcs, &mut registry);
-        let registry_changed = propagate_caller_params(funcs, &cg, &mut registry);
+        let registry_changed = propagate_caller_params(funcs, &mut registry);
         let applied = apply_registry_to_callees(funcs, &registry);
+        let applied = apply_registry_to_callers(funcs, &registry) | applied;
 
         let sig_delta = signatures_diff_count(&prev_sigs, &new_sigs);
         report.signature_changes = report.signature_changes.saturating_add(sig_delta);

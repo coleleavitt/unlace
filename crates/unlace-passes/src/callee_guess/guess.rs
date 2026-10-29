@@ -65,6 +65,7 @@ pub fn guess_from_call_sites(
     let unknown = |loc| SignatureParam {
         loc,
         ty: PrimitiveType::Unknown,
+        composite: None,
     };
     if cc == CallingConvention::MicrosoftX64 {
         // One position per argument; each uses either its integer or its
@@ -103,6 +104,7 @@ pub fn guess_from_call_sites(
 
     Some(FunctionSignature {
         return_type: PrimitiveType::Unknown,
+        return_composite: None,
         params,
         calling_convention: cc,
         rank: SignatureRank::CallSite,

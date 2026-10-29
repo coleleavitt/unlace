@@ -1489,7 +1489,12 @@ fn print_c_attempt(
                     );
                     out.push_str(&decl);
                 } else {
-                    let _ = write!(out, "{} {}", c_sig_type_for_type(pty), pname);
+                    match pty {
+                        Type::Primitive(_) | Type::Named(_) => {
+                            let _ = write!(out, "{} {}", c_sig_type_for_type(pty), pname);
+                        }
+                        _ => out.push_str(&render_type_decl_as_c(pty, pname)),
+                    }
                     // t260: __usercall register-location suffix.
                     if let Some(reg) = usercall_spec
                         .and_then(|uc| uc.param_regs.get(i))

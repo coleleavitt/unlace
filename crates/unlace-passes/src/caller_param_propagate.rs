@@ -1,9 +1,12 @@
-//! Caller→callee parameter type propagation (whole-program pass).
+//! Caller→callee type propagation (whole-program pass).
 //!
-//! For every direct `Call` instruction in every function, walk back from the
-//! call site to find the SSA varnode that *defined* each argument register
-//! (per the calling convention) and then merge its inferred type into the
-//! callee's parameter slot in the [`FunctionSignatureRegistry`].
+//! For every call with a known callee (direct, or indirect with a resolved
+//! target) in every function, find the SSA value of each argument register
+//! (per the calling convention) and merge its inferred type into the
+//! callee's parameter slot in the [`FunctionSignatureRegistry`]; how the
+//! caller uses the call's result fills the callee's return type. The
+//! opposite direction, callee prototypes into callers, is
+//! [`apply_registry_to_callers`](crate::interproc_types::apply_registry_to_callers).
 //!
 //! Modelled after IDA's `apply_callee_tinfo` (`research/analyzed-references/IDA/IDAlib/all/`),
 //! which fills in argument types from caller context when the callee body is
@@ -16,13 +19,27 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::signature::{
-    FunctionSignature, FunctionSignatureRegistry, SignatureRank, merge_param_type,
+    ArgLoc, FunctionSignature, FunctionSignatureRegistry, SignatureRank, merge_composite,
+    merge_param_type,
 };
 use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::xref::CallGraph;
-use unlace_ir::{BlockId, IrOp, SpaceId};
+use unlace_ir::types::Type;
+use unlace_ir::{BlockId, SpaceId};
 
-/// Run caller→callee parameter propagation across the whole program.
+use crate::interproc_types::{
+    ArgValue, CallTarget, ValueFlow, call_sites, entry_value_reads, param_flow, result_use,
+    returned_composite,
+};
+
+/// Run caller→callee type propagation across the whole program.
+///
+/// Every call whose callee is known — a direct call, or an indirect call
+/// with a resolved target — contributes a [`SignatureRank::CallSite`]
+/// prototype: the types of the arguments it sets up, the struct layout a
+/// pointer argument is known to have, and, for an argument that is the
+/// address of a function the callee calls through, that function's
+/// prototype as a function-pointer type. How the caller uses the call's
+/// result contributes the return type and returned struct layout.
 ///
 /// The prototypes of all call sites of one callee are merged with each
 /// other first, so the result does not depend on caller order, and then
@@ -31,62 +48,108 @@ use unlace_ir::{BlockId, IrOp, SpaceId};
 /// Returns `true` if any signature in `registry` changed.
 pub fn propagate_caller_params(
     funcs: &BTreeMap<u64, SsaFunction>,
-    call_graph: &CallGraph,
     registry: &mut FunctionSignatureRegistry,
 ) -> bool {
+    let flows: BTreeMap<u64, ValueFlow> = funcs
+        .iter()
+        .map(|(&addr, ssa)| (addr, ValueFlow::build(ssa)))
+        .collect();
     let mut from_sites = FunctionSignatureRegistry::new();
+    let mut returns: BTreeMap<u64, (PrimitiveType, Option<Type>)> = BTreeMap::new();
 
-    for (&caller_addr, ssa) in funcs {
-        let callees = call_graph.callees_of(caller_addr);
-        if callees.is_empty() {
-            continue;
-        }
+    for (caller_addr, ssa) in funcs {
+        let flow = &flows[caller_addr];
+        for site in call_sites(ssa) {
+            let CallTarget::Function(callee_addr) = site.target else {
+                continue;
+            };
 
-        for (&bid, block) in &ssa.function.blocks {
-            for (insn_idx, insn) in block.insns.iter().enumerate() {
-                if insn.op != IrOp::Call {
-                    continue;
-                }
-                let Some(target_vn) = insn.inputs.first() else {
+            let cc = registry
+                .get(&callee_addr)
+                .map(|sig| sig.calling_convention)
+                .filter(|cc| *cc != CallingConvention::Unknown)
+                .or_else(|| funcs.get(&callee_addr).map(|f| f.calling_convention))
+                .unwrap_or(ssa.calling_convention);
+
+            if let Some(result) = site.result
+                && let Some(used) = result_use(ssa, flow, registry, result)
+            {
+                let entry = returns
+                    .entry(callee_addr)
+                    .or_insert((PrimitiveType::Unknown, None));
+                entry.0 = merge_param_type(entry.0, used.ty);
+                merge_composite(&mut entry.1, used.composite.as_ref());
+            }
+
+            let arg_types = collect_arg_types_at_call(ssa, site.block, site.insn_idx, cc);
+            if arg_types.is_empty() {
+                continue;
+            }
+            let mut sig = FunctionSignature::with_param_types(
+                cc,
+                SignatureRank::CallSite,
+                PrimitiveType::Unknown,
+                &arg_types,
+            );
+            let callee = funcs.get(&callee_addr).zip(flows.get(&callee_addr));
+            for (reg, value) in site.with_args(ssa, cc).args {
+                let Some(param) = sig.params.iter_mut().find(|p| p.loc == ArgLoc::Reg(reg)) else {
                     continue;
                 };
-                if target_vn.space != SpaceId::Const {
-                    continue;
+                let value = match value {
+                    ArgValue::Var(arg) => flow
+                        .copied_constant(ssa, arg)
+                        .map_or(value, ArgValue::Const),
+                    ArgValue::Const(_) => value,
+                };
+                let composite = match value {
+                    ArgValue::Var(arg) => flow
+                        .copy_chain(ssa, arg)
+                        .iter()
+                        .find_map(|value| ssa.composite_var_types.get(value))
+                        .cloned(),
+                    ArgValue::Const(addr) => funcs.get(&addr).map(|target| {
+                        registry
+                            .get(&addr)
+                            .map_or_else(|| body_signature(target), Clone::clone)
+                            .func_ptr_type()
+                    }),
+                };
+                // A function address is only a function pointer to a
+                // callee that calls through the parameter; a constant that
+                // merely equals some entry address may be an integer.
+                let composite = composite.filter(|ty| {
+                    !matches!(ty, Type::FuncPtr { .. })
+                        || callee.is_some_and(|(f, fl)| param_flow(f, fl, reg).called)
+                });
+                if let Some(ty) = composite {
+                    param.ty = merge_param_type(param.ty, PrimitiveType::Ptr);
+                    param.composite = Some(ty);
                 }
-                let callee_addr = target_vn.offset;
-                if !callees.contains(&callee_addr) {
-                    continue;
-                }
-
-                let cc = registry
-                    .get(&callee_addr)
-                    .map(|sig| sig.calling_convention)
-                    .filter(|cc| *cc != CallingConvention::Unknown)
-                    .or_else(|| funcs.get(&callee_addr).map(|f| f.calling_convention))
-                    .unwrap_or(ssa.calling_convention);
-
-                let arg_types = collect_arg_types_at_call(ssa, bid, insn_idx, cc);
-                if arg_types.is_empty() {
-                    continue;
-                }
-
-                merge_or_insert(
-                    &mut from_sites,
-                    callee_addr,
-                    FunctionSignature::with_param_types(
-                        cc,
-                        SignatureRank::CallSite,
-                        PrimitiveType::Unknown,
-                        &arg_types,
-                    ),
-                );
             }
+            merge_or_insert(&mut from_sites, callee_addr, sig);
         }
     }
 
     let mut changed = false;
     for (callee_addr, site) in from_sites {
         changed |= merge_or_insert(registry, callee_addr, site);
+    }
+    for (callee_addr, (ty, composite)) in returns {
+        changed |= match registry.get_mut(&callee_addr) {
+            Some(entry) => entry.merge_call_site_return(ty, composite.as_ref()),
+            None => {
+                let mut sig = FunctionSignature::with_param_types(
+                    CallingConvention::Unknown,
+                    SignatureRank::CallSite,
+                    ty,
+                    &[],
+                );
+                sig.return_composite = composite;
+                registry.insert(callee_addr, sig);
+                true
+            }
+        };
     }
     changed
 }
@@ -194,15 +257,56 @@ pub fn apply_registry_to_callees(
                 changed = true;
             }
         }
+
+        // A return value the body left open but callers use.
+        if ssa.inferred_return_type == PrimitiveType::Unknown
+            && sig.return_type != PrimitiveType::Unknown
+            && !ssa.noreturn
+        {
+            tracing::debug!(
+                target: "unlace::interproc",
+                "callee-return func={} ty={:?} source=call-sites",
+                ssa.function.name,
+                sig.return_type
+            );
+            ssa.inferred_return_type = sig.return_type;
+            changed = true;
+        }
+
+        // Struct layouts and prototypes callers know for a parameter
+        // reach the values carrying its entry value.
+        for param in sig.params.iter().take(named) {
+            let (ArgLoc::Reg(reg), Some(composite)) = (param.loc, &param.composite) else {
+                continue;
+            };
+            for read in entry_value_reads(ssa, reg) {
+                let entry = ssa.composite_var_types.get(&read.value).cloned();
+                let mut merged = entry.clone();
+                merge_composite(&mut merged, Some(composite));
+                if merged != entry
+                    && let Some(merged) = merged
+                {
+                    tracing::debug!(
+                        target: "unlace::interproc",
+                        "callee-param func={} reg={reg} composite={merged}",
+                        ssa.function.name
+                    );
+                    ssa.composite_var_types.insert(read.value, merged);
+                    changed = true;
+                }
+            }
+        }
     }
     changed
 }
 
 /// The prototype a function's own analysis recovered: its inferred
-/// parameters placed by its calling convention.
+/// parameters placed by its calling convention, with the struct layouts
+/// and prototypes recorded on the values carrying them and on a value it
+/// returns.
 pub(crate) fn body_signature(ssa: &SsaFunction) -> FunctionSignature {
     let param_types: Vec<PrimitiveType> = ssa.inferred_params.iter().map(|(_, ty)| *ty).collect();
-    FunctionSignature {
+    let mut sig = FunctionSignature {
         variadic: ssa.variadic.is_some(),
         ..FunctionSignature::with_param_types(
             ssa.calling_convention,
@@ -210,7 +314,18 @@ pub(crate) fn body_signature(ssa: &SsaFunction) -> FunctionSignature {
             ssa.inferred_return_type,
             &param_types,
         )
+    };
+    if ssa.composite_var_types.is_empty() {
+        return sig;
     }
+    let flow = ValueFlow::build(ssa);
+    for param in &mut sig.params {
+        if let ArgLoc::Reg(reg) = param.loc {
+            param.composite = param_flow(ssa, &flow, reg).composite;
+        }
+    }
+    sig.return_composite = returned_composite(ssa, &flow);
+    sig
 }
 
 /// Build (or refresh) the [`FunctionSignatureRegistry`] from the per-function
@@ -250,7 +365,7 @@ mod tests {
     use super::*;
     use smallvec::smallvec;
     use unlace_ir::ssa::build_ssa;
-    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     const RDI: u64 = 56;
 
@@ -309,14 +424,6 @@ mod tests {
         ssa
     }
 
-    fn call_graph(funcs: &BTreeMap<u64, SsaFunction>) -> CallGraph {
-        let ir_funcs: BTreeMap<u64, _> = funcs
-            .iter()
-            .map(|(a, s)| (*a, s.function.clone()))
-            .collect();
-        unlace_ir::xref::build_call_graph(&ir_funcs)
-    }
-
     #[test]
     fn propagates_int_literal_into_untyped_callee_param() {
         let caller_addr = 0x1000;
@@ -329,16 +436,10 @@ mod tests {
         funcs.insert(caller_addr, caller_ssa);
         funcs.insert(callee_addr, callee_ssa);
 
-        let ir_funcs: BTreeMap<u64, _> = funcs
-            .iter()
-            .map(|(a, s)| (*a, s.function.clone()))
-            .collect();
-        let cg = unlace_ir::xref::build_call_graph(&ir_funcs);
-
         let mut registry = FunctionSignatureRegistry::new();
         seed_registry_from_funcs(&funcs, &mut registry);
 
-        let changed = propagate_caller_params(&funcs, &cg, &mut registry);
+        let changed = propagate_caller_params(&funcs, &mut registry);
         assert!(changed, "registry should have been updated");
 
         let sig = registry
@@ -356,11 +457,10 @@ mod tests {
         let mut funcs = BTreeMap::new();
         funcs.insert(caller_addr, make_caller("caller", caller_addr, callee_addr));
         funcs.insert(callee_addr, make_empty_callee(callee_addr));
-        let cg = call_graph(&funcs);
 
         let mut registry = FunctionSignatureRegistry::new();
         seed_registry_from_funcs(&funcs, &mut registry);
-        propagate_caller_params(&funcs, &cg, &mut registry);
+        propagate_caller_params(&funcs, &mut registry);
 
         let sig = registry.get(&callee_addr).unwrap();
         assert!(
@@ -376,11 +476,10 @@ mod tests {
         let mut funcs = BTreeMap::new();
         funcs.insert(caller_addr, make_caller("caller", caller_addr, callee_addr));
         funcs.insert(callee_addr, make_empty_callee(callee_addr));
-        let cg = call_graph(&funcs);
         funcs.remove(&callee_addr);
 
         let mut registry = FunctionSignatureRegistry::new();
-        assert!(propagate_caller_params(&funcs, &cg, &mut registry));
+        assert!(propagate_caller_params(&funcs, &mut registry));
 
         let sig = registry.get(&callee_addr).unwrap();
         assert_eq!(sig.rank, SignatureRank::CallSite);
@@ -410,15 +509,9 @@ mod tests {
         funcs.insert(caller_b_addr, caller_b);
         funcs.insert(callee_addr, callee_ssa);
 
-        let ir_funcs: BTreeMap<u64, _> = funcs
-            .iter()
-            .map(|(a, s)| (*a, s.function.clone()))
-            .collect();
-        let cg = unlace_ir::xref::build_call_graph(&ir_funcs);
-
         let mut registry = FunctionSignatureRegistry::new();
         seed_registry_from_funcs(&funcs, &mut registry);
-        propagate_caller_params(&funcs, &cg, &mut registry);
+        propagate_caller_params(&funcs, &mut registry);
 
         let sig = registry.get(&callee_addr).unwrap();
         assert_eq!(
@@ -441,12 +534,6 @@ mod tests {
         funcs.insert(caller_addr, caller);
         funcs.insert(callee_addr, callee);
 
-        let ir_funcs: BTreeMap<u64, _> = funcs
-            .iter()
-            .map(|(a, s)| (*a, s.function.clone()))
-            .collect();
-        let cg = unlace_ir::xref::build_call_graph(&ir_funcs);
-
         let mut registry = FunctionSignatureRegistry::new();
         registry.insert(
             callee_addr,
@@ -458,7 +545,7 @@ mod tests {
             ),
         );
 
-        propagate_caller_params(&funcs, &cg, &mut registry);
+        propagate_caller_params(&funcs, &mut registry);
 
         let sig = registry.get(&callee_addr).unwrap();
         assert_eq!(

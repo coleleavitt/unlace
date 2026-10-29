@@ -11,6 +11,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use crate::ssa::{CallingConvention, PrimitiveType};
+use crate::types::Type;
 
 const RCX: u64 = 8;
 const RDX: u64 = 16;
@@ -101,10 +102,16 @@ pub enum SignatureRank {
 }
 
 /// One parameter: where it is passed and its type.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SignatureParam {
     pub loc: ArgLoc,
     pub ty: PrimitiveType,
+    /// Richer type of the value, in the convention of
+    /// `SsaFunction::composite_var_types`: a `Type::Struct` on a pointer
+    /// value is the struct it points to, and a `Type::FuncPtr` is the
+    /// prototype of the function it points to.
+    #[serde(default)]
+    pub composite: Option<Type>,
 }
 
 /// Inferred signature of a function: return type, located parameters,
@@ -117,6 +124,10 @@ pub struct SignatureParam {
 pub struct FunctionSignature {
     /// Return type (the value left in RAX/X0/etc.).
     pub return_type: PrimitiveType,
+    /// Richer type of the returned value, in the convention of
+    /// [`SignatureParam::composite`].
+    #[serde(default)]
+    pub return_composite: Option<Type>,
     /// Named parameters in calling-convention order.
     pub params: Vec<SignatureParam>,
     /// Calling convention used to place the parameters.
@@ -236,10 +247,15 @@ impl FunctionSignature {
             .arg_locs(param_types)
             .into_iter()
             .zip(param_types)
-            .map(|(loc, &ty)| SignatureParam { loc, ty })
+            .map(|(loc, &ty)| SignatureParam {
+                loc,
+                ty,
+                composite: None,
+            })
             .collect();
         FunctionSignature {
             return_type,
+            return_composite: None,
             params,
             calling_convention,
             rank,
@@ -250,6 +266,15 @@ impl FunctionSignature {
     /// Parameter types in order.
     pub fn param_types(&self) -> impl Iterator<Item = PrimitiveType> + '_ {
         self.params.iter().map(|param| param.ty)
+    }
+
+    /// The type of a pointer to a function with this prototype.
+    pub fn func_ptr_type(&self) -> Type {
+        Type::FuncPtr {
+            params: self.params.iter().map(SignatureParam::value_type).collect(),
+            return_type: Box::new(value_type(self.return_type, self.return_composite.as_ref())),
+            variadic: self.variadic,
+        }
     }
 
     /// Merge another view of the same function into this one and report
@@ -287,25 +312,52 @@ impl FunctionSignature {
         *self != before
     }
 
+    /// Merge what call sites show about the returned value: its type and
+    /// struct layout, from how callers use the result.
+    ///
+    /// Only open prototypes take it. A debug-info, library or user
+    /// prototype with an unknown return type returns `void`.
+    pub fn merge_call_site_return(&mut self, ty: PrimitiveType, composite: Option<&Type>) -> bool {
+        let before = (self.return_type, self.return_composite.clone());
+        match self.rank {
+            SignatureRank::CallSite => {
+                self.return_type = merge_param_type(self.return_type, ty);
+            }
+            SignatureRank::CalleeBody => {
+                if self.return_type == PrimitiveType::Unknown {
+                    self.return_type = ty;
+                }
+            }
+            SignatureRank::User | SignatureRank::DebugInfo | SignatureRank::Library => {
+                return false;
+            }
+        }
+        merge_composite(&mut self.return_composite, composite);
+        (self.return_type, &self.return_composite) != (before.0, &before.1)
+    }
+
     fn fill_unknown_from(&mut self, other: &FunctionSignature) {
         if self.return_type == PrimitiveType::Unknown {
             self.return_type = other.return_type;
         }
+        merge_composite(&mut self.return_composite, other.return_composite.as_ref());
         if self.calling_convention == CallingConvention::Unknown {
             self.calling_convention = other.calling_convention;
         }
         for param in &mut self.params {
-            if param.ty != PrimitiveType::Unknown {
+            let Some(found) = other.params.iter().find(|o| o.loc == param.loc) else {
                 continue;
-            }
-            if let Some(found) = other.params.iter().find(|o| o.loc == param.loc) {
+            };
+            if param.ty == PrimitiveType::Unknown {
                 param.ty = found.ty;
             }
+            merge_composite(&mut param.composite, found.composite.as_ref());
         }
     }
 
     fn merge_same_rank(&mut self, other: &FunctionSignature) {
         self.return_type = merge_param_type(self.return_type, other.return_type);
+        merge_composite(&mut self.return_composite, other.return_composite.as_ref());
         if self.calling_convention == CallingConvention::Unknown {
             self.calling_convention = other.calling_convention;
         }
@@ -319,6 +371,7 @@ impl FunctionSignature {
             .count();
         for (mine, theirs) in self.params.iter_mut().zip(&other.params).take(common) {
             mine.ty = merge_param_type(mine.ty, theirs.ty);
+            merge_composite(&mut mine.composite, theirs.composite.as_ref());
         }
 
         if self.rank == SignatureRank::CallSite {
@@ -328,6 +381,80 @@ impl FunctionSignature {
             self.params.extend_from_slice(&other.params[common..]);
         }
     }
+}
+
+impl SignatureParam {
+    /// The parameter's type as a [`Type`]: its composite type when known.
+    pub fn value_type(&self) -> Type {
+        value_type(self.ty, self.composite.as_ref())
+    }
+}
+
+/// The [`Type`] of a value with primitive type `ty` and optional
+/// composite type. A struct composite describes the pointee, so the
+/// value is a pointer to it.
+fn value_type(ty: PrimitiveType, composite: Option<&Type>) -> Type {
+    match composite {
+        Some(st @ (Type::Struct { .. } | Type::Union { .. })) => Type::Ptr(Box::new(st.clone())),
+        Some(other) => other.clone(),
+        None => Type::Primitive(ty),
+    }
+}
+
+/// Merge the composite type `incoming`, seen for the same value by
+/// another source, into `current`: an absent type takes the other; two
+/// struct layouts merge field by field ([`merge_struct_layouts`]); any
+/// other disagreement keeps `current`, so repeated merges cannot
+/// oscillate.
+pub fn merge_composite(current: &mut Option<Type>, incoming: Option<&Type>) {
+    let Some(incoming) = incoming else {
+        return;
+    };
+    match current {
+        None => *current = Some(incoming.clone()),
+        Some(cur) => {
+            if let Some(merged) = merge_struct_layouts(cur, incoming) {
+                *cur = merged;
+            }
+        }
+    }
+}
+
+/// Union of two struct layouts of one object: `current` keeps its name
+/// and every field it has; fields only `incoming` has at offsets that do
+/// not overlap one of `current`'s are added. `None` unless both are
+/// structs.
+pub fn merge_struct_layouts(current: &Type, incoming: &Type) -> Option<Type> {
+    let (
+        Type::Struct { name, fields },
+        Type::Struct {
+            fields: other_fields,
+            ..
+        },
+    ) = (current, incoming)
+    else {
+        return None;
+    };
+    let mut merged = fields.clone();
+    for field in other_fields {
+        let start = field.offset;
+        let end = start + field_extent(field);
+        let overlaps = fields
+            .iter()
+            .any(|f| start < f.offset + field_extent(f) && f.offset < end);
+        if !overlaps {
+            merged.push(field.clone());
+        }
+    }
+    merged.sort_by_key(|f| f.offset);
+    Some(Type::Struct {
+        name: name.clone(),
+        fields: merged,
+    })
+}
+
+fn field_extent(field: &crate::types::StructFieldType) -> u64 {
+    u64::from(field.ty.size().unwrap_or(1).max(1))
 }
 
 /// Merge two types seen for one parameter location by equally ranked
@@ -492,6 +619,72 @@ mod tests {
         );
         assert!(ints.merge(&floats));
         assert!(ints.params.is_empty(), "no common location prefix");
+    }
+
+    fn layout(name: &str, fields: &[(u64, PrimitiveType)]) -> Type {
+        Type::Struct {
+            name: name.into(),
+            fields: fields
+                .iter()
+                .map(|&(offset, ty)| crate::types::StructFieldType {
+                    name: format!("field_{offset}"),
+                    ty: Type::Primitive(ty),
+                    offset,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn struct_layouts_merge_without_overlapping_fields() {
+        use PrimitiveType::*;
+        let mut current = Some(layout("a", &[(8, Int(4)), (16, Int(8))]));
+        merge_composite(
+            &mut current,
+            Some(&layout("b", &[(0, Ptr), (12, Int(4)), (16, Int(4))])),
+        );
+        assert_eq!(
+            current,
+            Some(layout(
+                "a",
+                &[(0, Ptr), (8, Int(4)), (12, Int(4)), (16, Int(8))]
+            ))
+        );
+    }
+
+    #[test]
+    fn conflicting_composites_keep_the_current_one() {
+        let proto = sig(SignatureRank::CallSite, &[PrimitiveType::Int(4)]).func_ptr_type();
+        let mut current = Some(proto.clone());
+        merge_composite(&mut current, Some(&layout("a", &[(0, PrimitiveType::Ptr)])));
+        assert_eq!(current, Some(proto));
+    }
+
+    #[test]
+    fn call_site_return_fills_only_open_prototypes() {
+        let mut body = sig(SignatureRank::CalleeBody, &[]);
+        assert!(body.merge_call_site_return(PrimitiveType::Ptr, None));
+        assert_eq!(body.return_type, PrimitiveType::Ptr);
+
+        let mut debug = sig(SignatureRank::DebugInfo, &[]);
+        assert!(!debug.merge_call_site_return(PrimitiveType::Ptr, None));
+        assert_eq!(debug.return_type, PrimitiveType::Unknown, "void stays void");
+    }
+
+    #[test]
+    fn struct_param_value_type_is_a_pointer() {
+        let mut proto = sig(SignatureRank::CalleeBody, &[PrimitiveType::Ptr]);
+        proto.params[0].composite = Some(layout("node", &[(0, PrimitiveType::Ptr)]));
+        let Type::FuncPtr { params, .. } = proto.func_ptr_type() else {
+            panic!("function pointer expected");
+        };
+        assert_eq!(
+            params,
+            vec![Type::Ptr(Box::new(layout(
+                "node",
+                &[(0, PrimitiveType::Ptr)]
+            )))]
+        );
     }
 
     #[test]

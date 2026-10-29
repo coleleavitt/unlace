@@ -37,6 +37,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use unlace_ir::signature::ArgLoc;
 use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, VarnodeSlot};
 use unlace_ir::types::Type;
 use unlace_ir::{IrOp, SpaceId, Varnode};
@@ -137,7 +138,13 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
         }
 
         // Rule 2: narrow type if every use is an `IntAnd(reg, 0xFF)` mask.
-        let narrowed = if uses.iter().all(|u| matches!(u, ParamUse::AndMaskFF)) {
+        let narrowed = if let Some(proto) = callers_func_ptr_type(func, reg) {
+            sig_trace_line(
+                func,
+                format!("func-ptr-param idx={idx} name={name} reg={reg} type={proto}"),
+            );
+            proto
+        } else if uses.iter().all(|u| matches!(u, ParamUse::AndMaskFF)) {
             sig_trace_line(
                 func,
                 format!(
@@ -233,6 +240,19 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
         ),
     );
     sig
+}
+
+/// The prototype callers give the parameter passed in `reg`, when it is a
+/// function pointer: the function's whole-program registry entry (empty
+/// outside whole-program analysis) records the address of a function the
+/// callers pass and the body calls through.
+fn callers_func_ptr_type(func: &SsaFunction, reg: u64) -> Option<Type> {
+    let sig = func.external_signatures.get(&func.function.addr)?;
+    let param = sig.params.iter().find(|p| p.loc == ArgLoc::Reg(reg))?;
+    param
+        .composite
+        .clone()
+        .filter(|ty| matches!(ty, Type::FuncPtr { .. }))
 }
 
 /// Classification of one read of a parameter register in the function

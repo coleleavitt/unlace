@@ -2047,6 +2047,38 @@ fn t230_dropped_param_shrinks_header() {
     );
 }
 
+/// A function-pointer parameter is declared around its name.
+#[test]
+fn func_ptr_param_is_declared_around_its_name() {
+    use unlace_ir::ssa::FinalizedSignature;
+    use unlace_ir::types::Type;
+
+    let mut func = make_func("apply", vec![HirNode::Return(None)]);
+    func.finalized_signature = Some(FinalizedSignature {
+        variadic: false,
+        stack_param_slots: BTreeMap::new(),
+        params: vec![
+            (
+                "a1".into(),
+                Type::FuncPtr {
+                    params: vec![Type::Primitive(PrimitiveType::Int(4))],
+                    return_type: Box::new(Type::Primitive(PrimitiveType::Int(4))),
+                    variadic: false,
+                },
+            ),
+            ("a2".into(), Type::Primitive(PrimitiveType::Int(4))),
+        ],
+        return_type: Type::Primitive(PrimitiveType::Unknown),
+        dropped_param_count: 0,
+        sret: false,
+    });
+    let output = print_c(&func);
+    assert!(
+        output.contains("void apply(int (*a1)(int), int a2)"),
+        "{output}"
+    );
+}
+
 /// A variadic finalized signature closes the header with `...` after the
 /// named parameters, and a variadic function with none prints `(...)`
 /// rather than `(void)`.

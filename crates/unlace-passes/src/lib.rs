@@ -135,6 +135,7 @@ pub mod indirect_jump_resolve;
 pub mod inline_foldback;
 pub mod instrument;
 pub mod interproc_fixpoint;
+pub mod interproc_types;
 #[cfg(feature = "unwired")]
 pub mod ipa_slice;
 #[cfg(feature = "unwired")]
@@ -404,6 +405,7 @@ pub use instrument::{
     record_pass_timing, run_instrumented, schedule_audit_oscillations,
 };
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
+pub use interproc_types::apply_registry_to_callers;
 #[cfg(feature = "unwired")]
 pub use ipa_slice::{IpaSlicePass, ProgramSlice, SliceCriterion};
 #[cfg(feature = "unwired")]

@@ -422,7 +422,7 @@ mod tests {
     const SP: Varnode = Varnode::reg(0x20, 8);
 
     fn op(op: IrOp, out: Varnode, inputs: &[Varnode]) -> IrInsn {
-        IrInsn::with_output(op, out, inputs.iter().copied().collect::<Vec<_>>(), 0x1000)
+        IrInsn::with_output(op, out, inputs.to_vec(), 0x1000)
     }
 
     fn reg(offset: u64, size: u8) -> Varnode {

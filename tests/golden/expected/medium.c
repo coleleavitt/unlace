@@ -331,7 +331,6 @@ int main(void) {
     v28 = (_DWORD)2u < 3;
     v29 = __OFSUB__(2u, 3);
     while (1) {
-    label_28:;
         ++v15;
         v26 = v15 == 0xa;
         v27 = (_BYTE)(v15 < 0xa);
@@ -361,11 +360,14 @@ int main(void) {
                             v28 = (_DWORD)v7 < (_DWORD)v13;
                             v29 = __OFSUB__(v7, v13);
                             if (v7 != v13 && v13 <= v7) {
-                                goto label_28;
+                                break;
                             }
                         } else {
                             break;
                         }
+                    }
+                    if (v22) {
+                        break;
                     }
                 } else {
                     break;
@@ -504,19 +506,20 @@ int main(void) {
                     v27 = (_BYTE)(v8 < 9);
                     v28 = (_DWORD)v8 < 9;
                     if (v8 > 9) {
-                        goto label_43;
+                        break;
                     }
                 }
             }
-            v13 = (_DWORD)(v8 + (v8 << 1LL));
-            v8 = v17 + 1;
-            v26 = v24 + v13 == 0;
-            v27 = (_BYTE)(v24 + v13 < 0);
-            v28 = (v24 + v13) < v24;
-            v24 += v13;
-            continue;
+            if (v17 <= 4) {
+                v13 = (_DWORD)(v8 + (v8 << 1LL));
+                v8 = v17 + 1;
+                v26 = v24 + v13 == 0;
+                v27 = (_BYTE)(v24 + v13 < 0);
+                v28 = (v24 + v13) < v24;
+                v24 += v13;
+                continue;
+            }
         }
-    label_43:;
         v24 = (_DWORD)(v24 + v8 - 10);
         v17 = (_DWORD)v8;
         v18 = (_DWORD)v8 + 1;

@@ -6139,6 +6139,9 @@ pub fn emit_output(
                 hir_step!("output.hir.goto-to-continue", "goto_to_continue", {
                     unlace_struct::goto_to_continue(&mut hir);
                 });
+                hir_step!("output.hir.merge-loop-exits", "merge_loop_exits", {
+                    unlace_struct::merge_loop_exits(&mut hir, ssa);
+                });
                 hir_step!(
                     "output.hir.detect-continue-break1",
                     "detect_continue_break1",

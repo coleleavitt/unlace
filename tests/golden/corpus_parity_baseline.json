@@ -2,8 +2,8 @@
   "x86_64": {
     "functions": 149,
     "failed": 0,
-    "line_similarity_pct": 35.8,
-    "ast_similarity_pct": 63.3,
+    "line_similarity_pct": 37.5,
+    "ast_similarity_pct": 64.1,
     "gotos": 286,
     "leaked_temps": 184,
     "worse": 82

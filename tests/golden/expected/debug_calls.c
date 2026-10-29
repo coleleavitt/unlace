@@ -56,9 +56,6 @@ _QWORD qword_3FF8;
 _QWORD qword_4008;
 __int64 sub_1030();
 __int64 sub_10a0();
-__int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */;
-void sub_1070(void);
-void sub_1120(void);
 
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -78,13 +75,13 @@ void _start(void) {
     return;
 }
 // debug language: C
-/* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1070(void) {
+/* Function:   deregister_tm_clones | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void deregister_tm_clones(void) {
     return;
 }
 // debug language: C
-/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
-__int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
+/* Function:   __do_global_dtors_aux | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1030 | Xrefs from: unknown */
+__int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4010) {
         return result;
@@ -93,14 +90,14 @@ __int64 sub_10e0(void) /* // dropped 1 param(s) (dead in body) */ {
             __int64 v1 = qword_4008; // rdi
             result = sub_1030(v1);
         }
-        result = sub_1070();
+        result = deregister_tm_clones();
         byte_4010 = 1;
         return result;
     }
 }
 // debug language: C
-/* Function:   sub_1120 | Address: 0x1120 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1120(void) {
+/* Function:   frame_dummy | Address: 0x1120 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void frame_dummy(void) {
     sub_10a0();
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)

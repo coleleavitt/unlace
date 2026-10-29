@@ -83,5 +83,8 @@ research/decompiled-references/gcc/gcc/
 eula*.html
 eula*.txt
 .jython_cache/
-.jfc/checkpoints/*.absent
+.jfc/
 target-agents/
+
+# Prime agent session artifacts
+.prime/

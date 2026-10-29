@@ -82,30 +82,28 @@ __int64 sub_11a0();
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
     __int64 field_0;
-    void * field_8;
-    __int64 field_16;
+    __int64 field_8;
+    void * field_16;
     __int64 field_24;
-    void * field_32;
 };
 
-/* Function:   main | Address: 0x10c0 | Size: 0x77 (119 bytes) | Convention: System V AMD64 | Stack frame: 0x28 (40 bytes) | Xrefs to:   identify(Animal*), __printf_chk, __stack_chk_fail | Xrefs from: unknown */
+/* Function:   main | Address: 0x10c0 | Size: 0x77 (119 bytes) | Convention: System V AMD64 | Stack frame: 0x20 (32 bytes) | Xrefs to:   identify(Animal*), __printf_chk, __stack_chk_fail | Xrefs from: unknown */
 int main(void) {
-    __int64 v_8;
-    __int64 v_16;
-    __int64 v_32;
+    char buf[32];
     __int64 v0; // rax
     __int64 v1; // rax
     __int64 v2; // rax
     __int64 v3; // rax
     __int64 v4; // rbx
     _QWORD v5; // temp
+    *(_QWORD *)(buf + 24) = v4;
     v0 = v5;
-    __int64 v6 = (uintptr_t)&v_16; // rdi
-    v_8 = 0x3d00;
-    v_16 = 0x3d28;
-    v1 = identify(&v_16);
+    __int64 v6 = (uintptr_t)(buf + 8); // rdi
+    *(_QWORD *)buf = 0x3d00;
+    *(_QWORD *)(buf + 8) = 0x3d28;
+    v1 = identify((buf + 8));
     v4 = v1;
-    v2 = identify(&v_8);
+    v2 = identify(buf);
     __int64 v7 = v2; // rdx
     v3 = printf("%s %s\n", (char *)v7, (char *)v4);
     return 0;
@@ -129,7 +127,7 @@ void _start(void) {
     return;
 }
 
-/* Function:   deregister_tm_clones | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   deregister_tm_clones | Address: 0x1170 | Size: 0x2c (44 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void deregister_tm_clones(void) {
     return;
 }
@@ -137,12 +135,13 @@ void deregister_tm_clones(void) {
 /* Function:   __do_global_dtors_aux | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1070 | Xrefs from: unknown */
 __int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
+    __int64 v1; // rax
     if (byte_4010) {
         return result;
     } else {
         if (qword_3FD8) {
-            __int64 v1 = qword_4008; // rdi
-            result = sub_1070(v1);
+            __int64 v2 = qword_4008; // rdi
+            v1 = sub_1070(v2);
         }
         result = deregister_tm_clones();
         byte_4010 = 1;
@@ -159,7 +158,6 @@ void frame_dummy(void) {
 // identify(Animal*)
 char * identify(Animal *a1) {
     __int64 v_16;
-    __int64 v_8;
     __int64 result; // rax
     __int64 v2; // rax
     __int64 v3; // rcx
@@ -167,10 +165,10 @@ char * identify(Animal *a1) {
         return "unknown";
     } else {
         __int64 v4 = 0x3d40; // rsi
-        v_8 = a1;
+        v_16 = a1;
         /* dynamic cast */
         __int64 v5 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL); // rax
-        a1 = v_8;
+        a1 = v_16;
         __int64 v6 = v5; // rdx
         if (!v5) {
             v6 = 0x3d68;

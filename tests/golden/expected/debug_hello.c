@@ -75,7 +75,7 @@ void _start(void) {
     return;
 }
 // debug language: C
-/* Function:   deregister_tm_clones | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   deregister_tm_clones | Address: 0x1090 | Size: 0x2c (44 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void deregister_tm_clones(void) {
     return;
 }
@@ -83,12 +83,13 @@ void deregister_tm_clones(void) {
 /* Function:   __do_global_dtors_aux | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1040 | Xrefs from: unknown */
 __int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
+    __int64 v1; // rax
     if (byte_4010) {
         return result;
     } else {
         if (qword_3FF8) {
-            __int64 v1 = qword_4008; // rdi
-            result = sub_1040(v1);
+            __int64 v2 = qword_4008; // rdi
+            v1 = sub_1040(v2);
         }
         result = deregister_tm_clones();
         byte_4010 = 1;

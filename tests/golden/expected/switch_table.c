@@ -73,19 +73,20 @@ void _start(void) {
     __builtin_trap();
     return;
 }
-/* Function:   deregister_tm_clones | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   deregister_tm_clones | Address: 0x1070 | Size: 0x2c (44 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void deregister_tm_clones(void) {
     return;
 }
 /* Function:   __do_global_dtors_aux | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1030 | Xrefs from: unknown */
 __int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
+    __int64 v1; // rax
     if (byte_4010) {
         return result;
     } else {
         if (qword_3FF8) {
-            __int64 v1 = qword_4008; // rdi
-            result = sub_1030(v1);
+            __int64 v2 = qword_4008; // rdi
+            v1 = sub_1030(v2);
         }
         result = deregister_tm_clones();
         byte_4010 = 1;
@@ -122,17 +123,10 @@ int dispatch(int a1) {
     }
     return 0;
 }
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    _QWORD field_0;
-    void * field_8;
-};
-
-/* Function:   main | Address: 0x117b | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   dispatch | Xrefs from: unknown */
+/* Function:   main | Address: 0x117b | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   dispatch | Xrefs from: unknown */
 int main(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 v0; // rax
-    _QWORD v1; // rbx
-    v1 = 0;
+    int v1 = 0; // ebx
     int v2 = 0; // ebp
     do {
         _QWORD v3 = v1; // rdi

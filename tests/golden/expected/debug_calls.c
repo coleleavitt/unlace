@@ -75,7 +75,7 @@ void _start(void) {
     return;
 }
 // debug language: C
-/* Function:   deregister_tm_clones | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   deregister_tm_clones | Address: 0x1070 | Size: 0x2c (44 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void deregister_tm_clones(void) {
     return;
 }
@@ -83,12 +83,13 @@ void deregister_tm_clones(void) {
 /* Function:   __do_global_dtors_aux | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1030 | Xrefs from: unknown */
 __int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
+    __int64 v1; // rax
     if (byte_4010) {
         return result;
     } else {
         if (qword_3FF8) {
-            __int64 v1 = qword_4008; // rdi
-            result = sub_1030(v1);
+            __int64 v2 = qword_4008; // rdi
+            v1 = sub_1030(v2);
         }
         result = deregister_tm_clones();
         byte_4010 = 1;
@@ -150,16 +151,14 @@ int mul(int a, int b) {
 int square(int x) {
     int v_4;
     v_4 = x;
-    x = v_4;
-    return mul(x, v_4);
+    return mul(v_4, v_4);
 }
 // debug language: C
 /* Function:   cube | Address: 0x118e | Size: 0x28 (40 bytes) | Convention: System V AMD64 | Stack frame: 0x4 (4 bytes) | Xrefs to:   mul, square | Xrefs from: unknown */
 int cube(int x) {
     int v_4;
     v_4 = x;
-    x = v_4;
-    x = square(x);
+    x = square(v_4);
     return mul(x, v_4);
 }
 // debug language: C
@@ -228,11 +227,7 @@ int clamp(int x, int lo, int hi) {
     v_4 = x;
     v_8 = lo;
     v_12 = hi;
-    // fixtures/src/calls.c:9
-    hi = v_8;
-    lo = hi;
-    x = v_4;
-    hi = max(x, lo);
+    hi = max(v_4, v_8);
     return min(hi, v_12);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -263,8 +258,7 @@ int compute(int x) {
     int v_8;
     int v_4;
     a = x;
-    x = a;
-    e = add(x, 0xaLL);
+    e = add(a, 0xaLL);
     v_16 = sub(e, 3LL);
     v_12 = square(v_16);
     v_8 = cube(2LL);

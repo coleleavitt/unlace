@@ -13372,16 +13372,17 @@ fn try_emit_compound_assign(
     if insn.inputs.len() != 2 {
         return None;
     }
-    let counter_is_first = input_base_is_statement_output(insn, stmt_idx, 0, ctx);
-    let counter_is_second = input_base_is_statement_output(insn, stmt_idx, 1, ctx);
-
-    let counter_idx = if counter_is_first {
-        0
-    } else if counter_is_second {
-        1
-    } else {
-        return None;
+    // The destination must be read exactly once: `x = x + x` keeps its
+    // plain form.
+    let counter_idx = match (
+        input_base_is_statement_output(insn, stmt_idx, 0, ctx),
+        input_base_is_statement_output(insn, stmt_idx, 1, ctx),
+    ) {
+        (true, false) => 0,
+        (false, true) => 1,
+        _ => return None,
     };
+    let counter_is_first = counter_idx == 0;
 
     // If the counter input has a foldable definition, its expression expands
     // inline and compound form would be wrong (e.g. `((1) + 2) += 3`).
@@ -13402,19 +13403,19 @@ fn try_emit_compound_assign(
     // For commutative ops, either operand position is fine.
     // For non-commutative ops (sub, div, mod, shifts), only first-position works.
     let op_str = match insn.op {
-        IrOp::IntAdd if counter_is_first || counter_is_second => "+=",
+        IrOp::IntAdd => "+=",
         IrOp::IntSub if counter_is_first => "-=",
-        IrOp::IntMult if counter_is_first || counter_is_second => "*=",
+        IrOp::IntMult => "*=",
         IrOp::IntDiv | IrOp::IntSdiv if counter_is_first => "/=",
         IrOp::IntRem | IrOp::IntSrem if counter_is_first => "%=",
         IrOp::IntLeft if counter_is_first => "<<=",
         IrOp::IntRight | IrOp::IntSright if counter_is_first => ">>=",
-        IrOp::IntAnd if counter_is_first || counter_is_second => "&=",
-        IrOp::IntOr if counter_is_first || counter_is_second => "|=",
-        IrOp::IntXor if counter_is_first || counter_is_second => "^=",
+        IrOp::IntAnd => "&=",
+        IrOp::IntOr => "|=",
+        IrOp::IntXor => "^=",
         _ => return None,
     };
-    let other_idx = if counter_is_first { 1 } else { 0 };
+    let other_idx = 1 - counter_idx;
     let const_ctx = const_context_for_op(insn.op);
     let other = emit_operand_with_prec(
         &insn.inputs[other_idx],
@@ -13424,6 +13425,10 @@ fn try_emit_compound_assign(
         ParentCtx::top(),
         ctx,
     );
+    // An inlined operand can read the destination again (`x = x + f(x)`).
+    if contains_identifier(&other, lhs) {
+        return None;
+    }
     Some(format!("{} {} {}", lhs, op_str, other))
 }
 

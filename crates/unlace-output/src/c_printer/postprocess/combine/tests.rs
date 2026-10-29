@@ -36,7 +36,18 @@ fn compound_assignment() {
         combine("*(_DWORD *)(p + 8) = *(_DWORD *)(p + 8) | 4;"),
         "*(_DWORD *)(p + 8) |= 4;"
     );
-    assert_eq!(combine("x = x + f(x);"), "x += f(x);");
+    assert_eq!(combine("x = x + f(x);"), "x = x + f(x);");
+    assert_eq!(combine("x = x + x;"), "x = x + x;");
+    assert_eq!(combine("x = y * x + x;"), "x = y * x + x;");
+    assert_eq!(combine("x = p[x] ^ x;"), "x = p[x] ^ x;");
+    assert_eq!(combine("x = x & p->x;"), "x &= p->x;");
+    assert_eq!(combine("x = x - y;"), "x -= y;");
+    assert_eq!(combine("x = x * y;"), "x *= y;");
+    assert_eq!(combine("x = x / y;"), "x /= y;");
+    assert_eq!(combine("x = x % y;"), "x %= y;");
+    assert_eq!(combine("x = x ^ y;"), "x ^= y;");
+    assert_eq!(combine("x = x << 3;"), "x <<= 3;");
+    assert_eq!(combine("x = 3 << x;"), "x = 3 << x;");
     assert_eq!(combine("f(x) = f(x) + 1;"), "f(x) = f(x) + 1;");
     assert_eq!(
         combine("MEMORY[0x10] = MEMORY[0x10] + 1;"),

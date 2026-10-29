@@ -4800,6 +4800,41 @@ fn test_compound_or_assign() {
     );
 }
 
+#[test]
+fn test_compound_sub_assign() {
+    let v = reg(0, 4);
+    let n = reg(8, 4);
+    let body = vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntSub,
+            v,
+            smallvec![v, n],
+            0x1000,
+        )),
+        HirNode::Return(Some(sv(0, 4))),
+    ];
+    let func = make_func("sub_assign", body);
+    let output = print_c(&func);
+    assert!(output.contains("result -= v1;"), "{output}");
+}
+
+#[test]
+fn test_compound_assign_needs_single_destination_read() {
+    let v = reg(0, 4);
+    let body = vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            v,
+            smallvec![v, v],
+            0x1000,
+        )),
+        HirNode::Return(Some(sv(0, 4))),
+    ];
+    let func = make_func("double", body);
+    let output = print_c(&func);
+    assert!(output.contains("result = result + result;"), "{output}");
+}
+
 // -------------------------------------------------------------------
 // P4-7: Negation folding tests
 // -------------------------------------------------------------------

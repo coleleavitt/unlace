@@ -309,16 +309,17 @@ fn statement(e: Expr) -> Option<Expr> {
     }
 }
 
-/// `x = x op y` -> `x op= y` (and `x = y op x` for commutative `op`).
+/// `x = x op y` -> `x op= y` (and `x = y op x` for commutative `op`), only
+/// when `x` occurs exactly once on the right: `x = x + f(x)` stays as is.
 fn assignment(lhs: Expr, rhs: Expr) -> Expr {
     if let Expr::Binary { op, lhs: a, rhs: b } = &rhs
         && op.has_compound()
         && is_pure(&lhs)
     {
-        if **a == lhs {
+        if **a == lhs && !mentions(b, &lhs) {
             return compound(*op, lhs, compound_operand((**b).clone()));
         }
-        if op.is_commutative() && **b == lhs {
+        if op.is_commutative() && **b == lhs && !mentions(a, &lhs) {
             return compound(*op, lhs, compound_operand((**a).clone()));
         }
     }
@@ -471,6 +472,31 @@ fn unary_operand(e: Expr) -> Expr {
         e
     } else {
         Expr::Paren(Box::new(e))
+    }
+}
+
+/// `needle` occurs somewhere in `e`.
+fn mentions(e: &Expr, needle: &Expr) -> bool {
+    if e == needle {
+        return true;
+    }
+    match e {
+        Expr::Atom(_) => false,
+        Expr::Paren(x)
+        | Expr::Cast { expr: x, .. }
+        | Expr::Prefix { expr: x, .. }
+        | Expr::Postfix { expr: x, .. }
+        | Expr::Member { base: x, .. } => mentions(x, needle),
+        Expr::Call { callee, args } => {
+            mentions(callee, needle) || args.iter().any(|a| mentions(a, needle))
+        }
+        Expr::Index { base, index } => mentions(base, needle) || mentions(index, needle),
+        Expr::Binary { lhs, rhs, .. }
+        | Expr::Assign { lhs, rhs, .. }
+        | Expr::Comma { lhs, rhs } => mentions(lhs, needle) || mentions(rhs, needle),
+        Expr::Ternary { cond, then, els } => {
+            mentions(cond, needle) || mentions(then, needle) || mentions(els, needle)
+        }
     }
 }
 

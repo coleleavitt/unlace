@@ -32,6 +32,7 @@ pub mod bool_coverage;
 pub mod bool_simplify;
 #[cfg(feature = "unwired")]
 pub mod boost_recognize;
+pub mod branch_fold;
 #[cfg(feature = "unwired")]
 pub mod bsim_db;
 #[cfg(feature = "unwired")]
@@ -309,6 +310,7 @@ pub use bmi_idioms::BmiIdiomPass;
 #[cfg(feature = "unwired")]
 pub use bool_coverage::BoolCoveragePass;
 pub use bool_simplify::BoolSimplifyPass;
+pub use branch_fold::ConstBranchFoldPass;
 #[cfg(feature = "unwired")]
 pub use builtin_recognize::{
     BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,

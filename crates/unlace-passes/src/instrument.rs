@@ -80,6 +80,9 @@ fn linkscope_pass_name_span(name: &str) -> linkscope::Span {
         }
         "DeadCodeElimPass" | "dce" => linkscope::phase("pass.name.DeadCodeElimPass"),
         "SccpPass" | "sccp" => linkscope::phase("pass.name.SccpPass"),
+        "ConstBranchFoldPass" | "const-branch-fold" => {
+            linkscope::phase("pass.name.ConstBranchFoldPass")
+        }
         "CsePass" | "cse" => linkscope::phase("pass.name.CsePass"),
         "GvnPass" | "gvn" => linkscope::phase("pass.name.GvnPass"),
         "BmiIdiomPass" | "bmi-idioms" => linkscope::phase("pass.name.BmiIdiomPass"),

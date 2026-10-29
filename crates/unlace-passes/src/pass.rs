@@ -894,6 +894,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("GlobalCopyPropPass", GlobalOpt),
         PassDescriptor::new("DeadCodeElimPass", LocalOpt),
         PassDescriptor::new("SccpPass", LocalOpt),
+        PassDescriptor::new("ConstBranchFoldPass", GlobalOpt),
         PassDescriptor::new("CsePass", GlobalOpt),
         PassDescriptor::new("GvnPass", GlobalOpt),
         PassDescriptor::new("BmiIdiomPass", LocalOpt),
@@ -1247,6 +1248,7 @@ mod phase_tests {
             Box::new(crate::global_copy_prop::GlobalCopyPropPass),
             Box::new(crate::dse_global::DeadStoreElimGlobalPass),
             Box::new(crate::cfg_repair::CfgRepairPass),
+            Box::new(crate::branch_fold::ConstBranchFoldPass),
             Box::new(crate::tail_call::TailCallDetectPass),
             Box::new(crate::indirect_call_resolve::IndirectCallResolvePass),
             Box::new(crate::indirect_jump_resolve::IndirectJumpResolvePass),
@@ -1354,7 +1356,7 @@ mod phase_tests {
         let expected: BTreeMap<u8, usize> = [
             (PassPhase::PreOpt.ordinal(), 7),
             (PassPhase::LocalOpt.ordinal(), 18),
-            (PassPhase::GlobalOpt.ordinal(), 10),
+            (PassPhase::GlobalOpt.ordinal(), 11),
             (PassPhase::TypeRecovery.ordinal(), 20),
             (PassPhase::StackRecovery.ordinal(), 3),
             (PassPhase::LVarAlloc.ordinal(), 1),
@@ -1414,6 +1416,7 @@ mod phase_tests {
             GlobalOpt, // GlobalCopyPropPass
             LocalOpt,  // DeadCodeElimPass
             LocalOpt,  // SccpPass
+            GlobalOpt, // ConstBranchFoldPass
             GlobalOpt, // CsePass
             GlobalOpt, // GvnPass
             LocalOpt,  // BmiIdiomPass

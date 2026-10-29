@@ -34,6 +34,7 @@ pub mod label_hoist;
 pub mod label_tail_dup;
 #[cfg(feature = "unwired")]
 pub mod loop_classify;
+pub mod loop_exit_merge;
 pub mod loop_normalize;
 pub mod node_split;
 pub mod options;
@@ -86,6 +87,7 @@ pub use label_hoist::hoist_cross_branch_labels;
 pub use label_tail_dup::duplicate_simple_label_tails;
 #[cfg(feature = "unwired")]
 pub use loop_classify::{LoopFormCounts, classify_function, classify_loop_form, classify_nodes};
+pub use loop_exit_merge::merge_loop_exits;
 pub use loop_normalize::{normalize_dowhile_to_while, reverse_loop_rotation};
 pub use node_split::split_irreducible_entries;
 pub use options::StructureOptions;

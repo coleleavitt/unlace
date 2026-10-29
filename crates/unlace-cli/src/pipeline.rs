@@ -72,7 +72,8 @@ use unlace_loader::{
 use unlace_passes::{
     AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
     BoolSimplifyPass, CallBoundaryCopyPropPass, CalleeArity, CallingConvFinalizePass,
-    CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstantFoldPass,
+    CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstBranchFoldPass,
+    ConstantFoldPass,
     CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass, CppVariantPass,
     CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
     DeadFlagElimPass, DeadPhiElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,

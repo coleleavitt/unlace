@@ -48,9 +48,12 @@ $ unlace decompile ./target.exe --sig vc64ucrt.sig --sig vc64rtf.sig
 $ unlace decompile ./target.exe --sig-dir ./sig/pc
 ```
 
-Matched functions are named in every call site, and their bodies are
-replaced by a `// [flirt]` stub. `unlace siggen ./libfoo.a -o libfoo.sig`
-builds a `.sig` file from a static library; ready-made files for x86-64
+Matched functions are named at their definition and in every call site;
+their bodies are still decompiled. Without `--sig`, a small built-in table
+names the C runtime startup code (`_start`, `deregister_tm_clones`,
+`register_tm_clones`, `__do_global_dtors_aux`, `frame_dummy`).
+`unlace siggen ./libfoo.a -o libfoo.sig` builds a `.sig` file from a
+static library; ready-made files for x86-64
 Linux runtimes are in `crates/unlace-flirt/sig/linux-x86_64/`.
 
 ## Heuristic Function Discovery

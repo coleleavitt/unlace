@@ -58,9 +58,6 @@ _QWORD qword_3FE8;
 _QWORD qword_4008;
 __int64 sub_10b0();
 __int64 sub_12c0();
-__int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */;
-void sub_1290(void);
-void sub_1340(void);
 
 /*
  * C++ Class Hierarchy (from RTTI):
@@ -125,8 +122,8 @@ void _start(void) {
     return;
 }
 
-/* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1290(void) {
+/* Function:   deregister_tm_clones | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void deregister_tm_clones(void) {
     int v0; // reg?
     if (v0) {
         return;
@@ -138,8 +135,8 @@ void sub_1290(void) {
     return;
 }
 
-/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
-__int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
+/* Function:   __do_global_dtors_aux | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_10b0 | Xrefs from: unknown */
+__int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4020) {
         return result;
@@ -148,14 +145,14 @@ __int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
             __int64 v1 = qword_4008; // rdi
             result = sub_10b0(v1);
         }
-        result = sub_1290();
+        result = deregister_tm_clones();
         byte_4020 = 1;
         return result;
     }
 }
 
-/* Function:   sub_1340 | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1340(void) {
+/* Function:   frame_dummy | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void frame_dummy(void) {
     sub_12c0();
 }
 

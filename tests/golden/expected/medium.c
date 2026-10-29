@@ -57,9 +57,6 @@ _QWORD qword_3FF8;
 _QWORD qword_4008;
 __int64 sub_1040();
 __int64 sub_14e0();
-__int64 sub_1520(void) /* // dropped 1 param(s) (dead in body) */;
-void sub_14b0(void);
-void sub_1560(void);
 
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -608,8 +605,8 @@ void _start(void) {
     __builtin_trap();
     return;
 }
-/* Function:   sub_14b0 | Address: 0x14b0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_14b0(void) {
+/* Function:   deregister_tm_clones | Address: 0x14b0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void deregister_tm_clones(void) {
     int v0; // reg?
     if (v0) {
         return;
@@ -620,8 +617,8 @@ void sub_14b0(void) {
     }
     return;
 }
-/* Function:   sub_1520 | Address: 0x1520 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1040, sub_14b0 | Xrefs from: unknown */
-__int64 sub_1520(void) /* // dropped 1 param(s) (dead in body) */ {
+/* Function:   __do_global_dtors_aux | Address: 0x1520 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1040 | Xrefs from: unknown */
+__int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4010) {
         return result;
@@ -630,13 +627,13 @@ __int64 sub_1520(void) /* // dropped 1 param(s) (dead in body) */ {
             __int64 v1 = qword_4008; // rdi
             result = sub_1040(v1);
         }
-        result = sub_14b0();
+        result = deregister_tm_clones();
         byte_4010 = 1;
         return result;
     }
 }
-/* Function:   sub_1560 | Address: 0x1560 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1560(void) {
+/* Function:   frame_dummy | Address: 0x1560 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void frame_dummy(void) {
     sub_14e0();
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)

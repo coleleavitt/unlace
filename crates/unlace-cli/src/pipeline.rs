@@ -3479,8 +3479,8 @@ impl Default for PipelineConfig {
 }
 
 /// User-facing FLIRT controls. Matching is enabled by default with the
-/// bundled signature database. The default threshold preserves legacy
-/// bundled matches, including weak reference-resolution hits at 50%.
+/// bundled signature database. Matches score 90% or 100%, so the default
+/// threshold of 50% accepts every match.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FlirtOptions {
     pub enabled: bool,
@@ -4444,12 +4444,9 @@ pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String>
 
 /// §5.5: confidence-aware FLIRT match result.
 ///
-/// `confidence` is the synthetic 0.5–1.0 score reported by the
-/// underlying [`unlace_loader::flirt::FlirtMatch`]:
+/// `confidence` is the score reported by the matcher:
 ///  - `1.0` — every recorded outbound reference resolved (strongest).
 ///  - `0.9` — byte/CRC matched, signature carried no references.
-///  - `0.5` — byte/CRC matched but at least one outbound reference
-///    failed to resolve.
 ///
 /// `signature_id` is the matched signature's insertion-order index in
 /// the process-wide `FlirtDb`. Surfaced so downstream consumers can
@@ -4513,17 +4510,8 @@ fn bundled_flirt_match(
         return None;
     }
     let text = text_section(image)?;
-    let (start, end) = function_bounds(entry, text);
-    if start < text.vaddr {
-        return None;
-    }
-    let off_start = (start - text.vaddr) as usize;
-    let off_end = ((end - text.vaddr) as usize).min(text.data.len());
-    if off_start >= off_end {
-        return None;
-    }
-    let bytes = &text.data[off_start..off_end];
-    let matched = flirt_db().match_function_with_refs(bytes, resolved)?;
+    let code = unlace_loader::flirt::FunctionCode::new(text.vaddr, &text.data, entry.addr)?;
+    let matched = flirt_db().match_function_with_refs(code, resolved)?;
     (matched.confidence >= config.min_confidence_f32()).then(|| FlirtConfidence {
         name: matched.name.to_string(),
         confidence: matched.confidence,
@@ -4598,19 +4586,6 @@ fn is_flirt_eligible_name(name: &str) -> bool {
         || name == "entry"
 }
 
-/// Render a one-line C-printer surrogate for a FLIRT-matched function.
-/// The body is elided; the canonical library name is surfaced as both the
-/// emitted symbol and a `// [flirt] …` annotation so a human reader knows
-/// the decompiler chose pattern-recognition over instruction-by-instruction
-/// recovery.
-pub fn render_flirt_stub(canonical: &str, entry: &FunctionEntry) -> String {
-    format!(
-        "// [flirt] {canonical}\n// {} @ {:#x} (matched library stub; body elided)\n\
-         void {}(void) {{ /* {canonical} */ }}\n",
-        entry.name, entry.addr, canonical,
-    )
-}
-
 pub fn decompile_function_with_symbols(
     image: &BinaryImage,
     lifter: &dyn Lifter,
@@ -4636,25 +4611,24 @@ pub fn decompile_function_with_symbols(
         );
     }
 
-    if matches!(emit, EmitFormat::C)
-        && let Some(canonical) = config
-            .symbol_context
-            .as_deref()
-            .map(|context| context.flirt_calls.get(&entry.addr).map(|m| m.name.clone()))
-            .unwrap_or_else(|| {
-                flirt_match_detailed_with_config(image, entry, &config.flirt).map(|m| m.name)
-            })
-    {
-        profiling::diagnostic(
-            "debug",
-            "flirt match; eliding body",
-            [
-                TraceField::text("function", entry.name.clone()),
-                TraceField::text("canonical", canonical.clone()),
-            ],
-        );
-        return Ok(render_flirt_stub(&canonical, entry));
-    }
+    let flirt_name = config
+        .symbol_context
+        .as_deref()
+        .map(|context| context.flirt_calls.get(&entry.addr).map(|m| m.name.clone()))
+        .unwrap_or_else(|| {
+            flirt_match_detailed_with_config(image, entry, &config.flirt).map(|m| m.name)
+        });
+    let flirt_entry;
+    let entry = match flirt_name {
+        Some(name) => {
+            flirt_entry = FunctionEntry {
+                name,
+                ..entry.clone()
+            };
+            &flirt_entry
+        }
+        None => entry,
+    };
 
     let t = Instant::now();
     pipeline_trace_start(&entry.name, "lift");
@@ -7736,19 +7710,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn flirt_render_stub_emits_canonical_header() {
-        let entry = FunctionEntry {
-            name: "sub_4011a0".into(),
-            addr: 0x4011a0,
-            size: 16,
-        };
-        let out = super::render_flirt_stub("strcpy", &entry);
-        assert!(out.contains("// [flirt] strcpy"), "header missing: {out}");
-        assert!(out.contains("body elided"));
-        assert!(out.contains("void strcpy(void)"));
-    }
-
     // -----------------------------------------------------------------
     // t234 — Wave 24 pipeline ordering smoke test
     //
@@ -7877,172 +7838,149 @@ mod tests {
         );
     }
 
-    #[test]
-    fn flirt_match_finds_known_prologue_in_text() {
-        // Build a tiny image whose .text holds the leading bytes of glibc's
-        // memcpy: endbr64; mov %rdi,%rax; mov %rdx,%rcx; rep movsb; ret.
-        let memcpy_bytes: Vec<u8> = vec![
-            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
-        ];
-        let base: u64 = 0x1000;
-        let image = make_text_image(memcpy_bytes.clone(), base);
-        let entry = FunctionEntry {
-            name: "sub_1000".into(),
-            addr: base,
-            size: memcpy_bytes.len() as u64,
-        };
-        let canonical = super::flirt_match(&image, &entry);
-        assert_eq!(canonical.as_deref(), Some("memcpy"));
+    /// `.text` 0x14b0..0x1569 of `fixtures/medium.elf`: the `crtbeginS.o`
+    /// helpers `deregister_tm_clones` (0x14b0), `register_tm_clones`
+    /// (0x14e0), `__do_global_dtors_aux` (0x1520) and `frame_dummy` (0x1560).
+    const CRT_PIE_BASE: u64 = 0x14b0;
+    const CRT_PIE: [u8; 185] = [
+        0x48, 0x8d, 0x3d, 0x59, 0x2b, 0x00, 0x00, 0x48, 0x8d, 0x05, 0x52, 0x2b, 0x00, 0x00, 0x48,
+        0x39, 0xf8, 0x74, 0x15, 0x48, 0x8b, 0x05, 0x16, 0x2b, 0x00, 0x00, 0x48, 0x85, 0xc0, 0x74,
+        0x09, 0xff, 0xe0, 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00, 0xc3, 0x0f, 0x1f, 0x80, 0x00,
+        0x00, 0x00, 0x00, 0x48, 0x8d, 0x3d, 0x29, 0x2b, 0x00, 0x00, 0x48, 0x8d, 0x35, 0x22, 0x2b,
+        0x00, 0x00, 0x48, 0x29, 0xfe, 0x48, 0x89, 0xf0, 0x48, 0xc1, 0xf8, 0x03, 0x48, 0xc1, 0xee,
+        0x3f, 0x48, 0x01, 0xc6, 0x48, 0xd1, 0xfe, 0x74, 0x14, 0x48, 0x8b, 0x05, 0xe5, 0x2a, 0x00,
+        0x00, 0x48, 0x85, 0xc0, 0x74, 0x08, 0xff, 0xe0, 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00, 0xc3,
+        0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00, 0xf3, 0x0f, 0x1e, 0xfa, 0x80, 0x3d, 0xe5, 0x2a,
+        0x00, 0x00, 0x00, 0x75, 0x2b, 0x55, 0x48, 0x83, 0x3d, 0xc2, 0x2a, 0x00, 0x00, 0x00, 0x48,
+        0x89, 0xe5, 0x74, 0x0c, 0x48, 0x8b, 0x3d, 0xc6, 0x2a, 0x00, 0x00, 0xe8, 0xf9, 0xfa, 0xff,
+        0xff, 0xe8, 0x64, 0xff, 0xff, 0xff, 0xc6, 0x05, 0xbd, 0x2a, 0x00, 0x00, 0x01, 0x5d, 0xc3,
+        0x0f, 0x1f, 0x00, 0xc3, 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00, 0xf3, 0x0f, 0x1e, 0xfa,
+        0xe9, 0x77, 0xff, 0xff, 0xff,
+    ];
+
+    fn crt_entry(addr: u64) -> FunctionEntry {
+        FunctionEntry {
+            name: format!("sub_{addr:x}"),
+            addr,
+            size: 0,
+        }
     }
 
     #[test]
-    fn flirt_match_resolves_reference_name_lists() {
-        let mut code = vec![0x55, 0x48, 0x89, 0xE5, 0xE8, 0x37, 0x00, 0x00, 0x00];
-        code.resize(0x40, 0x90);
-        code.extend_from_slice(&[
-            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
-        ]);
-        let base: u64 = 0x1000;
-        let mut image = make_text_image(code, base);
-        image.symbols.insert(
-            base,
-            unlace_loader::Symbol {
-                name: "sub_1000".into(),
-                addr: base,
-                size: 9,
-                kind: SymbolKind::Function,
-            },
+    fn flirt_match_names_startup_helpers_in_text() {
+        let image = make_text_image(CRT_PIE.to_vec(), CRT_PIE_BASE);
+        let names: Vec<_> = [0x14b0, 0x14e0, 0x1520, 0x1560]
+            .map(|addr| super::flirt_match(&image, &crt_entry(addr)))
+            .into_iter()
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "deregister_tm_clones",
+                "register_tm_clones",
+                "__do_global_dtors_aux",
+                "frame_dummy",
+            ]
+            .map(|name| Some(name.to_string()))
         );
-        image.symbols.insert(
-            base + 0x40,
-            unlace_loader::Symbol {
-                name: "sub_1040".into(),
-                addr: base + 0x40,
-                size: 13,
-                kind: SymbolKind::Function,
-            },
-        );
-        let entry = FunctionEntry {
-            name: "sub_1000".into(),
-            addr: base,
-            size: 9,
-        };
-        let canonical = super::flirt_match(&image, &entry);
-        assert_eq!(canonical.as_deref(), Some("__memcpy_chk"));
     }
 
-    /// Batch 20: FLIRT-matched names propagate through
-    /// `build_symbol_table_with_functions` so a call site to a recognised
-    /// libc stub renders the canonical name (`memcpy`) rather than the
-    /// stripped `sub_XXXX` placeholder.
-    /// §5.5: `flirt_match_detailed` returns a 0.5–1.0 confidence
-    /// alongside the canonical name. The memcpy stub (no references)
-    /// lands at confidence 0.5 because `refs_matched` is true only when
-    /// outbound calls resolve.
+    #[test]
+    fn flirt_match_skips_named_functions() {
+        let image = make_text_image(CRT_PIE.to_vec(), CRT_PIE_BASE);
+        let entry = FunctionEntry {
+            name: "my_cleanup".into(),
+            ..crt_entry(0x14b0)
+        };
+        assert_eq!(super::flirt_match(&image, &entry), None);
+    }
+
+    /// `confidence` is 1.0 when the signature's references resolved and 0.9
+    /// for a signature without references.
     #[test]
     fn flirt_match_detailed_returns_confidence() {
-        let memcpy_bytes: Vec<u8> = vec![
-            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
-        ];
-        let base: u64 = 0x1000;
-        let image = make_text_image(memcpy_bytes.clone(), base);
-        let entry = FunctionEntry {
-            name: "sub_1000".into(),
-            addr: base,
-            size: memcpy_bytes.len() as u64,
-        };
-        let detail = super::flirt_match_detailed(&image, &entry).expect("flirt hit");
-        assert_eq!(detail.name, "memcpy");
-        // Refs check: the stub has no outbound calls, so refs trivially
-        // match → confidence 1.0.
-        assert!(
-            detail.confidence >= 0.5 && detail.confidence <= 1.0,
-            "confidence in [0.5, 1.0], got {}",
-            detail.confidence
+        let image = make_text_image(CRT_PIE.to_vec(), CRT_PIE_BASE);
+        let plain = super::flirt_match_detailed(&image, &crt_entry(0x14b0)).expect("flirt hit");
+        assert_eq!(
+            (plain.name.as_str(), plain.confidence),
+            ("deregister_tm_clones", 0.9)
+        );
+        let referenced =
+            super::flirt_match_detailed(&image, &crt_entry(0x1520)).expect("flirt hit");
+        assert_eq!(
+            (referenced.name.as_str(), referenced.confidence),
+            ("__do_global_dtors_aux", 1.0)
         );
     }
 
+    /// A reference that leads to a known name other than the expected one
+    /// rejects the match.
+    #[test]
+    fn flirt_match_rejects_reference_to_another_function() {
+        let mut image = make_text_image(CRT_PIE.to_vec(), CRT_PIE_BASE);
+        image.symbols.insert(
+            0x14b0,
+            unlace_loader::Symbol {
+                name: "cleanup_tables".into(),
+                addr: 0x14b0,
+                size: 0x29,
+                kind: SymbolKind::Function,
+            },
+        );
+        assert_eq!(super::flirt_match(&image, &crt_entry(0x1520)), None);
+    }
+
+    /// FLIRT-matched names propagate through
+    /// `build_symbol_table_with_functions` so call sites render the library
+    /// name rather than the stripped `sub_XXXX` placeholder.
     #[test]
     fn build_symbol_table_overlays_flirt_canonical_names() {
-        let memcpy_bytes: Vec<u8> = vec![
-            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
-        ];
-        let base: u64 = 0x1000;
-        let image = make_text_image(memcpy_bytes.clone(), base);
-        let entry = FunctionEntry {
-            name: "sub_1000".into(),
-            addr: base,
-            size: memcpy_bytes.len() as u64,
-        };
-        let symbols = super::build_symbol_table_with_functions(&image, &[entry]);
+        let image = make_text_image(CRT_PIE.to_vec(), CRT_PIE_BASE);
+        let symbols = super::build_symbol_table_with_functions(&image, &[crt_entry(0x14b0)]);
         assert_eq!(
-            symbols.get(&base).map(String::as_str),
-            Some("memcpy"),
+            symbols.get(&0x14b0).map(String::as_str),
+            Some("deregister_tm_clones"),
             "FLIRT canonical name must replace `sub_XXXX` in the symbol table",
         );
     }
 
     #[test]
     fn build_symbol_table_respects_no_flirt_config() {
-        let memcpy_bytes: Vec<u8> = vec![
-            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
-        ];
-        let base: u64 = 0x1000;
-        let image = make_text_image(memcpy_bytes.clone(), base);
-        let entry = FunctionEntry {
-            name: "sub_1000".into(),
-            addr: base,
-            size: memcpy_bytes.len() as u64,
-        };
+        let image = make_text_image(CRT_PIE.to_vec(), CRT_PIE_BASE);
         let flirt_config = super::FlirtConfig::from_options(super::FlirtOptions {
             enabled: false,
             ..Default::default()
         })
         .expect("disabled FLIRT config");
 
-        let (symbols, flirt) =
-            super::build_symbol_table_and_flirt_with_config(&image, &[entry], &flirt_config);
-        assert_eq!(symbols.get(&base).map(String::as_str), Some("sub_1000"));
+        let (symbols, flirt) = super::build_symbol_table_and_flirt_with_config(
+            &image,
+            &[crt_entry(0x14b0)],
+            &flirt_config,
+        );
+        assert_eq!(symbols.get(&0x14b0).map(String::as_str), Some("sub_14b0"));
         assert!(flirt.is_empty());
         assert!(
-            super::flirt_match_detailed_with_config(
-                &image,
-                &FunctionEntry {
-                    name: "sub_1000".into(),
-                    addr: base,
-                    size: memcpy_bytes.len() as u64,
-                },
-                &flirt_config,
-            )
-            .is_none()
+            super::flirt_match_detailed_with_config(&image, &crt_entry(0x14b0), &flirt_config)
+                .is_none()
         );
     }
 
-    /// §5.5: `build_symbol_table_and_flirt_with_functions` returns the
-    /// per-entry FLIRT confidence map alongside the symbol table so
-    /// downstream printer annotations and quality counters can drive
-    /// off the same data without re-running the matcher.
+    /// `build_symbol_table_and_flirt_with_functions` returns the per-entry
+    /// FLIRT confidence map alongside the symbol table so downstream printer
+    /// annotations and quality counters can drive off the same data without
+    /// re-running the matcher.
     #[test]
     fn build_symbol_table_and_flirt_surfaces_confidence() {
-        let memcpy_bytes: Vec<u8> = vec![
-            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
-        ];
-        let base: u64 = 0x1000;
-        let image = make_text_image(memcpy_bytes.clone(), base);
-        let entry = FunctionEntry {
-            name: "sub_1000".into(),
-            addr: base,
-            size: memcpy_bytes.len() as u64,
-        };
-        let (symbols, flirt) = super::build_symbol_table_and_flirt_with_functions(&image, &[entry]);
-        assert_eq!(symbols.get(&base).map(String::as_str), Some("memcpy"));
-        let fc = flirt.get(&base).expect("flirt confidence missing");
-        assert_eq!(fc.name, "memcpy");
-        assert!(
-            fc.confidence >= 0.5 && fc.confidence <= 1.0,
-            "confidence in [0.5, 1.0], got {}",
-            fc.confidence
+        let image = make_text_image(CRT_PIE.to_vec(), CRT_PIE_BASE);
+        let (symbols, flirt) =
+            super::build_symbol_table_and_flirt_with_functions(&image, &[crt_entry(0x1560)]);
+        assert_eq!(
+            symbols.get(&0x1560).map(String::as_str),
+            Some("frame_dummy")
         );
+        let fc = flirt.get(&0x1560).expect("flirt confidence missing");
+        assert_eq!((fc.name.as_str(), fc.confidence), ("frame_dummy", 1.0));
     }
 
     /// Batch §1 Phase 4: `apply_pdb_types_to_ssa` writes

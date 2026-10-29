@@ -57,9 +57,6 @@ _QWORD qword_3FF8;
 _QWORD qword_4008;
 __int64 sub_1040();
 __int64 sub_10c0();
-__int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */;
-void sub_1090(void);
-void sub_1140(void);
 
 // DWARF composite types
 typedef struct Point Point;
@@ -103,8 +100,8 @@ struct Rect {
 };
 
 // debug language: C
-/* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1090(void) {
+/* Function:   deregister_tm_clones | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void deregister_tm_clones(void) {
     int v0; // reg?
     if (v0) {
         return;
@@ -128,8 +125,8 @@ struct Rect {
 };
 
 // debug language: C
-/* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
-__int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */ {
+/* Function:   __do_global_dtors_aux | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1040 | Xrefs from: unknown */
+__int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4010) {
         return result;
@@ -138,7 +135,7 @@ __int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */ {
             __int64 v1 = qword_4008; // rdi
             result = sub_1040(v1);
         }
-        result = sub_1090();
+        result = deregister_tm_clones();
         byte_4010 = 1;
         return result;
     }
@@ -156,8 +153,8 @@ struct Rect {
 };
 
 // debug language: C
-/* Function:   sub_1140 | Address: 0x1140 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1140(void) {
+/* Function:   frame_dummy | Address: 0x1140 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void frame_dummy(void) {
     sub_10c0();
 }
 // DWARF composite types

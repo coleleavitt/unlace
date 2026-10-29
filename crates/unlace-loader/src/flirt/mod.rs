@@ -1,18 +1,15 @@
 //! FLIRT-equivalent library function recognition.
 //!
-//! When a stripped binary's `strcpy` looks like the leading bytes of glibc's
-//! `strcpy`, we'd rather surface it as `strcpy` than spend pass + printer
-//! cycles decompiling it. This module ships a small in-memory signature
-//! database modelled after IDA's FLIRT format: a leading byte pattern, a
-//! mask marking wildcard positions (relocations / immediates that vary
-//! between builds), an optional CRC16 over a tail range to disambiguate
-//! when several functions share the same prologue, and an optional list of
-//! outbound call targets whose names are only known *after* some other
-//! FLIRT matches have already landed.
+//! This module ships a small in-memory signature database modelled after
+//! IDA's FLIRT format: a leading byte pattern, a mask marking wildcard
+//! positions (relocations / immediates that vary between builds), an
+//! optional CRC16 over a tail range to disambiguate when several functions
+//! share the same prologue, and an optional list of outbound references
+//! that must lead to a function of a given name.
 //!
-//! The database is ship-in-binary (`flirt_signatures::DEFAULT_SIGNATURES`)
-//! rather than loaded from `.sig` files; that's enough for the parity push
-//! and avoids a runtime IO + parsing dependency.
+//! The database is built into the binary ([`default_db`]) rather than
+//! loaded from `.sig` files. IDA `.sig` files are handled by the
+//! `unlace-flirt` crate.
 
 mod generator;
 mod signatures;
@@ -29,63 +26,73 @@ pub use signatures::default_db;
 #[derive(Debug, Clone)]
 pub struct FlirtSignature {
     pub name: String,
-    /// Leading byte pattern. `pattern.len()` is the comparison window;
-    /// positions where `mask[i] == 0` are treated as wildcards.
+    /// Leading byte pattern; positions where `mask[i] == 0` are wildcards.
     pub pattern: Vec<u8>,
     /// Per-byte mask: `0xFF` → must match exactly, `0x00` → wildcard.
-    /// Other values are not currently meaningful (FLIRT only uses 0/0xFF).
     pub mask: Vec<u8>,
-    pub min_len: usize,
-    pub max_len: Option<usize>,
-    /// Optional CRC16 (CCITT) over `pattern[start..start+len]` to break
-    /// ties when several signatures share the same wildcarded prefix.
-    /// Tuple is `(start, expected_crc)`; the matcher recomputes it over
-    /// the candidate's actual bytes at the same offset using a fixed
-    /// 32-byte window (matching IDA's default tail length).
+    /// Optional CRC16 (CCITT) over a 32-byte window starting at the given
+    /// offset, to break ties when several signatures share the same
+    /// wildcarded prefix. Tuple is `(start, expected_crc)`.
     pub crc16_at: Option<(usize, u16)>,
-    /// Optional outbound call references recorded in the signature.
-    ///
-    /// In FLIRT these are the "reference names" attached to a candidate:
-    /// if the bytes match but the function calls out to a callee whose
-    /// canonical name is known from another match, we can resolve otherwise
-    /// ambiguous signatures by checking that those outbound references line up.
+    /// Outbound references that must all resolve for the signature to
+    /// match. In FLIRT these are the "reference names" of a module.
     pub refs: Vec<FlirtRef>,
 }
 
 /// One outbound reference captured by a FLIRT signature.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlirtRef {
-    /// Offset within the function where the call / branch immediate starts.
+    /// Offset within the function of the opcode of a direct `call rel32`
+    /// (`E8`), `jmp rel32` (`E9`) or `jmp rel8` (`EB`).
     pub offset: usize,
-    /// Canonical name of the expected callee.
+    /// Name of the function the branch must lead to: either a known name at
+    /// the target address, or a signature of this name matching there.
     pub name: String,
 }
 
-/// Result of matching one function body against the FLIRT DB.
+/// A candidate function entry inside the executable section that holds it.
 ///
-/// §5.5: `confidence` is a synthetic 0.5–1.0 score derived from the
-/// signature evidence quality:
-/// - `1.0` when every recorded outbound reference resolved to the
-///   expected callee name (refs_matched && sig has refs).
-/// - `0.9` when the signature carries no outbound references but the
-///   byte/CRC prefix matched exactly — high confidence because there
-///   was no second-stage check that could have raised it further.
-/// - `0.5` when byte/CRC matched but at least one outbound reference
-///   failed to resolve (the byte prefix is still suggestive but the
-///   reference table didn't line up).
+/// Matching reads from the entry to the end of the section rather than to
+/// the discovered function end: discovered bounds are not reliable enough to
+/// cut a signature short, and references are checked at absolute addresses.
+#[derive(Debug, Clone, Copy)]
+pub struct FunctionCode<'a> {
+    section_addr: u64,
+    section: &'a [u8],
+    addr: u64,
+}
+
+impl<'a> FunctionCode<'a> {
+    /// `None` when `addr` lies outside the section.
+    pub fn new(section_addr: u64, section: &'a [u8], addr: u64) -> Option<Self> {
+        let offset = addr.checked_sub(section_addr)?;
+        (offset < section.len() as u64).then_some(Self {
+            section_addr,
+            section,
+            addr,
+        })
+    }
+
+    /// The bytes from the entry to the end of the section.
+    pub fn bytes(&self) -> &'a [u8] {
+        &self.section[(self.addr - self.section_addr) as usize..]
+    }
+
+    fn at(&self, addr: u64) -> Option<Self> {
+        Self::new(self.section_addr, self.section, addr)
+    }
+}
+
+/// Result of matching one function against the FLIRT DB.
 ///
-/// `signature_id` is the index of the matched signature inside the
-/// owning [`FlirtDb`]'s entry vector. Stable for the lifetime of a
-/// given DB (insertion-ordered), useful as a per-match correlation
-/// key in higher-level annotations.
+/// `confidence` is `1.0` when the signature's outbound references all
+/// resolved and `0.9` for a byte/CRC match of a signature without
+/// references. `signature_id` is the index of the matched signature in the
+/// owning [`FlirtDb`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct FlirtMatch<'a> {
     pub name: &'a str,
-    /// Whether all available reference-name checks succeeded.
-    pub refs_matched: bool,
-    /// Confidence score in `[0.5, 1.0]`.
     pub confidence: f32,
-    /// Index of the matched signature in the owning [`FlirtDb`].
     pub signature_id: usize,
 }
 
@@ -118,131 +125,100 @@ impl FlirtDb {
         self.entries.is_empty()
     }
 
-    /// Try to match `bytes` (typically the prologue + body of a candidate
-    /// function) against any signature in the database. Returns the first
-    /// byte/CRC match by registration order so callers control priority via
-    /// the signature table layout.
+    /// Match a function whose code starts at `bytes[0]`, without any known
+    /// names for its references.
     pub fn match_function(&self, bytes: &[u8]) -> Option<&str> {
-        self.match_function_with_refs(bytes, &BTreeMap::new())
+        let code = FunctionCode::new(0, bytes, 0)?;
+        self.match_function_with_refs(code, &BTreeMap::new())
             .map(|m| m.name)
     }
 
-    /// Match `bytes` against the DB, preferring candidates whose recorded
-    /// outbound references resolve against the already-known `resolved_names`
-    /// map (absolute address → canonical callee name).
+    /// Match the function at `code` against the DB. Returns the first
+    /// matching signature in registration order. A signature with
+    /// references matches only when every reference leads to a function of
+    /// the expected name: known from `resolved_names` (absolute address →
+    /// name), or recognised by a reference-free signature of that name.
     pub fn match_function_with_refs<'a>(
         &'a self,
-        bytes: &[u8],
+        code: FunctionCode<'_>,
         resolved_names: &BTreeMap<u64, String>,
     ) -> Option<FlirtMatch<'a>> {
-        let mut fallback: Option<FlirtMatch<'a>> = None;
-        for (signature_id, sig) in self.entries.iter().enumerate() {
-            if !signature_matches(sig, bytes) {
-                continue;
-            }
-            let refs_matched = references_match(sig, bytes, resolved_names);
-            if refs_matched {
-                // refs_matched is true both when the signature *has* refs
-                // and they all resolved, and when the signature carries
-                // no refs at all (vacuous truth). Distinguish those:
-                // explicit-reference success is the highest-confidence
-                // signal we have (1.0); pure byte/CRC matches with no
-                // reference evidence land at 0.9.
-                let confidence = if sig.refs.is_empty() { 0.9 } else { 1.0 };
-                return Some(FlirtMatch {
-                    name: &sig.name,
-                    refs_matched: true,
-                    confidence,
-                    signature_id,
-                });
-            }
-            if fallback.is_none() {
-                fallback = Some(FlirtMatch {
-                    name: &sig.name,
-                    refs_matched: false,
-                    confidence: 0.5,
-                    signature_id,
-                });
-            }
+        self.entries
+            .iter()
+            .enumerate()
+            .find(|(_, sig)| {
+                signature_matches(sig, code.bytes())
+                    && sig
+                        .refs
+                        .iter()
+                        .all(|reference| self.reference_resolves(code, reference, resolved_names))
+            })
+            .map(|(signature_id, sig)| FlirtMatch {
+                name: &sig.name,
+                confidence: if sig.refs.is_empty() { 0.9 } else { 1.0 },
+                signature_id,
+            })
+    }
+
+    fn reference_resolves(
+        &self,
+        code: FunctionCode<'_>,
+        reference: &FlirtRef,
+        resolved_names: &BTreeMap<u64, String>,
+    ) -> bool {
+        let Some(target) = branch_target(code, reference.offset) else {
+            return false;
+        };
+        if let Some(name) = resolved_names.get(&target) {
+            return *name == reference.name;
         }
-        fallback
+        let Some(callee) = code.at(target) else {
+            return false;
+        };
+        self.entries.iter().any(|sig| {
+            sig.name == reference.name
+                && sig.refs.is_empty()
+                && signature_matches(sig, callee.bytes())
+        })
     }
 }
 
 fn signature_matches(sig: &FlirtSignature, bytes: &[u8]) -> bool {
-    if bytes.len() < sig.min_len {
-        return false;
-    }
-    if let Some(max) = sig.max_len
-        && bytes.len() > max
-    {
-        return false;
-    }
     if bytes.len() < sig.pattern.len() {
         return false;
     }
-    for (i, &want) in sig.pattern.iter().enumerate() {
-        let m = sig.mask.get(i).copied().unwrap_or(0xFF);
-        if m == 0 {
-            continue;
-        }
-        if (bytes[i] & m) != (want & m) {
-            return false;
-        }
+    let pattern_matches = sig
+        .pattern
+        .iter()
+        .zip(&sig.mask)
+        .zip(bytes)
+        .all(|((&want, &mask), &have)| have & mask == want & mask);
+    if !pattern_matches {
+        return false;
     }
-    if let Some((start, expected)) = sig.crc16_at {
-        const WINDOW: usize = 32;
-        let end = (start + WINDOW).min(bytes.len());
-        if start >= end {
-            return false;
+    match sig.crc16_at {
+        Some((start, expected)) => {
+            const WINDOW: usize = 32;
+            let end = (start + WINDOW).min(bytes.len());
+            start < end && crc16_ccitt(&bytes[start..end]) == expected
         }
-        if crc16_ccitt(&bytes[start..end]) != expected {
-            return false;
-        }
+        None => true,
     }
-    true
 }
 
-fn references_match(
-    sig: &FlirtSignature,
-    bytes: &[u8],
-    resolved_names: &BTreeMap<u64, String>,
-) -> bool {
-    if sig.refs.is_empty() {
-        return true;
-    }
-    for reference in &sig.refs {
-        let Some(target) = resolve_rel32_call(bytes, reference.offset) else {
-            return false;
-        };
-        let Some(name) = resolved_names.get(&target) else {
-            return false;
-        };
-        if name != &reference.name {
-            return false;
+/// Absolute target of the direct branch whose opcode is at `offset`.
+fn branch_target(code: FunctionCode<'_>, offset: usize) -> Option<u64> {
+    let bytes = code.bytes();
+    let (len, disp) = match *bytes.get(offset)? {
+        0xE8 | 0xE9 => {
+            let rel: [u8; 4] = bytes.get(offset + 1..offset + 5)?.try_into().ok()?;
+            (5, i64::from(i32::from_le_bytes(rel)))
         }
-    }
-    true
-}
-
-/// Resolve a near x86/x86-64 rel32 `call`/`jmp` target at `offset`.
-///
-/// `offset` must point at the opcode byte (`E8`/`E9`) inside `bytes`.
-fn resolve_rel32_call(bytes: &[u8], offset: usize) -> Option<u64> {
-    let end = offset.checked_add(5)?;
-    if end > bytes.len() {
-        return None;
-    }
-    match bytes[offset] {
-        0xE8 | 0xE9 => {}
+        0xEB => (2, i64::from(*bytes.get(offset + 1)? as i8)),
         _ => return None,
-    }
-    let disp = i32::from_le_bytes(bytes[offset + 1..end].try_into().ok()?);
-    let target = end as i64 + disp as i64;
-    if target < 0 {
-        return None;
-    }
-    Some(target as u64)
+    };
+    let next = code.addr.checked_add((offset + len) as u64)?;
+    next.checked_add_signed(disp)
 }
 
 /// CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection, no xorout).
@@ -272,10 +248,20 @@ mod tests {
             name: name.to_string(),
             pattern: pattern.to_vec(),
             mask: mask.to_vec(),
-            min_len: pattern.len(),
-            max_len: None,
             crc16_at: None,
             refs: Vec::new(),
+        }
+    }
+
+    fn with_ref(name: &str, pattern: &[u8], offset: usize, callee: &str) -> FlirtSignature {
+        let mut mask = vec![0xFF; pattern.len()];
+        mask[offset + 1..].fill(0);
+        FlirtSignature {
+            refs: vec![FlirtRef {
+                offset,
+                name: callee.into(),
+            }],
+            ..sig(name, pattern, &mask)
         }
     }
 
@@ -287,6 +273,10 @@ mod tests {
         out[0] = opcode;
         out[1..].copy_from_slice(&disp.to_le_bytes());
         out
+    }
+
+    fn code(bytes: &[u8], section_addr: u64, addr: u64) -> FunctionCode<'_> {
+        FunctionCode::new(section_addr, bytes, addr).unwrap()
     }
 
     #[test]
@@ -327,23 +317,14 @@ mod tests {
         let crc_b = crc16_ccitt(&bytes_b[prefix.len()..]);
         assert_ne!(crc_a, crc_b);
 
+        let mask = [0xFF; 4];
         db.push(FlirtSignature {
-            name: "fn_a".into(),
-            pattern: prefix.to_vec(),
-            mask: vec![0xFF; prefix.len()],
-            min_len: prefix.len(),
-            max_len: None,
             crc16_at: Some((prefix.len(), crc_a)),
-            refs: Vec::new(),
+            ..sig("fn_a", &prefix, &mask)
         });
         db.push(FlirtSignature {
-            name: "fn_b".into(),
-            pattern: prefix.to_vec(),
-            mask: vec![0xFF; prefix.len()],
-            min_len: prefix.len(),
-            max_len: None,
             crc16_at: Some((prefix.len(), crc_b)),
-            refs: Vec::new(),
+            ..sig("fn_b", &prefix, &mask)
         });
 
         assert_eq!(db.match_function(&bytes_a), Some("fn_a"));
@@ -352,90 +333,95 @@ mod tests {
 
     #[test]
     fn reference_names_break_prefix_ties() {
-        let mut db = FlirtDb::new();
         let mut bytes = vec![0x55, 0x48, 0x89, 0xE5];
         bytes.extend_from_slice(&rel32(0xE8, 0x40, 4));
         bytes.resize(0x50, 0x90);
+        let pattern = &bytes[..9];
+        let db = FlirtDb::from_entries(vec![
+            with_ref("calls_malloc", pattern, 4, "malloc"),
+            with_ref("calls_free", pattern, 4, "free"),
+        ]);
 
-        let prefix_len = 4;
-        db.push(FlirtSignature {
-            name: "calls_malloc".into(),
-            pattern: bytes[..prefix_len].to_vec(),
-            mask: vec![0xFF; prefix_len],
-            min_len: prefix_len,
-            max_len: None,
-            crc16_at: None,
-            refs: vec![FlirtRef {
-                offset: 4,
-                name: "malloc".into(),
-            }],
-        });
-        db.push(FlirtSignature {
-            name: "calls_free".into(),
-            pattern: bytes[..prefix_len].to_vec(),
-            mask: vec![0xFF; prefix_len],
-            min_len: prefix_len,
-            max_len: None,
-            crc16_at: None,
-            refs: vec![FlirtRef {
-                offset: 4,
-                name: "free".into(),
-            }],
-        });
-
-        let mut resolved = BTreeMap::new();
-        resolved.insert(0x40, "malloc".to_string());
-        let m = db.match_function_with_refs(&bytes, &resolved).unwrap();
-        assert_eq!(m.name, "calls_malloc");
-        assert!(m.refs_matched);
+        let resolved = BTreeMap::from([(0x40, "free".to_string())]);
+        let m = db
+            .match_function_with_refs(code(&bytes, 0, 0), &resolved)
+            .unwrap();
+        assert_eq!(m.name, "calls_free");
+        assert_eq!(m.confidence, 1.0);
+        assert_eq!(m.signature_id, 1);
     }
 
     #[test]
-    fn unresolved_reference_falls_back_to_first_byte_match() {
-        let mut db = FlirtDb::new();
+    fn references_resolve_at_absolute_addresses() {
+        let section_addr = 0x40_1000;
+        let mut bytes = vec![0x90; 0x10];
+        bytes.extend_from_slice(&[0x55, 0x48, 0x89, 0xE5]);
+        bytes.extend_from_slice(&rel32(0xE8, 0x40, 0x14));
+        bytes.resize(0x50, 0x90);
+        let db = FlirtDb::from_entries(vec![with_ref(
+            "calls_malloc",
+            &bytes[0x10..0x19],
+            4,
+            "malloc",
+        )]);
+
+        let resolved = BTreeMap::from([(section_addr + 0x40, "malloc".to_string())]);
+        let at = code(&bytes, section_addr, section_addr + 0x10);
+        assert_eq!(
+            db.match_function_with_refs(at, &resolved).map(|m| m.name),
+            Some("calls_malloc")
+        );
+        // The section-relative target means nothing.
+        let wrong = BTreeMap::from([(0x40, "malloc".to_string())]);
+        assert!(db.match_function_with_refs(at, &wrong).is_none());
+    }
+
+    #[test]
+    fn unresolved_reference_rejects_match() {
         let mut bytes = vec![0x55, 0x48, 0x89, 0xE5];
         bytes.extend_from_slice(&rel32(0xE8, 0x40, 4));
-
-        db.push(FlirtSignature {
-            name: "calls_malloc".into(),
-            pattern: bytes[..4].to_vec(),
-            mask: vec![0xFF; 4],
-            min_len: 4,
-            max_len: None,
-            crc16_at: None,
-            refs: vec![FlirtRef {
-                offset: 4,
-                name: "malloc".into(),
-            }],
-        });
-
-        let m = db
-            .match_function_with_refs(&bytes, &BTreeMap::new())
-            .unwrap();
-        assert_eq!(m.name, "calls_malloc");
-        assert!(!m.refs_matched);
+        let db = FlirtDb::from_entries(vec![with_ref("calls_malloc", &bytes, 4, "malloc")]);
+        assert!(db.match_function(&bytes).is_none());
     }
 
     #[test]
-    fn bad_reference_opcode_rejects_reference_match() {
-        let mut db = FlirtDb::new();
-        let bytes = vec![0x55, 0x48, 0x89, 0xE5, 0x90, 0x90, 0x90, 0x90, 0x90];
-        db.push(FlirtSignature {
-            name: "calls_malloc".into(),
-            pattern: bytes[..4].to_vec(),
-            mask: vec![0xFF; 4],
-            min_len: 4,
-            max_len: None,
-            crc16_at: None,
+    fn bad_reference_opcode_rejects_match() {
+        let bytes = [0x55, 0x48, 0x89, 0xE5, 0x90, 0x90, 0x90, 0x90, 0x90];
+        let db = FlirtDb::from_entries(vec![FlirtSignature {
             refs: vec![FlirtRef {
                 offset: 4,
                 name: "malloc".into(),
             }],
-        });
+            ..sig("calls_malloc", &bytes[..4], &[0xFF; 4])
+        }]);
+        assert!(db.match_function(&bytes).is_none());
+    }
+
+    #[test]
+    fn reference_resolves_through_callee_signature() {
+        // `jmp short` to a body that a reference-free signature names.
+        let callee = [0x31, 0xC0, 0xC3];
+        let mut bytes = vec![0xEB, 0x02, 0xCC, 0xCC];
+        bytes.extend_from_slice(&callee);
+        let db = FlirtDb::from_entries(vec![
+            with_ref("thunk", &[0xEB, 0x00], 0, "zero"),
+            sig("zero", &callee, &[0xFF; 3]),
+        ]);
         let m = db
-            .match_function_with_refs(&bytes, &BTreeMap::new())
+            .match_function_with_refs(code(&bytes, 0x1000, 0x1000), &BTreeMap::new())
             .unwrap();
-        assert!(!m.refs_matched);
+        assert_eq!(m.name, "thunk");
+        assert_eq!(m.confidence, 1.0);
+        assert_eq!(db.match_function(&bytes[2..]), None);
+    }
+
+    #[test]
+    fn signature_without_references_has_lower_confidence() {
+        let db = FlirtDb::from_entries(vec![sig("ret", &[0xC3], &[0xFF])]);
+        let m = db
+            .match_function_with_refs(code(&[0xC3], 0, 0), &BTreeMap::new())
+            .unwrap();
+        assert_eq!((m.name, m.confidence, m.signature_id), ("ret", 0.9, 0));
     }
 
     #[test]
@@ -452,93 +438,10 @@ mod tests {
     }
 
     #[test]
-    fn flirt_match_carries_confidence_and_signature_id() {
-        // §5.5: surfacing confidence + signature_id on FlirtMatch.
-        // Two signatures pushed in order — index 0 has refs that resolve
-        // (high-confidence path, 1.0); index 1 has refs that *do not*
-        // resolve (fallback path, 0.5).
-        let mut db = FlirtDb::new();
-
-        // Signature 0: resolves to "malloc" via reference at offset 4.
-        let mut bytes_a = vec![0x55, 0x48, 0x89, 0xE5];
-        bytes_a.extend_from_slice(&rel32(0xE8, 0x40, 4));
-        db.push(FlirtSignature {
-            name: "calls_malloc".into(),
-            pattern: bytes_a[..4].to_vec(),
-            mask: vec![0xFF; 4],
-            min_len: 4,
-            max_len: None,
-            crc16_at: None,
-            refs: vec![FlirtRef {
-                offset: 4,
-                name: "malloc".into(),
-            }],
-        });
-        // Signature 1: distinct prefix; refs claim "free" but resolved map is empty.
-        let mut bytes_b = vec![0x53, 0x48, 0x89, 0xE5];
-        bytes_b.extend_from_slice(&rel32(0xE8, 0x80, 4));
-        db.push(FlirtSignature {
-            name: "calls_free".into(),
-            pattern: bytes_b[..4].to_vec(),
-            mask: vec![0xFF; 4],
-            min_len: 4,
-            max_len: None,
-            crc16_at: None,
-            refs: vec![FlirtRef {
-                offset: 4,
-                name: "free".into(),
-            }],
-        });
-
-        // High-confidence: refs resolve → confidence 1.0, signature_id = 0.
-        let mut resolved = BTreeMap::new();
-        resolved.insert(0x40, "malloc".to_string());
-        let m_hi = db.match_function_with_refs(&bytes_a, &resolved).unwrap();
-        assert_eq!(m_hi.name, "calls_malloc");
-        assert!(m_hi.refs_matched);
-        assert!(
-            (m_hi.confidence - 1.0).abs() < 1e-6,
-            "expected 1.0 got {}",
-            m_hi.confidence
-        );
-        assert_eq!(m_hi.signature_id, 0);
-
-        // Low-confidence fallback: byte prefix matches sig 1 but no
-        // resolved name for 0x80 → refs_matched=false, confidence=0.5,
-        // signature_id=1 (preserves DB insertion order).
-        let m_lo = db
-            .match_function_with_refs(&bytes_b, &BTreeMap::new())
-            .unwrap();
-        assert_eq!(m_lo.name, "calls_free");
-        assert!(!m_lo.refs_matched);
-        assert!(
-            (m_lo.confidence - 0.5).abs() < 1e-6,
-            "expected 0.5 got {}",
-            m_lo.confidence
-        );
-        assert_eq!(m_lo.signature_id, 1);
-    }
-
-    #[test]
-    fn default_db_is_populated() {
-        let db = default_db();
-        assert!(db.len() >= 30, "expected ≥30 signatures, got {}", db.len());
-        let names: Vec<&str> = db.entries.iter().map(|s| s.name.as_str()).collect();
-        for required in &[
-            "strcpy",
-            "strlen",
-            "memcpy",
-            "memset",
-            "malloc",
-            "free",
-            "__cxa_throw",
-            "operator new",
-            "pthread_create",
-        ] {
-            assert!(
-                names.iter().any(|n| n == required),
-                "default_db missing {required}"
-            );
-        }
+    fn function_code_rejects_addresses_outside_the_section() {
+        let bytes = [0x90; 4];
+        assert!(FunctionCode::new(0x1000, &bytes, 0xFFF).is_none());
+        assert!(FunctionCode::new(0x1000, &bytes, 0x1004).is_none());
+        assert_eq!(code(&bytes, 0x1000, 0x1003).bytes(), &[0x90]);
     }
 }

@@ -70,8 +70,8 @@ void __aapcs csel_test(__int64 a1, __int64 a2) {
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    void * field_0;
-    void * field_8;
+    __int64 field_0;
+    __int64 field_8;
 };
 struct __anon1 {
     void * field_0;
@@ -83,7 +83,7 @@ void __aapcs bitfield_test(void) {
     __int64 v_24;
     __int64 v_16;
     int v0; // rcx
-    __int64 v1; // r29
+    int v1; // r29
     __int64 v2; // r30
     int v3; // r31
     *(_QWORD *)(v3 - 16) = v1;

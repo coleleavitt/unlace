@@ -40,9 +40,9 @@
 //! | `cot_postdec` (54)     | `x--`               | not emitted (statement position uses `--x`) | n/a |
 //! | `cot_preinc` (55)      | `++x`               | `try_emit_increment_form`, `postprocess::combine` | ✅ |
 //! | `cot_predec` (56)      | `--x`               | `try_emit_increment_form`, `postprocess::combine` | ✅ |
-//! | `cot_idx` (57)         | `arr[i]`            | `try_array_subscript`, `member_path` | ✅ |
-//! | `cot_memref` (58)      | `s.m`               | `member_path` (nested members) | ✅ |
-//! | `cot_memptr` (59)      | `p->m`              | `try_resolve_field_from_addr`| ✅ |
+//! | `cot_idx` (57)         | `arr[i]`            | `try_array_subscript`, `cpa`, `member_path` | ✅ |
+//! | `cot_memref` (58)      | `s.m`               | `cpa`, `member_path` (nested members) | ✅ |
+//! | `cot_memptr` (59)      | `p->m`              | `cpa`, `member_path`         | ✅ |
 //! | `cot_call` (60)        | `f(...)`            | `Call`/`Callind`             | ✅ |
 //! | `cot_var/obj/num/...`  | name / literal      | `emit_operand_with_prec`     | ✅ |
 //! | `cot_str` (63)         | `"..."`             | `emit_operand_with_prec` + `escape_c_string` | ✅ |
@@ -115,15 +115,17 @@ use unlace_struct::{HirFunction, HirNode, SwitchCase};
 
 use crate::expr_ast::CExpr;
 
+mod cpa;
 mod member_path;
 mod postprocess;
 mod trace;
-mod typed_access;
 
+use cpa::{
+    Pointee, try_typed_access, try_typed_pointer_sum, typed_access_is_stable, typed_pointer_update,
+};
 use member_path::StructLayouts;
 use postprocess::*;
 use trace::*;
-use typed_access::{Pointee, try_typed_access, typed_access_is_stable};
 
 fn cprinter_detail_phase(name: &'static str) -> Option<linkscope::Span> {
     linkscope::trace_detail_enabled().then(|| linkscope::phase(name))
@@ -1990,8 +1992,9 @@ fn compute_param_register_names(
     }
 }
 
-/// Record the entry value of each DWARF pointer parameter with its declared
-/// pointee, so accesses through it render as `param->member` / `param[i]`.
+/// Record the register of each DWARF pointer parameter with its declared
+/// pointee, so arithmetic and accesses through it render in the pointee's
+/// units: `param->member`, `param[i]`, `param + 1`.
 fn compute_param_pointees(
     dwarf_func: Option<&FunctionDebugInfo>,
     header: Option<&FunctionHeaderInfo>,
@@ -2013,11 +2016,8 @@ fn compute_param_pointees(
         let Some(pointee) = pointee else {
             continue;
         };
-        let entry_value = SsaVarnode {
-            base: Varnode::new(SpaceId::Register, reg, 8),
-            version: 0,
-        };
-        ctx.pointees.insert(entry_value, pointee);
+        ctx.pointees
+            .insert(Varnode::new(SpaceId::Register, reg, 8), pointee);
     }
 }
 
@@ -2680,9 +2680,10 @@ struct PrintCtx {
     frame_size: Option<u64>,
     /// DWARF struct layouts for typed `base->member` rendering.
     struct_layouts: StructLayouts,
-    /// Pointer values whose pointee type is declared (entry values of DWARF
-    /// pointer parameters).
-    pointees: BTreeMap<SsaVarnode, Pointee>,
+    /// Variables declared as pointers to a known pointee (the registers of
+    /// DWARF pointer parameters, which print as the parameter in every SSA
+    /// version), keyed by base varnode.
+    pointees: BTreeMap<Varnode, Pointee>,
     panic_sites: BTreeMap<u64, PanicKind>,
     /// Merged symbol table: address → symbol name (PLT + function symbols).
     symbols: BTreeMap<u64, String>,
@@ -3480,7 +3481,7 @@ fn try_frame_local_indexed_subscript(
 /// `buf[i]` for a variable-indexed access into a recovered stack local.
 ///
 /// Pointer bases are subscripted only through a declared element type (see
-/// `typed_access`); an untyped `base + k*i` stays a raw `*(T *)(...)`, as in
+/// `cpa`); an untyped `base + k*i` stays a raw `*(T *)(...)`, as in
 /// Hex-Rays, because the base is declared as a scalar and `base[i]` would
 /// neither compile nor say which width it reads.
 fn try_array_subscript(
@@ -13326,10 +13327,13 @@ fn try_emit_increment_form(
     insn: &IrInsn,
     stmt_idx: u32,
     lhs: &str,
-    ctx: &PrintCtx,
+    ctx: &mut PrintCtx,
 ) -> Option<String> {
     if insn.inputs.len() != 2 {
         return None;
+    }
+    if let Some(update) = typed_pointer_update(insn, stmt_idx, lhs, ctx) {
+        return Some(update);
     }
     let (counter_idx, const_in) = match (insn.inputs[0].space, insn.inputs[1].space) {
         (SpaceId::Const, _) => (1, &insn.inputs[0]),
@@ -14959,6 +14963,15 @@ fn emit_expr_with_prec(
             // that target.
             let other = 1 - instruction_pointer_operand(insn, stmt_idx, ctx).unwrap_or(0);
             emit_operand_resolved(&insn.inputs[other], other, stmt_idx, ctx)
+        }
+        IrOp::IntAdd | IrOp::IntSub | IrOp::Ptradd
+            if let Some(sum) = try_typed_pointer_sum(insn, stmt_idx, ctx) =>
+        {
+            if needs_parens(IrOp::IntAdd, parent) {
+                format!("({sum})")
+            } else {
+                sum
+            }
         }
         IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, parent, ctx),
         IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, parent, ctx),

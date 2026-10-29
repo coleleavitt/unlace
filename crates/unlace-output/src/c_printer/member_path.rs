@@ -29,6 +29,11 @@ pub(super) enum MemberStep {
 pub(super) struct MemberPath(Vec<MemberStep>);
 
 impl MemberPath {
+    /// `true` for the path to the struct itself.
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Render the access through a pointer `base`: `base->size.x`.
     pub(super) fn through_pointer(&self, base: CExpr) -> CExpr {
         self.render(base, true)
@@ -109,6 +114,54 @@ impl StructLayouts {
             return (within == 0 && field.size == width).then_some(MemberPath(steps));
         }
         None
+    }
+
+    /// The deepest member chain that starts exactly at byte `offset` of
+    /// `struct_name` and is at least `width` bytes wide, for an access that
+    /// reads it as another type (`*(_QWORD *)&p->size`). The empty path is the
+    /// struct itself, at offset 0.
+    pub(super) fn member_start(
+        &self,
+        struct_name: &str,
+        offset: u64,
+        width: u64,
+    ) -> Option<MemberPath> {
+        let mut layout = self.structs.get(struct_name)?;
+        let mut best = (offset == 0 && width <= layout.size).then(|| MemberPath(Vec::new()));
+        let mut steps = Vec::new();
+        let mut offset = offset;
+        for _ in 0..MAX_MEMBER_DEPTH {
+            let Some(field) = member_containing(layout, offset) else {
+                break;
+            };
+            let within = offset - field.offset;
+            steps.push(MemberStep::Field(field.name.clone()));
+            if within == 0 && field.size >= width {
+                best = Some(MemberPath(steps.clone()));
+            }
+            if let Some(nested) = self.struct_of(&field.type_name) {
+                layout = nested;
+                offset = within;
+                continue;
+            }
+            let Some((element, count)) = array_element(&field.type_name) else {
+                break;
+            };
+            let Some(stride) = field.size.checked_div(count).filter(|&s| s > 0) else {
+                break;
+            };
+            steps.push(MemberStep::Index(within / stride));
+            let within_element = within % stride;
+            if within_element == 0 && stride >= width {
+                best = Some(MemberPath(steps.clone()));
+            }
+            let Some(nested) = self.struct_of(element) else {
+                break;
+            };
+            layout = nested;
+            offset = within_element;
+        }
+        best
     }
 
     fn struct_of(&self, type_name: &str) -> Option<&StructType> {
@@ -221,6 +274,23 @@ mod tests {
         assert_eq!(l.member_path("Rect", 10, 2), None);
         assert_eq!(l.member_path("Rect", 16, 4), None);
         assert_eq!(l.member_path("Missing", 0, 4), None);
+    }
+
+    #[test]
+    fn member_start_finds_the_widest_fit_at_an_offset() {
+        let l = layouts();
+        let start = |name, offset, width| l.member_start(name, offset, width).map(|p| render(&p));
+        // 8 bytes at `size` cover the whole nested Point.
+        assert_eq!(start("Rect", 8, 8).as_deref(), Some("p->size"));
+        // 4 bytes at `size` reach down to its first member.
+        assert_eq!(start("Rect", 8, 4).as_deref(), Some("p->size.x"));
+        // Array elements past the first start mid-member.
+        assert_eq!(start("Poly", 16, 8).as_deref(), Some("p->pts[1]"));
+        // The whole struct at offset 0.
+        assert_eq!(start("Rect", 0, 16).as_deref(), Some("p"));
+        // Nothing starts at byte 10, and nothing at 8 is 16 bytes wide.
+        assert_eq!(start("Rect", 10, 2), None);
+        assert_eq!(start("Rect", 8, 16), None);
     }
 
     #[test]

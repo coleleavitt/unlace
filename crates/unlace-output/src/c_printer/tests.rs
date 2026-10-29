@@ -14639,3 +14639,207 @@ fn index_term_walk_stops_on_copy_cycle() {
 
     assert_eq!(extract_index_term(&x, None, 3, &ctx), None);
 }
+
+/// Pointer arithmetic correction over every unit and member form: the byte
+/// offset of an access through a typed pointer is rewritten in the pointer's
+/// own units, so the printed C addresses the same bytes.
+#[test]
+fn cpa_rewrites_typed_pointer_accesses_in_pointee_units() {
+    use unlace_loader::{StructField, StructType};
+    let field = |name: &str, offset: u64, size: u64, ty: &str| StructField {
+        name: name.into(),
+        offset,
+        size,
+        type_name: ty.into(),
+    };
+    let point = StructType {
+        name: "Point".into(),
+        size: 8,
+        template_params: vec![],
+        fields: vec![field("x", 0, 4, "int"), field("y", 4, 4, "int")],
+    };
+    let rect = StructType {
+        name: "Rect".into(),
+        size: 16,
+        template_params: vec![],
+        fields: vec![field("origin", 0, 8, "Point"), field("size", 8, 8, "Point")],
+    };
+    // `*(width)(p + scale*i + offset)` through `p` of type `ty`; `i` prints as `v1`.
+    let render = |offset: i64, width: u8, scale: u64, ty: &str, pointee_size: u64| {
+        let (space, p, i) = (con(0, 8), reg(56, 8), reg(8, 8));
+        let (scaled, sum, addr) = (
+            Varnode::unique(100, 8),
+            Varnode::unique(200, 8),
+            Varnode::unique(300, 8),
+        );
+        let load_out = reg(16, width);
+        let mut body = vec![];
+        let base = if scale == 0 {
+            p
+        } else {
+            body.push(HirNode::Statement(IrInsn::with_output(
+                IrOp::IntMult,
+                scaled,
+                smallvec![i, con(scale, 8)],
+                0x1000,
+            )));
+            body.push(HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                sum,
+                smallvec![p, scaled],
+                0x1004,
+            )));
+            sum
+        };
+        body.push(HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![base, con(offset as u64, 8)],
+            0x1008,
+        )));
+        body.push(HirNode::Statement(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![space, addr],
+            0x100c,
+        )));
+        body.push(HirNode::Return(Some(SsaVarnode {
+            base: load_out,
+            version: 0,
+        })));
+        let func = make_func("cpa", body);
+        let (dwarf, header) =
+            dwarf_with_pointer_param("p", ty, pointee_size, vec![point.clone(), rect.clone()]);
+        let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
+        output
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("result = "))
+            .unwrap_or_else(|| panic!("no load in:\n{output}"))
+            .trim_end_matches(';')
+            .to_string()
+    };
+    let cases = [
+        // Element units.
+        (8, 4, 4, "int *", 4, "p[v1 + 2]"),
+        (-8, 4, 0, "int *", 4, "p[-2]"),
+        (8, 8, 0, "int *", 4, "*(_QWORD *)(p + 2)"),
+        // A narrower access counts in its own width.
+        (4, 4, 0, "__int64 *", 8, "*((_DWORD *)p + 1)"),
+        (6, 2, 8, "__int64 *", 8, "*((_WORD *)p + 4 * v1 + 3)"),
+        // Nothing divides: bytes through `char *`.
+        (6, 4, 0, "int *", 4, "*(_DWORD *)((char *)p + 6)"),
+        (8, 4, 1, "int *", 4, "*(_DWORD *)((char *)p + v1 + 8)"),
+        // Struct members: memptr, idx + memref, and reinterpreted members.
+        (12, 4, 16, "Rect *", 16, "p[v1].size.y"),
+        (8, 8, 0, "Rect *", 16, "*(_QWORD *)&p->size"),
+        (16, 8, 16, "Rect *", 16, "*(_QWORD *)&p[v1 + 1].origin"),
+        // Struct offsets no member covers stay in bytes.
+        (10, 4, 0, "Rect *", 16, "*(_DWORD *)((char *)p + 10)"),
+        (-4, 4, 0, "Rect *", 16, "*(_DWORD *)((char *)p - 4)"),
+        (4, 4, 8, "Rect *", 16, "*(_DWORD *)((char *)p + 8 * v1 + 4)"),
+    ];
+    for (offset, width, scale, ty, pointee_size, expected) in cases {
+        let rendered = render(offset, width, scale, ty, pointee_size);
+        assert_eq!(
+            rendered, expected,
+            "offset={offset} width={width} scale={scale} ty={ty}"
+        );
+    }
+}
+
+/// Pointer values and updates of a typed pointer count elements too: `p + i`,
+/// `++p`, and bytes through `(char *)` when the offset splits an element.
+#[test]
+fn cpa_scales_typed_pointer_values_and_updates() {
+    let (p, i, out) = (reg(56, 8), reg(8, 8), reg(0, 8));
+    let print = |body: Vec<HirNode>| {
+        let func = make_func("cpa_value", body);
+        let (dwarf, header) = dwarf_with_pointer_param("p", "int *", 4, vec![]);
+        super::print_c_full(&func, Some(&dwarf), Some(&header), None, None)
+    };
+    let shl = Varnode::unique(100, 8);
+    let indexed = print(vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntLeft,
+            shl,
+            smallvec![i, con(2, 8)],
+            0x1000,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![p, shl],
+            0x1004,
+        )),
+        HirNode::Return(Some(SsaVarnode {
+            base: out,
+            version: 0,
+        })),
+    ]);
+    assert!(indexed.contains("p + v1"), "{indexed}");
+
+    let split = print(vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![p, con(6, 8)],
+            0x1000,
+        )),
+        HirNode::Return(Some(SsaVarnode {
+            base: out,
+            version: 0,
+        })),
+    ]);
+    assert!(split.contains("(char *)p + 6"), "{split}");
+
+    let space = con(0, 8);
+    let stepped = print(vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            p,
+            smallvec![p, con(4, 8)],
+            0x1000,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::Load,
+            reg(16, 4),
+            smallvec![space, p],
+            0x1004,
+        )),
+        HirNode::Return(Some(SsaVarnode {
+            base: reg(16, 4),
+            version: 0,
+        })),
+    ]);
+    assert!(stepped.contains("++p;"), "{stepped}");
+    assert!(!stepped.contains("+= 4"), "{stepped}");
+}
+
+/// The difference of two typed pointers is taken in bytes, as the machine
+/// code computes it: C would divide `p - q` by the pointee size.
+#[test]
+fn cpa_typed_pointer_difference_is_taken_in_bytes() {
+    let (p, q, out) = (reg(56, 8), reg(48, 8), reg(0, 8));
+    let func = make_func(
+        "cpa_diff",
+        vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSub,
+                out,
+                smallvec![p, q],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
+        ],
+    );
+    let (mut dwarf, header) = dwarf_with_pointer_param("p", "int *", 4, vec![]);
+    let params = &mut dwarf.functions.get_mut(&0x1000).expect("function").params;
+    let mut second = params[0].clone();
+    second.name = Some("q".to_string());
+    params.push(second);
+    let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
+    assert!(output.contains("(char *)p - (char *)q"), "{output}");
+}

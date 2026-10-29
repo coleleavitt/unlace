@@ -112,6 +112,41 @@ fn part_reads_become_casts() {
 }
 
 #[test]
+fn part_reads_take_the_direct_part() {
+    assert_eq!(combine("x = LOBYTE(v0 >> 8);"), "x = BYTE1(v0);");
+    assert_eq!(
+        combine("x = LOBYTE((_DWORD)v0 >> 24);"),
+        "x = BYTE3((_DWORD)v0);"
+    );
+    assert_eq!(combine("x = LOWORD(v0 >> 16);"), "x = HIWORD(v0);");
+    assert_eq!(combine("x = LODWORD(v0 >> 32);"), "x = HIDWORD(v0);");
+    assert_eq!(combine("x = BYTE1(v0 >> 8);"), "x = BYTE2(v0);");
+    assert_eq!(combine("x = LOBYTE(HIWORD(v0));"), "x = BYTE2(v0);");
+    assert_eq!(combine("x = LODWORD(HIDWORD(v0));"), "x = HIDWORD(v0);");
+    assert_eq!(combine("x = BYTE1(v0 & 0xFF00);"), "x = BYTE1(v0);");
+    assert_eq!(combine("x = HIWORD(0xFFFF0000 & v0);"), "x = HIWORD(v0);");
+    assert_eq!(combine("x = (_BYTE)(v0 >> 16);"), "x = BYTE2(v0);");
+    assert_eq!(combine("x = (_WORD)(v0 >> 16);"), "x = HIWORD(v0);");
+    assert_eq!(combine("x = (_BYTE)(v0 >> 8 >> 8);"), "x = BYTE2(v0);");
+    assert_eq!(combine("x = (_DWORD)(v0 >> 32);"), "x = HIDWORD(v0);");
+}
+
+#[test]
+fn part_reads_keep_bits_they_cannot_prove() {
+    // The mask drops bits BYTE1 reads.
+    assert_eq!(combine("x = BYTE1(v0 & 0xF00);"), "x = BYTE1(v0 & 0xF00);");
+    // BYTE1 of a byte reads bits LOBYTE dropped.
+    assert_eq!(combine("x = BYTE1(LOBYTE(v0));"), "x = BYTE1((_BYTE)v0);");
+    // No part sits at bit 40.
+    assert_eq!(
+        combine("x = BYTE1(HIDWORD(v0));"),
+        "x = BYTE1(HIDWORD(v0));"
+    );
+    assert_eq!(combine("x = (_BYTE)(v0 >> 4);"), "x = (_BYTE)(v0 >> 4);");
+    assert_eq!(combine("LOBYTE(v0 >> 8) = 1;"), "LOBYTE(v0 >> 8) = 1;");
+}
+
+#[test]
 fn idempotent_bit_ops() {
     assert_eq!(
         combine("if ((LODWORD(c12) & LODWORD(c12)) != 0) {"),

@@ -62,9 +62,12 @@ fn combine(e: Expr, place: Place) -> Expr {
         Expr::Cast { ty, expr } => match combine(*expr, Place::Rvalue) {
             // `(T)(T)x` is `(T)x`.
             Expr::Cast { ty: inner, expr } if inner == ty => Expr::Cast { ty, expr },
-            expr => Expr::Cast {
-                ty,
-                expr: Box::new(expr),
+            expr => match cast_as_part(&ty, &expr) {
+                Some((part, arg)) if place != Place::Lvalue => part_read(part, arg, place),
+                _ => Expr::Cast {
+                    ty,
+                    expr: Box::new(expr),
+                },
             },
         },
         Expr::Prefix { op, expr } => {
@@ -193,37 +196,87 @@ fn small_signed_literal(e: Expr) -> Expr {
 }
 
 // ---------------------------------------------------------------------------
-// IDA part macros: LOBYTE / LOWORD / LODWORD / HIDWORD / BYTEn
+// IDA part macros: LOBYTE / BYTEn / LOWORD / HIWORD / LODWORD / HIDWORD
 // ---------------------------------------------------------------------------
 
+/// A bit range named by an IDA part macro. The prelude defines `NAME(x)` as
+/// `((T)((x) >> shift))`, with `T` the unsigned type `bits` wide.
+#[derive(Clone, Copy)]
+struct Part {
+    name: &'static str,
+    shift: u32,
+    bits: u32,
+}
+
+const PARTS: [Part; 8] = [
+    Part::new("LOBYTE", 0, 8),
+    Part::new("BYTE1", 8, 8),
+    Part::new("BYTE2", 16, 8),
+    Part::new("BYTE3", 24, 8),
+    Part::new("LOWORD", 0, 16),
+    Part::new("HIWORD", 16, 16),
+    Part::new("LODWORD", 0, 32),
+    Part::new("HIDWORD", 32, 32),
+];
+
+impl Part {
+    const fn new(name: &'static str, shift: u32, bits: u32) -> Part {
+        Part { name, shift, bits }
+    }
+
+    fn named(name: &str) -> Option<Part> {
+        PARTS.into_iter().find(|p| p.name == name)
+    }
+
+    fn at(shift: u32, bits: u32) -> Option<Part> {
+        PARTS
+            .into_iter()
+            .find(|p| p.shift == shift && p.bits == bits)
+    }
+
+    fn mask(self) -> u128 {
+        (1 << self.bits) - 1
+    }
+
+    /// The cast the macro truncates with.
+    fn ty(self) -> &'static str {
+        match self.bits {
+            8 => "_BYTE",
+            16 => "_WORD",
+            _ => "_DWORD",
+        }
+    }
+}
+
 fn part_macro(callee: Expr, args: Vec<Expr>, place: Place) -> Expr {
-    let name = callee.as_ident().unwrap_or_default();
-    if args.len() != 1 || !is_part_macro(name) || place == Place::Lvalue {
+    let part = callee.as_ident().and_then(Part::named);
+    let Some(part) = part.filter(|_| args.len() == 1 && place != Place::Lvalue) else {
         return Expr::Call {
             callee: Box::new(callee),
             args,
         };
-    }
-    if let Some(folded) = fold_part_macro(name, &args[0]) {
+    };
+    let arg = args.into_iter().next().expect("one argument");
+    part_read(part, arg, place)
+}
+
+/// Print a read of `part(arg)`.
+fn part_read(part: Part, arg: Expr, place: Place) -> Expr {
+    let (part, arg) = direct_part(part, arg);
+    if let Some(folded) = fold_part_macro(part, &arg) {
         return folded;
+    }
+    if part.shift != 0 {
+        return Expr::Call {
+            callee: Box::new(Expr::atom(part.name)),
+            args: vec![arg],
+        };
     }
     // IDA writes a low-part read as a cast; the macros are reserved for
     // partial writes (`LODWORD(v3) = ...`). The prelude defines each as
     // exactly this cast, so the rewrite is textual identity after expansion.
-    let ty = match name {
-        "LOBYTE" => "_BYTE",
-        "LOWORD" => "_WORD",
-        "LODWORD" => "_DWORD",
-        _ => {
-            return Expr::Call {
-                callee: Box::new(callee),
-                args,
-            };
-        }
-    };
-    let arg = args.into_iter().next().expect("one argument");
     let cast = Expr::Cast {
-        ty: ty.to_string(),
+        ty: part.ty().to_string(),
         expr: Box::new(unary_operand(arg)),
     };
     if matches!(place, Place::PostfixBase | Place::Callee) {
@@ -233,15 +286,91 @@ fn part_macro(callee: Expr, args: Vec<Expr>, place: Place) -> Expr {
     }
 }
 
-fn is_part_macro(name: &str) -> bool {
-    matches!(
-        name,
-        "LOBYTE" | "LOWORD" | "LODWORD" | "HIWORD" | "HIDWORD" | "BYTE1" | "BYTE2" | "BYTE3"
-    )
+/// `(_BYTE)(x >> 8)` is the prelude's definition of `BYTE1(x)`, so a cast of
+/// a shift reads the part at that shift.
+fn cast_as_part(ty: &str, expr: &Expr) -> Option<(Part, Expr)> {
+    let Expr::Binary {
+        op: BinOp::Shr,
+        lhs,
+        rhs,
+    } = peel_parens(expr)
+    else {
+        return None;
+    };
+    let shift = small_literal(rhs)?;
+    let part = PARTS
+        .into_iter()
+        .find(|p| p.shift == shift && p.shift != 0 && p.ty() == ty)?;
+    Some((part, (**lhs).clone()))
+}
+
+/// Rewrite `part(arg)` to the most direct equal part read. Each step is an
+/// identity of the prelude definitions:
+///
+/// - `P(a >> k)` is the part `k` bits above `P` (`LOBYTE(x >> 8)` is
+///   `BYTE1(x)`, `LODWORD(x >> 32)` is `HIDWORD(x)`);
+/// - `P(Q(a))` reads only bits `Q` kept, so it is the part of `a` at the
+///   sum of both shifts (`LOBYTE(HIWORD(x))` is `BYTE2(x)`);
+/// - `P(a & c)` is `P(a)` when `c` keeps every bit `P` reads.
+///
+/// A new shift past bit 24 only arises where the input already shifted by
+/// that much, so no step introduces a shift the original did not perform.
+fn direct_part(part: Part, arg: Expr) -> (Part, Expr) {
+    let step = match peel_parens(&arg) {
+        Expr::Binary {
+            op: BinOp::Shr,
+            lhs,
+            rhs,
+        } => small_literal(rhs)
+            .and_then(|k| Part::at(part.shift + k, part.bits))
+            .map(|p| (p, (**lhs).clone())),
+        Expr::Binary {
+            op: BinOp::BitAnd,
+            lhs,
+            rhs,
+        } if part.shift + part.bits <= 32 => {
+            let keeps = |c: &Expr| {
+                c.as_atom()
+                    .and_then(int_literal)
+                    .is_some_and(|lit| (lit.value >> part.shift) & part.mask() == part.mask())
+            };
+            if keeps(rhs) {
+                Some((part, (**lhs).clone()))
+            } else if keeps(lhs) {
+                Some((part, (**rhs).clone()))
+            } else {
+                None
+            }
+        }
+        Expr::Call { callee, args } if args.len() == 1 => callee
+            .as_ident()
+            .and_then(Part::named)
+            .filter(|inner| part.shift + part.bits <= inner.bits)
+            .and_then(|inner| Part::at(inner.shift + part.shift, part.bits))
+            .map(|p| (p, args[0].clone())),
+        _ => None,
+    };
+    match step {
+        Some((part, arg)) => direct_part(part, arg),
+        None => (part, arg),
+    }
+}
+
+fn peel_parens(e: &Expr) -> &Expr {
+    match e {
+        Expr::Paren(inner) => peel_parens(inner),
+        _ => e,
+    }
+}
+
+/// An integer literal below 64, the range of a meaningful shift count.
+fn small_literal(e: &Expr) -> Option<u32> {
+    let lit = int_literal(peel_parens(e).as_atom()?)?;
+    (lit.value < 64).then_some(lit.value as u32)
 }
 
 /// Evaluate a part macro applied to an integer literal.
-fn fold_part_macro(name: &str, arg: &Expr) -> Option<Expr> {
+fn fold_part_macro(part: Part, arg: &Expr) -> Option<Expr> {
     let (lit, negative) = match arg {
         Expr::Atom(s) => (int_literal(s)?, false),
         Expr::Prefix {
@@ -258,18 +387,10 @@ fn fold_part_macro(name: &str, arg: &Expr) -> Option<Expr> {
     // `x >> 32` on an `int` literal is undefined; only fold HIDWORD of a
     // literal that is 64-bit by suffix or magnitude.
     let wide = lit.suffix.contains(['l', 'L']) || lit.value > u32::MAX as u128;
-    let (shift, mask) = match name {
-        "LOBYTE" => (0, 0xff),
-        "LOWORD" => (0, 0xffff),
-        "LODWORD" => (0, 0xffff_ffff),
-        "BYTE1" => (8, 0xff),
-        "BYTE2" => (16, 0xff),
-        "BYTE3" => (24, 0xff),
-        "HIWORD" => (16, 0xffff),
-        "HIDWORD" if wide => (32, 0xffff_ffff),
-        _ => return None,
-    };
-    let folded = ((value >> shift) as u128) & mask;
+    if part.shift >= 32 && !wide {
+        return None;
+    }
+    let folded = ((value >> part.shift) as u128) & part.mask();
     let digits = if lit.hex && folded > 9 {
         format!("{folded:#x}")
     } else {
@@ -277,7 +398,7 @@ fn fold_part_macro(name: &str, arg: &Expr) -> Option<Expr> {
     };
     // A `_DWORD` result stays `unsigned int`; `_BYTE` and `_WORD` results
     // promote to `int`, which a plain literal already is.
-    let suffix = if mask == 0xffff_ffff { "u" } else { "" };
+    let suffix = if part.bits == 32 { "u" } else { "" };
     Some(Expr::atom(format!("{digits}{suffix}")))
 }
 
@@ -509,7 +630,7 @@ fn is_pure(e: &Expr) -> bool {
         Expr::Prefix { op, expr } => !matches!(op, PrefixOp::Inc | PrefixOp::Dec) && is_pure(expr),
         Expr::Postfix { .. } | Expr::Assign { .. } | Expr::Comma { .. } => false,
         Expr::Call { callee, args } => {
-            callee.as_ident().is_some_and(is_part_macro) && args.iter().all(is_pure)
+            callee.as_ident().and_then(Part::named).is_some() && args.iter().all(is_pure)
         }
         Expr::Index { base, index } => is_pure(base) && is_pure(index),
         Expr::Binary { lhs, rhs, .. } => is_pure(lhs) && is_pure(rhs),

@@ -13574,6 +13574,51 @@ fn test_t255_int_and_0xffff_emits_loword() {
     );
 }
 
+fn print_shift_then_mask(width: u8, shift: u64, mask: u64) -> String {
+    let r0 = reg(0, width);
+    let tmp = Varnode::unique(0, width);
+    let r8 = reg(8, width);
+    let body = vec![
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntRight,
+            tmp,
+            smallvec![r0, con(shift, width)],
+            0x1000,
+        )),
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAnd,
+            r8,
+            smallvec![tmp, con(mask, width)],
+            0x1004,
+        )),
+        HirNode::Return(Some(sv(8, width))),
+    ];
+    print_c(&make_func("shift_then_mask", body))
+}
+
+#[test]
+fn shift_then_mask_emits_part_macro() {
+    for (width, shift, mask, want) in [
+        (4, 8, 0xFF, "return BYTE1((_DWORD)v0);"),
+        (4, 16, 0xFF, "return BYTE2(v0);"),
+        (4, 24, 0xFF, "return BYTE3((_DWORD)v0);"),
+        (4, 16, 0xFFFF, "return HIWORD(v0);"),
+        (8, 16, 0xFFFF, "return HIWORD((_QWORD)v0);"),
+    ] {
+        let output = print_shift_then_mask(width, shift, mask);
+        let ret = output
+            .lines()
+            .rev()
+            .find(|l| l.contains("return "))
+            .unwrap_or_default();
+        assert_eq!(
+            ret.trim(),
+            want,
+            "(x >> {shift}) & {mask:#x} at width {width}: {output}"
+        );
+    }
+}
+
 #[test]
 fn test_callother_sve_add_emits_svadd_s32_t300() {
     // Callother(0x420 /* SVE_ADD */, pg=0, zd, zn, zm) → svadd_s32

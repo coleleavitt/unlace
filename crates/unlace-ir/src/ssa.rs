@@ -921,6 +921,16 @@ pub struct SsaFunction {
     /// parameters were detected. Populated by
     /// [`ParamInferPass`](https://docs.rs/unlace-passes).
     pub inferred_stack_params: BTreeSet<i64>,
+    /// Data items and data regions of the binary that this function
+    /// references. Set by the CLI pipeline from the loaded image before the
+    /// pass pipeline; read by `ObjectWidenPass` to decide which constant
+    /// addresses are global data and how far a global may grow.
+    pub data_items: crate::mem_object::DataItems,
+    /// Types synthesised for whole memory objects (global data items and
+    /// stack frame regions) from their access patterns: arrays, arrays of
+    /// structs and `fld_N` structs. Populated by `ObjectWidenPass`
+    /// (Hex-Rays `sub_27BC20` / `sub_27AE10`).
+    pub object_types: BTreeMap<crate::mem_object::MemObject, crate::types::Type>,
 }
 
 /// Classification of a C++ method recovered from its mangled name.
@@ -1699,6 +1709,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         cpp_this_args: BTreeSet::new(),
         variadic: None,
         inferred_stack_params: BTreeSet::new(),
+        data_items: crate::mem_object::DataItems::default(),
+        object_types: BTreeMap::new(),
     }
 }
 

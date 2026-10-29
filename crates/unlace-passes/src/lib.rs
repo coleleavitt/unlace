@@ -186,6 +186,7 @@ pub mod nullability_taint;
 pub mod objc_blocks;
 pub mod objc_byref;
 pub mod objc_dispatch;
+pub mod object_widen;
 pub mod op_type_binding;
 #[cfg(feature = "unwired")]
 pub mod opaque_pred;
@@ -449,6 +450,7 @@ pub use nullability_taint::{
 pub use objc_blocks::{BLOCK_ISA_SYMBOLS, BlockLiteral, detect_objc_blocks};
 pub use objc_byref::{ByrefBox, apply_objc_byref, detect_objc_byref_boxes};
 pub use objc_dispatch::ObjcDispatchPass;
+pub use object_widen::ObjectWidenPass;
 pub use op_type_binding::{OpTypeBindingPass, render_enum_const, render_field_access};
 #[cfg(feature = "unwired")]
 pub use opaque_pred::opaque_predicate_detect;

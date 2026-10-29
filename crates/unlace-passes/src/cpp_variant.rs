@@ -346,6 +346,8 @@ mod tests {
             cpp_this_args: std::collections::BTreeSet::new(),
             variadic: None,
             inferred_stack_params: std::collections::BTreeSet::new(),
+            data_items: unlace_ir::mem_object::DataItems::default(),
+            object_types: Default::default(),
             rust_async: None,
         }
     }

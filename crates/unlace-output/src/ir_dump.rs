@@ -109,6 +109,20 @@ pub fn dump_type_audit(func: &SsaFunction) -> String {
             let _ = writeln!(out, "| {:?}#{} | {:?} |", sv.base.space, sv.version, ty);
         }
     }
+
+    if !func.object_types.is_empty() {
+        let _ = writeln!(out);
+        let _ = writeln!(out, "### object types ({}):", func.object_types.len());
+        let _ = writeln!(out, "| object | synthesised type |");
+        let _ = writeln!(out, "|--------|------------------|");
+        for (object, ty) in &func.object_types {
+            let object = match object {
+                unlace_ir::mem_object::MemObject::Global(addr) => format!("global 0x{addr:x}"),
+                unlace_ir::mem_object::MemObject::Frame(off) => format!("frame {off}"),
+            };
+            let _ = writeln!(out, "| {object} | {ty:?} |");
+        }
+    }
     out
 }
 
@@ -439,6 +453,8 @@ mod tests {
             cpp_this_args: std::collections::BTreeSet::new(),
             variadic: None,
             inferred_stack_params: std::collections::BTreeSet::new(),
+            data_items: unlace_ir::mem_object::DataItems::default(),
+            object_types: Default::default(),
             vtable_calls: BTreeMap::new(),
             cpp_vtable_calls: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),

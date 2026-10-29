@@ -932,7 +932,8 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("StructFieldDetectPass", TypeRecovery),
         PassDescriptor::new("TypeInferPass", TypeRecovery),
         PassDescriptor::new("TypeConstraintSolverPass", TypeRecovery),
-        PassDescriptor::new("TypeVotePass", TypeRecovery),
+PassDescriptor::new("TypeVotePass", TypeRecovery),
+        PassDescriptor::new("ObjectWidenPass", TypeRecovery),
         PassDescriptor::new("SizeofRecognitionPass", TypeRecovery),
         PassDescriptor::new("CppVariantPass", TypeRecovery),
         PassDescriptor::new("CppLambdaCapturePass", TypeRecovery),
@@ -1258,6 +1259,7 @@ mod phase_tests {
             Box::new(crate::calling_convention::ParamInferPass),
             Box::new(crate::calling_convention::ReturnTypeInferPass),
             Box::new(crate::struct_field_detect::StructFieldDetectPass),
+            Box::new(crate::object_widen::ObjectWidenPass),
             Box::new(crate::sizeof_recognition::SizeofRecognitionPass::default()),
             Box::new(crate::cpp_vtable::CppVtablePass),
             Box::new(crate::cpp_method::CppMethodPass),
@@ -1448,7 +1450,8 @@ mod phase_tests {
             TypeRecovery, // StructFieldDetectPass
             TypeRecovery, // TypeInferPass
             TypeRecovery, // TypeConstraintSolverPass
-            TypeRecovery, // TypeVotePass
+TypeRecovery, // TypeVotePass
+            TypeRecovery, // ObjectWidenPass
             TypeRecovery, // SizeofRecognitionPass
             TypeRecovery, // CppVariantPass
             TypeRecovery, // CppLambdaCapturePass

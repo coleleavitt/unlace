@@ -148,6 +148,7 @@ fn linkscope_pass_name_span(name: &str) -> linkscope::Span {
         "TypeConstraintSolverPass" | "TypeConstraintSolver" => {
             linkscope::phase("pass.name.TypeConstraintSolverPass")
         }
+        "ObjectWidenPass" | "object-widen" => linkscope::phase("pass.name.ObjectWidenPass"),
         "SizeofRecognitionPass" => linkscope::phase("pass.name.SizeofRecognitionPass"),
         "CppVariantPass" | "cpp-variant" => linkscope::phase("pass.name.CppVariantPass"),
         "CppLambdaCapturePass" | "cpp-lambda-captures" => {

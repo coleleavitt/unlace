@@ -2842,7 +2842,8 @@ fn pipeline_stage_type_recovery(
         ssa,
         opts,
     )?;
-    run_instrumented(&unlace_passes::type_vote::TypeVotePass, ssa, opts)?;
+run_instrumented(&unlace_passes::type_vote::TypeVotePass, ssa, opts)?;
+    run_instrumented(&unlace_passes::ObjectWidenPass, ssa, opts)?;
     if let Some(resolve) = resolver {
         let structs = known_struct_types(ssa);
         let _ = unlace_passes::recognize_with_resolver(ssa, resolve, &structs);
@@ -3891,6 +3892,7 @@ pub fn lift_and_run_passes(
     };
     ssa.arch = image.arch;
     ssa.os_abi = image.os_abi;
+    ssa.data_items = data_items_for_ssa(image, &ssa);
 
     {
         let _profile_stage = profile_pipeline_stage("pipeline.debug-info-overlay", entry);
@@ -4721,6 +4723,7 @@ pub fn decompile_function_with_symbols(
     // produced `stack_vars.len() == 0`.
     ssa.arch = image.arch;
     ssa.os_abi = image.os_abi;
+    ssa.data_items = data_items_for_ssa(image, &ssa);
     pipeline_trace_ssa(&entry.name, "build-ssa", t, deadline, &ssa);
 
     let t = Instant::now();
@@ -5177,6 +5180,43 @@ fn build_printer_annotations(
         custom_names: db.custom_names.clone(),
         ..Default::default()
     }
+}
+
+/// Data regions and object symbols around the constant addresses `ssa`
+/// references, for [`unlace_passes::ObjectWidenPass`]: every readable,
+/// non-executable section one of them falls in, and the symbols just before
+/// and just after each address when they are data objects.
+pub(crate) fn data_items_for_ssa(
+    image: &BinaryImage,
+    ssa: &SsaFunction,
+) -> unlace_ir::mem_object::DataItems {
+    let mut items = unlace_ir::mem_object::DataItems::default();
+    let addrs = const_addrs_for_ssa(ssa);
+    for section in &image.sections {
+        let data = section.flags.contains(SectionFlags::READ)
+            && !section.flags.contains(SectionFlags::EXEC)
+            && section.vaddr != 0;
+        if !data {
+            continue;
+        }
+        let start = section.vaddr;
+        let end = section.vaddr.saturating_add(section.size);
+        let mut referenced = addrs.range(start..end).peekable();
+        if referenced.peek().is_none() {
+            continue;
+        }
+        items.add_region(start, end);
+        for &addr in referenced {
+            let preceding = image.symbols.range(start..=addr).next_back();
+            let next = image.symbols.range(addr.saturating_add(1)..end).next();
+            for (_, sym) in preceding.into_iter().chain(next) {
+                if sym.kind == SymbolKind::Object {
+                    items.add_item(sym.addr, sym.size);
+                }
+            }
+        }
+    }
+    items
 }
 
 fn collect_readonly_scalars_for_ssa(

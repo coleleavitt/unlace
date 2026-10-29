@@ -55,6 +55,7 @@ every `unlace::cprinter::*` trace, and `unlace=debug` is the old
 | `unlace::calling` (`trace` = verbose), `unlace::calling::signature` | `UNLACE_CALLING_TRACE`, `UNLACE_SIGNATURE_TRACE` |
 | `unlace::call_args`, `unlace::interproc` | `UNLACE_CALL_ARGS_TRACE`, `UNLACE_INTERPROC_TRACE` |
 | `unlace::x87` | `UNLACE_X87_TRACE` (x87 TOP pass) |
+| `unlace::object_widen` | — (debug: per memory object given a new type: object, access count, max end, synthesised layout) |
 | `unlace::cpp_vtable` | — (debug: per virtual dispatch, receiver class and slot method, or `class=unknown` with the receiver's defining op) |
 | `unlace::lvar`, `unlace::variable_merge`, `unlace::register_coalesce`, `unlace::var_naming` | `UNLACE_LVAR_TRACE`, `UNLACE_VAR_MERGE_TRACE` / `UNLACE_INTERFERENCE_TRACE`, `UNLACE_REG_COALESCE_TRACE`, `UNLACE_VAR_NAMING_TRACE` |
 | `unlace::dwarf_map`, `unlace::jump_table` | `UNLACE_DWARF_MAP_TRACE`, `UNLACE_JUMPTABLE_TRACE` |

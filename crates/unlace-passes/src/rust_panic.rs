@@ -171,6 +171,8 @@ mod tests {
             cpp_this_args: BTreeSet::new(),
             variadic: None,
             inferred_stack_params: BTreeSet::new(),
+            data_items: unlace_ir::mem_object::DataItems::default(),
+            object_types: Default::default(),
             vtable_calls: BTreeMap::new(),
             cpp_vtable_calls: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),

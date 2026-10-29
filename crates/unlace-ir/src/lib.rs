@@ -19,6 +19,7 @@ mod insn;
 pub mod known_bits;
 mod lifter;
 pub mod lvar;
+pub mod mem_object;
 pub mod memory_ssa;
 mod op;
 pub mod reg_alias;

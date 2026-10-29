@@ -65,11 +65,7 @@ void sub_10104(void) {
 }
 /* Function:   v850_branch | Address: 0x10114 | Size: 0x12 (18 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void v850_branch(void) {
-    int v0; // reg?
-    int v1 = 5; // r10d
-    if (!v0) {
-        v1 = 0;
-    }
+    int v0 = 0; // r10d
     return;
 }
 /* Function:   sub_10118 | Address: 0x10118 | Size: 0xc (12 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

@@ -54,7 +54,6 @@ _BYTE byte_4020;
 _QWORD qword_3FD0;
 _QWORD qword_3FD8;
 _QWORD qword_3FE0;
-_QWORD qword_3FE8;
 _QWORD qword_4008;
 __int64 sub_10b0();
 __int64 sub_12c0();
@@ -127,14 +126,6 @@ void _start(void) {
 
 /* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1290(void) {
-    int v0; // reg?
-    if (v0) {
-        return;
-    } else {
-        if (!qword_3FE8) {
-            return;
-        }
-    }
     return;
 }
 

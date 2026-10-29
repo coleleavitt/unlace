@@ -281,6 +281,9 @@ fn collect_hoist_candidates(func: &SsaFunction, nat: &NaturalLoop) -> Vec<Candid
             if output_feeds_header_phi(func, nat.header, bid, idx) {
                 continue;
             }
+            if output_storage_redefined_in_loop(func, bid, idx, nat) {
+                continue;
+            }
             if !inputs_invariant(func, bid, idx, insn, nat) {
                 continue;
             }
@@ -375,6 +378,40 @@ fn still_hoistable(func: &SsaFunction, bid: BlockId, idx: usize, nat: &NaturalLo
         return false;
     }
     inputs_invariant(func, bid, idx, insn, nat)
+}
+
+/// Out-of-SSA names values by their storage, so a hoisted definition of a
+/// register the loop also redefines (or merges in a phi) would share one C
+/// variable with the loop's own versions while both are live, and the
+/// loop-carried path would observe the hoisted value instead of the
+/// redefinition.
+fn output_storage_redefined_in_loop(
+    func: &SsaFunction,
+    bid: BlockId,
+    idx: usize,
+    nat: &NaturalLoop,
+) -> bool {
+    let Some(output) = func.var_map.get(&(bid, idx, VarnodeSlot::Output)) else {
+        return false;
+    };
+    let same_storage = |sv: &SsaVarnode| {
+        sv.base.space == output.base.space && sv.base.offset == output.base.offset
+    };
+    let redefined_by_insn = func
+        .var_map
+        .iter()
+        .any(|(&(def_bid, def_idx, ref slot), sv)| {
+            matches!(slot, VarnodeSlot::Output)
+                && (def_bid, def_idx) != (bid, idx)
+                && nat.body.contains(&def_bid)
+                && same_storage(sv)
+        });
+    redefined_by_insn
+        || nat.body.iter().any(|body_bid| {
+            func.phi_map
+                .get(body_bid)
+                .is_some_and(|phis| phis.iter().any(|phi| same_storage(&phi.output)))
+        })
 }
 
 fn output_feeds_header_phi(func: &SsaFunction, header: BlockId, bid: BlockId, idx: usize) -> bool {
@@ -649,6 +686,37 @@ mod tests {
         func.insert_block(b3);
 
         build_ssa(func)
+    }
+
+    /// `c = 2` in the header while the latch also writes `c`: hoisting would
+    /// leave two live versions of `c`, which out-of-SSA names as one variable.
+    #[test]
+    fn licm_keeps_definition_whose_storage_the_loop_redefines() {
+        let c = Varnode::reg(16, 4);
+        let reset = IrInsn::with_output(IrOp::Copy, c, smallvec![Varnode::constant(2, 4)], 0x1080);
+        let mut ssa = build_header_latch_loop_with(reset);
+        let latch = ssa.function.blocks.get_mut(&BlockId(2)).expect("latch");
+        latch.insns.insert(
+            0,
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                c,
+                smallvec![c, Varnode::constant(1, 4)],
+                0x1108,
+            ),
+        );
+        let mut ssa = build_ssa(ssa.function);
+
+        LicmPass.run(&mut ssa).expect("ok");
+
+        let header = &ssa.function.blocks[&BlockId(1)];
+        assert!(
+            header
+                .insns
+                .iter()
+                .any(|i| i.op == IrOp::Copy && i.output == Some(c)),
+            "the reset of a loop-redefined register must stay in the loop"
+        );
     }
 
     #[test]

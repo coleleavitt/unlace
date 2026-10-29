@@ -72,24 +72,24 @@ use unlace_loader::{
 use unlace_passes::{
     AlgebraicSimplifyPass, AliasCategorizePass, AnalysisContext, BitfieldIdiomPass, BmiIdiomPass,
     BoolSimplifyPass, CallBoundaryCopyPropPass, CalleeArity, CallingConvFinalizePass,
-    CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass, CppVariantPass,
-    CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadPhiElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,
-    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
-    IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, KnownBitsSimplifyPass, LicmPass,
-    LvarCollectPass, MemorySsaDsePass, ModuloIdiomPass, NoreturnDetectPass, ObjcDispatchPass,
-    OpTypeBindingPass, OuterFixedpointReport, ParamInferPass, PassAdapter, PassOptions,
-    PassWithContext, PrologueElimPass, RedundantFlagElimPass, RegisterCoalescePass,
-    RepStringIdiomPass, ReturnTypeInferPass, RustAsyncPass, RustEnumPass, RustPanicPass,
-    RustVtablePass, SccpPass, SignatureSnapshot, SizeofRecognitionPass, StackOffsetSnapshotPass,
-    StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass, VariableMergePass,
-    annotate_libc_calls, bump_if_signature_changed, canonical_pipeline_backedge_exceptions,
-    canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
-    recover_direct_call_args_with_param_counts, recover_stack_frame, recover_structs,
-    run_instrumented, run_outer_fixedpoint, run_to_fixedpoint_with_context,
-    validate_named_phase_monotonicity_with_exceptions,
+    CallingConventionDetectPass, CfgRepairPass, ConditionSimplifyPass, ConstBranchFoldPass,
+    ConstantFoldPass, CopyPropagationPass, CppCoroutinePass, CppLambdaCapturePass, CppMethodPass,
+    CppVariantPass, CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
+    DeadCodeElimPass, DeadFlagElimPass, DeadPhiElimPass, DeadStoreElimGlobalPass,
+    DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass,
+    IdiomRecognitionPass, IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass,
+    KnownBitsSimplifyPass, LicmPass, LvarCollectPass, MemorySsaDsePass, ModuloIdiomPass,
+    NoreturnDetectPass, ObjcDispatchPass, OpTypeBindingPass, OuterFixedpointReport, ParamInferPass,
+    PassAdapter, PassOptions, PassWithContext, PrologueElimPass, RedundantFlagElimPass,
+    RegisterCoalescePass, RepStringIdiomPass, ReturnTypeInferPass, RustAsyncPass, RustEnumPass,
+    RustPanicPass, RustVtablePass, SccpPass, SignatureSnapshot, SizeofRecognitionPass,
+    StackOffsetSnapshotPass, StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass,
+    StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
+    VariableMergePass, annotate_libc_calls, bump_if_signature_changed,
+    canonical_pipeline_backedge_exceptions, canonical_pipeline_descriptor, detect_byref,
+    detect_go_defer, parse_printf_format_strings, recover_direct_call_args_with_param_counts,
+    recover_stack_frame, recover_structs, run_instrumented, run_outer_fixedpoint,
+    run_to_fixedpoint_with_context, validate_named_phase_monotonicity_with_exceptions,
 };
 
 mod call_site_guess;
@@ -1869,7 +1869,7 @@ pub fn run_whole_program_quality_refinement(
 /// |               | StrengthReduce, IvElim, IdiomRec, BMI, Cond/Bool      |
 /// | `GlobalOpt`   | GVN, CSE, LICM, GlobalCopyProp, DseGlobal,            |
 /// |               | TailCall, TailDup, IndirectCall/JumpResolve,          |
-/// |               | MsvcSEH                                               |
+/// |               | MsvcSEH, ConstBranchFold                              |
 /// | `TypeRecovery`| TypeInfer, TypeConstraintSolver, TypeVote,            |
 /// |               | OpTypeBinding,                                        |
 /// |               | CC detect/param/return, Struct/Sizeof, Cpp/Rust/Objc, |
@@ -2456,6 +2456,7 @@ fn pipeline_stage_ir_fixedpoint(
     let gprop_pass = GlobalCopyPropPass;
     let dce_pass = DeadCodeElimPass;
     let sccp_pass = SccpPass { limits: opts.sccp };
+    let branch_fold_pass = ConstBranchFoldPass;
     let cse_pass = CsePass;
     let gvn_pass = GvnPass;
     let licm_pass = LicmPass;
@@ -2496,6 +2497,10 @@ fn pipeline_stage_ir_fixedpoint(
     };
     let sccp = PassAdapter {
         inner: &sccp_pass,
+        options: opts,
+    };
+    let branch_fold = PassAdapter {
+        inner: &branch_fold_pass,
         options: opts,
     };
     let cse = PassAdapter {
@@ -2561,6 +2566,7 @@ fn pipeline_stage_ir_fixedpoint(
         &gprop,
         &dce,
         &sccp,
+        &branch_fold,
         &cse,
         &gvn,
         &bmi,

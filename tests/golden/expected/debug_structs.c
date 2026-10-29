@@ -52,7 +52,6 @@ unsigned long long atomic_exchange_explicit(_Atomic unsigned long long *obj, uns
 _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, unsigned long long *expected, unsigned long long desired, memory_order success, memory_order failure);
 _BYTE byte_4010;
 _QWORD qword_3FD8;
-_QWORD qword_3FE0;
 _QWORD qword_3FF8;
 _QWORD qword_4008;
 __int64 sub_1040();
@@ -105,14 +104,6 @@ struct Rect {
 // debug language: C
 /* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1090(void) {
-    int v0; // reg?
-    if (v0) {
-        return;
-    } else {
-        if (!qword_3FE0) {
-            return;
-        }
-    }
     return;
 }
 // DWARF composite types

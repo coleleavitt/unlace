@@ -53,7 +53,6 @@ _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, u
 _BYTE byte_4010;
 _QWORD qword_3FD8;
 _QWORD qword_3FE0;
-_QWORD qword_3FE8;
 _QWORD qword_4008;
 __int64 sub_1070();
 __int64 sub_11a0();
@@ -137,14 +136,6 @@ void _start(void) {
 
 /* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1170(void) {
-    int v0; // reg?
-    if (v0) {
-        return;
-    } else {
-        if (!qword_3FE8) {
-            return;
-        }
-    }
     return;
 }
 

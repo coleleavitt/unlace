@@ -976,24 +976,31 @@ fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
             let overflow = (sa ^ sb) & (sa ^ diff) < 0;
             Some(u64::from(overflow))
         }
+        // Boolean operators are logical over the whole operand: lifters feed
+        // them full-width values (`ZF = BOOL_NEGATE (x & 4)`), so a non-zero
+        // operand is true regardless of its low bit.
         IrOp::BoolNegate => {
             let a = one(inputs)?;
-            Some(u64::from((a.offset & 1) == 0))
+            Some(u64::from(!truth(a)))
         }
         IrOp::BoolAnd => {
             let (a, b) = two(inputs)?;
-            Some((a.offset & 1) & (b.offset & 1))
+            Some(u64::from(truth(a) && truth(b)))
         }
         IrOp::BoolOr => {
             let (a, b) = two(inputs)?;
-            Some((a.offset & 1) | (b.offset & 1))
+            Some(u64::from(truth(a) || truth(b)))
         }
         IrOp::BoolXor => {
             let (a, b) = two(inputs)?;
-            Some((a.offset & 1) ^ (b.offset & 1))
+            Some(u64::from(truth(a) != truth(b)))
         }
         _ => None,
     }
+}
+
+fn truth(v: Varnode) -> bool {
+    v.offset & mask_for_size(v.size) != 0
 }
 
 fn one(inputs: &[Varnode]) -> Option<Varnode> {

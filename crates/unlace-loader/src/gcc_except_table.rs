@@ -262,11 +262,18 @@ impl<'a> Cursor<'a> {
             // Indirect encoding: the encoded value points at the real pointer.
             // When the containing image is available, dereference it so LSDA
             // type-table entries resolve to `_ZTI*` objects instead of GOT
-            // slots. Fall back to the address for synthetic tests / partial
-            // images where the pointee bytes are not mapped.
-            self.image
-                .and_then(|image| read_pointer_at_va(image, result))
-                .or(Some(result))
+            // slots. A slot the dynamic loader fills (an imported
+            // typeinfo) stays the slot address, so it is not mistaken for the
+            // zero catch-all sentinel; its relocation names the typeinfo.
+            // Fall back to the address for synthetic tests / partial images
+            // where the pointee bytes are not mapped.
+            let Some(image) = self.image else {
+                return Some(result);
+            };
+            if image.relocations.iter().any(|r| r.addr == result) {
+                return Some(result);
+            }
+            read_pointer_at_va(image, result).or(Some(result))
         } else {
             Some(result)
         }
@@ -456,10 +463,10 @@ fn parse_single_lsda(cursor: &mut Cursor<'_>, function_start: u64) -> Option<Fun
 
                 type_filters.push(ttype_index);
 
-                if ttype_index == 0 {
-                    // Itanium catch-all sentinel (`catch (...)`).
-                    region_typeinfo_addrs.push(0);
-                } else if ttype_index > 0
+                // Index 0 is a cleanup and negative indices are exception
+                // specs; only positive indices name catch clauses. A clause
+                // whose type-table entry is null is `catch (...)`.
+                if ttype_index > 0
                     && let Some(typeinfo_addr) =
                         resolve_typeinfo_addr(cursor, class_info_offset, ttype_index)
                 {
@@ -844,7 +851,7 @@ mod tests {
     fn test_synthetic_lsda_action_chain_resolves_region_typeinfo() {
         // One call site points at an action chain:
         //   action #1: ttypeIndex=1, next=+1
-        //   action #2: ttypeIndex=0, next=0      (catch-all)
+        //   action #2: ttypeIndex=0, next=0      (cleanup)
         //
         // The +1 offset is relative to the address of action #1's
         // actionOffset field, matching libcxxabi/GCC unwinder semantics.
@@ -862,7 +869,7 @@ mod tests {
             0x40, 0x00, 0x00, 0x00,      // cs_lpad
             0x01,                        // cs_action = first action (1-based)
             0x01, 0x01,                  // action #1: type 1, next +1
-            0x00, 0x00,                  // action #2: catch-all, end
+            0x00, 0x00,                  // action #2: cleanup, end
             0x00, 0x90, 0x00, 0x00,      // typeinfo pointer 0x9000
             0x00, 0x00, 0x00, 0x00,
         ];
@@ -883,7 +890,7 @@ mod tests {
         assert_eq!(lsda.try_regions.len(), 1);
         let region = &lsda.try_regions[0];
         assert_eq!(region.type_filters, vec![1, 0]);
-        assert_eq!(region.caught_typeinfo_addrs, vec![0x9000, 0]);
+        assert_eq!(region.caught_typeinfo_addrs, vec![0x9000]);
         assert_eq!(lsda.caught_typeinfo_addrs, vec![0x9000]);
     }
 

@@ -14,6 +14,7 @@ pub mod data_layout;
 #[cfg(feature = "unwired")]
 pub mod data_xrefs;
 mod display;
+pub mod eh;
 mod function;
 mod insn;
 pub mod known_bits;

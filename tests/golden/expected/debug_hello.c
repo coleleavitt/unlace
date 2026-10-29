@@ -52,11 +52,13 @@ unsigned long long atomic_exchange_explicit(_Atomic unsigned long long *obj, uns
 _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, unsigned long long *expected, unsigned long long desired, memory_order success, memory_order failure);
 _BYTE byte_4010;
 _QWORD qword_3FD8;
-_QWORD qword_3FE0;
 _QWORD qword_3FF8;
 _QWORD qword_4008;
 __int64 sub_1040();
 __int64 sub_10c0();
+__int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */;
+void sub_1090(void);
+void sub_1140(void);
 
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -76,21 +78,13 @@ void _start(void) {
     return;
 }
 // debug language: C
-/* Function:   deregister_tm_clones | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void deregister_tm_clones(void) {
-    int v0; // reg?
-    if (v0) {
-        return;
-    } else {
-        if (!qword_3FE0) {
-            return;
-        }
-    }
+/* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1090(void) {
     return;
 }
 // debug language: C
-/* Function:   __do_global_dtors_aux | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1040 | Xrefs from: unknown */
-__int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
+/* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
+__int64 sub_1100(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4010) {
         return result;
@@ -99,14 +93,14 @@ __int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
             __int64 v1 = qword_4008; // rdi
             result = sub_1040(v1);
         }
-        result = deregister_tm_clones();
+        result = sub_1090();
         byte_4010 = 1;
         return result;
     }
 }
 // debug language: C
-/* Function:   frame_dummy | Address: 0x1140 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void frame_dummy(void) {
+/* Function:   sub_1140 | Address: 0x1140 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1140(void) {
     sub_10c0();
 }
 // debug language: C

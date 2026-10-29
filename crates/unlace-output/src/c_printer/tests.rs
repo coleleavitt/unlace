@@ -4392,8 +4392,9 @@ fn test_try_catch_c_output() {
     let func = make_func("try_catch_func", body);
     let output = print_c(&func);
 
-    assert!(output.contains("__try {"), "__try: {output}");
-    assert!(output.contains("} __except {"), "__except: {output}");
+    assert!(output.contains("try {"), "try: {output}");
+    assert!(output.contains("} catch (...) {"), "catch-all: {output}");
+    assert!(!output.contains("__except"), "no SEH __except: {output}");
 }
 
 #[test]
@@ -4643,20 +4644,20 @@ fn test_try_catch_nested_indentation() {
 
     let try_line = output
         .lines()
-        .find(|l| l.contains("__try"))
-        .expect("__try line");
+        .find(|l| l.contains("try {"))
+        .expect("try line");
     assert!(
-        try_line.starts_with("    __try"),
+        try_line.starts_with("    try"),
         "try should be indented one level: {try_line:?}",
     );
 
-    let except_line = output
+    let catch_line = output
         .lines()
-        .find(|l| l.contains("__except"))
-        .expect("__except line");
+        .find(|l| l.contains("catch (...)"))
+        .expect("catch line");
     assert!(
-        except_line.starts_with("    }"),
-        "except should be at depth 1: {except_line:?}",
+        catch_line.starts_with("    }"),
+        "catch should be at depth 1: {catch_line:?}",
     );
 }
 

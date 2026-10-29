@@ -230,18 +230,15 @@ pub fn structure_with_arch_until(
     structure_with_arch_inner(func, arch, Some(deadline), StructureOptions::default())
 }
 
-/// Structure `func` under explicit complexity budgets, wrapping regions at
-/// `landing_pad_addrs` in `TryCatch` nodes and aborting past `deadline`.
+/// Structure `func` under explicit complexity budgets, aborting past
+/// `deadline`.
 pub fn structure_with_options(
     func: &SsaFunction,
     arch: ArchId,
-    landing_pad_addrs: &BTreeSet<u64>,
     deadline: Option<Instant>,
     options: &StructureOptions,
 ) -> Result<HirFunction, StructureError> {
-    let mut hir = structure_with_arch_inner(func, arch, deadline, *options)?;
-    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
-    Ok(hir)
+    structure_with_arch_inner(func, arch, deadline, *options)
 }
 
 /// Conservative unstructured fallback for functions whose structured recovery
@@ -339,6 +336,11 @@ fn structure_with_arch_inner(
         strip_unused_labels(&mut body);
     }
     trace_hir_top("strip-labels", &body);
+    {
+        let _span = linkscope::phase("struct.recover-try-catch");
+        crate::eh_dispatch::recover_try_catch(&mut body, func);
+    }
+    trace_hir_top("recover-try-catch", &body);
     {
         let _span = linkscope::phase("struct.recover-for-loops");
         recover_for_loops(&mut body);
@@ -472,59 +474,6 @@ fn classify_unstructured_indirect_branches(
     out
 }
 
-/// Like [`structure`] but wraps regions at `landing_pad_addrs` in `TryCatch` nodes.
-///
-/// When `landing_pad_addrs` is empty this behaves identically to [`structure`].
-pub fn structure_with_landing_pads(
-    func: &SsaFunction,
-    landing_pad_addrs: &BTreeSet<u64>,
-) -> Result<HirFunction, StructureError> {
-    structure_with_landing_pads_and_arch(func, landing_pad_addrs, ArchId::X86_64)
-}
-
-/// Like [`structure_with_landing_pads`] but aborts when `deadline` is exceeded.
-pub fn structure_with_landing_pads_until(
-    func: &SsaFunction,
-    landing_pad_addrs: &BTreeSet<u64>,
-    deadline: Instant,
-) -> Result<HirFunction, StructureError> {
-    structure_with_landing_pads_and_arch_until(func, landing_pad_addrs, ArchId::X86_64, deadline)
-}
-
-/// [`structure_with_landing_pads`] with an explicit `arch` for per-arch
-/// indirect-branch classification.
-pub fn structure_with_landing_pads_and_arch(
-    func: &SsaFunction,
-    landing_pad_addrs: &BTreeSet<u64>,
-    arch: ArchId,
-) -> Result<HirFunction, StructureError> {
-    let mut hir = structure_with_arch(func, arch)?;
-    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
-    Ok(hir)
-}
-
-/// [`structure_with_landing_pads_and_arch`] with a hard deadline.
-pub fn structure_with_landing_pads_and_arch_until(
-    func: &SsaFunction,
-    landing_pad_addrs: &BTreeSet<u64>,
-    arch: ArchId,
-    deadline: Instant,
-) -> Result<HirFunction, StructureError> {
-    let mut hir = structure_with_arch_until(func, arch, deadline)?;
-    wrap_landing_pads(&mut hir, func, landing_pad_addrs);
-    Ok(hir)
-}
-
-fn wrap_landing_pads(hir: &mut HirFunction, func: &SsaFunction, landing_pad_addrs: &BTreeSet<u64>) {
-    if landing_pad_addrs.is_empty() {
-        return;
-    }
-    let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
-    if !confirmed.is_empty() {
-        hir.body = wrap_try_catch(std::mem::take(&mut hir.body), &confirmed, func);
-    }
-}
-
 /// Apply [`eager_returns`] before structuring, so functions with multiple
 /// returns produce one [`HirNode::Return`] per return point.
 ///
@@ -534,192 +483,6 @@ fn wrap_landing_pads(hir: &mut HirFunction, func: &SsaFunction, landing_pad_addr
 pub fn structure_preserve_returns(func: &mut SsaFunction) -> Result<HirFunction, StructureError> {
     eager_returns(func);
     structure(func)
-}
-
-/// [`structure_preserve_returns`] + landing-pad wrapping.
-pub fn structure_preserve_returns_with_landing_pads(
-    func: &mut SsaFunction,
-    landing_pad_addrs: &BTreeSet<u64>,
-) -> Result<HirFunction, StructureError> {
-    eager_returns(func);
-    structure_with_landing_pads(func, landing_pad_addrs)
-}
-
-fn resolve_landing_pad_addrs(
-    func: &SsaFunction,
-    landing_pad_addrs: &BTreeSet<u64>,
-) -> BTreeSet<u64> {
-    let mut confirmed = BTreeSet::new();
-    for block in func.function.blocks.values() {
-        if let Some(first_insn) = block.insns.first()
-            && landing_pad_addrs.contains(&first_insn.addr)
-        {
-            confirmed.insert(first_insn.addr);
-        }
-    }
-    confirmed
-}
-
-fn wrap_try_catch(
-    nodes: Vec<HirNode>,
-    landing_pad_addrs: &BTreeSet<u64>,
-    func: &SsaFunction,
-) -> Vec<HirNode> {
-    let split_idx = nodes
-        .iter()
-        .position(|node| node_starts_at_landing_pad(node, landing_pad_addrs));
-
-    let Some(idx) = split_idx else {
-        return nodes
-            .into_iter()
-            .map(|n| recurse_try_catch_children(n, landing_pad_addrs, func))
-            .collect();
-    };
-
-    let (try_nodes, catch_and_rest) = nodes.split_at(idx);
-    let split_landing_pad = catch_and_rest
-        .first()
-        .and_then(|node| node_landing_pad_addr(node, landing_pad_addrs));
-
-    let catch_end = catch_and_rest
-        .iter()
-        .position(|node| !node_starts_at_landing_pad(node, landing_pad_addrs))
-        .unwrap_or(catch_and_rest.len());
-
-    let try_body: Vec<HirNode> = try_nodes.to_vec();
-    let catch_body: Vec<HirNode> = catch_and_rest[..catch_end].to_vec();
-    let rest: Vec<HirNode> = catch_and_rest[catch_end..].to_vec();
-
-    let mut result = Vec::new();
-    if try_body.is_empty() {
-        result.extend(catch_body);
-    } else if split_landing_pad.is_some_and(|lp| func.eh_cleanup_landing_pads.contains(&lp)) {
-        result.push(HirNode::TryFinally {
-            try_body,
-            finally_body: catch_body,
-        });
-    } else {
-        result.push(HirNode::TryCatch {
-            try_body,
-            catch_arms: catch_arms_for_landing_pad(func, split_landing_pad, catch_body),
-        });
-    }
-
-    if !rest.is_empty() {
-        result.extend(wrap_try_catch(rest, landing_pad_addrs, func));
-    }
-
-    result
-}
-
-fn node_starts_at_landing_pad(node: &HirNode, landing_pad_addrs: &BTreeSet<u64>) -> bool {
-    node_landing_pad_addr(node, landing_pad_addrs).is_some()
-}
-
-fn node_landing_pad_addr(node: &HirNode, landing_pad_addrs: &BTreeSet<u64>) -> Option<u64> {
-    match node {
-        HirNode::Statement(insn) => landing_pad_addrs.contains(&insn.addr).then_some(insn.addr),
-        HirNode::Block(children) => children
-            .first()
-            .and_then(|n| node_landing_pad_addr(n, landing_pad_addrs)),
-        _ => None,
-    }
-}
-
-fn catch_arms_for_landing_pad(
-    func: &SsaFunction,
-    landing_pad: Option<u64>,
-    catch_body: Vec<HirNode>,
-) -> Vec<(unlace_ir::types::Type, Vec<HirNode>)> {
-    let catch_all = unlace_ir::types::Type::Primitive(unlace_ir::ssa::PrimitiveType::Unknown);
-    let Some(landing_pad) = landing_pad else {
-        return vec![(catch_all, catch_body)];
-    };
-    let Some(types) = func.eh_landing_pad_catches.get(&landing_pad) else {
-        return vec![(catch_all, catch_body)];
-    };
-    if types.is_empty() {
-        return vec![(catch_all, catch_body)];
-    }
-    types
-        .iter()
-        .cloned()
-        .map(|ty| (ty, catch_body.clone()))
-        .collect()
-}
-
-fn recurse_try_catch_children(
-    node: HirNode,
-    landing_pad_addrs: &BTreeSet<u64>,
-    func: &SsaFunction,
-) -> HirNode {
-    match node {
-        HirNode::Block(children) => {
-            HirNode::Block(wrap_try_catch(children, landing_pad_addrs, func))
-        }
-        HirNode::If {
-            cond,
-            then_body,
-            else_body,
-        } => HirNode::If {
-            cond,
-            then_body: wrap_try_catch(then_body, landing_pad_addrs, func),
-            else_body: else_body.map(|eb| wrap_try_catch(eb, landing_pad_addrs, func)),
-        },
-        HirNode::While { cond, body } => HirNode::While {
-            cond,
-            body: wrap_try_catch(body, landing_pad_addrs, func),
-        },
-        HirNode::DoWhile { body, cond } => HirNode::DoWhile {
-            body: wrap_try_catch(body, landing_pad_addrs, func),
-            cond,
-        },
-        HirNode::For {
-            init,
-            cond,
-            update,
-            body,
-        } => HirNode::For {
-            init,
-            cond,
-            update,
-            body: wrap_try_catch(body, landing_pad_addrs, func),
-        },
-        HirNode::Switch {
-            cond,
-            cases,
-            default,
-            jumptable_addr,
-            jumptable_cases,
-        } => HirNode::Switch {
-            cond,
-            cases: cases
-                .into_iter()
-                .map(|(c, body, ft)| (c, wrap_try_catch(body, landing_pad_addrs, func), ft))
-                .collect(),
-            default: default.map(|d| wrap_try_catch(d, landing_pad_addrs, func)),
-            jumptable_addr,
-            jumptable_cases,
-        },
-        HirNode::TryCatch {
-            try_body,
-            catch_arms,
-        } => HirNode::TryCatch {
-            try_body: wrap_try_catch(try_body, landing_pad_addrs, func),
-            catch_arms: catch_arms
-                .into_iter()
-                .map(|(ty, body)| (ty, wrap_try_catch(body, landing_pad_addrs, func)))
-                .collect(),
-        },
-        HirNode::TryFinally {
-            try_body,
-            finally_body,
-        } => HirNode::TryFinally {
-            try_body: wrap_try_catch(try_body, landing_pad_addrs, func),
-            finally_body: wrap_try_catch(finally_body, landing_pad_addrs, func),
-        },
-        other => other,
-    }
 }
 
 struct StructureCtx<'a> {

@@ -54,10 +54,12 @@ _BYTE byte_4020;
 _QWORD qword_3FD0;
 _QWORD qword_3FD8;
 _QWORD qword_3FE0;
-_QWORD qword_3FE8;
 _QWORD qword_4008;
 __int64 sub_10b0();
 __int64 sub_12c0();
+__int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */;
+void sub_1290(void);
+void sub_1340(void);
 
 /*
  * C++ Class Hierarchy (from RTTI):
@@ -83,20 +85,67 @@ _Noreturn void may_throw(void) {
 struct __anon0 {
     __int64 field_0;
     void * field_8;
+    __int64 field_16;
 };
 
-/* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_throw, __printf_chk | Xrefs from: unknown */
+/* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: System V AMD64 | Stack frame: 0x18 (24 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_free_exception, __cxa_throw, __printf_chk | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
 _Noreturn int safe_call(void) {
+    __int64 v_24;
+    __int64 v_16;
+    __int64 v_8;
     __int64 v0; // rax
-    __int64 v1; // rbx
-    __int64 v2 = 0x10; // rdi
+    __int64 v1; // rax
+    __int64 result_0; // rax
+    __int64 v2; // rax
+    __int64 v3; // rax
+    __int64 v4; // rax
+    __int64 v5; // rax
+    __int64 v6; // rdx
+    __int64 v7; // rbx
+    __int64 v8; // rdi
+    _QWORD v9; // temp
     /* allocate exception */
-    __int64 v3 = __cxa_allocate_exception(v2); // rax
-    v1 = v3;
-    std_runtime_error_runtime_error(v1, "negative");
-    /* throw */
-    v0 = __cxa_throw(v1, 0x3d40LL, qword_3FE0);
+    __int64 v10 = __cxa_allocate_exception(0x10LL); // rax
+    __int64 v11 = "negative"; // rsi
+    v8 = v10;
+    v7 = v10;
+    try {
+        v0 = std_runtime_error_runtime_error(v8, "negative");
+        v6 = qword_3FE0;
+        v11 = 0x3d40;
+        v8 = v7;
+        try {
+            /* throw */
+            v1 = __cxa_throw(v8, 0x3d40LL, v6);
+        } catch (struct std__exception e) {
+            result_0 = __eh_exception();
+            v6 = 1;
+            v8 = result_0;
+            result_0 = 1;
+        }
+    } catch (struct std__exception e) {
+        result_0 = __eh_exception();
+        v6 = __eh_selector();
+        v_8 = v6;
+        /* free exception */
+        v2 = __cxa_free_exception(v7);
+        v8 = v9;
+        result_0 = v_8;
+    }
+    --result_0;
+    if (result_0 != 1) {
+        _Unwind_Resume(v8);
+    } else {
+        /* catch */
+        v3 = __cxa_begin_catch(v8);
+        v4 = v3->__vftable->method_2();
+        v6 = v4;
+        printf("caught: %s\n", (char *)v6);
+        /* end catch */
+        v5 = __cxa_end_catch();
+        return 0xffffffff;
+    }
     return 0;
 }
 
@@ -122,21 +171,13 @@ void _start(void) {
     return;
 }
 
-/* Function:   deregister_tm_clones | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void deregister_tm_clones(void) {
-    int v0; // reg?
-    if (v0) {
-        return;
-    } else {
-        if (!qword_3FE8) {
-            return;
-        }
-    }
+/* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1290(void) {
     return;
 }
 
-/* Function:   __do_global_dtors_aux | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_10b0 | Xrefs from: unknown */
-__int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
+/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
+__int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4020) {
         return result;
@@ -145,14 +186,14 @@ __int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
             __int64 v1 = qword_4008; // rdi
             result = sub_10b0(v1);
         }
-        result = deregister_tm_clones();
+        result = sub_1290();
         byte_4020 = 1;
         return result;
     }
 }
 
-/* Function:   frame_dummy | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void frame_dummy(void) {
+/* Function:   sub_1340 | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1340(void) {
     sub_12c0();
 }
 

@@ -9225,12 +9225,7 @@ fn render_function_pointer_params(params: &[Type], variadic: bool) -> String {
 }
 
 /// `true` when `ty` is the sentinel used to encode a catch-all clause
-/// inside [`HirNode::TryCatch`]'s `catch_arms`.
-///
-/// The HIR represents `catch (...)` (C++) and the historical
-/// `__except { ... }` (MSVC SEH catch-all) by pairing the handler body
-/// with `Type::Primitive(PrimitiveType::Unknown)`. Concrete exception
-/// types render as `catch (T e) { ... }`.
+/// (`catch (...)`) inside [`HirNode::TryCatch`]'s `catch_arms`.
 fn is_catch_all_type(ty: &unlace_ir::types::Type) -> bool {
     matches!(
         ty,
@@ -9240,30 +9235,44 @@ fn is_catch_all_type(ty: &unlace_ir::types::Type) -> bool {
 
 struct CatchObjectBinding {
     name: String,
-    skip_leading_stmt: bool,
+    /// Indices of the leading handler statements the binding replaces: the
+    /// `__cxa_begin_catch` call and the `__eh_exception()` definitions
+    /// feeding it.
+    replaced: Vec<usize>,
 }
 
+/// The `__cxa_begin_catch` result among the handler's leading statements,
+/// which names the caught object in the `catch (T name)` header.
 fn catch_object_binding(body: &[HirNode], ctx: &mut PrintCtx) -> Option<CatchObjectBinding> {
-    let HirNode::Statement(insn) = body.first()? else {
-        return None;
-    };
-    if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
-        return None;
+    let mut replaced = Vec::new();
+    for (idx, node) in body.iter().enumerate() {
+        let HirNode::Statement(insn) = node else {
+            return None;
+        };
+        if unlace_ir::eh::EhHelper::of(insn) == Some(unlace_ir::eh::EhHelper::Exception) {
+            replaced.push(idx);
+            continue;
+        }
+        if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
+            continue;
+        }
+        let action = cxx_eh_action_for_call(insn, ctx)?;
+        if !matches!(
+            action,
+            unlace_passes::cxx_eh::CxxEhAction::BeginCatch
+                | unlace_passes::cxx_eh::CxxEhAction::GetExceptionPtr
+        ) {
+            return None;
+        }
+        let call_stmt = ctx.emit_stmt + idx as u32;
+        let sv = ctx.stmt_outputs.get(&call_stmt).copied().flatten()?;
+        replaced.push(idx);
+        return Some(CatchObjectBinding {
+            name: ctx.name_of(&sv),
+            replaced,
+        });
     }
-    let action = cxx_eh_action_for_call(insn, ctx)?;
-    if !matches!(
-        action,
-        unlace_passes::cxx_eh::CxxEhAction::BeginCatch
-            | unlace_passes::cxx_eh::CxxEhAction::GetExceptionPtr
-    ) {
-        return None;
-    }
-    let sv = ctx.stmt_outputs.get(&ctx.emit_stmt).copied().flatten()?;
-    let name = ctx.name_of(&sv);
-    Some(CatchObjectBinding {
-        name,
-        skip_leading_stmt: true,
-    })
+    None
 }
 
 fn emit_catch_body(
@@ -9273,12 +9282,19 @@ fn emit_catch_body(
     ctx: &mut PrintCtx,
     out: &mut String,
 ) {
-    if binding.is_some_and(|b| b.skip_leading_stmt) && !body.is_empty() {
-        ctx.emit_stmt += 1;
-        emit_nodes(&body[1..], depth, ctx, out);
-    } else {
+    let Some(last_replaced) = binding.and_then(|b| b.replaced.last().copied()) else {
         emit_nodes(body, depth, ctx, out);
+        return;
+    };
+    let replaced = &binding.expect("binding has replaced statements").replaced;
+    for (idx, node) in body[..=last_replaced].iter().enumerate() {
+        if replaced.contains(&idx) {
+            ctx.emit_stmt += 1;
+        } else {
+            emit_nodes(std::slice::from_ref(node), depth, ctx, out);
+        }
     }
+    emit_nodes(&body[last_replaced + 1..], depth, ctx, out);
 }
 
 fn c_type(ty: &PrimitiveType) -> &'static str {
@@ -12554,26 +12570,14 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             try_body,
             catch_arms,
         } => {
-            // t183: when *every* arm is the catch-all sentinel
-            // (`PrimitiveType::Unknown`), render the historical MSVC
-            // SEH shape `__try { ... } __except { ... }` to preserve
-            // back-compat with the landing-pad-driven structurer.
-            // Otherwise emit C++-style `try { ... } catch (T e) { ... }`
-            // arms (one `catch (...)` for any catch-all arm).
-            let all_catch_all = catch_arms.iter().all(|(ty, _)| is_catch_all_type(ty));
+            // C++ `try { ... } catch (T e) { ... }` arms; a catch-all arm
+            // renders as `catch (...)`.
             indent(depth, ctx.config.tab_width, out);
-            if all_catch_all {
-                let _ = writeln!(out, "__try {{");
-            } else {
-                let _ = writeln!(out, "try {{");
-            }
+            let _ = writeln!(out, "try {{");
             emit_nodes(try_body, depth + 1, ctx, out);
             for (ty, body) in catch_arms {
                 indent(depth, ctx.config.tab_width, out);
-                if all_catch_all {
-                    let _ = writeln!(out, "}} __except {{");
-                    emit_nodes(body, depth + 1, ctx, out);
-                } else if is_catch_all_type(ty) {
+                if is_catch_all_type(ty) {
                     let _ = writeln!(out, "}} catch (...) {{");
                     emit_nodes(body, depth + 1, ctx, out);
                 } else {
@@ -16424,6 +16428,10 @@ fn is_cmov_callother(insn: &IrInsn) -> bool {
 fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     if insn.inputs.is_empty() {
         return "/* CALLOTHER (no tag) */ 0".to_string();
+    }
+
+    if let Some(helper) = unlace_ir::eh::EhHelper::of(insn) {
+        return format!("{}()", helper.c_name());
     }
 
     if let Some(convention) = SyscallConvention::of(insn) {

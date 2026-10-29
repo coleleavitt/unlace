@@ -12,12 +12,12 @@
 //!    `SsaFunction::variadic_call_types` for every function whose Call
 //!    sites resolve to a variadic libc family member.
 //!
-//! Canonical fixture: `cpp_exceptions.elf`. Compiled with `g++ -O0
-//! -fno-inline` on x86-64-linux, it contains two `printf("caught: %s\n",
-//! ...)` call sites — one in `safe_call(int)` and one in its cold split
-//! `safe_call(int).cold`. Both go through the libc PLT thunk, so the
-//! resolver must agree on the same canonical name ("printf") for the
-//! parser to fire.
+//! Canonical fixture: `cpp_exceptions.elf`, built with `g++ -O2` on
+//! x86-64-linux. Its only printf-family call is the `__printf_chk` at
+//! 0x1207 in the catch handler of `safe_call(int) [clone .cold]`. The
+//! handler is reachable only through the exception dispatch edge that
+//! `unlace_struct::install_eh_dispatch` adds, so the count also guards that
+//! wiring.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -40,12 +40,11 @@ fn unlace_bin() -> Command {
 /// pre-pass call site in `quality::collect` populates
 /// `ssa.variadic_call_types`, and the per-binary aggregation in
 /// `quality::FunctionQuality::variadic_call_sites` rolls those up. The
-/// expected count (`2`) is exact, not lower-bounded — both printf sites
-/// in `cpp_exceptions.elf` are discoverable and any regression in
-/// `find_constant_arg` (the PIE-relative `IntAdd` walk) will drop it to
-/// zero.
+/// expected count (`1`) is exact: any regression in `find_constant_arg`
+/// (the PIE-relative `IntAdd` walk) or in the exception dispatch edges drops
+/// it to zero.
 #[test]
-fn printf_wiring_cpp_exceptions_reports_two_sites() {
+fn printf_wiring_cpp_exceptions_reports_one_site() {
     let path = fixtures_dir().join("cpp_exceptions.elf");
     assert!(
         path.exists(),
@@ -76,8 +75,8 @@ fn printf_wiring_cpp_exceptions_reports_two_sites() {
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or_else(|| panic!("could not parse count from line: {line:?}"));
     assert_eq!(
-        n, 2,
-        "expected exactly 2 variadic call sites on cpp_exceptions.elf, got {n}.\nfull output:\n{stdout}"
+        n, 1,
+        "expected exactly 1 variadic call site on cpp_exceptions.elf, got {n}.\nfull output:\n{stdout}"
     );
 }
 

@@ -53,10 +53,12 @@ _Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, u
 _BYTE byte_4010;
 _QWORD qword_3FD8;
 _QWORD qword_3FE0;
-_QWORD qword_3FE8;
 _QWORD qword_4008;
 __int64 sub_1070();
 __int64 sub_11a0();
+__int64 sub_11e0(void) /* // dropped 1 param(s) (dead in body) */;
+void sub_1170(void);
+void sub_1220(void);
 
 /*
  * C++ Class Hierarchy (from RTTI):
@@ -132,21 +134,13 @@ void _start(void) {
     return;
 }
 
-/* Function:   deregister_tm_clones | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void deregister_tm_clones(void) {
-    int v0; // reg?
-    if (v0) {
-        return;
-    } else {
-        if (!qword_3FE8) {
-            return;
-        }
-    }
+/* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1170(void) {
     return;
 }
 
-/* Function:   __do_global_dtors_aux | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_1070 | Xrefs from: unknown */
-__int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
+/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
+__int64 sub_11e0(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4010) {
         return result;
@@ -155,14 +149,14 @@ __int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
             __int64 v1 = qword_4008; // rdi
             result = sub_1070(v1);
         }
-        result = deregister_tm_clones();
+        result = sub_1170();
         byte_4010 = 1;
         return result;
     }
 }
 
-/* Function:   frame_dummy | Address: 0x1220 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void frame_dummy(void) {
+/* Function:   sub_1220 | Address: 0x1220 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_1220(void) {
     sub_11a0();
 }
 

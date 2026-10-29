@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use unlace_ir::cfg::EdgeKind;
 use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
@@ -1207,8 +1207,62 @@ impl Pass for SccpPass {
             }
         };
         let changed = rewrite(func, &results);
-        Ok(changed)
+        Ok(fold_constant_branches(func) || changed)
     }
+}
+
+/// Turn each `CBRANCH` on a constant condition into a `BRANCH` to its
+/// feasible successor, and drop the infeasible edge with its
+/// phi inputs. Blocks reachable only through such edges stay in the
+/// function but become unreachable, so structuring no longer emits them.
+fn fold_constant_branches(func: &mut SsaFunction) -> bool {
+    let block_addrs: BTreeMap<BlockId, u64> = func
+        .function
+        .blocks
+        .iter()
+        .filter_map(|(&bid, b)| Some((bid, b.insns.first()?.addr)))
+        .collect();
+    let mut dropped_edges = Vec::new();
+    for (&bid, block) in &mut func.function.blocks {
+        let Some(last) = block.insns.last() else {
+            continue;
+        };
+        if last.op != IrOp::Cbranch || block.successors.len() != 2 {
+            continue;
+        }
+        let Some(cond) = last.inputs.get(1).filter(|c| c.space == SpaceId::Const) else {
+            continue;
+        };
+        let (kept, dropped) = if cond.offset != 0 {
+            (block.successors[0], block.successors[1])
+        } else {
+            (block.successors[1], block.successors[0])
+        };
+        let addr = last.addr;
+        let target = block_addrs.get(&kept).copied().unwrap_or(addr);
+        block.insns.pop();
+        block.insns.push(IrInsn::without_output(
+            IrOp::Branch,
+            smallvec![Varnode::constant(target, 8)],
+            addr,
+        ));
+        block.successors = smallvec![kept];
+        if kept != dropped {
+            dropped_edges.push((bid, dropped));
+        }
+    }
+    if dropped_edges.is_empty() {
+        return false;
+    }
+    for &(pred, succ) in &dropped_edges {
+        if let Some(phis) = func.phi_map.get_mut(&succ) {
+            for phi in phis {
+                phi.inputs.retain(|(from, _)| *from != pred);
+            }
+        }
+    }
+    unlace_ir::ssa::rebuild_cfg(func);
+    true
 }
 
 // ---------------------------------------------------------------------------
@@ -1679,6 +1733,61 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_sccp_folds_constant_branch_and_drops_dead_edge() {
+        let v1 = Varnode::reg(0, 4);
+        let mut func = Function::new("fold_branch", BlockId(0), 0x6000);
+
+        // BB0: CBRANCH BB1 on a propagated constant; BB2 is dead.
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![Varnode::constant(0x6010, 8), Varnode::constant(1, 1)],
+            0x6004,
+        ));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            v1,
+            smallvec![Varnode::constant(5, 4)],
+            0x6010,
+        ));
+        bb1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x6014));
+        bb1.successors = smallvec![BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            v1,
+            smallvec![Varnode::constant(10, 4)],
+            0x6020,
+        ));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![v1], 0x6030));
+
+        for bb in [bb0, bb1, bb2, bb3] {
+            func.insert_block(bb);
+        }
+        let mut ssa = build_ssa(func);
+        assert!(SccpPass::default().run(&mut ssa).unwrap());
+
+        let bb0 = &ssa.function.blocks[&BlockId(0)];
+        let last = bb0.insns.last().unwrap();
+        assert_eq!(last.op, IrOp::Branch);
+        assert_eq!(last.inputs[0], Varnode::constant(0x6010, 8));
+        assert_eq!(bb0.successors.as_slice(), &[BlockId(1)]);
+        assert!(
+            !ssa.cfg.predecessors(BlockId(2)).contains(&BlockId(0)),
+            "dead edge removed from the CFG"
+        );
     }
 
     /// Barrier test: an MMIO-tagged LOAD whose evaluated lattice would

@@ -13,6 +13,7 @@ pub mod cpp_eh;
 #[cfg(feature = "unwired")]
 pub mod cross_jump_revert;
 pub mod eager_returns;
+pub mod eh_dispatch;
 pub mod empty_if_cleanup;
 pub mod flatten_if_else;
 #[cfg(feature = "unwired")]
@@ -61,6 +62,7 @@ pub use cpp_eh::cpp_eh_regions_to_seh;
 #[cfg(feature = "unwired")]
 pub use cross_jump_revert::cross_jump_revert;
 pub use eager_returns::eager_returns;
+pub use eh_dispatch::{CatchLandingPad, install_eh_dispatch, recover_try_catch};
 pub use empty_if_cleanup::cleanup_empty_ifs;
 pub use flatten_if_else::{flatten_if_else_chains, simplify_chain_conditions};
 #[cfg(feature = "unwired")]
@@ -96,11 +98,9 @@ pub use seh_lower::{
 pub use short_circuit::short_circuit_recovery;
 pub use structurer::{
     StructureError, recover_for_loops, structure, structure_preserve_returns,
-    structure_preserve_returns_with_landing_pads, structure_unstructured_fallback,
-    structure_unstructured_fallback_with_arch, structure_unstructured_fallback_with_options,
-    structure_until, structure_with_arch, structure_with_arch_until, structure_with_landing_pads,
-    structure_with_landing_pads_and_arch, structure_with_landing_pads_and_arch_until,
-    structure_with_landing_pads_until, structure_with_options,
+    structure_unstructured_fallback, structure_unstructured_fallback_with_arch,
+    structure_unstructured_fallback_with_options, structure_until, structure_with_arch,
+    structure_with_arch_until, structure_with_options,
 };
 pub use switch_cleanup::cleanup_switches;
 pub use switch_recovery::{

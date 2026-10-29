@@ -648,32 +648,13 @@ pub struct SsaFunction {
     ///
     /// Empty by default — single-function decompilation has no peer info.
     pub external_signatures: FunctionSignatureRegistry,
-    /// Exception-handling landing-pad addresses for this function, recovered
-    /// from `.eh_frame` + `.gcc_except_table` (LSDA call-site table).
+    /// Catch types of each C++ landing pad, keyed by pad VA, in LSDA
+    /// action-chain order. A `PrimitiveType::Unknown` entry is `catch (...)`.
     ///
-    /// Each entry is the absolute virtual address of a landing pad — the
-    /// first instruction of a catch / cleanup handler reachable from a
-    /// `try`-protected call site within this function. Empty for functions
-    /// without LSDA data (pure C, no try/catch, missing unwind tables).
-    ///
-    /// Populated by the CLI pipeline; consumed by
-    /// `unlace_struct::structure_with_landing_pads` to materialise
-    /// `HirNode::TryCatch` nodes at the correct boundaries instead of
-    /// relying on `__cxa_begin_catch` call-site heuristics.
-    pub eh_landing_pads: BTreeSet<u64>,
-    /// Typed catch arms recovered for each EH landing pad. Keyed by landing
-    /// pad VA; each value is the ordered action-chain catch type list decoded
-    /// from LSDA type filters. A `PrimitiveType::Unknown` entry denotes the
-    /// Itanium catch-all sentinel (`catch (...)`).
-    ///
-    /// This refines [`Self::eh_landing_pads`]: the set still answers "where is
-    /// the handler?", while this map answers "what does it catch?".
+    /// Populated by the CLI pipeline from `.eh_frame` + `.gcc_except_table`;
+    /// `unlace_struct::eh_dispatch::recover_try_catch` turns them into the
+    /// arms of each `HirNode::TryCatch`.
     pub eh_landing_pad_catches: BTreeMap<u64, Vec<crate::types::Type>>,
-    /// EH landing pads that are cleanup-only regions rather than catch
-    /// handlers. Itanium LSDA call-site entries encode these as landing pads
-    /// with no catch action chain; the structurer renders them as
-    /// `TryFinally` instead of manufacturing a catch-all handler.
-    pub eh_cleanup_landing_pads: BTreeSet<u64>,
     /// Detected stack-frame gaps (regions of the local frame that no
     /// LOAD/STORE/Stack-space access has covered). Keyed by RSP-relative
     /// start offset; value is the gap's byte length. Populated by
@@ -1671,9 +1652,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         composite_var_types: BTreeMap::new(),
         array_strides: BTreeMap::new(),
         external_signatures: BTreeMap::new(),
-        eh_landing_pads: BTreeSet::new(),
         eh_landing_pad_catches: BTreeMap::new(),
-        eh_cleanup_landing_pads: BTreeSet::new(),
         stack_gaps: BTreeMap::new(),
         frame_size: 0,
         sp_delta_at: BTreeMap::new(),

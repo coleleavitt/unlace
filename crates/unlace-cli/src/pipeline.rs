@@ -983,7 +983,15 @@ pub fn lift_function(
     // zero byte, e.g. ARCompact `arc_branch` whose tail insn is `e0 7f 00 00`).
     let has_known_size = entry.size > 0;
     let lifted_insns = lift_instructions(lifter, code, func_start, has_known_size)?;
-    let function = build_function_from_insns(&entry.name, func_start, &lifted_insns, &[]);
+    // Catch handlers are entered by the unwinder, not by a branch: their
+    // pads and try starts become block leaders so the dispatch edges below
+    // can attach to them.
+    let catch_pads = catch_landing_pads(image, entry.addr);
+    let eh_leaders: Vec<u64> = catch_pads
+        .iter()
+        .flat_map(|pad| [pad.try_start, pad.addr])
+        .collect();
+    let function = build_function_from_insns(&entry.name, func_start, &lifted_insns, &eh_leaders);
     // Jump-table targets are block leaders that no direct branch names, and
     // the dispatch block's successors. A target that follows a `ret` plus
     // alignment padding would otherwise sit inside the padding's block, and
@@ -993,12 +1001,18 @@ pub fn lift_function(
     let mut function = if tables.is_empty() {
         function
     } else {
-        let leaders: Vec<u64> = tables.values().flatten().copied().collect();
+        let mut leaders: Vec<u64> = tables.values().flatten().copied().collect();
+        leaders.extend_from_slice(&eh_leaders);
         let mut function =
             build_function_from_insns(&entry.name, func_start, &lifted_insns, &leaders);
         install_dispatch_successors(&mut function, &tables);
         function
     };
+    if let Some(data_regs) = unlace_ir::eh::landing_pad_data_regs(image.arch)
+        && !catch_pads.is_empty()
+    {
+        unlace_struct::install_eh_dispatch(&mut function, &catch_pads, data_regs);
+    }
     unlace_passes::trim_syscall_args(&mut function);
     Ok(function)
 }
@@ -5013,90 +5027,123 @@ fn check_output_deadline(deadline: Option<Instant>, func_name: &str, stage: &str
     Ok(())
 }
 
-/// Recover precise try/catch boundaries for `entry` from the binary's
-/// `.eh_frame` and `.gcc_except_table` sections, populating
-/// [`SsaFunction::eh_landing_pads`], [`SsaFunction::eh_landing_pad_catches`],
-/// and [`SsaFunction::eh_cleanup_landing_pads`].
+/// The LSDA of the function starting at `addr`, from the compiled code's
+/// `.eh_frame` and `.gcc_except_table` sections.
 ///
-/// This replaces the heuristic `__cxa_throw` / `__cxa_begin_catch` call-site
-/// detection with the authoritative LSDA call-site table that the C++
-/// personality routine consumes at runtime. Each landing-pad VA is the first
-/// instruction of a catch / cleanup handler — the structurer wraps blocks
-/// starting at these addresses in `HirNode::TryCatch` or `HirNode::TryFinally`.
+/// The FDE's initial_address is what populates `function_start`, which
+/// matches `FunctionEntry::addr` for entries discovered from the symbol
+/// table or DWARF.
+fn function_lsda(image: &BinaryImage, addr: u64) -> Option<unlace_loader::FunctionLsda> {
+    let eh = unlace_loader::parse_eh_frame(image)
+        .ok()
+        .filter(|eh| !eh.lsda_entries.is_empty())?;
+    let mut info = unlace_loader::parse_gcc_except_table(image, &eh.lsda_entries).ok()?;
+    info.functions.remove(&addr)
+}
+
+/// The catch landing pads of the function starting at `addr`, grouped from
+/// its LSDA call-site table for [`unlace_struct::install_eh_dispatch`].
 ///
-/// On any failure (missing sections, parse error, no FDE for this function)
-/// the landing-pad set is left empty and structuring proceeds as if no
-/// exception data existed. This is safe: empty set ⇒
-/// `structure_with_landing_pads` behaves identically to plain `structure`.
+/// A pad is a catch pad when some call site that unwinds to it names a
+/// catch clause (positive type filter); cleanup-only pads stay unreachable.
+/// The try start is the first such call site.
+fn catch_landing_pads(image: &BinaryImage, addr: u64) -> Vec<unlace_struct::CatchLandingPad> {
+    let Some(lsda) = function_lsda(image, addr) else {
+        return Vec::new();
+    };
+    let mut by_pad: BTreeMap<u64, Vec<&unlace_loader::TryRegion>> = BTreeMap::new();
+    for region in &lsda.try_regions {
+        if let Some(pad) = region.landing_pad {
+            by_pad.entry(pad).or_default().push(region);
+        }
+    }
+    by_pad
+        .into_iter()
+        .filter(|(_, regions)| {
+            regions
+                .iter()
+                .any(|r| r.type_filters.iter().any(|&f| f > 0))
+        })
+        .map(|(pad, regions)| {
+            let try_start = regions
+                .iter()
+                .map(|r| r.pc_range.start)
+                .min()
+                .unwrap_or(pad);
+            let selector = match regions[0].type_filters.as_slice() {
+                &[filter] if filter > 0 && regions.iter().all(|r| r.type_filters == [filter]) => {
+                    Some(filter as u64)
+                }
+                _ => None,
+            };
+            unlace_struct::CatchLandingPad {
+                addr: pad,
+                try_start,
+                selector,
+            }
+        })
+        .collect()
+}
+
+/// Record the catch types of each landing pad of `entry` in
+/// [`SsaFunction::eh_landing_pad_catches`], from the LSDA call-site table
+/// the C++ personality routine reads at runtime. Cleanup-only pads catch
+/// nothing and are not recorded.
 ///
-/// Multiple `catch (T1) / catch (T2)` arms that share one landing pad still
-/// share the same recovered handler body, but their LSDA action-chain types
-/// are now preserved as distinct HIR catch arms.
+/// Several `catch (T1) / catch (T2)` clauses that share one landing pad
+/// keep their action-chain types as distinct HIR catch arms.
 fn populate_eh_landing_pads(
     image: &BinaryImage,
     entry: &FunctionEntry,
     ssa: &mut SsaFunction,
     rtti: Option<&unlace_loader::RttiInfo>,
 ) {
-    let eh = match unlace_loader::parse_eh_frame(image) {
-        Ok(eh) if !eh.lsda_entries.is_empty() => eh,
-        _ => return,
-    };
-
-    let info = match unlace_loader::parse_gcc_except_table(image, &eh.lsda_entries) {
-        Ok(info) if !info.is_empty() => info,
-        _ => return,
-    };
-
-    // Match this function's start address against the LSDA function map.
-    // The FDE's initial_address is what populates `function_start`, which
-    // matches `FunctionEntry::addr` for entries discovered from the symbol
-    // table or DWARF.
-    let Some(lsda) = info.functions.get(&entry.addr) else {
+    let Some(lsda) = function_lsda(image, entry.addr) else {
         return;
     };
 
     for region in &lsda.try_regions {
-        if let Some(lp) = region.landing_pad {
-            ssa.eh_landing_pads.insert(lp);
-            let catch_types = lsda_region_catch_types(region, rtti);
-            if catch_types.is_empty() {
-                ssa.eh_cleanup_landing_pads.insert(lp);
-            } else {
-                let entry = ssa.eh_landing_pad_catches.entry(lp).or_default();
-                for ty in catch_types {
-                    if !entry.contains(&ty) {
-                        entry.push(ty);
-                    }
-                }
+        let Some(lp) = region.landing_pad else {
+            continue;
+        };
+        let catch_types = lsda_region_catch_types(image, region, rtti);
+        if catch_types.is_empty() {
+            continue;
+        }
+        let entry = ssa.eh_landing_pad_catches.entry(lp).or_default();
+        for ty in catch_types {
+            if !entry.contains(&ty) {
+                entry.push(ty);
             }
         }
     }
 
-    if !ssa.eh_landing_pads.is_empty() {
+    if !ssa.eh_landing_pad_catches.is_empty() {
         profiling::diagnostic(
             "trace",
             "populated EH landing pads from LSDA",
             [
                 TraceField::text("function", entry.name.clone()),
-                TraceField::count("count", ssa.eh_landing_pads.len() as u64),
+                TraceField::count("count", ssa.eh_landing_pad_catches.len() as u64),
             ],
         );
     }
 }
 
 fn lsda_region_catch_types(
+    image: &BinaryImage,
     region: &unlace_loader::TryRegion,
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Vec<Type> {
     region
         .caught_typeinfo_addrs
         .iter()
-        .map(|&addr| cxx_catch_type_for_typeinfo_addr(addr, rtti))
+        .map(|&addr| cxx_catch_type_for_typeinfo_addr(image, addr, rtti))
         .collect()
 }
 
 fn cxx_catch_type_for_typeinfo_addr(
+    image: &BinaryImage,
     typeinfo_addr: u64,
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Type {
@@ -5107,6 +5154,25 @@ fn cxx_catch_type_for_typeinfo_addr(
     if let Some(cls) = rtti.and_then(|info| info.classes.get(&typeinfo_addr)) {
         return Type::Struct {
             name: sanitize_cxx_type_name(&cls.demangled_name),
+            fields: Vec::new(),
+        };
+    }
+
+    // An imported typeinfo (`_ZTISt9exception`) is a relocated slot or a
+    // copy relocation; the relocation's symbol names the caught type.
+    let imported = image
+        .relocations
+        .iter()
+        .find(|r| r.addr == typeinfo_addr)
+        .and_then(|r| unlace_output::demangle(&r.sym_name))
+        .and_then(|d| {
+            d.full_signature
+                .strip_prefix("typeinfo for ")
+                .map(str::to_string)
+        });
+    if let Some(name) = imported {
+        return Type::Struct {
+            name: sanitize_cxx_type_name(&name),
             fields: Vec::new(),
         };
     }
@@ -5973,14 +6039,11 @@ pub fn emit_output(
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
         EmitFormat::CfgDot => Ok(unlace_output::emit_cfg_dot(ssa)),
         EmitFormat::C => {
-            // Use LSDA-derived landing pads when available; falls back to
-            // plain `structure` (no TryCatch wrapping) when the set is empty.
             let mut hir = {
                 let _span = profiling::phase("output.structure");
                 let structured = unlace_struct::structure_with_options(
                     ssa,
                     ArchId::X86_64,
-                    &ssa.eh_landing_pads,
                     deadline,
                     &options.structure,
                 );
@@ -7034,20 +7097,33 @@ mod tests {
             },
         );
         let rtti = unlace_loader::RttiInfo { classes };
+        let mut image = BinaryImage::empty(ArchId::X86_64, unlace_loader::Endian::Little);
+        image.relocations.push(unlace_loader::Relocation {
+            addr: 0x4010,
+            sym_name: "_ZTISt9exception".to_string(),
+            kind: unlace_loader::RelocKind::Other,
+        });
 
         assert_eq!(
-            cxx_catch_type_for_typeinfo_addr(0, Some(&rtti)),
+            cxx_catch_type_for_typeinfo_addr(&image, 0, Some(&rtti)),
             Type::Primitive(PrimitiveType::Unknown),
         );
         assert_eq!(
-            cxx_catch_type_for_typeinfo_addr(0x9000, Some(&rtti)),
+            cxx_catch_type_for_typeinfo_addr(&image, 0x9000, Some(&rtti)),
             Type::Struct {
                 name: "std____1__bad_alloc".to_string(),
                 fields: vec![],
             },
         );
         assert_eq!(
-            cxx_catch_type_for_typeinfo_addr(0xdead, Some(&rtti)),
+            cxx_catch_type_for_typeinfo_addr(&image, 0x4010, Some(&rtti)),
+            Type::Struct {
+                name: "std__exception".to_string(),
+                fields: vec![],
+            },
+        );
+        assert_eq!(
+            cxx_catch_type_for_typeinfo_addr(&image, 0xdead, Some(&rtti)),
             Type::Struct {
                 name: "typeinfo_dead".to_string(),
                 fields: vec![],

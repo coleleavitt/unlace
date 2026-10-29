@@ -32,7 +32,7 @@ use unlace_struct::{HirFunction, HirNode};
 use crate::config::Config;
 use crate::pipeline::{self, FlirtConfidence, FunctionEntry};
 use crate::profiling::{self, TraceField};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use unlace_ir::{ArchId, SpaceId};
 
 fn null_deref_regex() -> &'static regex::Regex {
@@ -820,7 +820,9 @@ enum CallotherClass {
 }
 
 fn classify_callother(insn: &IrInsn) -> CallotherClass {
-    if unlace_ir::syscall::SyscallConvention::of(insn).is_some() {
+    if unlace_ir::syscall::SyscallConvention::of(insn).is_some()
+        || unlace_ir::eh::EhHelper::of(insn).is_some()
+    {
         return CallotherClass::KnownIntrinsic;
     }
     match callother_tag(insn) {
@@ -1412,14 +1414,8 @@ fn analyze_function(
 
     let mut hir = {
         let _span = profiling::phase("quality.structure");
-        unlace_struct::structure_with_options(
-            &ssa,
-            ArchId::X86_64,
-            &BTreeSet::new(),
-            None,
-            &options.structure,
-        )
-        .context("control-flow structuring failed")?
+        unlace_struct::structure_with_options(&ssa, ArchId::X86_64, None, &options.structure)
+            .context("control-flow structuring failed")?
     };
 
     // Run the same post-structuring passes that the main pipeline applies so

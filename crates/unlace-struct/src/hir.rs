@@ -254,11 +254,8 @@ pub enum HirNode {
     /// catch-all handler — the C printer renders it as `catch (...)`.
     ///
     /// MSVC SEH lowering (t183) emits this variant when a try-block map
-    /// entry has one or more typed handlers. The historical
-    /// landing-pad-driven structurer also emits it with a single
-    /// catch-all arm when no typed catch metadata is available (the printer in
-    /// turn emits these as `__except` for back-compat with the previous
-    /// fixed-shape rendering).
+    /// entry has one or more typed handlers. Itanium C++ handlers come from
+    /// [`crate::eh_dispatch::recover_try_catch`].
     TryCatch {
         try_body: Vec<HirNode>,
         catch_arms: Vec<(Type, Vec<HirNode>)>,

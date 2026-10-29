@@ -1,0 +1,22 @@
+# CodeRabbit configuration
+# https://docs.coderabbit.ai/guides/configure-coderabbit
+
+language: en-US
+tone_instructions: "Be direct and technical. Focus on correctness, performance, and Rust idioms."
+early_access: true
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - master
+
+chat:
+  auto_reply: true

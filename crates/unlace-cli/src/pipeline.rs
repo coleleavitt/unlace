@@ -1875,7 +1875,8 @@ pub fn run_whole_program_quality_refinement(
 /// | `GlobalOpt`   | GVN, CSE, LICM, GlobalCopyProp, DseGlobal,            |
 /// |               | TailCall, TailDup, IndirectCall/JumpResolve,          |
 /// |               | MsvcSEH                                               |
-/// | `TypeRecovery`| TypeInfer, TypeConstraintSolver, OpTypeBinding,       |
+/// | `TypeRecovery`| TypeInfer, TypeConstraintSolver, TypeVote,            |
+/// |               | OpTypeBinding,                                        |
 /// |               | CC detect/param/return, Struct/Sizeof, Cpp/Rust/Objc, |
 /// |               | RustAsync                                             |
 /// | `StackRecovery`| StackOffsetSnapshot, StackPointerTracking,           |
@@ -2840,6 +2841,7 @@ fn pipeline_stage_type_recovery(
         ssa,
         opts,
     )?;
+    run_instrumented(&unlace_passes::type_vote::TypeVotePass, ssa, opts)?;
     if let Some(resolve) = resolver {
         let structs = known_struct_types(ssa);
         let _ = unlace_passes::recognize_with_resolver(ssa, resolve, &structs);

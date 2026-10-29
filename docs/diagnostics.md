@@ -62,6 +62,7 @@ every `unlace::cprinter::*` trace, and `unlace=debug` is the old
 | `unlace::engine` (debug: per-function timing; info: batch summary) | — (`--engine ghidra`) |
 | `unlace::struct` and `unlace::struct::*` | `UNLACE_STRUCT_TRACE`, `UNLACE_SPLIT_TRACE`, `UNLACE_LABEL_*_TRACE`, `UNLACE_GOTO_ELIM_TRACE`, `UNLACE_EMPTY_IF_TRACE` |
 | `unlace::cprinter` and `unlace::cprinter::*` | `UNLACE_CPRINTER_*`, `UNLACE_C_PRINTER_TRACE`, `UNLACE_CPRINTER_PIPELINE` |
+| `unlace::type_vote` | — (debug: one `decide` event per varnode the weighted type vote types, with round, type and weak flag; one `summary` per function) |
 | `unlace::quality` (debug: CALLOTHER classes, each `unknown-type` varnode with its defining/using ops) | `UNLACE_QUALITY_TRACE` |
 | `unlace::mcp` | — (`unlace-mcp` server start/stop) |
 

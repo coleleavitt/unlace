@@ -932,6 +932,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("StructFieldDetectPass", TypeRecovery),
         PassDescriptor::new("TypeInferPass", TypeRecovery),
         PassDescriptor::new("TypeConstraintSolverPass", TypeRecovery),
+        PassDescriptor::new("TypeVotePass", TypeRecovery),
         PassDescriptor::new("SizeofRecognitionPass", TypeRecovery),
         PassDescriptor::new("CppVariantPass", TypeRecovery),
         PassDescriptor::new("CppLambdaCapturePass", TypeRecovery),
@@ -1251,6 +1252,7 @@ mod phase_tests {
             // ---- TypeRecovery ----
             Box::new(crate::type_infer::TypeInferPass),
             Box::new(crate::type_constraint_solver::TypeConstraintSolverPass::default()),
+            Box::new(crate::type_vote::TypeVotePass),
             Box::new(crate::op_type_binding::OpTypeBindingPass),
             Box::new(crate::calling_convention::CallingConventionDetectPass),
             Box::new(crate::calling_convention::ParamInferPass),
@@ -1349,7 +1351,7 @@ mod phase_tests {
             (PassPhase::PreOpt.ordinal(), 7),
             (PassPhase::LocalOpt.ordinal(), 18),
             (PassPhase::GlobalOpt.ordinal(), 10),
-            (PassPhase::TypeRecovery.ordinal(), 18),
+            (PassPhase::TypeRecovery.ordinal(), 19),
             (PassPhase::StackRecovery.ordinal(), 3),
             (PassPhase::LVarAlloc.ordinal(), 1),
             (PassPhase::FinalCleanup.ordinal(), 6),
@@ -1446,6 +1448,7 @@ mod phase_tests {
             TypeRecovery, // StructFieldDetectPass
             TypeRecovery, // TypeInferPass
             TypeRecovery, // TypeConstraintSolverPass
+            TypeRecovery, // TypeVotePass
             TypeRecovery, // SizeofRecognitionPass
             TypeRecovery, // CppVariantPass
             TypeRecovery, // CppLambdaCapturePass

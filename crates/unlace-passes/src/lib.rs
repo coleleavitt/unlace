@@ -273,6 +273,7 @@ pub mod taint_engine;
 pub mod target_transform;
 pub mod type_constraint_solver;
 pub mod type_infer;
+pub mod type_vote;
 #[cfg(feature = "unwired")]
 pub mod union_recovery;
 pub mod var_naming;

@@ -17,6 +17,4 @@ reviews:
     drafts: false
     base_branches:
       - master
-
-chat:
-  auto_reply: true
+      - code-review-base

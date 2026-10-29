@@ -222,7 +222,10 @@ pub fn strip_comments(text: &str) -> String {
     let mut chars = text.chars().peekable();
     let mut quote: Option<char> = None;
     let mut in_block = false;
+    let mut prev = ' ';
     while let Some(c) = chars.next() {
+        let after_ident = is_ident_char(prev);
+        prev = c;
         if in_block {
             if c == '*' && chars.peek() == Some(&'/') {
                 chars.next();
@@ -251,7 +254,7 @@ pub fn strip_comments(text: &str) -> String {
                 chars.next();
                 in_block = true;
             }
-            ('"' | '\'', _) => {
+            ('"', _) | ('\'', _) if !(c == '\'' && after_ident) => {
                 quote = Some(c);
                 out.push(c);
             }
@@ -259,6 +262,12 @@ pub fn strip_comments(text: &str) -> String {
         }
     }
     out
+}
+
+/// A `'` right after an identifier character is not a character literal
+/// but part of a demangled name such as `` `typeinfo for'vd_failure_t``.
+fn is_ident_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
 }
 
 /// Net `{`/`}` balance of a line, ignoring literals and comments.
@@ -271,7 +280,10 @@ fn strip_literals(code: &str) -> String {
     let mut out = String::with_capacity(code.len());
     let mut quote: Option<char> = None;
     let mut escaped = false;
+    let mut prev = ' ';
     for c in code.chars() {
+        let after_ident = is_ident_char(prev);
+        prev = c;
         match quote {
             Some(q) => {
                 if escaped {
@@ -282,7 +294,7 @@ fn strip_literals(code: &str) -> String {
                     quote = None;
                 }
             }
-            None if c == '"' || c == '\'' => quote = Some(c),
+            None if c == '"' || (c == '\'' && !after_ident) => quote = Some(c),
             None => out.push(c),
         }
     }
@@ -416,5 +428,16 @@ mod tests {
     fn brace_delta_ignores_literals_and_comments() {
         assert_eq!(brace_delta(r#"puts("{"); // }"#), 0);
         assert_eq!(brace_delta("if (a) {"), 1);
+    }
+
+    #[test]
+    fn demangled_quote_is_not_a_char_literal() {
+        let line = "__cxa_throw(e, &`typeinfo for'vd_failure_t, 0); // goto";
+        assert_eq!(
+            strip_comments(line),
+            "__cxa_throw(e, &`typeinfo for'vd_failure_t, 0); "
+        );
+        assert_eq!(brace_delta("f(`typeinfo for'x); {"), 1);
+        assert_eq!(strip_comments("c == 'x'; // c"), "c == 'x'; ");
     }
 }

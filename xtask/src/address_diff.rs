@@ -44,7 +44,7 @@ impl FuncMetrics {
 }
 
 /// How a candidate function compares to the reference.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Verdict {
     Better,
     Equivalent,

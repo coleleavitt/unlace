@@ -57,9 +57,6 @@ _QWORD qword_3FE0;
 _QWORD qword_4008;
 __int64 sub_10b0();
 __int64 sub_12c0();
-__int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */;
-void sub_1290(void);
-void sub_1340(void);
 
 /*
  * C++ Class Hierarchy (from RTTI):
@@ -100,50 +97,48 @@ _Noreturn int safe_call(void) {
     __int64 v2; // rax
     __int64 v3; // rax
     __int64 v4; // rax
-    __int64 v5; // rax
-    __int64 v6; // rdx
-    __int64 v7; // rbx
-    __int64 v8; // rdi
-    _QWORD v9; // temp
+    __int64 v5; // rdx
+    __int64 v6; // rbx
+    __int64 v7; // rdi
+    _QWORD v8; // temp
     /* allocate exception */
-    __int64 v10 = __cxa_allocate_exception(0x10LL); // rax
-    __int64 v11 = "negative"; // rsi
-    v8 = v10;
-    v7 = v10;
+    __int64 v9 = __cxa_allocate_exception(0x10LL); // rax
+    __int64 v10 = "negative"; // rsi
+    v7 = v9;
+    v6 = v9;
     try {
-        v0 = std_runtime_error_runtime_error(v8, "negative");
-        v6 = qword_3FE0;
-        v11 = 0x3d40;
-        v8 = v7;
+        v0 = std_runtime_error_runtime_error(v7, "negative");
+        v5 = qword_3FE0;
+        v10 = 0x3d40;
+        v7 = v6;
         try {
             /* throw */
-            v1 = __cxa_throw(v8, 0x3d40LL, v6);
+            v1 = __cxa_throw(v7, 0x3d40LL, v5);
         } catch (struct std__exception e) {
             result_0 = __eh_exception();
-            v6 = 1;
-            v8 = result_0;
+            v5 = 1;
+            v7 = result_0;
             result_0 = 1;
         }
     } catch (struct std__exception e) {
         result_0 = __eh_exception();
-        v6 = __eh_selector();
-        v_8 = v6;
+        v5 = __eh_selector();
+        v_8 = v5;
         /* free exception */
-        v2 = __cxa_free_exception(v7);
-        v8 = v9;
+        v2 = __cxa_free_exception(v6);
+        v7 = v8;
         result_0 = v_8;
     }
     --result_0;
     if (result_0 != 1) {
-        _Unwind_Resume(v8);
+        _Unwind_Resume(v7);
     } else {
         /* catch */
-        v3 = __cxa_begin_catch(v8);
-        v4 = v3->__vftable->method_2();
-        v6 = v4;
-        printf("caught: %s\n", (char *)v6);
+        v3 = __cxa_begin_catch(v7);
+        v5 = v3->__vftable->method_2();
+        printf("caught: %s\n", (char *)v5);
         /* end catch */
-        v5 = __cxa_end_catch();
+        v4 = __cxa_end_catch();
         return 0xffffffff;
     }
     return 0;
@@ -171,13 +166,13 @@ void _start(void) {
     return;
 }
 
-/* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1290(void) {
+/* Function:   deregister_tm_clones | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void deregister_tm_clones(void) {
     return;
 }
 
-/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
-__int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
+/* Function:   __do_global_dtors_aux | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   deregister_tm_clones, sub_10b0 | Xrefs from: unknown */
+__int64 __do_global_dtors_aux(void) /* // dropped 1 param(s) (dead in body) */ {
     __int64 result; // rax
     if (byte_4020) {
         return result;
@@ -186,14 +181,14 @@ __int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
             __int64 v1 = qword_4008; // rdi
             result = sub_10b0(v1);
         }
-        result = sub_1290();
+        result = deregister_tm_clones();
         byte_4020 = 1;
         return result;
     }
 }
 
-/* Function:   sub_1340 | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sub_1340(void) {
+/* Function:   frame_dummy | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void frame_dummy(void) {
     sub_12c0();
 }
 

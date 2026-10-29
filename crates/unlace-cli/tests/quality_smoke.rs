@@ -401,14 +401,17 @@ fn baseline_branches() {
 /// entry in `ssa.libc_call_annotations`.
 #[test]
 fn noreturn_and_libc_counters_wired() {
-    let medium = analyze("medium.elf");
+    // `may_throw(int) [clone .cold]` ends every path in `__cxa_throw`.
+    // (`medium.elf` has none: `main` only calls `__stack_chk_fail` on its
+    // cold path, which does not make it noreturn.)
+    let exceptions = analyze("cpp_exceptions.elf");
     assert!(
-        medium.noreturn_functions > 0,
-        "medium.elf must report >0 noreturn functions (got {}); \
+        exceptions.noreturn_functions > 0,
+        "cpp_exceptions.elf must report >0 noreturn functions (got {}); \
          NoreturnDetectPass writes ssa.noreturn and FunctionQuality reads \
          it — if this assertion fires, the producer / consumer wiring has \
          drifted (e.g. field renamed, resolver dropped from analyze_function)",
-        medium.noreturn_functions,
+        exceptions.noreturn_functions,
     );
 
     let vtable = analyze("cpp_vtable.elf");

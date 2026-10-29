@@ -109,7 +109,7 @@ struct __anon0 {
 
 /* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0xb3 (179 bytes) | Convention: System V AMD64 | Stack frame: 0x18 (24 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_free_exception, __cxa_throw, __printf_chk | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
-_Noreturn int safe_call(void) {
+int safe_call(void) {
     __int64 v_24;
     __int64 v_16;
     __int64 v0; // rax

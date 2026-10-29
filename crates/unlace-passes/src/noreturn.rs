@@ -110,17 +110,17 @@ impl NoreturnDetectPass {
     ///
     /// 1. **Per-block scan** — for each block, find the first `Call` to a
     ///    roster-known noreturn target and trim every instruction after it
-    ///    (those are unreachable). If any block had such a call, the
-    ///    function is itself noreturn-reachable and `noreturn = true`.
-    /// 2. **Exit-block fixpoint** — additionally, if **every** CFG exit
-    ///    block of the function ends in a `Call` to a roster-known
-    ///    noreturn target, mark the function `noreturn = true`. Iterates
-    ///    up to [`NORETURN_FIXPOINT_CAP`] rounds. Per-function this is
-    ///    largely redundant with the per-block scan (any noreturn call
-    ///    promotes the function), but stays as a defensive belt: future
-    ///    callers that pre-trim blocks before invoking this pass would
-    ///    otherwise lose the promotion. Cross-function tail-call
-    ///    propagation lives in
+    ///    (those are unreachable). The block is now *terminated*: control
+    ///    never leaves it.
+    /// 2. **Reachable exits** — walk the CFG from the entry without
+    ///    leaving terminated blocks. The function is `noreturn` when at
+    ///    least one terminated block exists, no reachable block contains a
+    ///    `Return`, and every reachable block without successors is
+    ///    terminated (an unknown exit such as a tail jump stays a possible
+    ///    return). A function that merely *contains* a noreturn call on a
+    ///    cold path — every stack-protected function calls
+    ///    `__stack_chk_fail` — therefore stays returning. Cross-function
+    ///    tail-call propagation lives in
     ///    [`crate::noreturn_propagation::propagate_noreturn`].
     pub fn run_with_resolver(
         &self,
@@ -128,7 +128,7 @@ impl NoreturnDetectPass {
         resolve_name: impl Fn(u64) -> Option<&'static str>,
     ) -> Result<bool, PassError> {
         let mut changed = false;
-        let mut found_noreturn = false;
+        let mut terminated = BTreeSet::new();
 
         let block_ids: Vec<_> = func.function.blocks.keys().copied().collect();
 
@@ -153,7 +153,7 @@ impl NoreturnDetectPass {
                 if let Some(name) = resolve_name(target_addr)
                     && self.matches_name(name)
                 {
-                    found_noreturn = true;
+                    terminated.insert(bid);
                     noreturn_insn_idx = Some(insn_idx);
                     break;
                 }
@@ -178,113 +178,60 @@ impl NoreturnDetectPass {
             }
         }
 
-        if found_noreturn && !func.noreturn {
-            func.noreturn = true;
-            changed = true;
-        }
-
-        // Phase 2: exit-block fixpoint. If we did not already flag this
-        // function noreturn, check whether every CFG exit terminates with
-        // a noreturn-named call. Idempotent after one iteration but we
-        // loop defensively (cap = 10) in case a future hook mutates the
-        // CFG mid-pass.
-        if !func.noreturn {
-            for _ in 0..NORETURN_FIXPOINT_CAP {
-                if !self.all_exits_end_in_noreturn_call(func, &resolve_name) {
-                    break;
-                }
-                if func.noreturn {
-                    break;
-                }
+        if !func.noreturn && !terminated.is_empty() {
+            let noreturn = never_returns(func, &terminated);
+            tracing::debug!(
+                target: "unlace::noreturn",
+                "func={} terminated={terminated:?} noreturn={noreturn}",
+                func.function.name
+            );
+            if noreturn {
                 func.noreturn = true;
                 changed = true;
-                // Single mutation per fixpoint round; the condition
-                // becomes stable once noreturn = true, so the next
-                // iteration's early-exit terminates the loop.
             }
         }
 
         Ok(changed)
     }
+}
 
-    /// True iff the function has at least one exit block (no CFG
-    /// successors) **and** every such exit block's terminator is a `Call`
-    /// to a roster-known noreturn target.
-    ///
-    /// A function with zero exit blocks (pure infinite loop) is
-    /// conservatively reported `false` here — the propagation pass owns
-    /// that case via a separate signal so we do not double-fire.
-    fn all_exits_end_in_noreturn_call(
-        &self,
-        func: &SsaFunction,
-        resolve_name: &impl Fn(u64) -> Option<&'static str>,
-    ) -> bool {
-        let exit_blocks: Vec<BlockId> = func
-            .function
-            .blocks
-            .keys()
-            .copied()
-            .filter(|&bid| Self::is_exit_block(func, bid))
-            .collect();
-
-        if exit_blocks.is_empty() {
-            return false;
+/// Whether no path from the entry reaches a `Return` or an exit block that
+/// is not in `terminated`, walking the CFG without leaving terminated
+/// blocks. Requires at least one terminated block to be reachable, so an
+/// unreachable cold-path `abort()` does not count.
+fn never_returns(func: &SsaFunction, terminated: &BTreeSet<BlockId>) -> bool {
+    let cfg = func.cfg.inner();
+    let mut visited = BTreeSet::new();
+    let mut stack = vec![func.cfg.entry_block()];
+    let mut reached_terminated = false;
+    while let Some(bid) = stack.pop() {
+        if !visited.insert(bid) {
+            continue;
         }
-
-        for bid in exit_blocks {
-            if !self.block_ends_with_noreturn_call(func, bid, resolve_name) {
-                return false;
-            }
-        }
-        true
-    }
-
-    fn is_exit_block(func: &SsaFunction, bid: BlockId) -> bool {
-        let Some(node) = func.cfg.node_index(bid) else {
-            return false;
-        };
-        func.cfg
-            .inner()
-            .neighbors_directed(node, petgraph::Direction::Outgoing)
-            .next()
-            .is_none()
-    }
-
-    /// True iff block `bid`'s last `Call` instruction targets a
-    /// roster-known noreturn name. Earlier `Call`s don't count — we want
-    /// the *terminator-position* call, the one whose unreachable-fall-
-    /// through would be the return.
-    fn block_ends_with_noreturn_call(
-        &self,
-        func: &SsaFunction,
-        bid: BlockId,
-        resolve_name: &impl Fn(u64) -> Option<&'static str>,
-    ) -> bool {
         let Some(block) = func.function.blocks.get(&bid) else {
             return false;
         };
-        let last_call_target = block.insns.iter().rev().find_map(|insn| match insn.op {
-            IrOp::Call => insn
-                .inputs
-                .first()
-                .filter(|vn| vn.space == SpaceId::Const)
-                .map(|vn| vn.offset),
-            _ => None,
-        });
-        let Some(target) = last_call_target else {
+        if block.insns.iter().any(|insn| insn.op == IrOp::Return) {
+            return false;
+        }
+        if terminated.contains(&bid) {
+            reached_terminated = true;
+            continue;
+        }
+        let Some(node) = func.cfg.node_index(bid) else {
             return false;
         };
-        match resolve_name(target) {
-            Some(name) => self.matches_name(name),
-            None => false,
+        let successors: Vec<BlockId> = cfg
+            .neighbors_directed(node, petgraph::Direction::Outgoing)
+            .map(|succ| cfg[succ])
+            .collect();
+        if successors.is_empty() {
+            return false;
         }
+        stack.extend(successors);
     }
+    reached_terminated
 }
-
-/// Hard cap on fixpoint iterations in [`NoreturnDetectPass::run_with_resolver`].
-/// Per-function logic stabilises in a single round; the cap exists purely
-/// as a safety belt.
-pub const NORETURN_FIXPOINT_CAP: usize = 10;
 
 impl Pass for NoreturnDetectPass {
     fn name(&self) -> &str {
@@ -746,6 +693,71 @@ mod tests {
         let changed = pass.run_with_resolver(&mut ssa, fixpoint_resolver).unwrap();
         assert!(changed);
         assert!(ssa.noreturn, "prefix-matched callee must promote caller");
+    }
+
+    fn call(target: u64, addr: u64) -> IrInsn {
+        IrInsn::without_output(IrOp::Call, smallvec![Varnode::constant(target, 8)], addr)
+    }
+
+    fn cbranch(targets: [BlockId; 2]) -> BasicBlock {
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![Varnode::constant(0, 8), Varnode::constant(1, 1)],
+            0x1000,
+        ));
+        bb.successors = targets.into_iter().collect();
+        bb
+    }
+
+    /// A returning path next to a cold `__stack_chk_fail` block — every
+    /// stack-protected function — must stay a returning function.
+    #[test]
+    fn cold_noreturn_block_does_not_promote_returning_function() {
+        let entry = cbranch([BlockId(2), BlockId(1)]);
+        let mut ret = BasicBlock::new(BlockId(1));
+        ret.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+        let mut cold = BasicBlock::new(BlockId(2));
+        cold.insns.push(call(0xDEAD, 0x1020));
+
+        let mut ssa = make_ssa(vec![entry, ret, cold], VarMap::new());
+        let pass = NoreturnDetectPass::new();
+        assert!(!pass.run_with_resolver(&mut ssa, mock_resolver).unwrap());
+        assert!(!ssa.noreturn);
+    }
+
+    /// Both branches end in noreturn calls: the function never returns,
+    /// even though the first callee block falls through to the second in
+    /// block order.
+    #[test]
+    fn all_paths_ending_in_noreturn_calls_promote() {
+        let entry = cbranch([BlockId(2), BlockId(1)]);
+        let mut left = BasicBlock::new(BlockId(1));
+        left.insns.push(call(0xDEAD, 0x1010));
+        let mut right = BasicBlock::new(BlockId(2));
+        right.insns.push(call(0xBEEF, 0x1020));
+
+        let mut ssa = make_ssa(vec![entry, left, right], VarMap::new());
+        let pass = NoreturnDetectPass::new();
+        assert!(pass.run_with_resolver(&mut ssa, mock_resolver).unwrap());
+        assert!(ssa.noreturn);
+    }
+
+    /// The fallthrough edge after a noreturn call is never taken, so a
+    /// returning block reachable only through it does not count.
+    #[test]
+    fn fallthrough_after_noreturn_call_is_not_a_return_path() {
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.insns.push(call(0xDEAD, 0x1000));
+        let mut dead = BasicBlock::new(BlockId(1));
+        dead.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+
+        let mut ssa = make_ssa(vec![entry, dead], VarMap::new());
+        let pass = NoreturnDetectPass::new();
+        assert!(pass.run_with_resolver(&mut ssa, mock_resolver).unwrap());
+        assert!(ssa.noreturn);
     }
 
     /// Plain returning function (no noreturn calls anywhere) must remain

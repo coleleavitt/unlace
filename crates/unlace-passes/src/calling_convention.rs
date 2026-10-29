@@ -1194,6 +1194,13 @@ fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
                 calling_trace_line(func, format!("return-infer phi-at-return ty={ty:?}"));
                 return ty;
             }
+            if !found_rax
+                && !found_xmm0
+                && let Some(ty) = returned_operand_type(func, bid, insn_idx)
+            {
+                calling_trace_line(func, format!("return-infer returned-operand ty={ty:?}"));
+                return ty;
+            }
             if found_xmm0 {
                 has_xmm0_at_return = true;
             }
@@ -1290,12 +1297,80 @@ fn phi_return_type(func: &SsaFunction, bid: BlockId, ret_idx: usize) -> Option<P
     })
 }
 
+/// Return type read off the `RETURN` operand itself once propagation has
+/// replaced the return register by the value it carried: a parameter
+/// register read at entry (`mov rax, rdi; ret` returns `a1`), or a value an
+/// instruction other than a call computed in the returning block. `None`
+/// for the return register itself (the block scan owns it), for a call
+/// result, for an incoming non-parameter register, and for a value computed
+/// in an earlier block: those are what a `void` function leaves in `rax`
+/// (`deregister_tm_clones` compares a `lea rax` and returns nothing).
+///
+/// Only the x86 lifters put the return *value* register in the `RETURN`
+/// operand; the AArch64 lifter puts the return *address* (`x30`) there.
+fn returned_operand_type(
+    func: &SsaFunction,
+    bid: BlockId,
+    ret_idx: usize,
+) -> Option<PrimitiveType> {
+    if !matches!(func.arch, ArchId::X86 | ArchId::X86_64) {
+        return None;
+    }
+    let ret_sv = *func.var_map.get(&(bid, ret_idx, VarnodeSlot::Input(0)))?;
+    let base = ret_sv.base;
+    if !matches!(base.space, SpaceId::Register | SpaceId::Unique)
+        || (base.space == SpaceId::Register && base.offset == RAX)
+    {
+        return None;
+    }
+    let by_width = |size: u8| match size {
+        1 => PrimitiveType::Bool,
+        2 => PrimitiveType::Int(2),
+        4 => PrimitiveType::Int(4),
+        _ => PrimitiveType::Int(8),
+    };
+    match crate::pass::DefIndex::build(func).lookup(ret_sv) {
+        None => {
+            // Not written by this function: an incoming register. Only an
+            // argument register carries a value the function returns.
+            let (int_regs, float_regs): (&[u64], &[u64]) = match func.calling_convention {
+                CallingConvention::SystemV => (SYSV_ARG_REGS, SYSV_FLOAT_REGS),
+                CallingConvention::MicrosoftX64 => (MSX64_ARG_REGS, MSX64_FLOAT_REGS),
+                _ => return None,
+            };
+            if base.space == SpaceId::Register && int_regs.contains(&base.offset) {
+                Some(by_width(base.size))
+            } else if base.space == SpaceId::Register && float_regs.contains(&base.offset) {
+                Some(if base.size == 4 {
+                    PrimitiveType::Float
+                } else {
+                    PrimitiveType::Double
+                })
+            } else {
+                None
+            }
+        }
+        Some((def_bid, def_idx)) => {
+            if def_bid != bid {
+                return None;
+            }
+            let insn = func.function.blocks.get(&def_bid)?.insns.get(def_idx)?;
+            if matches!(insn.op, IrOp::Call | IrOp::Callind | IrOp::Callother) {
+                return None;
+            }
+            Some(
+                match classify_return_value(insn, &func.var_types, def_bid, func) {
+                    PrimitiveType::Unknown => by_width(base.size),
+                    ty => ty,
+                },
+            )
+        }
+    }
+}
+
 fn constant_return_type(insn: &unlace_ir::IrInsn) -> Option<PrimitiveType> {
     let ret = insn.inputs.first()?;
     if ret.space != SpaceId::Const {
-        return None;
-    }
-    if ret.size == 8 && ret.offset == 0 {
         return None;
     }
     Some(match ret.size {
@@ -1431,6 +1506,109 @@ mod tests {
         );
     }
 
+    fn returning(value: Varnode, prelude: Vec<IrInsn>) -> SsaFunction {
+        let mut func = Function::new("ret", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.extend(prelude);
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![value],
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+        ssa.calling_convention = CallingConvention::SystemV;
+        ssa
+    }
+
+    /// `mov rax, rdi; ret` once propagation has folded the copy: the
+    /// `RETURN` carries the parameter register, and the function returns it.
+    #[test]
+    fn return_of_a_parameter_register_is_not_void() {
+        let ssa = returning(Varnode::reg(RDI, 8), Vec::new());
+        assert_eq!(infer_return_type(&ssa), PrimitiveType::Int(8));
+        let ssa = returning(Varnode::reg(RSI, 4), Vec::new());
+        assert_eq!(infer_return_type(&ssa), PrimitiveType::Int(4));
+    }
+
+    /// An incoming callee-saved register in `rax` is what a `void`
+    /// function leaves behind; it is not a return value.
+    #[test]
+    fn return_of_an_incoming_non_parameter_register_stays_void() {
+        const RBX: u64 = 24;
+        let ssa = returning(Varnode::reg(RBX, 8), Vec::new());
+        assert_eq!(infer_return_type(&ssa), PrimitiveType::Unknown);
+    }
+
+    /// The AArch64 lifter's `RETURN` operand is the return address, not a
+    /// value: nothing is read off it.
+    #[test]
+    fn aarch64_return_operand_is_not_a_value() {
+        let mut ssa = returning(Varnode::reg(RDI, 8), Vec::new());
+        ssa.arch = ArchId::AArch64;
+        ssa.calling_convention = CallingConvention::AArch64;
+        assert_eq!(infer_return_type(&ssa), PrimitiveType::Unknown);
+    }
+
+    /// `lea rax, X; cmp rax, rdi; je ret; ...; ret`: a value computed in an
+    /// earlier block and left in `rax` is not a return value.
+    #[test]
+    fn value_computed_in_an_earlier_block_stays_void() {
+        let lea = Varnode::unique(0x40, 8);
+        let mut func = Function::new("deregister_tm_clones", BlockId(0), 0x1000);
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            lea,
+            smallvec![Varnode::reg(RSI, 8), Varnode::constant(0x4010, 8)],
+            0x1000,
+        ));
+        entry.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![Varnode::constant(0x1010, 8), Varnode::reg(256, 1)],
+            0x1004,
+        ));
+        entry.successors = smallvec![BlockId(1), BlockId(1)];
+        let mut ret = BasicBlock::new(BlockId(1));
+        ret.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![lea], 0x1010));
+        func.insert_block(entry);
+        func.insert_block(ret);
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+        ssa.calling_convention = CallingConvention::SystemV;
+        assert_eq!(infer_return_type(&ssa), PrimitiveType::Unknown);
+    }
+
+    /// A value computed in the returning block by an instruction other
+    /// than a call is typed by its producer.
+    #[test]
+    fn return_of_a_computed_value_is_typed_by_its_producer() {
+        let sum = Varnode::unique(0x20, 4);
+        let add = IrInsn::with_output(
+            IrOp::IntAdd,
+            sum,
+            smallvec![Varnode::reg(RDI, 4), Varnode::constant(1, 4)],
+            0x1000,
+        );
+        assert_eq!(
+            infer_return_type(&returning(sum, vec![add])),
+            PrimitiveType::Int(4)
+        );
+        let cmp = Varnode::unique(0x30, 1);
+        let less = IrInsn::with_output(
+            IrOp::IntSless,
+            cmp,
+            smallvec![Varnode::reg(RDI, 8), Varnode::constant(1, 8)],
+            0x1000,
+        );
+        assert_eq!(
+            infer_return_type(&returning(cmp, vec![less])),
+            PrimitiveType::Bool
+        );
+    }
+
     #[test]
     fn argument_read_only_past_entry_block_is_a_param() {
         let params = infer_params(&diamond_into_shared_return());
@@ -1471,7 +1649,7 @@ mod tests {
         bb.insns = insns;
         bb.insns.push(IrInsn::without_output(
             IrOp::Return,
-            smallvec![Varnode::constant(0, 8)],
+            smallvec![Varnode::reg(RAX, 8)],
             0x1FFF,
         ));
         func.insert_block(bb);
@@ -1614,11 +1792,19 @@ mod tests {
 
     #[test]
     fn return_type_void_when_no_rax_write_before_return() {
-        // Empty entry block (just the RETURN added by the helper).
+        // Empty entry block (just the `RETURN rax` added by the helper).
         let ssa = make_entry_block_ssa(vec![]);
         let ty = infer_return_type(&ssa);
         // No RAX write → caller sees Unknown (= treated as void downstream).
         assert_eq!(ty, PrimitiveType::Unknown);
+    }
+
+    /// `xor eax, eax; ret` once propagation has folded the zero into the
+    /// `RETURN`: a returned constant, zero included.
+    #[test]
+    fn return_type_int_when_return_operand_is_folded_zero() {
+        let ssa = returning(Varnode::constant(0, 8), Vec::new());
+        assert_eq!(infer_return_type(&ssa), PrimitiveType::Int(4));
     }
 
     #[test]

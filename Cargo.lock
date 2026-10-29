@@ -2479,6 +2479,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "console 0.15.11",
  "criterion",
  "iced-x86",
  "indicatif",

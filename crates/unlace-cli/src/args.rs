@@ -274,7 +274,7 @@ pub enum Cmd {
         /// Progress rendering mode. Progress is drawn on stderr only when
         /// stderr is a terminal; logs and pipes never receive it.
         ///
-        /// - `auto`: same as `color`
+        /// - `auto`: `color` unless `NO_COLOR` or `CLICOLOR=0` asks for `plain`
         /// - `plain`: uncolored progress bar
         /// - `color`: ANSI-colored progress bar
         /// - `off`: disable progress output
@@ -672,7 +672,8 @@ pub enum EmitFormat {
 /// Batch progress rendering mode.
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
 pub enum BatchProgressStyle {
-    /// Colored progress bar when stderr is a terminal.
+    /// Colored progress bar when stderr is a terminal and its color
+    /// conventions (`NO_COLOR`, `CLICOLOR`) allow it; plain otherwise.
     Auto,
     /// Disable batch progress output.
     Off,

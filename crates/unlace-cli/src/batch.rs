@@ -1,13 +1,10 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::{IsTerminal, Read, Write};
+use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -21,6 +18,10 @@ use crate::args::{BatchProgressStyle, EmitFormat};
 use crate::config::Config;
 use crate::pipeline::{self, FunctionEntry, PipelineConfig};
 use crate::profiling::{self, TraceField};
+
+mod progress;
+
+use progress::BatchProgress;
 
 pub struct BatchConfig {
     pub jobs: usize,
@@ -98,160 +99,6 @@ fn default_manifest_version() -> u8 {
 
 fn should_serialize_large_function(entry: &FunctionEntry, threshold: u64) -> bool {
     threshold > 0 && entry.size >= threshold
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ProgressRenderMode {
-    Off,
-    Plain,
-    Color,
-}
-
-fn progress_render_mode(style: BatchProgressStyle) -> ProgressRenderMode {
-    if !std::io::stderr().is_terminal() {
-        return ProgressRenderMode::Off;
-    }
-    match style {
-        BatchProgressStyle::Off => ProgressRenderMode::Off,
-        BatchProgressStyle::Plain => ProgressRenderMode::Plain,
-        BatchProgressStyle::Color | BatchProgressStyle::Auto => ProgressRenderMode::Color,
-    }
-}
-
-fn progress_style_for(mode: ProgressRenderMode) -> ProgressStyle {
-    let template = match mode {
-        ProgressRenderMode::Color => {
-            "{prefix} [{elapsed_precise}] [{bar:32.cyan/blue}] started {pos}/{len} {msg}"
-        }
-        ProgressRenderMode::Plain => {
-            "{prefix} [{elapsed_precise}] [{bar:32}] started {pos}/{len} {msg}"
-        }
-        ProgressRenderMode::Off => "",
-    };
-    ProgressStyle::with_template(template)
-        .unwrap_or_else(|_| ProgressStyle::default_bar())
-        .progress_chars("=>-")
-}
-
-struct ProgressPrinter {
-    bar: Option<ProgressBar>,
-}
-
-impl ProgressPrinter {
-    fn new(stage: &'static str, style: BatchProgressStyle, total: usize) -> Self {
-        let mode = progress_render_mode(style);
-        let bar = match mode {
-            ProgressRenderMode::Off => None,
-            ProgressRenderMode::Plain | ProgressRenderMode::Color => {
-                let pb = ProgressBar::new(total as u64);
-                pb.set_style(progress_style_for(mode));
-                pb.set_prefix(format!("[unlace {stage}]"));
-                pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(4));
-                if total > 0 {
-                    pb.enable_steady_tick(Duration::from_millis(250));
-                }
-                Some(pb)
-            }
-        };
-        Self { bar }
-    }
-
-    fn bar(&self) -> Option<&ProgressBar> {
-        self.bar.as_ref()
-    }
-
-    fn ensure_total(&self, total: usize) {
-        if total == 0 {
-            return;
-        }
-        if let Some(pb) = self.bar()
-            && pb.length() != Some(total as u64)
-        {
-            pb.set_length(total as u64);
-        }
-    }
-
-    fn enabled(&self) -> bool {
-        self.bar.is_some()
-    }
-
-    fn tick(&self, started: usize, total: usize) {
-        if !self.enabled() {
-            return;
-        }
-        if total == 0 {
-            return;
-        }
-        self.ensure_total(total);
-        if let Some(pb) = self.bar() {
-            let pos = started.max(pb.position() as usize).min(total) as u64;
-            pb.set_position(pos);
-        }
-    }
-
-    fn report(
-        &self,
-        started: usize,
-        completed: usize,
-        failed: usize,
-        active: usize,
-        total: usize,
-        current: Option<&FunctionEntry>,
-    ) {
-        if !self.enabled() || total == 0 {
-            return;
-        }
-
-        self.tick(started, total);
-        if let Some(pb) = self.bar() {
-            pb.set_message(progress_message(completed, failed, active, current));
-            pb.tick();
-        }
-    }
-
-    fn finish(&self) {
-        if let Some(pb) = self.bar() {
-            let total = pb.length().unwrap_or_default();
-            let done = pb.position();
-            pb.finish_with_message(format!("done {done}/{total}"));
-        }
-    }
-}
-
-fn short_progress_name(name: &str) -> String {
-    const MAX_CHARS: usize = 48;
-    let mut chars = name.chars();
-    let short: String = chars.by_ref().take(MAX_CHARS).collect();
-    if chars.next().is_some() {
-        format!("{short}...")
-    } else {
-        short
-    }
-}
-
-fn progress_message(
-    completed: usize,
-    failed: usize,
-    active: usize,
-    current: Option<&FunctionEntry>,
-) -> String {
-    let mut message = format!("done {completed} active {active}");
-    if failed > 0 {
-        message.push_str(&format!(" failed {failed}"));
-    }
-    if let Some(entry) = current {
-        message.push_str(&format!(
-            " last {}@0x{:x}",
-            short_progress_name(&entry.name),
-            entry.addr
-        ));
-    }
-    message
-}
-
-/// Returns true when any style except `Off` is selected.
-fn progress_enabled(style: BatchProgressStyle) -> bool {
-    !matches!(style, BatchProgressStyle::Off)
 }
 
 fn sort_batch_work(entries: &mut [&FunctionEntry]) {
@@ -522,12 +369,7 @@ fn decompile_all_parallel(
     let mut sorted: Vec<&FunctionEntry> = indexed.into_values().collect();
     sort_batch_work(&mut sorted);
     let total = sorted.len();
-    let report = progress_enabled(config.progress_style);
-    let progress = Arc::new(ProgressPrinter::new("batch", config.progress_style, total));
-    let started = AtomicUsize::new(0);
-    let completed = AtomicUsize::new(0);
-    let failed = AtomicUsize::new(0);
-    let active = AtomicUsize::new(0);
+    let progress = BatchProgress::new("batch", config.progress_style, total);
 
     let large_threshold = config.options.batch.large_function_serial_bytes;
     let mut parallel_entries = Vec::new();
@@ -561,18 +403,7 @@ fn decompile_all_parallel(
             ],
         );
         profiling::record_items("batch.function", 1);
-        if report {
-            let started_now = started.fetch_add(1, Ordering::Relaxed) + 1;
-            let active_now = active.fetch_add(1, Ordering::Relaxed) + 1;
-            progress.report(
-                started.load(Ordering::Relaxed).max(started_now),
-                completed.load(Ordering::Relaxed),
-                failed.load(Ordering::Relaxed),
-                active_now,
-                total,
-                Some(entry),
-            );
-        }
+        progress.started(entry);
         let output = pipeline::decompile_function_with_symbols(
             image,
             lifter,
@@ -583,23 +414,7 @@ fn decompile_all_parallel(
             functions,
             rtti,
         );
-        if report {
-            let failed_now = if output.is_err() {
-                failed.fetch_add(1, Ordering::Relaxed) + 1
-            } else {
-                failed.load(Ordering::Relaxed)
-            };
-            let active_now = active.fetch_sub(1, Ordering::Relaxed).saturating_sub(1);
-            let completed_now = completed.fetch_add(1, Ordering::Relaxed) + 1;
-            progress.report(
-                started.load(Ordering::Relaxed),
-                completed_now,
-                failed_now,
-                active_now,
-                total,
-                None,
-            );
-        }
+        progress.completed(output.is_ok());
         let result = BatchResult {
             addr: entry.addr,
             name: entry.name.clone(),
@@ -679,16 +494,8 @@ fn decompile_interproc(
     }
 
     let total_phase1 = sorted.len();
-    let report = progress_enabled(config.progress_style);
-    let progress_phase1 = Arc::new(ProgressPrinter::new(
-        "interproc-phase1",
-        config.progress_style,
-        total_phase1,
-    ));
-    let started_phase1 = AtomicUsize::new(0);
-    let completed_phase1 = AtomicUsize::new(0);
-    let failed_phase1 = AtomicUsize::new(0);
-    let active_phase1 = AtomicUsize::new(0);
+    let progress_phase1 =
+        BatchProgress::new("interproc-phase1", config.progress_style, total_phase1);
 
     // Phase 1: parallel lift + passes
     profiling::diagnostic(
@@ -709,18 +516,7 @@ fn decompile_interproc(
                 ],
             );
             profiling::record_items("batch.interproc.phase1.function", 1);
-            if report {
-                let started_now = started_phase1.fetch_add(1, Ordering::Relaxed) + 1;
-                let active_now = active_phase1.fetch_add(1, Ordering::Relaxed) + 1;
-                progress_phase1.report(
-                    started_phase1.load(Ordering::Relaxed).max(started_now),
-                    completed_phase1.load(Ordering::Relaxed),
-                    failed_phase1.load(Ordering::Relaxed),
-                    active_now,
-                    total_phase1,
-                    Some(entry),
-                );
-            }
+            progress_phase1.started(entry);
             let r = pipeline::lift_and_run_passes(
                 image,
                 lifter,
@@ -730,25 +526,7 @@ fn decompile_interproc(
                 rtti,
                 functions,
             );
-            if report {
-                let failed_now = if r.is_err() {
-                    failed_phase1.fetch_add(1, Ordering::Relaxed) + 1
-                } else {
-                    failed_phase1.load(Ordering::Relaxed)
-                };
-                let active_now = active_phase1
-                    .fetch_sub(1, Ordering::Relaxed)
-                    .saturating_sub(1);
-                let completed_now = completed_phase1.fetch_add(1, Ordering::Relaxed) + 1;
-                progress_phase1.report(
-                    started_phase1.load(Ordering::Relaxed),
-                    completed_now,
-                    failed_now,
-                    active_now,
-                    total_phase1,
-                    None,
-                );
-            }
+            progress_phase1.completed(r.is_ok());
             (entry.addr, entry.name.clone(), r)
         })
         .collect();
@@ -866,15 +644,8 @@ fn decompile_interproc(
         })
         .collect();
     let total_phase3 = emit_entries.len();
-    let started_phase3 = AtomicUsize::new(0);
-    let completed_phase3 = AtomicUsize::new(0);
-    let failed_phase3 = AtomicUsize::new(0);
-    let active_phase3 = AtomicUsize::new(0);
-    let progress_phase3 = Arc::new(ProgressPrinter::new(
-        "interproc-phase3",
-        config.progress_style,
-        total_phase3,
-    ));
+    let progress_phase3 =
+        BatchProgress::new("interproc-phase3", config.progress_style, total_phase3);
 
     let mut emit_results: Vec<BatchResult> = emit_entries
         .into_par_iter()
@@ -902,18 +673,7 @@ fn decompile_interproc(
                 ],
             );
             profiling::record_items("batch.interproc.phase3.emit", 1);
-            if report {
-                let started_now = started_phase3.fetch_add(1, Ordering::Relaxed) + 1;
-                let active_now = active_phase3.fetch_add(1, Ordering::Relaxed) + 1;
-                progress_phase3.report(
-                    started_phase3.load(Ordering::Relaxed).max(started_now),
-                    completed_phase3.load(Ordering::Relaxed),
-                    failed_phase3.load(Ordering::Relaxed),
-                    active_now,
-                    total_phase3,
-                    Some(&entry),
-                );
-            }
+            progress_phase3.started(&entry);
             let output = pipeline::emit_function_interproc(
                 &mut ssa,
                 image,
@@ -924,25 +684,7 @@ fn decompile_interproc(
                 functions,
                 rtti,
             );
-            if report {
-                let failed_now = if output.is_err() {
-                    failed_phase3.fetch_add(1, Ordering::Relaxed) + 1
-                } else {
-                    failed_phase3.load(Ordering::Relaxed)
-                };
-                let active_now = active_phase3
-                    .fetch_sub(1, Ordering::Relaxed)
-                    .saturating_sub(1);
-                let completed_now = completed_phase3.fetch_add(1, Ordering::Relaxed) + 1;
-                progress_phase3.report(
-                    started_phase3.load(Ordering::Relaxed),
-                    completed_now,
-                    failed_now,
-                    active_now,
-                    total_phase3,
-                    None,
-                );
-            }
+            progress_phase3.completed(output.is_ok());
             BatchResult {
                 addr,
                 name,
@@ -1230,29 +972,6 @@ mod tests {
     fn fixture(name: &str) -> PathBuf {
         let manifest = env!("CARGO_MANIFEST_DIR");
         PathBuf::from(format!("{manifest}/../../fixtures/{name}"))
-    }
-
-    #[test]
-    fn progress_mode_selection_is_stable() {
-        assert!(!progress_enabled(BatchProgressStyle::Off));
-        assert!(progress_enabled(BatchProgressStyle::Plain));
-        assert!(progress_enabled(BatchProgressStyle::Color));
-        assert!(progress_enabled(BatchProgressStyle::Auto));
-    }
-
-    #[test]
-    fn progress_message_reports_active_work_before_completion() {
-        let entry = FunctionEntry {
-            name: "very_long_function_name_that_should_be_shortened_for_terminal_progress"
-                .to_string(),
-            addr: 0x1000,
-            size: 0x20,
-        };
-        let message = progress_message(0, 0, 1, Some(&entry));
-
-        assert!(message.contains("done 0 active 1"));
-        assert!(message.contains("last very_long_function_name"));
-        assert!(message.contains("...@0x1000"));
     }
 
     #[test]

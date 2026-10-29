@@ -1,3 +1,0 @@
-elapsed_seconds=0.611
-cfg_blocks=424
-gate=not needed; CMOV lowers to Callother without adding CFG edges

@@ -1,2 +1,0 @@
-lint-determinism: OK — no HashMap/HashSet in enforced crates
-Lint correctly detects HashMap violations (tested with injected use statement)

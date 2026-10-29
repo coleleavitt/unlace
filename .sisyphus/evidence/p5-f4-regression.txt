@@ -1,9 +1,0 @@
-F4: Regression Check — APPROVE
-Date: 2026-04-30
-medium.elf: 725 lines (decompiles successfully)
-debug_structs.elf: 187 lines (decompiles successfully)
-debug_calls.elf: 661 lines (decompiles successfully)
-debug_hello.elf: 102 lines (decompiles successfully)
-Test failures: 0
-Invalid input handling: exit code 1 (correct)
-All Phase 1-4 features intact. No regressions.

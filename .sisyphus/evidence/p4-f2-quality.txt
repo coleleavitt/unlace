@@ -1,5 +1,0 @@
-F2: Code Quality Review — APPROVE
-Date: 2026-04-30
-cargo test --workspace: 995 passed, 0 failed
-cargo xtask lint-determinism: OK
-All clean.

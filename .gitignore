@@ -88,3 +88,7 @@ target-agents/
 
 # Prime agent session artifacts
 .prime/
+
+# Agent session state (local-only)
+.cortexkit/
+.sisyphus/

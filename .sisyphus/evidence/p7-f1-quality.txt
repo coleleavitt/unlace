@@ -1,9 +1,0 @@
-F1: Code Quality Review — APPROVE
-Date: 2026-04-30
-Core tests: 960 passed, 0 failed
-Lint: OK — no HashMap/HashSet
-Golden tests: 9/9 pass (updated after new passes)
-Note: CLI smoke tests not run (branches.elf hang from stashed CMOVcc changes)
-New passes added: GlobalCopyProp, GVN, alias-aware DSE, DWARF stack vars,
-struct field inference, Type propagation, array stride detection,
-variable naming heuristics, complex cast emission

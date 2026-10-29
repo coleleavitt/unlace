@@ -106,6 +106,7 @@ const CHILD_REPORTS: [ChildReport; 5] = [
             "worse",
             "gotos",
             "leaktemp",
+            "baseline",
         ],
     },
     ChildReport {

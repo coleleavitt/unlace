@@ -7,12 +7,16 @@
 //! unlace (in-process, one symbol context for the whole binary) and compares
 //! each pair: the pseudo-C feature counts of [`features::FEATURES`], the
 //! line and syntax-tree similarity of [`similarity`], and the goto/line
-//! verdict of [`crate::address_diff`]. Without the binary it prints a
-//! `skipped` summary and exits 0, so `cargo xtask gate` stays informational.
+//! verdict of [`crate::address_diff`]. The totals are checked against
+//! [`baseline::PATH`]: a regression exits 1, so the `corpus parity` row of
+//! `cargo xtask gate` fails. Without the binary it prints a `skipped`
+//! summary and exits 0, so the row stays informational.
 //!
 //! Usage: `cargo xtask corpus-parity [--arch x86_64] [--binary PATH]
-//! [--out DIR] [--only SUBSTR] [--timeout SECS] [--reuse-unlace]`
+//! [--out DIR] [--only SUBSTR] [--timeout SECS] [--reuse-unlace]
+//! [--update-baseline]`
 
+mod baseline;
 mod binaries;
 pub mod features;
 mod report;
@@ -40,6 +44,8 @@ struct Options {
     timeout: Duration,
     /// Re-measure the unlace C saved by an earlier run instead of decompiling.
     reuse_unlace: bool,
+    /// Write the current totals as the new baseline instead of checking.
+    update_baseline: bool,
 }
 
 impl Options {
@@ -51,6 +57,7 @@ impl Options {
             only: None,
             timeout: PipelineConfig::default().timeout,
             reuse_unlace: false,
+            update_baseline: false,
         };
         let mut args = args.iter();
         while let Some(arg) = args.next() {
@@ -65,6 +72,7 @@ impl Options {
                     options.timeout = Duration::from_secs(secs);
                 }
                 "--reuse-unlace" => options.reuse_unlace = true,
+                "--update-baseline" => options.update_baseline = true,
                 other => return Err(format!("unknown argument {other}")),
             }
         }
@@ -250,8 +258,82 @@ pub fn run(root: &Path, args: &[String]) -> i32 {
         &options.out_dir.join("corpus-parity.json"),
         &serde_json::to_string_pretty(&report).expect("report serializes"),
     );
-    println!("{}", report::summary_line(&report));
-    0
+
+    // `--only` measures a subset; its totals are not comparable to the baseline.
+    let verdict = if options.only.is_some() {
+        BaselineVerdict::NotComparable
+    } else {
+        match check_baseline(root, &options, &report) {
+            Ok(verdict) => verdict,
+            Err(e) => {
+                eprintln!("corpus-parity: {e}");
+                return 1;
+            }
+        }
+    };
+    println!("{} {verdict}", report::summary_line(&report));
+    match verdict {
+        BaselineVerdict::Regressed(_) => 1,
+        _ => 0,
+    }
+}
+
+enum BaselineVerdict {
+    Ok,
+    Updated,
+    Missing,
+    NotComparable,
+    Regressed(Vec<baseline::Regression>),
+}
+
+impl std::fmt::Display for BaselineVerdict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ok => write!(f, "baseline=ok"),
+            Self::Updated => write!(f, "baseline=updated"),
+            Self::Missing => write!(f, "baseline=none"),
+            Self::NotComparable => write!(f, "baseline=skipped(--only)"),
+            Self::Regressed(regressions) => {
+                let metrics: Vec<&str> = regressions.iter().map(|r| r.metric).collect();
+                write!(f, "baseline=REGRESSED({})", metrics.join(","))
+            }
+        }
+    }
+}
+
+fn check_baseline(
+    root: &Path,
+    options: &Options,
+    report: &CorpusReport,
+) -> Result<BaselineVerdict, String> {
+    let current = baseline::Baseline::of(&report::Totals::of(report));
+    if options.update_baseline {
+        baseline::store(root, &options.arch, &current)?;
+        println!("wrote {}", root.join(baseline::PATH).display());
+        return Ok(BaselineVerdict::Updated);
+    }
+    let Some(stored) = baseline::load(root, &options.arch)? else {
+        eprintln!(
+            "corpus-parity: no baseline for {} in {}; run with --update-baseline to record one",
+            options.arch,
+            baseline::PATH
+        );
+        return Ok(BaselineVerdict::Missing);
+    };
+    let regressions = baseline::compare(&stored, &current);
+    if regressions.is_empty() {
+        return Ok(BaselineVerdict::Ok);
+    }
+    for regression in &regressions {
+        eprintln!("corpus-parity: regression: {regression}");
+    }
+    eprintln!(
+        "corpus-parity: {} regression(s) against {}; review the diff under {} before refreshing with --update-baseline",
+        regressions.len(),
+        baseline::PATH,
+        options.out_dir.join("unlace").display()
+    );
+    Ok(BaselineVerdict::Regressed(regressions))
 }
 
 type Reference = (String, u64, String);

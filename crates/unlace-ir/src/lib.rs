@@ -22,6 +22,7 @@ pub mod lvar;
 pub mod memory_ssa;
 mod op;
 pub mod reg_alias;
+pub mod signature;
 mod space;
 pub mod ssa;
 pub mod stack;

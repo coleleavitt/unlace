@@ -74,8 +74,9 @@ impl<'img> Decompiler<'img> {
         let mut effective_config = config.clone();
         effective_config.symbol_context = Some({
             let _span = profiling::phase("decompile.symbol-context");
-            std::sync::Arc::new(pipeline::build_symbol_context_with_config(
+            std::sync::Arc::new(pipeline::build_shared_symbol_context(
                 image,
+                lifter.as_ref(),
                 &functions,
                 &config.flirt,
             ))

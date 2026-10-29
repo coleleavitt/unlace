@@ -5,7 +5,8 @@
 use std::collections::BTreeMap;
 
 use unlace_ir::IrOp;
-use unlace_ir::ssa::{CallingConvention, FunctionSignatureRegistry, SsaFunction};
+use unlace_ir::signature::FunctionSignatureRegistry;
+use unlace_ir::ssa::{CallingConvention, SsaFunction};
 
 use crate::pass::{Pass, PassError};
 
@@ -74,7 +75,8 @@ pub fn infer_program_convention(functions: &[&SsaFunction]) -> CallingConvention
 mod tests {
     use super::*;
     use smallvec::smallvec;
-    use unlace_ir::ssa::{FunctionSignature, PrimitiveType, build_ssa};
+    use unlace_ir::signature::{FunctionSignature, SignatureRank};
+    use unlace_ir::ssa::{PrimitiveType, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
 
     #[test]
@@ -99,11 +101,12 @@ mod tests {
         let mut registry = FunctionSignatureRegistry::new();
         registry.insert(
             0x2000,
-            FunctionSignature {
-                param_types: vec![PrimitiveType::Int(8), PrimitiveType::Int(8)],
-                return_type: PrimitiveType::Int(4),
-                calling_convention: CallingConvention::SystemV,
-            },
+            FunctionSignature::with_param_types(
+                CallingConvention::SystemV,
+                SignatureRank::CalleeBody,
+                PrimitiveType::Int(4),
+                &[PrimitiveType::Int(8), PrimitiveType::Int(8)],
+            ),
         );
 
         let pass = WholeProgCallingConvPass { registry };

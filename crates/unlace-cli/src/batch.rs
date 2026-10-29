@@ -346,8 +346,9 @@ fn decompile_all_parallel(
 ) -> Vec<BatchResult> {
     let symbol_context = {
         let _span = profiling::phase("batch.symbol-context");
-        Arc::new(pipeline::build_symbol_context_with_config(
+        Arc::new(pipeline::build_shared_symbol_context(
             image,
+            lifter,
             functions,
             &config.flirt,
         ))
@@ -450,8 +451,9 @@ fn decompile_interproc(
 ) -> Vec<BatchResult> {
     let symbol_context = {
         let _span = profiling::phase("batch.symbol-context");
-        Arc::new(pipeline::build_symbol_context_with_config(
+        Arc::new(pipeline::build_shared_symbol_context(
             image,
+            lifter,
             functions,
             &config.flirt,
         ))

@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use unlace_ir::signature::{FunctionSignature, FunctionSignatureRegistry};
 use unlace_ir::ssa::{CallingConvention, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{ArchId, BlockId, IrOp, SpaceId, Varnode};
 
@@ -53,7 +54,12 @@ pub fn recover_direct_call_args(
     func: &mut SsaFunction,
     callee_name_at_addr: &dyn Fn(u64) -> Option<&'static str>,
 ) -> usize {
-    recover_direct_call_args_with_param_counts(func, callee_name_at_addr, &|_| None)
+    recover_direct_call_args_with_param_counts(
+        func,
+        callee_name_at_addr,
+        &|_| None,
+        &FunctionSignatureRegistry::new(),
+    )
 }
 
 /// Parameter shape of a direct-call target, as far as a caller can know it.
@@ -87,6 +93,15 @@ impl CalleeArity {
     }
 }
 
+impl From<&FunctionSignature> for CalleeArity {
+    fn from(sig: &FunctionSignature) -> Self {
+        CalleeArity {
+            params: sig.params.len(),
+            variadic: sig.variadic,
+        }
+    }
+}
+
 impl From<&LibcSignature> for CalleeArity {
     fn from(sig: &LibcSignature) -> Self {
         CalleeArity {
@@ -99,13 +114,17 @@ impl From<&LibcSignature> for CalleeArity {
 /// Append visible ABI arguments to direct calls and tail-call branches with
 /// known libc signatures or caller-provided callee arities.
 ///
-/// The arity resolver lets frontends feed debug-info or prologue knowledge
-/// into the same ABI register scan used for libc calls. It is intentionally
-/// count-only; type refinement stays in the later signature/type passes.
+/// The arity of a callee comes from the best source that knows it: the
+/// libc table, then the caller-provided resolver (debug info or the
+/// callee's own body), then the parameter list of its demangled name, and
+/// last `guessed`, the prototypes guessed from every call site in the image
+/// ([`crate::callee_guess`]). It is intentionally count-only; type
+/// refinement stays in the later signature/type passes.
 pub fn recover_direct_call_args_with_param_counts(
     func: &mut SsaFunction,
     callee_name_at_addr: &dyn Fn(u64) -> Option<&'static str>,
     callee_arity_at_addr: &dyn Fn(u64) -> Option<CalleeArity>,
+    guessed: &FunctionSignatureRegistry,
 ) -> usize {
     let def_map = build_def_map(func);
     let cc = calling_convention_for(func);
@@ -114,7 +133,8 @@ pub fn recover_direct_call_args_with_param_counts(
         return 0;
     }
 
-    let entry_states = compute_arg_reg_entry_states(func, arg_regs);
+    let (entry_seed, forwarded) = entry_arg_values(func, cc, arg_regs);
+    let entry_states = compute_arg_reg_entry_states(func, arg_regs, entry_seed);
 
     let mut updates = Vec::new();
     for (&bid, block) in &func.function.blocks {
@@ -126,17 +146,25 @@ pub fn recover_direct_call_args_with_param_counts(
                 && target.space == SpaceId::Const
             {
                 let callee_name = callee_name_at_addr(target.offset);
-                let visible = visible_arg_count(arg_regs, &reg_state);
-                let wanted = callee_name
+                let visible = visible_arg_count(arg_regs, &reg_state, &forwarded);
+                let arity = callee_name
                     .and_then(lookup_libc_normalized)
-                    .map(CalleeArity::from)
-                    .or_else(|| callee_arity_at_addr(target.offset))
+                    .map(|sig| (ArityOrigin::Libc, CalleeArity::from(sig)))
+                    .or_else(|| {
+                        callee_arity_at_addr(target.offset).map(|a| (ArityOrigin::Resolver, a))
+                    })
                     .or_else(|| {
                         callee_name
                             .and_then(param_count_from_itanium_symbol)
-                            .map(CalleeArity::fixed)
+                            .map(|n| (ArityOrigin::Demangled, CalleeArity::fixed(n)))
                     })
-                    .map_or(0, |arity| arity.wanted_args(visible, arg_regs.len()));
+                    .or_else(|| {
+                        guessed
+                            .get(&target.offset)
+                            .map(|sig| (ArityOrigin::CallSites, CalleeArity::from(sig)))
+                    });
+                let wanted =
+                    arity.map_or(0, |(_, arity)| arity.wanted_args(visible, arg_regs.len()));
                 let existing = insn.inputs.len().saturating_sub(1);
                 if wanted > existing {
                     let mut args = Vec::new();
@@ -151,6 +179,7 @@ pub fn recover_direct_call_args_with_param_counts(
                             insn.addr,
                             target.offset,
                             callee_name,
+                            arity.map(|(origin, _)| origin),
                             wanted,
                             existing,
                             visible,
@@ -205,17 +234,36 @@ pub fn recover_direct_call_args_with_param_counts(
     changed_sites
 }
 
-fn visible_arg_count(arg_regs: &[u64], state: &RegState) -> usize {
+/// Argument registers the call site visibly sets up: a leading run of
+/// registers holding a value other than an entry value the function never
+/// reads itself.
+fn visible_arg_count(
+    arg_regs: &[u64],
+    state: &RegState,
+    forwarded: &BTreeSet<SsaVarnode>,
+) -> usize {
     arg_regs
         .iter()
-        .take_while(|reg| state.contains_key(reg))
+        .take_while(|reg| state.get(reg).is_some_and(|sv| !forwarded.contains(sv)))
         .count()
 }
 
+/// Which source supplied a callee's arity, for the `unlace::call_args`
+/// trace.
+#[derive(Clone, Copy, Debug)]
+enum ArityOrigin {
+    Libc,
+    Resolver,
+    Demangled,
+    CallSites,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn trace_call_args(
     call_addr: u64,
     target_addr: u64,
     callee_name: Option<&str>,
+    origin: Option<ArityOrigin>,
     wanted: usize,
     existing: usize,
     visible: usize,
@@ -223,7 +271,7 @@ fn trace_call_args(
 ) {
     tracing::debug!(
         target: "unlace::call_args",
-        "call=0x{call_addr:x} target=0x{target_addr:x} name={} wanted={wanted} existing={existing} visible={visible} added={added}",
+        "call=0x{call_addr:x} target=0x{target_addr:x} name={} origin={origin:?} wanted={wanted} existing={existing} visible={visible} added={added}",
         callee_name.unwrap_or("<unknown>")
     );
 }
@@ -231,6 +279,7 @@ fn trace_call_args(
 fn compute_arg_reg_entry_states(
     func: &SsaFunction,
     arg_regs: &[u64],
+    entry_seed: RegState,
 ) -> BTreeMap<BlockId, RegState> {
     let reachable = reachable_blocks(func);
     let mut predecessors: BTreeMap<BlockId, Vec<BlockId>> = BTreeMap::new();
@@ -245,7 +294,6 @@ fn compute_arg_reg_entry_states(
         }
     }
 
-    let entry_seed = collect_live_in_arg_regs(func, arg_regs);
     let mut in_states: BTreeMap<BlockId, RegState> = BTreeMap::new();
     let mut out_states: BTreeMap<BlockId, RegState> = BTreeMap::new();
 
@@ -297,6 +345,51 @@ fn reachable_blocks(func: &SsaFunction) -> BTreeSet<BlockId> {
         }
     }
     reachable
+}
+
+/// The value of every argument register at function entry, and the subset
+/// of those values the function never reads itself.
+///
+/// An unread entry value still reaches a call that comes before any
+/// redefinition, as an argument forwarded unchanged from the caller's own
+/// arguments (`mov esi, 8; jmp operator delete` passes `this` in RDI). Such
+/// a value fills the arguments of a callee whose arity is known, but does
+/// not count as visible setup for a variadic callee. Only registers the
+/// function never writes are forwarded this way: SSA numbers the entry
+/// value and the first definition of a register both as version 0.
+fn entry_arg_values(
+    func: &SsaFunction,
+    cc: CallingConvention,
+    arg_regs: &[u64],
+) -> (RegState, BTreeSet<SsaVarnode>) {
+    let mut state = collect_live_in_arg_regs(func, arg_regs);
+    let written: BTreeSet<u64> = func
+        .function
+        .blocks
+        .values()
+        .flat_map(|block| &block.insns)
+        .filter_map(|insn| insn.output)
+        .filter(|out| out.space == SpaceId::Register)
+        .map(|out| canonical_register_offset(out.offset))
+        .collect();
+    let width = if cc == CallingConvention::Thiscall {
+        4
+    } else {
+        8
+    };
+    let mut forwarded = BTreeSet::new();
+    for &reg in arg_regs {
+        if written.contains(&reg) || state.contains_key(&reg) {
+            continue;
+        }
+        let sv = SsaVarnode {
+            base: Varnode::reg(reg, width),
+            version: 0,
+        };
+        forwarded.insert(sv);
+        state.insert(reg, sv);
+    }
+    (state, forwarded)
 }
 
 fn collect_live_in_arg_regs(func: &SsaFunction, arg_regs: &[u64]) -> RegState {
@@ -442,6 +535,10 @@ pub(crate) fn arg_regs_for(cc: CallingConvention) -> &'static [u64] {
     }
 }
 
+/// Arguments of a call to `raw_name`, from the parameter list of its
+/// Itanium demangling. Constructors and destructors also take `this`, which
+/// the list leaves out; other member functions cannot be told apart from
+/// namespace-scope ones by the name alone.
 fn param_count_from_itanium_symbol(raw_name: &str) -> Option<usize> {
     let demangled = crate::itanium_demangle::demangle_itanium(raw_name)?;
     let open = demangled.find('(')?;
@@ -450,10 +547,22 @@ fn param_count_from_itanium_symbol(raw_name: &str) -> Option<usize> {
         return None;
     }
     let params = demangled[open + 1..close].trim();
-    if params.is_empty() || params == "void" {
-        return Some(0);
+    let named = if params.is_empty() || params == "void" {
+        0
+    } else {
+        params.split(',').count()
+    };
+    Some(named + usize::from(is_structor(&demangled[..open])))
+}
+
+/// Whether a demangled qualified name (`Dog::Dog`, `Dog::~Dog`) names a
+/// constructor or destructor.
+fn is_structor(qualified: &str) -> bool {
+    let mut parts = qualified.rsplit("::");
+    match (parts.next(), parts.next()) {
+        (Some(last), Some(class)) => last.trim_start_matches('~') == class,
+        _ => false,
     }
-    Some(params.split(',').count())
 }
 
 fn canonical_register_offset(offset: u64) -> u64 {
@@ -1015,9 +1124,12 @@ mod tests {
         let mut ssa = build_ssa(func);
         ssa.arch = ArchId::X86_64;
 
-        let changed = recover_direct_call_args_with_param_counts(&mut ssa, &|_| None, &|addr| {
-            (addr == 0x1360).then_some(CalleeArity::fixed(1))
-        });
+        let changed = recover_direct_call_args_with_param_counts(
+            &mut ssa,
+            &|_| None,
+            &|addr| (addr == 0x1360).then_some(CalleeArity::fixed(1)),
+            &FunctionSignatureRegistry::new(),
+        );
 
         assert_eq!(changed, 1);
         let branch = &ssa.function.blocks[&BlockId(0)].insns[1];
@@ -1055,7 +1167,12 @@ mod tests {
                 variadic: true,
             })
         };
-        recover_direct_call_args_with_param_counts(&mut ssa, &|_| None, &arity);
+        recover_direct_call_args_with_param_counts(
+            &mut ssa,
+            &|_| None,
+            &arity,
+            &FunctionSignatureRegistry::new(),
+        );
 
         let call = &ssa.function.blocks[&BlockId(0)].insns[3];
         assert_eq!(
@@ -1094,12 +1211,61 @@ mod tests {
             &mut ssa,
             &|addr| (addr == 0x1360).then_some("_Z9safe_calli"),
             &|_| None,
+            &FunctionSignatureRegistry::new(),
         );
 
         assert_eq!(changed, 1);
         let branch = &ssa.function.blocks[&BlockId(0)].insns[1];
         assert_eq!(branch.inputs.len(), 2);
         assert_eq!(branch.inputs[1], Varnode::constant(0xffff_ffff, 4));
+    }
+
+    #[test]
+    fn structor_calls_take_this() {
+        assert_eq!(param_count_from_itanium_symbol("_Z9safe_calli"), Some(1));
+        assert_eq!(param_count_from_itanium_symbol("_ZN3DogC1Ev"), Some(1));
+        assert!(is_structor("Dog::~Dog"));
+        assert!(!is_structor("Dog::speak"));
+        assert!(!is_structor("speak"));
+    }
+
+    /// A callee with no other prototype source takes the arity guessed
+    /// from the call sites of the whole image.
+    #[test]
+    fn guessed_call_site_arity_is_the_last_fallback() {
+        let mut func = Function::new("main", BlockId(0), 0x1250);
+        let mut bb = BasicBlock::new(BlockId(0));
+        for (idx, reg) in [RDI, RSI].into_iter().enumerate() {
+            bb.insns.push(IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::reg(reg, 8),
+                smallvec![Varnode::constant(10 + idx as u64, 8)],
+                0x1254 + idx as u64,
+            ));
+        }
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![Varnode::constant(0x1360, 8)],
+            0x1260,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::X86_64;
+
+        let guessed = FunctionSignatureRegistry::from([(
+            0x1360,
+            FunctionSignature::with_param_types(
+                CallingConvention::SystemV,
+                unlace_ir::signature::SignatureRank::CallSite,
+                unlace_ir::ssa::PrimitiveType::Unknown,
+                &[unlace_ir::ssa::PrimitiveType::Unknown],
+            ),
+        )]);
+        recover_direct_call_args_with_param_counts(&mut ssa, &|_| None, &|_| None, &guessed);
+
+        let call = &ssa.function.blocks[&BlockId(0)].insns[2];
+        assert_eq!(&call.inputs[1..], &[Varnode::constant(10, 8)]);
     }
 
     #[test]

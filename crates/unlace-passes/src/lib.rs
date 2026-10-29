@@ -41,6 +41,7 @@ pub mod call_args;
 pub mod call_boundary_copyprop;
 #[cfg(feature = "unwired")]
 pub mod call_snapshot;
+pub mod callee_guess;
 pub mod caller_param_propagate;
 #[cfg(feature = "unwired")]
 pub mod calling_conv_coverage;

@@ -5,44 +5,28 @@
 //! (per the calling convention) and then merge its inferred type into the
 //! callee's parameter slot in the [`FunctionSignatureRegistry`].
 //!
-//! Modelled after IDA's `apply_callee_tinfo` (`research/decompiled-references/ida/idalib/all/`),
+//! Modelled after IDA's `apply_callee_tinfo` (`research/analyzed-references/IDA/IDAlib/all/`),
 //! which fills in argument types from caller context when the callee body is
-//! ambiguous. The merge rule is the [`PrimitiveType::join`] lattice: `Unknown`
-//! is replaced by anything; equal types stay; conflicts collapse to `Unknown`.
+//! ambiguous. Each call site contributes a [`SignatureRank::CallSite`]
+//! prototype and each callee body a [`SignatureRank::CalleeBody`] one; they
+//! meet through [`FunctionSignature::merge`], so caller evidence refines the
+//! types of a callee's parameters but never changes the parameter list a
+//! better source established.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{
-    CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction, SsaVarnode,
-    VarnodeSlot,
+use unlace_ir::signature::{
+    FunctionSignature, FunctionSignatureRegistry, SignatureRank, merge_param_type,
 };
+use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::xref::CallGraph;
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
-/// x86-64 register offsets (must match `calling_convention.rs`).
-const RCX: u64 = 8;
-const RDX: u64 = 16;
-const RSI: u64 = 48;
-const RDI: u64 = 56;
-const R8: u64 = 64;
-const R9: u64 = 72;
-
-const SYSV_INT_REGS: &[u64] = &[RDI, RSI, RDX, RCX, R8, R9];
-const MSX64_INT_REGS: &[u64] = &[RCX, RDX, R8, R9];
-const AARCH64_INT_REGS: &[u64] = &[0, 8, 16, 24, 32, 40, 48, 56];
-
-/// Argument-passing register list for a calling convention.
-fn arg_regs(cc: CallingConvention) -> &'static [u64] {
-    match cc {
-        CallingConvention::SystemV => SYSV_INT_REGS,
-        CallingConvention::MicrosoftX64 => MSX64_INT_REGS,
-        CallingConvention::AArch64 => AARCH64_INT_REGS,
-        CallingConvention::Thiscall => &[RCX],
-        CallingConvention::Cdecl | CallingConvention::Stdcall | CallingConvention::Unknown => &[],
-    }
-}
-
 /// Run caller→callee parameter propagation across the whole program.
+///
+/// The prototypes of all call sites of one callee are merged with each
+/// other first, so the result does not depend on caller order, and then
+/// into the callee's registry entry.
 ///
 /// Returns `true` if any signature in `registry` changed.
 pub fn propagate_caller_params(
@@ -50,7 +34,7 @@ pub fn propagate_caller_params(
     call_graph: &CallGraph,
     registry: &mut FunctionSignatureRegistry,
 ) -> bool {
-    let mut changed = false;
+    let mut from_sites = FunctionSignatureRegistry::new();
 
     for (&caller_addr, ssa) in funcs {
         let callees = call_graph.callees_of(caller_addr);
@@ -86,12 +70,41 @@ pub fn propagate_caller_params(
                     continue;
                 }
 
-                changed |= merge_into_registry(registry, callee_addr, cc, &arg_types);
+                merge_or_insert(
+                    &mut from_sites,
+                    callee_addr,
+                    FunctionSignature::with_param_types(
+                        cc,
+                        SignatureRank::CallSite,
+                        PrimitiveType::Unknown,
+                        &arg_types,
+                    ),
+                );
             }
         }
     }
 
+    let mut changed = false;
+    for (callee_addr, site) in from_sites {
+        changed |= merge_or_insert(registry, callee_addr, site);
+    }
     changed
+}
+
+/// Merge `sig` into the registry entry at `addr`, inserting it when the
+/// entry is absent. Returns `true` if the registry changed.
+fn merge_or_insert(
+    registry: &mut FunctionSignatureRegistry,
+    addr: u64,
+    sig: FunctionSignature,
+) -> bool {
+    match registry.get_mut(&addr) {
+        Some(entry) => entry.merge(&sig),
+        None => {
+            registry.insert(addr, sig);
+            true
+        }
+    }
 }
 
 /// For each argument register of `cc`, find the most recent definition
@@ -104,7 +117,7 @@ fn collect_arg_types_at_call(
     call_insn_idx: usize,
     cc: CallingConvention,
 ) -> Vec<PrimitiveType> {
-    let regs = arg_regs(cc);
+    let regs = cc.int_arg_regs();
     if regs.is_empty() {
         return Vec::new();
     }
@@ -143,41 +156,6 @@ fn collect_arg_types_at_call(
     out
 }
 
-/// Merge `arg_types` into the callee's `param_types`, growing the vector
-/// as needed. Returns `true` if the entry changed.
-fn merge_into_registry(
-    registry: &mut FunctionSignatureRegistry,
-    callee_addr: u64,
-    cc: CallingConvention,
-    arg_types: &[PrimitiveType],
-) -> bool {
-    let entry = registry.entry(callee_addr).or_default();
-
-    let mut changed = false;
-    if entry.calling_convention == CallingConvention::Unknown && cc != CallingConvention::Unknown {
-        entry.calling_convention = cc;
-        changed = true;
-    }
-
-    if entry.param_types.len() < arg_types.len() {
-        entry
-            .param_types
-            .resize(arg_types.len(), PrimitiveType::Unknown);
-        changed = true;
-    }
-
-    for (slot, &incoming) in arg_types.iter().enumerate() {
-        let cur = entry.param_types[slot];
-        let merged = cur.join(incoming);
-        if merged != cur {
-            entry.param_types[slot] = merged;
-            changed = true;
-        }
-    }
-
-    changed
-}
-
 /// Apply a previously-built [`FunctionSignatureRegistry`] back into each
 /// function's per-function `external_signatures` map and refine the
 /// callee's *own* `inferred_params` when the registry contains more
@@ -199,7 +177,7 @@ pub fn apply_registry_to_callees(
 
         // Callers of a variadic function pass more arguments than it names.
         let named = ssa.variadic.map_or(usize::MAX, |v| v.fixed_params);
-        for (slot, &param_ty) in sig.param_types.iter().enumerate().take(named) {
+        for (slot, param_ty) in sig.param_types().enumerate().take(named) {
             if param_ty == PrimitiveType::Unknown {
                 continue;
             }
@@ -210,7 +188,7 @@ pub fn apply_registry_to_callees(
                 continue;
             }
             let cur = ssa.inferred_params[slot].1;
-            let merged = cur.join(param_ty);
+            let merged = merge_param_type(cur, param_ty);
             if merged != cur {
                 ssa.inferred_params[slot].1 = merged;
                 changed = true;
@@ -218,6 +196,21 @@ pub fn apply_registry_to_callees(
         }
     }
     changed
+}
+
+/// The prototype a function's own analysis recovered: its inferred
+/// parameters placed by its calling convention.
+pub(crate) fn body_signature(ssa: &SsaFunction) -> FunctionSignature {
+    let param_types: Vec<PrimitiveType> = ssa.inferred_params.iter().map(|(_, ty)| *ty).collect();
+    FunctionSignature {
+        variadic: ssa.variadic.is_some(),
+        ..FunctionSignature::with_param_types(
+            ssa.calling_convention,
+            SignatureRank::CalleeBody,
+            ssa.inferred_return_type,
+            &param_types,
+        )
+    }
 }
 
 /// Build (or refresh) the [`FunctionSignatureRegistry`] from the per-function
@@ -229,22 +222,7 @@ pub fn seed_registry_from_funcs(
     registry: &mut FunctionSignatureRegistry,
 ) {
     for (&addr, ssa) in funcs {
-        let entry = registry.entry(addr).or_default();
-        if entry.calling_convention == CallingConvention::Unknown {
-            entry.calling_convention = ssa.calling_convention;
-        }
-        if entry.return_type == PrimitiveType::Unknown {
-            entry.return_type = ssa.inferred_return_type;
-        }
-        if entry.param_types.len() < ssa.inferred_params.len() {
-            entry
-                .param_types
-                .resize(ssa.inferred_params.len(), PrimitiveType::Unknown);
-        }
-        for (slot, (_, ty)) in ssa.inferred_params.iter().enumerate() {
-            let cur = entry.param_types[slot];
-            entry.param_types[slot] = cur.join(*ty);
-        }
+        merge_or_insert(registry, addr, body_signature(ssa));
     }
 }
 
@@ -273,6 +251,8 @@ mod tests {
     use smallvec::smallvec;
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
+
+    const RDI: u64 = 56;
 
     /// Build a System V function whose body sets RDI = const(42, 4) and
     /// then calls `callee_addr`. Returns `(caller_addr, ssa)`.
@@ -322,13 +302,28 @@ mod tests {
         ssa
     }
 
+    /// A callee whose body reads RDI without revealing its type.
+    fn make_untyped_param_callee(addr: u64) -> SsaFunction {
+        let mut ssa = make_empty_callee(addr);
+        ssa.inferred_params = vec![("a1".into(), PrimitiveType::Unknown)];
+        ssa
+    }
+
+    fn call_graph(funcs: &BTreeMap<u64, SsaFunction>) -> CallGraph {
+        let ir_funcs: BTreeMap<u64, _> = funcs
+            .iter()
+            .map(|(a, s)| (*a, s.function.clone()))
+            .collect();
+        unlace_ir::xref::build_call_graph(&ir_funcs)
+    }
+
     #[test]
-    fn propagates_int_literal_into_empty_callee() {
+    fn propagates_int_literal_into_untyped_callee_param() {
         let caller_addr = 0x1000;
         let callee_addr = 0x2000;
 
         let caller_ssa = make_caller("caller", caller_addr, callee_addr);
-        let callee_ssa = make_empty_callee(callee_addr);
+        let callee_ssa = make_untyped_param_callee(callee_addr);
 
         let mut funcs = BTreeMap::new();
         funcs.insert(caller_addr, caller_ssa);
@@ -349,11 +344,50 @@ mod tests {
         let sig = registry
             .get(&callee_addr)
             .expect("callee must have a signature");
+        assert_eq!(sig.params.len(), 1);
+        assert_eq!(sig.params[0].ty, PrimitiveType::Int(4));
+        assert_eq!(sig.rank, SignatureRank::CalleeBody);
+    }
+
+    #[test]
+    fn call_sites_do_not_add_params_to_an_analysed_callee() {
+        let caller_addr = 0x1000;
+        let callee_addr = 0x2000;
+        let mut funcs = BTreeMap::new();
+        funcs.insert(caller_addr, make_caller("caller", caller_addr, callee_addr));
+        funcs.insert(callee_addr, make_empty_callee(callee_addr));
+        let cg = call_graph(&funcs);
+
+        let mut registry = FunctionSignatureRegistry::new();
+        seed_registry_from_funcs(&funcs, &mut registry);
+        propagate_caller_params(&funcs, &cg, &mut registry);
+
+        let sig = registry.get(&callee_addr).unwrap();
         assert!(
-            !sig.param_types.is_empty(),
-            "callee should have at least 1 param"
+            sig.params.is_empty(),
+            "the body reads no argument register, which outranks the call site"
         );
-        assert_eq!(sig.param_types[0], PrimitiveType::Int(4));
+    }
+
+    #[test]
+    fn external_callee_takes_the_call_site_prototype() {
+        let caller_addr = 0x1000;
+        let callee_addr = 0x2000;
+        let mut funcs = BTreeMap::new();
+        funcs.insert(caller_addr, make_caller("caller", caller_addr, callee_addr));
+        funcs.insert(callee_addr, make_empty_callee(callee_addr));
+        let cg = call_graph(&funcs);
+        funcs.remove(&callee_addr);
+
+        let mut registry = FunctionSignatureRegistry::new();
+        assert!(propagate_caller_params(&funcs, &cg, &mut registry));
+
+        let sig = registry.get(&callee_addr).unwrap();
+        assert_eq!(sig.rank, SignatureRank::CallSite);
+        assert_eq!(
+            sig.param_types().collect::<Vec<_>>(),
+            vec![PrimitiveType::Int(4)]
+        );
     }
 
     #[test]
@@ -369,7 +403,7 @@ mod tests {
             caller_b.var_types.insert(sv, PrimitiveType::Ptr);
         }
 
-        let callee_ssa = make_empty_callee(callee_addr);
+        let callee_ssa = make_untyped_param_callee(callee_addr);
 
         let mut funcs = BTreeMap::new();
         funcs.insert(caller_a_addr, caller_a);
@@ -388,7 +422,7 @@ mod tests {
 
         let sig = registry.get(&callee_addr).unwrap();
         assert_eq!(
-            sig.param_types[0],
+            sig.params[0].ty,
             PrimitiveType::Unknown,
             "Int+Ptr should collapse to Unknown via join"
         );
@@ -416,18 +450,19 @@ mod tests {
         let mut registry = FunctionSignatureRegistry::new();
         registry.insert(
             callee_addr,
-            unlace_ir::ssa::FunctionSignature {
-                return_type: PrimitiveType::Unknown,
-                param_types: vec![PrimitiveType::Ptr],
-                calling_convention: CallingConvention::SystemV,
-            },
+            FunctionSignature::with_param_types(
+                CallingConvention::SystemV,
+                SignatureRank::CalleeBody,
+                PrimitiveType::Unknown,
+                &[PrimitiveType::Ptr],
+            ),
         );
 
         propagate_caller_params(&funcs, &cg, &mut registry);
 
         let sig = registry.get(&callee_addr).unwrap();
         assert_eq!(
-            sig.param_types[0],
+            sig.params[0].ty,
             PrimitiveType::Ptr,
             "Unknown argument from caller must not clobber a known callee type"
         );

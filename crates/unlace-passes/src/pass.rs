@@ -1303,7 +1303,7 @@ mod phase_tests {
             }),
             Box::new(crate::counterexample_refine::CounterexampleRefinePass),
             Box::new(crate::calling_conv_whole_prog::WholeProgCallingConvPass {
-                registry: unlace_ir::ssa::FunctionSignatureRegistry::new(),
+                registry: unlace_ir::signature::FunctionSignatureRegistry::new(),
             }),
             Box::new(crate::bitfield_recovery::BitfieldRecoveryPass),
             Box::new(crate::daikon_invariants::DaikonInvariantPass),

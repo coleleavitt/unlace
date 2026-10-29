@@ -76,7 +76,7 @@ _Noreturn void may_throw(void) {
     /* allocate exception */
     v0 = __cxa_allocate_exception(0x10LL);
     __int64 v2 = v0; // rbx
-    std_runtime_error_runtime_error();
+    std_runtime_error_runtime_error(v2, "negative");
     /* throw */
     v1 = __cxa_throw(v2, 0x3d40LL, qword_3FE0);
     return;
@@ -97,7 +97,7 @@ _Noreturn int safe_call(void) {
     /* allocate exception */
     __int64 v3 = __cxa_allocate_exception(v2); // rax
     v1 = v3;
-    std_runtime_error_runtime_error();
+    std_runtime_error_runtime_error(v1, "negative");
     /* throw */
     v0 = __cxa_throw(v1, 0x3d40LL, qword_3FE0);
     return 0;
@@ -146,7 +146,7 @@ __int64 sub_1300(void) /* // dropped 1 param(s) (dead in body) */ {
     } else {
         if (qword_3FD0) {
             __int64 v1 = qword_4008; // rdi
-            result = sub_10b0();
+            result = sub_10b0(v1);
         }
         result = sub_1290();
         byte_4020 = 1;

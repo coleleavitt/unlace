@@ -628,7 +628,7 @@ __int64 sub_1520(void) /* // dropped 1 param(s) (dead in body) */ {
     } else {
         if (qword_3FF8) {
             __int64 v1 = qword_4008; // rdi
-            result = sub_1040();
+            result = sub_1040(v1);
         }
         result = sub_14b0();
         byte_4010 = 1;

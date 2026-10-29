@@ -223,11 +223,10 @@ fn collect_param_input_scan(func: &SsaFunction, tracked_regs: &[u64]) -> ParamIn
             }
         }
         for (insn_idx, insn) in block.insns.iter().enumerate() {
-            match insn.op {
-                IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
-                _ => {}
-            }
             for (input_idx, inp) in insn.inputs.iter().enumerate() {
+                if is_control_operand(insn.op, input_idx) {
+                    continue;
+                }
                 let Some((reg, mut size)) =
                     tracked_input_register(func, bid, insn_idx, input_idx, inp, tracked_regs)
                 else {
@@ -330,6 +329,17 @@ fn collect_param_input_scan(func: &SsaFunction, tracked_regs: &[u64]) -> ParamIn
             .unwrap_or_default(),
         reg_consumer_ops,
         reg_input_sizes,
+    }
+}
+
+/// Inputs of a control transfer that are its target or condition rather
+/// than a value it reads. A tail-call `BRANCH` keeps, after its target, the
+/// arguments `call_args` recovered for it.
+fn is_control_operand(op: IrOp, input_idx: usize) -> bool {
+    match op {
+        IrOp::Cbranch | IrOp::Branchind => true,
+        IrOp::Branch => input_idx == 0,
+        _ => false,
     }
 }
 
@@ -706,11 +716,10 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
     let mut read_before_write: BTreeSet<u64> = BTreeSet::new();
 
     for (insn_idx, insn) in entry_block.insns.iter().enumerate() {
-        match insn.op {
-            IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
-            _ => {}
-        }
         for (input_idx, inp) in insn.inputs.iter().enumerate() {
+            if is_control_operand(insn.op, input_idx) {
+                continue;
+            }
             if let Some((reg, _size)) =
                 tracked_input_register(func, entry, insn_idx, input_idx, inp, tracked_regs)
                 && !defined.contains(&reg)
@@ -1426,6 +1435,33 @@ mod tests {
     fn argument_read_only_past_entry_block_is_a_param() {
         let params = infer_params(&diamond_into_shared_return());
         assert_eq!(params.len(), 2, "{params:?}");
+    }
+
+    /// `mov esi, 8; jmp operator delete` once `call_args` has appended the
+    /// forwarded `this` and the size: the tail call reads RDI.
+    #[test]
+    fn tail_call_argument_is_a_param() {
+        let mut func = Function::new("deleting_dtor", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(RSI, 8),
+            smallvec![Varnode::constant(8, 8)],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Branch,
+            smallvec![
+                Varnode::constant(0x2000, 8),
+                Varnode::reg(RDI, 8),
+                Varnode::reg(RSI, 8)
+            ],
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = build_ssa(func);
+        ssa.calling_convention = CallingConvention::SystemV;
+        assert_eq!(infer_params(&ssa).len(), 1);
     }
 
     #[allow(dead_code)]

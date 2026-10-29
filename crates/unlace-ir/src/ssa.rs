@@ -10,6 +10,7 @@ use petgraph::algo::dominators::simple_fast;
 use petgraph::stable_graph::StableDiGraph;
 
 use crate::cfg::{ControlFlowGraph, build_cfg};
+use crate::signature::FunctionSignatureRegistry;
 use crate::{ArchId, BlockId, Function, OsAbi, Varnode};
 
 fn ssa_trace_enabled() -> bool {
@@ -110,34 +111,6 @@ impl std::fmt::Display for CallingConvention {
         }
     }
 }
-
-/// Inferred signature of a function — return type and parameter types.
-///
-/// Populated by the inter-procedural type propagation pipeline after each
-/// function has been individually analyzed. Keyed by function entry address
-/// in the [`FunctionSignatureRegistry`] so that `Call` instructions whose
-/// target is a constant address can look up callee types.
-///
-/// Param types are listed in calling-convention order (e.g. for SystemV:
-/// RDI, RSI, RDX, RCX, R8, R9). An entry of [`PrimitiveType::Unknown`]
-/// means the type was not determinable from the callee body alone.
-#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
-pub struct FunctionSignature {
-    /// Inferred return type (corresponds to the value left in RAX/X0/etc.).
-    pub return_type: PrimitiveType,
-    /// Inferred parameter types in calling-convention order.
-    pub param_types: Vec<PrimitiveType>,
-    /// Calling convention used to interpret the parameter slots.
-    pub calling_convention: CallingConvention,
-}
-
-/// Map from function entry address to its inferred [`FunctionSignature`].
-///
-/// Built by the CLI driver after a first analysis pass over every function
-/// in the binary. On a second analysis pass, [`InterprocTypePropPass`] uses
-/// this map at every `Call` instruction to refine caller-side argument and
-/// return-value types.
-pub type FunctionSignatureRegistry = BTreeMap<u64, FunctionSignature>;
 
 /// Counterexample-guided explanation for an ambiguous primitive type.
 ///

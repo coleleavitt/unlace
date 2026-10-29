@@ -1421,6 +1421,9 @@ fn print_c_attempt(
                 ),
             );
         }
+        // With the receiver already printed from its class, the inferred
+        // first parameter it names is the same `this`.
+        let this_printed = param_idx > 0;
         // t230 — when finalize-signature has run, use its `params` list
         // (post-dead-drop, post-byte-mask-narrow) instead of the raw
         // `func.params`. This is how the dead-param drop becomes
@@ -1428,6 +1431,9 @@ fn print_c_attempt(
         // as `char` instead of `__int64`.
         if let Some(sig) = func.finalized_signature.as_ref() {
             for (i, (pname, pty)) in sig.params.iter().enumerate() {
+                if this_printed && pname == "this" {
+                    continue;
+                }
                 if param_idx > 0 || i > 0 {
                     out.push_str(", ");
                 }
@@ -1464,6 +1470,9 @@ fn print_c_attempt(
             }
         } else {
             for (i, (pname, pty)) in func.params.iter().enumerate() {
+                if this_printed && pname == "this" {
+                    continue;
+                }
                 if param_idx > 0 || i > 0 {
                     out.push_str(", ");
                 }

@@ -156,7 +156,7 @@ __int64 sub_11e0(void) /* // dropped 1 param(s) (dead in body) */ {
     } else {
         if (qword_3FD8) {
             __int64 v1 = qword_4008; // rdi
-            result = sub_1070();
+            result = sub_1070(v1);
         }
         result = sub_1170();
         byte_4010 = 1;
@@ -251,11 +251,11 @@ void Cat_Cat(Cat *this) {
 /* Function:   Cat::~Cat() | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Cat::~Cat()
 void Cat_Cat(Cat *this) {
-    delete();
+    delete(this, 8LL);
 }
 
 /* Function:   Dog::~Dog() | Address: 0x1350 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::~Dog()
 void Dog_Dog(Dog *this) {
-    delete();
+    delete(this, 8LL);
 }

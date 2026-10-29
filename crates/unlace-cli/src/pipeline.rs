@@ -92,6 +92,7 @@ use unlace_passes::{
     validate_named_phase_monotonicity_with_exceptions,
 };
 
+mod call_site_guess;
 mod function_extents;
 mod hir_recovery;
 
@@ -1739,7 +1740,7 @@ pub fn run_whole_program_quality_refinement(
     let trace = tracing::enabled!(target: "unlace::interproc", tracing::Level::DEBUG);
     let mut report = WholeProgramQualityReport::default();
 
-    let mut registry = unlace_ir::ssa::FunctionSignatureRegistry::new();
+    let mut registry = unlace_ir::signature::FunctionSignatureRegistry::new();
     unlace_passes::seed_registry_from_funcs(funcs, &mut registry);
     if trace {
         tracing::debug!(
@@ -3411,6 +3412,10 @@ pub struct SymbolContext {
     pub objc_categories: Vec<unlace_loader::ObjcCategory>,
     pub objc_dispatch_pass: Option<Arc<ObjcDispatchPass>>,
     pub go_itab_methods: BTreeSet<u64>,
+    /// Prototypes guessed from every call site in the image, for callees no
+    /// better source describes. Empty unless the context was built by
+    /// [`build_shared_symbol_context`].
+    pub call_site_signatures: unlace_ir::signature::FunctionSignatureRegistry,
 }
 
 impl SymbolContext {
@@ -3439,6 +3444,7 @@ impl SymbolContext {
             objc_categories,
             objc_dispatch_pass,
             go_itab_methods,
+            call_site_signatures: Default::default(),
         }
     }
 }
@@ -3654,6 +3660,24 @@ pub fn build_symbol_table_and_flirt_with_config(
 ) -> (BTreeMap<u64, String>, BTreeMap<u64, FlirtConfidence>) {
     let context = build_symbol_context_with_config(image, discovered, flirt_config);
     (context.symbols, context.flirt_calls)
+}
+
+/// The symbol context shared by every function of one run: symbols and
+/// FLIRT names ([`build_symbol_context_with_config`]) plus the prototypes
+/// guessed from every call site in the image, which takes one extra lift of
+/// each function.
+pub fn build_shared_symbol_context(
+    image: &BinaryImage,
+    lifter: &dyn Lifter,
+    discovered: &[FunctionEntry],
+    flirt_config: &FlirtConfig,
+) -> SymbolContext {
+    let mut context = build_symbol_context_with_config(image, discovered, flirt_config);
+    context.call_site_signatures = {
+        let _span = profiling::phase("symbol-context.call-site-guess");
+        call_site_guess::guess_call_site_signatures(image, lifter, discovered)
+    };
+    context
 }
 
 pub fn build_symbol_context_with_config(
@@ -3923,7 +3947,12 @@ pub fn lift_and_run_passes(
 
     let _call_args_pre = {
         let _profile_stage = profile_pipeline_stage("pipeline.recover-call-args", entry);
-        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &callee_arity)
+        recover_direct_call_args_with_param_counts(
+            &mut ssa,
+            &resolve_name,
+            &callee_arity,
+            &symbol_context.call_site_signatures,
+        )
     };
 
     // Batch 6 (pre-pass): parse printf-family format strings against the
@@ -4769,7 +4798,12 @@ pub fn decompile_function_with_symbols(
 
     let _call_args_pre = {
         let _profile_stage = profile_pipeline_stage("pipeline.recover-call-args", entry);
-        recover_direct_call_args_with_param_counts(&mut ssa, &resolve_name, &callee_arity)
+        recover_direct_call_args_with_param_counts(
+            &mut ssa,
+            &resolve_name,
+            &callee_arity,
+            &symbol_context.call_site_signatures,
+        )
     };
 
     // Batch 6 (pre-pass): parse printf-family format strings *before*

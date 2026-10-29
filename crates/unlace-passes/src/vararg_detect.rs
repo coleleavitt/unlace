@@ -2,10 +2,10 @@
 //!
 //! Two complementary signals fire here:
 //!
-//! 1. **Variable argument counts.** When the same callee is invoked from
-//!    multiple sites with *different* numbers of argument-register writes
-//!    visible immediately before the `Call`, we mark the callee variadic
-//!    in the [`FunctionSignatureRegistry`].
+//! 1. **Call-site prototypes.** [`detect_variadic_callees`] guesses each
+//!    callee's prototype from what its call sites set up
+//!    ([`crate::callee_guess`]): the minimum arity over the sites, variadic
+//!    when every site sets the System V vector-register count in AL.
 //!
 //! 2. **Printf-family format parsing.** When the callee is a known
 //!    printf-style libc function and the call site supplies a constant
@@ -25,13 +25,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{
-    CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction, Variadic, VarnodeSlot,
-};
+use unlace_ir::signature::FunctionSignatureRegistry;
+use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, Variadic, VarnodeSlot};
 use unlace_ir::stack::StackSpec;
 use unlace_ir::xref::CallGraph;
 use unlace_ir::{ArchId, BlockId, Function, IrInsn, IrOp, OsAbi, SpaceId, Varnode};
 
+use crate::call_args::calling_convention_for;
+use crate::callee_guess::{CallSiteArgs, collect_call_sites, guess_from_call_sites};
 use crate::libc_signatures::lookup_libc_normalized;
 
 const RAX: u64 = 0;
@@ -53,64 +54,51 @@ fn arg_regs(cc: CallingConvention) -> &'static [u64] {
     }
 }
 
-/// Whole-program variadic detection.
+/// Whole-program call-site prototype guessing.
 ///
-/// Returns `true` if any signature in `registry` was newly flagged
-/// variadic during this run.
+/// Collects every direct call of each callee in the call graph
+/// ([`collect_call_sites`]) and merges the guess
+/// [`guess_from_call_sites`] makes from them into the callee's registry
+/// entry: the fixed arity is the minimum the call sites show, and the guess
+/// is variadic when every site sets the System V vector-register count.
+/// Better-ranked entries keep their shape (see
+/// [`FunctionSignature::merge`](unlace_ir::signature::FunctionSignature::merge)).
+///
+/// Returns `true` if any signature in `registry` changed.
 pub fn detect_variadic_callees(
     funcs: &BTreeMap<u64, SsaFunction>,
     call_graph: &CallGraph,
     registry: &mut FunctionSignatureRegistry,
 ) -> bool {
-    let mut arg_counts: BTreeMap<u64, BTreeSet<usize>> = BTreeMap::new();
-
+    let mut sites: BTreeMap<u64, (CallingConvention, Vec<CallSiteArgs>)> = BTreeMap::new();
     for (&caller_addr, ssa) in funcs {
         let callees = call_graph.callees_of(caller_addr);
-        if callees.is_empty() {
+        let Some(spec) = StackSpec::for_arch(ssa.arch) else {
             continue;
-        }
-        for block in ssa.function.blocks.values() {
-            for (idx, insn) in block.insns.iter().enumerate() {
-                if insn.op != IrOp::Call {
-                    continue;
-                }
-                let Some(t) = insn.inputs.first() else {
-                    continue;
-                };
-                if t.space != SpaceId::Const {
-                    continue;
-                }
-                if !callees.contains(&t.offset) {
-                    continue;
-                }
-
-                let cc = registry
-                    .get(&t.offset)
-                    .map(|s| s.calling_convention)
-                    .filter(|cc| *cc != CallingConvention::Unknown)
-                    .or_else(|| funcs.get(&t.offset).map(|f| f.calling_convention))
-                    .unwrap_or(ssa.calling_convention);
-
-                let arg_count = count_arg_writes_before(&block.insns, idx, cc);
-                arg_counts.entry(t.offset).or_default().insert(arg_count);
+        };
+        let cc = calling_convention_for(ssa);
+        for site in collect_call_sites(&ssa.function, cc, spec.sp.offset) {
+            if !callees.contains(&site.target) {
+                continue;
+            }
+            let (site_cc, args) = sites.entry(site.target).or_insert((cc, Vec::new()));
+            if *site_cc == cc {
+                args.push(site.args);
             }
         }
     }
 
     let mut changed = false;
-    for (callee, counts) in arg_counts {
-        if counts.len() > 1 {
-            let entry = registry.entry(callee).or_default();
-            // Set the *fixed* prefix to the smallest observed count.
-            // Variadic-ness is signalled to downstream passes by the
-            // mismatch between this prefix size and the observed
-            // per-call-site argument counts (recorded by the printf
-            // path in `SsaFunction::variadic_call_types`).
-            let min = counts.iter().min().copied().unwrap_or(0);
-            if entry.param_types.len() != min {
-                entry.param_types.resize(min, PrimitiveType::Unknown);
+    for (callee, (cc, args)) in sites {
+        let Some(guess) = guess_from_call_sites(cc, &args) else {
+            continue;
+        };
+        match registry.get_mut(&callee) {
+            Some(entry) => changed |= entry.merge(&guess),
+            None => {
+                registry.insert(callee, guess);
+                changed = true;
             }
-            changed = true;
         }
     }
     changed
@@ -297,34 +285,6 @@ fn find_constant_arg(
         return None;
     }
     None
-}
-
-/// Count the number of argument-register writes (Copy/IntAdd/etc. whose
-/// output is an arg register) immediately preceding `call_idx`. Stops
-/// at the first arg register slot that has *no* preceding write.
-fn count_arg_writes_before(
-    insns: &[unlace_ir::IrInsn],
-    call_idx: usize,
-    cc: CallingConvention,
-) -> usize {
-    let regs = arg_regs(cc);
-    let mut written: BTreeSet<u64> = BTreeSet::new();
-    for insn in insns[..call_idx].iter() {
-        if let Some(out) = insn.output
-            && out.space == SpaceId::Register
-        {
-            written.insert(out.offset);
-        }
-    }
-    let mut count = 0usize;
-    for &r in regs {
-        if written.contains(&r) {
-            count += 1;
-        } else {
-            break;
-        }
-    }
-    count
 }
 
 /// Parse a C printf-style format string, returning the inferred
@@ -838,14 +798,10 @@ mod tests {
         assert_eq!(entry[1], PrimitiveType::Ptr);
     }
 
-    #[test]
-    fn t88_variable_arg_count_marks_variadic() {
-        // Two callers of the same target — caller_a writes 1 arg reg
-        // (RDI), caller_b writes 3 (RDI, RSI, RDX). The detector should
-        // observe count={1,3} and set the variadic flag.
-        let target = 0xDEAD_0000u64;
-
-        let make_caller = |addr: u64, n: usize| -> SsaFunction {
+    /// Callers of one target, each setting the first `n` argument
+    /// registers and, with `vector_count`, AL right before the call.
+    fn callers_of(target: u64, counts: &[(usize, bool)]) -> BTreeMap<u64, SsaFunction> {
+        let make_caller = |addr: u64, n: usize, vector_count: bool| -> SsaFunction {
             let mut func = Function::new("c", BlockId(0), addr);
             let mut bb = BasicBlock::new(BlockId(0));
             let regs = [RDI, RSI, RDX];
@@ -856,6 +812,14 @@ mod tests {
                     r,
                     smallvec![Varnode::constant(i as u64, 8)],
                     addr + i as u64 * 4,
+                ));
+            }
+            if vector_count {
+                bb.insns.push(IrInsn::with_output(
+                    IrOp::IntZext,
+                    Varnode::reg(RAX, 8),
+                    smallvec![Varnode::constant(0, 4)],
+                    addr + 0xfc,
                 ));
             }
             bb.insns.push(IrInsn::without_output(
@@ -870,42 +834,50 @@ mod tests {
             ));
             func.insert_block(bb);
             let mut ssa = build_ssa(func);
+            ssa.arch = ArchId::X86_64;
             ssa.calling_convention = CallingConvention::SystemV;
             ssa
         };
 
         let mut funcs = BTreeMap::new();
-        funcs.insert(0x1000u64, make_caller(0x1000, 1));
-        funcs.insert(0x2000u64, make_caller(0x2000, 3));
+        for (i, &(n, vector_count)) in counts.iter().enumerate() {
+            let addr = 0x1000 * (i as u64 + 1);
+            funcs.insert(addr, make_caller(addr, n, vector_count));
+        }
+        funcs
+    }
 
-        // Make the target itself a tiny leaf so the call-graph has it.
-        let mut target_func = Function::new("target", BlockId(0), target);
-        let mut bb = BasicBlock::new(BlockId(0));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![Varnode::constant(0, 8)],
-            target,
-        ));
-        target_func.insert_block(bb);
-        let mut target_ssa = build_ssa(target_func);
-        target_ssa.calling_convention = CallingConvention::SystemV;
-        funcs.insert(target, target_ssa);
-
+    fn registry_for(funcs: &BTreeMap<u64, SsaFunction>) -> (bool, FunctionSignatureRegistry) {
         let ir_funcs: BTreeMap<u64, _> = funcs
             .iter()
             .map(|(a, s)| (*a, s.function.clone()))
             .collect();
         let cg = unlace_ir::xref::build_call_graph(&ir_funcs);
-
         let mut registry = FunctionSignatureRegistry::new();
-        let changed = detect_variadic_callees(&funcs, &cg, &mut registry);
+        let changed = detect_variadic_callees(funcs, &cg, &mut registry);
+        (changed, registry)
+    }
+
+    #[test]
+    fn t88_variable_arg_count_keeps_the_minimum_fixed_prefix() {
+        // caller_a writes 1 arg reg (RDI), caller_b writes 3 (RDI, RSI,
+        // RDX). Differing counts alone do not prove `...`: the guess keeps
+        // the smallest count as the fixed prefix.
+        let target = 0xDEAD_0000u64;
+        let (changed, registry) = registry_for(&callers_of(target, &[(1, false), (3, false)]));
         assert!(changed);
-        // The target's signature should reflect the smallest count = 1
-        // as the fixed prefix. The "variadic" flag is communicated by
-        // the size mismatch + caller observation; a future Symbol-level
-        // flag could record this explicitly.
         let sig = registry.get(&target).expect("target sig present");
-        assert_eq!(sig.param_types.len(), 1);
+        assert_eq!(sig.params.len(), 1);
+        assert!(!sig.variadic);
+    }
+
+    #[test]
+    fn vector_count_at_every_call_site_marks_variadic() {
+        let target = 0xDEAD_0000u64;
+        let (_, registry) = registry_for(&callers_of(target, &[(1, true), (3, true)]));
+        let sig = registry.get(&target).expect("target sig present");
+        assert!(sig.variadic);
+        assert_eq!(sig.params.len(), 1);
     }
 
     // -------------------------------------------------------------------

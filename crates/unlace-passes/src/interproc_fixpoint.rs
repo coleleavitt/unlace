@@ -17,11 +17,12 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{FunctionSignature, FunctionSignatureRegistry, PrimitiveType, SsaFunction};
+use unlace_ir::signature::FunctionSignatureRegistry;
+use unlace_ir::ssa::{PrimitiveType, SsaFunction};
 use unlace_ir::xref::{CallGraph, build_call_graph};
 
 use crate::caller_param_propagate::{
-    apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,
+    apply_registry_to_callees, body_signature, propagate_caller_params, seed_registry_from_funcs,
 };
 use crate::pass::PassError;
 
@@ -40,16 +41,10 @@ pub struct InterprocReport {
 
 /// Build a per-function signature snapshot keyed by entry address.
 fn snapshot_signatures(funcs: &BTreeMap<u64, SsaFunction>) -> FunctionSignatureRegistry {
-    let mut out = BTreeMap::new();
-    for (&addr, ssa) in funcs {
-        let sig = FunctionSignature {
-            calling_convention: ssa.calling_convention,
-            return_type: ssa.inferred_return_type,
-            param_types: ssa.inferred_params.iter().map(|(_, ty)| *ty).collect(),
-        };
-        out.insert(addr, sig);
-    }
-    out
+    funcs
+        .iter()
+        .map(|(&addr, ssa)| (addr, body_signature(ssa)))
+        .collect()
 }
 
 /// Drive the cross-function fixed-point loop.
@@ -286,6 +281,8 @@ mod tests {
             func.insert_block(bb);
             let mut ssa = build_ssa(func);
             ssa.calling_convention = CallingConvention::SystemV;
+            // B's own analysis found its first parameter, but not its type.
+            ssa.inferred_params = vec![("a1".into(), PrimitiveType::Unknown)];
             funcs.insert(b_addr, ssa);
         }
 
@@ -323,14 +320,14 @@ mod tests {
         assert!(!report.hit_cap, "must converge well under 5 iterations");
 
         // After the loop, B should know its first parameter is Int(4) (from
-        // A's call site), even though B's body has no read of RDI.
+        // A's call site), although its own analysis left the type unknown.
         let b = &funcs[&0x2000];
         let b_sig = b
             .external_signatures
             .get(&0x2000)
             .expect("B's own signature should be registered");
-        assert!(!b_sig.param_types.is_empty(), "B must have param 0");
-        assert_eq!(b_sig.param_types[0], PrimitiveType::Int(4));
+        assert!(!b_sig.params.is_empty(), "B must have param 0");
+        assert_eq!(b_sig.params[0].ty, PrimitiveType::Int(4));
 
         // C's body said it returns a Ptr; that should remain visible in the
         // registry that flows to B.

@@ -138,10 +138,10 @@ int main(void) /* // dropped 1 param(s) (dead in body) */ {
     v1 = 0;
     int v2 = 0; // ebp
     do {
-        _QWORD v3 = (_DWORD)v1; // rdi
+        _QWORD v3 = v1; // rdi
         v0 = dispatch(v3);
         v2 += v0;
-        v1 = (_DWORD)v1 + 1;
+        ++v1;
     } while (v1 != 8);
     return (_QWORD)(_BYTE)v2;
 }

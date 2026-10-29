@@ -98,21 +98,19 @@ int main(void) {
     __int64 v_32;
     __int64 v0; // rax
     __int64 v1; // rax
-    __int64 result_0; // rax
     __int64 v2; // rax
-    __int64 v3; // rbx
-    _QWORD v4; // temp
-    result_0 = v4;
-    result_0 = 0x3d00;
-    __int64 v5 = (uintptr_t)&v_16; // rdi
-    v_8 = result_0;
-    result_0 = 0x3d28;
-    v_16 = result_0;
-    v0 = identify(&v_16);
-    v3 = v0;
-    v1 = identify(&v_8);
-    __int64 v6 = v1; // rdx
-    v2 = printf("%s %s\n", (char *)v6, (char *)v3);
+    __int64 v3; // rax
+    __int64 v4; // rbx
+    _QWORD v5; // temp
+    v0 = v5;
+    __int64 v6 = (uintptr_t)&v_16; // rdi
+    v_8 = 0x3d00;
+    v_16 = 0x3d28;
+    v1 = identify(&v_16);
+    v4 = v1;
+    v2 = identify(&v_8);
+    __int64 v7 = v2; // rdx
+    v3 = printf("%s %s\n", (char *)v7, (char *)v4);
     return 0;
     return 0;
 }
@@ -165,23 +163,20 @@ void sub_1220(void) {
 char * identify(Animal *a1) {
     __int64 v_16;
     __int64 v_8;
-    __int64 v1; // rax
-    __int64 v2; // rax
     __int64 result; // rax
-    __int64 v4; // rcx
+    __int64 v2; // rax
+    __int64 v3; // rcx
     if (!a1) {
-        result = "unknown";
         return "unknown";
     } else {
-        __int64 v5 = 0x3d40; // rsi
+        __int64 v4 = 0x3d40; // rsi
         v_8 = a1;
         /* dynamic cast */
-        v1 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL);
+        __int64 v5 = __dynamic_cast(a1, 0x3d40LL, 0x3d50LL, 0LL); // rax
         a1 = v_8;
-        __int64 v6 = v1; // rdx
-        if (!v1) {
+        __int64 v6 = v5; // rdx
+        if (!v5) {
             v6 = 0x3d68;
-            v5 = 0x3d40;
             /* dynamic cast */
             v2 = __dynamic_cast(a1, 0x3d40LL, 0x3d68LL, 0LL);
             a1 = v2;
@@ -190,25 +185,22 @@ char * identify(Animal *a1) {
                 return result;
             } else {
                 result = *(_QWORD *)v2;
-                v4 = 0x1310;
                 v6 = *(_QWORD *)result;
                 result = "meow";
-                if (v6 == v4) {
+                if (v6 == 0x1310) {
                     return "meow";
                 } else {
                     return v2->speak();
                 }
             }
         } else {
-            result = *(_QWORD *)v1;
-            v5 = 0x1300;
-            v4 = *(_QWORD *)result;
-            result = "woof";
-            if (v4 != v5) {
+            result = *(_QWORD *)v5;
+            v3 = *(_QWORD *)result;
+            if (v3 != 0x1300) {
                 a1 = v6;
-                return v1->speak();
+                return v5->speak();
             } else {
-                return result;
+                return "woof";
             }
         }
     }

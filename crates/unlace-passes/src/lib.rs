@@ -274,6 +274,7 @@ pub mod tail_duplication;
 pub mod taint_engine;
 #[cfg(feature = "unwired")]
 pub mod target_transform;
+pub mod temp_home;
 pub mod type_constraint_solver;
 pub mod type_infer;
 pub mod type_vote;
@@ -543,6 +544,7 @@ pub use tail_duplication::TailDuplicationPass;
 pub use taint_engine::{TaintEnginePass, TaintFinding, TaintSink, TaintSource, propagate_taint};
 #[cfg(feature = "unwired")]
 pub use target_transform::{TargetTransformInfo, TransformBenefit};
+pub use temp_home::TempHomePass;
 pub use type_constraint_solver::{
     Constraint, PolyTypeBounds, PolyTypeSolution, TypeCapability, TypeConstraintSolverPass,
     collect_and_apply as solve_type_constraints, collect_constraints, solve_constraints,

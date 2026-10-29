@@ -204,6 +204,8 @@ impl Pass for VariableMergePass {
             linkscope::record_items("pass.variable-merge.live-ranges", live_ranges.len() as u64);
             live_ranges
         };
+        let mut live_ranges = live_ranges;
+        extend_ranges_through_folds(func, &mut live_ranges);
         for (sv, points) in &live_ranges {
             var_merge_trace_line!(
                 "range func={} sv={:?} len={} points=[{}]",
@@ -267,6 +269,64 @@ impl Pass for VariableMergePass {
             func.merged_names.len(),
         );
         Ok(changed)
+    }
+}
+
+/// A folded expression is printed where its value is read, so the temps it
+/// reads stay live until then. Extend each temp's range along the chain of
+/// single-use foldable values it feeds, within its block, so a temp is never
+/// given the name of a value defined between its own read and the printed
+/// read of the expression (`v1 = a; v1 = b; r = v1(a) - v1`).
+fn extend_ranges_through_folds(
+    func: &SsaFunction,
+    live_ranges: &mut BTreeMap<SsaVarnode, BTreeSet<ProgramPoint>>,
+) {
+    let mut use_of: BTreeMap<SsaVarnode, (BlockId, usize)> = BTreeMap::new();
+    for (&(bid, idx, ref slot), sv) in &func.var_map {
+        if matches!(slot, VarnodeSlot::Input(_)) && func.foldable_exprs.contains(sv) {
+            use_of.insert(*sv, (bid, idx));
+        }
+    }
+    let mut extensions: Vec<(SsaVarnode, BlockId, usize, usize)> = Vec::new();
+    for (&(bid, idx, ref slot), out) in &func.var_map {
+        if *slot != VarnodeSlot::Output || !func.foldable_exprs.contains(out) {
+            continue;
+        }
+        let mut end = idx;
+        let mut cur = *out;
+        while let Some(&(use_bid, use_idx)) = use_of.get(&cur) {
+            if use_bid != bid || use_idx <= end {
+                break;
+            }
+            end = use_idx;
+            match func.var_map.get(&(bid, use_idx, VarnodeSlot::Output)) {
+                Some(next) if func.foldable_exprs.contains(next) => cur = *next,
+                _ => break,
+            }
+        }
+        if end == idx {
+            continue;
+        }
+        let Some(insn) = func
+            .function
+            .blocks
+            .get(&bid)
+            .and_then(|b| b.insns.get(idx))
+        else {
+            continue;
+        };
+        for input in 0..insn.inputs.len() {
+            if let Some(sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(input)))
+                && live_ranges.contains_key(sv)
+            {
+                extensions.push((*sv, bid, idx, end));
+            }
+        }
+    }
+    for (sv, bid, from, to) in extensions {
+        if let Some(points) = live_ranges.get_mut(&sv) {
+            points.extend((from..=to).map(|insn| ProgramPoint::at(bid, insn)));
+        }
     }
 }
 

@@ -14,8 +14,8 @@
 
 use std::collections::BTreeSet;
 
-use unlace_ir::SpaceId;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::{SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
@@ -23,11 +23,14 @@ use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 const FLAG_OFFSET_MIN: u64 = 256;
 const FLAG_OFFSET_END: u64 = 262;
 
+/// Returns `true` if `vn` is an x86 RFLAGS bit.
+pub(crate) fn is_x86_flag_bit(vn: &Varnode) -> bool {
+    vn.space == SpaceId::Register && (FLAG_OFFSET_MIN..FLAG_OFFSET_END).contains(&vn.offset)
+}
+
 /// Returns `true` if `sv` refers to an x86 RFLAGS bit.
 fn is_flag_varnode(sv: &SsaVarnode) -> bool {
-    sv.base.space == SpaceId::Register
-        && sv.base.offset >= FLAG_OFFSET_MIN
-        && sv.base.offset < FLAG_OFFSET_END
+    is_x86_flag_bit(&sv.base)
 }
 
 /// Dead flag elimination: remove instructions whose output is an unused

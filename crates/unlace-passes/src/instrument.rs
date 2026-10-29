@@ -166,6 +166,7 @@ fn linkscope_pass_name_span(name: &str) -> linkscope::Span {
         }
         "OpTypeBindingPass" | "op_type_binding" => linkscope::phase("pass.name.OpTypeBindingPass"),
         "DeadPhiElimPass" | "dead-phi-elim" => linkscope::phase("pass.name.DeadPhiElimPass"),
+        "TempHomePass" | "temp-home" => linkscope::phase("pass.name.TempHomePass"),
         "ExpressionTreePass" | "expression-tree" => {
             linkscope::phase("pass.name.ExpressionTreePass")
         }

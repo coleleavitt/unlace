@@ -84,7 +84,7 @@ use unlace_passes::{
     RepStringIdiomPass, ReturnTypeInferPass, RustAsyncPass, RustEnumPass, RustPanicPass,
     RustVtablePass, SccpPass, SignatureSnapshot, SizeofRecognitionPass, StackOffsetSnapshotPass,
     StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass, VariableMergePass,
+    TailCallDetectPass, TempHomePass, TypeConstraintSolverPass, VarNamingPass, VariableMergePass,
     annotate_libc_calls, bump_if_signature_changed, canonical_pipeline_backedge_exceptions,
     canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
     recover_direct_call_args_with_param_counts, recover_stack_frame, recover_structs,
@@ -2887,6 +2887,7 @@ fn pipeline_stage_lvar(
 ) -> Result<(), unlace_passes::PassError> {
     let trace = tracing::enabled!(target: "unlace::interproc", tracing::Level::DEBUG);
     run_instrumented(&DeadPhiElimPass, ssa, opts)?;
+    run_instrumented(&TempHomePass, ssa, opts)?;
     if trace {
         tracing::debug!(
             target: "unlace::interproc",

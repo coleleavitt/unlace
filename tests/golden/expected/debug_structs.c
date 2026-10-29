@@ -166,10 +166,7 @@ struct Rect {
 // debug language: C
 /* Function:   area | Address: 0x1149 | Size: 0xb (11 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 int area(Rect *r) {
-    __int64 result; // temp
-    // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
-    result = r->size.x;
-    return result * r->size.y;
+    return r->size.x * r->size.y;
 }
 // DWARF composite types
 typedef struct Point Point;
@@ -188,8 +185,7 @@ struct Rect {
 Point offset(Point p, int dx, int dy) {
     // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:5
     dy = (_DWORD)(dy + (p >> 0x20));
-    dy <<= 0x20;
-    return (_DWORD)(dx + p) | dy;
+    return (_DWORD)(dx + p) | (dy << 0x20);
 }
 // DWARF composite types
 typedef struct Point Point;

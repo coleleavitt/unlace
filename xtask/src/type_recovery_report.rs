@@ -2558,8 +2558,11 @@ fn rendered_text_for_function(
 ) -> (Option<String>, String) {
     for name in function_scope_names(function) {
         let stem = sanitize_filename_stem(&name, function.low_pc);
-        if let Some(text) = output_files.get(&stem) {
-            return (Some(stem), text.clone());
+        // `unlace batch` names each file `<name>_<address>.c`.
+        for stem in [format!("{stem}_{:x}", function.low_pc), stem] {
+            if let Some(text) = output_files.get(&stem) {
+                return (Some(stem), text.clone());
+            }
         }
     }
 

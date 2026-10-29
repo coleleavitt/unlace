@@ -114,11 +114,9 @@ struct __anon0 {
 int add(int a, int b) {
     int v_8;
     int v_4;
-    v_4 = (_DWORD)a;
-    v_8 = (_DWORD)b;
-    // fixtures/src/calls.c:1
-    _QWORD v2 = v_4; // rdx
-    return v_8 + v2;
+    v_4 = a;
+    v_8 = b;
+    return v_8 + v_4;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -131,10 +129,9 @@ struct __anon0 {
 int sub(int a, int b) {
     int v_8;
     int v_4;
-    v_4 = (_DWORD)a;
-    v_8 = (_DWORD)b;
-    int v2 = v_4; // temp
-    return v2 - v_8;
+    v_4 = a;
+    v_8 = b;
+    return v_4 - v_8;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -145,14 +142,11 @@ struct __anon0 {
 // debug language: C
 /* Function:   mul | Address: 0x1157 | Size: 0x16 (22 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs from: unknown */
 int mul(int a, int b) {
-    __int64 result; // temp
     int v_8;
     int v_4;
-    v_4 = (_DWORD)a;
-    v_8 = (_DWORD)b;
-    // fixtures/src/calls.c:3
-    result = v_4;
-    return result * v_8;
+    v_4 = a;
+    v_8 = b;
+    return v_4 * v_8;
 }
 // debug language: C
 /* Function:   square | Address: 0x116e | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x4 (4 bytes) | Xrefs to:   mul | Xrefs from: unknown */
@@ -168,19 +162,20 @@ int cube(int x) {
     int v_4;
     v_4 = x;
     x = v_4;
-    int v1 = (_DWORD)square(x); // temp
-    return mul(v1, v_4);
+    x = square(x);
+    return mul(x, v_4);
 }
 // debug language: C
 /* Function:   abs_val | Address: 0x11b7 | Size: 0x16 (22 bytes) | Convention: System V AMD64 | Stack frame: 0x4 (4 bytes) | Xrefs from: unknown */
 int abs_val(int x) {
     int v_4;
     _QWORD result; // rax
-    v_4 = (_DWORD)x;
+    v_4 = x;
     // fixtures/src/calls.c:6
     result = v_4;
-    _QWORD v2 = result; // rdx
-    return !(_BYTE)(result < 0) ? v2 : result;
+    __int64 v2 = result; // rdx
+    char v3 = (_BYTE)(v2 < 0); // temp
+    return !v3 ? v2 : result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
@@ -194,8 +189,8 @@ int max(int a, int b) {
     int v_8;
     int v_4;
     _QWORD result; // rax
-    v_4 = (_DWORD)a;
-    v_8 = (_DWORD)b;
+    v_4 = a;
+    v_8 = b;
     // fixtures/src/calls.c:7
     _QWORD v3 = v_8; // rdx
     result = v_4;
@@ -213,8 +208,8 @@ int min(int a, int b) {
     int v_8;
     int v_4;
     _QWORD result; // rax
-    v_4 = (_DWORD)a;
-    v_8 = (_DWORD)b;
+    v_4 = a;
+    v_8 = b;
     // fixtures/src/calls.c:8
     _QWORD v3 = v_8; // rdx
     result = v_4;
@@ -240,7 +235,7 @@ int clamp(int x, int lo, int hi) {
     hi = v_8;
     lo = hi;
     x = v_4;
-    hi = (_DWORD)max(x, lo);
+    hi = max(x, lo);
     return min(hi, v_12);
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -270,21 +265,13 @@ int compute(int x) {
     int v_12;
     int v_8;
     int v_4;
-    __int64 v1; // rax
-    __int64 v2; // rax
-    __int64 v3; // rax
     a = x;
     x = a;
-    e = (_DWORD)add(x, 0xaLL);
-    v1 = sub(e, 3LL);
-    v_16 = (_DWORD)v1;
-    v2 = square(v_16);
-    v_12 = (_DWORD)v2;
-    v_8 = (_DWORD)cube(2LL);
-    // fixtures/src/calls.c:16
-    _QWORD v4 = v_8; // rdx
-    v3 = sub(v_12, v4);
-    v_4 = (_DWORD)abs_val((_DWORD)v3);
+    e = add(x, 0xaLL);
+    v_16 = sub(e, 3LL);
+    v_12 = square(v_16);
+    v_8 = cube(2LL);
+    v_4 = abs_val(sub(v_12, v_8));
     return clamp(v_4, 0LL, 0x64LL);
 }
 // debug language: C

@@ -8,8 +8,9 @@
 use std::collections::BTreeSet;
 
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{IrOp, SpaceId};
+use unlace_ir::{ArchId, BlockId, IrOp, SpaceId, Varnode};
 
+use crate::dead_flag_elim::{DeadFlagElimPass, is_x86_flag_bit};
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
 /// Returns `true` if `op` may have observable side effects and must not
@@ -56,6 +57,17 @@ impl Pass for DeadCodeElimPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        sweep_dead_insns(func, &BTreeSet::new())
+    }
+}
+
+/// One DCE sweep that also drops the instructions listed in `also_dead`
+/// (block, index) when they have no side effects.
+fn sweep_dead_insns(
+    func: &mut SsaFunction,
+    also_dead: &BTreeSet<(BlockId, usize)>,
+) -> Result<bool, PassError> {
+    {
         let trace = tracing::enabled!(target: "unlace::dce", tracing::Level::DEBUG);
         let mut used = insn_uses(func);
 
@@ -82,6 +94,7 @@ impl Pass for DeadCodeElimPass {
 
                 let mut keep_reason = None;
                 let is_dead = match output_sv {
+                    _ if also_dead.contains(&(bid, insn_idx)) => true,
                     Some(sv) => {
                         if used.contains(sv) {
                             keep_reason = Some("exact-use");
@@ -202,6 +215,64 @@ impl Pass for DeadCodeElimPass {
     }
 }
 
+/// Register writes in a `RETURN` block that nothing after them reads.
+///
+/// The block has no successors, so once no later instruction (or the
+/// `RETURN` itself) reads the register, the write is dead whatever SSA
+/// version later code might have named. That covers callee-saved restores
+/// (`pop rbx` → `rbx = *rsp`) that `DeadCodeElimPass` keeps because other
+/// versions of the register are read elsewhere. A call or an indirect
+/// operation may read registers implicitly, so the scan stops at one. The
+/// stack pointer stays: stack recovery reads its updates.
+fn dead_exit_register_writes(func: &SsaFunction) -> BTreeSet<(BlockId, usize)> {
+    const X86_RSP_OFFSET: u64 = 32;
+    let overlaps = |a: &Varnode, b: &Varnode| {
+        a.space == b.space
+            && a.offset < b.offset.saturating_add(u64::from(b.size))
+            && b.offset < a.offset.saturating_add(u64::from(a.size))
+    };
+    let mut dead = BTreeSet::new();
+    for (&bid, block) in &func.function.blocks {
+        if block
+            .insns
+            .last()
+            .is_none_or(|insn| insn.op != IrOp::Return)
+        {
+            continue;
+        }
+        let mut read: Vec<Varnode> = Vec::new();
+        for (idx, insn) in block.insns.iter().enumerate().rev() {
+            if matches!(
+                insn.op,
+                IrOp::Call | IrOp::Callind | IrOp::Callother | IrOp::Branchind
+            ) {
+                break;
+            }
+            let out_sv = func.var_map.get(&(bid, idx, VarnodeSlot::Output));
+            let written = out_sv.map(|sv| sv.base).or(insn.output);
+            if let Some(written) = written
+                && written.space == SpaceId::Register
+                && written.offset != X86_RSP_OFFSET
+                && !is_side_effecting(insn.op)
+                && insn
+                    .output
+                    .is_none_or(|out| !read.iter().any(|r| overlaps(r, &out)))
+                && !read.iter().any(|r| overlaps(r, &written))
+            {
+                dead.insert((bid, idx));
+                continue;
+            }
+            for (input, raw) in insn.inputs.iter().enumerate() {
+                read.push(*raw);
+                if let Some(sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(input))) {
+                    read.push(sv.base);
+                }
+            }
+        }
+    }
+    dead
+}
+
 /// SSA varnodes read by at least one instruction (phi inputs excluded).
 fn insn_uses(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
     let mut used = BTreeSet::new();
@@ -248,9 +319,29 @@ impl Pass for DeadPhiElimPass {
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let trace = tracing::enabled!(target: "unlace::dce", tracing::Level::DEBUG);
         let mut changed = false;
-        while remove_dead_unique_phis(func, &insn_uses(func), trace) {
-            changed = true;
-            if !DeadCodeElimPass.run(func)? {
+        // The RFLAGS sweep is exact (unlike `DeadCodeElimPass`, which keeps
+        // any register write some other version of that register is read
+        // through) and runs only now, once every optimization has consumed
+        // the flags it reads.
+        let x86 = matches!(func.arch, ArchId::X86 | ArchId::X86_64);
+        loop {
+            let pruned = remove_dead_temp_phis(func, &insn_uses(func), trace);
+            let mut swept = false;
+            loop {
+                let flags = x86 && DeadFlagElimPass.run(func)?;
+                let exit_writes = if x86 {
+                    dead_exit_register_writes(func)
+                } else {
+                    BTreeSet::new()
+                };
+                let rest = sweep_dead_insns(func, &exit_writes)?;
+                if !(flags || rest) {
+                    break;
+                }
+                swept = true;
+            }
+            changed |= pruned || swept;
+            if !swept {
                 break;
             }
         }
@@ -258,11 +349,14 @@ impl Pass for DeadPhiElimPass {
     }
 }
 
-/// Drops phis over `Unique` temporaries whose output reaches no instruction,
-/// directly or through other live phis. Phis are pure, so an unused one can
-/// always go; register and stack phis stay because they also carry naming and
-/// calling-convention evidance.
-fn remove_dead_unique_phis(
+/// Drops phis over temporaries whose output reaches no instruction, directly
+/// or through other live phis. Phis are pure, so an unused one can always go.
+/// Temporaries are `Unique` varnodes and, on x86, the RFLAGS bits: a flag web
+/// that no branch or arithmetic reads is lifting scaffolding, and keeping it
+/// alive keeps every flag computation feeding it (and the temps those read).
+/// Other register and stack phis stay because they also carry naming and
+/// calling-convention evidence.
+fn remove_dead_temp_phis(
     func: &mut SsaFunction,
     insn_uses: &BTreeSet<SsaVarnode>,
     trace: bool,
@@ -275,8 +369,11 @@ fn remove_dead_unique_phis(
         .flatten()
         .map(|phi| (phi.output, phi.inputs.iter().map(|&(_, sv)| sv).collect()))
         .collect();
+    let x86 = matches!(func.arch, ArchId::X86 | ArchId::X86_64);
+    let is_temp =
+        |sv: &SsaVarnode| sv.base.space == SpaceId::Unique || (x86 && is_x86_flag_bit(&sv.base));
     for phi in func.phi_map.values().flatten() {
-        if phi.output.base.space != SpaceId::Unique && live.insert(phi.output) {
+        if !is_temp(&phi.output) && live.insert(phi.output) {
             worklist.push(phi.output);
         }
     }
@@ -309,6 +406,9 @@ fn remove_dead_unique_phis(
     changed
 }
 
+/// `true` when a use of a *differently shaped* register overlaps `output`
+/// (an `eax` def read through `ax`). A use of the same base is resolved by its
+/// SSA version, so another version of the same register never keeps a def.
 fn register_output_covers_use(output: &SsaVarnode, used: &SsaVarnode) -> bool {
     if output.base.space != SpaceId::Register || used.base.space != SpaceId::Register {
         return false;
@@ -490,6 +590,52 @@ mod tests {
         let insns = &ssa.function.blocks[&BlockId(0)].insns;
         assert_eq!(insns.len(), 1, "only RETURN should remain");
         assert_eq!(insns[0].op, IrOp::Return);
+    }
+
+    /// A register restored right before `RETURN` (`pop rbx`) is dead even
+    /// though another version of `rbx` is read earlier in the function.
+    #[test]
+    fn exit_block_restore_of_unread_register_is_removed() {
+        let rbx_in = sv(24, 4);
+        let rax = sv(0, 1);
+        let rbx_restored = sv(24, 5);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rax.base,
+            smallvec![rbx_in.base],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rbx_restored.base,
+            smallvec![Varnode::constant(7, 8)],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![rax.base],
+            0x1008,
+        ));
+
+        let mut var_map = VarMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rbx_in);
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), rax);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Output), rbx_restored);
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Input(0)), rax);
+
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
+        ssa.arch = unlace_ir::ArchId::X86_64;
+
+        assert!(
+            !DeadCodeElimPass.run(&mut ssa).expect("dce runs"),
+            "plain DCE keeps a write another version of the register is read through"
+        );
+        assert!(DeadPhiElimPass.run(&mut ssa).expect("late sweep runs"));
+        let insns = &ssa.function.blocks[&BlockId(0)].insns;
+        assert_eq!(insns.len(), 2, "the restore is gone: {insns:?}");
+        assert_eq!(insns[1].op, IrOp::Return);
     }
 
     #[test]

@@ -168,9 +168,9 @@ fn cse_flat(nodes: &mut [HirNode]) {
                             let operands_ok = insn
                                 .inputs
                                 .iter()
-                                .all(|v| last_write.get(v).copied().unwrap_or(0) <= recorded_gen);
+                                .all(|v| last_write_overlapping(&last_write, v) <= recorded_gen);
                             let prior_out_ok =
-                                last_write.get(&prior_out).copied().unwrap_or(0) <= recorded_gen;
+                                last_write_overlapping(&last_write, &prior_out) <= recorded_gen;
                             if operands_ok && prior_out_ok {
                                 cse_target = Some(prior_out);
                             }
@@ -241,6 +241,25 @@ fn cse_flat(nodes: &mut [HirNode]) {
             }
         }
     }
+}
+
+/// Generation of the latest write to any storage overlapping `v`: a write to
+/// `rdx` changes a later read of `edx` even though the two varnodes differ.
+fn last_write_overlapping(last_write: &BTreeMap<Varnode, u64>, v: &Varnode) -> u64 {
+    if v.space == SpaceId::Const {
+        return 0;
+    }
+    let end = v.offset.saturating_add(u64::from(v.size));
+    last_write
+        .iter()
+        .filter(|(w, _)| {
+            w.space == v.space
+                && w.offset < end
+                && v.offset < w.offset.saturating_add(u64::from(w.size))
+        })
+        .map(|(_, &generation)| generation)
+        .max()
+        .unwrap_or(0)
 }
 
 /// A statement can seed or reuse a common subexpression only when it computes
@@ -330,6 +349,31 @@ mod tests {
                     "Copy should source the first occurrence's output"
                 );
             }
+            other => panic!("expected Statement, got {other:?}"),
+        }
+    }
+
+    /// A write to the whole register (`rdx`) changes a later read of its low
+    /// half (`edx`), so the second `edx != esi` is not the first one.
+    #[test]
+    fn wide_register_write_blocks_narrow_read_elimination() {
+        let edx = Varnode::reg(16, 4);
+        let esi = Varnode::reg(48, 4);
+        let rdx = Varnode::reg(16, 8);
+        let t1 = Varnode::unique(0, 1);
+        let t2 = Varnode::unique(8, 1);
+        let u = Varnode::unique(16, 4);
+
+        let mut body = vec![
+            stmt(IrOp::IntNotequal, t1, vec![edx, esi], 0x1000),
+            stmt(IrOp::IntZext, rdx, vec![u], 0x1004),
+            stmt(IrOp::IntNotequal, t2, vec![edx, esi], 0x1008),
+        ];
+
+        eliminate_common_subexpressions(&mut body);
+
+        match &body[2] {
+            HirNode::Statement(insn) => assert_eq!(insn.op, IrOp::IntNotequal),
             other => panic!("expected Statement, got {other:?}"),
         }
     }

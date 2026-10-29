@@ -1054,6 +1054,8 @@ fn print_c_attempt(
         collect_varnodes(&func.body, &mut ctx);
     }
     trace_ctx_snapshot("collect-varnodes", &ctx);
+    split_duplicated_temp_defs(&mut ctx);
+    ctx.rbp_is_general_register = rbp_is_general_register(&ctx);
     {
         let _span = linkscope::phase("cprinter.precompute.canary-stack-offsets");
         compute_canary_stack_offsets(&mut ctx);
@@ -1592,7 +1594,19 @@ fn print_c_attempt(
         .iter()
         .filter_map(|stmt_idx| ctx.stmt_outputs.get(stmt_idx).copied().flatten())
         .collect();
-    foldable_svs.extend(&func.foldable_exprs);
+    // A value the SSA pass found foldable still needs a declaration when the
+    // printer kept one of its definitions as a statement.
+    let printed_defs: BTreeSet<SsaVarnode> = ctx
+        .stmt_outputs
+        .iter()
+        .filter(|(stmt_idx, _)| !ctx.foldable_stmts.contains(stmt_idx))
+        .filter_map(|(_, out)| *out)
+        .collect();
+    foldable_svs.extend(
+        func.foldable_exprs
+            .iter()
+            .filter(|sv| !printed_defs.contains(sv)),
+    );
 
     // Build the set of variable names that are actually referenced in the
     // emitted body (read as input, used as condition, or written in a
@@ -2626,6 +2640,9 @@ struct PrintCtx {
     /// [`PrinterAnnotations::arch`]). `None` falls back to the legacy hard-coded
     /// x86/AArch64 frame-base offsets.
     stack_spec: Option<unlace_ir::stack::StackSpec>,
+    /// x86 `rbp` holds data here (`lea ebp, [rdi-2]`), not a frame pointer,
+    /// so reads of it are values rather than stack addresses.
+    rbp_is_general_register: bool,
     /// The function's architecture (see [`PrinterAnnotations::arch`]). CALLOTHER
     /// tags are per-lifter numbering, so non-x86 tags resolve through it.
     arch: Option<unlace_ir::ArchId>,
@@ -3057,6 +3074,7 @@ impl PrintCtx {
         Self {
             config: PrintConfig::default(),
             stack_spec: None,
+            rbp_is_general_register: false,
             arch: None,
             next_var: start_next,
             var_names: BTreeMap::new(),
@@ -4797,6 +4815,33 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             continue;
         }
 
+        // `r = COPY t` of a loaded temp keeps the register as the named
+        // home of the loaded value; folding it instead leaves the load
+        // printed into a `// temp`.
+        if insn.op == IrOp::Copy
+            && output_sv.base.space == SpaceId::Register
+            && ctx
+                .stmt_inputs
+                .get(&stmt_idx)
+                .and_then(|inputs| inputs.first())
+                .filter(|input| input.base.space == SpaceId::Unique)
+                .and_then(|input| {
+                    ctx.stmt_outputs
+                        .iter()
+                        .find_map(|(def, out)| (*out == Some(*input)).then_some(*def))
+                })
+                .and_then(|def| ctx.stmt_insns.get(&def).map(|insn| (def, insn)))
+                .is_some_and(|(def, load)| {
+                    load.op == IrOp::Load && loads_through_register(def, ctx)
+                })
+        {
+            tracing::debug!(target: "unlace::cprinter",
+                "fold stmt={stmt_idx} op={:?} output={output_sv:?} decision=load-home-keep",
+                insn.op
+            );
+            continue;
+        }
+
         if is_never_foldable_op(insn.op) {
             if insn.op == IrOp::Load && is_temp_varnode(&output_sv.base) {
                 ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
@@ -4850,7 +4895,11 @@ fn compute_foldable(ctx: &mut PrintCtx) {
             // first arm's definition gets folded straight into `return …`,
             // dropping the other arm(s). Keep it materialised as `result`.
             let def_depth = ctx.stmt_depths.get(&stmt_idx).copied().unwrap_or(0);
-            let is_returned_merge = ctx.returned_svs.contains(&output_sv) && def_depth > 0;
+            // A temp has a single definition (duplicates were rejected
+            // above), so it cannot be such a merge.
+            let is_returned_merge = ctx.returned_svs.contains(&output_sv)
+                && def_depth > 0
+                && output_sv.base.space != SpaceId::Unique;
             if is_returned_merge {
                 tracing::debug!(target: "unlace::cprinter",
                     "fold stmt={stmt_idx} op={:?} output={output_sv:?} uses={use_count} def_depth={def_depth} decision=returned-branch-merge-keep",
@@ -5250,7 +5299,19 @@ fn copy_like_snapshot_source_redefined_before_consumer(
         insn.op
     );
 
-    if ctx
+    // A source that is itself folded is rendered from its own operands, so
+    // another value sharing its printed name does not clobber it; whether
+    // those operands survive is checked below.
+    let source_inlined = defining_stmt_for_sv(&source_sv, ctx).is_some_and(|def| {
+        def < stmt_idx
+            && (ctx.foldable_stmts.contains(&def)
+                || ctx
+                    .stmt_insns
+                    .get(&def)
+                    .is_some_and(|insn| stable_load_expr_is_inlineable(insn, def, ctx)))
+    });
+    if !source_inlined
+        && ctx
         .stmt_outputs
         .range((stmt_idx + 1)..consumer_stmt)
         .any(|(&redef_stmt, output)| {
@@ -5749,8 +5810,10 @@ fn multi_use_temp_inlines_everywhere(
 /// the same or an overlapping location, or two SSA values the variable merge
 /// gave one name.
 fn share_printed_storage(a: SsaVarnode, b: SsaVarnode, ctx: &PrintCtx) -> bool {
+    // Temps are named per base, so two temps share storage only by name;
+    // their offsets are identifiers, not overlapping bytes.
     a.base == b.base
-        || aliases(a.base, b.base)
+        || (a.base.space != SpaceId::Unique && aliases(a.base, b.base))
         || ctx
             .merged_names
             .get(&a)
@@ -6587,14 +6650,28 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         let Some(inputs) = ctx.stmt_inputs.get(&s) else {
             continue;
         };
-        for input_sv in inputs {
+        // A condition renders its folded operands inline, so the bases they
+        // read are used at the condition's scope too (a do-while condition
+        // sits outside the body that defines them).
+        let mut pending: Vec<SsaVarnode> = inputs.clone();
+        let mut seen: BTreeSet<SsaVarnode> = BTreeSet::new();
+        while let Some(input_sv) = pending.pop() {
+            if !seen.insert(input_sv) {
+                continue;
+            }
             base_scope_paths
                 .entry(input_sv.base)
                 .or_default()
                 .push(path.clone());
-            if let Some(name) = known_name_of_sv(ctx, input_sv) {
+            if let Some(name) = known_name_of_sv(ctx, &input_sv) {
                 record_hoist_candidate_name(&mut candidate_bases, input_sv.base, &name);
                 name_scope_paths.entry(name).or_default().push(path.clone());
+            }
+            if let Some(def) = ctx.sv_defining_stmt.get(&input_sv)
+                && ctx.foldable_stmts.contains(def)
+                && let Some(def_inputs) = ctx.stmt_inputs.get(def)
+            {
+                pending.extend(def_inputs.iter().copied());
             }
         }
     }
@@ -7774,7 +7851,7 @@ fn may_resolve_stack_offset(
     stmt_idx: u32,
     ctx: &PrintCtx,
 ) -> bool {
-    if vn.space == SpaceId::Stack || is_x86_frame_base(vn) {
+    if vn.space == SpaceId::Stack || is_x86_frame_base_ctx(vn, ctx) {
         return true;
     }
     if vn.space == SpaceId::Const {
@@ -7933,7 +8010,7 @@ fn resolve_stack_offset_for_addr(
         );
         return Some(offset);
     }
-    if is_x86_frame_base(vn) {
+    if is_x86_frame_base_ctx(vn, ctx) {
         trace_stack_offset_step(
             "frame-base",
             stmt_idx,
@@ -8082,6 +8159,138 @@ fn resolve_stack_offset_add(
         return Some(base.wrapping_add(a.offset as i64));
     }
     None
+}
+
+/// Give each printed copy of a duplicated temp definition its own SSA name.
+///
+/// When the structurer duplicates a block, every copy defines the same SSA
+/// temp, and the fold pass reads two definitions as a control-flow merge it
+/// must keep as a `// temp` variable. If all copies are the same instruction
+/// and every reader sits inside the scope of the nearest copy before it, the
+/// copies are independent values: each copy (after the first) gets a fresh
+/// version, and its readers follow it, so each folds like any single-use temp.
+fn split_duplicated_temp_defs(ctx: &mut PrintCtx) {
+    let mut defs: BTreeMap<SsaVarnode, Vec<u32>> = BTreeMap::new();
+    for (&stmt, out) in &ctx.stmt_outputs {
+        if let Some(sv) = out.filter(|sv| sv.base.space == SpaceId::Unique) {
+            defs.entry(sv).or_default().push(stmt);
+        }
+    }
+    defs.retain(|_, stmts| stmts.len() > 1);
+    if defs.is_empty() {
+        return;
+    }
+    let pinned: BTreeSet<SsaVarnode> = ctx
+        .cond_uses
+        .iter()
+        .chain(ctx.ssa_phi_uses.iter())
+        .chain(ctx.cond_use_stmts.iter().map(|(sv, _)| sv))
+        .chain(ctx.returned_svs.iter())
+        .copied()
+        .collect();
+    let mut next_version: BTreeMap<Varnode, u32> = BTreeMap::new();
+    for sv in ctx
+        .stmt_outputs
+        .values()
+        .flatten()
+        .chain(ctx.stmt_inputs.values().flatten())
+    {
+        let next = next_version.entry(sv.base).or_default();
+        *next = (*next).max(sv.version + 1);
+    }
+    for (sv, def_stmts) in defs {
+        if pinned.contains(&sv) {
+            continue;
+        }
+        let first = &ctx.stmt_insns[&def_stmts[0]];
+        if def_stmts.iter().any(|stmt| {
+            ctx.stmt_insns.get(stmt).is_none_or(|insn| {
+                insn.op != first.op || insn.inputs != first.inputs || insn.output != first.output
+            })
+        }) {
+            continue;
+        }
+        let readers: Vec<u32> = ctx
+            .stmt_inputs
+            .iter()
+            .filter(|(_, inputs)| inputs.contains(&sv))
+            .map(|(&stmt, _)| stmt)
+            .collect();
+        let empty = Vec::new();
+        let owner_of = |reader: u32| {
+            let def = *def_stmts.iter().rev().find(|&&def| def < reader)?;
+            let def_path = ctx.stmt_scope_paths.get(&def).unwrap_or(&empty);
+            let reader_path = ctx.stmt_scope_paths.get(&reader).unwrap_or(&empty);
+            reader_path.starts_with(def_path).then_some(def)
+        };
+        let Some(owners) = readers
+            .iter()
+            .map(|&reader| owner_of(reader).map(|def| (reader, def)))
+            .collect::<Option<Vec<_>>>()
+        else {
+            continue;
+        };
+        trace_temp_text(format_args!(
+            "split-duplicate sv={sv:?} defs={def_stmts:?} readers={owners:?}"
+        ));
+        for &def in &def_stmts[1..] {
+            let next = next_version.entry(sv.base).or_default();
+            let copy = SsaVarnode {
+                base: sv.base,
+                version: *next,
+            };
+            *next += 1;
+            ctx.stmt_outputs.insert(def, Some(copy));
+            if let Some(name) = ctx.var_names.get(&sv).cloned() {
+                ctx.var_names.insert(copy, name);
+            }
+            if let Some(ty) = ctx.var_types.get(&sv).copied() {
+                ctx.var_types.insert(copy, ty);
+            }
+            for &(reader, _) in owners.iter().filter(|&&(_, owner)| owner == def) {
+                if let Some(inputs) = ctx.stmt_inputs.get_mut(&reader) {
+                    for input in inputs.iter_mut().filter(|input| **input == sv) {
+                        *input = copy;
+                    }
+                }
+                if let Some(slots) = ctx.stmt_input_slots.get_mut(&reader) {
+                    for slot in slots.values_mut().filter(|slot| **slot == sv) {
+                        *slot = copy;
+                    }
+                }
+                for (_, slot) in ctx
+                    .stmt_input_slot_lookup
+                    .range_mut((reader, 0)..=(reader, usize::MAX))
+                    .filter(|(_, slot)| **slot == sv)
+                {
+                    *slot = copy;
+                }
+            }
+        }
+    }
+}
+
+/// `true` when some statement writes `rbp` with anything but frame setup or a
+/// restore: a copy or offset of `rsp`, or a load (`pop rbp`).
+fn rbp_is_general_register(ctx: &PrintCtx) -> bool {
+    const RSP_REG_OFF: u64 = 32;
+    const RBP_REG_OFF: u64 = 40;
+    let is_reg = |vn: &Varnode, offset| vn.space == SpaceId::Register && vn.offset == offset;
+    ctx.stmt_insns.values().any(|insn| {
+        insn.output.is_some_and(|out| is_reg(&out, RBP_REG_OFF))
+            && !(insn.op == IrOp::Load
+                || (matches!(insn.op, IrOp::Copy | IrOp::IntAdd | IrOp::IntSub)
+                    && insn
+                        .inputs
+                        .first()
+                        .is_some_and(|src| is_reg(src, RSP_REG_OFF))))
+    })
+}
+
+/// [`is_x86_frame_base`] that leaves out `rbp` where it holds data.
+fn is_x86_frame_base_ctx(vn: &Varnode, ctx: &PrintCtx) -> bool {
+    const RBP_REG_OFF: u64 = 40;
+    is_x86_frame_base(vn) && !(ctx.rbp_is_general_register && vn.offset == RBP_REG_OFF)
 }
 
 fn is_x86_frame_base(vn: &Varnode) -> bool {
@@ -11407,6 +11616,7 @@ fn rebase_cond_operand_after_body(
     for candidate_base in &candidate_bases {
         if let Some((alias_sv, delta)) =
             latest_linear_update_copy_for_base_in_range(candidate_base, start_stmt, end_stmt, ctx)
+            && !value_chain_reaches(&sv, &alias_sv, ctx)
         {
             let text = ctx.name_of(&alias_sv);
             trace_sequence(format_args!(
@@ -11622,6 +11832,40 @@ fn condition_rebase_candidate_bases(sv: &SsaVarnode, ctx: &PrintCtx) -> Vec<Varn
         current = input_sv;
     }
     bases
+}
+
+/// `true` when `sv` is `target` or a copy/extension chain of it: the operand
+/// already reads the value a linear update produced, so it needs no rebase.
+fn value_chain_reaches(sv: &SsaVarnode, target: &SsaVarnode, ctx: &PrintCtx) -> bool {
+    let mut current = *sv;
+    for _ in 0..4 {
+        if current == *target {
+            return true;
+        }
+        let Some(def_stmt) = defining_stmt_for_sv(&current, ctx) else {
+            return false;
+        };
+        let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
+            return false;
+        };
+        if !matches!(
+            def_insn.op,
+            IrOp::Copy | IrOp::Subpiece | IrOp::IntZext | IrOp::IntSext | IrOp::Cast
+        ) {
+            return false;
+        }
+        let Some(input) = def_insn.inputs.first().copied() else {
+            return false;
+        };
+        let Some(input_sv) = input_or_latest_sv_for_operand(&input, Some(0), def_stmt, ctx) else {
+            return false;
+        };
+        if input_sv == current {
+            return false;
+        }
+        current = input_sv;
+    }
+    current == *target
 }
 
 fn comparison_symbol(op: IrOp) -> Option<&'static str> {
@@ -16965,6 +17209,15 @@ fn load_output_is_suppressed_for_inline(insn: &IrInsn, stmt_idx: u32, ctx: &Prin
         try_readonly_scalar_load(addr, Some(addr_idx), stmt_idx, load_size, ctx).is_some()
     });
     stable_load_expr_is_inlineable(insn, stmt_idx, ctx) || readonly
+}
+
+/// Whether the load at `stmt_idx` dereferences a register (`*(_QWORD *)rax`)
+/// rather than a fixed or stack address, which print inline at the reader.
+fn loads_through_register(stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    ctx.stmt_input_slots
+        .get(&stmt_idx)
+        .and_then(|slots| slots.get(&1))
+        .is_some_and(|addr| addr.base.space == SpaceId::Register && !is_x86_frame_base(&addr.base))
 }
 
 fn stable_load_expr_is_inlineable(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {

@@ -67,24 +67,24 @@ void logic_test(void) {
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    void * field_0;
+    __int64 field_0;
     int field_8;
 };
 struct __anon1 {
-    void * field_0;
+    __int64 field_0;
     void * field_8;
 };
 
 /* Function:   memory_test | Address: 0x120000170 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x28 (40 bytes) | Xrefs from: unknown */
 void memory_test(void) {
+    __int64 v_40;
     int v_32;
     __int64 v_16;
     __int64 v_8;
-    __int64 v_24;
-    __int64 v0; // r30
-    __int64 v1; // r31
+    int v0; // r30
+    int v1; // r31
     __int64 v2 = v2 - 32; // r29
-    *(_QWORD *)(v2 - 32 + 0x18LL) = v1;
+    *(_QWORD *)(v2 - 8) = v1;
     *(_QWORD *)(v2 + 0x10LL) = v0;
     *(_DWORD *)v2 = 0x42;
     return;

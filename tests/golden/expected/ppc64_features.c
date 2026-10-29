@@ -60,15 +60,15 @@ void _start(void) {
 }
 /* Function:   sub_10000104 | Address: 0x10000104 | Size: 0x14 (20 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10000104(void) {
-    __int64 v0 = 0; // rbx
-    linux_syscall(1LL, 0LL, 0x14LL, v0 + 0x14LL, v0 - 0x14LL);
+    __int64 v0; // rbx
+    __int64 v1 = v0 + 0x14LL; // rbp
+    __int64 v2 = v0 - 0x14LL; // temp
+    linux_syscall(1LL, 0LL, 0x14LL, v1, v2);
     return;
 }
 /* Function:   ppc_branch | Address: 0x1000011c | Size: 0x18 (24 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void ppc_branch(void) {
-    __int64 v0 = 5; // rbx
-    if (5u != 3u) {
-    }
+    __int64 v0 = 8; // rbx
     return;
 }
 /* Function:   sub_10000120 | Address: 0x10000120 | Size: 0x14 (20 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

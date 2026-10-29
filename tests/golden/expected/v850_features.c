@@ -57,10 +57,8 @@ void sub_10118(void);
 void _start(void) {
     return;
 }
-/* Function:   sub_10104 | Address: 0x10104 | Size: 0x10 (16 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_10104 | Address: 0x10104 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10104(void) {
-    int v0 = v0 + v1; // r11d
-    int v1 = 1; // r10d
     return;
 }
 /* Function:   v850_branch | Address: 0x10114 | Size: 0x12 (18 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

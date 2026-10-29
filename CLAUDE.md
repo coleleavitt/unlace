@@ -411,8 +411,11 @@ research sessions. This ignores stale Sisyphus task state.
    an informational `corpus parity` row (skipped when the binary is absent).
    2026-10-29 numbers: `line_sim=35.8% ast_sim=63.3% better=54 equivalent=13
    worse=82 gotos=286/210 leaktemp=184 lines=10693/7637 arity_match=124/149`.
-   Not yet a failing check; a baseline file and regression thresholds are the
-   next step.
+   `tests/golden/corpus_parity_baseline.json` pins them: lower line/tree
+   similarity (beyond 0.1 pp) or more failed/gotos/leaked temps/`worse`
+   verdicts exits 1 and fails the row. Refresh only after reviewing the
+   per-function diff under `target/corpus-parity/unlace/`, with
+   `cargo xtask corpus-parity --update-baseline`.
 
 5. Lifters and call resolution.
    Older gap sessions found missing branches, unresolved calls, `CALLOTHER` placeholders, raw address calls, exception edges, SIMD gaps, and architecture-specific semantics. Verify current code before fixing, but do not assume printer work can compensate for incomplete lifting.

@@ -1,6 +1,0 @@
-__int64 sub_13AAD0()
-{
-  sub_145CD0(0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL);
-  return 1;
-}
-

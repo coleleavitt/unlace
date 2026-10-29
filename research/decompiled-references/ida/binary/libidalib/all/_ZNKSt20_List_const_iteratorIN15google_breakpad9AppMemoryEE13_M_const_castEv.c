@@ -1,8 +1,0 @@
-__int64 __fastcall std::_List_const_iterator<google_breakpad::AppMemory>::_M_const_cast(_QWORD *a1)
-{
-  __int64 v2; // [rsp+18h] [rbp-8h] BYREF
-
-  std::_List_iterator<google_breakpad::AppMemory>::_List_iterator(&v2, *a1);
-  return v2;
-}
-

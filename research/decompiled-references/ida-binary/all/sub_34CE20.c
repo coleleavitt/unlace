@@ -1,5 +1,0 @@
-__int64 sub_34CE20()
-{
-  sub_37DF70(0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL);
-  return 1;
-}

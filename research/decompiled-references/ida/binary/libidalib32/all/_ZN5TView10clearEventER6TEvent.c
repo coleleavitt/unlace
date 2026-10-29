@@ -1,5 +1,0 @@
-void TView::clearEvent()
-{
-  ;
-}
-

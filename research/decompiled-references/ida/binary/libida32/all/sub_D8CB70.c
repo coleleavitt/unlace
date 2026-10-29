@@ -1,9 +1,0 @@
-__int64 __fastcall sub_D8CB70(__int64 a1)
-{
-  _WORD *v1; // rbp
-
-  v1 = (_WORD *)sub_DFDA20(a1, 8);
-  *(_WORD *)sub_DFD980(a1, 8) = *v1;
-  return 1;
-}
-

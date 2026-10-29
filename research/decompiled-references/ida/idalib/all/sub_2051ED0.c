@@ -1,5 +1,0 @@
-__int64 __fastcall sub_2051ED0(__int64 a1)
-{
-  sub_2051EA0(a1);
-  return *(_QWORD *)(a1 + 24);
-}

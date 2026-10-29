@@ -1,6 +1,0 @@
-void __fastcall sub_339C80(__int64 a1, __int64 a2)
-{
-  if ( *(char *)(a1 + 49) < 0 && *(_BYTE *)a2 == 6 )
-    *(_QWORD *)(a2 + 8) &= ~1uLL;
-}
-

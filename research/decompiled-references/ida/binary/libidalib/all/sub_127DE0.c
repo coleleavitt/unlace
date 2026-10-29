@@ -1,6 +1,0 @@
-__int64 sub_127DE0()
-{
-  sub_145400(0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL);
-  return 1;
-}
-

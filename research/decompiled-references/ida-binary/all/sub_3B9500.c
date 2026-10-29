@@ -1,5 +1,0 @@
-__int64 sub_3B9500()
-{
-  sub_3B90B0(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF);
-  return 1;
-}

@@ -1,3 +1,0 @@
-# Large source PDFs are fetched on demand (see bibliography.md acquisition
-# notes); keep only the extracted text + bibliography under version control.
-pdf/

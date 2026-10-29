@@ -1,9 +1,0 @@
-unsigned __int64 sub_5DF610()
-{
-  qword_4B237D0 = 0xB0C0B0C000001404LL;
-  word_4B237DA = 4611;
-  qword_4B237C0 = 0xB0C0B0C000001404LL;
-  word_4B237CA = 4614;
-  return 0xB0C0B0C000001404LL;
-}
-

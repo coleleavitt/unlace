@@ -1,6 +1,0 @@
-// attributes: thunk
-__int64 Z3_mk_zero_ext()
-{
-  return Z3_mk_zero_ext();
-}
-

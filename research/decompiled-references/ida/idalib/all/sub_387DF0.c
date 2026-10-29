@@ -1,5 +1,0 @@
-void __fastcall __noreturn sub_387DF0(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
-{
-  itext(a1, a2, a3, a4);
-  callui();
-}

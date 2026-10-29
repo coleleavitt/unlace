@@ -1,4 +1,0 @@
-void ida_checkmem()
-{
-  ;
-}

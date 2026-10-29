@@ -1,9 +1,0 @@
-void __fastcall sub_139FE30(std::_V2::error_category *a1)
-{
-  if ( a1 )
-  {
-    *(_QWORD *)a1 = &off_2C44288;
-    std::_V2::error_category::~error_category(a1);
-    operator delete(a1, 8u);
-  }
-}

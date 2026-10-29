@@ -1,4 +1,0 @@
-__int64 __fastcall sub_47F1C0(_QWORD *a1)
-{
-  return (*(__int64 (__fastcall **)(_QWORD))(*(_QWORD *)*a1 + 16LL))(*a1);
-}

@@ -1,6 +1,0 @@
-void __fastcall sub_9FAD70(__int64 a1)
-{
-  if ( *(_QWORD *)(a1 + 16) != a1 + 32 )
-    free(*(void **)(a1 + 16));
-}
-

@@ -1,5 +1,0 @@
-__int64 sub_32E2E0()
-{
-  sub_37F300(0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL, 0xFFFFFFFFLL);
-  return 1;
-}

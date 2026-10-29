@@ -1,6 +1,0 @@
-__int64 sub_135B20()
-{
-  sub_135900(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF);
-  return 1;
-}
-

@@ -1,9 +1,0 @@
-__int64 __fastcall sub_11970(__int64 a1)
-{
-  char byte; // al
-
-  *(_BYTE *)(*(_QWORD *)(a1 + 4352) + 40LL * *(int *)(a1 + 4360) + 73) = *(_BYTE *)(*(_QWORD *)(a1 + 4352) + 29LL) & 1;
-  byte = get_byte();
-  return sub_10AC0(a1, *((_DWORD *)qword_1AFE0 + (byte & 0x1F)), 2u, 255, 255);
-}
-

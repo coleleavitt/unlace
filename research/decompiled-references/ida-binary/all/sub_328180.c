@@ -1,5 +1,0 @@
-__int64 sub_328180()
-{
-  sub_327F60(0xFFFFFFFF, 0xFFFFFFFFLL, 0xFFFFFFFF, 0xFFFFFFFF);
-  return 1;
-}

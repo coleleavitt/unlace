@@ -1,5 +1,0 @@
-void TDeskTop::tile()
-{
-  ;
-}
-

@@ -1,5 +1,0 @@
-void __fastcall sub_E7F0(void *a1)
-{
-  operator delete(a1, 0x164u);
-}
-

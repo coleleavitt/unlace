@@ -1,7 +1,0 @@
-__int64 __fastcall std::allocator_traits<google_breakpad::PageStdAllocator<unsigned char>>::max_size(__int64 a1)
-{
-  return std::allocator_traits<google_breakpad::PageStdAllocator<unsigned char>>::_S_max_size<google_breakpad::PageStdAllocator<unsigned char> const>(
-           a1,
-           0);
-}
-

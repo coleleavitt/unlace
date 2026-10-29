@@ -1,9 +1,0 @@
-__int64 __fastcall boost::asio::detail::service_registry::destroy_added(__int64 a1)
-{
-  __int64 result; // rax
-
-  if ( a1 )
-    return (*(__int64 (__fastcall **)(__int64))(*(_QWORD *)a1 + 8LL))(a1);
-  return result;
-}
-

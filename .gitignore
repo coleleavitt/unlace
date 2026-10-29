@@ -1,5 +1,8 @@
 /target
 
+# Local research corpus (decompiled references, papers, docs) — never committed.
+research/
+
 # Hex-Rays plugin .so binaries — large, local-only.
 # Source copies live at ~/Downloads/Software/IDAPro/ida-pro-9.3sp1/
 # and at hexrays/<ida-version>/*.so on disk (gitignored).

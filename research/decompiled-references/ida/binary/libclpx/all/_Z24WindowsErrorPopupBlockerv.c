@@ -1,5 +1,0 @@
-void __fastcall WindowsErrorPopupBlocker()
-{
-  ;
-}
-

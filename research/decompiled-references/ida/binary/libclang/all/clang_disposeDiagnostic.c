@@ -1,5 +1,0 @@
-void clang_disposeDiagnostic()
-{
-  ;
-}
-

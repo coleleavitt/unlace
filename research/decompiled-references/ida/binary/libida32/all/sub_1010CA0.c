@@ -1,6 +1,0 @@
-void __fastcall sub_1010CA0(__int64 a1)
-{
-  *(_QWORD *)a1 = &unk_2C0AB58;
-  sub_1009960(a1);
-}
-

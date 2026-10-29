@@ -1,5 +1,0 @@
-unsigned __int64 __fastcall set_node_info(unsigned int a1, unsigned int a2, __int64 a3, int a4)
-{
-  return sub_5BF530(*(_QWORD **)(qword_2CA1698 + 1480), (const char *)a1, a2, a3, a4);
-}
-

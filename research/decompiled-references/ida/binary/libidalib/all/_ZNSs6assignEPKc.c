@@ -1,8 +1,0 @@
-__int64 __fastcall std::string::assign(std::string *this, const char *a2)
-{
-  unsigned __int64 v2; // rax
-
-  v2 = std::char_traits<char>::length(a2);
-  return std::string::assign(this, a2, v2);
-}
-

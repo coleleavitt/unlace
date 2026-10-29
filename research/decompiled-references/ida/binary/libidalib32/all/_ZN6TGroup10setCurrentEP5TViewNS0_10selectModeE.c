@@ -1,5 +1,0 @@
-void TGroup::setCurrent()
-{
-  ;
-}
-

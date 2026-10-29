@@ -1,9 +1,0 @@
-/* Split from IDA decompile_many output for CodeGraph indexing. */
-// Name: KLUDGE_bpt_visitor_t__for_all_bpts
-// Address: 0x000706CC
-
-//----- (000706CC) --------------------------------------------------------
-int KLUDGE_bpt_visitor_t__for_all_bpts()
-{
-  return 0;
-}

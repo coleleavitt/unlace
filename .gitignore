@@ -59,6 +59,7 @@ notes
 rust_out
 .worktrees/
 .claude/
+CLAUDE.local.md
 
 # Code / Codex local session artifacts. These contain transient terminal output,
 # agent transcripts, and user-message mirrors; they are useful while debugging a

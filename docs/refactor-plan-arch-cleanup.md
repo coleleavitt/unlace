@@ -52,3 +52,21 @@ next to the module they test only after the module is stable.
 - Are `lift-sh/sbpf/tic6x/lua` intentionally parked? (`lift-sh` may duplicate
   `lift-superh`; `lift-sbpf` may be covered by `lift-ebpf`. Unverified.)
 - Is `engine` the future decompiler or a reference oracle?
+
+## Findings: orphan lifter crates (needs a decision)
+
+Four `unlace-lift-*` crates are workspace members (via the `crates/*` glob), so
+they compile and run their own tests, but nothing depends on them. They have no
+`[workspace.dependencies]` entry, no optional dep and no `arch-*` feature in
+`unlace-lift`, and `arch_support.rs` marks their arches `FixtureOnly`.
+
+| crate | LOC | state |
+|---|---|---|
+| `unlace-lift-sh` | ~1.2k | duplicates `unlace-lift-superh` (same arch, wired one is `superh`); newer (2026-06-02) |
+| `unlace-lift-sbpf` | ~100 | stub; `ebpf` is wired |
+| `unlace-lift-tic6x` | ~500 | single-file; `unlace-lift-ti` is wired |
+| `unlace-lift-lua` | ~2.4k | newest (2026-10-28); `Lua` is FixtureOnly |
+
+Options per crate: (a) wire into the facade with an `arch-*` feature, (b) merge
+into the wired sibling, (c) delete. `sh` vs `superh` is the clearest dedupe:
+pick one implementation and drop the other.

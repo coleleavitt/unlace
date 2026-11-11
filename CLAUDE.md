@@ -331,6 +331,11 @@ architecture/style audit. The important result is that the workspace crate split
 is already domain-shaped; the next cleanup is private module extraction inside
 owning crates, not new crates for file size alone.
 
+**Active branch `refactor/arch-cleanup`:** the ordered, step-by-step plan is in
+`docs/refactor-plan-arch-cleanup.md`. Follow it on that branch: pure moves,
+goldens byte-identical, one step per commit. The queue below is the older
+summary.
+
 Current architecture queue:
 
 1. Split `crates/unlace-output/src/c_printer.rs` internally around trace,

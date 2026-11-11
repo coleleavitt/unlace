@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_engine::program::{Parameter, Prototype, ValueType};
+use engine::program::{Parameter, Prototype, ValueType};
 use unlace_loader::DwarfInfo;
 
 use crate::pipeline::FunctionEntry;

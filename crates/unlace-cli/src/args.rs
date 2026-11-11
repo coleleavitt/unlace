@@ -129,7 +129,7 @@ pub enum Cmd {
         flirt_min_confidence: u8,
 
         /// Analysis engine (default: `[engine] default` in the config, else `legacy`). `ghidra` is the
-        /// `unlace-engine` core (Ghidra's decompiler ported to Rust).
+        /// `engine` core (Ghidra's decompiler ported to Rust).
         #[arg(long, value_enum)]
         engine: Option<Engine>,
 
@@ -298,7 +298,7 @@ pub enum Cmd {
         flirt_min_confidence: u8,
 
         /// Analysis engine (default: `[engine] default` in the config, else `legacy`). `ghidra` is the
-        /// `unlace-engine` core (Ghidra's decompiler ported to Rust).
+        /// `engine` core (Ghidra's decompiler ported to Rust).
         #[arg(long, value_enum)]
         engine: Option<Engine>,
 
@@ -690,7 +690,7 @@ pub enum Engine {
     /// unlace's own lifters, passes, structurer, and C printer.
     #[default]
     Legacy,
-    /// `unlace-engine`, the Rust port of Ghidra's decompiler.
+    /// `engine`, the Rust port of Ghidra's decompiler.
     Ghidra,
 }
 
@@ -703,7 +703,7 @@ pub enum EngineStyle {
     Ghidra,
 }
 
-impl From<EngineStyle> for unlace_engine::output_style::OutputStyle {
+impl From<EngineStyle> for engine::output_style::OutputStyle {
     fn from(style: EngineStyle) -> Self {
         match style {
             EngineStyle::Ida => Self::Ida,

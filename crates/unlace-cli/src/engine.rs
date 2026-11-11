@@ -1,4 +1,4 @@
-//! The `unlace-engine` analysis core (a Rust port of the Ghidra decompiler) behind
+//! The `engine` analysis core (a Rust port of the Ghidra decompiler) behind
 //! `--engine ghidra`.
 //!
 //! unlace's loader and discovery choose the functions and their names; the engine decompiles each
@@ -20,8 +20,8 @@ use std::time::{Duration, Instant};
 use anyhow::Context as _;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use unlace_engine::output_style::OutputStyle;
-use unlace_engine::program::{Program, ProgramOptions, Prototypes, SymbolLoading};
+use engine::output_style::OutputStyle;
+use engine::program::{Program, ProgramOptions, Prototypes, SymbolLoading};
 use unlace_passes::libc_signatures;
 use unlace_passes::noreturn::NORETURN_NAMES;
 

@@ -19,7 +19,7 @@ one step per commit.**
 
 | # | Step | Kind | Status |
 |---|------|------|--------|
-| 1 | Rename `unlace-engine` -> `engine` (dir, package, lib, path refs, docs) | move | todo |
+| 1 | Rename `unlace-engine` -> `engine` (dir, package, lib, path refs, docs) | move | done |
 | 2 | Split `unlace-output/src/c_printer/mod.rs` (18.9k lines) by job | move | done (d264f1d, 6e28dda); `c_printer_emit`/`c_printer_conditions` still 1.9k/1.3k |
 | 3 | Orphan lifters: `lift-sh`, `lift-sbpf`, `lift-tic6x`, `lift-lua` have no reverse dep. Wire into facade or delete. Add a check that every lifter is reachable from `unlace-lift` | decision | todo |
 | 4 | Split `unlace-cli/src/pipeline.rs` (8.7k lines) into a `pipeline/` tree, one file per phase | move | done (bd9f555); flat `pipeline_*.rs`, 8.7k -> 2k |

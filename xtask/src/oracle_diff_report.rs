@@ -186,7 +186,7 @@ pub fn markdown(diffs: &[BinaryDiff], ida_version: &str) -> String {
         out,
         "Hex-Rays oracle (IDA {ida_version}) vs unlace legacy pipeline, per function matched by start address.\n\
          Metric pairs are `Hex-Rays / unlace`, summed over functions both sides printed. PLT stubs and thunks are excluded.\n\
-         The Ghidra-based unlace-engine column is omitted: no such engine exists in this checkout.\n"
+         The Ghidra-based engine column is omitted: no such engine exists in this checkout.\n"
     );
     let _ = writeln!(out, "## Summary\n");
     out.push_str(&summary_table(diffs));

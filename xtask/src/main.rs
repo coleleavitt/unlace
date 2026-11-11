@@ -253,7 +253,7 @@ const ENFORCED_CRATES: &[&str] = &[
     "unlace-passes",
     "unlace-struct",
     "unlace-output",
-    "unlace-engine",
+    "engine",
 ];
 
 fn is_violation(line: &str) -> bool {

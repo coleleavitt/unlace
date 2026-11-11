@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 
-use unlace_engine::output_style::OutputStyle;
+use engine::output_style::OutputStyle;
 
 const HEADER: &str = "#include <stdbool.h>\n#include <stdint.h>\n";
 

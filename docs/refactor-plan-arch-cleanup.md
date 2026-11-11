@@ -24,7 +24,7 @@ one step per commit.**
 | 3 | Orphan lifters: `lift-sh`, `lift-sbpf`, `lift-tic6x`, `lift-lua` have no reverse dep. Wire into facade or delete. Add a check that every lifter is reachable from `unlace-lift` | decision | done: sh/sbpf/tic6x deleted (superseded or unreferenced); lua/ebpf kept as intentional standalone, guarded by `unlace-lift/tests/lifter_reachability.rs` |
 | 4 | Split `unlace-cli/src/pipeline.rs` (8.7k lines) into a `pipeline/` tree, one file per phase | move | done (bd9f555); flat `pipeline_*.rs`, 8.7k -> 2k |
 | 5 | Group `unlace-struct` passes (40+ flat files) into phase dirs with an ordered pass list; shrink `structurer/mod.rs` (5.8k) | move | done (2f8f91c) as flat `structurer_*.rs`; phase dirs not used (tree is flat by decision) |
-| 6 | Replace stringly-typed arch registry (`arch_support.rs` feature-name strings + `cfg(feature)` in `unlace-lift`) with one generated table | refactor | todo |
+| 6 | Replace stringly-typed arch registry (`arch_support.rs` feature-name strings + `cfg(feature)` in `unlace-lift`) with one generated table | refactor | done (already): `product_tier` in unlace-ir is the single table; facade returns typed `LifterUnavailable`; facade tests cross-check every ArchId against the table and Cargo.toml, incl. under `all-arches`. Remaining cfg arms in `get_lifter` are boilerplate, drift-guarded by tests; no macro added |
 | 7 | Replace text-level C rewriters (post-print line patching) with IR/HIR fixes; typed variable origins instead of name-prefix checks | behavior | todo |
 | 8 | Decide what `engine` is (reference oracle vs. future). 175k lines, own IR, only used by `--engine` in CLI | decision | open |
 

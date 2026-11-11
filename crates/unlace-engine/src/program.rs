@@ -1,7 +1,12 @@
+#[path = "program_demangle.rs"]
 mod demangle;
+#[path = "program_discovery.rs"]
 mod discovery;
+#[path = "program_prototypes.rs"]
 mod prototypes;
+#[path = "program_stubs.rs"]
 mod stubs;
+#[path = "program_symbols.rs"]
 mod symbols;
 
 use std::collections::{BTreeMap, BTreeSet};

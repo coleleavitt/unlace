@@ -9,6 +9,7 @@ use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId};
 
 use crate::pass::{DefIndex, Pass, PassError};
 
+#[path = "type_infer_simd.rs"]
 mod simd;
 
 pub struct TypeInferPass;

@@ -93,8 +93,11 @@ use unlace_passes::{
     validate_named_phase_monotonicity_with_exceptions,
 };
 
+#[path = "pipeline_call_site_guess.rs"]
 mod call_site_guess;
+#[path = "pipeline_function_extents.rs"]
 mod function_extents;
+#[path = "pipeline_hir_recovery.rs"]
 mod hir_recovery;
 
 /// Once-per-process pipeline phase-monotonicity check.

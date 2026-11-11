@@ -19,6 +19,7 @@ use crate::config::Config;
 use crate::pipeline::{self, FunctionEntry, PipelineConfig};
 use crate::profiling::{self, TraceField};
 
+#[path = "batch_progress.rs"]
 mod progress;
 
 use progress::BatchProgress;

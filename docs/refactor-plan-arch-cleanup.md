@@ -84,3 +84,19 @@ Total: 20 lines removed across the whole corpus. Classes:
 - 3 dead overwritten stores (`result = "woof"`, `c5 = 1LL`, `c4 = "caught: %s\n"`). Need HIR-level liveness across branches; this is the only class the text liveness is genuinely needed for.
 
 Plan: (1) make DCE drop non-volatile unused Loads, re-measure; (2) chase the frame arithmetic survivors; (3) only then decide whether an HIR liveness pass is worth building for the 3 overwritten stores. Do each as a golden-diffed change, not a blanket refresh.
+
+### Step 7 experiment: DCE dropping dead non-volatile loads (reverted)
+
+Tried making `dce.rs` treat a `Load` as removable when its result is unused and
+its `AliasCategory` is not preserved. Result: 9 of 19 goldens changed, e.g.
+`debug_hello.elf` struct `__anon0` `field_8` went from `void *` to `__int64`.
+
+Cause: dead loads still contribute type evidence to struct/field inference, and
+DCE runs before that. The text-level `dead_assign` pass removes the same lines
+only after types are decided, which is why it is safe today.
+
+Consequence: the loads cannot move into IR DCE as a plain removal. Either
+(a) run the dead-load removal after type inference and struct-field recovery in
+the IR, or (b) record the load's type evidence on the surviving field before
+dropping it. Do not retry the naive DCE change. Tree was reverted; no code
+change from this experiment.

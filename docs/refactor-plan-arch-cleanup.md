@@ -25,8 +25,8 @@ one step per commit.**
 | 4 | Split `unlace-cli/src/pipeline.rs` (8.7k lines) into a `pipeline/` tree, one file per phase | move | done (bd9f555); flat `pipeline_*.rs`, 8.7k -> 2k |
 | 5 | Group `unlace-struct` passes (40+ flat files) into phase dirs with an ordered pass list; shrink `structurer/mod.rs` (5.8k) | move | done (2f8f91c) as flat `structurer_*.rs`; phase dirs not used (tree is flat by decision) |
 | 6 | Replace stringly-typed arch registry (`arch_support.rs` feature-name strings + `cfg(feature)` in `unlace-lift`) with one generated table | refactor | done (already): `product_tier` in unlace-ir is the single table; facade returns typed `LifterUnavailable`; facade tests cross-check every ArchId against the table and Cargo.toml, incl. under `all-arches`. Remaining cfg arms in `get_lifter` are boilerplate, drift-guarded by tests; no macro added |
-| 7 | Replace text-level C rewriters (post-print line patching) with IR/HIR fixes; typed variable origins instead of name-prefix checks | behavior | todo |
-| 8 | Decide what `engine` is (reference oracle vs. future). 175k lines, own IR, only used by `--engine` in CLI | decision | open |
+| 7 | Replace text-level C rewriters (post-print line patching) with IR/HIR fixes; typed variable origins instead of name-prefix checks | behavior | todo; sized: ~4.2k lines in 24 `c_printer_postprocess_*` files (combine, dead_assign, decls, idents, idioms, labels, lvar_names, repair). Name-prefix checks are down to `buf_` (c_printer_stack_access/stack_names) and `saved_` (passes/var_naming). Do one postprocessor at a time, golden-diff each, not as one batch |
+| 8 | Decide what `engine` is (reference oracle vs. future). ~165k lines, own IR, only used by `--engine` in CLI (cli `engine*.rs`: args, config, main) | decision | open, needs owner call |
 
 ## Step 2: c_printer target layout
 

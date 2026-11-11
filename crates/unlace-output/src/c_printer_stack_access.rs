@@ -500,7 +500,7 @@ pub(super) fn stack_slot_for_offset(
             return Some(StackSlotRef {
                 name: name.clone(),
                 delta: 0,
-                is_buffer: name.starts_with("buf_"),
+                is_buffer: unlace_ir::stack_names::is_fallback_buffer_name(name),
             });
         }
     }
@@ -542,7 +542,7 @@ pub(super) fn stack_slot_for_address_offset(offset: i64, ctx: &PrintCtx) -> Opti
             return Some(StackSlotRef {
                 name: name.clone(),
                 delta: 0,
-                is_buffer: name.starts_with("buf_"),
+                is_buffer: unlace_ir::stack_names::is_fallback_buffer_name(name),
             });
         }
     }

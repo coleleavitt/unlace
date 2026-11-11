@@ -632,11 +632,7 @@ fn stack_lvar_name(func: &SsaFunction, offset: i64, size: u64) -> String {
     {
         return name.clone();
     }
-    if size > 8 {
-        format!("buf_{}", offset.unsigned_abs())
-    } else {
-        format!("v_{}", offset.unsigned_abs())
-    }
+    unlace_ir::stack_names::fallback_slot_name_for_size(offset, size)
 }
 
 /// Best-effort type for a recovered stack-frame slot. Falls back to

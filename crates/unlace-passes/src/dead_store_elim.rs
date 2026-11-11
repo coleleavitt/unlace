@@ -15,8 +15,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::IrOp;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::Varnode;
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 use crate::stack_address::{StackAddr, StackAddrResolver};
@@ -963,8 +963,14 @@ mod tests {
         func.insert_block(bb);
         let mut ssa = unlace_ir::ssa::build_ssa(func);
 
-        let changed = DeadStoreElimPass.run(&mut ssa).expect("pass should succeed");
-        assert!(!changed, "both pushes write distinct slots: {:?}", ssa.function.blocks);
+        let changed = DeadStoreElimPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(
+            !changed,
+            "both pushes write distinct slots: {:?}",
+            ssa.function.blocks
+        );
         let stores = ssa.function.blocks[&BlockId(0)]
             .insns
             .iter()

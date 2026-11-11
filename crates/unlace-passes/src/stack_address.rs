@@ -166,7 +166,11 @@ impl<'a> AddressResolver<'a> {
 
     /// The stack offset whose address `insn` materializes into a register
     /// (`lea rdi, [rsp+0x10]` lifts to `rdi = rsp + 0x10`), if any.
-    pub(crate) fn taken_stack_address(&mut self, site: (BlockId, usize), insn: &IrInsn) -> Option<i64> {
+    pub(crate) fn taken_stack_address(
+        &mut self,
+        site: (BlockId, usize),
+        insn: &IrInsn,
+    ) -> Option<i64> {
         let out = insn.output?;
         if out.space != SpaceId::Register
             || self.spec.is_frame_base(&out)
@@ -199,10 +203,10 @@ impl<'a> AddressResolver<'a> {
         if vn.space == SpaceId::Const {
             return None;
         }
-        if let Some(&input_sv) = self
-            .func
-            .var_map
-            .get(&(site.0, site.1, VarnodeSlot::Input(input_idx)))
+        if let Some(&input_sv) =
+            self.func
+                .var_map
+                .get(&(site.0, site.1, VarnodeSlot::Input(input_idx)))
         {
             return self.ssa_value_offset(&input_sv, site, depth);
         }
@@ -657,20 +661,46 @@ mod tests {
             Varnode::unique(16, 8),
         );
         let ssa = ssa_with_deltas(vec![
-            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), Varnode::constant(0x18, 8)], 0x1000),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u0,
+                smallvec![rsp(), Varnode::constant(0x18, 8)],
+                0x1000,
+            ),
             IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u0], 0x1000),
-            IrInsn::with_output(IrOp::IntAdd, u1, smallvec![rsp(), Varnode::constant(0xc, 8)], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                u1,
+                smallvec![rsp(), Varnode::constant(0xc, 8)],
+                0x1004,
+            ),
             IrInsn::without_output(IrOp::Store, smallvec![ram, u1, Varnode::reg(16, 4)], 0x1004),
-            IrInsn::with_output(IrOp::IntAdd, u2, smallvec![rsp(), Varnode::constant(0x18, 8)], 0x1008),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                u2,
+                smallvec![rsp(), Varnode::constant(0x18, 8)],
+                0x1008,
+            ),
             IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u2], 0x1008),
-            IrInsn::with_output(IrOp::Load, Varnode::reg(24, 8), smallvec![ram, rsp()], 0x100c),
+            IrInsn::with_output(
+                IrOp::Load,
+                Varnode::reg(24, 8),
+                smallvec![ram, rsp()],
+                0x100c,
+            ),
         ]);
         let spec = StackSpec::for_arch(ArchId::X86_64).unwrap();
         let mut resolver = AddressResolver::new(&ssa, &spec);
         let block = &ssa.function.blocks[&BlockId(0)];
 
-        assert_eq!(resolver.stack_offset((BlockId(0), 3), &block.insns[3]), Some(-12));
-        assert_eq!(resolver.stack_offset((BlockId(0), 6), &block.insns[6]), Some(0));
+        assert_eq!(
+            resolver.stack_offset((BlockId(0), 3), &block.insns[3]),
+            Some(-12)
+        );
+        assert_eq!(
+            resolver.stack_offset((BlockId(0), 6), &block.insns[6]),
+            Some(0)
+        );
 
         let by_addr = resolver.coords.sp_offset_by_addr(&ssa);
         assert_eq!(by_addr[&0x1000], 0);
@@ -692,18 +722,40 @@ mod tests {
             Varnode::unique(24, 8),
         );
         let mut ssa = ssa_with_deltas(vec![
-            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), Varnode::constant(8, 8)], 0x1000),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u0,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x1000,
+            ),
             IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u0], 0x1000),
             IrInsn::without_output(IrOp::Store, smallvec![ram, u0, rbp()], 0x1000),
             IrInsn::with_output(IrOp::Copy, rbp(), smallvec![rsp()], 0x1001),
-            IrInsn::with_output(IrOp::IntSub, u1, smallvec![rsp(), Varnode::constant(0x10, 8)], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u1,
+                smallvec![rsp(), Varnode::constant(0x10, 8)],
+                0x1004,
+            ),
             IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u1], 0x1004),
-            IrInsn::with_output(IrOp::IntAdd, u2, smallvec![rbp(), Varnode::constant(-4i64 as u64, 8)], 0x1008),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                u2,
+                smallvec![rbp(), Varnode::constant(-4i64 as u64, 8)],
+                0x1008,
+            ),
             IrInsn::without_output(IrOp::Store, smallvec![ram, u2, Varnode::reg(56, 4)], 0x1008),
-            IrInsn::with_output(IrOp::IntAdd, u3, smallvec![rsp(), Varnode::constant(8, 8)], 0x100c),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                u3,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x100c,
+            ),
             IrInsn::without_output(IrOp::Store, smallvec![ram, u3, Varnode::reg(48, 4)], 0x100c),
         ]);
-        crate::prologue_elim::PrologueElimPass.run(&mut ssa).unwrap();
+        crate::prologue_elim::PrologueElimPass
+            .run(&mut ssa)
+            .unwrap();
         StackPointerTrackingPass.run(&mut ssa).unwrap();
         let spec = StackSpec::for_arch(ArchId::X86_64).unwrap();
         let mut resolver = AddressResolver::new(&ssa, &spec);
@@ -711,8 +763,14 @@ mod tests {
 
         assert!(resolver.coords.has_frame_pointer());
         assert_eq!(resolver.coords.return_address_offset(), 8);
-        assert_eq!(resolver.stack_offset((BlockId(0), 7), &block.insns[7]), Some(-4));
-        assert_eq!(resolver.stack_offset((BlockId(0), 9), &block.insns[9]), Some(-8));
+        assert_eq!(
+            resolver.stack_offset((BlockId(0), 7), &block.insns[7]),
+            Some(-4)
+        );
+        assert_eq!(
+            resolver.stack_offset((BlockId(0), 9), &block.insns[9]),
+            Some(-8)
+        );
     }
 
     /// Dead-store aliasing keys an address by the stack-pointer value it was
@@ -723,12 +781,30 @@ mod tests {
         let ram = Varnode::constant(1, 8);
         let (u0, u1) = (Varnode::unique(0, 8), Varnode::unique(8, 8));
         let ssa = ssa_with_deltas(vec![
-            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), Varnode::constant(8, 8)], 0x1000),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u0,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x1000,
+            ),
             IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u0], 0x1000),
-            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, Varnode::reg(120, 8)], 0x1000),
-            IrInsn::with_output(IrOp::IntSub, u1, smallvec![rsp(), Varnode::constant(8, 8)], 0x1002),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![ram, u0, Varnode::reg(120, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u1,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x1002,
+            ),
             IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u1], 0x1002),
-            IrInsn::without_output(IrOp::Store, smallvec![ram, u1, Varnode::reg(112, 8)], 0x1002),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![ram, u1, Varnode::reg(112, 8)],
+                0x1002,
+            ),
         ]);
         let mut resolver = StackAddrResolver::new(&ssa);
         let first = resolver
@@ -741,8 +817,20 @@ mod tests {
             base: rsp(),
             version: 0,
         };
-        assert_eq!(first, StackAddr { root: entry_rsp, offset: -8 });
-        assert_eq!(second, StackAddr { root: entry_rsp, offset: -16 });
+        assert_eq!(
+            first,
+            StackAddr {
+                root: entry_rsp,
+                offset: -8
+            }
+        );
+        assert_eq!(
+            second,
+            StackAddr {
+                root: entry_rsp,
+                offset: -16
+            }
+        );
         assert!(!first.overlaps(8, &second, 8));
     }
 }

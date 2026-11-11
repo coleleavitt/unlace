@@ -145,8 +145,7 @@ pub fn detect_byref(func: &SsaFunction) -> ByrefInfo {
                 }
                 // 2b: argument is RSP/RBP itself, or resolves through a
                 // Copy / IntAdd / IntSub chain.
-                if let Some(AddrRoot::Stack(k)) = trace.resolve_root(&arg_vn, (bid, insn_idx), 0)
-                {
+                if let Some(AddrRoot::Stack(k)) = trace.resolve_root(&arg_vn, (bid, insn_idx), 0) {
                     info.byref_locals.insert(k);
                 }
             }

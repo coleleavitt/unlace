@@ -293,11 +293,7 @@ pub fn stack_lvar_annotations_from_ssa(func: &SsaFunction) -> BTreeMap<i64, Stac
             .or(stack_var_size)
             .or_else(|| type_kind_size_hint(lv.ty))
             .unwrap_or(8);
-        let fallback_name = if size > 8 {
-            format!("buf_{}", offset.unsigned_abs())
-        } else {
-            format!("v_{}", offset.unsigned_abs())
-        };
+        let fallback_name = unlace_ir::stack_names::fallback_slot_name_for_size(offset, size);
         let raw_name = lv.name.as_deref().unwrap_or(&fallback_name);
         let name = crate::demangle::sanitize_for_c(raw_name);
         let from_debug =

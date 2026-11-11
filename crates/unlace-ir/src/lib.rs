@@ -28,6 +28,7 @@ pub mod signature;
 mod space;
 pub mod ssa;
 pub mod stack;
+pub mod stack_names;
 pub mod syscall;
 pub mod tinfo;
 pub mod types;

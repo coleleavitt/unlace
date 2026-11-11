@@ -283,15 +283,16 @@ pub(super) fn effective_stack_buffer_size(
 }
 
 pub(super) fn fallback_stack_name(offset: i64, size: u64, is_buffer: bool) -> String {
-    if is_buffer || size > 8 {
-        format!("buf_{}", offset.unsigned_abs())
-    } else {
-        format!("v_{}", offset.unsigned_abs())
-    }
+    unlace_ir::stack_names::fallback_slot_name(
+        offset,
+        is_buffer || size > unlace_ir::stack_names::MAX_SCALAR_SLOT_SIZE,
+    )
 }
 
 pub(super) fn canonical_stack_buffer_name(func: &HirFunction, name: &str) -> String {
-    if name.starts_with("buf_") && visible_stack_buffer_count(func) == 1 {
+    if unlace_ir::stack_names::is_fallback_buffer_name(name)
+        && visible_stack_buffer_count(func) == 1
+    {
         "buf".to_string()
     } else {
         name.to_string()

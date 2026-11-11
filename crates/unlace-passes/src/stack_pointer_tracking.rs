@@ -69,8 +69,8 @@ impl Pass for StackPointerTrackingPass {
         let coords = FrameCoordinates::of(func, &spec);
         let saved_register_slots = classify_saved_register_slots(func, &spec, &coords);
         let frame_holes = compute_frame_holes(func, &spec, &saved_register_slots);
-        changed |= frame_holes != func.frame_holes
-            || saved_register_slots != func.saved_register_slots;
+        changed |=
+            frame_holes != func.frame_holes || saved_register_slots != func.saved_register_slots;
         func.frame_holes = frame_holes;
         func.saved_register_slots = saved_register_slots;
 
@@ -135,8 +135,7 @@ fn collect_stack_accesses(
                 continue;
             }
             let addr = &insn.inputs[addr_idx];
-            let Some(delta) = resolve_addr_to_sp_offset(func, bid, idx, addr, spec, coords)
-            else {
+            let Some(delta) = resolve_addr_to_sp_offset(func, bid, idx, addr, spec, coords) else {
                 stack_access_trace_line(
                     func,
                     format_args!(

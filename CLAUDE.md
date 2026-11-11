@@ -33,6 +33,7 @@ Important paths:
 - `crates/unlace-ir`: core IR, SSA, arch ids, types
 - `crates/unlace-loader`: binary loaders, DWARF/PDB/signature support
 - `crates/unlace-lift*`: lifter facade plus per-arch lifters
+- `crates/engine`: standalone reference engine with its own IR (~165k lines), reachable only via the CLI `--engine` flag; not part of the default pipeline and nothing else depends on it
 - `crates/unlace-passes`: IR and SSA recovery passes
 - `crates/unlace-struct`: HIR and control-flow structuring
 - `crates/unlace-output`: C printer

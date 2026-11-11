@@ -299,7 +299,9 @@ impl<'a> Evaluator<'a> {
             Some(sites) => sites.clone(),
             None if sv.version == 0 => self
                 .defs
-                .range((sv.base.space, sv.base.offset, 0)..=(sv.base.space, sv.base.offset, u32::MAX))
+                .range(
+                    (sv.base.space, sv.base.offset, 0)..=(sv.base.space, sv.base.offset, u32::MAX),
+                )
                 .flat_map(|(_, sites)| sites.iter().copied())
                 .collect(),
             None => return Some(None),

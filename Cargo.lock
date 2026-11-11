@@ -2807,22 +2807,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unlace-lift-sbpf"
-version = "0.1.0"
-dependencies = [
- "smallvec",
- "unlace-ir",
-]
-
-[[package]]
-name = "unlace-lift-sh"
-version = "0.1.0"
-dependencies = [
- "smallvec",
- "unlace-ir",
-]
-
-[[package]]
 name = "unlace-lift-sharc"
 version = "0.1.0"
 dependencies = [
@@ -2866,14 +2850,6 @@ dependencies = [
 
 [[package]]
 name = "unlace-lift-ti"
-version = "0.1.0"
-dependencies = [
- "smallvec",
- "unlace-ir",
-]
-
-[[package]]
-name = "unlace-lift-tic6x"
 version = "0.1.0"
 dependencies = [
  "smallvec",

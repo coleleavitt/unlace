@@ -28,7 +28,7 @@ gcc "${COMMON[@]}" "$SRC/data.c" -o "$OUT/data-x86_64"
 g++ "${COMMON[@]}" -O0 "$SRC/names.cc" -o "$OUT/names-cpp"
 
 for mangling in legacy v0; do
-    rustc +nightly -Z unstable-options -C symbol-mangling-version="$mangling" -C opt-level=1 -C panic=abort \
+    rustc +rustc-master -Z unstable-options -C symbol-mangling-version="$mangling" -C opt-level=1 -C panic=abort \
         -C strip=debuginfo -C link-arg=-Wl,--build-id=none "$SRC/names.rs" -o "$OUT/names-rust-$mangling"
 done
 

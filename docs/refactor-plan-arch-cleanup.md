@@ -25,7 +25,7 @@ one step per commit.**
 | 4 | Split `unlace-cli/src/pipeline.rs` (8.7k lines) into a `pipeline/` tree, one file per phase | move | done (bd9f555); flat `pipeline_*.rs`, 8.7k -> 2k |
 | 5 | Group `unlace-struct` passes (40+ flat files) into phase dirs with an ordered pass list; shrink `structurer/mod.rs` (5.8k) | move | done (2f8f91c) as flat `structurer_*.rs`; phase dirs not used (tree is flat by decision) |
 | 6 | Replace stringly-typed arch registry (`arch_support.rs` feature-name strings + `cfg(feature)` in `unlace-lift`) with one generated table | refactor | done (already): `product_tier` in unlace-ir is the single table; facade returns typed `LifterUnavailable`; facade tests cross-check every ArchId against the table and Cargo.toml, incl. under `all-arches`. Remaining cfg arms in `get_lifter` are boilerplate, drift-guarded by tests; no macro added |
-| 7 | Replace text-level C rewriters (post-print line patching) with IR/HIR fixes; typed variable origins instead of name-prefix checks | behavior | partial; `buf_`/`v_` fallback names now minted and detected only via `unlace_ir::stack_names` (no scattered prefix literals). Remaining: `saved_` in passes/var_naming; text rewriters. `dead_assign` is load-bearing (disabling it breaks 9/19 goldens), so it needs an IR-level replacement before removal. Sized: ~4.2k lines in 24 `c_printer_postprocess_*` files (combine, dead_assign, decls, idents, idioms, labels, lvar_names, repair). Name-prefix checks are down to `buf_` (c_printer_stack_access/stack_names) and `saved_` (passes/var_naming). Do one postprocessor at a time, golden-diff each, not as one batch |
+| 7 | Replace text-level C rewriters (post-print line patching) with IR/HIR fixes; typed variable origins instead of name-prefix checks | behavior | partial; `buf_`/`v_` fallback names now minted and detected only via `unlace_ir::stack_names` (no scattered prefix literals). Remaining: `saved_` in passes/var_naming; text rewriters. `dead_assign` is load-bearing (disabling it breaks 9/19 goldens), so it needs an IR-level replacement before removal. Sized: ~4.2k lines in 24 `c_printer_postprocess_*` files (combine, dead_assign, decls, idents, idioms, labels, lvar_names, repair). Name-prefix checks are down to `buf_` (c_printer_stack_access/stack_names) and `saved_` (passes/var_naming). Do one postprocessor at a time, golden-diff each, not as one batch | **Measured (dead_assign)**: see "Step 7 measurements" below.
 | 8 | Decide what `engine` is (reference oracle vs. future). ~165k lines, own IR, only used by `--engine` in CLI (cli `engine*.rs`: args, config, main) | decision | decided: keep as a documented standalone reference engine behind `--engine`; not part of the default pipeline, no other crate depends on it. Documented in CLAUDE.md crate map |
 
 ## Step 2: c_printer target layout
@@ -70,3 +70,17 @@ they compile and run their own tests, but nothing depends on them. They have no
 Options per crate: (a) wire into the facade with an `arch-*` feature, (b) merge
 into the wired sibling, (c) delete. `sh` vs `superh` is the clearest dedupe:
 pick one implementation and drop the other.
+
+
+## Step 7 measurements: `dead_assign`
+
+Measured by temporarily logging every line `prune_dead_plain_assignments` deletes while running the 19 goldens (instrumentation reverted). Disabling the pass outright fails 9/19 goldens, so output depends on it.
+
+Total: 20 lines removed across the whole corpus. Classes:
+
+- 8 dead loads (`v8 = *(_QWORD *)(v18)`, `c0 = *(_QWORD *)(buf + 16)`, ...). IR `DeadCodeElimPass` never removes `IrOp::Load` (treated as side-effecting for volatile/MMIO). Replacement: let DCE drop a Load whose output is unused when the load is not from a volatile/MMIO space.
+- 6 leftover frame arithmetic (`v22 = c4 - 8LL - 8LL - ...`). Chains survive IR DCE; needs investigation of why the SSA uses remain (likely a use inside a later-removed text region).
+- 3 flag-style arithmetic (`c0 += 0x7f`, `c0 = c0 + v2`). Candidates for `dead_flag_elim` or a dead-RMW rule.
+- 3 dead overwritten stores (`result = "woof"`, `c5 = 1LL`, `c4 = "caught: %s\n"`). Need HIR-level liveness across branches; this is the only class the text liveness is genuinely needed for.
+
+Plan: (1) make DCE drop non-volatile unused Loads, re-measure; (2) chase the frame arithmetic survivors; (3) only then decide whether an HIR liveness pass is worth building for the 3 overwritten stores. Do each as a golden-diffed change, not a blanket refresh.

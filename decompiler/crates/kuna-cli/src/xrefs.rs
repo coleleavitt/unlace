@@ -343,11 +343,12 @@ fn query(args: &XrefArgs) -> Result<String, String> {
         .into_iter()
         .filter(|r| args.instructions && (args.kinds.is_empty() || args.kinds.contains(&r.kind)))
         .collect();
-    rows.extend(
-        objc_rows.iter().filter(|r| args.instructions && (args.kinds.is_empty() || args.kinds.contains(&r.kind))),
-    );
-    rows.sort_by_key(|r| (r.from, r.to));
-    rows.dedup_by_key(|r| (r.from, r.to, r.kind));
+    for r in &objc_rows {
+        let wanted = args.instructions && (args.kinds.is_empty() || args.kinds.contains(&r.kind));
+        if wanted && !rows.iter().any(|x| (x.from, x.to, x.kind) == (r.from, r.to, r.kind)) {
+            rows.push(r);
+        }
+    }
     let data = kuna_analysis::loader::kuna_dataptrs::data_pointers(&file, &bytes);
     let operands = matches!(
         object::Object::architecture(&file),

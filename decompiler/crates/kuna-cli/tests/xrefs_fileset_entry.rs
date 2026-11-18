@@ -163,5 +163,6 @@ fn a_dyldimage_option_selects_the_image_xrefs_reads() {
         "libcaller.dylib",
     ]);
     assert_eq!(rc, 0, "{stderr}");
-    assert!(stdout.contains("call\tcallee_add\t@0x18000180c"), "{stdout}");
+    // The island binds `_callee_entry`, libumbrella's re-export alias of `callee_add`.
+    assert!(stdout.contains("call\tcallee_entry\t@0x18000180c"), "{stdout}");
 }

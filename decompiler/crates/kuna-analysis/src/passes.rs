@@ -480,18 +480,6 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         passes.push(Box::new(crate::strings::kuna_panicloc::PanicLocationPass));
     }
 
-    // S1 PE/Mach-O import-slot call binding (PeImportCallPass): paint
-    // `Varnode::externref` over PE IAT slots and typed Mach-O lazy/non-lazy
-    // symbol-pointer entries so `ActionDeindirect` resolves `call [slot]` to the
-    // FunctionSymbol already registered at that VA. The Win32 no-return API list
-    // remains strictly PE/COFF.
-    if matches!(
-        format,
-        object::BinaryFormat::Pe | object::BinaryFormat::Coff | object::BinaryFormat::MachO
-    ) {
-        passes.push(Box::new(crate::loader::kuna_peimportcall::PeImportCallPass));
-    }
-
     // S1 arm64e `__auth_ptr` call binding (AuthPtrCallPass): name each chained
     // bind slot of `__auth_ptr` after its import and paint it `externref`, the
     // `peimportcall` facts for the one Mach-O import table the indirect-symbol

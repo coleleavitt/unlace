@@ -144,10 +144,10 @@ fn a_flow_cut_by_the_budget_or_a_declared_extent_is_a_warning() {
 /// instruction, which is where the drained `funcboundflow` warning is recorded.
 #[test]
 fn an_empty_body_s_drained_warning_is_a_body_warning_in_every_language() {
-    let cases = [
-        ("function_boundary_return_x86_64", "ordinary_first", 0x401016, vec![]),
-        ("i386_pie_nl", "register_tm_clones", 0x18f0, vec![("injected", 0x18d0)]),
-    ];
+    // Upstream also runs `i386_pie_nl`'s `register_tm_clones`, whose body
+    // upstream splits at a phantom entry (`sub_18f2`); the fork's inventory
+    // keeps the function whole, so it has no fall-through to drain.
+    let cases = [("function_boundary_return_x86_64", "ordinary_first", 0x401016, Vec::<(&str, u64)>::new())];
     for (fixture, name, last, header) in &cases {
         let image = common::fixture(fixture);
         let listing = document(&["disassemble", &image, name, "--json"]);
@@ -173,13 +173,6 @@ fn an_empty_body_s_drained_warning_is_a_body_warning_in_every_language() {
     };
     let alone = go("function_boundary_return_x86_64", "ordinary_first");
     assert!(alone["code"].as_str().unwrap().starts_with("func ordinary_first() { // warn: funcboundflow: "), "{alone}");
-    let both = go("i386_pie_nl", "register_tm_clones");
-    assert!(
-        both["code"].as_str().unwrap().starts_with("func register_tm_clones() { // injected // warn: funcboundflow: "),
-        "{both}"
-    );
-    let at: Vec<(Value, Value)> = placed(&both).iter().map(|w| (w["line"].clone(), w["address"].clone())).collect();
-    assert_eq!(at, [(json!(1), json!(0x18d0)), (json!(1), json!(0x18f0))], "{both}");
 }
 
 /// `audit_undecodable` opens with `JZ 0x401033`, a branch into the middle of

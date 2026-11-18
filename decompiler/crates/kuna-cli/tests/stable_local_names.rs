@@ -439,7 +439,14 @@ fn an_incomplete_structure_pointer_retype_keeps_the_local() {
     let code = decompile_in("retypestackchoose_arm_le32", "choose", &["--assert-strict"], &directives);
     let uncast = code.replace("  Opaque *v1; // r4\n", "  char *v1; // r4\n").replace("(Opaque *)", "");
     assert_eq!(lines_renamed(&uncast, &[("first", "v3"), ("second", "v4")]), lines_renamed(&plain, &[]), "{plain}\n---\n{code}");
-    let code = decompile_in("retypeptr_x86_64", "walk", &[], &["typedef struct Opaque;", "type v2 struct Opaque *"]);
+    // The fork's `looprotate` folds `walk` into a `for` with no `v2`; the probe
+    // wants upstream's do-while rendering.
+    let code = decompile_in(
+        "retypeptr_x86_64",
+        "walk",
+        &["--option", "looprotate", "off"],
+        &["typedef struct Opaque;", "type v2 struct Opaque *"],
+    );
     assert!(code.contains("  Opaque *v2;") && code.contains("walk(Opaque *a0,Opaque *a1)"), "{code}");
 }
 

@@ -1,6 +1,6 @@
-/* FID callee-arbitration fixture. `wrap_a` and `wrap_b` compile to the same
- * instructions and differ only in the function they call, so their FID full
- * hashes collide; their callees `scale_a` and `scale_b` have bodies of their
+/* Callee fixture. `wrap_a` and `wrap_b` compile to the same
+ * instructions and differ only in the function they call, so only their
+ * callees tell them apart; `scale_a` and `scale_b` have bodies of their
  * own. `bump` is a stub of at most 16 bytes with no callee. */
 
 __attribute__((noinline)) int scale_a(int x) { return ((x * 37 + 11) ^ (x >> 3)) - (x << 2); }

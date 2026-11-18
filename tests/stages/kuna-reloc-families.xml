@@ -56,12 +56,10 @@
 </script>
 <stringmatch name="relocs #1: AArch64 ADR, literal load and MOVW reach the extern data" min="1" max="1">return \(uint4\)\(dat_402004 \+ dat_402010 \+ dat_402008\);</stringmatch>
 <stringmatch name="relocs #2: AArch64 CBZ/TBNZ/B.cond reach their global labels" min="1" max="1">if \(a0 &gt;&gt; 3 &amp; 1\) \{</stringmatch>
-<stringmatch name="relocs #3: RISC-V HI20/LO12 resolve the global" min="1" max="1">dat_400078 \+= \(int4\)a0;</stringmatch>
+<stringmatch name="relocs #3: RISC-V HI20/LO12 resolve the global" min="1" max="1">counter \+= \(int4\)a0;</stringmatch>
 <stringmatch name="relocs #10: RISC-V auipc+jr to an extern slot is a tail call" min="1" max="1">v3 = ext_fn\(\(int8\)-\(int4\)a0\); // tail-call</stringmatch>
-<stringmatch name="relocs #4: MIPS HI16/LO16 pairs resolve the global" min="1" max="1">dat_4000b0 \+= a0;</stringmatch>
+<stringmatch name="relocs #4: MIPS HI16/LO16, MIPS PIC GOT16 through _gp and PPC32 ADDR16_HA/LO resolve the global" min="3" max="3">counter \+= a0;</stringmatch>
 <stringmatch name="relocs #5: MIPS R_MIPS_26 calls the extern" min="2" max="2">return ext_fn\(-a0\);</stringmatch>
-<stringmatch name="relocs #8: MIPS PIC GOT16 page + LO16 reaches the local table" min="1" max="1">\(a0 &amp; 3\) \* 4 \+ 0x4000c4\)</stringmatch>
-<stringmatch name="relocs #9: MIPS PIC global GOT16 through _gp reaches the global" min="1" max="1">dat_4000c0 \+= a0;</stringmatch>
-<stringmatch name="relocs #6: PPC32 ADDR16_HA/LO resolve the global" min="1" max="1">dat_400090 \+= a0;</stringmatch>
+<stringmatch name="relocs #8: MIPS PIC GOT16 page + LO16 reaches the local table (as the RISC-V, MIPS and PPC32 forms do)" min="4" max="4">local_tab\[\(a0 &amp; 3\) \* 4\]</stringmatch>
 <stringmatch name="relocs #7: PPC32 REL24 calls the extern" min="1" max="1">v2 = ext_fn\(-a0\);</stringmatch>
 </decompilertest>

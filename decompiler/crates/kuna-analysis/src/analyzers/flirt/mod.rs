@@ -1,9 +1,10 @@
 //! (kuna `flirt`) Name library functions with IDA FLIRT `.sig` signatures.
 //!
 //! The `.sig` files ship with IDA (`<ida>/sig/<proc>/*.sig`); kuna reads them
-//! ([`sig`]) and matches every discovered function entry against them, the way
-//! IDA's `AU_LIBF` pass does (`libida.so` 0x8b2260 trie walk, 0x8b04c0 leaf
-//! check):
+//! and matches every discovered function entry against them, the way
+//! IDA's `AU_LIBF` pass does. Reading the files and the byte-level match
+//! (trie, CRC, tail bytes, instruction bits) is the `flirt-sig` crate; this
+//! module adds the reference names and the rounds:
 //!
 //! 1. walk the byte trie over the first `pattern_len` bytes at the entry;
 //! 2. at a leaf, a module matches when the CRC-16 of the `crc_len` bytes after
@@ -16,18 +17,14 @@
 //!    matching runs up to [`MAX_ROUNDS`] rounds (IDA's three `AU_LIBF`
 //!    queues).
 //!
-//! With `flirtsites` on, modules that disagree on the name are arbitrated by
-//! their reference sites, and a module wholly inside the trie prefix must not
-//! contradict its sites (see [`match_all`]); off, a function is renamed only
-//! when every matching module agrees and a prefix-only module without a
-//! reference names nothing. A name goes to one address only (IDA's collision
+//! Modules that disagree on the name are arbitrated by their reference sites,
+//! and a module wholly inside the trie prefix must not contradict its sites
+//! (see [`match_all`]). A name goes to one address only (IDA's collision
 //! rule without `AF_SIGMLT`). The names go out as [`FidMatch`] renames, so they
 //! only replace `sub_` placeholders.
 //!
 //! The signature files are named by `KUNA_FLIRT_SIGS` (`:`-separated files or
 //! directories).
-
-pub mod sig;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -35,10 +32,10 @@ use object::read::{Object, ObjectSection};
 
 use crate::listing::Listing;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase};
-use sig::{crc16, Module, Node, Sig};
+use flirt_sig::{Endian, Matcher, Module, Signature, FLAG_STARTUP};
 
 /// The environment variable that lists the `.sig` files.
-pub const FLIRT_SIGS_ENV: &str = "KUNA_FLIRT_SIGS";
+pub const FLIRT_SIGS_ENV: &str = kuna_decomp::kuna_loadoptions::FLIRT_SIGS_ENV;
 
 /// Matching rounds: a module whose reference names a function another module
 /// names is accepted in the round after that name exists.
@@ -63,25 +60,32 @@ impl AnalysisPass for FlirtPass {
         if sigs.is_empty() {
             return out;
         }
+        let endian = if ctx.file.is_little_endian() { Endian::Little } else { Endian::Big };
+        let matchers: Vec<Matcher<'_>> = sigs.iter().map(|s| Matcher::new(s, endian)).collect();
         let image = Image::new(ctx.file);
         let entries: Vec<u64> = listing.functions().map(|(&a, _)| a).collect();
         let known: HashMap<u64, String> = listing
             .functions()
             .filter_map(|(&a, f)| f.name.clone().map(|n| (a, n)))
             .collect();
-        for (addr, name) in match_all(&sigs, &image, listing, &entries, known, ctx.arch.analysis_flirtsites) {
-            out.fid_names.push(FidMatch { addr, name });
+        for (addr, name) in match_all(&matchers, &image, listing, &entries, known, true) {
+            out.fid_names.push(FidMatch { addr, name, by_signature: true });
         }
         out
     }
 }
 
-/// Parse the signature files `KUNA_FLIRT_SIGS` names (files, or directories
+/// Parse the signature files the load names (`LoadOptions::flirt_sigs`, else
+/// `KUNA_FLIRT_SIGS`: files, or directories
 /// whose `*.sig` files are all taken) that apply to a binary of `format`:
 /// startup signatures and those whose header excludes the file type are left
 /// out. Unreadable or malformed files are skipped.
-pub fn load_sigs(format: object::BinaryFormat) -> Vec<Sig> {
-    let Some(list) = std::env::var_os(FLIRT_SIGS_ENV) else { return Vec::new() };
+pub fn load_sigs(format: object::BinaryFormat) -> Vec<Signature> {
+    use kuna_decomp::kuna_loadoptions::{env, scoped};
+    let list = scoped(|o| o.flirt_sigs.clone()).unwrap_or_else(env::flirt_sigs);
+    if list.is_empty() {
+        return Vec::new();
+    }
     let ft = match format {
         object::BinaryFormat::Elf => Some(18),
         object::BinaryFormat::Pe => Some(11),
@@ -90,7 +94,7 @@ pub fn load_sigs(format: object::BinaryFormat) -> Vec<Sig> {
         _ => None,
     };
     let mut paths: Vec<std::path::PathBuf> = Vec::new();
-    for p in std::env::split_paths(&list) {
+    for p in list {
         match std::fs::read_dir(&p) {
             Ok(dir) => {
                 let mut sigs: Vec<_> = dir
@@ -107,9 +111,21 @@ pub fn load_sigs(format: object::BinaryFormat) -> Vec<Sig> {
     paths
         .iter()
         .filter_map(|p| std::fs::read(p).ok())
-        .filter(|d| sig::applies_to(d, ft))
-        .filter_map(|d| sig::parse(&d).ok())
+        .filter(|d| applies_to(d, ft))
+        .filter_map(|d| Signature::parse(&d).ok())
         .collect()
+}
+
+/// Whether a `.sig` file's header admits a binary of IDA file type `ft`
+/// (`FT_*` bit index): not a startup signature, and the file-type mask is unset
+/// or names `ft`. Read from the raw header so excluded files are never parsed.
+pub fn applies_to(data: &[u8], ft: Option<u32>) -> bool {
+    if data.len() < 18 || &data[..6] != b"IDASGN" {
+        return false;
+    }
+    let formats = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
+    let flags = u16::from_le_bytes([data[16], data[17]]);
+    flags & FLAG_STARTUP == 0 && (formats == 0 || ft.is_none_or(|b| formats >> b & 1 == 1))
 }
 
 /// The image bytes by address: every section with file content.
@@ -118,7 +134,14 @@ pub struct Image<'a> {
     /// x86 code addresses through 32-bit instruction fields (`rel32` from the
     /// instruction end on x86-64, absolute everywhere).
     x86_fields: bool,
+    /// The 4-byte branch-target landing pads of the architecture (`endbr64` /
+    /// `endbr32`, AArch64 `bti`).
+    pads: &'static [[u8; 4]],
 }
+
+const X86_PADS: &[[u8; 4]] = &[[0xf3, 0x0f, 0x1e, 0xfa], [0xf3, 0x0f, 0x1e, 0xfb]];
+const AARCH64_PADS: &[[u8; 4]] =
+    &[[0x1f, 0x24, 0x03, 0xd5], [0x5f, 0x24, 0x03, 0xd5], [0x9f, 0x24, 0x03, 0xd5], [0xdf, 0x24, 0x03, 0xd5]];
 
 impl<'a> Image<'a> {
     pub fn new(file: &'a object::File<'a>) -> Self {
@@ -130,7 +153,18 @@ impl<'a> Image<'a> {
             .collect();
         spans.sort_by_key(|&(a, _)| a);
         let x86_fields = matches!(file.architecture(), object::Architecture::X86_64 | object::Architecture::I386);
-        Image { spans, x86_fields }
+        let pads = match file.architecture() {
+            _ if x86_fields => X86_PADS,
+            object::Architecture::Aarch64 if file.is_little_endian() => AARCH64_PADS,
+            _ => &[],
+        };
+        Image { spans, x86_fields, pads }
+    }
+
+    /// Whether the code at `addr` starts with a landing pad.
+    fn landing_pad(&self, addr: u64) -> bool {
+        let b = self.from(addr);
+        self.pads.iter().any(|p| b.starts_with(p))
     }
 
     /// The bytes from `addr` to the end of its section.
@@ -156,7 +190,7 @@ impl<'a> Image<'a> {
 /// Run every round of matching and return the accepted `(entry, name)` pairs.
 ///
 /// At each entry every module that passes the byte checks and whose required
-/// references resolve is a candidate. With `sites` on (kuna `flirtsites`):
+/// references resolve is a candidate. With `sites` on (what the pass runs):
 /// an entry that is a bare return is never named; a module that lies wholly
 /// inside the trie prefix and names reference sites is dropped when a site's
 /// target carries another name, and waits for the last round unless one site
@@ -169,7 +203,7 @@ impl<'a> Image<'a> {
 /// none. A round that names nothing new makes the next one the last. With
 /// `sites` off, a rename needs every candidate to agree.
 pub fn match_all(
-    sigs: &[Sig],
+    sigs: &[Matcher<'_>],
     image: &Image<'_>,
     listing: &Listing,
     entries: &[u64],
@@ -187,20 +221,21 @@ pub fn match_all(
                 continue;
             }
             let code = image.from(ea);
-            if sites && listing.instruction_at(ea).is_some_and(|i| i.flow.is_terminal && !i.flow.is_jump) {
+            if sites && bare_return(listing, image, ea) {
                 continue;
             }
             let mut best: BTreeMap<String, i32> = BTreeMap::new();
             for s in sigs {
-                for m in candidates(s, code) {
-                    let unnamed_ok = sites && last && m.length as usize > s.pattern_len;
-                    if !module_matches(s, m, code) || !reference_ok(m, ea, image, listing, &known, unnamed_ok) {
+                let pattern_len = usize::from(s.signature().header.pattern_len);
+                for m in s.match_at(code) {
+                    let unnamed_ok = sites && last && m.length as usize > pattern_len;
+                    if !reference_ok(m, ea, image, listing, &known, unnamed_ok) {
                         continue;
                     }
-                    let Some(name) = function_name(m, s.pattern_len, sites) else { continue };
+                    let Some(name) = function_name(m, pattern_len, sites) else { continue };
                     let tally = if sites { site_tally(m, ea, image, listing, &known) } else { Tally::default() };
                     let unconfirmed = tally.differ > 0 || (tally.agree == 0 && !last);
-                    if sites && m.length as usize <= s.pattern_len && tally.named > 0 && unconfirmed {
+                    if sites && m.length as usize <= pattern_len && tally.named > 0 && unconfirmed {
                         continue;
                     }
                     let score = 4 * (tally.agree as i32 - tally.differ as i32);
@@ -253,48 +288,11 @@ pub fn match_all(
     named
 }
 
-/// The modules whose trie path matches `code`.
-fn candidates<'s>(s: &'s Sig, code: &[u8]) -> Vec<&'s Module> {
-    fn walk<'s>(node: &'s Node, code: &[u8], at: usize, out: &mut Vec<&'s Module>) {
-        out.extend(node.modules.iter());
-        for c in &node.children {
-            let end = at + c.pattern.len();
-            let Some(bytes) = code.get(at..end) else { continue };
-            if c.pattern.iter().zip(bytes).all(|(p, b)| p.is_none_or(|p| p == *b)) {
-                walk(c, code, end, out);
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&s.root, code, 0, &mut out);
-    out
-}
-
-/// The CRC, tail-byte and instruction-bit checks of one module at `code`.
-fn module_matches(s: &Sig, m: &Module, code: &[u8]) -> bool {
-    let p = s.pattern_len;
-    let crc_end = p + m.crc_len as usize;
-    if m.length as usize > code.len() {
-        return false;
-    }
-    let Some(crc_bytes) = code.get(p.min(crc_end)..crc_end) else { return false };
-    if m.crc_len > 0 && crc16(crc_bytes) != m.crc {
-        return false;
-    }
-    if m.tails.iter().any(|&(off, want)| code.get(crc_end + off as usize) != Some(&want)) {
-        return false;
-    }
-    let word = |off: i64| -> Option<u32> {
-        let off = usize::try_from(off).ok()?;
-        let b = code.get(off..off + 4)?;
-        Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-    };
-    let bits_ok = |off: i64, bits: Option<(u32, u32)>| match bits {
-        Some((mask, value)) => word(off).is_some_and(|w| (w ^ value) & mask == 0),
-        None => true,
-    };
-    m.publics.iter().all(|p| bits_ok(p.off, p.bits))
-        && m.sites.iter().all(|s| bits_ok(i64::from(s.off), s.bits))
+/// Whether the entry is a bare return, after a landing pad if it starts with one
+/// (`endbr64; ret` is as empty as `ret`).
+fn bare_return(listing: &Listing, image: &Image<'_>, ea: u64) -> bool {
+    let at = if image.landing_pad(ea) { ea + 4 } else { ea };
+    listing.instruction_at(at).is_some_and(|i| i.flow.is_terminal && !i.flow.is_jump)
 }
 
 /// The module's own name: the public at offset 0, unless it is unnamed (`?`) or
@@ -302,14 +300,14 @@ fn module_matches(s: &Sig, m: &Module, code: &[u8]) -> bool {
 /// longer than the trie prefix, with nothing referenced to check) names
 /// nothing either.
 fn function_name(m: &Module, pattern_len: usize, sites: bool) -> Option<String> {
-    let p = m.publics.iter().find(|p| p.off == 0)?;
-    if p.name.is_empty() || p.name.starts_with('?') || p.flags & 0x04 != 0 {
+    let p = m.publics.iter().find(|p| p.offset == 0)?;
+    if p.name.is_empty() || p.name.starts_with(b"?") || p.flags & 0x04 != 0 {
         return None;
     }
     if !sites && m.length as usize <= pattern_len && m.reference.is_none() && m.sites.iter().all(|s| s.name.len() < 2) {
         return None;
     }
-    Some(p.name.clone())
+    Some(String::from_utf8_lossy(&p.name).into_owned())
 }
 
 /// How the instruction covering a module offset relates to the name the module
@@ -328,7 +326,7 @@ enum SiteMatch {
 fn site_match(
     ea: u64,
     off: i64,
-    want: &str,
+    want: &[u8],
     image: &Image<'_>,
     listing: &Listing,
     known: &HashMap<u64, String>,
@@ -342,7 +340,8 @@ fn site_match(
     let mut targets: Vec<u64> = insn.flows.clone();
     targets.extend(image.field_targets(at, end));
     let names: Vec<&String> = targets.iter().filter_map(|t| known.get(t)).collect();
-    Some(if names.iter().any(|k| same_name(k, want)) {
+    let want = String::from_utf8_lossy(want);
+    Some(if names.iter().any(|k| same_name(k, &want)) {
         SiteMatch::Agrees
     } else if !names.is_empty() {
         SiteMatch::Differs
@@ -361,12 +360,12 @@ struct Tally {
 }
 
 fn site_tally(m: &Module, ea: u64, image: &Image<'_>, listing: &Listing, known: &HashMap<u64, String>) -> Tally {
-    let reference = m.reference.as_ref().filter(|(_, n)| n != ".").map(|(o, n)| (*o, n.as_str()));
+    let reference = m.reference.as_ref().filter(|r| r.name != b".").map(|r| (r.offset, r.name.as_slice()));
     let sites = m
         .sites
         .iter()
         .filter(|s| s.name.len() >= 2 && s.flags & 0x08 == 0)
-        .map(|s| (i64::from(s.off), s.name.as_str()));
+        .map(|s| (i64::from(s.offset), s.name.as_slice()));
     let mut seen: HashSet<i64> = HashSet::new();
     let mut t = Tally::default();
     for (off, name) in reference.into_iter().chain(sites).filter(|&(o, _)| seen.insert(o)) {
@@ -393,8 +392,8 @@ fn reference_ok(
     known: &HashMap<u64, String>,
     unnamed_ok: bool,
 ) -> bool {
-    let reference_ok = m.reference.as_ref().filter(|(_, n)| n != ".").is_none_or(|(off, name)| {
-        match site_match(ea, *off, name, image, listing, known) {
+    let reference_ok = m.reference.as_ref().filter(|r| r.name != b".").is_none_or(|r| {
+        match site_match(ea, r.offset, &r.name, image, listing, known) {
             Some(SiteMatch::Agrees) => true,
             Some(SiteMatch::Unnamed) => unnamed_ok,
             _ => false,
@@ -405,16 +404,32 @@ fn reference_ok(
             .sites
             .iter()
             .filter(|s| m.length <= 0x10 && s.name.len() >= 2 && s.flags & 0x08 == 0)
-            .all(|s| site_match(ea, i64::from(s.off), &s.name, image, listing, known) == Some(SiteMatch::Agrees))
+            .all(|s| site_match(ea, i64::from(s.offset), &s.name, image, listing, known) == Some(SiteMatch::Agrees))
 }
 
 /// FLIRT names carry the object file's spelling (`_strlen` on a Mach-O or COFF
-/// library); compare under the `nameladder` spellings.
+/// library); compare with jump-thunk and import prefixes, `@N` decorations and
+/// leading underscores stripped.
 fn same_name(have: &str, want: &str) -> bool {
-    let strip = |s: &str| s.trim_start_matches('_').to_string();
-    have == want
-        || strip(have) == strip(want)
-        || crate::analyzers::protos::kuna_nameladder::fallbacks(have).iter().any(|f| f == want)
+    have == want || bare_name(have) == bare_name(want)
+}
+
+fn bare_name(name: &str) -> &str {
+    let mut s = name;
+    while let Some(rest) = s.strip_prefix("j_") {
+        s = rest;
+    }
+    s = ["__imp__", "__imp_", "_imp__", "_imp_", "imp__", "imp_"]
+        .iter()
+        .find_map(|p| s.strip_prefix(p))
+        .unwrap_or(s);
+    let body = s.strip_prefix('@').unwrap_or(s);
+    if let Some((base, n)) = body.rsplit_once('@') {
+        if !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) {
+            s = base;
+        }
+    }
+    s.trim_start_matches('_')
 }
 
 #[cfg(test)]

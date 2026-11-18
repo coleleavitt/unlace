@@ -49,7 +49,7 @@ Every fact a pass emits is keyed by an address in the **loaded image's** address
 space. That is not free on a relocatable object (an ELF `ET_REL` `.o`, a COFF
 `.obj`): the loader lays such a file out synthetically above `RELOC_BASE`
 (`relocobjects`), while a pass re-parsing it through `object::File` sees the
-pre-link, section-relative addresses. `relocrebase` (default-on, GH-289) holds the
+pre-link, section-relative addresses. `relocrebase` (always on, GH-289) holds the
 contract up by rebasing the tier's **input** — `loader/kuna_relocrebase.rs`
 re-presents the object with each laid-out section's relocated bytes and load VMA,
 each unlaid `.debug_*` section's relocations applied, and each ELF symbol shifted
@@ -109,9 +109,15 @@ reconstructs `got_slot → name` from the dynamic relocations and decodes each
 RISC-V, SPARC; classic, CET `.plt.sec`, PIE, and stripped layouts). SPARC is the
 one decoder where the stub address and the name-map key coincide: its
 `R_SPARC_JMP_SLOT` `r_offset` is the PLT entry itself (the linker rewrites the
-in-place 32-byte `sethi/b,a` stub at resolution time), so `decode_sparc` just
-strides the `.plt` and records any `sethi %g1`-headed entry that is a known
-relocation (Increment 24, `plt_sparc64` e2e). PowerPC64 ELFv2 has no `.plt`
+in-place stub at resolution time), so `decode_sparc` visits every word of the
+window and records any `sethi %g1`-headed word that is a known relocation and
+has a complete entry behind it: 12 bytes for ELF32 (SPARC, SPARC32Plus), 32 for
+ELF64, chosen by the ELF class (a zero `.plt` `sh_entsize` does not override it).
+The relocation, not a stride, fixes the entry boundary, so the sectionless
+`PT_LOAD` scan, whose window starts with the segment rather than at `.plt`, finds
+every entry too. Toolchain-free ELF32 fixtures cover SPARC and
+SPARC32Plus call names, absent relocations, invalid heads and truncated entries;
+`plt_sparc64` preserves the native ELF64 behavior. PowerPC64 ELFv2 has no `.plt`
 *code* section, so its TOC-relative call stubs (synthesized inline in `.text`)
 are decoded out of band (`decode_ppc_text`/`decode_ppc64_stubs`: TOC base =
 `.got` vma + `0x8000`, slot = `TOC + (addis@ha << 16) + ld@l`; Increment 26,
@@ -163,8 +169,8 @@ what names a copy-relocated (`R_X86_64_COPY`) libc extern — `stderr`, `stdout`
 a `.dynsym` entry but no DIE in the program's own `.debug_info`, and a
 stripped/DWARF-less binary's own statics. The Ghidra analog is the ELF symbol
 importer's data-symbol path (`ElfSymbolTable` → data address markup), which
-names data objects independently of debug info. Gated by `--option datasyms
-on|off`, default ON (DIV-26/DIV-76); the commit is in
+names data objects independently of debug info. Always on (DIV-26/DIV-76); the
+commit is in
 `kuna-console/src/engine.rs::commit_analysis_output`.
 
 ## 3. DWARF debug-info recovery — ⛔ Gap

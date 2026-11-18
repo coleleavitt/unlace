@@ -44,7 +44,7 @@ c3
   <com>print C</com>
   <com>quit</com>
 </script>
-<stringmatch name="swifttypes off: the struct global is raw bytes under its mangled name" min="1" max="1">\$s7callfix3ctrAA7CounterVvp\._8_8_ = 2;</stringmatch>
+<stringmatch name="swifttypes off: the struct global is raw bytes under its mangled name" min="1" max="1">\*\(unsigned long \*\)&amp;\$s7callfix3ctrAA7CounterVvp\[8\] = 2;</stringmatch>
 <stringmatch name="swifttypes on: the integer global is typed and named" min="1" max="1">callfix\.n = </stringmatch>
 <stringmatch name="swifttypes on: the struct global's fields print by name" min="1" max="1">callfix\.ctr\.step = 2;</stringmatch>
 <stringmatch name="swifttypes on: the class-reference global is typed" min="1" max="1">callfix\.acct = </stringmatch>

@@ -70,6 +70,8 @@ use kuna_decomp::inject_sleigh::SleighPayload;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
+pub mod kuna_msvcftolsig;
+
 /// Prefix Ghidra strips from a conflicting library-imported function name before
 /// the target-map probe (`CallFixupAnalyzer.java:207-209`,
 /// `LIBRARY_ID_CONFLICT_PREFIX`).
@@ -102,15 +104,6 @@ pub fn target_fixup_map(arch: &Architecture) -> Vec<(String, String)> {
         let Ok(fixup_name) = std::str::from_utf8(&cf.payload.core.name) else {
             continue;
         };
-        // (kuna `msvcftol`) The kuna-owned MSVC `__ftol`-family fixup is
-        // registered unconditionally at bootstrap (`load file` precedes the
-        // console's `option` lines, so the flag is not readable there). Its
-        // user-visible gate is here, on the install: dropping its targets from
-        // the map leaves the payload registered but never tagged onto a function,
-        // which restores the un-fixed `__ftol()` rendering.
-        if fixup_name == kuna_decomp::kuna_msvcftol::FIXUP_NAME && !arch.msvc_ftol {
-            continue;
-        }
         if fixup_name.starts_with(kuna_decomp::kuna_arithhelpers::FIXUP_PREFIX) && !arch.arith_helpers {
             continue;
         }
@@ -206,8 +199,7 @@ fn scan_call_fixups(file: &object::File, bytes: &[u8], arch: &Architecture) -> A
 /// Port of `CallFixupAnalyzer` (the install half): tag every program function
 /// whose name matches a cspec call-fixup `<target>` so the engine applies that
 /// fixup at flow time. Ghidra ships it default-on (`setDefaultEnablement(true)`,
-/// CallFixupAnalyzer.java:51), so on-by-default is faithful; gate id `"callfixup"`
-/// lets `--option callfixup off` restore the un-fixed rendering.
+/// CallFixupAnalyzer.java:51), so it is always on.
 #[derive(Clone, Copy, Default)]
 pub struct CallFixupPass;
 
@@ -221,7 +213,9 @@ impl AnalysisPass for CallFixupPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        scan_call_fixups(ctx.file, ctx.bytes, ctx.arch)
+        let mut out = scan_call_fixups(ctx.file, ctx.bytes, ctx.arch);
+        kuna_msvcftolsig::scan(ctx.file, &mut out);
+        out
     }
 }
 

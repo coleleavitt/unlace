@@ -52,6 +52,6 @@
 <stringmatch name="IOKITCLASSES #2: off leaves the constructor unnamed" min="2" max="2">sub_fffffff007a04000\(0xfffffff007a060[04]0,"</stringmatch>
 <stringmatch name="IOKITCLASSES #3: off leaves the vtable-only override unnamed" min="1" max="1">^unsigned long sub_fffffff007a04110\(</stringmatch>
 <stringmatch name="IOKITCLASSES #4: on names the constructor found by vote" min="1" max="1">OSMetaClass::OSMetaClass\(gMetaClass,"Derived",gMetaClass,0x30\);</stringmatch>
-<stringmatch name="IOKITCLASSES #5: on names the metaclass object the initializer writes" min="1" max="1">Derived::gMetaClass._0_8_ = 0xfffffff007a051d8;</stringmatch>
+<stringmatch name="IOKITCLASSES #5: on names the metaclass object the initializer writes" min="1" max="1">\*\(unsigned long \*\)Derived::gMetaClass = 0xfffffff007a051d8;</stringmatch>
 <stringmatch name="IOKITCLASSES #6: on names the override after the slot it overrides" min="1" max="1">^unsigned long Derived::m2\(</stringmatch>
 </decompilertest>

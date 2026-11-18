@@ -42,15 +42,6 @@ c0035fd6
 <symbol space="ram" offset="0x100000" name="harness_stub"/>
 </binaryimage>
 <script>
-  <com>option swiftdemangle off</com>
-  <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_swift_classnames_arm64</com>
-  <com>option objc on</com>
-  <com>read symbols</com>
-  <com>load addr 0x1000006f8</com>
-  <com>decompile</com>
-  <com>print C</com>
-  <com>option swiftdemangle on</com>
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_swift_classnames_arm64</com>
   <com>option objc on</com>
@@ -76,11 +67,9 @@ c0035fd6
   <com>option sourcelang auto</com>
   <com>quit</com>
 </script>
-<stringmatch name="swiftdemangle off: self and the struct keep the runtime class name" min="1" max="1">-\[_TtC4main3Car loadPerSeat:\]\(_TtC4main3Car \*self</stringmatch>
-<stringmatch name="swiftdemangle off: the quoted-class ivar pointer keeps the runtime class name" min="1" max="1">_TtC4main6Engine \*v2;</stringmatch>
-<stringmatch name="swiftdemangle default: self is typed with the demangled class struct" min="3" max="3">-\[main\.Car loadPerSeat:\]\(main\.Car \*self</stringmatch>
-<stringmatch name="swiftdemangle default: the quoted-class ivar pointer names the demangled class" min="2" max="2">main\.Engine \*v2;</stringmatch>
-<stringmatch name="every pass with a layout: the ivars fold through the struct (inherited, pointer, own)" min="3" max="3">v1 = \(self->super\)\.wheels;</stringmatch>
-<stringmatch name="every pass with a layout: the engine pointer reads as a field" min="3" max="3">v2 = self->engine;</stringmatch>
+<stringmatch name="swiftdemangle: self is typed with the demangled class struct" min="3" max="3">-\[main\.Car loadPerSeat:\]\(main\.Car \*self</stringmatch>
+<stringmatch name="swiftdemangle: the quoted-class ivar pointer names the demangled class" min="2" max="2">main\.Engine \*v2;</stringmatch>
+<stringmatch name="every pass with a layout: the ivars fold through the struct (inherited, pointer, own)" min="2" max="2">v1 = \(self->super\)\.wheels;</stringmatch>
+<stringmatch name="every pass with a layout: the engine pointer reads as a field" min="2" max="2">v2 = self->engine;</stringmatch>
 <stringmatch name="Swift image: the layout is left to the Swift pass, which has none for the class" min="1" max="1">v2 = \(\(unsigned long \*\)self\)\[1\];</stringmatch>
 </decompilertest>

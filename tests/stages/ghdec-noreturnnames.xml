@@ -41,8 +41,6 @@ c3
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-analysis/tests/fixtures/noreturn_names_x86_64</com>
   <com>option noreturn_known off</com>
-  <com>option noreturn_extern off</com>
-  <com>option noreturn_externmatch off</com>
   <com>option fdeflowbound off</com>
   <com>option itaniumeh off</com>
   <com>read symbols</com>
@@ -70,8 +68,6 @@ c3
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-analysis/tests/fixtures/rust_noreturn_v0_x86_64</com>
   <com>option noreturn_known off</com>
-  <com>option noreturn_extern off</com>
-  <com>option noreturn_externmatch off</com>
   <com>option fdeflowbound off</com>
   <com>read symbols</com>
   <com>load function opt</com>

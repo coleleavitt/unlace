@@ -75,6 +75,12 @@ fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
 /// Bootstrap `fixture`, (optionally) enable `cfstrings`, commit, then decompile
 /// the function at `vma` and return its rendered C.
 fn run(fixture: &str, mode: Mode, vma: u64) -> String {
+    run_with(fixture, mode, vma, None)
+}
+
+/// [`run`], with a data symbol of type `ty` named `planted` already mapped at
+/// the first entry before the commit, as a debug or analysis symbol would be.
+fn run_with(fixture: &str, mode: Mode, vma: u64, planted: Option<(&str, kuna_decomp::dtype::type_metatype)>) -> String {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let bin = fixtures().join(fixture);
@@ -89,6 +95,14 @@ fn run(fixture: &str, mode: Mode, vma: u64) -> String {
         Mode::Annotate => "annotate",
     };
     prog.arch_mut().set_kuna_option("cfstrings", value).expect("cfstrings takes the value");
+    if let Some((name, meta)) = planted {
+        let arch = prog.arch_mut();
+        let space = arch.manage().get_default_code_space().expect("a default code space").clone();
+        let entry = Address::new(space, ENTRIES[0].2);
+        let ty = arch.types().get_base(8, meta).expect("an 8-byte base type");
+        let global = arch.symboltab.get_global_scope().expect("a global scope");
+        arch.symboltab.add_symbol_mapped(global, name, ty, &entry, &Address::new_invalid()).expect("map the symbol");
+    }
     prog.commit_pending_analysis().expect("analysis commit succeeds");
 
     let name = name_at(&prog, vma);
@@ -170,4 +184,17 @@ fn chained_utf16_and_call_argument_cfstrings() {
     assert!(call.contains("consume(CFSTR(\"chained hello\"))"), "{call}");
     let off = run(FIXTURE, Mode::Off, 0x10000052c);
     assert!(off.contains("consume(0x100004008)"), "{off}");
+}
+
+/// A symbol already on a `__cfstring` entry (debug info, another pass) keeps
+/// its name, but the entry still reads as its string: the literal is
+/// registered whatever sits there.
+#[test]
+fn cfstring_under_an_existing_symbol_still_renders() {
+    use kuna_decomp::dtype::type_metatype;
+    let (vma, _, _, text) = ENTRIES[0];
+    for meta in [type_metatype::TYPE_UNKNOWN, type_metatype::TYPE_INT] {
+        let on = run_with("macho_cfstring", Mode::On, vma, Some(("kGreetingDebug", meta)));
+        assert!(on.contains(&format!("CFSTR(\"{text}\")")), "an entry under a symbol must render CFSTR({text:?}):\n{on}");
+    }
 }

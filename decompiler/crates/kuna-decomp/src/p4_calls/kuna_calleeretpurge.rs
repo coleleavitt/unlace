@@ -20,7 +20,9 @@
 //! The ObjC `objc_msgSend*_stret` imports have no body to read but pop the
 //! hidden result pointer like any struct-returning function, so they get 8.
 //! 32-bit x86 only: x86-64 code does not pop arguments, and the decode is not
-//! free when a Ghidra host serves the instructions.
+//! free when a Ghidra host serves the instructions. Not under a Windows
+//! compiler spec either: its models state no extrapop, and
+//! [`crate::p4_calls::kuna_calleepurge`] reads the callee's purge there.
 
 use kuna_base::address::Address;
 use kuna_base::space::spacetype;
@@ -147,7 +149,7 @@ pub fn probe_return_purge<T: kuna_sleigh::translate::Translate + ?Sized>(tr: &T,
 /// Record the return purge of every direct callee of `data`, decoding each
 /// distinct callee once per image. A no-op unless `option calleeretpurge` is on.
 pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
-    if !arch.callee_ret_purge {
+    if !arch.callee_ret_purge || arch.get_description().contains("windows") {
         return;
     }
     for i in 0..data.num_calls() {

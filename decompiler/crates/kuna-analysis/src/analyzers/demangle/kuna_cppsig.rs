@@ -73,10 +73,9 @@
 //!
 //! ## MSVC names
 //!
-//! An MSVC name is read twice. This module's parse is the `msvcsig off`
-//! reading, kept so that gate restores it exactly; [`super::kuna_msvcsig`] reads
-//! the same names, and the PE imports, with their calling convention, return
-//! type and hidden return pointer, which is what the commit applies by default.
+//! An MSVC name is left to [`super::kuna_msvcsig`], which reads the defined
+//! names and the PE imports with their calling convention, return type and
+//! hidden return pointer.
 //!
 //! ## Origin (upstream Ghidra)
 //!
@@ -172,6 +171,9 @@ impl AnalysisPass for CppSigPass {
         let ptr = types.get_size_of_pointer();
         let hidden = hidden_return_entries(ctx);
         for (addr, decl, msvc) in &decls {
+            if *msvc {
+                continue;
+            }
             let (has_this, proven) = match decl.this_kind {
                 ThisKind::Proven => (true, true),
                 ThisKind::ProvenNone => (false, true),
@@ -195,9 +197,7 @@ impl AnalysisPass for CppSigPass {
                     pieces.first_var_arg_slot += 1;
                 }
             }
-            if *msvc {
-                out.cpp_sig.msvc_legacy.push((*addr, pieces));
-            } else if proven {
+            if proven {
                 out.cpp_sig.proven.push((*addr, pieces));
             } else {
                 out.cpp_sig.inferred.push((*addr, pieces));
@@ -880,13 +880,12 @@ pub struct SelectedSig {
 }
 
 /// Fold the pass's certainty tiers into the list the commit boundary applies,
-/// under the resolved `--option cppsig` mode and `--option msvcsig` gate.
-pub fn select(facts: CppSigFacts, inferred: bool, msvc: bool) -> Vec<SelectedSig> {
+/// under the resolved `--option cppsig` mode.
+pub fn select(facts: CppSigFacts, inferred: bool) -> Vec<SelectedSig> {
     let CppSigFacts {
         proven,
         inferred: amb,
         msvc: msvc_sigs,
-        msvc_legacy,
         ..
     } = facts;
     let plain = |(addr, pieces): (u64, PrototypePieces)| SelectedSig {
@@ -896,16 +895,12 @@ pub fn select(facts: CppSigFacts, inferred: bool, msvc: bool) -> Vec<SelectedSig
         msvc: false,
     };
     let mut out: Vec<SelectedSig> = proven.into_iter().map(plain).collect();
-    if msvc {
-        out.extend(msvc_sigs.into_iter().map(|(addr, pieces, model)| SelectedSig {
-            addr,
-            pieces,
-            model,
-            msvc: true,
-        }));
-    } else {
-        out.extend(msvc_legacy.into_iter().map(plain));
-    }
+    out.extend(msvc_sigs.into_iter().map(|(addr, pieces, model)| SelectedSig {
+        addr,
+        pieces,
+        model,
+        msvc: true,
+    }));
     if inferred {
         out.extend(amb.into_iter().map(plain));
     }

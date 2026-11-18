@@ -80,7 +80,7 @@
 <stringmatch name="javatry #1: off loses the catch of parse" min="1" max="1">return Integer\.parseInt\(a0\);
 ^}</stringmatch>
 <stringmatch name="javatry #2: off runs on past the call that could throw" min="1" max="1">^  Integer\.parseInt\(a0\);
-^  return;</stringmatch>
+^}</stringmatch>
 <stringmatch name="javatry #3: parse catches NumberFormatException" min="1" max="1">catch \(NumberFormatException e\) \{
 return -1;</stringmatch>
 <stringmatch name="javatry #4: twoCatches has two clauses on one try" min="1" max="1">catch \(NumberFormatException e\) \{

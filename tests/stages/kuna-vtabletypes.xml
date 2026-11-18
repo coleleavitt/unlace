@@ -53,5 +53,5 @@ c3
 <stringmatch name="VTABLETYPES #4: on, the call on the visible object is direct" min="1" max="1">^  (Tr::)?area\(v3,a0\);</stringmatch>
 <stringmatch name="VTABLETYPES #5: off, the slot load is cast arithmetic and the first call loses an argument" min="1" max="1">v2 = \(\*\(code \*\)\*\*\(unsigned long \*\*\)a0\)\(a0,CONCAT44\(v3,a1\)\);</stringmatch>
 <stringmatch name="VTABLETYPES #6: off, the method's call on this takes no arguments" min="1" max="1">v1 = \(\*\(code \*\)\*\*\(unsigned long \*\*\)this\)\(\);</stringmatch>
-<stringmatch name="VTABLETYPES #7: off, the call on the visible object stays indirect" min="1" max="1">\(\*_ZTV2Tr\._16_8_\)\(v3,a0\);</stringmatch>
+<stringmatch name="VTABLETYPES #7: off, the call on the visible object stays indirect (through the vptr itaniumrtti names)" min="1" max="1">\(\*_Tr_vptr\)\(v3,a0\);</stringmatch>
 </decompilertest>

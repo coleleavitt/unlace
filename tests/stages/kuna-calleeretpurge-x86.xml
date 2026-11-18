@@ -57,6 +57,6 @@
 </script>
 <stringmatch name="CALLEERETPURGE-X86 #1: off, the result pointer is four bytes past the slot the caller passes" min="1" max="1">mk\(\(int4\)&amp;\w+ \+ 4,</stringmatch>
 <stringmatch name="CALLEERETPURGE-X86 #2: on, mk receives the address of the caller's slot" min="1" max="1">mk\(&amp;\w+,</stringmatch>
-<stringmatch name="CALLEERETPURGE-X86 #3: both passes, the second call passes the second stored word and k" min="2" max="2">mk\(\w+,\w+\._4_4_,\w+\);</stringmatch>
+<stringmatch name="CALLEERETPURGE-X86 #3: both passes, the second call passes the second stored word and k" min="2" max="2">mk\(\w+,\(\(int4 \*\)&amp;\w+\)\[1\],\w+\);</stringmatch>
 <stringmatch name="CALLEERETPURGE-X86 #4: on, the return multiplies the first word the caller stored" min="1" max="1">return \(\(\(int4\)\w+ \* \w+ \+</stringmatch>
 </decompilertest>

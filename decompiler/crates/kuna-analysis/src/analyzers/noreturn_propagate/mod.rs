@@ -120,12 +120,12 @@ impl AnalysisPass for NoReturnPropagatePass {
         // a nonzero constant (they call `exit(status)`), so a wrapper whose tail is
         // `call error(2,…)` is itself no-return — but `error` is NOT on the Known
         // no-return list (it *returns* for `error(0,…)`). The recognizer is a
-        // per-call-site value check (arg0 is a nonzero literal), gated by its own
-        // `--option noreturn_error` flag (default-on, DIV-16). When on, compute the
+        // per-call-site value check (arg0 is a nonzero literal) that runs with the
+        // known-no-return pass (`noreturn_known`, DIV-16). When on, compute the
         // `error`/`error_at_line` entry addresses (PLT stubs + any defined funcsym)
         // so the propagation rule can treat a `call error(nonzero)` tail as terminal.
         let imports = crate::loader::format::resolve_imports(ctx.file, ctx.bytes);
-        let error_recog = if ctx.arch.analysis_noreturn_error {
+        let error_recog = if ctx.arch.analysis_noreturn_known {
             ErrorRecognizer::from_imports(&imports, listing)
         } else {
             ErrorRecognizer::disabled()
@@ -142,9 +142,9 @@ impl AnalysisPass for NoReturnPropagatePass {
             out.noreturn.push(fact);
         }
         // (kuna, Ghidra-gap) Emit every `call error(nonzero,…)` site so the decompile
-        // seam prunes its fall-through (CALL_RETURN override). Gated by the same
-        // `noreturn_error` flag as the recognizer; the recognizer is `disabled()` (no
-        // addresses) when the flag is off, so this yields an empty set then.
+        // seam prunes its fall-through (CALL_RETURN override). The recognizer is
+        // `disabled()` (no addresses) under `noreturn_known off`, so this yields an
+        // empty set then.
         out.no_fallthru_calls = collect_error_noreturn_callsites(listing, &error_recog);
         out
     }
@@ -202,6 +202,9 @@ struct ErrorRecognizer {
     /// Entry addresses (PLT stub + any defined funcsym) of `error`/`error_at_line`.
     /// Empty ⇒ the recognizer is inert (disabled, or no `error` import present).
     error_addrs: BTreeSet<u64>,
+    /// (kuna #1288) The MS-DOS exit interrupts ([`crate::listing::kuna_dosexit`]):
+    /// call sites that never return whatever their arguments.
+    exit_sites: BTreeSet<u64>,
 }
 
 trait InstructionBody {
@@ -263,7 +266,12 @@ impl<'a> InstructionBody for BTreeMap<u64, &'a Insn> {
 impl ErrorRecognizer {
     /// A disabled recognizer (no addresses ⇒ never matches).
     fn disabled() -> Self {
-        ErrorRecognizer { error_addrs: BTreeSet::new() }
+        ErrorRecognizer { error_addrs: BTreeSet::new(), exit_sites: BTreeSet::new() }
+    }
+
+    /// A recognizer whose only terminal call sites are the DOS exits `sites`.
+    fn dos_exits(sites: &[u64]) -> Self {
+        ErrorRecognizer { error_addrs: BTreeSet::new(), exit_sites: sites.iter().copied().collect() }
     }
 
     /// Collect the `error`/`error_at_line` entry addresses from the object: the
@@ -291,7 +299,7 @@ impl ErrorRecognizer {
                 }
             }
         }
-        ErrorRecognizer { error_addrs }
+        ErrorRecognizer { error_addrs, exit_sites: BTreeSet::new() }
     }
 
     /// Is `entry` the `error`/`error_at_line` function?
@@ -320,6 +328,9 @@ impl ErrorRecognizer {
     ) -> bool {
         if !call.flow.is_call {
             return false;
+        }
+        if self.exit_sites.contains(&call_vma) {
+            return true;
         }
         if !call.flows.iter().any(|t| self.is_error(*t)) {
             return false;
@@ -804,6 +815,14 @@ fn bytes_at<'a>(file: &'a object::File, vma: u64, len: usize) -> Option<&'a [u8]
     data.get(start..start.checked_add(len)?)
 }
 
+/// (kuna #1288) The propagation of [`propagate_noreturn`] seeded from the DOS
+/// exit interrupts `sites` instead of the Known list: a function is no-return
+/// when every path it can take ends at one, or at a call to a function already
+/// concluded.
+pub(crate) fn propagate_exits(listing: &Listing, sites: &[u64], reach: bool) -> Vec<NoReturnFact> {
+    propagate_noreturn(listing, &ErrorRecognizer::dos_exits(sites), &BTreeSet::new(), reach, &BTreeSet::new())
+}
+
 /// Run the call-graph no-return propagation over the Listing and return the
 /// concluded functions as [`NoReturnFact`]s.
 ///
@@ -1049,6 +1068,7 @@ mod tests {
 
         let recog = ErrorRecognizer {
             error_addrs: [0x500].into_iter().collect(),
+            exit_sites: BTreeSet::new(),
         };
         assert!(
             !recog.call_is_terminal_error(&body, 0x100, &call, false),
@@ -1068,6 +1088,7 @@ mod tests {
         let body = ListingInstructionBody::new(&listing, 0x100, None);
         let recog = ErrorRecognizer {
             error_addrs: [0x500].into_iter().collect(),
+            exit_sites: BTreeSet::new(),
         };
 
         assert!(

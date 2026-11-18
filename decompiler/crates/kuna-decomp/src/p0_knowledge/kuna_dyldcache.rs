@@ -5,7 +5,7 @@
 //! Both act inside `load file`, while the loader rebuilds the image from the
 //! cache, upstream of every per-function `option` command, so both travel as
 //! process environment variables set by the `kuna` CLI before loading (the
-//! `dynrelocs` loadtime pattern). The CLI's `--image NAME` sets
+//! loadtime pattern). The CLI's `--image NAME` sets
 //! [`DYLDIMAGE_ENV`] for every subcommand; the console's `option dyldimage NAME`
 //! before `load file` sets the same variable, and is accepted before any image
 //! is loaded, since choosing the first image is its purpose.
@@ -20,7 +20,8 @@ pub const DYLDIMAGE_ENV: &str = "KUNA_DYLD_IMAGE";
 pub const DYLDCROSSREFS_ENV: &str = "KUNA_DYLDCROSSREFS";
 
 pub fn dyldcrossrefs_enabled() -> bool {
-    crate::options::env_toggle(DYLDCROSSREFS_ENV, true)
+    crate::kuna_loadoptions::scoped(|o| o.dyldcrossrefs)
+        .unwrap_or_else(crate::kuna_loadoptions::env::dyldcrossrefs)
 }
 
 pub fn set_dyldcrossrefs_env(on: bool) {
@@ -36,9 +37,11 @@ pub fn image_name(value: &str) -> Option<&str> {
     Some(value.trim()).filter(|v| !v.is_empty() && *v != "none")
 }
 
-/// The image the run selected through [`DYLDIMAGE_ENV`].
+/// The image the load in progress selected (`LoadOptions::dyldimage`, else
+/// [`DYLDIMAGE_ENV`]).
 pub fn selected_image() -> Option<String> {
-    std::env::var(DYLDIMAGE_ENV).ok().and_then(|v| image_name(&v).map(str::to_string))
+    crate::kuna_loadoptions::scoped(|o| o.dyldimage.clone())
+        .unwrap_or_else(crate::kuna_loadoptions::env::dyldimage)
 }
 
 /// Apply `option dyldimage|dyldcrossrefs VALUE`, or `None` for another option.

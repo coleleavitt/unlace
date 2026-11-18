@@ -942,18 +942,11 @@ fn te_image_discovers_the_entrys_call_closure() {
     }
 
     let (stdout, stderr, ok) = run_kuna(&[
-        "functions", &binary, "--option", "rawdiscover", "off", "--option", "objectview", "off",
-        "--sleighpath", &sp,
+        "functions", &binary, "--option", "objectview", "off", "--sleighpath", &sp,
     ]);
-    assert!(ok, "TE functions without discovery failed: {stderr}");
-    assert_eq!(stdout.lines().count(), 1, "{stdout}");
-
-    let (stdout, stderr, ok) = run_kuna(&[
-        "functions", &binary, "--option", "rawdiscover", "off", "--sleighpath", &sp,
-    ]);
-    assert!(ok, "TE functions through the PE view alone failed: {stderr}");
+    assert!(ok, "TE functions without the PE view failed: {stderr}");
     for entry in ["0x401000", "0x401010", "0x401020"] {
-        assert!(stdout.contains(entry), "{entry} missing from the PE-view inventory:\n{stdout}");
+        assert!(stdout.contains(entry), "{entry} missing from the discovery inventory:\n{stdout}");
     }
 }
 
@@ -972,15 +965,6 @@ fn te_image_auto_detects_entry_mapping_and_thumb_context() {
         "{stdout}"
     );
     assert!(!stderr.contains("[kuna te]"), "{stderr}");
-
-    let (_, stderr, ok) = run_kuna(&[
-        "functions", &binary, "--option", "rawdiscover", "off", "--sleighpath", &sp,
-    ]);
-    assert!(ok, "TE functions without discovery failed: {stderr}");
-    assert!(
-        stderr.contains("rawdiscover is off"),
-        "a TE inventory without discovery must say why it is only the entry: {stderr}"
-    );
 
     let (stdout, stderr, ok) = run_kuna(&[
         "functions",
@@ -1576,9 +1560,9 @@ fn functions_lists_main() {
 /// the single biggest cause of kuna losing to Ghidra proper on the benchmark
 /// (~50% of the ghidra-beats-kuna GED cases were this boundary overrun).
 ///
-/// The test isolates exactly the fix: `--option noreturn_error off` (no error
+/// The test isolates exactly the fix: `--option noreturn_known off` (no error
 /// recognizer ⇒ no prune ⇒ err_fatal absorbs `compute`) must yield a LARGER
-/// function byte-extent than the default (`noreturn_error on`, the prune fires).
+/// function byte-extent than the default (`noreturn_known on`, the prune fires).
 #[test]
 fn decompile_all_error_nonzero_does_not_absorb_next_function() {
     let bin = noreturn_error_fixture();
@@ -1595,7 +1579,7 @@ fn decompile_all_error_nonzero_does_not_absorb_next_function() {
     // `funcboundflow` (default-on, DIV-67) is a SECOND, name-independent bound that
     // stops the same overrun at `compute`'s entry, so it must also be off to expose
     // the pre-fix overrun this test isolates.
-    let off = code(&["--option", "noreturn_error", "off", "--option", "funcboundflow", "off", "--option", "fdeflowbound", "off"]);
+    let off = code(&["--option", "noreturn_known", "off", "--option", "funcboundflow", "off", "--option", "fdeflowbound", "off"]);
     // ON (default): the CALL_RETURN prune stops err_fatal at the no-return call.
     let on = code(&[]);
     // `err_warn` belongs to `compute_warn` — a DIFFERENT function two hops after
@@ -1604,12 +1588,12 @@ fn decompile_all_error_nonzero_does_not_absorb_next_function() {
     // overrun; ON (the prune) must not.
     assert!(
         off.contains("err_warn"),
-        "with noreturn_error off, err_fatal should overrun and absorb the following \
+        "with noreturn_known off, err_fatal should overrun and absorb the following \
          functions (the pre-fix behaviour):\n{off}"
     );
     assert!(
         !on.contains("err_warn"),
-        "noreturn_error must prune the `call error(2)` fall-through so err_fatal does \
+        "noreturn_known must prune the `call error(2)` fall-through so err_fatal does \
          NOT absorb `compute`/`compute_warn`:\n{on}"
     );
 }
@@ -1618,7 +1602,7 @@ fn decompile_all_error_nonzero_does_not_absorb_next_function() {
 /// `error(nonzero)` fall-through — not just `decompile-all`. It now builds the Listing by
 /// default (like decompile-all) and `IfcDecompile` applies the CALL_RETURN overrides, so
 /// `err_fatal` @ 0x4011c0 does not overrun into the following `compute`/`compute_warn`.
-/// `--option noreturn_error off` disables the recognizer ⇒ the overrun returns (control).
+/// `--option noreturn_known off` disables the recognizer ⇒ the overrun returns (control).
 #[test]
 fn kuna_decompile_single_error_nonzero_does_not_absorb_next_function() {
     let bin = noreturn_error_fixture();
@@ -1634,11 +1618,11 @@ fn kuna_decompile_single_error_nonzero_does_not_absorb_next_function() {
     // output ONLY if the flow overran past `call error(2)`.  `funcboundflow` (default-on,
     // DIV-67) is a second, name-independent bound at `compute`'s entry, so it too must be
     // off to expose the pre-fix overrun.
-    let off = code(&["--option", "noreturn_error", "off", "--option", "funcboundflow", "off", "--option", "fdeflowbound", "off"]);
+    let off = code(&["--option", "noreturn_known", "off", "--option", "funcboundflow", "off", "--option", "fdeflowbound", "off"]);
     let on = code(&[]);
     assert!(
         off.contains("err_warn"),
-        "noreturn_error off: single-function err_fatal should overrun (pre-fix):\n{off}"
+        "noreturn_known off: single-function err_fatal should overrun (pre-fix):\n{off}"
     );
     assert!(
         !on.contains("err_warn"),
@@ -1799,16 +1783,7 @@ fn raw_image_discovers_called_functions_beyond_its_seeds() {
     let spec = PathBuf::from(&sp).join("Ghidra/Processors/Cortus/data/languages/aps3.sla");
     assert!(spec.exists(), "required processor spec missing; build specs before running integration tests");
 
-    // Off: the inventory is exactly the seed, as it was before the option.
-    let (stdout, stderr, ok) = run_kuna(&[
-        "functions", &binary, "--json", "--raw-image", "--target", target, "--base",
-        "0x80000000", "--entry", "0x80000000", "--option", "rawdiscover", "off",
-        "--option", "objectview", "off", "--sleighpath", &sp,
-    ]);
-    assert!(ok, "raw functions with rawdiscover off failed: {stderr}");
-    assert!(stdout.contains("\"count\": 1"), "{stdout}");
-
-    // On (the default): the seed, its direct callee, and the sweep-only callee.
+    // The seed, its direct callee, and the sweep-only callee.
     let (stdout, stderr, ok) = run_kuna(&[
         "functions", &binary, "--json", "--raw-image", "--target", target, "--base",
         "0x80000000", "--entry", "0x80000000", "--sleighpath", &sp,
@@ -3242,19 +3217,15 @@ fn a_float_register_parameter_round_trips() {
             assert!(stdout.contains(want), "{tag}: missing `{want}`:\n{stdout}");
         }
         let printed = printed_functions(&stdout, &["sink ", "negsink ", "iget3 ", "use ", "k3b "]);
-        let global = printed
-            .lines()
-            .find_map(|l| l.trim().strip_prefix("return ").and_then(|r| r.strip_suffix(';')).filter(|g| g.starts_with("dat_")))
-            .unwrap_or_else(|| panic!("{tag}: iget3 returns no global:\n{printed}"));
         let constants: String = printed
             .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-            .filter(|w| w.starts_with("dat_") && *w != global)
+            .filter(|w| w.starts_with("dat_"))
             .map(|w| format!("const float {w} = 2.0f;\n"))
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
             .collect();
         let src = format!(
-            "#include <stdio.h>\n#include <string.h>\n{BITS}unsigned int {global} = 0x40490fdbu;\n{constants}{printed}\n\
+            "#include <stdio.h>\n#include <string.h>\n{BITS}int gj = 0x40490fdb;\n{constants}{printed}\n\
              int main(void) {{\n  unsigned p[2] = {{0, 0x3fc00000u}};\n  float o[2] = {{0}}, q = 0;\n  int k = 0;\n  \
              negsink((void *)p, o);\n  k3b((void *)&k, &q);\n  \
              printf(\"%llx %llx %d %llx\\n\", BITS(o[0]), BITS(o[1]), k, BITS(q));\n  return 0;\n}}\n"
@@ -3676,13 +3647,15 @@ fn a_float_return_beside_a_global_read_stays_an_integer() {
 /// The entry hands `f`'s `eax` to `ExitProcess`, so `f` is decompiled again to
 /// return it, and that decompile restarts once its second indirect call
 /// resolves to `ExitProcess`. On its one returning path `f` returns the handle
-/// the comparison also reads: `return -1;`. Patched to also load through the
-/// handle on that path (`je` to a `mov ecx,[eax]` the `ExitProcess` path jumps
-/// over), the pass before the restart returned `eax`, joined with what the
-/// unresolved call left, and the pass after it refused the handle; the first
-/// pass's output survived as `int sub_401020(..)` around a bare `return;`, and
-/// the function must be `void` again. No function that declares a return type
-/// prints a bare `return;`.
+/// the comparison also reads, the `INVALID_HANDLE_VALUE` bits `0xffffffff`.
+/// The restart starts from the prototype the function was given, as upstream's
+/// `Funcdata::clear` does, so the return type is what the restarted pass
+/// recovers (`unsigned int`), not the first pass's. Patched to also load
+/// through the handle on that path (`je` to a `mov ecx,[eax]` the
+/// `ExitProcess` path jumps over), the pass before the restart returned `eax`,
+/// joined with what the unresolved call left, and the pass after it refused
+/// the handle: the function must be `void`. No function that declares a return
+/// type prints a bare `return;`.
 #[test]
 fn a_return_refused_after_a_restart_leaves_the_function_void() {
     let fixture = repo_root().join("decompiler/crates/kuna-analysis/tests/fixtures/floatret_restart_pe_i386.exe");
@@ -3700,7 +3673,10 @@ fn a_return_refused_after_a_restart_leaves_the_function_void() {
         printed_functions(&stdout, &["sub_401020 "])
     };
     let printed = decompile(fixture.to_str().unwrap());
-    assert!(printed.contains("int sub_401020(unsigned int a0)") && printed.contains("return -1;"), "{printed}");
+    assert!(
+        printed.contains("unsigned int sub_401020(unsigned int a0)") && printed.contains("return 0xffffffff;"),
+        "{printed}"
+    );
 
     let mut image = std::fs::read(&fixture).unwrap();
     let at = |image: &[u8], pattern: &[u8]| image.windows(pattern.len()).position(|w| w == pattern).unwrap();
@@ -3764,28 +3740,6 @@ fn a_return_merged_in_pieces_stays_void() {
 /// `floatret_parse_gcc_O1.o` and `floatret_parse_armel.o` (soft-float ARM):
 /// `parse`, `parse2` and `parsef` return what `strtod` and `strtof` return, and
 /// `rp` keeps `parse`'s bits as an integer, `rp2` stores `parse2`'s `double`, and
-/// `rpf` keeps `parsef`'s bits. With libc signature seeding disabled, neither
-/// callee has a declaration, so
-/// a return through them printed `unsigned long parse(..) { return strtod(..); }`,
-/// which converts the `double` by value once compiled against `<stdlib.h>`. They
-/// stay `void`, as before a caller asked for their result.
-#[test]
-fn a_return_of_an_undeclared_float_callee_stays_void() {
-    let sp = specs();
-    for name in ["floatret_parse_gcc_O1.o", "floatret_parse_armel.o"] {
-        let bin = repo_root().join("decompiler/crates/kuna-analysis/tests/fixtures").join(name).to_str().unwrap().to_string();
-        let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "libcsigs", "off"]);
-        assert!(ok, "kuna decompile-all failed on {name}: {stderr}");
-        let printed = printed_functions(&stdout, &["parse ", "parse2 ", "parsef ", "rp ", "rp2 ", "rpf "]);
-        for want in ["void parse(", "void parse2(", "void parsef("] {
-            assert!(printed.contains(want), "{name}: missing `{want}`:\n{printed}");
-        }
-        for bad in ["return strtod(", "return strtof("] {
-            assert!(!printed.contains(bad), "{name}: `{bad}` converts the callee's float by value:\n{printed}");
-        }
-    }
-}
-
 /// Code-proven imports receive their known floating-point contracts on x86-64;
 /// ARM retains its exclusion for incompatible floating-point ABI rows.
 #[test]
@@ -4075,6 +4029,37 @@ fn a_byte_pointee_vote_keeps_word_fills_and_long_callers_whole() {
     }
 }
 
+/// `sum_words` reads words, so its recovered parameter is `int *`. `scramble`
+/// reads and writes its buffer a byte at a time and refuses that vote, so its
+/// byte accesses print without a cast; `xor_words` walks words over a
+/// loop-carried offset before a byte tail and keeps a pointer, where a refusal
+/// printed its buffer as a `long` handed to `sum_words`.
+#[test]
+fn a_byte_cursor_refuses_a_word_vote_unless_it_walks_whole_words() {
+    let bin = repo_root()
+        .join("decompiler/crates/kuna-analysis/tests/fixtures/protoorder_bytecursor_x86_64")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let sp = specs();
+    let (stdout, stderr, ok) = run_kuna(&["decompile-all", bin.as_str(), "--sleighpath", &sp]);
+    assert!(ok, "kuna decompile-all failed: {stderr}");
+    let body = |name: &str| {
+        stdout
+            .split("// Function: ")
+            .find(|c| c.starts_with(&format!("{name} ")))
+            .unwrap_or_else(|| panic!("{name} is printed"))
+    };
+    let signature = |name: &str| {
+        body(name).lines().find(|l| l.contains(&format!(" {name}("))).unwrap_or_default().to_string()
+    };
+    let scramble = body("scramble");
+    assert!(signature("scramble").contains("char *a0,"), "scramble took the word vote:\n{scramble}");
+    assert!(!scramble.contains("char *)a0"), "scramble's byte accesses are cast:\n{scramble}");
+    let xor_words = body("xor_words");
+    assert!(signature("xor_words").contains(" *a0,"), "xor_words lost its pointer:\n{xor_words}");
+}
+
 /// `--jobs-full-load` gives every worker the parent's own load instead of the
 /// inventory hand-off.  It exists as the paranoid option, so it has to agree with
 /// the hand-off, not merely with itself.
@@ -4284,7 +4269,7 @@ fn jobs_names_synthesized_structs_as_the_serial_run_does() {
 /// the frame it writes as each function starts is all the parent sees of it. A
 /// function that stalls there is the one blamed, not the chunk's first
 /// function, and the window is the warm one: the run does not wait out a
-/// program load on top of it. `sub_14ea` stalls the second time it starts,
+/// program load on top of it. `shapes::Circle::Circle` (`0x14ea`) stalls the second time it starts,
 /// which is in the ordered chunk.
 #[test]
 fn jobs_a_stall_in_the_ordered_structsynth_worker_blames_the_function_that_stalled() {
@@ -4313,8 +4298,8 @@ fn jobs_a_stall_in_the_ordered_structsynth_worker_blames_the_function_that_stall
         .filter(|r| r.contains("\"error\": \""))
         .map(|r| record_name(r))
         .collect();
-    assert_eq!(failed, ["sub_14ea"], "only the function that stalled is lost:\n{stderr}");
-    let lost = records.iter().find(|r| record_name(r) == "sub_14ea").unwrap();
+    assert_eq!(failed, ["shapes::Circle::Circle"], "only the function that stalled is lost:\n{stderr}");
+    let lost = records.iter().find(|r| record_name(r) == "shapes::Circle::Circle").unwrap();
     assert!(lost.contains("\"error\": \"worker stalled past the per-function watchdog (1s)"), "{lost}");
     assert!(recovered_count(&stderr).is_some_and(|n| n >= 1), "{stderr}");
 }
@@ -6707,12 +6692,12 @@ int main(void) {
             ALL,
             want.as_str(),
             &[
-                ("\n  unsigned int v1; // stack - 0x14\n  \n  if (waitpid(a0,(int *)&v1,0) <= -1)",
-                 "\n  int v1; // stack - 0x14\n  \n  if (waitpid(a0,&v1,0) <= -1)"),
-                ("    return (int)v1 >> 8 & 0xff;", "    return v1 >> 8 & 0xff;"),
-                ("\n  unsigned int v1; // stack - 0x14\n  \n  v1 = a0;\n  waitpid(0x7ffffff0,(int *)&v1,1);",
-                 "\n  int v1; // stack - 0x14\n  \n  v1 = a0;\n  waitpid(0x7ffffff0,&v1,1);"),
-                ("(int)v1 >> 8 & 0xff : (int)v1 >> 0x14;", "v1 >> 8 & 0xff : v1 >> 0x14;"),
+                ("\n  unsigned int stat_loc; // stack - 0x14\n  \n  if (waitpid(a0,(int *)&stat_loc,0) <= -1)",
+                 "\n  int stat_loc; // stack - 0x14\n  \n  if (waitpid(a0,&stat_loc,0) <= -1)"),
+                ("    return (int)stat_loc >> 8 & 0xff;", "    return stat_loc >> 8 & 0xff;"),
+                ("\n  unsigned int stat_loc; // stack - 0x14\n  \n  stat_loc = a0;\n  waitpid(0x7ffffff0,(int *)&stat_loc,1);",
+                 "\n  int stat_loc; // stack - 0x14\n  \n  stat_loc = a0;\n  waitpid(0x7ffffff0,&stat_loc,1);"),
+                ("(int)stat_loc >> 8 & 0xff : (int)stat_loc >> 0x14;", "stat_loc >> 8 & 0xff : stat_loc >> 0x14;"),
             ],
             UNCHANGED,
         ),
@@ -6721,14 +6706,14 @@ int main(void) {
             ALL,
             want.as_str(),
             &[
-                ("\n  unsigned int v1; // stack - 0x14", "\n  int v1; // stack - 0x14"),
-                ("if (0 <= waitpid(a0,(int *)&v1,0)) {", "if (0 <= waitpid(a0,&v1,0)) {"),
-                ("  waitpid(0x7ffffff0,(int *)&v1,1);\n  v3 = (v1 & 0x7f) ? (int)v1 >> 8",
-                 "  waitpid(0x7ffffff0,&v1,1);\n  v3 = (v1 & 0x7f) ? v1 >> 8"),
+                ("\n  unsigned int stat_loc; // stack - 0x14", "\n  int stat_loc; // stack - 0x14"),
+                ("if (0 <= waitpid(a0,(int *)&stat_loc,0)) {", "if (0 <= waitpid(a0,&stat_loc,0)) {"),
+                ("  waitpid(0x7ffffff0,(int *)&stat_loc,1);\n  v3 = (stat_loc & 0x7f) ? (int)stat_loc >> 8",
+                 "  waitpid(0x7ffffff0,&stat_loc,1);\n  v3 = (stat_loc & 0x7f) ? stat_loc >> 8"),
             ],
             UNCHANGED,
         ),
-        ("castobject_gcc_O2_x86_64", ALL, want.as_str(), &[("(int *)&v1", "(int *)&v1")], EVERY),
+        ("castobject_gcc_O2_x86_64", ALL, want.as_str(), &[("(int *)&stat_loc", "(int *)&stat_loc")], EVERY),
         ("castobject_clang_O2_x86_64", CLANG_O2, want_clang_o2.as_str(), &[], &EVERY[5..]),
     ];
     let sp = specs();

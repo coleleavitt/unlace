@@ -312,7 +312,7 @@ pub(super) fn dispatch_tables(
             let name = format!("{prefix}::externalMethod_{sel}");
             out.entries.push(f);
             out.symbols.push(SymFact { addr: f, name: name.clone(), kind: SymKind::Function });
-            out.fid_names.push(FidMatch { addr: f, name });
+            out.fid_names.push(FidMatch { addr: f, name, by_signature: false });
         }
     }
 }

@@ -19,12 +19,13 @@ rustc-demangle.workspace = true
 msvc-demangler.workspace = true
 undname.workspace = true
 gimli.workspace = true
-ruzstd.workspace = true
 pdb.workspace = true
 lzma-rs.workspace = true
 brotli-decompressor.workspace = true
 memchr.workspace = true
 smallvec.workspace = true
+flirt-sig.workspace = true
+memmap2 = "0.9"
 
 [dev-dependencies]
 object = { workspace = true, features = ["write"] }

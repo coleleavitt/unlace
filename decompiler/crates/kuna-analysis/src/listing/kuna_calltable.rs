@@ -49,7 +49,6 @@ pub fn scan(file: &object::File, listing: &Listing, arch: &Architecture, transla
             n => n as usize,
         },
         preserved: &preserved,
-        far: true,
         compact: arch.archid.starts_with("AARCH64"),
     };
     let exec = listing.exec_ranges().to_vec();

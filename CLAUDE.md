@@ -117,6 +117,7 @@ need built specs; missing specs are failures, not skips.
 | `docs/options.md` | The generated option catalog (tiers, symptoms, flip guidance). |
 | `docs/cli.md` | The full `kuna` CLI reference (flags, JSON schemas, watchdog, export). |
 | `docs/pr-bodies.md` | How to write a PR body (read before opening/editing any PR). |
+| `docs/prepr.md` | Optional pre-PR helpers: a call-arity diff over real MSVC binaries, and a diff lint. |
 | `docs/improvement-pipeline.md` | The autonomous improvement pipeline + feature-PR requirements. |
 | `docs/re-pipeline.md` | The RE-friction loop (agents solve crackmes, record gaps, self-merge). |
 | `docs/decbench-loop.md` | The decbench benchmark / improvement campaign. |

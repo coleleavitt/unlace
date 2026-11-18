@@ -176,6 +176,11 @@ pub struct ChainedFixups {
     /// The slot width of the image's pointer format (4 for the 32-bit formats),
     /// 0 until a chain is walked.
     width: u8,
+    /// Why some fixups were not read, the first reason met: a truncated
+    /// header or start table, a pointer format the walk does not decode, a
+    /// chain that leaves the mapped segments, kernel-collection rebases whose
+    /// own collection level is unknown.
+    damage: Option<String>,
 }
 
 /// One bind fixup: the import a slot is bound to at load time.
@@ -288,6 +293,18 @@ impl ChainedFixups {
     /// (`SG_READ_ONLY`, the `__DATA_CONST` convention).
     pub fn in_readonly_segment(&self, va: u64) -> bool {
         self.readonly_segments.iter().any(|&(lo, hi)| va >= lo && va < hi)
+    }
+
+    /// Why the chains were not all read, when they were not: the rebases and
+    /// binds are then only those read.
+    pub fn damage(&self) -> Option<&str> {
+        self.damage.as_deref()
+    }
+
+    fn damaged(&mut self, why: impl FnOnce() -> String) {
+        if self.damage.is_none() {
+            self.damage = Some(why());
+        }
     }
 }
 
@@ -493,7 +510,13 @@ fn resolve_kernel_cache_levels(out: &mut ChainedFixups, imagebase: u64, links: O
         },
         None => None,
     };
-    let Some(own) = own else { return };
+    let Some(own) = own else {
+        if !pending.is_empty() {
+            let count = pending.len();
+            out.damaged(|| format!("{count} kernel-collection rebases need this collection's own level, which is unknown"));
+        }
+        return;
+    };
     for (va, level, offset) in pending {
         if level == own {
             out.rebases.insert(va, imagebase.wrapping_add(offset));
@@ -514,13 +537,17 @@ fn walk_fixups(
     // dyld_chained_fixups_header { fixups_version, starts_offset, imports_offset,
     //                              symbols_offset, imports_count, imports_format,
     //                              symbols_format } — 7 u32 (28 bytes).
-    let Some(starts_offset) = rd_u32(blob, 4) else { return };
+    let truncated = || "the chained-fixups header or its start table ends early".to_string();
+    let Some(starts_offset) = rd_u32(blob, 4) else { return out.damaged(truncated) };
     let sio = starts_offset as usize;
 
     // dyld_chained_starts_in_image { uint32 seg_count; uint32 seg_info_offset[]; }
-    let Some(seg_count) = rd_u32(blob, sio) else { return };
+    let Some(seg_count) = rd_u32(blob, sio) else { return out.damaged(truncated) };
     for i in 0..(seg_count as usize).min(blob.len() / 4) {
-        let Some(seg_info_off) = rd_u32(blob, sio + 4 + 4 * i) else { continue };
+        let Some(seg_info_off) = rd_u32(blob, sio + 4 + 4 * i) else {
+            out.damaged(truncated);
+            continue;
+        };
         if seg_info_off == 0 {
             // 0 = this segment has no fixups.
             continue;
@@ -543,17 +570,20 @@ fn walk_segment(
     //   uint32 size; uint16 page_size; uint16 pointer_format;
     //   uint64 segment_offset; uint32 max_valid_pointer;
     //   uint16 page_count; uint16 page_start[page_count]; ... }
-    let Some(page_size) = rd_u16(blob, p + 4) else { return };
-    let Some(pointer_format) = rd_u16(blob, p + 6) else { return };
-    let Some(segment_offset) = rd_u64(blob, p + 8) else { return };
-    let Some(max_valid) = rd_u32(blob, p + 16) else { return };
-    let Some(page_count) = rd_u16(blob, p + 20) else { return };
+    let fields = (rd_u16(blob, p + 4), rd_u16(blob, p + 6), rd_u64(blob, p + 8));
+    let (Some(page_size), Some(pointer_format), Some(segment_offset)) = fields else {
+        return out.damaged(|| format!("a segment's chain starts at blob offset 0x{p:x} end early"));
+    };
+    let (Some(max_valid), Some(page_count)) = (rd_u32(blob, p + 16), rd_u16(blob, p + 20)) else {
+        return out.damaged(|| format!("a segment's chain starts at blob offset 0x{p:x} end early"));
+    };
     if page_size == 0 {
-        return;
+        return out.damaged(|| format!("the segment chain starts at blob offset 0x{p:x} give page size 0"));
     }
 
-    // An unhandled format: leave its chains unresolved (the inert path).
-    let Some(stride) = chain_stride(pointer_format) else { return };
+    let Some(stride) = chain_stride(pointer_format) else {
+        return out.damaged(|| format!("chained pointer format {pointer_format} is not decoded"));
+    };
     out.width = if matches!(pointer_format, ptr_format::PTR_32 | ptr_format::PTR_32_FIRMWARE) { 4 } else { 8 };
     let start_budget = blob.len() / 2;
 
@@ -565,12 +595,16 @@ fn walk_segment(
     // `segment_offset` as the segment's own `vmaddr - imagebase`, i.e. its
     // fileoff, so the chain head lands at the segment's first fixup byte.)
     let page_starts = p + 22;
+    let exhausted = || "the chain starts name more pages than the blob can describe".to_string();
     for pi in 0..page_count as usize {
         if out.starts >= start_budget {
-            return;
+            return out.damaged(exhausted);
         }
         out.starts += 1;
-        let Some(page_start) = rd_u16(blob, page_starts + 2 * pi) else { continue };
+        let Some(page_start) = rd_u16(blob, page_starts + 2 * pi) else {
+            out.damaged(|| format!("a segment's page starts at blob offset 0x{p:x} end early"));
+            continue;
+        };
         if page_start == PTR_START_NONE {
             continue;
         }
@@ -584,7 +618,7 @@ fn walk_segment(
         let mut j = (page_start & !PTR_START_MULTI) as usize;
         for _ in 0..0x8000u32 {
             if out.starts >= start_budget {
-                return;
+                return out.damaged(exhausted);
             }
             out.starts += 1;
             let Some(start) = rd_u16(blob, page_starts + 2 * j) else { break };
@@ -681,9 +715,13 @@ fn walk_chain(
             return;
         }
         out.hops += 1;
-        let Some(fo) = va_to_fileoff(segs, va) else { return };
+        let Some(fo) = va_to_fileoff(segs, va) else {
+            return out.damaged(|| format!("a fixup chain reaches 0x{va:x}, outside the segments' file data"));
+        };
         let raw = if narrow { rd_u32(file, fo as usize).map(u64::from) } else { rd_u64(file, fo as usize) };
-        let Some(raw) = raw else { return };
+        let Some(raw) = raw else {
+            return out.damaged(|| format!("a fixup chain reaches 0x{va:x}, past the end of the file"));
+        };
         if let Some(ctx) = auth_context(raw, format.id) {
             out.auth.insert(va, ctx);
         }
@@ -1209,6 +1247,48 @@ mod tests {
         assert_eq!(fixups.bind_name(0x100004000), Some("_objc_msgSend"));
         assert!(fixups.in_readonly_segment(0x100004000), "__DATA_CONST is SG_READ_ONLY");
         assert!(!fixups.in_readonly_segment(0x100008228), "__DATA is writable");
+    }
+
+    /// A chained-fixups blob with one segment's starts at offset 36: `page_size`,
+    /// `pointer_format`, `segment_offset` and `page_count` page starts of 0.
+    fn starts_blob(page_size: u16, pointer_format: u16, segment_offset: u64, page_count: u16) -> Vec<u8> {
+        let mut blob = vec![0u8; 36 + 22 + 2 * page_count as usize];
+        blob[4..8].copy_from_slice(&28u32.to_le_bytes());
+        blob[28..32].copy_from_slice(&1u32.to_le_bytes());
+        blob[32..36].copy_from_slice(&8u32.to_le_bytes());
+        blob[40..42].copy_from_slice(&page_size.to_le_bytes());
+        blob[42..44].copy_from_slice(&pointer_format.to_le_bytes());
+        blob[44..52].copy_from_slice(&segment_offset.to_le_bytes());
+        blob[56..58].copy_from_slice(&page_count.to_le_bytes());
+        blob
+    }
+
+    /// GH #1502: a walk that cannot read every chain records why, and a clean
+    /// one records nothing: an unknown pointer format, a chain whose `next`
+    /// leaves the segments, kernel-collection rebases with no own level.
+    #[test]
+    fn a_walk_that_stops_short_says_why() {
+        const BASE: u64 = 0x1_0000_0000;
+        let mut file = vec![0u8; 0x100];
+        file[..8].copy_from_slice(&0x1234u64.to_le_bytes());
+        let segs = [SegInfo { vmaddr: BASE, fileoff: 0, filesize: file.len() as u64 }];
+        let run = |file: &[u8], blob: &[u8]| {
+            let mut out = ChainedFixups::default();
+            walk_fixups(blob, &segs, BASE, file, &[], &mut out);
+            out
+        };
+        let clean = run(&file, &starts_blob(0x1000, ptr_format::PTR_64, 0, 1));
+        assert_eq!((clean.rebases.len(), clean.damage()), (1, None));
+        let unknown = run(&file, &starts_blob(0x1000, 13, 0, 1));
+        assert_eq!(unknown.damage(), Some("chained pointer format 13 is not decoded"));
+        let mut runaway = file.clone();
+        runaway[..8].copy_from_slice(&(0x1234u64 | (0x80 << 51)).to_le_bytes());
+        let off = run(&runaway, &starts_blob(0x1000, ptr_format::PTR_64, 0, 1));
+        assert_eq!(off.rebases.len(), 1);
+        assert!(off.damage().is_some_and(|why| why.starts_with("a fixup chain reaches")), "{:?}", off.damage());
+        let mut levels = ChainedFixups { kernel_cache: vec![(BASE, 1, 0x10)], ..ChainedFixups::default() };
+        resolve_kernel_cache_levels(&mut levels, BASE, None);
+        assert!(levels.rebases.is_empty() && levels.damage().is_some());
     }
 
     /// `macho_bind_only_arm64` has `LC_DYLD_CHAINED_FIXUPS` with a single bind

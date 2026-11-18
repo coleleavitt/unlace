@@ -63,14 +63,48 @@ fn commands(bytes: &[u8]) -> Vec<(u32, usize)> {
     out
 }
 
+/// Does a segment, section or symbol-table range run past the end of the file,
+/// so that [`clamp_out_of_file_ranges`] would rewrite the header?
+pub fn runs_past_the_file(bytes: &[u8]) -> bool {
+    !out_of_file_edits(bytes).0.is_empty()
+}
+
 /// Clamp every segment `filesize` and section `size` that runs past the end of
 /// the file to the bytes present. Returns the bytes unchanged (no copy) and no
 /// note when nothing runs past the end.
 pub fn clamp_out_of_file_ranges(bytes: Vec<u8>) -> (Vec<u8>, Option<String>) {
     let len = bytes.len() as u64;
+    let (edits, clamped) = out_of_file_edits(&bytes);
+    if edits.is_empty() {
+        return (bytes, None);
+    }
+    let mut bytes = bytes;
+    for (at, value, wide) in edits {
+        if wide {
+            bytes[at..at + 8].copy_from_slice(&value.to_le_bytes());
+        } else {
+            bytes[at..at + 4].copy_from_slice(&(value as u32).to_le_bytes());
+        }
+    }
+    let note = if clamped.is_empty() {
+        format!("Mach-O sections extend past the end of the {len}-byte file; clamped to the bytes present")
+    } else {
+        format!(
+            "Mach-O {} extend past the end of the {len}-byte file; clamped to the bytes present, \
+             the rest reads as zero",
+            clamped.join(", ")
+        )
+    };
+    (bytes, Some(note))
+}
+
+/// The header words to rewrite, `(offset, value, 64-bit)`, and the names of
+/// the segments and tables that run past the end of the file.
+fn out_of_file_edits(bytes: &[u8]) -> (Vec<(usize, u64, bool)>, Vec<String>) {
+    let len = bytes.len() as u64;
     let mut edits: Vec<(usize, u64, bool)> = Vec::new();
     let mut clamped = Vec::new();
-    for (cmd, at) in commands(&bytes) {
+    for (cmd, at) in commands(bytes) {
         if cmd == LC_SYMTAB {
             let entry = if is_64(&bytes) { 16 } else { 12 };
             let (Some(symoff), Some(nsyms), Some(stroff), Some(strsize)) =
@@ -126,27 +160,7 @@ pub fn clamp_out_of_file_ranges(bytes: Vec<u8>) -> (Vec<u8>, Option<String>) {
             edits.push((s + offset_at, u64::from(offset).min(len), false));
         }
     }
-    if edits.is_empty() {
-        return (bytes, None);
-    }
-    let mut bytes = bytes;
-    for (at, value, wide) in edits {
-        if wide {
-            bytes[at..at + 8].copy_from_slice(&value.to_le_bytes());
-        } else {
-            bytes[at..at + 4].copy_from_slice(&(value as u32).to_le_bytes());
-        }
-    }
-    let note = if clamped.is_empty() {
-        format!("Mach-O sections extend past the end of the {len}-byte file; clamped to the bytes present")
-    } else {
-        format!(
-            "Mach-O {} extend past the end of the {len}-byte file; clamped to the bytes present, \
-             the rest reads as zero",
-            clamped.join(", ")
-        )
-    };
-    (bytes, Some(note))
+    (edits, clamped)
 }
 
 /// A one-line warning when the image's code is still encrypted

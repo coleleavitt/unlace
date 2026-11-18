@@ -528,7 +528,7 @@ pub fn emit(img: &MachoImage, file: &object::File, tctx: &TypeCtx, out: &mut Ana
             });
             let label = format!("block_invoke_{invoke:x}");
             out.symbols.push(SymFact { addr: invoke, name: label.clone(), kind: SymKind::Function });
-            out.fid_names.push(FidMatch { addr: invoke, name: label.clone() });
+            out.fid_names.push(FidMatch { addr: invoke, name: label.clone(), by_signature: false });
             let Some(desc) = img.rebase_ptr(va + 3 * ps) else { continue };
             let Some((sig, _)) = descriptor_signature(img, desc) else { continue };
             if let Some(p) = invoke_prototype(&label, &sig, tctx, layout) {
@@ -605,7 +605,7 @@ pub fn stack_blocks(img: &MachoImage, file: &object::File, bytes: &[u8], tctx: &
         *n += 1;
         let label = if *n == 1 { format!("{creator}_block_invoke") } else { format!("{creator}_block_invoke_{n}") };
         out.symbols.push(SymFact { addr: site.invoke, name: label.clone(), kind: SymKind::Function });
-        out.fid_names.push(FidMatch { addr: site.invoke, name: label.clone() });
+        out.fid_names.push(FidMatch { addr: site.invoke, name: label.clone(), by_signature: false });
         // The invoke is a function of its own: a block built inside it is its
         // block (`…_block_invoke_block_invoke`), not the outer creator's.
         if let Err(at) = creators.binary_search_by_key(&site.invoke, |(a, _)| *a) {

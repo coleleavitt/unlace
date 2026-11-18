@@ -1,15 +1,37 @@
 //! Shared object-file view, including Mach-O slice selection, the PE view of
 //! a TE image, and MZ refusal.
 
+use kuna_analysis::loader::kuna_kernelcache::FilesetMap;
 use kuna_analysis::loader::macho_fat::SlicePref;
+
+/// Inspect a thin Mach-O through its mapping; retain legacy reads for other inputs.
+pub(crate) fn inspect<T>(binary: &str, inspect: impl FnOnce(&[u8]) -> Option<T>) -> Option<T> {
+    if let Some(bytes) = kuna_analysis::image_bytes::ImageBytes::map_thin_macho(binary)
+        .ok().flatten()
+    {
+        inspect(&bytes)
+    } else {
+        let bytes = kuna_analysis::loader::elf_shdr::read_image(binary).ok()?;
+        inspect(&bytes)
+    }
+}
 
 /// Read the loader's selected image slice for an object-file consumer. A UEFI
 /// TE input is handed out as its PE view (`objectview`), which maps every
 /// section where the TE loader does.
 pub(crate) fn image_bytes(binary: &str, pref: SlicePref) -> Result<Vec<u8>, String> {
-    let bytes = kuna_analysis::loader::elf_shdr::read_image_sliced(binary, pref)
+    image_bytes_and_fileset(binary, pref).map(|(bytes, _)| bytes)
+}
+
+/// [`image_bytes`], and the entry map of the `MH_FILESET` kernel collection
+/// the image is one entry of.
+pub(crate) fn image_bytes_and_fileset(
+    binary: &str,
+    pref: SlicePref,
+) -> Result<(Vec<u8>, Option<FilesetMap>), String> {
+    let image = kuna_analysis::loader::elf_shdr::read_image_selected(binary, pref)
         .map_err(|e| format!("{binary}: {e}"))?;
-    object_view(binary, bytes)
+    Ok((object_view(binary, image.bytes)?, image.fileset))
 }
 
 /// `[start, end)` offsets into an image slice whose bytes are not the file's.
@@ -133,16 +155,28 @@ impl RawFlags {
     /// The object view the consumer scans: the ELF view of a raw image, else
     /// [`image_bytes`].
     pub(crate) fn image(&self, binary: &str, pref: SlicePref, target: Option<&str>) -> Result<Vec<u8>, String> {
+        self.image_and_fileset(binary, pref, target).map(|(bytes, _)| bytes)
+    }
+
+    /// [`Self::image`], and the entry map of the `MH_FILESET` kernel collection
+    /// the image is one entry of (a raw image is of none).
+    pub(crate) fn image_and_fileset(
+        &self,
+        binary: &str,
+        pref: SlicePref,
+        target: Option<&str>,
+    ) -> Result<(Vec<u8>, Option<FilesetMap>), String> {
         if !self.on {
-            return image_bytes(binary, pref);
+            return image_bytes_and_fileset(binary, pref);
         }
         let bytes = std::fs::read(binary).map_err(|e| format!("{binary}: {e}"))?;
         let base = self.base.unwrap_or(0);
         let entry = self.entries.first().copied().unwrap_or(base);
         let language = target.unwrap_or_default();
-        kuna_analysis::loader::kuna_objectview::raw_as_elf(&bytes, base, entry, language).ok_or_else(|| {
+        let view = kuna_analysis::loader::kuna_objectview::raw_as_elf(&bytes, base, entry, language).ok_or_else(|| {
             format!("{binary}: --target {language:?} does not name a processor:endian:size language")
-        })
+        })?;
+        Ok((view, None))
     }
 }
 

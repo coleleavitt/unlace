@@ -35,6 +35,7 @@ c0035fd6
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_ehframe_only_arm64</com>
   <com>option machoehframe off</com>
+  <com>option unwindstarts off</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>clear architecture</com>

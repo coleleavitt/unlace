@@ -131,7 +131,7 @@ impl AnalysisPass for ObjcMetadataPass {
         // The type-mapping context for IMP/ivar prototypes (PR-O2).
         let (ptr_size, word_size) = ctx.arch.data_org();
         let tctx = TypeCtx::new(ctx.arch.types(), ptr_size, word_size);
-        let sdk = match kuna_decomp::kuna_objcsdk::sdk_path_from_env() {
+        let sdk = match kuna_decomp::kuna_objcsdk::sdk_path() {
             Some(root) => kuna_objcsdk::signatures(&root, &kuna_objcsdk::linked_frameworks(ctx.file, ctx.bytes)),
             None => HashMap::new(),
         };
@@ -278,16 +278,12 @@ impl AnalysisPass for ObjcMetadataPass {
         }
 
         // A chained slot holds its packed fixup word until `dynrelocs` unpacks it
-        // at load; with that gate off the slots are named but never folded.
-        if !img.chained() || kuna_decomp::kuna_dynrelocs::dynrelocs_enabled() {
-            out.const_ranges.extend(refs.into_iter().map(|(first, last_open)| ConstRange {
-                first,
-                last_open,
-                gate: ConstGate::ObjcRefs,
-            }));
-        } else {
-            out.const_ranges.retain(|r| r.gate != ConstGate::ObjcRefs);
-        }
+        // at load.
+        out.const_ranges.extend(refs.into_iter().map(|(first, last_open)| ConstRange {
+            first,
+            last_open,
+            gate: ConstGate::ObjcRefs,
+        }));
         out
     }
 }
@@ -334,7 +330,7 @@ impl ObjcMetadataPass {
             // The label-gated rename (the FID precedent): overwrite the engine's
             // own sub_*/FUN_* placeholder with the ObjC method name, never a real
             // symbol.
-            out.fid_names.push(FidMatch { addr: m.imp, name: label.clone() });
+            out.fid_names.push(FidMatch { addr: m.imp, name: label.clone(), by_signature: false });
             if let Some(table) = out.objc_classes.as_mut() {
                 let shown_owner = display_class_name(owner);
                 table.classes.entry(shown_owner).or_default().methods.insert((kind == '+', m.selector.clone()), (label.clone(), m.imp));

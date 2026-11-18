@@ -78,7 +78,6 @@ c01f400000000000c01f400000000000d01f400000000000d023400000000000c023400000000000
   <com>decompile</com>
   <com>print C</com>
   <com>option crossjumprevert off</com>
-  <com>option taildup off</com>
   <com>option gotoreduce off</com>
   <com>option returndup off</com>
   <com>lo fu normal_ignoreSectionTok</com>
@@ -89,7 +88,6 @@ c01f400000000000c01f400000000000d01f400000000000d023400000000000c023400000000000
   <com>decompile</com>
   <com>print C</com>
   <com>option crossjumprevert on</com>
-  <com>option taildup on</com>
   <com>option gotoreduce on</com>
   <com>option returndup on</com>
   <com>lo fu normal_getAtts</com>

@@ -1,14 +1,13 @@
 //! (kuna) The one place an Objective-C runtime class name becomes the name
 //! kuna shows: a Swift class registers with the runtime as `_TtC6Toyota3Foo`,
-//! and under `swiftdemangle` every rendering of it — method labels, the
-//! instance struct, `@"…"` pointer types, ivar offset symbols — says
-//! `Toyota.Foo`. Lookups between the ObjC tables keep the runtime spelling.
+//! and every rendering of it — method labels, the instance struct, `@"…"`
+//! pointer types, ivar offset symbols — says `Toyota.Foo`. Lookups between the ObjC tables keep the runtime spelling.
 
 /// The class name kuna renders: the Swift demangling of an ObjC runtime name
-/// (`_TtC6Toyota3Foo` → `Toyota.Foo`) when `swiftdemangle` is on and the name
-/// is in the demangler's coverage, else the runtime spelling as is.
+/// (`_TtC6Toyota3Foo` → `Toyota.Foo`) when the name is in the demangler's
+/// coverage, else the runtime spelling as is.
 pub fn display_class_name(runtime_name: &str) -> String {
-    if is_swift_runtime_name(runtime_name) && kuna_decomp::kuna_swiftdemangle::swiftdemangle_enabled() {
+    if is_swift_runtime_name(runtime_name) {
         if let Some(d) = crate::demangle::kuna_swift::demangle_swift_name(runtime_name) {
             return d;
         }

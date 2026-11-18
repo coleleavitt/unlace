@@ -78,7 +78,7 @@
 //! replay, `Heritage::guard_calls` treats only ABI output storage at that exact
 //! call as unaffected (only for an actual `KILLEDBYCALL`, and never across an
 //! explicit effect override). The same non-destructive marker handoff also runs
-//! when `calleeretpreserves` is on and the exact checker is declared and locked
+//! when the exact checker is declared and locked
 //! `void`: it retains ABI output but leaves the checker and all cookie algebra
 //! visible. No generic callee-body claim is made, so a failure tail containing
 //! nested calls remains conservative. The normal SSA construction can then
@@ -447,6 +447,14 @@ fn cookie_check_calls(
     found
 }
 
+/// Does the call's model state how much it pops? An x86-32 Windows checker's
+/// pop is only the stack solver's guess, and deleting the call re-solves the
+/// frame without it, which moves every stack argument around it.
+fn pop_is_stated(data: &Funcdata, op: OpId) -> bool {
+    data.get_call_specs_index(op)
+        .is_some_and(|i| data.get_call_specs(i).get_extra_pop() != crate::fspec::EXTRAPOP_UNKNOWN)
+}
+
 /// (kuna) Strip the MSVC `/GS` frame-cookie check and its entry-side init
 /// (option `msvcstackguard`, default off).
 pub struct ActionStripMsvcStackGuard {
@@ -482,12 +490,6 @@ impl Action for ActionStripMsvcStackGuard {
 
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         let strip = self.enabled || data.get_arch().strip_msvc_stack_guard;
-        // `calleeretpreserves` also consumes the exact cookie mark for a locked
-        // void declaration. It preserves the caller's ABI return storage but
-        // leaves the check and all cookie algebra intact.
-        if !strip && !data.get_arch().callee_ret_preserves {
-            return 0;
-        }
         if data.num_calls() == 0 {
             return 0;
         }
@@ -504,7 +506,7 @@ impl Action for ActionStripMsvcStackGuard {
             data.set_restart_pending(true);
             return 0;
         }
-        let Some((op, inits)) = calls.into_iter().next() else { return 0 };
+        let Some((op, inits)) = calls.into_iter().find(|(op, _)| pop_is_stated(data, *op)) else { return 0 };
         let site = data.obank().get(op).expect("cookie checker op").get_addr().clone();
         if !data.get_override().is_msvc_cookie_call(&site) {
             data.get_override_mut().insert_msvc_cookie_call(site);

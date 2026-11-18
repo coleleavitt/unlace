@@ -12,17 +12,25 @@
 //!   kuna fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>
 //! ```
 //!
-//! `--lang` / `--cspec` are authoritative: they are written verbatim into the
-//! `.fid` header (the matching pass refuses a program whose language id differs).
+//! `--lang` / `--cspec` are written verbatim into the `.fid` header. The
+//! matching pass applies a database only to an image whose language has the
+//! header language's processor, address size and instruction byte order
+//! (`kuna_analysis::fid::kuna_fidapply`), so the builder refuses an object whose
+//! own language `--lang` does not apply to: its hashes were computed with the
+//! object's decoder, and the header would send them to the wrong images.
 //! A `.a` archive is unpacked member-by-member (each member is bootstrapped as a
-//! standalone object); a `.o`/linked image is bootstrapped directly.
+//! standalone object, and a member `--lang` does not apply to is skipped, unless
+//! it applies to no member, which refuses the archive); a `.o`/linked image is
+//! bootstrapped directly.
 
 mod archive;
+mod query;
+pub(crate) mod report;
 
 use archive::records_for_archive;
 
 use kuna_analysis::loadimage_object::ObjectLoadImage;
-use kuna_analysis::fid::build::{alias_names, build_records};
+use kuna_analysis::fid::build::build_records;
 use kuna_analysis::fid::db::{FidDb, FidRecord};
 use kuna_console::engine::bootstrap_from_object;
 
@@ -37,7 +45,7 @@ struct BuildArgs {
     cspec: Option<String>,
 }
 
-/// Dispatch `kuna fid <subcommand>`. Currently only `build` exists.
+/// Dispatch `kuna fid <subcommand>`: `build` or `query`.
 pub fn run(argv: &[String]) -> i32 {
     let Some(sub) = argv.first() else {
         eprintln!("kuna fid: missing subcommand (try `kuna fid build ...`)");
@@ -46,6 +54,7 @@ pub fn run(argv: &[String]) -> i32 {
     };
     match sub.as_str() {
         "build" => cmd_build(&argv[1..]),
+        "query" => query::run(&argv[1..]),
         "-h" | "--help" | "help" => {
             usage();
             0
@@ -61,10 +70,20 @@ pub fn run(argv: &[String]) -> i32 {
 fn usage() {
     eprintln!(
         "usage: kuna fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>\n\
+         kuna fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
          \n\
          Generate a kuna `.fid` fingerprint database from a static library or\n\
          object files. --lang is the SLEIGH language id (e.g. x86:LE:64:default),\n\
-         --cspec the compiler-spec id (e.g. gcc); both are written into the header."
+         --cspec the compiler-spec id (e.g. gcc); both are written into the header.\n\
+         A database applies only to an image whose language has the header\n\
+         language's processor, address size and instruction byte order (Ghidra's\n\
+         FID rule; the variant and --cspec do not matter), so build refuses an\n\
+         object whose own language --lang does not apply to.\n\
+         With kuna_fid_db set, a run that does not match against the database\n\
+         (missing, unreadable, invalid, or incompatible with the image) says why on\n\
+         stderr and still exits 0; --json documents list each database under\n\
+         fid_databases [{{path, status, records, language, compiler_spec, reason}}].\n\
+         Query --json emits {{binary, database, address, status, ...}}; multiple addresses use {{binary, database, queries, ...}}."
     );
 }
 
@@ -106,13 +125,11 @@ fn cmd_build(argv: &[String]) -> i32 {
     let spec_roots = spec_roots();
 
     let mut all: Vec<FidRecord> = Vec::new();
-    let mut aliases: Vec<(String, String)> = Vec::new();
     for input in &args.inputs {
-        match records_for_input(input, &spec_roots) {
-            Ok((mut recs, mut al)) => {
+        match records_for_input(input, &spec_roots, &lang) {
+            Ok(mut recs) => {
                 eprintln!("kuna fid build: {input}: {} record(s)", recs.len());
                 all.append(&mut recs);
-                aliases.append(&mut al);
             }
             Err(e) => {
                 eprintln!("kuna fid build: {input}: {e}");
@@ -121,7 +138,6 @@ fn cmd_build(argv: &[String]) -> i32 {
         }
     }
 
-    canonicalize_callees(&mut all, aliases);
     dedup_records(&mut all);
 
     let db = FidDb::from_records(lang, cspec, all);
@@ -137,21 +153,6 @@ fn cmd_build(argv: &[String]) -> i32 {
     );
     0
 }
-
-/// Rewrite each callee recorded under an alias to the name the database keeps
-/// for that function, so a match compares one spelling.
-fn canonicalize_callees(all: &mut [FidRecord], aliases: Vec<(String, String)>) {
-    #[expect(clippy::disallowed_types, reason = "lookup only")]
-    let kept: std::collections::HashMap<String, String> = aliases.into_iter().collect();
-    for (_, name) in all.iter_mut().flat_map(|r| r.callees.iter_mut()) {
-        if let Some(k) = kept.get(name.as_str()) {
-            name.clone_from(k);
-        }
-    }
-}
-
-/// A build's records and its `(alias, kept name)` pairs.
-type Built = (Vec<FidRecord>, Vec<(String, String)>);
 
 /// Keep the first record for each (full hash, specific hash, name), in input order.
 fn dedup_records(all: &mut Vec<FidRecord>) {
@@ -171,39 +172,63 @@ fn dedup_records(all: &mut Vec<FidRecord>) {
 
 /// Build the FID records for one input path: a `.a` archive (each member
 /// bootstrapped separately) or a single object/linked image.
-fn records_for_input(input: &str, spec_roots: &[String]) -> Result<Built, String> {
+fn records_for_input(input: &str, spec_roots: &[String], lang: &str) -> Result<Vec<FidRecord>, String> {
     let bytes = std::fs::read(input).map_err(|e| format!("cannot read: {e}"))?;
     if is_archive(&bytes) {
-        records_for_archive(input, &bytes, spec_roots)
+        records_for_archive(input, &bytes, spec_roots, lang)
     } else {
-        records_for_object_path(input, spec_roots)
+        records_for_object_path(input, spec_roots, lang).map_err(|e| e.to_string())
     }
 }
 
-/// Bootstrap a single object file (at a real path) and build its records.
-fn records_for_object_path(path: &str, spec_roots: &[String]) -> Result<Built, String> {
+/// Why an object yields no records.
+enum ObjectRefusal {
+    /// `--lang` does not apply to the object's own language.
+    Language(String),
+    /// The object could not be loaded.
+    Load(String),
+}
+
+impl std::fmt::Display for ObjectRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjectRefusal::Language(why) | ObjectRefusal::Load(why) => f.write_str(why),
+        }
+    }
+}
+
+/// Bootstrap a single object file (at a real path) and build its records,
+/// refusing an object `lang` does not apply to.
+fn records_for_object_path(
+    path: &str,
+    spec_roots: &[String],
+    lang: &str,
+) -> Result<Vec<FidRecord>, ObjectRefusal> {
     // Bootstrap the architecture from the object (resolves the SLEIGH language,
     // builds the engine, attaches the loadimage). `target = ""` ⇒ derive the
     // language from the object's machine.
     let prog = bootstrap_from_object(path, "", spec_roots)
-        .map_err(|e| format!("bootstrap failed: {e}"))?;
+        .map_err(|e| ObjectRefusal::Load(format!("bootstrap failed: {e}")))?;
     let arch = prog.arch();
+    kuna_analysis::fid::kuna_fidapply::applies(lang, arch).map_err(|reason| {
+        ObjectRefusal::Language(format!("--lang {lang} does not describe this object: {reason}"))
+    })?;
 
     // Re-read the bytes and open a fresh `ObjectLoadImage` for the generator (the
     // same throwaway-loader pattern `commit_pending_analysis` uses for the
     // deferred Listing build — its `image` arg is only used to satisfy the
     // contract; the decode reads through `arch.translate()`).
-    let bytes = std::fs::read(path).map_err(|e| format!("cannot re-read: {e}"))?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| ObjectRefusal::Load(format!("cannot re-read: {e}")))?;
     let image = ObjectLoadImage::from_bytes(path, &bytes)
-        .map_err(|e| format!("loadimage failed: {e}"))?;
+        .map_err(|e| ObjectRefusal::Load(format!("loadimage failed: {e}")))?;
 
-    let records = build_records(
+    Ok(build_records(
         &bytes,
         &image,
         arch,
         arch.translate().as_sleigh().expect("fid build: standalone Sleigh engine"),
-    );
-    Ok((records, alias_names(&image)))
+    ))
 }
 
 /// Is `bytes` a Unix `ar` archive (the `.a` magic `!<arch>\n`)?
@@ -259,17 +284,7 @@ mod tests {
             specific_addl: 2,
             flags: 0,
             name: name.to_string(),
-            callees: Vec::new(),
         }
-    }
-
-    #[test]
-    fn callees_recorded_under_an_alias_take_the_kept_name() {
-        let mut caller = record(1, 1, "caller");
-        caller.callees = vec![(4, "__libc_malloc".into()), (9, "free".into())];
-        let mut all = vec![caller];
-        canonicalize_callees(&mut all, vec![("__libc_malloc".into(), "malloc".into())]);
-        assert_eq!(all[0].callees, [(4, "malloc".into()), (9, "free".into())]);
     }
 
     #[test]

@@ -31,11 +31,8 @@
 //! ## Gating
 //!
 //! Registered ONLY for a Go-detected binary (beside `gopclntab`, and like it
-//! a structural no-op everywhere else). `option gonoreturn on|off`, default
-//! **on**, gates the facts at the commit boundary (the per-pass analysis
-//! gate, `Architecture::analysis_gonoreturn`); `option noreturn_known`
-//! continues to gate only the symbol-table pass, so the two sources stay
-//! separately flippable.
+//! a structural no-op everywhere else). `option noreturn_known` gates the
+//! facts at the commit boundary together with the symbol-table pass.
 
 use crate::loader::noreturn::{name_matches, parse_list};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, NoReturnFact, Phase};
@@ -59,7 +56,7 @@ impl AnalysisPass for GoNoReturnPass {
         let (exact, wildcard) = parse_list(crate::sourcelang::golang_noreturn_list());
         // The same table walk and executable-range admission as `gopclntab`:
         // a corrupt table cannot mark a no-return over data it never names.
-        let exec = ctx.image.executable_ranges();
+        let exec = ctx.image.expect("load-time analysis image").executable_ranges();
         let (funcs, _text_end) = recover_go_table(ctx.file);
         let mut seen = std::collections::HashSet::new();
         for f in funcs {

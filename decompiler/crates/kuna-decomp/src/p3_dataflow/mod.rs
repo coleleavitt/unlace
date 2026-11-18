@@ -4,6 +4,8 @@
 //! `lib.rs` so public paths (`kuna_decomp::<module>`) are unchanged.
 
 pub mod heritage;
+pub(crate) mod kuna_memoryguard;
+pub mod kuna_octeoneffects;
 mod kuna_leafmemory;
 pub(crate) mod kuna_globalcallranges;
 pub(crate) mod kuna_loadguardreads;
@@ -37,7 +39,6 @@ pub mod kuna_mba; // (kuna `mba`) linear mixed boolean-arithmetic simplification
 pub mod kuna_ovlesssimplify;
 pub mod kuna_flagcompare;
 pub mod kuna_arraystride;
-pub mod kuna_condexeplace;
 pub mod kuna_compareform;
 pub mod kuna_segmentize;
 pub mod kuna_indirectanchor; // (kuna) an op inserted after a guard INDIRECT anchors to the op it speaks for
@@ -52,6 +53,7 @@ pub(crate) mod kuna_calleehomes;
 pub(crate) mod kuna_partialglobalload;
 pub(crate) mod kuna_stackstoreguard;
 pub(crate) mod kuna_stackbytecopy;
+pub(crate) mod kuna_repframecopy;
 pub(crate) mod kuna_spillstoreguard;
 pub mod kuna_tiedstorekeep;
 pub mod kuna_loopcounterstore;

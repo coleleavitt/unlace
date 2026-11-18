@@ -103,7 +103,7 @@ impl AnalysisPass for UefiPass {
         if entry != 0 {
             if let Some(pieces) = efi.pieces("_ModuleEntryPoint", decl) {
                 out.symbols.push(SymFact { addr: entry, name: "_ModuleEntryPoint".to_string(), kind: SymKind::Function });
-                out.fid_names.push(FidMatch { addr: entry, name: "_ModuleEntryPoint".to_string() });
+                out.fid_names.push(FidMatch { addr: entry, name: "_ModuleEntryPoint".to_string(), by_signature: false });
                 out.prototypes_at.push((entry, pieces));
             }
         }
@@ -167,7 +167,7 @@ impl AnalysisPass for UefiPass {
                         };
                         pieces.outtype = Some(getter.clone());
                         out.symbols.push(SymFact { addr, name: (*name).to_string(), kind: SymKind::Function });
-                        out.fid_names.push(FidMatch { addr, name: (*name).to_string() });
+                        out.fid_names.push(FidMatch { addr, name: (*name).to_string(), by_signature: false });
                         out.prototypes_at.push((addr, pieces));
                     }
                 }

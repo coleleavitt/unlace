@@ -2007,7 +2007,6 @@ impl Funcdata {
         default_target: &Address,
         signed_labels: bool,
         prefer_head_operand: bool,
-        check_values: bool,
     ) -> KunaResult<Option<(usize, bool)>> {
         use kuna_base::types::uintb;
 
@@ -2027,8 +2026,7 @@ impl Funcdata {
         // out-edge, a representative case label (the printer emits one `case` per
         // address-table entry; duplicate-valued cases collapse to the same edge,
         // and the C++ trivial recovery emits one label per edge).
-        // (kuna `loweredswitchexact`) keeps every label of a shared body instead.
-        let all_labels = self.get_arch().lowered_switch_exact;
+        // (kuna `loweredswitchexact`) every label of a shared body is kept instead.
         let mut out_targets: Vec<Address> = Vec::new();
         let mut out_labels: Vec<Vec<uintb>> = Vec::new();
         let mut out_is_default: Vec<bool> = Vec::new();
@@ -2038,9 +2036,7 @@ impl Funcdata {
                 continue; // a case that coincides with the default folds away
             }
             if let Some(k) = out_targets.iter().position(|a| a == tgt) {
-                if all_labels {
-                    out_labels[k].push(case_vals[i]);
-                }
+                out_labels[k].push(case_vals[i]);
                 continue; // duplicate target: one out-edge
             }
             out_targets.push(tgt.clone());
@@ -2073,9 +2069,9 @@ impl Funcdata {
         if self.kuna_lowered_switch_strands_table(head, &out_blocks) {
             return Ok(None);
         }
-        // (kuna `loweredswitchexact`, and every later-head record) Nothing a deleted
-        // compare block writes may be read again on the raw p-code this edits.
-        if check_values && !crate::p2_lift::kuna_loweredswitchexact::raw_install_keeps_values(self, head, &out_blocks) {
+        // (kuna `loweredswitchexact`) Nothing a deleted compare block writes may be
+        // read again on the raw p-code this edits.
+        if !crate::p2_lift::kuna_loweredswitchexact::raw_install_keeps_values(self, head, &out_blocks) {
             return Ok(None);
         }
 
@@ -2096,7 +2092,7 @@ impl Funcdata {
         // (kuna `loweredswitchvalue`) Prefer what the head compare itself reads:
         // `var_addr` need not hold the compared value at the head.
         use crate::p2_lift::kuna_loweredswitchvalue::{head_compare_operand, HeadOperand};
-        let head_operand = if prefer_head_operand && self.get_arch().lowered_switch_value_check {
+        let head_operand = if prefer_head_operand {
             head_compare_operand(self, head, cbranch, var_addr, var_size)
                 .filter(|op| *op != HeadOperand::Storage(var_addr.clone()))
         } else {
@@ -2442,29 +2438,6 @@ impl Funcdata {
     /// through the return-address register (the jump-table `fail_return` mode).
     /// `glb.default_return_addr == None` (C++ `space == 0`, no standard return
     /// storage in the cspec) yields `false`, exactly as the C++ does.
-    pub fn is_userop_formed(&self, vn: VarnodeId, userop: uint4) -> bool {
-        let mut cur = vn;
-        while self.vbank().get(cur).map(|v| v.is_written()).unwrap_or(false) {
-            let Some(o) = self.vbank().get(cur).unwrap().get_def().and_then(|op| self.obank().get(op)) else {
-                return false;
-            };
-            match o.code() {
-                OpCode::CPUI_CALLOTHER => {
-                    return o
-                        .get_in(0)
-                        .and_then(|v| self.vbank().get(v))
-                        .is_some_and(|v| v.is_constant() && v.get_offset() == userop as u64);
-                }
-                OpCode::CPUI_INDIRECT | OpCode::CPUI_COPY => match o.get_in(0) {
-                    Some(v) => cur = v,
-                    None => return false,
-                },
-                _ => return false,
-            }
-        }
-        false
-    }
-
     pub fn test_for_return_address(&self, vn: VarnodeId) -> bool {
         let retaddr = match self.get_arch().default_return_addr.as_ref() {
             Some(rd) => rd,
@@ -2645,11 +2618,6 @@ impl Funcdata {
         let in0 = partial.obank().get(partop).unwrap().get_in(0).unwrap();
         if partial.test_for_return_address(in0) {
             return RecoveryMode::FailReturn;
-        }
-        if let Some(trap) = partial.get_arch().brk_userop {
-            if partial.is_userop_formed(in0, trap) {
-                return RecoveryMode::FailCallother;
-            }
         }
 
         // Recover addresses into the table (clone the table out, recover, store).

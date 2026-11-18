@@ -712,7 +712,7 @@ fn text_section_start(file: &object::File) -> u64 {
 /// The sorted entry PCs of every function the image's pclntab describes; empty
 /// when there is no table.
 ///
-/// The fast inventory walk drops these from its roots (`gowalkprune`). The
+/// The fast inventory walk drops these from its roots. The
 /// table names each of them and gives its extent, so the inventory already
 /// holds them, and on a PE, where every one also has a `.pdata` record, walking
 /// them from there decodes the whole Go text only to re-find the same set.
@@ -748,7 +748,7 @@ impl AnalysisPass for GoPclntabPass {
         // Format-neutral: the three formats share the `pcHeader`/`functab` layout. An
         // entry is admitted only inside executable bytes, so a corrupt table cannot
         // mint a function over data.
-        let exec = ctx.image.executable_ranges();
+        let exec = ctx.image.expect("load-time analysis image").executable_ranges();
         let (funcs, text_end) = recover_go_table(ctx.file);
         let mut funcs: Vec<GoFunc> = funcs.into_iter().filter(|f| exec_end(&exec, f.addr).is_some()).collect();
         funcs.sort_unstable_by_key(|f| f.addr);

@@ -21,6 +21,7 @@
 <script>
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-cli/tests/fixtures/gortti/shapes_go116</com>
+  <com>option gotypeglobals off</com>
   <com>option gortti off</com>
   <com>read symbols</com>
   <com>load function main.mk</com>
@@ -31,6 +32,7 @@
   <com>print C</com>
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-cli/tests/fixtures/gortti/shapes_go116</com>
+  <com>option gotypeglobals off</com>
   <com>option gortti on</com>
   <com>read symbols</com>
   <com>load function main.mk</com>
@@ -41,6 +43,7 @@
   <com>print C</com>
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-cli/tests/fixtures/gortti/shapes_go126</com>
+  <com>option gotypeglobals off</com>
   <com>option gortti off</com>
   <com>read symbols</com>
   <com>load function main.mk</com>
@@ -51,6 +54,7 @@
   <com>print C</com>
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-cli/tests/fixtures/gortti/shapes_go126</com>
+  <com>option gotypeglobals off</com>
   <com>option gortti on</com>
   <com>read symbols</com>
   <com>load function main.mk</com>

@@ -113,6 +113,6 @@ fn emit(c: &DextClass, out: &mut AnalysisOutput) {
         let name = format!("{}_New", c.name);
         out.entries.push(c.new);
         out.symbols.push(SymFact { addr: c.new, name: name.clone(), kind: SymKind::Function });
-        out.fid_names.push(FidMatch { addr: c.new, name });
+        out.fid_names.push(FidMatch { addr: c.new, name, by_signature: false });
     }
 }

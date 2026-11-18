@@ -20,8 +20,8 @@
 //! whatever the user asked for. So the gate is a process environment variable
 //! ([`LIBCTYPES_ENV`]), consulted by the pass and by the declared-name lookup,
 //! exported by the `kuna decompile`/`decompile-all` CLI before the load and set
-//! by the console's `option libctypes …` arm, exactly as the sibling
-//! `dwarfstructs`/`typedepth` gates do. The companion
+//! by the console's `option libctypes …` arm, exactly as the other load-time
+//! gates do. The companion
 //! `Architecture::analysis_libctypes` bool keeps the option catalog-visible and
 //! makes `phase catalog`'s live `current` field reflect it.
 //!
@@ -78,14 +78,8 @@ pub enum LibcTypesLayout {
 /// validator — `Architecture::set_kuna_option` rejects a bad value at the
 /// `option` line, where the operator can see it.
 pub fn libctypes_layout() -> LibcTypesLayout {
-    match std::env::var(LIBCTYPES_ENV) {
-        Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
-            "off" | "0" | "false" => LibcTypesLayout::Off,
-            "glibc" => LibcTypesLayout::Glibc,
-            _ => LibcTypesLayout::Opaque,
-        },
-        Err(_) => LibcTypesLayout::Opaque, // unset => default-on, opaque
-    }
+    crate::kuna_loadoptions::scoped(|o| o.libctypes)
+        .unwrap_or_else(crate::kuna_loadoptions::env::libctypes)
 }
 
 /// Whether the named libc aggregate types are enabled for this process.
@@ -105,7 +99,7 @@ pub const AGGREGATE_NAMES: &[&str] = &[
     "utmpx",
 ];
 
-/// Bridge a `set_kuna_option("libctypes", val)` choice to [`LIBCTYPES_ENV`] so a
+/// Export a `set_kuna_option("libctypes", val)` choice to [`LIBCTYPES_ENV`] so a
 /// later `load file` in the *same* process sees it (the interactive
 /// `option libctypes glibc` before `load file` path; the CLI sets the env var on
 /// the subprocess directly).

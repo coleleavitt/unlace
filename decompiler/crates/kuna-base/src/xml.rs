@@ -1640,8 +1640,8 @@ mod tests {
         // ghangr-ifelseflatten / ifelseflatten,
         // switchsharedcase-b2sum / switchsharedcase,
         // ghangr-who-condensing-opt-reversion-72e518 / crossjumprevert,
-        // ghangr-morton-my-message-callback-bfd2fa / taildup (return tail with a call),
-        // ghangr-true-1804-dedup-ite-tail-8a690c / dedupitetail (the INVERSE of taildup:
+        // ghangr-morton-my-message-callback-bfd2fa / gotoreduce on (return tail with a call),
+        // ghangr-true-1804-dedup-ite-tail-8a690c / dedupitetail (the INVERSE of gotoreduce:
         // merge a duplicated if/else leaf prefix/suffix),
         // ghangr-setlocale-rettype / DIV-11,
         // ghangr-noreturn_extern / noreturn_extern, angr test_tail_tail_bytes_ret_dup,
@@ -1714,10 +1714,10 @@ mod tests {
         // and ghdec-returncopysplit / the read-only output gate on a datatype
         // copy split (a cloned heritage return-copy printed per-element stores
         // into a .rodata string literal)
+        // and ghdec-peimportcall / PE import-call binding (a `call [IAT slot]` is
+        // named and carries the import's no-return effect)
         // and ghdec-itecondlist / the ITE condition-list tolerance (a run of N
         // identical assignment diamonds re-rolls N, not ceil(N/2))
-        // and ghdec-peimportcall / PE import-call binding (option off leaves a
-        // `call [IAT slot]` as an unnamed `(*dat_...)()` with no no-return effect)
         // and ghdec-undefname / no `$$undef` placeholder survives the naming pass
         // (an identifier containing `$$`, and one stack Symbol split across two names)
         // and ghdec-cspecprotos / the cspec's named prototype models are registered
@@ -1747,8 +1747,7 @@ mod tests {
         // the foldcallret indirect-read barrier (an out-parameter copy printed
         // above the call that fills it, so freecon consumed the pre-call NULL)
         // and gh182-loadguardrange / the ValueSet refinement of indexed-stack
-        // guards sizes a stack array by its real index bound (option off = the
-        // 4-element cap with split-off never-assigned tail scalars)
+        // guards sizes a stack array by its real index bound
         // and gh275-spillargtrial / caller-save spill tolerance in input-trial
         // scoring (option off drops the first atan2 call's second argument to
         // the `movapd [rsp+0x20],xmm1` spill, on recovers it)
@@ -1827,8 +1826,7 @@ mod tests {
         // syscall() with empty parens and a wrapper returning its own syscall
         // number) (repipe r12)
         // and kuna-splitstorekeep / a 31-byte stack-to-stack copy whose middle
-        // two 8-byte stores overlap keeps them (option off = the head store and
-        // the tail store with the fifteen bytes between them gone) (repipe r12)
+        // two 8-byte stores overlap keeps them (repipe r12)
         // and kuna-entrythumbflow / bounded Thumb context from a TE entry
         // and kuna-callretpair / a call whose cspec output rule asked for a
         // register pair gets that pair (repipe r12)
@@ -2111,93 +2109,33 @@ mod tests {
         // and kuna-ppc-lwarx-reservation / PowerPC lwarx sets the reservation its stwcx. checks
         // and kuna-ppc64-ldarx-encoding / generic PowerPC ldx and ldarx decode at their own opcodes
         // and kuna-sparc-delay-condition / a flag-writing delay slot cannot change its branch
-        // and kuna-objcrefs / ObjC selector, class and super reference slots and `__objc_stubs` named and folded
-        // and kuna-objcmeta / ObjC categories, protocols and ivar structs (option objcivars)
-        // and kuna-objcsdk / ObjC method signatures read from SDK headers (option objcsdk)
-        // and kuna-objctypes / ObjC getters, setters and ivars typed by the class their property names
-        // and kuna-ptrauthtrap / arm64e pointer-auth failure checks dropped
-        // and kuna-authptrcall / arm64e calls through __auth_ptr named
-        // and kuna-swiftdemangle / Swift symbols and ObjC runtime class names demangle
-        // and kuna-swiftmetadata / stripped Swift functions named from the swift5_* metadata
-        // and kuna-importdata / a data read through an import slot renders as the import
-        // and kuna-elfgotimports / an ELF GOT data import renders as the import
-        // and kuna-cfstrings / a Mach-O __cfstring reference renders its string literal
-        // and kuna-kernelcache / IMG4 + MH_FILESET kernelcache loading
-        // and kuna-unwindstarts / a stripped Mach-O's __unwind_info starts join the inventory
-        // and kuna-dyldcrossrefs / a dyld shared cache image names its calls into other images
-        // and kuna-dedupitetail-gototarget / a goto into an unwrapped if clause keeps its target
-        // and kuna-swiftcall / Swift methods take self and throwing calls keep their error
-        // and kuna-swiftclassnames / a Swift class's struct and pointers under its demangled name
-        // and kuna-dex / a DEX file's constant pool, entry copies and sparse switches
-        // and kuna-dex-apk / an APK's classes*.dex files mapped one after another
-        // and kuna-dex-javanew / an allocation and its <init> call as new T(args)
-        // and kuna-gotonext / a goto to the next statement, a case fall-through, a loop or switch exit
-        // and kuna-rangefold / a test or mask a dominating branch's range decides
-        // and kuna-pow2select + kuna-pow2select-aarch64 / x / 2^k and x % 2^k written as a select
-        // and kuna-whilecontinue / a jump to a do-while test continues
-        // and kuna-iokitclasses / IOKit class and vtable recovery
-        // and kuna-kernelcache-merge / several kernel-collection entries in one image
-        // and kuna-xnutables / kalloc_type views and external-method tables
-        // and kuna-osclassinfo / DriverKit class records
-        // and kuna-arm64evcall / arm64e virtual calls by pointer-auth discriminator
-        // and kuna-outlined / the Darwin stack probe and MachineOutliner fragments
-        // and kuna-a64-sysregs / AArch64 system-register names and Apple instructions
-        // and kuna-machoehframe / a stripped Mach-O's __eh_frame FDE starts join the inventory
-        // and kuna-machobinds / a Mach-O pointer slot filled by a bind is named for its import
-        // and kuna-exporttrie / Mach-O export tries name stripped exports and cross-image imports through re-exports
-        // and kuna-dyldcompanion / companion images join a dyld cache rebuild
-        // and kuna-repstring / rep movs/stos loops print as memcpy/memset
-        // and kuna-copyrun / unrolled element copies print as memcpy
-        // and kuna-arithhelpers / 32-bit arithmetic runtime helpers print as C operators
-        // and kuna-contextnames / loop counters and returned locals are named
-        // and kuna-formatcallees / undeclared format functions are typed from their formats
-        // and kuna-objcarc / Objective-C ARC bookkeeping hidden behind call-fixups
-        // and kuna-objcresolve / a message send typed and resolved by its receiver
-        // and kuna-objcstructs / by-value aggregates in ObjC encodings and global blocks
-        // and kuna-objcblocks / a stack block's invoke named after its creator and typed
-        // and kuna-calleeretpurge / a callee's `ret imm16` is the call's extrapop
-        // and kuna-switchtrim / an unguarded jump table is read until its layout ends
-        // and kuna-tailcontract / a tail-calling thunk sees its callee's prototype in a single decompile
-        // and kuna-calleeretpurge-x86 / the personal/x86-stack calleeretpurge test, kept beside bugs-misc's
-        // and kuna-dyldcacheobjc / a dyld shared cache image's ObjC metadata through the cache
-        // and kuna-stackexitanchor / the epilogue settles an unknown callee's purge
-        // and kuna-condfold-default / condfold on by default keeps a loop test
-        // and kuna-linearswitch / a linear equality chain re-rolls into a switch
-        // and kuna-cmpmerge / two comparisons of the same operands merge into one
-        // and kuna-gotosink / backward gotos become loops, a jump over a run becomes an if
-        // and kuna-p69 / latecse, implweight and dirtypool keep the gotonext fixture's output
-        // and kuna-unmergecall / gcc -Os cross-jumped call tails
-        // and kuna-prelinked / pre-fileset kernelcaches: threaded pointers rebased, a kext cut out
-        // and kuna-dedupitetail-switchgoto / a switch case goto into an unwrapped if clause keeps its target
-        // and kuna-vaarg-loop-gcc/-clang / va_arg in loops on a promoted va_list
-        // and kuna-vtabletypes / C++ virtual calls through typed vtable slots
         // and kuna-stacksolver-unsolved / a 16-bit stack solution of 65535 is solved once
         // and kuna-bejoin-evidence-pairs / a long long loaded or carried across a call joins
         // high word first (option bejoin off = swapped)
-        // and kuna-prunedssa / heritage markers only where a range is live (options prunedssa, readonlycalls)
+        // and kuna-prunedssa / heritage markers only where a range is live (option readonlycalls)
         // and kuna-lanedivide-terminator / a terminating SUBPIECE of an upper-lane piece
         // and kuna-x86-16-real-rel16 + kuna-x86-16-protected-rel16 / 16-bit near branches keep their segment
-        // and kuna-segmentize / x86 real-mode accesses go through the segment op (option segmentize)
+        // and kuna-segmentize / x86 real-mode accesses go through the segment op
         // and kuna-calleepop-x86-16 / a near call is credited the two bytes it stores
         // and kuna-returnglobal-sparc / a global in %o1 is not joined into an int's return
         // and kuna-segmentize-z80 / a Z80 table with a row outside the image is still followed
-        // and kuna-loadguardreads / LOAD guards read while renaming (option loadguardreads)
+        // and kuna-loadguardreads / LOAD guards read while renaming
         // and kuna-dedup-goto-arm / a goto into an arm unwrapped by a suffix hoist keeps a live target
         // and kuna-bejoin-callers / a long long whose callers read both registers joins
         // high word first (option bejoin evidence = swapped)
         // and kuna-x86-16-fpuemu / the 8087 emulator's INT 34h-3Dh decode as x87 (option fpuemu)
         // and kuna-retsplitlimit / a return block too costly to clone keeps its gotos (option retsplitlimit)
-        // and kuna-deadwaves / a pass after a removal-only pass visits only what it touched (option deadwaves)
-        // and kuna-earlyrestart / a pass stops at a dead-code delay bump and restarts at once (option earlyrestart)
+        // and kuna-deadwaves / a pass after a removal-only pass visits only what it touched
+        // and kuna-earlyrestart / a pass stops at a dead-code delay bump and restarts at once
         // and kuna-duplabels / two copies of one block print distinct labels
         // and kuna-pltlocal / a call through a bound PLT stub takes the definition's prototype
         // and kuna-floatstore / a float stored into unknown bytes is a float store
-        // and kuna-haltloopguard / a store before a loop the function never leaves is kept (option haltloopguard)
+        // and kuna-haltloopguard / a store before a loop the function never leaves is kept
         // and kuna-lanedivide-freefanout / a lane split giving a free varnode two readers is refused, not fatal
         // and kuna-octeon-core / explicit Octeon integer variants
-        // and kuna-truncptrflow / pointer flow on a truncated address space (option truncptrflow)
+        // and kuna-truncptrflow / pointer flow on a truncated address space
         // and kuna-retcopyclone / a cloned return block does not store a global a second time
-        // and kuna-switchrunon / an unguarded jump table stops where its rows leave the function (option switchrunon)
+        // and kuna-switchrunon / an unguarded jump table stops where its rows leave the function
         // and kuna-revisitrefine / refining a range a later heritage pass revisited
         // and kuna-wrapsplit + kuna-wrapsplit-be / accesses that run past the top of their space
         // and kuna-relocobj-ppc-mips / PowerPC and MIPS relocatable objects' calls and addresses
@@ -2205,15 +2143,14 @@ mod tests {
         // and kuna-funcstart-symbolextent / no pattern or gap start inside a sized function symbol
         // and kuna-relocrebase-be / a big-endian object's analysis facts at its load addresses
         // and kuna-bejoin-mipsclang / a proven pair whose low word feeds its high word stays whole
-        // and kuna-mipsgot-local / MIPS GOT slots of what the image defines (option dynrelocs)
+        // and kuna-mipsgot-local / MIPS GOT slots of what the image defines
         // and kuna-funcstart-symbolextent / no pattern or gap start inside a sized function symbol
-        // and kuna-mipsunaligned / a MIPS unaligned pair lifts as one access (option mipsunaligned)
+        // and kuna-mipsunaligned / a MIPS unaligned pair lifts as one access
         // and ghangr-rust-null-pointer / Rust null-constructor expressions
         // and ghangr-joined-callback-return / a callback's joined return components
         // and kuna-bejoinpass / a big-endian pair a call hands back is one value (option bejoinpass)
         // and kuna-gottailcall / a one-destination jump through an extern's slot is a tail call
         // and kuna-persistcalls / a persistent global's guards next to its accesses (option persistcalls)
-        // and kuna-segmentize-bios / a real-mode BIOS reset path through the segment op
         // and kuna-dyldcrossrefs / a dyld shared cache image names its calls into other images
         // and kuna-cfstrings / a Mach-O __cfstring reference renders its string literal
         // and kuna-dedupitetail-gototarget / a goto into an unwrapped if clause keeps its target
@@ -2235,16 +2172,50 @@ mod tests {
         // and kuna-elf-unwind-pcread / a PowerPC PC read keeps its FDE-owned body
         // and kuna-e500-call-slots / e500 scalar call slots inside 64-bit registers (option calloverlap)
         // and kuna-deadcascade / dead-op removal takes a dead chain out at once (option deadcascade)
-        // and kuna-copywaves / copy propagations seed rule-pool waves (option copywaves)
+        // and kuna-copywaves / copy propagations seed rule-pool waves
         // and kuna-stubtailcall / a loader-proven lazy-binding stub flowed as a tail call
         // and kuna-gotimportproto / a type-only declaration bound at a MIPS GOT import call
         // and kuna-aggregatefields / declared records kept whole until their fields are named
-        // and kuna-copywaves / copy propagations seed rule-pool waves (option copywaves)
-        // and kuna-armderef / the ARM pointer-access xref option parses and is inert on the console path
+        // and kuna-bejoin-residue / -O0 reloads, a pair passed to a 64-bit runtime routine, a whole wrapper's sign test (option bejoin)
+        // and kuna-armderef / the ARM pointer-access xref rule is inert on the console path
+        // and kuna-copywaves / copy propagations seed rule-pool waves
         // and kuna-deadcascade / dead-op removal takes a dead chain out at once (option deadcascade)
-        // and kuna-armpltslot, -armcondskip / the ARM xref options parse and are
-        // inert on the console path
-        assert_eq!(count, 841, "corpus file count drifted");
+        // and kuna-armpltslot, -armcondskip / the ARM xref rules are inert on the
+        // console path
+        // and kuna-gowbphi / shared and phi-feeding barrier arms fold post-SSA (same option)
+        // and kuna-poolfallthru / a call followed by its literal pool does not return (option funcboundflow)
+        // and kuna-stackpointerretype / a retyped pointer into a re-laid frame keeps its readers
+        // and kuna-opaquepointerretype / a retype to a pointer to a bodiless record keeps its local
+        // and kuna-prefixed-noreturn / a <prefix>__<runtime name> stub is no-return (option noreturn_known)
+        // and kuna-octeon-atomics-n32 + kuna-octeon-atomics-n64 / Octeon atomic, reservation and barrier effects retained
+        // and kuna-octeoneffects / Octeon memory effects are controlled by option octeoneffects
+        // and kuna-mipsreloc-chains / composed MIPS relocation expressions
+        // and kuna-swiftstrobj / a Swift string object prints as an address, not
+        // as the literal 32 bytes before it
+        // and kuna-msvcftolsig / stripped MSVC __ftol helpers recognized by their bytes
+        // and kuna-iltentry / an MSVC incremental-link table's stubs and bodies are entries
+        // and kuna-x87intrinsics / the MSVC x87 one-operand intrinsics take their operand in ST0
+        // and kuna-calleereginputs / an x86-32 callee's register inputs read off its own code
+        // and kuna-chkstkdarwin / the Darwin AArch64 stack probe keeps the
+        // argument registers it preserves (option chkstkdarwin)
+        // and kuna-brktrap / an AArch64 compiler trap ends the flow
+        // and kuna-calleepurge / an x86-32 callee's stack purge read off its own returns
+        // and kuna-calleeargs / an x86-32 callee's own code bounds its stack arguments
+        // and kuna-fcvtround-a64 / AArch64 FCVT and FRINT round in their own mode
+        // and kuna-repframecopy / a by-value argument copied with rep movs reaches its call
+        // and kuna-libcnames-win32 / a local takes the name of the Win32 call it meets
+        // and kuna-libcnames-addr / a stack object takes the name of the library parameter its address meets
+        // and kuna-sparc64-or-masked-spill / a spill read through an OR-masked frame address is kept
+        // and kuna-sparc64-hiddenret-slot-locals / a SPARC64 local in the unused hidden-return slot keeps its symbol
+        // and kuna-ppc64le-elfv2-stack-args / an ELFv2 stack argument follows the 32-byte header
+        // and kuna-stackchklocal / __stack_chk_fail_local takes no arguments and never returns
+        // and kuna-mipsgot-weak / unresolved weak GOT entries retain import-slot identity
+        // and kuna-stackcookie / the MSVC frame cookie is no call's argument
+        // and kuna-x86-directalias / a call keeps an argument a later direct stack store sits below
+        // and kuna-x86-directalias-freed / and does so after an earlier call stops taking that pointer
+        // and kuna-itaniumvfunc / an Itanium virtual method named after the function, not its vtable
+        // and kuna-itaniumctors / Itanium constructors and destructors named from their vptr stores
+        assert_eq!(count, 875, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

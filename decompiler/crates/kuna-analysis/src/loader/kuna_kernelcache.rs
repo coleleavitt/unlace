@@ -15,6 +15,8 @@ use kuna_decomp::kuna_kernelcache::KernelcacheChoice;
 
 use crate::rtti::kuna_arm64evcall::SignedImage;
 
+pub use fileset::FilesetMap;
+
 mod fileset;
 mod lzfse;
 mod lzss;
@@ -38,13 +40,15 @@ fn decode_limit(input_len: usize, declared: Option<usize>) -> usize {
     declared.map_or(cap, |d| d.min(cap))
 }
 
-/// The loadable image after [`peel`], plus a one-line note on what was done.
+/// The loadable image after [`peel`], a one-line note on what was done, and the
+/// collection's entry map when an `MH_FILESET` entry was cut out.
 pub struct Peeled {
     pub bytes: Vec<u8>,
     pub note: Option<String>,
     /// A kernel collection's signed pointer slots, whose signing context the
     /// applied fixups no longer carry in `bytes`.
     pub signed: Option<SignedImage>,
+    pub fileset: Option<FilesetMap>,
 }
 
 /// Whether `bytes` is an IMG4 / IM4P container or a bare compressed payload.
@@ -53,10 +57,16 @@ pub fn is_container(bytes: &[u8]) -> bool {
 }
 
 /// Unwrap a container and select one fileset entry, per `choice`. Input that is
+/// Is `bytes` a pre-fileset (prelinked) kernelcache, whose threaded or chained
+/// pointers [`peel`] rebases in an owned copy?
+pub fn is_prelinked(bytes: &[u8]) -> bool {
+    fileset::is_prelinked(bytes)
+}
+
 /// neither a container nor an `MH_FILESET` comes back unchanged.
 pub fn peel(bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<Peeled, String> {
     if *choice == KernelcacheChoice::Off {
-        return Ok(Peeled { bytes, note: None, signed: None });
+        return Ok(Peeled { bytes, note: None, signed: None, fileset: None });
     }
     let mut notes = Vec::new();
     let bytes = if is_container(&bytes) {
@@ -66,17 +76,17 @@ pub fn peel(bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<Peeled, String
     } else {
         bytes
     };
-    let (bytes, signed) = if fileset::is_fileset(&bytes) {
-        let (image, note, signed) = fileset::extract(bytes, choice)?;
+    let (bytes, signed, map) = if fileset::is_fileset(&bytes) {
+        let (image, note, signed, map) = fileset::extract(bytes, choice)?;
         notes.push(note);
-        (image, (!signed.slots.is_empty()).then_some(signed))
+        (image, (!signed.slots.is_empty()).then_some(signed), map)
     } else {
         let (image, note) = fileset::legacy(bytes, choice)?;
         notes.extend(note);
-        (image, None)
+        (image, None, None)
     };
     let note = (!notes.is_empty()).then(|| notes.join("; "));
-    Ok(Peeled { bytes, note, signed })
+    Ok(Peeled { bytes, note, signed, fileset: map })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

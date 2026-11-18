@@ -295,8 +295,7 @@ fn console_load_raw_preserves_whitespace_in_final_filename() {
 /// (kuna #1288) A raw x86 real-mode image states its code segment when one
 /// segment holds it: CS 0 in the first 64 KiB, else its base paragraph. A near
 /// CALL wraps IP inside that segment and pushes IP; a larger image states none
-/// and takes the linear sum above 64 KiB. The default `segmentize` folds the
-/// push into the frame, so the pushed IP is read with the option off.
+/// and takes the linear sum above 64 KiB.
 #[test]
 fn raw_real_mode_images_decode_near_calls_in_their_code_segment() {
     let image = |size: usize, code: &[(usize, &[u8])]| {
@@ -307,7 +306,7 @@ fn raw_real_mode_images_decode_near_calls_in_their_code_segment() {
         bytes
     };
     let ret7: &[u8] = &[0xb8, 0x07, 0x00, 0xc3];
-    let cases: [(&str, u64, Vec<u8>, u64, u64, &str); 3] = [
+    let cases: [(&str, u64, Vec<u8>, u64, u64); 3] = [
         // CS 0: IP 0x0103 - 0x7000 wraps to 0x9103.
         (
             "raw-x86-com",
@@ -315,28 +314,25 @@ fn raw_real_mode_images_decode_near_calls_in_their_code_segment() {
             image(0x9007, &[(0, &[0xe8, 0x00, 0x90, 0xc3]), (0x9003, ret7)]),
             0x100,
             0x9103,
-            "= 0x103;",
         ),
-        // C800:FFF0: IP 0xfff3 + 0x7000 wraps to C800:6FF3; the CALL pushes IP 0xfff3.
+        // C800:FFF0: IP 0xfff3 + 0x7000 wraps to C800:6FF3.
         (
             "raw-x86-rom",
             0xc8000,
             image(0x10000, &[(0xfff0, &[0xe8, 0x00, 0x70, 0xc3]), (0x6ff3, ret7)]),
             0xd7ff0,
             0xceff3,
-            "= 0xfff3;",
         ),
-        // 132 KiB at 0x10000 states no segment: 0x2b683 + 0x498d; the CALL pushes 0xb683.
+        // 132 KiB at 0x10000 states no segment: 0x2b683 + 0x498d.
         (
             "raw-x86-large",
             0x10000,
             image(0x21000, &[(0x1b680, &[0xe8, 0x8d, 0x49, 0xc3]), (0x20010, ret7)]),
             0x2b680,
             0x30010,
-            "= 0xb683;",
         ),
     ];
-    for (stem, base, bytes, caller, callee, pushed) in cases {
+    for (stem, base, bytes, caller, callee) in cases {
         let fixture = RawFixture::new(stem, &bytes);
         let path = fixture.0.to_string_lossy();
         let mut program = bootstrap_from_raw(
@@ -351,17 +347,69 @@ fn raw_real_mode_images_decode_near_calls_in_their_code_segment() {
         program.commit_pending_analysis().unwrap();
         assert!(program.find_entry_at(callee).is_some(), "{stem}: no function at {callee:#x}");
         let entry = program.find_entry_at(caller).expect("seeded raw entry must resolve");
-        for segmentize in ["on", "off"] {
-            program.arch_mut().set_kuna_option("segmentize", segmentize).expect("segmentize flips");
-            let results = decompile_targets(&mut program, vec![entry.clone()], true, false, false);
-            assert!(results[0].error.is_none(), "{stem}: {:?}", results[0].error);
-            let code = results[0].code.as_deref().unwrap();
-            assert!(code.contains(&format!("sub_{callee:x}();")), "{stem}:\n{code}");
-            if segmentize == "off" {
-                assert!(code.contains(pushed), "{stem}:\n{code}");
+        let results = decompile_targets(&mut program, vec![entry], true, false, false);
+        assert!(results[0].error.is_none(), "{stem}: {:?}", results[0].error);
+        let code = results[0].code.as_deref().unwrap();
+        assert!(code.contains(&format!("sub_{callee:x}();")), "{stem}:\n{code}");
+    }
+}
+
+#[test]
+fn ret_transfer_probes_do_not_change_another_functions_return_ip() {
+    use kuna_num::{opcodes::OpCode, pcoderaw::VarnodeData};
+    use kuna_sleigh::translate::PcodeEmit;
+
+    #[derive(Default)]
+    struct PushedIp {
+        saved: Option<(Address, u64)>,
+        pushed: Option<u64>,
+    }
+    impl PcodeEmit for PushedIp {
+        fn dump(&mut self, _: &Address, code: OpCode, out: Option<&VarnodeData>, inputs: &[VarnodeData]) {
+            if code == OpCode::CPUI_COPY {
+                if let (Some(out), Some(value)) = (out, inputs.first().filter(|v| v.get_addr().is_constant() && v.size == 2)) {
+                    self.saved = Some((out.get_addr(), value.offset));
+                }
+            }
+            if code == OpCode::CPUI_STORE {
+                if let Some(value) = inputs.get(2) {
+                    self.pushed = self.saved.as_ref().filter(|(at, _)| *at == value.get_addr()).map(|(_, n)| *n);
+                }
             }
         }
     }
+
+    let mut bytes = vec![0u8; 0x18900];
+    bytes[0x100..0x105].copy_from_slice(&[0xea, 0x00, 0x01, 0x79, 0x18]);
+    bytes[0x18890..0x18894].copy_from_slice(&[0xe8, 0x0d, 0x00, 0xc3]);
+    bytes[0x188a0] = 0xc3;
+    let fixture = RawFixture::new("raw-ret-probe-realcs", &bytes);
+    let program = bootstrap_from_raw(
+        &fixture.0.to_string_lossy(),
+        "x86:LE:16:Real Mode:default",
+        0,
+        &[0x18890],
+        None,
+        &specs(),
+    ).unwrap();
+    let arch = program.arch();
+    let space = arch.manage().get_default_code_space().cloned().unwrap();
+    let probe = Address::new(space.clone(), 0x100);
+    let caller = Address::new(space, 0x18890);
+    let pushed = || {
+        let mut emit = PushedIp::default();
+        arch.translate().one_instruction(&mut emit, &caller).unwrap();
+        emit.pushed
+    };
+    assert_eq!(pushed(), Some(0x8893));
+    kuna_console::kuna_retcallchain::kuna_entry_chain_sites(arch.translate(), &probe, 8, 16);
+    assert_eq!(pushed(), Some(0x8893), "an advisory chain walk changed the caller's IP");
+    kuna_console::kuna_retcallchain::kuna_push_immediate_ret(arch.translate(), &probe, 16);
+    assert_eq!(pushed(), Some(0x8893), "an advisory tail walk changed the caller's IP");
+
+    // A real far transfer must still teach the decoder the destination's CS.
+    arch.translate().one_instruction(&mut PushedIp::default(), &probe).unwrap();
+    assert_eq!(pushed(), Some(0x103));
 }
 
 #[test]

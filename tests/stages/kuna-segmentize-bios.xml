@@ -27,11 +27,6 @@ b800108ed8c70610003412e80100c3c3
 <symbol space="ram" offset="0x100f" name="helper"/>
 </binaryimage>
 <script>
-  <com>option segmentize off</com>
-  <com>lo fu init_ds</com>
-  <com>decompile</com>
-  <com>print C</com>
-  <com>option segmentize on</com>
   <com>lo fu init_ds</com>
   <com>decompile</com>
   <com>print C</com>
@@ -42,10 +37,7 @@ b800108ed8c70610003412e80100c3c3
   <com>decompile</com>
   <com>print C</com>
 </script>
-<stringmatch name="SEGMENTIZE-BIOS #1: off, the DS store is a segment user-op" min="1" max="1">segment\(0x1000,0x10\) = 0x1234;</stringmatch>
-<stringmatch name="SEGMENTIZE-BIOS #2: off, the call's return-address push is a store" min="1" max="1">segment\(v[0-9]+,v[0-9]+\) = 0x100e;</stringmatch>
-<stringmatch name="SEGMENTIZE-BIOS #3: on, the store is to the folded linear address (pass 2 and the BIOS)" min="2" max="2">dat_10010 = 0x1234;</stringmatch>
-<stringmatch name="SEGMENTIZE-BIOS #4: no push survives the rewrite" min="1" max="1">= 0x100e;</stringmatch>
+<stringmatch name="SEGMENTIZE-BIOS #3: the store is to the folded linear address (init_ds and the BIOS)" min="2" max="2">dat_10010 = 0x1234;</stringmatch>
+<stringmatch name="SEGMENTIZE-BIOS #4: no push survives the rewrite" min="0" max="0">= 0x100e;</stringmatch>
 <stringmatch name="SEGMENTIZE-BIOS #5: the BIOS reset path calls its POST routine in segment F000" min="2" max="2">  sub_fe000\(\);</stringmatch>
-<stringmatch name="SEGMENTIZE-BIOS #6: the segment user-ops (three lines) are all in the off pass" min="3" max="3">segment\(</stringmatch>
 </decompilertest>

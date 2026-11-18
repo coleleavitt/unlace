@@ -2,6 +2,8 @@
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 mod common;
+#[path = "sparc_prologue_start.rs"]
+mod sparc_prologue_start;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;
@@ -47,6 +49,9 @@ mod mapped_array_bits;
 
 #[path = "array_source_bits.rs"]
 mod array_source_bits;
+
+#[path = "relocated_table_c.rs"]
+mod relocated_table_c;
 
 #[path = "conditional_register_lifetimes.rs"]
 mod conditional_register_lifetimes;
@@ -166,11 +171,23 @@ mod ctypes_per_arch;
 #[path = "decompile_budget_cli.rs"]
 mod decompile_budget_cli;
 
+#[path = "dos_dgroup_cli.rs"]
+mod dos_dgroup_cli;
+
 #[path = "dos_fpuemu_cli.rs"]
 mod dos_fpuemu_cli;
 
+#[path = "dos_pcmemory_cli.rs"]
+mod dos_pcmemory_cli;
+
 #[path = "dos_mz_cli.rs"]
 mod dos_mz_cli;
+
+#[path = "dos_exit_cli.rs"]
+mod dos_exit_cli;
+
+#[path = "dos_extent_cli.rs"]
+mod dos_extent_cli;
 
 #[path = "decompile_cli.rs"]
 mod decompile_cli;
@@ -180,6 +197,9 @@ mod decompile_graph_cli;
 
 #[path = "decompile_json_cli.rs"]
 mod decompile_json_cli;
+
+#[path = "function_warnings_cli.rs"]
+mod function_warnings_cli;
 
 #[path = "decompile_project_cli.rs"]
 mod decompile_project_cli;
@@ -228,6 +248,9 @@ mod explicit_branch_assertion_cli;
 
 #[path = "fid_cli.rs"]
 mod fid_cli;
+
+#[path = "fid_db_status_cli.rs"]
+mod fid_db_status_cli;
 
 #[path = "float_unordered_compare.rs"]
 mod float_unordered_compare;
@@ -348,6 +371,9 @@ mod pltlocal_cli;
 #[path = "pointer_table_strings.rs"]
 mod pointer_table_strings;
 
+#[path = "pool_fallthrough.rs"]
+mod pool_fallthrough;
+
 #[path = "ppc64_delayed_constant_switch.rs"]
 mod ppc64_delayed_constant_switch;
 
@@ -417,6 +443,9 @@ mod sse_minss_cli;
 #[path = "stack_alias_preservation.rs"]
 mod stack_alias_preservation;
 
+#[path = "stack_chk_fail_local.rs"]
+mod stack_chk_fail_local;
+
 #[path = "stack_float_snapshot.rs"]
 mod stack_float_snapshot;
 
@@ -443,6 +472,9 @@ mod store_alias;
 
 #[path = "store_copy_effects.rs"]
 mod store_copy_effects;
+
+#[path = "repeated_global_pointer_stores.rs"]
+mod repeated_global_pointer_stores;
 
 #[path = "stored_return_values.rs"]
 mod stored_return_values;
@@ -535,6 +567,9 @@ mod xrefs_objc_resolved;
 
 #[path = "xrefs_data_refs_cli.rs"]
 mod xrefs_data_refs_cli;
+
+#[path = "xrefs_fileset_entry.rs"]
+mod xrefs_fileset_entry;
 
 #[path = "xrefs_got_call.rs"]
 mod xrefs_got_call;
@@ -639,6 +674,8 @@ mod x87_free_operands;
 
 #[path = "prototype_call_mechanisms.rs"]
 mod prototype_call_mechanisms;
+#[path = "ppc64_global_entry_toc.rs"]
+mod ppc64_global_entry_toc;
 #[path = "qualified_storage_addresses.rs"]
 mod qualified_storage_addresses;
 #[path = "qualified_import_storage.rs"]
@@ -807,6 +844,9 @@ mod scalar_call_results;
 #[path = "call_argument_extensions.rs"]
 mod call_argument_extensions;
 
+#[path = "calleereginputs_custom.rs"]
+mod calleereginputs_custom;
+
 #[path = "rust_store_value.rs"]
 mod rust_store_value;
 
@@ -825,11 +865,17 @@ mod rust_array_decay;
 #[path = "rust_array_constant.rs"]
 mod rust_array_constant;
 
+#[path = "high_address_branches.rs"]
+mod high_address_branches;
+
 #[path = "mips_import_flow.rs"]
 mod mips_import_flow;
 
 #[path = "qualified_call.rs"]
 mod qualified_call;
+
+#[path = "bitfield_byte_pull.rs"]
+mod bitfield_byte_pull;
 
 #[path = "powerpc_apu_selection.rs"]
 mod powerpc_apu_selection;
@@ -839,3 +885,15 @@ mod elf_unwind;
 
 #[path = "e500_arguments.rs"]
 mod e500_arguments;
+
+#[path = "cvf_trace.rs"]
+mod cvf_trace;
+
+#[path = "dynamic_sp_merge.rs"]
+mod dynamic_sp_merge;
+
+#[path = "mips_weak_imports.rs"]
+mod mips_weak_imports;
+
+#[path = "nullable_relocations.rs"]
+mod nullable_relocations;

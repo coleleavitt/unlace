@@ -124,6 +124,7 @@ mod kuna_framepool;
 pub(crate) mod kuna_frameflow;
 pub mod kuna_framereplay;
 mod kuna_thumbframes;
+mod kuna_sparcprologue;
 pub(crate) use kuna_framecache::ArmFrames;
 pub mod kuna_ptrentry;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
@@ -711,7 +712,7 @@ fn follow_subroutine(
             // Outside the gap: if it is decoded code, "adds info"; otherwise (data /
             // undecoded outside the gap) it is a bad flow target → reject.
             if listing.is_instruction_start(vma) {
-                // (kuna `armfuncmode`) A Thumb walk cannot reach code the
+                // (kuna) A Thumb walk cannot reach code the
                 // function symbols state is A32 without an exchange.
                 if thumb_walk && listing.in_a32_symbol_extent(vma) {
                     return None;
@@ -851,13 +852,13 @@ fn follow_subroutine(
 /// Bails (returns empty) unless there are ≥ [`MINIMUM_FUNCTION_COUNT`] discovered
 /// functions AND ≥ 1 decoded instruction (Ghidra's `funcCount` /
 /// `getNumInstructions()` gate), or if no fingerprint reaches the threshold.
-/// `aifstrict` (GH-299) adds the structural rejects in [`kuna_aifstrict`]: the gap
+/// `aif strict` (GH-299) adds the structural rejects in [`kuna_aifstrict`]: the gap
 /// cursor slides to the next 4-byte boundary instead of the next byte, probing only
-/// an aligned address or a hole's first byte. `aifcorroborate` (GH-313) restores
+/// an aligned address or a hole's first byte. `aif precise` (GH-313) also restores
 /// upstream's second fingerprint test in [`kuna_aifcorroborate`]: an accept must
 /// either add information or match a prologue 50 discovered functions share.
-/// `aifnoppad` (GH-299) keeps every entry off padding and zero fill in [`kuna_aifnoppad`],
-/// and `aifpoolslide` (GH-299) keeps it off literal-pool words in [`kuna_aifpoolslide`].
+/// [`kuna_aifnoppad`] (GH-299) keeps every entry off padding and zero fill, and
+/// `aifpoolslide` (GH-299) keeps it off literal-pool words in [`kuna_aifpoolslide`].
 #[allow(clippy::too_many_arguments)]
 pub fn run_aif(
     listing: &Listing,
@@ -867,11 +868,10 @@ pub fn run_aif(
     aifstrict: bool,
     aifcorroborate: bool,
     aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
-    aifnoppad: bool,
     aifpoolslide: Option<&kuna_decomp::architecture::Architecture>,
 ) -> Vec<u64> {
     run_aif_sharing(listing, translate, code_space, exec_ranges, aifstrict, aifcorroborate, aifbracket,
-        aifnoppad, aifpoolslide, None)
+        aifpoolslide, None)
 }
 
 /// [`run_aif`] over decodes shared through `memo`.
@@ -884,7 +884,6 @@ pub(crate) fn run_aif_sharing(
     aifstrict: bool,
     aifcorroborate: bool,
     aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
-    aifnoppad: bool,
     aifpoolslide: Option<&kuna_decomp::architecture::Architecture>,
     memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
 ) -> Vec<u64> {
@@ -893,7 +892,7 @@ pub(crate) fn run_aif_sharing(
     let mut decoder = GapDecoder::new(translate, code_space, exec_ranges);
     decoder.share(memo);
     let policy = GapWalk {
-        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: aifnoppad,
+        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: true,
         poolslide,
     };
     aif_candidates(listing, listing, &mut decoder, policy, &BTreeMap::new(), None, None)
@@ -909,7 +908,6 @@ pub(crate) fn run_aif_after_frames(
     aifstrict: bool,
     aifcorroborate: bool,
     aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
-    aifnoppad: bool,
     aifpoolslide: Option<&kuna_decomp::architecture::Architecture>,
     mut straight_line: Option<&mut BTreeSet<u64>>,
     memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
@@ -921,7 +919,7 @@ pub(crate) fn run_aif_after_frames(
     decoder.prior_partition = Some(prior);
     decoder.straight_line = straight_line.is_some().then(BTreeSet::new);
     let policy = GapWalk {
-        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: aifnoppad,
+        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: true,
         poolslide,
     };
     let entries = aif_candidates(listing, listing, &mut decoder, policy, &BTreeMap::new(), None, None);
@@ -947,10 +945,9 @@ fn run_aif_with_decoder(
     aifstrict: bool,
     aifcorroborate: bool,
     aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
-    aifnoppad: bool,
 ) -> Vec<u64> {
     let gap_walk = GapWalk {
-        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: aifnoppad,
+        strict: aifstrict, corroborate: aifcorroborate, bracket: aifbracket, noppad: false,
         poolslide: None,
     };
     aif_candidates(listing, listing, decoder, gap_walk, &BTreeMap::new(), None, None)
@@ -1035,7 +1032,7 @@ fn aif_candidates(
             continue;
         }
 
-        // (kuna, `aifstrict`) The cursor slides to the next instruction-alignment
+        // (kuna, `aif strict`) The cursor slides to the next instruction-alignment
         // boundary rather than the next byte, and only an aligned address or a
         // hole's first byte is a candidate at all.
         let mut advanced = if aifstrict {
@@ -1053,7 +1050,7 @@ fn aif_candidates(
         };
         if probe_here && filler != kuna_aifnoppad::Filler::Refuse {
             // (kuna, `aifbracket`) A fragment of the enclosing known function is
-            // refused but, like an `aifcorroborate` refusal, consumes its body.
+            // refused but, like an `aif precise` refusal, consumes its body.
             let probe = match probe_gap_start(decoder, listing, &hist, gap_start, gap_hi, aifcorroborate) {
                 Probe::Accept(body) if bracket.is_some_and(|evidence| {
                     kuna_aifbracket::rejects(listing, decoder, evidence, gap_start, &body)
@@ -1080,12 +1077,18 @@ fn aif_candidates(
             }
             match probe
             {
-                Probe::Accept(body) => {
-                    let entry = match (pool_end, filler) {
+                Probe::Accept(mut body) => {
+                    let mut entry = match (pool_end, filler) {
                         (Some(end), _) => end,
                         (None, kuna_aifnoppad::Filler::Before(at)) if body.contains(&at) => at,
                         _ => gap_start,
                     };
+                    if roots.is_none() && entry == gap_start {
+                        if let Some(prefix) = kuna_sparcprologue::prefix(decoder, listing, &claimed, entry) {
+                            body.extend([prefix, prefix + 4]);
+                            entry = prefix;
+                        }
+                    }
                     if let Some(bodies) = &mut bodies {
                         bodies.insert(entry, body.iter().copied().filter(|&at| at >= entry)
                             .map(|at| (at, decoder.recorded(at))).collect());
@@ -1104,7 +1107,7 @@ fn aif_candidates(
                     advanced = body_max.saturating_add(1);
                     claimed.extend(body);
                 }
-                // (kuna, `aifcorroborate`) An uncorroborated candidate is refused
+                // (kuna, `aif precise`) An uncorroborated candidate is refused
                 // as an ENTRY but still consumes its body. Without that, refusing
                 // an accept hands the cursor back to the interior of the same hole
                 // and it accepts a worse candidate deeper inside — measured on the
@@ -1134,7 +1137,7 @@ fn aif_candidates(
     accepted.into_iter().collect()
 }
 
-/// The outcome of one gap-start probe. `Uncorroborated` is `aifcorroborate`'s
+/// The outcome of one gap-start probe. `Uncorroborated` is `aif precise`'s
 /// refusal and exists as its own variant because it is not a plain `Reject`: the
 /// candidate DID disassemble into a valid subroutine, so the cursor must still
 /// consume its body rather than fall back into it.
@@ -1148,7 +1151,7 @@ enum Probe {
 /// fingerprint to match a ≥-threshold histogram entry, and run the valid-subroutine
 /// check.
 ///
-/// `aifcorroborate` (GH-313) additionally applies upstream's SECOND fingerprint
+/// `aif precise` (GH-313) additionally applies upstream's SECOND fingerprint
 /// test here, which is the only frame where both of its inputs exist: the
 /// `startCount` histogram hit computed just above, and the corroboration flag the
 /// validity walk returns. See [`kuna_aifcorroborate`].
@@ -1309,14 +1312,14 @@ pub(crate) fn raw_arm_frames(
             (start, decoder.probe(start).unwrap().len)
         }).collect();
         claimed.extend(spans.iter().copied());
-        if arch.analysis_aif || capture_xrefs {
+        if arch.analysis_aif.enabled() || capture_xrefs {
             frames.validated(vma, spans, &mut decoder);
         } else {
             frames.validated_body(vma, spans);
         }
     }
 
-    if arch.analysis_aif && !accepted.is_empty() && listing.function_count() >= MINIMUM_FUNCTION_COUNT {
+    if arch.analysis_aif.enabled() && !accepted.is_empty() && listing.function_count() >= MINIMUM_FUNCTION_COUNT {
         let policy = kuna_framepool::policy(arch, Rc::clone(&decoder.code_space));
         let replacements = frames.reconcile(listing, listing, &mut decoder, &accepted, &[], policy);
         accepted.retain(|root| !replacements.contains_key(root));
@@ -1341,7 +1344,7 @@ pub(crate) fn arm_frame_prefixes(
     translate: &dyn Translate,
     code_space: Rc<AddrSpace>,
 ) -> BTreeMap<u64, u64> {
-    if !arch.analysis_aif || roots.is_empty() || corpus.function_count() < MINIMUM_FUNCTION_COUNT {
+    if !arch.analysis_aif.enabled() || roots.is_empty() || corpus.function_count() < MINIMUM_FUNCTION_COUNT {
         return BTreeMap::new();
     }
     let context = frame_context.map(|scope| scope.probe_original())

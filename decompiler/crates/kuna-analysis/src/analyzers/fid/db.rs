@@ -15,14 +15,8 @@
 //! n_records    u32
 //! records[n]:  full_hash:u64 | specific_hash:u64 | code_unit_size:i16 |
 //!              specific_addl:u8 | flags:u8 | name_off:u32
-//! [version 2]  n_callees u32
-//!              callees[n]: record_index:u32 | offset:u32 | name_off:u32
 //! string_blob  (interned, NUL-separated UTF-8)
 //! ```
-//!
-//! Version 2 adds the callee table: for a record, the offset from the function
-//! entry of each call or jump that leaves the function, with the callee's name.
-//! A database without callees is written as version 1, and both load.
 //!
 //! All multi-byte integers are little-endian; string lengths are `u32` byte
 //! counts. A name offset points into the trailing string blob. Loading checks
@@ -41,9 +35,6 @@ pub const FID_DB_MAGIC: &[u8; 4] = b"KFID";
 /// analog) — a mismatched version means the stored hashes were computed by a
 /// different algorithm and would mis-match.
 pub const FID_DB_VERSION: u32 = 1;
-
-/// The format version that carries the callee table.
-pub const FID_DB_VERSION_CALLEES: u32 = 2;
 
 /// `flags` bit 0 — the record's hash was computed over a body with a terminator
 /// (return/halt) as its last code unit. Other flag bits are reserved.
@@ -70,9 +61,6 @@ pub struct FidRecord {
     /// The function name this fingerprint identifies (resolved from the interned
     /// string blob at load; interned back into it at serialize).
     pub name: String,
-    /// `(offset from the entry, callee name)` for each call or jump that leaves
-    /// the function and whose target the builder could name.
-    pub callees: Vec<(u32, String)>,
 }
 
 /// Read-only metadata and full-hash lookup for a fingerprint database.
@@ -153,22 +141,17 @@ impl FidDb {
         let mut blob: Vec<u8> = Vec::new();
         #[expect(clippy::disallowed_types, reason = "lookup only; blob order follows sorted records")]
         let mut name_off: HashMap<&str, u32> = HashMap::new();
-        let names = records
-            .iter()
-            .flat_map(|rec| std::iter::once(rec.name.as_str()).chain(rec.callees.iter().map(|(_, n)| n.as_str())));
-        for name in names {
-            if let Entry::Vacant(entry) = name_off.entry(name) {
+        for rec in &records {
+            if let Entry::Vacant(entry) = name_off.entry(rec.name.as_str()) {
                 entry.insert(blob.len() as u32);
-                blob.extend_from_slice(name.as_bytes());
+                blob.extend_from_slice(rec.name.as_bytes());
                 blob.push(0); // NUL terminator
             }
         }
-        let has_callees = records.iter().any(|rec| !rec.callees.is_empty());
-        let version = if has_callees { FID_DB_VERSION_CALLEES } else { FID_DB_VERSION };
 
         let mut out: Vec<u8> = Vec::new();
         out.extend_from_slice(FID_DB_MAGIC);
-        out.extend_from_slice(&version.to_le_bytes());
+        out.extend_from_slice(&FID_DB_VERSION.to_le_bytes());
         write_str(&mut out, &self.lang_id);
         write_str(&mut out, &self.cspec_id);
         out.extend_from_slice(&(records.len() as u32).to_le_bytes());
@@ -179,17 +162,6 @@ impl FidDb {
             out.push(rec.specific_addl);
             out.push(rec.flags);
             out.extend_from_slice(&name_off[rec.name.as_str()].to_le_bytes());
-        }
-        if has_callees {
-            let n: usize = records.iter().map(|rec| rec.callees.len()).sum();
-            out.extend_from_slice(&(n as u32).to_le_bytes());
-            for (i, rec) in records.iter().enumerate() {
-                for (off, name) in &rec.callees {
-                    out.extend_from_slice(&(i as u32).to_le_bytes());
-                    out.extend_from_slice(&off.to_le_bytes());
-                    out.extend_from_slice(&name_off[name.as_str()].to_le_bytes());
-                }
-            }
         }
         out.extend_from_slice(&blob);
         out
@@ -204,11 +176,11 @@ impl FidDb {
         let magic = r.take(4)?;
         if magic != FID_DB_MAGIC {
             return Err(KunaError::bad_data(format!(
-                "fid: bad magic {magic:02x?} (expected {FID_DB_MAGIC:?})"
+                "fid: bad magic {magic:02x?} (expected {FID_DB_MAGIC:02x?})"
             )));
         }
         let version = r.u32()?;
-        if version != FID_DB_VERSION && version != FID_DB_VERSION_CALLEES {
+        if version != FID_DB_VERSION {
             return Err(KunaError::bad_data(format!(
                 "fid: version {version} != supported {FID_DB_VERSION}"
             )));
@@ -230,14 +202,6 @@ impl FidDb {
                 name_off: r.u32()?,
             });
         }
-        let mut raw_callees: Vec<(u32, u32, u32)> = Vec::new();
-        if version == FID_DB_VERSION_CALLEES {
-            let n = r.u32()? as usize;
-            raw_callees.reserve(n.min(1 << 20));
-            for _ in 0..n {
-                raw_callees.push((r.u32()?, r.u32()?, r.u32()?));
-            }
-        }
         // The remainder is the string blob.
         let blob = r.rest();
 
@@ -251,14 +215,7 @@ impl FidDb {
                 specific_addl: rr.specific_addl,
                 flags: rr.flags,
                 name,
-                callees: Vec::new(),
             });
-        }
-        for (idx, off, name_off) in raw_callees {
-            let rec = records
-                .get_mut(idx as usize)
-                .ok_or_else(|| KunaError::bad_data(format!("fid: callee row names record {idx} of {n}")))?;
-            rec.callees.push((off, read_interned_name(blob, name_off as usize)?));
         }
 
         Ok(Self::from_records(lang_id, cspec_id, records))
@@ -388,20 +345,7 @@ mod tests {
             specific_addl: addl,
             flags: FLAG_HAS_TERMINATOR,
             name: name.to_string(),
-            callees: Vec::new(),
         }
-    }
-
-    #[test]
-    fn callee_table_round_trips_as_version_2() {
-        let mut with = rec(0x10, 1, 6, 0, "caller");
-        with.callees = vec![(5, "callee".into()), (17, "caller".into())];
-        let db = FidDb::from_records("L", "C", vec![rec(0x20, 2, 6, 0, "plain"), with.clone()]);
-        let bytes = db.serialize();
-        assert_eq!(&bytes[4..8], &FID_DB_VERSION_CALLEES.to_le_bytes());
-        let back = FidDb::load(&bytes).unwrap();
-        assert_eq!(back.find_by_full_hash(0x10), &[with]);
-        assert!(back.find_by_full_hash(0x20)[0].callees.is_empty());
     }
 
     #[test]

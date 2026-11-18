@@ -52,6 +52,7 @@ fn program_with_model(variant: &str, n32: bool, model: &str) -> ConsoleProgram {
         "struct TwoQuads { long double a, b; };",
         "struct DoubleBit { double d; unsigned b:1; };",
         "struct BitDouble { unsigned b:1; double d; };",
+        "struct WholeBit { unsigned short w:16; };",
     ] {
         parse_c(
             decl,
@@ -274,6 +275,19 @@ fn hard_float_aggregate_storage_is_not_scalar_quad_storage() {
                 output,
                 "n32={n32} output {ty}"
             );
+        }
+    }
+}
+
+#[test]
+fn bitfield_only_arguments_use_general_registers() {
+    for n32 in [true, false] {
+        for model in ["default", "hard"] {
+            let prog = program_with_model("octeon3", n32, model);
+            let assigned = allocate(&prog, "struct WholeBit", 0);
+            assert_eq!(storage(&prog, &assigned[1]), vec![reg(&prog, "a0", 0, 2)]);
+            assert_eq!(storage(&prog, &assigned[2]), vec![reg(&prog, "a1", 0, 8)]);
+            assert_eq!(storage(&prog, &assigned[0]), vec![reg(&prog, "v0", 0, 2)]);
         }
     }
 }
@@ -669,7 +683,7 @@ fn soft_float_aliases_preserve_unsigned_argument_extension_with_explicit_selecti
 }
 
 #[test]
-fn sectionless_pic_entries_recover_t9_under_the_existing_gate() {
+fn sectionless_pic_entries_recover_t9() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     for abi in ["n32", "64"] {
         let mut bytes =
@@ -684,36 +698,25 @@ fn sectionless_pic_entries_recover_t9_under_the_existing_gate() {
         }
         let path = crate::common::scratch_file("octeon-sectionless", "elf");
         std::fs::write(&path, bytes).unwrap();
-        for enabled in [false, true] {
-            let mut prog = bootstrap_from_object(
-                path.to_str().unwrap(),
-                "",
-                &[root.join("specs").to_string_lossy().into_owned()],
-            )
+        let mut prog = bootstrap_from_object(
+            path.to_str().unwrap(),
+            "",
+            &[root.join("specs").to_string_lossy().into_owned()],
+        )
+        .unwrap();
+        prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+        prog.commit_pending_analysis().unwrap();
+        let entry = prog
+            .resolve_entry(&EntrySelector::Numeric(0x100000))
             .unwrap();
-            prog.arch_mut()
-                .set_kuna_option("mips_gp", if enabled { "on" } else { "off" })
-                .unwrap();
-            prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
-            prog.commit_pending_analysis().unwrap();
-            let entry = prog
-                .resolve_entry(&EntrySelector::Numeric(0x100000))
-                .unwrap();
-            let result = decompile_targets(&mut prog, vec![entry], false, false, false);
-            assert!(result[0].error.is_none(), "{abi}: {:?}", result[0].error);
-            let code = result[0].code.as_ref().unwrap();
-            assert_eq!(
-                code.contains("// t9"),
-                !enabled,
-                "{abi} enabled={enabled}: {code}"
-            );
-            if enabled {
-                assert!(
-                    code.contains(if abi == "n32" { "102018" } else { "102020" }),
-                    "{abi}: {code}"
-                );
-            }
-        }
+        let result = decompile_targets(&mut prog, vec![entry], false, false, false);
+        assert!(result[0].error.is_none(), "{abi}: {:?}", result[0].error);
+        let code = result[0].code.as_ref().unwrap();
+        assert!(!code.contains("// t9"), "{abi}: {code}");
+        assert!(
+            code.contains(if abi == "n32" { "102018" } else { "102020" }),
+            "{abi}: {code}"
+        );
         std::fs::remove_file(path).unwrap();
     }
 }

@@ -1547,7 +1547,7 @@ fn find_contiguous_whole(data: &Funcdata, vn1: VarnodeId) -> Option<VarnodeId> {
 // =============================================================================
 
 /// `RulePtrFlow` — mark Varnode/PcodeOp objects carrying or operating on
-/// pointers when the default data space is truncated (`option truncptrflow`).
+/// pointers when the default data space is truncated.
 pub struct RulePtrFlow {
     /// C++ `hasTruncations`: an untruncated architecture installs the rule on
     /// no opcode. The option itself is read when the rule applies.
@@ -1561,10 +1561,9 @@ impl RulePtrFlow {
         RulePtrFlow { has_truncations }
     }
 
-    /// Whether `option truncptrflow` is on and the default data space is truncated.
+    /// Whether the default data space is truncated.
     pub(crate) fn is_live(data: &Funcdata) -> bool {
-        data.get_arch().trunc_ptr_flow
-            && data.get_arch().manage().get_default_data_space().is_some_and(|s| s.is_truncated())
+        data.get_arch().manage().get_default_data_space().is_some_and(|s| s.is_truncated())
     }
 
     /// Narrow only the address operand; other uses of the full value retain it.
@@ -1665,6 +1664,7 @@ impl Rule for RulePtrFlow {
             return Vec::new();
         }
         vec![
+            OpCode::CPUI_CALLOTHER,
             OpCode::CPUI_STORE,
             OpCode::CPUI_LOAD,
             OpCode::CPUI_COPY,
@@ -1692,6 +1692,20 @@ impl Rule for RulePtrFlow {
         }
         let mut made_change = 0;
         match op_code(data, op) {
+            OpCode::CPUI_CALLOTHER => {
+                let Some(effect) = crate::kuna_octeoneffects::effect(data, op) else { return 0 };
+                if !effect.addressed() { return 0; }
+                let Some(space) = data.get_arch().manage().get_default_data_space() else { return 0 };
+                let size = space.get_addr_size() as int4;
+                let Some(mut vn) = op_in(data, op, 1) else { return 0 };
+                if vn_size(data, vn) > size {
+                    vn = Self::truncate_pointer(data, op, vn, 1, size);
+                    made_change = 1;
+                }
+                if Self::propagate_flow_to_def(data, vn) {
+                    made_change = 1;
+                }
+            }
             OpCode::CPUI_LOAD | OpCode::CPUI_STORE => {
                 let index = vn_offset(data, op_in(data, op, 0).expect("memory space"));
                 let manager = data.get_arch().manage();

@@ -77,8 +77,63 @@ pub(super) fn legacy(mut bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<(
     Ok((image, Some(note)))
 }
 
+pub(super) fn is_prelinked(bytes: &[u8]) -> bool {
+    prelinked::is_prelinked(bytes)
+}
+
 pub(super) fn is_fileset(bytes: &[u8]) -> bool {
     rd_u32(bytes, 0) == Some(MH_MAGIC_64) && rd_u32(bytes, 12) == Some(MH_FILESET)
+}
+
+/// Which entry of a kernel collection was loaded, and the addresses every
+/// entry's segments map: what a surface reading the loaded entry needs to say
+/// that an address belongs to another entry rather than to nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FilesetMap {
+    pub loaded: String,
+    entries: Vec<(String, Vec<std::ops::Range<u64>>)>,
+}
+
+impl FilesetMap {
+    /// The entry whose segments map `addr`, the loaded entry first (every entry
+    /// maps the one shared `__LINKEDIT`).
+    pub fn owner(&self, addr: u64) -> Option<&str> {
+        let loaded = self.entries.iter().filter(|(id, _)| *id == self.loaded);
+        loaded
+            .chain(self.entries.iter())
+            .find(|(_, ranges)| ranges.iter().any(|r| r.contains(&addr)))
+            .map(|(id, _)| id.as_str())
+    }
+}
+
+/// The [`FilesetMap`] of a collection with `all[index]` loaded. Each distinct
+/// entry header is read once, the loaded one first, within the [`bind_work`]
+/// budget.
+fn fileset_map(bytes: &[u8], all: &[FilesetEntry], index: usize) -> FilesetMap {
+    let mut work = bind_work(bytes);
+    let mut seen = std::collections::HashSet::new();
+    let mut entries = Vec::new();
+    for entry in std::iter::once(&all[index]).chain(all) {
+        if work == 0 {
+            break;
+        }
+        if !seen.insert(entry.fileoff) {
+            continue;
+        }
+        let Some(cmds) = load_commands(bytes, entry.fileoff as usize) else { continue };
+        work = work.saturating_sub(cmds.len());
+        let ranges = cmds
+            .iter()
+            .filter(|&&(cmd, _)| cmd == LC_SEGMENT_64)
+            .filter_map(|&(_, p)| {
+                let vmaddr = rd_u64(bytes, p + 24)?;
+                Some(vmaddr..vmaddr.saturating_add(rd_u64(bytes, p + 32)?))
+            })
+            .filter(|r| !r.is_empty())
+            .collect();
+        entries.push((entry.id.clone(), ranges));
+    }
+    FilesetMap { loaded: all[index].id.clone(), entries }
 }
 
 struct Segment {
@@ -245,7 +300,7 @@ fn select<'a>(all: &'a [FilesetEntry], choice: &KernelcacheChoice) -> Result<&'a
 pub(super) fn extract(
     mut bytes: Vec<u8>,
     choice: &KernelcacheChoice,
-) -> Result<(Vec<u8>, String, SignedImage), String> {
+) -> Result<(Vec<u8>, String, SignedImage, Option<FilesetMap>), String> {
     let all = entries(&bytes).ok_or("malformed MH_FILESET load commands")?;
     if *choice == KernelcacheChoice::Entry("list".into()) {
         let info: HashMap<String, prelink::KextInfo> =
@@ -265,10 +320,11 @@ pub(super) fn extract(
             "MH_FILESET: loaded {shown} as one image ({applied} chained-fixup pointers rebased, \
              {branch} branch-stub segments mapped)"
         );
-        return Ok((image, note, signed));
+        return Ok((image, note, signed, None));
     }
     let index = chosen[0];
     let entry = all[index].clone();
+    let map = fileset_map(&bytes, &all, index);
 
     let at = usize::try_from(entry.fileoff).map_err(|_| "fileset entry offset out of range")?;
     let sizeofcmds = rd_u32(&bytes, at + 20).ok_or("truncated fileset entry header")? as usize;
@@ -290,7 +346,7 @@ pub(super) fn extract(
         index + 1,
         all.len()
     );
-    Ok((bytes, note, signed))
+    Ok((bytes, note, signed, Some(map)))
 }
 
 /// An entry's `LC_SYMTAB` and its `LC_DYSYMTAB` external-defined and undefined

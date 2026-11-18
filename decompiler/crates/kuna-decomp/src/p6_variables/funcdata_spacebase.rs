@@ -590,7 +590,7 @@ impl Funcdata {
             // MapState clears the proto's param range out of the analysis range;
             // restructureVarnode passes (getRangeTree, proto.getParamRange()).
             let rangetree = lm.range_tree_clone();
-            let param_range = self.get_func_proto().get_param_range().clone();
+            let param_range = local_param_range(self, &space);
             let types = match self.get_arch().types() {
                 Some(t) => t,
                 None => return 0,
@@ -1091,6 +1091,9 @@ impl Funcdata {
 
     /// C++ `MapState::gatherOpen` (`varmap.cc:1004`): run the alias checker over
     /// the IR and add an open/array reference for each pointer base it finds.
+    /// A base carrying a replayed `type` directive's pointer to a record
+    /// without a body states no extent: it lays the frame out by the pointee
+    /// the variable was printed with, or adds no range when that has no size.
     fn gather_open(
         &mut self,
         space: &Rc<kuna_base::space::AddrSpace>,
@@ -1134,6 +1137,12 @@ impl Funcdata {
                     ct = None; // Do unknown array
                 }
             }
+            if ct.as_ref().is_some_and(|c| c.get_size() == 0) && crate::kuna_stablenames::holds_retype(self, base) {
+                match crate::kuna_stablenames::printed_pointee(self, base) {
+                    Some(pointee) => ct = Some(pointee),
+                    None => continue,
+                }
+            }
             super::kuna_wrappedstackaggregate::map(self, space, offset, index.is_some(), ct.as_ref());
             // If there is an index Varnode, assume at least the 4 values [0,3].
             let mut min_items = if index.is_some() { 3 } else { -1 };
@@ -1152,9 +1161,8 @@ impl Funcdata {
         }
         // The LoadGuard/StoreGuard hint loops (C++ varmap.cc:1241-1248): each
         // heritage-recorded indexed LOAD/STORE guard contributes an open hint.
-        // A guard only carries a bound once `option loadguardrange` has run the
-        // ValueSet refinement (`addGuard` bails on `step == 0`), so with the
-        // option off these loops add nothing.
+        // A guard only carries a bound once the ValueSet refinement has run
+        // (`addGuard` bails on `step == 0`).
         let follow = extent >= super::kuna_arrayextent::LEVEL_ON;
         let load_guards: Vec<crate::heritage::LoadGuard> = self.get_load_guards().to_vec();
         for guard in &load_guards {
@@ -1481,6 +1489,47 @@ fn addr_eq(a: &Address, b: &Address) -> bool {
     sa == sb && a.get_offset() == b.get_offset()
 }
 
+/// The stack parameter range `restructure_varnode` clears out of the local
+/// analysis range (C++ `proto.getParamRange()`).
+///
+/// (kuna) A `storage="hiddenret"` entry only holds a parameter when this
+/// function takes a hidden return pointer. Otherwise its storage is ordinary
+/// local frame memory: SPARC V9's 64-bit models place the entry at stack
+/// `0x7ef`, inside every function's own frame, and clearing it there dropped
+/// the locals at `0x7ef..0x7f6` from symbol recovery. The slot stays a
+/// parameter while anything says it may be one: a recorded hidden-return
+/// input, an output returned through indirect storage, an input Varnode the
+/// function reads from the slot (an unrecovered prototype has no store yet,
+/// so the entry read is the only evidence there), or an ordinary stack entry
+/// sharing its storage.
+fn local_param_range(fd: &Funcdata, space: &Rc<kuna_base::space::AddrSpace>) -> kuna_base::address::RangeList {
+    use crate::dtype::type_class::TYPECLASS_HIDDENRET;
+    let proto = fd.get_func_proto();
+    let mut range = proto.get_param_range().clone();
+    let declared = proto.has_store()
+        && (proto.get_output().is_indirect_storage()
+            || (0..proto.num_params()).any(|i| proto.get_param(i).is_some_and(|p| p.is_hidden_return())));
+    if declared || !proto.has_model() {
+        return range;
+    }
+    let entries = proto.model().input().get_entry();
+    let stack = |entry: &&crate::fspec::ParamEntry| entry.get_space().get_index() == space.get_index();
+    for slot in entries.iter().filter(stack).filter(|e| e.get_type() == TYPECLASS_HIDDENRET) {
+        let (first, size) = (slot.get_base(), slot.get_size());
+        let last = first.wrapping_add((size - 1) as u64);
+        let shared = entries.iter().filter(stack).any(|e| {
+            e.get_type() != TYPECLASS_HIDDENRET
+                && e.get_base() <= last
+                && first <= e.get_base().wrapping_add((e.get_size() - 1) as u64)
+        });
+        let read = fd.has_input_intersection(size, &Address::new(Rc::clone(space), first)).unwrap_or(true);
+        if !shared && !read {
+            range.remove_range(Rc::clone(space), first, last);
+        }
+    }
+    range
+}
+
 /// Extract the four `deriveBoundaries` inputs from a function prototype (C++
 /// `AliasChecker::deriveBoundaries`'s reads of `proto.hasModel()` + the first
 /// local / last param `Range`s).  `None` when the prototype has no model.
@@ -1601,6 +1650,7 @@ impl Funcdata {
         exempt_scramble: bool,
     ) {
         use std::collections::BTreeSet;
+        let skip_reads = exempt_scramble && crate::p4_calls::kuna_calleereginputs::skips_read_operands(self);
         // (base, index) queue.
         let mut vnqueue: Vec<(VarnodeId, Option<VarnodeId>)> = vec![(startvn, None)];
         let mut marked: BTreeSet<VarnodeId> = BTreeSet::new();
@@ -1678,7 +1728,8 @@ impl Funcdata {
                         nonadduse |= crate::p6_variables::kuna_cookiescramble::is_escape_site(
                             exempt_scramble,
                             code,
-                        );
+                        ) && !(skip_reads
+                            && crate::p4_calls::kuna_calleereginputs::is_read_operand(self, op, vn));
                     }
                 }
             }

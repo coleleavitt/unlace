@@ -9,20 +9,13 @@ use std::ffi::OsString;
 use std::process::Command;
 
 use kuna_decomp::{
-    kuna_calltargettype, kuna_dwarfstructs, kuna_exporttrie, kuna_dyldcache, kuna_dwarfvariants, kuna_dynrelocs, kuna_debuglink, kuna_i386_pie_plt,
-    kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_ppcapu, kuna_msvcfpconst, kuna_pdatachained, kuna_peordinal,
-    kuna_goabi, kuna_goreg, kuna_gotypes, kuna_objcivars, kuna_objcsdk, kuna_relocrebase, kuna_rexthunk, kuna_sourcelang, kuna_swiftdemangle,
-    kuna_symbolnamebound, kuna_symbolnamechars,
-    kuna_variantnames,
-    kuna_symbolnamerepair, kuna_typedepth, options::RELOC_OBJECTS_ENV,
+    kuna_calltargettype, kuna_dyldcache, kuna_exporttrie, kuna_debuglink, kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_ppcapu, kuna_goabi, kuna_objcivars, kuna_objcsdk, kuna_sourcelang, kuna_symbolnamechars, kuna_macho_arm64e,
 };
 
 #[derive(Clone, Copy)]
 enum Encoding {
     DefaultOn,
     DefaultOff,
-    RelocObjects,
-    Arm64e,
     SymbolNameChars,
     Trimmed,
     LibcTypes,
@@ -34,35 +27,18 @@ enum Encoding {
 fn binding(name: &str) -> Option<(&'static str, Encoding)> {
     use Encoding::*;
     Some(match name {
-        "relocobjects" => (RELOC_OBJECTS_ENV, RelocObjects),
         "ppc32picimports" => (kuna_decomp::kuna_ppc32picimports::ENV, Ppc32Pic),
-        "i386_pie_plt" => (kuna_i386_pie_plt::I386_PIE_PLT_ENV, DefaultOn),
-        "ifuncfpret" => (kuna_ifuncfpret::IFUNCFPRET_ENV, DefaultOff),
+        "ifuncfpret" => (kuna_ifuncfpret::IFUNCFPRET_ENV, DefaultOn),
         "ppcapu" => (kuna_ppcapu::PPCAPU_ENV, DefaultOff),
-        "relocrebase" => (kuna_relocrebase::RELOCREBASE_ENV, DefaultOn),
-        "dynrelocs" => (kuna_dynrelocs::DYNRELOCS_ENV, DefaultOn),
         "debuglink" => (kuna_debuglink::DEBUGLINK_ENV, DefaultOn),
         "kernelcache" => (kuna_kernelcache::KERNELCACHE_ENV, Kernelcache),
-        "pdatachained" => (kuna_pdatachained::PDATACHAINED_ENV, DefaultOn),
-        "rexthunk" => (kuna_rexthunk::REXTHUNK_ENV, DefaultOn),
         "goabi" => (kuna_goabi::GOABI_ENV, DefaultOn),
-        "goreg" => (kuna_goreg::GOREG_ENV, DefaultOn),
-        "peordinal" => (kuna_peordinal::PEORDINAL_ENV, DefaultOn),
-        "msvcfpconst" => (kuna_msvcfpconst::MSVCFPCONST_ENV, DefaultOn),
-        "symbolnamerepair" => (kuna_symbolnamerepair::SYMBOLNAMEREPAIR_ENV, DefaultOn),
         "symbolnamechars" => (kuna_symbolnamechars::SYMBOLNAMECHARS_ENV, SymbolNameChars),
-        "symbolnamebound" => (kuna_symbolnamebound::SYMBOLNAMEBOUND_ENV, Trimmed),
-        "typedepth" => (kuna_typedepth::TYPEDEPTH_ENV, DefaultOn),
         "libctypes" => (kuna_libctypes::LIBCTYPES_ENV, LibcTypes),
-        "dwarfstructs" => (kuna_dwarfstructs::DWARFSTRUCTS_ENV, DefaultOn),
         "dwarfscopes" => (kuna_analysis::dwarf::kuna_dwarfscopes::DWARFSCOPES_ENV, DefaultOn),
-        "gotypes" => (kuna_gotypes::GOTYPES_ENV, DefaultOn),
-        "dwarfvariants" => (kuna_dwarfvariants::DWARFVARIANTS_ENV, DefaultOn),
-        "variantnames" => (kuna_variantnames::VARIANTNAMES_ENV, DefaultOn),
-        "calltargettype" => (kuna_calltargettype::CALLTARGETTYPE_ENV, DefaultOff),
-        "macho-arm64e" => ("KUNA_MACHO_ARM64E", Arm64e),
+        "calltargettype" => (kuna_calltargettype::CALLTARGETTYPE_ENV, DefaultOn),
+        "macho-arm64e" => (kuna_macho_arm64e::MACHO_ARM64E_ENV, DefaultOn),
         "sourcelang" => (kuna_sourcelang::SOURCELANG_ENV, SourceLang),
-        "swiftdemangle" => (kuna_swiftdemangle::SWIFTDEMANGLE_ENV, DefaultOn),
         "objcivars" => (kuna_objcivars::OBJCIVARS_ENV, DefaultOn),
         "objcsdk" => (kuna_objcsdk::OBJCSDK_ENV, Trimmed),
         "dyldimage" => (kuna_dyldcache::DYLDIMAGE_ENV, Trimmed),
@@ -84,10 +60,6 @@ impl Encoding {
                 "off"
             }
             .into(),
-            Self::RelocObjects => if off || token == "no" { "0" } else { "1" }.into(),
-            Self::Arm64e => {
-                return matches!(token.as_str(), "on" | "true" | "1" | "yes").then(|| "1".into());
-            }
             Self::SymbolNameChars => kuna_symbolnamechars::NameChars::parse(value)
                 .unwrap_or_default()
                 .as_str()
@@ -121,6 +93,37 @@ pub(crate) fn is_loadtime_gate(name: &str) -> bool {
     binding(name).is_some()
 }
 
+/// The load-time gates that choose which image of a file is read: the
+/// `MH_FILESET` entry and the dyld shared cache image.
+const IMAGE_SELECTION: [&str; 2] = ["kernelcache", "dyldimage"];
+
+/// Export the image-selection gates `argv` sets with `--option NAME VALUE` for
+/// the whole invocation, as the global `--image` is: every surface that reads
+/// the image itself (the reference walk, the string and constant scans, the
+/// call graph) then reads the image the engine loads. The last value wins.
+pub(crate) fn export_image_selection(argv: &[String]) {
+    for (key, value) in image_selection(argv) {
+        std::env::set_var(key, value);
+    }
+}
+
+fn image_selection(argv: &[String]) -> BTreeMap<&'static str, String> {
+    let mut values = BTreeMap::new();
+    let mut i = 0;
+    while i < argv.len() {
+        if argv[i] != "--option" || i + 2 >= argv.len() {
+            i += 1;
+            continue;
+        }
+        let name = argv[i + 1].as_str();
+        if let Some((key, encoding)) = binding(name).filter(|_| IMAGE_SELECTION.contains(&name)) {
+            values.extend(encoding.encode(&argv[i + 2]).map(|value| (key, value)));
+        }
+        i += 3;
+    }
+    values
+}
+
 pub(crate) fn last_option_value<'a>(
     options: &'a [(String, String)],
     name: &str,
@@ -141,6 +144,7 @@ fn settings(
     options: &[(String, String)],
     slice: Option<&str>,
     decode_lanes: usize,
+    functions_inventory: bool,
 ) -> BTreeMap<&'static str, Option<String>> {
     let mut values = BTreeMap::new();
     for (name, value) in options {
@@ -160,6 +164,25 @@ fn settings(
             Some(decode_lanes.to_string()),
         );
     }
+    let objc = last_option_value(options, "objc").unwrap_or("on");
+    values.insert(
+        kuna_analysis::passes::LOAD_OBJC_ENV,
+        Some(if matches!(objc.trim(), "off" | "0" | "false") { "off" } else { "on" }.into()),
+    );
+    let strings = if functions_inventory {
+        "off"
+    } else {
+        last_option_value(options, "strings").unwrap_or("on")
+    };
+    values.insert(
+        kuna_analysis::passes::LOAD_STRINGS_ENV,
+        Some(if matches!(strings.trim(), "off" | "0" | "false") {
+            "off"
+        } else {
+            "on"
+        }
+        .into()),
+    );
     values
 }
 
@@ -168,7 +191,7 @@ pub(crate) fn apply_to_command(
     options: &[(String, String)],
     slice: Option<&str>,
 ) {
-    for (name, value) in settings(options, slice, 1) {
+    for (name, value) in settings(options, slice, 1, false) {
         match value {
             Some(value) => cmd.env(name, value),
             None => cmd.env_remove(name),
@@ -180,9 +203,10 @@ pub(crate) fn apply_to_process(
     options: &[(String, String)],
     slice: Option<&str>,
     decode_lanes: usize,
+    functions_inventory: bool,
 ) -> LoadtimeEnv {
     let mut env = LoadtimeEnv::default();
-    for (name, value) in settings(options, slice, decode_lanes) {
+    for (name, value) in settings(options, slice, decode_lanes, functions_inventory) {
         env.set(name, value.as_deref());
     }
     env
@@ -220,6 +244,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn load_pass_gates_follow_options_and_surface() {
+        use kuna_analysis::passes::{LOAD_OBJC_ENV, LOAD_STRINGS_ENV};
+        for (objc, strings, inventory, expected_objc, expected_strings) in [
+            (None, None, false, "on", "on"),
+            (Some("off"), None, false, "off", "on"),
+            (Some("on"), Some("off"), false, "on", "off"),
+            (None, Some("on"), true, "on", "off"),
+        ] {
+            let options: Vec<(String, String)> = [("objc", objc), ("strings", strings)]
+                .into_iter()
+                .filter_map(|(name, value)| Some((name.into(), value?.into())))
+                .collect();
+            let values = settings(&options, None, 1, inventory);
+            assert_eq!(values[LOAD_OBJC_ENV].as_deref(), Some(expected_objc));
+            assert_eq!(values[LOAD_STRINGS_ENV].as_deref(), Some(expected_strings));
+        }
+    }
+
+    #[test]
     fn loader_value_vocabularies_are_preserved() {
         for (name, cases) in [
             ("ppc32picimports", vec![("off", Some("off")), ("on", Some("on")),
@@ -227,7 +270,7 @@ mod tests {
                 ("", Some("on")), ("0", Some("off")), ("yes", Some("off")),
                 ("invalid", Some("off"))]),
             (
-                "typedepth",
+                "objcivars",
                 vec![
                     (" OFF ", Some("off")),
                     ("false", Some("off")),
@@ -237,7 +280,7 @@ mod tests {
                 ],
             ),
             (
-                "ifuncfpret",
+                "ppcapu",
                 vec![
                     (" TRUE ", Some("on")),
                     ("", Some("on")),
@@ -246,21 +289,13 @@ mod tests {
                 ],
             ),
             (
-                "relocobjects",
-                vec![
-                    (" NO ", Some("0")),
-                    ("false", Some("0")),
-                    ("invalid", Some("1")),
-                ],
-            ),
-            (
                 "macho-arm64e",
                 vec![
-                    (" YES ", Some("1")),
-                    ("1", Some("1")),
-                    ("", None),
-                    ("off", None),
-                    ("invalid", None),
+                    (" YES ", Some("on")),
+                    ("1", Some("on")),
+                    ("", Some("on")),
+                    ("off", Some("off")),
+                    ("0", Some("off")),
                 ],
             ),
             (
@@ -281,10 +316,6 @@ mod tests {
                 ],
             ),
             (
-                "symbolnamebound",
-                vec![(" 23 ", Some("23")), ("BAD", Some("BAD"))],
-            ),
-            (
                 "symbolnamechars",
                 vec![("off", Some("off")), ("invalid", Some("safe"))],
             ),
@@ -301,12 +332,31 @@ mod tests {
     }
 
     #[test]
+    fn image_selection_takes_the_last_entry_and_image_options_only() {
+        let argv: Vec<String> = [
+            "bin", "--option", "kernelcache", "A", "--option", "dyldimage", " libfoo.dylib ",
+            "--option", "objc", "off", "--option", "kernelcache", "PMGR", "--option", "kernelcache",
+        ]
+        .map(String::from)
+        .to_vec();
+        assert_eq!(
+            image_selection(&argv),
+            BTreeMap::from([
+                (kuna_kernelcache::KERNELCACHE_ENV, "PMGR".to_string()),
+                (kuna_dyldcache::DYLDIMAGE_ENV, "libfoo.dylib".to_string()),
+            ])
+        );
+        assert!(image_selection(&["--option".into(), "kernelcache".into()]).is_empty());
+    }
+
+    #[test]
     fn command_overrides_keep_last_values_and_explicit_removals() {
         let options = [
-            ("typedepth".into(), "on".into()),
-            ("typedepth".into(), "off".into()),
+            ("objcivars".into(), "on".into()),
+            ("objcivars".into(), "off".into()),
             ("macho-arm64e".into(), "off".into()),
-            ("dwarfvariants".into(), "off".into()),
+            ("dyldcrossrefs".into(), "off".into()),
+            ("sourcelang".into(), "auto".into()),
             ("unrelated".into(), "on".into()),
         ];
         let mut cmd = Command::new("unused");
@@ -318,15 +368,19 @@ mod tests {
         assert_eq!(
             actual,
             BTreeMap::from([
-                ("KUNA_TYPEDEPTH", Some("off")),
-                ("KUNA_MACHO_ARM64E", None),
+                ("KUNA_OBJCIVARS", Some("off")),
+                ("KUNA_MACHO_ARM64E", Some("off")),
                 ("KUNA_MACHO_SLICE", Some("arm64")),
-                ("KUNA_DWARFVARIANTS", Some("off")),
+                ("KUNA_DYLDCROSSREFS", Some("off")),
+                (kuna_sourcelang::SOURCELANG_ENV, None),
+                (kuna_analysis::passes::LOAD_OBJC_ENV, Some("on")),
+                (kuna_analysis::passes::LOAD_STRINGS_ENV, Some("on")),
             ])
         );
-        assert!(settings(&[], Some("  "), 1).is_empty());
+        assert_eq!(settings(&[], Some("  "), 1, false).len(), 2);
         assert_eq!(
-            settings(&[], None, 4)[kuna_analysis::listing::kuna_pdecode::DECODE_JOBS_ENV],
+            settings(&[], None, 4, false)
+                [kuna_analysis::listing::kuna_pdecode::DECODE_JOBS_ENV],
             Some("4".into())
         );
     }

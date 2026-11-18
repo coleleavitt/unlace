@@ -113,6 +113,9 @@ struct Binder<'t, 'a> {
     declared: BTreeMap<u64, (Declared, &'static str)>,
     /// Dotted paths of the local class-bound protocols.
     class_bound: HashSet<String>,
+    /// Functions a symbol names as Swift functions of a module, no type's
+    /// members: they take no `self` and leave the register alone.
+    free: Vec<u64>,
 }
 
 impl Binder<'_, '_> {
@@ -301,6 +304,7 @@ impl Binder<'_, '_> {
             };
             // A free function: no owner, no `self`.
             if entity.kind == Kind::Function && entity.first().is_some_and(|c| c.kind == Kind::Module) && !partial {
+                self.free.push(*addr);
                 let throws = throws(entity);
                 let model = match (is_async(entity), throws) {
                     (true, true) => SWIFTASYNCCALL_THROWS,
@@ -772,11 +776,13 @@ pub fn bind(types: &Types, regs: &Registers, symbols: &[(u64, String)], out: &mu
         bound: BTreeMap::new(),
         declared: BTreeMap::new(),
         class_bound,
+        free: Vec::new(),
     };
     b.symbols(symbols);
     b.classes();
     b.conformances();
     let mut stats = Stats::default();
+    out.swift_types.no_self = std::mem::take(&mut b.free);
     if !b.bound.is_empty() {
         out.swift_types.regs = Some((regs.self_reg, regs.error_reg, regs.async_reg));
     }

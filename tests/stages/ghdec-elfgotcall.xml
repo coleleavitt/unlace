@@ -50,27 +50,6 @@ c3
 <script>
   <com>clear architecture</com>
   <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_got_noreturn_x86_64</com>
-  <com>option peimportcall off</com>
-  <com>option fdeflowbound off</com>
-  <com>option relronoreturn off</com>
-  <com>option importdata off</com>
-  <com>option listing on</com>
-  <com>read symbols</com>
-  <com>load function check</com>
-  <com>decompile</com>
-  <com>print C</com>
-  <com>load function die</com>
-  <com>decompile</com>
-  <com>print C</com>
-  <com>load function pick</com>
-  <com>decompile</com>
-  <com>print C</com>
-  <com>load function main</com>
-  <com>decompile</com>
-  <com>print C</com>
-  <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_got_noreturn_x86_64</com>
-  <com>option peimportcall on</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function check</com>
@@ -103,15 +82,12 @@ c3
   <com>print C</com>
   <com>quit</com>
 </script>
-<stringmatch name="ELFGOTCALL #1: off leaves the abort GOT call unnamed" min="1" max="1">\(\*dat_3fb0\)\(\);</stringmatch>
-<stringmatch name="ELFGOTCALL #2: off leaves the exit GOT call unnamed" min="1" max="1">\(\*dat_3fd0\)\(2\);</stringmatch>
-<stringmatch name="ELFGOTCALL #3: off truncates both functions at the next entry" min="2" max="2">funcboundflow: fall-through reached the next function entry</stringmatch>
-<stringmatch name="ELFGOTCALL #4: on binds the abort slot and ends the flow there" min="1" max="1">^\s*abort\(\); // no-return$</stringmatch>
-<stringmatch name="ELFGOTCALL #5: on binds the exit slot and ends the flow there (x86-64 and AArch64)" min="2" max="2">^\s*exit\(2\); // no-return$</stringmatch>
-<stringmatch name="ELFGOTCALL #6: on names the other GOT call in die" min="1" max="1">__fprintf_chk\(</stringmatch>
-<stringmatch name="ELFGOTCALL #8: die joins the no-return set through its exit slot, in both passes" min="2" max="2">^\s*die\("usage"\); // no-return$</stringmatch>
+<stringmatch name="ELFGOTCALL #4: the binding names the abort slot and ends the flow there" min="1" max="1">^\s*abort\(\); // no-return$</stringmatch>
+<stringmatch name="ELFGOTCALL #5: the binding names the exit slot and ends the flow there (x86-64 and AArch64)" min="2" max="2">^\s*exit\(2\); // no-return$</stringmatch>
+<stringmatch name="ELFGOTCALL #6: the binding names the other GOT call in die" min="1" max="1">__fprintf_chk\(</stringmatch>
+<stringmatch name="ELFGOTCALL #8: die joins the no-return set through its exit slot" min="1" max="1">^\s*die\("usage"\); // no-return$</stringmatch>
 <stringmatch name="ELFGOTCALL #9: the address of a bound slot stays an address, not the import's name" min="1" max="1">v1 = \(unsigned long \*\)0x3fd8;</stringmatch>
 <stringmatch name="ELFGOTCALL #10: no bound slot address prints as a function name" min="0" max="0">= (lgetxattr|getxattr);</stringmatch>
 <stringmatch name="ELFGOTCALL #11: AArch64 die joins the no-return set through its exit slot" min="1" max="1">^\s*die\((0x[0-9a-f]+|"big")\); // no-return$</stringmatch>
-<stringmatch name="ELFGOTCALL #7: the .data.rel.ro function-pointer table stays a table in both passes" min="2" max="2">&amp;classes\[</stringmatch>
+<stringmatch name="ELFGOTCALL #7: the .data.rel.ro function-pointer table stays a table" min="1" max="1">&amp;classes\[</stringmatch>
 </decompilertest>

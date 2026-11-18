@@ -487,7 +487,7 @@ pub fn emit_settable_json(out: &mut String, st: &KunaSettable, live: Option<&str
 ///
 /// (kuna) The closure yields a [`Cow`] rather than a `&'static str` because a
 /// VALUED option's live value need not come from a fixed token set —
-/// `symbolnamebound` reports a number. Every fixed-token arm still borrows, so
+/// `dyldimage` reports a name. Every fixed-token arm still borrows, so
 /// the emitted bytes are unchanged.
 pub fn emit_catalog_json(live: impl Fn(&str) -> Option<Cow<'static, str>>) -> String {
     let mut out = String::new();
@@ -506,23 +506,31 @@ pub fn emit_catalog_json(live: impl Fn(&str) -> Option<Cow<'static, str>>) -> St
 }
 
 /// The `###` heading of an option's section, inline code included.
-/// An option's heading; a `<placeholder>` value is a code span so the
-/// renderer shows it rather than reading it as an HTML tag.
 fn option_heading(st: &KunaSettable) -> String {
     format!(
         "`{}` -- {}, default `{}`{}",
         st.option,
-        st.values.replace('|', " | ").replace('<', "`<").replace('>', ">`"),
+        st.values.replace('|', " | "),
         st.shipped,
         if st.destructive { " (destructive opt-in)" } else { "" },
     )
 }
 
-/// GitHub's anchor for a heading: the rendered text (code backticks gone)
-/// lowercased, punctuation dropped, spaces to hyphens.
+/// GitHub's anchor for a heading: the rendered text (code backticks and
+/// raw `<...>` spans gone) lowercased, punctuation dropped, spaces to hyphens.
 fn github_anchor(markdown_heading: &str) -> String {
-    markdown_heading
-        .chars()
+    let mut text = String::new();
+    let mut in_tag = false;
+    for ch in markdown_heading.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' if in_tag => in_tag = false,
+            _ if in_tag => {}
+            '`' => {}
+            _ => text.push(ch),
+        }
+    }
+    text.chars()
         .filter_map(|ch| match ch {
             ' ' => Some('-'),
             'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' => Some(ch.to_ascii_lowercase()),

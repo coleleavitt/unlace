@@ -289,7 +289,8 @@ relocated the lazy model to the seams the kuna pipeline actually reads
 - **flushNative** clears everything in the upstream order
   (`Architecture::flush_remote_caches`): the lazy symbol cache + property rollback
   + the per-address tracked-register cache, the non-core types, the comment
-  database, the decoded strings.
+  database, the decoded strings, and the x86-32 callee stack walks (they read
+  the host's names and no-return facts).
 
 ## 6. Response contracts that make the GUI work
 
@@ -554,8 +555,8 @@ pins now hold the Phase-3 level.
       label-override cache-clearing test.
 - [x] ghidra-mode defaults: the `aggressive` engine-tier preset at registerProgram +
       `FUN_`/`DAT_`/`LAB_` fallback naming (DIV-77); `setOptions` decodes and applies
-      for real with per-element skip-unknown (DIV-76). `calltargettype` is left
-      out: Java decodes its anonymous function-pointer types as `undefined1`.
+      for real with per-element skip-unknown (DIV-76). `calltargettype` is held
+      off: Java decodes its anonymous function-pointer types as `undefined1`.
 
 **Phase 4 — the full response encode (branch `feat/ghidra-phase4-encode`).**
 - [x] `Datatype::encodeRef` port (`substrate/dtype.rs` `encode_ref`/`encode`/

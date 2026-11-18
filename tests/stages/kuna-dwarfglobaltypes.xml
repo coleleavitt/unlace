@@ -39,7 +39,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
 </script>
-<stringmatch name="DWARFGLOBALTYPES #1: off, a struct global's fields are raw byte pieces" min="1" max="1">return cfg\._12_4_ \+ cfg\._8_4_;</stringmatch>
+<stringmatch name="DWARFGLOBALTYPES #1: off, a struct global's fields are raw byte offsets" min="1" max="1">return \*\(int4 \*\)&amp;cfg\[0xc\] \+ \*\(int4 \*\)&amp;cfg\[8\];</stringmatch>
 <stringmatch name="DWARFGLOBALTYPES #2: on, the fields are named" min="1" max="1">return cfg\.flags \+ cfg\.port;</stringmatch>
 <stringmatch name="DWARFGLOBALTYPES #3: on, the pointer table is indexed by element" min="1" max="1">return modes\[i\];</stringmatch>
 </decompilertest>

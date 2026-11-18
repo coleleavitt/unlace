@@ -440,7 +440,7 @@ impl Recovered {
         entries.dedup();
         out.entries.extend(entries);
         out.symbols.extend(names.iter().map(|(&addr, name)| SymFact { addr, name: name.clone(), kind: SymKind::Function }));
-        out.fid_names.extend(names.into_iter().map(|(addr, name)| FidMatch { addr, name }));
+        out.fid_names.extend(names.into_iter().map(|(addr, name)| FidMatch { addr, name, by_signature: false }));
     }
 }
 

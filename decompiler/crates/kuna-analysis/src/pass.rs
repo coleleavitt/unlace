@@ -286,6 +286,9 @@ pub struct SwiftTypeFacts {
     pub input_hints: Vec<InputHintFact>,
     /// (kuna `swiftcall`) Declared prototypes from mangled names.
     pub declared: Vec<SwiftDeclaredFact>,
+    /// Swift functions of a module, no type's members, by entry address: a
+    /// call to one passes no `self` and leaves `swiftself` as it was.
+    pub no_self: Vec<u64>,
     /// The `swiftself` and `swifterror` registers, once a convention is bound.
     pub regs: Option<(&'static str, &'static str, &'static str)>,
 }
@@ -324,7 +327,7 @@ pub struct InputHintFact {
 /// The kuna analog of Ghidra's `DWARFLineInfoCommentScript.addSourceLineInfo`,
 /// which walks each compilation unit's `.debug_line` rows
 /// (`DWARFLine.getAllSourceFileAddrInfo`) and `appendComment(addr, EOL,
-/// "%s:%d".formatted(fileName, lineNum))`. Produced only by
+/// "%s:%d".formatted(fileName, lineNum))`. Produced by the CVF `.trace` lines pass and
 /// [`crate::dwarf::DwarfLinesPass`] (the `.debug_line` parse, gated on the
 /// `dwarf_lines` flag, default-off); empty otherwise.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -410,12 +413,16 @@ pub struct FidMatch {
     pub addr: u64,
     /// The library name the full-hash fingerprint matched (e.g. `kuna_crc32`).
     pub name: String,
+    /// A code-signature guess (FID, FLIRT) rather than a name the binary's own
+    /// metadata states (PDB, Objective-C, Swift). Signature names at one address
+    /// apply only when they all agree, and never over a metadata name.
+    pub by_signature: bool,
 }
 
 /// Which option decides whether a [`ConstRange`] is committed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConstGate {
-    /// `objcrefconst`: the ObjC selector/class/super/protocol reference slots.
+    /// `objc`: the ObjC selector/class/super/protocol reference slots.
     ObjcRefs,
     /// `objcivars`: the ObjC ivar offset variables in `__objc_ivar`.
     ObjcIvars,
@@ -522,6 +529,11 @@ pub struct AnalysisOutput {
     /// entry, return address)`; the decompile step decodes a `void` function's
     /// callers from there.
     pub call_returns: Vec<(u64, u64)>,
+    /// (kuna `poolextents`) The ARM32 literal pools the Listing's trusted
+    /// instructions prove, as sorted, disjoint `[lo, hi)` word runs; the flow
+    /// walk's `funcboundflow` bound ends a call's fall-through at one. Empty
+    /// without the Listing and on every other target.
+    pub arm_pool_extents: Vec<(u64, u64)>,
     /// Extra read-only address ranges (e.g. `.got` after relocation).
     pub readonly: Vec<(u64, u64)>,
     /// (kuna) Ranges whose loaded contents are constant by construction, each
@@ -645,11 +657,19 @@ pub struct AnalysisOutput {
     /// MIPS PIC `$gp`-relative load resolves). Produced only on the MIPS path (see
     /// [`crate::loader::mips_markers`]); empty otherwise.
     pub tracked_regs: Vec<TrackedRegFact>,
+    /// Register values seeded at one function entry through the architecture's
+    /// per-entry loader seeds, as the ELFv1 TOC is, rather than as a context-database
+    /// range: every function's snapshot of that database would otherwise grow with
+    /// their number. Produced by [`crate::loader::kuna_ppc64r12`]; empty otherwise.
+    pub entry_tracks: Vec<TrackedRegFact>,
     /// Functions whose names matched a cspec call-fixup `<target>` (e.g. the `-pg`
     /// `mcount`/`__fentry__` profiling stubs). The commit boundary tags each with the
     /// matched fixup's inject id so the engine replaces the CALL with the fixup
     /// body. The kuna analog of Ghidra's `CallFixupAnalyzer` install loop.
     pub call_fixups: Vec<CallFixupFact>,
+    /// Functions bound to a named prototype model without a signature (see
+    /// [`ModelFact`]).
+    pub models: Vec<ModelFact>,
     /// Named, typed stack LOCALS recovered from DWARF (`DW_OP_fbreg` variables /
     /// parameters), each to be installed in its owning function's stack scope so the
     /// decompiler renders the source name+type instead of `local_*`/`iVar*`. The
@@ -658,11 +678,12 @@ pub struct AnalysisOutput {
     /// Produced only by the DWARF pass (subtask 3); empty otherwise. See
     /// [`LocalFact`].
     pub locals: Vec<LocalFact>,
-    /// Source-line annotations recovered from DWARF `.debug_line`, each to be
+    /// Source-line annotations recovered from debug metadata, each to be
     /// installed as a `Comment::user2` so the decompiled output carries the
     /// `file:line` of the instruction. The commit boundary writes each into the
-    /// architecture's `commentdb`. Produced only by the DWARF lines pass
-    /// (`dwarf_lines`, default-off); empty otherwise. See [`CommentFact`].
+    /// architecture's `commentdb`. Produced by the DWARF lines pass and the CVF
+    /// trace lines pass (`dwarf_lines on`, `cvftrace lines`); empty otherwise. See
+    /// [`CommentFact`].
     pub comments: Vec<CommentFact>,
     /// (kuna) Function header (plate) comments, keyed by `func_addr`. Produced
     /// only by [`crate::entry::kuna_itaniumeh::EhNotePass`] (`ehnote`).
@@ -684,11 +705,23 @@ pub struct AnalysisOutput {
     /// (kuna `aifdataveto`) Discovered (not symbol) entries the code reads or
     /// writes as data; the commit drops them from the entry stream.
     pub data_vetoed: Vec<u64>,
+    /// Signature names a recogniser holds but does not apply (`fid strict` when
+    /// the specific hash disagrees). They take part in the agreement check of
+    /// [`FidMatch::by_signature`] guesses at the same address and are never
+    /// committed on their own.
+    pub signature_vetoes: Vec<FidMatch>,
+    /// What became of each `.fid` database the FID pass was configured with
+    /// (loaded, missing, unreadable, invalid, incompatible). Produced only by
+    /// [`crate::fid::FidPass`] when `kuna_fid_db` names a database.
+    pub fid_databases: Vec<crate::fid::kuna_fidapply::FidDbReport>,
+    /// Lowest-priority function names, committed after every other name stream:
+    /// only an existing `sub_`/`FUN_` placeholder function takes the name, and
+    /// only when no function, data symbol or alias anywhere already uses it. No
+    /// function is created. Produced only by [`crate::kuna_cvftrace::CvfTracePass`].
+    pub fallback_names: Vec<FidMatch>,
     /// (kuna `cppproto`) The DWARF recoveries that only the C++ arm of the DWARF
-    /// pass produces, held APART from the streams above so the commit boundary can
-    /// drop them wholesale under `--option cppproto off`. The producing pass runs
-    /// at load, upstream of the `option` commands, so the gate cannot live inside
-    /// it — this split is what makes the flag live. See [`CppDwarfFacts`].
+    /// pass produces, held APART from the streams above so the commit boundary
+    /// merges them in its own order. See [`CppDwarfFacts`].
     pub cpp_dwarf: CppDwarfFacts,
     /// Go DWARF signatures, with type interning deferred until the commit gate.
     pub go_dwarf: Vec<crate::dwarf::kuna_godwarfsig::Facts>,
@@ -705,6 +738,18 @@ pub struct AnalysisOutput {
     /// (kuna `gortti`) Go runtime type descriptors and itabs under their linker
     /// names; folded into [`Self::typed_data`] at commit when the option is on.
     pub go_rtti: Vec<TypedDataFact>,
+    /// (kuna `gotypeglobals`) A Go image's `_type` descriptors as named, typed
+    /// data globals (`type:main.Point` of shell `go.typedesc`). Held APART from
+    /// [`Self::typed_data`] because the producing pass runs at load, upstream of
+    /// the `option` commands: the commit boundary folds them into the typed-data
+    /// stream only when the `gotypeglobals` gate is on, and drops them whole
+    /// otherwise. Produced by [`crate::gotypes::GoTypesPass`]; empty elsewhere.
+    pub go_type_globals: Vec<TypedDataFact>,
+    /// (kuna `gotypeglobals`) Name-only `go:itab.<concrete>,<interface>` data
+    /// symbols for the located interface-dispatch tables; committed into the
+    /// symbol table under the same gate. Name-only (not typed) so an itab
+    /// address used polymorphically keeps rendering the symbol.
+    pub go_itabs: Vec<SymFact>,
     /// (kuna `swifttypes`) The Swift type-layout facts. See [`SwiftTypeFacts`].
     pub swift_types: SwiftTypeFacts,
     /// (kuna `formatstring static`) Per-call-site prototype overrides the
@@ -803,9 +848,13 @@ impl AnalysisOutput {
         });
         self.data_objects.iter_mut().for_each(|d| fix_data(&mut d.name));
         self.typed_data.iter_mut().for_each(|d| fix_data(&mut d.name));
+        self.go_type_globals.iter_mut().for_each(|d| fix_data(&mut d.name));
+        self.go_itabs.iter_mut().for_each(|s| fix_data(&mut s.name));
         self.entry_names.iter_mut().for_each(|(_, n)| fix(n));
         self.locals.iter_mut().for_each(|l| fix(&mut l.name));
         self.fid_names.iter_mut().for_each(|f| fix(&mut f.name));
+        self.signature_vetoes.iter_mut().for_each(|f| fix(&mut f.name));
+        self.fallback_names.iter_mut().for_each(|f| fix(&mut f.name));
         self.prototypes.iter_mut().for_each(fix_proto);
         self.prototypes_at.iter_mut().for_each(|(_, p)| fix_proto(p));
         self.dwarf_nocall.iter_mut().for_each(|(_, n, _)| fix(n));
@@ -817,7 +866,6 @@ impl AnalysisOutput {
         self.cpp_sig.proven.iter_mut().for_each(|(_, p)| fix_proto(p));
         self.cpp_sig.inferred.iter_mut().for_each(|(_, p)| fix_proto(p));
         self.cpp_sig.msvc.iter_mut().for_each(|(_, p, _)| fix_proto(p));
-        self.cpp_sig.msvc_legacy.iter_mut().for_each(|(_, p)| fix_proto(p));
         self.cpp_sig.msvc_byval.iter_mut().for_each(|(_, d)| fix_proto(&mut d.pieces));
         self.format_sites.iter_mut().for_each(|f| fix_proto(&mut f.pieces));
     }
@@ -850,10 +898,6 @@ pub struct CppSigFacts {
     /// laid out for (`__thiscall`, `__cdecl`, ...) on a 32-bit x86 image, where the
     /// convention decides the storage; `None` elsewhere.
     pub msvc: Vec<(u64, kuna_decomp::fspec::PrototypePieces, Option<&'static str>)>,
-    /// (kuna `msvcsig off`) The same defined MSVC symbols read the way `cppsig`
-    /// read them before the MSVC arm existed, applied in place of [`Self::msvc`]
-    /// when that gate is off.
-    pub msvc_legacy: Vec<(u64, kuna_decomp::fspec::PrototypePieces)>,
     /// (kuna `msvcbyval`) The MSVC `__cdecl` imports in [`Self::msvc`] left open
     /// at a by-value class, as whole declarations the call sites size.
     pub msvc_byval: Vec<(u64, kuna_decomp::kuna_msvcbyval::ByvalDecl)>,
@@ -898,12 +942,15 @@ impl AnalysisOutput {
         self.dwarf_param_regs.extend(other.dwarf_param_regs);
         self.typed_data.extend(other.typed_data);
         self.go_rtti.extend(other.go_rtti);
+        self.go_type_globals.extend(other.go_type_globals);
+        self.go_itabs.extend(other.go_itabs);
         self.swift_types.typed_data.extend(other.swift_types.typed_data);
         self.swift_types.prototypes.extend(other.swift_types.prototypes);
         self.swift_types.param_locks.extend(other.swift_types.param_locks);
         self.swift_types.models.extend(other.swift_types.models);
         self.swift_types.input_hints.extend(other.swift_types.input_hints);
         self.swift_types.declared.extend(other.swift_types.declared);
+        self.swift_types.no_self.extend(other.swift_types.no_self);
         self.swift_types.regs = self.swift_types.regs.or(other.swift_types.regs);
         self.entries.extend(other.entries);
         self.fde_bodies.extend(other.fde_bodies);
@@ -917,6 +964,7 @@ impl AnalysisOutput {
         self.no_fallthru_calls.extend(other.no_fallthru_calls);
         self.eh_call_sites.extend(other.eh_call_sites);
         self.call_returns.extend(other.call_returns);
+        self.arm_pool_extents.extend(other.arm_pool_extents);
         self.readonly.extend(other.readonly);
         self.const_ranges.extend(other.const_ranges);
         self.objc_self_types.extend(other.objc_self_types);
@@ -943,7 +991,9 @@ impl AnalysisOutput {
         self.context_paints.extend(other.context_paints);
         self.inventory_context_paints.extend(other.inventory_context_paints);
         self.tracked_regs.extend(other.tracked_regs);
+        self.entry_tracks.extend(other.entry_tracks);
         self.call_fixups.extend(other.call_fixups);
+        self.models.extend(other.models);
         self.locals.extend(other.locals);
         self.comments.extend(other.comments);
         self.header_comments.extend(other.header_comments);
@@ -951,6 +1001,9 @@ impl AnalysisOutput {
         self.function_bodies.extend(other.function_bodies);
         self.global_widths.extend(other.global_widths);
         self.data_vetoed.extend(other.data_vetoed);
+        self.signature_vetoes.extend(other.signature_vetoes);
+        self.fid_databases.extend(other.fid_databases);
+        self.fallback_names.extend(other.fallback_names);
         self.cpp_dwarf.symbols.extend(other.cpp_dwarf.symbols);
         self.cpp_dwarf.locals.extend(other.cpp_dwarf.locals);
         self.cpp_dwarf.prototypes.extend(other.cpp_dwarf.prototypes);
@@ -958,7 +1011,6 @@ impl AnalysisOutput {
         self.cpp_sig.proven.extend(other.cpp_sig.proven);
         self.cpp_sig.inferred.extend(other.cpp_sig.inferred);
         self.cpp_sig.msvc.extend(other.cpp_sig.msvc);
-        self.cpp_sig.msvc_legacy.extend(other.cpp_sig.msvc_legacy);
         self.cpp_sig.msvc_byval.extend(other.cpp_sig.msvc_byval);
         self.cpp_sig.msvc_builders.extend(other.cpp_sig.msvc_builders);
         self.format_sites.extend(other.format_sites);
@@ -1001,7 +1053,7 @@ pub struct AnalysisCtx<'a> {
     /// typed parser; the ELF impl ignores it.
     pub bytes: &'a [u8],
     /// The loaded image backing byte reads at a vma.
-    pub image: &'a ObjectLoadImage,
+    pub image: Option<&'a ObjectLoadImage>,
     /// The engine architecture (read access to types/spaces/options).
     pub arch: &'a Architecture,
     /// The optional Listing/xref disassembly model (`--option listing on`,

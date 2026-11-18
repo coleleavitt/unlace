@@ -67,6 +67,7 @@
 </binaryimage>
 <script>
   <com>option typevote off</com>
+  <com>option partialaccess off</com>
   <com>lo fu f</com>
   <com>decompile</com>
   <com>print C</com>

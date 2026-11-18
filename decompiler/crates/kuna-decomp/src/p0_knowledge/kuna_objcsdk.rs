@@ -3,7 +3,7 @@
 //! The `objc` pass runs while the loader snapshots the image, upstream of every
 //! console `option`, so the directory it reads method signatures from travels
 //! as a process environment variable ([`OBJCSDK_ENV`]) the way `sourcelang`
-//! and `dynrelocs` do. Apple's headers are never vendored: the user points kuna
+//! does. Apple's headers are never vendored: the user points kuna
 //! at an SDK on disk (`--option objcsdk /path/to/iPhoneOS.sdk`) or at any
 //! directory of `.h` files, and nothing derived from them is written anywhere.
 
@@ -13,7 +13,15 @@ use std::path::PathBuf;
 /// Unset, empty or `off` means no headers are read.
 pub const OBJCSDK_ENV: &str = "KUNA_OBJCSDK";
 
-/// The configured header root, if any. A value that names no directory (set
+/// The header root the load in progress names (`LoadOptions::objcsdk`, else
+/// [`OBJCSDK_ENV`]), if any.
+pub fn sdk_path() -> Option<PathBuf> {
+    crate::kuna_loadoptions::scoped(|o| o.objcsdk.clone())
+        .unwrap_or_else(crate::kuna_loadoptions::env::objcsdk)
+}
+
+/// The header root [`OBJCSDK_ENV`] names, if any. Reads only the environment;
+/// a load in progress reads [`sdk_path`]. A value that names no directory (set
 /// outside kuna, or removed since) reads no headers and says so once.
 pub fn sdk_path_from_env() -> Option<PathBuf> {
     let v = std::env::var(OBJCSDK_ENV).ok()?;

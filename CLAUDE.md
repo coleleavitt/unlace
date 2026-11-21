@@ -79,6 +79,9 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   into the worktree's `specs/` (never `make specs` in a worktree); **never `git stash`**
   (`refs/stash` is shared across worktrees); build with the worktree env in `CLAUDE.local.md`
   and never set `CARGO_INCREMENTAL=0`.
+- **Before you finish in a worktree**: commit your work (a worktree can be removed once its
+  session ends, and only committed work survives), then remove the worktree and its build dir
+  if you are done with it (`kuna-wt-rm <name>` refuses anything unsaved or unpushed).
 - **Specs**: after a pull that changes any `specs/**/*.{slaspec,sinc}`, rebuild every `.sla` in
   the main checkout with `slacomp -a specs` (exact steps in `CLAUDE.local.md`) and check that
   each `.slaspec` has its `.sla`; stale or missing specs show up as lift diffs or "Could not

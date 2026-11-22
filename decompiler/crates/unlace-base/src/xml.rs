@@ -2304,12 +2304,13 @@ mod tests {
         // and kuna-sdkprotos / an imported C function takes its prototype from the SDK headers (option objcsdk)
         // and kuna-swiftstrcsel / a Swift literal's two words are paired along one branch arm
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
+        // and kuna-swiftconcurrency / the Swift concurrency runtime's prototypes and an async context read from the body
+        // and kuna-swiftasyncextent / a flow that runs on into an async body does not make the function async
+        assert_eq!(count, 968, "corpus file count drifted");
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
         // and kuna-swiftstrcmp / a Swift literal compared for equality prints in the inline test
-        assert_eq!(count, 966, "corpus file count drifted");
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-loweredswitchbits / a switch lowered to bit tests re-rolls
-        // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

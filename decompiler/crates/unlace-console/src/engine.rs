@@ -63,6 +63,7 @@ use unlace_analysis::flirt::kuna_rustprofiles::{
 use unlace_analysis::loadimage_mz::{MZ_LANGUAGE, MzImage, is_mz_dos_image};
 use unlace_analysis::loadimage_object::{ObjectLoadImage, PE_MACHINES, is_arm32_language};
 use unlace_analysis::loadimage_te::{TE_PROBE_LEN, TeLoadImage, is_te_image};
+use unlace_analysis::loadimage_wasm::{WASM_LANGUAGE, WasmImage, WasmLoadImage, is_wasm_module};
 use unlace_sleigh::loadimage::{LoadImage, LoadImageFunc, LoadImageSection, section_flags};
 use unlace_sleigh::loadimage_xml::LoadImageXml;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
@@ -250,6 +251,8 @@ enum ProgramContainer {
     Te,
     /// A DEX file mapped whole at address 0.
     Dex,
+    /// A WebAssembly module, its bodies lowered to register form.
+    Wasm,
 }
 
 /// A mixed-ARM container entry with the Thumb bit set, awaiting the
@@ -4987,6 +4990,9 @@ pub(crate) fn bootstrap_image(
     } else if let Some(bytes) = file_mz_dos_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_mz_bytes(path, &bytes, target, languages, isa)
+    } else if let Some(bytes) = file_wasm_module(path) {
+        let _load = enter_load(options, from_env);
+        bootstrap_wasm_bytes(path, &bytes, target, languages)
     } else {
         bootstrap_object(path, target, languages, isa, options, from_env)
     }
@@ -5026,6 +5032,122 @@ fn file_mz_dos_image(path: &str) -> Option<Vec<u8>> {
     }
     let bytes = std::fs::read(path).ok()?;
     is_mz_dos_image(&bytes).then_some(bytes)
+}
+
+/// The file's bytes when it opens with the WebAssembly preamble.
+fn file_wasm_module(path: &str) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut head = [0u8; 8];
+    std::fs::File::open(path).ok()?.read_exact(&mut head).ok()?;
+    if !is_wasm_module(&head) {
+        return None;
+    }
+    std::fs::read(path).ok()
+}
+
+/// Bootstrap a WebAssembly module from bytes already read from `path`.
+pub fn bootstrap_from_wasm_bytes(
+    path: &str,
+    bytes: &[u8],
+    target: &str,
+    spec_roots: &[String],
+) -> KunaResult<ConsoleProgram> {
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .wasm_bytes(path, bytes)
+}
+
+/// The wasm bootstrap: the module's linear memory, lowered code, globals and
+/// tables are one flat image (`unlace_analysis::loadimage_wasm`), decoded as the
+/// one language that reads the lowered records. Named functions come from the
+/// loader's symbol stream; the unnamed ones are named at `read symbols`.
+pub(crate) fn bootstrap_wasm_bytes(
+    path: &str,
+    bytes: &[u8],
+    target: &str,
+    languages: &(impl Languages + ?Sized),
+) -> KunaResult<ConsoleProgram> {
+    let target = unlace_analysis::loadimage_object::explicit_language_target(target).unwrap_or("");
+    if !target.is_empty() && target != WASM_LANGUAGE {
+        return Err(KunaError::lowlevel(format!(
+            "a WebAssembly module decodes only as {WASM_LANGUAGE}, not {target}"
+        )));
+    }
+    let image = WasmImage::parse(bytes)
+        .map_err(|error| KunaError::lowlevel(format!("WebAssembly module: {error}")))?;
+    if let Some((index, reason)) = image.refused.first() {
+        unlace_base::notes::say_once(
+            path,
+            &format!(
+                "[kuna wasm] {path}: {} of {} function bodies were not lowered and decompile to an unsupported() call; the first is function {index}, which {reason}",
+                image.refused.len(),
+                image
+                    .functions
+                    .iter()
+                    .filter(|function| !function.imported)
+                    .count(),
+            ),
+        );
+    }
+    if image.unplaced_segments > 0 {
+        unlace_base::notes::say_once(
+            path,
+            &format!(
+                "[kuna wasm] {path}: {} data or element segment(s) have an offset that is not a constant inside the memory or table, and were not placed",
+                image.unplaced_segments
+            ),
+        );
+    }
+    let registry = build_registry();
+    let mut loader = WasmLoadImage::new(path, image);
+    let mut sleigh = build_sleigh_for_loader(path, "", languages, &registry, WASM_LANGUAGE, None)?;
+    let code_space = default_code_space(&sleigh)?;
+    loader.attach_to_space(Rc::clone(&code_space));
+    let readonly_ranges = loader_readonly_ranges(&loader, sleigh.base().unwrap().manage());
+    let litpool_const =
+        unlace_decomp::kuna_litpoolconst::code_const_ranges(&LoadImage::get_segments(&loader), &[]);
+
+    let mut symbols = read_loader_symbols_generic(&loader);
+    let image = loader.image();
+    let imports: BTreeSet<u64> = image
+        .functions
+        .iter()
+        .filter(|function| function.imported)
+        .map(|function| function.addr)
+        .collect();
+    for symbol in &mut symbols {
+        if imports.contains(&symbol.addr.get_offset()) {
+            symbol.provenance = EntryProvenance::UndefinedExternal;
+        }
+    }
+    let unnamed = image
+        .functions
+        .iter()
+        .filter(|function| function.name.is_none() && !function.imported)
+        .map(|function| Address::new(Rc::clone(&code_space), function.addr))
+        .collect();
+    let loader_data_objects = image.globals.clone();
+    let mut facts = unlace_analysis::pass::AnalysisOutput::default();
+    facts.prototypes_at = image.prototypes(sleigh.base().unwrap());
+    facts.typed_data = image.table_types(sleigh.base().unwrap());
+    let image_metadata = ProgramImageMetadata {
+        entry: image.entry,
+        sections: loader.section_metadata(),
+    };
+    sleigh.base_mut().unwrap().set_loader(Box::new(loader));
+
+    let description = sleigh.base().unwrap().get_description().to_string();
+    let mut program = empty_program(sleigh, registry, ProgramContainer::Wasm, description);
+    program.symbols = SymbolStream::from_loader(symbols);
+    program.pending_synthetic_entries = unnamed;
+    program.image_metadata = Some(image_metadata);
+    program.analysis_code_space = Some(code_space);
+    program.loader_data_objects = loader_data_objects;
+    program.pending_analysis = vec![("wasm", facts)];
+    program.read_loader_symbols()?;
+    apply_readonly_ranges(&mut program, &readonly_ranges);
+    program.arch_mut().litpool_const = Rc::new(litpool_const);
+    Ok(program)
 }
 
 const MZ_RAW_IMAGE_HINT: &str = "to map the whole file as-is, use --raw-image --target \"x86:LE:16:Real Mode:default\" --base <address> and at least one --entry/--addr <address>";
@@ -8202,6 +8324,7 @@ pub fn bootstrap_from_file(
 
 /// What [`bootstrap_from_file`] found at a path, by its leading bytes.
 pub(crate) enum FileInput {
+    Wasm(Vec<u8>),
     Mz(Vec<u8>),
     Te(Vec<u8>),
     Dex(Vec<u8>),
@@ -8221,6 +8344,9 @@ pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
     }
     let bytes = std::fs::read(path)
         .map_err(|e| KunaError::lowlevel(format!("Unable to recognize imagefile {path}: {e}")))?;
+    if is_wasm_module(&bytes) {
+        return Ok(FileInput::Wasm(bytes));
+    }
     if is_mz_dos_image(&bytes) {
         return Ok(FileInput::Mz(bytes));
     }

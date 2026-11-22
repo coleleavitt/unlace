@@ -2304,6 +2304,7 @@ mod tests {
         // and kuna-swiftstrcsel / a Swift literal's two words are paired along one branch arm
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
+        assert_eq!(count, 961, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

@@ -67,13 +67,13 @@ fn surface_count_is_101() {
 }
 
 #[test]
-fn settable_count_is_315() {
-    assert_eq!(kuna_num_settables(), 315);
-    assert_eq!(SETTABLE_TABLE.len(), 315);
+fn settable_count_is_316() {
+    assert_eq!(kuna_num_settables(), 316);
+    assert_eq!(SETTABLE_TABLE.len(), 316);
 }
 
 #[test]
-fn tier_counts_are_65_core_154_transform_96_analysis() {
+fn tier_counts_are_65_core_154_transform_97_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -85,7 +85,7 @@ fn tier_counts_are_65_core_154_transform_96_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (65, 154, 96));
+    assert_eq!((core, transform, analysis), (65, 154, 97));
 }
 
 #[test]
@@ -336,6 +336,7 @@ fn option_values_live_value_present_for_129() {
         "storetype",
         // (kuna) The UEFI module pass -- an analysis-pass gate read console-side. Default-ON.
         "uefi",
+        "cortexmscs",
         // (kuna) The libgcc `__divdi3` contract -- an analysis-pass gate read
         // console-side via kuna_live_value, like `libcsigs`. Default-off.
         "libgccsigs",
@@ -1285,7 +1286,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `chkstkdarwin`, its P2 row after `msvcftol`.
     // +1 for `calleeargs`; its P4 row sits after `argclobber`.
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
-    assert_eq!(json.matches("},\n").count(), 314);
+    assert_eq!(json.matches("},\n").count(), 315);
 }
 
 #[test]

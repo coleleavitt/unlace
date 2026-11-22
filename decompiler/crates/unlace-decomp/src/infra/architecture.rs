@@ -2266,6 +2266,14 @@ pub struct Architecture {
     /// (kuna) `iokitclasses`: IOKit class and vtable recovery on an XNU kernel
     /// or kext (a commit-gated analysis pass, default on).
     pub analysis_iokitclasses: bool,
+    /// (kuna `iokitclasses on`) Type the recovered IOKit classes like Itanium
+    /// vtables (a sized `C` whose first field is `C_vtbl *vtable`) and give
+    /// each virtual member, constructor and destructor a `C *this` input
+    /// hint; see [`crate::kuna_vtabletypes`]. Off under `iokitclasses names`.
+    pub analysis_iokittypes: bool,
+    /// (kuna `iokitclasses on`) The `this` input hints, by function entry.
+    pub kuna_this_hints:
+        std::collections::BTreeMap<Address, Rc<Vec<crate::kuna_inputhints::InputHint>>>,
     /// (kuna) `xnutables`: kalloc_type views, IOExternalMethodDispatch tables and
     /// unnamed pointer slots on an XNU kernel or kext (default on).
     pub analysis_xnutables: bool,
@@ -3157,6 +3165,8 @@ impl Architecture {
             cfstrings_annotate: false,
             cfstring_entries: std::collections::BTreeSet::new(),
             analysis_iokitclasses: false,
+            analysis_iokittypes: false,
+            kuna_this_hints: std::collections::BTreeMap::new(),
             analysis_xnutables: false,
             analysis_osclassinfo: false,
             analysis_blobs: false,
@@ -3630,6 +3640,7 @@ impl Architecture {
         self.analysis_objcivars = true; // (kuna) ObjC instance structs + typed self + ivar offset fold; inert unless objc is on
         self.analysis_swifttypes = true; // Swift type layouts default-on, inert unless swiftmetadata is on
         self.analysis_iokitclasses = true; // (kuna) IOKit class recovery, XNU images only
+        self.analysis_iokittypes = true;
         self.analysis_xnutables = true; // (kuna) XNU data tables, XNU images only
         self.analysis_osclassinfo = true; // (kuna) DriverKit class records
         self.analysis_cfstrings = true; // (kuna) Mach-O __cfstring constant-string recovery default-on: Mach-O-only and real-binary-path only, so the XML datatest corpus never runs it (0/675); on an 80 MB third-party arm64 iOS app one decompile is within noise (min 2.324 s off, 2.359 s on, medians 2.442 / 2.372 over 6 interleaved runs)
@@ -4339,7 +4350,7 @@ impl Architecture {
         ctx.pass_through = self.pass_through; // passthrough
         ctx.mixed_tail_ret = self.mixed_tail_ret; // mixedtailret
 
-        ctx.vtable_types = self.analysis_vtabletypes;
+        ctx.vtable_types = self.analysis_vtabletypes || !self.kuna_this_hints.is_empty();
         ctx.cache_return = self.cache_return; // cachereturn
         ctx.readonly_calls = self.readonly_calls;
         ctx.persist_calls = self.persist_calls;

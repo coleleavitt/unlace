@@ -554,6 +554,11 @@ and `auto`, and one whose stripped kext is cut out of `__PRELINK_TEXT`.
 `kuna-xnutables.xml` decompiles the same synthetic kext with `xnutables` off and
 on: a `kalloc_type` view and an `IOExternalMethodDispatch` handler gain names.
 
+`kuna-iokitcxx.xml` decompiles a second kext (`gen_iokitcxx.py`) with
+`iokitclasses` `names` and `on`: a method's `this`, the constructor's vtable
+store, a call through a vtable slot and a metaclass `alloc` take their class's
+types.
+
 `kuna-osclassinfo.xml` decompiles a synthetic DriverKit executable
 (`gen_dext.py`) with `osclassinfo` off and on: its metaclass global and `New`
 function take their class's name.

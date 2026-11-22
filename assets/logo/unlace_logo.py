@@ -1,4 +1,5 @@
-"""Draw the Unlace logo: vector line art of a black-and-white low-top sneaker coming unlaced.
+"""Draw the Unlace logo: vector line art of a black-and-white Nike Dunk Low ("panda") coming unlaced,
+toe pointing left.
 
 Every shape is computed: Catmull-Rom splines through control points traced from a side view of
 a black-and-white ("panda") low top, filled flat black or white, outlined, with stitch lines
@@ -59,7 +60,7 @@ def line(pts, w=2.0, color=INK, dash=None, cap="round"):
     return f'<path d="{d(pts)}" fill="none" stroke="{color}" stroke-width="{w}" stroke-linecap="{cap}" stroke-linejoin="round"{da}/>'
 
 
-# ---- the shoe, side view, toe to the right ----
+# ---- the shoe, drawn toe to the right, then mirrored so the toe points left ----
 upper = catmull([(86, 372), (84, 320), (88, 232), (98, 182), (118, 166), (160, 176), (214, 184),
                  (270, 172), (322, 148), (360, 112), (392, 108), (424, 132), (470, 162), (540, 198),
                  (620, 236), (700, 268), (770, 288), (850, 306), (898, 326), (912, 350), (896, 370),
@@ -109,6 +110,14 @@ for row in range(3):
     for col in range(6 - row):
         cx, cy = 728 + col * 20 + row * 9, 288 + row * 9 + col * 3.6
         parts.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="2" fill="{INK}"/>')
+# the swoosh on the white quarter, in standard orientation once the shoe is mirrored (hook
+# toward the toe, tail rising toward the heel); the outer mirror below is undone here so the
+# path can use the classic logo coordinates (0..100 wide)
+SWOOSH = ("M100,0 C72,16 42,32 20,35 C8,37 1,33 3,26 C4,22 7,17 11,12 "
+          "C9,18 11,22 17,22 C27,22 50,12 100,0 Z")
+parts.append(f'<g transform="translate({W},0) scale(-1,1) translate(476,246) scale(2.5,3.3)">'
+             f'<path d="{SWOOSH}" fill="{INK}" stroke="{PAPER}" stroke-width="1.4" stroke-linejoin="round"/>'
+             f'<path d="{SWOOSH}" fill="none" stroke="{INK}" stroke-width="0.7" stroke-linejoin="round"/></g>')
 # eyelets
 for x, y in eyelets:
     parts.append(f'<ellipse cx="{x}" cy="{y}" rx="6" ry="4.5" fill="{PAPER}" stroke="{INK}" stroke-width="1.6"/>')
@@ -144,7 +153,9 @@ parts.append(line([(70, 470), (950, 470)], w=1.6))
 svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">
 <title>Unlace logo: line art of a black-and-white sneaker coming unlaced</title>
 <rect width="{W}" height="{H}" fill="{PAPER}"/>
+<g transform="translate({W},0) scale(-1,1)">
 {chr(10).join(parts)}
+</g>
 <text x="{W / 2}" y="548" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="700" font-size="46" letter-spacing="16" fill="{INK}">UNLACE</text>
 </svg>
 """

@@ -1,15 +1,25 @@
 //! (kuna `swiftruntime`) The Swift runtime's entry points, with the
 //! signatures the runtime's public headers give them
 //! (`swift/Runtime/HeapObject.h`, `Metadata.h`, `Casting.h`,
-//! `Exclusivity.h`, `Concurrency.h`), so a call into the runtime reads as
+//! `Exclusivity.h`, `Concurrency.h`, and the compiler's own list of them,
+//! `RuntimeFunctions.def`: the typed allocators, the `swift_cvw_*`
+//! layout-string witnesses, the array witnesses), so a call into the runtime reads as
 //! what it is: `swift_allocObject(metadata, 0x20, 7)` takes a
 //! `swift.type_metadata *` and two sizes, `swift_getGenericMetadata(…)`
 //! returns a `swift.MetadataResponse` whose first word is the metadata,
 //! `swift_dynamicCast` a `bool`. Bound by name, so an import stub, a GOT slot or an unstripped
 //! copy of the runtime all take them.
 //!
-//! The runtime is C (every entry point here is `extern "C"` under the
-//! platform convention), so these are plain prototypes; the `swiftcc`
+//! The standard library's own C entry points come along (`_swift_stdlib_*`,
+//! from `stdlib/public/SwiftShims/swift/shims/AssertionReporting.h`,
+//! `RuntimeShims.h`, `LibcShims.h`, `FoundationShims.h`,
+//! `ThreadLocalStorage.h`): `_swift_stdlib_reportUnimplementedInitializer`
+//! takes two strings with their lengths and the flags, so the live floating
+//! registers of its caller stop reading as its first arguments.
+//!
+//! The runtime is C (every entry point here is `extern "C"`, under the
+//! platform convention or under `swiftcc` with every argument in the
+//! platform's argument registers), so these are plain prototypes; the `swiftcc`
 //! entry points whose arguments ride in the Swift registers
 //! (the key-path accessors) are left to recovery.
 //!
@@ -63,6 +73,8 @@ pub enum Ty {
     Int,
     /// `unsigned int`.
     U32,
+    /// `int`.
+    I32,
     Bool,
     /// `swift.AsyncContext *`.
     Ctx,
@@ -73,6 +85,8 @@ pub enum Ty {
     Exec,
     /// `swift.AsyncTaskAndContext` (a new task and its initial context).
     TaskAndContext,
+    /// `swift.NSOperatingSystemVersion` (major, minor and patch, three words).
+    OsVersion,
 }
 
 struct Sig {
@@ -377,6 +391,329 @@ const RUNTIME: &[(&str, Sig)] = &[
         "swift_reflectionMirror_normalizedType",
         sig!(Meta(Ptr, Meta, Meta)),
     ),
+    ("swift_lookUpClassMethod", sig!(Ptr(Meta, Ptr, Ptr))),
+    ("swift_deletedMethodError", sig!(Void())),
+    ("swift_reportError", sig!(Void(U32, Str))),
+    ("swift_reportWarning", sig!(Void(U32, Str))),
+    (
+        "_swift_stdlib_reportFatalError",
+        sig!(Void(Str, I32, Str, I32, U32)),
+    ),
+    (
+        "_swift_stdlib_reportFatalErrorInFile",
+        sig!(Void(Str, I32, Str, I32, Str, I32, U32, U32)),
+    ),
+    (
+        "_swift_stdlib_reportUnimplementedInitializer",
+        sig!(Void(Str, I32, Str, I32, U32)),
+    ),
+    (
+        "_swift_stdlib_reportUnimplementedInitializerInFile",
+        sig!(Void(Str, I32, Str, I32, Str, I32, U32, U32, U32)),
+    ),
+    ("_swift_stdlib_strtold_clocale", sig!(Str(Str, Ptr))),
+    ("_swift_stdlib_strtod_clocale", sig!(Str(Str, Ptr))),
+    ("_swift_stdlib_strtof_clocale", sig!(Str(Str, Ptr))),
+    ("_swift_stdlib_strtof16_clocale", sig!(Str(Str, Ptr))),
+    ("_swift_stdlib_immortalize", sig!(Void(Ptr))),
+    ("_swift_stdlib_flockfile_stdout", sig!(Void())),
+    ("_swift_stdlib_funlockfile_stdout", sig!(Void())),
+    ("_swift_stdlib_putc_stderr", sig!(I32(I32))),
+    ("_swift_stdlib_getHardwareConcurrency", sig!(Size())),
+    ("_swift_stdlib_getCurrentStackBounds", sig!(Bool(Ptr, Ptr))),
+    ("_swift_stdlib_isExecutableLinkedOnOrAfter", sig!(Bool(U32))),
+    ("_swift_stdlib_fwrite_stdout", sig!(Size(Ptr, Size, Size))),
+    ("swift_stdlib_readLine_stdin", sig!(Int(Ptr))),
+    ("_swift_stdlib_operatingSystemVersion", sig!(OsVersion())),
+    ("_swift_stdlib_threadLocalStorageGet", sig!(Ptr())),
+    ("swift_allocBoxTyped", sig!(BoxPair(Meta, Size))),
+    ("swift_allocEmptyBox", sig!(Obj())),
+    ("swift_allocObjectTyped", sig!(Obj(Meta, Size, Size, Size))),
+    ("swift_allocRawTyped", sig!(Ptr(Size, Size, Size))),
+    ("swift_allocateMetadataPack", sig!(Ptr(Ptr, Size))),
+    ("swift_allocateWitnessTablePack", sig!(Ptr(Ptr, Size))),
+    (
+        "swift_arrayAssignWithCopyBackToFront",
+        sig!(Void(Ptr, Ptr, Size, Meta)),
+    ),
+    (
+        "swift_arrayAssignWithCopyFrontToBack",
+        sig!(Void(Ptr, Ptr, Size, Meta)),
+    ),
+    (
+        "swift_arrayAssignWithCopyNoAlias",
+        sig!(Void(Ptr, Ptr, Size, Meta)),
+    ),
+    (
+        "swift_arrayInitWithTakeNoAlias",
+        sig!(Void(Ptr, Ptr, Size, Meta)),
+    ),
+    (
+        "swift_autoDiffAllocateSubcontextWithType",
+        sig!(Ptr(Obj, Meta)),
+    ),
+    (
+        "swift_autoDiffCreateLinearMapContextWithType",
+        sig!(Obj(Meta)),
+    ),
+    ("swift_autoDiffProjectTopLevelSubcontext", sig!(Ptr(Obj))),
+    ("swift_clearSensitive", sig!(Void(Ptr, Size))),
+    (
+        "swift_compareProtocolConformanceDescriptors",
+        sig!(Bool(Ptr, Ptr)),
+    ),
+    ("swift_compareTypeContextDescriptors", sig!(Bool(Ptr, Ptr))),
+    (
+        "swift_copyKeyPathTrivialIndices",
+        sig!(Void(Ptr, Ptr, Size)),
+    ),
+    ("swift_copyPOD", sig!(Ptr(Ptr, Ptr, Meta))),
+    (
+        "swift_cvw_allocateGenericClassMetadataWithLayoutString",
+        sig!(Meta(Ptr, Ptr, Ptr)),
+    ),
+    (
+        "swift_cvw_allocateGenericValueMetadataWithLayoutString",
+        sig!(Meta(Ptr, Ptr, Ptr, Size)),
+    ),
+    ("swift_cvw_assignWithCopy", sig!(Ptr(Ptr, Ptr, Meta))),
+    (
+        "swift_cvw_assignWithCopyMultiPayloadEnumFN",
+        sig!(Ptr(Ptr, Ptr, Meta)),
+    ),
+    ("swift_cvw_assignWithTake", sig!(Ptr(Ptr, Ptr, Meta))),
+    (
+        "swift_cvw_assignWithTakeMultiPayloadEnumFN",
+        sig!(Ptr(Ptr, Ptr, Meta)),
+    ),
+    ("swift_cvw_destroy", sig!(Void(Ptr, Meta))),
+    ("swift_cvw_destroyMultiPayloadEnumFN", sig!(Void(Ptr, Meta))),
+    ("swift_cvw_enumFn_getEnumTag", sig!(U32(Ptr, Meta))),
+    (
+        "swift_cvw_enumSimple_destructiveInjectEnumTag",
+        sig!(Void(Ptr, U32, Meta)),
+    ),
+    ("swift_cvw_enumSimple_getEnumTag", sig!(U32(Ptr, Meta))),
+    (
+        "swift_cvw_initEnumMetadataMultiPayloadWithLayoutString",
+        sig!(Void(Meta, Size, Size, Ptr)),
+    ),
+    (
+        "swift_cvw_initEnumMetadataSingleCaseWithLayoutString",
+        sig!(Void(Meta, Size, Meta)),
+    ),
+    (
+        "swift_cvw_initEnumMetadataSinglePayloadWithLayoutString",
+        sig!(Void(Meta, Size, Meta, U32)),
+    ),
+    (
+        "swift_cvw_initStructMetadataWithLayoutString",
+        sig!(Void(Meta, Size, Size, Ptr, Ptr, Ptr)),
+    ),
+    ("swift_cvw_initWithCopy", sig!(Ptr(Ptr, Ptr, Meta))),
+    (
+        "swift_cvw_initWithCopyMultiPayloadEnumFN",
+        sig!(Ptr(Ptr, Ptr, Meta)),
+    ),
+    ("swift_cvw_initWithTake", sig!(Ptr(Ptr, Ptr, Meta))),
+    (
+        "swift_cvw_initWithTakeMultiPayloadEnumFN",
+        sig!(Ptr(Ptr, Ptr, Meta)),
+    ),
+    (
+        "swift_cvw_initializeBufferWithCopyOfBuffer",
+        sig!(Ptr(Ptr, Ptr, Meta)),
+    ),
+    (
+        "swift_cvw_initializeBufferWithCopyOfBufferMultiPayloadEnumFN",
+        sig!(Ptr(Ptr, Ptr, Meta)),
+    ),
+    ("swift_cvw_instantiateLayoutString", sig!(Void(Ptr, Meta))),
+    (
+        "swift_cvw_multiPayloadEnumGeneric_destructiveInjectEnumTag",
+        sig!(Void(Ptr, U32, Meta)),
+    ),
+    (
+        "swift_cvw_multiPayloadEnumGeneric_getEnumTag",
+        sig!(U32(Ptr, Meta)),
+    ),
+    (
+        "swift_cvw_singlePayloadEnumGeneric_destructiveInjectEnumTag",
+        sig!(Void(Ptr, U32, Meta)),
+    ),
+    (
+        "swift_cvw_singlePayloadEnumGeneric_getEnumTag",
+        sig!(U32(Ptr, Meta)),
+    ),
+    (
+        "swift_cvw_singletonEnum_destructiveInjectEnumTag",
+        sig!(Void(Ptr, U32, Meta)),
+    ),
+    ("swift_cvw_singletonEnum_getEnumTag", sig!(U32(Ptr, Meta))),
+    ("swift_deallocBox", sig!(Void(Obj))),
+    (
+        "swift_deallocClassInstanceTyped",
+        sig!(Void(Obj, Size, Size, Size)),
+    ),
+    ("swift_deallocError", sig!(Void(Ptr, Meta))),
+    (
+        "swift_deallocObjectTyped",
+        sig!(Void(Obj, Size, Size, Size)),
+    ),
+    (
+        "swift_deallocPartialClassInstanceTyped",
+        sig!(Void(Obj, Meta, Size, Size, Size)),
+    ),
+    ("swift_deallocRawTyped", sig!(Void(Ptr, Size, Size, Size))),
+    (
+        "swift_deallocUninitializedObjectTyped",
+        sig!(Void(Obj, Size, Size, Size)),
+    ),
+    ("swift_dereferenceBorrow", sig!(Ptr(Meta, Ptr))),
+    (
+        "swift_dynamicCastMetatypeToObjectConditional",
+        sig!(Ptr(Meta)),
+    ),
+    (
+        "swift_dynamicCastMetatypeToObjectUnconditional",
+        sig!(Ptr(Meta, Str, U32, U32)),
+    ),
+    ("swift_dynamicCastObjCClassMetatype", sig!(Ptr(Ptr, Ptr))),
+    (
+        "swift_dynamicCastObjCClassMetatypeUnconditional",
+        sig!(Ptr(Ptr, Ptr, Str, U32, U32)),
+    ),
+    ("swift_dynamicCastTest", sig!(Bool(Ptr, Meta, Meta, Size))),
+    (
+        "swift_dynamicCastTypeToObjCProtocolConditional",
+        sig!(Meta(Meta, Size, Ptr)),
+    ),
+    (
+        "swift_dynamicCastTypeToObjCProtocolUnconditional",
+        sig!(Meta(Meta, Size, Ptr, Str, U32, U32)),
+    ),
+    ("swift_errorInMain", sig!(Void(Ptr))),
+    (
+        "swift_getAssociatedConformanceWitnessRelative",
+        sig!(Ptr(Ptr, Meta, Meta, Ptr, Ptr)),
+    ),
+    (
+        "swift_getAssociatedTypeWitnessRelative",
+        sig!(Response(Size, Ptr, Meta, Ptr, Ptr)),
+    ),
+    ("swift_getBorrowTypeMetadata", sig!(Response(Size, Meta))),
+    ("swift_getCOMDynamicType", sig!(Meta(Ptr, Meta))),
+    (
+        "swift_getCanonicalPrespecializedGenericMetadata",
+        sig!(Response(Size, Ptr, Ptr, Ptr)),
+    ),
+    (
+        "swift_getCanonicalSpecializedMetadata",
+        sig!(Response(Size, Meta, Ptr)),
+    ),
+    (
+        "swift_getExtendedExistentialTypeMetadata_unique",
+        sig!(Meta(Ptr, Ptr)),
+    ),
+    (
+        "swift_getExtendedExistentialTypeShape",
+        sig!(Meta(Ptr, Ptr)),
+    ),
+    (
+        "swift_getExtendedFunctionTypeMetadata",
+        sig!(Meta(Size, Size, Ptr, Ptr, Meta, Meta, U32, Meta)),
+    ),
+    (
+        "swift_getFixedArrayTypeMetadata",
+        sig!(Response(Size, Size, Meta)),
+    ),
+    ("swift_getFunctionReplacement", sig!(Ptr(Ptr, Ptr))),
+    (
+        "swift_getFunctionTypeMetadataDifferentiable",
+        sig!(Meta(Size, Size, Ptr, Ptr, Meta)),
+    ),
+    (
+        "swift_getFunctionTypeMetadataGlobalActor",
+        sig!(Meta(Size, Size, Ptr, Ptr, Meta, Meta)),
+    ),
+    (
+        "swift_getFunctionTypeMetadataGlobalActorBackDeploy",
+        sig!(Meta(Size, Size, Ptr, Ptr, Meta, Meta)),
+    ),
+    (
+        "swift_getMultiPayloadEnumTagSinglePayload",
+        sig!(U32(Ptr, U32, Meta)),
+    ),
+    ("swift_getObjCMetatypeFromMetadata", sig!(Ptr(Meta))),
+    (
+        "swift_getOpaqueTypeMetadata",
+        sig!(Response(Size, Ptr, Ptr, Size)),
+    ),
+    ("swift_getOrigOfReplaceable", sig!(Ptr(Ptr))),
+    ("swift_initBorrow", sig!(Void(Meta, Ptr, Ptr))),
+    (
+        "swift_initClassMetadata",
+        sig!(Void(Meta, Size, Size, Ptr, Ptr)),
+    ),
+    (
+        "swift_initRawStructMetadata",
+        sig!(Void(Meta, Size, Ptr, U32)),
+    ),
+    (
+        "swift_initRawStructMetadata2",
+        sig!(Void(Meta, Size, Ptr, Size, Size)),
+    ),
+    ("swift_instantiateObjCClass", sig!(Void(Meta))),
+    ("swift_isDeallocating", sig!(Bool(Obj))),
+    (
+        "swift_makeBoxUniqueTyped",
+        sig!(BoxPair(Ptr, Meta, Size, Size)),
+    ),
+    ("swift_nonatomic_bridgeObjectRelease", sig!(Void(Ptr))),
+    (
+        "swift_nonatomic_bridgeObjectRelease_n",
+        sig!(Void(Ptr, U32)),
+    ),
+    ("swift_nonatomic_bridgeObjectRetain", sig!(Ptr(Ptr))),
+    ("swift_nonatomic_bridgeObjectRetain_n", sig!(Ptr(Ptr, U32))),
+    ("swift_nonatomic_release_n", sig!(Void(Obj, U32))),
+    ("swift_nonatomic_retain_n", sig!(Obj(Obj, U32))),
+    ("swift_nonatomic_unknownObjectRelease", sig!(Void(Ptr))),
+    (
+        "swift_nonatomic_unknownObjectRelease_n",
+        sig!(Void(Obj, U32)),
+    ),
+    ("swift_nonatomic_unknownObjectRetain", sig!(Ptr(Ptr))),
+    ("swift_nonatomic_unknownObjectRetain_n", sig!(Obj(Obj, U32))),
+    (
+        "swift_objc_swift3ImplicitObjCEntrypoint",
+        sig!(Void(Ptr, Ptr, Str, Size, Size, Size, Ptr)),
+    ),
+    ("swift_onceClosureDestroyedError", sig!(Void(Obj))),
+    ("swift_registerProtocolConformances", sig!(Void(Ptr, Ptr))),
+    ("swift_registerProtocols", sig!(Void(Ptr, Ptr))),
+    ("swift_registerTypeMetadataRecords", sig!(Void(Ptr, Ptr))),
+    ("swift_releaseBox", sig!(Void(Obj))),
+    ("swift_releaseBoxTyped", sig!(Void(Obj, Size))),
+    ("swift_relocateClassMetadata", sig!(Meta(Ptr, Ptr))),
+    (
+        "swift_storeMultiPayloadEnumTagSinglePayload",
+        sig!(Void(Ptr, U32, U32, Meta)),
+    ),
+    ("swift_tryRetain", sig!(Obj(Obj))),
+    (
+        "swift_unexpectedError",
+        sig!(Void(Ptr, Str, Int, Bool, Size)),
+    ),
+    (
+        "swift_updateClassMetadata",
+        sig!(Void(Meta, Size, Size, Ptr, Ptr)),
+    ),
+    (
+        "swift_updatePureObjCClassMetadata",
+        sig!(Ptr(Ptr, Size, Size, Ptr)),
+    ),
+    ("swift_verifyEndOfLifetime", sig!(Void(Obj))),
 ];
 
 /// The shared types, interned once per factory.
@@ -429,6 +766,25 @@ impl Types<'_> {
                 ("state", word),
             ],
         )
+    }
+
+    fn os_version(&self) -> Option<Rc<Datatype>> {
+        let name = "swift.NSOperatingSystemVersion";
+        if let Some(t) = self.tf.find_by_name(name).ok().flatten() {
+            if t.get_size() > 0 {
+                return Some(t);
+            }
+        }
+        let word = self.tf.get_base(8, type_metatype::TYPE_INT).ok()?;
+        let shell = self.tf.get_type_struct(name).ok()?;
+        let fields = ["majorVersion", "minorVersion", "patchVersion"]
+            .into_iter()
+            .enumerate()
+            .map(|(i, n)| TypeField::new(i as i32, 8 * i as i32, n.to_string(), Rc::clone(&word)))
+            .collect();
+        self.tf
+            .set_fields_struct_raw(&shell, fields, Vec::new(), 24, 8, 0)
+            .ok()
     }
 
     fn box_pair(&self) -> Option<Rc<Datatype>> {
@@ -512,6 +868,7 @@ impl Types<'_> {
             Size => self.tf.get_base(8, type_metatype::TYPE_UINT).ok()?,
             Int => self.tf.get_base(8, type_metatype::TYPE_INT).ok()?,
             U32 => self.tf.get_base(4, type_metatype::TYPE_UINT).ok()?,
+            I32 => self.tf.get_base(4, type_metatype::TYPE_INT).ok()?,
             Bool => self.tf.get_base(1, type_metatype::TYPE_BOOL).ok()?,
             Ctx => self.async_context()?,
             ContCtx => self.continuation_context()?,
@@ -523,6 +880,7 @@ impl Types<'_> {
                     ("initial_context", self.async_context()?),
                 ],
             )?,
+            OsVersion => self.os_version()?,
         })
     }
 }
@@ -731,7 +1089,11 @@ mod tests {
         let total = names.len();
         names.dedup();
         assert_eq!(names.len(), total, "a runtime entry point is listed twice");
-        assert!(names.iter().all(|n| n.starts_with("swift_")));
+        assert!(
+            names
+                .iter()
+                .all(|n| n.starts_with("swift_") || n.starts_with("_swift_stdlib_"))
+        );
     }
 
     #[test]

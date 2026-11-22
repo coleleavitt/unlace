@@ -2308,7 +2308,8 @@ mod tests {
         // and kuna-swiftconcurrency / the Swift concurrency runtime's prototypes and an async context read from the body
         // and kuna-swiftasyncextent / a flow that runs on into an async body does not make the function async
         // and kuna-swiftrrregs / the arm64 register-specific swift_retain_x<N> / swift_release_x<N> take their register
-        assert_eq!(count, 974, "corpus file count drifted");
+        // and kuna-swiftstdlib / the Swift standard library's C entry points carry their shims-header signatures
+        assert_eq!(count, 975, "corpus file count drifted");
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
         // and kuna-darwinvarargs / an undeclared variadic callee on Apple arm64 keeps its stack-passed arguments
         // and kuna-oslog / an os_log call prints its decoded arguments; __oslogstring literals print as strings

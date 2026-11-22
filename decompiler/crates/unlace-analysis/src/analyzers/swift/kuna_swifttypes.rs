@@ -41,6 +41,7 @@ use super::Namer;
 use super::descriptors::{
     Context, ContextKind, FieldDescriptor, Metadata, MethodKind, Reader, Target,
 };
+use super::kuna_swiftwitness::{HAS_ENUM_WITNESSES, WITNESSES, witness_pointer};
 use crate::demangle::kuna_swift::node::{Kind, Node, NodeRef};
 use crate::demangle::kuna_swift::parse::mk_type;
 use crate::demangle::kuna_swift::print::print_full;
@@ -223,7 +224,7 @@ pub struct Types<'a> {
     ambiguous: HashSet<String>,
     built: RefCell<HashMap<u64, Option<Rc<Datatype>>>>,
     in_progress: RefCell<HashSet<u64>>,
-    ptr_size: i32,
+    pub(super) ptr_size: i32,
 }
 
 /// What the pass did, for the report.
@@ -545,7 +546,7 @@ impl<'a> Types<'a> {
         header
     }
 
-    fn void_ptr(&self) -> Option<Rc<Datatype>> {
+    pub(super) fn void_ptr(&self) -> Option<Rc<Datatype>> {
         let void = self.tf.get_type_void().ok()?;
         self.tf.get_type_pointer(self.ptr_size, void, 1).ok()
     }
@@ -596,7 +597,7 @@ impl<'a> Types<'a> {
     }
 
     /// The node a symbolic reference in a mangled name at `base` stands for.
-    fn resolve(&self, base: u64, kind: u8, at: usize, value: u64) -> Option<NodeRef> {
+    pub(super) fn resolve(&self, base: u64, kind: u8, at: usize, value: u64) -> Option<NodeRef> {
         let here = base.wrapping_add(at as u64);
         let offset = value as u32 as i32 as i64 as u64;
         match kind {
@@ -615,7 +616,7 @@ impl<'a> Types<'a> {
 
     /// The demangler tree of a local context: `Type(Structure(Module,
     /// Identifier))` for a nominal type, a `Module` node for a module.
-    fn context_node(&self, addr: u64, depth: usize) -> Option<NodeRef> {
+    pub(super) fn context_node(&self, addr: u64, depth: usize) -> Option<NodeRef> {
         if depth > 32 {
             return None;
         }
@@ -999,31 +1000,54 @@ impl<'a> Types<'a> {
         )
     }
 
+    /// The layout of the table at `table`: `swift.enum_value_witness_table`
+    /// when its flags say it has the enum witnesses.
+    pub fn table_struct_at(&self, table: u64) -> Option<Rc<Datatype>> {
+        let flags = self.reader.img.read_u32(table.checked_add(80)?)?;
+        if flags & HAS_ENUM_WITNESSES != 0 {
+            self.enum_witness_table_struct()
+        } else {
+            self.witness_table_struct()
+        }
+    }
+
+    /// `swift.enum_value_witness_table`: the value witness table, then the
+    /// three enum witnesses.
+    pub fn enum_witness_table_struct(&self) -> Option<Rc<Datatype>> {
+        let fields = self.witness_table_fields(WITNESSES.len())?;
+        self.interned_struct("swift.enum_value_witness_table", &fields, 112)
+    }
+
     /// `swift.value_witness_table`.
     pub fn witness_table_struct(&self) -> Option<Rc<Datatype>> {
+        let fields = self.witness_table_fields(8)?;
+        self.interned_struct("swift.value_witness_table", &fields, 88)
+    }
+
+    /// The layout words and the first `witnesses` functions of a table,
+    /// each function slot a pointer of the witness's signature.
+    fn witness_table_fields(
+        &self,
+        witnesses: usize,
+    ) -> Option<Vec<(i32, &'static str, Rc<Datatype>)>> {
         let ptr = self.void_ptr()?;
         let word = self.tf.get_base(8, type_metatype::TYPE_UINT).ok()?;
         let u32t = self.tf.get_base(4, type_metatype::TYPE_UINT).ok()?;
-        let names = [
-            "initializeBufferWithCopyOfBuffer",
-            "destroy",
-            "initializeWithCopy",
-            "assignWithCopy",
-            "initializeWithTake",
-            "assignWithTake",
-            "getEnumTagSinglePayload",
-            "storeEnumTagSinglePayload",
-        ];
-        let mut fields: Vec<(i32, &str, Rc<Datatype>)> = names
+        let meta = self.metadata_struct().and_then(|t| self.pointer_to(t))?;
+        let mut fields: Vec<(i32, &'static str, Rc<Datatype>)> = WITNESSES[..witnesses]
             .iter()
             .enumerate()
-            .map(|(i, n)| (8 * i as i32, *n, Rc::clone(&ptr)))
+            .map(|(i, (n, off))| {
+                let f = witness_pointer(self.tf, i, &meta).unwrap_or_else(|| Rc::clone(&ptr));
+                (*off as i32, *n, f)
+            })
             .collect();
         fields.push((64, "size", Rc::clone(&word)));
         fields.push((72, "stride", word));
         fields.push((80, "flags", Rc::clone(&u32t)));
         fields.push((84, "extraInhabitantCount", u32t));
-        self.interned_struct("swift.value_witness_table", &fields, 88)
+        fields.sort_by_key(|f| f.0);
+        Some(fields)
     }
 
     /// Build every static layout, type the metadata records, the accessors
@@ -1037,7 +1061,6 @@ impl<'a> Types<'a> {
         addrs.sort_unstable();
         let metadata_t = self.metadata_struct();
         let class_metadata_t = self.class_metadata_struct();
-        let vwt_t = self.witness_table_struct();
         let response_t = self.metadata_response_struct();
         for addr in addrs {
             let Some(ctx) = self.md.contexts.get(&addr) else {
@@ -1079,7 +1102,10 @@ impl<'a> Types<'a> {
                 });
             }
             if ctx.kind != ContextKind::Class {
-                if let (Some(w), Some(t)) = (self.local_witness_table(meta), vwt_t.clone()) {
+                if let Some((w, t)) = self
+                    .local_witness_table(meta)
+                    .and_then(|w| Some((w, self.table_struct_at(w)?)))
+                {
                     out.swift_types.typed_data.push(TypedDataFact {
                         addr: w,
                         name: format!("{path}.value_witness_table"),
@@ -1272,7 +1298,7 @@ impl<'a> Types<'a> {
 
 /// The type (or module) node an imported descriptor symbol names
 /// (`$s7SwiftUI4ViewPMp`, `$s10Foundation4DateVMn`, `$s7SwiftUIMXM`).
-fn imported_node(import: &str) -> Option<NodeRef> {
+pub(super) fn imported_node(import: &str) -> Option<NodeRef> {
     let tree =
         demangle_swift_tree(import).or_else(|| demangle_swift_tree(&format!("_{import}")))?;
     let top = tree.first()?;

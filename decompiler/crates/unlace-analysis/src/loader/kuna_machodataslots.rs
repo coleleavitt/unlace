@@ -130,6 +130,7 @@ impl AnalysisPass for MachODataImportPass {
             };
             out.externref.push((slot, end));
             out.import_slot_names.push((slot, minted_name(&name)));
+            out.data_import_slots.push(slot);
         }
         out
     }

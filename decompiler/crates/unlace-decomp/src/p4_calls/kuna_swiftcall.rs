@@ -59,7 +59,7 @@ use crate::fspec::ProtoModel;
 use crate::funcdata::Funcdata;
 
 /// The Swift registers of the image and its four models.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SwiftAbi {
     pub self_reg: (Address, int4),
     pub error_reg: (Address, int4),

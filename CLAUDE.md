@@ -118,7 +118,7 @@ make rust-test     # full cargo workspace suite + options.md freshness  → gree
 make check-spec    # docs/spec anchors + phase-folder ownership resolve → green
 make test-tools    # Python tooling unit tests + module layering ratchet (CI-required)
 ```
-`scripts/check_layers.py` (run by `make test-tools`) fails on a new `crate::` path from a lower
+`scripts/check_layers.py` (run by `make test-tools`) fails on a new module path (`crate::`, `super::`, `self::`) from a lower
 band of unlace-decomp to a higher one (middle < lift < structure < bandb < emit < driver; the
 bands are listed in the script). Invert the dependency instead of adding it to
 `scripts/layers-allowlist.txt`; that list only shrinks.

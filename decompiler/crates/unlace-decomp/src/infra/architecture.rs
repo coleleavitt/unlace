@@ -978,6 +978,10 @@ pub struct Architecture {
     /// its return value too (option `mixedtailret`).  See
     /// [`crate::p4_calls::kuna_mixedtailret`].
     pub mixed_tail_ret: bool,
+    /// (kuna) A return register that holds one memory cell's value on every
+    /// path is the return value (option `cachereturn`).  See
+    /// [`crate::p4_calls::kuna_cachereturn`].
+    pub cache_return: bool,
     /// (kuna) Recover whole scalar VFP returns and double arguments on an ARM
     /// image that states the VFP calling convention (option `armfloatreturn`).
     /// See [`crate::p4_calls::kuna_armfloatreturn`].
@@ -1419,11 +1423,19 @@ pub struct Architecture {
     /// one op across several leaves, and suppressing by identity would delete
     /// genuine mid-body early returns).
     pub voidtailreturn: bool,
+    /// (kuna `switchmerge`) Print a C `switch` whose `default:` arm is only
+    /// another switch on the same selector as one `switch`, and leave out the
+    /// labels of arms that jump to the code `default:` runs.
+    pub switchmerge: bool,
     /// (kuna `importdata`) Render a data read through a loader-marked import slot
     /// (a GOT / `__got` / `__auth_got` / IAT entry holding an import's address) as
     /// the import itself, instead of a dereference of the anonymous slot. Default
     /// **on**.
     pub import_data: bool,
+    /// (kuna `importdata`) `(space index, offset)` of each import slot whose
+    /// import is a data object (`machodataslots`): a read of the slot's own
+    /// value renders `&<import>`.
+    pub data_import_slots: std::collections::BTreeSet<(int4, uintb)>,
     /// (kuna `castimplied`) Leave out a cast C's own conversion rules already
     /// perform: a value-preserving integer widening passed to a trusted
     /// parameter, assigned to or returned as exactly its type, or stacked under
@@ -2177,6 +2189,8 @@ pub struct Architecture {
     /// (kuna) Name a stripped Mach-O stub from the chained bind on its slot
     /// (`stubbinds`). Default on; Mach-O only.
     pub analysis_stubbinds: bool,
+    /// (kuna) Name a placeholder jump thunk `j_<target>` (`thunknames`). Default on.
+    pub analysis_thunknames: bool,
     /// (kuna) Gate the Mach-O Objective-C metadata recovery pass (`objc`); default
     /// **off**. The kuna analog of Ghidra's `ObjcTypeMetadataAnalyzer`
     /// (name-recovery half): when the binary is a Mach-O, walk the `__objc_*`
@@ -2214,6 +2228,12 @@ pub struct Architecture {
     /// typed metadata records, accessor prototypes and the register-pinned
     /// `self` of getters. Default-on; inert unless `swiftmetadata` is on.
     pub analysis_swifttypes: bool,
+    /// (kuna) Gate the Swift helper arm of the metadata pass
+    /// (`swifthelpers`): the instantiation helpers and lazy witness table
+    /// accessors named from their bodies, and the caches they fill named
+    /// after the type each call asks for. Default-on; inert unless
+    /// `swiftmetadata` is on.
+    pub analysis_swifthelpers: bool,
     /// (kuna `swifttypes`) Register-pinned parameters the analysis tier
     /// declared, by function entry: `(slot, name, storage + type)`, the
     /// shape of a console `map param`. The decompile drive seeds a
@@ -2246,6 +2266,17 @@ pub struct Architecture {
     /// (kuna `swiftruntime`) The Swift runtime's entry points bound to their
     /// header signatures, by name. Default-on; Swift-detected images only.
     pub analysis_swiftruntime: bool,
+    /// (kuna) Gate the `@objc`-thunk arm of the Swift metadata pass
+    /// (`swiftobjcthunk`): a vtable slot an Objective-C entry point calls is
+    /// named by its selector or property. Default-on; inert unless
+    /// `swiftmetadata` is on.
+    pub analysis_swiftobjcthunk: bool,
+    /// (kuna) Gate the value-witness arm of the metadata pass
+    /// (`valuewitness`): each local struct's and enum's value witness
+    /// functions named and prototyped, and a load of a value's witness table
+    /// through its metadata typed `swift.value_witness_table *`. Default-on;
+    /// inert unless `swiftmetadata` is on.
+    pub analysis_valuewitness: bool,
     /// (kuna) The calling convention the analysis tier bound to a function
     /// without declaring its signature, by entry `(space index, offset)`.
     /// The function's own parameters, and those of every direct call to it,
@@ -2259,6 +2290,9 @@ pub struct Architecture {
     /// (kuna `swiftcall`) The Swift registers and the throwing model
     /// ([`crate::kuna_swiftcall`]).
     pub loader_swift_abi: Option<Rc<crate::kuna_swiftcall::SwiftAbi>>,
+    /// (kuna `swiftmetadata`) Each local Swift enum's case count by its
+    /// metadata accessor's entry offset (`p2_lift/kuna_switchextent.rs`).
+    pub loader_swift_enum_cases: Rc<std::collections::BTreeMap<u64, u32>>,
     /// (kuna) Gate the PE PDB metadata recovery pass (`pdb`); default **off**. The
     /// kuna analog of Ghidra's `PdbUniversalAnalyzer` (the pure-Java PDB analyzer;
     /// the MS-DIA `PdbAnalyzer` is Windows-native and out of scope) — the
@@ -2865,6 +2899,7 @@ impl Architecture {
             retpoline_thunk: true,
             vararg_save: false,
             alloca_calls: true,
+            cache_return: true, // (kuna) option cachereturn; reset_defaults sets the shipped default
             readonly_calls: Some(crate::p3_dataflow::heritage::READONLY_CROSS_PRODUCT),
             persist_calls: Some(crate::p3_dataflow::heritage::PERSIST_CROSS_PRODUCT),
             narrow_args: true,
@@ -2933,8 +2968,10 @@ impl Architecture {
             realtypes: false,
             ctypes: false, // (kuna) option ctypes; reset_defaults sets the shipped default
             voidtailreturn: false, // (kuna) option voidtailreturn; reset_defaults sets the shipped default
-            goto_next: false, // (kuna) option gotonext; reset_defaults sets the shipped default
+            switchmerge: false, // (kuna) option switchmerge; reset_defaults sets the shipped default
+            goto_next: false,   // (kuna) option gotonext; reset_defaults sets the shipped default
             import_data: false,
+            data_import_slots: std::collections::BTreeSet::new(),
             cast_implied: false, // (kuna) option castimplied; reset_defaults sets the shipped default
             cast_sign: false,    // (kuna) option castsign; reset_defaults sets the shipped default
             cast_ternary: false, // (kuna) option castternary; reset_defaults sets the shipped default
@@ -3092,6 +3129,7 @@ impl Architecture {
             analysis_protomerge: false,
             analysis_calltable: false,
             analysis_stubbinds: false,
+            analysis_thunknames: false,
             analysis_objc: false,
 
             analysis_objcivars: true,
@@ -3106,11 +3144,15 @@ impl Architecture {
             analysis_osclassinfo: false,
             analysis_blobs: false,
             blob_entries: Rc::default(),
+            analysis_swifthelpers: true,
             analysis_swiftcall: true,
             analysis_swiftruntime: true,
+            analysis_swiftobjcthunk: true,
+            analysis_valuewitness: true,
             loader_proto_models: Rc::default(),
             loader_input_hints: std::collections::BTreeMap::new(),
             loader_swift_abi: None,
+            loader_swift_enum_cases: Rc::default(),
             analysis_pdb: true,
             macho_arm64e: false,
 
@@ -3342,6 +3384,7 @@ impl Architecture {
         self.ctypes = false; // (kuna) DIV-75: default-OFF in the catalog because the datatest corpus pins `int4`/`float8` spellings in 42 assertions; ON in the `aggressive` and `fast` presets and at every `auto` size, so valid C is the default RENDERING everywhere a real binary is decompiled
         self.goto_next = true; // (kuna) option gotonext default-on: upstream BlockGoto::gotoPrints; only the spelling of a jump changes; 0/675 datatests
         self.voidtailreturn = true; // (kuna) option voidtailreturn default-on (DIV-98); `option voidtailreturn off` restores the trailing `return;`
+        self.switchmerge = true; // (kuna) option switchmerge default-on; `option switchmerge off` prints every jump-table arm of every nested switch
         self.import_data = true; // (kuna) option importdata default-on; `option importdata off` keeps the `*dat_<slot>` dereference
 
         self.cast_implied = true; // (kuna) option castimplied default-on: leaves out only a value-preserving integer conversion C performs itself (argument to a type-locked parameter, assignment to a local or parameter declared that spelling, return, or under another conversion); 1/675 datatest assertion moved (Union #26, the intended form, pinned to upstream by a per-test opt-out), 10 stage assertions moved to the new form, speed within budget; docs/features/castimplied/default-on-evaluation.md
@@ -3382,6 +3425,7 @@ impl Architecture {
         self.narrow_ext = crate::kuna_narrowext::NarrowExtMode::Abi; // (kuna) option narrowext default `abi`: a narrow integer argument or return value is extended as the RISC-V and LoongArch procedure-call standards state
         self.arm_float_return = true; // (kuna) option armfloatreturn: default-ON; inert unless the ELF states the VFP procedure-call standard
         self.pass_through = true; // (kuna) option passthrough default-on: over 574 slices in 25 projects (the 444-slice decbench corpus plus 130 slices of 17 disjoint projects) 4,107 of 4,346 gained parameters are DWARF-confirmed, NONE contradicted, 239 thunks DWARF does not describe, 0 parameters and 0 call arguments lost; the return arm is 5,458 of 5,615 confirmed, its 157 misses all the undecidable `void` tail-call wrapper; docs/features/passthrough/dwarf-confirmation.md
+        self.cache_return = true; // (kuna) option cachereturn default-on: a lazy accessor's cache-cell return, Swift images only; 0/675 datatests
         self.mixed_tail_ret = false; // (kuna) option mixedtailret default-off: a void guard that leaves the value it tested in the return register beside a tail call compiles to the same bytes; see the phases.toml row
         self.kuna_calleeargs = true;
         self.arg_clobber = true; // (kuna) option argclobber default-on: the drop now needs the callee's own RECOVERED prototype to say the register is free (`protoorder` parks it), so it is inert wherever no callee was decompiled first; 0/675 datatest assertions, PARITY OK on stages, no scored type_match change, measured in docs/features/argclobber/record.json
@@ -3547,6 +3591,7 @@ impl Architecture {
         self.analysis_aifpoolslide = true;
         self.analysis_tailcallentry = true; // tail-call function-entry recovery (ARM-only, needs listing)
         self.analysis_calltable = true; // call tables and the call-table vs switch vote (needs listing)
+        self.analysis_thunknames = true; // (kuna) placeholder jump thunks named j_<target>
         self.analysis_stubbinds = true; // (kuna) stripped Mach-O stubs named from their slot's chained bind (Mach-O-only pass)
         self.analysis_objc = true; // Mach-O Objective-C metadata recovery (Mach-O-only pass)
         self.analysis_swiftmetadata = true; // Swift runtime-metadata recovery (inert without swift5_* sections)
@@ -3570,8 +3615,11 @@ impl Architecture {
         self.analysis_cfstrings = true; // (kuna) Mach-O __cfstring constant-string recovery default-on: Mach-O-only and real-binary-path only, so the XML datatest corpus never runs it (0/675); on an 80 MB third-party arm64 iOS app one decompile is within noise (min 2.324 s off, 2.359 s on, medians 2.442 / 2.372 over 6 interleaved runs)
         self.cfstrings_annotate = false;
         self.analysis_blobs = true; // (kuna) embedded image/archive data symbols; real-binary-path only
+        self.analysis_swifthelpers = true; // Swift helper names default-on, inert unless swiftmetadata is on
         self.analysis_swiftcall = true; // Swift calling convention default-on, inert unless swiftmetadata is on
         self.analysis_swiftruntime = true; // Swift runtime prototypes default-on (Swift-detected images only)
+        self.analysis_swiftobjcthunk = true; // Swift slot names from @objc thunks default-on, inert unless swiftmetadata is on
+        self.analysis_valuewitness = true; // Swift value witnesses default-on, inert unless swiftmetadata is on
         self.analysis_pdb = true; // (kuna) DIV-129 default-on: a PE whose CodeView record names a .pdb that is actually beside it decompiles with its real function names; the GUID/age fingerprint gate keeps a wrong or stale .pdb from ever being applied. PE-only, and the XML datatest path never runs an analysis pass (0/675)
         self.macho_arm64e = true; // arm64e Apple-Silicon spec selection (arm64e Mach-O only)
     }
@@ -4155,6 +4203,7 @@ impl Architecture {
         ctx.go_write_barrier = self.go_write_barrier;
         ctx.go_new_type = self.go_new_type;
         ctx.outlined_inline = self.outlined_inline;
+        ctx.swift_metadata_results = self.analysis_swifttypes;
         ctx.ptrauth_trap_userop = self
             .ptrauth_trap
             .then(|| {
@@ -4254,6 +4303,7 @@ impl Architecture {
         ctx.cast_index = self.cast_index && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) castindex
         ctx.ptr_from_use = self.ptr_from_use; // (kuna) ptrfromuse
         ctx.char_ptr = self.char_ptr; // (kuna) charptr
+        ctx.analysis_valuewitness = self.analysis_valuewitness; // (kuna) valuewitness
         ctx.elem_ptr = self.elem_ptr; // (kuna) elemptr
         ctx.elem_ptr_ranges = std::rc::Rc::clone(&self.globalref_ranges); // (kuna) elemptr
         ctx.libctypes = self.analysis_libctypes; // (kuna) libctypes (kuna_libcfit)
@@ -4268,6 +4318,7 @@ impl Architecture {
         ctx.mixed_tail_ret = self.mixed_tail_ret; // mixedtailret
 
         ctx.vtable_types = self.analysis_vtabletypes;
+        ctx.cache_return = self.cache_return; // cachereturn
         ctx.readonly_calls = self.readonly_calls;
         ctx.persist_calls = self.persist_calls;
         // (kuna `calleereginputs custom`) a function's own evaluation sees the
@@ -4550,6 +4601,7 @@ impl Architecture {
             };
         ctx.bound_proto_models = Rc::clone(&self.loader_proto_models);
         ctx.swift_abi = self.loader_swift_abi.clone();
+        ctx.swift_enum_cases = Rc::clone(&self.loader_swift_enum_cases);
         ctx.virtual_this = crate::p4_calls::kuna_calleereginputs::virtual_this(self);
         // Carry the constant-pointer-inference config (C++ `glb->infer_pointers`)
         // and the ordered inferable-pointer spaces (C++ `glb->inferPtrSpaces`,

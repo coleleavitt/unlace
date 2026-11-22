@@ -21,6 +21,14 @@ mod property_list_t {
 
 /// A property's selectors with their encodings: `(selector, encoding)`.
 pub fn declarations(img: &MachoImage, list_va: u64) -> Vec<(String, String)> {
+    properties(img, list_va)
+        .into_iter()
+        .flat_map(|(name, attrs)| from_attributes(&name, &attrs))
+        .collect()
+}
+
+/// Each property's name and attribute string: `(name, attributes)`.
+pub fn properties(img: &MachoImage, list_va: u64) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let Some(ent) = list_va
         .checked_add(property_list_t::ENTSIZE)
@@ -55,7 +63,7 @@ pub fn declarations(img: &MachoImage, list_va: u64) -> Vec<(String, String)> {
         else {
             continue;
         };
-        out.extend(from_attributes(&name, &attrs));
+        out.push((name, attrs));
     }
     out
 }

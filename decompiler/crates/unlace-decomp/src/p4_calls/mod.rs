@@ -12,6 +12,7 @@ pub mod kuna_armfloatargs; // (kuna) an ARM hard-float function takes its scalar
 pub mod kuna_armfloatreturn; // (kuna) an ARM hard-float function returns and takes whole VFP values
 pub mod kuna_bejoin; // (kuna) a big-endian pair joins its halves in the ABI's order when its low word is returned on purpose
 pub mod kuna_bejoinpass;
+pub mod kuna_cachereturn; // (kuna) a return register holding one memory cell's value on every path is the return value
 pub mod kuna_callbacktype; // (kuna) a callback takes the prototype of the slot it is passed to
 pub mod kuna_calleearity; // (kuna) one callee, one argument list across its call sites
 pub mod kuna_calleearitybody; // (kuna) recover a lone call's argument list from the callee's own body

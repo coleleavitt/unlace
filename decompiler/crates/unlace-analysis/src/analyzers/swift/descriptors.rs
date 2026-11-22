@@ -144,6 +144,10 @@ pub struct Context {
     /// An enum's payload and empty case counts.
     pub num_payload_cases: u32,
     pub num_empty_cases: u32,
+    /// An enum's case count: its payload cases (the low 24 bits of
+    /// `NumPayloadCasesAndPayloadSizeOffset`) plus its empty cases; zero for
+    /// any other kind.
+    pub num_cases: u32,
     /// A class's mangled superclass type name.
     pub superclass_type: Option<u64>,
     pub vtable: Vec<VTableEntry>,
@@ -467,6 +471,7 @@ impl<'a> Reader<'a> {
             field_offset_vector: 0,
             num_payload_cases: 0,
             num_empty_cases: 0,
+            num_cases: 0,
             superclass_type: None,
             vtable: Vec::new(),
             overrides: Vec::new(),
@@ -518,6 +523,7 @@ impl<'a> Reader<'a> {
                         ctx.num_payload_cases =
                             self.img.read_u32(addr.wrapping_add(20))? & 0x00ff_ffff;
                         ctx.num_empty_cases = self.img.read_u32(addr.wrapping_add(24))?;
+                        ctx.num_cases = ctx.num_payload_cases.checked_add(ctx.num_empty_cases)?;
                     }
                     ContextKind::Class => {
                         ctx.superclass_type = self.rel(addr.wrapping_add(20));

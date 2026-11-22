@@ -709,7 +709,7 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
         }
     } else if only_self {
         PendingCallFixup {
-            rescue: None,
+            rescue: crate::p4_calls::kuna_calleearityfwd::capture_empty_call(fc, data),
             extend: crate::p4_calls::kuna_calleearitylive::capture_partial_call(fc, data),
             body: crate::p4_calls::kuna_calleearitybody::capture_lone_call(fc, data),
             pass_through,

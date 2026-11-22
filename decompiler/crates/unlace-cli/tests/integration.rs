@@ -106,6 +106,8 @@ mod arm_frame_pool;
 mod arm_frame_retain;
 #[path = "arm_frame_switch.rs"]
 mod arm_frame_switch;
+#[path = "thumb_shrinkwrap_split.rs"]
+mod thumb_shrinkwrap_split;
 
 #[path = "arm_interwork_cli.rs"]
 mod arm_interwork_cli;
@@ -634,9 +636,6 @@ mod cppsig_hidden_return;
 
 #[path = "globalwidth.rs"]
 mod globalwidth;
-
-#[path = "funcchunks_cli.rs"]
-mod funcchunks_cli;
 
 #[path = "xrefs_unflagged_cli.rs"]
 mod xrefs_unflagged_cli;

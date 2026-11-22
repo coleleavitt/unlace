@@ -4929,6 +4929,19 @@ context is a `swift.AsyncContext *` whose record names the parent context
 and the resume function at its head (`parent`, `resume_parent`), the
 function's own frame following.
 
+An import whose symbol demangles to such a member (`$sSS6appendyySSF`,
+`String.append(_:)`) gets the model alone, at the code a call to it enters (a
+Mach-O stub, an ELF PLT entry: an imported symbol whose address lies in an
+instruction section, `analyzers/swift/mod.rs (import_call_targets)`, or a
+stub of a stripped image whose slot only the chained binds name,
+`loader/kuna_stubbinds.rs (stub_bind_symbols)`), with no
+declared prototype: the stub's body cannot say whether a struct member takes
+`self` exploded or in `swiftself`, so a struct member's binding is
+maybe-`self` and a call passes the register only when the caller set it for
+that call (below). A call to `String.append(_:)` so passes the address of the
+string it appends to; under the C model the call dropped it. An imported free
+function is recorded in `no_self` as a defined one is.
+
 The error register has two moments the dataflow names
 (`decompiler/crates/unlace-decomp/src/p4_calls/kuna_swifterror.rs`, an action
 after `ActionFuncLink` has given every call its model and before heritage):
@@ -5013,7 +5026,15 @@ back is still the caller's own), after `stale_self` has had its say for a
 callee that may not take `self`. A call that then passes nothing but that
 `self` is, for the callee-body and sibling rules (`calleearitybody`,
 `calleearity`), still a call that recovered nothing, so the arguments they
-would have found for it are found after the `self`. An
+would have found for it are found after the `self`. A sibling's `swiftself`
+is no witness for those rules (`witness_storage` leaves it out): the
+register is a resource section of its own, decided per call, so a call whose
+stale `self` was scored no-use still takes the argument registers its
+sibling passed; and the retry after the pass (`calleearityfwd`) takes a call
+that passes only a `self` as one that recovered nothing, keeping the `self`
+as its first argument, so a `String.append(_:)` whose argument is the
+previous call's two-word result gets it from a later sibling as an empty
+call would. An
 indirect call takes `__swiftcall` too when its block loads the target from
 memory and the call shows it is Swift's (`indirect_call`): the slot is
 reached through another loaded pointer (an isa's vtable, a witness table
@@ -5044,9 +5065,13 @@ bound or declared.
 
 *A body that reads `swiftself` takes it.* The decompile drive decodes the
 function and each of its direct callees from their entries (`probe_reads`,
-cached per entry for the run), following every path up to its first call,
-return, indirect branch or write of the register, and at most 256
-instructions. A read of the register on such a path is evidence unless it only
+cached per entry for the run), following every path up to its first return,
+indirect branch, trap (a `CALLOTHER`) or write of the register, and at most
+256 instructions. A call does not end a path: every convention preserves the
+register across it, so a closure that calls a function before it reads its
+context (`opaque() &+ b.v`, a type's metadata accessor first) reads the
+value it was called with; a call that does not return is followed by a trap
+on Apple targets. A read of the register on such a path is evidence unless it only
 stores the register: a `STORE` of it, or of the temporary its own instruction
 copied it into (an AArch64 `stp x20, x19`, an x86 `push %r13`). No C or
 Objective-C function reads a preserved register it has not written for
@@ -5076,7 +5101,23 @@ gets the call-output local type `swift.pair`,
 a structure of two `undefined8` fields `_0` and `_1`
 (`pair_output_type`, consulted by `TypeOpCall::getOutputLocal`'s unlocked
 arm). The words then print as `v1._0` / `v1._1` instead of
-`SUB168(v1,0)` / `SUB168(v1,8)`. Pinned by `tests/stages/kuna-swiftinfer.xml`.
+`SUB168(v1,0)` / `SUB168(v1,8)`. Pinned by `tests/stages/kuna-swiftinfer.xml`;
+the read after a call and the imported method's `self` by
+`tests/stages/kuna-swiftself.xml`.
+
+*A two-word result built from its words is a pair.* The same holds for a
+function's own result: in a function whose output is not declared and that
+is under a `__swift…` model or not named as a C or Objective-C function (the
+callee test above, so `sub_` placeholders such as stripped metadata accessors
+qualify), a `RETURN` value that is a 16-byte join of two registers defined by a `PIECE`
+of two 8-byte words takes the input local type `swift.pair`
+(`pair_return_type`, consulted by `TypeOpReturn::getInputLocal` ahead of the
+recovered output type, which it becomes). `RulePieceStructure` then splits the
+`PIECE` into field writes, so a stripped `CodingKey.stringValue` or
+`description` getter declares `swift.pair` and returns `v1` after
+`v1._1 = "endCursor"; v1._0 = 0x…;` instead of returning
+`*(unsigned __int128 *)v1` from an `undefined16`. Pinned by
+`tests/stages/kuna-swiftinfer.xml`.
 
 ### (kuna) An MSVC by-value class sized at the call (`kuna_msvcbyval.rs`)
 

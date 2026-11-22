@@ -3141,6 +3141,22 @@ llvm-strip --strip-all -o swift_self_elf swift_self_syms_elf
 
 SHA-256: `e358a5be499c6448e3b81ac339f267a4e6dcf3b409536b3264629a64e26b6d05`.
 
+### `swift_pairret_elf` — a Swift getter that returns its String in two registers (`swiftcall`)
+
+`swift_pairret_elf` (x86-64 ELF shared library, 9.4 KB, stripped) is the second
+fixture of `tests/stages/kuna-swiftinfer.xml`. In its source
+`swift_pairret_elf.swift`, `Key.description` (0x2140, the
+`CustomStringConvertible` witness) returns one string literal per case, each
+built as the pair `rdx:rax` and returned on its own path. Built with the swiftly
+6.4.2 toolchain:
+
+```bash
+swiftc -O -module-name pairfix -parse-as-library -emit-library swift_pairret_elf.swift -o swift_pairret_syms_elf
+llvm-strip --strip-all -o swift_pairret_elf swift_pairret_syms_elf
+```
+
+SHA-256: `1755b5d1b84c603b7293f35bf96329fdcc50b67f42d91aaf3bb8a1d310be970b`.
+
 ### `swift_call_helper_elf` — a mutating struct call after a runtime helper (`swiftcall`)
 
 `swift_call_helper_elf` (x86-64 ELF, 17 KB, with symbols) is the fixture for the

@@ -1,12 +1,29 @@
 # unlace
 
-unlace is an agent-first decompiler written in Rust. It is a fork of
-[Noelo-Lab/kuna](https://github.com/Noelo-Lab/kuna), which began as a Rust port of
-[Ghidra](https://github.com/NationalSecurityAgency/ghidra)'s decompiler and SLEIGH compiler.
-This fork adds Apple platform support (Mach-O, chained fixups, the dyld shared cache,
-kernelcaches, Objective-C and Swift metadata, arm64e) and fixes found by comparing the output
-against IDA 9.5. It keeps upstream's phase model, option catalog and parity gates, and it
-merges upstream regularly.
+unlace is Cole Leavitt's decompiler, written in Rust and built to be driven by agents as well as
+people. Its engine comes from [Noelo-Lab/kuna](https://github.com/Noelo-Lab/kuna), which began
+as a Rust port of [Ghidra](https://github.com/NationalSecurityAgency/ghidra)'s decompiler and
+SLEIGH compiler. On top of that engine, unlace adds Apple platform support (Mach-O, chained
+fixups, the dyld shared cache, kernelcaches, Objective-C and Swift metadata, arm64e) and fixes
+found by comparing the output against IDA 9.5. It keeps kuna's phase model, option catalog and
+parity gates, and it merges kuna regularly.
+
+## History
+
+unlace started on 2026-04-29 as a from-scratch decompiler aimed at Hex-Rays and Ghidra parity.
+It had its own IR with SSA, its own control-flow structuring and C printer, more than 40
+per-architecture lifters, its own loaders (ELF, PE/COFF, Mach-O, the dyld cache, DWARF and PDB
+ingest, FLIRT signatures), and a debugger, an emulator, a Lumina client and an MCP server. That
+work ran to about 1,800 commits by 2026-11-06. It is archived unchanged on the `master` branch
+and the `unlace-v1-final` tag.
+
+In November 2026 Cole moved his Apple and IDA-comparison work onto kuna, porting the Apple
+analysis (chained fixups, the dyld cache, ObjC, Swift) from the first unlace into kuna's
+`kuna-analysis` tier. On 2026-11-22 unlace moved onto that fork: `main` is the former kuna fork's combined branch, with the crates and the CLI
+renamed to unlace. The first unlace's own IR, lifters, debugger, emulator, Lumina and MCP
+crates are not part of this engine; they stay on `master` as a reference.
+[`docs/architecture/decompiler-ir-landscape.md`](docs/architecture/decompiler-ir-landscape.md)
+compares the two designs.
 
 Measured locally on 2026-11-22 (not an independent benchmark):
 

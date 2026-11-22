@@ -186,6 +186,7 @@ b801000000c3
 </binaryimage>
 <script>
   <com>option looprotate off</com>
+  <com>option guardedloop off</com>
   <com>lo fu sum_msvc</com>
   <com>decompile</com>
   <com>print C</com>

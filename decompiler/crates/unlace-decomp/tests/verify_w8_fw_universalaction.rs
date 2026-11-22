@@ -161,7 +161,7 @@ fn w8_fw_universalaction_allgroups_full_order_count_head_tail() {
         "all universalAction passes are ported; UNPORTED_ALLOWLIST must be empty"
     );
     assert_eq!(
-        nonblank, 336,
+        nonblank, 337,
         "full kuna schedule registration count changed"
     );
 
@@ -202,13 +202,13 @@ fn w8_fw_universalaction_allgroups_full_order_count_head_tail() {
     assert_eq!(
         tail,
         vec![
-            "ifelseflatten",
             "crossjumprevert",
             "dedupitetail",
             "iteregion",
             "iteboolean",
             "gotosink",
             "crossjumptail",
+            "guardedloop",
             "paramcopyhoist",
             "prototypewarnings",
             "stop"

@@ -104,12 +104,16 @@ pub fn install(
     Ok(typed)
 }
 
+/// The most slots a vtable is typed with; a longer one is left untyped.
+const MAX_SLOTS: usize = 4096;
+
 fn install_class(arch: &Architecture, space: &Rc<AddrSpace>, c: &VtableClass) -> KunaResult<bool> {
     let types = arch.types();
     let ptr = types.get_size_of_pointer();
     let ws = space.get_word_size();
     let vtbl_name = format!("{}_vtbl", c.class);
-    if c.slots.is_empty() || types.find_by_name(&vtbl_name)?.is_some() {
+    if c.slots.is_empty() || c.slots.len() > MAX_SLOTS || types.find_by_name(&vtbl_name)?.is_some()
+    {
         return Ok(false);
     }
     let class = match types.find_by_name(&c.class)? {

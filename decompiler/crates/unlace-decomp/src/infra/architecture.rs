@@ -753,6 +753,9 @@ pub struct Architecture {
     pub index_rescale: bool,
     /// (kuna `looprotate`) A guarded do-while loop becomes a while loop.
     pub loop_rotate: bool,
+    /// (kuna `guardedloop`) A guarded do-while prints as a while loop.  See
+    /// [`crate::p8_structure::kuna_guardedloop`].
+    pub guarded_loop: bool,
     /// (kuna `vastart`) The x86-64 va_start prologue as va_start(ap, last).
     pub va_start: bool,
     /// (kuna `switchguardmerge`) Merge an equality guard into its switch.
@@ -2823,6 +2826,7 @@ impl Architecture {
             va_arg: false,
             index_rescale: false,
             loop_rotate: false,
+            guarded_loop: false,
             va_start: false,
             switch_guard_merge: false,
             global_array_anchor: false,
@@ -3277,6 +3281,7 @@ impl Architecture {
         self.va_arg = true;
         self.index_rescale = true;
         self.loop_rotate = true;
+        self.guarded_loop = true;
         self.va_start = true;
         self.switch_guard_merge = true;
         self.ret_split_global = true; // (kuna) DIV-PENDING default-on: a shared RETURN block that stores to GLOBALS is not the bare epilogue `ActionReturnSplit::isSplittable` assumes, so it is no longer cloned into every predecessor. One-directional (it can only decline a split) and byte-identical (0/675) on the datatest corpus; restore the upstream predicate with `option retsplitglobal off`
@@ -4243,6 +4248,8 @@ impl Architecture {
         ctx.va_arg = self.va_arg;
         ctx.index_rescale = self.index_rescale;
         ctx.loop_rotate = self.loop_rotate;
+        ctx.guarded_loop =
+            self.guarded_loop && self.print.out_lang() == crate::kuna_lang::OutLang::C;
         ctx.va_start = self.va_start;
         ctx.switch_guard_merge = self.switch_guard_merge;
         ctx.global_array_anchor = self.global_array_anchor;

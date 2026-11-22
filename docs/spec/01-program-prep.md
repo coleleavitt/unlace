@@ -3534,6 +3534,8 @@ could override the method. The reference walk
 same table: a site with one method is a `call` edge to it, a site with
 several a `vcall` edge to each, and every method in the image's code is
 walked as a function.
+Stage test: `tests/stages/kuna-arm64evcall.xml`, each of three fixtures with the
+option off and on.
 
 Two arch-marker passes paint **decode context** rather than names, because a wrong
 decode mode is unrecoverable downstream. `decompiler/crates/unlace-analysis/src/loader/arm_markers.rs
@@ -7513,7 +7515,8 @@ both
   else the class of the table's named handlers. A `__got` / `__auth_got` /
   `__auth_ptr` slot the indirect-symbol table does not name, whose rebased
   pointer reaches a function or object of this image named by a symbol or by
-  `iokitclasses`, is named `<target>_ptr` (123 slots when the whole iOS 16.4.1
+  `iokitclasses`, is named `<target>_ptr`, a further slot holding the same
+  target `<target>_ptr_2` and so on (123 slots when the whole iOS 16.4.1
   collection is loaded as one image; none on the stripped iOS 12.4 and 14.8
   caches, whose slots point at functions nothing names). On the iOS 16.4.1 collection there are 6,953 `kalloc_type`
   views (4,140 distinct structs; the kernel's 1,088 views build 533), 1,687 var

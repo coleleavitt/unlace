@@ -542,6 +542,10 @@ a vtable-only override gain their names.
 and then together with the kernel (`kernelcache com.apple.kernel,Widget`): only
 the merged image names the kernel object the kext points at.
 
+`kuna-prelinked.xml` loads two pre-fileset kernels (`gen_prelinked.py`): one
+whose pointers are threaded through `__thread_starts`, with `kernelcache` off
+and `auto`, and one whose stripped kext is cut out of `__PRELINK_TEXT`.
+
 `kuna-xnutables.xml` decompiles the same synthetic kext with `xnutables` off and
 on: a `kalloc_type` view and an `IOExternalMethodDispatch` handler gain names.
 

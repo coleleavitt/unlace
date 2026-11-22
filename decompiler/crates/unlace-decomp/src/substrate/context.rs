@@ -1384,6 +1384,8 @@ pub struct ArchContext {
     pub lowered_switch_linear: bool,
     /// (kuna) `loweredswitch tree|all` — compare trees re-roll from 2 to 64 cases.
     pub lowered_switch_tree: bool,
+    /// (kuna) `loweredswitchbits` — a switch lowered to bit tests re-rolls.
+    pub lowered_switch_bits: bool,
     pub cond_fold: int4,
     /// (kuna) `condstmts`: most statements a folded condition operand may print
     /// before its test; negative = off.  See [`crate::p8_structure::kuna_condstmts`].
@@ -1994,16 +1996,17 @@ impl ArchContext {
             switch_selector_guard: false, // switchselector (opt-in default-off)
             lowered_switch_linear: false, // loweredswitch linear|all
             lowered_switch_tree: false,   // loweredswitch tree|all
-            cond_fold: 0,                 // condfold (opt-in default-off; 0 = off)
-            cond_stmts: -1,               // condstmts (-1 = off)
+            lowered_switch_bits: false, // loweredswitchbits (live value copied from the Architecture)
+            cond_fold: 0,               // condfold (opt-in default-off; 0 = off)
+            cond_stmts: -1,             // condstmts (-1 = off)
             goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode::Off, // gotoreduce
-            flatten_ifelse: false,        // ifelseflatten (opt-in default-off)
-            revert_cross_jumps: false,    // crossjumprevert (opt-in default-off)
-            dedup_ite_tail: false,        // dedupitetail (opt-in default-off)
-            iteregion: false,             // iteregion (opt-in default-off, runtime-choice)
-            iteexpr: false,               // iteexpr (computed-arm ?: extension, default-off)
-            iteboolean: false,            // iteboolean (0/1 select -> boolean assignment)
-            param_copy_hoist: false,      // paramcopyhoist (parameter copy-shadow -> entry block)
+            flatten_ifelse: false,      // ifelseflatten (opt-in default-off)
+            revert_cross_jumps: false,  // crossjumprevert (opt-in default-off)
+            dedup_ite_tail: false,      // dedupitetail (opt-in default-off)
+            iteregion: false,           // iteregion (opt-in default-off, runtime-choice)
+            iteexpr: false,             // iteexpr (computed-arm ?: extension, default-off)
+            iteboolean: false,          // iteboolean (0/1 select -> boolean assignment)
+            param_copy_hoist: false,    // paramcopyhoist (parameter copy-shadow -> entry block)
             returndup_triangle: false, // rettriangle (one-block-if join, copied from the Architecture)
             duplicate_shared_returns: false, // returndup (opt-in default-off)
             duplicate_call_returns: false, // returndup calls

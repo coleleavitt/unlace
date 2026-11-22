@@ -214,6 +214,9 @@ Three tiers:
 | a deep if/else tree on one variable with an equality test at every leaf where the source had a dense switch of 17 or more cases | [`loweredswitch`](#loweredswitch----on--off--linear--tree--all-default-on) |
 | binary-search cascade of constant compares where source had a switch | [`loweredswitch`](#loweredswitch----on--off--linear--tree--all-default-on) |
 | flip off to keep the compiler's lowered compare-tree rendering | [`loweredswitch`](#loweredswitch----on--off--linear--tree--all-default-on) |
+| if ((1 << (x - K)) & MASK) bit tests on one selector where the source had a switch | [`loweredswitchbits`](#loweredswitchbits----on--off-default-on) |
+| a range check t - K <= N followed by a shift-and-mask test | [`loweredswitchbits`](#loweredswitchbits----on--off-default-on) |
+| flip off to keep the compiler's bit-test rendering | [`loweredswitchbits`](#loweredswitchbits----on--off-default-on) |
 | values below an x87 call are read from the wrong register-stack positions after consecutive calls | [`callmechanisms`](#callmechanisms----off--auto--on-default-auto) |
 | a store the compiler spec says a callee always makes is missing after the call | [`callmechanisms`](#callmechanisms----off--auto--on-default-auto) |
 | a custom compiler spec's uponentry or uponreturn p-code has no effect on the output | [`callmechanisms`](#callmechanisms----off--auto--on-default-auto) |
@@ -893,6 +896,10 @@ Three tiers:
 | a UEFI boot service call renders as (**(code **)(*(long *)(param_2 + 0x60) + 0x140))(...) | [`uefi`](#uefi----on--off-default-on) |
 | a protocol GUID in .data is an unnamed 16-byte blob | [`uefi`](#uefi----on--off-default-on) |
 | a DXE core's static boot-services table is raw words | [`uefi`](#uefi----on--off-default-on) |
+| SCB, NVIC or SysTick registers of Cortex-M firmware print as dat_e000ed08 or dat_e000e010 | [`cortexmscs`](#cortexmscs----on--off-default-on) |
+| an interrupt enable is a store through a computed pointer near -0x1fff1f00 | [`cortexmscs`](#cortexmscs----on--off-default-on) |
+| a vendor HAL startup routine is a list of stores to raw 0xe000xxxx addresses | [`cortexmscs`](#cortexmscs----on--off-default-on) |
+| a polling loop on a System Control Space register folds away because the read is not volatile | [`cortexmscs`](#cortexmscs----on--off-default-on) |
 | a global holding a service table is an untyped dat_ word in every function but the one that stores it | [`storetype`](#storetype----off--uefi--all-default-uefi) |
 | a UEFI helper calls (**(code **)(dat_1a70 + 0x40))(...) instead of gBS->AllocatePool | [`storetype`](#storetype----off--uefi--all-default-uefi) |
 | the same global prints typed in one function and untyped in the next | [`storetype`](#storetype----off--uefi--all-default-uefi) |
@@ -1659,6 +1666,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default (DIV-4); the required binary-search-structure guard (a range/jle split) keeps it off hand-written linear if/else-if chains. Set OFF to restore the upstream if/else-if rendering of a lowered switch. Set `linear` when nested `if (v != 5) { if (v != 2) ...` tests on one variable stand for a small switch (clang lowers a three- or four-case switch that way); it is not the default because an if/else-if chain the author wrote re-rolls too. Set `tree` on a gcc -O0 binary whose dense switch of more than 16 cases prints as a deep if/else tree; the 16-case cap is the default because a very wide synthesized switch can leave the structurer with unstructured case edges. A switch installed for a function stays when the value is narrowed later in the same session, so compare `on` before the wider value. The exactness, every-head, signedness and value guards are the only way the re-roll runs and have no switch of their own.
 - **Where / provenance:** P2/switch-model · angr · structure-recovery · angr-LoweredSwitchSimplifier
 - **Example:** `option loweredswitch off`
+
+### `loweredswitchbits` -- on | off, default `on`
+
+- **Symptoms:** if ((1 << (x - K)) & MASK) bit tests on one selector where the source had a switch; a range check t - K <= N followed by a shift-and-mask test; flip off to keep the compiler's bit-test rendering.
+- **What it does:** Re-roll a switch the compiler lowered to bit tests and offset range checks (`if (t - A <= N && (1 << (t - A)) & mask)`, several tests sharing one shift) on a selector of at most two bytes. When loweredswitch records nothing for a function, each condition block whose condition is a pure function of one such selector is evaluated on every selector value; walking from a head, every value lands on exactly one target, the target with the most values is the default and every other value is a case of the target it reaches. The cascade must hold a bit test, at most 64 cases and at least two case targets, and every block after the head must compute only its condition and be entered only from the cascade. The record goes through the loweredswitch install, which reads the register holding the selector at the head.
+- **When to flip:** On by default: a switch on a 16-bit type tag or a char that clang lowered to a bit mask prints as a switch, as in the source. Set OFF to keep the compiler's bit-test rendering.
+- **Where / provenance:** P2/switch-model · kuna · structure-recovery · kuna-loweredswitchbits
+- **Example:** `option loweredswitchbits off`
 
 ### `callmechanisms` -- off | auto | on, default `auto`
 
@@ -3119,6 +3134,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default; it only acts on EFI-subsystem PE images, so every other input is byte-identical. Flip off to see the module without the EFI types: the entry then takes two untyped words and every service call is an indirect call through an offset.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-53
 - **Example:** `option uefi off`
+
+### `cortexmscs` -- on | off, default `on`
+
+- **Symptoms:** SCB, NVIC or SysTick registers of Cortex-M firmware print as dat_e000ed08 or dat_e000e010; an interrupt enable is a store through a computed pointer near -0x1fff1f00; a vendor HAL startup routine is a list of stores to raw 0xe000xxxx addresses; a polling loop on a System Control Space register folds away because the read is not volatile.
+- **What it does:** On ARM Cortex-M firmware, declare the System Control Space as typed volatile globals. Every ARMv7-M and ARMv8-M core maps the same registers at fixed addresses of the Private Peripheral Bus: the System Control Block at 0xE000ED00, the NVIC at 0xE000E100, SysTick at 0xE000E010, the MPU, FPU, SAU and debug control blocks beside them, and ITM, DWT, FPB and TPI at 0xE0000000, 0xE0001000, 0xE0002000 and 0xE0040000. Each block becomes a structure with the CMSIS-Core name and members (SCB_Type, NVIC_Type, SysTick_Type, ...) and a name- and type-locked global at its address, and the registers are marked volatile, so `dat_e000ed08 = 0x8000000` reads `SCB.VTOR = 0x8000000` and a computed store into the interrupt set-enable words reads `NVIC.ISER[irq >> 5] = ...`. CMSIS structures overlap one another (NVIC_Type reaches STIR at 0xE000EF00, past the SCB), so a block ends where the next one starts and each register beyond that is a global of its own (SCB_STIR, SCB_ICIALLU). The image is a Cortex-M one when its language is ARM:*:32:Cortex or ARM:*:32:v8-m (what a raw dump probed from its vector table loads as), or when it is an ARM ELF whose build attributes state the M profile (Tag_CPU_arch_profile 'M'); Tag_CPU_arch or the language picks the ARMv7-M or ARMv8-M layout. A global the user or a CMSIS-SVD file declares at one of these addresses replaces the built-in one.
+- **When to flip:** On by default on Cortex-M images and inert on every other target: no other image gets the globals, so its output is byte-identical. Flip off to read the raw addresses, or when the image is not what its language or attributes say and 0xE000E000 is ordinary memory.
+- **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · kuna-analysis-cortexmscs
+- **Example:** `option cortexmscs off`
 
 ### `storetype` -- off | uefi | all, default `uefi`
 

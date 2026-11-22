@@ -195,6 +195,7 @@ kuna_options! { self, p1;
     "objcrettype" => on_off!(objc_rettype, "Objective-C message result typed by its receiver"),
     "objcresolve" => on_off!(objc_resolve, "Objective-C message send resolved to its method"),
     "typevote" => on_off!(type_vote, "Type vote for leftover undefined variables"),
+    "oslog" => on_off!(os_log_args, "Apple os_log call arguments"),
     "tailcalljump" => {
         let (jumps, tables, msg) = crate::kuna_tailcalljump::tail_call_mode(p1)?;
         self.tail_call_jumps = jumps;

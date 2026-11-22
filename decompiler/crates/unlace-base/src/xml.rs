@@ -2307,8 +2307,11 @@ mod tests {
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-swiftconcurrency / the Swift concurrency runtime's prototypes and an async context read from the body
         // and kuna-swiftasyncextent / a flow that runs on into an async body does not make the function async
-        assert_eq!(count, 970, "corpus file count drifted");
+        assert_eq!(count, 973, "corpus file count drifted");
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
+        // and kuna-darwinvarargs / an undeclared variadic callee on Apple arm64 keeps its stack-passed arguments
+        // and kuna-oslog / an os_log call prints its decoded arguments; __oslogstring literals print as strings
+        // and kuna-objcstubagree / an objc_msgSend$<sel> stub is typed only from declarations that agree on its registers
         // and kuna-swiftstrcmp / a Swift literal compared for equality prints in the inline test
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start

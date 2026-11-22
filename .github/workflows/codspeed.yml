@@ -24,6 +24,7 @@ defaults:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   benchmarks:
@@ -45,10 +46,26 @@ jobs:
         with:
           workspaces: decompiler
           key: codspeed
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # The benches read the compiled .sla tree from specs/.
+      # The benches read the compiled .sla tree from specs/; same cache as tests.yml.
+      - name: Restore the compiled SLEIGH specs
+        id: sla
+        uses: actions/cache/restore@v4
+        with:
+          path: specs/**/*.sla
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+
       - name: Compile the SLEIGH specs
+        if: steps.sla.outputs.cache-hit != 'true'
         run: make specs
+
+      - name: Save the compiled SLEIGH specs
+        if: steps.sla.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: specs/**/*.sla
+          key: ${{ steps.sla.outputs.cache-primary-key }}
 
       - name: Build the benchmarks
         working-directory: decompiler

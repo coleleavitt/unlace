@@ -71,6 +71,33 @@ Individually, on dev binaries: `make test BINDIR=$CARGO_TARGET_DIR/debug`,
 `make test-stages BINDIR=$CARGO_TARGET_DIR/debug`, `make check-spec`,
 `$CARGO_TARGET_DIR/debug/unlace catalog --check`.
 
+## CI
+
+`.github/workflows/tests.yml` runs on every pull request and every push to `main` (and is
+called whole by the nightly). Its four jobs start together; none waits for another.
+
+| Job | What it runs | Typical time |
+|---|---|---|
+| `tidy` | `cargo fmt --all --check`, `make test-tools` (includes `scripts/check_test_layout.py`), actionlint with shellcheck over `.github/workflows` | about 1 min |
+| `clippy` | `make lint`: `-D warnings` on unlace-cli, unlace-base and unlace-num (the rest of the workspace is not clippy-clean yet) | about 2 min |
+| `parity gates` | release build, `make test`, `make test-stages`, `make check-spec`, `make test-cli`, `unlace catalog --check`, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
+| `cargo workspace suite` | `make rust-test` under cargo-llvm-cov, then the Repowise coverage upload. Skipped on a PR from a branch of this repository unless it has the `full-ci` label | about 20 min |
+
+Caching:
+
+- `Swatinem/rust-cache` keeps each job's dependency build under its own key (`clippy`,
+  `gates`, `rust-test-line-tables`; the jobs build different units, so a shared key would not help).
+  Only runs on `main` save it; PR runs read it. The workspace suite also saves after a
+  failing test (`cache-on-failure`).
+- The compiled `.sla` files are cached under a hash of `specs/**/*.{slaspec,sinc}`,
+  `decompiler/Cargo.lock` and the slacomp, sleigh, base and num crates; a hit skips
+  `make specs`. Both jobs still check that every `.slaspec` has its `.sla`.
+- `CARGO_INCREMENTAL=0` for the whole workflow (CI builds are never incremental).
+
+A new push to a PR cancels that PR's running workflow; runs on `main` are never cancelled.
+`.github/actionlint.yaml` declares the `ubuntu-26.04` runner label, which actionlint does not
+know yet. Run `actionlint` from the repository root before pushing a workflow change.
+
 ## Benchmarks
 
 `decompiler/crates/unlace-bench` holds a divan benchmark suite over committed fixtures:
@@ -78,7 +105,8 @@ Individually, on dev binaries: `make test BINDIR=$CARGO_TARGET_DIR/debug`,
 p-code lift of one function, and full decompiles of a jump-table switch, an arm64 Mach-O
 caller and an irreducible loop. It reads the compiled specs (`$KUNA_SPECS`, else `specs/`).
 `.github/workflows/codspeed.yml` runs it under CodSpeed's CPU simulation on every push to
-main and every PR; results are at <https://codspeed.io/coleleavitt/unlace>.
+main and every PR (with the same `.sla` cache and `CARGO_INCREMENTAL=0` as `tests.yml`);
+results are at <https://codspeed.io/coleleavitt/unlace>.
 
 ```bash
 cd decompiler && cargo bench -p unlace-bench                  # wall-clock, plain divan

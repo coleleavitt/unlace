@@ -454,6 +454,13 @@ pub trait FlowEnvironment {
         None
     }
 
+    /// (kuna) Does a Linux kernel `__bug_table` entry name the trap at `addr`?
+    /// Such a `ud2` is a `WARN`/`BUG` statement of its own, not evidence about
+    /// the call before it (`trapaftercall`).
+    fn kernel_bug_trap_at(&self, _addr: u64) -> bool {
+        false
+    }
+
     /// (kuna) Is the direct BRANCH or bounded CBRANCH `op`, whose target is
     /// `dest`, an `-O2` tail call to another known function's entry (and so should
     /// be recovered as a `CALL` + `RETURN` rather than flow-followed into the
@@ -3833,7 +3840,10 @@ truncating the fall-through here"
             Some(0xff) => byte(&addr, first + 1).is_some_and(|m| (m >> 3) & 7 == 2),
             _ => false,
         };
-        is_call && byte(&next, 0) == Some(0x0f) && byte(&next, 1) == Some(0x0b)
+        is_call
+            && byte(&next, 0) == Some(0x0f)
+            && byte(&next, 1) == Some(0x0b)
+            && !self.env.kernel_bug_trap_at(next.get_offset())
     }
 
     /// [`FlowEnvironment::query_call_no_return_at`] for the decoded instruction

@@ -3297,7 +3297,10 @@ either way. Varnodes are compared through their `COPY` chains.
 and reads its output at both. An op whose value is a LOAD or STORE address is
 skipped, because type recovery turns each such use into its own field access.
 Once per function, because a rule that splits a shared value again would
-otherwise alternate with it in the repeating fullloop.
+otherwise alternate with it in the repeating fullloop. Within that one run the
+merge is repeated (at most eight rounds) until nothing merges, because merging
+two reads of a value exposes the identical ops over their outputs one layer at
+a time.
 
 Option `implweight N` changes `ActionMarkExplicit`
 (`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs`):

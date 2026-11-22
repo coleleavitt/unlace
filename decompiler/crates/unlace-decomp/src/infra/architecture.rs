@@ -753,6 +753,9 @@ pub struct Architecture {
     pub index_rescale: bool,
     /// (kuna `looprotate`) A guarded do-while loop becomes a while loop.
     pub loop_rotate: bool,
+    /// (kuna `guardedloop`) A guarded do-while prints as a while loop.  See
+    /// [`crate::p8_structure::kuna_guardedloop`].
+    pub guarded_loop: bool,
     /// (kuna `vastart`) The x86-64 va_start prologue as va_start(ap, last).
     pub va_start: bool,
     /// (kuna `switchguardmerge`) Merge an equality guard into its switch.
@@ -1550,6 +1553,10 @@ pub struct Architecture {
     /// (kuna `swiftcall`) Per-image cache of whether a callee's body leaves
     /// `swiftself` unread ([`crate::kuna_swiftcall::seed_self_readers`]).
     pub kuna_swift_self_first_cache: std::collections::HashMap<(int4, uintb), bool>,
+    /// (kuna `swiftcall`) Whether the body at an entry reads `swiftself`
+    /// before writing it, other than to save it
+    /// ([`crate::kuna_swiftinfer::seed`]).
+    pub kuna_swift_self_reads: std::collections::BTreeMap<(int4, uintb), bool>,
     /// (kuna `argclobber`) Per-image cache of the forwarding resolution
     /// ([`crate::kuna_calleedeadarg::resolve_forward_transfer`]) — what a value
     /// the caller leaves in a register can reach once the callee at `(space
@@ -1711,6 +1718,9 @@ pub struct Architecture {
     pub analysis_dwarfscopes: bool,
     /// (kuna) Gate the UEFI module markup pass (`uefi`); default on.
     pub analysis_uefi: bool,
+    /// (kuna) Gate the Cortex-M System Control Space globals (`cortexmscs`);
+    /// default on. Inert unless the image is a Cortex-M one.
+    pub analysis_cortexmscs: bool,
     /// (kuna) Gate the string-literal pass (`strings`); default on.
     pub analysis_strings: bool,
     /// (kuna) Gate the 2-byte (UTF-16LE) width of the string-literal pass
@@ -2820,6 +2830,7 @@ impl Architecture {
             va_arg: false,
             index_rescale: false,
             loop_rotate: false,
+            guarded_loop: false,
             va_start: false,
             switch_guard_merge: false,
             global_array_anchor: false,
@@ -2993,6 +3004,7 @@ impl Architecture {
             kuna_callee_dead_cache: std::collections::HashMap::new(),
             kuna_callee_memory_cache: std::collections::HashMap::new(),
             kuna_swift_self_first_cache: std::collections::HashMap::new(),
+            kuna_swift_self_reads: std::collections::BTreeMap::new(),
             kuna_callee_forward_cache: std::collections::HashMap::new(),
             kuna_protoorder_types: std::collections::HashMap::new(),
             kuna_tail_callee_batch: false,
@@ -3038,6 +3050,7 @@ impl Architecture {
             analysis_dwarfglobaltypes: false,
             analysis_dwarfscopes: true,
             analysis_uefi: false,
+            analysis_cortexmscs: false,
             analysis_x86listingswitch: false,
             analysis_addrtakenentry: false,
             analysis_flowmode: false,
@@ -3273,6 +3286,7 @@ impl Architecture {
         self.va_arg = true;
         self.index_rescale = true;
         self.loop_rotate = true;
+        self.guarded_loop = true;
         self.va_start = true;
         self.switch_guard_merge = true;
         self.ret_split_global = true; // (kuna) DIV-PENDING default-on: a shared RETURN block that stores to GLOBALS is not the bare epilogue `ActionReturnSplit::isSplittable` assumes, so it is no longer cloned into every predecessor. One-directional (it can only decline a split) and byte-identical (0/675) on the datatest corpus; restore the upstream predicate with `option retsplitglobal off`
@@ -3483,6 +3497,7 @@ impl Architecture {
         self.analysis_dwarfglobaltypes = false;
         self.storetype = crate::kuna_storetype::StoreTypeMode::Uefi;
         self.analysis_uefi = true;
+        self.analysis_cortexmscs = true; // Cortex-M System Control Space globals (Cortex-M images only)
         // (kuna) DIV-139 declared-name libc prototype lookup -- default-ON.
         self.analysis_strings = true;
         self.analysis_widestrings32 = false;
@@ -4238,6 +4253,8 @@ impl Architecture {
         ctx.va_arg = self.va_arg;
         ctx.index_rescale = self.index_rescale;
         ctx.loop_rotate = self.loop_rotate;
+        ctx.guarded_loop =
+            self.guarded_loop && self.print.out_lang() == crate::kuna_lang::OutLang::C;
         ctx.va_start = self.va_start;
         ctx.switch_guard_merge = self.switch_guard_merge;
         ctx.global_array_anchor = self.global_array_anchor;
@@ -7211,7 +7228,7 @@ impl Architecture {
             byname.insert(rc.get_name().to_string(), Rc::clone(&rc));
             out.push(rc);
         }
-        // (kuna `swiftcall`) Swift's two models, derived from the default one
+        // (kuna `swiftcall`) Swift's four models, derived from the default one
         // on a language Swift targets when the spec declares neither.
         let default_el =
             find_child(root, "default_proto").and_then(|dp| find_child(&dp, "prototype"));

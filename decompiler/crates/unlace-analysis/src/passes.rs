@@ -101,6 +101,10 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // names the image IMPORTS (see the module docs — a defined `error` is the
         // image's own function). Registered always.
         Box::new(crate::protos::kuna_libcsigs::LibcSigsPass),
+        // (kuna `objcsdk`) C prototypes read from the SDK headers the option
+        // names, for a Mach-O's imports. After the libc tables, which it defers
+        // to; inert with no header directory.
+        Box::new(crate::protos::kuna_sdkprotos::SdkProtoPass),
         // S1 libgcc DI-mode contracts (`libgccsigs`): `long long __divdi3(long long,
         // long long)` on SPARC32 BE ELF. Registered always; the COMMIT is gated by
         // `--option libgccsigs on|off` (default off) via `analysis_pass_enabled`.
@@ -390,6 +394,12 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // impl exists only for the `aif` gate identity (its `run` is a no-op). See
         // `aif/mod.rs` + docs/history/analysis-port-log.md.
     ];
+
+    // (kuna `cortexmscs`) The Cortex-M System Control Space as typed volatile
+    // globals (a raw image is stashed by its bootstrap). Registered for every
+    // format; the pass self-gates on a Cortex-M language or M-profile ELF build
+    // attributes.
+    passes.push(Box::new(crate::cortexmscs::CortexMScsPass));
 
     // (kuna, NOVEL) S1 Itanium (GCC/Clang) RTTI + vtable recovery
     // (ItaniumRttiPass): on an ELF, discover every `_ZTI…` typeinfo object from the

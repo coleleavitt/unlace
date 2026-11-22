@@ -105,6 +105,7 @@ kuna_options! { self, p1;
     "vaarg" => on_off!(va_arg, "va_arg expansion as one call"),
     "indexrescale" => on_off!(index_rescale, "Byte offsets rescaled to element indexes"),
     "looprotate" => on_off!(loop_rotate, "Guarded do-while loops rotated to while loops"),
+    "guardedloop" => on_off!(guarded_loop, "Guarded do-while loops printed as while loops"),
     "vastart" => on_off!(va_start, "va_start prologue as one call"),
     "switchguardmerge" => on_off!(switch_guard_merge, "Equality guards merged into their switch"),
     "returnbranch" => on_off!(return_branch, "Computed jumps through the return register"),
@@ -836,6 +837,7 @@ kuna_options! { self, p1;
     },
     "tlsnames" => on_off!(analysis_tlsnames, "Gate the static-TLS naming (`tlsnames`); default on."),
     "uefi" => on_off!(analysis_uefi, "Gate the UEFI module markup pass (`uefi`); default on."),
+    "cortexmscs" => on_off!(analysis_cortexmscs, "Cortex-M System Control Space globals"),
     "strings" => on_off!(analysis_strings, "String-literal analysis pass"),
     "widestrings" => {
         on_off!(analysis_widestrings, "UTF-16LE width of the string-literal pass")

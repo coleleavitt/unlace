@@ -81,6 +81,18 @@ class CheckLayersTests(unittest.TestCase):
                 self.assertEqual(self.edges_of("use crate::printc::emit;\n", relative), [])
                 self.write(relative, "")
 
+    def test_test_only_fields_arms_and_inner_attributes_hide_only_themselves(self):
+        code = ("struct S {\n    #[cfg(test)]\n    test: u8,\n    real: u8,\n}\n"
+                "fn f() { crate::printc::emit() }\n")
+        self.assertEqual(self.edges_of(code), ["funcdata -> printc"])
+        code = "mod checks {\n    #![cfg(test)]\n    use crate::printc::emit;\n}\nuse crate::printc::emit;\n"
+        self.assertEqual(self.edges_of(code), ["funcdata -> printc"])
+        self.assertEqual(self.edges_of("//! Tests.\n#![cfg(test)]\nuse crate::printc::emit;\n"), [])
+
+    def test_raw_identifiers_and_foreign_folder_names(self):
+        self.assertEqual(self.edges_of("use crate::{r#printc};\nuse crate::{#};\n"), ["funcdata -> printc"])
+        self.assertEqual(self.edges_of("use crate::p9_emit::fspec;\n"), ["funcdata -> p9_emit"])
+
     def test_one_line_test_module_does_not_hide_the_code_after_it(self):
         code = "#[cfg(test)]\nmod tests {}\nuse crate::printc::emit;\n"
         self.assertEqual(self.edges_of(code), ["funcdata -> printc"])

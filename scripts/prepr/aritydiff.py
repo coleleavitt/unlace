@@ -3,7 +3,7 @@
     python -m scripts.prepr.aritydiff BASE_KUNA HEAD_KUNA [--corpus msvc32] [BINARY ...]
         [--option NAME VALUE] [--verbose] [--json] [--max-fn-seconds N]
 
-Both builds run `kuna decompile-all --json` over every binary. In each function
+Both builds run `unlace decompile-all --json` over every binary. In each function
 whose printed code differs, the calls are matched by callee and order, and each
 argument count that changed is reported. The run fails (exit status 1) when any
 call loses an argument, when a function stops decompiling, or when a binary

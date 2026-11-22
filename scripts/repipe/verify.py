@@ -178,7 +178,7 @@ def _stub(pid, reason, arm=None):
 def resolve_binary(p, work=None, challenges=()):
     """Absolute path for {{BIN}}, plus a note on how it was found.
 
-    A probe may name no target at all (`kuna --help`, an `absence` probe); that is not an
+    A probe may name no target at all (`unlace --help`, an `absence` probe); that is not an
     error and yields ("", "no target"). Otherwise the search order is: an in-repo vendored
     path, the work dir (an arena keeps the arena-relative shape), then the dataset, whose
     binaries are addressed challenges/<hexid>/<rel> -- `bin/` preserves recursive-extraction

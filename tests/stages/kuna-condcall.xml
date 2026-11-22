@@ -28,7 +28,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/condcall_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/condcall_le32</com>
   <com>mode aggressive</com>
   <com>read symbols</com>
   <com>functions</com>

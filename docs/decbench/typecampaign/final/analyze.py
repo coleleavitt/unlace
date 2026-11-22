@@ -119,7 +119,7 @@ def main():
     # classes: kuna base/final over their own scored sets (identical fn sets expected)
     keep = both
     out = {}
-    for name, it in (("kuna_base", kuna_decs(base)), ("kuna_final", kuna_decs(fin))):
+    for name, it in (("unlace_base", kuna_decs(base)), ("kuna_final", kuna_decs(fin))):
         out[name] = classes(it, keep)
     kept_rival = {}
     for r in ("ida", "binja", "ghidra", "angr", "kuna"):

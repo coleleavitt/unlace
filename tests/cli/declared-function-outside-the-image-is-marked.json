@@ -19,11 +19,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/macho_imports_arm64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/macho_imports_arm64",
     "binary_sha256": "7b9b3c64c2f16b56c99c6435423abc132ddb425ec640b95d745bf592a56eed64",
     "binary_size": 50016,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/macho_imports_arm64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/macho_imports_arm64",
     "selector": "0x999999999",
     "selector_kind": "addr"
   },

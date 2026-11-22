@@ -14,7 +14,7 @@ rounds: [5]
 first_seen_round: 5
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: null
@@ -114,11 +114,11 @@ _not yet refuted_
 - round 5 REFUTER: hypothesis **inconclusive**. REFUTED IN-TICK (captain, round 5). VERDICT: INCONCLUSIVE -- a refuter ran, the SYMPTOM IS CONFIRMED REAL AND SEVERE, and the single most plausible prior cause was RULED OUT by A/B. No hypothesis was on file to uphold, and I could not close the last step from the C text alone.
 
 THE SYMPTOM IS REAL AND IT IS AN INFINITE LOOP, NOT A COSMETIC RENAME. Reproduced verbatim:
-  kuna decompile ObfuscationFiesta.exe sub_140002530
+  unlace decompile ObfuscationFiesta.exe sub_140002530
   -> for (v55 = 0; v55 <= 4; v7 = v55 + 1) { v46 = (v46 ^ v55 * 0x17) + 0x11; }
 The induction variable v55 is never updated; the increment lands on v7. As written the loop does not terminate, so this is invalid C, not a naming nit.
 
-THE BINARY SAYS THE COUNTER IS A STACK SLOT AND THE STORE IS REALLY THERE. `kuna disassemble --addr 0x1400035f0 --count 10`:
+THE BINARY SAYS THE COUNTER IS A STACK SLOT AND THE STORE IS REALLY THERE. `unlace disassemble --addr 0x1400035f0 --count 10`:
   0x1400035f4  JMP 0x140003606                     <- test-first entry
   0x1400035f6  MOV EAX,dword ptr [RSP + 0x84]
   0x1400035fd  INC EAX
@@ -137,5 +137,5 @@ THE EVIDENCE THAT MAKES ME DOUBT THE FILED TITLE ("stores DISAPPEAR"). An assign
 WHY INCONCLUSIVE RATHER THAN A VERDICT. Two readings produce identical C and I could not separate them without a p-code dump: (a) the store to [RSP+0x84] is deleted and `v7 = v55 + 1` is the surviving register def of INC EAX, or (b) the store survives but its output varnode is merged into the wrong HighVariable. Reading (b) is better supported -- v7 has no single storage, which is what an over-merge looks like and not what a plain EAX temp looks like -- but I am not asserting it. THE BUILDER SHOULD START BY DECIDING (a) vs (b), because the fix lives in a different phase for each: (a) is dead-store/copy-prop in P3, (b) is merge/naming in P6. Do that before writing any option.
 
 CHEAP STARTING POINT: the loop at 0x1400035f4 is small, isolated, and test-first; `--define-function` around 0x1400035f0-0x140003629 should reproduce the misattribution in a few lines instead of a 600-line function.
-round 5 TRIAGE (captain): CONFIRMED AS FILED -- quality / kuna-decomp / small / blocker. This is the round's ONE genuine refuter-backed `inconclusive`: a refuter ran and could not decide, which is not the same as unexamined. Dispatch is allowed, but the builder owes a diagnosis in design before it writes code.
+round 5 TRIAGE (captain): CONFIRMED AS FILED -- quality / unlace-decomp / small / blocker. This is the round's ONE genuine refuter-backed `inconclusive`: a refuter ran and could not decide, which is not the same as unexamined. Dispatch is allowed, but the builder owes a diagnosis in design before it writes code.
 - round 10 CAPTAIN (18:45Z tick, B_DRAIN off-critical-path repair): REPRODUCTION ARM TARGET BOUND. This need's `## Acceptance` arm was already bound but its `## Reproduction` arm carried no `target` block, so the arm that is supposed to assert the bug EXISTS TODAY could not run (`ProbeError: {{BIN}} used but the context supplies no bin`). That never blocked B_DONE -- closure is gated on the ACCEPTANCE arm alone, measured -- but it blinded the refuter and the builder's reproduction step. Repaired by COPYING this need's own acceptance target verbatim, which is a copy and not a guess: the need has exactly one `challenges:` entry, so both arms necessarily address the same binary, and verify.resolve_binary treats a binary_sha256 mismatch as a hard stop. Measured after the write: the reproduction arm runs (unrunnable=false) and PASSES -- a passing reproduction arm means the defect still reproduces on main at b23e01ec, so this doubles as a re-confirmation that the symptom is live. Probe ids did NOT move (probe_id_of is keyed on cmd+expect only, needs.py:269; all 32 arms across the 16 repaired needs re-hashed byte-identically). PROMOTION CAVEAT unchanged: binary_source is `dataset` and `verify --promote` refuses that verbatim -- vendor an in-repo fixture in the SAME PR or B_DONE closes the need but cannot promote its probe.

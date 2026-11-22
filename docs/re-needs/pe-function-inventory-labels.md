@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli/src/functions.rs, decompiler/crates/kuna-analysis/src/listing]
+touches: [decompiler/crates/unlace-cli/src/functions.rs, decompiler/crates/unlace-analysis/src/listing]
 scope: small
 regression_of: null
 pr: null
@@ -100,7 +100,7 @@ A trustworthy function inventory for triaging the PE.
 
 The name is not a data-symbol alias winning canonical-name selection. `<Class>::vftable_<i>`
 is a name kuna SYNTHESISES, and it is attached to a genuine function. The `rtti` pass (R3,
-`decompiler/crates/kuna-analysis/src/analyzers/rtti/mod.rs`) walks each recovered vftable and
+`decompiler/crates/unlace-analysis/src/analyzers/rtti/mod.rs`) walks each recovered vftable and
 emits, per slot, a `SymFact{Function}` **at the address the slot points at** — the virtual
 method itself, not the table. All 10 flagged entries on `trappy attack.exe` are real
 `.text` routines (0x140001040/32B … 0x140001de0/496B), and the classification as functions is
@@ -129,5 +129,5 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 2 T_TRIAGE (captain): track quality -> TOOLING, touches kuna-decomp -> the inventory surface. Naming an executable range after a data symbol (std::bad_alloc::vftable_1) is wrong output with no judgment call in it, so it is a bug fix and needs no option. scope small. If the builder finds the alias comes from symbol application in the analysis tier and correcting it changes function DISCOVERY rather than labelling, STOP -- that is a different, gated change.
+- round 2 T_TRIAGE (captain): track quality -> TOOLING, touches unlace-decomp -> the inventory surface. Naming an executable range after a data symbol (std::bad_alloc::vftable_1) is wrong output with no judgment call in it, so it is a bug fix and needs no option. scope small. If the builder finds the alias comes from symbol application in the analysis tier and correcting it changes function DISCOVERY rather than labelling, STOP -- that is a different, gated change.
 - closed: acceptance a-d6666365cbb6 now PASSES at fed78ec3c044

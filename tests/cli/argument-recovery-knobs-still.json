@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/alignednew_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/alignednew_x86_64",
     "binary_sha256": "7131be38a30e72c96907954ca4a7cd2dea34031a0d46756f2498cadca97c8538",
     "binary_size": 4848,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/alignednew_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/alignednew_x86_64",
     "selector": "caller",
     "selector_kind": "name"
   },

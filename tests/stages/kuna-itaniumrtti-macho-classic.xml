@@ -16,14 +16,14 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/itaniumrtti_macho/libshapes_arm64_classic.dylib</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/itaniumrtti_macho/libshapes_arm64_classic.dylib</com>
   <com>option itaniumrtti off</com>
   <com>read symbols</com>
   <com>load function _make</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/itaniumrtti_macho/libshapes_arm64_classic.dylib</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/itaniumrtti_macho/libshapes_arm64_classic.dylib</com>
   <com>option itaniumrtti on</com>
   <com>read symbols</com>
   <com>load function _make</com>

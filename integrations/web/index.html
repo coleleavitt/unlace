@@ -56,10 +56,10 @@
         </div>
 
         <div class="cmd">
-          <div><span class="p">$</span> kuna decompile ./a.out main</div>
-          <div><span class="p">$</span> kuna decompile ./stripped.bin 0x401040 --addr</div>
-          <div><span class="p">$</span> kuna decompile-all ./a.out --json</div>
-          <div><span class="p">$</span> kuna decompile ./a.out main --option compareform canonical</div>
+          <div><span class="p">$</span> unlace decompile ./a.out main</div>
+          <div><span class="p">$</span> unlace decompile ./stripped.bin 0x401040 --addr</div>
+          <div><span class="p">$</span> unlace decompile-all ./a.out --json</div>
+          <div><span class="p">$</span> unlace decompile ./a.out main --option compareform canonical</div>
         </div>
       </div>
 
@@ -241,7 +241,7 @@
     const ged = gedLine(s, rival);
     metaEl.innerHTML = `<b>${escapeHtml(s.meta || '')}</b>` + (ged ? `<br>${ged}` : '');
     kunaEl.innerHTML = highlightC(tightenHeader(s.kuna));
-    kunaNoteEl.textContent = 'kuna decompile';
+    kunaNoteEl.textContent = 'unlace decompile';
 
     rivalNameEl.textContent = rival.name;
     const code = (s.vs || {})[rival.id];

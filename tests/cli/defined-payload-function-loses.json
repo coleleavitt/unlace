@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/calleearitybody_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calleearitybody_x86_64",
     "binary_sha256": "614dc5e09e717181161e025881ed9cac77c15aadbaebfb3b62040d5c4c8e6ef1",
     "binary_size": 4712,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/calleearitybody_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calleearitybody_x86_64",
     "selector": "caller",
     "selector_kind": "name"
   },

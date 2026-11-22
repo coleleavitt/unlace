@@ -46,7 +46,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/floatret_cm4.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatret_cm4.o</com>
   <com>read symbols</com>
   <com>option armfloatreturn off</com>
   <com>option armfloatargs off</com>
@@ -69,7 +69,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/floatret_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatret_x86_64</com>
   <com>read symbols</com>
   <com>load function sub_11c0</com>
   <com>decompile</com>
@@ -81,7 +81,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/floatret_put_cm4.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatret_put_cm4.o</com>
   <com>read symbols</com>
   <com>option armfloatreturn off</com>
   <com>option armfloatargs off</com>

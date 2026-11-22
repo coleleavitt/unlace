@@ -10,7 +10,7 @@ human-reviewed PR.**
 There is a second, fully autonomous lane. `docs/re-pipeline.md` — the RE-friction loop —
 asks the other question about the same engine: not "is the emitted C worse than angr's" but
 "can an agent USE kuna to reverse-engineer a binary". Its builders **self-merge**, gated on
-the four gates plus `kuna catalog --check`, a re-derivation of every shared counter on the
+the four gates plus `unlace catalog --check`, a re-derivation of every shared counter on the
 rebased tree, green CI with the `full-ci` label forced on, and an executable acceptance
 predicate that must flip from FAIL to PASS. Its large features still stop at a draft
 `[PROPOSAL]` PR; the captain, not a human, approves them. The two lanes share this
@@ -110,14 +110,14 @@ triage checklist in `docs/decbench-loop.md` before turning a case into a feature
 
 ```bash
 python3 -m scripts.pipeline.compare /path/to/bin <func> --reference angr   # side-by-side + metrics + signals
-decompiler/target/release/kuna decompile-all ./bin --json                  # eyeball a whole binary (JSON per function)
+decompiler/target/release/unlace decompile-all ./bin --json                  # eyeball a whole binary (JSON per function)
 ```
 
 `compare` takes a name, `0x`-address, or `@entry` as selector, and works on any binary —
 this is the route for user reports and upstream Ghidra issues (the original GH-issue
 campaign is summarized in `docs/history.md`).
 
-**Before claiming any case**: check it isn't already covered — sweep `kuna catalog
+**Before claiming any case**: check it isn't already covered — sweep `unlace catalog
 --json` for an existing option whose `use_when`/`symptoms` match, and re-run the case
 with that option on. If an existing option closes it, that's a **default-flip candidate
 or a per-function runtime choice, not a new feature** — record it and pick another case.
@@ -153,7 +153,7 @@ investigating.
      decision's phase* — wrong-looking constants in the C are usually destroyed in Band B,
      not mis-rendered at P9.
    - **Option-flip diagnosis**: flip nearby decisions and diff the output —
-     `kuna decompile ./bin fn --option <name> <value>` (repeatable), or
+     `unlace decompile ./bin fn --option <name> <value>` (repeatable), or
      `--kassert "<phase> <subphase> <value>"` for a typed P0 assertion.
    - **Console session** for the pipeline's own view:
      ```bash
@@ -163,7 +163,7 @@ investigating.
      `quality` = the goto/structure metric; `restarts` = why the function restarted;
      `region tree` = the P7 region view; `pipeline <variant>` runs reduced sub-queries;
      plus the whole Ghidra console (`print raw`, `graph controlflow`, `list action`).
-     Note `kuna decompile-all` injects `option listing on` (and `funcstart_patterns`/
+     Note `unlace decompile-all` injects `option listing on` (and `funcstart_patterns`/
      `aif` on non-x86-64) — pass the same options to single-function runs when comparing.
    - **Root-cause in the reference**: find the angr pass/class that produces the better
      shape. Ground truth is the *installed* angr in the venv (the version that ran), not
@@ -181,7 +181,7 @@ investigating.
 
 ## 3. Implement: one option-gated feature
 
-Canonical template: `decompiler/crates/kuna-decomp/src/p2_lift/kuna_loweredswitch.rs`
+Canonical template: `decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs`
 (+ its `phases.toml` row and `tests/stages/ghangr-loweredswitch.xml`). Model the code,
 registration, and test on it. New logic lives in `kuna_<slug>.rs` inside the owning phase
 folder; edits to ported-core files only where an anchor demands it, each marked
@@ -190,16 +190,16 @@ byte-identical until the ablation says otherwise.
 
 The artifact checklist (every item, or the gates fail opaquely):
 
-1. `decompiler/crates/kuna-decomp/src/<phase>/kuna_<slug>.rs` — the feature, early-return
+1. `decompiler/crates/unlace-decomp/src/<phase>/kuna_<slug>.rs` — the feature, early-return
    when its flag is off. Flag on the architecture struct, defaulted in its reset path.
    ElementId from the 4000+ range (grep for the current highest).
-2. `[[settable]]` row in `decompiler/crates/kuna-decomp/phases.toml` — **every field**,
+2. `[[settable]]` row in `decompiler/crates/unlace-decomp/phases.toml` — **every field**,
    including the provenance contract (§below): `summary`, `use_when`, `values`+`example`,
    `tier`, `symptoms`, `source_decompiler`, `inspiration`, `change_kind`.
 3. Option name registered in `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
 4. **Bump the hard-coded catalog counts** (three places; grep the current total):
    `src/p0_knowledge/kuna_phases/tests.rs` (count asserts),
-   `decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
+   `decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
    `tests/fixtures/phase_catalog.json` fixture — regenerate it with the console
    `openfile write`/`phase catalog` recapture documented in that file's header), and the
    `tests/stages/kuna-catalog.xml` stringmatch counts (bump whichever bucket the new
@@ -218,17 +218,17 @@ The artifact checklist (every item, or the gates fail opaquely):
    stringmatch spans both passes' transcript — absent in pass 1 AND present in pass 2.
    Then re-record the stages baseline:
    ```bash
-   decompiler/target/release/kuna test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json
+   decompiler/target/release/unlace test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json
    ```
-6. Regenerate the catalog doc: `decompiler/target/release/kuna catalog --markdown > docs/options.md`.
+6. Regenerate the catalog doc: `decompiler/target/release/unlace catalog --markdown > docs/options.md`.
 7. Update the owning `docs/spec/` chapter; `make check-spec`.
 
 ## 4. Verify & ship
 
-**Ablation decides the default.** `kuna test` has no option flag — to measure the flip,
+**Ablation decides the default.** `unlace test` has no option flag — to measure the flip,
 temporarily set the option's default to ON (its architecture reset path + the
 `phases.toml` row's `default =`), `make binaries`, then run
-`kuna test --all --baseline docs/baseline.json`; revert the flip if the table below says
+`unlace test --all --baseline docs/baseline.json`; revert the flip if the table below says
 opt-in:
 
 | Ablation (option ON) | Speed (`timeit`) | Ship as |
@@ -251,7 +251,7 @@ python3 -m scripts.pipeline.timeit --record docs/features/<slug>/record.json \
 
 **The four gates, all green, before commit**:
 `make test` (**PARITY OK** 675/675) · `make test-stages` (**PARITY OK**) ·
-`make rust-test` · `make check-spec`. Plus `kuna catalog --check` → `catalog OK`.
+`make rust-test` · `make check-spec`. Plus `unlace catalog --check` → `catalog OK`.
 
 **The PR** carries the per-feature bundle `docs/features/<slug>/`:
 
@@ -390,7 +390,7 @@ Callers retain their existing encoding, JSON layout, and permission choices.
 
 | Piece | What |
 |---|---|
-| `scripts/pipeline/reference/` | `ReferenceDecompiler` protocol; registry `angr`, `kuna`. Add another decompiler by implementing the protocol and registering it — everything downstream is decompiler-agnostic (`compare --reference <name>`). |
+| `scripts/pipeline/reference/` | `ReferenceDecompiler` protocol; registry `angr`, `unlace`. Add another decompiler by implementing the protocol and registering it — everything downstream is decompiler-agnostic (`compare --reference <name>`). |
 | `scripts/pipeline/worklist.py` | angr `test_decompiler.py` → `(binary, function)` targets (AST parse, never executes angr). |
 | `scripts/pipeline/compare.py` | reference vs kuna on the same function; metrics + "where the reference is better" signals. Structural, never raw-text. |
 | `scripts/pipeline/sweep.py` + `rank.py` | `compare` across the corpus → ranked `opportunities.json` + human `matrix.md`. |
@@ -406,7 +406,7 @@ Callers retain their existing encoding, JSON layout, and permission choices.
 ## The provenance contract (what makes features LLM-discoverable)
 
 Every shipped option's `phases.toml` row must let the *next* agent discover and judge it
-from `kuna catalog --json` alone: `summary` (WHAT), `use_when` (WHEN — the symptom),
+from `unlace catalog --json` alone: `summary` (WHAT), `use_when` (WHEN — the symptom),
 `values` + `example` (HOW), `tier` (`transform` = the on/off control surface | `core` |
 `analysis`), `symptoms` (2–5 output-shaped greppable phrases), plus provenance:
 
@@ -417,7 +417,7 @@ from `kuna catalog --json` alone: `summary` (WHAT), `use_when` (WHEN — the sym
   `analysis-enablement` | `opt-in-tool`; the field an agent reads to judge whether
   flipping is cosmetic, structural, or semantic.
 
-`kuna catalog --check` + the `tests/stages/kuna-catalog.xml` fence enforce the contract.
+`unlace catalog --check` + the `tests/stages/kuna-catalog.xml` fence enforce the contract.
 
 ## Known caveats
 
@@ -434,6 +434,6 @@ from `kuna catalog --json` alone: `summary` (WHAT), `use_when` (WHEN — the sym
   load/spec gaps.
 - **A reference failure mutes kuna's side**: when the angr leg errors, `compare` skips
   the kuna leg and prints "(no output)" — that is not a kuna failure; run
-  `kuna decompile` directly to see kuna's output.
+  `unlace decompile` directly to see kuna's output.
 - **`select --skip-custom` is currently a no-op** — filter custom-option testcases at
   sweep time (`sweep --skip-custom`) instead.

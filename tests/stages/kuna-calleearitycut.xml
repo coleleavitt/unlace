@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:64:default:gcc">
 <!--
     RE-friction round 8, need `bytecode-reader-call-site` (challenge
-    673da52e9b533b4c22bd2eeb, ELF x86-64 `Layers`): `kuna decompile ...
+    673da52e9b533b4c22bd2eeb, ELF x86-64 `Layers`): `unlace decompile ...
     sub_9d9c0` renders the one call it makes to its bytecode reader with no
     arguments at all,
 

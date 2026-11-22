@@ -1,0 +1,382 @@
+//! The convention a declared function-pointer prototype is forced under at an
+//! indirect call.  A declarator that names no convention gets the default model,
+//! which passes floating-point values in floating-point registers.  An image may
+//! pass them in integer registers (soft-float) or keep doubles out of the
+//! floating-point registers (single-float); forcing the default storage there
+//! reads registers the caller never set and drops the arguments it did set.
+//! A variadic prototype is forced only when every fixed parameter and the return
+//! value sit in one non-floating-point location: ARM passes every variadic value
+//! in core registers, and a locked variadic prototype with a floating-point
+//! return or a register-pair parameter misreads the arguments past it.  A return
+//! value narrower than its register is forced only where the model extends it by
+//! its type, `narrowext` states its extension, or the caller extends it: a MIPS
+//! model states no extension, a RISC-V one zero-extends signed values, and an
+//! Apple arm64 callee sign-extends a signed value narrower than 32 bits that the
+//! model zero-extends.  A declared function or direct-callee prototype that
+//! names no convention is laid out under the soft-float model on an ARM image
+//! that states the soft-float convention and no floating-point hardware, and a
+//! variadic one returns under the base standard on an ARM image that states the
+//! VFP variant.
+use crate::{
+    context::ArchContext,
+    dtype::{TypeFactory, type_class, type_metatype},
+    fspec::{FuncProto, ProtoModel, PrototypePieces},
+    funcdata::Funcdata,
+    infra::architecture::Architecture,
+    kuna_narrowext::Widen,
+};
+use std::rc::Rc;
+use unlace_base::{
+    address::Address,
+    space::{AddrSpace, AddrSpaceManager},
+};
+use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
+
+/// The ARM model for the base (core-register) procedure-call standard.
+const SOFT_FLOAT_MODEL: &str = "__stdcall_softfp";
+
+/// Whether the image passes floating-point arguments, doubles included, in
+/// floating-point registers: x86 and AArch64 always do; Octeon's selected
+/// compiler model is authoritative, including explicit target overrides;
+/// elsewhere the container's stated convention decides.
+pub fn image_evidence(arch: &Architecture) -> Option<bool> {
+    if x86_or_aarch64(arch) {
+        return Some(true);
+    }
+    if let Some(hard) = crate::kuna_octeonid::hard_float(&arch.archid) {
+        return Some(hard);
+    }
+    arch.translate()
+        .loader_rc()
+        .try_borrow()
+        .ok()
+        .and_then(|loader| loader.float_arg_registers())
+}
+
+fn x86_or_aarch64(arch: &Architecture) -> bool {
+    arch.archid.starts_with("x86:") || arch.archid.starts_with("AARCH64:")
+}
+
+/// The narrowest return value, in bytes, whose caller extends it itself: any on
+/// x86, and on AArch64 where the container states a platform other than Apple's;
+/// otherwise 32 bits on AArch64, since an Apple arm64 callee extends a narrower
+/// one and its caller reads it as it is; none elsewhere.
+pub fn caller_extends_from(arch: &Architecture) -> i32 {
+    if arch.archid.starts_with("x86:") {
+        return 1;
+    }
+    if !arch.archid.starts_with("AARCH64:") {
+        return i32::MAX;
+    }
+    let stated_other = !arch.archid.starts_with("AARCH64:LE:64:AppleSilicon:")
+        && arch
+            .translate()
+            .loader_rc()
+            .try_borrow()
+            .is_ok_and(|loader| loader.callee_extends_returns() == Some(false));
+    if stated_other { 1 } else { 4 }
+}
+
+/// The spec's soft-float model, on an image that states the soft-float
+/// convention, with the default model's extension of an argument narrower than
+/// its core register: the base standard extends one as the VFP variant does, and
+/// the spec's soft-float entries leave it unstated.
+pub fn soft_model(arch: &Architecture, evidence: Option<bool>) -> Option<Rc<ProtoModel>> {
+    if evidence != Some(false) {
+        return None;
+    }
+    let soft = arch.get_model(SOFT_FLOAT_MODEL)?;
+    let Some(default) = arch.default_fp() else {
+        return Some(Rc::clone(soft));
+    };
+    let mut model = (**soft).clone();
+    for entry in model.input_mut().kuna_entries_mut() {
+        let same = default.input().get_entry().iter().find(|d| {
+            d.get_type() == entry.get_type()
+                && d.get_space().get_index() == entry.get_space().get_index()
+                && d.get_base() == entry.get_base()
+                && d.get_size() == entry.get_size()
+        });
+        if let Some(same) = same {
+            entry.kuna_copy_extension(same);
+        }
+    }
+    Some(Rc::new(model))
+}
+
+/// The image states no floating-point hardware.  A declaration that names no
+/// convention is laid out under the soft-float model only there: an image with
+/// an FPU may still pass a function's floating-point values in VFP registers
+/// where the compiler sees every call (`-mfloat-abi=softfp` lets GCC and clang
+/// do so for a static function), so the default model stays.
+pub fn without_fpu(arch: &Architecture) -> bool {
+    arch.translate()
+        .loader_rc()
+        .try_borrow()
+        .is_ok_and(|loader| loader.float_hardware() == Some(false))
+}
+
+/// Does the architecture return a `double` in one register its return recovery
+/// reads whole?  x86 (`xmm0`, `ST0`) and AArch64 (`d0`) do.  ARM's default
+/// model lists only `s0`..`s7` among its outputs, so a hard-float function
+/// returning a `double` it computed from a declared `double` is recovered as the
+/// `unsigned int` low half of `d0`; a soft-float or `softfp` image passes it in
+/// `r0:r1`, and its callers hold that as a 64-bit integer. A hard-float ARM
+/// image under `armfloatreturn` returns it whole in `d0`.
+pub fn returns_doubles_whole(arch: &Architecture) -> bool {
+    x86_or_aarch64(arch) || crate::kuna_armfloatreturn::applies(arch)
+}
+
+/// Does `pieces` declare a `float` or `double` parameter or return value?
+pub fn declares_a_float(pieces: &PrototypePieces) -> bool {
+    pieces
+        .outtype
+        .iter()
+        .chain(&pieces.intypes)
+        .any(|ty| ty.get_metatype() == type_metatype::TYPE_FLOAT)
+}
+
+/// The model a declared prototype that names no convention is laid out under,
+/// or `None` for the default one: the soft-float model, on an image that states
+/// the soft-float convention and no floating-point hardware ([`without_fpu`]),
+/// when the default model would put a parameter or the return value of `pieces`
+/// in its floating-point registers; the default model with the base standard's
+/// variadic return rules for a variadic declaration on an ARM image that states
+/// the VFP variant ([`crate::kuna_vfpvariadic`]).
+pub fn undeclared_model(arch: &ArchContext, pieces: &PrototypePieces) -> Option<Rc<ProtoModel>> {
+    if arch.vfp_variadic && crate::kuna_vfpvariadic::moves_return(pieces) {
+        return arch
+            .variadic_declarations
+            .get_or_init(|| crate::kuna_vfpvariadic::model(arch.default_fp()?, arch.manage()))
+            .clone();
+    }
+    let soft = arch.soft_float_declarations.as_ref()?;
+    soft_layout(
+        soft,
+        arch.default_fp()?,
+        pieces,
+        arch.types()?,
+        arch.manage(),
+    )
+}
+
+/// [`undeclared_model`] for the architecture a declaration is parked on.
+pub fn undeclared_model_for(
+    arch: &Architecture,
+    pieces: &PrototypePieces,
+) -> Option<Rc<ProtoModel>> {
+    if crate::kuna_vfpvariadic::moves_return(pieces) && crate::kuna_vfpvariadic::applies(arch) {
+        return crate::kuna_vfpvariadic::declarations(arch);
+    }
+    if !may_use_float_storage(pieces) || !without_fpu(arch) {
+        return None;
+    }
+    let soft = soft_model(arch, image_evidence(arch))?;
+    soft_layout(
+        &soft,
+        arch.default_fp()?,
+        pieces,
+        arch.types(),
+        arch.manage(),
+    )
+}
+
+fn may_use_float_storage(pieces: &PrototypePieces) -> bool {
+    pieces.outtype.iter().chain(&pieces.intypes).any(|ty| {
+        matches!(
+            ty.get_metatype(),
+            type_metatype::TYPE_FLOAT
+                | type_metatype::TYPE_STRUCT
+                | type_metatype::TYPE_UNION
+                | type_metatype::TYPE_ARRAY
+        )
+    })
+}
+
+fn soft_layout(
+    soft: &Rc<ProtoModel>,
+    default: &Rc<ProtoModel>,
+    pieces: &PrototypePieces,
+    types: &dyn TypeFactory,
+    manage: &AddrSpaceManager,
+) -> Option<Rc<ProtoModel>> {
+    if !may_use_float_storage(pieces) {
+        return None;
+    }
+    let types_only = PrototypePieces {
+        input_storage: Vec::new(),
+        output_storage: None,
+        ..pieces.clone()
+    };
+    let mut proto = FuncProto::new();
+    let void = types.get_type_void().ok()?;
+    proto
+        .seed_locked_from_pieces(&types_only, Rc::clone(default), void, types, manage)
+        .ok()?;
+    uses_float_storage(&storage(&proto), &float_entries(default)).then(|| Rc::clone(soft))
+}
+
+/// The prototype to force at a CALLIND typed with `proto`, or `None` to leave the
+/// call to model recovery.  A prototype whose return value is narrower than its
+/// register and extended by neither the model by type nor the caller is
+/// declined.  A variadic prototype is forced only when no fixed parameter or
+/// return value lives in a join or in the model's floating-point registers.  Any
+/// other prototype that puts nothing in those registers, or names its own
+/// convention, is forced as declared.  Otherwise the stated convention decides:
+/// hard-float keeps it; soft-float rebuilds it under the soft-float model, or
+/// declines when the spec has none; single-float or no stated convention
+/// declines.
+pub fn admit(data: &Funcdata, proto: Rc<FuncProto>) -> Option<Rc<FuncProto>> {
+    if !proto.has_model() {
+        return Some(proto);
+    }
+    let arch = data.get_arch();
+    if proto.get_output().get_size() < arch.caller_extends_returns_from
+        && unextended_return(&proto)
+        && !abi_extended_return(arch.narrow_ext.output, &proto)
+    {
+        return None;
+    }
+    let storage = storage(&proto);
+    let in_float = uses_float_storage(&storage, &float_entries(proto.model()));
+    if proto.is_dotdotdot() {
+        let in_join = storage.iter().any(|(addr, _)| addr.is_join());
+        return (!in_float && !in_join).then_some(proto);
+    }
+    if !in_float {
+        return Some(proto);
+    }
+    let default = arch.defaultfp.as_ref().map(|model| model.get_name());
+    if default.is_some_and(|name| name != proto.get_model_name()) {
+        return Some(proto);
+    }
+    match arch.float_arg_registers {
+        Some(true) => Some(proto),
+        Some(false) => rebuild(arch, &proto),
+        None => None,
+    }
+}
+
+/// The (space index, offset, size) of each floating-point entry of the model.
+fn float_entries(model: &ProtoModel) -> Vec<(i32, u64, u64)> {
+    model
+        .input()
+        .get_entry()
+        .iter()
+        .chain(model.output().get_entry())
+        .filter(|e| e.get_type() == type_class::TYPECLASS_FLOAT)
+        .map(|e| {
+            (
+                e.get_space().get_index(),
+                e.get_base(),
+                e.get_size().max(0) as u64,
+            )
+        })
+        .collect()
+}
+
+fn overlaps(entries: &[(i32, u64, u64)], space: &AddrSpace, offset: u64, size: u64) -> bool {
+    entries.iter().any(|&(index, base, len)| {
+        index == space.get_index() && base < offset + size && offset < base + len
+    })
+}
+
+/// A non-floating-point return value sits in the low part of a register entry
+/// for which the model states no extension by type: the callee's extension of
+/// the rest goes unmodelled (MIPS) or is modelled with the wrong sign (RISC-V).
+fn unextended_return(proto: &FuncProto) -> bool {
+    let output = proto.get_output();
+    let size = output.get_size();
+    let float = output
+        .get_type()
+        .is_some_and(|ty| ty.get_metatype() == type_metatype::TYPE_FLOAT);
+    if size <= 0 || float {
+        return false;
+    }
+    let addr = output.get_address();
+    let mut container = VarnodeData::default();
+    match proto
+        .model()
+        .assumed_output_extension(&addr, size, &mut container)
+    {
+        OpCode::CPUI_PIECE => false,
+        OpCode::CPUI_COPY => {
+            let Some(space) = addr.get_space() else {
+                return false;
+            };
+            let offset = addr.get_offset();
+            proto.model().output().get_entry().iter().any(|e| {
+                let len = e.get_size().max(0) as u64;
+                e.get_type() != type_class::TYPECLASS_FLOAT
+                    && e.get_space().get_index() == space.get_index()
+                    && e.get_base() <= offset
+                    && offset + size as u64 <= e.get_base() + len
+                    && (size as u64) < len
+            })
+        }
+        _ => true,
+    }
+}
+
+/// `narrowext` states the extension of the return value.
+fn abi_extended_return(rule: Option<Widen>, proto: &FuncProto) -> bool {
+    let output = proto.get_output();
+    let (Some(rule), Some(ty)) = (rule, output.get_type()) else {
+        return false;
+    };
+    let mut container = VarnodeData::default();
+    let list = proto.model().output();
+    crate::kuna_narrowext::extension(
+        rule,
+        list,
+        &output.get_address(),
+        output.get_size(),
+        ty,
+        &mut container,
+    )
+    .is_some()
+}
+
+/// The storage of each parameter and of a non-void return value.
+fn storage(proto: &FuncProto) -> Vec<(Address, i32)> {
+    let output = proto.get_output();
+    (0..proto.num_params())
+        .filter_map(|i| proto.get_param(i))
+        .map(|p| (p.get_address(), p.get_size()))
+        .chain((output.get_size() > 0).then(|| (output.get_address(), output.get_size())))
+        .collect()
+}
+
+/// Some storage lies in a floating-point entry, directly or as a piece of a join.
+fn uses_float_storage(storage: &[(Address, i32)], entries: &[(i32, u64, u64)]) -> bool {
+    storage.iter().any(|(addr, size)| {
+        let Some(space) = addr.get_space() else {
+            return false;
+        };
+        if addr.is_join() {
+            return space.find_join(addr.get_offset()).is_ok_and(|rec| {
+                (0..rec.num_pieces()).any(|i| {
+                    let piece = rec.get_piece(i);
+                    piece
+                        .space
+                        .as_ref()
+                        .is_some_and(|s| overlaps(entries, s, piece.offset, u64::from(piece.size)))
+                })
+            });
+        }
+        overlaps(entries, space, addr.get_offset(), (*size).max(0) as u64)
+    })
+}
+
+fn rebuild(arch: &ArchContext, proto: &FuncProto) -> Option<Rc<FuncProto>> {
+    let model = arch.soft_float_model.clone()?;
+    let types = arch.types()?;
+    let mut pieces = PrototypePieces::default();
+    proto.get_pieces(&mut pieces);
+    let mut soft = FuncProto::new();
+    soft.set_internal(model, types.get_type_void().ok()?);
+    soft.update_all_types(&pieces, types, &arch.manage).ok()?;
+    soft.set_input_lock(true);
+    soft.set_output_lock(true);
+    Some(Rc::new(soft))
+}

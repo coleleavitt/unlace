@@ -16,11 +16,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/dynseg_plt_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/dynseg_plt_x86_64",
     "binary_sha256": "79c289f19884d8591cc7f8501a8cb045329dbfa19789b0433838a0ea25e837bf",
     "binary_size": 808,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/dynseg_plt_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/dynseg_plt_x86_64",
     "selector": "0x240",
     "selector_kind": "addr"
   },

@@ -14,7 +14,7 @@ rounds: [11, 12]
 first_seen_round: 11
 attempts: 1
 covered_by_option: calleeretpreserves
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: 607
@@ -92,11 +92,11 @@ Preserve main's explicit exit codes across its RAX-preserving cookie helper, ide
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_void_cookie_multi_exit_x86_64.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_void_cookie_multi_exit_x86_64.exe",
     "binary_sha256": "16512154b0c419b2e4b064dbabd4932251ec5e0e11e14302d86821dca1ade1f0",
     "binary_size": 16384,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_void_cookie_multi_exit_x86_64.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_void_cookie_multi_exit_x86_64.exe",
     "selector": "sub_1400012f0",
     "selector_kind": "name"
   }
@@ -126,7 +126,7 @@ _not yet refuted_
 - filed by cluster.py from 1 observation(s)
 - round 11 REFUTER: hypothesis **inconclusive**. REFUTER (captain, in-tick, round 11). VERDICT: inconclusive -- a refuter DID run and settled one question decisively, but did not reach the mechanism. Recording the scope honestly rather than leaving the filed default.
 
-1. WHAT WAS SETTLED: THIS IS NOT A REGRESSION, AND IT MUST NOT BE FILED AS ONE. There are three cookie needs in the backlog and it is easy to conflate them. main-returns-invented-cookie (rounds [6], hypothesis overturned) was CLOSED in round 8 by PR #494 against the in-repo fixture decompiler/crates/kuna-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe. I replayed that fixture on current main (d6105e3d): kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe 0x140001000 --addr emits sub_140001080(v2 ^ (unsigned long long)v1); return 0; -- the literal return 0 the acceptance demands, with no return sub_XXXX(...) shape anywhere. #494 HOLDS. So this round-11 need is a case #494 never covered, on a different binary (68b94ba3, Patch protect v2, PE x86-64 16 KB), not a regression of it. Do not set regression_of and do not let it outrank the queue on that basis. Recall that regression_of is set from TITLES elsewhere in this pipeline, so a title-similar close is exactly the trap here.
+1. WHAT WAS SETTLED: THIS IS NOT A REGRESSION, AND IT MUST NOT BE FILED AS ONE. There are three cookie needs in the backlog and it is easy to conflate them. main-returns-invented-cookie (rounds [6], hypothesis overturned) was CLOSED in round 8 by PR #494 against the in-repo fixture decompiler/crates/unlace-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe. I replayed that fixture on current main (d6105e3d): unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe 0x140001000 --addr emits sub_140001080(v2 ^ (unsigned long long)v1); return 0; -- the literal return 0 the acceptance demands, with no return sub_XXXX(...) shape anywhere. #494 HOLDS. So this round-11 need is a case #494 never covered, on a different binary (68b94ba3, Patch protect v2, PE x86-64 16 KB), not a regression of it. Do not set regression_of and do not let it outrank the queue on that basis. Recall that regression_of is set from TITLES elsewhere in this pipeline, so a title-similar close is exactly the trap here.
 
 2. WHY THE #494 ACCEPTANCE DID NOT CATCH THIS SHAPE, which is the useful part for whoever builds it. That acceptance is stdout_absent of return\s+sub_[0-9a-fA-F]+\([^;]*\);\s*\} plus stdout_matches of return\s+(?:0|0x0)\s*;. It forbids returning the CALL and requires a literal zero to appear somewhere in the output. This round's symptom is main returning an UNDEFINED EAX LOCAL -- a return vN; with vN never assigned. That shape trips neither clause: it is not a return sub_...() , and the positive clause is satisfied by any function in the output that returns 0. If you build a fix here, do not copy that acceptance pattern; require the returned expression itself to be the preserved zero, not merely that some line in the file says return 0.
 

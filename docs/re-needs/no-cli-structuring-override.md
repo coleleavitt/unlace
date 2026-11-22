@@ -12,7 +12,7 @@ instances: 1
 rounds: [2]
 first_seen_round: 2
 attempts: 0
-touches: [decompiler/crates/kuna-cli/src/assertdecl.rs, decompiler/crates/kuna-console/src/ifacedecomp.rs, decompiler/crates/kuna-decomp/phases.toml]
+touches: [decompiler/crates/unlace-cli/src/assertdecl.rs, decompiler/crates/unlace-console/src/ifacedecomp.rs, decompiler/crates/unlace-decomp/phases.toml]
 scope: small
 pr: "398"
 closed_in_round: 2
@@ -38,7 +38,7 @@ This record was NARROWED in round 2 (see the decision log): as filed it also cov
 ## Reproduction
 
 Demonstrates the gap on merged main: the directive is rejected by the CLI parser before the engine
-is ever reached (`kuna-cli/src/assertdecl.rs:275`), exit 2, nothing on stdout.
+is ever reached (`unlace-cli/src/assertdecl.rs:275`), exit 2, nothing on stdout.
 
 ```json
 {
@@ -63,11 +63,11 @@ is ever reached (`kuna-cli/src/assertdecl.rs:275`), exit 2, nothing on stdout.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/aif_gap_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "binary_sha256": "1a592a85f424cc2db8953d5a38c86676bcee5e37b242b6fb6244a2c9fccfeeef",
     "binary_size": 14408,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/aif_gap_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "selector": "0x13c9",
     "selector_kind": "addr"
   },
@@ -82,7 +82,7 @@ is ever reached (`kuna-cli/src/assertdecl.rs:275`), exit 2, nothing on stdout.
       "unknown directive \"flow\""
     ]
   },
-  "notes": "The gap as it stands: the one structuring override whose engine path IS ported (IfcFlowOverride, kuna-console/src/ifacedecomp.rs:2911) has no spelling on the --assert plane, so an agent driving the kuna binary cannot reclassify a flow at all.",
+  "notes": "The gap as it stands: the one structuring override whose engine path IS ported (IfcFlowOverride, unlace-console/src/ifacedecomp.rs:2911) has no spelling on the --assert plane, so an agent driving the kuna binary cannot reclassify a flow at all.",
   "probe_id": "p-a862d011f87f"
 }
 ```
@@ -119,11 +119,11 @@ promotes to `tests/cli/` verbatim.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/aif_gap_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "binary_sha256": "1a592a85f424cc2db8953d5a38c86676bcee5e37b242b6fb6244a2c9fccfeeef",
     "binary_size": 14408,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/aif_gap_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "selector": "0x13c9",
     "selector_kind": "addr"
   },
@@ -162,7 +162,7 @@ promotes to `tests/cli/` verbatim.
 
 ## Hypothesis
 
-ADVISORY. Exposure, not implementation: the engine path exists (`kuna-console/src/ifacedecomp.rs`
+ADVISORY. Exposure, not implementation: the engine path exists (`unlace-console/src/ifacedecomp.rs`
 `IfcFlowOverride`, with the stashed facts re-seeded on each flow follow) and the CLI plane exists
 (`--assert` + `--assert-strict` + the `assertions` fate report, shipped this round by #389/#391).
 What is missing is the arm in `assertdecl.rs` that spells `flow` and routes it. A builder should
@@ -178,9 +178,9 @@ exist). `kind` is effectively `absence`, which is the case `REPIPE_REFUTE_MODE=a
 
 ## Reference
 
-- console command: `decompiler/crates/kuna-console/src/ifacedecomp.rs:2911` (`IfcFlowOverride`)
-- CLI directive parser: `decompiler/crates/kuna-cli/src/assertdecl.rs:263-275`
-- the stubs this record NO LONGER covers: `decompiler/crates/kuna-console/src/kuna_console.rs:718`
+- console command: `decompiler/crates/unlace-console/src/ifacedecomp.rs:2911` (`IfcFlowOverride`)
+- CLI directive parser: `decompiler/crates/unlace-cli/src/assertdecl.rs:263-275`
+- the stubs this record NO LONGER covers: `decompiler/crates/unlace-console/src/kuna_console.rs:718`
   (`Dispatch::ForceGoto`), `:724` (`Dispatch::MultistageJump`), `:727` (`Dispatch::FlowOverride`,
   the `--kassert` arm), and the `structure blocks` / switch-model entries routed through
   `engine_unavailable`.
@@ -194,8 +194,8 @@ exist). `kind` is effectively `absence`, which is the case `REPIPE_REFUTE_MODE=a
 - seeded for round 2 from a source survey of the override surface, after round 1 showed testers
   hitting obfuscated images with no lever to correct kuna with. Not tester-filed: round 2 should
   confirm the demand.
-- round 2 T_TRIAGE (captain): track tooling / touches [kuna-console/src/ifacedecomp.rs,
-  kuna-decomp/phases.toml] / scope large CONFIRMED, with one lease consequence worth stating: it is
+- round 2 T_TRIAGE (captain): track tooling / touches [unlace-console/src/ifacedecomp.rs,
+  unlace-decomp/phases.toml] / scope large CONFIRMED, with one lease consequence worth stating: it is
   the only no-cli-* need that declares phases.toml, so it takes file:phases.toml and cannot run
   beside the round's option-adding quality builder even though its track is tooling. That is
   correct, not a mislabel -- it edits the exposure fields of subphases whose overrides are
@@ -222,7 +222,7 @@ exist). `kind` is effectively `absence`, which is the case `REPIPE_REFUTE_MODE=a
   asked a builder to confirm, both confirmed by measurement rather than by reading:
     * the CLI's one-shot decompile DOES re-seed the override the way the console's
       `load function` -> `override flow` -> `decompile` sequence does, and by a different
-      route than the console's: `kuna decompile --json` is the IN-PROCESS load
+      route than the console's: `unlace decompile --json` is the IN-PROCESS load
       (`decompile_json` -> `decompile_all::load_program`), not the forked script, so the
       console's `pending_flow_overrides` stash is never consulted there. The directive is
       seeded into the same `DecompileSeed::flow_overrides` slot the analysis's `call

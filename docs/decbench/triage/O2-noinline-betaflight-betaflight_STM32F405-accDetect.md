@@ -143,7 +143,7 @@ kuna does parse and register it (`infra/architecture.rs:2382 init_userops_and_fi
 `p2_lift/flow.rs:1193-1203` (`xref_control_flow`) queues every injected-userop `CALLOTHER` onto
 `injectlist`. But the drain runs **once**:
 
-`decompiler/crates/kuna-decomp/src/p2_lift/flow.rs:1735`
+`decompiler/crates/unlace-decomp/src/p2_lift/flow.rs:1735`
 ```rust
     pub fn generate_ops(&mut self) -> KunaResult<()> {
         self.clear_properties();
@@ -191,7 +191,7 @@ may be an independent P2 jump-table issue.
 
 ## Proposed fix
 
-**Mechanism.** In `decompiler/crates/kuna-decomp/src/p2_lift/flow.rs`,
+**Mechanism.** In `decompiler/crates/unlace-decomp/src/p2_lift/flow.rs`,
 `generate_ops_with_jumptables`, drain the inject list after each table-driven fall-thru round —
 the same `if self.has_inject() { self.inject_pcode()?; }` that `generate_ops` already runs — so
 a registered `<callotherfixup>` is applied uniformly regardless of how the block was

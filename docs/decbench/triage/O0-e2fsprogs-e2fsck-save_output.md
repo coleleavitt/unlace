@@ -168,7 +168,7 @@ source; ghidra sinks them exactly like kuna and scores 61.
 original spill stores are folded away in P3; P6's merge then has to trim a
 MULTIEQUAL input that cannot join the output's HighVariable, and the trim COPY
 is anchored at the *end of the phi's incoming predecessor block*. From
-`decompiler/crates/kuna-decomp/src/p6_variables/funcdata_merge.rs:840`
+`decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs:840`
 (`trim_op_input_prep`, the `Merge::trimOpInput` port):
 
 ```rust
@@ -238,7 +238,7 @@ Textual ablations against the fresh block, each measured with the real GED:
 ## Proposed fix
 
 **Feature `paramcopyhoist` (P6, default-off), new module
-`decompiler/crates/kuna-decomp/src/p6_variables/kuna_paramcopyhoist.rs`.**
+`decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs`.**
 
 Mechanism: in `trim_op_input_prep`
 (`p6_variables/funcdata_merge.rs:838-849`), when the MULTIEQUAL input being
@@ -250,9 +250,9 @@ spill store, which the varmap still knows) instead of `block_stop_addr(pred)`.
 a `(block, addr, after_op)` triple, so only the anchor computation changes.
 
 Owning files:
-- `decompiler/crates/kuna-decomp/src/p6_variables/kuna_paramcopyhoist.rs` (new: eligibility + anchor)
-- `decompiler/crates/kuna-decomp/src/p6_variables/funcdata_merge.rs` (`trim_op_input_prep` calls it)
-- `decompiler/crates/kuna-decomp/phases.toml` + `src/p0_knowledge/options.rs` (option row)
+- `decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs` (new: eligibility + anchor)
+- `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs` (`trim_op_input_prep` calls it)
+- `decompiler/crates/unlace-decomp/phases.toml` + `src/p0_knowledge/options.rs` (option row)
 - `docs/spec/` P6 chapter; `tests/stages/` two-pass testcase; catalog count bumps
 
 Risks:

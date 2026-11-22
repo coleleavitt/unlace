@@ -7,7 +7,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/array_index_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/array_index_x86_64</com>
   <com>read symbols</com>
   <com>option outlang rust</com>
   <com>option ctypes off</com>

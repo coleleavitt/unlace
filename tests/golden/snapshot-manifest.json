@@ -1018,7 +1018,7 @@
    "source": "tests/stages/kuna-catalog.xml",
    "status": "ok"
   },
-  "kuna-console": {
+  "unlace-console": {
    "arch": "x86:LE:64:default:gcc",
    "decompiles": 0,
    "files": {

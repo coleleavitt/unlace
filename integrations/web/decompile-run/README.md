@@ -27,7 +27,7 @@ To change the site, change Kuna. Bugs go to
 | Path | What |
 |---|---|
 | `index.html`, `decompile/` | The page and its modules |
-| `kuna_wasm.wasm` | The decompiler engine |
+| `unlace_wasm.wasm` | The decompiler engine |
 | `kuna-web.js`, `kuna-worker*.js`, `zip.js`, `sha256.js`, `vendor/` | The Worker that runs the engine, and its helpers and WASI runtime |
 | `specs/`, `specs-small.json` | Processor specifications, fetched as each program needs them |
 | `assets/` | Fonts, styles, and the code highlighter |

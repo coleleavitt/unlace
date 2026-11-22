@@ -1,0 +1,2328 @@
+//! CLI end-to-end gate for `unlace decompile-project` — drives the built `unlace`
+//! binary over the vendored `fauxware` (x86-64) and `arm_thumb_linked_le32`
+//! (ARM Thumb) ELF fixtures and asserts the four project artifacts
+//! (`.c` / `.h` / `.asm` / `README.md`) are written, cross-referenced, and
+//! (for the `.h`) syntactically valid C.
+//!
+//! Integration tests require the built processor specs under `specs/`.
+
+use crate::common;
+
+use common::process;
+
+use std::path::PathBuf;
+use std::process::Command;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
+}
+
+fn fixture(name: &str) -> String {
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+fn specs() -> String {
+    repo_root().join("specs").to_str().unwrap().to_string()
+}
+
+/// A unique per-test output directory under the system temp dir.
+fn out_dir(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+        "kuna_decompile_project_{tag}_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    dir
+}
+
+fn run_kuna(args: &[&str]) -> (String, String, bool) {
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(args)
+        .output()
+        .expect("failed to spawn the kuna binary");
+    (
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+        out.status.success(),
+    )
+}
+
+/// Export `fixture_name` and return the project directory.
+fn project(fixture_name: &str, tag: &str) -> PathBuf {
+    let bin = fixture(fixture_name);
+    let dir = out_dir(tag);
+    let (_stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--sleighpath",
+        &specs(),
+    ]);
+    if !ok {
+        panic!("unlace decompile-project failed on {fixture_name}: {stderr}");
+    }
+    dir
+}
+
+/// A selected project begins with the same body-bearing target resolution as
+/// decompile-all. Refusal happens before an output folder is created.
+#[test]
+fn selected_project_refuses_an_executable_section_iat_slot() {
+    let bin = fixture("pe_iatincode_i386.exe");
+    let dir = out_dir("iat_slot");
+    let (stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--addr",
+        "0x401000",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert!(!ok, "an IAT slot unexpectedly exported: {stdout}");
+    assert!(
+        stdout.trim().is_empty(),
+        "an IAT project summary escaped: {stdout}"
+    );
+    assert_eq!(
+        stderr,
+        "error: selector \"0x401000\" identifies import VirtualAlloc at 0x401000; \
+         the IAT slot contains a loader-written pointer, not a function body\n"
+    );
+    assert!(
+        !dir.exists(),
+        "refusal left a project folder at {}",
+        dir.display()
+    );
+}
+
+/// The four artifact paths for a `<file_name>` project export.
+fn artifacts(dir: &std::path::Path, file_name: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
+    (
+        dir.join(format!("{file_name}.c")),
+        dir.join(format!("{file_name}.h")),
+        dir.join(format!("{file_name}.asm")),
+        dir.join("README.md"),
+    )
+}
+
+#[test]
+fn project_folder_written_for_fauxware() {
+    let dir = project("fauxware", "written");
+    let (c, h, asm, readme) = artifacts(&dir, "fauxware");
+    for f in [&c, &h, &asm, &readme] {
+        assert!(f.exists(), "missing artifact {}", f.display());
+    }
+    let c_text = std::fs::read_to_string(&c).unwrap();
+    assert!(
+        c_text.contains("#include \"fauxware.h\""),
+        ".c missing header include:\n{c_text}"
+    );
+    assert!(
+        c_text.contains("// Function: main"),
+        ".c missing main function header:\n{c_text}"
+    );
+
+    let h_text = std::fs::read_to_string(&h).unwrap();
+    assert!(
+        h_text.contains("typedef unsigned int undefined4;"),
+        ".h missing the undefined4 typedef:\n{h_text}"
+    );
+    // The `main` prototype line ends in `;` (token-identical to the .c
+    // definition's signature line).
+    let main_proto = h_text
+        .lines()
+        .find(|l| l.contains("main(") && !l.contains("//"))
+        .unwrap_or_else(|| panic!(".h missing a main( prototype:\n{h_text}"));
+    assert!(
+        main_proto.trim_end().ends_with(';'),
+        "main prototype must end in `;`: {main_proto:?}"
+    );
+
+    let readme_text = std::fs::read_to_string(&readme).unwrap();
+    assert!(
+        readme_text.contains("x86:LE:64"),
+        "README missing arch id:\n{readme_text}"
+    );
+    assert!(
+        readme_text.contains("Entry point"),
+        "README missing entry point:\n{readme_text}"
+    );
+    assert!(
+        readme_text.contains("## Sections"),
+        "README missing sections table:\n{readme_text}"
+    );
+}
+
+/// The README's entry-point row was `object`'s raw `entry()`, which on a Mach-O
+/// `LC_MAIN` image is a `__TEXT`-relative file offset -- so the export claimed an
+/// entry at `0x5b0` for a program whose `main` is at `0x1000005b0`.
+#[test]
+fn macho_readme_entry_point_is_a_vma() {
+    let dir = project("macho_stripped_main", "macho_entry");
+    let (_c, _h, _asm, readme) = artifacts(&dir, "macho_stripped_main");
+    let readme_text = std::fs::read_to_string(&readme).unwrap();
+    assert!(
+        readme_text.contains("| Entry point | `0x1000005b0` |"),
+        "README entry point must be the VMA:\n{readme_text}"
+    );
+}
+
+/// The README's entry point is reported through the inventory: an ARM
+/// `e_entry` carrying the Thumb mode bit (`0x100d7`) prints at the even
+/// address every other artifact uses for that function.
+#[test]
+fn arm_thumb_readme_entry_point_is_the_even_inventory_address() {
+    let dir = project("arm_thumb_linked_le32", "thumb_entry");
+    let (_c, _h, _asm, readme) = artifacts(&dir, "arm_thumb_linked_le32");
+    let readme_text = std::fs::read_to_string(&readme).unwrap();
+    assert!(
+        readme_text.contains("| Entry point | `0x100d6` |"),
+        "README entry point must be the even inventory address:\n{readme_text}"
+    );
+    assert!(
+        readme_text.contains("| `.text` | `0x"),
+        "README must list the loader's named sections:\n{readme_text}"
+    );
+}
+
+/// A relocatable object declares no entry and has no load addresses of its
+/// own: the README says so, and lists the laid-out sections at the synthetic
+/// layout the rest of the export uses, rather than every section at file
+/// offset zero.
+#[test]
+fn relocatable_readme_has_no_entry_and_lists_laid_out_sections() {
+    let dir = project("entry_selectors_x86_64.o", "reloc_readme");
+    let (_c, _h, _asm, readme) = artifacts(&dir, "entry_selectors_x86_64.o");
+    let readme_text = std::fs::read_to_string(&readme).unwrap();
+    assert!(
+        readme_text.contains("| Entry point | unavailable |"),
+        "a relocatable object declares no entry:\n{readme_text}"
+    );
+    assert!(
+        readme_text.contains("| `.text.selector_a` | `0x400000` |"),
+        "sections must be listed at their synthetic load addresses:\n{readme_text}"
+    );
+    assert!(
+        !readme_text.contains("| `.symtab` |") && !readme_text.contains("| `0x0` |"),
+        "link-time-only sections and file-offset-zero rows must not appear:\n{readme_text}"
+    );
+}
+
+#[test]
+fn asm_labels_match_c_function_names() {
+    let dir = project("fauxware", "labels");
+    let (c, _h, asm, _r) = artifacts(&dir, "fauxware");
+    let c_text = std::fs::read_to_string(&c).unwrap();
+    let asm_text = std::fs::read_to_string(&asm).unwrap();
+    // Every `// Function: <name>` in the .c must have a `<name>:` label in the .asm.
+    let mut checked = 0;
+    for line in c_text.lines() {
+        if let Some(rest) = line.strip_prefix("// Function: ") {
+            let name = rest.split_whitespace().next().unwrap();
+            assert!(
+                asm_text.lines().any(|l| l.starts_with(&format!("{name}:"))),
+                "asm has no `{name}:` label for the .c function {name:?}"
+            );
+            checked += 1;
+        }
+    }
+    assert!(
+        checked > 1,
+        "expected several functions cross-checked, got {checked}"
+    );
+}
+
+#[test]
+fn asm_has_stack_comment_for_main() {
+    let dir = project("fauxware", "stack");
+    let (_c, _h, asm, _r) = artifacts(&dir, "fauxware");
+    let asm_text = std::fs::read_to_string(&asm).unwrap();
+    // Find `main:` and assert a `; stack:` or `; arg:` line appears in its
+    // header block (before the first instruction / blank separator).
+    let mut lines = asm_text.lines();
+    let found = lines.by_ref().any(|l| l.starts_with("main:"));
+    assert!(found, "no main: label in asm:\n{asm_text}");
+    let header: Vec<&str> = lines.take_while(|l| l.starts_with(';')).collect();
+    assert!(
+        header
+            .iter()
+            .any(|l| l.starts_with("; stack:") || l.starts_with("; arg:")),
+        "main: has no stack/arg comment block:\n{}",
+        header.join("\n")
+    );
+}
+
+#[test]
+fn dat_labels_cross_referenced() {
+    let dir = project("fauxware", "dat");
+    let (c, _h, asm, _r) = artifacts(&dir, "fauxware");
+    let c_text = std::fs::read_to_string(&c).unwrap();
+    let asm_text = std::fs::read_to_string(&asm).unwrap();
+
+    // Collect every `dat_<hex>` token in the .c (same policy as the emitter:
+    // preceding char must not be an identifier char).
+    let bytes = c_text.as_bytes();
+    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let mut tokens = std::collections::BTreeSet::new();
+    let mut i = 0;
+    while let Some(pos) = c_text[i..].find("dat_") {
+        let start = i + pos;
+        let hs = start + 4;
+        let mut he = hs;
+        while he < bytes.len() && matches!(bytes[he], b'0'..=b'9' | b'a'..=b'f') {
+            he += 1;
+        }
+        let prev_ok = start == 0 || !is_ident(bytes[start - 1]);
+        let next_ok = he == bytes.len() || !is_ident(bytes[he]);
+        if prev_ok && next_ok && he > hs {
+            tokens.insert(c_text[start..he].to_string());
+        }
+        i = he.max(hs);
+    }
+    assert!(
+        !tokens.is_empty(),
+        "fauxware .c should reference some dat_<hex> data:\n{c_text}"
+    );
+
+    // Label policy (documented in decompile_project.rs): a bare `dat_<hex>`
+    // gets its own `dat_<hex>:` label line; when a NAMED global covers the
+    // address the symbol name is the label and the `dat_` spelling is appended
+    // as `= dat_<hex>`.  Either form satisfies the cross-reference.
+    for t in &tokens {
+        let has_label = asm_text.lines().any(|l| l.starts_with(&format!("{t}:")))
+            || asm_text.contains(&format!("= {t}"));
+        assert!(
+            has_label,
+            "dat token {t:?} from the .c has no label/alias in the .asm"
+        );
+    }
+}
+
+#[test]
+fn header_syntax_checks_with_cc() {
+    if process::optional_output(Command::new("cc").arg("--version")).is_none() {
+        eprintln!("header_syntax_checks_with_cc: skipping (no `cc`)");
+        return;
+    }
+    let dir = project("fauxware", "cc");
+    let (_c, h, _asm, _r) = artifacts(&dir, "fauxware");
+    // The export preserves the recovered prototype token-for-token, including
+    // a possibly non-standard signature for `main`. Remap that reserved C
+    // identifier so this test checks the header's syntax rather than asking the
+    // host compiler to validate prototype recovery.
+    let stub = dir.join("hcheck.c");
+    std::fs::write(
+        &stub,
+        format!(
+            "#define main kuna_recovered_main\n#include \"{}\"\nint stub_entry(void){{return 0;}}\n",
+            h.display()
+        ),
+    )
+    .unwrap();
+    let out = Command::new("cc")
+        .args(["-std=c99", "-fsyntax-only", stub.to_str().unwrap()])
+        .output()
+        .expect("spawn cc");
+    assert!(
+        out.status.success(),
+        "generated .h failed cc -fsyntax-only:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// (kuna) `stat` and `sigaction` are each a POSIX struct tag AND a POSIX
+/// function, and C keeps typedefs and functions in one file-scope namespace. The
+/// export must not emit both spellings as declarations, or the header stops
+/// parsing at the clash and every declaration after it fails too.
+///
+/// `libctypes_stat_x86_64` imports `stat` and carries `struct stat` in its DWARF,
+/// so the clash is reachable with the named tables OFF (the DWARF import alone)
+/// and with them on (`stat *` from the prototype table as well). The `glibc` arm
+/// is here because it is the one that gives a minted shell real MEMBERS, so the
+/// header stops declaring it opaque and starts printing a struct body  -  which
+/// has to parse, and has to arrive after the aggregates it holds by value.
+#[test]
+fn header_syntax_checks_when_a_type_shares_a_name_with_a_function() {
+    if process::optional_output(Command::new("cc").arg("--version")).is_none() {
+        eprintln!("header_syntax_checks_when_a_type_shares_a_name_with_a_function: no `cc`");
+        return;
+    }
+    for arm in ["off", "opaque", "glibc"] {
+        let bin = fixture("libctypes_stat_x86_64");
+        let dir = out_dir(&format!("typefnclash_{arm}"));
+        let (_stdout, stderr, ok) = run_kuna(&[
+            "decompile-project",
+            &bin,
+            "-o",
+            dir.to_str().unwrap(),
+            "--option",
+            "libctypes",
+            arm,
+            "--sleighpath",
+            &specs(),
+        ]);
+        if !ok {
+            panic!("unlace decompile-project failed (libctypes {arm}): {stderr}");
+        }
+        let (_c, h, _asm, _r) = artifacts(&dir, "libctypes_stat_x86_64");
+        let text = std::fs::read_to_string(&h).unwrap();
+        assert!(
+            text.contains("prototype omitted: int stat("),
+            "libctypes {arm}: the `stat` prototype should be suppressed, not declared:\n{text}"
+        );
+        assert!(
+            text.contains("conflicts with a data or type declaration */")
+                && !text.contains("#error"),
+            "libctypes {arm}: the collision is reported in a comment, not a hard error:\n{text}"
+        );
+        let stub = dir.join("hcheck.c");
+        std::fs::write(
+            &stub,
+            format!(
+                "#define main kuna_recovered_main\n#include \"{}\"\nint stub_entry(void){{return 0;}}\n",
+                h.display()
+            ),
+        )
+        .unwrap();
+        let out = Command::new("cc")
+            .args(["-std=c99", "-fsyntax-only", stub.to_str().unwrap()])
+            .output()
+            .expect("spawn cc");
+        assert!(
+            out.status.success(),
+            "libctypes {arm}: generated .h failed cc -fsyntax-only:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}
+
+#[test]
+fn arm_thumb_project_smoke() {
+    let dir = project("arm_thumb_linked_le32", "arm");
+    let (_c, _h, asm, _r) = artifacts(&dir, "arm_thumb_linked_le32");
+    assert!(asm.exists(), "arm project missing .asm");
+    let asm_text = std::fs::read_to_string(&asm).unwrap();
+    assert!(!asm_text.trim().is_empty(), "arm .asm is empty");
+    // The non-x86 sweep + ARM Thumb odd-address normalization must still label
+    // functions (at least one `<name>:  ; 0x` line).
+    assert!(
+        asm_text.lines().any(|l| l.contains(":  ; 0x")),
+        "arm .asm has no function labels:\n{asm_text}"
+    );
+}
+
+/// `pdb_prog.exe` ships its matching `pdb_prog.pdb` beside it, and the shipped
+/// `pdb` default (DIV-129) inventories every function that PDB names -- the hidden
+/// leaf this test expects only fast discovery to find included. Both runs turn it
+/// off so the discovery under test is the only one operating.
+#[test]
+fn fast_project_discovers_real_function_bodies() {
+    let bin = fixture("pdb_prog.exe");
+    let dir = out_dir("fast_bodies");
+    let (stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--mode",
+        "fast",
+        "--option",
+        "pdb",
+        "off",
+        "--sleighpath",
+        &specs(),
+    ]);
+    if !ok {
+        panic!("fast project failed: {stderr}");
+    }
+    let c = std::fs::read_to_string(dir.join("pdb_prog.exe.c")).unwrap();
+    assert!(c.contains("@ 0x140001010"), "entry function missing:\n{c}");
+    assert!(
+        c.contains("@ 0x140001000"),
+        "direct-call target missing:\n{c}"
+    );
+    assert!(
+        c.contains("return a1 * 7 + a0 * 3;"),
+        "discovered function has no real body:\n{c}"
+    );
+    assert!(
+        stdout.contains("functions: 2 ok, 0 failed"),
+        "unexpected project summary: {stdout}"
+    );
+
+    let control = out_dir("fast_bodies_off");
+    let (_stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        control.to_str().unwrap(),
+        "--mode",
+        "fast",
+        "--option",
+        "fast_funcdisc",
+        "off",
+        "--option",
+        "pdb",
+        "off",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert!(ok, "fast discovery control failed: {stderr}");
+    let control_c = std::fs::read_to_string(control.join("pdb_prog.exe.c")).unwrap();
+    assert!(
+        !control_c.contains("@ 0x140001000"),
+        "disabled fast discovery unexpectedly found the hidden leaf:\n{control_c}"
+    );
+}
+
+#[test]
+fn fast_project_discovers_indirect_pointer_target() {
+    let bin = fixture("aif_gap_x86_64");
+    let dir = out_dir("fast_pointer");
+    let (_stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--mode",
+        "fast",
+        "--sleighpath",
+        &specs(),
+    ]);
+    if !ok {
+        panic!("fast pointer project failed: {stderr}");
+    }
+    let c = std::fs::read_to_string(dir.join("aif_gap_x86_64.c")).unwrap();
+    assert!(
+        c.contains("@ 0x13ae"),
+        "pointer-only function missing:\n{c}"
+    );
+    assert!(
+        c.contains("return (a0 + 0x40) * 2 + 9;"),
+        "pointer-only function has no real body:\n{c}"
+    );
+
+    let control = out_dir("fast_pointer_off");
+    let (_stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        control.to_str().unwrap(),
+        "--mode",
+        "fast",
+        "--option",
+        "fast_funcdisc",
+        "off",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert!(ok, "fast pointer discovery control failed: {stderr}");
+    let control_c = std::fs::read_to_string(control.join("aif_gap_x86_64.c")).unwrap();
+    assert!(
+        !control_c.contains("@ 0x13ae"),
+        "disabled fast discovery unexpectedly found the pointer-only target:\n{control_c}"
+    );
+}
+
+#[test]
+fn fast_project_does_not_promote_switch_case_labels() {
+    let bin = fixture("switchtab_x86_64");
+    let dir = out_dir("fast_switch_labels");
+    let (_stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--mode",
+        "fast",
+        "--sleighpath",
+        &specs(),
+    ]);
+    if !ok {
+        panic!("fast switch-table project failed: {stderr}");
+    }
+    let c = std::fs::read_to_string(dir.join("switchtab_x86_64.c")).unwrap();
+    for case in [
+        0x401119_u64,
+        0x40111f,
+        0x401125,
+        0x40112b,
+        0x401131,
+        0x401137,
+        0x40113d,
+        0x401149,
+    ] {
+        assert!(
+            !c.contains(&format!("@ 0x{case:x}")),
+            "switch case 0x{case:x} was promoted to a function:\n{c}"
+        );
+    }
+}
+
+#[test]
+fn fast_selected_project_does_not_expand_to_callees() {
+    let bin = fixture("pdb_prog.exe");
+    let dir = out_dir("fast_selected");
+    let (stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--addr",
+        "0x140001010",
+        "--mode",
+        "fast",
+        "--sleighpath",
+        &specs(),
+    ]);
+    if !ok {
+        panic!("fast selected project failed: {stderr}");
+    }
+    let c = std::fs::read_to_string(dir.join("pdb_prog.exe.c")).unwrap();
+    assert!(
+        c.contains("@ 0x140001010"),
+        "selected function missing:\n{c}"
+    );
+    assert!(
+        !c.contains("@ 0x140001000"),
+        "selector expanded to an unrequested callee:\n{c}"
+    );
+    assert!(
+        stdout.contains("functions: 1 ok, 0 failed"),
+        "unexpected project summary: {stdout}"
+    );
+}
+
+/// A named global whose declared datatype is larger than the load image's
+/// 512-byte read window took the whole export down: the loader answered every
+/// read out of that window and indexed past its end, so `decompile-project`
+/// panicked before it created the output directory and wrote nothing at all.
+/// `regglobal_fmt_x86_64` carries a 40,000-byte `unused_word_type`, which is
+/// dumped whole -- the loader serves the read the declared type asks for.
+#[test]
+fn a_global_larger_than_the_load_window_is_dumped_whole() {
+    let dir = project("regglobal_fmt_x86_64", "big_global");
+    let (_c, _h, asm, _readme) = artifacts(&dir, "regglobal_fmt_x86_64");
+    let asm_text = std::fs::read_to_string(&asm).unwrap();
+    assert!(
+        asm_text.contains("\nunused_word_type:"),
+        "the 40,000-byte global is missing from the data tail"
+    );
+    let rows = asm_text
+        .lines()
+        .skip_while(|l| !l.starts_with("unused_word_type:"))
+        .skip(1)
+        .take_while(|l| l.starts_with("  "))
+        .count();
+    assert_eq!(rows, 40_000 / 16, "the declared 40,000 bytes, 16 to a row");
+}
+
+/// The same defect on the shape that made it reachable everywhere: a plain
+/// string. `tests/bug-repro/sort` carries a 604-byte usage string at `0x16600`,
+/// and reading it took the export down before `create_dir_all` ran, so the run
+/// wrote nothing at all -- the same failure `/bin/ls` and 52 of the 219 ELF
+/// binaries in `/usr/bin` hit. `--addr` selects one function; the `.asm` data
+/// tail, where the read happens, is emitted for the whole image regardless.
+#[test]
+fn a_binary_with_a_string_over_the_load_window_still_exports() {
+    let bin = repo_root().join("tests/bug-repro/sort");
+    let dir = out_dir("big_string");
+    let (_stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        bin.to_str().unwrap(),
+        "-o",
+        dir.to_str().unwrap(),
+        "--addr",
+        "0x3000",
+        "--sleighpath",
+        &specs(),
+    ]);
+    if !ok {
+        panic!("unlace decompile-project failed on tests/bug-repro/sort: {stderr}");
+    }
+    let (c, h, asm, readme) = artifacts(&dir, "sort");
+    for f in [&c, &h, &asm, &readme] {
+        assert!(f.exists(), "missing artifact {}", f.display());
+    }
+    let asm_text = std::fs::read_to_string(&asm).unwrap();
+    let rows: Vec<&str> = asm_text
+        .lines()
+        .skip_while(|l| !l.starts_with("s_16600:"))
+        .skip(1)
+        .take_while(|l| l.starts_with("  "))
+        .collect();
+    assert_eq!(
+        rows.len(),
+        38,
+        "604 bytes, 16 to a row:\n{}",
+        rows.join("\n")
+    );
+    assert!(
+        rows[0].contains("KEYDEF is F[.C]"),
+        "first row: {:?}",
+        rows[0]
+    );
+    assert!(
+        rows[37].starts_with("  00016850: 20 73 75 66 66 69 78 65 73"),
+        "last row: {:?}",
+        rows[37]
+    );
+}
+
+/// Every artifact, not just the `.c`.  The `.h` is the one that could plausibly
+/// move: its type block renders the type factory AFTER the loop, and a decompile
+/// can intern a type into it, so a sharded run has one factory per worker where a
+/// serial run has one.  The block therefore travels back from the workers, and
+/// this is what holds it to the serial rendering.
+///
+/// (kuna `protoorder`) The serial run a pool matches is the one without the
+/// callee-first order: a worker cannot see another worker's callees, so both
+/// arms name it.
+#[test]
+fn jobs_project_artifacts_are_byte_identical_to_serial() {
+    let bin = fixture("dwarfstructs_x86_64");
+    let serial = out_dir("jobs_serial");
+    let (_, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        serial.to_str().unwrap(),
+        "--max-fn-seconds",
+        "0",
+        "--option",
+        "protoorder",
+        "off",
+        "--sleighpath",
+        &specs(),
+    ]);
+    if !ok {
+        panic!("serial project export failed: {stderr}");
+    }
+    let names = [
+        "dwarfstructs_x86_64.c",
+        "dwarfstructs_x86_64.h",
+        "dwarfstructs_x86_64.asm",
+        "README.md",
+    ];
+    let want: Vec<Vec<u8>> = names
+        .iter()
+        .map(|n| std::fs::read(serial.join(n)).expect(n))
+        .collect();
+    // The .h really does carry recovered aggregates, or this proves nothing.
+    let header = String::from_utf8_lossy(&want[1]).into_owned();
+    assert!(
+        header.contains("struct Nest {"),
+        "the fixture stopped exercising the type block:\n{header}"
+    );
+
+    for (jobs, chunk) in [("2", "1"), ("4", "3"), ("8", "100")] {
+        let dir = out_dir(&format!("jobs_{jobs}_{chunk}"));
+        let (_, stderr, ok) = run_kuna(&[
+            "decompile-project",
+            &bin,
+            "-o",
+            dir.to_str().unwrap(),
+            "--max-fn-seconds",
+            "0",
+            "--option",
+            "protoorder",
+            "off",
+            "--jobs",
+            jobs,
+            "--jobs-chunk",
+            chunk,
+            "--sleighpath",
+            &specs(),
+        ]);
+        assert!(ok, "--jobs {jobs} project export failed: {stderr}");
+        for (name, want) in names.iter().zip(&want) {
+            let got = std::fs::read(dir.join(name)).expect(name);
+            assert!(&got == want, "--jobs {jobs} (chunk {chunk}) moved {name}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    let _ = std::fs::remove_dir_all(&serial);
+}
+
+/// A sharded export names every synthesized structure as the serial export
+/// does, so every artifact is byte-identical, the `.h` included: the workers
+/// that render the structures all hold the same replayed set, every other
+/// worker's block adds the types its own functions interned, and the minted
+/// structures are declared in name order, which also makes two serial exports
+/// agree with each other. `structsynthchain_x86_64` takes the convergence
+/// sweep, `itaniumrtti_x86_64.so` mints five structures,
+/// `explicit_branch_assertion_pe_i386.exe` is 32-bit, and in
+/// `structsynth_teb_pe_x86_64.exe` the `TEB` type comes from a function that
+/// synthesizes nothing. `synth:force` decompiles every function that asked
+/// again rather than renaming it. The 32-bit slot was `i386_pie_nl` until
+/// `libctypes` gained `re_pattern_buffer`: that binary's ONE synthesized
+/// structure is the regex buffer, which is now named from
+/// `re_compile_pattern`'s declaration instead of synthesized.
+///
+/// (kuna `protoorder`) With `--option protoorder off` on every arm, which is the
+/// serial run a pool replays: the callee-first order decides what a function
+/// mints as much as the ledger does, and no pool can take it.
+#[test]
+fn jobs_project_names_synthesized_structs_as_the_serial_export_does() {
+    for fixture_name in [
+        "structsynthchain_x86_64",
+        "itaniumrtti_x86_64.so",
+        "explicit_branch_assertion_pe_i386.exe",
+        "structsynth_teb_pe_x86_64.exe",
+    ] {
+        let bin = fixture(fixture_name);
+        let stem = std::path::Path::new(fixture_name)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let export = |tag: &str, extra: &[&str], env: &[(&str, &str)]| -> (PathBuf, String, bool) {
+            let dir = out_dir(&format!("structsynth_{stem}_{tag}"));
+            let mut args = vec![
+                "decompile-project",
+                bin.as_str(),
+                "-o",
+                dir.to_str().unwrap(),
+            ];
+            args.extend_from_slice(&["--max-fn-seconds", "0", "--option", "protoorder", "off"]);
+            args.extend_from_slice(extra);
+            let sp = specs();
+            args.extend_from_slice(&["--sleighpath", sp.as_str()]);
+            let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+                .args(&args)
+                .envs(env.iter().copied())
+                .output()
+                .expect("failed to spawn the kuna binary");
+            (
+                dir,
+                String::from_utf8_lossy(&out.stderr).into_owned(),
+                out.status.success(),
+            )
+        };
+        let (serial, stderr, ok) = export("serial", &[], &[]);
+        if !ok {
+            panic!("serial project export failed: {stderr}");
+        }
+        let names: Vec<String> = ["c", "h", "asm"]
+            .iter()
+            .map(|ext| format!("{stem}.{ext}"))
+            .chain(std::iter::once("README.md".to_string()))
+            .collect();
+        let header = std::fs::read_to_string(serial.join(&names[1])).unwrap();
+        assert!(
+            header.contains("struct struct_0 {"),
+            "{stem} stopped synthesizing:\n{header}"
+        );
+        let mut dirs = vec![serial.clone()];
+        for (tag, extra, env) in [
+            ("again", &[][..], &[][..]),
+            ("j2", &["--jobs", "2", "--jobs-chunk", "1"][..], &[][..]),
+            ("j4", &["--jobs", "4"][..], &[][..]),
+            (
+                "force",
+                &["--jobs", "3", "--jobs-chunk", "1"][..],
+                &[("KUNA_JOBS_FAULT", "synth:force")][..],
+            ),
+        ] {
+            let (dir, stderr, ok) = export(tag, extra, env);
+            assert!(ok, "{stem} {tag} project export failed: {stderr}");
+            assert!(!stderr.contains("warning"), "{stem} {tag}: {stderr}");
+            for name in &names {
+                let got = std::fs::read(dir.join(name)).expect(name);
+                let want = std::fs::read(serial.join(name)).expect(name);
+                assert!(
+                    got == want,
+                    "{stem} {tag} differs from the serial export in {name}"
+                );
+            }
+            dirs.push(dir);
+        }
+        for dir in dirs {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+}
+
+/// The one-worker serial path decompiles only the functions that synthesize a
+/// structure, so the types a function that synthesizes nothing interned live
+/// in another worker. The `.h` still declares them (as the union of the
+/// shards' blocks, and says so), and the `.c` is the serial one.
+#[test]
+fn jobs_project_serial_path_keeps_the_types_of_the_other_functions() {
+    let bin = fixture("structsynth_teb_pe_x86_64.exe");
+    let sp = specs();
+    let export = |tag: &str, extra: &[&str], env: &[(&str, &str)]| -> (PathBuf, String, bool) {
+        let dir = out_dir(&format!("structsynth_teb_{tag}"));
+        let mut args = vec![
+            "decompile-project",
+            bin.as_str(),
+            "-o",
+            dir.to_str().unwrap(),
+        ];
+        // (kuna `protoorder`) The serial run a pool replays is the one without
+        // the callee-first order; both arms name it.
+        args.extend_from_slice(&[
+            "--max-fn-seconds",
+            "0",
+            "--option",
+            "protoorder",
+            "off",
+            "--sleighpath",
+            sp.as_str(),
+        ]);
+        args.extend_from_slice(extra);
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+            .args(&args)
+            .envs(env.iter().copied())
+            .output()
+            .expect("failed to spawn the kuna binary");
+        (
+            dir,
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+            out.status.success(),
+        )
+    };
+    let (serial, stderr, ok) = export("serial", &[], &[]);
+    if !ok {
+        panic!("serial project export failed: {stderr}");
+    }
+    let (sharded, stderr, ok) = export(
+        "fallback",
+        &["--jobs", "4", "--jobs-chunk", "1"],
+        &[("KUNA_JOBS_FAULT", "synth:serial")],
+    );
+    assert!(ok, "sharded export failed: {stderr}");
+    assert!(
+        stderr.contains("decompiled again in order by one worker process"),
+        "{stderr}"
+    );
+    let c = "structsynth_teb_pe_x86_64.exe.c";
+    assert_eq!(
+        std::fs::read(sharded.join(c)).unwrap(),
+        std::fs::read(serial.join(c)).unwrap()
+    );
+    let body = std::fs::read_to_string(serial.join(c)).unwrap();
+    assert!(
+        body.contains("TEB *teb;"),
+        "the fixture stopped reading the TEB:\n{body}"
+    );
+    let header = std::fs::read_to_string(sharded.join("structsynth_teb_pe_x86_64.exe.h")).unwrap();
+    for wanted in [
+        "struct TEB {",
+        "struct PEB {",
+        "struct struct_0 {",
+        "struct struct_4 {",
+    ] {
+        assert_eq!(
+            header.matches(wanted).count(),
+            1,
+            "{wanted:?} in:\n{header}"
+        );
+    }
+    for dir in [serial, sharded] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// Both project writers finish every artifact before reporting that no selected
+/// function produced a body. A mixed project remains a successful export.
+#[test]
+fn project_exit_distinguishes_all_failed_from_partial_success() {
+    let bin = fixture("fauxware");
+    let sp = specs();
+    for stream in [false, true] {
+        let mode = if stream { "stream" } else { "standard" };
+        let failed_dir = out_dir(&format!("all_failed_{mode}"));
+        let failed_path = failed_dir.to_str().unwrap().to_string();
+        let mut args = vec![
+            "decompile-project",
+            &bin,
+            "-o",
+            &failed_path,
+            "--functions",
+            "main",
+            "--option",
+            "maxinstruction",
+            "5",
+            "--option",
+            "errortoomanyinstructions",
+            "on",
+            "--sleighpath",
+            &sp,
+        ];
+        if stream {
+            args.push("--stream");
+        }
+        let (stdout, stderr, ok) = run_kuna(&args);
+        assert!(!ok, "the all-failed {mode} project exited zero: {stdout}");
+        assert!(
+            stdout.contains("functions: 0 ok, 1 failed"),
+            "summary was lost: {stdout}"
+        );
+        assert!(
+            stderr.contains("decompilation produced zero function bodies")
+                && stderr.contains("per-function error record"),
+            "the all-failed {mode} project has no run diagnostic: {stderr}"
+        );
+        let (c, h, asm, readme) = artifacts(&failed_dir, "fauxware");
+        for path in [&c, &h, &asm, &readme] {
+            assert!(
+                path.is_file(),
+                "{mode} project did not finish {}",
+                path.display()
+            );
+        }
+        assert!(
+            std::fs::read_to_string(&c)
+                .unwrap()
+                .contains("Flow exceeded maximum allowable instructions"),
+            "the per-function failure is absent from {}",
+            c.display()
+        );
+        assert!(
+            std::fs::read_to_string(&readme)
+                .unwrap()
+                .contains("1 total, 0 decompiled, 1 failed"),
+            "the final README lost the all-failed tally"
+        );
+        assert!(
+            !failed_dir.join(".streaming").exists(),
+            "a completed all-failed export left a stale streaming marker"
+        );
+        if stream {
+            assert!(
+                failed_dir.join("index.jsonl").is_file(),
+                "stream index was not completed"
+            );
+        }
+
+        let mixed_dir = out_dir(&format!("partial_{mode}"));
+        let mixed_path = mixed_dir.to_str().unwrap().to_string();
+        let mut args = vec![
+            "decompile-project",
+            &bin,
+            "-o",
+            &mixed_path,
+            "--functions",
+            "main,__libc_csu_fini",
+            "--option",
+            "maxinstruction",
+            "5",
+            "--option",
+            "errortoomanyinstructions",
+            "on",
+            "--sleighpath",
+            &sp,
+        ];
+        if stream {
+            args.push("--stream");
+        }
+        let (stdout, stderr, ok) = run_kuna(&args);
+        assert!(ok, "a partial-success {mode} project failed: {stderr}");
+        assert!(
+            stdout.contains("functions: 1 ok, 1 failed"),
+            "bad mixed summary: {stdout}"
+        );
+        let c = std::fs::read_to_string(mixed_dir.join("fauxware.c")).unwrap();
+        assert!(
+            c.contains("Flow exceeded maximum allowable instructions")
+                && c.contains("void __libc_csu_fini(void)"),
+            "the mixed {mode} project needs one error and one body: {c}"
+        );
+        assert!(!mixed_dir.join(".streaming").exists());
+
+        for dir in [failed_dir, mixed_dir] {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+}
+
+// --- `--stream` ---------------------------------------------------------------
+
+/// Run a streamed export into a fresh temp directory.
+fn stream_project(fixture_name: &str, tag: &str, extra: &[&str]) -> PathBuf {
+    let bin = fixture(fixture_name);
+    let dir = out_dir(tag);
+    let specs = specs();
+    let mut args: Vec<&str> = vec![
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--stream",
+        "--max-fn-seconds",
+        "0",
+        "--sleighpath",
+        &specs,
+    ];
+    args.extend_from_slice(extra);
+    let (_stdout, stderr, ok) = run_kuna(&args);
+    if !ok {
+        panic!("streamed project export failed on {fixture_name}: {stderr}");
+    }
+    dir
+}
+
+/// Return a required top-level field's original JSON bytes.
+fn json_field<'a>(line: &'a str, key: &str) -> &'a str {
+    let fields: std::collections::BTreeMap<String, &serde_json::value::RawValue> =
+        serde_json::from_str(line).expect("valid project JSON");
+    fields
+        .get(key)
+        .copied()
+        .unwrap_or_else(|| panic!("missing {key}: {line}"))
+        .get()
+}
+
+/// The `// Function:` blocks of a `.c`, as a sorted multiset.
+fn c_blocks(text: &str) -> Vec<String> {
+    let mut blocks: Vec<String> = Vec::new();
+    for (i, part) in text.split("// Function: ").enumerate() {
+        if i == 0 {
+            continue;
+        }
+        blocks.push(format!("// Function: {part}"));
+    }
+    blocks.sort();
+    blocks
+}
+
+fn header_halves(text: &str) -> (String, Vec<String>) {
+    let (types, protos) = text
+        .split_once("/* function prototypes */")
+        .unwrap_or_else(|| panic!(".h has no prototype section:\n{text}"));
+    let mut lines: Vec<String> = protos.lines().map(str::to_string).collect();
+    lines.sort();
+    (types.to_string(), lines)
+}
+
+/// Everything a streamed export promises about its artifacts, against the
+/// non-stream export of the same binary: the same function SET, the same
+/// prototypes, the same disassembly, and an `index.jsonl` that slices the `.c`.
+fn assert_stream_matches_serial(
+    stream: &std::path::Path,
+    serial: &std::path::Path,
+    file_name: &str,
+    exact_types: bool,
+) {
+    assert!(
+        !stream.join(".streaming").exists(),
+        ".streaming outlived a successful export"
+    );
+
+    let c = std::fs::read_to_string(stream.join(format!("{file_name}.c"))).unwrap();
+    let plain_c = std::fs::read_to_string(serial.join(format!("{file_name}.c"))).unwrap();
+    assert_eq!(
+        c_blocks(&c),
+        c_blocks(&plain_c),
+        "the streamed .c is not the same function set"
+    );
+
+    let index = std::fs::read_to_string(stream.join("index.jsonl")).unwrap();
+    let lines: Vec<&str> = index.lines().collect();
+    assert_eq!(
+        lines.len(),
+        c_blocks(&c).len(),
+        "one index line per function"
+    );
+    for line in &lines {
+        let offset: usize = json_field(line, "c_offset").parse().unwrap();
+        let len: usize = json_field(line, "c_len").parse().unwrap();
+        let name: String = serde_json::from_str(json_field(line, "name")).unwrap();
+        let addr: String = serde_json::from_str(json_field(line, "addr")).unwrap();
+        let block = &c[offset..offset + len];
+        assert!(
+            block.starts_with(&format!("// Function: {name} @ {addr}")),
+            "index line does not slice its own block: {line}\n{block:?}"
+        );
+    }
+
+    let (types, protos) =
+        header_halves(&std::fs::read_to_string(stream.join(format!("{file_name}.h"))).unwrap());
+    let (plain_types, plain_protos) =
+        header_halves(&std::fs::read_to_string(serial.join(format!("{file_name}.h"))).unwrap());
+    assert_eq!(
+        protos, plain_protos,
+        "the streamed .h declares a different prototype set"
+    );
+    if exact_types {
+        assert_eq!(
+            types, plain_types,
+            "the serial streamed .h type block moved"
+        );
+    } else {
+        let mut got: Vec<&str> = types.lines().collect();
+        let mut want: Vec<&str> = plain_types.lines().collect();
+        got.sort_unstable();
+        want.sort_unstable();
+        assert_eq!(
+            got, want,
+            "the sharded streamed .h type block is not the serial one's union"
+        );
+    }
+
+    let asm = std::fs::read_to_string(stream.join(format!("{file_name}.asm"))).unwrap();
+    let plain_asm = std::fs::read_to_string(serial.join(format!("{file_name}.asm"))).unwrap();
+    let (sweep, tails) = asm
+        .split_once("\n; --- variables ---\n")
+        .expect("no variables section");
+    let (plain_sweep, plain_tail) = plain_asm
+        .split_once("\n; --- data ---\n")
+        .expect("no data tail");
+    let stripped: String = plain_sweep
+        .lines()
+        .filter(|l| !l.starts_with("; arg:") && !l.starts_with("; stack:"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    assert_eq!(
+        sweep, stripped,
+        "the streamed sweep is not the non-stream disassembly minus its variable comments"
+    );
+    let (vars, tail) = tails
+        .split_once("\n; --- data ---\n")
+        .expect("no data tail");
+    assert_eq!(tail, plain_tail, "the streamed data tail moved");
+    let moved: Vec<&str> = vars
+        .lines()
+        .filter(|l| l.starts_with("; arg:") || l.starts_with("; stack:"))
+        .collect();
+    let removed: Vec<&str> = plain_sweep
+        .lines()
+        .filter(|l| l.starts_with("; arg:") || l.starts_with("; stack:"))
+        .collect();
+    assert_eq!(
+        moved, removed,
+        "the variables section is not what the labels lost"
+    );
+}
+
+/// The streamed export writes the same export, in a different order, and says
+/// where everything landed.
+#[test]
+fn streamed_artifacts_match_the_non_stream_export() {
+    let stream = stream_project("dwarfstructs_x86_64", "stream_serial", &[]);
+    let serial = out_dir("stream_reference");
+    let (_, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &fixture("dwarfstructs_x86_64"),
+        "-o",
+        serial.to_str().unwrap(),
+        "--max-fn-seconds",
+        "0",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert!(ok, "the reference project export failed: {stderr}");
+    // The fixture really does carry recovered aggregates, or the type-block
+    // comparison proves nothing.
+    let header = std::fs::read_to_string(serial.join("dwarfstructs_x86_64.h")).unwrap();
+    assert!(
+        header.contains("struct Nest {"),
+        "the fixture stopped exercising the type block"
+    );
+
+    assert_stream_matches_serial(&stream, &serial, "dwarfstructs_x86_64", true);
+
+    let pooled = stream_project(
+        "dwarfstructs_x86_64",
+        "stream_j3",
+        &["--jobs", "3", "--jobs-chunk", "1"],
+    );
+    assert_stream_matches_serial(&pooled, &serial, "dwarfstructs_x86_64", false);
+
+    for dir in [stream, serial, pooled] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// Run a `--progress` export into a fresh temp directory.
+fn progress_project(fixture_name: &str, tag: &str, extra: &[&str]) -> PathBuf {
+    let bin = fixture(fixture_name);
+    let dir = out_dir(tag);
+    let specs = specs();
+    let mut args: Vec<&str> = vec![
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--progress",
+        "--max-fn-seconds",
+        "0",
+        "--sleighpath",
+        &specs,
+    ];
+    args.extend_from_slice(extra);
+    let (_stdout, stderr, ok) = run_kuna(&args);
+    if !ok {
+        panic!("--progress project export failed on {fixture_name}: {stderr}");
+    }
+    dir
+}
+
+/// The final `index.jsonl` of a `--progress` export, checked against its
+/// `.c`: contiguous `seq`, ascending addresses, and offsets that slice each block.
+fn assert_final_index(dir: &std::path::Path, file_name: &str) -> String {
+    let c = std::fs::read_to_string(dir.join(format!("{file_name}.c"))).unwrap();
+    let index = std::fs::read_to_string(dir.join("index.jsonl")).unwrap();
+    let mut end = format!("#include \"{file_name}.h\"\n\n").len();
+    let mut last_addr = None;
+    for (seq, line) in index.lines().enumerate() {
+        assert_eq!(json_field(line, "seq"), seq.to_string(), "{line}");
+        let offset: usize = json_field(line, "c_offset").parse().unwrap();
+        let len: usize = json_field(line, "c_len").parse().unwrap();
+        assert_eq!(
+            offset, end,
+            "the index skips or overlaps a .c block: {line}"
+        );
+        end = offset + len;
+        let name: String = serde_json::from_str(json_field(line, "name")).unwrap();
+        let addr: String = serde_json::from_str(json_field(line, "addr")).unwrap();
+        assert!(
+            c[offset..end].starts_with(&format!("// Function: {name} @ {addr}")),
+            "{line}"
+        );
+        let value = u64::from_str_radix(addr.trim_start_matches("0x"), 16).unwrap();
+        assert!(
+            last_addr.is_none_or(|last| last <= value),
+            "the index is not address-ordered"
+        );
+        last_addr = Some(value);
+    }
+    assert_eq!(end, c.len(), "the index does not cover the whole .c");
+    index
+}
+
+/// `--progress` is the non-stream export plus `index.jsonl`: the four artifacts
+/// are byte-identical to it, and so is the whole folder from one job count to
+/// the next.
+#[test]
+fn a_progress_export_is_the_non_stream_export_plus_its_index() {
+    let name = "dwarfstructs_x86_64";
+    let plain = out_dir("progress_plain");
+    let (_, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &fixture(name),
+        "-o",
+        plain.to_str().unwrap(),
+        "--jobs",
+        "3",
+        "--jobs-chunk",
+        "1",
+        "--max-fn-seconds",
+        "0",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert!(ok, "the reference project export failed: {stderr}");
+    assert!(!plain.join("index.jsonl").exists());
+
+    let runs = [
+        progress_project(name, "progress_j3", &["--jobs", "3", "--jobs-chunk", "1"]),
+        progress_project(name, "progress_j2", &["--jobs", "2"]),
+        progress_project(name, "progress_j1", &["--option", "protoorder", "off"]),
+    ];
+    let mut indexes = Vec::new();
+    for dir in &runs {
+        assert!(
+            !dir.join(".streaming").exists(),
+            ".streaming outlived a successful export"
+        );
+        for artifact in [
+            format!("{name}.c"),
+            format!("{name}.h"),
+            format!("{name}.asm"),
+            "README.md".into(),
+        ] {
+            assert_eq!(
+                std::fs::read(dir.join(&artifact)).unwrap(),
+                std::fs::read(plain.join(&artifact)).unwrap(),
+                "{artifact} in {} is not the non-stream export's",
+                dir.display()
+            );
+        }
+        indexes.push(assert_final_index(dir, name));
+    }
+    assert!(
+        indexes.windows(2).all(|w| w[0] == w[1]),
+        "index.jsonl depends on the job count"
+    );
+    for dir in runs.iter().chain([&plain]) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// While a `--progress` export runs, `.streaming` counts, `index.jsonl`
+/// grows one feed line per finished function with no `.c` span yet, and the
+/// previous export's `.c` is gone rather than passing for this run's.  A stalled
+/// worker holds the run open long enough to look: the smallest function is the
+/// last chunk of the plan, so the worker that draws it is already warm and the
+/// watchdog kills it after four one-second budgets.
+#[test]
+fn a_progress_export_reports_progress_before_it_writes_the_export() {
+    let name = "dwarfstructs_x86_64";
+    let dir = progress_project(name, "progress_live", &[]);
+    let index = std::fs::read_to_string(dir.join("index.jsonl")).unwrap();
+    let total = index.lines().count();
+    let smallest = index
+        .lines()
+        .min_by_key(|l| {
+            (
+                json_field(l, "size").parse::<u64>().unwrap(),
+                std::cmp::Reverse(json_field(l, "seq").parse::<usize>().unwrap()),
+            )
+        })
+        .map(|l| serde_json::from_str::<String>(json_field(l, "addr")).unwrap())
+        .unwrap();
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args([
+            "decompile-project",
+            &fixture(name),
+            "-o",
+            dir.to_str().unwrap(),
+            "--progress",
+            "--jobs",
+            "2",
+            "--jobs-chunk",
+            "1",
+            "--max-fn-seconds",
+            "1",
+            "--sleighpath",
+            &specs(),
+        ])
+        .env("KUNA_JOBS_FAULT", format!("stall:{smallest}"))
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn the kuna binary");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
+    let mut seen = None;
+    while std::time::Instant::now() < deadline && child.try_wait().unwrap().is_none() {
+        let status = std::fs::read_to_string(dir.join(".streaming")).unwrap_or_default();
+        if status.contains("\"phase\":\"decompiling\"")
+            && json_field(&status, "functions_done") != "0"
+        {
+            let feed = std::fs::read_to_string(dir.join("index.jsonl")).unwrap();
+            let c_exists = dir.join(format!("{name}.c")).exists();
+            let readme = std::fs::read_to_string(dir.join("README.md")).unwrap();
+            seen = Some((status, feed, c_exists, readme));
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "the stalled export failed: {stderr}");
+    let (status, feed, c_exists, readme) =
+        seen.unwrap_or_else(|| panic!("never saw the export mid-run: {stderr}"));
+
+    assert_eq!(
+        json_field(&status, "functions_total"),
+        total.to_string(),
+        "{status}"
+    );
+    assert_eq!(json_field(&status, "c_bytes"), "0", "{status}");
+    assert!(
+        !c_exists,
+        "the previous export's .c survived into a running export"
+    );
+    assert!(
+        readme.contains("**This export is still streaming**"),
+        "{readme}"
+    );
+    assert!(readme.contains("do not exist yet"), "{readme}");
+    let complete: Vec<&str> = feed
+        .split_inclusive('\n')
+        .filter(|l| l.ends_with('\n'))
+        .collect();
+    assert!(
+        !complete.is_empty(),
+        "functions_done moved before the feed did: {status}"
+    );
+    for line in &complete {
+        assert_eq!(json_field(line, "c_offset"), "null", "{line}");
+        assert_eq!(json_field(line, "c_len"), "null", "{line}");
+    }
+
+    assert!(!dir.join(".streaming").exists());
+    let index = assert_final_index(&dir, name);
+    assert_eq!(index.lines().count(), total);
+    let stalled = index
+        .lines()
+        .find(|l| json_field(l, "addr") == format!("\"{smallest}\""))
+        .unwrap();
+    assert_ne!(
+        json_field(stalled, "error"),
+        "null",
+        "the stalled function has a body: {stalled}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `--stream` already reports progress, so with both flags the export is the
+/// streamed one: decompile-ordered, with the streamed README.
+#[test]
+fn stream_wins_over_progress() {
+    let dir = stream_project(
+        "dwarfstructs_x86_64",
+        "stream_and_progress",
+        &["--progress"],
+    );
+    let readme = std::fs::read_to_string(dir.join("README.md")).unwrap();
+    assert!(
+        readme.contains("Generated by `unlace decompile-project --stream`."),
+        "{readme}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Streamed project selection reads the same discovered inventory as
+/// `functions` and `decompile-all`, including callbacks found by a later
+/// discovery round.
+#[test]
+fn streamed_project_can_select_nested_dialog_callbacks() {
+    let dir = stream_project(
+        "stdcallpop_pe_i386.exe",
+        "stream_dialog_callbacks",
+        &["--functions", "sub_401000,sub_401410"],
+    );
+    let c = std::fs::read_to_string(dir.join("stdcallpop_pe_i386.exe.c")).unwrap();
+    for (address, name) in [("0x401000", "sub_401000"), ("0x401410", "sub_401410")] {
+        assert!(
+            c.contains(&format!("// Function: {name} @ {address}")),
+            "streamed project omitted discovered callback {address}:\n{c}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(dir.join("index.jsonl"))
+            .unwrap()
+            .lines()
+            .count(),
+        2,
+        "selected callbacks must produce exactly two stream records"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The point of the feature: the entry point and what it reaches are written
+/// first, ahead of functions that come earlier in address order.
+#[test]
+fn streamed_blocks_follow_the_entry_point_not_the_address_order() {
+    let dir = stream_project("fauxware", "stream_order", &[]);
+    let index = std::fs::read_to_string(dir.join("index.jsonl")).unwrap();
+    let order: Vec<String> = index
+        .lines()
+        .map(|line| serde_json::from_str(json_field(line, "name")).unwrap())
+        .collect();
+    let at = |name: &str| {
+        order
+            .iter()
+            .position(|n| n == name)
+            .unwrap_or_else(|| panic!("{name} missing from the streamed order: {order:?}"))
+    };
+    assert_eq!(
+        order[0], "_start",
+        "the image entry point is written first: {order:?}"
+    );
+    // `_init` and `sub_400500` are the two lowest addresses in the binary and
+    // the entry point reaches neither, so address order would put them first.
+    for reached in ["main", "authenticate", "accepted", "rejected"] {
+        for unreached in ["_init", "sub_400500"] {
+            assert!(
+                at(reached) < at(unreached),
+                "{reached} is reachable from the entry and must precede {unreached}: {order:?}"
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Run `unlace` with extra environment under a wall-clock cap, returning `None`
+/// when it had to be killed: the failure a fault-injecting run guards against
+/// is a pool that never finishes.
+fn run_kuna_env_with_timeout(
+    args: &[&str],
+    env: &[(&str, &str)],
+    cap: std::time::Duration,
+) -> Option<(String, String, bool)> {
+    process::output_with_timeout(
+        Command::new(env!("CARGO_BIN_EXE_unlace"))
+            .args(args)
+            .envs(env.iter().copied()),
+        cap,
+        std::time::Duration::from_millis(100),
+    )
+    .map(|output| {
+        (
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+            output.status.success(),
+        )
+    })
+}
+
+/// `--stream` hands its chunks to the same pool, so a worker that panics costs
+/// a streamed export only the function that panicked as well: the functions the
+/// dead worker never delivered are re-run on their own and land in the `.c` and
+/// `index.jsonl` like any other.  `__libc_start_main` is the first function the
+/// seeds' hints put on the frontier, so its worker dies before delivering
+/// anything.
+#[test]
+fn streamed_worker_panic_loses_only_the_function_that_panicked() {
+    let pool = ["--jobs", "2", "--jobs-chunk", "64"];
+    let reference = stream_project("fauxware", "stream_fault_reference", &pool);
+    let dir = out_dir("stream_fault");
+    let bin = fixture("fauxware");
+    let specs = specs();
+    let mut args = vec![
+        "decompile-project",
+        bin.as_str(),
+        "-o",
+        dir.to_str().unwrap(),
+        "--stream",
+        "--max-fn-seconds",
+        "0",
+        "--sleighpath",
+        specs.as_str(),
+    ];
+    args.extend_from_slice(&pool);
+    let (_, stderr, ok) = run_kuna_env_with_timeout(
+        &args,
+        &[("KUNA_JOBS_FAULT", "panic:0x400540")],
+        std::time::Duration::from_secs(240),
+    )
+    .expect("a panicking worker wedged the streamed export");
+    assert!(
+        ok,
+        "one panicking function must not fail the export:\n{stderr}"
+    );
+
+    let index = |d: &std::path::Path| -> Vec<(String, String)> {
+        let text = std::fs::read_to_string(d.join("index.jsonl")).unwrap();
+        let mut rows: Vec<(String, String)> = text
+            .lines()
+            .map(|l| {
+                (
+                    json_field(l, "addr").to_string(),
+                    json_field(l, "error").to_string(),
+                )
+            })
+            .collect();
+        rows.sort();
+        rows
+    };
+    let want = index(&reference);
+    let got = index(&dir);
+    assert_eq!(got.len(), want.len(), "one index line per target");
+    assert!(
+        want.iter().all(|(_, e)| e == "null"),
+        "the reference export lost functions"
+    );
+    for ((addr, error), (want_addr, _)) in got.iter().zip(&want) {
+        assert_eq!(addr, want_addr, "the streamed function set moved");
+        let expected = if addr == "\"0x400540\"" {
+            "\"worker chunk failed (worker exited: exit status: 101)\""
+        } else {
+            "null"
+        };
+        assert_eq!(error, expected, "record {addr}");
+    }
+
+    let bodies = |d: &std::path::Path| -> Vec<String> {
+        let c = std::fs::read_to_string(d.join("fauxware.c")).unwrap();
+        c_blocks(&c)
+            .into_iter()
+            .filter(|b| !b.starts_with("// Function: __libc_start_main @"))
+            .collect()
+    };
+    assert_eq!(bodies(&dir), bodies(&reference), "a bystander's body moved");
+    assert_eq!(
+        stderr
+            .matches("KUNA_JOBS_FAULT: injected panic at 0x400540")
+            .count(),
+        2,
+        "the function that panicked runs once in its chunk and once alone:\n{stderr}"
+    );
+    assert!(
+        stderr.lines().any(|l| l.starts_with("[kuna --stream] ")
+            && l.contains("left unfinished by a failed worker process were re-run")),
+        "the streamed run must say what it recovered:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("1 of them failed again when re-run on their own."),
+        "{stderr}"
+    );
+    for d in [reference, dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// GH-636: the seeds used to be decompiled in the PARENT, before the pool
+/// started, so a seed that took its process down took the whole export with it
+/// -- and a stack overflow, which is what found this, aborts rather than
+/// unwinds.  They go through the pool like every other function now.
+///
+/// `KUNA_JOBS_FAULT` fires in the worker, which is exactly what makes the change
+/// observable: a panic armed at the image entry point used to fire nowhere at
+/// all, because the one process that decompiled it carried no fault hook, and
+/// the export came back with 1,031 clean records instead of 1,030 and a loss.
+#[test]
+fn a_streamed_seed_runs_in_a_worker_and_costs_only_its_own_record() {
+    const ENTRY: &str = "0x400580";
+    let pool = ["--jobs", "2", "--jobs-chunk", "64"];
+    let reference = stream_project("fauxware", "stream_seed_reference", &pool);
+    let dir = out_dir("stream_seed_fault");
+    let bin = fixture("fauxware");
+    let specs = specs();
+    let mut args = vec![
+        "decompile-project",
+        bin.as_str(),
+        "-o",
+        dir.to_str().unwrap(),
+        "--stream",
+        "--max-fn-seconds",
+        "0",
+        "--sleighpath",
+        specs.as_str(),
+    ];
+    args.extend_from_slice(&pool);
+    let (_, stderr, ok) = run_kuna_env_with_timeout(
+        &args,
+        &[("KUNA_JOBS_FAULT", &format!("panic:{ENTRY}"))],
+        std::time::Duration::from_secs(240),
+    )
+    .expect("a panicking seed wedged the streamed export");
+    assert!(ok, "a seed that dies must not fail the export:\n{stderr}");
+    assert!(
+        stderr.contains(&format!("injected panic at {ENTRY}")),
+        "the seed must be decompiled by a worker, where the fault hook lives:\n{stderr}"
+    );
+
+    let index = |d: &std::path::Path| -> Vec<(String, String)> {
+        let text = std::fs::read_to_string(d.join("index.jsonl")).unwrap();
+        let mut rows: Vec<(String, String)> = text
+            .lines()
+            .map(|l| {
+                (
+                    json_field(l, "addr").to_string(),
+                    json_field(l, "error").to_string(),
+                )
+            })
+            .collect();
+        rows.sort();
+        rows
+    };
+    let want = index(&reference);
+    let got = index(&dir);
+    assert!(
+        want.iter().all(|(_, e)| e == "null"),
+        "the reference export lost functions"
+    );
+    assert_eq!(
+        got.len(),
+        want.len(),
+        "one index line per target, seed loss included"
+    );
+    for ((addr, error), (want_addr, _)) in got.iter().zip(&want) {
+        assert_eq!(addr, want_addr, "the streamed function set moved");
+        let expected = if addr == &format!("\"{ENTRY}\"") {
+            "\"worker chunk failed (worker exited: exit status: 101)\""
+        } else {
+            "null"
+        };
+        assert_eq!(error, expected, "record {addr}");
+    }
+
+    // The rest of the export is untouched: only the seed's own block is gone.
+    let bodies = |d: &std::path::Path| -> Vec<String> {
+        let c = std::fs::read_to_string(d.join("fauxware.c")).unwrap();
+        c_blocks(&c)
+            .into_iter()
+            .filter(|b| !b.starts_with("// Function: _start @"))
+            .collect()
+    };
+    assert_eq!(bodies(&dir), bodies(&reference), "a bystander's body moved");
+    for d in [reference, dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// A selected export stays selected: a callee hint that names a function the
+/// run did not ask for is scheduling noise, not a target.
+#[test]
+fn streamed_selected_project_does_not_expand_to_callees() {
+    let bin = fixture("pdb_prog.exe");
+    let dir = out_dir("stream_selected");
+    let (stdout, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--stream",
+        "--addr",
+        "0x140001010",
+        "--mode",
+        "fast",
+        "--sleighpath",
+        &specs(),
+    ]);
+    if !ok {
+        panic!("streamed selected project failed: {stderr}");
+    }
+    let c = std::fs::read_to_string(dir.join("pdb_prog.exe.c")).unwrap();
+    assert!(
+        c.contains("@ 0x140001010"),
+        "selected function missing:\n{c}"
+    );
+    assert!(
+        !c.contains("@ 0x140001000"),
+        "selector expanded to an unrequested callee:\n{c}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("index.jsonl"))
+            .unwrap()
+            .lines()
+            .count(),
+        1,
+        "one target, one index line"
+    );
+    assert!(
+        stdout.contains("functions: 1 ok, 0 failed"),
+        "unexpected project summary: {stdout}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// An unqualified `--assert` directive binds to "the function under decompile",
+/// which a streamed whole-binary run would apply to every function in turn.
+#[test]
+fn stream_refuses_an_assertion_and_is_not_a_whole_binary_flag() {
+    let bin = fixture("fauxware");
+    let dir = out_dir("stream_assert");
+    let (_, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        &bin,
+        "-o",
+        dir.to_str().unwrap(),
+        "--stream",
+        "--assert",
+        "name main authenticated",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert!(!ok, "--stream with --assert must be refused");
+    assert!(
+        stderr.contains("--assert and --stream are exclusive"),
+        "unexpected refusal: {stderr}"
+    );
+    assert!(
+        !dir.exists(),
+        "a refused run must not create the output folder"
+    );
+
+    for cmd in ["decompile-all", "decompile-graph"] {
+        let (_, stderr, ok) = run_kuna(&[cmd, &bin, "--stream", "--sleighpath", &specs()]);
+        assert!(!ok, "{cmd} must not accept --stream");
+        assert!(
+            stderr.contains("unknown option --stream"),
+            "{cmd}: {stderr}"
+        );
+    }
+}
+
+/// A failed load is reported in `.streaming`, and leaves whatever a previous
+/// export wrote into that folder alone — the whole reason nothing is truncated
+/// before the program loads, README.md included.
+#[test]
+fn a_failed_load_reports_itself_and_spares_a_previous_export() {
+    let dir = project("fauxware", "stream_failed");
+    let (c, h, asm, readme) = artifacts(&dir, "fauxware");
+    let before: Vec<Vec<u8>> = [&c, &h, &asm, &readme]
+        .iter()
+        .map(|f| std::fs::read(f).unwrap())
+        .collect();
+
+    // NAMED after the fixture and outside the folder, so a run that did truncate
+    // its artifacts would truncate exactly the ones this test hashes.
+    let junk_dir = out_dir("stream_failed_input");
+    std::fs::create_dir_all(&junk_dir).unwrap();
+    let junk = junk_dir.join("fauxware");
+    std::fs::write(&junk, b"this is not an object file\n").unwrap();
+    let (_, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        junk.to_str().unwrap(),
+        "-o",
+        dir.to_str().unwrap(),
+        "--stream",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert!(!ok, "a load failure must exit nonzero: {stderr}");
+
+    let status = std::fs::read_to_string(dir.join(".streaming")).unwrap();
+    assert!(
+        status.contains("\"phase\":\"failed\""),
+        "no failed phase: {status}"
+    );
+    assert!(status.contains("\"schema\":1"), "no schema: {status}");
+    assert!(
+        !status.contains("\"error\":null"),
+        "a failed run must say why: {status}"
+    );
+    let after: Vec<Vec<u8>> = [&c, &h, &asm, &readme]
+        .iter()
+        .map(|f| std::fs::read(f).unwrap())
+        .collect();
+    assert_eq!(
+        before, after,
+        "a failed load overwrote a previous export's artifacts"
+    );
+    for dir in [dir, junk_dir] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// With no previous export in the folder there is nothing to put back, so the
+/// failure is reported in the README instead — and a failed export does not
+/// claim to be still streaming.
+#[test]
+fn a_failed_load_into_an_empty_folder_leaves_a_failed_readme() {
+    let junk_dir = out_dir("stream_failed_fresh_input");
+    std::fs::create_dir_all(&junk_dir).unwrap();
+    let junk = junk_dir.join("notabinary");
+    std::fs::write(&junk, b"this is not an object file\n").unwrap();
+    let dir = out_dir("stream_failed_fresh");
+    let (_, stderr, ok) = run_kuna(&[
+        "decompile-project",
+        junk.to_str().unwrap(),
+        "-o",
+        dir.to_str().unwrap(),
+        "--stream",
+        "--sleighpath",
+        &specs(),
+    ]);
+    assert!(!ok, "a load failure must exit nonzero: {stderr}");
+    let readme = std::fs::read_to_string(dir.join("README.md")).unwrap();
+    assert!(
+        readme.contains("| Phase | failed |"),
+        "the README must report the failure: {readme}"
+    );
+    assert!(
+        !readme.contains("still streaming"),
+        "a failed export is not streaming: {readme}"
+    );
+    assert!(
+        !dir.join("notabinary.c").exists(),
+        "a failed load must write no .c"
+    );
+    for dir in [dir, junk_dir] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// A path that does not exist is refused before anything is created, the way
+/// the non-stream export refuses it — an explicit `--mode` skips the file stat
+/// the argument parser would otherwise do.
+#[test]
+fn a_missing_binary_creates_no_folder() {
+    let dir = out_dir("stream_missing");
+    let missing = dir.join("nope.bin");
+    let specs = specs();
+    for extra in [vec![], vec!["-o", dir.to_str().unwrap()]] {
+        let mut args = vec![
+            "decompile-project",
+            missing.to_str().unwrap(),
+            "--stream",
+            "--mode",
+            "fast",
+            "--sleighpath",
+            &specs,
+        ];
+        args.extend(extra);
+        let (_, stderr, ok) = run_kuna(&args);
+        assert!(!ok, "a missing binary must fail: {stderr}");
+        assert!(
+            stderr.contains("binary not found"),
+            "unexpected error: {stderr}"
+        );
+        assert!(
+            !dir.exists(),
+            "a missing binary must not create a folder: {stderr}"
+        );
+        assert!(
+            !PathBuf::from("nope.bin.kuna").exists(),
+            "a missing binary must not create a folder in the cwd"
+        );
+    }
+
+    // The default `--mode auto` stats the file to size the mode before the
+    // streamed timeline is reached, so it refuses earlier and differently: the
+    // two are documented as two, and neither leaves a folder.
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args([
+            "decompile-project",
+            missing.to_str().unwrap(),
+            "--stream",
+            "-o",
+            dir.to_str().unwrap(),
+            "--sleighpath",
+            &specs,
+        ])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "the parser refuses it as a usage error: {stderr}"
+    );
+    assert!(
+        stderr.contains("cannot read input binary metadata for mode auto"),
+        "unexpected error: {stderr}"
+    );
+    assert!(
+        !dir.exists(),
+        "a missing binary must not create a folder: {stderr}"
+    );
+}
+
+/// The writer owns every artifact a reader polls, so when it cannot write one
+/// the run stops there and reports ITS error — rather than decompiling the rest
+/// of the binary into a channel nobody is reading.
+///
+/// Both producers are covered: the serial loop's own pull and, at `--jobs 2`,
+/// the scheduler's `next_chunk`, which is what a worker thread asks.
+#[test]
+fn a_dead_writer_stops_the_run_and_reports_its_own_error() {
+    for jobs in ["1", "2"] {
+        a_dead_writer_stops_a_run_at_jobs(jobs);
+    }
+}
+
+/// The fault waits for `asm: complete`, so the producer is past the sweep
+/// interleave and doing nothing but pulling targets — which is where ignoring
+/// the stop signal costs the whole binary: the fixture's 1,073 functions take
+/// ~95 s serially and ~50 s at `--jobs 2`, against the few dozen written by the
+/// time a stopping run notices.
+fn a_dead_writer_stops_a_run_at_jobs(jobs: &str) {
+    let bin = fixture("mcount_x86_64");
+    let dir = out_dir(&format!("stream_writer_death_j{jobs}"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args([
+            "decompile-project",
+            &bin,
+            "-o",
+            dir.to_str().unwrap(),
+            "--stream",
+            "--jobs",
+            jobs,
+            "--max-fn-seconds",
+            "0",
+            "--sleighpath",
+            &specs(),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn the kuna binary");
+
+    // Wait until the sweep is finished and functions are the only work left,
+    // then turn the `.h` the writer rewrites on its clock into a directory, so
+    // its next atomic replace fails the way a full disk or a lost mount would.
+    let header = dir.join("mcount_x86_64.h");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
+    let mut injected = None;
+    let mut done_at_fault = 0usize;
+    while std::time::Instant::now() < deadline {
+        let status = std::fs::read_to_string(dir.join(".streaming")).unwrap_or_default();
+        if status.contains("\"phase\":\"decompiling\"") && status.contains("\"asm\":\"complete\"") {
+            done_at_fault = json_field(&status, "functions_done").parse().unwrap();
+            block_with_a_directory(&header);
+            injected = Some(std::time::Instant::now());
+            break;
+        }
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let Some(injected) = injected else {
+        let out = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        panic!("the export never finished its sweep: {stderr}");
+    };
+
+    let out = child.wait_with_output().unwrap();
+    let stopped_after = injected.elapsed();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !out.status.success(),
+        "a dead writer must fail the run at --jobs {jobs}: {stderr}"
+    );
+    assert!(
+        stderr.contains("mcount_x86_64.h") && stderr.contains("Is a directory"),
+        "the run must report the writer's own error, not a sentinel: {stderr}"
+    );
+
+    let status = std::fs::read_to_string(dir.join(".streaming")).unwrap();
+    assert!(
+        status.contains("\"phase\":\"failed\""),
+        "no failed phase: {status}"
+    );
+    assert!(
+        status.contains("mcount_x86_64.h") && status.contains("Is a directory"),
+        ".streaming must carry the real path and errno: {status}"
+    );
+    let done: usize = json_field(&status, "functions_done").parse().unwrap();
+    let total: usize = json_field(&status, "functions_total").parse().unwrap();
+    assert!(
+        done <= total / 2,
+        "--jobs {jobs}: the fault landed at {done_at_fault} of {total} and the run wrote {done} \
+         before stopping — it decompiled the binary into a dead writer"
+    );
+    if jobs == "1" {
+        // The serial producer pulls one target at a time, so it stops at the
+        // next one: measured ~2 s, against the ~90 s it takes to decompile the
+        // rest of the fixture into a channel nobody is reading.
+        assert!(
+            stopped_after < std::time::Duration::from_secs(30),
+            "the serial run took {stopped_after:?} to stop after its writer died"
+        );
+    } else {
+        // A worker finishes the chunk it is on, so the wall time depends on the
+        // chunk and the load. What must not depend on either is how much the
+        // pool produced: the closing line counts what it actually delivered.
+        let delivered: usize = stderr
+            .rsplit_once("] done: ")
+            .and_then(|(_, tail)| tail.split_once(" functions"))
+            .unwrap_or_else(|| panic!("the pool printed no closing line: {stderr}"))
+            .0
+            .parse()
+            .unwrap();
+        assert!(
+            delivered <= total / 2,
+            "the pool delivered {delivered} of {total} after its writer died at \
+             {done_at_fault}: it served the whole target set into a dead writer"
+        );
+        assert!(
+            stopped_after < std::time::Duration::from_secs(120),
+            "--jobs {jobs}: the run took {stopped_after:?} to stop after its writer died"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Replace `path` with a directory, retrying against the writer's own atomic
+/// rename onto it.
+fn block_with_a_directory(path: &std::path::Path) {
+    for _ in 0..100 {
+        let _ = std::fs::remove_file(path);
+        if std::fs::create_dir(path).is_ok() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("could not replace {} with a directory", path.display());
+}
+
+/// Strip an ELF's section headers (`e_shoff`/`e_shnum`/`e_shstrndx`), which
+/// kuna loads through its segment fallback.  Such an image publishes no CODE
+/// section, so there is nothing to sweep.
+fn section_header_stripped(fixture_name: &str, tag: &str) -> (PathBuf, PathBuf) {
+    let dir = out_dir(tag);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut bytes = std::fs::read(fixture(fixture_name)).unwrap();
+    assert_eq!(&bytes[..4], b"\x7fELF", "{fixture_name} is not an ELF");
+    assert_eq!(bytes[4], 2, "{fixture_name} is not ELF64");
+    bytes[0x28..0x30].fill(0); // e_shoff
+    bytes[0x3c..0x40].fill(0); // e_shnum, e_shstrndx
+    let path = dir.join(fixture_name);
+    std::fs::write(&path, &bytes).unwrap();
+    (dir, path)
+}
+
+/// An image with no CODE section has nothing to sweep, so its `.asm` is final
+/// before the first function is decompiled — and `.streaming` has to say
+/// `complete` rather than `sweeping` for the whole run, because an agent that
+/// waits for `complete` before reading the `.asm` would otherwise wait for the
+/// export it did not need.
+#[test]
+fn a_sectionless_image_never_reports_a_sweeping_asm_at_jobs_1() {
+    let (junk_dir, bin) = section_header_stripped("fauxware", "stream_sectionless_input");
+    let dir = out_dir("stream_sectionless");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args([
+            "decompile-project",
+            bin.to_str().unwrap(),
+            "-o",
+            dir.to_str().unwrap(),
+            "--stream",
+            "--jobs",
+            "1",
+            "--max-fn-seconds",
+            "0",
+            "--sleighpath",
+            &specs(),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn the kuna binary");
+
+    let mut seen: Vec<String> = Vec::new();
+    while child.try_wait().unwrap().is_none() {
+        if let Ok(status) = std::fs::read_to_string(dir.join(".streaming")) {
+            if seen.last().map(String::as_str) != Some(status.trim()) {
+                seen.push(status.trim().to_string());
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    if !out.status.success() {
+        panic!("the sectionless streamed export failed: {stderr}");
+    }
+    assert!(!seen.is_empty(), "the status file was never observed");
+    for status in &seen {
+        assert!(
+            !status.contains("\"asm\":\"sweeping\""),
+            "there is no CODE section to sweep: {status}"
+        );
+        if status.contains("\"phase\":\"decompiling\"")
+            || status.contains("\"phase\":\"finalizing\"")
+        {
+            assert!(
+                status.contains("\"asm\":\"complete\""),
+                "the .asm was final before the first function: {status}"
+            );
+        }
+    }
+    assert!(
+        !dir.join(".streaming").exists(),
+        ".streaming outlived a successful export"
+    );
+    let asm = std::fs::read_to_string(dir.join("fauxware.asm")).unwrap();
+    let (sweep, tails) = asm
+        .split_once("\n; --- variables ---\n")
+        .expect("the .asm is missing its variables tail");
+    assert!(
+        tails.contains("\n; --- data ---\n"),
+        "the .asm is missing its data tail: {tails}"
+    );
+    // The premise: this image publishes no CODE section, so the sweep between
+    // the two header lines and the tails is empty — every line of it is a
+    // comment, where a swept .asm carries labels and instructions.
+    let swept: Vec<&str> = sweep
+        .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with("; "))
+        .collect();
+    assert!(
+        swept.is_empty(),
+        "a sectionless image has nothing to sweep, but the .asm disassembled {swept:?}"
+    );
+    assert!(
+        std::fs::read_to_string(dir.join("index.jsonl"))
+            .unwrap()
+            .lines()
+            .count()
+            > 0,
+        "the export decompiled nothing"
+    );
+    for dir in [dir, junk_dir] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// Every `struct struct_N { ... }` block in `text`, by name.
+fn synthesized_structs(text: &str) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("\nstruct struct_") {
+        let body = &rest[at + 1..];
+        let Some(open) = body.find(" {\n") else { break };
+        let Some(close) = body.find("\n};") else {
+            break;
+        };
+        if close > open {
+            out.entry(body["struct ".len()..open].to_string())
+                .or_insert_with(|| body[open + 3..close].to_string());
+        }
+        rest = &body[open..];
+    }
+    out
+}
+
+/// (kuna `protoorder` + `structsynth`) A `struct_N` names one record across the
+/// whole-program surfaces.
+///
+/// The ledger numbers a synthesized layout in the order the program is visited
+/// in, and `decompile-all` visits callees first. The export used to keep its own
+/// address-order schedule, so the two surfaces put different records under the
+/// same name: three of this fixture's five disagreed, and a reader resolving a
+/// `struct_2 *` in `decompile-all --json` against the exported header read the
+/// wrong layout.
+#[test]
+fn a_struct_name_means_the_same_record_in_the_export_and_in_decompile_all() {
+    let bin = fixture("protoorder_floatpointee_x86_64");
+    for arm in [&[][..], &["--option", "protoorder", "off"][..]] {
+        let dir = out_dir("struct_names");
+        let base = [
+            "decompile-project",
+            &bin,
+            "-o",
+            dir.to_str().unwrap(),
+            "--sleighpath",
+            &specs(),
+        ];
+        let (_out, stderr, ok) = run_kuna(&[&base[..], arm].concat());
+        if !ok {
+            panic!("unlace decompile-project failed: {stderr}");
+        }
+        let header = std::fs::read_to_string(dir.join("protoorder_floatpointee_x86_64.h")).unwrap();
+        let all = [
+            "decompile-all",
+            &bin,
+            "--sleighpath",
+            &specs(),
+            "--option",
+            "structdefs",
+            "on",
+        ];
+        let (text, stderr, ok) = run_kuna(&[&all[..], arm].concat());
+        assert!(ok, "unlace decompile-all failed: {stderr}");
+        let (exported, decompiled) = (synthesized_structs(&header), synthesized_structs(&text));
+        assert!(
+            decompiled.len() >= 3,
+            "the fixture stopped synthesizing: {decompiled:?}"
+        );
+        for (name, body) in &decompiled {
+            let Some(theirs) = exported.get(name) else {
+                panic!("{name} is decompiled but not exported (arm {arm:?})");
+            };
+            assert_eq!(
+                theirs, body,
+                "{name} is a different record in the export (arm {arm:?})"
+            );
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

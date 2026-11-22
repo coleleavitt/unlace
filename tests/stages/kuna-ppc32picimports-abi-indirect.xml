@@ -6,7 +6,7 @@
 <script>
   <com>option ppc32picimports abi</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-indirect.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-indirect.elf</com>
   <com>read symbols</com>
   <com>load function check2</com>
   <com>decompile</com>

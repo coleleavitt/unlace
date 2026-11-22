@@ -1,11 +1,11 @@
-"""Count what `kuna decompile-all` actually declares — the goal-2 instrument.
+"""Count what `unlace decompile-all` actually declares — the goal-2 instrument.
 
 `type_match` cannot see variable *count*: decbench scores the JSON `variables[]`
 array (args + stack symbols + framelayout slots) and a merged-away temporary was
 never in it. So "kuna declares fewer/more locals than it should" needs its own
 number, and this is it.
 
-Over one binary's `kuna decompile-all` text, per function:
+Over one binary's `unlace decompile-all` text, per function:
 
 * **declarations** — a 2-space-indented line ending in `;` with no `=` and no `(`
   (comments stripped first), at least two tokens, not a bare `return/goto/…`;
@@ -227,7 +227,7 @@ def json_surface(payload: dict) -> dict:
 
 def run_kuna(binary: Path, options: list[list[str]], mode: str | None,
              want_json: bool, timeout: int) -> tuple[str, dict | None]:
-    kuna = paths.binary("kuna", "KUNA_BIN")
+    kuna = paths.binary("unlace", "KUNA_BIN")
     base = [str(kuna), "decompile-all", str(binary)]
     if mode:
         base += ["--mode", mode]

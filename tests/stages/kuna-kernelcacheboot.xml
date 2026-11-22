@@ -23,14 +23,14 @@
 <script>
   <com>option kernelcache-boot off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/linked/AuxiliaryKernelExtensions.kc</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/linked/AuxiliaryKernelExtensions.kc</com>
   <com>read symbols</com>
   <com>load function gadget_start</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option kernelcache-boot auto</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/linked/AuxiliaryKernelExtensions.kc</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/linked/AuxiliaryKernelExtensions.kc</com>
   <com>read symbols</com>
   <com>load function gadget_start</com>
   <com>decompile</com>

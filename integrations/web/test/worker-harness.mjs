@@ -45,7 +45,7 @@ const MIME = {
 };
 
 export function requireDist() {
-  if (!existsSync(join(dist, 'kuna_wasm.wasm')) || !existsSync(join(dist, 'kuna-worker.js'))) {
+  if (!existsSync(join(dist, 'unlace_wasm.wasm')) || !existsSync(join(dist, 'kuna-worker.js'))) {
     throw new Error('dist/ not built — run integrations/web/build.sh first');
   }
 }
@@ -107,7 +107,7 @@ export class BrowserWorker {
 export function workerClient(base) {
   return new KunaWorkerClient({
     workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
-    wasmUrl: `${base}/kuna_wasm.wasm`,
+    wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new BrowserWorker(url),
   });

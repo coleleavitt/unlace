@@ -26,7 +26,7 @@ if (!wasmPath || !specsDir || !binaryPath || !cmd) {
 
 const workDir = resolve(dirname(binaryPath));
 const guestBinary = '/work/' + basename(binaryPath);
-const args = ['kuna_wasm', guestBinary, '/specs', cmd, ...cmdArgs];
+const args = ['unlace_wasm', guestBinary, '/specs', cmd, ...cmdArgs];
 
 const wasi = new WASI({
   version: 'preview1',

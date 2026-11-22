@@ -20,11 +20,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/assertranges_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
     "binary_sha256": "1c9ad3b67437c7e85ac53d0755609c5b5e015225796a98c0287de5f2cb3d382e",
     "binary_size": 15800,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/assertranges_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
     "selector": "sample",
     "selector_kind": "name"
   },
@@ -86,6 +86,6 @@
       }
     ]
   },
-  "notes": "Desired: two range facts an agent knows and kuna cannot derive, on one `kuna decompile --json`. scale/bias are .data (writable, so never loader-readonly) and nothing writes them: asserted readonly they fold to `* 7` / `+ 100`. 0x50000000 is device memory, so kuna CSEs its two reads into one; asserted volatile keeps both. FAILS at ed353fb2: exit 2, unknown directive. In-repo fixture.",
+  "notes": "Desired: two range facts an agent knows and kuna cannot derive, on one `unlace decompile --json`. scale/bias are .data (writable, so never loader-readonly) and nothing writes them: asserted readonly they fold to `* 7` / `+ 100`. 0x50000000 is device memory, so kuna CSEs its two reads into one; asserted volatile keeps both. FAILS at ed353fb2: exit 2, unknown directive. In-repo fixture.",
   "probe_id": "a-567d3207ce62"
 }

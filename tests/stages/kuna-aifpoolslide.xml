@@ -22,7 +22,7 @@
     follows the first pool.  A pool word's high half reads as `movs r0,#0`,
     which with `lone`'s first `adds`, or with the string's bytes
     (`adds r0,#0x41; bx lr`), matches the leaves' prologue.  Both passes use
-    `mode reliable` with the Listing and the gap walk on, as `kuna functions`
+    `mode reliable` with the Listing and the gap walk on, as `unlace functions`
     runs on a large ARM image.
 
     Pass 1 (`option aifpoolslide off`) reproduces the bug: the gap walk lists
@@ -39,7 +39,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolslide_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolslide_le32</com>
   <com>mode reliable</com>
   <com>option listing on</com>
   <com>option aif on</com>
@@ -47,7 +47,7 @@ c3
   <com>read symbols</com>
   <com>functions</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolslide_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolslide_le32</com>
   <com>mode reliable</com>
   <com>option listing on</com>
   <com>option aif on</com>

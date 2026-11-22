@@ -18,11 +18,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/irreducible_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/irreducible_x86_64",
     "binary_sha256": "3ef272099901ec20081010317d3f80e06bd4a568af804c7af5d52b22b3cd2e70",
     "binary_size": 5008,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/irreducible_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/irreducible_x86_64",
     "selector": "irreducible",
     "selector_kind": "name"
   },

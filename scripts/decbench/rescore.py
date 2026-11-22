@@ -16,7 +16,7 @@ How a value is computed (mirrors scripts/reeval_ged.py in the decbench repo):
 - BEFORE: Joern on the STORED run artifact (decompiled/kuna_<stem>.c); this
   recomputes the recorded run value (printed as a METRIC-DRIFT warning if they
   disagree — e.g. the GED code changed since the run).
-- AFTER: fresh `kuna decompile-all <stripped> --json --addr 0x<addr>` with the
+- AFTER: fresh `unlace decompile-all <stripped> --json --addr 0x<addr>` with the
   current binary (+ any --option pairs), self-relabeled exactly like the run
   (own name only), SPLICED over the function's block inside a copy of the
   stored artifact (full-file context avoids single-vs-full Joern parse skew),

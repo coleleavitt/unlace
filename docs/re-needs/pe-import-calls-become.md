@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp, decompiler/crates/kuna-console]
+touches: [decompiler/crates/unlace-decomp, decompiler/crates/unlace-console]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/576
@@ -95,11 +95,11 @@ Read the dialog input calls as GetDlgItemTextA, preserving their import identity
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
     "binary_sha256": "9cd4f3d091d647eeb36df883e2f3f063d34ac7a508c71c9f28f26683f05ac6f6",
     "binary_size": 1024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
     "selector": "0x401028",
     "selector_kind": "addr"
   }
@@ -137,11 +137,11 @@ The bytes settle the fold exactly. .text is the ONLY code section (VMA 0x401000,
 
 THE DECISIVE ABLATION: --option litpoolconst off restores full import identity on the SAME command. Line 66 becomes v4 = GetDlgItemTextA(a0,0x68,v12,0x20), plus SendMessageA(a0,0xa1,2,0), SetBkMode(a2,1), SendMessageA(v5,0x80,1,v8) -- correct names, correct arity, correct arguments. Whole-binary census over decompile-all, 93 functions: DEFAULT = 0 named import calls and 115 folded (*(void *)0x1xxxx) calls; litpoolconst off = 19 named import calls (over a 10-name sample) and 0 folded. Not one Win32 API is named anywhere in this program at the default.
 
-WHY litpoolconst fires here and nowhere normal -- the CONTROL settles it. decompiler/crates/kuna-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000 with flags CONTENTS ALLOC LOAD DATA, i.e. WRITABLE. On that binary, at the default: 0 folded indirect calls, 14 named import calls, and litpoolconst on vs off is BYTE-IDENTICAL (118744 chars both) -- the option is structurally inert because the slots are writable. Same kuna, same defaults, opposite outcome, and the only difference is the section permission. litpoolconst's warrant is "allocated, executable, non-writable, file-backed"; a PE that puts its IAT inside .text satisfies all four.
+WHY litpoolconst fires here and nowhere normal -- the CONTROL settles it. decompiler/crates/unlace-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000 with flags CONTENTS ALLOC LOAD DATA, i.e. WRITABLE. On that binary, at the default: 0 folded indirect calls, 14 named import calls, and litpoolconst on vs off is BYTE-IDENTICAL (118744 chars both) -- the option is structurally inert because the slots are writable. Same kuna, same defaults, opposite outcome, and the only difference is the section permission. litpoolconst's warrant is "allocated, executable, non-writable, file-backed"; a PE that puts its IAT inside .text satisfies all four.
 
 THE SOUNDNESS HOLE, IN litpoolconst's OWN WORDS. Its summary justifies the fold as "mapped r-x, so a store to them faults and the image's copy IS the run-time value". That premise is FALSE for a PE IAT slot: the Windows loader writes every one of them at load time (that is what an Import Address Table is for), so the image's copy is provably NOT the run-time value -- it is the hint/name RVA, which is exactly the wrong number kuna prints. The same summary already names the risk: "the direction that matters on a corpus of packers and protectors, where a data section's flags are least trustworthy". This is that case.
 
-FOUR DEAD LINES CLOSED OFF. (1) peimportcall on vs off on the probe command is BYTE-IDENTICAL, 5945 bytes each -- the option the tester was told to flip on is default-ON and does nothing on this binary, so "peimportcall is a partial fix" is false. (2) The import parsing is NOT broken: kuna functions names all 176 entries correctly, GetDlgItemTextA at 0x401078, so the INT/IAT lockstep walk succeeds. (3) It is not a single-function blind spot: 115 folded calls across the whole binary. (4) It is not PE32-vs-PE32+ -- the working control is PE32+ and the failing image PE32, but the control's litpoolconst inertness is due to section flags, not width.
+FOUR DEAD LINES CLOSED OFF. (1) peimportcall on vs off on the probe command is BYTE-IDENTICAL, 5945 bytes each -- the option the tester was told to flip on is default-ON and does nothing on this binary, so "peimportcall is a partial fix" is false. (2) The import parsing is NOT broken: unlace functions names all 176 entries correctly, GetDlgItemTextA at 0x401078, so the INT/IAT lockstep walk succeeds. (3) It is not a single-function blind spot: 115 folded calls across the whole binary. (4) It is not PE32-vs-PE32+ -- the working control is PE32+ and the failing image PE32, but the control's litpoolconst inertness is due to section flags, not width.
 
 WHY IT IS WRONG OUTPUT AND NOT UGLY OUTPUT: an agent reading this function sees (*(void *)0x173dc)(a0,0x68,v12,0x20) and has no route to the name -- 0x173dc is not an address in the running program, it is a file offset into a name string. It also silently kills peimportcall's OTHER half, the Win32 no-return effect, so a function ending in ExitProcess runs on.
 
@@ -153,7 +153,7 @@ CROSS-LINK: this is the PE twin of the PIE-dynrelocs family -- a relocated slot 
   context supplies no bin" -- clauses `[]`, repeat 0 -- and two consecutive `B_PLAN` ticks had to
   skip it because an acceptance that cannot run can never flip, however good the fix. The binary is
   identified from the filing tester's own `toolcalls.jsonl`, by an argv that matches the probe cmd
-  exactly, not by guessing from the arena: `kuna decompile target/GiTS_2010_Crypto_Crackmes.zip.__x/crypto4.exe 0x40341c --addr --option peimportcall on`. Bound to
+  exactly, not by guessing from the arena: `unlace decompile target/GiTS_2010_Crypto_Crackmes.zip.__x/crypto4.exe 0x40341c --addr --option peimportcall on`. Bound to
   `bin/GiTS_2010_Crypto_Crackmes.zip.__x/crypto4.exe` (sha256 `f88284c9bfe6e8581261ee224395c83d79507b26a64f81614631d78498cf63b9`, 123904 bytes,
   source `dataset`, resolved as `challenges/5ab77f6433c5d40ad448cae1/<rel>`). Replayed on unpatched main `17da9472`: **reproduction PASSES** and the original acceptance fails.
 - round 12 BUILDER: the refuter's proposed PE-range subtraction was narrowed to the general P3 invariant already encoded by `externref`. `ActionVarnodeProps` snapshots `is_external_ref()` and skips its entire `fillin_read_only` branch for that Varnode, whether entered through `readonly`, `dynrelocs`, or `litpoolconst`. Loader ranges and option gates are untouched, so `peimportcall off` remains raw and ARM literal-pool constants still fold.

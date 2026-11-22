@@ -25,7 +25,7 @@
     An explicit source `if/else` compiles to the SAME object code as a `?:`
     ternary, so the diamond -> ternary rewrite matches the source ONLY when the
     source used a ternary. The binary cannot tell them apart, so this ships
-    default-OFF and is flipped PER FUNCTION by an agent (`kuna catalog` ->
+    default-OFF and is flipped PER FUNCTION by an agent (`unlace catalog` ->
     `-option iteregion on`): ON for format/print/flag-heavy code where the ternary
     form dominates, OFF where explicit if/else is the likely source.
 

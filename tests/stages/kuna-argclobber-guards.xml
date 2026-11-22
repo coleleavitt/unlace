@@ -40,7 +40,7 @@
     argclobber-keeps-an-argument-the-callee-takes.json,
     argclobber-keeps-an-argument-a-thunk-forwards.json).  No stage test can
     carry the callee clause: `park_recovered_proto` is set by
-    kuna-cli/src/decompile_all.rs alone, so the datatest harness never parks a
+    unlace-cli/src/decompile_all.rs alone, so the datatest harness never parks a
     prototype at all.
 
     Stage / sub-stage: P4 "active-input-trial-scoring".  Both passes must

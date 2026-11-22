@@ -12,7 +12,7 @@
     a large third-party iOS app.
 
     Stage / sub-stage: P9 naming-policy, `PrintC::op_load`
-    (`kuna-decomp/src/p9_emit/printc.rs`, `import_slot_name`), resolved as
+    (`unlace-decomp/src/p9_emit/printc.rs`, `import_slot_name`), resolved as
     ActionDeindirect resolves a call through the same slot.
 
     P0 assertion: `option importdata on|off` (default on). It is read when C is
@@ -35,14 +35,14 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_gotdata</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_gotdata</com>
   <com>option importdata off</com>
   <com>read symbols</com>
   <com>load addr 0x100000448</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_gotdata</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_gotdata</com>
   <com>read symbols</com>
   <com>load addr 0x100000448</com>
   <com>decompile</com>

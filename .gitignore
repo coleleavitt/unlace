@@ -2,8 +2,12 @@
 specs/**/*.sla
 specs/**/*.sla.lock
 
-# Rust build output (decompiler/, the Cargo workspace)
-decompiler/target/
+# Rust build output (decompiler/, the Cargo workspace); a worktree's decompiler/target is a
+# symlink to its target dir (docs/dev-setup.md)
+decompiler/target
+
+# The lefthook config link tools/hooks/git-hooks/post-checkout puts in each worktree
+/.lefthook.yml
 
 # Golden snapshot dumps produced by the differential harness
 tests/golden/snapshots/

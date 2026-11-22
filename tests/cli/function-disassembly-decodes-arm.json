@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_poolentry_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/cortexm_poolentry_le32",
     "binary_sha256": "8194242c64bafb297cf705e456bd808e08b7544bc843d8118d5051617608471f",
     "binary_size": 601,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_poolentry_le32",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/cortexm_poolentry_le32",
     "selector": "0x8000140",
     "selector_kind": "addr"
   },

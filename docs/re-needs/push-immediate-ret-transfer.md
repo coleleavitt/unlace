@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 1
 covered_by_option: pushimmediateret
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: 603
@@ -80,11 +80,11 @@ See the transfer to 0x40365a after unpacking.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/push_immediate_ret_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/push_immediate_ret_i386.exe",
     "binary_sha256": "12a564ed5035a19b27958597f26a51694deb9428d89ee61320c18500c4ec0d90",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/push_immediate_ret_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/push_immediate_ret_i386.exe",
     "selector": "0x402000",
     "selector_kind": "addr"
   },

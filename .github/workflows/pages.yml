@@ -9,16 +9,9 @@ name: Deploy web demo to GitHub Pages
 # fetched), so nothing talks to a backend and it decompiles whatever the CLI
 # supports (ELF/PE/Mach-O, all arches). See docs/web-integration.md.
 
+# unlace: manual only. The publish step pushes to Noelo-Lab/decompile.run with a deploy key
+# this repository does not hold, and Pages is not set up for coleleavitt/unlace.
 on:
-  # Redeploy when the demo, the engine, or the vendored specs change.
-  push:
-    branches: [main]
-    paths:
-      - 'integrations/web/**'
-      - 'decompiler/**'
-      - 'specs/**'
-      - '.github/workflows/pages.yml'
-  # Allow a manual redeploy from the Actions tab.
   workflow_dispatch:
 
 # Least-privilege token for the Pages deployment.
@@ -67,7 +60,7 @@ jobs:
       - name: Build all SLEIGH specs
         run: make specs
 
-      # Builds kuna_wasm for wasm32-wasip1 and assembles integrations/web/dist/.
+      # Builds unlace_wasm for wasm32-wasip1 and assembles integrations/web/dist/.
       - name: Assemble the static demo (dist/)
         run: bash integrations/web/build.sh
 
@@ -116,7 +109,7 @@ jobs:
           git add -A
           git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-              commit -q -m "Deploy Noelo-Lab/kuna@${GITHUB_SHA}"
+              commit -q -m "Deploy ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
           GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
             git push -q -f git@github.com:Noelo-Lab/decompile.run.git main
 

@@ -20,11 +20,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/structsynth_peb_pe_x86_64.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/structsynth_peb_pe_x86_64.exe",
     "binary_sha256": "ccd7a1940da2a171e76d48df7efb0dd5c5fc5c551c7f144270861884dacb6019",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/structsynth_peb_pe_x86_64.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/structsynth_peb_pe_x86_64.exe",
     "selector": null,
     "selector_kind": "none"
   },

@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_codeptr_thumb_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_codeptr_thumb_le32",
     "binary_sha256": "7a954a37054992e877ff9dcdf45926319fea3b1bfcc4e5c612aa76f2a2514fab",
     "binary_size": 448,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_codeptr_thumb_le32",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_codeptr_thumb_le32",
     "selector": "sub_8110",
     "selector_kind": "name"
   },

@@ -9,7 +9,7 @@
       members, and with the option off nothing in the output says what a
       `mystruct` is: the layout the decompiler is printing field accesses
       against exists only in the type factory (and, for a whole-binary run, in
-      `kuna decompile-project`'s header).
+      `unlace decompile-project`'s header).
 
       Two passes over the SAME decompiled function: the default (off) prints the
       bare function document, then `option structdefs on` prints the struct

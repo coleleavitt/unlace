@@ -1,4 +1,4 @@
-# kuna-decomp crate architecture: evidence and proposal
+# unlace-decomp crate architecture: evidence and proposal
 
 Research only. No code was changed and no builds were run. Upstream tree: `kuna-wt-up` at `2b96e74e8`.
 LSP checks ran on the main checkout (branch `all`), which has the same module layout. All kuna line numbers
@@ -53,7 +53,7 @@ rust-analyzer call hierarchy (quoted below).
   must change shape (into extension traits) for a split.
 - `pub(crate)` items: about 1170, of which 208 are in the proposed IR crate. Those 208 become `pub`.
 
-**Churn decides the value of any split.** Upstream non-merge commits that touched kuna-decomp since 2026-09-01:
+**Churn decides the value of any split.** Upstream non-merge commits that touched unlace-decomp since 2026-09-01:
 800. Of these:
 - 522 (65%) touch a file that would sit in an IR crate.
 - `architecture.rs` is touched by 377 (47%), and 332 of those 377 also touch `kuna_option_dispatch.rs` or
@@ -106,7 +106,7 @@ p3-only 26, p6-only 21, and so on.
   passes `-Cprefer-dynamic` for std.
 - **Codegen facts that matter for a kuna split at opt-level 1, incremental on:**
   - Within one crate, opt-level >= 1 with more than one CGU gets local ThinLTO (`rustc_session/src/session.rs:1062-1066`).
-    So inlining across CGUs works today inside kuna-decomp.
+    So inlining across CGUs works today inside unlace-decomp.
   - Across crates, automatic inlining inference is **off when incremental is on**
     (`rustc_mir_transform/src/cross_crate_inline.rs:83-87`). Only `#[inline]`, generic and tiny forced items cross.
     `rustc_middle/src/mono.rs:166-175` describes the trade-off between optimization and incrementality.
@@ -139,16 +139,16 @@ p3-only 26, p6-only 21, and so on.
 ## 4. Target layering for kuna
 
 ```
-kuna-base, kuna-num, kuna-sleigh                      (unchanged)
+unlace-base, unlace-num, unlace-sleigh                      (unchanged)
 └─ kuna-middle  (~105k)   IR + types + call model + symbols + session; no pass crate below it
    ├─ kuna-lift      (~30k)  P1 + P2           (flow, jump-table recovery, injection, loaders' arch binding)
    ├─ kuna-structure (~22k)  P7 + P8           (regions, blockaction, structuring)
    └─ kuna-bandb     (~170k) P3 + P4 + P5 + P6 (rules, heritage users, protos, types, variables)
       └─ kuna-emit   (~52k)  P9
-kuna-decomp (driver, ~20k + facade): universal_sched, decompile_drive, option dispatch + catalog (phases.toml,
+unlace-decomp (driver, ~20k + facade): universal_sched, decompile_drive, option dispatch + catalog (phases.toml,
             build.rs), the providers/hooks wiring, and `pub use` of every crate (bevy_internal-style) so
-            kuna-console/cli/harness/analysis/ghidra/wasm compile unchanged
-kuna-decomp-dylib (optional, dev only): crate-type = ["dylib"], re-exports kuna-decomp + kuna-analysis
+            unlace-console/cli/harness/analysis/ghidra/wasm compile unchanged
+unlace-decomp-dylib (optional, dev only): crate-type = ["dylib"], re-exports unlace-decomp + unlace-analysis
 ```
 
 Why these bands: I tried all 5040 orders of the 7 pass groups and picked the one with the fewest upward
@@ -215,20 +215,20 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
   `kuna-middle`. A later cargo-patch could share unchanged workspace units across worktrees; with a split, that
   would let most agents skip middle and bandb entirely. Not available now.
 
-**Dylib (Bevy-style `kuna-decomp-dylib`, a dev-only feature):**
-- What it helps: relinking. Today each edit relinks every binary that statically contains kuna-decomp and
-  kuna-analysis. That is 5 bins (`kuna`, `decomp_dbg`, `decomp_test_dbg`, `kuna_ghidra`, `kuna_wasm`) plus 40
-  integration-test targets across kuna-cli (7), kuna-console (22), kuna-harness (5), kuna-ghidra (1) and
-  kuna-decomp (4). With the dylib, each edit links the `.so` once, and the bins link against it quickly.
+**Dylib (Bevy-style `unlace-decomp-dylib`, a dev-only feature):**
+- What it helps: relinking. Today each edit relinks every binary that statically contains unlace-decomp and
+  unlace-analysis. That is 5 bins (`unlace`, `decomp_dbg`, `decomp_test_dbg`, `unlace_ghidra`, `unlace_wasm`) plus 40
+  integration-test targets across unlace-cli (7), unlace-console (22), unlace-harness (5), unlace-ghidra (1) and
+  unlace-decomp (4). With the dylib, each edit links the `.so` once, and the bins link against it quickly.
 - It is independent of the split, so it can come first if step 0 shows that relink time matters.
-- What it does not help: the compile of kuna-decomp itself. It cannot help kuna-decomp's own tests.
+- What it does not help: the compile of unlace-decomp itself. It cannot help unlace-decomp's own tests.
 - Constraints:
-  - kuna-analysis depends on kuna-decomp and console depends on both, so the dylib must re-export both (the
+  - unlace-analysis depends on unlace-decomp and console depends on both, so the dylib must re-export both (the
     `bevy_internal` pattern) to avoid two copies.
   - `-Cprefer-dynamic` makes the binaries need `libstd-*.so` and the dylib at run time. `cargo run`/`cargo test`
     set the library path, but `make test BINDIR=...` runs the binaries directly, so it needs an rpath or
     `LD_LIBRARY_PATH`.
-  - Never in release or dist. Not for kuna-wasm.
+  - Never in release or dist. Not for unlace-wasm.
 - Runtime cost: Rust executables are already PIE, so the `.so` code is no worse. Calls cross the boundary only at
   coarse console->engine entry points (PLT), so the cost is negligible.
 
@@ -264,7 +264,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
 
 0. **Measure (no code).** On a quiet machine, run `cargo build --timings` and `-Zself-profile` for three edits:
    `p8_structure/blockaction.rs`, `p9_emit/printc.rs`, `substrate/funcdata.rs`. Split each time into front-end,
-   codegen, the rebuild of kuna-analysis/console/cli, and per-binary link time. This decides whether the dylib
+   codegen, the rebuild of unlace-analysis/console/cli, and per-binary link time. This decides whether the dylib
    (step 3) is worth doing and gives the baseline for every later step.
 1. **Layering ratchet (~150 lines, one PR).** A `scripts/check_layers.py` in the style of
    `check_test_layout.py`, run in `make test-tools`. It computes the module graph above (code lines, docs
@@ -274,8 +274,8 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
 2. **Budget clock down (~300 lines moved, ~25 call sites).** Move the `decompile_drive` thread-local deadline and
    `budget_probe`/`budget_spent`/`deadline_passed_in`/`note_budget_site` into `substrate/kuna_budget.rs`.
    `decompile_drive` keeps `pub use`, so no caller changes. No behaviour change.
-3. **Optional, independent: dev dylib (~50 lines + Makefile).** `kuna-decomp-dylib` (dylib, re-exports
-   kuna-decomp + kuna-analysis), behind a `dynamic_linking` feature on console/cli/harness/ghidra, plus an rpath
+3. **Optional, independent: dev dylib (~50 lines + Makefile).** `unlace-decomp-dylib` (dylib, re-exports
+   unlace-decomp + unlace-analysis), behind a `dynamic_linking` feature on console/cli/harness/ghidra, plus an rpath
    for `make test`. Only if step 0 shows relink time is significant.
 4. **Extension traits (10 small PRs or one, ~10 files).** Turn the foreign inherent impls (section 1) into
    `...Ext` traits. No behaviour change.
@@ -284,7 +284,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
      `kuna_option_dispatch.rs`. The old fields keep working.
    - PRs 5b..5k migrate options one phase at a time (P9 first: it has the most single-band commits). Each PR
      deletes the `Architecture` field, the `ArchContext` mirror and the dispatch arm for its options.
-   - `kuna catalog --check` and the 675/675 parity gate prove each step changes nothing.
+   - `unlace catalog --check` and the 675/675 parity gate prove each step changes nothing.
    - Rule for open PRs: new options after 5a use the registry. This needs a one-line note in `docs/agents.md`
      and a check in step 1's script.
 6. **Funcdata typed slots (about 8 PRs, by pass family).** The same mechanism for the ~100 `kuna_*` fields.
@@ -302,14 +302,14 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
    Record `make test` wall time before and after.
 9. **Physical split, one crate per PR, bottom-up.** Each PR is a `git mv` of a set of files into
    `crates/kuna-<x>/src/<same folders>`, a Cargo.toml, `pub(crate) use kuna_middle::*;` at the new crate root,
-   `pub use kuna_<x>::*;` in kuna-decomp's lib.rs, and `pub(crate)` -> `pub` where needed. Open PRs that edit
+   `pub use kuna_<x>::*;` in unlace-decomp's lib.rs, and `pub(crate)` -> `pub` where needed. Open PRs that edit
    moved files usually still merge, because git's rename detection follows the move when the content barely
    changes. Order and size:
    - 9a `kuna-middle` (~105k moved, about 200 visibility edits)
    - 9b `kuna-lift` (~30k)
    - 9c `kuna-structure` (~22k)
    - 9d `kuna-bandb` (~170k)
-   - 9e `kuna-emit` (~52k); kuna-decomp is left as the driver and facade.
+   - 9e `kuna-emit` (~52k); unlace-decomp is left as the driver and facade.
    - Each new crate's unit tests move with it. `phases.toml` and `build.rs` stay in the driver, so
      `make check-spec`, the catalog counts and `docs/options.md` keep their paths.
    - Every PR runs the parity gate plus a runtime A/B.

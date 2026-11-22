@@ -263,7 +263,7 @@ def verify_bundle(d: Path, timeout: int = 900) -> dict:
     The recorded pane came from decbench's kuna 0.1.0 run, so before a sample
     ships the page must still be what kuna prints *today*. Re-runs
 
-        kuna decompile-all <stripped binary> --addr <0xVMA>
+        unlace decompile-all <stripped binary> --addr <0xVMA>
 
     — the same whole-binary, load-once surface decbench's backend drives
     (``decbench/decompilers/raw/kuna_raw.py``), Listing tier on by default, which

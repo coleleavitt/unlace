@@ -152,7 +152,7 @@ That is +2 nodes / +3 edges per arm × the 5 pointer arms = the exact +10 nodes 
 **Root cause: kuna's own `branchflip` option over-fires on short-circuit guards.**
 `--option branchflip off` on the same binary, same build, restores the positive
 conjunction and takes the case to GED 0. The mechanism, read in
-`decompiler/crates/kuna-decomp/src/substrate/funcdata_block.rs`:
+`decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs`:
 
 * `Funcdata::block_if_flip_negated_guard` (~line 3588) takes a 3-component
   `BlockIf`, resolves its guard to a `SplitPoint` via `get_split_point`, and
@@ -186,7 +186,7 @@ flips observable is silently absent on exactly the cases that regress. The spec
 
 **Owning phase: P8 (structure), `readability-rewrites` subphase** — the
 `ActionBranchFlip` scheduled at
-`decompiler/crates/kuna-decomp/src/infra/universalaction.rs:740`.
+`decompiler/crates/unlace-decomp/src/infra/universalaction.rs:740`.
 
 **Minimal reproducer** (this is a general shape, not bash-specific). Compiled
 `-O0 -shared -fPIC`, decompiled with today's binary:
@@ -218,7 +218,7 @@ would throw away the DIV-14 leaf-flip win (the `z` control:
 Narrow `branchflip` to leaf guards — decline `SplitPoint::Condition`.
 
 * **Mechanism.** In
-  `decompiler/crates/kuna-decomp/src/substrate/funcdata_block.rs::block_if_flip_negated_guard`,
+  `decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs::block_if_flip_negated_guard`,
   after `get_split_point`, return `Ok(false)` for `SplitPoint::Condition(_)`.
   One guard clause; `prefer_complement` (upstream Ghidra, class `0`) is untouched
   and keeps its existing `Condition` handling. Equivalent framing: only flip a
@@ -227,7 +227,7 @@ Narrow `branchflip` to leaf guards — decline `SplitPoint::Condition`.
 * **Owning files.**
   `substrate/funcdata_block.rs` (the guard clause);
   `p8_structure/blockaction.rs (ActionBranchFlip)` (no change expected);
-  `decompiler/crates/kuna-decomp/phases.toml` (branchflip row ~2250: `summary` /
+  `decompiler/crates/unlace-decomp/phases.toml` (branchflip row ~2250: `summary` /
   `use_when` / `symptoms` must say leaf-guard-only, and add the
   "negated-disjunction ladder instead of an `else if` cascade" symptom);
   `docs/spec/08-structuring.md` §8.1 (~line 363, state the `Condition` exclusion

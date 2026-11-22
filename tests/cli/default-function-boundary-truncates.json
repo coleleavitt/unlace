@@ -22,11 +22,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/function_boundary_return_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/function_boundary_return_x86_64",
     "binary_sha256": "6aac76982527b9e550ef1a70bbe0ab8dd7d59fc67c42cf21a33991e03e40ff01",
     "binary_size": 5080,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/function_boundary_return_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/function_boundary_return_x86_64",
     "selector": "shared_wrapper",
     "selector_kind": "name"
   },

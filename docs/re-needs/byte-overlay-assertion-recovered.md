@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli]
+touches: [decompiler/crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -133,19 +133,19 @@ WHY THIS WAS REFUTED AT ALL, given it is effectively an absence need: for a miss
 
 MEASURED ON b9029a8f, release binaries:
 
-1. The directive vocabulary is closed and does not contain bytes. From kuna decompile --help:
+1. The directive vocabulary is closed and does not contain bytes. From unlace decompile --help:
        function, typedef, prototype, data, param, return,
        name, type, comment, flow, readonly, volatile
    The rejection is a real closed-set rejection, emitted at
-       decompiler/crates/kuna-cli/src/assertdecl.rs:319
+       decompiler/crates/unlace-cli/src/assertdecl.rs:319
    as: --assert {raw}: unknown directive {other} (want one of ...). So the symptom reproduces exactly as filed and exit 2 is the parser, not a downstream failure.
 
 2. NO ADJACENT MECHANISM SUPPLIES BYTE CONTENT. I searched the whole 176-option catalog for overlay / patch / selfmod / self-mod / smc / byte content. It returned 15 apparent hits and ALL FIFTEEN ARE FALSE POSITIVES -- every one is the substring "patch" inside DISPATCH in jump-table prose (V850 jmp reg, lowered-switch cascade, CMOV dispatch, image-base-relative tables, the MSVC Duff's-device tables). There is no overlay option. DO NOT RE-RUN THAT GREP; it is answered.
 
-3. kuna docs, the whole embedded manual, has ZERO matches for patch, overlay, self-modif or --bytes.
+3. unlace docs, the whole embedded manual, has ZERO matches for patch, overlay, self-modif or --bytes.
 
 4. The nearest neighbours are not substitutes. --assert data declares a TYPE at an address, not content. --raw-image sets a load base for a headerless image; it does not overlay bytes into an already-mapped PE. The tester's recorded workaround -- Python plus a copied executable -- is exactly the evidence that no in-tool route exists.
 
-CONCLUSION FOR THE BUILDER: the gap is real and it is a genuinely new directive, not a rename or a re-exposure of existing machinery. Scope stands at small and track stands at tooling: this is CLI/assertion-parser surface (kuna-cli/src/assertdecl.rs), not a decompiler-phase change, so it should need no option, no phases.toml row and no catalog-count bump -- which is why it holds only its own cluster lease and none of the counter:* or file:* leases.
+CONCLUSION FOR THE BUILDER: the gap is real and it is a genuinely new directive, not a rename or a re-exposure of existing machinery. Scope stands at small and track stands at tooling: this is CLI/assertion-parser surface (unlace-cli/src/assertdecl.rs), not a decompiler-phase change, so it should need no option, no phases.toml row and no catalog-count bump -- which is why it holds only its own cluster lease and none of the counter:* or file:* leases.
 
 ONE HAZARD WORTH CARRYING: the probe writes bytes at 0x43d0c6 INSIDE the range 0x43d060-0x43d0c6 that the same command defines as decrypt_stage1, and the acceptance is on a self-modifying stage-1 unpacker. Ordering will matter -- an overlay applied after the image is mapped but before code is lifted is the only ordering that can work, and the range-property-ordering precedent in this repo (readonly/volatile are silently inert if painted after symbols are mapped) is the direct analogue. Get the ordering wrong and the directive parses, accepts, and does nothing.

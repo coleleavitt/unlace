@@ -11,7 +11,7 @@
     than one type) while the layout arm typed its `self` after another.
 
     Stage / sub-stage: P1 external-refinement, the Swift metadata pass
-    (`kuna-analysis/src/analyzers/swift/mod.rs`, `resolve_claims`).
+    (`unlace-analysis/src/analyzers/swift/mod.rs`, `resolve_claims`).
 
     P0 assertion: `option swiftmetadata on|off` (the fix needs no option
     of its own: it only corrects wrong output).
@@ -33,7 +33,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_icf_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_icf_elf</com>
   <com>option swiftmetadata off</com>
   <com>read symbols</com>
   <com>load addr 0x27f0</com>
@@ -43,7 +43,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_icf_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_icf_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x27f0</com>

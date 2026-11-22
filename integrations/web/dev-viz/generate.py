@@ -24,7 +24,7 @@ import tomllib
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 from scripts.observatory import atlas  # noqa: E402
-CATALOG = "decompiler/crates/kuna-decomp/phases.toml"
+CATALOG = "decompiler/crates/unlace-decomp/phases.toml"
 PHASES = [
     ("P0", "Knowledge", "Configuration, symbols & assertions"),
     ("P1", "Partition", "Images, code boundaries & entry points"),
@@ -68,7 +68,7 @@ def tracked(repo: Path, *paths: str) -> list[str]:
 def phase_names(paths: list[str]) -> dict[str, str]:
     owners: dict[str, set[str]] = defaultdict(set)
     for path in paths:
-        match = re.search(r"kuna-decomp/src/p([0-9])_[^/]+/", path)
+        match = re.search(r"unlace-decomp/src/p([0-9])_[^/]+/", path)
         if match and Path(path).suffix == ".rs":
             owners[Path(path).stem].add("P" + match[1])
     return {name: next(iter(phases)) for name, phases in owners.items()
@@ -81,10 +81,10 @@ def destination(path: str) -> str:
 
 
 def phase_for(path: str, names: dict[str, str]) -> str | None:
-    match = re.search(r"kuna-decomp/src/[ps]([0-9])_[^/]+/", path)
+    match = re.search(r"unlace-decomp/src/[ps]([0-9])_[^/]+/", path)
     if match:
         return "P" + match[1]
-    if "kuna-decomp/src/" in path or path.startswith("decompiler/cpp/"):
+    if "unlace-decomp/src/" in path or path.startswith("decompiler/cpp/"):
         return names.get(Path(path).stem)
     return None
 
@@ -195,7 +195,7 @@ def export(repo: Path) -> dict:
     if git(repo, "rev-parse", "--is-shallow-repository").strip() == "true":
         raise ValueError("dev-viz requires full git history (checkout fetch-depth: 0)")
     sha = git(repo, "rev-parse", "HEAD").strip()
-    names = phase_names(tracked(repo, "decompiler/crates/kuna-decomp/src"))
+    names = phase_names(tracked(repo, "decompiler/crates/unlace-decomp/src"))
     log = git(repo, "log", "HEAD", "--no-merges", "--find-renames", "--numstat",
               "--format=%x1e%H%x1f%cI%x1f%B%x1f")
     commits = parse_commits(log, names)

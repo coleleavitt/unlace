@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/arraycoverwidth_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/arraycoverwidth_x86_64",
     "binary_sha256": "0d768f2d5738cac7e9eda386c36b0a8b40058b001f27867f4f2bcb53d55c2788",
     "binary_size": 5040,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/arraycoverwidth_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/arraycoverwidth_x86_64",
     "selector": "vm",
     "selector_kind": "name"
   },

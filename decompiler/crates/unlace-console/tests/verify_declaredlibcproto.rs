@@ -1,0 +1,123 @@
+//! A declared function name answers out of the built-in libc signature tables —
+//! `docs/re-needs/both-argument-recovery-options.md`.
+//!
+//! `libproto` and `libcsigs` match a name the IMAGE carries: its FUNC symbols, its
+//! imports. A stripped, statically linked target has neither, so the only evidence
+//! a callee is `ptrace` is the operator's `--define-function 0x8049027=ptrace` —
+//! and a name that buys no prototype buys almost nothing, because the callee's
+//! arity has to come from somewhere and glibc's `ptrace` is a varargs wrapper
+//! (`long ptrace(enum __ptrace_request, ...)`, the rest fetched with `va_arg`) that
+//! no body analysis can answer for.
+//!
+//! The proof on `declaredlibcproto_i386` (the reduction of the witness,
+//! crackmes.one `5ab77f5c33c5d40ad448c615`): declared, the call renders
+//! `ptrace(2,v1,NULL,(void *)0x804a004)` — the signature typed the third and
+//! fourth arguments, where the spelling alone gave `ptrace(2,v1,0,0x804a004)`.
+
+use std::path::PathBuf;
+use std::rc::Rc;
+
+use unlace_base::address::Address;
+use unlace_console::decompile_step::{DecompileSeed, decompile_one};
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+
+/// The caller, whose loop pushes four `ptrace` arguments per iteration.
+const CALLER: u64 = 0x8049000;
+/// The varargs wrapper the operator identifies as `ptrace`.
+const WRAPPER: u64 = 0x8049027;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
+}
+
+/// Bootstrap the fixture.
+fn load() -> ConsoleProgram {
+    let root = repo_root();
+    let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
+    let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures/declaredlibcproto_i386");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    prog
+}
+
+fn code_addr(prog: &ConsoleProgram, vma: u64) -> Address {
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .expect("code space")
+        .clone();
+    Address::new(Rc::clone(&space), vma)
+}
+
+/// Declare the wrapper as `ptrace`, then render the caller.
+fn caller_body() -> String {
+    let mut prog = load();
+    let wrapper = code_addr(&prog, WRAPPER);
+    let name = prog
+        .declare_function(wrapper, Some("ptrace"), 0)
+        .expect("the declaration lands");
+    assert_eq!(name, "ptrace");
+
+    let entry = code_addr(&prog, CALLER);
+    let declared = prog.declared_extent(CALLER);
+    let step = decompile_one(
+        prog.arch_mut(),
+        "sub_8049000",
+        entry,
+        declared,
+        &DecompileSeed::plain(&[], &[]),
+        &[],
+    );
+    let fd = step.result.expect("the caller decompiles");
+    unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd)
+}
+
+/// The declared name carries its signature to every call site.
+#[test]
+fn a_declared_libc_name_types_the_call_it_names() {
+    let body = caller_body();
+    // The last argument is typed `void *` either way: as a cast, or (`globalref`,
+    // default on) as the address of the global it names.
+    assert!(
+        body.contains("ptrace(2,")
+            && (body.contains(",NULL,(void *)0x804a004)") || body.contains(",NULL,&dat_804a004)")),
+        "the parked signature must type the pointer arguments, got:\n{body}"
+    );
+}
+
+/// A declared name neither table knows is left exactly alone — the lookup must not
+/// invent a prototype for `stage1`.
+#[test]
+fn a_name_the_tables_do_not_know_parks_nothing() {
+    let mut prog = load();
+    let wrapper = code_addr(&prog, WRAPPER);
+    prog.declare_function(wrapper, Some("stage1"), 0)
+        .expect("the declaration lands");
+
+    let entry = code_addr(&prog, CALLER);
+    let step = decompile_one(
+        prog.arch_mut(),
+        "sub_8049000",
+        entry,
+        0,
+        &DecompileSeed::plain(&[], &[]),
+        &[],
+    );
+    let fd = step.result.expect("the caller decompiles");
+    let body = unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd);
+    assert!(
+        body.contains("stage1("),
+        "the declared name renders, got:\n{body}"
+    );
+    assert!(
+        !body.contains("NULL"),
+        "an unknown name must not acquire a signature, got:\n{body}"
+    );
+}

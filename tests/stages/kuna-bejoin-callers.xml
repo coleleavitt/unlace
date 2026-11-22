@@ -22,7 +22,7 @@
     Stage: P4 calls and prototypes (output-prototype), option bejoin.
     Pass 1 is the default (callers), pass 2 option bejoin evidence.
 
-    Image: decompiler/crates/kuna-analysis/tests/fixtures/bejoin_callers_ppc32_O2
+    Image: decompiler/crates/unlace-analysis/tests/fixtures/bejoin_callers_ppc32_O2
     (bejoin_callers.c, powerpc-linux-gnu-gcc 13.3 -O2 -nostdlib -static).
 
     Assert #1: the default returns add64's sum high word first; evidence
@@ -37,7 +37,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/bejoin_callers_ppc32_O2</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_callers_ppc32_O2</com>
   <com>option typevote off</com>
   <com>option partialaccess off</com>
   <com>read symbols</com>

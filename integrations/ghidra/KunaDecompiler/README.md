@@ -6,7 +6,7 @@ place of the stock C++ `decompile` binary — the *unchanged* Ghidra GUI (Decomp
 window, analyzers, scripts) running on the kuna engine. It is a drop-in, backwards-
 compatible backend: Ghidra's Java side is untouched; only the spawned process changes.
 
-**Status: Phase 2 — kuna decompiles.** The `kuna_ghidra` binary speaks the complete
+**Status: Phase 2 — kuna decompiles.** The `unlace_ghidra` binary speaks the complete
 Ghidra⇄decompiler wire protocol *and* drives kuna's engine, so the Decompiler window
 shows **real C produced by kuna**, with working click-to-address. Current scope: simple,
 self-contained functions decompile cleanly; a function that references globals/types the
@@ -21,13 +21,13 @@ latest stable release (currently **12.1.2**). The swap relies on the exact shape
 
 Every kuna release ships a ready-to-install extension zip —
 `kuna-v<ver>-KunaDecompiler-ghidra_<ghidra-version>.zip` on the
-[releases tab](https://github.com/Noelo-Lab/kuna/releases) — with prebuilt `kuna_ghidra`
+[releases tab](https://github.com/Noelo-Lab/kuna/releases) — with prebuilt `unlace_ghidra`
 backends for **all platforms** already inside: Linux x86_64 and arm64, macOS x86_64 and
-arm64, Windows x86_64 (`kuna_ghidra.exe`). Ghidra picks the right one at runtime, and
+arm64, Windows x86_64 (`unlace_ghidra.exe`). Ghidra picks the right one at runtime, and
 its built-in arm→x86 fallbacks cover the rest (Windows-on-ARM runs the x86_64 binary
 under emulation; an Apple-Silicon install missing `mac_arm_64` would fall back to
 `mac_x86_64` under Rosetta). No cargo, no network, no separate specs download —
-`kuna_ghidra` receives everything over the wire, so the zip plus a Ghidra release
+`unlace_ghidra` receives everything over the wire, so the zip plus a Ghidra release
 install are the only two files an airgapped machine needs.
 
 1. Download the `…KunaDecompiler-ghidra_<version>.zip` asset from the kuna releases tab.
@@ -50,7 +50,7 @@ Every decompiler consumer in Ghidra funnels process creation through one static
 factory, `ghidra.app.decompiler.DecompileProcessFactory`, which resolves the executable
 once and caches it in a `private static String exepath` field. There is no property,
 env var, or ExtensionPoint to substitute it — so at plugin load,
-`KunaDecompilerPlugin` resolves the `kuna_ghidra` binary shipped in this extension's
+`KunaDecompilerPlugin` resolves the `unlace_ghidra` binary shipped in this extension's
 `os/<platform>/` directory (or the `-Dkuna.decompiler.exe` override) and writes that
 field by reflection, before the lazily-spawned first decompiler process exists. A
 Tools-menu checkbox toggles between the kuna core and the stock one at runtime.
@@ -61,7 +61,7 @@ The whole flow, against a **Ghidra release install** — build the backend, pack
 extension, install it, enable the plugin, decompile:
 
 ```bash
-# 1. Build the kuna_ghidra backend and package the extension in one step.
+# 1. Build the unlace_ghidra backend and package the extension in one step.
 #    build.sh compiles the release binary, stages it into os/<platform>/, and
 #    (because GHIDRA_INSTALL_DIR is set) builds the installable zip.
 cd integrations/ghidra/KunaDecompiler
@@ -89,8 +89,8 @@ by hand, from the repo root:
 
 ```bash
 cd decompiler
-cargo build --release -p kuna-ghidra
-cp target/release/kuna_ghidra ../integrations/ghidra/KunaDecompiler/os/linux_x86_64/
+cargo build --release -p unlace-ghidra
+cp target/release/unlace_ghidra ../integrations/ghidra/KunaDecompiler/os/linux_x86_64/
 ```
 
 The binary is a gitignored build artifact; it must be present under
@@ -127,7 +127,7 @@ No zip needed — inject this directory as an external module when launching Ghi
 added to the launcher's VM args (e.g. the Eclipse/VSCode launch configuration created
 by `gradle prepDev` / the VSCode integration), with the extension's Java compiled into
 the project. During development you can skip copying the binary and instead pass
-`-Dkuna.decompiler.exe=/abs/path/to/kuna/decompiler/target/release/kuna_ghidra`.
+`-Dkuna.decompiler.exe=/abs/path/to/kuna/decompiler/target/release/unlace_ghidra`.
 
 ## Enable the plugin
 
@@ -147,7 +147,7 @@ leaves the stock core active.
   kuna engine. If a function can't be decompiled yet (an un-supported engine path), the
   window shows a clean per-function message instead of hanging.
 - Sanity check that it's really kuna and not the stock core: the two decompilers produce
-  cosmetically different C, and `KunaCoreStatus.java` reports the `kuna_ghidra` path.
+  cosmetically different C, and `KunaCoreStatus.java` reports the `unlace_ghidra` path.
 
 ## Revert
 
@@ -184,7 +184,7 @@ a release install.
 
 ## Use with PyGhidra (headless / scripting)
 
-Build the backend once (`cd decompiler && cargo build --release -p kuna-ghidra`), install
+Build the backend once (`cd decompiler && cargo build --release -p unlace-ghidra`), install
 pyghidra (`pip install "$GHIDRA_INSTALL_DIR"/Ghidra/Features/PyGhidra/pypkg/dist/pyghidra-*.whl`,
 or `pip install pyghidra`), and set `GHIDRA_INSTALL_DIR`. Then pick one of two ways to make
 Ghidra use kuna.
@@ -206,13 +206,13 @@ def _exepath():
     f = DecompileProcessFactory.class_.getDeclaredField("exepath")
     f.setAccessible(True)
     return f
-def enable_kuna(exe):  _exepath().set(None, exe)    # kuna ON  (abs path to kuna_ghidra)
+def enable_kuna(exe):  _exepath().set(None, exe)    # kuna ON  (abs path to unlace_ghidra)
 def disable_kuna():    _exepath().set(None, None)   # back to the stock decompiler
 def active_core():     return _exepath().get(None)  # what Ghidra will spawn next
 
 with pyghidra.open_program("a.out") as flat:        # analyze=True by default
     program = flat.getCurrentProgram()
-    enable_kuna(os.environ["KUNA_GHIDRA_EXE"])       # target/release/kuna_ghidra
+    enable_kuna(os.environ["KUNA_GHIDRA_EXE"])       # target/release/unlace_ghidra
     ifc = DecompInterface(); ifc.openProgram(program)
     for func in program.getFunctionManager().getFunctions(True):
         print(ifc.decompileFunction(func, 60, ConsoleTaskMonitor()).getDecompiledFunction().getC())
@@ -235,5 +235,5 @@ delete the copy to revert):
 ```bash
 PLAT=mac_arm_64   # or linux_x86_64 | mac_x86_64 | linux_arm_64 (see build.sh)
 DROP="$GHIDRA_INSTALL_DIR/Ghidra/Features/Decompiler/build/os/$PLAT"
-mkdir -p "$DROP" && cp decompiler/target/release/kuna_ghidra "$DROP/decompile"
+mkdir -p "$DROP" && cp decompiler/target/release/unlace_ghidra "$DROP/decompile"
 ```

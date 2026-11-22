@@ -2,7 +2,7 @@
 
 ```yaml
 Anchors:
-  - decompiler/crates/kuna-decomp/src/p7_regions
+  - decompiler/crates/unlace-decomp/src/p7_regions
 ```
 
 This phase computes kuna's S7 artifact: the **region tree** — a nesting of
@@ -22,7 +22,7 @@ the rustc security-check transform of §7.4 and the MSVC `/GS` transform of
 §7.5, which the schedule places back to back in fullloop's tail. Option defaults and flip guidance for
 every option named below live in the generated catalog
 ([docs/options.md](../options.md)); the registry rows are in
-`decompiler/crates/kuna-decomp/phases.toml` and the default divergences are
+`decompiler/crates/unlace-decomp/phases.toml` and the default divergences are
 DIV-12/DIV-14/DIV-82 in `docs/history.md`.
 
 ## 7.1 The region graph (angr)
@@ -31,7 +31,7 @@ DIV-12/DIV-14/DIV-82 in `docs/history.md`.
 collapsing* a graph — merging chains into multi-nodes, replacing whole node
 sets with a single region wrapper — and the decompiler's own `BlockGraph` must
 never be mutated by an analysis. So the phase carries its own substrate:
-`decompiler/crates/kuna-decomp/src/p7_regions/kuna_regiongraph.rs
+`decompiler/crates/unlace-decomp/src/p7_regions/kuna_regiongraph.rs
 (KunaRegionGraph)`, a mutable digraph in the image of `networkx.DiGraph`, over
 nodes pooled in `kuna_regiongraph.rs (KunaNodePool)`. A node
 (`kuna_regiongraph.rs (KunaRegionNode)`) is one of four kinds: a leaf `Block`
@@ -107,7 +107,7 @@ wrong answer.
 
 ## 7.2 The region identifier (angr)
 
-**The artifact.** `decompiler/crates/kuna-decomp/src/p7_regions/kuna_regionid.rs
+**The artifact.** `decompiler/crates/unlace-decomp/src/p7_regions/kuna_regionid.rs
 (KunaRegionIdentifier)` collapses the working graph into a nested
 `kuna_regionid.rs (KunaGraphRegion)` tree. A region records its head, its
 internal subgraph, its external successor frontier (plus the
@@ -158,7 +158,7 @@ collapse. For one header, `kuna_regionid.rs
      between that walk and the attempts, so step 1 does not walk the graph
      again for its latching nodes.
    - *Forward walk*. The slice's forward walk runs first, without building
-     the slice (`decompiler/crates/kuna-decomp/src/p7_regions/kuna_regiongraph.rs
+     the slice (`decompiler/crates/unlace-decomp/src/p7_regions/kuna_regiongraph.rs
      (kuna_slice_visits)`). It stops at the first other live header it visits.
      Pruning keeps every node that walk visits: each visited node is entered
      from a visited node and has a successor that is visited or on the
@@ -251,7 +251,7 @@ and the chapter-08 structurer treats a failed identification as non-fatal (it
 structures the `sblocks` topology without region guidance, and the
 loop-refinement data is simply absent).
 
-*(kuna decompile-all watchdog)* One identification runs inside a single
+*(unlace decompile-all watchdog)* One identification runs inside a single
 structuring action, which the action loop cannot interrupt, and on a big
 function's CFG it can still run long (before the step-2 ordering above,
 CPython 3.11's `_PyEval_EvalFrameDefault`, 62 KB, spent about 440 s in the
@@ -265,17 +265,17 @@ check, and the drive reports the budget. Without a budget nothing is polled.
 ## 7.3 kuna passes at the region tier: stackguard (angr)
 
 The folder's one scheduled, output-changing pass:
-`decompiler/crates/kuna-decomp/src/p7_regions/kuna_stackguard.rs
+`decompiler/crates/unlace-decomp/src/p7_regions/kuna_stackguard.rs
 (ActionStripStackGuard)`, the port of angr's `StackCanarySimplifier`
 (`option stackguard`, [docs/options.md](../options.md); registry row
 P7/`edge-virtualization`, `source_decompiler = "angr"`). Scheduled in
 fullloop's tail (00-overview §0.6), in the `returnsplit` group immediately
 before `ActionReturnSplit`
-(`decompiler/crates/kuna-decomp/src/infra/universalaction.rs
+(`decompiler/crates/unlace-decomp/src/infra/universalaction.rs
 (universal_sched)`).
 
 With `canaryglobal` (default on;
-`decompiler/crates/kuna-decomp/src/p7_regions/kuna_stackguard.rs (is_named_guard)`)
+`decompiler/crates/unlace-decomp/src/p7_regions/kuna_stackguard.rs (is_named_guard)`)
 a canary source is also an unwritten read of a global named `__stack_chk_guard`
 (`___stack_chk_guard` on Mach-O) or `__security_cookie`, reached directly or
 through the `INDIRECT` a call adds. That is the AArch64, ARM, PowerPC and i386
@@ -356,7 +356,7 @@ the binary executes (`REMOVES CODE` in its catalog row, `destructive = true`)
 contract of the toggleable-transform tier (flip guidance: the catalog row).
 Default **on** since DIV-14 (`docs/history.md`; live flag
 `strip_stack_guard` set in
-`decompiler/crates/kuna-decomp/src/infra/architecture.rs
+`decompiler/crates/unlace-decomp/src/infra/architecture.rs
 (reset_defaults_internal)` and carried to the per-function ArchContext); the
 one affected datatest file (`tests/datatests/partialsplit.xml`, whose Partial
 splitting #1/#2 would change) opts out with a single `option stackguard off`
@@ -369,13 +369,13 @@ hence the both-operands-derive rule and the handler-call gate.
 ## 7.4 kuna passes at the region tier: securitycheck (angr)
 
 The folder's second scheduled, output-changing pass:
-`decompiler/crates/kuna-decomp/src/p7_regions/kuna_securitycheck.rs
+`decompiler/crates/unlace-decomp/src/p7_regions/kuna_securitycheck.rs
 (ActionRemoveSecurityCheck)`, the port of SEFCOM Oxidizer's
 `SecurityCheckRemover` (`option securitycheck`,
 [docs/options.md](../options.md); registry row P7/`edge-virtualization`,
 `source_decompiler = "angr"`). It is scheduled in the same `returnsplit` group
 as §7.3, immediately after `ActionStripStackGuard`
-(`decompiler/crates/kuna-decomp/src/infra/universalaction.rs
+(`decompiler/crates/unlace-decomp/src/infra/universalaction.rs
 (universal_sched)`), because it is the same operation on a different trigger:
 sever one CFG edge, collect the orphaned diverging handler, and let the
 repeating fullloop re-derive dataflow, types and structure from the reduced
@@ -432,7 +432,7 @@ remains. One check per apply; the fullloop re-invokes and the pass self-gates.
 kuna already knows never returns, and its address-keyed no-return discovery
 walks only the helper bodies it can reach. The same option therefore asserts
 the fact from the name at the flow seam
-(`decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs
+(`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs
 (ArchFlowEnv::query_call_no_return)`) — the same seam, the same shape and the
 same one-list discipline as the known-no-return name match, on a list that exists
 nowhere but Rust. Without it roughly half the checks in a Rust binary survive
@@ -442,7 +442,7 @@ as *returning* panic blocks the P7 guard correctly declines to remove.
 instructions the binary executes (`REMOVES CODE`, `destructive = true`).
 Default **on** since DIV-82 (`docs/history.md`; live flag
 `strip_security_check` set in
-`decompiler/crates/kuna-decomp/src/infra/architecture.rs
+`decompiler/crates/unlace-decomp/src/infra/architecture.rs
 (reset_defaults_internal)` and carried to the per-function ArchContext).
 Because the trigger is a Rust-only name it changes nothing on the C corpus:
 0/675 datatest assertions and zero differing `code` fields over the whole-binary
@@ -456,7 +456,7 @@ exists. `tests/stages/oxidizer-securitycheck.xml` pins both directions.
 ## 7.5 kuna passes at the region tier: msvcstackguard (kuna)
 
 The folder's third scheduled, output-changing pass:
-`decompiler/crates/kuna-decomp/src/p7_regions/kuna_msvcstackguard.rs
+`decompiler/crates/unlace-decomp/src/p7_regions/kuna_msvcstackguard.rs
 (ActionStripMsvcStackGuard)` — the Windows sibling of §7.3 (`option
 msvcstackguard`, [docs/options.md](../options.md); registry row
 P7/`edge-virtualization`, `source_decompiler = "kuna"`, GH-468 finding 3).
@@ -607,7 +607,7 @@ one restart.
 ## 7.5b kuna passes at the region tier: the post-SSA write-barrier arm (kuna)
 
 **(kuna) `option gowritebarrier`, post-SSA arm,
-`decompiler/crates/kuna-decomp/src/p7_regions/kuna_gowbphi.rs
+`decompiler/crates/unlace-decomp/src/p7_regions/kuna_gowbphi.rs
 (ActionGoWriteBarrierPhi)`.** The pre-SSA one-hop fold (chapter 02, §2.10)
 takes the textbook write-barrier diamond; real Go binaries carry two shapes it
 must refuse — a barrier arm SHARED by several guards, and an arm whose call
@@ -618,7 +618,7 @@ made every read explicit, so this action sits in the fullloop tail beside the
 other edge strippers and uses the same `remove_branch` +
 `remove_unreachable_blocks` pair.
 
-The matcher (`decompiler/crates/kuna-decomp/src/infra/idiom.rs
+The matcher (`decompiler/crates/unlace-decomp/src/infra/idiom.rs
 (match_guarded_cold_call_phi)`) refuses unless ALL of: every predecessor of
 the arm is a CBRANCH-terminated guard whose condition derives from a global
 flag (a `ram`-storage read or a LOAD through a constant pointer — the
@@ -635,13 +635,13 @@ it — each surviving phi collapses to the hot-path value. One guard edge is
 cut per apply, so a shared arm converges one guard at a time and every cut
 re-validates the shape against the edited graph. The witness is
 `tests/stages/kuna-gowbphi.xml` (a double-guarded shared arm whose buffer
-stores read the call result), and the kuna-console `verify_go_writebarrier`
+stores read the call result), and the unlace-console `verify_go_writebarrier`
 family carries the store-preservation oracle over real Go builds.
 
 ## 7.6 Observability (kuna)
 
 Three console commands expose the region tree
-(`decompiler/crates/kuna-console/src/kuna_console.rs (IfcKunaRegionTree,
+(`decompiler/crates/unlace-console/src/kuna_console.rs (IfcKunaRegionTree,
 IfcKunaRegionBlocks, IfcKunaRegionWalk)`): `region tree` renders the nested
 hierarchy (the angr `GraphRegion.dbg_print` analog), `region blocks` the flat
 per-region block-address lists (`regions_by_block_addrs`), and `region walk`
@@ -660,15 +660,15 @@ drives the `kuna_regionid.rs (KunaRegionVisitor)` callback trait, which
 brackets nested regions and fires once per leaf). In `phases.toml` the three
 surfaces are registered at P7/`loop-refinement` — the observable half of that
 subphase's LATENT region-shaping assertions. The CLI mirror is
-`kuna decompile <bin> <fn> --regions`, which captures `region blocks` +
+`unlace decompile <bin> <fn> --regions`, which captures `region blocks` +
 `region tree` through a second `openfile write` so the region text never
 mixes with the C.
 
 **Handoff to chapter 08.** The region tree's consumer is the region
 structurer: when `regionstructure` is on (default since DIV-12),
-`decompiler/crates/kuna-decomp/src/p8_structure/blockaction.rs
+`decompiler/crates/unlace-decomp/src/p8_structure/blockaction.rs
 (ActionBlockStructure)` routes S8 through
-`decompiler/crates/kuna-decomp/src/p8_structure/region_structurer.rs
+`decompiler/crates/unlace-decomp/src/p8_structure/region_structurer.rs
 (run_region_structurer)`, which builds and computes a fresh
 `KunaRegionIdentifier` over the real CFG per structuring attempt and consumes
 ONE thing from this phase: when `regionlooprefine` is on, the `cyclic_loops()`
@@ -683,7 +683,7 @@ schemas over this tree, virtualizes edges, and falls back to
 `CollapseStructure` is chapter [08 — Structuring](08-structuring.md).
 
 **Dynamic alloca** (`dynalloca`, default off; kuna;
-`decompiler/crates/kuna-decomp/src/p7_regions/kuna_dynalloca.rs (RuleDynAlloca)`):
+`decompiler/crates/unlace-decomp/src/p7_regions/kuna_dynalloca.rs (RuleDynAlloca)`):
 a variable-length array or an `alloca` moves the stack pointer by a run-time
 amount (`sub rsp, rax`); once types are in, the new stack pointer value is
 `PTRADD(sp, -n, 1)` off the stack's spacebase input, which printed as
@@ -698,7 +698,7 @@ functions `alloca` declines. Both use `BUILTIN_ALLOCA`.
 
 ## Go compiler checks (`gobounds`)
 
-`decompiler/crates/kuna-decomp/src/p7_regions/kuna_gobounds.rs
+`decompiler/crates/unlace-decomp/src/p7_regions/kuna_gobounds.rs
 (ActionGoBounds)` runs beside `securitycheck` in the repeating fullloop tail.
 The default-on `gobounds` option is additionally gated on the effective Go source
 language. It recognizes exact runtime names for compiler-generated bounds, slice,

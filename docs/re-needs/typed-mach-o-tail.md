@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/585
@@ -105,11 +105,11 @@ Before the repair, even the stronger two-parameter declaration below rendered
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/macho_imports",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/macho_imports",
     "binary_sha256": "0394e1be81c4ccdfb28a50cf5dba55a6d95a692cd5504f2305a8f139e8f86675",
     "binary_size": 16688,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/macho_imports",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/macho_imports",
     "selector": "printf",
     "selector_kind": "name"
   },

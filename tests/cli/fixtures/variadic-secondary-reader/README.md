@@ -10,7 +10,7 @@ value as uint32_t widened to uint64_t, including for negative inputs.
 gcc -O2 -fno-optimize-sibling-calls -c tests/cli/fixtures/variadic-secondary-reader/selected.c -o /tmp/variadic-selected.o
 gcc -O0 -no-pie tests/cli/fixtures/variadic-secondary-reader/{probe.S,native.c} /tmp/variadic-selected.o -o /tmp/variadic-reader
 /tmp/variadic-reader
-kuna decompile /tmp/variadic-reader caller_stored_integer --json --mode reliable --assert-strict \
+unlace decompile /tmp/variadic-reader caller_stored_integer --json --mode reliable --assert-strict \
   --assert 'prototype caller_stored_integer unsigned long long MSABI caller_stored_integer(int *value)' \
   --assert 'prototype render_value unsigned long long MSABI render_value(const char *format,...)'
 ```
@@ -40,7 +40,7 @@ plus a healthy call without the store:
 
 ```sh
 python3 tests/cli/fixtures/variadic-secondary-reader/imported.py /tmp/variadic-imported.exe
-kuna decompile-all /tmp/variadic-imported.exe --addr 0x140001000 --mode reliable --assert-strict \
+unlace decompile-all /tmp/variadic-imported.exe --addr 0x140001000 --mode reliable --assert-strict \
   --assert 'function 0x140001000-0x14000101d=caller_imported_integer' \
   --assert 'prototype caller_imported_integer unsigned long long caller_imported_integer(int *value)' \
   --assert 'prototype 0x140002050 unsigned long long render_value(const char *format,...)' \
@@ -60,5 +60,5 @@ positive control. The second file repeats the checks with explicit char-array
 symbols, whose flags otherwise conceal the writable bytes:
 
 ```sh
-kuna test --datatests --datatests-dir tests/cli/fixtures/variadic-secondary-reader
+unlace test --datatests --datatests-dir tests/cli/fixtures/variadic-secondary-reader
 ```

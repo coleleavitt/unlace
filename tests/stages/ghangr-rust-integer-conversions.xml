@@ -20,7 +20,7 @@
   <com>load function mul32</com><com>decompile</com><com>print C</com>
   <com>load function negate64</com><com>decompile</com><com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/rust_integer_conversions_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_integer_conversions_x86_64</com>
   <com>read symbols</com>
   <com>option outlang rust</com>
   <com>map prototype as_unsigned8 uint1 as_unsigned8(int1 value);</com>
@@ -49,7 +49,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/rust_integer_context_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_integer_context_x86_64</com>
   <com>read symbols</com>
   <com>option outlang rust</com>
   <com>map prototype isolated_bit uint8 isolated_bit(uint8 n);</com>

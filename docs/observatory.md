@@ -46,10 +46,10 @@ silently from the tree:
 
 - `docs/phases.md` (the two pipe tables: phase names/artifacts/Band B and the
   folder map) — parsed, not duplicated.
-- `decompiler/crates/kuna-decomp/phases.toml` (groups, sub-phases, surfaces,
+- `decompiler/crates/unlace-decomp/phases.toml` (groups, sub-phases, surfaces,
   settable options).
 - `docs/spec/*.md` `Anchors:` blocks (folder → owning chapter).
-- `decompiler/crates/kuna-decomp/tests/fixtures/list_action_decompile_snapshot.txt`
+- `decompiler/crates/unlace-decomp/tests/fixtures/list_action_decompile_snapshot.txt`
   — the byte-enforced listing of the default `decompile` schedule — joined
   against the declarative registry in `infra/universalaction.rs` (`rrow!`
   rows, `act!` group literals, `ActionBase::new` definition sites) for each

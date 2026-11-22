@@ -40,7 +40,7 @@ def kuna_bin() -> str:
     env = os.environ.get("KUNA_BIN")
     if env:
         return env
-    return str(paths.repo_root() / "decompiler" / "target" / "release" / "kuna")
+    return str(paths.repo_root() / "decompiler" / "target" / "release" / "unlace")
 
 
 def repo_root() -> Path:

@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/listing/kuna_picpool.rs, decompiler/crates/kuna-analysis/src/listing/xrefs.rs]
+touches: [decompiler/crates/unlace-analysis/src/listing/kuna_picpool.rs, decompiler/crates/unlace-analysis/src/listing/xrefs.rs]
 scope: small
 regression_of: null
 pr: 1264
@@ -28,7 +28,7 @@ reject_reason: null
 Find who registers the timer callback `on_expire`.
 
 > **ARM -fPIC callback read through the GOT has no reference** (major, synthetic `gotxref_arm_le32`)
-> `kuna xrefs --to on_expire` reports 0 references, although `arm_timers` loads it from its GOT slot and passes it to `set_timeout`. The string literals of the same function also have no xref, and the raw pool words are filed as data references into `.text`.
+> `unlace xrefs --to on_expire` reports 0 references, although `arm_timers` loads it from its GOT slot and passes it to `set_timeout`. The string literals of the same function also have no xref, and the raw pool words are filed as data references into `.text`.
 
 Seen first on a production ARM executable (GCC, `-fPIC`, linked non-PIE at 0x10000); `gotxref_arm_le32` reproduces it from a small C source.
 
@@ -101,7 +101,7 @@ Seen first on a production ARM executable (GCC, `-fPIC`, linked non-PIE at 0x100
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/gotxref_arm_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/gotxref_arm_le32",
     "binary_sha256": "7fd54d44cf3d1e1464abd08a9d593f59d2ac94225a50dc2f2eff311b0aaecfb2",
     "binary_size": 71396,
     "binary_source": "in-repo"

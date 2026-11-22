@@ -1,7 +1,7 @@
 """Thin library shim: ``decompile(binary, target, ...)`` for the pipeline.
 
-The **user-facing CLI** that used to live here was ported to the Rust ``kuna``
-binary (``kuna decompile <binary> <func> ...``); see ``decompiler/crates/kuna-cli``.
+The **user-facing CLI** that used to live here was ported to the Rust ``unlace``
+binary (``unlace decompile <binary> <func> ...``); see ``decompiler/crates/unlace-cli``.
 The Rust binary is the one project paradigm now.
 
 What remains here is **only the library function** the still-Python feature
@@ -165,7 +165,7 @@ def decompile(
 
 # Options whose effect is baked during `load file`, upstream of every `option`
 # command, so the console line below cannot reach them: the engine reads them from
-# the process environment instead (the same bridge `kuna decompile` puts on the
+# the process environment instead (the same bridge `unlace decompile` puts on the
 # decomp_dbg subprocess). Keyed option name -> env var. Empty since the DWARF
 # import options were folded into `dwarf`; the seam stays for the next such option.
 _LOADTIME_GATE_ENV = {}
@@ -204,7 +204,7 @@ def _console_path(path):
     containing a space splits into two arguments: `load file` loads the wrong
     file and `openfile write` truncates a file at the split point.  Conditional
     so every path that works today produces a byte-identical script (mirrors
-    kuna-cli/src/decompile.rs `console_path`).
+    unlace-cli/src/decompile.rs `console_path`).
     """
     path = str(path)
     if not any(c.isspace() or c == '"' for c in path):
@@ -221,8 +221,8 @@ def _build_script(binary, target, by_address, bfd_target, raw, out_path,
     else:
         lines.append("load file %s" % image)
 
-    # `option` lines MUST precede `read symbols` (match the Rust `kuna decompile`
-    # CLI, kuna-cli/src/decompile.rs): the kuna_analysis passes are committed —
+    # `option` lines MUST precede `read symbols` (match the Rust `unlace decompile`
+    # CLI, unlace-cli/src/decompile.rs): the unlace_analysis passes are committed —
     # gated by the per-pass `--option <id> on|off` flags — inside `read symbols`
     # (IfcReadSymbols -> commit_pending_analysis). An analysis-tier option set
     # *after* `read symbols` (e.g. `listing on` / `noreturn_propagate on`) is too
@@ -258,7 +258,7 @@ def _build_script(binary, target, by_address, bfd_target, raw, out_path,
 
 
 # The console prompt decomp_dbg writes before echoing each command, and its
-# exception -> prefix grammar (kuna-console/src/ifacedecomp.rs `execute`).
+# exception -> prefix grammar (unlace-console/src/ifacedecomp.rs `execute`).
 _CONSOLE_PROMPT = "[decomp]>"
 _CONSOLE_DIAGNOSTICS = (
     "Execution error: ",

@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp/src/p4_calls/funcdata_callsite.rs]
+touches: [decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs]
 scope: medium
 feature_option: calleearitylive
 regression_of: argument-recovery-knobs-still
@@ -135,7 +135,7 @@ _not yet refuted_
 - lineage: `argument-recovery-knobs-still` (closed round 2 by PR #376) still PASSES its own acceptance on main, so this is not a regression of that probe -- it is the same class of gap on three new binaries, found by three testers with both `calleearity` and `varargstackargs` enabled.
 - round 4 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK BY THE CAPTAIN (no refuter role exists in the launcher), on the 69761b7a witness, sha 6188e204, arena .kuna-repipe/arena/4/69761b7a39e9c4d85c2f9fc1/target/graphy-release.zip.__x/graphy.
 
-SYMPTOM REPRODUCED AND THE ARGUMENTS ARE GENUINELY LIVE. `kuna decompile ... sub_1002c90 --option calleearity on --option varargstackargs on` emits 15 calls to sub_1005250; 11 carry five arguments and FOUR carry three. The callee itself decompiles as sub_1005250(long*,uint,uchar,uint,uchar). objdump at the broken site 0x10033c7 and at a good site 0x10035ba is instruction-for-instruction the same shape -- lea -0x40(%rbp),%rdi / mov %r15d,%esi / movzbl ..,%edx / mov %r12d,%ecx / movzbl %al,%r8d, then CALL -- so ecx and r8d are written by dedicated movs immediately before the call at BOTH. The three-argument rendering is wrong output, not a defensible shorter list.
+SYMPTOM REPRODUCED AND THE ARGUMENTS ARE GENUINELY LIVE. `unlace decompile ... sub_1002c90 --option calleearity on --option varargstackargs on` emits 15 calls to sub_1005250; 11 carry five arguments and FOUR carry three. The callee itself decompiles as sub_1005250(long*,uint,uchar,uint,uchar). objdump at the broken site 0x10033c7 and at a good site 0x10035ba is instruction-for-instruction the same shape -- lea -0x40(%rbp),%rdi / mov %r15d,%esi / movzbl ..,%edx / mov %r12d,%ecx / movzbl %al,%r8d, then CALL -- so ecx and r8d are written by dedicated movs immediately before the call at BOTH. The three-argument rendering is wrong output, not a defensible shorter list.
 
 HYPOTHESIS BULLET 2 IS EXACTLY RIGHT AND IS THE ACTIONABLE CAUSE. 'Sibling arity reconciliation may rescue empty lists but leave partially recovered argument lists untouched' is not a guess -- it is the documented, deliberate limit of the mechanism. kuna_calleearity.rs: 'Only a call that recovered NOTHING. This is the limit the whole-corpus sweep bought.' These four sites recovered three arguments, so calleearity declines them by design. Bullets 1 and 3 ('callee arity/convention does not reach the caller') are true as DESCRIPTION but misleading as direction: kuna deliberately never promotes a caller trial from the callee's own recovered prototype, only from a sibling CALL SITE.
 

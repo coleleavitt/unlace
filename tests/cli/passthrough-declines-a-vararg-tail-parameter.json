@@ -15,11 +15,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/varargtail_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/varargtail_x86_64",
     "binary_sha256": "966c775f303a06a34578fc4ba74bd437e011bb3becd1fd7cf660e53563fc534b",
     "binary_size": 8560,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/varargtail_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/varargtail_x86_64",
     "selector": "sub_40105e",
     "selector_kind": "name"
   },

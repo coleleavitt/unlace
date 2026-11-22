@@ -14,7 +14,7 @@ rounds: [5]
 first_seen_round: 5
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp/src/p9_emit]
+touches: [decompiler/crates/unlace-decomp/src/p9_emit]
 scope: small
 regression_of: null
 pr: null
@@ -116,7 +116,7 @@ _not yet refuted_
 VERDICT: UPHELD, AND THE FILED SEVERITY IS TOO LOW. The hypothesis ("address-taken parameter storage may be emitted again as a local symbol") is exactly right, and I pinned it to one storage location by address. THE OUTPUT IS NOT MERELY UGLY, IT IS INVALID C: a parameter and a local with THE SAME NAME in THE SAME SCOPE and TWO DIFFERENT TYPES.
 
 REPRO, one command, no options, no assertions:
-  kuna decompile <bin> 0x401571
+  unlace decompile <bin> 0x401571
   void sub_401571(unsigned int a0,int4 a1,int4 a2)
   {
     int4 a0;                                <- redeclares the parameter, different type
@@ -162,7 +162,7 @@ origin/main..feat/re-address-taken-key-parameter`), then finish it:
    (675/675, 707/707, 101/101, check-spec strict, `catalog --check` OK) — re-run them after
    the rebase, since the rebase is what can break them.
 3. **Re-derive the counts the rebase invalidates**, do not hand-merge them: the catalog
-   counts, the `tests/stages` corpus file count in `decompiler/crates/kuna-base/src/xml.rs`,
+   counts, the `tests/stages` corpus file count in `decompiler/crates/unlace-base/src/xml.rs`,
    and `docs/baseline-stages.json`.
 4. **DIV-143 is still free** on `origin/main` (highest row there is DIV-142), so no renumber
    is expected — but check the row is present exactly once after the rebase.

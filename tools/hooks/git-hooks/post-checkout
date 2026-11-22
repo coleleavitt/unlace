@@ -1,0 +1,8 @@
+#!/bin/sh
+# Give every worktree the tracked lefthook config, then the usual codegraph sync.
+top="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[ -e "$top/.lefthook.yml" ] || ln -s tools/hooks/lefthook.yml "$top/.lefthook.yml" 2>/dev/null
+if command -v codegraph >/dev/null 2>&1; then
+  ( codegraph sync >/dev/null 2>&1 & ) >/dev/null 2>&1
+fi
+exit 0

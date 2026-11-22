@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis, decompiler/crates/kuna-decomp, decompiler/crates/kuna-cli, decompiler/crates/kuna-console]
+touches: [decompiler/crates/unlace-analysis, decompiler/crates/unlace-decomp, decompiler/crates/unlace-cli, decompiler/crates/unlace-console]
 scope: small
 regression_of: null
 pr: 737
@@ -29,7 +29,7 @@ Read a PE that imports the BSTR/VARIANT API or WinSock by ordinal and see API na
 
 > **PE imports by ordinal render as `<DLL>_Ordinal_<n>`** (major)
 > Flare-On 12 challenge 4 (`UnholyDragon-150.exe`, first byte patched back to `M`) imports 45
-> OLEAUT32 functions by ordinal only. Every call, `kuna functions` entry and `kuna xrefs` target
+> OLEAUT32 functions by ordinal only. Every call, `unlace functions` entry and `unlace xrefs` target
 > reads `OLEAUT32_Ordinal_2`, `OLEAUT32_Ordinal_6`, `OLEAUT32_Ordinal_150`, ... and none of them
 > gets a Win32 prototype, because the signature tables are keyed by name.
 
@@ -54,11 +54,11 @@ Read a PE that imports the BSTR/VARIANT API or WinSock by ordinal and see API na
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_ordinal_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_ordinal_i386.exe",
     "binary_sha256": "467116a4503a003f6e11bc7b5abd0bf14c5a43103a767e379c1e82d55509aff2",
     "binary_size": 4608,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_ordinal_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_ordinal_i386.exe",
     "selector": "0x401200",
     "selector_kind": "addr"
   },
@@ -97,11 +97,11 @@ Read a PE that imports the BSTR/VARIANT API or WinSock by ordinal and see API na
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_ordinal_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_ordinal_i386.exe",
     "binary_sha256": "467116a4503a003f6e11bc7b5abd0bf14c5a43103a767e379c1e82d55509aff2",
     "binary_size": 4608,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_ordinal_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_ordinal_i386.exe",
     "selector": "0x401200",
     "selector_kind": "addr"
   },
@@ -152,5 +152,5 @@ _not yet refuted_
 - closed: acceptance `a-f99c3e5c2e57` passes with option `peordinal` (default on); the reproduction
   still passes on the unpatched tree and under `--option peordinal off`. Manually validated on
   `UnholyDragon-150.exe`: all 45 OLEAUT32 ordinal imports resolve (`SysAllocStringByteLen`,
-  `SysFreeString`, `VariantClear`, `SafeArrayAccessData`, ...), `kuna xrefs --to SysFreeString`
+  `SysFreeString`, `VariantClear`, `SafeArrayAccessData`, ...), `unlace xrefs --to SysFreeString`
   lists 602 references.

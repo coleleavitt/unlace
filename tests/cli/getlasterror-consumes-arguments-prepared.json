@@ -24,11 +24,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
     "binary_sha256": "a1734e48030ee5035a5f6d57cf044e8e894422bec392246d865c72ea60889d2e",
     "binary_size": 8704,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
     "selector": "0x401000",
     "selector_kind": "addr"
   }

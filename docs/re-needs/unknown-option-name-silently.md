@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli/src/decompile.rs, decompiler/crates/kuna-cli/src/decompile_all.rs, decompiler/crates/kuna-console/src/ifacedecomp.rs]
+touches: [decompiler/crates/unlace-cli/src/decompile.rs, decompiler/crates/unlace-cli/src/decompile_all.rs, decompiler/crates/unlace-console/src/ifacedecomp.rs]
 scope: small
 regression_of: null
 pr: null
@@ -28,7 +28,7 @@ reject_reason: null
 Turn a decision off for one run and see whether it was the cause.
 
 > **A misspelled option name is accepted with no diagnostic** (major, `605443e333c5d42c3d016f59`)
-> kuna decompile KataVM_L1 0x12d0 --addr --option zzzznotanoption off exits 0, writes nothing
+> unlace decompile KataVM_L1 0x12d0 --addr --option zzzznotanoption off exits 0, writes nothing
 > to stderr, and prints output byte-identical to the run with no --option at all. The same is
 > true of LOWEREDSWITCH, lowered_switch and loweredswitc. Only the exactly spelled
 > loweredswitch does anything, and nothing distinguishes the two cases from outside.
@@ -102,11 +102,11 @@ Measured matrix at `68d27c99`, same binary and address, sha256 of stdout:
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "main",
     "selector_kind": "name"
   },
@@ -170,7 +170,7 @@ _not yet refuted_
   confirmed by a `decomp_dbg` script showing `Execution error:` on stdout with rc=0.
 - Why it matters to this loop and not only to users: every tester sentence of the form
   "option X did not remove the defect" is worthless unless X is spelled exactly as
-  `kuna catalog` spells it, and one such sentence is already in the round-4 record
+  `unlace catalog` spells it, and one such sentence is already in the round-4 record
   (`unsigned-byte-vm-selector`). This makes every future ablation honest.
 - The CLI-tier change recipe applies: no new option, no stage XML, no catalog counts.
 - round 4 REFUTER: hypothesis **inconclusive**. Captain-run, not a spawned refuter. SYMPTOM PROVEN, exactly: at 68d27c99 on KataVM_L1 0x12d0 --addr, the four spellings loweredswitch / LOWEREDSWITCH / lowered_switch / zzzznotanoption all exit 0 with EMPTY stderr, and only the exact spelling changes stdout (sha c4a4013bf5b4 vs af7dfc7999d9 for the other three AND for the no-option default). MECHANISM HALF-PROVEN. Verified by reading: kuna lowers each --option into an 'option NAME VALUE' script line for decomp_dbg (decompile.rs:161), and the console handler raises IfaceError::execution Unknown option when the name is in neither KUNA_OPTION_NAMES nor the ElementId registry (ifacedecomp.rs:869-874). Verified by running: decomp_dbg fed 'restore-file <path>' + 'option zzzznotanoption off' printed ERROR: Invalid command and Execution error: No load image present on STDOUT and exited 0. NOT verified: that the Unknown-option error specifically behaves the same once an image IS loaded, because the no-load-image error preempted it in that script. So the causal chain is one observation short, and a builder should confirm it before choosing between the two candidate fixes. Either fix closes the acceptance regardless -- validating the name against the catalog kuna already ships does not depend on the swallow being the cause.

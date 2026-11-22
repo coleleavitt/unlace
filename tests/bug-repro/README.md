@@ -34,7 +34,7 @@ of the fixture's file size; stripped ARM firmware needs that tier to find the
 function at all.
 
 ```bash
-K=decompiler/target/release/kuna
+K=decompiler/target/release/unlace
 
 # #180 — overflow guard rendered against the post-add value
 $K decompile-all tests/bug-repro/grep --mode reliable --addr 0x7c90                        # grep nlscan

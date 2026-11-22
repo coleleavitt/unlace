@@ -4,7 +4,7 @@
     RE-friction round 9, need `hint-printing-call-loses` (challenge
     5e51836e33c5d4439bb2dc24, ELF x86-64 `cr4ckm3_0x`): the function at 0x400f30
     decodes a 23-byte string with an unrolled XOR loop and hands the buffer to
-    its hint printer, and `kuna decompile` renders that call with no arguments,
+    its hint printer, and `unlace decompile` renders that call with no arguments,
 
         sub_417f80();                         0x401007
 

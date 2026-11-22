@@ -1,0 +1,91 @@
+//! S2 -- Flow & op-graph recovery: lift, CFG, jump tables, p-code injection.
+//!
+//! Stage-aligned module group; declared flatly at the crate root via re-export in
+//! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
+
+pub mod flow;
+pub mod funcdata_resolveflow;
+pub mod inject_sleigh;
+pub mod jumptable;
+pub mod kuna_arithhelpers; // (kuna) 32-bit runtime arithmetic helpers (__udivdi3, __aeabi_uldivmod, _alldiv) as C operators
+pub mod kuna_armflowcontext;
+pub mod kuna_brktrap; // (kuna) an AArch64 brk compiler trap ends the flow instead of returning through SoftwareBreakpoint
+pub mod kuna_callpopret; // (kuna) flow a call through a callee that pops the return address and rets to the grandparent
+pub mod kuna_calltrampoline; // (kuna) flow a call through a callee that discards the pushed return address
+pub mod kuna_cleanupcode; // (kuna) oxidizer CleanupCodeRemover: delete rust drop/dealloc call sites
+pub mod kuna_constselectjump; // (kuna) recover a BRANCHIND whose destination is selected between constants
+pub mod kuna_cortexmpriv; // (kuna) fold the Cortex-M isCurrentModePrivileged() guard around MRS/MSR
+pub mod kuna_decodehalt; // (kuna) a halt planted where the decode failed says so instead of printing as an ordinary return
+pub mod kuna_emulatefunction;
+pub mod kuna_entryretdispatch; // (kuna) recover an entry-point push/push/ret dispatch chain as calls
+pub mod kuna_fastfailnoreturn; // (kuna) a Windows `int 0x29` (__fastfail) ends the flow instead of unbalancing the stack
+pub mod kuna_fpuemu; // (kuna) decode the 8087 emulator's INT 34h-3Dh as the x87 instructions they stand for
+pub mod kuna_funcboundflow; // (kuna) bound fall-through at a known function entry (no cross-function merge)
+pub mod kuna_gomorestack; // (kuna) fold the Go stack-growth entry guard (docs/multilang.md W2)
+pub mod kuna_gottailcall; // (kuna) a one-destination computed jump to a function is a tail call when the call loses nothing
+pub mod kuna_gowritebarrier; // (kuna) fold the Go GC write-barrier diamond (docs/multilang.md W2)
+pub mod kuna_int3pad; // (kuna) name the int3 pad control ran into instead of printing it as a call through swi()
+pub mod kuna_itaniumeh; // (kuna `itaniumeh`) exceptional edges from each covered call to its Itanium landing pad
+pub mod kuna_javatry; // (kuna `javatry`) exception edges and try dispatches from a DEX method's try items
+pub mod kuna_jumpassist; // (kuna) the JumpAssisted model: switches computed by a <jumpassist> user-op
+pub mod kuna_jumptablefault;
+pub mod kuna_kernelbug; // (kuna) a Linux kernel __bug_table trap prints as BUG() or __WARN(file,line)
+pub mod kuna_lanefuse; // (kuna `lanefuse`) re-fuse per-lane vector p-code into one intrinsic op
+pub mod kuna_linuxsyscall; // (kuna) name the 32-bit Linux int 0x80 sites instead of calling through swi()
+pub mod kuna_loweredswitch;
+pub mod kuna_loweredswitchexact; // (kuna) keep a re-rolled lowered switch only when it is its compare tree
+pub mod kuna_loweredswitchheads; // (kuna) try a lowered-switch cascade behind every head on its variable
+pub mod kuna_loweredswitchlabels;
+pub mod kuna_loweredswitchvalue; // (kuna) prove a re-rolled lowered switch reads the value its cascade compared
+pub mod kuna_mappedflowboundary;
+pub mod kuna_memtag; // (kuna) lift the AArch64 memory-tagging instructions with their tag effect
+pub mod kuna_mipsunaligned; // (kuna) lift a MIPS lwl/lwr-style unaligned pair as one whole access
+pub mod kuna_msvcftol; // (kuna) MSVC __ftol family call-fixup: recover the x87 (ST0) argument
+pub mod kuna_msvcimportcall; // (kuna `msvcsig`) a call through an import slot with a locked MSVC prototype is direct from the flow on
+pub mod kuna_msvcstrappend; // (kuna) collapse an inlined MSVC std::string push_back/append diamond into one call
+pub mod kuna_noreturn_externmatch; // (kuna) angr incorrect-duplication-chcon: name-matched extern no-return
+pub mod kuna_noreturnextern; // (kuna) angr tail-tail-bytes-ret-dup: undefined-extern name-based no-return
+pub mod kuna_objcarc; // (kuna) hide Objective-C ARC bookkeeping calls through call-fixups
+pub mod kuna_outlinedinline; // (kuna) inline clang's OUTLINED_FUNCTION_<n> fragments into their callers
+pub mod kuna_overlapbranch; // (kuna) a conditional branch target inside its own fall-through instruction (anti-disassembly overlap)
+pub mod kuna_ppc32piccalls;
+pub mod kuna_ptrauthtrap; // (kuna) drop the arm64e pointer-auth failure checks
+pub mod kuna_pushimmediateret; // (kuna) recover a one-store push-immediate/ret tail transfer as a branch
+pub mod kuna_retpolinethunk; // (kuna) a retpoline thunk recognized by its body is `call *%reg`
+pub mod kuna_sparcstructret;
+pub mod kuna_stackprobeloop;
+pub mod kuna_switchextent; // (kuna) an unguarded jump table ends at the function's next table
+pub mod kuna_switchguardbound;
+pub mod kuna_switchguardmerge; // (kuna) merge an equality guard into its switch
+pub mod kuna_switchguardrange;
+pub mod kuna_switchmodbound;
+pub mod kuna_switchrunon; // (kuna) an unguarded jump table stops where its rows leave the function
+pub mod kuna_switchsharedcase;
+pub mod kuna_switchtrim; // (kuna) recover an unguarded jump table and end it where its layout ends
+pub mod kuna_syscallregs; // (kuna) give the ARM/AArch64/RISC-V/MIPS/PowerPC system-call user-op its register effects
+pub mod kuna_tailcallframe; // (kuna) recover a frame-teardown tail jump whose callee was never discovered
+pub mod kuna_tailcalljump;
+pub mod kuna_tailcallsaved; // (kuna) a teardown that restores nothing the entry block saved is argument cleanup
+pub mod kuna_v850indbranch;
+pub mod kuna_vexzeroupper; // (kuna `vexzeroupper`) split the VEX zero-upper ZMM write at the result width
+pub mod kuna_x64syscall; // (kuna) give the x86-64 SYSCALL user-op the Linux ABI register effects
+pub mod pcodeinject;
+pub mod userop; // (kuna) test-only: panic one function's jump-table recovery
+
+pub mod kuna_gojumpchain;
+pub mod kuna_returnbranch;
+
+pub mod kuna_chkstkdarwin;
+pub mod kuna_rustprobestack; // (kuna) remove the Darwin AArch64 stack probe so the registers it preserves survive it
+
+pub mod kuna_calleeoverride; // (kuna) a caller-stated destination for an indirect call
+pub(crate) mod kuna_highslice_guard;
+pub mod kuna_stubtailcall; // (kuna) a loader-proven lazy-binding stub flows as a tail call
+
+pub mod kuna_ppcpcread;
+
+pub mod kuna_indirectreturn;
+
+pub mod kuna_nullable_reloc;
+
+pub(crate) mod kuna_atomicxadd;

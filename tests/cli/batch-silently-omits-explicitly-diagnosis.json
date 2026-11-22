@@ -16,11 +16,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_datasection_entry_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_datasection_entry_i386.exe",
     "binary_sha256": "1c7aeca2665b5b0645a4930dec027b464051dacf2bc158d966dc9f8871c0492f",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_datasection_entry_i386.exe"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_datasection_entry_i386.exe"
   },
   "expect": {
     "exit_code": {

@@ -6,7 +6,7 @@ privilege guard `ARMTHUMBinstructions.sinc` wraps around every VERSION_7M MRS/MS
 away. It ships default-OFF and ON in the `aggressive` preset.
 
 Every number here is from one kuna binary (`bb0b9c38`) invoked exactly as decbench's
-`kuna_raw` backend invokes it -- `kuna decompile-all <stripped> --json --max-fn-seconds 120`
+`kuna_raw` backend invokes it -- `unlace decompile-all <stripped> --json --max-fn-seconds 120`
 with no `--mode`, so `auto` resolves to `aggressive` under 500 KiB.
 
 **Arm naming.** `optsweep`'s *baseline* arm is the shipped defaults, which on this branch

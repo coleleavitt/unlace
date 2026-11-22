@@ -7,7 +7,7 @@ from scripts.check_layers import ALLOWLIST, SRC, check
 
 class CheckLayersTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-layers-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="layers-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.write("p9_emit/printc.rs", "pub fn emit() {}\n")

@@ -1,6 +1,6 @@
 // decompile-data.mjs — the Data tab's rows, from the source tree with no
 // build: integers, text, pointers, arrays and structs decoded by their
-// layouts from what the native kuna_wasm prints for globals.elf (as the
+// layouts from what the native unlace_wasm prints for globals.elf (as the
 // symbol table types it, retyped by `data` directives, and stripped, where
 // the decompiler's own declarations type it), bytes that start as zeros, the
 // unlabelled bytes between items, who uses an item, and that every engine

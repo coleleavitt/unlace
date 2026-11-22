@@ -1,0 +1,1295 @@
+//! Unit tests for the kuna phase registry (`kuna_phases.rs`).
+//!
+//! Parity targets (origin: `decompiler/cpp/kuna_stages.cc`, since grown):
+//! group/subphase/surface/settable counts pinned by the asserts below, plus the phase-code
+//! helpers, the lookup API, the typed `OptionValues` defaults, and the
+//! catalog emitter.
+
+use super::*;
+
+#[test]
+fn catalog_matches_implemented_options() {
+    use crate::options::KUNA_OPTION_NAMES;
+    use std::collections::BTreeSet;
+
+    let registered: BTreeSet<_> = KUNA_OPTION_NAMES.iter().copied().collect();
+    let documented: BTreeSet<_> = SETTABLE_TABLE.iter().map(|row| row.option).collect();
+    assert_eq!(
+        registered.len(),
+        KUNA_OPTION_NAMES.len(),
+        "duplicate option handler"
+    );
+    assert_eq!(
+        documented.len(),
+        SETTABLE_TABLE.len(),
+        "duplicate catalog option"
+    );
+    assert_eq!(registered, documented);
+}
+
+#[test]
+fn github_anchor_matches_rendered_heading_text() {
+    let cases = [
+        (
+            "`objc` -- on | off, default `off`",
+            "objc----on--off-default-off",
+        ),
+        (
+            "`returnpair` -- pair | single, default `pair` (destructive opt-in)",
+            "returnpair----pair--single-default-pair-destructive-opt-in",
+        ),
+        (
+            "`fooopt` -- off | 0 | 1 | <n>, default `2`",
+            "fooopt----off--0--1---default-2",
+        ),
+    ];
+    for (heading, anchor) in cases {
+        assert_eq!(github_anchor(heading), anchor, "{heading}");
+    }
+}
+
+#[test]
+fn group_count_is_39() {
+    assert_eq!(kuna_num_groups(), 39);
+    assert_eq!(GROUP_TABLE.len(), 39);
+}
+
+#[test]
+fn subphase_count_is_49() {
+    assert_eq!(kuna_num_subphases(), 49);
+    assert_eq!(SUBPHASE_TABLE.len(), 49);
+}
+
+#[test]
+fn surface_count_is_101() {
+    assert_eq!(kuna_num_surfaces(), 101);
+    assert_eq!(SURFACE_TABLE.len(), 101);
+}
+
+#[test]
+fn settable_count_is_308() {
+    assert_eq!(kuna_num_settables(), 308);
+    assert_eq!(SETTABLE_TABLE.len(), 308);
+}
+
+#[test]
+fn tier_counts_are_63_core_153_transform_92_analysis() {
+    let mut core = 0;
+    let mut transform = 0;
+    let mut analysis = 0;
+    for s in SETTABLE_TABLE.iter() {
+        match s.tier {
+            "core" => core += 1,
+            "transform" => transform += 1,
+            "analysis" => analysis += 1,
+            other => panic!("invalid tier {other:?} on {}", s.option),
+        }
+    }
+    assert_eq!((core, transform, analysis), (63, 153, 92));
+}
+
+#[test]
+fn noreturn_family_is_all_transform_tier() {
+    // The whole family can remove code at call sites, so it sits in the
+    // control-surface tier regardless of which tier mechanically hosts it.
+    for s in SETTABLE_TABLE
+        .iter()
+        .filter(|s| s.option.starts_with("noreturn_"))
+    {
+        assert_eq!(
+            s.tier, "transform",
+            "{} must sit in the transform tier",
+            s.option
+        );
+    }
+}
+
+// --- Stage helpers (kunaStageCode/Name/Artifact/InBandB/FromCode) ------------
+
+#[test]
+fn stage_codes() {
+    assert_eq!(KunaPhase::P0.code(), "P0");
+    assert_eq!(KunaPhase::P1.code(), "P1");
+    assert_eq!(KunaPhase::P9.code(), "P9");
+    // C++ STAGE_CODES[10] for infra.
+    assert_eq!(KunaPhase::Infra.code(), "--");
+}
+
+#[test]
+fn stage_names_and_artifacts() {
+    assert_eq!(KunaPhase::P0.name(), "Knowledge & Configuration Plane");
+    assert_eq!(KunaPhase::P9.name(), "Surface Rendering & Refinement");
+    assert_eq!(KunaPhase::Infra.name(), "Infrastructure / orchestration");
+    assert_eq!(
+        KunaPhase::P7.artifact(),
+        "region tree (sblocks - physically distinct from the CFG)"
+    );
+    assert_eq!(
+        KunaPhase::Infra.artifact(),
+        "(none - schedule/termination policy only)"
+    );
+}
+
+#[test]
+fn band_b_membership() {
+    // C++ kunaStageInBandB: S3..S6 only.
+    assert!(!KunaPhase::P0.in_band_b());
+    assert!(!KunaPhase::P1.in_band_b());
+    assert!(!KunaPhase::P2.in_band_b());
+    assert!(KunaPhase::P3.in_band_b());
+    assert!(KunaPhase::P4.in_band_b());
+    assert!(KunaPhase::P5.in_band_b());
+    assert!(KunaPhase::P6.in_band_b());
+    assert!(!KunaPhase::P7.in_band_b());
+    assert!(!KunaPhase::P8.in_band_b());
+    assert!(!KunaPhase::P9.in_band_b());
+    assert!(!KunaPhase::Infra.in_band_b());
+}
+
+#[test]
+fn stage_from_code() {
+    // C++ kunaStageFromCode: P0/p0, S1..S9/s1..s9; everything else fails.
+    assert_eq!(KunaPhase::from_code("P0"), Some(KunaPhase::P0));
+    assert_eq!(KunaPhase::from_code("p0"), Some(KunaPhase::P0));
+    assert_eq!(KunaPhase::from_code("S3"), Some(KunaPhase::P3));
+    assert_eq!(KunaPhase::from_code("s3"), Some(KunaPhase::P3));
+    assert_eq!(KunaPhase::from_code("S9"), Some(KunaPhase::P9));
+    // Failures.
+    assert_eq!(KunaPhase::from_code("P3"), Some(KunaPhase::P3));
+    assert_eq!(KunaPhase::from_code("p9"), Some(KunaPhase::P9));
+    assert_eq!(KunaPhase::from_code("S0"), None);
+    assert_eq!(KunaPhase::from_code("P0"), Some(KunaPhase::P0));
+    assert_eq!(KunaPhase::from_code("X3"), None);
+    assert_eq!(KunaPhase::from_code("S"), None);
+    assert_eq!(KunaPhase::from_code("S33"), None);
+    assert_eq!(KunaPhase::from_code(""), None);
+    assert_eq!(KunaPhase::from_code("--"), None);
+}
+
+#[test]
+fn stage_index_matches_cpp_enum() {
+    // C++ enum: kstage_infra=-1, kstage_p0=0, kstage_s1=1 .. kstage_s9=9.
+    assert_eq!(KunaPhase::Infra.index(), -1);
+    assert_eq!(KunaPhase::P0.index(), 0);
+    assert_eq!(KunaPhase::P1.index(), 1);
+    assert_eq!(KunaPhase::P9.index(), 9);
+}
+
+// --- Lookup API (kunaLookup*) ------------------------------------------------
+
+#[test]
+fn lookup_group_parity() {
+    // Every group in the table is findable by name and round-trips by index.
+    for i in 0..kuna_num_groups() {
+        let e = kuna_group_by_index(i);
+        let found = lookup_group(e.group).expect("group findable by name");
+        assert_eq!(found.group, e.group);
+        assert_eq!(found.phase, e.phase);
+    }
+    // A couple of known entries (transcribed from groupTable).
+    assert_eq!(lookup_group("base").unwrap().phase, KunaPhase::Infra);
+    assert_eq!(lookup_group("analysis").unwrap().phase, KunaPhase::P3);
+    assert_eq!(lookup_group("casts").unwrap().phase, KunaPhase::P9);
+    assert!(lookup_group("nonexistent").is_none());
+}
+
+#[test]
+fn lookup_subphase_parity() {
+    for i in 0..kuna_num_subphases() {
+        let e = kuna_subphase_by_index(i);
+        let found = lookup_subphase(e.name).expect("subphase findable");
+        assert_eq!(found.name, e.name);
+        assert_eq!(found.phase, e.phase);
+        assert_eq!(found.rewind, e.rewind);
+    }
+    // Known rewind targets (stage-model.md section 12).
+    let typ = lookup_subphase("type-propagation").unwrap();
+    assert_eq!(typ.phase, KunaPhase::P5);
+    assert_eq!(typ.rewind, KunaPhase::P5);
+    let force = lookup_subphase("edge-virtualization").unwrap();
+    assert_eq!(force.phase, KunaPhase::P7);
+    assert_eq!(force.rewind, KunaPhase::P7);
+    // explicit-implied: rewinds to S9 (the only cross-stage rewind in the table).
+    let ei = lookup_subphase("explicit-implied").unwrap();
+    assert_eq!(ei.phase, KunaPhase::P6);
+    assert_eq!(ei.rewind, KunaPhase::P9);
+    assert!(lookup_subphase("not-a-subphase").is_none());
+}
+
+#[test]
+fn lookup_surface_parity() {
+    for i in 0..kuna_num_surfaces() {
+        let e = kuna_surface_by_index(i);
+        let found = lookup_surface(e.surface).expect("surface findable by exact string");
+        assert_eq!(found.surface, e.surface);
+        assert_eq!(found.phase, e.phase);
+    }
+    assert_eq!(lookup_surface("force goto").unwrap().phase, KunaPhase::P7);
+    assert_eq!(
+        lookup_surface("option compareform").unwrap().subphase,
+        "comparison-canonicalization"
+    );
+    assert!(lookup_surface("nope").is_none());
+}
+
+#[test]
+fn lookup_settable_parity() {
+    for i in 0..kuna_num_settables() {
+        let e = kuna_settable_by_index(i);
+        let found = lookup_settable(e.option).expect("settable findable by option");
+        assert_eq!(found.option, e.option);
+        assert_eq!(found.shipped, e.shipped);
+    }
+    assert!(lookup_settable("compareform").is_some());
+    assert!(lookup_settable("namestyle").is_some());
+    assert!(lookup_settable("not-an-option").is_none());
+}
+
+// --- Typed OptionValues defaults == settableTable shipped values -------------
+
+#[test]
+fn option_values_defaults_match_shipped() {
+    let ov = OptionValues::default();
+    for i in 0..kuna_num_settables() {
+        let st = kuna_settable_by_index(i);
+        let live = ov
+            .get(st.option)
+            .unwrap_or_else(|| panic!("OptionValues field missing for {}", st.option));
+        assert_eq!(
+            live, st.shipped,
+            "default for {} must equal shipped value",
+            st.option
+        );
+    }
+}
+
+#[test]
+fn option_values_set_validates_against_values() {
+    let mut ov = OptionValues::default();
+    // compareform default is "original"; "canonical" is allowed.
+    assert_eq!(ov.get("compareform"), Some("original"));
+    assert!(ov.set("compareform", "canonical"));
+    assert_eq!(ov.get("compareform"), Some("canonical"));
+    // An out-of-vocabulary value is rejected and leaves the field unchanged.
+    assert!(!ov.set("compareform", "bogus"));
+    assert_eq!(ov.get("compareform"), Some("canonical"));
+    // Unknown option.
+    assert!(!ov.set("not-an-option", "on"));
+    assert_eq!(ov.get("not-an-option"), None);
+}
+
+#[test]
+fn option_values_live_value_present_for_129() {
+    let ov = OptionValues::default();
+    // 28 options have a codegen live reader (realtypes + dedupvardecls join the
+    // field-backed group; switchguardbound is field-backed via switch_guard_bound;
+    // switchsharedcase is field-backed via switch_shared_case;
+    // switchmultipred is field-backed via switch_multi_pred;
+    // unrolledguard is field-backed via unrolled_guard;
+    // +1 for `tailcalljump`, whose `live_field` is `tail_call_jumps`; +1 for
+    // `noreturn_extern`, whose `live_field` is `noreturn_extern_calls`, opt-in;
+    // +1 for `noreturn_externmatch`, field-backed via `noreturn_extern_match`, DIV-13); the
+    // live_value returns the current value for them and None for
+    // loweredswitch/stackguard/namestyle/foldcallret PLUS the
+    // analysis/loader-tier gates (which have no `live_field` — their live state
+    // is read console-side via the hand-written `kuna_live_value` / an env gate,
+    // not the codegen `live_value`; +1 for `funcstart_patterns`, the full
+    // byte-pattern function-start pass).
+    const PASS_GATES: &[&str] = &[
+        // (kuna) Separate debug files: a load-time env gate like `dynrelocs`.
+        "debuglink",
+        "noreturn_known",
+        // (kuna) The source-language override — a loadtime env bridge
+        // (`KUNA_SOURCELANG`) whose live
+        // state is read console-side via `kuna_live_value` (it reports the
+        // option, `auto` by default, not the detected fact), so it has no
+        // codegen live reader.
+        "sourcelang",
+        // (kuna) dyld shared cache image selection and cross-image naming -
+        // loadtime env bridges (`KUNA_DYLD_IMAGE`, `KUNA_DYLDCROSSREFS`).
+        "dyldimage",
+        "dyldcrossrefs",
+        // (kuna) golang cspec selection - a loadtime env bridge (`KUNA_GOABI`)
+        // whose live state is read
+        // console-side via `kuna_live_value` (auto|off token), so it has no
+        // codegen live reader.
+        "goabi",
+        // (kuna) The length-carried literal rule — three-valued, read
+        // console-side via `kuna_live_value` (its token), no codegen live
+        // reader.
+        "fatstr",
+        // (kuna) The Swift string-literal rule, the same three-valued shape.
+        "swiftstr",
+        // (kuna) The named libc/POSIX aggregate types — a load-time analysis gate
+        // read through the `KUNA_LIBCTYPES` env bridge (the named shells are
+        // interned while the prototype pass builds its signatures, upstream of
+        // every `option` command), so no codegen live reader. Default-ON
+        // (`opaque`).
+        "libctypes",
+        // (kuna) Static TLS naming -- an analysis-pass gate read console-side. Default-ON.
+        "tlsnames",
+        // (kuna) DWARF lexical-block and location-list locals -- a load-time env bridge.
+        "dwarfscopes",
+        // (kuna) DWARF global types -- a commit-time gate read console-side.
+        "dwarfglobaltypes",
+        // (kuna) Global typing from stored values -- a batch ledger read in project.rs.
+        "storetype",
+        // (kuna) The UEFI module pass -- an analysis-pass gate read console-side. Default-ON.
+        "uefi",
+        // (kuna) The libgcc `__divdi3` contract -- an analysis-pass gate read
+        // console-side via kuna_live_value, like `libcsigs`. Default-off.
+        "libgccsigs",
+        // (kuna) The Go `_type` descriptor globals -- an analysis-pass commit
+        // gate (`analysis_go_type_globals`) read console-side via
+        // kuna_live_value, like `libgccsigs`. Default-on.
+        "gotypeglobals",
+        // (kuna) The Go newobject result typing (the sitetypelock client) --
+        // an on/off engine gate read console-side via kuna_live_value, like
+        // `gotypeglobals`. Default-on.
+        "gonewtype",
+        // (kuna) The MS-DOS data segment in DS -- an on/off engine gate
+        // (`Architecture::mz_dgroup_on`) read console-side via kuna_live_value,
+        // like `gonewtype`. Default-on, MZ loads only.
+        "mzdgroup",
+        "strings",
+        // (kuna) The 2-byte (UTF-16LE) width of the string-literal pass — an
+        // analysis-pass gate read at the commit boundary (console-side via
+        // kuna_live_value), same as `strings` above. Default-ON (DIV-110).
+        "widestrings",
+        // (kuna) The 4-byte width of the string-literal markup -- read at the
+        // commit boundary like `widestrings`. Default-off (aggressive on).
+        "widestrings32",
+        "entry_disc",
+        // (kuna) `.eh_frame` LSDA landing-pad discovery sub-feature of entry_disc
+        // (GccExceptionAnalyzer), default-off; analysis-tier, no codegen live reader.
+        "eh_frame_full",
+        // (kuna) Mach-O `__unwind_info` function-start discovery — an analysis-pass
+        // gate with no codegen live reader (read console-side via kuna_live_value),
+        // same as `eh_frame_full` above. Default-off.
+        "unwindstarts",
+        "exporttrie",
+        "machobinds",
+        "machoehframe",
+        "ehcold",
+        "importvote",
+        "ehnote",
+        // (kuna) The full byte-pattern function-start pass — an analysis-pass gate
+        // with no codegen live reader (read console-side via kuna_live_value), same
+        // as the gates around it. Default-off.
+        "funcstart_patterns",
+        "armframes",
+        // (kuna) The widened ARM Cortex-M vector-table signature — an analysis-pass
+        // gate with no codegen live reader (read console-side via kuna_live_value),
+        // same as the gates around it. Default-off.
+        "cortexmvectors",
+        // (kuna) Pointer-referenced ARM function entries — an analysis-pass gate
+        // with no codegen live reader (read console-side via kuna_live_value),
+        // same as the gates around it. Default-off.
+        "ptrentry",
+        "dwarf",
+        "dwarf_lines",
+        "cvftrace",
+        "addrtable",
+        "operand_refs",
+        "formatstring",
+        "listing",
+        "fast_funcdisc",
+        // (kuna) The TE / raw-image object view -- an analysis-tier gate read at
+        // the commit, console-side via kuna_live_value, like `rawdiscover`.
+        "objectview",
+        "noreturn_disc",
+        "noreturn_propagate",
+        // (kuna, decbench F2) The error(nonzero,…)-conditional recognizer — a
+        // sub-rule gate of noreturn_propagate with no codegen live reader (read
+        // console-side via kuna_live_value), like the analysis gates around it.
+        // Default-on (DIV-16).
+        "noreturn_error",
+        // (kuna) CFG-reachability no-return rule (Ghidra targetOnlyCallsNoReturn), a
+        // sub-rule gate of noreturn_propagate with no codegen live reader. Default-on (DIV-19).
+        "noreturn_reach",
+        // (kuna) FID fingerprint-matcher Listing consumer — an analysis-pass gate
+        // whose DB source is a load-time env var (`kuna_fid_db`); no codegen
+        // live_value reader (read console-side via kuna_live_value), like the gates
+        // around it. Default-off.
+        "fid",
+        // (kuna) FLIRT signature matcher, the same Listing-consumer gate as `fid`;
+        // its signatures come from `KUNA_FLIRT_SIGS`. Default-off.
+        "flirt",
+        // (kuna) MSVC RTTI / vftable class-name recovery — a PE-only analysis-pass
+        // gate (no `live_field`); its live state is read console-side via
+        // kuna_live_value, like the analysis-pass gates around it. Default-off.
+        "rtti",
+        // (kuna) ELF libc-start `main` naming + prototype -- the ELF counterpart of
+        // `machomain` above and the same seam: an analysis-tier gate with no
+        // codegen live reader, read console-side via kuna_live_value. Default-ON.
+        "elfmain",
+        "x86listingswitch",
+        // (kuna) Address-taken code function entries -- an analysis-tier gate with
+        // no codegen live reader (read console-side via kuna_live_value), like
+        // `thunkentry` above. Default-ON.
+        "addrtakenentry",
+        // (kuna, GH-780) ARM flow-proven decode-mode paints -- an analysis-tier
+        // gate read console-side via kuna_live_value, like `ppclocalentry` above.
+        // Default-ON.
+        "flowmode",
+        "aif",
+        // (kuna, GH-299) The AIF literal-pool slide, read console-side like `aif`.
+        "aifpoolslide",
+        // (kuna) Tail-call function-entry recovery — an analysis-pass gate with no
+        // codegen live reader (read console-side via kuna_live_value), same as the
+        // gates around it. Default-off, ARM-only.
+        "tailcallentry",
+        "calltable",
+        "stubbinds",
+        "incrementalwalk",
+        "aifdataveto",
+        "globalwidth",
+        "funcchunks",
+        "tailcallentryall",
+        "nameladder",
+        "flirt",
+        "fidproto",
+        "codestrings",
+        "protomerge",
+        "canaryglobal",
+        // (kuna) ARM literal-pool inference — an analysis-pass gate with no codegen
+        // live reader (read console-side via kuna_live_value), same as
+        // `tailcallentry` above. Default-off, ARM-only.
+        "poolentry",
+        // (kuna) Mach-O Objective-C metadata recovery — an analysis-pass gate with
+        // no codegen live reader (read console-side via kuna_live_value), like the
+        // gates around it. Default-off, Mach-O-only.
+        "objc",
+        // (kuna) Objective-C instance layouts — same commit-side gate as `objcrefconst`.
+        "objcivars",
+        // (kuna) The Objective-C SDK header directory — a load-time env bridge
+        // (`KUNA_OBJCSDK`, the sourcelang pattern); no codegen live reader.
+        "objcsdk",
+        // (kuna) The Swift runtime-metadata pass gate, the objc precedent.
+        "swiftmetadata",
+        // (kuna) The Swift type-layout arm's gate, read inside that pass.
+        "swifttypes",
+        // (kuna) Mach-O __cfstring constant-string recovery — an analysis-pass gate
+        // with no codegen live reader (read console-side via kuna_live_value), like
+        // the gates around it. Default-on, Mach-O-only.
+        "cfstrings",
+        // (kuna) Embedded image and archive data symbols: a commit-side gate.
+        "blobs",
+        // (kuna) The Swift type-layout arm's gate, read inside that pass.
+        "swifttypes",
+        // (kuna) Objective-C instance layouts — same commit-side gate as `objc`.
+        "objcivars",
+        // (kuna) IOKit class and vtable recovery -- an analysis-pass gate on XNU
+        // images, read console-side. Default-on.
+        "iokitclasses",
+        // (kuna) XNU data tables -- the same kind of gate. Default-on.
+        "xnutables",
+        // (kuna) DriverKit __osclassinfo records -- the same kind of gate. Default-on.
+        "osclassinfo",
+        // (kuna) The Swift calling-convention arm's gate, read inside that pass.
+        "swiftcall",
+        // (kuna) The Swift runtime prototype pass gate.
+        "swiftruntime",
+        // (kuna) PE PDB metadata recovery — an analysis-pass gate with no codegen
+        // live reader (read console-side via kuna_live_value), like the gates around
+        // it. Default-on (DIV-129), PE-only, `.pdb`-sidecar-gated.
+        "pdb",
+        "ppc32picimports",
+        // (kuna) x86-64 IFUNC PLT-stub naming: a load-time gate read via the
+        // `kuna_ifuncfpret` env var (no codegen live reader), like `i386_pie_plt`.
+        "ifuncfpret",
+        // (kuna) PowerPC APU-note language selection: a load-time gate read via
+        // the `kuna_ppcapu` env var, like `ifuncfpret`.
+        "ppcapu",
+        // (kuna, GH-340) Symbol-name character sanitizing: a load-time gate read
+        // via the `kuna_symbolnamechars` env var (names are minted inside `load
+        // file`), like `symbolnamerepair`. Three-valued, default `safe`.
+        "symbolnamechars",
+        // (PR-8) Mach-O arm64e spec selection: a load-time (pre-`option`) gate read
+        // from the `KUNA_MACHO_ARM64E` env var, so it too has no codegen live_value.
+        "macho-arm64e",
+        // (kuna) DWARF DW_CC_nocall parameter drop -- the same commit-boundary
+        // gate as `cppproto`, read console-side. Default-on.
+        "dwarfnocall",
+        "godwarfsig",
+        // (kuna) Demangled C++ signature application — an analysis-tier gate read
+        // at the analysis COMMIT boundary (console-side via kuna_live_value), like
+        // `cppproto` above. Three-valued, default `proven`.
+        "cppsig",
+        // (kuna) Itanium (GCC/Clang) RTTI + vtable recovery — an analysis-tier gate
+        // read at the analysis COMMIT boundary (console-side via kuna_live_value),
+        // like the analysis-pass gates above. Default-on, ELF-only.
+        "itaniumrtti",
+        // (kuna `lazyfuncs`) The deferred entry commit -- read console-side at
+        // `read symbols` (the commit either creates a Function per entry or parks
+        // the starts), so it has no codegen live reader. Default-off.
+        "lazyfuncs",
+        // (kuna) Apple kernelcache unwrapping + MH_FILESET entry choice -- a
+        // LOAD-time gate read from `KUNA_KERNELCACHE`. Default auto.
+        "kernelcache",
+        // (kuna) Where a kernel collection's linked collections are found -- a
+        // LOAD-time gate read from `KUNA_KERNELCACHE_BOOT`. Default auto.
+        "kernelcache-boot",
+    ];
+    let mut with_live = 0;
+    for i in 0..kuna_num_settables() {
+        let st = kuna_settable_by_index(i);
+        match ov.live_value(st.option) {
+            Some(v) => {
+                with_live += 1;
+                assert_eq!(v, st.shipped, "live default == shipped for {}", st.option);
+            }
+            None => {
+                assert!(
+                    matches!(
+                        st.option,
+                        "outline"
+                            | "implweight"
+                            | "outlang"
+                            | "loweredswitch"
+                            | "regionstructure"
+                            | "regionlooprefine"
+                            | "loopcontinue"
+                            | "regionedgeorder"
+                            // (kuna) `mapglobalsyms` is read by the decompile
+                            // driver after the function, console-side.
+                            | "mapglobalsyms"
+                            | "condfold"
+                            // (kuna) `condstmts` takes `off` or an INTEGER cap;
+                            // its live value is `Architecture::cond_stmts`.
+                            | "condstmts"
+                            | "stackguard"
+                            | "msvcstackguard"
+                            | "securitycheck"
+                            | "branchflip"
+                            | "namestyle"
+                            | "foldcallret"
+                            // (kuna) `foldcallretphi` extends `foldcallret`'s
+                            // decision and shares its seam, so it reports its
+                            // live state the same way its sibling does.
+                            // (kuna) `indirectonly` gates an engine-side
+                            // Varnode flag read by `HighVariable::has_name` and
+                            // `Merge::merge_test_adjacent`, not a printer flag;
+                            // like `foldcallret` above it declares no
+                            // `live_field`, so the catalog suppresses `current`.
+                            | "indirectonly"
+                            | "gotoreduce"
+                            | "ifelseflatten"
+                            | "crossjumprevert"
+                            | "dedupitetail"
+                            | "iteregion"
+                            | "iteexpr"
+                            | "iteboolean"
+                            | "returndup"
+                            | "rettriangle"
+                            | "earlyreturn"
+                            | "switchreturn"
+                            | "loopbreak_recovery"
+                            | "truthycond"
+                            | "braceelide"
+                            | "warnstyle"
+                            | "infloopstyle"
+                            | "int3pad"
+                            | "x64syscall"
+                            | "pebnames"
+                            // (kuna) `ptrfromuse` takes `off|byte|void`, which
+                            // the codegen live reader (a bool
+                            // `live_true`/`live_false` pair) cannot express --
+                            // the same reason `pebnames` is here. Its live value
+                            // is `Architecture::ptr_from_use`.
+                            | "ptrfromuse"
+                            // (kuna) `readonlycalls` takes `off|on|<n>`, a guard
+                            // count; its live value is `Architecture::readonly_calls`.
+                            | "readonlycalls"
+                            // (kuna) `persistcalls` takes `off|on|<n>`, a guard
+                            // count; its live value is `Architecture::persist_calls`.
+                            | "persistcalls"
+                            // (kuna) `deadcascade` takes `off|on|<n>`, a pass
+                            // count; its live value is `Architecture::dead_cascade`.
+                            | "deadcascade"
+                            // (kuna) `retsplitlimit` takes `off|<n>`, an op count;
+                            // its live value is `Architecture::ret_split_limit`.
+                            | "retsplitlimit"
+                            // (kuna) `narrowargs` takes `off|on|callers`; its
+                            // live value is the pair `Architecture::narrow_args`
+                            // and `Architecture::narrow_args_callers`.
+                            | "narrowargs"
+                            // (kuna) `structsynth` takes a MODE (`off|param|nest`),
+                            // for the same reason.  Its live value is
+                            // `Architecture::struct_synth`.
+                            | "structsynth"
+                            // (kuna) `structmerge` takes a MODE
+                            // (`off|siblings`) over an enum field, for the same
+                            // reason.  Its live value is
+                            // `Architecture::struct_merge`.
+                            | "structmerge"
+                            // (kuna) `structheadless` takes a MODE
+                            // (`off|closed`) over an enum field, for the same
+                            // reason.  Its live value is
+                            // `Architecture::struct_headless`.
+                            | "structheadless"
+                            // (kuna) `protoorder` takes a MODE
+                            // (`off|types|cycles|lock`) over an enum field, for the
+                            // same reason.  Its live value is
+                            // `Architecture::protoorder`.
+                            | "protoorder"
+                            // (kuna) `calleevote` takes a MODE
+                            // (`off|types|fields`) over an enum field, for the
+                            // same reason.  Its live value is
+                            // `Architecture::calleevote`.
+                            | "calleevote"
+                            // (kuna) `callbacktype` is an enum field the same
+                            // way; its live value is `Architecture::callbacktype`.
+                            | "callbacktype"
+                            // (kuna `calleereginputs`) three-valued
+                            // (`off|on|custom`), so its live value is read
+                            // console-side from its two engine flags, not a
+                            // single codegen `live_field`.
+                            | "calleereginputs"
+                            // (kuna `castwiden`) takes a MODE
+                            // (`off|on|literal`) over an enum field, for the
+                            // same reason.  Its live value is
+                            // `Architecture::cast_widen`.
+                            | "castwiden"
+                            // (kuna) `armconstshift` takes a MODE
+                            // (`off|on|all`) over an enum field, for the same
+                            // reason.  Its live value is
+                            // `Architecture::arm_constant_shift`.
+                            | "armconstshift"
+                            // (kuna) `constselectjump` takes a MODE
+                            // (`off|reentry|on`) over an enum field, for the
+                            // same reason.  Its live value is
+                            // `Architecture::const_select_jump`.
+                            | "constselectjump"
+                            // (kuna) `declorder` takes a MODE (`natural|name`)
+                            // over an enum field, for the same reason.  Its live
+                            // value is `Architecture::decl_order`.
+                            | "declorder"
+                            // (kuna) `narrowext` takes a MODE
+                            // (`off|abi|compiler`) over an enum field, for the
+                            // same reason.  Its live value is
+                            // `Architecture::narrow_ext`.
+                            | "narrowext"
+                            // (kuna) `syscallregs` takes a MODE
+                            // (`off|auto|on`) over an enum field, for the
+                            // same reason.  Its live value is
+                            // `Architecture::syscall_regs`.
+                            | "syscallregs"
+                            // (kuna) `linuxsyscall` takes the same MODE
+                            // (`off|auto|on`) over an enum field; its live
+                            // value is `Architecture::linux_syscall`.
+                            | "linuxsyscall"
+                            // (kuna) `callmechanisms` takes a MODE
+                            // (`off|auto|on`) over an enum field, for the
+                            // same reason.  Its live value is
+                            // `Architecture::call_mechanism_mode`.
+                            | "callmechanisms"
+                            // (kuna) `bejoin` takes a MODE (`off|evidence|on`)
+                            // over an enum field, for the same reason.  Its live
+                            // value is `Architecture::be_join`.
+                            | "bejoin"
+                            // (kuna) `bejoinpass` likewise (`off|whole|high`);
+                            // its live value is `Architecture::be_join_pass`.
+                            | "bejoinpass"
+                            // (kuna) `octeoneffects` likewise
+                            // (`off|atomic|ordered`); its live value is
+                            // `Architecture::octeon_effects`.
+                            | "octeoneffects"
+                            | "bytearrayc"
+                            // (kuna) `structdefs` is a PrintC option: its live
+                            // state is `PrintC::options.struct_defs`, which the
+                            // codegen live reader (an `Architecture` bool
+                            // member) cannot reach.
+                            | "structdefs"
+                            // (kuna) `globalref` is a PrintC option too:
+                            // `PrintC::options.global_ref`.
+                            | "globalref"
+                            | "mixedtailret"
+                            | "calloverlap"
+                            | "indexaliasguard"
+                            // (kuna) `arrayextent` takes a MODE
+                            // (`off|bound|on`) over an int field; its live
+                            // value is `Architecture::array_extent`.
+                            | "arrayextent"
+                            // (kuna) `arraysize` takes a MODE (`off|on|calls`)
+                            // over an int field; its live value is
+                            // `Architecture::array_size`.
+                            | "arraysize"
+                            | "spillargtrial"
+                            | "paramcopyhoist"
+                            | "guardarm"
+                            | "loopcondhoist"
+                            | "rustabi"
+                            // (kuna) `gomorestack` takes a MODE
+                            // (`off|auto|always`) over a u8 field, the
+                            // rustabi shape; its live value is
+                            // `Architecture::go_morestack`.
+                            | "gomorestack"
+                            | "rustprobestack"
+                            | "rustfmt"
+                            // (kuna) `gobool` takes the same MODE shape; its
+                            // live value is `Architecture::go_bool`.
+                            | "gobool"
+                            // (kuna) `fpuemu` takes the same MODE shape; its
+                            // live value is `Architecture::fpu_emu`.
+                            | "fpuemu"
+                            // (kuna) `gowritebarrier`: the same MODE shape;
+                            // its live value is `Architecture::go_write_barrier`.
+                            | "gowritebarrier"
+                            // (kuna) `impliedrefs`/`termdup` take an INTEGER
+                            // (`2|3|4|<n>`), which the codegen live reader (a
+                            // bool `live_true`/`live_false` pair) cannot
+                            // express -- the same reason `int3pad`, `warnstyle`
+                            // and `namestyle` are here. Their live values are
+                            // `Architecture::max_implied_ref` /
+                            // `max_term_duplication`.
+                            | "impliedrefs"
+                            | "termdup"
+                            // (kuna) `jumptablemax` takes an INTEGER; its
+                            // live value is `Architecture::max_jumptable_size`.
+                            | "jumptablemax"
+                            // (kuna) `signedness` takes FOUR values
+                            // (`upstream|auto|prefer-signed|prefer-unsigned`)
+                            // over an enum field, which the codegen live reader
+                            // (a bool `live_true`/`live_false` pair) cannot
+                            // express -- the same reason `namestyle`,
+                            // `warnstyle` and `int3pad` are here.  Its live
+                            // value is `Architecture::signedness`.
+                            | "signedness"
+                    ) || PASS_GATES.contains(&st.option),
+                    "unexpected option with no live reader: {}",
+                    st.option
+                );
+            }
+        }
+    }
+    // (kuna) `int3pad` joins the suppressed group (96 -> 97): it is a THREE-valued
+    // option (`off|warn|halt`) whose live field is an enum, which the codegen
+    // live reader (a bool `live_true`/`live_false` pair) cannot express -- the
+    // same reason `warnstyle` and `namestyle` are there.
+    // 28 -> 29: +1 for `peimportcall` (live_field = analysis_peimportcall);
+    // `itecondlist` declares no live_field, so it does not move this count.
+    // 29 -> 30: +1 for `funcboundflow` (live_field = funcbound_flow).
+    // 30 -> 31: +1 for `evalcurrentproto` (live_field = evalcurrentproto).
+    // 31 -> 32: +1 for `msvcftol` (live_field = msvc_ftol).
+    // 32 -> 33: +1 for `ctypes` (live_field = ctypes).
+    // 33 -> 34: +1 for `loadguardrange` (live_field = load_guard_range).
+    // 34 -> 35: +1 for `cleanupcode` (live_field = remove_cleanup_code).
+    // 35 -> 36: +1 for `retinputhalf` (live_field = ret_input_half).
+    // 36 -> 37: +1 for `framelayout` (live_field = framelayout, DIV-97).
+    // 38 -> 39: +1 for `cortexmpriv` (live_field = cortexmpriv, DIV-99).
+    // 39 -> 40: +1 for `linuxsyscall` (live_field = linux_syscall).
+    // 40 -> 41: +1 for `switchselector` (its own live_field).
+    // 41 -> 42: +1 for `tiedstorekeep` (live_field = tied_store_keep, DIV-105).
+    // 42 -> 43: +1 for `overlapbranch` (live_field = overlap_branch, DIV-106).
+    // 43 -> 44: +1 for `ptrdepthcap` (live_field = ptrdepthcap, DIV-108).
+    // 44 -> 45: +1 for `tailcallframe` (live_field = tail_call_frame, DIV-109).
+    // 45 -> 46: +1 for `jtsharepartial` (live_field = jumptable_share_partial).
+    // 46 -> 47: +1 for `rodatastring` (live_field = rodata_string, DIV-113).
+    // 47 -> 48: +1 for `inputparamgap` (live_field = input_param_gap, DIV-114).
+    // 48 -> 49: +1 for `simdlane` (live_field = simd_lane_fold, DIV-115).
+    // 49 -> 50: +1 for `retsplitglobal` (live_field = ret_split_global, DIV-116).
+    // 50 -> 51: +1 for `noreturnretuse` (live_field = noreturn_ret_use, DIV-118).
+    // 51 -> 52: +1 for `fastfailnoreturn` (live_field = fastfail_noreturn, DIV-119).
+    // 53 -> 54: +1 for `constselectjump` (live_field = const_select_jump).
+    // 54 -> 55: +1 for `calleepop` (live_field = callee_pop).
+    // 55 -> 56: +1 for `litpoolconst` (live_field = litpoolconst, DIV-136).
+    // 56 -> 57: +1 for `codescalar` (live_field = codescalar, DIV-138).
+    // 57 -> 58: +1 for `stackarggap` (live_field = stack_arg_gap, DIV-140).
+    // 58 -> 59: +1 for `calleeprotostack` (live_field = callee_proto_stack,
+    // DIV-142).
+    // 59 -> 60: +1 for `paramrefdecl` (live_field = param_ref_decl, DIV-143).
+    // 60 -> 61: +1 for `calltrampoline` (live_field = call_trampoline, DIV-144).
+    // 61 -> 62: +1 for `loopcounterstore` (live_field = loop_counter_store,
+    // DIV-146).
+    // 62 -> 63: +1 for `zeroidiomuse` (live_field = zero_idiom_use).
+    // 63 -> 64: +1 for `decodehalt` (live_field = decode_halt, DIV-151).
+    // 64 -> 65: +1 for `splitstorekeep` (live_field = split_store_keep,
+    // DIV-153).
+    // 65 -> 66: +1 for `entrythumbflow` (live_field = analysis_entrythumbflow).
+    // 66 -> 67: +1 for `retpushedhalf` (live_field = ret_pushed_half, DIV-156).
+    // 67 -> 68: +1 for `tailcallsaved` (live_field = tail_call_saved, DIV-157).
+    // 68 -> 69: +1 for `constspaceload` (live_field = const_space_load_fold,
+    // DIV-158).
+    // 69 -> 70: +1 for `declhightype` (live_field = decl_high_type, DIV-160).
+    // 70 -> 71: +1 for `exclusivearguse` (live_field = exclusive_arg_use,
+    // DIV-161).
+    // 71 -> 72: +1 for `callretpair` (live_field = call_ret_pair, DIV-162).
+    // 72 -> 73: +1 for `callpopret` (live_field = call_pop_ret, DIV-163).
+    // 73 -> 74: +1 for `entryretdispatch` (live_field = entry_ret_dispatch,
+    // DIV-168).
+    // 74 -> 75: +1 for `pushimmediateret` (live_field = push_immediate_ret,
+    // DIV-170).
+    // 75 -> 76: +1 for `loweredswitchlabels` (live_field = lowered_switch_labels,
+    // DIV-173).
+    // 76 -> 77: +1 for `cancelbytearithmetic` (live_field =
+    // cancel_byte_arithmetic, DIV-174).
+    // 78 -> 79: +1 for `nulterminator` (live_field = nul_terminator, opt-in).
+    // 79 -> 80: +1 for `endptrbound` (live_field = end_ptr_bound, DIV-177).
+    // 80 -> 81: +1 for `msvcstrappend` (live_field = msvc_str_append).
+    // 81 -> 82: +1 for `loweredswitchvalue` (live_field =
+    // lowered_switch_value_check, DIV-181).
+    // 82 -> 83: +1 for `tiedphitrim` (live_field = tied_phi_trim, DIV-182).
+    // 83 -> 85: +1 for `loweredswitchexact` (P2 re-rolled switch matches its compare tree, DIV-183) and +1 for `loweredswitchheads` (P2 every lowered-switch cascade head, DIV-184).
+    // 85 -> 86: +1 for `bytehonest` (live_field = byte_honest).
+    // 86 -> 87: +1 for `argclobber` (live_field = arg_clobber, opt-in).
+    // 87 -> 88: +1 for `hideshadow` (live_field = hide_shadow, default-on).
+    // 88 -> 89: +1 for `boolbyte` (live_field = bool_byte, opt-in).
+    // 89 -> 90: +1 for `mulblob` (live_field = mul_blob, default-on).
+    // 90 -> 91: +1 for `charbyte` (live_field = char_byte, default-on).
+    // 92 -> 93: +1 for `charptr` (live_field = char_ptr, opt-in).
+    // 93 -> 94: +1 for `slotptr` (live_field = slot_ptr, default-on).
+    // 94 -> 95: +1 for `passthrough` (live_field = pass_through).
+    // 95 -> 96: +1 for `castimplied` (live_field = cast_implied).
+    // 97 -> 98: +1 for `castsign` (live_field = cast_sign).
+    // 98 -> 99: +1 for `castindex` (live_field = cast_index).
+    // 99 -> 100: +1 for `castternary` (live_field = cast_ternary).
+    // 100 -> 101: +1 for `callpush` (live_field = drop_call_push).
+    // 101 -> 102: +1 for `callrettype` (live_field = call_ret_type).
+    // 102 -> 103: +1 for `castobject` (live_field = cast_object).
+    // 103 -> 104: +1 for `elemptr` (live_field = elem_ptr).
+    // 104 -> 105: +1 for `condexeret` (live_field = cond_exe_ret).
+    // 105 -> 106: +1 for `fieldtype` (live_field = field_type).
+    // 106 -> 107: +1 for `armfloatreturn` (live_field = arm_float_return).
+    // 107 -> 108: +1 for `armfloatargs` (live_field = arm_float_args).
+    // 108 -> 109: +1 for `stackstoreguard` (live_field = stack_store_guard, default-on).
+    // 110 -> 111: +1 for `bejoin` (live_field = be_join).
+    // 111 -> 112: +1 for `calltargettype` (live_field = call_target_type).
+    // 112 -> 113: +1 for `condexeretuse` (live_field = cond_exe_ret_use).
+    // 113 -> 114: +1 for `retsysreg` (live_field = ret_sys_reg).
+    // 114 -> 115: +1 for `floatglobals` (live_field = float_globals, default-on).
+    // 115 -> 116: +1 for `floatbits` (live_field = float_bits).
+    // 116 -> 117: +1 for `reloadarg` (live_field = reload_arg).
+    // 117 -> 118: +1 for `varargsharedfloat` (live_field = vararg_shared_float).
+    // 118 -> 119: +1 for `armfuncmode` (live_field = analysis_armfuncmode).
+    // 119 -> 120: +1 for `armwalkmode` (live_field = analysis_armwalkmode).
+    // 120 -> 121: +1 for `calleepopslot` (live_field = callee_pop_slot).
+    // 121 -> 122: +1 for `callerreads` (live_field = caller_reads).
+    // 122 -> 123: +1 for `callarrayextent` (live_field = call_array_extent).
+    // 123 -> 124: +1 for `globalarrayanchor` (live_field = global_array_anchor).
+    // 124 -> 126: +2 for `wideslice` and `devectorize`.
+    // 127 -> 128: +1 for `calleepopframe` (live_field = callee_pop_frame).
+    // 129 -> 130: +1 for `msvcbyval` (live_field = msvc_byval).
+    // 132 -> 133: +1 for `pushpadread` (live_field = push_pad_read).
+    // -1 for `bejoin`, now a mode (`off|evidence|on`) over an enum field
+    // with no `live_field`.
+    // 135 -> 136: +1 for `strlenscan` (live_field = strlen_scan).
+    // 136 -> 137: +1 for `libcnames` (live_field = libc_names).
+    // 138 -> 139: +1 for `indirectargs` (live_field = indirect_args).
+    // 141 -> 142: +1 for `fputruncviews` (live_field = fpu_trunc_views).
+    // 142 -> 143: +1 for `reglocals` (live_field = reg_locals).
+    // 143 -> 144: +1 for `narrowargs` (live_field = narrow_args).
+    // 144 -> 145: +1 for `callerptr` (live_field = caller_ptr).
+    // 145 -> 146: +1 for `regnarrow` (live_field = narrow_locals).
+    // 146 -> 147: +1 for `narrowret` (live_field = narrow_ret).
+    // 147 -> 146: `narrowargs` takes `off|on|callers` and has no live_field.
+    // 146 -> 147: +1 for `slotreport` (live_field = slot_report).
+    // 147 -> 148: +1 for `callmechanisms` (live_field = call_mechanism_effects).
+    // 148 -> 149: +1 for `slotsplit` (live_field = slot_split).
+    // 151 -> 152: +1 for `regsigned` (live_field = narrow_signed).
+    // 152 -> 153: +1 for `callwide` (live_field = call_wide).
+    // 153 -> 154: +1 for `pairrefine` (live_field = pair_refine).
+    // 154 -> 155: +1 for `ptrauthtrap` (live_field = ptrauth_trap).
+    // 155 -> 156: +1 for `authptrcall` (live_field = analysis_authptrcall).
+    // 156 -> 157: +1 for `importdata`.
+    // 154 -> 155: +1 for `relronoreturn` (live_field = relro_noreturn).
+    // 154 -> 156: +2 for `dexmodel` and `jumpassist` (dex_model, jump_assist).
+    // 156 -> 157: +1 for `javanew` (java_new).
+    // 154 -> 155: +1 for `gotonext` (live_field = goto_next).
+    // 154 -> 155: +1 for `rangefold` (live_field = range_fold).
+    // 154 -> 155: +1 for `pow2select` (live_field = pow2_select).
+    // 154 -> 155: +1 for `whilecontinue`.
+    // +1 for `arm64evcall` (live_field = analysis_arm64evcall).
+    // +2 for `chkstkdarwin` and `outlinedinline`.
+    // 154 -> 155: +1 for `repstring` (live_field = rep_string).
+    // 155 -> 156: +1 for `copyrun` (live_field = copy_run).
+    // 154 -> 155: +1 for `arithhelpers` (live_field = arith_helpers).
+    // 154 -> 155: +1 for `contextnames` (live_field = context_names).
+    // 154 -> 155: +1 for `formatcallees` (live_field = analysis_format_callees).
+    // 157 -> 158: +1 for `bitidioms` (live_field = bit_idioms).
+    // 157 -> 158: +1 for `objcarc` (live_field = objc_arc).
+    // 158 -> 160: +2 for `objcrettype`/`objcresolve` (live_field = objc_rettype/objc_resolve).
+    // 157 -> 158: +1 for `calleeretpurge` (live_field).
+    // 158 -> 159: +1 for `switchtrim` (live_field).
+    // 159 -> 160: +1 for `tailcontract` (live_field).
+    // 187 -> 188: +1 for `stackexitanchor` (live_field).
+    // 188 -> 189: +1 for `fdeflowbound` (live_field).
+    // +1 for `cmpmerge`.
+    // +1 for `gotosink`.
+    // +1 for `latecse`.
+    // +1 for `dirtypool`.
+    // +1 for `unmergecall`.
+    // +3 for `vexzeroupper`/`lanefuse`/`vectorabi`, +1 for `strcodelen`, +1 for `gortti`.
+    // 195 -> 196: +1 for `vaarg` (live_field = va_arg).
+    // +1 for `vtabletypes` (live_field = analysis_vtabletypes).
+    // 154 -> 156: +2 for `readonlycalls` and `prunedssa` (readonly_calls, pruned_ssa).
+    // 156 -> 157: +1 for `segmentize` (live_field = segmentize).
+    // 157 -> 158: +1 for `loadguardreads` (load_guard_reads).
+    // 158 -> 157: `readonlycalls` takes `off|on|<n>` and has no live_field.
+    // 157 -> 158: +1 for `deadwaves` (pool_dead_waves).
+    // 158 -> 159: +1 for `earlyrestart` (early_restart).
+    // 159 -> 160: +1 for `pltlocal` (plt_local_calls).
+    // 160 -> 161: +1 for `haltloopguard` (halt_loop_guard).
+    // 161 -> 162: +1 for `truncptrflow` (trunc_ptr_flow).
+    // 168 -> 169: +1 for `switchrunon` (switch_run_on).
+    // 175 -> 176: +1 for `highsliceguard` (highslice_guard).
+    // 176 -> 177: +1 for `mipsunaligned` (mips_unaligned).
+    // 177 -> 178: +1 for `gottailcall` (got_tail_call).
+    // 179 -> 180: +1 for `copywaves` (pool_copy_waves).
+    // 180 -> 182: +2 for `stubtailcall` (stub_tail_call) and `gotimportproto` (got_import_proto).
+    // 182 -> 183: +1 for `aggregatefields` (aggregate_fields).
+    // 179 -> 180: +1 for `exclusivecallret` (exclusive_call_ret).
+    // 179 -> 178: `callmechanisms` takes `off|auto|on` and has no live_field.
+    // 179 -> 182: +1 for `copywaves` (pool_copy_waves), +2 for `armpltslot` and `armcondskip` (analysis_armpltslot, analysis_armcondskip).
+    // 179 -> 181: +1 for `copywaves` (pool_copy_waves), +1 for `armderef` (analysis_armderef).
+    // 178 -> 179: +1 for `ptrauthtrap` (live_field = ptrauth_trap).
+    // 179 -> 180: +1 for `authptrcall` (live_field = analysis_authptrcall).
+    // 186 -> 187: +1 for `chkstkdarwin` (chkstk_darwin).
+    // 73 -> 74: +1 for `calleereginputs` (live_field = callee_reginputs).
+    // 74 -> 75: +1 for `chkstkdarwin` (live_field = chkstk_darwin).
+    // 75 -> 76: +1 for `calleeargs` (live_field = kuna_calleeargs).
+    // 76 -> 75: `calleereginputs` became three-valued (off|on|custom), so it has
+    // no codegen live reader; its live value is read console-side via
+    // `kuna_live_value`, like `narrowargs`/`protoorder`.
+    // Recounted after merging upstream/main (2026-11-22): the fork's live-field rows plus upstream's.
+    assert_eq!(with_live, 130);
+}
+
+#[test]
+fn live_from_arch_matches_cpp_ternaries() {
+    // compareform = present_lessequal ? "original" : "canonical"
+    let on = |_f: &str| Some(true);
+    let off = |_f: &str| Some(false);
+    assert_eq!(
+        OptionValues::live_from_arch("compareform", on),
+        Some("original")
+    );
+    assert_eq!(
+        OptionValues::live_from_arch("compareform", off),
+        Some("canonical")
+    );
+    // returnpair = return_single ? "single" : "pair"
+    assert_eq!(
+        OptionValues::live_from_arch("returnpair", on),
+        Some("single")
+    );
+    assert_eq!(
+        OptionValues::live_from_arch("returnpair", off),
+        Some("pair")
+    );
+    // a plain on/off option
+    assert_eq!(
+        OptionValues::live_from_arch("memsetrecover", on),
+        Some("on")
+    );
+    assert_eq!(
+        OptionValues::live_from_arch("memsetrecover", off),
+        Some("off")
+    );
+    // no live reader -> None even with a value-producing closure
+    assert_eq!(OptionValues::live_from_arch("namestyle", on), None);
+    assert_eq!(OptionValues::live_from_arch("stackguard", on), None);
+    assert_eq!(OptionValues::live_from_arch("loweredswitch", on), None);
+    // unknown flag -> None propagates
+    assert_eq!(
+        OptionValues::live_from_arch("compareform", |_f: &str| None),
+        None
+    );
+}
+
+// --- Catalog JSON emitter byte-shape (full byte-compat is in the integration
+//     test catalog_bytecompat.rs against the C++ binary's captured output) ----
+
+#[test]
+fn emit_settable_json_first_row_shape() {
+    // The first settable is `compareform`. Emit it with no live value (no
+    // program loaded form) and check the leading bytes match kunaEmitSettableJson.
+    let st = lookup_settable("compareform").unwrap();
+    let mut out = String::new();
+    emit_settable_json(&mut out, st, None);
+    assert!(out.starts_with("  {\"option\": \"compareform\", \"values\": [\"canonical\", \"original\"], \"default\": \"original\", \"destructive_as_default\": false, \"phase\": \"P3\""));
+    // No `current` field when live is None.
+    assert!(!out.contains("\"current\""));
+    // ... and the tail order (issue ... change_kind ... tier ... symptoms).
+    assert!(out.contains("\"strength\": \"HARD\", \"rewind\": \"P3\", \"issue\": \"GH-558\""));
+    assert!(out.contains(
+        "\"change_kind\": \"presentation-default\", \"tier\": \"core\", \"symptoms\": [\""
+    ));
+    assert!(out.ends_with("\"]}"));
+}
+
+#[test]
+fn every_settable_has_nonempty_symptoms() {
+    // C3: every catalog row carries at least one nonempty, output-shaped
+    // symptom phrase (pipe-separated in the table, a JSON array in the
+    // catalog) so an LLM can grep a natural-language symptom to its option.
+    for i in 0..kuna_num_settables() {
+        let st = kuna_settable_by_index(i);
+        assert!(
+            !st.symptoms.is_empty(),
+            "settable `{}` has no symptoms",
+            st.option
+        );
+        for phrase in st.symptoms.split('|') {
+            assert!(
+                !phrase.trim().is_empty(),
+                "settable `{}` has an empty symptom phrase",
+                st.option
+            );
+        }
+    }
+}
+
+#[test]
+fn emit_settable_json_includes_current_when_live() {
+    let st = lookup_settable("compareform").unwrap();
+    let mut out = String::new();
+    emit_settable_json(&mut out, st, Some("canonical"));
+    // C++ inserts "current" right after "default".
+    assert!(out.contains(
+        "\"default\": \"original\", \"current\": \"canonical\", \"destructive_as_default\""
+    ));
+}
+
+#[test]
+fn emit_catalog_json_static_form_brackets_and_commas() {
+    let json = emit_catalog_json(|_| None);
+    assert!(json.starts_with("[\n  {\"option\": \"compareform\""));
+    assert!(json.ends_with("}\n]\n"));
+    // 83 rows: 82 trailing commas (the last, macho-arm64e, has none;
+    // callsitestackargs' P4 row sits mid-table, so it does not move the tail;
+    // switchguardbound's, switchsharedcase's, switchmultipred's, unrolledguard's,
+    // tailcalljump's, noreturn_extern's, and noreturn_externmatch's S2 rows,
+    // branchflip's, regionstructure's, regionlooprefine's, regionedgeorder's,
+    // ifelseflatten's,
+    // crossjumprevert's, dedupitetail's, returndup's, iteregion's and
+    // iteboolean's S8 rows,
+    // noreturn_error's S1 analysis row, eh_frame_full's S1 row,
+    // cortexmvectors' S1 row, ptrentry's S1 row,
+    // operand_refs's S1 row, funcstart_patterns's S1 row, aif's S1 row, fid's S1
+    // row, rtti's S1 row, dwarf_lines' S1 row, the `objc` Mach-O Objective-C S1 row,
+    // the `pdb` PE PDB S1 row, switchreturn's S8 row, paramcopyhoist's P6 row,
+    // itecondlist's S8 row, peimportcall's S1 row, cppproto's S1 row,
+    // fdeinterior's S1 row, cppsig's S1 row, typedepth's S1 row, itaniumrtti's S1
+    // row, libcsigs' S1 row, funcboundflow's S2 row, poolentry's S1 row, the
+    // two P8 ifNoExit rows, calloverlap's P3 row, orchain's S8 row,
+    // evalcurrentproto's P4 row, ifuncfpret's P1 row, msvcftol's P2 row and
+    // datasyms' P1 row, loadguardrange's P3 row, relocrebase's P1 row,
+    // spillargtrial's P4 row, dynrelocs' P1 row and
+    // retinputhalf's P4, dwarfstructs' P1, dwarfvariants' P1, rustabi's P4 and
+    // symbolnamerepair's P1 rows sit mid-table, so they do not move the tail).
+    // noreturn_discstrict's P1 row is mid-table too, so it only bumps the count.
+    // retinputhalf's P4, dwarfstructs' P1, dwarfvariants' P1, rustabi's P4,
+    // symbolnamerepair's P1 rows sit mid-table, so they do not move the tail).
+    // symbolnamerepair's P1 and symbolnamechars' P1 rows sit mid-table, so they
+    // do not move the tail).
+    // symbolnamerepair's P1 and symbolnamebound's P1 rows sit mid-table, so they
+    // do not move the tail).
+    // symbolnamerepair's P1 and msvcfpconst's P1 rows sit mid-table, so they do
+    // not move the tail).
+    // +1 for `pdatainterior` (a P1 row beside `fdeinterior`, mid-table, so it only
+    // bumps the count).
+    // 123 -> 124: +1 for `framelayout` (DIV-97; its P6 row sits mid-table ahead of
+    // `ctypes`, so it does not move the tail either).
+    // 127 -> 129: +1 for `unmappedentry` and +1 for `entrymainproto` (both P1 rows
+    // mid-table, beside `fdeinterior`, so neither moves the tail either); the
+    // count is one less than the settable total, since the last row has no comma.
+    // +1 for `ppclocalentry` (another P1 row beside `unmappedentry`, mid-table).
+    // +1 for `pdatachained`, appended at the TAIL, so the previous last row gains
+    // its comma and the count moves with the total.
+    // +1 for `varargstackargs` and +1 for `calleearity`; both P4 rows sit
+    // mid-table beside `callsitestackargs`, so the tail does not move either.
+    // 148 -> 149: +1 for `noreturnretuse` (DIV-118); its P4 row is appended after
+    // the last one, so the previous tail row gains a comma and it becomes the tail.
+    // 149 -> 150: +1 for `msvcstackguard` (GH-468); its P7 row sits mid-table
+    // beside `securitycheck`, so the tail does not move.
+    // 180 -> 181: +1 for `entrythumbflow` (DIV-154); its P1 row sits mid-table
+    // beside `tailcallentry`, so the tail does not move.
+    // +1 for `cancelbytearithmetic` (DIV-174); its P3 row sits mid-table, so it
+    // increments the comma-terminated catalog-row count.
+    // 193 -> 194: +1 for `pebnames` (DIV-175); its P5 row sits mid-table beside
+    // `codescalar`, so it increments the comma-terminated catalog-row count.
+    // 194 -> 195: +1 for `mappedflowboundary` (DIV-176); its P2 row sits mid-table
+    // beside `funcboundflow`.
+    // 195 -> 196: +1 for `nulterminator` (opt-in); its P6 row sits mid-table beside
+    // `cookiescramble`, so it increments the comma-terminated catalog-row count.
+    // 196 -> 197: +1 for `endptrbound` (DIV-177); its P6 row sits mid-table.
+    // 197 -> 198: +1 for `rexthunk`; its P1 row sits mid-table beside `pdatachained`,
+    // so it increments the comma-terminated catalog-row count.
+    // 198 -> 199: +1 for `pdbinterior` (DIV-180); its P1 row sits mid-table beside
+    // `pdatainterior`.
+    // +1 for `msvcstrappend`; its P2 row sits mid-table.
+    // 200 -> 201: +1 for `loweredswitchvalue` (DIV-181); its P2 row sits
+    // mid-table, so it increments the comma-terminated catalog-row count.
+    // +1 for `tiedphitrim` (DIV-182); its P6 row sits mid-table beside
+    // `paramcopyhoist`, so it increments the comma-terminated catalog-row count.
+    // 202 -> 204: +1 for `loweredswitchexact` (P2 re-rolled switch matches its compare tree, DIV-183) and +1 for `loweredswitchheads` (P2 every lowered-switch cascade head, DIV-184).
+    // 209 -> 210: +1 for `libctypes`; its P1 row sits mid-table, so it
+    // increments the comma-terminated catalog-row count.
+    // 210 -> 211: +1 for `foldcallretphi`.
+    // 211 -> 212: +1 for `ptrfromuse`; its P5 row sits mid-table, so it
+    // increments the comma-terminated catalog-row count.
+    // 214 -> 215: +1 for `structsynth`.
+    // 215 -> 216: +1 for `signedness`; its P9 row sits mid-table, so it
+    // increments the comma-terminated catalog-row count.
+    // 216 -> 217: +1 for `boolbyte`; its P5 row sits mid-table, so it
+    // increments it again.
+    // 217 -> 218: +1 for `mulblob`; its P3 row sits mid-table, so it
+    // increments it again.
+    // 224 -> 225: +1 for `slotptr`; its P6 row sits mid-table.
+    // 225 -> 226: +1 for `calleevote`.
+    // 226 -> 227: +1 for `structmerge`; its P5 row sits mid-table.
+    // 232 -> 233: +1 for `structheadless`; its P5 row sits mid-table.
+    // 235 -> 236: +1 for `callpush`; its P4 row sits mid-table.
+    // 237 -> 238: +1 for `peordinal`.
+    // 238 -> 239: +1 for `jumptablemax`.
+    // 240 -> 241: +1 for `callrettype`; its P4 row sits mid-table.
+    // 241 -> 242: +1 for `castobject`.
+    // 242 -> 243: +1 for `castwiden`.
+    // 243 -> 244: +1 for `elemptr`.
+    // 244 -> 245: +1 for `condexeret`; its P4 row sits mid-table.
+    // 245 -> 246: +1 for `fieldtype`.
+    // 246 -> 247: +1 for `armfloatreturn`.
+    // 247 -> 248: +1 for `armfloatargs`.
+    // 248 -> 249: +1 for `narrowext`; its P4 row sits mid-table.
+    // 249 -> 250: +1 for `syscallregs`.
+    // 250 -> 251: +1 for `flowmode`.
+    // 251 -> 252: +1 for `varargforward`.
+    // 252 -> 253: +1 for `stackstoreguard`.
+    // 253 -> 254: +1 for `protoranges`; its P6 row sits mid-table.
+    // 257 -> 258: +1 for `bejoin`.
+    // +1 for `coldentry`; its P1 row sits mid-table beside `fdeinterior`.
+    // +1 for `thunkentry`; its P1 row sits mid-table beside `unmappedentry`.
+    // +1 for `zerocallregs`; its P4 row sits mid-table beside `zerofillreturn`.
+    // +1 for `callerreads`.
+    // +1 for `bytearrayc`; its P9 row sits mid-table.
+    // +2 for `wideslice` and `devectorize`.
+    // +1 for `addrtakenentry`; its P1 row sits mid-table beside `thunkentry`.
+    // +1 for `lazyfuncs`; its P1 row sits beside `addrtakenentry`.
+    // +1 for `pairrefine`; its P3 row sits beside `splitstorekeep`.
+    // +1 for `sourcelang`; its P1 row sits beside `gopclntab`.
+    // +1 for `fatstr`; its P5 row sits beside `sourcelang`.
+    // +1 for `gomorestack`; its P2 row sits beside `sourcelang`.
+    // +1 for `gonoreturn`; its P1 row sits beside `sourcelang`.
+    // +1 for `variantnames`; its P5 row sits beside `dwarfvariants`.
+    // +1 for `goabi`; its P1 row sits beside `sourcelang`.
+    // +1 for `gowritebarrier`; its P2 row sits beside `gomorestack`.
+    // +1 for `goreg`; its P1 row sits beside `goabi`.
+    // +1 for `gobool`; its P4 row sits beside `sourcelang`.
+    // +1 for `swiftdemangle`; its P1 row sits beside `sourcelang`.
+    // +1 for `objcrefconst`; its P1 row sits beside `objc`.
+    // +1 for `objcivars`; its P1 row sits beside `objcrefconst`.
+    // +1 for `objcsdk`; its P1 row sits beside `objcivars`.
+    // +1 for `ptrauthtrap`; its P2 row sits beside `gowritebarrier`.
+    // +1 for `authptrcall`; its P1 row sits beside `peimportcall`.
+    // +1 for `swiftmetadata`; its P1 row sits beside `objc`.
+    // +1 for `swifttypes`, beside it.
+    // +1 for `importdata`.
+    // +1 for `cfstrings`.
+    // +1 for `kernelcache`; its P1 row sits beside `macho-arm64e`.
+    // +1 for `unwindstarts`; its P1 row sits beside `eh_frame_full`.
+    // +2 for `dyldimage` and `dyldcrossrefs`; their P1 rows follow `swiftdemangle`.
+    // +1 for `swiftcall`, beside `swifttypes`.
+    // +1 for `relronoreturn`; its P2 row sits beside `fastfailnoreturn`.
+    // +2 for `dexmodel` and `jumpassist`; their rows sit beside `constselectjump`.
+    // +1 for `javanew`; its row sits beside them.
+    // +1 for `gotonext`; its P8 row sits beside `gotoreduce`.
+    // +1 for `rangefold`; its P3 row sits beside `strlenscan`.
+    // +1 for `pow2select`; its P3 row sits beside `strlenscan`.
+    // +1 for `whilecontinue`.
+    // +1 for `iokitclasses`, beside `cfstrings`.
+    // +1 for `xnutables`, beside `iokitclasses`.
+    // +1 for `osclassinfo`, beside `xnutables`.
+    // +1 for `arm64evcall`; its P1 row sits beside `authptrcall`.
+    // +2 for `chkstkdarwin` and `outlinedinline`, beside `ptrauthtrap`.
+    // +1 for `machoehframe`; its P1 row follows `unwindstarts`.
+    // +1 for `machobinds`; its P1 row follows `dyldcrossrefs`.
+    // +1 for `exporttrie`; its P1 row follows `machobinds`.
+    // +5 for `uefi`, `storetype`, `dwarfscopes`, `dwarfglobaltypes` and `tlsnames`.
+    // +1 for `repstring`; its P3 row sits beside `strlenscan`.
+    // +1 for `copyrun`; its P3 row sits beside `repstring`.
+    // +1 for `arithhelpers`; its P2 row sits beside `msvcftol`.
+    // +1 for `contextnames`; its P6 row sits beside `libcnames`.
+    // +1 for `formatcallees`; its P1 row sits beside `formatstring`.
+    // +2 for `funcchunks` and `tailcallentryall`, beside `tailcallentry`; +1 `compacttable`; +1 `nameladder`; +1 `flirt` and `fidproto` beside `fid`; +1 `codestrings`; +1 `protomerge`; +1 `bitidioms`; +1 `canaryglobal`.
+    // +1 for `calleeretpurge`.
+    // +1 for `dwarfnocall`.
+    // +1 for `switchtrim`.
+    // +1 for `ehcold`.
+    // +1 for `tailcontract`.
+    // +2 for `funcchunks` and `tailcallentryall`, beside `tailcallentry`; +1 `compacttable`; +1 `nameladder`; +1 `flirt` and `fidproto` beside `fid`; +1 `fidcallees`; +1 `flirtsites`.
+    // +1 for `objectview`, beside `rawdiscover`; +1 for `mapglobalsyms`.
+    // +1 for `stackexitanchor`.
+    // +1 for `importvote`.
+    // +1 for `fdeflowbound`.
+    // +1 for `ehnote`.
+    // +1 for `linearswitch`.
+    // +1 for `treeswitch`.
+    // +1 for `cmpmerge`.
+    // +1 for `gotosink`.
+    // +1 for `latecse`.
+    // +1 for `implweight`.
+    // +1 for `dirtypool`.
+    // +1 for `unmergecall`.
+    // +1 for `vaarg`.
+    // +1 for `vtabletypes`.
+    // +2 for `readonlycalls` and `prunedssa`; their P3 rows sit at the end.
+    // +1 for `segmentize`; its P3 row sits beside `x64syscall`.
+    // +1 for `gowalkprune`; its P1 row sits beside `gonoreturn`.
+    // +1 for `loadguardreads`; its P3 row sits after `prunedssa`.
+    // +1 for `mzsweep`; its P1 row sits beside `rawdiscover`.
+    // +1 for `fpuemu`; its P2 row sits beside `decodehalt`.
+    // +1 for `retsplitlimit`; its P8 row sits after `retsplitglobal`.
+    // +1 for `deadwaves`; its P3 row sits after `jtsharepartial`.
+    // +1 for `earlyrestart`; its P3 row sits after `deadwaves`.
+    // +1 for `pltlocal`; its P4 row sits after `passthrough`.
+    // +1 for `haltloopguard`; its P3 row sits after `earlyrestart`.
+    // +1 for `truncptrflow`; its P3 row sits after `haltloopguard`.
+    // +1 for `clonephiorder`; its P8 row sits after `rettriangle`.
+    // +1 for `switchrunon`; its P2 row sits after `switchsharedcase`.
+    // +1 for `bejoinpass`; its P4 row sits after `bejoin`.
+    // +1 for `persistcalls`; its P3 row sits after `readonlycalls`.
+    // +1 for `copywaves`; its P3 row sits after `deadwaves`.
+    // +1 for `deadcascade`; its P3 row sits after `copywaves`.
+    // +2 for `stubtailcall` (after `mappedflowboundary`) and `gotimportproto` (after `pltlocal`).
+    // +1 for `aggregatefields`; its P5 row sits after `fieldtype`.
+    // +1 for `ppcapu`; its P1 row sits after `ifuncfpret`.
+    // +1 for `exclusivecallret`; its P4 row sits after `exclusivearguse`.
+    // +1 for `copywaves`, its P3 row after `deadwaves`; +1 for `deadcascade`, its P3 row after `copywaves`;
+    // +2 for `armpltslot` and `armcondskip`, their P1 rows beside `armwalkmode`.
+    // +1 for `armderef`, its P1 row after `armwalkmode`.
+    // +1 for `unwindstarts`; its P1 row sits beside `eh_frame_full`.
+    // +1 for `objcrefconst`; its P1 row sits beside `objc`.
+    // +1 for `ptrauthtrap`; its P2 row sits beside `gowritebarrier`.
+    // +1 for `authptrcall`; its P1 row sits beside `peimportcall`.
+    // +1 for `swiftmetadata`; its P1 row sits beside `objc`.
+    // +1 for `swifttypes`, beside it.
+    // +1 for `kernelcache`; its P1 row sits beside `macho-arm64e`.
+    // +1 for `objcivars`; its P1 row sits beside `objcrefconst`.
+    // +1 for `swiftcall`, beside that.
+    // +1 for `objcsdk`; its P1 row sits beside `objcivars`.
+    // +2 for `dyldimage` and `dyldcrossrefs`; their P1 rows follow `swiftdemangle`.
+    // +1 for `gotypeglobals`; its P1 row sits beside `goabi`.
+    // +1 for `flirt`; its P1 row sits beside `fid`.
+    // +1 for `chkstkdarwin`, its P2 row after `msvcftol`.
+    // +1 for `calleeargs`; its P4 row sits after `argclobber`.
+    // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
+    assert_eq!(json.matches("},\n").count(), 307);
+}
+
+#[test]
+fn emit_catalog_json_one_unknown_is_none() {
+    assert!(emit_catalog_json_one("bogus", None).is_none());
+    let one = emit_catalog_json_one("namestyle", None).unwrap();
+    assert!(one.starts_with("  {\"option\": \"namestyle\""));
+    assert!(one.ends_with("}\n"));
+}
+
+#[test]
+fn json_string_escaping() {
+    // Direct check of the escape rules (quote, backslash, newline, control).
+    let mut out = String::new();
+    json_string(&mut out, "a\"b\\c\nd\te");
+    // tab (0x09) is a control char < 0x20 and is NOT '\n' -> collapses to space.
+    assert_eq!(out, "\"a\\\"b\\\\c\\nd e\"");
+}

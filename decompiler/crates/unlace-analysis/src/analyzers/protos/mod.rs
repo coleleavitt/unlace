@@ -1,0 +1,1655 @@
+//! Library-prototype seeding — the kuna analog of Ghidra's
+//! `ApplyDataArchiveAnalyzer` ("Apply Data Archives").
+//!
+//! Ghidra ships parsed C headers as binary data-type archives (`.gdt`) and, for
+//! each function whose name matches an archive entry, applies the archived
+//! signature (return + parameter types) to the function. That gives an import
+//! like `puts` its `int puts(char *)` prototype, so the decompiler types the
+//! call's argument (a `char *`) and — combined with read-only string data — emits
+//! `puts("Username: ")` instead of `puts(0x400915)`.
+//!
+//! The `.gdt` archives are a binary format not vendored into the kuna tree, so
+//! this pass substitutes a **built-in table of the most common libc signatures**
+//! (a faithful, minimal stand-in). It is the deliberate analog of the
+//! dependency/data substitutions elsewhere in the port (BFD → `object`); the
+//! signatures are standard C library declarations. Documented LOSS: it covers
+//! only the table below, not a full header archive.
+//!
+//! Matching is by name against functions actually present in the object (same as
+//! `ApplyDataArchiveAnalyzer` matching archive entries to program symbols); a
+//! table entry with no matching function is simply not emitted. The commit seam
+//! (`engine.rs::commit_analysis_output`) keeps the compatible by-name park and
+//! also parks imports at every concrete address reported by the format resolver.
+//! The latter is required when an IAT slot and its code veneer share a name:
+//! `ActionDefaultParams` reads the prototype back by the resolved entry address.
+//! If an image both imports and defines/exports the same spelling, the ambiguous
+//! by-name park is suppressed while the genuine import addresses remain typed.
+
+use std::collections::HashSet;
+use std::rc::Rc;
+
+use object::SymbolKind;
+use object::read::{Object, ObjectSymbol};
+
+use unlace_base::error::KunaResult;
+use unlace_base::types::uint4;
+use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
+use unlace_decomp::fspec::PrototypePieces;
+
+use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
+
+pub mod kuna_importvote;
+mod kuna_libcnames;
+pub mod kuna_libcsigs;
+pub mod kuna_libctypes;
+pub mod kuna_libgcc;
+pub mod kuna_nameladder;
+pub mod kuna_win32sigs;
+pub mod kuna_x87intrinsics;
+
+/// Port of `ApplyDataArchiveAnalyzer`: seed built-in libc prototypes onto matching
+/// FunctionSymbols so call arguments get typed.
+pub struct LibProtoPass;
+
+/// A primitive type slot in a built-in libc signature.
+///
+/// Integer slots are four bytes or pointer-width for libc declarations. Compiler
+/// runtime machine-mode contracts can additionally state an exact eight-byte
+/// integer; that does not establish the width of libc `long long` parameters.
+#[derive(Clone, Copy)]
+enum Ty {
+    /// `void` (return only).
+    Void,
+    /// `int` (4-byte signed).
+    Int,
+    /// `unsigned int` / `mode_t` / `uid_t` / `wint_t` (4-byte unsigned).
+    UInt,
+    /// `size_t` (pointer-width unsigned).
+    Size,
+    /// `ssize_t` / `long` / `ptrdiff_t` (pointer-width signed).
+    Long,
+    /// Signed DI-mode integer (exactly eight bytes in the compiler runtime ABI).
+    Int64,
+    /// `char *`.
+    CharPtr,
+    /// `char **`.
+    CharPtrPtr,
+    /// `int *`.
+    IntPtr,
+    /// `unsigned int *` (`LPDWORD`, `PDWORD`).
+    UIntPtr,
+    /// `wchar_t *` (`LPWSTR` / `LPCWSTR`), at the compiler spec's `wchar_size`.
+    WCharPtr,
+    /// `void *` (also used for `FILE *`, opaque handles).
+    VoidPtr,
+    /// `float` (4-byte IEEE 754 on every target these tables apply to).
+    Float,
+    /// Two-component complex value, only seeded on explicitly supported ABIs.
+    Complex(i32),
+    /// `double` (8-byte IEEE 754). `long double` has no fixed width and no Ty.
+    Double,
+    /// (kuna `libctypes`) A pointer to the NAMED libc/POSIX aggregate spelled by
+    /// the payload (`FILE`, `stat`, `DIR`, ...), sized from
+    /// [`kuna_libctypes::NAMED_AGGREGATES`].
+    ///
+    /// Pointer-only: no slot these tables name is taken or returned BY VALUE,
+    /// because no libc declaration restated here does that. That is a property
+    /// of the TABLE, not a guarantee about the emitted C. Ordinary type
+    /// propagation can still carry a named type into a by-value position, and
+    /// does — on `-O2` coreutils `ls` the gnulib `gettime` wrapper renders
+    /// `timespec sub_10210(void) { timespec v1; clock_gettime(0,&v1); return
+    /// v1; }` from the `timespec *` slot alone.
+    ///
+    /// What makes that rendering right is the WIDTH, not the pointer. Both
+    /// hazards `analyzers::dwarf::kuna_dwarfstructs` documents are hazards of a
+    /// SIZELESS aggregate: a by-value parameter the ABI classifier cannot size
+    /// degrades to a raw integer, and a sizeless RETURN is classified as a
+    /// hidden-return-buffer call, which grows a phantom first parameter and
+    /// shifts every real one. Every name here carries its real ABI width, so
+    /// the classifier answers correctly — a 16-byte `timespec` really is
+    /// returned in a register pair. `rethidden` appears nowhere in the sweep
+    /// corpus, where those three `gettime` wrappers are the only by-value named
+    /// returns at all and nothing wider than a register pair reaches a return
+    /// slot.
+    NamedPtr(&'static str),
+}
+
+/// Shorthand for the one layout every `void *` table can be built under: these
+/// signatures carry no [`Ty::NamedPtr`], so the value never reaches a mint.
+const L: kuna_libctypes::Layout = kuna_libctypes::Layout::Opaque;
+
+/// A built-in libc signature: return type, parameter types, and the first
+/// variadic slot (`-1` if not variadic).
+struct Sig {
+    ret: Ty,
+    params: &'static [Ty],
+    vararg: i32,
+}
+
+/// The built-in libc prototype table — a faithful minimal stand-in for Ghidra's
+/// `.gdt` archives. Standard C library signatures; `FILE *` is modeled as
+/// `void *`. Keep entries conservative and correct.
+const LIBC: &[(&str, Sig)] = &[
+    // stdio
+    (
+        "puts",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "printf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: 1,
+        },
+    ),
+    (
+        "fputs",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::VoidPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "sprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "snprintf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::Size, Ty::CharPtr],
+            vararg: 3,
+        },
+    ),
+    (
+        "scanf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: 1,
+        },
+    ),
+    (
+        "sscanf",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: 2,
+        },
+    ),
+    (
+        "perror",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "fopen",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    // locale.h — `char *setlocale(int category, const char *locale)`.  Without
+    // this prototype the call's result is an untyped `undefined8`, so a wrapper
+    // whose last act is `return setlocale(cat, NULL);` (e.g. gnulib's
+    // `setlocale_null_androidfix`, a tail call at -O2) loses both the recovered
+    // return value and the `char *` type.  See docs/features/setlocale-rettype/.
+    (
+        "setlocale",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::Int, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    // string.h
+    (
+        "strlen",
+        Sig {
+            ret: Ty::Size,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strncmp",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcpy",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strncpy",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "strcat",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "strchr",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::Int],
+            vararg: -1,
+        },
+    ),
+    (
+        "strstr",
+        Sig {
+            ret: Ty::CharPtr,
+            params: &[Ty::CharPtr, Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "atoi",
+        Sig {
+            ret: Ty::Int,
+            params: &[Ty::CharPtr],
+            vararg: -1,
+        },
+    ),
+    // stdlib / mem
+    (
+        "malloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "calloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "realloc",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "free",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "memcpy",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "memmove",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "memset",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr, Ty::Int, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    // sys/ptrace.h — `long ptrace(int request, pid_t pid, void *addr, void *data)`.
+    // glibc DECLARES it variadic (`long ptrace(enum __ptrace_request, ...)`), so no
+    // body analysis can derive the arity; the four fixed slots are glibc's own
+    // (`sysdeps/unix/sysv/linux/ptrace.c` fetches `pid_t`, `void *`, `void *` after
+    // the request with `va_arg`), which is also the call form ptrace(2) documents.
+    (
+        "ptrace",
+        Sig {
+            ret: Ty::Long,
+            params: &[Ty::Int, Ty::Int, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+];
+
+/// The Itanium `operator new` / `operator delete` imports, by mangled name
+/// (`m` = 64-bit `size_t`, `j` = 32-bit). Seeded while `cppsig` is on.
+const CXX_ALLOC: &[(&str, Sig)] = &[
+    (
+        "_Znwm",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_Znam",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_Znwj",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_Znaj",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnwmRKSt9nothrow_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnamRKSt9nothrow_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnwjRKSt9nothrow_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnajRKSt9nothrow_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnwmSt11align_val_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZnamSt11align_val_t",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPv",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdaPv",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPvm",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdaPvm",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPvj",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdaPvj",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPvSt11align_val_t",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "_ZdlPvmSt11align_val_t",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::Size, Ty::Size],
+            vararg: -1,
+        },
+    ),
+];
+
+/// Build the kuna [`Datatype`] for a [`Ty`] using the architecture's type factory.
+fn build_ty(
+    t: Ty,
+    types: &dyn TypeFactory,
+    word_size: uint4,
+    layout: kuna_libctypes::Layout,
+) -> KunaResult<Rc<Datatype>> {
+    let ptr = types.get_size_of_pointer();
+    match t {
+        Ty::Void => types.get_type_void(),
+        Ty::Int => types.get_base(4, type_metatype::TYPE_INT),
+        Ty::UInt => types.get_base(4, type_metatype::TYPE_UINT),
+        Ty::Size => types.get_base(ptr, type_metatype::TYPE_UINT),
+        Ty::Long => types.get_base(ptr, type_metatype::TYPE_INT),
+        Ty::Int64 => types.get_base(8, type_metatype::TYPE_INT),
+        Ty::CharPtr => {
+            let c = types.get_type_char(types.get_size_of_char())?;
+            types.get_type_pointer(ptr, c, word_size)
+        }
+        Ty::CharPtrPtr => {
+            let c = types.get_type_char(types.get_size_of_char())?;
+            let cp = types.get_type_pointer(ptr, c, word_size)?;
+            types.get_type_pointer(ptr, cp, word_size)
+        }
+        Ty::IntPtr => {
+            let i = types.get_base(4, type_metatype::TYPE_INT)?;
+            types.get_type_pointer(ptr, i, word_size)
+        }
+        Ty::UIntPtr => {
+            let u = types.get_base(4, type_metatype::TYPE_UINT)?;
+            types.get_type_pointer(ptr, u, word_size)
+        }
+        Ty::WCharPtr => {
+            let w = types.get_type_char(types.get_size_of_wchar())?;
+            types.get_type_pointer(ptr, w, word_size)
+        }
+        Ty::VoidPtr => {
+            let v = types.get_type_void()?;
+            types.get_type_pointer(ptr, v, word_size)
+        }
+        Ty::Complex(size) => crate::analyzers::dwarf::kuna_dwarfcomplex::complex_type(types, size)
+            .ok_or_else(|| unlace_base::error::KunaError::lowlevel("unsupported complex layout")),
+        Ty::Float => types.get_base(4, type_metatype::TYPE_FLOAT),
+        Ty::Double => types.get_base(8, type_metatype::TYPE_FLOAT),
+        Ty::NamedPtr(n) => {
+            let s = kuna_libctypes::named_aggregate(n, types, word_size, layout)?;
+            types.get_type_pointer(ptr, s, word_size)
+        }
+    }
+}
+
+/// Build [`PrototypePieces`] for a single table entry.
+fn build_pieces(
+    name: &str,
+    sig: &Sig,
+    types: &dyn TypeFactory,
+    word_size: uint4,
+    layout: kuna_libctypes::Layout,
+) -> KunaResult<PrototypePieces> {
+    let outtype = Some(build_ty(sig.ret, types, word_size, layout)?);
+    let mut intypes = Vec::with_capacity(sig.params.len());
+    for p in sig.params {
+        intypes.push(build_ty(*p, types, word_size, layout)?);
+    }
+    let innames = vec![String::new(); intypes.len()];
+    Ok(PrototypePieces {
+        name: name.to_string(),
+        outtype,
+        intypes,
+        innames,
+        first_var_arg_slot: sig.vararg,
+        output_storage: None,
+        input_storage: Vec::new(),
+        kuna_library_names: kuna_libcnames::library_names(name)
+            .filter(|n| n.params.len() == sig.params.len()),
+    })
+}
+
+/// (kuna) The named-aggregate layout this image's built-in prototypes are built
+/// under: the `libctypes` gate, narrowed by whether the aggregate widths are
+/// true of THIS object (`Off` when they are not) and then by whether the
+/// published glibc layouts are.
+///
+/// The decision `LibcTypesPass` makes, factored out so a second consumer
+/// (`formatstring static`, which must spell `fprintf`'s `FILE *` exactly as the
+/// callee's own parked prototype does) cannot drift from it.
+pub(crate) fn effective_libctypes_layout(
+    file: &object::File,
+) -> unlace_decomp::kuna_libctypes::LibcTypesLayout {
+    use unlace_decomp::kuna_libctypes::LibcTypesLayout as L;
+    match unlace_decomp::kuna_libctypes::libctypes_layout() {
+        L::Off => L::Off,
+        _ if !kuna_libctypes::glibc::target_takes_the_widths(file) => L::Off,
+        L::Glibc if kuna_libctypes::glibc::target_is_glibc_x86_64(file) => L::Glibc,
+        _ => L::Opaque,
+    }
+}
+
+/// (kuna `formatstring static`) The table names whose last fixed parameter is a
+/// `char *` and whose varargs are nevertheless NOT governed by it. `execlp`'s is
+/// `argv[0]`, not a format — every other variadic in the tables is excluded
+/// structurally (its last fixed slot is an `int` or a `size_t`).
+const NOT_FORMAT_VARIADICS: &[&str] = &["execl", "execle", "execlp"];
+
+/// (kuna `formatstring static`) The built-in prototype for a VARIADIC
+/// format-taking libc function, plus the parameter index its format string
+/// occupies — or `None` when neither table knows the name, or knows it as
+/// something else.
+///
+/// The predicate is the tables' own data, not a name list: a signature qualifies
+/// when it declares a first-variadic slot (`vararg >= 1`) and the fixed parameter
+/// immediately before it is a `char *`. That is Ghidra's
+/// `usesVariadicFormatString` read off the declaration instead of off a recovered
+/// prototype, and it is what keeps `execlp`/`fcntl`/`ioctl`/`open` — variadic, but
+/// not format-taking — out while admitting the `err`/`warn`/`error`/`syslog`
+/// families the `printf`/`scanf` substring test never matched.
+///
+/// `layout` selects the same named-aggregate spelling the load-time prototype
+/// passes install, so a `fprintf` override carries the very `FILE *` the callee's
+/// own parked prototype does.
+pub(crate) fn variadic_format_prototype(
+    name: &str,
+    types: &dyn TypeFactory,
+    word_size: uint4,
+    layout: unlace_decomp::kuna_libctypes::LibcTypesLayout,
+) -> Option<(PrototypePieces, usize)> {
+    if NOT_FORMAT_VARIADICS.contains(&name) {
+        return None;
+    }
+    let named = if layout == kuna_libctypes::Layout::Off {
+        None
+    } else {
+        kuna_libctypes::declared_named_prototype(name)
+    };
+    let sig = match named {
+        Some(sig) => sig,
+        None => LIBC
+            .iter()
+            .chain(kuna_libcsigs::LIBC_EXT.iter())
+            .find(|(n, _)| *n == name)
+            .map(|(_, sig)| sig)?,
+    };
+    if sig.vararg < 1 || (sig.vararg as usize) != sig.params.len() {
+        return None;
+    }
+    let slot = sig.params.len() - 1;
+    if !matches!(sig.params[slot], Ty::CharPtr) {
+        return None;
+    }
+    let pieces = build_pieces(name, sig, types, word_size, layout).ok()?;
+    Some((pieces, slot))
+}
+
+/// Imported function names paired with every concrete address the format
+/// resolver associates with them. A PE import normally contributes both its IAT
+/// slot and its `FF 25` veneer.
+pub(crate) fn resolved_import_addrs(file: &object::File, bytes: &[u8]) -> Vec<(String, u64)> {
+    crate::loader::format::resolve_imports(file, bytes)
+        .into_iter()
+        .filter(|sym| sym.kind == crate::loader::format::ImportSymKind::Import)
+        .filter_map(|imp| {
+            String::from_utf8(imp.name)
+                .ok()
+                .map(|name| (name, imp.addr))
+        })
+        .collect()
+}
+
+/// Add address-keyed prototypes for the resolver entries whose names occur in
+/// `table`. The compatible by-name streams are emitted separately by each pass.
+fn seed_resolved_prototypes(
+    out: &mut AnalysisOutput,
+    imports: &[(String, u64)],
+    table: &[(&str, Sig)],
+    types: &dyn TypeFactory,
+    word_size: uint4,
+    layout: kuna_libctypes::Layout,
+) {
+    for (name, addr) in imports {
+        let Some((_, sig)) = table.iter().find(|(candidate, _)| *candidate == name) else {
+            continue;
+        };
+        if let Ok(pieces) = build_pieces(name, sig, types, word_size, layout) {
+            out.prototypes_at.push((*addr, pieces));
+        }
+    }
+}
+
+/// Add compatible by-name prototypes for names which may be resolved without
+/// ambiguity. Address-keyed prototypes are emitted separately.
+fn seed_named_prototypes(
+    out: &mut AnalysisOutput,
+    names: &HashSet<String>,
+    table: &[(&str, Sig)],
+    types: &dyn TypeFactory,
+    word_size: uint4,
+    layout: kuna_libctypes::Layout,
+    ladder: bool,
+) {
+    for (name, sig) in table {
+        if !names.contains(*name) {
+            continue;
+        }
+        if let Ok(pieces) = build_pieces(name, sig, types, word_size, layout) {
+            out.prototypes.push(pieces);
+        }
+    }
+    if !ladder {
+        return;
+    }
+    let mut spelled: Vec<&String> = names
+        .iter()
+        .filter(|n| table.iter().all(|(t, _)| t != n))
+        .collect();
+    spelled.sort_unstable();
+    for present in spelled {
+        let hit = kuna_nameladder::fallbacks(present)
+            .into_iter()
+            .find_map(|f| table.iter().find(|(t, _)| *t == f));
+        if let Some((_, sig)) = hit {
+            if let Ok(pieces) = build_pieces(present, sig, types, word_size, layout) {
+                out.prototypes.push(pieces);
+            }
+        }
+    }
+}
+
+/// (kuna `declaredlibcproto`) The built-in signature for a function name the
+/// OPERATOR declared, or `None` when neither table knows the name.
+///
+/// The two load-time passes match a name the *image* carries: [`LibProtoPass`]
+/// over the object's own FUNC symbols and imports, [`kuna_libcsigs::LibcSigsPass`]
+/// over the imports alone. Neither can answer for a name that exists only because
+/// a caller said so (`--define-function 0x8048968=ptrace` on a stripped, statically
+/// linked image), which is precisely the reverse-engineering case: the symbol table
+/// is gone, the operator has identified the callee, and the arity is still unknown.
+///
+/// Both tables are searched here, the imports-only restriction included. That
+/// restriction exists because a *coincidental* spelling must not retype a function
+/// the image defines itself — a judgement about evidence, and the evidence is
+/// different when a human or an agent has named the entry outright.
+pub fn declared_libc_prototype(
+    name: &str,
+    types: &dyn TypeFactory,
+    word_size: uint4,
+    layout: unlace_decomp::kuna_libctypes::LibcTypesLayout,
+) -> Option<PrototypePieces> {
+    // (kuna `libctypes`) The named-aggregate form of the same signature when that
+    // gate is on, so a declared `fopen` agrees with what the load-time pass parks
+    // on an imported one. A named signature that cannot be built -- the image
+    // holds `stat` as its own 24-byte struct, say -- degrades to the width-stable
+    // one rather than withdrawing the prototype, which is what the load-time pass
+    // does too (it skips the named slot and the `void *` seeding still stands).
+    //
+    // `layout` is the CALLER's, and the only caller that may pass `Glibc` is the
+    // console, which passes on the load-time pass's own target decision
+    // (`AnalysisOutput::libctypes_glibc`). It cannot be re-derived here: the
+    // object file is out of reach by the time a `--define-function` directive is
+    // answered, and the program alone cannot stand in for it -- a MIPS32 image's
+    // DWARF `stat` also puts `st_dev` at offset 0. `Off` is how the console
+    // passes on a target whose ABI the aggregate widths are not measured for.
+    let named = if layout == kuna_libctypes::Layout::Off {
+        None
+    } else {
+        kuna_libctypes::declared_named_prototype(name)
+    };
+    if let Some(sig) = named {
+        if let Ok(pieces) = build_pieces(name, sig, types, word_size, layout) {
+            return Some(pieces);
+        }
+    }
+    let sig = LIBC
+        .iter()
+        .chain(kuna_libcsigs::LIBC_EXT.iter())
+        .find(|(n, _)| *n == name)
+        .map(|(_, sig)| sig)?;
+    build_pieces(name, sig, types, word_size, layout).ok()
+}
+
+/// Collect the set of FUNC symbol names present in the object — the names the
+/// prototype table is matched against. Two format-neutral sources, unioned:
+///
+/// 1. defined/declared FUNC symbols (`.symtab` + `.dynsym` on ELF; the COFF
+///    symtab on PE/COFF; `LC_SYMTAB` on Mach-O), `@VERSION` stripped;
+/// 2. the §3 import resolver (`resolve_imports`): PE IAT/INT, Mach-O `__stubs`.
+///    This is the source that matters on a **stripped** PE (no symtab `puts`)
+///    and on Mach-O (the import `printf` is named by the `__stubs` walk, not a
+///    `SymbolKind::Text` entry) — `ApplyDataArchiveAnalyzer` matches archive
+///    entries to the program's *functions*, which on these formats include the
+///    resolved imports.
+///
+/// libc/msvcrt names are unmangled, so demangling is a no-op here.
+fn present_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String> {
+    let mut present = HashSet::new();
+    for sym in file.symbols().chain(file.dynamic_symbols()) {
+        if sym.kind() != SymbolKind::Text {
+            continue;
+        }
+        if let Ok(n) = sym.name() {
+            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
+                present.insert(n);
+            }
+        }
+    }
+    // The resolved format symbols (PE IAT/exports, Mach-O stubs/exports). On
+    // ELF this overlaps the `.dynsym` set already collected (`elf_plt` names the
+    // PLT stub by the same `.dynstr` name), so the union is a no-op there — ELF
+    // behavior unchanged. Exports make a name present but are also definition
+    // evidence: a same-named import/definition collision is removed later from
+    // the otherwise-compatible by-name stream. `resolved_import_addrs` rejects
+    // exports from exact address locking.
+    for sym in crate::loader::format::resolve_imports(file, bytes) {
+        if let Ok(name) = String::from_utf8(sym.name) {
+            present.insert(name);
+        }
+    }
+    present
+}
+
+/// Collect every function spelling for which the image supplies its own
+/// definition. Resolver exports matter here because stripped PE and Mach-O
+/// images need not carry an ordinary text symbol for the exported function.
+fn defined_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String> {
+    let mut defined = HashSet::new();
+    for sym in file.symbols().chain(file.dynamic_symbols()) {
+        if sym.kind() != SymbolKind::Text || sym.is_undefined() {
+            continue;
+        }
+        if let Ok(n) = sym.name() {
+            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
+                defined.insert(n);
+            }
+        }
+    }
+    for sym in crate::loader::format::resolve_imports(file, bytes) {
+        if sym.kind != crate::loader::format::ImportSymKind::Export {
+            continue;
+        }
+        if let Ok(name) = String::from_utf8(sym.name) {
+            defined.insert(name);
+        }
+    }
+    defined
+}
+
+/// Collect imported function spellings from ordinary undefined symbols and the
+/// format resolver. This is intentionally the broad evidence set, before any
+/// same-spelled definition is used to suppress ambiguous by-name parking.
+fn imported_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String> {
+    let mut imported = HashSet::new();
+    for sym in file.symbols().chain(file.dynamic_symbols()) {
+        if sym.kind() != SymbolKind::Text || !sym.is_undefined() {
+            continue;
+        }
+        if let Ok(n) = sym.name() {
+            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
+                imported.insert(n);
+            }
+        }
+    }
+    imported.extend(
+        resolved_import_addrs(file, bytes)
+            .into_iter()
+            .map(|(name, _)| name),
+    );
+    imported
+}
+
+/// Remove only names which are simultaneously imported and defined. A global
+/// by-name prototype cannot distinguish those functions, while an address-keyed
+/// prototype can and remains safe on each genuine import resolver address.
+fn retain_unambiguous_names(
+    candidates: &mut HashSet<String>,
+    imported: &HashSet<String>,
+    defined: &HashSet<String>,
+) {
+    candidates.retain(|name| !(imported.contains(name) && defined.contains(name)));
+}
+
+/// The names this image DEFINES and does not also import — the mirror of
+/// `loaded_function_names(..., true)`, and the only set that can tell a
+/// linked-in copy of a library function from a call into the system one.
+///
+/// `loaded_function_names(..., false)` cannot: it is the union, minus the
+/// collisions, so an ordinary import is in it.
+fn unambiguous_defined_function_names(
+    file: &object::File,
+    bytes: &[u8],
+    reloc_imports: &[(String, u64)],
+) -> HashSet<String> {
+    let mut defined = defined_function_names(file, bytes);
+    let mut imported = imported_function_names(file, bytes);
+    imported.extend(reloc_imports.iter().map(|(name, _)| name.clone()));
+    let defined_evidence = defined.clone();
+    retain_unambiguous_names(&mut defined, &imported, &defined_evidence);
+    defined
+}
+
+/// Extend resolver addresses with proven ELF code externs retained by `reloc_symbols`.
+pub(crate) fn loaded_import_addrs(
+    file: &object::File,
+    bytes: &[u8],
+    image: &crate::loadimage_object::ObjectLoadImage,
+) -> (Vec<(String, u64)>, Vec<(String, u64)>) {
+    let mut imports = resolved_import_addrs(file, bytes);
+    let mut reloc_imports = Vec::new();
+    if file.format() != object::BinaryFormat::Elf || image.reloc_symbols().is_empty() {
+        return (imports, reloc_imports);
+    }
+    let mut seen: HashSet<_> = imports.iter().cloned().collect();
+    for sym in image.reloc_symbols().iter().filter(|sym| sym.undefined) {
+        let name = crate::loader::elf_plt::strip_version(sym.name.as_bytes());
+        let imported = (String::from_utf8_lossy(&name).into_owned(), sym.vma);
+        if seen.insert(imported.clone()) {
+            imports.push(imported.clone());
+            reloc_imports.push(imported);
+        }
+    }
+    (imports, reloc_imports)
+}
+
+/// Preserve import/definition ambiguity checks after adding proven code externs.
+fn loaded_function_names(
+    file: &object::File,
+    bytes: &[u8],
+    reloc_imports: &[(String, u64)],
+    imported_only: bool,
+) -> HashSet<String> {
+    let mut imported = imported_function_names(file, bytes);
+    imported.extend(reloc_imports.iter().map(|(name, _)| name.clone()));
+    let defined = defined_function_names(file, bytes);
+    let mut names = if imported_only {
+        imported.clone()
+    } else {
+        present_function_names(file, bytes)
+    };
+    if !imported_only {
+        names.extend(reloc_imports.iter().map(|(name, _)| name.clone()));
+    }
+    retain_unambiguous_names(&mut names, &imported, &defined);
+    names
+}
+
+impl AnalysisPass for LibProtoPass {
+    fn phase(&self) -> Phase {
+        Phase::P1
+    }
+
+    fn id(&self) -> &'static str {
+        "libproto"
+    }
+
+    fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
+        // Format-agnostic (PR-10): the libc/msvcrt name match reads neutral data
+        // (`present_function_names` unions the FUNC symbols with the §3 import
+        // resolver's names), so it fires on ELF/PE/COFF/Mach-O alike — no format
+        // branch. On a PE a `printf` import then types its first arg `char *`, so
+        // `printf("%d\n", …)` renders the literal instead of `printf(0x…, …)`.
+        let mut out = AnalysisOutput::default();
+        let (imports, reloc_imports) = loaded_import_addrs(
+            ctx.file,
+            ctx.bytes,
+            ctx.image.expect("load-time analysis image"),
+        );
+        let present = loaded_function_names(ctx.file, ctx.bytes, &reloc_imports, false);
+        let types = ctx.arch.types();
+        let (_addr_size, word_size) = ctx.arch.data_org();
+        seed_named_prototypes(
+            &mut out,
+            &present,
+            LIBC,
+            types,
+            word_size,
+            L,
+            ctx.arch.analysis_nameladder,
+        );
+        seed_resolved_prototypes(&mut out, &imports, LIBC, types, word_size, L);
+        if ctx.arch.analysis_cppsig.enabled() {
+            seed_named_prototypes(
+                &mut out,
+                &present,
+                CXX_ALLOC,
+                types,
+                word_size,
+                L,
+                ctx.arch.analysis_nameladder,
+            );
+            seed_resolved_prototypes(&mut out, &imports, CXX_ALLOC, types, word_size, L);
+        }
+        out.c_runtime_imports = crate::loader::pe_iat::c_runtime_import_names(ctx.bytes);
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn notype_call_imports_gain_prototypes_but_data_relocations_do_not() {
+        use object::{
+            Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolScope,
+            write,
+        };
+        for (architecture, endian, code, relocation) in [
+            (
+                Architecture::Sparc,
+                Endianness::Big,
+                vec![0x40, 0, 0, 0],
+                object::elf::R_SPARC_WDISP30,
+            ),
+            (
+                Architecture::X86_64,
+                Endianness::Little,
+                vec![0xe8, 0, 0, 0, 0],
+                object::elf::R_X86_64_PLT32,
+            ),
+        ] {
+            for (call_target, same_named_definition) in
+                [(false, false), (true, false), (true, true)]
+            {
+                let mut object = write::Object::new(BinaryFormat::Elf, architecture, endian);
+                let section = object.section_id(if call_target {
+                    write::StandardSection::Text
+                } else {
+                    write::StandardSection::Data
+                });
+                object.append_section_data(section, &code, 4);
+                let symbol = object.add_symbol(write::Symbol {
+                    name: if same_named_definition {
+                        b"memset@TEST_1".to_vec()
+                    } else {
+                        b"memset".to_vec()
+                    },
+                    value: 0,
+                    size: 0,
+                    kind: SymbolKind::Unknown,
+                    scope: SymbolScope::Dynamic,
+                    weak: false,
+                    section: write::SymbolSection::Undefined,
+                    flags: SymbolFlags::None,
+                });
+                if same_named_definition {
+                    object.add_symbol(write::Symbol {
+                        name: b"memset@@TEST_1".to_vec(),
+                        value: 0,
+                        size: 4,
+                        kind: SymbolKind::Text,
+                        scope: SymbolScope::Dynamic,
+                        weak: false,
+                        section: write::SymbolSection::Section(section),
+                        flags: SymbolFlags::None,
+                    });
+                }
+                let r_type = if call_target {
+                    relocation
+                } else if architecture == Architecture::Sparc {
+                    object::elf::R_SPARC_32
+                } else {
+                    object::elf::R_X86_64_32
+                };
+                object
+                    .add_relocation(
+                        section,
+                        write::Relocation {
+                            offset: if architecture == Architecture::X86_64 && call_target {
+                                1
+                            } else {
+                                0
+                            },
+                            symbol,
+                            addend: if architecture == Architecture::X86_64 && call_target {
+                                -4
+                            } else {
+                                0
+                            },
+                            flags: RelocationFlags::Elf { r_type },
+                        },
+                    )
+                    .unwrap();
+                let bytes = object.write().unwrap();
+                let file = object::File::parse(bytes.as_slice()).unwrap();
+                let image =
+                    crate::loadimage_object::ObjectLoadImage::from_bytes_silent("call.o", &bytes)
+                        .unwrap();
+                let (imports, reloc_imports) = loaded_import_addrs(&file, &bytes, &image);
+                assert_eq!(
+                    imports.iter().any(|(name, _)| name == "memset"),
+                    call_target,
+                    "code proof: {architecture:?}, call={call_target}, definition={same_named_definition}"
+                );
+                for imported_only in [false, true] {
+                    let names = loaded_function_names(&file, &bytes, &reloc_imports, imported_only);
+                    assert_eq!(
+                        names.contains("memset"),
+                        call_target && !same_named_definition,
+                        "name parking: {architecture:?}, call={call_target}, definition={same_named_definition}, imported={imported_only}"
+                    );
+                }
+                let defined = unambiguous_defined_function_names(&file, &bytes, &reloc_imports);
+                assert!(
+                    !defined.contains("memset"),
+                    "definition collision: {architecture:?}"
+                );
+                let types = fmt_factory();
+                let mut out = AnalysisOutput::default();
+                seed_resolved_prototypes(&mut out, &imports, LIBC, &types, 1, L);
+                assert_eq!(out.prototypes_at.len(), usize::from(call_target));
+                if call_target {
+                    assert_eq!(
+                        out.prototypes_at[0].1.intypes[0].metatype,
+                        type_metatype::TYPE_PTR
+                    );
+                    assert_eq!(out.prototypes_at[0].0, imports[0].1);
+                    if same_named_definition {
+                        let definition = image
+                            .reloc_symbols()
+                            .iter()
+                            .find(|sym| !sym.undefined && sym.name.starts_with("memset"))
+                            .unwrap();
+                        assert_ne!(out.prototypes_at[0].0, definition.vma);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn notype_address_materialization_in_text_is_not_a_function_import() {
+        use object::{
+            Architecture, BinaryFormat, Endianness, RelocationFlags, SymbolFlags, SymbolScope,
+            write,
+        };
+        let sparc: Vec<_> = [0x03000000u32, 0x82106000, 0x81c3e008, 0x01000000]
+            .into_iter()
+            .flat_map(u32::to_be_bytes)
+            .collect();
+        for (architecture, endian, code, relocations) in [
+            (
+                Architecture::Sparc,
+                Endianness::Big,
+                sparc,
+                vec![
+                    (0, object::elf::R_SPARC_HI22, 0),
+                    (4, object::elf::R_SPARC_LO10, 0),
+                ],
+            ),
+            (
+                Architecture::X86_64,
+                Endianness::Little,
+                vec![0x48, 0x8d, 0x05, 0, 0, 0, 0, 0xc3],
+                vec![(3, object::elf::R_X86_64_PC32, -4)],
+            ),
+            (
+                Architecture::X86_64,
+                Endianness::Little,
+                vec![0x48, 0x8b, 0x05, 0, 0, 0, 0, 0xc3],
+                vec![(3, object::elf::R_X86_64_GOTPCREL, -4)],
+            ),
+            (
+                Architecture::X86_64,
+                Endianness::Little,
+                vec![0x48, 0x8b, 0x05, 0, 0, 0, 0, 0xc3],
+                vec![(3, object::elf::R_X86_64_REX_GOTPCRELX, -4)],
+            ),
+        ] {
+            let mut object = write::Object::new(BinaryFormat::Elf, architecture, endian);
+            let text = object.section_id(write::StandardSection::Text);
+            object.append_section_data(text, &code, 4);
+            let target = object.add_symbol(write::Symbol {
+                name: b"memset".to_vec(),
+                value: 0,
+                size: 0,
+                kind: SymbolKind::Unknown,
+                scope: SymbolScope::Dynamic,
+                weak: false,
+                section: write::SymbolSection::Undefined,
+                flags: SymbolFlags::None,
+            });
+            for &(offset, r_type, addend) in &relocations {
+                object
+                    .add_relocation(
+                        text,
+                        write::Relocation {
+                            offset,
+                            symbol: target,
+                            addend,
+                            flags: RelocationFlags::Elf { r_type },
+                        },
+                    )
+                    .unwrap();
+            }
+            let bytes = object.write().unwrap();
+            let file = object::File::parse(bytes.as_slice()).unwrap();
+            let image =
+                crate::loadimage_object::ObjectLoadImage::from_bytes_silent("address.o", &bytes)
+                    .unwrap();
+            let (imports, reloc_imports) = loaded_import_addrs(&file, &bytes, &image);
+            assert!(
+                imports.is_empty(),
+                "data address: {architecture:?}, {relocations:?}"
+            );
+            assert!(!loaded_function_names(&file, &bytes, &reloc_imports, true).contains("memset"));
+        }
+    }
+
+    /// A type factory shaped like the x86-64 one the passes run against.
+    fn fmt_factory() -> unlace_decomp::dtype::TypeFactoryImpl {
+        let types = unlace_decomp::dtype::TypeFactoryImpl::new();
+        types.set_default_alignment_map();
+        types.set_max_basetype_size(8);
+        types.setup_sizes(Some(8), 8, 4);
+        types
+            .set_core_type(
+                "char",
+                1,
+                unlace_decomp::dtype::type_metatype::TYPE_INT,
+                true,
+            )
+            .expect("char core type");
+        types.cache_core_types().expect("cache core types");
+        types
+    }
+
+    #[test]
+    fn variadic_format_prototype_admits_the_format_families() {
+        use unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque;
+        let types = fmt_factory();
+        // The format slot is the LAST fixed parameter of each declaration.
+        for (name, slot) in [
+            ("printf", 0usize),
+            ("scanf", 0),
+            ("fprintf", 1),
+            ("sprintf", 1),
+            ("snprintf", 2),
+            ("sscanf", 1),
+            ("fscanf", 1),
+            ("__isoc99_scanf", 0),
+            ("__isoc99_sscanf", 1),
+            ("__printf_chk", 1),
+            ("__fprintf_chk", 2),
+            ("__sprintf_chk", 3),
+            ("__snprintf_chk", 4),
+            ("__syslog_chk", 2),
+            ("asprintf", 1),
+            // The families the printf/scanf substring test never named.
+            ("err", 1),
+            ("errx", 1),
+            ("warn", 0),
+            ("warnx", 0),
+            ("error", 2),
+            ("syslog", 1),
+        ] {
+            let (pieces, got) = variadic_format_prototype(name, &types, 8, Opaque)
+                .unwrap_or_else(|| panic!("{name} is a format function"));
+            assert_eq!(got, slot, "{name} format slot");
+            assert_eq!(
+                pieces.intypes.len(),
+                slot + 1,
+                "{name} fixed parameter count"
+            );
+            assert_eq!(
+                pieces.first_var_arg_slot as usize,
+                slot + 1,
+                "{name} vararg slot"
+            );
+        }
+    }
+
+    #[test]
+    fn variadic_format_prototype_refuses_everything_else() {
+        use unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque;
+        let types = fmt_factory();
+        for name in [
+            // Variadic, but the varargs are not governed by the trailing char *.
+            "execlp",
+            // Variadic with a non-pointer last fixed parameter.
+            "open",
+            "openat",
+            "fcntl",
+            "ioctl",
+            // The `v*` forms take a va_list, not varargs.
+            "vsnprintf",
+            "vasprintf",
+            "__vfprintf_chk",
+            // Not variadic at all, and not in the tables at all.
+            "puts",
+            "memcpy",
+            "sub_401136",
+            "",
+        ] {
+            assert!(
+                variadic_format_prototype(name, &types, 8, Opaque).is_none(),
+                "{name} must not be treated as a format function"
+            );
+        }
+    }
+
+    #[test]
+    fn table_entries_are_well_formed() {
+        // vararg slot, when set, points within or just past the fixed params.
+        for (name, sig) in LIBC {
+            if sig.vararg >= 0 {
+                assert!(
+                    (sig.vararg as usize) <= sig.params.len(),
+                    "{name}: vararg slot {} > {} fixed params",
+                    sig.vararg,
+                    sig.params.len()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn setlocale_signature_is_char_ptr_int_char_ptr() {
+        // `char *setlocale(int category, const char *locale)`.  Curating this
+        // entry is the fix for the `-O2` setlocale wrapper (gnulib
+        // `setlocale_null_androidfix`): without it the call's result is an
+        // untyped `undefined8`, so the wrapper's signature comes out `void`
+        // instead of `char *` and the return value is lost.  Pin the shape so a
+        // future edit cannot silently demote the return type back to `int`/`void`.
+        let entry = LIBC.iter().find(|(n, _)| *n == "setlocale");
+        let (_, sig) = entry.expect("table must know setlocale");
+        assert!(matches!(sig.ret, Ty::CharPtr), "setlocale returns char *");
+        assert_eq!(sig.params.len(), 2, "setlocale takes (int, const char *)");
+        assert!(matches!(sig.params[0], Ty::Int), "category is int");
+        assert!(
+            matches!(sig.params[1], Ty::CharPtr),
+            "locale is const char *"
+        );
+        assert_eq!(sig.vararg, -1, "setlocale is not variadic");
+    }
+
+    #[test]
+    fn ptrace_is_the_four_slot_documented_call_form() {
+        // glibc DECLARES `long ptrace(enum __ptrace_request, ...)`, so a stripped
+        // static image gives argument recovery nothing to work from. The four
+        // fixed slots are the ones glibc's own wrapper fetches with `va_arg`.
+        let (_, sig) = LIBC
+            .iter()
+            .find(|(n, _)| *n == "ptrace")
+            .expect("table knows ptrace");
+        assert!(matches!(sig.ret, Ty::Long), "ptrace returns long");
+        assert_eq!(sig.params.len(), 4, "request, pid, addr, data");
+        assert!(matches!(sig.params[0], Ty::Int));
+        assert!(matches!(sig.params[1], Ty::Int));
+        assert!(matches!(sig.params[2], Ty::VoidPtr));
+        assert!(matches!(sig.params[3], Ty::VoidPtr));
+        assert_eq!(
+            sig.vararg, -1,
+            "the fixed form is what a caller is typed against"
+        );
+    }
+
+    #[test]
+    fn a_declared_name_is_answered_out_of_either_table() {
+        // The declared-name lookup is what a stripped image has instead of a symbol
+        // table, so it must reach BOTH tables: the imports-only restriction on the
+        // measured extension is about a coincidental spelling, and an operator who
+        // named the entry outright is not a coincidence.
+        let types = unlace_decomp::dtype::TypeFactoryImpl::new();
+        types.set_default_alignment_map();
+        types.set_max_basetype_size(8);
+        types.setup_sizes(Some(4), 4, 4);
+        let _ = types.cache_core_types();
+        let base = declared_libc_prototype(
+            "ptrace",
+            &types,
+            1,
+            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+        )
+        .expect("base table name");
+        assert_eq!(base.name, "ptrace");
+        assert_eq!(base.intypes.len(), 4);
+        let ext = declared_libc_prototype(
+            "read",
+            &types,
+            1,
+            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+        )
+        .expect("extension table name");
+        assert_eq!(ext.intypes.len(), 3, "ssize_t read(int, void *, size_t)");
+        assert!(
+            declared_libc_prototype(
+                "sub_8049027",
+                &types,
+                1,
+                unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque
+            )
+            .is_none(),
+            "a name neither table knows is left alone"
+        );
+    }
+
+    #[test]
+    fn fauxware_seeds_puts_printf_strcmp() {
+        // The fixture's imports (puts/printf/strcmp/read/open) are present; the pass
+        // must emit prototypes for the libc names it knows that are present, and
+        // none for names absent from the table or the binary.
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fauxware");
+        let bytes = std::fs::read(path).expect("read fauxware fixture");
+        let file = object::File::parse(bytes.as_slice()).expect("parse fauxware");
+        let present = present_function_names(&file, &bytes);
+        for want in ["puts", "printf", "strcmp"] {
+            assert!(present.contains(want), "fauxware should import {want}");
+            assert!(
+                LIBC.iter().any(|(n, _)| n == &want),
+                "table should know {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn pe_present_names_include_imports_for_proto_typing() {
+        // PR-10: on a PE the libc imports must be in `present_function_names` (so
+        // their prototypes seed and the call args type `char *`). In the linked
+        // MinGW PE `puts`/`printf` are in the COFF symtab; the resolver also names
+        // them via the IAT — either way they are present, so `printf("%d\n", …)`
+        // can render the literal.
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/pe_imports.exe");
+        let bytes = std::fs::read(path).expect("read pe_imports.exe");
+        let file = object::File::parse(bytes.as_slice()).expect("parse pe_imports.exe");
+        assert_eq!(file.format(), object::BinaryFormat::Pe, "fixture is a PE");
+        let present = present_function_names(&file, &bytes);
+        for want in ["puts", "printf"] {
+            assert!(
+                present.contains(want),
+                "PE present-names must include {want}: {present:?}"
+            );
+            assert!(
+                LIBC.iter().any(|(n, _)| n == &want),
+                "table should know {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn stripped_pe_present_names_from_resolver_only() {
+        // The IAT-resolver half: in a *stripped* PE there is no COFF symtab `puts`,
+        // so the import names come purely from `resolve_imports`. They must still
+        // be present so the prototype seeds (the stripped-binary proof).
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/pe_imports_stripped.exe"
+        );
+        let bytes = std::fs::read(path).expect("read pe_imports_stripped.exe");
+        let file = object::File::parse(bytes.as_slice()).expect("parse stripped PE");
+        let present = present_function_names(&file, &bytes);
+        assert!(
+            present.contains("puts"),
+            "stripped PE must name `puts` via the IAT: {present:?}"
+        );
+    }
+
+    #[test]
+    fn pe_import_prototype_is_seeded_at_iat_and_veneer_but_not_export() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/libcsigs_pe_x86_64.exe"
+        );
+        let bytes = std::fs::read(path).expect("read duplicate-name PE fixture");
+        let file = object::File::parse(bytes.as_slice()).expect("parse duplicate-name PE fixture");
+        let all = crate::loader::format::resolve_imports(&file, &bytes);
+        let memcmp_all: Vec<(u64, crate::loader::format::ImportSymKind)> = all
+            .iter()
+            .filter(|sym| sym.name == b"memcmp")
+            .map(|sym| (sym.addr, sym.kind))
+            .collect();
+        assert_eq!(
+            memcmp_all,
+            vec![
+                (0x140002050, crate::loader::format::ImportSymKind::Import),
+                (0x140001080, crate::loader::format::ImportSymKind::Import),
+                (0x140001060, crate::loader::format::ImportSymKind::Export),
+            ],
+            "the format resolver must preserve import/export provenance"
+        );
+
+        let imports = resolved_import_addrs(&file, &bytes);
+        let memcmp: Vec<u64> = imports
+            .iter()
+            .filter(|(name, _)| name == "memcmp")
+            .map(|(_, addr)| *addr)
+            .collect();
+        assert_eq!(
+            memcmp,
+            vec![0x140002050, 0x140001080],
+            "only the imported IAT and veneer are eligible for address locking"
+        );
+
+        let types = unlace_decomp::dtype::TypeFactoryImpl::new();
+        types.set_default_alignment_map();
+        types.set_max_basetype_size(8);
+        types.setup_sizes(Some(8), 8, 4);
+        types
+            .set_core_type("char", 1, type_metatype::TYPE_INT, true)
+            .expect("install char core type");
+        types.cache_core_types().expect("cache core types");
+        let mut out = AnalysisOutput::default();
+        let imported = loaded_function_names(&file, &bytes, &[], true);
+        assert!(
+            !imported.contains("memcmp"),
+            "a same-named resolver export makes global by-name parking ambiguous"
+        );
+        seed_named_prototypes(
+            &mut out,
+            &imported,
+            kuna_libcsigs::LIBC_EXT,
+            &types,
+            1,
+            L,
+            false,
+        );
+        seed_resolved_prototypes(&mut out, &imports, kuna_libcsigs::LIBC_EXT, &types, 1, L);
+        let seeded: Vec<(u64, usize)> = out
+            .prototypes_at
+            .iter()
+            .filter(|(_, pieces)| pieces.name == "memcmp")
+            .map(|(addr, pieces)| (*addr, pieces.intypes.len()))
+            .collect();
+        assert_eq!(
+            seeded,
+            vec![(0x140002050, 3), (0x140001080, 3)],
+            "the signature belongs on both import targets and not the same-named export"
+        );
+        assert!(
+            out.prototypes.iter().all(|pieces| pieces.name != "memcmp"),
+            "no global memcmp prototype may be parked where it could type the export"
+        );
+    }
+
+    #[test]
+    fn base_by_name_matching_suppresses_only_import_definition_collisions() {
+        let mut candidates = HashSet::from([
+            "puts".to_string(),
+            "printf".to_string(),
+            "strcmp".to_string(),
+        ]);
+        let imported = HashSet::from(["puts".to_string(), "printf".to_string()]);
+        let defined = HashSet::from(["puts".to_string(), "strcmp".to_string()]);
+        retain_unambiguous_names(&mut candidates, &imported, &defined);
+
+        let types = unlace_decomp::dtype::TypeFactoryImpl::new();
+        types.set_default_alignment_map();
+        types.set_max_basetype_size(8);
+        types.setup_sizes(Some(8), 8, 4);
+        types
+            .set_core_type("char", 1, type_metatype::TYPE_INT, true)
+            .expect("install char core type");
+        types.cache_core_types().expect("cache core types");
+        let mut out = AnalysisOutput::default();
+        seed_named_prototypes(&mut out, &candidates, LIBC, &types, 1, L, false);
+        let names: HashSet<&str> = out
+            .prototypes
+            .iter()
+            .map(|pieces| pieces.name.as_str())
+            .collect();
+
+        assert!(
+            !candidates.contains("puts"),
+            "same-named import and definition cannot safely share a global prototype"
+        );
+        assert!(
+            !names.contains("puts"),
+            "the base pass must not park the conflicting name"
+        );
+        assert!(
+            names.contains("printf"),
+            "import-only compatibility is preserved"
+        );
+        assert!(
+            names.contains("strcmp"),
+            "defined-only base matching is preserved"
+        );
+    }
+
+    #[test]
+    fn base_table_imports_keep_name_matching_and_gain_address_keys() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/pe_imports_stripped.exe"
+        );
+        let bytes = std::fs::read(path).expect("read stripped PE fixture");
+        let file = object::File::parse(bytes.as_slice()).expect("parse stripped PE fixture");
+        let present = loaded_function_names(&file, &bytes, &[], false);
+        assert!(
+            present.contains("puts"),
+            "the compatible by-name match remains available"
+        );
+
+        let imports = resolved_import_addrs(&file, &bytes);
+        let types = unlace_decomp::dtype::TypeFactoryImpl::new();
+        types.set_default_alignment_map();
+        types.set_max_basetype_size(8);
+        types.setup_sizes(Some(8), 8, 4);
+        types
+            .set_core_type("char", 1, type_metatype::TYPE_INT, true)
+            .expect("install char core type");
+        types.cache_core_types().expect("cache core types");
+        let mut out = AnalysisOutput::default();
+        seed_resolved_prototypes(&mut out, &imports, LIBC, &types, 1, L);
+        let mut seeded: Vec<u64> = out
+            .prototypes_at
+            .iter()
+            .filter(|(_, pieces)| pieces.name == "puts")
+            .map(|(addr, _)| *addr)
+            .collect();
+        seeded.sort_unstable();
+        assert_eq!(
+            seeded,
+            vec![0x140007240, 0x14000d33c],
+            "the base-table signature must reach both the puts veneer and IAT slot"
+        );
+    }
+
+    #[test]
+    fn macho_present_names_include_stub_import() {
+        // Mach-O: the `printf` import is named by the `__stubs` indirect-symbol
+        // walk (not a `SymbolKind::Text` entry), so the resolver-union is what
+        // makes it present for prototype typing.
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_imports");
+        let bytes = std::fs::read(path).expect("read macho_imports");
+        let file = object::File::parse(bytes.as_slice()).expect("parse macho_imports");
+        assert_eq!(
+            file.format(),
+            object::BinaryFormat::MachO,
+            "fixture is Mach-O"
+        );
+        let present = present_function_names(&file, &bytes);
+        assert!(
+            present.contains("printf"),
+            "Mach-O must name `printf` via __stubs: {present:?}"
+        );
+    }
+}

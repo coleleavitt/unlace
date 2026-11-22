@@ -10,8 +10,8 @@
     the default of current rustc, whose `_RNv...` symbols the legacy
     `_ZN...17h` prefixes in the Rust list never match.
 
-    Stage / sub-stage: P1 external-refinement (`kuna-analysis`
-    `loader/noreturn.rs` and the lists under `kuna-analysis/data/`).
+    Stage / sub-stage: P1 external-refinement (`unlace-analysis`
+    `loader/noreturn.rs` and the lists under `unlace-analysis/data/`).
 
     P0 assertion: `option noreturn_known on|off` (with `noreturn_extern` and
     `noreturn_externmatch` off in the first pass, which read the same ELF list
@@ -39,7 +39,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/noreturn_names_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/noreturn_names_x86_64</com>
   <com>option noreturn_known off</com>
   <com>option fdeflowbound off</com>
   <com>option itaniumeh off</com>
@@ -54,7 +54,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/noreturn_names_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/noreturn_names_x86_64</com>
   <com>read symbols</com>
   <com>load function quit_now</com>
   <com>decompile</com>
@@ -66,7 +66,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/rust_noreturn_v0_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_noreturn_v0_x86_64</com>
   <com>option noreturn_known off</com>
   <com>option fdeflowbound off</com>
   <com>read symbols</com>
@@ -80,7 +80,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/rust_noreturn_v0_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_noreturn_v0_x86_64</com>
   <com>read symbols</com>
   <com>load function opt</com>
   <com>decompile</com>
@@ -92,13 +92,13 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/rust_noreturn_pie_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_noreturn_pie_x86_64</com>
   <com>read symbols</com>
   <com>load function opt</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/rust_noreturn_pie_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_noreturn_pie_x86_64</com>
   <com>option relronoreturn on</com>
   <com>read symbols</com>
   <com>load function opt</com>

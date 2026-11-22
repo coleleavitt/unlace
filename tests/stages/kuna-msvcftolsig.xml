@@ -9,7 +9,7 @@
     eliminated. The recognizer names the helpers from their VS2005 CRT bytes.
     The SSE2 entries return only EAX; __ftol and __ftol2 return EDX:EAX.
 
-    Fixture: decompiler/crates/kuna-analysis/tests/fixtures/ftolsig_pe_i386.exe
+    Fixture: decompiler/crates/unlace-analysis/tests/fixtures/ftolsig_pe_i386.exe
     (build notes in ftolsig_pe_i386.s). sub_401150 is VC8 /O2 output calling
     __ftol2_sse twice, sub_401033 calls __ftol, and sub_401042 calls a helper
     with the same contract that no signature knows: it stays argument-less
@@ -22,7 +22,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/ftolsig_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ftolsig_pe_i386.exe</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>load function sub_401150</com>

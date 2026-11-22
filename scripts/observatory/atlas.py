@@ -27,7 +27,7 @@ def assemble(doc: dict, reg: dict, code: dict, owners: dict, sched: dict, meta: 
         phases.append(
             {
                 **phase,
-                "specChapter": specmap.chapter_for(owners, "kuna-decomp", folder),
+                "specChapter": specmap.chapter_for(owners, "unlace-decomp", folder),
                 "files": stats["files"],
                 "loc": stats["loc"],
                 "modules": stats["modules"],
@@ -53,7 +53,7 @@ def assemble(doc: dict, reg: dict, code: dict, owners: dict, sched: dict, meta: 
         extra.append(
             {
                 **info,
-                "specChapter": specmap.chapter_for(owners, "kuna-decomp", info["folder"]),
+                "specChapter": specmap.chapter_for(owners, "unlace-decomp", info["folder"]),
                 "files": stats["files"],
                 "loc": stats["loc"],
                 "modules": stats["modules"],
@@ -73,7 +73,7 @@ def assemble(doc: dict, reg: dict, code: dict, owners: dict, sched: dict, meta: 
 
 def generate(root: Path | None = None, out: Path | None = None) -> dict:
     root = root or common.repo_root()
-    reg = registry.load(root / "decompiler" / "crates" / "kuna-decomp" / "phases.toml")
+    reg = registry.load(root / "decompiler" / "crates" / "unlace-decomp" / "phases.toml")
     return assemble(
         doc=phasesdoc.parse(root / "docs" / "phases.md"),
         reg=reg,

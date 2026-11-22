@@ -347,6 +347,7 @@ jobs:
         run: |
           ver="${{ needs.version.outputs.version }}"
           ls -l dist/
+          # shellcheck disable=SC2016  # the backticks in the notes are Markdown
           gh release create "v$ver" \
             --target "$GITHUB_SHA" \
             --title "unlace v$ver" \

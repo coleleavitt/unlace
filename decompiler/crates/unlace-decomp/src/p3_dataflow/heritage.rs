@@ -86,12 +86,12 @@ use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 
 use crate::context::BlockId;
+use crate::funcdata_spacebase::FuncdataAliasExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::kuna_indexaliasguard::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
 use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
 use crate::overrides::Override;
 use crate::varnode::varnode_flags;
-use crate::funcdata_spacebase::FuncdataAliasExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 // =============================================================================
 // VariableStack (heritage.hh:29)

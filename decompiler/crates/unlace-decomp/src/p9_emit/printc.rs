@@ -2687,10 +2687,10 @@ use crate::architecture::Architecture;
 use crate::cast::{CastContext, CastStrategy, CastStrategyC, OpRef, VnRef};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use crate::funcdata_facing::FuncdataFacingExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::funcdata_union::FuncdataUnionExt;
+use unlace_num::opcodes::OpCode;
 
 /// One resolved member token of a partial-symbol access walk (C++
 /// `PartialSymbolEntry`, printc.cc:1985-1994).  A struct/union field becomes a

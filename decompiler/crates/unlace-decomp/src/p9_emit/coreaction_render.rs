@@ -2179,11 +2179,11 @@ impl Action for ActionDeadCode {
 // ---------------------------------------------------------------------------
 
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use unlace_base::address::{calc_mask, coveringmask, leastsigbit_set, minimalmask};
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// C++ `ActionDeadCode::pushConsumed` (coreaction.cc:3714).
 ///

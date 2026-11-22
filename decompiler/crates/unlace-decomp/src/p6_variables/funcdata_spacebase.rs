@@ -51,10 +51,7 @@ pub(crate) trait FuncdataSpacebaseExt {
         off: int8,
     ) -> Option<(Rc<crate::dtype::Datatype>, int8)>;
     fn split_uses(&mut self, vn: VarnodeId);
-    fn find_spacebase_input(
-        &self,
-        id: &Rc<unlace_base::space::AddrSpace>,
-    ) -> Option<VarnodeId>;
+    fn find_spacebase_input(&self, id: &Rc<unlace_base::space::AddrSpace>) -> Option<VarnodeId>;
     fn query_local_properties(
         &self,
         addr: &Address,
@@ -396,10 +393,7 @@ impl FuncdataSpacebaseExt for Funcdata {
     /// Locate the unique input Varnode that holds the incoming value of a
     /// spacebase (stack-pointer) register (C++ `Funcdata::findSpacebaseInput`,
     /// `funcdata.cc:289`).
-    fn find_spacebase_input(
-        &self,
-        id: &Rc<unlace_base::space::AddrSpace>,
-    ) -> Option<VarnodeId> {
+    fn find_spacebase_input(&self, id: &Rc<unlace_base::space::AddrSpace>) -> Option<VarnodeId> {
         let point = id.get_spacebase(0).ok()?;
         let point_space = point.space.as_ref()?;
         let addr = Address::new(Rc::clone(point_space), point.offset);

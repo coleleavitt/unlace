@@ -34,8 +34,8 @@ use unlace_num::opcodes::OpCode;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeFactoryImpl, TypeField, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::unionresolve::ResolvedUnion;
 use unlace_decomp::funcdata_union::FuncdataUnionExt;
+use unlace_decomp::unionresolve::ResolvedUnion;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();

@@ -78,9 +78,9 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::p0_knowledge::options::on_or_off;
 use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// Marshaling element `<endptrbound>` (kuna 4000+ range; 4168 was the previous
 /// high-water mark).

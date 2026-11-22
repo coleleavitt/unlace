@@ -6,10 +6,10 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::printc::PrintC;
 use crate::printlanguage::{OpToken, ReversePolish, TokenType};
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Find the token following a cast through enclosing right-hand expressions.
 pub(crate) fn cast_before_angle(stack: &[ReversePolish]) -> bool {

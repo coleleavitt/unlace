@@ -1,4 +1,5 @@
 //! Keep a proven volatile load live while its constant address is still an SSA expression.
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::{
     context::{OpId, VarnodeId},
     funcdata::Funcdata,
@@ -10,7 +11,6 @@ use unlace_base::{
     space::AddrSpace,
 };
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// Values proven for written varnodes: `Some` is the constant, `None` a
 /// varnode proven not to be one. Valid while the op graph is unchanged.

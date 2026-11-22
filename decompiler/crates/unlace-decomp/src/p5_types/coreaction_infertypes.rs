@@ -50,9 +50,9 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::typeop::type_op_info;
 use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::typeop::type_op_info;
 
 /// Resolve `op->outputTypeLocal()` / `op->inputTypeLocal(slot)` faithfully via the
 /// W6 typeop inst table (`getOutputLocal`/`getInputLocal`).  Falls back to a

@@ -7,10 +7,10 @@ use unlace_base::space::{
     spacetype,
 };
 use unlace_decomp::context::ArchContext;
+use unlace_decomp::coreaction_casts::FuncdataCastExt;
 use unlace_decomp::dtype::{TypeFactory, TypeFactoryImpl, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
-use unlace_decomp::coreaction_casts::FuncdataCastExt;
 
 fn conversion(
     size: i32,

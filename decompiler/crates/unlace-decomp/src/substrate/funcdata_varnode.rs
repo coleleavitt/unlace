@@ -16,9 +16,9 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
-use crate::varnode::{DefOpInfo, varnode_flags};
-use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
+use crate::varnode::{DefOpInfo, varnode_flags};
 
 impl Funcdata {
     // -----------------------------------------------------------------------

@@ -5,11 +5,11 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataAliasExt;
 use std::rc::Rc;
 use unlace_base::address::{Address, sign_extend};
 use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_spacebase::FuncdataAliasExt;
 
 #[derive(Clone)]
 struct EffectRange {

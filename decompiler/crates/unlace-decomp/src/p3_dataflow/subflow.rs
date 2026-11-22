@@ -94,10 +94,10 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{ArchHandle, OpId, TypeOp, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_class, type_metatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_merge::FuncdataMergeExt;
 use crate::op::pcodeop_flags;
 use crate::transform::{LaneDescription, TVarRef, TransformManager};
 use std::rc::Rc;
-use crate::funcdata_merge::FuncdataMergeExt;
 
 // =============================================================================
 // SubvariableFlow placeholder data structures (subflow.hh:43-95)

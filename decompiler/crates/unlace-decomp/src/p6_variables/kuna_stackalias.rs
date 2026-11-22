@@ -8,9 +8,9 @@
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataAliasExt;
 use std::collections::BTreeSet;
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_spacebase::FuncdataAliasExt;
 
 /// Whether this Varnode is a physical write in this function's frame space.
 pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {

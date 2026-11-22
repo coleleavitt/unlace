@@ -4,10 +4,10 @@ use crate::architecture::Architecture;
 use crate::context::OpId;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::printc::{PrintC, op_key, tokens};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType, modifiers};
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 impl PrintC {
     pub(crate) fn op_rust_ptradd(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {

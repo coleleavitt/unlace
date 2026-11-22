@@ -2206,9 +2206,9 @@ fn doc_function_renders_a_real_prototype() {
 // independent of the stubbed IR.
 // ---------------------------------------------------------------------------
 
-use crate::printlanguage::{Atom as PlAtom, SyntaxHighlight as PlHl, TagType as PlTag};
 use crate::funcdata_facing::FuncdataFacingExt;
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::printlanguage::{Atom as PlAtom, SyntaxHighlight as PlHl, TagType as PlTag};
 
 /// A variable-name leaf atom.
 fn var_atom(name: &str) -> PlAtom {

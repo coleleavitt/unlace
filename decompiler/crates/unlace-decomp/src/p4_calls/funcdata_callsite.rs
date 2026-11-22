@@ -34,9 +34,9 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataAliasExt;
 use crate::funcdata_varnode::AncestorRealistic;
 use crate::varmap::AliasChecker;
-use crate::funcdata_spacebase::FuncdataAliasExt;
 
 /// (kuna) The deferred argument-list retry one finalized call leaves behind.
 ///

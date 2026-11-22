@@ -7,12 +7,12 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::Datatype;
 use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_union::FuncdataUnionExt;
 use crate::kuna_stackobjects::{ByteSource, SourcePoint};
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_union::FuncdataUnionExt;
 
 #[derive(Clone)]
 pub struct UseAnchor {

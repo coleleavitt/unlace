@@ -26,10 +26,10 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
-use crate::p4_calls::fspec::{FuncCallSpecs, FuncProto, PrototypePieces};
 use crate::funcdata_spacebase::FuncdataAliasExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::infra::architecture::Architecture;
+use crate::p4_calls::fspec::{FuncCallSpecs, FuncProto, PrototypePieces};
 
 /// What a recovered prototype is allowed to say about a call site.
 ///

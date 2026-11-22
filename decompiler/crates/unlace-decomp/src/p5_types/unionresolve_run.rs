@@ -52,12 +52,12 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::unionresolve::{
     ConstantFitFacts, FloatConstFact, LockedProtoFacts, MAX_PASSES, MAX_TRIALS, ResolvedUnion,
     THRESHOLD, compute_best_index, deref_pointer, score_constant_fit, score_locked_type,
     score_parameter, score_return_type, score_tables, score_truncation,
 };
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Direction a trial pushes (C++ `ScoreUnionFields::Trial::dir_type`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

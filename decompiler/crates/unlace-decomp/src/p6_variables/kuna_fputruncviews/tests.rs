@@ -3,12 +3,12 @@ use std::rc::Rc;
 
 use crate::context::{ArchContext, BlockId, VarnodeId};
 use crate::dtype::TypeFactoryImpl;
+use crate::funcdata_merge::FuncdataMergeExt;
 use crate::varnode::varnode_flags;
 use unlace_base::address::Address;
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
-use crate::funcdata_merge::FuncdataMergeExt;
 
 struct Fixture {
     fd: Funcdata,

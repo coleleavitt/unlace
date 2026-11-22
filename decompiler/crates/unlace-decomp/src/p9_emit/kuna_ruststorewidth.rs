@@ -7,6 +7,8 @@ use crate::dtype::type_metatype::{
     TYPE_BOOL, TYPE_INT, TYPE_PTR, TYPE_STRUCT, TYPE_UINT, TYPE_UNKNOWN,
 };
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::kuna_rustarrayaddr::{RAW_ADDRESS, array_place};
 use crate::kuna_rusttypes::int_name;
 use crate::prettyprint::Emit;
@@ -15,8 +17,6 @@ use crate::printlanguage::{Atom, SyntaxHighlight, TagType, modifiers};
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_facing::FuncdataFacingExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 fn integer(ty: &Datatype) -> Option<&'static str> {
     if ty.is_enum_type() {

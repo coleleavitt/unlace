@@ -4,11 +4,11 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::kuna_rustintegers::needs_integer_context;
 use crate::printc::{PrintC, op_key, op_token, tokens};
 use crate::printlanguage::{Atom, OpToken, SyntaxHighlight, TagType, TokenType, modifiers};
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) static RAW_ADDRESS: OpToken =
     op_token("&raw mut ", "", 1, 62, false, TokenType::UnaryPrefix, 0, 0);

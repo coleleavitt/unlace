@@ -5,8 +5,8 @@ use std::rc::Rc;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use unlace_num::opcodes::OpCode;
 use crate::funcdata_facing::FuncdataFacingExt;
+use unlace_num::opcodes::OpCode;
 
 pub(crate) struct SignedTextPlan {
     pub(crate) inputs: [VarnodeId; 2],

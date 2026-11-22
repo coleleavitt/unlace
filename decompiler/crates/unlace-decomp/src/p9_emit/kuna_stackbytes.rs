@@ -4,9 +4,9 @@ use crate::context::{OpId, VarnodeId};
 use crate::database::SymbolId;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Byte {

@@ -1,12 +1,12 @@
 use super::*;
 use crate::context::ArchContext;
+use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, spacetype};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 struct Image;
 impl LoadImage for Image {

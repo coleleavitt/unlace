@@ -6,11 +6,11 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::kuna_langtypes::SpellCtx;
 use crate::printc::{PrintC, op_key, op_token, tokens};
 use crate::printlanguage::{Atom, OpToken, SyntaxHighlight, TagType, TokenType};
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) use carrier::is_zero_word_carrier;
 

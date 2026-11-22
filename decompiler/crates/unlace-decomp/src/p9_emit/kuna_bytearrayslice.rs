@@ -7,9 +7,9 @@
 use crate::context::OpId;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::p9_emit::kuna_floatslice::Slice;
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// The slice and whether the source needs a word cast before shifting (a pointer does).
 pub(crate) fn recognize(fd: &Funcdata, op: OpId) -> Option<(Slice, bool)> {

@@ -14,9 +14,9 @@ use unlace_decomp::architecture::Architecture;
 use unlace_decomp::context::VarnodeId;
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::funcdata_facing::FuncdataFacingExt;
 use unlace_decomp::varnode::varnode_flags;
 use unlace_num::opcodes::OpCode;
-use unlace_decomp::funcdata_facing::FuncdataFacingExt;
 
 /// Why a format that was applied does not show: the next decompile did not
 /// find the constant again.

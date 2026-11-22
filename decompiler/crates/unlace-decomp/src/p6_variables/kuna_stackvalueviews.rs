@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::unionresolve::ResolvedUnion;
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::unionresolve::ResolvedUnion;
 
 pub(crate) fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     let mut edges = Vec::new();

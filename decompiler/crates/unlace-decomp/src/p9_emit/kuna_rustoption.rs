@@ -4,12 +4,12 @@ use crate::architecture::Architecture;
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::kuna_lang::OutLang;
 use crate::prettyprint::{Emit, SyntaxHighlight};
 use crate::printc::PrintC;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 const OPTION_U64: &str = "core::option::Option<u64>";
 

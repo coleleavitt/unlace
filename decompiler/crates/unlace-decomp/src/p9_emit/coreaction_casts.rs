@@ -66,11 +66,11 @@ use crate::coreaction_infertypes::{
 };
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::unionresolve::ResolvedUnion;
 use crate::funcdata_facing::FuncdataFacingExt;
 use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::unionresolve::ResolvedUnion;
 
 // =============================================================================
 // FuncdataCastContext — the read-only IR bridge for CastStrategyC.
@@ -1410,21 +1410,14 @@ pub trait FuncdataCastExt {
     ) -> bool;
     fn cast_output(&mut self, op: OpId, strat: &CastStrategyC) -> int4;
     fn cast_narrowed_call(&mut self, op: OpId, wide: Rc<Datatype>, unsigned: bool) -> int4;
-    fn cast_output_token(
-        &mut self,
-        op: OpId,
-        strat: &CastStrategyC,
-        tokenct: Rc<Datatype>,
-    ) -> int4;
+    fn cast_output_token(&mut self, op: OpId, strat: &CastStrategyC, tokenct: Rc<Datatype>)
+    -> int4;
     fn cast_insert_ptrsub_zero(&mut self, op: OpId, slot: int4, ct: Rc<Datatype>) -> OpId;
     fn cast_try_resolution_adjustment(&mut self, dt: &Rc<Datatype>, op: OpId, slot: int4) -> bool;
     fn cast_try_resolution_copy(&mut self, op: OpId) -> bool;
     fn cast_check_pointer_issues(&mut self, op: OpId, _vn: VarnodeId);
-    fn rebuild_resolved(
-        &self,
-        unres_type: &Rc<Datatype>,
-        field_num: int4,
-    ) -> Option<ResolvedUnion>;
+    fn rebuild_resolved(&self, unres_type: &Rc<Datatype>, field_num: int4)
+    -> Option<ResolvedUnion>;
 }
 
 impl FuncdataCastExt for Funcdata {

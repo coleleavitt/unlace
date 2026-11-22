@@ -10,8 +10,8 @@ use unlace_num::opcodes::OpCode;
 
 use super::*;
 use crate::context::ArchContext;
-use crate::dtype::{Datatype, TypeFactoryImpl};
 use crate::coreaction_casts::FuncdataCastExt;
+use crate::dtype::{Datatype, TypeFactoryImpl};
 
 struct Fx {
     fd: Funcdata,

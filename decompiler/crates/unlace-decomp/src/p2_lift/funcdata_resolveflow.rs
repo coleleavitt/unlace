@@ -26,10 +26,10 @@ use unlace_num::opcodes::OpCode;
 use crate::context::OpId;
 use crate::dtype::{Datatype, DatatypeKind, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::unionresolve::ResolvedUnion;
-use crate::unionresolve_run::ScoreUnionFields;
 use crate::funcdata_facing::FuncdataFacingExt;
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::unionresolve::ResolvedUnion;
+use crate::unionresolve_run::ScoreUnionFields;
 
 /// [`Funcdata`] methods for union resolution along data flow, kept out of the IR module.
 pub trait FuncdataResolveFlowExt {

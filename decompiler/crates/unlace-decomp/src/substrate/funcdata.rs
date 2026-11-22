@@ -5029,12 +5029,12 @@ pub type DefOp = DefOpInfo;
 
 use crate::cover::{Cover, CoverContext, CoverPoint};
 use crate::dtype::Datatype;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_union::FuncdataUnionExt;
+use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
 use crate::variable::{CompareNameView, HighContext, VarnodeView, VarnodeViewLoc};
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
-use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::funcdata_union::FuncdataUnionExt;
 
 impl Funcdata {
     /// Convert a constant pointer into a `PTRSUB(spacebase, off)` (+ extra/zext/

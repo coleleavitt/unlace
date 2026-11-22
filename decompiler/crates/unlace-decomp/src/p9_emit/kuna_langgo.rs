@@ -779,9 +779,9 @@ pub(crate) fn escape(output: &mut String, value: i32, quote: char) {
 }
 
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::printc::op_key;
 use crate::printlanguage::{Atom, SyntaxHighlight as AtomHighlight, TagType};
-use crate::funcdata_facing::FuncdataFacingExt;
 
 impl PrintC {
     pub(crate) fn emit_go_condition_expression(

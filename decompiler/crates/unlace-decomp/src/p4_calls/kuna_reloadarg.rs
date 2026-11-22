@@ -34,8 +34,8 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
-use crate::varmap::AliasChecker;
 use crate::funcdata_spacebase::FuncdataAliasExt;
+use crate::varmap::AliasChecker;
 
 /// Flag trial `i` of call spec `idx` for [`recheck`] when one of `loads`, the
 /// LOADs its walk took as solid, reads the caller's frame.

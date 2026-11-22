@@ -102,8 +102,8 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
-use crate::funcdata::Funcdata;
 use crate::coreaction_casts::FuncdataCastExt;
+use crate::funcdata::Funcdata;
 use crate::funcdata_merge::FuncdataMergeExt;
 
 // =============================================================================

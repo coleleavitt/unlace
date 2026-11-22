@@ -79,6 +79,7 @@
 //! [`ActionIteBoolean::apply`] early-returns, nothing is marked, and output is
 //! byte-identical.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::error::KunaResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;

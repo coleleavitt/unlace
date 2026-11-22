@@ -5,6 +5,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use std::rc::Rc;
 use unlace_base::address::{Address, sign_extend};
 use unlace_base::space::AddrSpace;

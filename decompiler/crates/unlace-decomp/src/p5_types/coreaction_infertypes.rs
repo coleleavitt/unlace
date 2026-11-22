@@ -40,6 +40,8 @@
 //! conservatively decline (return `None`/no-op), which is faithful — the C++ also
 //! returns null along those edges when the supporting surface doesn't apply.
 
+use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};

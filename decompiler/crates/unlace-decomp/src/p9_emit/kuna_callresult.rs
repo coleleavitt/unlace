@@ -1,5 +1,6 @@
 //! Preserve low scalar return storage when a recovered callee prints a wider integer.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;

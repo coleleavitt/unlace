@@ -67,6 +67,8 @@
 //! without C's own spelling the target prints the upstream `code *`, and nothing
 //! here runs.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 

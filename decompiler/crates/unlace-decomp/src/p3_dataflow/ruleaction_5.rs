@@ -47,6 +47,8 @@
 //! whose `applyOp` is a STUB stub returning `0` (no transform).  Each is in the
 //! structured `losses` output.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask, uintb_negate};

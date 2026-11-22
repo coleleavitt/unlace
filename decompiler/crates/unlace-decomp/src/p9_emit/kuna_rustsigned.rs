@@ -1,5 +1,6 @@
 //! Signed machine operations on Rust's unsigned primitive storage.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};

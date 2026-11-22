@@ -42,6 +42,7 @@
 //! expose; absent it the `FLOAT` constant arm takes the C++ `format == 0` branch
 //! (`score = -1`), recorded as a loss.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::address::sign_extend;

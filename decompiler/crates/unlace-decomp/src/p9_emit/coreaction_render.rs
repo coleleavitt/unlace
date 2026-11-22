@@ -105,6 +105,7 @@
 //! pulls individual constructors rather than a `*_actions()` bundle.  A
 //! [`render_actions`] helper is provided for round-trip identity testing only.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::collections::HashSet;
 use std::rc::Rc;
 

@@ -22,7 +22,7 @@ pub(crate) mod kuna_bytearrayslice;
 pub(crate) mod kuna_callargextend;
 pub mod kuna_callerstack;
 pub(crate) mod kuna_callresult;
-mod kuna_calltransport;
+pub mod kuna_calltransport;
 pub mod kuna_castarith; // (kuna) pointer arithmetic stays in pointer terms
 pub mod kuna_castimplied; // (kuna) casts C's own conversions already perform
 pub mod kuna_castnarrow; // (kuna) a narrowing C's own assignment, argument or return conversion performs keeps no cast

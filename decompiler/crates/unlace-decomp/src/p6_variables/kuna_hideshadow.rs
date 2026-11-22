@@ -50,6 +50,7 @@
 use crate::action::ApplyResult;
 use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
+use crate::funcdata_merge::FuncdataMergeExt;
 use crate::merge::MergeContext;
 use crate::varnode::varnode_flags;
 

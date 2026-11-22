@@ -1,6 +1,7 @@
 //! Recover paired fields from the integer carrier's zero extension or word shift.
 
 use super::*;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::kuna_lang::OutLang;
 use crate::kuna_langgo::GO_SPELLER;
 use crate::kuna_langtypes::TypeSpeller;

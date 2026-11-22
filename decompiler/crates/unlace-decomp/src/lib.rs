@@ -83,4 +83,18 @@ pub use p8_structure::*;
 pub use p9_emit::*;
 pub use substrate::*;
 
+/// The `Funcdata`/`Datatype` extension traits whose methods were inherent before they moved
+/// out of the IR module; `use unlace_decomp::prelude::*;` brings every one into scope.
+pub mod prelude {
+    pub use crate::coreaction_casts::FuncdataCastExt;
+    pub use crate::funcdata_facing::FuncdataFacingExt;
+    pub use crate::funcdata_merge::FuncdataMergeExt;
+    pub use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
+    pub use crate::funcdata_spacebase::FuncdataAliasExt;
+    pub use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+    pub use crate::funcdata_union::FuncdataUnionExt;
+    pub use crate::kuna_calltransport::FuncdataCallTransportExt;
+    pub use crate::kuna_typequal::DatatypeQualExt;
+}
+
 pub(crate) use p9_emit::kuna_indirectargs;

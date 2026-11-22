@@ -80,6 +80,7 @@
 #![allow(clippy::enum_variant_names)]
 #![allow(clippy::needless_late_init)]
 
+use crate::funcdata_merge::FuncdataMergeExt;
 use std::collections::BTreeMap;
 
 use unlace_base::address::{

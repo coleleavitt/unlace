@@ -1,5 +1,6 @@
 //! Bounded integer views and whole-value reads of Go byte-array storage.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;

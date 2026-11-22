@@ -6,6 +6,7 @@
 //! and preserve the surrounding dataflow. Constant-fill and read-only-string
 //! recovery reuse the same collection and replacement machinery.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, int8, uintb};

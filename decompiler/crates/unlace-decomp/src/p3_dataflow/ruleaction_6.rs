@@ -5,6 +5,9 @@
 //! Opcode mutations use canonical type operations. Unsupported type-facing
 //! cases decline their rewrite.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_merge::FuncdataMergeExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::{

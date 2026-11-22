@@ -1,5 +1,6 @@
 //! Native-use assertions for logical objects over shared physical frame storage.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 

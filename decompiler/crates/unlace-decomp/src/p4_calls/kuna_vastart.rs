@@ -22,6 +22,7 @@
 //! mapping (as the stack-guard strip does for the canary slot), so dead-code
 //! removes the spills. An unlocked prototype is marked variadic.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;

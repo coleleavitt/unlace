@@ -25,6 +25,7 @@
 //! and from there over each following constant-initialised local. Where
 //! upstream's merge reaches further on its own, the array is upstream's.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, sign_extend};

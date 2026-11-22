@@ -22,6 +22,8 @@
 //! not part of the transform); those are STUB-noted no-ops, only reachable on a
 //! distribution failure that does not occur on the targeted corpus.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
 use unlace_base::address::{calc_mask, sign_extend, uintb_negate};

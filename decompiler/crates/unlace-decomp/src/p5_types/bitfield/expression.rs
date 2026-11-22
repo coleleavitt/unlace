@@ -27,6 +27,7 @@
 //! and in-symbol offset off the high exactly where the C++ reads them off the
 //! Symbol.  // STUB(W4 symbol) — mirrors `printc::push_vn_explicit_ir`.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;

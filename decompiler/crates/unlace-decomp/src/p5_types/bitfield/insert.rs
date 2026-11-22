@@ -16,6 +16,7 @@
 //! `TypeStruct` bitfield `TypeField`s by the base `establishFields`); nothing is
 //! hardcoded.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::address::{calc_mask, extend_signbit, leastsigbit_set, popcount};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;

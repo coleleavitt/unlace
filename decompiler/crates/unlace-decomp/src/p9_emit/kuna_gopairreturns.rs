@@ -1,5 +1,6 @@
 //! Go multiple-result syntax over verified ordinary struct storage.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;

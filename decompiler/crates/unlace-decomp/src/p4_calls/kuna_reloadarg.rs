@@ -25,6 +25,7 @@
 //! stays a hole-filled argument. A Go image passes arguments in registers the
 //! cspec calls scratch, so the rule stands down there.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;

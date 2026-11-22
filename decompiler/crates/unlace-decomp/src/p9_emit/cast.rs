@@ -57,6 +57,7 @@
 //! data-type pairs `getInputCast` would feed it, and the promotion tests drive
 //! the IR-walking methods through a mock [`CastContext`].
 
+use crate::kuna_typequal::DatatypeQualExt;
 use std::rc::Rc;
 
 use unlace_base::address::{mostsigbit_set, signbit_negative, uintb_negate};

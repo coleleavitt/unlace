@@ -22,6 +22,7 @@
 //! as wide as `int` are considered; a narrower one is cast by the upstream
 //! integer-promotion checks.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::address::signbit_negative;

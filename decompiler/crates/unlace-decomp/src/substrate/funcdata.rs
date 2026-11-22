@@ -26,6 +26,10 @@
 //!   `funcdata_spacebase.rs`          — variable/merge/stack tiers (P6)
 //! - `p9_emit/coreaction_casts.rs`    — cast insertion hooks (P9)
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_union::FuncdataUnionExt;
+use crate::kuna_calltransport::FuncdataCallTransportCrateExt;
+use crate::kuna_calltransport::FuncdataCallTransportExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::types::{Wrap, int2, int4, uint4, uint8, uintm};
@@ -7071,6 +7075,7 @@ impl<'a> HighContext for HighReadView<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::funcdata_merge::FuncdataMergeExt;
     use std::rc::Rc;
 
     use unlace_base::address::Address;

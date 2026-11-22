@@ -1,5 +1,6 @@
 //! Preserve a live Go pointer when byte arithmetic survives as an integer add.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;

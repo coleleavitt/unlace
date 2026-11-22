@@ -69,6 +69,7 @@
 //! Gated by [`ArchContext::elem_ptr`](crate::context::ArchContext) (option
 //! `elemptr on|off`); with the option off nothing here is reachable.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;

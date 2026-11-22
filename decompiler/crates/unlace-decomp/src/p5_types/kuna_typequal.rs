@@ -10,12 +10,18 @@ pub const VOLATILE: u8 = 4;
 pub const ELEM_QUALIFIED: unlace_base::marshal::ElementId =
     unlace_base::marshal::ElementId::new("qualified", 4094);
 
-impl Datatype {
-    pub fn c_qualifiers(&self) -> u8 {
+/// [`Datatype`] methods for C type qualifiers.
+pub trait DatatypeQualExt {
+    fn c_qualifiers(&self) -> u8;
+    fn qualified_base(&self) -> Option<&Rc<Datatype>>;
+}
+
+impl DatatypeQualExt for Datatype {
+    fn c_qualifiers(&self) -> u8 {
         self.qualifiers
     }
 
-    pub fn qualified_base(&self) -> Option<&Rc<Datatype>> {
+    fn qualified_base(&self) -> Option<&Rc<Datatype>> {
         self.qualified_base.as_ref()
     }
 }

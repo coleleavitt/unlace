@@ -9,6 +9,7 @@
 //! unless `intPromotionType` shows its promoted value extends the way that
 //! type does.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;

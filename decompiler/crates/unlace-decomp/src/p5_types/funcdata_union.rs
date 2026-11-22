@@ -3,7 +3,8 @@
 //! union-resolution subsystem ([`crate::coreaction_cleanup::ActionSetCasts`])
 //! and the per-op `getInputCast`/`resolveInFlow` surface key on.
 //!
-//! These are additional `impl Funcdata` methods; the `union_map`
+//! These are [`FuncdataUnionExt`] methods implemented for `Funcdata` (two private helpers are
+//! `FuncdataUnionLocalExt`); the `union_map`
 //! `BTreeMap<ResolveEdge, ResolvedUnion>` field and its clear live in
 //! [`crate::funcdata`].  The map is keyed by [`ResolveEdge`] whose [`Ord`] is the
 //! verbatim C++ `ResolveEdge::operator<`, so the `BTreeMap` reproduces the C++
@@ -30,23 +31,80 @@ use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 
-impl Funcdata {
-    /// `op->getTime()` for a live op (the C++ `ResolveEdge` reads `op->getTime()`).
-    /// Panics on a stale id, mirroring the other `obank().get(...).expect(...)`
-    /// accessors in [`crate::funcdata_op`] (a stale op here is a logic error).
-    fn op_time(&self, op: OpId) -> unlace_base::types::uintm {
-        self.obank()
-            .get(op)
-            .expect("union edge: stale op")
-            .get_time()
-    }
+/// [`Funcdata`] methods for the per-function union-field resolution cache.
+pub trait FuncdataUnionExt {
+    fn get_union_field(
+        &self,
+        unres_type: &Datatype,
+        op: OpId,
+        slot: int4,
+    ) -> Option<&ResolvedUnion>;
+    fn get_union_resolution(
+        &self,
+        unres_type: &Datatype,
+        op: OpId,
+        slot: int4,
+    ) -> Option<&ResolvedUnion>;
+    fn get_address_based_union_field(
+        &self,
+        unres_type: &Datatype,
+        addr: &Address,
+        slot: int4,
+    ) -> Option<&ResolvedUnion>;
+    fn set_union_field(
+        &mut self,
+        unres_type: &Datatype,
+        op: OpId,
+        slot: int4,
+        resolve: ResolvedUnion,
+    ) -> bool;
+    fn set_address_based_union_field(
+        &mut self,
+        unres_type: &Datatype,
+        addr: &Address,
+        slot: int4,
+        resolve: ResolvedUnion,
+    ) -> bool;
+    fn apply_union_facet(&mut self, entry: &crate::database::SymbolEntry) -> KunaResult<bool>;
+    fn update_union_field(
+        &mut self,
+        unres_type: &Datatype,
+        op: OpId,
+        slot: int4,
+        res_type: Rc<Datatype>,
+    ) -> bool;
+    fn force_facing_type(
+        &mut self,
+        unres_type: Rc<Datatype>,
+        field_num: int4,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<()>;
+    fn inherit_union_field(
+        &mut self,
+        unres_type: &Datatype,
+        op: OpId,
+        slot: int4,
+        old_op: OpId,
+        old_slot: int4,
+    ) -> int4;
+    fn inherit_union_field_ptr(
+        &mut self,
+        unres_ptr: Rc<Datatype>,
+        op: OpId,
+        slot: int4,
+        old_op: OpId,
+        old_slot: int4,
+    ) -> KunaResult<int4>;
+}
 
-    /// Build the data-flow `ResolveEdge(unresType, op, slot)`
-    /// (C++ `ResolveEdge::ResolveEdge(const Datatype*,const PcodeOp*,int4)`).
-    fn union_edge_op(&self, unres_type: &Datatype, op: OpId, slot: int4) -> ResolveEdge {
-        ResolveEdge::new_op(unres_type, self.op_time(op), slot)
-    }
+/// [`Funcdata`] methods for the per-function union-field resolution cache private to this module.
+trait FuncdataUnionLocalExt {
+    fn op_time(&self, op: OpId) -> unlace_base::types::uintm;
+    fn union_edge_op(&self, unres_type: &Datatype, op: OpId, slot: int4) -> ResolveEdge;
+}
 
+impl FuncdataUnionExt for Funcdata {
     /// \brief Get the resolution (union field) associated with an unresolved
     /// data-type and the given edge (C++ `Funcdata::getUnionField`,
     /// `funcdata.cc:915-929`).
@@ -54,7 +112,7 @@ impl Funcdata {
     /// The cached resolution is only returned when its data-type size matches the
     /// unresolved data-type's size (the C++ "Check that the Varnode size matches"
     /// guard).
-    pub fn get_union_field(
+    fn get_union_field(
         &self,
         unres_type: &Datatype,
         op: OpId,
@@ -77,7 +135,7 @@ impl Funcdata {
     ///
     /// The size of the resolved data-type does not have to match the given
     /// data-type.
-    pub fn get_union_resolution(
+    fn get_union_resolution(
         &self,
         unres_type: &Datatype,
         op: OpId,
@@ -90,7 +148,7 @@ impl Funcdata {
     /// \brief Get any resolution (union field) associated with an unresolved
     /// data-type and the given address (C++
     /// `Funcdata::getAddressBasedUnionField`, `funcdata.cc:959-968`).
-    pub fn get_address_based_union_field(
+    fn get_address_based_union_field(
         &self,
         unres_type: &Datatype,
         addr: &Address,
@@ -108,7 +166,7 @@ impl Funcdata {
     /// exists.  For a `MULTIEQUAL`, the resolution is also copied to every other
     /// input slot holding the same Varnode (data-type propagation does not happen
     /// between `MULTIEQUAL` input slots holding the same Varnode).
-    pub fn set_union_field(
+    fn set_union_field(
         &mut self,
         unres_type: &Datatype,
         op: OpId,
@@ -172,7 +230,7 @@ impl Funcdata {
     ///
     /// Overwrites a previous association unless it was \e locked.  Returns `true`
     /// except where a previous *locked* association exists.
-    pub fn set_address_based_union_field(
+    fn set_address_based_union_field(
         &mut self,
         unres_type: &Datatype,
         addr: &Address,
@@ -211,7 +269,7 @@ impl Funcdata {
     /// Reached from [`attempt_dynamic_mapping`](Funcdata::attempt_dynamic_mapping)
     /// and [`attempt_dynamic_mapping_late`](Funcdata::attempt_dynamic_mapping_late)
     /// for a `union_facet`-category SymbolEntry.
-    pub fn apply_union_facet(&mut self, entry: &crate::database::SymbolEntry) -> KunaResult<bool> {
+    fn apply_union_facet(&mut self, entry: &crate::database::SymbolEntry) -> KunaResult<bool> {
         let sym_id = entry.symbol;
         let (sym_type, field_number, addr_based) = {
             let localmap = match self.get_scope_local() {
@@ -309,7 +367,7 @@ impl Funcdata {
     /// If further resolution of the cached data-type has happened, update the
     /// cache with the new data-type.  Returns `true` unless there was no
     /// association for the edge.
-    pub fn update_union_field(
+    fn update_union_field(
         &mut self,
         unres_type: &Datatype,
         op: OpId,
@@ -330,7 +388,7 @@ impl Funcdata {
     ///
     /// A relative pointer is *not* associated with the resolution; it is first
     /// converted to a standard pointer to the same base.
-    pub fn force_facing_type(
+    fn force_facing_type(
         &mut self,
         unres_type: Rc<Datatype>,
         field_num: int4,
@@ -371,7 +429,7 @@ impl Funcdata {
     ///
     /// Returns the field number that was inherited, or -1 if `old_op`/`old_slot`
     /// had no associated resolution.
-    pub fn inherit_union_field(
+    fn inherit_union_field(
         &mut self,
         unres_type: &Datatype,
         op: OpId,
@@ -405,7 +463,7 @@ impl Funcdata {
     /// `funcdata.cc:1101-1115`).
     ///
     /// Returns the inherited field number, or -1 if there was nothing to inherit.
-    pub fn inherit_union_field_ptr(
+    fn inherit_union_field_ptr(
         &mut self,
         unres_ptr: Rc<Datatype>,
         op: OpId,
@@ -441,5 +499,23 @@ impl Funcdata {
             ResolvedUnion::new_field(Rc::clone(&unres_ptr), inherited_field, typegrp.as_ref())?;
         self.set_union_field(&unres_ptr, op, slot, ptrres);
         Ok(inherited_field)
+    }
+}
+
+impl FuncdataUnionLocalExt for Funcdata {
+    /// `op->getTime()` for a live op (the C++ `ResolveEdge` reads `op->getTime()`).
+    /// Panics on a stale id, mirroring the other `obank().get(...).expect(...)`
+    /// accessors in [`crate::funcdata_op`] (a stale op here is a logic error).
+    fn op_time(&self, op: OpId) -> unlace_base::types::uintm {
+        self.obank()
+            .get(op)
+            .expect("union edge: stale op")
+            .get_time()
+    }
+
+    /// Build the data-flow `ResolveEdge(unresType, op, slot)`
+    /// (C++ `ResolveEdge::ResolveEdge(const Datatype*,const PcodeOp*,int4)`).
+    fn union_edge_op(&self, unres_type: &Datatype, op: OpId, slot: int4) -> ResolveEdge {
+        ResolveEdge::new_op(unres_type, self.op_time(op), slot)
     }
 }

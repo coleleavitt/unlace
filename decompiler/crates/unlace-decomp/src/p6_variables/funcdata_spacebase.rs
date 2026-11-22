@@ -35,7 +35,77 @@ use crate::varnode::varnode_flags;
 #[cfg(test)]
 pub(crate) mod spacebase_tests;
 
-impl Funcdata {
+/// [`Funcdata`] methods for stack and spacebase recovery.
+pub trait FuncdataSpacebaseExt {
+    fn spacebase(&mut self);
+    fn is_ptrsub_matching_scope(
+        &self,
+        ptrtype: &Rc<crate::dtype::Datatype>,
+        off: int8,
+        extra: int8,
+        multiplier: int8,
+    ) -> bool;
+    fn spacebase_get_sub_type(
+        &self,
+        sb_type: &Rc<crate::dtype::Datatype>,
+        off: int8,
+    ) -> Option<(Rc<crate::dtype::Datatype>, int8)>;
+    fn split_uses(&mut self, vn: VarnodeId);
+    fn find_spacebase_input(&self, id: &Rc<unlace_base::space::AddrSpace>) -> Option<VarnodeId>;
+    fn query_local_properties(
+        &self,
+        addr: &Address,
+        size: int4,
+        usepoint: &Address,
+    ) -> unlace_base::types::uint4;
+    fn restrict_local(&mut self);
+    fn restructure_varnode(&mut self, aliasyes: bool) -> int4;
+    fn check_unaliased_return(
+        &mut self,
+        space: &Rc<unlace_base::space::AddrSpace>,
+        alias: &[uintb],
+    );
+    fn apply_type_recommendations(&mut self);
+    fn annotate_raw_stack_ptr(&mut self, space: &Rc<unlace_base::space::AddrSpace>);
+    fn sync_varnodes_with_symbols(
+        &mut self,
+        update_datatypes: bool,
+        unmapped_alias_check: bool,
+    ) -> bool;
+}
+
+/// [`Funcdata`] methods for stack and spacebase recovery private to this module.
+trait FuncdataSpacebaseLocalExt {
+    fn record_frame_layout_pass(&self, space: &Rc<unlace_base::space::AddrSpace>);
+    fn alias_reaches_return_slot(alias: &[uintb], off: uintb, size: int4) -> bool;
+    fn gather_varnodes(
+        &self,
+        space: &Rc<unlace_base::space::AddrSpace>,
+        state: &mut crate::varmap::MapState,
+    );
+    fn is_read_active(&self, vn: VarnodeId) -> bool;
+    fn gather_open(
+        &mut self,
+        space: &Rc<unlace_base::space::AddrSpace>,
+        state: &mut crate::varmap::MapState,
+        bounds: Option<&crate::varmap::ProtoBoundaries>,
+    ) -> Vec<super::kuna_arrayextent::OpenBase>;
+    fn add_guard(
+        &self,
+        state: &mut crate::varmap::MapState,
+        guard: &crate::heritage::LoadGuard,
+        opc: OpCode,
+    ) -> Option<super::kuna_arrayextent::OpenBase>;
+    fn sync_varnodes_with_symbol(
+        &mut self,
+        group: &[VarnodeId],
+        fl: uint4,
+        ct: Option<&Rc<crate::dtype::Datatype>>,
+        entry_is_join_piece: bool,
+    ) -> bool;
+}
+
+impl FuncdataSpacebaseExt for Funcdata {
     /// Mark Varnode objects that hold stack-pointer values and set up special
     /// data-types (C++ `Funcdata::spacebase`, `funcdata.cc:228`).
     ///
@@ -45,7 +115,7 @@ impl Funcdata {
     /// it is the input it is typed as a pointer to the space.  A base register
     /// that is **already** marked and is defined by `INT_ADD` is split so a stale
     /// multi-descendant chain doesn't block promotion (`splitUses`).
-    pub fn spacebase(&mut self) {
+    fn spacebase(&mut self) {
         let numspaces = self.get_arch().manage().num_spaces();
         for j in 0..numspaces {
             let spc = match self.get_arch().manage().get_space(j) {
@@ -143,7 +213,7 @@ impl Funcdata {
     /// method.  Callers are `ActionSetCasts::castFixupPtrsub`
     /// (`coreaction.cc:2837`) and `RulePtrsubUndo::applyOp` (`ruleaction.cc:7169`),
     /// which must NOT undo a valid stack-frame `PTRSUB(sp, off)`.
-    pub fn is_ptrsub_matching_scope(
+    fn is_ptrsub_matching_scope(
         &self,
         ptrtype: &Rc<crate::dtype::Datatype>,
         off: int8,
@@ -204,7 +274,7 @@ impl Funcdata {
     /// `sb_type` is the `TYPE_SPACEBASE` data-type; `off` is the byte offset
     /// (already address-to-byte converted by the caller, matching the `int8 off`
     /// the C++ `getSubType` receives from `TypePointer::downChain`).
-    pub fn spacebase_get_sub_type(
+    fn spacebase_get_sub_type(
         &self,
         sb_type: &Rc<crate::dtype::Datatype>,
         off: int8,
@@ -254,7 +324,7 @@ impl Funcdata {
     /// each descendant has its own copy (C++ `Funcdata::splitUses`).
     ///
     /// Dead-code actions remove the now-unused original op.
-    pub fn split_uses(&mut self, vn: VarnodeId) {
+    fn split_uses(&mut self, vn: VarnodeId) {
         let op = match self.vbank().get(vn).and_then(|v| v.get_def()) {
             Some(o) => o,
             None => return,
@@ -327,10 +397,7 @@ impl Funcdata {
     /// Locate the unique input Varnode that holds the incoming value of a
     /// spacebase (stack-pointer) register (C++ `Funcdata::findSpacebaseInput`,
     /// `funcdata.cc:289`).
-    pub fn find_spacebase_input(
-        &self,
-        id: &Rc<unlace_base::space::AddrSpace>,
-    ) -> Option<VarnodeId> {
+    fn find_spacebase_input(&self, id: &Rc<unlace_base::space::AddrSpace>) -> Option<VarnodeId> {
         let point = id.get_spacebase(0).ok()?;
         let point_space = point.space.as_ref()?;
         let addr = Address::new(Rc::clone(point_space), point.offset);
@@ -344,7 +411,7 @@ impl Funcdata {
     /// scope or the range is not in its map.  This is the local-scope half of the
     /// `Heritage::guard` property walk; the global-scope half is
     /// [`crate::context::ArchHandle::query_global_properties`].
-    pub fn query_local_properties(
+    fn query_local_properties(
         &self,
         addr: &Address,
         size: int4,
@@ -376,7 +443,7 @@ impl Funcdata {
     /// Transcribes the two C++ loops (no name/register/offset
     /// special-casing; the spacebase/join classification and the unaffected/COPY
     /// walk are purely structural).
-    pub fn restrict_local(&mut self) {
+    fn restrict_local(&mut self) {
         use unlace_base::space::spacetype;
 
         // --- Loop 1: stack-passed params of input-locked locked calls -----------
@@ -566,7 +633,7 @@ impl Funcdata {
     /// `markUnaliased`/`annotateRawStackPtr`) refines parameter and alias
     /// bookkeeping; the layout-creating core (gather + restructure) is realized
     /// here.
-    pub fn restructure_varnode(&mut self, aliasyes: bool) -> int4 {
+    fn restructure_varnode(&mut self, aliasyes: bool) -> int4 {
         use crate::varmap::MapState;
 
         // C++ `restructureVarnode` head (varmap.cc:1259): clear out the unlocked
@@ -721,38 +788,6 @@ impl Funcdata {
         rebased
     }
 
-    /// (kuna `framelayout`) Snapshot the NO_CATEGORY stack Symbols this pass
-    /// recovered into the `Funcdata`'s frame-slot union.
-    fn record_frame_layout_pass(&self, space: &Rc<unlace_base::space::AddrSpace>) {
-        let Some(sl) = self.get_scope_local() else {
-            return;
-        };
-        let specs = sl
-            .database()
-            .scope_space_local_var_specs(sl.scope_id(), space.get_index() as usize);
-        let mut slots = Vec::new();
-        for (name, ct, addr, category) in specs {
-            if category != crate::database::symbol_category::NO_CATEGORY {
-                continue;
-            }
-            let off = unlace_base::address::sign_extend(
-                addr.get_offset() as i64,
-                space.get_addr_size() as i32 * 8 - 1,
-            );
-            let size = ct.get_size();
-            slots.push((
-                off,
-                crate::funcdata::FrameSlot {
-                    name,
-                    dtype: ct,
-                    size,
-                },
-            ));
-        }
-        self.record_frame_slots(slots);
-        crate::kuna_slotptr::record_pass(self, space);
-    }
-
     /// C++ `ScopeLocal::checkUnaliasedReturn` (`varmap.cc:414-428`): if the return
     /// value is passed back in a location held by this scope's (stack) space, assume
     /// it is unmapped — unless a specific alias reaches into the location — and mark
@@ -760,7 +795,7 @@ impl Funcdata {
     ///
     /// `alias` is the sorted list of alias offsets into the space (from the
     /// `MapState`).  Called from [`restructure_varnode`] when `aliasyes` is set.
-    pub fn check_unaliased_return(
+    fn check_unaliased_return(
         &mut self,
         space: &Rc<unlace_base::space::AddrSpace>,
         alias: &[uintb],
@@ -802,22 +837,6 @@ impl Funcdata {
         }
     }
 
-    /// The alias-overlap decision of C++ `ScopeLocal::checkUnaliasedReturn`
-    /// (`varmap.cc:421-425`): does any alias offset reach into the return slot
-    /// `[off, off+size)`?  `lower_bound(alias, off)` finds the first alias `>= off`;
-    /// if that alias is `<= off+size-1` it lands inside the slot.  When it does, the
-    /// slot stays mapped (aliased); otherwise the caller unmaps it.
-    fn alias_reaches_return_slot(alias: &[uintb], off: uintb, size: int4) -> bool {
-        // iter = lower_bound(alias.begin(), alias.end(), off);
-        let pos = alias.partition_point(|&a| a < off);
-        if pos < alias.len() {
-            // Alias is greater than or equal to vn offset.
-            let last = off.wrapping_add(size as uintb).wrapping_sub(1);
-            return alias[pos] <= last;
-        }
-        false
-    }
-
     /// C++ `ScopeLocal::applyTypeRecommendations` (`varmap.cc:1574`): for each
     /// pending `(addr, type)` recommendation, if an input Varnode exists at that
     /// address, lock the recommended data-type onto it.
@@ -826,7 +845,7 @@ impl Funcdata {
     /// each type-propagation pass.  The merged tree's only recommendation source is
     /// the `this`-pointer collection (`collectNameRecs`/`prepareThisPointer`); on a
     /// recommendation-free function this is a no-op.
-    pub fn apply_type_recommendations(&mut self) {
+    fn apply_type_recommendations(&mut self) {
         let recs: Vec<(int4, Address, Rc<crate::dtype::Datatype>)> = match self.get_scope_local() {
             Some(lm) => lm
                 .type_recommendations()
@@ -870,7 +889,7 @@ impl Funcdata {
     ///
     /// Reached from [`Funcdata::restructure_varnode`] when a zero-offset use of the
     /// stack pointer exists (the first alias offset is 0).
-    pub fn annotate_raw_stack_ptr(&mut self, space: &Rc<unlace_base::space::AddrSpace>) {
+    fn annotate_raw_stack_ptr(&mut self, space: &Rc<unlace_base::space::AddrSpace>) {
         if !self.has_type_recovery_started() {
             return;
         }
@@ -916,6 +935,198 @@ impl Funcdata {
                 let _ = self.op_set_input(op, out, slot);
             }
         }
+    }
+
+    /// Update Varnode flags and data-types from the local symbol map (C++
+    /// `Funcdata::syncVarnodesWithSymbols`, `funcdata_varnode.cc:959`).
+    ///
+    /// Walks every Varnode in the local scope's space; for each, resolves the
+    /// overlapping mapped Symbol and paints the `mapped`/`addrtied`/`addrforce`/
+    /// `nolocalalias` flags and (when `update_datatypes`) the recovered type.
+    /// Unmapped locations gain `nolocalalias` only when the caller enables
+    /// the alias check and the local map proves the location unaliased.
+    /// Returns `true` if any Varnode changed.
+    fn sync_varnodes_with_symbols(
+        &mut self,
+        update_datatypes: bool,
+        unmapped_alias_check: bool,
+    ) -> bool {
+        let space = match (self.get_scope_local(), self.get_arch().types()) {
+            (Some(lm), Some(_)) => Rc::clone(lm.get_space_id()),
+            _ => return false,
+        };
+        let mut update_occurred = false;
+
+        // Iterate the location set restricted to the stack space, grouped by
+        // (size, addr) — each group is one syncVarnodesWithSymbol run.
+        let all: Vec<VarnodeId> = self
+            .vbank()
+            .iter_loc()
+            .filter(|vn| {
+                self.vbank()
+                    .get(*vn)
+                    .and_then(|v| v.get_addr().get_space().map(|s| s.get_index()))
+                    == Some(space.get_index())
+            })
+            .collect();
+
+        // Group consecutive (size, offset) exemplars.  beginLoc/endLoc in C++
+        // walks one (size,addr) block per outer step; here we resolve the symbol
+        // once per exemplar group and apply to every member.
+        let mut i = 0usize;
+        while i < all.len() {
+            let exemplar = all[i];
+            let (ex_addr, ex_size) = match self.vbank().get(exemplar) {
+                Some(v) => (v.get_addr().clone(), v.get_size()),
+                None => {
+                    i += 1;
+                    continue;
+                }
+            };
+
+            // Collect this (size, addr) group.
+            let mut group: Vec<VarnodeId> = Vec::new();
+            while i < all.len() {
+                let vn = all[i];
+                let same = match self.vbank().get(vn) {
+                    Some(v) => {
+                        v.get_size() == ex_size && v.get_addr().get_offset() == ex_addr.get_offset()
+                    }
+                    None => false,
+                };
+                if !same {
+                    break;
+                }
+                group.push(vn);
+                i += 1;
+            }
+
+            // Resolve the overlapping symbol for the exemplar.
+            let overlap = self.get_scope_local().and_then(|lm| {
+                self.get_arch()
+                    .types()
+                    .and_then(|t| lm.sync_overlap(&ex_addr, ex_size, t))
+            });
+
+            let mut ct: Option<Rc<crate::dtype::Datatype>> = None;
+            let fl: uint4;
+            // Whether the resolved SymbolEntry is a join-piece sub-entry (precislo/
+            // precishi extra-flags, NOT `mapped`) — the extra maps `Scope::addMap`
+            // registers per piece of a join-address Symbol (database.cc:1161-1180).
+            // The kuna addrtied pre-tie must NOT fire for such a partial piece: the
+            // covered Varnode is a SUBPIECE-extracted field of the join symbol, and
+            // C++'s heritage pre-tie only ties whole-symbol storage (the `mapped`
+            // entry), never these piece sub-entries.  Without this gate the field
+            // read gets addrtied and is forced explicit as a copymarker self-assign
+            // (`d.field_b = d.field_b;`) instead of staying implied.
+            let mut entry_is_join_piece = false;
+            if let Some(ov) = overlap {
+                let mut flags = ov.all_flags;
+                entry_is_join_piece =
+                    (ov.extraflags & (varnode_flags::precislo | varnode_flags::precishi)) != 0
+                        && (ov.extraflags & varnode_flags::mapped) == 0;
+                if ov.entry_size >= ex_size {
+                    if update_datatypes {
+                        if let Some(t) = &ov.sized_type {
+                            if t.get_metatype() != crate::dtype::type_metatype::TYPE_UNKNOWN {
+                                ct = Some(Rc::clone(t));
+                            }
+                        }
+                    }
+                } else {
+                    // Overlapping but not containing: drop typelock/namelock.
+                    flags &= !(varnode_flags::typelock | varnode_flags::namelock);
+                }
+                fl = flags;
+            } else {
+                // No symbol found.  C++ funcdata_varnode.cc:992-1004: if the range
+                // is in scope (`rangetree.inRange`) there *should* be a symbol — the
+                // fallback marks `mapped | addrtied`.  (A stack-passed struct param's
+                // field read used to land here because its join-piece SymbolEntry was
+                // not yet registered in the stack EntryMap; the `Scope::addMap` join
+                // arm now registers it, so the `Some(ov)` arm above resolves it to the
+                // param Symbol instead — Stack spill #1.)
+                let in_scope = self
+                    .get_scope_local()
+                    .map(|lm| lm.in_scope(&ex_addr, ex_size))
+                    .unwrap_or(false);
+                if in_scope {
+                    fl = varnode_flags::mapped | varnode_flags::addrtied;
+                } else if unmapped_alias_check {
+                    let unaliased = self
+                        .get_scope_local()
+                        .and_then(|lm| {
+                            ex_addr
+                                .get_space()
+                                .map(|spc| lm.is_unmapped_unaliased(spc, ex_addr.get_offset()))
+                        })
+                        .unwrap_or(false);
+                    fl = if unaliased {
+                        varnode_flags::nolocalalias
+                    } else {
+                        0
+                    };
+                } else {
+                    fl = 0;
+                }
+            }
+
+            if self.sync_varnodes_with_symbol(&group, fl, ct.as_ref(), entry_is_join_piece) {
+                update_occurred = true;
+            }
+        }
+
+        update_occurred
+    }
+}
+
+impl FuncdataSpacebaseLocalExt for Funcdata {
+    /// (kuna `framelayout`) Snapshot the NO_CATEGORY stack Symbols this pass
+    /// recovered into the `Funcdata`'s frame-slot union.
+    fn record_frame_layout_pass(&self, space: &Rc<unlace_base::space::AddrSpace>) {
+        let Some(sl) = self.get_scope_local() else {
+            return;
+        };
+        let specs = sl
+            .database()
+            .scope_space_local_var_specs(sl.scope_id(), space.get_index() as usize);
+        let mut slots = Vec::new();
+        for (name, ct, addr, category) in specs {
+            if category != crate::database::symbol_category::NO_CATEGORY {
+                continue;
+            }
+            let off = unlace_base::address::sign_extend(
+                addr.get_offset() as i64,
+                space.get_addr_size() as i32 * 8 - 1,
+            );
+            let size = ct.get_size();
+            slots.push((
+                off,
+                crate::funcdata::FrameSlot {
+                    name,
+                    dtype: ct,
+                    size,
+                },
+            ));
+        }
+        self.record_frame_slots(slots);
+        crate::kuna_slotptr::record_pass(self, space);
+    }
+
+    /// The alias-overlap decision of C++ `ScopeLocal::checkUnaliasedReturn`
+    /// (`varmap.cc:421-425`): does any alias offset reach into the return slot
+    /// `[off, off+size)`?  `lower_bound(alias, off)` finds the first alias `>= off`;
+    /// if that alias is `<= off+size-1` it lands inside the slot.  When it does, the
+    /// slot stays mapped (aliased); otherwise the caller unmaps it.
+    fn alias_reaches_return_slot(alias: &[uintb], off: uintb, size: int4) -> bool {
+        // iter = lower_bound(alias.begin(), alias.end(), off);
+        let pos = alias.partition_point(|&a| a < off);
+        if pos < alias.len() {
+            // Alias is greater than or equal to vn offset.
+            let last = off.wrapping_add(size as uintb).wrapping_sub(1);
+            return alias[pos] <= last;
+        }
+        false
     }
 
     /// C++ `MapState::gatherVarnodes` (`varmap.cc:1122`): add a data-type hint for
@@ -1359,148 +1570,6 @@ impl Funcdata {
         }
     }
 
-    /// Update Varnode flags and data-types from the local symbol map (C++
-    /// `Funcdata::syncVarnodesWithSymbols`, `funcdata_varnode.cc:959`).
-    ///
-    /// Walks every Varnode in the local scope's space; for each, resolves the
-    /// overlapping mapped Symbol and paints the `mapped`/`addrtied`/`addrforce`/
-    /// `nolocalalias` flags and (when `update_datatypes`) the recovered type.
-    /// Unmapped locations gain `nolocalalias` only when the caller enables
-    /// the alias check and the local map proves the location unaliased.
-    /// Returns `true` if any Varnode changed.
-    pub fn sync_varnodes_with_symbols(
-        &mut self,
-        update_datatypes: bool,
-        unmapped_alias_check: bool,
-    ) -> bool {
-        let space = match (self.get_scope_local(), self.get_arch().types()) {
-            (Some(lm), Some(_)) => Rc::clone(lm.get_space_id()),
-            _ => return false,
-        };
-        let mut update_occurred = false;
-
-        // Iterate the location set restricted to the stack space, grouped by
-        // (size, addr) — each group is one syncVarnodesWithSymbol run.
-        let all: Vec<VarnodeId> = self
-            .vbank()
-            .iter_loc()
-            .filter(|vn| {
-                self.vbank()
-                    .get(*vn)
-                    .and_then(|v| v.get_addr().get_space().map(|s| s.get_index()))
-                    == Some(space.get_index())
-            })
-            .collect();
-
-        // Group consecutive (size, offset) exemplars.  beginLoc/endLoc in C++
-        // walks one (size,addr) block per outer step; here we resolve the symbol
-        // once per exemplar group and apply to every member.
-        let mut i = 0usize;
-        while i < all.len() {
-            let exemplar = all[i];
-            let (ex_addr, ex_size) = match self.vbank().get(exemplar) {
-                Some(v) => (v.get_addr().clone(), v.get_size()),
-                None => {
-                    i += 1;
-                    continue;
-                }
-            };
-
-            // Collect this (size, addr) group.
-            let mut group: Vec<VarnodeId> = Vec::new();
-            while i < all.len() {
-                let vn = all[i];
-                let same = match self.vbank().get(vn) {
-                    Some(v) => {
-                        v.get_size() == ex_size && v.get_addr().get_offset() == ex_addr.get_offset()
-                    }
-                    None => false,
-                };
-                if !same {
-                    break;
-                }
-                group.push(vn);
-                i += 1;
-            }
-
-            // Resolve the overlapping symbol for the exemplar.
-            let overlap = self.get_scope_local().and_then(|lm| {
-                self.get_arch()
-                    .types()
-                    .and_then(|t| lm.sync_overlap(&ex_addr, ex_size, t))
-            });
-
-            let mut ct: Option<Rc<crate::dtype::Datatype>> = None;
-            let fl: uint4;
-            // Whether the resolved SymbolEntry is a join-piece sub-entry (precislo/
-            // precishi extra-flags, NOT `mapped`) — the extra maps `Scope::addMap`
-            // registers per piece of a join-address Symbol (database.cc:1161-1180).
-            // The kuna addrtied pre-tie must NOT fire for such a partial piece: the
-            // covered Varnode is a SUBPIECE-extracted field of the join symbol, and
-            // C++'s heritage pre-tie only ties whole-symbol storage (the `mapped`
-            // entry), never these piece sub-entries.  Without this gate the field
-            // read gets addrtied and is forced explicit as a copymarker self-assign
-            // (`d.field_b = d.field_b;`) instead of staying implied.
-            let mut entry_is_join_piece = false;
-            if let Some(ov) = overlap {
-                let mut flags = ov.all_flags;
-                entry_is_join_piece =
-                    (ov.extraflags & (varnode_flags::precislo | varnode_flags::precishi)) != 0
-                        && (ov.extraflags & varnode_flags::mapped) == 0;
-                if ov.entry_size >= ex_size {
-                    if update_datatypes {
-                        if let Some(t) = &ov.sized_type {
-                            if t.get_metatype() != crate::dtype::type_metatype::TYPE_UNKNOWN {
-                                ct = Some(Rc::clone(t));
-                            }
-                        }
-                    }
-                } else {
-                    // Overlapping but not containing: drop typelock/namelock.
-                    flags &= !(varnode_flags::typelock | varnode_flags::namelock);
-                }
-                fl = flags;
-            } else {
-                // No symbol found.  C++ funcdata_varnode.cc:992-1004: if the range
-                // is in scope (`rangetree.inRange`) there *should* be a symbol — the
-                // fallback marks `mapped | addrtied`.  (A stack-passed struct param's
-                // field read used to land here because its join-piece SymbolEntry was
-                // not yet registered in the stack EntryMap; the `Scope::addMap` join
-                // arm now registers it, so the `Some(ov)` arm above resolves it to the
-                // param Symbol instead — Stack spill #1.)
-                let in_scope = self
-                    .get_scope_local()
-                    .map(|lm| lm.in_scope(&ex_addr, ex_size))
-                    .unwrap_or(false);
-                if in_scope {
-                    fl = varnode_flags::mapped | varnode_flags::addrtied;
-                } else if unmapped_alias_check {
-                    let unaliased = self
-                        .get_scope_local()
-                        .and_then(|lm| {
-                            ex_addr
-                                .get_space()
-                                .map(|spc| lm.is_unmapped_unaliased(spc, ex_addr.get_offset()))
-                        })
-                        .unwrap_or(false);
-                    fl = if unaliased {
-                        varnode_flags::nolocalalias
-                    } else {
-                        0
-                    };
-                } else {
-                    fl = 0;
-                }
-            }
-
-            if self.sync_varnodes_with_symbol(&group, fl, ct.as_ref(), entry_is_join_piece) {
-                update_occurred = true;
-            }
-        }
-
-        update_occurred
-    }
-
     /// Apply resolved flags/type to one `(size, addr)` group of Varnodes (C++
     /// `Funcdata::syncVarnodesWithSymbol`, `funcdata_varnode.cc:889`).
     fn sync_varnodes_with_symbol(
@@ -1709,60 +1778,36 @@ impl crate::varmap::AliasGatherAccess for FuncdataAliasAccess<'_> {
     }
 }
 
-impl Funcdata {
-    /// Build the live-IR [`AliasGatherAccess`](crate::varmap::AliasGatherAccess) over
-    /// this function's def/use graph, so an [`AliasChecker`](crate::varmap::AliasChecker)
-    /// can lazily gather stack-pointer aliases (`findSpacebaseInput`/
-    /// `gatherAdditiveBase`/`gatherOffset`).  Used by the call-site input recovery
-    /// (`checkInputTrialUse`'s spacebase branch).
-    pub(crate) fn alias_gather_access(&self) -> FuncdataAliasAccess<'_> {
-        FuncdataAliasAccess {
-            fd: self,
-            exempt_scramble: true,
-        }
-    }
+/// [`Funcdata`] methods for stack-pointer alias gathering.
+pub trait FuncdataAliasExt {
+    fn gather_additive_base(
+        &self,
+        startvn: VarnodeId,
+        addbase: &mut Vec<crate::varmap::AddBase>,
+        exempt_scramble: bool,
+    );
+    fn gather_offset(&self, vn: VarnodeId) -> uintb;
+}
 
-    /// Build the deferred local-alias checker the call-site input recovery uses
-    /// (C++ `ActionActiveParam`'s `aliascheck.gather(&data, getStackSpace(), true)`).
-    ///
-    /// The boundaries are derived from this function's prototype; the gather is
-    /// deferred (the Varnode walk runs lazily on the first `hasLocalAlias`).
-    /// Returns `None` if there is no stack space (no possible local alias).
-    pub(crate) fn build_alias_checker_deferred(&self) -> Option<crate::varmap::AliasChecker> {
-        let stackspc = self.get_arch().manage().get_stack_space().map(Rc::clone)?;
-        let bounds = proto_boundaries(self.get_func_proto());
-        let mut checker = crate::varmap::AliasChecker::new();
-        let mut access = self.alias_gather_access();
-        checker.gather(stackspc, bounds.as_ref(), true, &mut access);
-        Some(checker)
-    }
-
-    /// Mark a stack range as not mapped to a local symbol (C++
-    /// `ScopeLocal::markNotMapped`, reached via `getScopeLocal()` from
-    /// `buildInputFromTrials` for a stack-passed parameter).
-    ///
-    /// STUB(W4 ScopeLocal::markNotMapped): the `RangeHint`/`markNotMapped` range
-    /// surface on `ScopeLocal` is not yet ported (LOSS recorded in the structured
-    /// output).  The register-parameter recovery path the call-rendering datatests
-    /// exercise never reaches this (only stack-passed params do); a stack-passed
-    /// parameter simply is not marked unmapped here, which at worst leaves a stack
-    /// slot eligible for a redundant local — it does not corrupt the call list.
-    pub(crate) fn scope_local_mark_not_mapped(
+/// [`Funcdata`] methods for stack-pointer alias gathering used elsewhere in the crate.
+pub(crate) trait FuncdataAliasCrateExt {
+    fn alias_gather_access(&self) -> FuncdataAliasAccess<'_>;
+    fn build_alias_checker_deferred(&self) -> Option<crate::varmap::AliasChecker>;
+    fn scope_local_mark_not_mapped(
         &mut self,
         spc: &Rc<unlace_base::space::AddrSpace>,
         first: uintb,
         sz: int4,
         param: bool,
-    ) {
-        // C++ `data.getScopeLocal()->markNotMapped(spc, first, sz, param)`.
-        // ScopeLocal::markNotMapped IS ported (varmap.rs); delegate so a STORE the
-        // internal-storage pass flagged unmapped removes its slot's Symbol and
-        // range (the alias gather then can't propagate through the gap).
-        if let Some(lm) = self.get_scope_local_mut() {
-            lm.mark_not_mapped(spc, first, sz, param);
-        }
-    }
+    );
+}
 
+/// [`Funcdata`] methods for stack-pointer alias gathering private to this module.
+trait FuncdataAliasLocalExt {
+    fn gather_offset_opt(&self, vn: Option<VarnodeId>) -> uintb;
+}
+
+impl FuncdataAliasExt for Funcdata {
     /// C++ `AliasChecker::gatherAdditiveBase` (`varmap.cc:736`): collect the roots
     /// of every additive expression tree rooted at `startvn` (a spacebase input).
     ///
@@ -1770,7 +1815,7 @@ impl Funcdata {
     /// The `setMark`/`clearMark` queue de-dup is reproduced with a visited set
     /// (the marks are a transient analysis bit; a local set is equivalent and
     /// re-entrancy-safe).
-    pub fn gather_additive_base(
+    fn gather_additive_base(
         &self,
         startvn: VarnodeId,
         addbase: &mut Vec<crate::varmap::AddBase>,
@@ -1881,7 +1926,7 @@ impl Funcdata {
 
     /// C++ `AliasChecker::gatherOffset` (`varmap.cc:818`): the constant portion of
     /// the additive sum the given Varnode is the result of.
-    pub fn gather_offset(&self, vn: VarnodeId) -> uintb {
+    fn gather_offset(&self, vn: VarnodeId) -> uintb {
         let v = match self.vbank().get(vn) {
             Some(v) => v,
             None => return 0,
@@ -1934,7 +1979,64 @@ impl Funcdata {
         };
         retval & unlace_base::address::calc_mask(size)
     }
+}
 
+impl FuncdataAliasCrateExt for Funcdata {
+    /// Build the live-IR [`AliasGatherAccess`](crate::varmap::AliasGatherAccess) over
+    /// this function's def/use graph, so an [`AliasChecker`](crate::varmap::AliasChecker)
+    /// can lazily gather stack-pointer aliases (`findSpacebaseInput`/
+    /// `gatherAdditiveBase`/`gatherOffset`).  Used by the call-site input recovery
+    /// (`checkInputTrialUse`'s spacebase branch).
+    fn alias_gather_access(&self) -> FuncdataAliasAccess<'_> {
+        FuncdataAliasAccess {
+            fd: self,
+            exempt_scramble: true,
+        }
+    }
+
+    /// Build the deferred local-alias checker the call-site input recovery uses
+    /// (C++ `ActionActiveParam`'s `aliascheck.gather(&data, getStackSpace(), true)`).
+    ///
+    /// The boundaries are derived from this function's prototype; the gather is
+    /// deferred (the Varnode walk runs lazily on the first `hasLocalAlias`).
+    /// Returns `None` if there is no stack space (no possible local alias).
+    fn build_alias_checker_deferred(&self) -> Option<crate::varmap::AliasChecker> {
+        let stackspc = self.get_arch().manage().get_stack_space().map(Rc::clone)?;
+        let bounds = proto_boundaries(self.get_func_proto());
+        let mut checker = crate::varmap::AliasChecker::new();
+        let mut access = self.alias_gather_access();
+        checker.gather(stackspc, bounds.as_ref(), true, &mut access);
+        Some(checker)
+    }
+
+    /// Mark a stack range as not mapped to a local symbol (C++
+    /// `ScopeLocal::markNotMapped`, reached via `getScopeLocal()` from
+    /// `buildInputFromTrials` for a stack-passed parameter).
+    ///
+    /// STUB(W4 ScopeLocal::markNotMapped): the `RangeHint`/`markNotMapped` range
+    /// surface on `ScopeLocal` is not yet ported (LOSS recorded in the structured
+    /// output).  The register-parameter recovery path the call-rendering datatests
+    /// exercise never reaches this (only stack-passed params do); a stack-passed
+    /// parameter simply is not marked unmapped here, which at worst leaves a stack
+    /// slot eligible for a redundant local — it does not corrupt the call list.
+    fn scope_local_mark_not_mapped(
+        &mut self,
+        spc: &Rc<unlace_base::space::AddrSpace>,
+        first: uintb,
+        sz: int4,
+        param: bool,
+    ) {
+        // C++ `data.getScopeLocal()->markNotMapped(spc, first, sz, param)`.
+        // ScopeLocal::markNotMapped IS ported (varmap.rs); delegate so a STORE the
+        // internal-storage pass flagged unmapped removes its slot's Symbol and
+        // range (the alias gather then can't propagate through the gap).
+        if let Some(lm) = self.get_scope_local_mut() {
+            lm.mark_not_mapped(spc, first, sz, param);
+        }
+    }
+}
+
+impl FuncdataAliasLocalExt for Funcdata {
     /// `gatherOffset` on an optional input (a null operand contributes 0).
     fn gather_offset_opt(&self, vn: Option<VarnodeId>) -> uintb {
         match vn {

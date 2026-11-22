@@ -81,6 +81,7 @@
 //! type exposes `new(group)` returning the boxed action.  [`early_actions`]
 //! enumerates the full early set in C++ definition order for the W8 assembler.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 

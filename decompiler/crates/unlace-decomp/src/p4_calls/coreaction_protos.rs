@@ -87,6 +87,8 @@
 //! Each boundary is reported in this item's `losses` so the owning wave can finish
 //! the wiring by replaying the commented body against the real accessors.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

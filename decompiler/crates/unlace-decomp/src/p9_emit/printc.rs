@@ -70,6 +70,9 @@
 //! canonical).  The toggle state lives here; the emission that reads it is the
 //! W9 stub.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_union::FuncdataUnionExt;
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;

@@ -11,6 +11,7 @@
 //! of a join are outside this module: they have no storage, so they are always
 //! logical constants.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_num::opcodes::OpCode;

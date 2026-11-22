@@ -52,6 +52,7 @@
 //! in: the drive then analyzes a freshly built copy of the function without
 //! the guard (`withdraw_spoiled_guard`), which prints the unguarded analysis.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;

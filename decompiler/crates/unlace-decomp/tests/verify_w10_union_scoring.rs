@@ -26,6 +26,7 @@ use unlace_num::opcodes::OpCode;
 use unlace_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use unlace_decomp::dtype::{Datatype, DatatypeKind, TypeFactoryImpl, TypeField, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::prelude::*;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();

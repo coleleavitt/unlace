@@ -60,6 +60,7 @@
 //! `return v` that `ActionReturnSplit` (the next action in the `returnsplit`
 //! group) duplicates into each predecessor, eliminating the goto/label.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 

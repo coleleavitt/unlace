@@ -2799,6 +2799,8 @@ mod w10_printc_cast_render {
     use crate::context::{ArchContext as ContextArch, TypeOp};
     use crate::dtype::{Datatype, type_metatype};
     use crate::funcdata::Funcdata;
+    use crate::funcdata_facing::FuncdataFacingExt;
+    use crate::funcdata_union::FuncdataUnionExt;
     use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::error::{KunaError, KunaResult};

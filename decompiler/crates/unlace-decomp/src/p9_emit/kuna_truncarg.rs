@@ -28,6 +28,7 @@
 //! promotion cannot change it.  Output languages without integer promotion (Rust)
 //! get nothing.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::types::{int4, uint4};

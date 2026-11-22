@@ -70,6 +70,7 @@
 //! into one `INSERT`/`PULL` per field so each renders as a separate
 //! `ptr->field = ...` statement (e.g. `ip->field5 = ip->field5 + 1;`).
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::address::{leastsigbit_set, mostsigbit_set};

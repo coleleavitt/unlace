@@ -1,5 +1,6 @@
 //! Go spelling and statement forms on the shared emission plane.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::borrow::Cow;
 use std::rc::Rc;
 

@@ -5,6 +5,8 @@
 // unconditional), so a hand-built fixture with a stack spacebase suffices to pin
 // it.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseLocalExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

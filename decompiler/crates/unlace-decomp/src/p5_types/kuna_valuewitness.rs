@@ -21,6 +21,7 @@
 //! `meta[1].kind`: those words are not header fields. In code of any other language the layouts are never interned and
 //! nothing changes.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_num::opcodes::OpCode;

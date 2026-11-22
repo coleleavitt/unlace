@@ -8,6 +8,7 @@
 //! which now keeps only thin dispatchers so its existing free-function callers
 //! and their tests are unchanged.
 
+use crate::kuna_typequal::DatatypeQualExt;
 use std::borrow::Cow;
 use std::rc::Rc;
 

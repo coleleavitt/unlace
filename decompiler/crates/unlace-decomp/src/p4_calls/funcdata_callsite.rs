@@ -25,6 +25,7 @@
 //! through the live-IR [`AliasGatherAccess`](crate::varmap::AliasGatherAccess) already
 //! built in `funcdata_spacebase.rs`.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;

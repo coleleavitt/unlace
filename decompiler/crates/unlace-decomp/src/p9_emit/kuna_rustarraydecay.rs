@@ -1,5 +1,6 @@
 //! Convert proven array places at Rust pointer consumers without loading them.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use super::kuna_rustarrayaddr::{RAW_ADDRESS, array_place};

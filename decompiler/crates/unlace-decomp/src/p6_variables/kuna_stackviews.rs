@@ -6,6 +6,7 @@
 //! before those hints are reconciled. The union's operation-specific resolutions
 //! select members; no claim that an old pointer stopped aliasing is needed.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 

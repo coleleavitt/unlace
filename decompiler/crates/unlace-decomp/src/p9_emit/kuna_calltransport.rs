@@ -11,8 +11,86 @@ use crate::context::{OpId, VarnodeId};
 use crate::fspec::Containment;
 use crate::funcdata::Funcdata;
 
-impl Funcdata {
-    pub(crate) fn kuna_record_call_transport(&mut self, first: VarnodeId) {
+/// [`Funcdata`] methods for outgoing-argument transport detection.
+pub trait FuncdataCallTransportExt {
+    fn kuna_is_call_transport(&self, vn: VarnodeId) -> bool;
+}
+
+/// [`Funcdata`] methods for outgoing-argument transport detection used elsewhere in the crate.
+pub(crate) trait FuncdataCallTransportCrateExt {
+    fn kuna_record_call_transport(&mut self, first: VarnodeId);
+    fn kuna_is_call_transport_projection(
+        &self,
+        vn: VarnodeId,
+        byte_offset: int4,
+        byte_size: int4,
+    ) -> bool;
+    fn kuna_has_local_storage_use(&self, first: VarnodeId) -> bool;
+}
+
+/// [`Funcdata`] methods for outgoing-argument transport detection private to this module.
+trait FuncdataCallTransportLocalExt {
+    fn kuna_is_register_storage(&self, address: &Address, size: int4) -> bool;
+    fn kuna_has_prior_storage(
+        &self,
+        first: VarnodeId,
+        carrier: &Address,
+        instruction: &Address,
+    ) -> bool;
+    fn kuna_materializes_computation(&self, first: VarnodeId, instruction: &Address) -> bool;
+    fn kuna_only_argument_uses(&self, first: VarnodeId, carrier: &Address, size: int4) -> bool;
+    fn kuna_argument_storage_matches(
+        &self,
+        op: OpId,
+        slot: int4,
+        address: &Address,
+        size: int4,
+    ) -> bool;
+}
+
+impl FuncdataCallTransportExt for Funcdata {
+    /// A register copy is transport only when an earlier home exists and all
+    /// remaining uses forward it through that register to ordinary call arguments.
+    fn kuna_is_call_transport(&self, vn: VarnodeId) -> bool {
+        if !self.get_arch().name_style_angr {
+            return false;
+        }
+        let Some(value) = self.vbank().get(vn) else {
+            return false;
+        };
+        if value.is_persist() || self.kuna_storage_write_has_local_use(vn, value.get_size()) {
+            return false;
+        }
+        if self.kuna_was_call_transport(vn) {
+            return value.has_no_descend()
+                || self.kuna_only_argument_uses(vn, value.get_addr(), value.get_size());
+        }
+        if !self.kuna_is_register_storage(value.get_addr(), value.get_size()) {
+            return false;
+        }
+        let Some(definition) = value.get_def().and_then(|id| self.obank().get(id)) else {
+            return false;
+        };
+        if definition.code() != OpCode::CPUI_COPY {
+            return false;
+        }
+        let Some(input) = definition.get_in(0) else {
+            return false;
+        };
+        if self
+            .vbank()
+            .get(input)
+            .is_none_or(|v| v.get_size() != value.get_size())
+            || !self.kuna_has_prior_storage(input, value.get_addr(), definition.get_addr())
+        {
+            return false;
+        }
+        self.kuna_only_argument_uses(vn, value.get_addr(), value.get_size())
+    }
+}
+
+impl FuncdataCallTransportCrateExt for Funcdata {
+    fn kuna_record_call_transport(&mut self, first: VarnodeId) {
         self.kuna_mark_call_transport(first);
         let Some(value) = self.vbank().get(first) else {
             return;
@@ -70,46 +148,7 @@ impl Funcdata {
         }
     }
 
-    /// A register copy is transport only when an earlier home exists and all
-    /// remaining uses forward it through that register to ordinary call arguments.
-    pub fn kuna_is_call_transport(&self, vn: VarnodeId) -> bool {
-        if !self.get_arch().name_style_angr {
-            return false;
-        }
-        let Some(value) = self.vbank().get(vn) else {
-            return false;
-        };
-        if value.is_persist() || self.kuna_storage_write_has_local_use(vn, value.get_size()) {
-            return false;
-        }
-        if self.kuna_was_call_transport(vn) {
-            return value.has_no_descend()
-                || self.kuna_only_argument_uses(vn, value.get_addr(), value.get_size());
-        }
-        if !self.kuna_is_register_storage(value.get_addr(), value.get_size()) {
-            return false;
-        }
-        let Some(definition) = value.get_def().and_then(|id| self.obank().get(id)) else {
-            return false;
-        };
-        if definition.code() != OpCode::CPUI_COPY {
-            return false;
-        }
-        let Some(input) = definition.get_in(0) else {
-            return false;
-        };
-        if self
-            .vbank()
-            .get(input)
-            .is_none_or(|v| v.get_size() != value.get_size())
-            || !self.kuna_has_prior_storage(input, value.get_addr(), definition.get_addr())
-        {
-            return false;
-        }
-        self.kuna_only_argument_uses(vn, value.get_addr(), value.get_size())
-    }
-
-    pub(crate) fn kuna_is_call_transport_projection(
+    fn kuna_is_call_transport_projection(
         &self,
         vn: VarnodeId,
         byte_offset: int4,
@@ -158,21 +197,7 @@ impl Funcdata {
         })
     }
 
-    fn kuna_is_register_storage(&self, address: &Address, size: int4) -> bool {
-        let Some(space) = address.get_space() else {
-            return false;
-        };
-        self.get_arch()
-            .manage()
-            .register_lookup()
-            .is_some_and(|lookup| {
-                !lookup
-                    .get_register_name(space, address.get_offset(), size)
-                    .is_empty()
-            })
-    }
-
-    pub(crate) fn kuna_has_local_storage_use(&self, first: VarnodeId) -> bool {
+    fn kuna_has_local_storage_use(&self, first: VarnodeId) -> bool {
         let Some(value) = self.vbank().get(first) else {
             return false;
         };
@@ -249,6 +274,22 @@ impl Funcdata {
             }
         }
         false
+    }
+}
+
+impl FuncdataCallTransportLocalExt for Funcdata {
+    fn kuna_is_register_storage(&self, address: &Address, size: int4) -> bool {
+        let Some(space) = address.get_space() else {
+            return false;
+        };
+        self.get_arch()
+            .manage()
+            .register_lookup()
+            .is_some_and(|lookup| {
+                !lookup
+                    .get_register_name(space, address.get_offset(), size)
+                    .is_empty()
+            })
     }
 
     fn kuna_has_prior_storage(

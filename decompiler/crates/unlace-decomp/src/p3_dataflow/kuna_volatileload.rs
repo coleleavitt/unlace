@@ -1,4 +1,5 @@
 //! Keep a proven volatile load live while its constant address is still an SSA expression.
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::{
     context::{OpId, VarnodeId},
     funcdata::Funcdata,

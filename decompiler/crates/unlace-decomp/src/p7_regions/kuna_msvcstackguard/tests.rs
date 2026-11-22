@@ -23,6 +23,7 @@
 //     return-storage preservation but remains in the function.
 
 use super::*;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 use std::rc::Rc;
 

@@ -30,13 +30,23 @@
 //! `findResolve` overrides do, so the typed-access cluster (`union_datatype.xml`)
 //! gets the resolved field type once the Casts stage drives the cache.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 use crate::funcdata::Funcdata;
 
-impl Funcdata {
+/// [`Funcdata`] methods for union-facing data-types of varnodes.
+pub trait FuncdataFacingExt {
+    fn find_resolve_facing(&self, ct: &Rc<Datatype>, op: OpId, slot: i32) -> Rc<Datatype>;
+    fn vn_type_def_facing(&self, vn: VarnodeId) -> Rc<Datatype>;
+    fn vn_type_read_facing(&self, vn: VarnodeId, op: OpId) -> Rc<Datatype>;
+    fn vn_high_type_def_facing(&mut self, vn: VarnodeId) -> Rc<Datatype>;
+    fn vn_high_type_read_facing(&mut self, vn: VarnodeId, op: OpId) -> Rc<Datatype>;
+}
+
+impl FuncdataFacingExt for Funcdata {
     /// `Datatype::findResolve(op, slot)` dispatched against the live union cache
     /// (C++ `type.cc:590` + the `TypePointer`/`TypeArray`/`TypeStruct`/`TypeUnion`/
     /// `TypePartialUnion` overrides).  `self` stands in for
@@ -47,7 +57,7 @@ impl Funcdata {
     /// `needsResolution()`, but the per-kind dispatch is transcribed in full so the
     /// fallback type (the C++ `field[0].type` / `arrayof` / `stripped`) is faithful
     /// when a needs-resolution type misses the cache.
-    pub fn find_resolve_facing(&self, ct: &Rc<Datatype>, op: OpId, slot: i32) -> Rc<Datatype> {
+    fn find_resolve_facing(&self, ct: &Rc<Datatype>, op: OpId, slot: i32) -> Rc<Datatype> {
         match &ct.kind {
             // TypePointer::findResolve (type.cc:1335-1345): only a pointer *to a
             // union* consults the cache; any other pointer returns itself.
@@ -105,7 +115,7 @@ impl Funcdata {
     /// C++ `Varnode::getTypeDefFacing()` (varnode.cc:645-651): the Varnode's own
     /// data-type, resolved against the *write* edge (`slot == -1`) when it needs
     /// union resolution.  `vn` **must** be written.
-    pub fn vn_type_def_facing(&self, vn: VarnodeId) -> Rc<Datatype> {
+    fn vn_type_def_facing(&self, vn: VarnodeId) -> Rc<Datatype> {
         if crate::kuna_stackviews::enabled(self) {
             if let Some(op) = self.vbank().get(vn).and_then(|v| v.get_def()) {
                 if let Some(view) = crate::kuna_stackviews::access_type(self, vn, op, -1) {
@@ -127,7 +137,7 @@ impl Funcdata {
     /// C++ `Varnode::getTypeReadFacing(op)` (varnode.cc:658-664): the Varnode's own
     /// data-type, resolved against the *read* edge (`op->getSlot(this)`) when it
     /// needs union resolution.
-    pub fn vn_type_read_facing(&self, vn: VarnodeId, op: OpId) -> Rc<Datatype> {
+    fn vn_type_read_facing(&self, vn: VarnodeId, op: OpId) -> Rc<Datatype> {
         if crate::kuna_stackviews::enabled(self) {
             let slot = self.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1);
             if let Some(view) = crate::kuna_stackviews::access_type(self, vn, op, slot) {
@@ -151,7 +161,7 @@ impl Funcdata {
     /// HighVariable's data-type, resolved against the write edge when it needs
     /// union resolution.  This is the def-facing node of the type graph the Casts
     /// stage walks.
-    pub fn vn_high_type_def_facing(&mut self, vn: VarnodeId) -> Rc<Datatype> {
+    fn vn_high_type_def_facing(&mut self, vn: VarnodeId) -> Rc<Datatype> {
         if crate::kuna_stackviews::enabled(self) {
             if let Some(op) = self.vbank().get(vn).and_then(|v| v.get_def()) {
                 if let Some(view) = crate::kuna_stackviews::access_type(self, vn, op, -1) {
@@ -177,7 +187,7 @@ impl Funcdata {
     /// HighVariable's data-type, resolved against the read edge when it needs union
     /// resolution.  This is the read-facing node of the type graph
     /// `ActionSetCasts::castInput`/`castOutput` query.
-    pub fn vn_high_type_read_facing(&mut self, vn: VarnodeId, op: OpId) -> Rc<Datatype> {
+    fn vn_high_type_read_facing(&mut self, vn: VarnodeId, op: OpId) -> Rc<Datatype> {
         if crate::kuna_stackviews::enabled(self) {
             let slot = self.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1);
             if let Some(view) = crate::kuna_stackviews::access_type(self, vn, op, slot) {

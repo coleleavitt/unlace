@@ -1,5 +1,6 @@
 //! Explicit same-width primitive integer conversions for Rust expressions.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;

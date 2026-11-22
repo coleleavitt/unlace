@@ -42,6 +42,7 @@
 //! address-like beside an integer cast to a pointer (`table[i]` compiles to the
 //! same `INT_ADD`, with the table as the constant).
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::types::{int4, uintb};

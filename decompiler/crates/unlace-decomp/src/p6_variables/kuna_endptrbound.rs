@@ -65,6 +65,7 @@
 //!
 //! The value compared is unchanged; only the base it is expressed on moves.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::collections::HashSet;
 use std::rc::Rc;
 

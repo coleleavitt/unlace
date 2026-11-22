@@ -1,5 +1,6 @@
 //! Incoming parameter values and later objects share frame storage, not variable identity.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 

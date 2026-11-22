@@ -9,6 +9,7 @@ use unlace_base::space::{
 use unlace_decomp::context::ArchContext;
 use unlace_decomp::dtype::{TypeFactory, TypeFactoryImpl, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
+use unlace_decomp::prelude::*;
 use unlace_num::opcodes::OpCode;
 
 fn conversion(

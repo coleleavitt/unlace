@@ -314,6 +314,39 @@ pub(crate) fn gotosink_apply(data: &mut Funcdata) -> i32 {
     count
 }
 
+/// Clear the label of each leaf in `heads` that no plain goto (not a `break`
+/// or `continue`) reaches any more.
+pub(crate) fn release_labels(data: &mut Funcdata, heads: &[BlockId]) {
+    let graph = data.sblocks_ref();
+    let mut still = std::collections::BTreeSet::new();
+    let mut stack = vec![data.sblocks_root()];
+    while let Some(id) = stack.pop() {
+        let b = graph.block(id);
+        stack.extend((0..b.get_size()).map(|i| b.get_block(i)));
+        still.extend(
+            if_goto(graph, id)
+                .or_else(|| plain_goto(graph, id))
+                .and_then(|t| graph.get_front_leaf(t)),
+        );
+        still.extend(
+            b.switch_caseblocks()
+                .iter()
+                .filter(|c| c.gototype == block_flags::f_goto_goto)
+                .filter_map(|c| graph.get_front_leaf(c.block)),
+        );
+        if let BlockKind::MultiGoto { gotoedges, .. } = b.kind() {
+            still.extend(gotoedges.iter().filter_map(|&t| graph.get_front_leaf(t)));
+        }
+    }
+    for &h in heads {
+        if !still.contains(&h) {
+            data.sblocks_mut()
+                .block_mut(h)
+                .clear_flag(block_flags::f_unstructured_targ);
+        }
+    }
+}
+
 /// Runs [`gotosink_apply`] when option `gotosink` is on.
 pub struct ActionGotoSink {
     base: ActionBase,

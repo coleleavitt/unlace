@@ -4,8 +4,10 @@ Every shape is computed: Catmull-Rom splines through control points traced from 
 a black-and-white ("panda") low top, filled flat black or white, outlined, with stitch lines
 offset inside the panels. No randomness; the output is the same on every run.
 
-    python3 assets/logo/unlace_logo.py assets/logo/unlace-logo.svg
-    rsvg-convert -w 1000 assets/logo/unlace-logo.svg -o assets/logo/unlace-logo.png
+    python3 assets/logo/unlace_logo.py /tmp/logo.svg && rsvg-convert -w 1000 /tmp/logo.svg -o /tmp/logo.png
+    h=$(sha256sum /tmp/logo.png | cut -c1-10)   # name the files after their content, so GitHub's
+                                                 # image cache cannot serve an old drawing
+    mv /tmp/logo.svg assets/logo/unlace-logo-$h.svg; mv /tmp/logo.png assets/logo/unlace-logo-$h.png
 """
 import math
 import sys

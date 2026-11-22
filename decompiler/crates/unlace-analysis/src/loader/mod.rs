@@ -31,9 +31,11 @@
 //! defined-function reader lifted out of [`crate::loadimage_object`].
 
 pub mod arm_markers;
+// (kuna) WebAssembly bodies lowered from stack form to register form.
 pub(crate) mod kuna_mipstarget;
 pub(crate) mod kuna_ppc64elfv2target;
 pub(crate) mod kuna_ppcaputarget;
+pub mod kuna_wasmlower;
 #[cfg(test)]
 mod mips_target_tests;
 #[cfg(test)]
@@ -103,6 +105,7 @@ pub(crate) mod kuna_pltlocal;
 pub mod firmware;
 pub mod format;
 pub mod kuna_msvcfpconst;
+pub(crate) mod kuna_nanomips;
 // (kuna) PE/Mach-O/ELF import-slot call binding (`peimportcall`): `externref` over
 // typed import-pointer slots + upstream's strictly PE-only no-return API names.
 pub mod kuna_authptrcall;

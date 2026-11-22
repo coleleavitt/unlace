@@ -24,6 +24,8 @@
 //!   PE/COFF byte mapping + section/segment/symbol enumeration).
 //! - [`loadimage_te`] -- bounded UEFI TE header/section parsing and direct
 //!   stripped-offset-to-load-address mapping.
+//! - [`loadimage_wasm`] -- a WebAssembly module laid out as a flat image, its
+//!   bodies lowered to register form.
 //! - [`loader`] -- image-format markup: PLT/GOT import naming, relocations,
 //!   ARM/MIPS mapping markers, the known no-return name lists.
 //! - [`analyzers`] -- the metadata analyzers, one module per pass (strings,
@@ -57,6 +59,7 @@ pub mod loadimage_dex;
 pub mod loadimage_mz;
 pub mod loadimage_object;
 pub mod loadimage_te;
+pub mod loadimage_wasm;
 pub mod neolite;
 pub mod pass;
 pub mod passes;

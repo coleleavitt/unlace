@@ -33,6 +33,7 @@ pub mod kuna_kernelbug; // (kuna) a Linux kernel __bug_table trap prints as BUG(
 pub mod kuna_lanefuse; // (kuna `lanefuse`) re-fuse per-lane vector p-code into one intrinsic op
 pub mod kuna_linuxsyscall; // (kuna) name the 32-bit Linux int 0x80 sites instead of calling through swi()
 pub mod kuna_loweredswitch;
+pub mod kuna_loweredswitchbits; // (kuna) re-roll a switch lowered to bit tests and offset range checks
 pub mod kuna_loweredswitchexact; // (kuna) keep a re-rolled lowered switch only when it is its compare tree
 pub mod kuna_loweredswitchheads; // (kuna) try a lowered-switch cascade behind every head on its variable
 pub mod kuna_loweredswitchlabels;

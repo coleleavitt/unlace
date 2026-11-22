@@ -68,6 +68,7 @@ pub mod kuna_namedglobals;
 pub mod kuna_namespaces; // (kuna) which namespaces print in front of a name
 pub mod kuna_naming;
 pub mod kuna_narrowselector; // (kuna) a switch on a narrow expression casts it to its own width
+pub mod kuna_oslog;
 pub mod kuna_paramrefdecl;
 pub mod kuna_partialaccess;
 pub mod kuna_partialconcat;

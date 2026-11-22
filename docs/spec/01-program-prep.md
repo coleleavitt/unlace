@@ -1315,6 +1315,21 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   away from this path — a read-only section in a `.o` holds *pre*-relocation
   bytes, but a `__real@` COMDAT carries no relocation, and a disagreement between
   the bytes and the name drops the range with a warning rather than folding it.
+- **Mach-O read-only sections** — a Mach-O section carries no write bit of its
+  own, so `decompiler/crates/unlace-analysis/src/loader/format/macho.rs (section_bits)`
+  derives READONLY from the neutral section kind `object` assigns, which knows
+  `__TEXT,__cstring` by name and nothing else. Every other literal section
+  (`__TEXT,__oslogstring`, the kernel's `__TEXT,__os_log`, `__objc_methname`)
+  read as unknown, so it was not read-only and a reference to one of its strings
+  printed as the string's symbol (`_os_log_impl(...,s_10006c0cf,...)`) even
+  though `kuna strings` found the text. Two facts the image states settle it. A
+  section of type `S_CSTRING_LITERALS` is a pool of coalesced literals and is
+  `DATA | READONLY` like `__cstring`. And a loaded section lying wholly inside a
+  segment whose initial protection is readable but not writable (`__TEXT`, never
+  `__DATA_CONST`, which dyld writes before protecting it) is READONLY
+  (`macho.rs (readonly_segments)`, `macho.rs (in_readonly_segment)`, applied by the
+  object load image to every non-NOLOAD section); this covers the kernel's
+  `__os_log`, an `S_REGULAR` section. Strings in either now print as literals.
 - **Mach-O fat/arm64e** — a universal binary is peeled to one slice's bytes
   before anything else parses it, because `object::File::parse` has no fat arm
   and rejects the whole file with "Unsupported file format"
@@ -6700,6 +6715,35 @@ every other binary's pass list is byte-identical to before the pass existed):
     argument its format does not have. An import-less definition of the same
     name (libobjc itself) keeps what its body says.
 
+    One stub serves every receiver of its selector, so its prototype is a claim
+    about all of them, and a wrong return register is the costly error: a
+    protocol of the image declaring `- (double)length` typed
+    `objc_msgSend$length` as returning in `d0` for every sender, so after
+    `[name length]` on a string `x0` read as dead and the next call lost all its
+    arguments (`objc_msgSend$length(arg3); if (sub_103434eb4())`). The stub
+    therefore takes the image's agreed spelling
+    (`decompiler/crates/unlace-analysis/src/analyzers/objc/kuna_objcrefs.rs (stub_encoding)`)
+    only when, if the SDK headers of `objcsdk` spell the selector, they place
+    its return and every argument in the same register class: integer, pointer,
+    object and selector all `x`, floating-point `d`, a by-value struct its own
+    layout (`Q` and `q` agree, `d` and `Q` do not). A selector only a protocol
+    of the image declares, with no class or category of the image implementing
+    it, is promised to conformers the image need not hold, so when its return
+    is floating-point or a struct it also needs the headers to spell it alike:
+    that is the return that hides `x0` from a framework class answering the
+    same selector there. A protocol-only `x` or `void` return keeps typing the
+    stub. Headers that cannot spell a selector neither confirm nor refute it.
+    One the image declares nowhere still takes the headers' spelling. Anything
+    else keeps the untyped call-site inference, which recovers the return from
+    its use: `v4 = objc_msgSend$length(arg1); if (sub_103434eb4(v4,arg6,1,…))`.
+    Without headers an implemented declaration is the only evidence and still
+    types the stub, so a framework class answering the same selector
+    differently stays mistyped until `objcsdk` names the SDK. An untyped stub
+    takes only the arguments the call site shows, so a receiver the caller
+    never moved (its own incoming `x0`) is not listed:
+    `v1 = objc_msgSend$length();`. A strict fix, no option;
+    `tests/stages/kuna-objcstubagree.xml` pins it.
+
   The rebase slots of the three ref sections are also reported constant
   (`AnalysisOutput::const_ranges`). dyld fills them once before any code runs
   and nothing rewrites them — Ghidra's `ObjectiveC2_ClassAnalyzer` marks the same
@@ -6882,7 +6926,8 @@ every other binary's pass list is byte-identical to before the pass existed):
     `NSString *`-backed typed enum resolve — and spells each declaration as the
     type encoding the runtime metadata would carry (`v@:d` for
     `setAlpha:(CGFloat)`), so it rides the one selector → prototype path; the
-    image's own declarations always win. A class-pointer argument keeps its
+    image's own declarations win unless the headers place a selector's return
+    or arguments in different registers (the stub rule above). A class-pointer argument keeps its
     class (`@"UIView"`), a block is `@?`, an `id<P>` is `@`; a type the reader
     cannot encode (an unknown struct, a function pointer) makes the selector
     unusable rather than guessed, and a selector declared two ways across

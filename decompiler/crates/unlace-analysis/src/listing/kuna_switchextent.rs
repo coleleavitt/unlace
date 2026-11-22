@@ -34,7 +34,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use unlace_base::space::AddrSpace;
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::Translate;
 
@@ -106,6 +106,9 @@ impl<'a> FunctionTables<'a> {
             let Some(len) = decode(translate, at, code_space, &mut cap) else {
                 break;
             };
+            // What the instruction writes after a branch inside it joins two
+            // values (`csel` picks one of its operands), so it is unknown.
+            let mut joined = false;
             for op in cap.ops() {
                 if op.opcode == OpCode::CPUI_BRANCHIND {
                     match op.ins.first().and_then(|vn| value_of(vn, &vals, data)) {
@@ -124,7 +127,20 @@ impl<'a> FunctionTables<'a> {
                 ) {
                     vals.clear();
                 }
-                let folded = fold(op, &vals, data, self.pool);
+                if matches!(op.opcode, OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH)
+                    && op
+                        .ins
+                        .first()
+                        .and_then(|vn| vn.space.as_ref())
+                        .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+                {
+                    joined = true;
+                }
+                let folded = if joined {
+                    None
+                } else {
+                    fold(op, &vals, data, self.pool)
+                };
                 let Some(key) = op.out.as_ref().and_then(|vn| key_of(vn, data)) else {
                     continue;
                 };

@@ -29,8 +29,12 @@
 
 pub mod descriptors;
 pub mod kuna_swiftcall;
+pub mod kuna_swifthelpers;
+pub mod kuna_swiftobjcthunk;
+pub mod kuna_swiftoutlined;
 pub mod kuna_swiftruntime;
 pub mod kuna_swifttypes;
+pub mod kuna_swiftwitness;
 
 #[cfg(test)]
 mod tests;
@@ -122,6 +126,11 @@ impl AnalysisPass for SwiftMetadataPass {
             bind_slots: &bind_slots,
         };
         let md = reader.read_all(ctx.file, names, ctx.bytes.len());
+        let objc_members = if ctx.file.format() == object::BinaryFormat::MachO {
+            kuna_swiftobjcthunk::members(ctx.file, ctx.bytes, &img, &md, &imports)
+        } else {
+            Default::default()
+        };
         // Only a code address may be named as a function: a base-protocol
         // or associated-type witness row points at data.
         let code: Vec<(u64, u64)> = ctx
@@ -133,6 +142,7 @@ impl AnalysisPass for SwiftMetadataPass {
         let namer = Namer {
             md: &md,
             imports: &imports,
+            objc_members,
             memo: Default::default(),
             code,
             bodies: crate::analyzers::entry::stated_function_bodies(ctx.file, ctx.bytes),
@@ -140,8 +150,26 @@ impl AnalysisPass for SwiftMetadataPass {
             claims: Default::default(),
             budget: std::cell::Cell::new(NAME_BYTES.saturating_add(ctx.bytes.len())),
         };
-        namer.emit(&mut out);
-        if ctx.arch.analysis_swifttypes {
+        let records = namer.claim_records();
+        let witnesses = ctx
+            .arch
+            .analysis_valuewitness
+            .then(|| kuna_swiftwitness::claim(&reader, &md, ctx.file.architecture(), &namer));
+        let helpers = (ctx.arch.analysis_valuewitness
+            && ctx.file.architecture() == object::Architecture::Aarch64)
+            .then(|| {
+                let entries = crate::analyzers::entry::collect_entries(ctx.file, ctx.bytes);
+                kuna_swiftoutlined::claim(&reader, &md, &namer, &entries)
+            });
+        let mut metadata_ptr = None;
+        out.swift_enum_cases = md
+            .contexts
+            .values()
+            .filter(|c| c.kind == ContextKind::Enum && c.num_cases > 0)
+            .filter_map(|c| Some((c.accessor?, c.num_cases)))
+            .collect();
+        out.swift_enum_cases.sort_unstable();
+        if ctx.arch.analysis_swifttypes || ctx.arch.analysis_swifthelpers {
             let mut types = kuna_swifttypes::Types::new(
                 &md,
                 &reader,
@@ -151,37 +179,69 @@ impl AnalysisPass for SwiftMetadataPass {
                 ctx.file.architecture(),
                 ctx.file.format() == object::BinaryFormat::MachO,
             );
-            types.locate_all();
-            let regs = kuna_swifttypes::Registers::for_arch(ctx.file.architecture());
-            types.emit(regs.as_ref(), &mut out);
-            // A global variable's storage symbol (`$s…vp`) names its type:
-            // a typed data object where the image kept its symbols.
-            for s in ctx
-                .file
-                .symbols()
-                .filter(|s| s.kind() == object::SymbolKind::Data && s.is_definition())
-            {
-                let (Ok(name), addr) = (s.name(), s.address()) else {
-                    continue;
-                };
-                if let Some((path, t)) = types.global_variable(name) {
-                    out.swift_types.typed_data.push(crate::pass::TypedDataFact {
-                        addr,
-                        name: path,
-                        type_: t,
-                    });
-                }
+            if ctx.arch.analysis_swifthelpers {
+                kuna_swifthelpers::emit(&types, ctx.file, &mut out);
             }
-            if let (true, Some(regs)) = (ctx.arch.analysis_swiftcall, regs.as_ref()) {
-                let symbols: Vec<(u64, String)> = ctx
+            if ctx.arch.analysis_swifttypes {
+                types.locate_all();
+                let regs = kuna_swifttypes::Registers::for_arch(ctx.file.architecture());
+                types.emit(regs.as_ref(), &mut out);
+                // A global variable's storage symbol (`$s…vp`) names its type:
+                // a typed data object where the image kept its symbols.
+                for s in ctx
                     .file
                     .symbols()
-                    .filter(|s| s.kind() == object::SymbolKind::Text && s.is_definition())
-                    .filter_map(|s| Some((s.address(), s.name().ok()?.to_string())))
-                    .collect();
-                kuna_swiftcall::bind(&types, regs, &symbols, &mut out);
+                    .filter(|s| s.kind() == object::SymbolKind::Data && s.is_definition())
+                {
+                    let (Ok(name), addr) = (s.name(), s.address()) else {
+                        continue;
+                    };
+                    if let Some((path, t)) = types.global_variable(name) {
+                        out.swift_types.typed_data.push(crate::pass::TypedDataFact {
+                            addr,
+                            name: path,
+                            type_: t,
+                        });
+                    }
+                }
+                if let (true, Some(regs)) = (ctx.arch.analysis_swiftcall, regs.as_ref()) {
+                    let symbols: Vec<(u64, String)> = ctx
+                        .file
+                        .symbols()
+                        .filter(|s| s.kind() == object::SymbolKind::Text && s.is_definition())
+                        .filter_map(|s| Some((s.address(), s.name().ok()?.to_string())))
+                        .collect();
+                    kuna_swiftcall::bind(&types, regs, &symbols, &mut out);
+                }
+                if let Some(w) = &witnesses {
+                    kuna_swiftwitness::type_tables(w, &types, &mut out);
+                }
+                metadata_ptr = types.metadata_struct().and_then(|t| types.pointer_to(t));
             }
         }
+        let tf = ctx.arch.types();
+        let meta = metadata_ptr.or_else(|| {
+            let void = tf.get_type_void().ok()?;
+            tf.get_type_pointer(tf.get_size_of_pointer(), void, 1).ok()
+        });
+        if let (Some(w), Some(meta)) = (&witnesses, &meta) {
+            kuna_swiftwitness::prototypes(w, &namer, tf, meta, &mut out);
+        }
+        if let (Some(h), Some(meta)) = (&helpers, &meta) {
+            kuna_swiftoutlined::prototypes(h, &namer, tf, meta, &mut out);
+        }
+        namer.finish(records, &mut out);
+        // A witness that carries a symbol (`__swift_memcpy16_8`) keeps it.
+        let named: std::collections::HashSet<u64> = ctx
+            .file
+            .symbols()
+            .filter(|s| s.kind() == object::SymbolKind::Text && s.is_definition())
+            .filter(|s| s.name().is_ok_and(|n| !n.is_empty() && !n.starts_with('<')))
+            .map(|s| s.address())
+            .collect();
+        out.swift_witnesses
+            .names
+            .retain(|s| !named.contains(&s.addr));
         out
     }
 }
@@ -248,6 +308,14 @@ fn member_after_protocol(name: &str) -> Option<String> {
     Some(member.to_string())
 }
 
+/// Whether a claim's name is a value witness's
+/// (`Module.Point.destroy_value_witness`) or an outlined helper's
+/// (`Module.Point.outlined_destroy`, `outlined_destroy.merged`).
+fn is_value_witness(name: &str) -> bool {
+    let name = name.strip_suffix(".merged").unwrap_or(name);
+    name.ends_with("_value_witness") || kuna_swiftoutlined::is_helper_name(name)
+}
+
 /// The bytes of names the pass builds beyond the image's own length. A
 /// real image's names come to a fraction of its size; the budget stops a
 /// crafted one whose long paths repeat across many records.
@@ -296,9 +364,18 @@ pub struct Claim {
     /// `None` when the record's type has no nameable path: the claim still
     /// counts as a co-claimant, it just names nothing.
     pub name: Option<String>,
+    /// The slot's positional name (`Class.vtable#N.kind`) when `name` is the
+    /// member an `@objc` thunk gives it.
+    pub positional: Option<String>,
     pub owner: Owner,
     pub requirement: Option<(String, String)>,
     pub getter: bool,
+}
+
+impl Claim {
+    fn is_value_witness(&self) -> bool {
+        self.name.as_deref().is_some_and(is_value_witness)
+    }
 }
 
 /// [`Namer::insn_align`] of `file`'s architecture.
@@ -312,6 +389,9 @@ fn insn_align(file: &object::File) -> u64 {
 pub struct Namer<'a> {
     md: &'a Metadata,
     imports: &'a HashMap<u64, String>,
+    /// The member name an `@objc` thunk gives a method descriptor
+    /// ([`kuna_swiftobjcthunk::members`]), by descriptor address.
+    objc_members: kuna_swiftobjcthunk::Members,
     memo: std::cell::RefCell<HashMap<u64, Option<String>>>,
     code: Vec<(u64, u64)>,
     /// The function bodies the image states
@@ -423,6 +503,19 @@ impl Namer<'_> {
         requirement: Option<(String, String)>,
         getter: bool,
     ) {
+        self.claim_slot(addr, (name, None), owner, requirement, getter);
+    }
+
+    /// [`Self::claim`] with the positional name of a slot an `@objc` thunk
+    /// names ([`Self::slot_name`]).
+    fn claim_slot(
+        &self,
+        addr: u64,
+        (name, positional): (Option<String>, Option<String>),
+        owner: &Owner,
+        requirement: Option<(String, String)>,
+        getter: bool,
+    ) {
         let owner_bytes = match owner {
             Owner::Local(_) => "",
             Owner::Imported(s) => s.as_str(),
@@ -444,6 +537,7 @@ impl Namer<'_> {
             .or_default()
             .push(Claim {
                 name,
+                positional,
                 owner: owner.clone(),
                 requirement,
                 getter,
@@ -454,12 +548,15 @@ impl Namer<'_> {
     /// linker folded it with code of another type, or with a member that is
     /// not a getter.
     pub fn ambiguous_self(&self, addr: u64) -> bool {
-        self.owners_disagree(addr)
-            || self
-                .claims
-                .borrow()
-                .get(&addr)
-                .is_some_and(|c| c.iter().any(|c| !c.getter))
+        let claims = self.claims.borrow();
+        let Some(claims) = claims.get(&addr) else {
+            return false;
+        };
+        let mut claims = claims.iter().filter(|c| !c.is_value_witness());
+        let Some(first) = claims.next() else {
+            return false;
+        };
+        !first.getter || claims.any(|c| c.owner != first.owner || !c.getter)
     }
 
     /// Whether the linker folded the function at `addr` with code of another
@@ -472,7 +569,9 @@ impl Namer<'_> {
         claims.iter().any(|c| c.owner != claims[0].owner)
     }
 
-    fn emit(&self, out: &mut AnalysisOutput) {
+    /// Claim every function the records name; the records' own data
+    /// symbols are returned for [`Namer::finish`].
+    fn claim_records(&self) -> Vec<SymFact> {
         let mut data: Vec<SymFact> = Vec::new();
         let mut contexts: Vec<&Context> = self.md.contexts.values().collect();
         contexts.sort_by_key(|c| c.addr);
@@ -516,22 +615,34 @@ impl Namer<'_> {
                     for e in &ctx.vtable {
                         if let Some(f) = e.impl_addr {
                             let getter = e.kind == descriptors::MethodKind::Getter && e.instance;
-                            self.claim(
-                                f,
-                                named(&format!("vtable#{}.{}", e.index, e.kind.tag())),
-                                &owner,
-                                None,
-                                getter,
-                            );
+                            match &path {
+                                Some(p) => {
+                                    let (name, positional) = self.slot_name(p, e, f);
+                                    self.claim_slot(
+                                        f,
+                                        (Some(name), positional),
+                                        &owner,
+                                        None,
+                                        getter,
+                                    );
+                                }
+                                None => self.claim(f, None, &owner, None, getter),
+                            }
                         }
                     }
                     for o in &ctx.overrides {
                         let Some(f) = o.impl_addr else { continue };
                         match &path {
                             Some(p) => {
-                                if let Some(name) = self.override_name(p, o) {
+                                if let Some((name, positional)) = self.override_name(p, o, f) {
                                     let getter = name.ends_with(".getter");
-                                    self.claim(f, Some(name), &owner, None, getter);
+                                    self.claim_slot(
+                                        f,
+                                        (Some(name), positional),
+                                        &owner,
+                                        None,
+                                        getter,
+                                    );
                                 }
                             }
                             None => self.claim(f, None, &owner, None, false),
@@ -635,6 +746,11 @@ impl Namer<'_> {
                 witness(*f, member, getter);
             }
         }
+        data
+    }
+
+    /// Name every claimed function, then the records.
+    fn finish(&self, data: Vec<SymFact>, out: &mut AnalysisOutput) {
         self.resolve_claims(out);
         // Dedup by address: the first (lowest-addressed descriptor) wins.
         let mut seen = std::collections::HashSet::new();
@@ -651,12 +767,66 @@ impl Namer<'_> {
     /// (`<T:P>.requirement#10.merged#4`); witnesses of one protocol member
     /// from different types name it after the member alone
     /// (`<*:Swift.RawRepresentable>.init(rawValue:)`, a later such body
-    /// `.2`, `.3`, …); anything else keeps the engine placeholder.
+    /// `.2`, `.3`, …); value witnesses of different types are named after
+    /// the first (`Module.A.destroy_value_witness.merged#3`); anything
+    /// else keeps the engine placeholder. A value witness names only a
+    /// function no other record claims, into the `valuewitness` facts.
     fn resolve_claims(&self, out: &mut AnalysisOutput) {
+        let names = self.resolved(|c| c.name.as_ref());
+        if self
+            .claims
+            .borrow()
+            .values()
+            .flatten()
+            .any(|c| c.positional.is_some())
+        {
+            let positional: HashMap<u64, String> = self
+                .resolved(|c| c.positional.as_ref().or(c.name.as_ref()))
+                .into_iter()
+                .map(|(addr, name, _)| (addr, name))
+                .collect();
+            for (addr, name, _) in &names {
+                if let Some(p) = positional.get(addr).filter(|p| *p != name) {
+                    out.swift_positional_names
+                        .push((*addr, name.clone(), p.clone()));
+                }
+            }
+        }
+        for (addr, name, witness_only) in names {
+            let sym = SymFact {
+                addr,
+                name: name.clone(),
+                kind: SymKind::Function,
+            };
+            if witness_only {
+                out.swift_witnesses.names.push(sym);
+                continue;
+            }
+            out.symbols.push(sym);
+            out.fid_names.push(FidMatch {
+                addr,
+                name,
+                by_signature: false,
+            });
+        }
+    }
+
+    /// The name [`Self::resolve_claims`] gives each claimed function, each
+    /// claim named by `name_of`, and whether only value witnesses claim it.
+    fn resolved(&self, name_of: impl Fn(&Claim) -> Option<&String>) -> Vec<(u64, String, bool)> {
+        let mut out = Vec::new();
         let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut next: HashMap<String, usize> = HashMap::new();
-        for (&addr, claims) in self.claims.borrow().iter() {
-            let mut names: Vec<&str> = claims.iter().filter_map(|c| c.name.as_deref()).collect();
+        for (&addr, all) in self.claims.borrow().iter() {
+            let (witnesses, claims): (Vec<&Claim>, Vec<&Claim>) =
+                all.iter().partition(|c| c.is_value_witness());
+            let witness_only = claims.is_empty();
+            let claims = if witness_only { witnesses } else { claims };
+            let mut names: Vec<&str> = claims
+                .iter()
+                .filter_map(|c| name_of(c))
+                .map(String::as_str)
+                .collect();
             if names.is_empty() {
                 continue;
             }
@@ -665,7 +835,9 @@ impl Namer<'_> {
             let unnamed = claims.iter().any(|c| c.name.is_none());
             let mut name = if names.len() == 1 && !unnamed {
                 names[0].to_string()
-            } else if claims.iter().all(|c| c.owner == claims[0].owner) {
+            } else if claims.iter().all(|c| c.owner == claims[0].owner)
+                || claims.iter().all(|c| c.is_value_witness())
+            {
                 format!("{}.merged#{}", names[0], names.len())
             } else if let Some((proto, member)) = claims[0]
                 .requirement
@@ -687,17 +859,9 @@ impl Namer<'_> {
                     }
                 }
             }
-            out.symbols.push(SymFact {
-                addr,
-                name: name.clone(),
-                kind: SymKind::Function,
-            });
-            out.fid_names.push(FidMatch {
-                addr,
-                name,
-                by_signature: false,
-            });
+            out.push((addr, name, witness_only));
         }
+        out
     }
 
     fn requirement_index(&self, protocol: Target, requirement: u64) -> Option<usize> {
@@ -711,12 +875,17 @@ impl Namer<'_> {
             .position(|(addr, _)| *addr == requirement)
     }
 
-    fn override_name(&self, class_path: &str, o: &descriptors::OverrideEntry) -> Option<String> {
+    fn override_name(
+        &self,
+        class_path: &str,
+        o: &descriptors::OverrideEntry,
+        f: u64,
+    ) -> Option<(String, Option<String>)> {
         match o.method {
             Target::Slot(slot) => {
                 let desc = import_name(self.imports, slot, "method_descriptor")?;
                 let member = member_after_protocol(&desc)?;
-                Some(format!("{class_path}.{member}"))
+                Some((format!("{class_path}.{member}"), None))
             }
             Target::Direct(m) => {
                 let Target::Direct(b) = o.base_class else {
@@ -724,8 +893,23 @@ impl Namer<'_> {
                 };
                 let base = self.md.contexts.get(&b)?;
                 let e = base.vtable.iter().find(|e| e.addr == m)?;
-                Some(format!("{class_path}.vtable#{}.{}", e.index, e.kind.tag()))
+                Some(self.slot_name(class_path, e, f))
             }
+        }
+    }
+
+    /// `Class.member` with its positional name for a slot an `@objc` thunk
+    /// names at implementation `f`, else `Class.vtable#N.kind` alone.
+    fn slot_name(
+        &self,
+        class_path: &str,
+        e: &descriptors::VTableEntry,
+        f: u64,
+    ) -> (String, Option<String>) {
+        let positional = format!("{class_path}.vtable#{}.{}", e.index, e.kind.tag());
+        match self.objc_members.get(e.addr, f) {
+            Some(member) => (format!("{class_path}.{member}"), Some(positional)),
+            None => (positional, None),
         }
     }
 }

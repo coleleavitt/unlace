@@ -536,6 +536,8 @@ impl Action for ActionDefaultParams {
             .clone()
             .filter(|_| data.kuna_vector_code)
             .or_else(|| arch.default_fp().cloned());
+        let witness_tables = crate::kuna_valuewitness::tables(&arch);
+        let mut ordered: Option<Vec<crate::context::OpId>> = None;
         let size = data.num_calls();
         for i in 0..size {
             if !data.get_call_specs(i).proto().has_model() {
@@ -565,6 +567,24 @@ impl Action for ActionDefaultParams {
                     }
                     _ => None,
                 };
+                // (kuna `valuewitness`) A call through a Swift value witness
+                // table slot takes the slot's prototype, locked, now rather than
+                // in type recovery. See `kuna_valuewitness::call_prototype`.
+                let witness_proto = match (&slot_proto, &witness_tables, has_funcdata) {
+                    (None, Some(tables), false) => {
+                        let ops = ordered
+                            .get_or_insert_with(|| crate::kuna_valuewitness::ordered_ops(data));
+                        crate::kuna_valuewitness::call_prototype(
+                            data,
+                            data.get_call_specs(i).get_op(),
+                            ops,
+                            tables,
+                        )
+                    }
+                    _ => None,
+                };
+                let locks_inputs = witness_proto.is_some();
+                let slot_proto = slot_proto.or(witness_proto);
                 let own_slot = matches!(
                     indirect_slot,
                     Some((_, crate::context::IndirectSlotType::FunctionCode, true))
@@ -689,6 +709,9 @@ impl Action for ActionDefaultParams {
                             data.get_call_specs_mut(i)
                                 .proto_mut()
                                 .set_model(Some(model));
+                        }
+                        if locks_inputs {
+                            data.get_call_specs_mut(i).proto_mut().set_input_lock(true);
                         }
                     }
                     None => {
@@ -2029,7 +2052,15 @@ impl Action for ActionReturnRecovery {
                     let t = active.get_trial(i);
                     (t.get_address().clone(), t.get_size())
                 };
-                if crate::p4_calls::kuna_passthrough::returns_tail_result(data, vn, &taddr, tsize) {
+                if crate::p4_calls::kuna_passthrough::returns_tail_result(data, vn, &taddr, tsize)
+                    || crate::p4_calls::kuna_cachereturn::returns_cached(
+                        data,
+                        &return_ops,
+                        slot,
+                        &taddr,
+                        tsize,
+                    )
+                {
                     active.get_trial_mut(i).mark_active();
                     self.base.count += 1;
                     continue;

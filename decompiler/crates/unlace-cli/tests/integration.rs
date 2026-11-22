@@ -702,6 +702,8 @@ mod windows_stack_argument_alignment;
 
 #[path = "dwarf_linkage_calls.rs"]
 mod dwarf_linkage_calls;
+#[path = "dwarf_name_chars.rs"]
+mod dwarf_name_chars;
 #[path = "imported_data_identifiers.rs"]
 mod imported_data_identifiers;
 #[path = "project_named_globals.rs"]

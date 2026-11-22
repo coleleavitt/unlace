@@ -1166,7 +1166,21 @@ kuna_options! { self, p1;
             None => "Objective-C SDK headers off".to_string(),
         })
     },
-    "iokitclasses" => on_off!(analysis_iokitclasses, "IOKit class and vtable recovery"),
+    "iokitclasses" => {
+        let (names, types) = match p1 {
+            "on" => (true, true),
+            "names" => (true, false),
+            "off" => (false, false),
+            other => {
+                return Err(KunaError::parse(format!(
+                    "iokitclasses takes on|names|off, not {other:?}"
+                )));
+            }
+        };
+        self.analysis_iokitclasses = names;
+        self.analysis_iokittypes = types;
+        Ok(format!("IOKit class and vtable recovery set to {p1}"))
+    },
     "xnutables" => on_off!(analysis_xnutables, "XNU kalloc_type / external-method / pointer-slot naming"),
     "osclassinfo" => on_off!(analysis_osclassinfo, "DriverKit __osclassinfo class records"),
     "swiftcall" => on_off!(analysis_swiftcall, "Swift calling convention on methods and witnesses"),

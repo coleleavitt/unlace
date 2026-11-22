@@ -671,12 +671,14 @@ fn fileset_signed_slots_resolve_kernel_virtual_calls() {
             VcallSite {
                 site: base + 0x302c,
                 register: 8,
-                targets: vec![base + 0x3000]
+                targets: vec![base + 0x3000],
+                object: None
             },
             VcallSite {
                 site: base + 0x3054,
                 register: 8,
-                targets: vec![base + 0x3008, base + 0x3800]
+                targets: vec![base + 0x3008, base + 0x3800],
+                object: None
             },
         ]
     );

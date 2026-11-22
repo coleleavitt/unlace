@@ -2306,7 +2306,10 @@ mod tests {
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-loweredswitchbits / a switch lowered to bit tests re-rolls
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
-        assert_eq!(count, 965, "corpus file count drifted");
+        // and kuna-darwinvarargs / an undeclared variadic callee on Apple arm64 keeps its stack-passed arguments
+        assert_eq!(count, 968, "corpus file count drifted");
+        // and kuna-oslog / an os_log call prints its decoded arguments; __oslogstring literals print as strings
+        // and kuna-objcstubagree / an objc_msgSend$<sel> stub is typed only from declarations that agree on its registers
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

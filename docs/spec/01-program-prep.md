@@ -10948,7 +10948,14 @@ gives **the AIF data veto** (`aifdataveto`, default-on;
 a discovered entry (not a symbol, and not the target of a decoded call or
 branch) whose first instruction the code reads or writes as data is dropped from
 the entry stream, and an AIF gap entry likewise, IDA's roll-back of a
-speculative run with a `dr_R`/`dr_W` xref. On a Thumb literal-pool image an
+speculative run with a `dr_R`/`dr_W` xref. A register a constant was put in
+stays known for the next eight straight-line instructions, until something else
+writes it or a branch, call or user op ends the run, and two known addends sum,
+so an AArch64 `adrp x17, P; add x17, x17, #o; ldrsw x16, [x17, x16, lsl #2]`
+reads its jump table at `P + o`. Apple's linker lists such an inline `__text`
+table in `LC_FUNCTION_STARTS`, where it decodes as a `sub_` entry the dispatch
+then indexes (`sub_4060[a0 * 4]`), and the veto removes it
+(`tests/stages/kuna-relswitch-a64.xml`). On a Thumb literal-pool image an
 AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes

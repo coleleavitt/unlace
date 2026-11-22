@@ -7502,6 +7502,20 @@ both
   `swift.HeapObject *` would hide the first stored property behind
   `obj[1].isa`. The stage test `tests/stages/kuna-swiftruntime.xml` runs the
   stripped `swift_types_elf` off and on.
+  On arm64 the table also carries the runtime's register-specific retain and
+  release entry points (`swift/Runtime/CustomRRABI.h`, instantiated for
+  `swift_retain`, `swift_release`, `swift_bridgeObjectRetain` and
+  `swift_bridgeObjectRelease`): `swift_retain_x<N>` and
+  `swift_bridgeObjectRetain_x<N>` take the object in `x<N>` and return it in
+  `x0`, the two releases read `x<N>` and return nothing, for `N` in 1–15 and 19–28 (`x0` is the
+  plain entry point, `x16`/`x17` are call glue, `x18` is reserved, `x29`/`x30`
+  the frame and link registers). An optimized caller releases a value through
+  them without moving it into `x0`, where no convention places a parameter,
+  so the one parameter is explicit storage on the prototype (the
+  `objc_retain_x<N>` shape) and the call prints its argument:
+  `swift_release_x20(v)` for the bare `swift_release_x20()`. The stage test
+  `tests/stages/kuna-swiftrrregs.xml` runs `swift_rr_regs_macho`, an arm64
+  Mach-O assembled against the iOS libswiftCore.
   The concurrency runtime's entry points come from a second, generated table
   (`kuna_swiftconcurrency.rs`, from the Swift project's
   `swift/Runtime/Concurrency.h` by `tools/gen_swift_concurrency.py`, 64-bit
@@ -7583,7 +7597,11 @@ both
   caller-saved registers, except that a constructor returns its `this`); any
   other instruction that writes a register makes it unknown. The constructor
   is the callee most calls share whose `x1` is a class-name C string and whose
-  `w3` is a plausible size, so no symbol is needed. Each such call gives a
+  `w3` is a plausible size, so no symbol is needed. A class with its own zone
+  registers through a second overload that takes three more arguments
+  (`IOSurface` does); any other callee with such a call is accepted as a
+  constructor too when the call is followed, before the next call, by the store
+  of a vtable into the object it built (`mod.rs (constructors)`). Each such call gives a
   class (name, metaclass object, superclass metaclass, instance size); the
   first store into the metaclass object after the call is the metaclass
   vtable. A class's own vtable is a run of code pointers in a data section,
@@ -7610,6 +7628,31 @@ both
   `vfn_` wherever no ancestor slot is named, except where an abstract class has
   no vtable in the image (AGXG12P: 627 of 1,979 methods are credited to the one
   concrete subclass instead). The pass takes 13 ms on the kernel.
+  With `iokitclasses on` (the default; `names` stops at the names above) the
+  kernel-side classes are also reported as C++ types
+  (`decompiler/crates/unlace-analysis/src/analyzers/iokit/cxx.rs (cxx_facts)`),
+  in the shape the typed Itanium vtables use, so chapter 05 types them with
+  the same machinery whatever `vtabletypes` is set to. Each class with a
+  vtable and a name no other class of the image shares gives a record: its
+  instance size, and per slot a field name and the functions the class and its
+  descendants in the image hold there. A slot is named `dtor` and
+  `deleting_dtor` for the first two, else after the method the nearest
+  ancestor's slot names, else after the name of the function the class or a
+  descendant holds there, else `vfn_<i>`; a name an earlier slot of the same
+  vtable took gets the slot index appended (`release_5`, the overload of
+  `release`). The pass also reports the class of `this` for every function a
+  class vtable holds (the nearest class that is an ancestor of every class
+  whose vtable holds it) and for every `C::C` / `C::~C` of a recovered class;
+  the address point of each typed vtable; each metaclass object's own vtable
+  slots; and which `X::MetaClass::alloc` allocates which class. `vtable for X`
+  then covers only the two header words, leaving the slots to the typed
+  object. The arm64e call-site walk (`arm64evcall`) reports, for a call whose
+  vtable pointer was loaded from an `adrp`-addressed object, that object
+  (`kuna_arm64evcall.rs (object_at)`): when it is a metaclass object, the
+  commit resolves the call to the one method that metaclass's own vtable
+  holds in the slot, so `X::gMetaClass.alloc()` is a direct call.
+  Stage test: `tests/stages/kuna-iokitcxx.xml` (the typed classes, `names`
+  against `on`).
 - **XNU data tables** (kuna, `xnutables`, the same XNU images, default-on;
   `decompiler/crates/unlace-analysis/src/analyzers/iokit/tables.rs`): three kinds
   of table that need no class knowledge to find. Each `__kalloc_type` record (a

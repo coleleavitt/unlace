@@ -631,6 +631,9 @@ pub struct AnalysisOutput {
     /// (kuna `vtabletypes`) The recovered C++ vtables to type. See
     /// [`crate::rtti::kuna_vtabletypes`].
     pub cpp_vtables: crate::rtti::kuna_vtabletypes::VtableFacts,
+    /// (kuna `iokitclasses on`) The IOKit classes to type like `cpp_vtables`, and
+    /// the class each member's `this` points to. See [`crate::iokit`].
+    pub iokit_cxx: crate::iokit::IokitCxxFacts,
     /// (kuna `machodataslots`) The [`Self::import_slot_names`] slots whose import
     /// is a data object, so the slot's own value is the object's address.
     pub data_import_slots: Vec<u64>,
@@ -1185,6 +1188,20 @@ impl AnalysisOutput {
         self.cpp_vtables
             .slot_ranges
             .extend(other.cpp_vtables.slot_ranges);
+        self.iokit_cxx
+            .vtables
+            .classes
+            .extend(other.iokit_cxx.vtables.classes);
+        self.iokit_cxx
+            .vtables
+            .slot_ranges
+            .extend(other.iokit_cxx.vtables.slot_ranges);
+        self.iokit_cxx.this_types.extend(other.iokit_cxx.this_types);
+        self.iokit_cxx
+            .vtable_points
+            .extend(other.iokit_cxx.vtable_points);
+        self.iokit_cxx.meta_slots.extend(other.iokit_cxx.meta_slots);
+        self.iokit_cxx.allocs.extend(other.iokit_cxx.allocs);
         self.data_import_slots.extend(other.data_import_slots);
         self.strings.extend(other.strings);
         self.bounded_strings.extend(other.bounded_strings);

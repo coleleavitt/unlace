@@ -20,12 +20,22 @@
 //! functions that take the caller's context in the `swiftasync` register
 //! (x22 / r14), and are stated as [`ContextProto`]s, which the commit binds
 //! under `__swiftasynccall` with that parameter pinned to the register.
+//!
+//! On arm64 the runtime also exports a retain and a release per register
+//! (`swift/Runtime/CustomRRABI.h`, instantiated for `swift_retain`,
+//! `swift_release`, `swift_bridgeObjectRetain` and `swift_bridgeObjectRelease`):
+//! `swift_retain_x<N>` takes the object in `x<N>` and returns it in `x0`,
+//! `swift_release_x<N>` reads `x<N>` and returns nothing, so an optimized caller
+//! releases a value without moving it into `x0`. Outside every calling
+//! convention, those take their one parameter as explicit storage.
 
 use std::rc::Rc;
 
 use object::read::Object;
+use unlace_base::address::Address;
+use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
-use unlace_decomp::fspec::PrototypePieces;
+use unlace_decomp::fspec::{ParameterPieces, PrototypePieces, parameter_pieces_flags};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
@@ -541,6 +551,84 @@ pub fn prototypes(tf: &dyn TypeFactory, ptr_size: i32) -> Vec<PrototypePieces> {
     out
 }
 
+/// The registers the runtime defines its register-specific entry points for
+/// (`CUSTOM_RR_ENTRYPOINTS_FOREACH_REG`): `x0` is the plain entry point,
+/// `x16`/`x17` are call glue, `x18` is reserved, `x29`/`x30` the frame and
+/// link registers.
+pub const CUSTOM_RR_REGISTERS: [u32; 25] = [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+];
+
+/// The functions `CUSTOM_RR_ENTRYPOINTS_DEFINE_ENTRYPOINTS` instantiates
+/// (`HeapObject.cpp`, `SwiftObject.mm`), and whether each returns its object.
+pub const CUSTOM_RR_FUNCTIONS: [(&str, bool); 4] = [
+    ("swift_retain", true),
+    ("swift_release", false),
+    ("swift_bridgeObjectRetain", true),
+    ("swift_bridgeObjectRelease", false),
+];
+
+/// `swift_retain_x19` → `(true, 19)`, `swift_bridgeObjectRelease_x8` →
+/// `(false, 8)`; `None` for any other name, a register the runtime defines no
+/// entry point for included.
+pub fn custom_rr_register(name: &str) -> Option<(bool, u32)> {
+    CUSTOM_RR_FUNCTIONS.iter().find_map(|&(function, retains)| {
+        let n: u32 = name
+            .strip_prefix(function)?
+            .strip_prefix("_x")?
+            .parse()
+            .ok()?;
+        CUSTOM_RR_REGISTERS.contains(&n).then_some((retains, n))
+    })
+}
+
+/// The register-specific entry points: per function in [`CUSTOM_RR_FUNCTIONS`]
+/// and register in [`CUSTOM_RR_REGISTERS`], `<function>_x<N>` taking
+/// `void *obj @ x<N>`, a retain giving the object back in `x0`.
+pub fn custom_rr_prototypes(arch: &Architecture, ptr_size: i32) -> Vec<PrototypePieces> {
+    let types = Types {
+        tf: arch.types(),
+        ptr_size,
+    };
+    let Some(obj) = types.of(Obj) else {
+        return Vec::new();
+    };
+    let Some(void) = types.of(Void) else {
+        return Vec::new();
+    };
+    let storage = |register: &str| {
+        let vn = arch.get_register_varnode(register.as_bytes()).ok()?;
+        Some(ParameterPieces {
+            addr: Address::new(vn.space?, vn.offset),
+            type_: Some(Rc::clone(&obj)),
+            flags: parameter_pieces_flags::TYPELOCK | parameter_pieces_flags::NAMELOCK,
+        })
+    };
+    let mut out = Vec::with_capacity(CUSTOM_RR_FUNCTIONS.len() * CUSTOM_RR_REGISTERS.len());
+    for n in CUSTOM_RR_REGISTERS {
+        let Some(input) = storage(&format!("x{n}")) else {
+            continue;
+        };
+        for (function, retains) in CUSTOM_RR_FUNCTIONS {
+            out.push(PrototypePieces {
+                name: format!("{function}_x{n}"),
+                outtype: Some(if retains {
+                    Rc::clone(&obj)
+                } else {
+                    Rc::clone(&void)
+                }),
+                intypes: vec![Rc::clone(&obj)],
+                innames: vec!["obj".to_string()],
+                first_var_arg_slot: -1,
+                output_storage: if retains { storage("x0") } else { None },
+                input_storage: vec![(0, input.clone())],
+                kuna_library_names: None,
+            });
+        }
+    }
+    out
+}
+
 /// A `swiftasync` runtime entry point: its prototype, and the parameter
 /// that rides in the `swiftasync` register.
 #[derive(Clone, Debug)]
@@ -619,6 +707,10 @@ impl AnalysisPass for SwiftRuntimePass {
         let mut out = AnalysisOutput::default();
         let ptr_size = if ctx.file.is_64() { 8 } else { 4 };
         out.prototypes = prototypes(ctx.arch.types(), ptr_size);
+        if ctx.file.architecture() == object::Architecture::Aarch64 && ptr_size == 8 {
+            out.prototypes
+                .extend(custom_rr_prototypes(ctx.arch, ptr_size));
+        }
         if ptr_size == 8 {
             let (plain, context) = concurrency(ctx.arch.types(), ptr_size);
             out.prototypes.extend(plain);
@@ -661,5 +753,40 @@ mod tests {
             .unwrap();
         assert_eq!(switch.context, Some(0));
         assert_eq!(switch.params.len(), 3);
+    }
+
+    #[test]
+    fn custom_rr_names_name_their_register() {
+        assert_eq!(custom_rr_register("swift_retain_x19"), Some((true, 19)));
+        assert_eq!(custom_rr_register("swift_release_x8"), Some((false, 8)));
+        assert_eq!(
+            custom_rr_register("swift_release_x0"),
+            None,
+            "x0 is the plain entry point"
+        );
+        assert_eq!(custom_rr_register("swift_retain_x16"), None, "call glue");
+        assert_eq!(custom_rr_register("swift_retain_x18"), None, "reserved");
+        assert_eq!(
+            custom_rr_register("swift_retain_x29"),
+            None,
+            "the frame pointer"
+        );
+        assert_eq!(custom_rr_register("swift_retain"), None);
+        assert_eq!(custom_rr_register("swift_retain_xa"), None);
+        assert_eq!(
+            custom_rr_register("swift_bridgeObjectRelease_x20"),
+            Some((false, 20))
+        );
+        assert_eq!(
+            custom_rr_register("swift_bridgeObjectRetain_x1"),
+            Some((true, 1))
+        );
+        assert_eq!(
+            custom_rr_register("swift_bridgeObjectRetain_x18"),
+            None,
+            "reserved"
+        );
+        assert_eq!(custom_rr_register("swift_retain_n_x1"), None);
+        assert_eq!(CUSTOM_RR_REGISTERS.len(), 25);
     }
 }

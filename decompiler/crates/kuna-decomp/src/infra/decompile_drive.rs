@@ -16,6 +16,7 @@ use kuna_base::types::int4;
 use kuna_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionContext};
+use crate::kuna_budget::{deadline_passed, deadline_passed_in, DeadlineScope};
 use crate::architecture::Architecture;
 use crate::flow::{FlowEnvironment, FlowInfo};
 use crate::funcdata::{funcdata_flags, Funcdata};
@@ -1277,7 +1278,7 @@ fn run_jumptable_pipeline(
             Ok(())
         }
         Err(payload) => {
-            let at = FN_TABLE_AT.with(std::cell::Cell::get).map(|at| format!(" at {at:#x}")).unwrap_or_default();
+            let at = crate::kuna_budget::jump_table_at().map(|at| format!(" at {at:#x}")).unwrap_or_default();
             let message = format!(
                 "decompile pipeline reached an un-ported seam (LOSS-131) in jump-table recovery{at}: {}",
                 panic_message(payload)
@@ -3641,17 +3642,6 @@ fn emit_inject(
 #[cfg(test)]
 mod tests;
 
-thread_local! {
-    static FN_DEADLINE: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
-    static FN_BUDGET_SITE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
-    static FN_TABLE_AT: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
-    static FN_PROBES: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-    static FN_SPENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// How many [`budget_probe`] calls between clock reads.
-const PROBE_STRIDE: u32 = 256;
-
 /// The wall-clock budget, in seconds, of a drive whose architecture sets none
 /// (`decomp_dbg --max-fn-seconds N`, which `kuna decompile` passes); 0 arms none.
 static DEFAULT_FN_BUDGET_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -3672,84 +3662,6 @@ fn fn_budget(arch: &Architecture) -> Option<std::time::Duration> {
     })
 }
 
-/// (kuna decompile-all watchdog) Has the running drive's per-function budget
-/// run out? For a long walk inside one pass, which no action or heritage loop
-/// boundary interrupts, to give up early.
-pub(crate) fn deadline_passed() -> bool {
-    FN_DEADLINE.with(|d| d.get().is_some_and(budget_spent))
-}
-
-/// (kuna decompile-all watchdog) [`deadline_passed`] for a walk that recurses
-/// or loops too often to read the clock at every step: every
-/// [`PROBE_STRIDE`]th call reads it, and once one has seen the budget spent
-/// every call answers `true` at once until the drive ends. It names no site;
-/// the loop that drives the walk does.
-pub(crate) fn budget_probe() -> bool {
-    if FN_SPENT.with(std::cell::Cell::get) {
-        return true;
-    }
-    let n = FN_PROBES.with(|c| {
-        let n = c.get().wrapping_add(1);
-        c.set(n);
-        n
-    });
-    if n % PROBE_STRIDE != 0 || !deadline_passed() {
-        return false;
-    }
-    FN_SPENT.with(|s| s.set(true));
-    true
-}
-
-/// [`deadline_passed`], naming `site` (see [`note_budget_site`]) when it has.
-pub(crate) fn deadline_passed_in(site: &str) -> bool {
-    let passed = deadline_passed();
-    if passed {
-        note_budget_site(|| site.to_string());
-    }
-    passed
-}
-
-/// (kuna decompile-all watchdog) Name `site` as where the running drive's
-/// budget ran out, unless a probe already named one: the first probe to see
-/// the expiry is the innermost polled loop, which the per-function error names.
-pub(crate) fn note_budget_site(site: impl FnOnce() -> String) {
-    FN_BUDGET_SITE.with(|s| {
-        let mut s = s.borrow_mut();
-        if s.is_none() {
-            let mut text = site();
-            if let Some(at) = FN_TABLE_AT.with(std::cell::Cell::get) {
-                let during = if text.starts_with("jump-table") { "" } else { " during jump-table recovery" };
-                text.push_str(&format!("{during} at {at:#x}"));
-            }
-            *s = Some(text);
-        }
-    });
-}
-
-/// (kuna decompile-all watchdog) Marks the drive as recovering the jump table
-/// of the indirect jump at an address until dropped, for [`note_budget_site`].
-pub(crate) struct JumpTableScope(Option<u64>);
-
-impl JumpTableScope {
-    pub(crate) fn enter(at: u64) -> Self {
-        JumpTableScope(FN_TABLE_AT.with(|t| t.replace(Some(at))))
-    }
-}
-
-impl Drop for JumpTableScope {
-    fn drop(&mut self) {
-        FN_TABLE_AT.with(|t| t.set(self.0));
-    }
-}
-
-/// (kuna decompile-all watchdog) The one test every cooperative probe makes:
-/// the clock passed `deadline`, or the drive went over its memory limit
-/// ([`crate::kuna_fnmemory::over`]).
-pub(crate) fn budget_spent(deadline: std::time::Instant) -> bool {
-    let now = std::time::Instant::now();
-    now >= deadline || crate::kuna_fnmemory::over(now)
-}
-
 /// How far out a drive armed only by a memory limit puts its deadline, so the
 /// probes that ask about memory run without a wall-clock budget.
 const MEMORY_ONLY_HORIZON: std::time::Duration = std::time::Duration::from_secs(365 * 24 * 3600);
@@ -3766,7 +3678,7 @@ fn budget_error(arch: &Architecture) -> Option<KunaError> {
         return None;
     }
     let secs = fn_budget(arch).map(|b| b.as_secs()).unwrap_or(0);
-    let site = FN_BUDGET_SITE.with(|s| s.borrow().clone());
+    let site = crate::kuna_budget::budget_site();
     let at = site.map(|s| format!(" in {s}")).unwrap_or_default();
     Some(KunaError::lowlevel(format!("{BUDGET_EXCEEDED} ({secs} s){at}")))
 }
@@ -3804,30 +3716,7 @@ impl RenderBudget {
         if !self.spent_in("rendering C") {
             return None;
         }
-        let site = FN_BUDGET_SITE.with(|s| s.borrow().clone()).unwrap_or_default();
+        let site = crate::kuna_budget::budget_site().unwrap_or_default();
         Some(KunaError::lowlevel(format!("{BUDGET_EXCEEDED} ({} s) in {site}", self.secs)))
-    }
-}
-
-/// Publishes a drive's deadline to [`deadline_passed`], with no budget site
-/// named yet and no [`budget_probe`] spent, and restores the ones before it
-/// when the drive ends.
-pub(crate) struct DeadlineScope(Option<std::time::Instant>, Option<String>, bool);
-
-impl DeadlineScope {
-    pub(crate) fn enter(deadline: Option<std::time::Instant>) -> Self {
-        DeadlineScope(
-            FN_DEADLINE.with(|d| d.replace(deadline)),
-            FN_BUDGET_SITE.with(|s| s.borrow_mut().take()),
-            FN_SPENT.with(|s| s.replace(false)),
-        )
-    }
-}
-
-impl Drop for DeadlineScope {
-    fn drop(&mut self) {
-        FN_DEADLINE.with(|d| d.set(self.0));
-        FN_BUDGET_SITE.with(|s| *s.borrow_mut() = self.1.take());
-        FN_SPENT.with(|s| s.set(self.2));
     }
 }

@@ -2264,7 +2264,7 @@ impl Funcdata {
         let mut reached_match = false;
         let mut i = 0;
         while i < varlist.len() {
-            if crate::decompile_drive::budget_probe() {
+            if crate::kuna_budget::budget_probe() {
                 res = false;
                 break;
             }
@@ -2535,7 +2535,7 @@ impl Funcdata {
         offset: int4,
         main_flags: kuna_base::types::uint4,
     ) -> Ancestry {
-        if maxlevel == 0 || crate::decompile_drive::budget_probe() {
+        if maxlevel == 0 || crate::kuna_budget::budget_probe() {
             return Ancestry::Unused { cut: 0, bounded: true };
         }
         let key = memo.key(invn, offset, main_flags);

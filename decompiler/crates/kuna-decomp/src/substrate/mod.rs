@@ -18,3 +18,6 @@ pub mod expression;
 pub mod transform;
 pub mod addtreestate;
 pub(crate) mod kuna_checkedarena;
+pub(crate) mod kuna_budget;
+pub mod kuna_fnmemory;
+pub mod kuna_hostmem;

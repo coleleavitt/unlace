@@ -399,7 +399,7 @@ and a budget that ran out inside it was overrun by as much). So every merge
 step probes (`merge.rs (Merge::budget)`): each address-tied window, each
 Varnode `unify_address` snips, each op of `merge_marker`, `merge_opcode` and
 `merge_adjacent`, each pair `merge_linear` tests and each `Merge::merge`. Every
-64th probe asks the drive's budget (`decompile_drive.rs (deadline_passed)`);
+64th probe asks the drive's budget (`kuna_budget.rs (deadline_passed)`);
 once one has seen it spent, that one names `variable merging` as the budget's
 site and every later step of that `Merge` fails at once. The merge actions drop
 the error like any other, the next action boundary stops the pipeline, and the

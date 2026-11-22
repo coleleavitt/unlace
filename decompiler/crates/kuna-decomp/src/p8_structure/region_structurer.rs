@@ -720,8 +720,8 @@ impl<'a> RegionStructurer<'a> {
         // is bounded by `cap`.
         let mut precond_rounds: i64 = 0;
         loop {
-            if deadline.is_some_and(crate::decompile_drive::budget_spent) {
-                crate::decompile_drive::note_budget_site(|| "region structuring".to_string());
+            if deadline.is_some_and(crate::kuna_budget::budget_spent) {
+                crate::kuna_budget::note_budget_site(|| "region structuring".to_string());
                 return Ok(false);
             }
             precond_rounds += 1;
@@ -735,8 +735,8 @@ impl<'a> RegionStructurer<'a> {
 
         let mut rounds: i64 = 0;
         while self.size() > 1 {
-            if deadline.is_some_and(crate::decompile_drive::budget_spent) {
-                crate::decompile_drive::note_budget_site(|| "region structuring".to_string());
+            if deadline.is_some_and(crate::kuna_budget::budget_spent) {
+                crate::kuna_budget::note_budget_site(|| "region structuring".to_string());
                 return Ok(false);
             }
             rounds += 1;

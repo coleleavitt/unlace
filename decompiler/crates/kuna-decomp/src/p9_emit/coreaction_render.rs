@@ -2700,7 +2700,7 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
         let mut changecount = 0i32;
         for (visited, vn) in ids.into_iter().enumerate() {
             if visited % SWEEP_DEADLINE_STRIDE == 0
-                && crate::decompile_drive::deadline_passed_in("action deadcode")
+                && crate::kuna_budget::deadline_passed_in("action deadcode")
             {
                 budget_spent = true;
                 break;

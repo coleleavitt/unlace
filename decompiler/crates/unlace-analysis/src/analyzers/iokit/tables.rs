@@ -439,7 +439,8 @@ pub(super) fn dispatch_tables(
 
 /// `__got`, `__auth_got` and `__auth_ptr` slots the indirect-symbol table does
 /// not name: `<target>_ptr` for a slot whose rebased pointer reaches a function
-/// or object of this image named by its symbols or by the class recovery.
+/// or object of this image named by its symbols or by the class recovery
+/// (`<target>_ptr_<n>` for a further slot holding the same target).
 pub(super) fn pointer_slots(
     file: &object::File,
     bytes: &[u8],
@@ -448,6 +449,7 @@ pub(super) fn pointer_slots(
     out: &mut AnalysisOutput,
 ) {
     let known = rec.known_names();
+    let mut seen = HashMap::new();
     let named: std::collections::HashSet<u64> =
         crate::loader::macho_stubs::resolve_macho_import_slots(file, bytes)
             .into_iter()
@@ -467,7 +469,7 @@ pub(super) fn pointer_slots(
             };
             out.data_objects.push(DataObjectFact {
                 addr: slot,
-                name: format!("{target}_ptr"),
+                name: unique(&mut seen, format!("{target}_ptr")),
                 size: 8,
             });
         }

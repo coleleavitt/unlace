@@ -39,7 +39,8 @@ impl Mode {
     }
 
     pub fn set_env(self) {
-        std::env::set_var(ENV, self.as_str());
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(ENV, self.as_str()) };
     }
 
     /// The environment vocabulary of the other default-off load-time gates,

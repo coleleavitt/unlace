@@ -10,7 +10,7 @@ use crate::architecture::Architecture;
 use crate::options::on_or_off;
 
 macro_rules! kuna_options {
-    ($this:ident, $value:ident; $($name:literal => $apply:expr),* $(,)?) => {
+    ($this:ident, $value:ident; $($name:literal => $apply:expr_2021),* $(,)?) => {
         pub const KUNA_OPTION_NAMES: &[&str] = &[$($name),*];
 
         impl Architecture {
@@ -1018,7 +1018,8 @@ kuna_options! { self, p1;
     "dwarfscopes" => {
         let val = on_or_off(p1)?;
         self.analysis_dwarfscopes = val;
-        std::env::set_var("KUNA_DWARFSCOPES", if val { "on" } else { "off" });
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("KUNA_DWARFSCOPES", if val { "on" } else { "off" }) };
         Ok(format!("DWARF lexical-block and location-list locals turned {}", if val { "on" } else { "off" }))
     },
     "addrtable" => on_off!(analysis_addrtable, "Address-table analysis pass"),

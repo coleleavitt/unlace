@@ -57,7 +57,8 @@ impl KernelcacheBoot {
 }
 
 pub fn set_kernelcache_boot_env(choice: &KernelcacheBoot) {
-    std::env::set_var(KERNELCACHE_BOOT_ENV, &*choice.as_str());
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(KERNELCACHE_BOOT_ENV, &*choice.as_str()) };
 }
 
 /// Parse a `kernelcache-boot` option value. A path that does not exist is

@@ -262,11 +262,13 @@ mod tests {
 
         // The env-gate toggling must be serialized: this process-global var is
         // also read by the console gate; keep the on-window tight.
-        std::env::set_var(MACHO_ARM64E_ENV, "off");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(MACHO_ARM64E_ENV, "off") };
         // Gate OFF: even an arm64e Mach-O yields None (generic v8A wins).
         assert_eq!(apple_silicon_id(&macho, Architecture::Aarch64, &arm64e), None);
 
-        std::env::remove_var(MACHO_ARM64E_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(MACHO_ARM64E_ENV) };
         // Gate ON (the default) + arm64e Mach-O + AArch64 → the AppleSilicon id.
         assert_eq!(
             apple_silicon_id(&macho, Architecture::Aarch64, &arm64e).as_deref(),
@@ -281,6 +283,7 @@ mod tests {
             apple_silicon_id(&crate::loader::format::elf::ElfFormat, Architecture::Aarch64, &arm64e),
             None
         );
-        std::env::remove_var(MACHO_ARM64E_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(MACHO_ARM64E_ENV) };
     }
 }

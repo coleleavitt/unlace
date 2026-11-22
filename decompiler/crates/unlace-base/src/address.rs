@@ -1200,20 +1200,18 @@ impl RangeList {
         let probe = Range::new(Rc::clone(spaceid), midway, midway);
         // First element greater than -range- (should be MOST negative),
         // stepped back one
-        if let Some(r) = self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back() {
-            if Rc::ptr_eq(&r.spc, spaceid) {
+        if let Some(r) = self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back()
+            && Rc::ptr_eq(&r.spc, spaceid) {
                 return Some(r);
             }
-        }
 
         // If there were no "positive" ranges, search for biggest negative
         // range
         let probe = Range::new(Rc::clone(spaceid), spaceid.get_highest(), spaceid.get_highest());
-        if let Some(r) = self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back() {
-            if Rc::ptr_eq(&r.spc, spaceid) {
+        if let Some(r) = self.tree.range((Bound::Unbounded, Bound::Included(&probe))).next_back()
+            && Rc::ptr_eq(&r.spc, spaceid) {
                 return Some(r);
             }
-        }
         None
     }
 

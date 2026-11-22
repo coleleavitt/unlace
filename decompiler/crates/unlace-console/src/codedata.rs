@@ -829,7 +829,7 @@ impl CodeDataAnalysis {
         let calls: Vec<Address> = self
             .tofrom_crossref
             .range(AddrLink::single(codeaddr.clone())..AddrLink::single(endaddr))
-            .filter(|(_, &flags)| (flags & code_unit_flags::CALL) != 0)
+            .filter(|&(_, &flags)| (flags & code_unit_flags::CALL) != 0)
             .map(|(k, _)| k.b.clone())
             .collect();
         for b in calls {

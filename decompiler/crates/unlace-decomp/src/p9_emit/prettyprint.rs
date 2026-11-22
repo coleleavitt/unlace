@@ -631,12 +631,12 @@ pub trait Emit {
     /// registration, or canceled).  This is C++'s frame-local
     /// `PendingBrace::getIndentId()`: it answers "did *my* brace fire", immune to
     /// sibling/descendant fires that share the emitter's pending slot.
-    fn pending_fired_indent(&self, gen: u64) -> int4 {
+    fn pending_fired_indent(&self, r#gen: u64) -> int4 {
         self.state()
             .pend_fired
             .iter()
             .rev()
-            .find(|(g, _)| *g == gen)
+            .find(|(g, _)| *g == r#gen)
             .map(|(_, id)| *id)
             .unwrap_or(-1)
     }
@@ -676,11 +676,11 @@ pub trait Emit {
             // The brace being fired is the *currently active* registration; stamp
             // its generation so its owning frame (and only that frame) can later
             // recognise its own fire.
-            let gen = self.state().pend_reg_gen;
+            let r#gen = self.state().pend_reg_gen;
             let id = self.open_brace_indent(OPEN_CURLY_FOR_PENDING, style);
             // Record the fired brace's indent id (C++ PendingBrace::indentId).
             self.state_mut().pend_brace_indent = id;
-            self.state_mut().pend_fired.push((gen, id));
+            self.state_mut().pend_fired.push((r#gen, id));
         }
     }
 }

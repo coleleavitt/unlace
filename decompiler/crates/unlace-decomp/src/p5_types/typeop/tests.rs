@@ -29,7 +29,7 @@ fn expected_table() -> Vec<Row> {
     use TypeOpClass::*;
     // Helper: a Base-class row uses TYPE_UNKNOWN metatypes (ignored for Base).
     macro_rules! b {
-        ($opc:expr, $of:expr, $af:expr, $nm:expr) => {
+        ($opc:expr_2021, $of:expr_2021, $af:expr_2021, $nm:expr_2021) => {
             Row {
                 opc: $opc,
                 opflags: $of,
@@ -42,7 +42,7 @@ fn expected_table() -> Vec<Row> {
         };
     }
     macro_rules! t {
-        ($opc:expr, $of:expr, $af:expr, $nm:expr, $cl:expr, $mo:expr, $mi:expr) => {
+        ($opc:expr_2021, $of:expr_2021, $af:expr_2021, $nm:expr_2021, $cl:expr_2021, $mo:expr_2021, $mi:expr_2021) => {
             Row {
                 opc: $opc,
                 opflags: $of,

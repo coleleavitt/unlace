@@ -193,10 +193,11 @@ impl LoadOptions {
                 kuna_symbolnamechars::set_symbolnamechars_env(self.symbolnamechars)
             }
             "libctypes" => kuna_libctypes::set_libctypes_env_layout(self.libctypes),
-            "calltargettype" => std::env::set_var(
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            "calltargettype" => unsafe { std::env::set_var(
                 kuna_calltargettype::CALLTARGETTYPE_ENV,
                 if self.calltargettype { "on" } else { "off" },
-            ),
+            ) },
             "macho-arm64e" => kuna_macho_arm64e::set_macho_arm64e_env(self.macho_arm64e),
             "sourcelang" => kuna_sourcelang::set_sourcelang_env(self.sourcelang),
             "objcivars" => kuna_objcivars::set_objcivars_env(self.objcivars),

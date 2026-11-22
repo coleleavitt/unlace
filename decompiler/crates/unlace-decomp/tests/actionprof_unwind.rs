@@ -107,7 +107,8 @@ fn calls(table: &str, key: &str) -> u64 {
 fn nested_panic_closes_frames_and_later_actions_publish() {
     let scratch = Scratch::new();
     let output = scratch.0.join("profile.txt");
-    std::env::set_var(actionprof::ENV_VAR, &output);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(actionprof::ENV_VAR, &output) };
     let mut data = data();
     let mut context = ActionContext::default();
     actionprof::set_root("probe");
@@ -131,7 +132,8 @@ fn nested_panic_closes_frames_and_later_actions_publish() {
         assert_eq!(std::fs::read_to_string(&output).unwrap(), table);
     }
 
-    std::env::set_var(actionprof::ENV_VAR, &scratch.0);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(actionprof::ENV_VAR, &scratch.0) };
     assert_eq!(
         ProbeAction::new("healthy", false).perform(&mut data, &mut context),
         0

@@ -57,16 +57,16 @@ pub fn declarations(arch: &Architecture, fd: &Funcdata) -> Result<Declarations, 
         };
         if !has_wide_contract {
             let parked = fd.get_arch().callee_proto_pieces(call.get_entry_address());
-            if let Some(pieces) = parked.filter(|pieces| pieces.first_var_arg_slot >= 0) {
+            match parked.filter(|pieces| pieces.first_var_arg_slot >= 0) { Some(pieces) => {
                 if snapshot
                     .set_pieces(&pieces, None, arch.types(), arch.manage())
                     .is_err()
                 {
                     continue;
                 }
-            } else if call.format_arity().is_some() {
+            } _ => if call.format_arity().is_some() {
                 continue;
-            }
+            }}
         }
         if snapshot.get_output_type().is_some_and(|t| {
             matches!(

@@ -194,7 +194,8 @@ fn usage() {
 /// invocations / the pipeline.
 fn apply_engine(engine: Option<&str>) {
     if let Some(e) = engine {
-        std::env::set_var("KUNA_ENGINE", e);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("KUNA_ENGINE", e) };
     }
 }
 
@@ -315,11 +316,13 @@ fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
             "--check" => check = true,
             "--engine" => engine = Some(take_value(argv, &mut i, "--engine")?),
             "--decomp-dbg" => {
-                std::env::set_var("KUNA_DECOMP_DBG", take_value(argv, &mut i, "--decomp-dbg")?);
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var("KUNA_DECOMP_DBG", take_value(argv, &mut i, "--decomp-dbg")?) };
                 decomp_dbg_flag = true;
             }
             "--sleighpath" => {
-                std::env::set_var("KUNA_SPECS", take_value(argv, &mut i, "--sleighpath")?);
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var("KUNA_SPECS", take_value(argv, &mut i, "--sleighpath")?) };
             }
             "-h" | "--help" => {
                 usage_catalog();

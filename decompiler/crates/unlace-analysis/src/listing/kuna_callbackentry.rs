@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn pushed_pointer_without_a_following_call_is_not_a_candidate() {
         let model = listing(0x1000, None);
-        let insns = model.instructions().filter(|(&at, _)| at != 0x2005)
+        let insns = model.instructions().filter(|&(&at, _)| at != 0x2005)
             .map(|(_, insn)| insn.clone()).collect();
         let model = Listing::from_model_for_test(insns, model.funcs.into_values().collect(),
             model.stack_callback_refs, model.exec_ranges);

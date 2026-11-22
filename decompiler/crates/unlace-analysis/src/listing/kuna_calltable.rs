@@ -150,7 +150,7 @@ pub fn scan(file: &object::File, listing: &Listing, arch: &Architecture, transla
     out.case_entries = listing
         .functions()
         .filter(|(e, f)| !f.from_symbol && cases.contains(e) && !calls.contains(e))
-        .filter(|(&e, _)| !listing.refs_to(e).iter().any(|r| r.kind == RefKind::Call))
+        .filter(|&(&e, _)| !listing.refs_to(e).iter().any(|r| r.kind == RefKind::Call))
         .map(|(&e, _)| e)
         .collect();
     out

@@ -427,7 +427,7 @@ pub(crate) fn printed_shape(data: &Funcdata, ops: &[OpId]) -> Option<PrintedShap
     // `continue`, which skipped the trace, so every block listed one op short of
     // its own measurement.)
     macro_rules! charge {
-        ($o:expr) => {{
+        ($o:expr_2021) => {{
             out.stmts += 1;
             if trace_ops() {
                 eprintln!(

@@ -401,7 +401,7 @@ fn mips_pic_calls(entry: u64, words: &[u32], word: &mut impl FnMut(u64) -> Optio
     let Some((gp, bases)) = mips_gp(entry, words) else { return };
     let skip = words.iter().take(16).position(|&w| mips_control(w)).unwrap_or(16.min(words.len()));
     let bases: Vec<u32> = bases.into_iter().filter(|&b| mips_base_holds(words, skip, b)).collect();
-    for (i, _) in words.iter().enumerate().filter(|(_, &w)| w == JALR_T9) {
+    for (i, _) in words.iter().enumerate().filter(|&(_, &w)| w == JALR_T9) {
         let (mut want, mut add, mut found) = (25u32, None, None);
         for j in (i.saturating_sub(8)..i).rev() {
             let w = words[j];

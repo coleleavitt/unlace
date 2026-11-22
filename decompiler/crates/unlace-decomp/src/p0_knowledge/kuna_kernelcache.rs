@@ -55,7 +55,8 @@ impl KernelcacheChoice {
 }
 
 pub fn set_kernelcache_env(choice: &KernelcacheChoice) {
-    std::env::set_var(KERNELCACHE_ENV, choice.as_str());
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(KERNELCACHE_ENV, choice.as_str()) };
 }
 
 pub fn parse_kernelcache(value: &str) -> KunaResult<(KernelcacheChoice, String)> {

@@ -82,14 +82,12 @@ fn parse_unit(stderr: &str) -> UnitResult {
     for raw in stderr.lines() {
         let line = trim_trailing_ws(raw);
         // ^testing : (?P<name>.+) \.\.\.$
-        if let Some(rest) = line.strip_prefix("testing : ") {
-            if let Some(name) = rest.strip_suffix(" ...") {
-                if !name.is_empty() {
+        if let Some(rest) = line.strip_prefix("testing : ")
+            && let Some(name) = rest.strip_suffix(" ...")
+                && !name.is_empty() {
                     current = Some(name.to_string());
                     continue;
                 }
-            }
-        }
         if let Some(cur) = current.clone() {
             // ^  passed\.$
             if line == "  passed." {
@@ -181,11 +179,10 @@ fn parse_data_error(line: &str) -> Option<String> {
     let t = line.trim_start();
     // "Error parsing <f>.xml: ..." | "Error executing <f>.xml: ..."
     for kw in ["Error parsing ", "Error executing "] {
-        if let Some(rest) = t.strip_prefix(kw) {
-            if let Some(idx) = rest.find(".xml: ") {
+        if let Some(rest) = t.strip_prefix(kw)
+            && let Some(idx) = rest.find(".xml: ") {
                 return Some(rest[..idx + 4].to_string());
             }
-        }
     }
     // "Error: Did not apply tests in <f>.xml"
     if let Some(rest) = t.strip_prefix("Error: Did not apply tests in ") {
@@ -198,17 +195,15 @@ fn parse_data_error(line: &str) -> Option<String> {
         }
     }
     // "No output for <f>.xml"
-    if let Some(rest) = t.strip_prefix("No output for ") {
-        if rest.ends_with(".xml") {
+    if let Some(rest) = t.strip_prefix("No output for ")
+        && rest.ends_with(".xml") {
             return Some(rest.to_string());
         }
-    }
     // "Execution failed for <f>.xml"
-    if let Some(rest) = t.strip_prefix("Execution failed for ") {
-        if rest.ends_with(".xml") {
+    if let Some(rest) = t.strip_prefix("Execution failed for ")
+        && rest.ends_with(".xml") {
             return Some(rest.to_string());
         }
-    }
     None
 }
 

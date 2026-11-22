@@ -212,7 +212,7 @@ pub(crate) fn coalesce(
         }
         if group.len() == 1 {
             result.extend(group);
-        } else if let Ok(mut shared) = backing(factory, function, &group) {
+        } else { match backing(factory, function, &group) { Ok(mut shared) => {
             let stem = shared.0.clone();
             let mut variant = 0;
             while !names.insert(shared.0.clone()) {
@@ -220,7 +220,7 @@ pub(crate) fn coalesce(
                 shared.0 = format!("{stem}_{variant}");
             }
             result.push(shared);
-        }
+        } _ => {}}}
         first = next;
     }
     result

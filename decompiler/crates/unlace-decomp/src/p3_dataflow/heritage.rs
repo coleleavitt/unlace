@@ -5490,7 +5490,7 @@ impl Heritage {
                 // stack storage if the output has no further descendants but
                 // lands in a spacebase space).
                 macro_rules! descend_into {
-                    ($outvn:expr, $newoff:expr, $newtrav:expr) => {{
+                    ($outvn:expr_2021, $newoff:expr_2021, $newtrav:expr_2021) => {{
                         let ov = $outvn;
                         let d: Vec<crate::context::OpId> =
                             fd.vbank().get(ov).expect("descend_into: stale outvn").descend_iter().collect();

@@ -240,11 +240,10 @@ fn is_archive(bytes: &[u8]) -> bool {
 /// `decomp_dbg` resolves them.
 fn spec_roots() -> Vec<String> {
     let mut roots: Vec<String> = Vec::new();
-    if let Ok(home) = std::env::var("SLEIGHHOME") {
-        if !home.is_empty() {
+    if let Ok(home) = std::env::var("SLEIGHHOME")
+        && !home.is_empty() {
             roots.push(home);
         }
-    }
     let specs = paths::specs_dir().to_string_lossy().into_owned();
     if !roots.contains(&specs) {
         roots.push(specs);

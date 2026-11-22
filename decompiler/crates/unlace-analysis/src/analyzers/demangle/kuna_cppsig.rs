@@ -779,9 +779,9 @@ fn build_param_type(
             break;
         }
     }
-    let base = if let Some(prim) = primitive_type(base_text, types) {
+    let base = match primitive_type(base_text, types) { Some(prim) => {
         prim?
-    } else if indirection == 0 {
+    } _ => if indirection == 0 {
         // A by-value aggregate whose width the mangling does not carry.
         return None;
     } else {
@@ -794,7 +794,7 @@ fn build_param_type(
             return None;
         }
         class_record(types, &name)?
-    };
+    }};
     let mut ty = base;
     for _ in 0..indirection {
         ty = types.get_type_pointer(ptr, ty, word_size).ok()?;

@@ -83,11 +83,14 @@ fn boot_fat(slice: Option<&str>) -> ConsoleProgram {
     assert!(path.exists(), "missing fixture {path:?}");
 
     match slice {
-        Some(s) => std::env::set_var("KUNA_MACHO_SLICE", s),
-        None => std::env::remove_var("KUNA_MACHO_SLICE"),
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        Some(s) => unsafe { std::env::set_var("KUNA_MACHO_SLICE", s) },
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        None => unsafe { std::env::remove_var("KUNA_MACHO_SLICE") },
     }
     let result = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots);
-    std::env::remove_var("KUNA_MACHO_SLICE");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_MACHO_SLICE") };
     result.expect("bootstrap fixture with built processor specs")
 }
 
@@ -176,9 +179,11 @@ fn boot_arm64e(gate: bool) -> ConsoleProgram {
     let path = fixtures().join("macho_arm64e");
     assert!(path.exists(), "missing fixture {path:?}");
 
-    std::env::set_var("KUNA_MACHO_ARM64E", if gate { "on" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_MACHO_ARM64E", if gate { "on" } else { "off" }) };
     let result = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots);
-    std::env::remove_var("KUNA_MACHO_ARM64E");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_MACHO_ARM64E") };
     result.expect("bootstrap fixture with built processor specs")
 }
 

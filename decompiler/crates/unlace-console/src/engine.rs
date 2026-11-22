@@ -202,7 +202,7 @@ impl SymbolStream {
         self.slots_of(name).find(|record| record.addr == *addr)
     }
 
-    fn slots_of(&self, name: &str) -> impl Iterator<Item = &ProgramSymbol> {
+    fn slots_of(&self, name: &str) -> impl Iterator<Item = &ProgramSymbol> + use<'_> {
         self.by_name
             .get(name)
             .into_iter()
@@ -3804,7 +3804,7 @@ fn name_hash(name: &str) -> u64 {
     hasher.finish()
 }
 
-fn hashed<'a, T: Copy>(index: &'a [(u64, T)], want: &str) -> impl Iterator<Item = T> + 'a {
+fn hashed<'a, T: Copy>(index: &'a [(u64, T)], want: &str) -> impl Iterator<Item = T> + 'a + use<'a, T> {
     let hash = name_hash(want);
     let lo = index.partition_point(|&(key, _)| key < hash);
     let hi = lo + index[lo..].partition_point(|&(key, _)| key == hash);
@@ -5239,9 +5239,11 @@ pub(crate) fn bootstrap_object(
     if from_env {
         match options.go_version {
             Some((maj, min)) => {
-                std::env::set_var(unlace_decomp::kuna_goreg::GOVERSION_ENV, format!("{maj}.{min}"))
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var(unlace_decomp::kuna_goreg::GOVERSION_ENV, format!("{maj}.{min}")) }
             }
-            None => std::env::remove_var(unlace_decomp::kuna_goreg::GOVERSION_ENV),
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            None => unsafe { std::env::remove_var(unlace_decomp::kuna_goreg::GOVERSION_ENV) },
         }
     }
     let _load = enter_load(&options, from_env);

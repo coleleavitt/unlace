@@ -146,11 +146,10 @@ pub(crate) fn decompile_callee_first(
     }
     converge_callee_first(prog, &targets, &plan, &base, &mut slots);
     prog.arch_mut().kuna_callbacktype.recording = false;
-    if let (Some(refs), Some(open)) = (&callback_refs, &open) {
-        if prog.arch().callbacktype.is_on() {
+    if let (Some(refs), Some(open)) = (&callback_refs, &open)
+        && prog.arch().callbacktype.is_on() {
             callback_park_round(prog, refs, open, &targets, &plan, &base, &mut slots);
         }
-    }
     converge_element_globals_callee_first(prog, &targets, &plan, &base, &mut slots);
     converge_store_types_callee_first(prog, &targets, &plan, &base, &mut slots);
     prog.arch_mut().kuna_settle_caller_reads = previous_settling;

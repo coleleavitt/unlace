@@ -19,5 +19,6 @@ pub fn objcivars_enabled() -> bool {
 /// Bridge a `set_kuna_option("objcivars", val)` choice to [`OBJCIVARS_ENV`] so
 /// a later `load file` in the same process sees it.
 pub fn set_objcivars_env(on: bool) {
-    std::env::set_var(OBJCIVARS_ENV, if on { "on" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(OBJCIVARS_ENV, if on { "on" } else { "off" }) };
 }

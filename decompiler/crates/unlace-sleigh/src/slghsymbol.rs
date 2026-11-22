@@ -1888,7 +1888,7 @@ impl DecisionNode {
     }
 
     /// Compatible branch values in ascending order (`DecisionNode::consistentValues`).
-    fn consistent_values(&self, pat: &DisjointPattern) -> impl Iterator<Item = u32> {
+    fn consistent_values(&self, pat: &DisjointPattern) -> impl Iterator<Item = u32> + use<> {
         let mut m: u32 = if self.bitsize == 32 { 0 } else { 1u32 << self.bitsize };
         m = m.wrapping_sub(1);
         let common_mask = m & pat.get_mask(self.startbit, self.bitsize, self.contextdecision);

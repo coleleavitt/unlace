@@ -104,14 +104,15 @@ pub const AGGREGATE_NAMES: &[&str] = &[
 /// `option libctypes glibc` before `load file` path; the CLI sets the env var on
 /// the subprocess directly).
 pub fn set_libctypes_env_layout(layout: LibcTypesLayout) {
-    std::env::set_var(
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(
         LIBCTYPES_ENV,
         match layout {
             LibcTypesLayout::Off => "off",
             LibcTypesLayout::Opaque => "opaque",
             LibcTypesLayout::Glibc => "glibc",
         },
-    );
+    ) };
 }
 
 #[cfg(test)]
@@ -123,21 +124,25 @@ mod tests {
     /// being a single test (env is process-global).
     #[test]
     fn libctypes_env_gate() {
-        std::env::remove_var(LIBCTYPES_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(LIBCTYPES_ENV) };
         assert!(libctypes_enabled(), "unset => default-on");
         assert_eq!(libctypes_layout(), LibcTypesLayout::Opaque, "unset => opaque");
         for off in ["off", "0", "false", "OFF", " off "] {
-            std::env::set_var(LIBCTYPES_ENV, off);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(LIBCTYPES_ENV, off) };
             assert!(!libctypes_enabled(), "`{off}` should disable");
             assert_eq!(libctypes_layout(), LibcTypesLayout::Off);
         }
         for on in ["opaque", "on", "1", "true", "OPAQUE", " opaque ", ""] {
-            std::env::set_var(LIBCTYPES_ENV, on);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(LIBCTYPES_ENV, on) };
             assert!(libctypes_enabled(), "`{on}` should enable");
             assert_eq!(libctypes_layout(), LibcTypesLayout::Opaque, "`{on}` is not a layout");
         }
         for g in ["glibc", "GLIBC", " glibc "] {
-            std::env::set_var(LIBCTYPES_ENV, g);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(LIBCTYPES_ENV, g) };
             assert!(libctypes_enabled(), "`{g}` should enable");
             assert_eq!(libctypes_layout(), LibcTypesLayout::Glibc, "`{g}` asks for layouts");
         }
@@ -149,6 +154,7 @@ mod tests {
             set_libctypes_env_layout(layout);
             assert_eq!(libctypes_layout(), want);
         }
-        std::env::remove_var(LIBCTYPES_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(LIBCTYPES_ENV) };
     }
 }

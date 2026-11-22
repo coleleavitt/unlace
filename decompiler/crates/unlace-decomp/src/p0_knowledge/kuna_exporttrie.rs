@@ -14,5 +14,6 @@ pub fn exporttrie_enabled() -> bool {
 }
 
 pub fn set_exporttrie_env(on: bool) {
-    std::env::set_var(EXPORTTRIE_ENV, if on { "on" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(EXPORTTRIE_ENV, if on { "on" } else { "off" }) };
 }

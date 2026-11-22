@@ -861,11 +861,10 @@ fn target_address(prog: &ConsoleProgram, spec: &str) -> Result<Resolution, Strin
     if let Some(addr) = prog.lookup_data_alias(spec) {
         return Ok(Resolution::Settled(TargetSpec { addr, name: Some(spec.to_string()), fallback: None }));
     }
-    if prog.arch().analysis_ppc32picimports.scoped() {
-        if let Some(slot) = prog.arch().ppc32_pic_imports.values().find(|s| s.name == spec) {
+    if prog.arch().analysis_ppc32picimports.scoped()
+        && let Some(slot) = prog.arch().ppc32_pic_imports.values().find(|s| s.name == spec) {
             return Ok(Resolution::Settled(TargetSpec { addr: slot.address, name: Some(spec.to_string()), fallback: None }));
         }
-    }
     if let Ok(addr) = u64::from_str_radix(spec, 16) {
         return Ok(Resolution::Settled(TargetSpec { addr, name: None, fallback: None }));
     }
@@ -962,13 +961,12 @@ fn source_function(
     prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames,
     edge: &Xref, context: Option<u64>,
 ) -> Option<(u64, String)> {
-    if edge.kind == XrefKind::Call {
-        if let Some(callers) = index.scoped_callers(edge.from, edge.to) {
+    if edge.kind == XrefKind::Call
+        && let Some(callers) = index.scoped_callers(edge.from, edge.to) {
             let entry = context.filter(|entry| callers.contains(entry))
                 .or_else(|| if callers.len() == 1 { callers.first().copied() } else { None })?;
             return Some((entry, function_name(prog, index, names, entry)));
         }
-    }
     owning_function(prog, index, names, edge.from)
 }
 

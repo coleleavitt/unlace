@@ -1720,16 +1720,15 @@ fn propagate_add_in2_out(
                 let sbptrto = cur.get_ptr_to()?;
                 let cur_size = cur.get_size();
                 let cur_ws = cur.get_word_size().unwrap_or(1);
-                if let Some((subtype, residual)) =
-                    data.spacebase_get_sub_type(&sbptrto, type_offset)
-                {
+                match data.spacebase_get_sub_type(&sbptrto, type_offset)
+                { Some((subtype, residual)) => {
                     type_offset = residual;
                     // The spacebase is never an array/struct container itself, so
                     // `par`/`parOff` stay unset; `!isArray -> getTypePointerStripArray`.
                     pointer = tlst.get_type_pointer_strip_array(cur_size, subtype, cur_ws).ok();
-                } else {
+                } _ => {
                     pointer = None;
-                }
+                }}
                 if pointer.is_none() || type_offset == 0 {
                     break;
                 }

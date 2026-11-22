@@ -26,7 +26,8 @@ pub fn macho_arm64e_enabled() -> bool {
 /// Bridge a `set_kuna_option("macho-arm64e", val)` toggle to
 /// [`MACHO_ARM64E_ENV`] so a later `load file` in the same process sees it.
 pub fn set_macho_arm64e_env(on: bool) {
-    std::env::set_var(MACHO_ARM64E_ENV, if on { "on" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(MACHO_ARM64E_ENV, if on { "on" } else { "off" }) };
 }
 
 #[cfg(test)]
@@ -35,15 +36,18 @@ mod tests {
 
     #[test]
     fn env_gate_default_on_and_off_tokens() {
-        std::env::remove_var(MACHO_ARM64E_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(MACHO_ARM64E_ENV) };
         assert!(macho_arm64e_enabled(), "unset env ⇒ default on");
 
         for on in ["on", "1", "true", "ON", "True", ""] {
-            std::env::set_var(MACHO_ARM64E_ENV, on);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(MACHO_ARM64E_ENV, on) };
             assert!(macho_arm64e_enabled(), "`{on}` ⇒ enabled");
         }
         for off in ["off", "0", "false"] {
-            std::env::set_var(MACHO_ARM64E_ENV, off);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(MACHO_ARM64E_ENV, off) };
             assert!(!macho_arm64e_enabled(), "`{off}` ⇒ disabled");
         }
 
@@ -52,6 +56,7 @@ mod tests {
         set_macho_arm64e_env(true);
         assert!(macho_arm64e_enabled());
 
-        std::env::remove_var(MACHO_ARM64E_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(MACHO_ARM64E_ENV) };
     }
 }

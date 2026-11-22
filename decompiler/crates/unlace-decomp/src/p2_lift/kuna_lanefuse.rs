@@ -306,7 +306,7 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
     let lane_writes: Vec<(usize, OpId)> = ops[pos + 1..]
         .iter()
         .enumerate()
-        .filter(|(_, &op)| {
+        .filter(|&(_, &op)| {
             addr_of(data, data.obank().get(op).and_then(|o| o.get_out())).is_some_and(|a| {
                 a.get_space().map(|s| s.get_index()) == r_addr.get_space().map(|s| s.get_index()) && a.get_offset() >= r_addr.get_offset() && a.get_offset() < r_addr.get_offset() + r_size as u64
             })

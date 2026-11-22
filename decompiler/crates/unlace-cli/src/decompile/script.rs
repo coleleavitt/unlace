@@ -145,11 +145,10 @@ pub(super) fn build_script_for_input(
         _ => ("addr", format!("0x{target}").into()),
     };
     lines.push(format!("function containing {selection}"));
-    if let Some(vma) = selected_vma(target, by_address) {
-        if !func_decls.iter().any(|decl| decl.start == vma) {
+    if let Some(vma) = selected_vma(target, by_address)
+        && !func_decls.iter().any(|decl| decl.start == vma) {
             lines.push(format!("function symbol {vma:#x}"));
         }
-    }
     // (kuna `--assert`) The PROGRAM-scoped directives -- a parsed type, a
     // declared prototype, a named global -- go here, after the analysis commit
     // and before the selection, so the function is loaded against them.

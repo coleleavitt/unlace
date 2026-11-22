@@ -499,7 +499,7 @@ impl Override {
             .iter()
             .enumerate()
             // i is a vector index (< len); int4 is i32, the C++ loop counter type.
-            .filter(|(_, &delay)| delay >= 0)
+            .filter(|&(_, &delay)| delay >= 0)
             .map(|(i, &delay)| (i as int4, delay))
     }
 

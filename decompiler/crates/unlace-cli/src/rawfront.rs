@@ -94,11 +94,10 @@ pub fn prepare(sub: &str, args: &[String]) -> Result<Prepared, String> {
                     out.extend(["--define-function".into(), format!("@{}", list.display())]);
                     prepared.temp.push(list);
                 }
-                if !has(out, "--target") {
-                    if let Some(t) = &flat.target {
+                if !has(out, "--target")
+                    && let Some(t) = &flat.target {
                         out.extend(["--target".into(), t.clone()]);
                     }
-                }
                 if !has(out, "--base") && (flat.target.is_some() || has(out, "--target")) {
                     out.extend(["--base".into(), format!("{:#x}", flat.base)]);
                 }

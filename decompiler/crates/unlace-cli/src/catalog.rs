@@ -93,11 +93,10 @@ fn entries(v: &Json) -> Vec<&Json> {
 fn field<'a>(entry: &'a Json, key: &str) -> Option<&'a str> {
     if let Json::Object(pairs) = entry {
         for (k, v) in pairs {
-            if k == key {
-                if let Json::Str(s) = v {
+            if k == key
+                && let Json::Str(s) = v {
                     return Some(s);
                 }
-            }
         }
     }
     None
@@ -118,8 +117,8 @@ fn bool_field(entry: &Json, key: &str) -> bool {
 fn arr_field(entry: &Json, key: &str) -> Vec<String> {
     if let Json::Object(pairs) = entry {
         for (k, v) in pairs {
-            if k == key {
-                if let Json::Array(items) = v {
+            if k == key
+                && let Json::Array(items) = v {
                     return items
                         .iter()
                         .filter_map(|i| match i {
@@ -128,7 +127,6 @@ fn arr_field(entry: &Json, key: &str) -> Vec<String> {
                         })
                         .collect();
                 }
-            }
         }
     }
     Vec::new()
@@ -181,11 +179,10 @@ pub fn cmd_text(option: Option<&str>, tier: Option<&str>, pinned_by: Option<&str
     };
     let mut text = String::new();
     for e in entries(&v) {
-        if let Some(want) = tier {
-            if field(e, "tier") != Some(want) {
+        if let Some(want) = tier
+            && field(e, "tier") != Some(want) {
                 continue;
             }
-        }
         let flag = if bool_field(e, "destructive_as_default") {
             "  (opt-in: destructive as global default)"
         } else {

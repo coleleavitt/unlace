@@ -898,12 +898,11 @@ fn run_firmware_volume(args: &Args, image: &[u8]) -> i32 {
     use unlace_analysis::loader::firmware::uefifv;
     let walk = uefifv::walk(image);
     let dir = PathBuf::from(args.output.clone().unwrap_or_else(|| format!("{}.modules", args.binary)));
-    if !args.list {
-        if let Err(e) = std::fs::create_dir_all(&dir) {
+    if !args.list
+        && let Err(e) = std::fs::create_dir_all(&dir) {
             eprintln!("error: could not create {}: {e}", dir.display());
             return 1;
         }
-    }
     let mut used = std::collections::BTreeMap::<String, usize>::new();
     let mut rows = Vec::new();
     for m in &walk.modules {
@@ -913,12 +912,11 @@ fn run_firmware_volume(args: &Args, image: &[u8]) -> i32 {
         *n += 1;
         let stem = if *n == 1 { stem } else { format!("{stem}_{n}") };
         let file = format!("{stem}.{}", if m.te { "te" } else { "efi" });
-        if !args.list {
-            if let Err(e) = std::fs::write(dir.join(&file), &m.image) {
+        if !args.list
+            && let Err(e) = std::fs::write(dir.join(&file), &m.image) {
                 eprintln!("error: could not write {file}: {e}");
                 return 1;
             }
-        }
         rows.push((file, m));
     }
     if args.json {

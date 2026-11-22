@@ -61,11 +61,10 @@ impl Agent {
         if let Some(v) = std::env::var_os(var).filter(|v| !v.is_empty()) {
             return Some(PathBuf::from(v));
         }
-        if self == Agent::OpenCode {
-            if let Some(v) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+        if self == Agent::OpenCode
+            && let Some(v) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
                 return Some(PathBuf::from(v).join("opencode"));
             }
-        }
         home_dir().map(|h| h.join(default))
     }
 

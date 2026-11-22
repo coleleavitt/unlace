@@ -625,10 +625,10 @@ impl Regs {
     }
 
     /// The general registers `v` overlaps without being one of them.
-    fn partial(&self, v: &VarnodeData) -> impl Iterator<Item = usize> + '_ {
+    fn partial(&self, v: &VarnodeData) -> impl Iterator<Item = usize> + '_ + use<'_> {
         let hit = Self::space_of(v) == Some(self.space) && self.exact(v).is_none();
         let (lo, hi) = (v.offset, v.offset + v.size as u64);
-        self.offs.iter().enumerate().filter(move |(_, &o)| hit && lo < o + 4 && o < hi).map(|(i, _)| i)
+        self.offs.iter().enumerate().filter(move |&(_, &o)| hit && lo < o + 4 && o < hi).map(|(i, _)| i)
     }
 }
 

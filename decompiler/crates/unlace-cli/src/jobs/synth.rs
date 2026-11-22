@@ -173,11 +173,10 @@ pub(super) fn name_structs_serially(
     }
     // The `.h` renders the structures from the workers that hold them, each
     // with the other types its own functions interned.
-    if cfg.want_types && !plan.minted.is_empty() {
-        if let Err(why) = install_on_idle_workers(cfg, session, &plan.table) {
+    if cfg.want_types && !plan.minted.is_empty()
+        && let Err(why) = install_on_idle_workers(cfg, session, &plan.table) {
             return fallback(run, &why);
         }
-    }
     again.sort_by_key(|(i, _)| *i);
     for (i, r) in again {
         if unlace_console::project::redo_replaces(&run.results[i], &r) {

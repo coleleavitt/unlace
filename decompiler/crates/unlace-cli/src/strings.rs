@@ -139,8 +139,8 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
         Some(view) => kuna_stringinv::inventory_in_image(&file, &query, &view.ranges),
         None => kuna_stringinv::inventory(&file, &query),
     };
-    if let Some(want) = &args.section {
-        if !inv.regions.iter().any(|n| n == want || n.strip_prefix('.') == Some(want.as_str())) {
+    if let Some(want) = &args.section
+        && !inv.regions.iter().any(|n| n == want || n.strip_prefix('.') == Some(want.as_str())) {
             let mut have: Vec<&str> = inv.regions.iter().map(String::as_str).collect();
             have.dedup();
             let have = if have.is_empty() {
@@ -150,7 +150,6 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
             };
             return Err(format!("no section named {want:?} ({have})"));
         }
-    }
 
     let mut truncated_filter = false;
     let found: Vec<FoundString> = inv

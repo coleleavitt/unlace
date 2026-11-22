@@ -1895,7 +1895,7 @@ impl PcodeOpBank {
     /// Included(SeqNum(addr,~0))]` — `SeqNum` orders by `(addr, uniq)`, and the
     /// maximal-uniq upper bound covers every op at this addr without spilling
     /// into a strictly-greater addr.
-    pub fn iter_at(&self, addr: &Address) -> impl Iterator<Item = (&SeqNum, OpId)> + '_ {
+    pub fn iter_at(&self, addr: &Address) -> impl Iterator<Item = (&SeqNum, OpId)> + '_ + use<'_> {
         let lo = SeqNum::new(addr.clone(), 0);
         let hi = SeqNum::new(addr.clone(), uintm::MAX); // ~((uintm)0)
         self.optree

@@ -2923,11 +2923,10 @@ impl AddrSpaceManager {
         let ind = spc.get_index();
         // mixed comparison: int4 ind vs size_t list length (C++ converts ind
         // up; negative ind never enters the branch there or here)
-        if ind >= 0 && (ind as usize) < self.resolvelist.0.len() {
-            if let Some(resolve) = &self.resolvelist.0[ind as usize] {
+        if ind >= 0 && (ind as usize) < self.resolvelist.0.len()
+            && let Some(resolve) = &self.resolvelist.0[ind as usize] {
                 return resolve.resolve(val, sz, point, full_encoding);
             }
-        }
         *full_encoding = val;
         let val = AddrSpace::address_to_byte(val, spc.get_word_size());
         let val = spc.wrap_offset(val);

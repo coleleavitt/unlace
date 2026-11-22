@@ -133,11 +133,14 @@ fn run(r: Run) -> String {
     assert!(r.exe.exists(), "missing fixture {:?}", r.exe);
 
     match &r.env {
-        Some(p) => std::env::set_var(PDB_PATH_ENV, p),
-        None => std::env::remove_var(PDB_PATH_ENV),
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        Some(p) => unsafe { std::env::set_var(PDB_PATH_ENV, p) },
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        None => unsafe { std::env::remove_var(PDB_PATH_ENV) },
     }
     let prog = bootstrap_from_object(r.exe.to_str().unwrap(), "", &spec_roots);
-    std::env::remove_var(PDB_PATH_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(PDB_PATH_ENV) };
 
     let mut prog = prog.expect("bootstrap fixture with built processor specs");
 
@@ -259,7 +262,8 @@ fn pdb_explicit_path_is_tried_first_and_falls_through() {
 #[test]
 fn pdb_cpp_publics_are_demangled() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    std::env::remove_var(PDB_PATH_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(PDB_PATH_ENV) };
     let spec_roots = vec![repo_root().join("specs").to_str().unwrap().to_string()];
     let exe = fixtures().join("pdb_cpp.exe");
     let mut prog = bootstrap_from_object(exe.to_str().unwrap(), "", &spec_roots)

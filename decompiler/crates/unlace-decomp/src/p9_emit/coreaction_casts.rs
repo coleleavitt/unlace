@@ -1378,14 +1378,14 @@ impl Funcdata {
         };
         let ct = self.vn_high_type_read_facing(in0, op);
         let fits = if ct.get_metatype() == type_metatype::TYPE_PTR {
-            if let (Some(ptrto), Some(ws)) = (ct.get_ptr_to(), ct.get_word_size()) {
+            match (ct.get_ptr_to(), ct.get_word_size()) { (Some(ptrto), Some(ws)) => {
                 let align = ptrto.get_align_size();
                 // C++: getAlignSize() == AddrSpace::addressToByteInt(sz, wordSize)
                 // (int4 vs int8 — promote the int4 align to int8 for the compare).
                 align as i64 == unlace_base::space::AddrSpace::address_to_byte_int(sz as i64, ws)
-            } else {
+            } _ => {
                 false
-            }
+            }}
         } else {
             false
         };
@@ -1786,14 +1786,14 @@ impl Funcdata {
         if out_high_type.needs_resolution() {
             self.inherit_union_field(&out_high_type, newop, -1, op, -1);
         }
-        if let Some(view) = self.stack_write_views.remove(&op) {
+        match self.stack_write_views.remove(&op) { Some(view) => {
             self.inherit_union_field(&view.backing, newop, -1, op, -1);
             self.stack_write_views.insert(newop, view);
-        } else if storage_type.is_some() {
+        } _ => if storage_type.is_some() {
             if let Some(backing) = self.vbank().get(outvn).and_then(|v| v.get_high()).and_then(|h| self.high_bank().get(h)).and_then(|h| h.kuna_symbol_type()).cloned() {
                 self.inherit_union_field(&backing, newop, -1, op, -1);
             }
-        }
+        }}
         1
     }
 

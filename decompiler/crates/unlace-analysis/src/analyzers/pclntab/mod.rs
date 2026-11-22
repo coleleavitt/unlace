@@ -620,7 +620,7 @@ fn moduledata_records<'d>(
     h: PcHeader,
     header_vma: u64,
     words: usize,
-) -> impl Iterator<Item = &'d [u8]> {
+) -> impl Iterator<Item = &'d [u8]> + use<'d> {
     let ps = h.ptr_size as usize;
     let data = sec.data().unwrap_or_default();
     let lead = (ps - (sec.address() as usize % ps)) % ps;

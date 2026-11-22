@@ -1176,9 +1176,9 @@ fn base_use(data: &Funcdata, op: OpId, vn: VarnodeId, off: intb, ev: &mut Eviden
                 if ov.get_offset() != 0 {
                     ev.refuse("compare-literal");
                 }
-            } else if let Some(p) = pointee_of(data, other, op) {
+            } else { match pointee_of(data, other, op) { Some(p) => {
                 ev.pointees.push(p);
-            }
+            } _ => {}}}
             None
         }
         OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {

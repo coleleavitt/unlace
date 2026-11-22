@@ -1734,11 +1734,11 @@ impl<'a> CParse<'a> {
     fn type_specifier(&mut self) -> KunaResult<Rc<Datatype>> {
         match self.peek()? {
             PToken::TypeName(_) => {
-                if let PToken::TypeName(tp) = self.next()? {
+                match self.next()? { PToken::TypeName(tp) => {
                     Ok(tp)
-                } else {
+                } _ => {
                     unreachable!()
-                }
+                }}
             }
             PToken::ScalarSpecifier(_) => self.scalar_specifier(),
             PToken::Struct | PToken::Union => self.struct_or_union_specifier(),

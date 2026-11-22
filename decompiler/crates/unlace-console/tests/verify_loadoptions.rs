@@ -214,13 +214,20 @@ fn load_pass_facts(bootstrap: impl Fn(&str) -> ConsoleProgram) -> (bool, bool) {
 fn explicit_options_neither_read_nor_write_the_environment() {
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
     let go = go_image();
-    std::env::set_var("KUNA_GOABI", "off");
-    std::env::set_var("KUNA_SOURCELANG", "rust");
-    std::env::set_var("KUNA_KERNELCACHE", "off");
-    std::env::set_var("KUNA_GOVERSION", "1.20");
-    std::env::set_var("KUNA_LOAD_OBJC", "off");
-    std::env::set_var("KUNA_LOAD_STRINGS", "off");
-    std::env::set_var("KUNA_LOAD_MMAP", "off");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_GOABI", "off") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_SOURCELANG", "rust") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_KERNELCACHE", "off") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_GOVERSION", "1.20") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_LOAD_OBJC", "off") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_LOAD_STRINGS", "off") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_LOAD_MMAP", "off") };
     let before = snapshot();
     let prog = load(&go, &LoadOptions::default());
     assert_eq!(
@@ -239,7 +246,8 @@ fn explicit_options_neither_read_nor_write_the_environment() {
     let from_env = load_pass_facts(|path| bootstrap_from_object(path, "", &[specs()]).unwrap());
     assert_eq!(from_env, (false, false), "an environment load skips them");
     for name in ENV_VARS {
-        std::env::remove_var(name);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(name) };
     }
     std::fs::remove_file(go).unwrap();
 }
@@ -255,18 +263,21 @@ fn fat_slice(options: &LoadOptions) -> String {
 #[test]
 fn an_explicit_load_picks_its_own_fat_slice() {
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::set_var("KUNA_MACHO_SLICE", "arm64");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_MACHO_SLICE", "arm64") };
     let default = fat_slice(&LoadOptions::default());
     let x86 = fat_slice(&LoadOptions {
         macho_slice: Some("x86_64".into()),
         ..LoadOptions::default()
     });
-    std::env::set_var("KUNA_MACHO_SLICE", "x86_64");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_MACHO_SLICE", "x86_64") };
     let arm = fat_slice(&LoadOptions {
         macho_slice: Some("arm64".into()),
         ..LoadOptions::default()
     });
-    std::env::remove_var("KUNA_MACHO_SLICE");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_MACHO_SLICE") };
     assert_eq!(
         default, "x86",
         "no slice named: the default, not the environment's"
@@ -342,13 +353,15 @@ fn an_explicit_program_never_reads_the_environment() {
 fn set_kuna_option_changes_its_program_not_later_explicit_loads() {
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
     let go = go_image();
-    std::env::remove_var("KUNA_GOABI");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_GOABI") };
     let mut prog = load(&go, &LoadOptions::default());
     prog.arch_mut().set_kuna_option("goabi", "off").unwrap();
     assert!(!prog.arch().load_options().goabi);
     assert_eq!(compiler(&load(&go, &LoadOptions::default())), "golang");
     for name in ENV_VARS {
-        std::env::remove_var(name);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(name) };
     }
     std::fs::remove_file(go).unwrap();
 }
@@ -359,11 +372,14 @@ fn set_kuna_option_changes_its_program_not_later_explicit_loads() {
 fn an_explicit_program_ignores_a_later_environment_change() {
     use unlace_console::kuna_console::kuna_live_value;
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::remove_var("KUNA_KERNELCACHE");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_KERNELCACHE") };
     let explicit = load(&fauxware(), &LoadOptions::default());
-    std::env::set_var("KUNA_KERNELCACHE", "off");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_KERNELCACHE", "off") };
     let explicit_value = kuna_live_value(explicit.arch(), "kernelcache").unwrap().into_owned();
-    std::env::remove_var("KUNA_KERNELCACHE");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_KERNELCACHE") };
     assert_eq!(explicit_value, "auto", "the explicit program kept its options");
 }
 
@@ -385,9 +401,11 @@ fn a_bootstrap_without_options_reads_the_environment() {
     struct ClearOnDrop;
     impl Drop for ClearOnDrop {
         fn drop(&mut self) {
-            std::env::remove_var(ARM_ISA_ENV);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::remove_var(ARM_ISA_ENV) };
             for name in ENV_VARS {
-                std::env::remove_var(name);
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::remove_var(name) };
             }
         }
     }
@@ -401,7 +419,8 @@ fn a_bootstrap_without_options_reads_the_environment() {
     let te = te.to_str().unwrap();
     let options = LoadOptions::default();
 
-    std::env::set_var(ARM_ISA_ENV, "thumb");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(ARM_ISA_ENV, "thumb") };
     let from_env = first_function(roots.image(te));
     assert!(from_env.contains("return 7"), "{from_env}");
     assert_eq!(first_function(roots.arm_isa(Some(ArmIsa::Thumb)).image(te)), from_env);
@@ -409,7 +428,8 @@ fn a_bootstrap_without_options_reads_the_environment() {
     assert_eq!(explicit, first_function(roots.arm_isa(None).options(&options).image(te)));
     assert_ne!(explicit, from_env, "an explicit load ignored KUNA_ARM_ISA");
 
-    std::env::set_var(ARM_ISA_ENV, "bogus");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(ARM_ISA_ENV, "bogus") };
     let refused = |load: unlace_base::error::KunaResult<ConsoleProgram>| match load {
         Ok(_) => panic!("loaded with KUNA_ARM_ISA=bogus"),
         Err(err) => err.to_string(),
@@ -417,11 +437,13 @@ fn a_bootstrap_without_options_reads_the_environment() {
     let err = refused(roots.image(te));
     assert!(err.contains("invalid --isa"), "{err}");
     assert_eq!(first_function(roots.options(&options).image(te)), explicit);
-    std::env::remove_var(ARM_ISA_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(ARM_ISA_ENV) };
     std::fs::remove_file(te).unwrap();
 
     let go = go_image();
-    std::env::set_var("KUNA_GOABI", "off");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_GOABI", "off") };
     let mut prog = roots.object(go.to_str().unwrap()).unwrap();
     prog.commit_pending_analysis().unwrap();
     assert_eq!(compiler(&prog), "gcc");
@@ -442,8 +464,10 @@ fn a_load_without_options_ignores_options_held_on_the_thread() {
     use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
 
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::remove_var("KUNA_KERNELCACHE");
-    std::env::remove_var(ARM_ISA_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_KERNELCACHE") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(ARM_ISA_ENV) };
     let held = load(
         &fauxware(),
         &LoadOptions {
@@ -483,9 +507,11 @@ fn a_load_without_options_ignores_options_held_on_the_thread() {
             KernelcacheChoice::default(),
             "{input} took the held program's options"
         );
-        std::env::set_var("KUNA_KERNELCACHE", "off");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("KUNA_KERNELCACHE", "off") };
         let live = kuna_live_value(prog.arch(), "kernelcache").unwrap().into_owned();
-        std::env::remove_var("KUNA_KERNELCACHE");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("KUNA_KERNELCACHE") };
         assert_eq!(live, "off", "{input} reads the environment live");
     }
     std::fs::remove_file(te).unwrap();
@@ -505,8 +531,10 @@ fn the_console_loads_the_next_image_from_the_environment() {
     use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
 
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::remove_var("KUNA_KERNELCACHE");
-    std::env::remove_var(ARM_ISA_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_KERNELCACHE") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(ARM_ISA_ENV) };
     let te = common::scratch_file("loadoptions-console-te", "te");
     std::fs::write(&te, TeImage::thumb(&[0x07, 0x20, 0x70, 0x47]).build()).unwrap();
     let held = load(

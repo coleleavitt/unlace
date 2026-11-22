@@ -441,7 +441,7 @@ impl<'a> Image<'a> {
         self.stubs
             .range(..=pc)
             .next_back()
-            .filter(|(&start, _)| pc < start.wrapping_add(16))
+            .filter(|&(&start, _)| pc < start.wrapping_add(16))
             .map(|(&start, _)| start)
     }
 

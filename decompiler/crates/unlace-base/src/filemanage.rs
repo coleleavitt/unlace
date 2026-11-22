@@ -60,11 +60,10 @@ impl FileManage {
     /// failure; the port does the same on `current_dir()` failure (or a
     /// non-UTF-8 cwd).
     pub fn add_current_dir(&mut self) {
-        if let Ok(dir) = std::env::current_dir() {
-            if let Some(filename) = dir.to_str() {
+        if let Ok(dir) = std::env::current_dir()
+            && let Some(filename) = dir.to_str() {
                 self.add_dir_2_path(filename);
             }
-        }
     }
 
     /// Search through paths to find a file with the given name, resolving the

@@ -63,9 +63,11 @@ fn run_one(stem: &str) -> Option<String> {
     // the env lock across set→run→remove so parallel tests in this binary don't
     // race on the process-global var (which would yield an empty render).
     let _guard = DUMP_ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    std::env::set_var("KUNA_DUMP", "1");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_DUMP", "1") };
     run_test_files_with_specs(&files, std::slice::from_ref(&specs), &mut out);
-    std::env::remove_var("KUNA_DUMP");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_DUMP") };
     drop(_guard);
     assert!(
         !out.contains("Execution failed") && !out.contains("Did not apply tests in"),

@@ -570,7 +570,7 @@ pub fn for_arch(
 ) -> Option<&'static FuncStartPatterns> {
     use object::Architecture as A;
     macro_rules! cached {
-        ($cell:ident, $build:expr) => {{
+        ($cell:ident, $build:expr_2021) => {{
             static $cell: OnceLock<FuncStartPatterns> = OnceLock::new();
             let set = $cell.get_or_init(|| $build);
             if set.is_empty() {

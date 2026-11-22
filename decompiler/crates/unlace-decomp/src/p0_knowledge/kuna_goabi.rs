@@ -52,7 +52,8 @@ pub fn goabi_env_enabled() -> bool {
 /// Export a `set_kuna_option("goabi", val)` toggle to [`GOABI_ENV`] so a later
 /// `load file` in the same process sees the choice.
 pub fn set_goabi_env(on: bool) {
-    std::env::set_var(GOABI_ENV, if on { "auto" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(GOABI_ENV, if on { "auto" } else { "off" }) };
 }
 
 /// Parse an `option goabi` value (`auto`/on-tokens enable, off-tokens disable).
@@ -81,12 +82,16 @@ mod tests {
 
     #[test]
     fn env_gate_default_on_and_off_tokens() {
-        std::env::remove_var(GOABI_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(GOABI_ENV) };
         assert!(goabi_env_enabled(), "unset env => default auto");
-        std::env::set_var(GOABI_ENV, "off");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(GOABI_ENV, "off") };
         assert!(!goabi_env_enabled());
-        std::env::set_var(GOABI_ENV, "auto");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(GOABI_ENV, "auto") };
         assert!(goabi_env_enabled());
-        std::env::remove_var(GOABI_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(GOABI_ENV) };
     }
 }

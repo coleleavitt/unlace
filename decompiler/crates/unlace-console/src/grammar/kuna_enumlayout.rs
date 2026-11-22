@@ -106,7 +106,7 @@ pub(super) fn enumerator_out_of_range<'e>(
             fits(v, tp.get_size(), is_signed(tp))
         }
     };
-    vecenum.iter().zip(values).find(|(_, &v)| !in_range(v)).map(|(e, _)| e.enumconstant.as_str())
+    vecenum.iter().zip(values).find(|&(_, &v)| !in_range(v)).map(|(e, _)| e.enumconstant.as_str())
 }
 
 /// C's constants for `vecenum`: an enumerator with no `=` is one past the one
@@ -132,7 +132,7 @@ pub(super) fn named_constants(vecenum: &[Enumerator], values: &[uintb], size: in
     vecenum
         .iter()
         .zip(values)
-        .filter(|(_, &v)| seen.insert(v & mask))
+        .filter(|&(_, &v)| seen.insert(v & mask))
         .map(|(e, &v)| (e.enumconstant.clone(), v))
         .unzip()
 }

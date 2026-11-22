@@ -645,7 +645,7 @@ mod tests {
     }
 
     /// A synthetic procedure: each tuple is `(vma, len, falls through, jumps, calls)`.
-    fn program(insns: &[(u64, u32, bool, &[u64], &[u64])]) -> impl FnMut(u64) -> Option<InsnFlow> {
+    fn program(insns: &[(u64, u32, bool, &[u64], &[u64])]) -> impl FnMut(u64) -> Option<InsnFlow> + use<> {
         let map: BTreeMap<u64, InsnFlow> = insns
             .iter()
             .map(|&(vma, len, falls, jumps, calls)| {

@@ -38,8 +38,10 @@ pub fn sdk_path_from_env() -> Option<PathBuf> {
 /// later `load file` in the same process sees it (`off` clears it).
 pub fn set_objcsdk_env(path: Option<&str>) {
     match path {
-        Some(p) => std::env::set_var(OBJCSDK_ENV, p),
-        None => std::env::remove_var(OBJCSDK_ENV),
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        Some(p) => unsafe { std::env::set_var(OBJCSDK_ENV, p) },
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        None => unsafe { std::env::remove_var(OBJCSDK_ENV) },
     }
 }
 

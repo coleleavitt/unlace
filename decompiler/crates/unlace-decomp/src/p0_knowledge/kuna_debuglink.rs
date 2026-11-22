@@ -14,5 +14,6 @@ pub fn debuglink_enabled() -> bool {
 
 /// Bridge `option debuglink on|off` to [`DEBUGLINK_ENV`] for a later `load file`.
 pub fn set_debuglink_env(on: bool) {
-    std::env::set_var(DEBUGLINK_ENV, if on { "on" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(DEBUGLINK_ENV, if on { "on" } else { "off" }) };
 }

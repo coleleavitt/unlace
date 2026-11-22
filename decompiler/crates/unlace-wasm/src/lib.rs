@@ -557,15 +557,18 @@ fn load_program(
         .last();
     let previous_arm64e = std::env::var_os(arm64e_env);
     if let Some(value) = arm64e {
-        std::env::set_var(arm64e_env, value);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(arm64e_env, value) };
     }
 
     let spec_roots = vec![spec_root.to_string()];
     let bootstrap = bootstrap_from_image(binary, "", &spec_roots);
     if arm64e.is_some() {
         match previous_arm64e {
-            Some(value) => std::env::set_var(arm64e_env, value),
-            None => std::env::remove_var(arm64e_env),
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            Some(value) => unsafe { std::env::set_var(arm64e_env, value) },
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            None => unsafe { std::env::remove_var(arm64e_env) },
         }
     }
     let mut prog = bootstrap

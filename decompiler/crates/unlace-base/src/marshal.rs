@@ -206,11 +206,10 @@ impl IdRegistry {
     /// Find the id associated with a specific element name
     /// (C++ `ElementId::find`).
     pub fn find_element(&self, nm: &str, scope: i32) -> u32 {
-        if scope == 0 {
-            if let Some(&id) = self.lookup_element_id.get(nm) {
+        if scope == 0
+            && let Some(&id) = self.lookup_element_id.get(nm) {
                 return id;
             }
-        }
         ELEM_UNKNOWN.id
     }
 
@@ -1259,11 +1258,10 @@ impl Decoder for XmlDecode<'_> {
 /// A non-UTF-8 name cannot equal any registered (ASCII) space name, so it
 /// falls through to the same "Unknown address space name" error as in C++.
 fn lookup_space_by_name(manager: &AddrSpaceManager, nm: &[u8]) -> KunaResult<Rc<AddrSpace>> {
-    if let Ok(nm_str) = std::str::from_utf8(nm) {
-        if let Some(spc) = manager.get_space_by_name(nm_str) {
+    if let Ok(nm_str) = std::str::from_utf8(nm)
+        && let Some(spc) = manager.get_space_by_name(nm_str) {
             return Ok(Rc::clone(spc));
         }
-    }
     Err(KunaError::decoder(format!(
         "Unknown address space name: {}",
         String::from_utf8_lossy(nm)

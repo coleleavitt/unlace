@@ -889,11 +889,10 @@ impl<R: RangeRecord> RangeMap<R> {
                 _ => break,
             }
         }
-        if let Some(k2) = &low {
-            if self.tree[k2].a.minus1() == b {
+        if let Some(k2) = &low
+            && self.tree[k2].a.minus1() == b {
                 rightsew = false;
             }
-        }
         if leftsew && leftoverlap {
             let start = self
                 .lower_bound_key(Self::min_key(aminus1))

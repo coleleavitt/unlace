@@ -52,9 +52,11 @@ fn load_function_names(bin: &str, mode: NameChars) -> Result<Vec<String>, String
     let _guard = GATE.lock().unwrap_or_else(|e| e.into_inner());
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-    std::env::set_var(SYMBOLNAMECHARS_ENV, mode.as_str());
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(SYMBOLNAMECHARS_ENV, mode.as_str()) };
     let prog = bootstrap_from_object(bin, "", &spec_roots);
-    std::env::remove_var(SYMBOLNAMECHARS_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(SYMBOLNAMECHARS_ENV) };
     let prog = prog.map_err(|e| e.explain().to_string())?;
     Ok(prog.function_entries().map(|(name, _)| name.to_string()).collect())
 }
@@ -167,7 +169,8 @@ fn every_reported_name_is_addressable_and_unique() {
         let _guard = GATE.lock().unwrap_or_else(|e| e.into_inner());
         let root = repo_root();
         let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
-        std::env::remove_var(SYMBOLNAMECHARS_ENV); // the shipped default
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(SYMBOLNAMECHARS_ENV) }; // the shipped default
         let prog = bootstrap_from_object(&path, "", &spec_roots)
             .unwrap_or_else(|e| panic!("{bin} must load: {}", e.explain()));
         let mut seen: std::collections::HashMap<&str, u64> = std::collections::HashMap::new();

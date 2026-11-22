@@ -118,11 +118,10 @@ pub(crate) fn scan(file: &object::File, entries: &[u64]) -> ArmScan {
                 let imm = u64::from((((h1 >> 10) & 1) << 11) | (((h2 >> 12) & 7) << 8) | (h2 & 0xff));
                 built.push(if h1 & 0xfbff == 0xf20f { thumb_pc + imm } else { thumb_pc.wrapping_sub(imm) });
             }
-            if h1 & 0xf800 == 0x4800 {
-                if let Some(v) = read(thumb_pc + u64::from(h1 & 0xff) * 4) {
+            if h1 & 0xf800 == 0x4800
+                && let Some(v) = read(thumb_pc + u64::from(h1 & 0xff) * 4) {
                     pc_literal.push((a, (h1 >> 8) & 7, v));
                 }
-            }
             if matches!(h1, 0xf8df | 0xf85f) {
                 let off = u64::from(h2 & 0xfff);
                 let lit = if h1 == 0xf8df { thumb_pc + off } else { thumb_pc.wrapping_sub(off) };

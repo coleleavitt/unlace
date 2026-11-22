@@ -185,10 +185,10 @@ fn arm_thumb_seed_decodes_in_thumb_mode_in_listing() {
     //     the `*3` shift/add — recover at least one shift mnemonic (`lsl`).
     let body: Vec<_> = listing
         .instructions()
-        .filter(|(&a, _)| (COMPUTE_EVEN_ENTRY..COMPUTE_EVEN_ENTRY + 30).contains(&a))
+        .filter(|&(&a, _)| (COMPUTE_EVEN_ENTRY..COMPUTE_EVEN_ENTRY + 30).contains(&a))
         .collect();
     assert!(body.len() >= 3, "expected several Thumb instructions in `compute`, got {}", body.len());
-    for (&a, insn) in &body {
+    for &(&a, ref insn) in &body {
         assert!(
             insn.len == 2 || insn.len == 4,
             "every Thumb instruction is 2 or 4 bytes; insn at {a:#x} has len {}",
@@ -263,7 +263,7 @@ fn mips16_seed_decodes_in_mips16_mode_in_listing() {
     //     >4-byte length.
     let body: Vec<_> = listing
         .instructions()
-        .filter(|(&a, _)| (M16_SQUARE_ENTRY..M16_SQUARE_ENTRY + 8).contains(&a))
+        .filter(|&(&a, _)| (M16_SQUARE_ENTRY..M16_SQUARE_ENTRY + 8).contains(&a))
         .collect();
     assert!(
         body.iter().all(|(_, i)| i.len == 2 || i.len == 4),

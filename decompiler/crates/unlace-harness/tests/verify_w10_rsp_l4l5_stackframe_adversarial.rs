@@ -51,9 +51,11 @@ fn render_datatest(stem: &str) -> Option<String> {
     let mut out = String::new();
     // Serialize the KUNA_DUMP env window + the render across the binary's tests.
     let _guard = RENDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::set_var("KUNA_DUMP", "1");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_DUMP", "1") };
     run_test_files_with_specs(&files, std::slice::from_ref(&specs), &mut out);
-    std::env::remove_var("KUNA_DUMP");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_DUMP") };
     drop(_guard);
     assert!(
         !out.contains("Execution failed") && !out.contains("Did not apply tests in"),

@@ -26,11 +26,13 @@ pub fn dyldcrossrefs_enabled() -> bool {
 }
 
 pub fn set_dyldcrossrefs_env(on: bool) {
-    std::env::set_var(DYLDCROSSREFS_ENV, if on { "on" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(DYLDCROSSREFS_ENV, if on { "on" } else { "off" }) };
 }
 
 pub fn set_dyldimage_env(name: &str) {
-    std::env::set_var(DYLDIMAGE_ENV, name);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(DYLDIMAGE_ENV, name) };
 }
 
 /// The image a `dyldimage` value names; `none` and the empty value name none.
@@ -63,7 +65,8 @@ pub fn set_dyldimage(value: &str) -> String {
             format!("dyld shared cache image set to {image}")
         }
         None => {
-            std::env::remove_var(DYLDIMAGE_ENV);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::remove_var(DYLDIMAGE_ENV) };
             "dyld shared cache image selection cleared".to_string()
         }
     }

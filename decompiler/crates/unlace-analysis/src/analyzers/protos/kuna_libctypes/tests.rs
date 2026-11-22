@@ -385,7 +385,8 @@ fn the_declared_lookup_follows_the_gate() {
         Some("FILE".to_string()),
         "on: the named signature"
     );
-    std::env::remove_var(unlace_decomp::kuna_libctypes::LIBCTYPES_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(unlace_decomp::kuna_libctypes::LIBCTYPES_ENV) };
 }
 
 /// A declared name whose named form cannot be built degrades to the width-stable
@@ -408,7 +409,8 @@ fn a_declined_aggregate_degrades_to_the_width_stable_signature() {
     assert_eq!(pieces.intypes.len(), 2, "the shipped arity survives");
     let p1 = pieces.intypes[1].get_ptr_to().expect("a pointer slot");
     assert_eq!(p1.get_metatype(), type_metatype::TYPE_VOID, "degraded to void *");
-    std::env::remove_var(unlace_decomp::kuna_libctypes::LIBCTYPES_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(unlace_decomp::kuna_libctypes::LIBCTYPES_ENV) };
 }
 
 // -- the `glibc` field layouts ---------------------------------------------
@@ -663,7 +665,8 @@ fn a_refused_target_cannot_reach_the_glibc_layouts() {
         .expect("fopen");
     let shell = still.outtype.as_ref().and_then(|t| t.get_ptr_to()).expect("FILE *");
     assert!(shell.is_incomplete(), "`opaque` mints the fieldless shell");
-    std::env::remove_var(LIBCTYPES_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(LIBCTYPES_ENV) };
 }
 
 /// Read one of the crate's binary fixtures.
@@ -877,7 +880,8 @@ fn a_refused_target_is_off_whatever_was_asked() {
         let file = object::File::parse(x86_64.as_slice()).expect("parse the x86-64 fixture");
         assert_ne!(super::super::effective_libctypes_layout(&file), Layout::Off, "{asked:?} on x86-64");
     }
-    std::env::remove_var(LIBCTYPES_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(LIBCTYPES_ENV) };
     let types = factory();
     let pieces = super::super::declared_libc_prototype("fopen", &types, 1, Layout::Off).expect("fopen");
     let pointee = pieces.outtype.as_ref().and_then(|t| t.get_ptr_to()).expect("a pointer result");

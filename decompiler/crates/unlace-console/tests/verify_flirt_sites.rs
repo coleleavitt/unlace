@@ -45,9 +45,11 @@ fn names(flirt: &str, fid_db: Option<&str>) -> Vec<String> {
 fn names_with(flirt: &str, fid: &str, fid_db: Option<PathBuf>) -> Vec<String> {
     let dir = fixtures();
     let specs = dir.join("../../specs").canonicalize().unwrap();
-    std::env::set_var("KUNA_FLIRT_SIGS", dir.join("flirt/callees.sig"));
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_FLIRT_SIGS", dir.join("flirt/callees.sig")) };
     if let Some(db) = fid_db {
-        std::env::set_var("kuna_fid_db", db);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("kuna_fid_db", db) };
     }
     let bin = dir.join("fid/callees/prog");
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &[specs.to_str().unwrap().to_string()])

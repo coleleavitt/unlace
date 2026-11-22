@@ -176,12 +176,12 @@ impl<K: Ord + Clone, V: Clone> PartMap<K, V> {
 
     /// Get first split point at-or-after the given point — a `lower_bound`
     /// (C++ `begin(pnt)`).
-    pub fn iter_from<'a>(&'a self, pnt: &K) -> impl Iterator<Item = (&'a K, &'a V)> {
+    pub fn iter_from<'a>(&'a self, pnt: &K) -> impl Iterator<Item = (&'a K, &'a V)> + use<'a, K, V> {
         self.database.range((Included(pnt), Unbounded))
     }
 
     /// Mutable flavor of [`PartMap::iter_from`].
-    pub fn iter_from_mut<'a>(&'a mut self, pnt: &K) -> impl Iterator<Item = (&'a K, &'a mut V)> {
+    pub fn iter_from_mut<'a>(&'a mut self, pnt: &K) -> impl Iterator<Item = (&'a K, &'a mut V)> + use<'a, K, V> {
         self.database.range_mut((Included(pnt), Unbounded))
     }
 

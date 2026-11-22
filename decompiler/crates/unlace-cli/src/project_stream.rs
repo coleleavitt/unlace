@@ -1108,11 +1108,10 @@ fn seed_indices(prog: &ConsoleProgram, args: &Args, scheduler: &Scheduler) -> Ve
     }
     let mut seeds: Vec<usize> = Vec::new();
     for addr in addrs {
-        if let Some(i) = scheduler.index_of(addr) {
-            if !seeds.contains(&i) {
+        if let Some(i) = scheduler.index_of(addr)
+            && !seeds.contains(&i) {
                 seeds.push(i);
             }
-        }
     }
     seeds
 }

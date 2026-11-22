@@ -616,11 +616,10 @@ fn run_pool_with(
         session.write_table(table)?;
     }
     eprintln!("{}", report.banner);
-    if phase.synth == SynthWorker::Off {
-        if let Some(note) = structsynth_shard_note(cfg, report.tag) {
+    if phase.synth == SynthWorker::Off
+        && let Some(note) = structsynth_shard_note(cfg, report.tag) {
             eprintln!("{note}");
         }
-    }
 
     let pool = Pool {
         cfg,
@@ -658,11 +657,10 @@ fn run_pool_with(
                     // Recycling returns a worker to the memory floor a process
                     // cannot reach on its own; it costs a whole program load, so
                     // it is a ceiling rather than a rhythm.
-                    if worker.as_ref().is_some_and(|w| w.functions_done >= RECYCLE_AFTER) {
-                        if let Some(w) = worker.take() {
+                    if worker.as_ref().is_some_and(|w| w.functions_done >= RECYCLE_AFTER)
+                        && let Some(w) = worker.take() {
                             session.retire(cfg, w);
                         }
-                    }
                 }
                 // Parked for the run's next pool; [`Session::close`] retires it.
                 if let Some(w) = worker.take() {
@@ -795,11 +793,10 @@ impl Pool<'_> {
             } else {
                 w.synth == self.synth
             };
-            if !usable {
-                if let Some(w) = worker.take() {
+            if !usable
+                && let Some(w) = worker.take() {
                     self.session.retire(self.cfg, w);
                 }
-            }
         }
         if let Err(e) = std::fs::write(self.scratch.join(spec_name(idx)), encode_spec(chunk)) {
             return Served::not_run(chunk, &format!("{SPEC_WRITE_FAILED}: {e}"));
@@ -1153,13 +1150,11 @@ impl Worker {
         // exact `done <n>` shape counts, so nothing on stdout can fake progress.
         std::thread::spawn(move || {
             for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
-                if let Some(rest) = line.strip_prefix(ACK_PREFIX) {
-                    if let Ok(idx) = rest.trim().parse::<usize>() {
-                        if tx.send(idx).is_err() {
+                if let Some(rest) = line.strip_prefix(ACK_PREFIX)
+                    && let Ok(idx) = rest.trim().parse::<usize>()
+                        && tx.send(idx).is_err() {
                             return;
                         }
-                    }
-                }
             }
         });
         Ok(Self { child, stdin, acks, functions_done: 0, warm: false, synth, table: 0 })

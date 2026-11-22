@@ -188,7 +188,8 @@ fn sanitize_ident_chain_matches_the_rtti_class_name_contract() {
 /// process-global.
 #[test]
 fn env_gate_defaults_to_safe_and_round_trips() {
-    std::env::remove_var(SYMBOLNAMECHARS_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(SYMBOLNAMECHARS_ENV) };
     assert_eq!(symbolnamechars_mode(), NameChars::Safe, "unset ⇒ safe");
 
     for (token, want) in [
@@ -203,13 +204,15 @@ fn env_gate_defaults_to_safe_and_round_trips() {
         ("IDENT", NameChars::Ident),
     ] {
         assert_eq!(NameChars::parse(token), Some(want), "{token}");
-        std::env::set_var(SYMBOLNAMECHARS_ENV, token);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(SYMBOLNAMECHARS_ENV, token) };
         assert_eq!(symbolnamechars_mode(), want, "{token}");
     }
     // An unrecognized value is not a silent third behavior: it falls back to the
     // shipped default rather than to `off`.
     assert_eq!(NameChars::parse("bogus"), None);
-    std::env::set_var(SYMBOLNAMECHARS_ENV, "bogus");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(SYMBOLNAMECHARS_ENV, "bogus") };
     assert_eq!(symbolnamechars_mode(), NameChars::Safe);
 
     for mode in [NameChars::Off, NameChars::Safe, NameChars::Ident] {
@@ -217,7 +220,8 @@ fn env_gate_defaults_to_safe_and_round_trips() {
         assert_eq!(symbolnamechars_mode(), mode);
         assert_eq!(NameChars::parse(mode.as_str()), Some(mode));
     }
-    std::env::remove_var(SYMBOLNAMECHARS_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(SYMBOLNAMECHARS_ENV) };
 }
 
 /// The `str` entry point agrees with the byte one and borrows when it can.

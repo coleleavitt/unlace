@@ -329,11 +329,10 @@ impl Filters {
     }
 
     fn keeps(&self, e: &FunctionEntry, reachable: Option<&BTreeSet<u64>>) -> bool {
-        if let Some(re) = &self.name {
-            if !re.is_match(&e.name) && !e.aliases.iter().any(|a| re.is_match(a)) {
+        if let Some(re) = &self.name
+            && !re.is_match(&e.name) && !e.aliases.iter().any(|a| re.is_match(a)) {
                 return false;
             }
-        }
         if self.min_size.is_some_and(|min| e.size < min) {
             return false;
         }
@@ -2141,11 +2140,10 @@ fn spec_roots(sleighpath: Option<&str>) -> Vec<String> {
         roots.push(p.to_string());
         return roots;
     }
-    if let Ok(home) = std::env::var("SLEIGHHOME") {
-        if !home.is_empty() {
+    if let Ok(home) = std::env::var("SLEIGHHOME")
+        && !home.is_empty() {
             roots.push(home);
         }
-    }
     let specs = paths::specs_dir().to_string_lossy().into_owned();
     if !roots.contains(&specs) {
         roots.push(specs);
@@ -3237,11 +3235,9 @@ pub(crate) fn parse_args_with_filters(
         && cmd != "decompile-project"
         && cmd != "decompile-graph"
         && crate::loadtime::explicit_output_language(&options).is_none()
-    {
-        if let Some(lang) = detected_output_language(&binary, &options) {
+        && let Some(lang) = detected_output_language(&binary, &options) {
             options.push(("setlanguage".into(), lang.into()));
         }
-    }
 
     let explicit_fast_funcdisc = options.iter().any(|(name, _)| name == "fast_funcdisc");
     // Omitted mode is the size-driven `auto` policy. Mode overrides are
@@ -3319,11 +3315,10 @@ pub(crate) fn parse_args_with_filters(
         }
     }
 
-    if let (Some(min), Some(max)) = (filters.min_size, filters.max_size) {
-        if min > max {
+    if let (Some(min), Some(max)) = (filters.min_size, filters.max_size)
+        && min > max {
             return Err(format!("--min-size {min} is greater than --max-size {max}"));
         }
-    }
 
     let args = Args {
             binary,

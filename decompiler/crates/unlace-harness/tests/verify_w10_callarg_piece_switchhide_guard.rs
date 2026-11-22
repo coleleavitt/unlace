@@ -81,9 +81,11 @@ fn switchhide_callarg_render_delta_pinned() {
     // The rendered `print C` only lands in `out` via the KUNA_DUMP triage hook
     // (`FunctionTestCollection::run_tests`).  This is the only test in its own
     // test binary, so the process-global env set is race-free here.
-    std::env::set_var("KUNA_DUMP", "1");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("KUNA_DUMP", "1") };
     run_test_files_with_specs(&files, std::slice::from_ref(&specs), &mut out);
-    std::env::remove_var("KUNA_DUMP");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("KUNA_DUMP") };
 
     // The file must still run (a whole-file EXEC-FAILURE is its own regression).
     assert!(

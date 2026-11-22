@@ -3572,14 +3572,14 @@ truncating the fall-through here"
             let ov = self.data.get_override().find_proto_override(&op_addr);
             if let Some(proto) = ov.and_then(|ov| ov.prototype()) {
                 fc.proto_mut().copy(proto);
-            } else if let Some(pieces) = ov.and_then(|ov| ov.pieces()).cloned().or_else(|| self.env.query_call_site_pieces(&op_addr)) {
+            } else { match ov.and_then(|ov| ov.pieces()).cloned().or_else(|| self.env.query_call_site_pieces(&op_addr)) { Some(pieces) => {
                 if let Some(proto) = self.env.build_override_proto(&pieces)? {
                     fc.proto_mut().copy(&proto);
                     if self.data.get_override().is_format_call(&op_addr) {
                         fc.set_format_arity(Some(pieces.intypes.len() as int4));
                     }
                 }
-            }
+            } _ => {}}}
         }
         // queryCall: resolve the direct callee symbol's name (W4 proto copy
         // postponed to ActionDefaultParams).

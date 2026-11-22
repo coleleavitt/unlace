@@ -2159,7 +2159,7 @@ fn decompile_func_full_with_objects_inner(
             fd.apply_locked_prototype_with_model(&rt.output, None)?;
             fd.get_func_proto_mut().set_input_lock(false);
             fd.kuna_set_elfmain(Some(rt.fresh()));
-        } else if let Some(abi) = fd.get_arch().swift_abi.clone().filter(|_| mapped_params.is_empty()) {
+        } else { match fd.get_arch().swift_abi.clone().filter(|_| mapped_params.is_empty()) { Some(abi) => {
             // (kuna `swiftcall`) A Swift function's convention without a
             // signature: the one the metadata bound, upgraded by what the
             // body calls — `swift_willThrow` makes it throw, the task
@@ -2193,7 +2193,7 @@ fn decompile_func_full_with_objects_inner(
                 }
                 fd.kuna_set_input_hints((!hints.is_empty()).then(|| std::rc::Rc::new(hints)));
             }
-        } else if let Some(model) =
+        } _ => if let Some(model) =
             fd.get_arch().bound_proto_model(&entry_addr)
         {
             // (kuna) A convention bound without a signature: the parameters
@@ -2206,7 +2206,7 @@ fn decompile_func_full_with_objects_inner(
             // (kuna) Hints under the default convention: an Objective-C
             // direct method's `self`.
             fd.kuna_set_input_hints(input_hints.clone());
-        }
+        }}}
         if let Some(expop) = arch.symboltab.function_extra_pop_across_scopes(&entry_addr) {
             fd.get_func_proto_mut().set_extra_pop(expop);
         }

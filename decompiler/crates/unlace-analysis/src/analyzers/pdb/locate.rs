@@ -208,13 +208,17 @@ mod tests {
     fn env_unset_or_empty_is_none() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         // (Serial-ish: tolerate whatever the ambient env holds by setting + clearing.)
-        std::env::remove_var(PDB_PATH_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(PDB_PATH_ENV) };
         assert!(explicit_pdb_path().is_none());
-        std::env::set_var(PDB_PATH_ENV, "");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(PDB_PATH_ENV, "") };
         assert!(explicit_pdb_path().is_none());
-        std::env::set_var(PDB_PATH_ENV, "/some/where.pdb");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(PDB_PATH_ENV, "/some/where.pdb") };
         assert_eq!(explicit_pdb_path(), Some(PathBuf::from("/some/where.pdb")));
-        std::env::remove_var(PDB_PATH_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(PDB_PATH_ENV) };
     }
 
     #[test]
@@ -243,10 +247,12 @@ mod tests {
     #[test]
     fn candidates_are_env_then_record_then_stem() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        std::env::set_var(PDB_PATH_ENV, "/explicit/one.pdb");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(PDB_PATH_ENV, "/explicit/one.pdb") };
         let cv = rsds_recording(r"C:\build\obj\recorded.pdb");
         let got = pdb_candidates(Some(Path::new("/bin/dir/prog.exe")), &cv);
-        std::env::remove_var(PDB_PATH_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(PDB_PATH_ENV) };
         assert_eq!(
             got,
             vec![
@@ -260,7 +266,8 @@ mod tests {
     #[test]
     fn candidates_dedupe_and_need_no_env() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        std::env::remove_var(PDB_PATH_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(PDB_PATH_ENV) };
         // The record already names `<stem>.pdb`: one candidate, not two.
         let cv = rsds_recording("prog.pdb");
         assert_eq!(
@@ -274,7 +281,8 @@ mod tests {
     #[test]
     fn candidates_fall_back_to_the_stem_when_the_record_is_unusable() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        std::env::remove_var(PDB_PATH_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(PDB_PATH_ENV) };
         let cv = rsds_recording(r"..\..\evil");
         assert_eq!(
             pdb_candidates(Some(Path::new("/bin/dir/prog.exe")), &cv),

@@ -296,12 +296,12 @@ impl Plan {
         }
         let (decl_type, unknown) = if !unknown {
             (object, false)
-        } else if let Some(read) = self.direct_type_at(off) {
+        } else { match self.direct_type_at(off) { Some(read) => {
             (read, false)
-        } else {
+        } _ => {
             let byte = arch.types_impl().get_base(1, type_metatype::TYPE_UNKNOWN).map_err(|_| Refusal::NotAPointer)?;
             (byte, true)
-        };
+        }}};
         let size = decl_type.get_size().max(1) as u64;
         // (kuna `elemptr`) An indexed address is an array only where the function
         // does not also read or write its first element by name: that name would

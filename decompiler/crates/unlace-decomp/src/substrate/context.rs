@@ -2532,7 +2532,7 @@ impl ArchContext {
     /// (kuna `switchrunon`) A lookup of the known function entry at or before
     /// an offset in `addr`'s space, over one global-scope snapshot and the
     /// entries `lazyfuncs` left as names.
-    pub fn function_owner(&self, addr: &Address) -> Option<impl Fn(u64) -> Option<u64>> {
+    pub fn function_owner(&self, addr: &Address) -> Option<impl Fn(u64) -> Option<u64> + use<>> {
         let query = self.effective_global_query(addr)?;
         let space_index = addr.get_space()?.get_index();
         let parked = Rc::clone(&self.lazy_entry_starts);

@@ -1963,7 +1963,7 @@ impl VarnodeBank {
         &self,
         start: &Address,
         end: &Address,
-    ) -> impl Iterator<Item = VarnodeId> + '_ {
+    ) -> impl Iterator<Item = VarnodeId> + '_ + use<'_> {
         let space_index = start.get_space().map(|s| s.get_index());
         let begin = LocProbe::Lower(LocKey::new(
             AddrKey::of(start),
@@ -2186,7 +2186,7 @@ impl VarnodeBank {
         &self,
         s: int4,
         addr: &Address,
-    ) -> impl Iterator<Item = VarnodeId> + '_ {
+    ) -> impl Iterator<Item = VarnodeId> + '_ + use<'_> {
         // beginLoc: searchvn{size=s, loc=addr} ; lower_bound  (flag = input)
         let begin = LocProbe::Lower(LocKey::new(
             AddrKey::of(addr),
@@ -2211,7 +2211,7 @@ impl VarnodeBank {
         s: int4,
         addr: &Address,
         fl: uint4,
-    ) -> impl Iterator<Item = VarnodeId> + '_ {
+    ) -> impl Iterator<Item = VarnodeId> + '_ + use<'_> {
         let begin = self.begin_loc_flag(s, addr, fl);
         let end = self.end_loc_flag(s, addr, fl);
         self.iter_loc_probe(begin, end)
@@ -2225,7 +2225,7 @@ impl VarnodeBank {
         addr: &Address,
         pc: &Address,
         uniq: Option<uintm>,
-    ) -> impl Iterator<Item = VarnodeId> + '_ {
+    ) -> impl Iterator<Item = VarnodeId> + '_ + use<'_> {
         let begin = self.begin_loc_pc(s, addr, pc, uniq);
         // endLoc uses the raw uniq (no ~0 remap)
         let end = self.end_loc_pc(s, addr, pc, uniq.unwrap_or(uintm::MAX));

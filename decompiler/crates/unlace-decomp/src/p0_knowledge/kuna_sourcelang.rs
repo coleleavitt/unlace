@@ -110,8 +110,10 @@ pub fn forced_from_env() -> Option<SourceLang> {
 /// so a later `load file` in the same process sees it (`auto` clears it).
 pub fn set_sourcelang_env(forced: Option<SourceLang>) {
     match forced {
-        Some(lang) => std::env::set_var(SOURCELANG_ENV, lang.as_str()),
-        None => std::env::remove_var(SOURCELANG_ENV),
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        Some(lang) => unsafe { std::env::set_var(SOURCELANG_ENV, lang.as_str()) },
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        None => unsafe { std::env::remove_var(SOURCELANG_ENV) },
     }
 }
 

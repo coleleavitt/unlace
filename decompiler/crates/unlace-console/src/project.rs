@@ -828,7 +828,7 @@ pub fn decompile_pulled(
         let mut replayed: Vec<crate::assertions::Expected> = Vec::new();
         let result = match step.result {
             Ok(mut fd) if replay => {
-                if let Some(expected) = crate::assertions::apply_symbol_scoped(prog, &mut fd, &name, single_target) {
+                match crate::assertions::apply_symbol_scoped(prog, &mut fd, &name, single_target) { Some(expected) => {
                     let carried = crate::assertions::carried_symbols(&fd);
                     let carried_usepoint = crate::assertions::carried_usepoint_symbols(&fd);
                     let carried_dynamic = crate::assertions::carried_dynamic_symbols(&fd);
@@ -856,9 +856,9 @@ pub fn decompile_pulled(
                     prog.arch_mut().kuna_prior_names = Default::default();
                     replayed = expected;
                     second
-                } else {
+                } _ => {
                     Ok(fd)
-                }
+                }}
             }
             other => other,
         };

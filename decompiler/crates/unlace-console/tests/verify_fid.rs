@@ -113,9 +113,11 @@ fn run(mode: Mode) -> Run {
                 std::fs::write(&db, FidDb::from_records("x86:LE:64:default", "gcc", records).serialize()).unwrap();
                 temp_db = Some(db.clone());
             }
-            std::env::set_var("kuna_fid_db", db.to_str().unwrap());
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var("kuna_fid_db", db.to_str().unwrap()) };
         }
-        Mode::Off => std::env::remove_var("kuna_fid_db"),
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        Mode::Off => unsafe { std::env::remove_var("kuna_fid_db") },
     }
 
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)

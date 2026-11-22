@@ -1376,7 +1376,7 @@ fn overlapping<'a>(
     spc: &Rc<unlace_base::space::AddrSpace>,
     off: uintb,
     size: int4,
-) -> impl Iterator<Item = VarnodeId> + 'a {
+) -> impl Iterator<Item = VarnodeId> + 'a + use<'a> {
     let lo = unlace_base::address::Address::new(Rc::clone(spc), off.saturating_sub(MAX_OVERLAP_BACK));
     let hi = unlace_base::address::Address::new(Rc::clone(spc), off.saturating_add(size as uintb));
     data.vbank()

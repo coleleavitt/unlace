@@ -2448,15 +2448,15 @@ decomp_command!(
                     dcp.fd = Some(fd);
                     dcp.stopped_flow = Some(recipe);
                 }
-            } else if let Ok(fd) = build_and_follow_flow_with_override(
+            } else { match build_and_follow_flow_with_override(
                 prog.arch_mut(),
                 &recipe.name,
                 recipe.entry.clone(),
                 recipe.size,
                 &recipe.flow_overrides,
-            ) {
+            ) { Ok(fd) => {
                 dcp_mut(status)?.fd = Some(fd);
-            }
+            } _ => {}}}
         }
         let dcp = dcp_mut(status)?;
         dcp.conf = Some(prog);

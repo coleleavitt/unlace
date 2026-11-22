@@ -6918,7 +6918,7 @@ impl JumpTable {
     /// fallback needs `recoverModel`/`buildAddresses` (W4). The two-phase
     /// structure is faithful.
     pub fn recover_labels(&mut self, fd: &mut Funcdata) -> KunaResult<()> {
-        if let Some(mut model) = self.jmodel.take() {
+        match self.jmodel.take() { Some(mut model) => {
             let orig_size = self.origmodel.as_ref().map(|m| m.get_table_size()).unwrap_or(0);
             model.find_unnormalized(fd, self.maxaddsub, self.maxleftright, self.maxext)?;
             let res = if self.origmodel.is_none() || orig_size == 0 {
@@ -6941,7 +6941,7 @@ impl JumpTable {
             };
             self.jmodel = Some(model);
             res?;
-        } else {
+        } _ => {
             // Trivial fallback (jumptable.cc:2878): the model could not be
             // recovered, but the addresses came from flow.
             let mut tm = JumpModelTrivial::new();
@@ -6977,7 +6977,7 @@ impl JumpTable {
                         .and_then(|op| fd.obank().get(op))
                         .is_some_and(|op| bd.cover.in_range(op.get_addr(), 1))
             });
-        }
+        }}
         self.clear_saved_model();
         Ok(())
     }

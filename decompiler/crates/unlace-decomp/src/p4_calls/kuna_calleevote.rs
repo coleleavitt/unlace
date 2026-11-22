@@ -570,15 +570,15 @@ pub fn decide_ledger_with(
                 }).collect();
                 eprintln!("[calleevote] 0x{:x} param {j} ({}@{:x}:{}) callers {:?} -> {}", key.1, spell(&p.ct), p.addr.get_offset(), p.size, seen, all && agreed.is_some());
             }
-            if let (true, Some(ct)) = (all, agreed) {
+            match (all, agreed) { (true, Some(ct)) => {
                 if uncommitted(&p.ct, ptr_size) || crate::kuna_structheadless::gives_a_pointee(&ct) {
                     inputs.push(Typed { addr: p.addr.clone(), size: p.size, ct, frame, null: false, proven: false, by_class: false });
                 }
-            } else if let Some(void_ptr) = pointers {
+            } _ => if let Some(void_ptr) = pointers {
                 if let Some(t) = crate::kuna_callerptr::pointer_vote(&sites, j, p, void_ptr) {
                     inputs.push(t);
                 }
-            }
+            }}
         }
         if inputs.is_empty() {
             continue;

@@ -19,7 +19,8 @@ pub fn ppcapu_enabled() -> bool {
 /// Bridge a `set_kuna_option("ppcapu", val)` toggle to [`PPCAPU_ENV`] so a later
 /// `load file` in the same process sees the choice.
 pub fn set_ppcapu_env(on: bool) {
-    std::env::set_var(PPCAPU_ENV, if on { "on" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(PPCAPU_ENV, if on { "on" } else { "off" }) };
 }
 
 #[cfg(test)]
@@ -28,20 +29,24 @@ mod tests {
 
     #[test]
     fn env_gate_default_off_and_on_tokens() {
-        std::env::remove_var(PPCAPU_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(PPCAPU_ENV) };
         assert!(!ppcapu_enabled(), "unset env ⇒ default off");
         for on in ["on", "1", "true", "ON", ""] {
-            std::env::set_var(PPCAPU_ENV, on);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(PPCAPU_ENV, on) };
             assert!(ppcapu_enabled(), "`{on}` ⇒ enabled");
         }
         for off in ["off", "0", "false"] {
-            std::env::set_var(PPCAPU_ENV, off);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(PPCAPU_ENV, off) };
             assert!(!ppcapu_enabled(), "`{off}` ⇒ disabled");
         }
         set_ppcapu_env(true);
         assert!(ppcapu_enabled());
         set_ppcapu_env(false);
         assert!(!ppcapu_enabled());
-        std::env::remove_var(PPCAPU_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(PPCAPU_ENV) };
     }
 }

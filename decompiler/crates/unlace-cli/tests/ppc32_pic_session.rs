@@ -13,7 +13,8 @@ static ENVIRONMENT: Mutex<()> = Mutex::new(());
 
 fn serial() -> MutexGuard<'static, ()> {
     let guard = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::remove_var(ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(ENV) };
     guard
 }
 

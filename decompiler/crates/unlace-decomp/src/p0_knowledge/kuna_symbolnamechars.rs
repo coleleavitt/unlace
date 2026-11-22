@@ -166,7 +166,8 @@ pub fn symbolnamechars_mode() -> NameChars {
 /// (the interactive `option symbolnamechars … ` before `load file` path, and the
 /// in-process CLI drivers).
 pub fn set_symbolnamechars_env(mode: NameChars) {
-    std::env::set_var(SYMBOLNAMECHARS_ENV, mode.as_str());
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(SYMBOLNAMECHARS_ENV, mode.as_str()) };
 }
 
 /// Whether `a`,`b` (adjacent, in that order) open or close a C comment.

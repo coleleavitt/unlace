@@ -38,7 +38,8 @@ pub fn ifuncfpret_enabled() -> bool {
 /// Export a `set_kuna_option("ifuncfpret", val)` toggle to [`IFUNCFPRET_ENV`] so a
 /// later `load file` in the *same* process sees the choice.
 pub fn set_ifuncfpret_env(on: bool) {
-    std::env::set_var(IFUNCFPRET_ENV, if on { "on" } else { "off" });
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(IFUNCFPRET_ENV, if on { "on" } else { "off" }) };
 }
 
 #[cfg(test)]
@@ -47,15 +48,18 @@ mod tests {
 
     #[test]
     fn env_gate_default_on_and_off_tokens() {
-        std::env::remove_var(IFUNCFPRET_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(IFUNCFPRET_ENV) };
         assert!(ifuncfpret_enabled(), "unset env ⇒ default on");
 
         for on in ["on", "1", "true", "ON", "True", ""] {
-            std::env::set_var(IFUNCFPRET_ENV, on);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(IFUNCFPRET_ENV, on) };
             assert!(ifuncfpret_enabled(), "`{on}` ⇒ enabled");
         }
         for off in ["off", "0", "false"] {
-            std::env::set_var(IFUNCFPRET_ENV, off);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(IFUNCFPRET_ENV, off) };
             assert!(!ifuncfpret_enabled(), "`{off}` ⇒ disabled");
         }
 
@@ -64,6 +68,7 @@ mod tests {
         set_ifuncfpret_env(false);
         assert!(!ifuncfpret_enabled());
 
-        std::env::remove_var(IFUNCFPRET_ENV);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(IFUNCFPRET_ENV) };
     }
 }

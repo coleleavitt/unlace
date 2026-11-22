@@ -40,13 +40,11 @@ pub(super) fn run(binary: &str, output: Option<&str>, list: bool, json: bool) ->
         }
     };
     let mut name = std::env::var(unlace_decomp::kuna_dyldcache::DYLDIMAGE_ENV).unwrap_or_default().trim().to_string();
-    if name.is_empty() {
-        if let Ok(cache) = DyldCache::open(path) {
-            if let [only] = cache.images() {
+    if name.is_empty()
+        && let Ok(cache) = DyldCache::open(path)
+            && let [only] = cache.images() {
                 name = only.path.clone();
             }
-        }
-    }
     let out_path = output.map(str::to_string).unwrap_or_else(|| format!("{binary}.{}.unpacked", output_stem(&name)));
     if let Err(e) = std::fs::write(&out_path, &image) {
         eprintln!("error: could not write {out_path}: {e}");

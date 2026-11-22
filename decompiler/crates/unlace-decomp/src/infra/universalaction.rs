@@ -265,12 +265,12 @@ fn print_rule_line(out: &mut String, num: int4, disabled: bool, break_action: bo
 
 // Declarative-DSL helpers (kept terse so the spec body reads like the C++).
 macro_rules! act {
-    ($e:expr) => {
+    ($e:expr_2021) => {
         SchedNode::Action(Box::new(|| $e))
     };
 }
 macro_rules! rrow {
-    ($name:expr, $group:expr, $ctor:expr) => {
+    ($name:expr_2021, $group:expr_2021, $ctor:expr_2021) => {
         RuleRow { name: $name, group: $group, ctor: || Box::new($ctor) }
     };
 }

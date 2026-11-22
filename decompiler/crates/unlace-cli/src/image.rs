@@ -6,14 +6,14 @@ use unlace_analysis::loader::macho_fat::SlicePref;
 
 /// Inspect a thin Mach-O through its mapping; retain legacy reads for other inputs.
 pub(crate) fn inspect<T>(binary: &str, inspect: impl FnOnce(&[u8]) -> Option<T>) -> Option<T> {
-    if let Some(bytes) = unlace_analysis::image_bytes::ImageBytes::map_thin_macho(binary)
+    match unlace_analysis::image_bytes::ImageBytes::map_thin_macho(binary)
         .ok().flatten()
-    {
+    { Some(bytes) => {
         inspect(&bytes)
-    } else {
+    } _ => {
         let bytes = unlace_analysis::loader::elf_shdr::read_image(binary).ok()?;
         inspect(&bytes)
-    }
+    }}
 }
 
 /// Read the loader's selected image slice for an object-file consumer. A UEFI

@@ -55,16 +55,19 @@ fn declared_group(fixture: &str, entry: u64) -> Option<Rc<unlace_decomp::dtype::
     let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(fixture);
     // The named shells are interned inside `load file`, upstream of every `option`
     // command, so the value has to be in the environment before the bootstrap.
-    std::env::set_var(LIBCTYPES_ENV, "glibc");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(LIBCTYPES_ENV, "glibc") };
     let mut prog: ConsoleProgram = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
-        .inspect_err(|_| std::env::remove_var(LIBCTYPES_ENV))
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        .inspect_err(|_| unsafe { std::env::remove_var(LIBCTYPES_ENV) })
         .expect("bootstrap fixture with built processor specs");
     prog.commit_pending_analysis().expect("analysis commit succeeds");
     let space = prog.arch().manage().get_default_code_space().expect("code space").clone();
     prog.declare_function(Address::new(Rc::clone(&space), entry), Some("getgrnam"), 0)
         .expect("the declaration lands");
     let held = prog.arch().types().find_by_name("group").expect("type lookup");
-    std::env::remove_var(LIBCTYPES_ENV);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(LIBCTYPES_ENV) };
     held
 }
 

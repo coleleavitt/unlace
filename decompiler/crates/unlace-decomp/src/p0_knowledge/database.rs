@@ -4494,7 +4494,7 @@ impl Database {
             if self.symbols[sym].is_type_locked() && alias_block_level != 0 {
                 if alias_block_level == 3 {
                     aliason = false;
-                } else if let Some(ct) = self.symbols[sym].dtype.clone() {
+                } else { match self.symbols[sym].dtype.clone() { Some(ct) => {
                     let meta = ct.get_metatype();
                     // C++ varmap.cc: structures always block aliases; arrays block
                     // only when alias_block_level > 1 (the two C++ `if`/`else if`
@@ -4504,7 +4504,7 @@ impl Database {
                     {
                         aliason = false;
                     }
-                }
+                } _ => {}}}
             }
         }
     }

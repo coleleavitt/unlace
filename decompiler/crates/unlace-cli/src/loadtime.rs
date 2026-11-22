@@ -105,7 +105,8 @@ const IMAGE_SELECTION: [&str; 3] = ["kernelcache", "kernelcache-boot", "dyldimag
 /// call graph) then reads the image the engine loads. The last value wins.
 pub(crate) fn export_image_selection(argv: &[String]) {
     for (key, value) in image_selection(argv) {
-        std::env::set_var(key, value);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(key, value) };
     }
 }
 
@@ -224,8 +225,10 @@ impl LoadtimeEnv {
     fn set(&mut self, name: &'static str, value: Option<&str>) {
         self.previous.push((name, std::env::var_os(name)));
         match value {
-            Some(value) => std::env::set_var(name, value),
-            None => std::env::remove_var(name),
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            Some(value) => unsafe { std::env::set_var(name, value) },
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            None => unsafe { std::env::remove_var(name) },
         }
     }
 }
@@ -234,8 +237,10 @@ impl Drop for LoadtimeEnv {
     fn drop(&mut self) {
         for (name, previous) in self.previous.drain(..).rev() {
             match previous {
-                Some(value) => std::env::set_var(name, value),
-                None => std::env::remove_var(name),
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                Some(value) => unsafe { std::env::set_var(name, value) },
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                None => unsafe { std::env::remove_var(name) },
             }
         }
     }

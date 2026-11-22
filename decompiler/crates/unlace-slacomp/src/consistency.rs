@@ -448,7 +448,7 @@ impl SleighCompile {
     ) -> bool {
         let opcode = self.template_op_opcode(h, opidx);
         macro_rules! rsize {
-            ($slot:expr) => {{
+            ($slot:expr_2021) => {{
                 let szc = self.template_varnode(h, opidx, $slot).get_size();
                 self.recover_size(szc, sym, ctidx, cc).ok()
             }};

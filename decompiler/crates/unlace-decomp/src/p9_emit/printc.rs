@@ -1296,7 +1296,7 @@ pub enum PrintEmit {
 /// Forward one [`Emit`] call to whichever [`PrintEmit`] variant is active — the
 /// static match that stands in for C++'s `Emit *` vtable dispatch.
 macro_rules! pe_forward {
-    ($self:ident . $method:ident ( $($arg:expr),* )) => {
+    ($self:ident . $method:ident ( $($arg:expr_2021),* )) => {
         match $self {
             PrintEmit::NoMarkup(e) => e.$method($($arg),*),
             PrintEmit::Markup(e) => e.$method($($arg),*),
@@ -8401,7 +8401,7 @@ impl PrintC {
                         let is_explicit =
                             fd.vbank().get(vn).map(|v| v.is_explicit()).unwrap_or(false);
                         let sym = high.and_then(|high| self.emitted_high_symbol(fd, high));
-                        if let (Some((name, sym_off, Some(sym_type))), true) = (sym, is_explicit) {
+                        match (sym, is_explicit) { (Some((name, sym_off, Some(sym_type))), true) => {
                             let mut boff = byte_off;
                             if sym_off > 0 {
                                 boff += sym_off as int8;
@@ -8427,7 +8427,7 @@ impl PrintC {
                                 return;
                             }
                             // Fall through to the cast/functional dispatch below.
-                        } else {
+                        } _ => {
                             if ct.get_metatype() == type_metatype::TYPE_STRUCT {
                                 if let Ok(Some((idx, off2))) =
                                     ct.find_truncation(byte_off, out_sz, op, 1)
@@ -8473,7 +8473,7 @@ impl PrintC {
                                     }
                                 }
                             }
-                        }
+                        }}
                         // Fall thru to functional/cast printing (printc.cc:889).
                     }
                 }

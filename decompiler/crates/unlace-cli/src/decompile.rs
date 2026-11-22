@@ -343,8 +343,8 @@ fn check_errors(
     // default mode is all option chatter, so the answer would be cut off.
     // A proven undefined external is not a bad selector. Other entries with
     // missing bytes remain selection failures.
-    if !(allow_external && is_undefined_external_entry(out)) {
-        if let Some(reason) = selection_failure(out) {
+    if !(allow_external && is_undefined_external_entry(out))
+        && let Some(reason) = selection_failure(out) {
             if reason.contains("per-function decompile budget exceeded")
                 || reason.contains("per-function memory limit exceeded")
             {
@@ -352,7 +352,6 @@ fn check_errors(
             }
             return Some(reason);
         }
-    }
     None
 }
 
@@ -1116,7 +1115,8 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     // resolve, but the flag is accepted (and exported) for compatibility with
     // existing invocations / the pipeline.
     if let Some(e) = &engine {
-        std::env::set_var("KUNA_ENGINE", e);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("KUNA_ENGINE", e) };
     }
     addr |= looks_like_addr(&target);
 
@@ -1182,11 +1182,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
 
     // (kuna outlang, DIV-80) The auto policy -- follow the binary when the caller
     // named no language. See `decompile_all::detected_output_language`.
-    if !saw_language && crate::loadtime::explicit_output_language(&options).is_none() {
-        if let Some(lang) = decompile_all::detected_output_language(&binary, &options) {
+    if !saw_language && crate::loadtime::explicit_output_language(&options).is_none()
+        && let Some(lang) = decompile_all::detected_output_language(&binary, &options) {
             options.push(("setlanguage".into(), lang.into()));
         }
-    }
 
     let explicit_fast_funcdisc = options.iter().any(|(name, _)| name == "fast_funcdisc");
     // Omitted mode is the size-driven `auto` policy. Preset overrides are

@@ -1724,6 +1724,7 @@ pub fn universal_sched(
                     "blockrecovery"
                 )
             ),
+            act!(crate::p8_structure::kuna_guardedloop::ActionGuardedLoop::boxed("blockrecovery")),
             act!(crate::p6_variables::kuna_paramcopyhoist::ActionParamCopyHoist::boxed("merge")),
             act!(ActionPrototypeWarnings::boxed("protorecovery")),
             act!(ActionStop::boxed("base")),

@@ -331,6 +331,7 @@
 0324                  iteregion
 0325                  iteboolean
 0326                  gotosink
-0327                  paramcopyhoist
-0328        !         prototypewarnings
-0329                  stop
+0327                  crossjumptail
+0328                  paramcopyhoist
+0329        !         prototypewarnings
+0330                  stop

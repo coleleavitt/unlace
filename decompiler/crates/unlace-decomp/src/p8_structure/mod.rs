@@ -8,6 +8,7 @@ pub mod kuna_clonephiorder;
 pub mod kuna_condfold;
 pub mod kuna_condstmts;
 pub mod kuna_crossjumpreverter;
+pub mod kuna_crossjumptail;
 pub mod kuna_dedupitetail;
 mod kuna_domindex;
 pub mod kuna_earlyreturn;

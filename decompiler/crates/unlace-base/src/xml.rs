@@ -2285,6 +2285,7 @@ mod tests {
         // and kuna-calleefilledarg-ctramp / a C trampoline that fills rsi keeps the positional rule
         // and kuna-switchextent-a64 / an unchecked AArch64 table ends at the function's next table (option switchextent)
         // and kuna-switchnext-a64 / a byte-masked last table ends at the next function's table (option switchextent)
+        // and kuna-crossjumptail / a goto to a shared statement run becomes a copy, an else arm or a continue
         // and kuna-objcforin / an SDK struct pointer parameter types the stack object passed to it (option objcsdk)
         // and kuna-switchnextcsel-a64 / a csel-picked next table still ends a byte-masked last table (option switchextent)
         // and kuna-switchmerge / a search tree of jump tables prints as one switch (option switchmerge)
@@ -2299,7 +2300,7 @@ mod tests {
         // fork-only ones, less the six of the options upstream superseded; then the
         // nine above from the 2026-11-22 upstream merge into unlace.
         // and kuna-sdkprotos / an imported C function takes its prototype from the SDK headers (option objcsdk)
-        assert_eq!(count, 955, "corpus file count drifted");
+        assert_eq!(count, 956, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

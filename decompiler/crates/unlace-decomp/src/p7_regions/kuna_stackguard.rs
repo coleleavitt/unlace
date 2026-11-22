@@ -185,11 +185,33 @@ fn is_named_guard(vn: VarnodeId, data: &Funcdata) -> bool {
         return false;
     }
     let addr = v.get_addr().clone();
-    data.get_arch()
-        .name_for_global_varnode(&addr, v.get_size(), &addr)
-        .is_some_and(|(name, off, _)| {
-            off == 0 && GUARD_GLOBALS.contains(&name.trim_start_matches('_'))
-        })
+    let arch = data.get_arch();
+    let name = match arch.name_for_global_varnode(&addr, v.get_size(), &addr) {
+        Some((name, 0, _)) => Some(name),
+        Some(_) => None,
+        None => arch.query_function(&addr).map(|(name, ..)| name),
+    };
+    name.is_some_and(|name| GUARD_GLOBALS.contains(&name.trim_start_matches('_')))
+}
+
+/// Is `ptr` the address of the canary global, read from its import slot (the
+/// AArch64, ARM and PowerPC PIC shape: `adrp`/`ldr` the slot, then load
+/// through it)?
+fn ptr_is_guard_slot(ptr: VarnodeId, data: &Funcdata) -> bool {
+    let mut ptr = ptr;
+    for _ in 0..8 {
+        let Some(v) = data.vbank().get(ptr) else {
+            return false;
+        };
+        let Some(dop) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            return is_named_guard(ptr, data);
+        };
+        match (dop.code(), dop.get_in(0)) {
+            (OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT, Some(in0)) => ptr = in0,
+            _ => return false,
+        }
+    }
+    false
 }
 
 /// Does `vn` ultimately derive from a LOAD of the canary slot?
@@ -223,10 +245,8 @@ fn derives_from_canary_load(
     let dop = data.obank().get(def).expect("derivesFromCanaryLoad: dop");
     let oc = dop.code();
     if oc == OpCode::CPUI_LOAD {
-        return ptr_is_canary_slot(
-            dop.get_in(1).expect("derivesFromCanaryLoad: load ptr"),
-            data,
-        );
+        let ptr = dop.get_in(1).expect("derivesFromCanaryLoad: load ptr");
+        return ptr_is_canary_slot(ptr, data) || ptr_is_guard_slot(ptr, data);
     }
     if oc == OpCode::CPUI_COPY
         || oc == OpCode::CPUI_CAST
@@ -306,7 +326,7 @@ fn collect_canary_slots(
             if canary && !loads.contains(&def) && ptr_is_fs_canary(ptr, data) {
                 loads.push(def);
             }
-            canary
+            canary || ptr_is_guard_slot(ptr, data)
         }
         OpCode::CPUI_COPY
         | OpCode::CPUI_CAST

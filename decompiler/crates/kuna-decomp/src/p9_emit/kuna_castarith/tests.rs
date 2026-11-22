@@ -11,6 +11,7 @@ use kuna_num::opcodes::OpCode;
 use super::*;
 use crate::context::ArchContext;
 use crate::dtype::{Datatype, TypeFactoryImpl};
+use crate::coreaction_casts::FuncdataCastExt;
 
 struct Fx {
     fd: Funcdata,

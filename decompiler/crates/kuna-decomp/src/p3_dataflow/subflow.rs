@@ -97,6 +97,7 @@ use crate::op::pcodeop_flags;
 use crate::context::{ArchHandle, OpId, TypeOp, VarnodeId};
 use crate::transform::{LaneDescription, TVarRef, TransformManager};
 use std::rc::Rc;
+use crate::funcdata_merge::FuncdataMergeExt;
 
 // =============================================================================
 // SubvariableFlow placeholder data structures (subflow.hh:43-95)

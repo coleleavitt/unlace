@@ -12,6 +12,7 @@ use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 use kuna_base::address::Address;
 use kuna_base::space::spacetype;
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 fn integer(ty: &Datatype) -> bool {
     matches!(ty.get_size(), 1 | 2 | 4 | 8) && !ty.is_enum_type()

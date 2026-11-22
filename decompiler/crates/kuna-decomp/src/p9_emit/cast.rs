@@ -66,6 +66,7 @@ use kuna_base::types::{int4, uint4, uintb};
 use kuna_num::opcodes::OpCode;
 
 use crate::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactory};
+use crate::kuna_typequal::DatatypeQualExt;
 
 /// Types of integer promotion (C++ `CastStrategy::IntPromotionCode`,
 /// cast.hh:48-54).  For many languages small integers are automatically

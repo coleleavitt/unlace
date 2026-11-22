@@ -9,6 +9,7 @@ use kuna_base::space::{
 use kuna_decomp::context::ArchContext;
 use kuna_decomp::dtype::{type_metatype, TypeFactory, TypeFactoryImpl};
 use kuna_decomp::funcdata::Funcdata;
+use kuna_decomp::coreaction_casts::FuncdataCastExt;
 use kuna_num::opcodes::OpCode;
 
 fn conversion(

@@ -16,6 +16,7 @@ use kuna_base::types::int4;
 
 use crate::funcdata::Funcdata;
 use crate::context::{ArchContext, VarnodeId};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 const SP_OFF: u64 = 0x20;
 const SP_SIZE: int4 = 8;

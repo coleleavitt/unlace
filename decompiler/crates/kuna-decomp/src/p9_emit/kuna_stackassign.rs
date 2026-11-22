@@ -6,6 +6,7 @@ use crate::funcdata::Funcdata;
 use kuna_base::address::Address;
 use kuna_num::opcodes::OpCode;
 use std::rc::Rc;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) struct Assignment {
     pub output: VarnodeId,

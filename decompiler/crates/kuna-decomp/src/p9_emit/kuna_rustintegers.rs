@@ -9,6 +9,7 @@ use crate::funcdata::Funcdata;
 use crate::printc::PrintC;
 use crate::printlanguage::{OpToken, ReversePolish, TokenType};
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Find the token following a cast through enclosing right-hand expressions.
 pub(crate) fn cast_before_angle(stack: &[ReversePolish]) -> bool {

@@ -57,6 +57,8 @@ use kuna_num::opcodes::{get_booleanflip, OpCode};
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::funcdata::Funcdata;
 use crate::context::{OpId, TypeOp, VarnodeId};
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 
 // =============================================================================
 // opcode -> TypeOp resolution (glb->inst[opc])

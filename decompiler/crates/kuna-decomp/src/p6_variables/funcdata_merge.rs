@@ -152,7 +152,22 @@ impl HighContext for Funcdata {
 // MergeContext for Funcdata
 // =============================================================================
 
-impl Funcdata {
+/// [`Funcdata`] methods for the cover/merge state of high variables, kept out of the IR module.
+pub trait FuncdataMergeExt {
+    fn make_covermerge() -> crate::merge::Merge;
+    fn ensure_covermerge(&mut self);
+    fn kuna_mapped_symbol_entry(&self, high: HighVariableId) -> Option<(Address, int4)>;
+    fn kuna_mapped_symbol_id(&self, high: HighVariableId) -> Option<u64>;
+    fn kuna_mapped_symbol_offset(&self, high: HighVariableId) -> Option<int4>;
+    fn with_covermerge<R>(
+        &mut self,
+        f: impl FnOnce(&mut crate::merge::Merge, &mut Funcdata) -> R,
+    ) -> R;
+    fn clear_covermerge(&mut self);
+    fn refresh_high_cover(&mut self, high: HighVariableId);
+}
+
+impl FuncdataMergeExt for Funcdata {
     /// Construct the function's persistent [`Merge`](crate::merge::Merge) engine
     /// (C++ `Merge covermerge` built by `Funcdata(...)` with `stackAffectingOps(fd)`
     /// + `testCache(stackAffectingOps)`).
@@ -169,7 +184,7 @@ impl Funcdata {
     /// Ensure the persistent merge engine exists (C++ `covermerge` is a value
     /// member, always present; the Rust field is lazily built so the bare
     /// `Funcdata::new` need not construct it).
-    pub fn ensure_covermerge(&mut self) {
+    fn ensure_covermerge(&mut self) {
         if self.covermerge.is_none() {
             self.covermerge = Some(Self::make_covermerge());
         }
@@ -284,7 +299,7 @@ impl Funcdata {
     /// back so its `copyTrims` accumulator persists across actions.  This is the
     /// faithful equivalent of the single `Funcdata::covermerge` member the C++
     /// merge actions all share.
-    pub fn with_covermerge<R>(
+    fn with_covermerge<R>(
         &mut self,
         f: impl FnOnce(&mut crate::merge::Merge, &mut Funcdata) -> R,
     ) -> R {
@@ -300,7 +315,7 @@ impl Funcdata {
     /// Clear the persistent merge engine's cached state (C++ `Merge::clear`,
     /// called by `Funcdata::clear`).  Drops the test cache, the `copyTrims`
     /// accumulator, and the proto-partial roots.
-    pub fn clear_covermerge(&mut self) {
+    fn clear_covermerge(&mut self) {
         if let Some(m) = self.covermerge.as_mut() {
             m.clear();
         }

@@ -9,6 +9,7 @@ use crate::prettyprint::{Emit, SyntaxHighlight};
 use crate::printc::PrintC;
 use kuna_base::address::Address;
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 const OPTION_U64: &str = "core::option::Option<u64>";
 

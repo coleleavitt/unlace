@@ -10,6 +10,7 @@ use crate::kuna_langtypes::SpellCtx;
 use crate::printc::{op_key, op_token, tokens, PrintC};
 use crate::printlanguage::{Atom, OpToken, SyntaxHighlight, TagType, TokenType};
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) use carrier::is_zero_word_carrier;
 

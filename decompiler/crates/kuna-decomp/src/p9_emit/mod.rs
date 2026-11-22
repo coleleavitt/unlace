@@ -36,7 +36,7 @@ pub mod kuna_narrowselector; // (kuna) a switch on a narrow expression casts it 
 pub mod stringmanage;
 pub mod kuna_naming;
 pub mod kuna_varsources;
-mod kuna_calltransport;
+pub(crate) mod kuna_calltransport;
 mod kuna_lanetrace;
 pub mod kuna_arraynotation;
 pub mod kuna_declhightype;

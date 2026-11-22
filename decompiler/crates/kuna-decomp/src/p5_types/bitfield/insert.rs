@@ -26,6 +26,7 @@ use crate::expression::{pointer_equality, root_pointer};
 use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
 use std::rc::Rc;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// `sizeof(uintb)` — the C++ `uintb` is `uint8`, i.e. 8 bytes.
 const SIZEOF_UINTB: int4 = 8;

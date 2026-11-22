@@ -16,6 +16,7 @@ use kuna_decomp::dtype::type_metatype;
 use kuna_decomp::funcdata::Funcdata;
 use kuna_decomp::varnode::varnode_flags;
 use kuna_num::opcodes::OpCode;
+use kuna_decomp::funcdata_facing::FuncdataFacingExt;
 
 /// Why a format that was applied does not show: the next decompile did not
 /// find the constant again.

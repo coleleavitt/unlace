@@ -12,6 +12,8 @@
 
 use super::*;
 use crate::printlanguage::{parentheses, ReversePolish};
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 
 #[test]
 fn max_line_size_bounds_the_comment_indent_and_survives_markup() {

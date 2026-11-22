@@ -10,6 +10,7 @@ use kuna_base::{
 };
 use kuna_num::opcodes::OpCode;
 use std::collections::{BTreeMap, BTreeSet};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// Values proven for written varnodes: `Some` is the constant, `None` a
 /// varnode proven not to be one. Valid while the op graph is unchanged.

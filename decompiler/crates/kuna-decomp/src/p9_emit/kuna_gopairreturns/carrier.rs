@@ -4,6 +4,7 @@ use super::*;
 use crate::kuna_lang::OutLang;
 use crate::kuna_langgo::GO_SPELLER;
 use crate::kuna_langtypes::TypeSpeller;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 #[derive(Clone, Copy)]
 enum Carrier {

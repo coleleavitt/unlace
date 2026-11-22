@@ -96,6 +96,8 @@ use kuna_num::opcodes::OpCode;
 
 use crate::action::{ruleflags, Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataAliasExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 #[cfg(test)]
 fn exact_indirect_target_slot(

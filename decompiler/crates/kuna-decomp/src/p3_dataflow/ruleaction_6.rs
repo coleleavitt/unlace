@@ -20,6 +20,9 @@ use kuna_num::opcodes::OpCode;
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_merge::FuncdataMergeExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 #[inline]
 fn set_opcode(data: &mut Funcdata, op: OpId, opc: OpCode) {

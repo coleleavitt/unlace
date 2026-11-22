@@ -7,6 +7,7 @@ use crate::funcdata::Funcdata;
 use kuna_num::opcodes::OpCode;
 use std::collections::BTreeSet;
 use std::rc::Rc;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) struct ByteAddress {
     pub name: String,

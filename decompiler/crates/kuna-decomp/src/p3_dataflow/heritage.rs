@@ -90,6 +90,8 @@ use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
 use crate::overrides::Override;
 use crate::context::BlockId;
 use crate::varnode::varnode_flags;
+use crate::funcdata_spacebase::FuncdataAliasExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 // =============================================================================
 // VariableStack (heritage.hh:29)

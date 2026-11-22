@@ -9,6 +9,7 @@ use kuna_base::address::{sign_extend, Address};
 use kuna_base::space::AddrSpace;
 use kuna_num::opcodes::OpCode;
 use std::rc::Rc;
+use crate::funcdata_spacebase::FuncdataAliasExt;
 
 #[derive(Clone)]
 struct EffectRange {

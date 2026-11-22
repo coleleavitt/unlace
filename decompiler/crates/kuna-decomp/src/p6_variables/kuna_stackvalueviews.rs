@@ -5,6 +5,7 @@ use std::rc::Rc;
 use crate::dtype::{type_metatype, TypeFactory};
 use crate::funcdata::Funcdata;
 use crate::unionresolve::ResolvedUnion;
+use crate::funcdata_union::FuncdataUnionExt;
 
 pub(crate) fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     let mut edges = Vec::new();

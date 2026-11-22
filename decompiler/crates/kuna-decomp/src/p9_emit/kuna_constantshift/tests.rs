@@ -6,6 +6,7 @@ use kuna_base::space::{spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, Un
 use kuna_sleigh::globalcontext::ContextInternal;
 use kuna_sleigh::loadimage::LoadImage;
 use kuna_sleigh::sleigh::Sleigh;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 struct Image;
 impl LoadImage for Image {

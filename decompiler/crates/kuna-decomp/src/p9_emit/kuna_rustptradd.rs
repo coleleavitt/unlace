@@ -7,6 +7,7 @@ use crate::funcdata::Funcdata;
 use crate::printc::{op_key, tokens, PrintC};
 use crate::printlanguage::{modifiers, Atom, SyntaxHighlight, TagType};
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 impl PrintC {
     pub(crate) fn op_rust_ptradd(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {

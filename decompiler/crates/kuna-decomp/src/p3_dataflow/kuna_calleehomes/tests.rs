@@ -15,6 +15,7 @@ use super::{
     caller_home_cell, caller_home_unobserved, frame_value_overlaps, is_home_slot,
     verified_home_gap, MAX_CALLER_SCAN_OPS,
 };
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 const HOME: i64 = -40;
 

@@ -15,6 +15,7 @@ use std::rc::Rc;
 
 use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
+use crate::kuna_typequal::DatatypeQualExt;
 
 /// The type of value `value` that a store through a pointer to `pointed_to`
 /// must be cast to point at: `value` itself, when it is a float C can name and

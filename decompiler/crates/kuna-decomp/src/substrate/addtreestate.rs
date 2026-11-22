@@ -32,6 +32,8 @@ use kuna_num::opcodes::OpCode;
 use crate::dtype::{type_metatype, Datatype};
 use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 
 /// The mutable analysis state for one `RulePtrArith` application
 /// (C++ `class AddTreeState`).

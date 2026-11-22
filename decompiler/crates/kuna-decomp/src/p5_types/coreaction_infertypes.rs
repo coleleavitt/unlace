@@ -51,6 +51,8 @@ use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
 use crate::typeop::type_op_info;
+use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// Resolve `op->outputTypeLocal()` / `op->inputTypeLocal(slot)` faithfully via the
 /// W6 typeop inst table (`getOutputLocal`/`getInputLocal`).  Falls back to a

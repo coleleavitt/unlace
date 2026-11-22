@@ -8,6 +8,7 @@ use kuna_base::address::Address;
 use kuna_base::space::{
     addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
 };
+use crate::funcdata_merge::FuncdataMergeExt;
 
 struct Fixture {
     fd: Funcdata,

@@ -93,6 +93,7 @@ use crate::options::on_or_off;
 use crate::p8_structure::kuna_iteregion::{leaf_bblock, printed_ops, same_storage};
 
 use kuna_base::marshal::ElementId;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Marshaling element `<iteboolean>` (kuna).  ElementIds live in the 4000+ range
 /// (4118 callsitestackargs was the previous high-water mark; this is 4119).

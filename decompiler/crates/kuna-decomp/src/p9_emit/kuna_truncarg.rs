@@ -38,6 +38,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::coreaction_casts::FuncdataCastContext;
 use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// The cast a narrowed argument in `slot` of the CALL/CALLIND `op` needs so its C
 /// value matches the zero-extended value the binary passes, or `None`.

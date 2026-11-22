@@ -21,6 +21,7 @@ use crate::funcdata::Funcdata;
 use crate::p0_knowledge::options::on_or_off;
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 use crate::varmap::{MapState, SHARED_STORAGE};
+use crate::funcdata_union::FuncdataUnionExt;
 
 #[derive(Clone)]
 pub(crate) struct StorageView {

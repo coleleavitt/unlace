@@ -26,6 +26,7 @@
 //!   `funcdata_spacebase.rs`          — variable/merge/stack tiers (P6)
 //! - `p9_emit/coreaction_casts.rs`    — cast insertion hooks (P9)
 
+use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
 use kuna_base::address::Address;
 use kuna_base::error::KunaResult;
 use kuna_base::types::{int2, int4, uint4, uint8, uintm, Wrap};
@@ -35,6 +36,8 @@ use crate::fspec::{FuncCallSpecs, FuncProto, ParamActive};
 use crate::op::PcodeOpBank;
 use crate::context::{ArchHandle, BlockId, OpId, VarnodeId};
 use crate::varnode::{DefOpInfo, VarnodeBank};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_union::FuncdataUnionExt;
 
 /// Boolean properties associated with a [`Funcdata`] (C++ anonymous `enum` in
 /// `class Funcdata`, `funcdata.hh:57-74`).
@@ -6549,7 +6552,8 @@ impl<'a> HighContext for HighReadView<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::funcdata_merge::FuncdataMergeExt;
+use super::*;
     use std::rc::Rc;
 
     use kuna_base::address::Address;

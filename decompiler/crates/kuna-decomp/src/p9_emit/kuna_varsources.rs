@@ -1,5 +1,6 @@
 //! Machine storage for declared variables, including homes removed by simplification.
 
+use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 

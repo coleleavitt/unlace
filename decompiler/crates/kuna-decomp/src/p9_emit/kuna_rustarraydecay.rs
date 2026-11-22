@@ -10,6 +10,7 @@ use crate::funcdata::Funcdata;
 use crate::printc::{op_key, PrintC};
 use crate::printlanguage::modifiers;
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 fn array_source(
     fd: &Funcdata,

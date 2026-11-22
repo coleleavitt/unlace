@@ -38,6 +38,7 @@ use kuna_decomp::decompile_drive::decompile_func;
 use kuna_decomp::options::register_option_elements;
 use kuna_decomp::sleigh_arch::{register_sleigh_arch_ids, LanguageDatabase};
 use kuna_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
+use kuna_decomp::funcdata_facing::FuncdataFacingExt;
 
 use kuna_sleigh::loadimage::LoadImage;
 use kuna_sleigh::loadimage_xml::register_loadimage_xml_ids;

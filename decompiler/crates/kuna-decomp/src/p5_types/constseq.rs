@@ -17,6 +17,7 @@ use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
 use crate::context::{OpId, VarnodeId};
 use crate::userop::{BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_STRNCPY, BUILTIN_WCSNCPY};
+use crate::funcdata_union::FuncdataUnionExt;
 
 /// Helper holding a data-flow edge and optionally a memory offset being COPYed
 /// into or from (C++ `ArraySequence::WriteNode`).

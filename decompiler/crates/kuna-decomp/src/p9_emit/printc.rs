@@ -85,6 +85,9 @@ use crate::printlanguage::{
     format_binary, modifiers, most_natural_base, parentheses, unicode_needs_escape, Atom, OpToken,
     PrintContext, ReversePolish, TagType, TokenType,
 };
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_union::FuncdataUnionExt;
 
 // ===========================================================================
 // PrintCCapability — the c-language back-end factory metadata

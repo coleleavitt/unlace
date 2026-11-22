@@ -9,6 +9,7 @@ use crate::funcdata::Funcdata;
 use crate::printc::{display_format, op_key, tokens, vn_key, PrintC};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) struct Operand {
     pub(crate) value: VarnodeId,

@@ -12,6 +12,7 @@ use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 use kuna_base::address::Address;
 use kuna_base::error::KunaResult;
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_union::FuncdataUnionExt;
 
 #[derive(Clone)]
 pub struct UseAnchor {

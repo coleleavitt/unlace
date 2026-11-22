@@ -29,6 +29,7 @@ use kuna_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataAliasExt;
 
 /// Bytes of the x86-64 SysV register save area (6 GPRs, 8 XMM registers).
 const SAVE_AREA: u64 = 176;

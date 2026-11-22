@@ -6,6 +6,7 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_metatype, Datatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) enum View {
     Whole,

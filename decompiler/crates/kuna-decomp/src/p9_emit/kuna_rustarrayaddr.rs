@@ -8,6 +8,7 @@ use crate::kuna_rustintegers::needs_integer_context;
 use crate::printc::{op_key, op_token, tokens, PrintC};
 use crate::printlanguage::{modifiers, Atom, OpToken, SyntaxHighlight, TagType, TokenType};
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) static RAW_ADDRESS: OpToken = op_token("&raw mut ", "", 1, 62, false, TokenType::UnaryPrefix, 0, 0);
 

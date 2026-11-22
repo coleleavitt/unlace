@@ -103,6 +103,8 @@ use kuna_num::opcodes::OpCode;
 
 use crate::action::{ruleflags, Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::funcdata::Funcdata;
+use crate::coreaction_casts::FuncdataCastExt;
+use crate::funcdata_merge::FuncdataMergeExt;
 
 // =============================================================================
 // ActionAssignHigh (coreaction.hh:340) — REALIZED

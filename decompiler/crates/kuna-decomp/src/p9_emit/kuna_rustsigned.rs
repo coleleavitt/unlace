@@ -6,6 +6,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_metatype, Datatype};
 use crate::funcdata::Funcdata;
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) struct SignedTextPlan {
     pub(crate) inputs: [VarnodeId; 2],

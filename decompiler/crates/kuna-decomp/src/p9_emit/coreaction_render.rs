@@ -119,6 +119,7 @@ use crate::funcdata::Funcdata;
 use crate::context::GlobalContainer;
 use crate::subflow::LaneDivide;
 use crate::transform::{LaneDescription, LanedRegister};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 // =============================================================================
 // ActionStackPtrFlow (coreaction.hh:89, coreaction.cc:496)

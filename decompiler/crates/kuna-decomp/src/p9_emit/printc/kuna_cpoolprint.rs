@@ -10,6 +10,7 @@ use crate::cpool::cpool_tag;
 use crate::dtype::type_metatype;
 use crate::kuna_lang::OutLang;
 use crate::printlanguage::SyntaxHighlight;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 impl PrintC {
     fn java(&self) -> bool {

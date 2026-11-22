@@ -71,6 +71,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::block::BlockKind;
 use crate::funcdata::Funcdata;
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::funcdata_spacebase::FuncdataAliasExt;
 
 /// Does Varnode `ptr` address `<base> + 0x28` (the x86-64 TLS canary slot)?
 /// (C++ `ptrIsCanarySlot`, `kuna_stackguard.cc:34`).

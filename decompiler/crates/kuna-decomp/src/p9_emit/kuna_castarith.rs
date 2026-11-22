@@ -51,6 +51,7 @@ use crate::cast::{CastStrategy, CastStrategyC};
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Why an `INT_ADD` keeps its integer form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

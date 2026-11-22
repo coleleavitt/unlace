@@ -36,6 +36,7 @@ use crate::funcdata::Funcdata;
 use crate::funcdata_varnode::AncestorRealistic;
 use crate::context::{OpId, VarnodeId};
 use crate::varmap::AliasChecker;
+use crate::funcdata_spacebase::FuncdataAliasExt;
 
 /// (kuna) The deferred argument-list retry one finalized call leaves behind.
 ///

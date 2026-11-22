@@ -47,6 +47,7 @@ use kuna_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// The most elements a move may copy and still be expanded.
 pub(crate) const MAX_ELEMENTS: u64 = 16;

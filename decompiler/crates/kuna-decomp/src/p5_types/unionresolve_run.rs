@@ -57,6 +57,7 @@ use crate::unionresolve::{
     score_return_type, score_tables, score_truncation, ConstantFitFacts, FloatConstFact,
     LockedProtoFacts, ResolvedUnion, MAX_PASSES, MAX_TRIALS, THRESHOLD,
 };
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Direction a trial pushes (C++ `ScoreUnionFields::Trial::dir_type`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -6,6 +6,7 @@ use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 use kuna_base::address::Address;
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Byte {

@@ -15,6 +15,7 @@ use kuna_base::types::int4;
 
 use crate::dtype::{type_metatype, Datatype};
 use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
+use crate::kuna_typequal::DatatypeQualExt;
 
 /// The c-language type speller.
 pub struct CSpeller;

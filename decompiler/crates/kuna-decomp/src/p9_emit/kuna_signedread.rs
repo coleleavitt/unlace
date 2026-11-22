@@ -20,6 +20,7 @@ use kuna_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// The signed type input `slot` of `op` must be cast to because the expression
 /// there prints as unsigned, or `None`.

@@ -11,8 +11,37 @@ use crate::context::{OpId, VarnodeId};
 use crate::fspec::Containment;
 use crate::funcdata::Funcdata;
 
-impl Funcdata {
-    pub(crate) fn kuna_record_call_transport(&mut self, first: VarnodeId) {
+/// [`Funcdata`] methods for outgoing-argument transport detection, kept out of the IR module.
+pub trait FuncdataCallTransportExt {
+    fn kuna_record_call_transport(&mut self, first: VarnodeId);
+    fn kuna_is_call_transport(&self, vn: VarnodeId) -> bool;
+    fn kuna_is_call_transport_projection(
+        &self,
+        vn: VarnodeId,
+        byte_offset: int4,
+        byte_size: int4,
+    ) -> bool;
+    fn kuna_is_register_storage(&self, address: &Address, size: int4) -> bool;
+    fn kuna_has_local_storage_use(&self, first: VarnodeId) -> bool;
+    fn kuna_has_prior_storage(
+        &self,
+        first: VarnodeId,
+        carrier: &Address,
+        instruction: &Address,
+    ) -> bool;
+    fn kuna_materializes_computation(&self, first: VarnodeId, instruction: &Address) -> bool;
+    fn kuna_only_argument_uses(&self, first: VarnodeId, carrier: &Address, size: int4) -> bool;
+    fn kuna_argument_storage_matches(
+        &self,
+        op: OpId,
+        slot: int4,
+        address: &Address,
+        size: int4,
+    ) -> bool;
+}
+
+impl FuncdataCallTransportExt for Funcdata {
+    fn kuna_record_call_transport(&mut self, first: VarnodeId) {
         self.kuna_mark_call_transport(first);
         let Some(value) = self.vbank().get(first) else {
             return;
@@ -72,7 +101,7 @@ impl Funcdata {
 
     /// A register copy is transport only when an earlier home exists and all
     /// remaining uses forward it through that register to ordinary call arguments.
-    pub fn kuna_is_call_transport(&self, vn: VarnodeId) -> bool {
+    fn kuna_is_call_transport(&self, vn: VarnodeId) -> bool {
         if !self.get_arch().name_style_angr {
             return false;
         }
@@ -109,7 +138,7 @@ impl Funcdata {
         self.kuna_only_argument_uses(vn, value.get_addr(), value.get_size())
     }
 
-    pub(crate) fn kuna_is_call_transport_projection(
+    fn kuna_is_call_transport_projection(
         &self,
         vn: VarnodeId,
         byte_offset: int4,
@@ -172,7 +201,7 @@ impl Funcdata {
             })
     }
 
-    pub(crate) fn kuna_has_local_storage_use(&self, first: VarnodeId) -> bool {
+    fn kuna_has_local_storage_use(&self, first: VarnodeId) -> bool {
         let Some(value) = self.vbank().get(first) else {
             return false;
         };

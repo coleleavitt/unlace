@@ -5,6 +5,7 @@ use crate::dtype::{type_metatype, Datatype};
 use crate::funcdata::Funcdata;
 use kuna_num::opcodes::OpCode;
 use std::rc::Rc;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) struct Transfer {
     pub input: VarnodeId,

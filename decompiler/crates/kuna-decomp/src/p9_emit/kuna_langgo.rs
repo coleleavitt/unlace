@@ -8,6 +8,7 @@ use crate::kuna_lang::*;
 use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
 use crate::printc::tokens;
 use crate::printlanguage::{OpToken, TokenType};
+use crate::funcdata_facing::FuncdataFacingExt;
 
 const fn binary(
     text: &'static str,

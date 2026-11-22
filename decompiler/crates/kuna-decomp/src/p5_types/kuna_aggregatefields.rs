@@ -19,6 +19,7 @@ use crate::action::Rule;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::Datatype;
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Longest equal-width COPY chain followed back to a declared input.
 const MAX_COPY_CHAIN: usize = 16;

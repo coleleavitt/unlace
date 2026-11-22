@@ -9,6 +9,7 @@ use crate::funcdata::Funcdata;
 use crate::kuna_stackobjects::{ByteSource, SourcePoint, StackObject};
 use kuna_base::address::Address;
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_union::FuncdataUnionExt;
 
 fn wider_scalar_parameter(fd: &Funcdata, address: &Address, size: i32) -> Option<i32> {
     if size <= 0 || !fd.get_func_proto().has_store() {

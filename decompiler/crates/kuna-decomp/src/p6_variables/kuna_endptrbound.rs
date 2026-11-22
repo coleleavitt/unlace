@@ -80,6 +80,7 @@ use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
 use crate::p0_knowledge::options::on_or_off;
 use crate::varmap::{MapState, RangeHint, RangeType, COPY_CONSTANT};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// Marshaling element `<endptrbound>` (kuna 4000+ range; 4168 was the previous
 /// high-water mark).

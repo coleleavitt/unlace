@@ -80,6 +80,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::dtype::{type_metatype, BitFieldTriple, Datatype};
 use crate::funcdata::Funcdata;
 use crate::context::VarnodeId;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// `func->getArch()->getDefaultDataSpace()->isBigEndian()` — the endianness the
 /// `BitFieldTransform` base records.  All bitfield rule bodies read it the same

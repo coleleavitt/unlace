@@ -37,6 +37,7 @@ use crate::action::{Action, ActionContext};
 use crate::context::{ArchContext, BlockId, TypeOp};
 use crate::dtype::{type_metatype, Datatype};
 use crate::fspec::{FuncCallSpecs, ProtoModel};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 const SP_OFF: u64 = 0x20;
 const SP_SIZE: int4 = 8;

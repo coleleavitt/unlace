@@ -52,6 +52,7 @@ use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
 use crate::merge::MergeContext;
 use crate::varnode::varnode_flags;
+use crate::funcdata_merge::FuncdataMergeExt;
 
 /// Run `Merge::hideShadows` over every `HighVariable` with a written instance
 /// (C++ `ActionHideShadow::apply`, `coreaction.cc:4976-4995`).  Returns the

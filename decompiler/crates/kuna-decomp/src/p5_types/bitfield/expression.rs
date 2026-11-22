@@ -35,6 +35,7 @@ use super::BitRange;
 use crate::dtype::{type_metatype, Datatype, TypeBitField};
 use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// `sizeof(uintb)` — the C++ `uintb` is `uint8`, i.e. 8 bytes.
 const SIZEOF_UINTB: int4 = 8;

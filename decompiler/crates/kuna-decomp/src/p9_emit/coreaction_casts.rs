@@ -65,6 +65,10 @@ use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
 use crate::unionresolve::ResolvedUnion;
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_union::FuncdataUnionExt;
 
 // =============================================================================
 // FuncdataCastContext — the read-only IR bridge for CastStrategyC.
@@ -1254,13 +1258,37 @@ fn load_store_space(data: &Funcdata, op: OpId) -> Option<Rc<kuna_base::space::Ad
 // ActionSetCasts driver + helpers (coreaction.cc:2407-2872), on Funcdata.
 // =============================================================================
 
-impl Funcdata {
+/// [`Funcdata`] methods for cast insertion (ActionSetCasts), kept out of the IR module.
+pub trait FuncdataCastExt {
+    fn action_set_casts(&mut self) -> int4;
+    fn cast_fixup_ptradd(&mut self, op: OpId);
+    fn cast_fixup_ptrsub(&mut self, op: OpId);
+    fn cast_resolve_union(&mut self, op: OpId, slot: int4, strat: &CastStrategyC) -> int4;
+    fn cast_input(&mut self, op: OpId, slot: int4, strat: &CastStrategyC) -> int4;
+    fn cast_input_resolution(
+        &mut self,
+        op: OpId,
+        slot: int4,
+        ct: &Rc<Datatype>,
+        _strat: &CastStrategyC,
+    ) -> bool;
+    fn cast_output(&mut self, op: OpId, strat: &CastStrategyC) -> int4;
+    fn cast_narrowed_call(&mut self, op: OpId, wide: Rc<Datatype>, unsigned: bool) -> int4;
+    fn cast_output_token(&mut self, op: OpId, strat: &CastStrategyC, tokenct: Rc<Datatype>) -> int4;
+    fn cast_insert_ptrsub_zero(&mut self, op: OpId, slot: int4, ct: Rc<Datatype>) -> OpId;
+    fn cast_try_resolution_adjustment(&mut self, dt: &Rc<Datatype>, op: OpId, slot: int4) -> bool;
+    fn cast_try_resolution_copy(&mut self, op: OpId) -> bool;
+    fn cast_check_pointer_issues(&mut self, op: OpId, _vn: VarnodeId);
+    fn rebuild_resolved(&self, unres_type: &Rc<Datatype>, field_num: int4) -> Option<ResolvedUnion>;
+}
+
+impl FuncdataCastExt for Funcdata {
     /// The `ActionSetCasts::apply` body (C++ `coreaction.cc:2812-2872`).
     ///
     /// Walks every printed op in dominance/basic-block order and drives
     /// `resolveUnion`/`castInput`/`castOutput`, inserting the explicit
     /// CAST/PTRSUB ops the rendered C needs.  Returns the number of changes made.
-    pub fn action_set_casts(&mut self) -> int4 {
+    fn action_set_casts(&mut self) -> int4 {
         self.start_cast_phase();
         crate::p9_emit::kuna_stackversions::prepare(self);
         crate::kuna_stackviews::prepare_casts(self);

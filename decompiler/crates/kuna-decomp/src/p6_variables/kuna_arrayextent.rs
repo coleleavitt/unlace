@@ -37,6 +37,7 @@ use crate::context::VarnodeId;
 use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
 use crate::varmap::{MapState, RangeHint, RangeType, COPY_CONSTANT};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// Upstream's four-element assumption only.
 pub const LEVEL_OFF: int4 = 0;

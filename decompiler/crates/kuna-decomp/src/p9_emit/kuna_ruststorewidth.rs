@@ -15,6 +15,8 @@ use crate::printlanguage::{modifiers, Atom, SyntaxHighlight, TagType};
 use kuna_base::address::{calc_mask, Address};
 use kuna_base::space::spacetype;
 use kuna_num::opcodes::OpCode;
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 fn integer(ty: &Datatype) -> Option<&'static str> {
     if ty.is_enum_type() {

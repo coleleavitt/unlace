@@ -16,6 +16,7 @@ use crate::cast::{CastContext, CastStrategy, CastStrategyC, IntPromotionCode, Vn
 use crate::context::OpId;
 use crate::dtype::{type_metatype, Datatype};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// The type the selector of the `BRANCHIND` `op`, Varnode `vn` behind `vr`,
 /// prints cast to, or `None`.

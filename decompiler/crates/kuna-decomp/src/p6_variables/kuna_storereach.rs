@@ -65,6 +65,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
 use crate::varmap::{MapState, RangeHint, RangeType};
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// Widest bounded reach, in bytes; a wider index is unbounded.
 const MAX_REACH: intb = 0x100;

@@ -33,6 +33,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::coreaction_casts::FuncdataCastContext;
 use crate::dtype::{type_metatype, Datatype, TypeFactory};
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 const DEPTH: u32 = 8;
 

@@ -16,6 +16,7 @@ use super::{
     eligible_effect_lane, overlaps, proven_unobserved, stack_memory_access, EffectRange,
     FrameRange, Save,
 };
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 const SLOT: u64 = u64::MAX - 7;
 

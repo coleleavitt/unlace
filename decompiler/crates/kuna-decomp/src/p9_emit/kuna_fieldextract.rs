@@ -4,6 +4,7 @@ use crate::context::OpId;
 use crate::dtype::{type_metatype, Datatype};
 use crate::funcdata::Funcdata;
 use std::rc::Rc;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 pub(crate) struct Extraction {
     pub target: Rc<Datatype>,

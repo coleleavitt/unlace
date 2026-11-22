@@ -33,6 +33,7 @@ use kuna_decomp::dtype::{type_metatype, Datatype, DatatypeKind, TypeFactoryImpl,
 use kuna_decomp::funcdata::Funcdata;
 use kuna_decomp::context::{ArchContext, OpId, TypeOp, VarnodeId};
 use kuna_decomp::unionresolve::ResolvedUnion;
+use kuna_decomp::funcdata_union::FuncdataUnionExt;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();

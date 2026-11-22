@@ -28,8 +28,61 @@ use crate::funcdata::Funcdata;
 use crate::context::OpId;
 use crate::unionresolve::ResolvedUnion;
 use crate::unionresolve_run::ScoreUnionFields;
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 
-impl Funcdata {
+/// [`Funcdata`] methods for union resolution along data flow, kept out of the IR module.
+pub trait FuncdataResolveFlowExt {
+    fn resolve_in_flow(&mut self, ct: &Rc<Datatype>, op: OpId, slot: int4) -> KunaResult<Rc<Datatype>>;
+    fn resolve_in_flow_union_like(
+        &mut self,
+        ct: &Rc<Datatype>,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Rc<Datatype>>;
+    fn resolve_in_flow_single_component(
+        &mut self,
+        ct: &Rc<Datatype>,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Rc<Datatype>>;
+    fn score_single_component(
+        &self,
+        parent: &Rc<Datatype>,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<int4>;
+    fn resolve_in_flow_partial(
+        &mut self,
+        ct: &Rc<Datatype>,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Rc<Datatype>>;
+    fn resolve_truncation(
+        &mut self,
+        ct: &Rc<Datatype>,
+        offset: int8,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Option<(int4, int8)>>;
+    fn resolve_truncation_union(
+        &mut self,
+        ct: &Rc<Datatype>,
+        offset: int8,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Option<(int4, int8)>>;
+    fn find_truncation(
+        &self,
+        ct: &Rc<Datatype>,
+        off: int8,
+        sz: int4,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Option<(int4, int8)>>;
+}
+
+impl FuncdataResolveFlowExt for Funcdata {
     /// `Datatype::resolveInFlow(op, slot)` dispatched against the live union
     /// scorer + cache (C++ `type.cc:578` base + the `TypePointer`/`TypeArray`/
     /// `TypeStruct`/`TypeUnion`/`TypePartialUnion` overrides).  `self` stands in
@@ -45,7 +98,7 @@ impl Funcdata {
     /// the cast plane (`ActionSetCasts::resolveUnion`) gates on `needsResolution()`
     /// before calling, but the base `return this` arm is kept so a non-resolution
     /// type is a no-op pass-through (the C++ `Datatype::resolveInFlow` body).
-    pub fn resolve_in_flow(&mut self, ct: &Rc<Datatype>, op: OpId, slot: int4) -> KunaResult<Rc<Datatype>> {
+    fn resolve_in_flow(&mut self, ct: &Rc<Datatype>, op: OpId, slot: int4) -> KunaResult<Rc<Datatype>> {
         match &ct.kind {
             // TypePointer::resolveInFlow (type.cc:1314-1333).
             //
@@ -290,7 +343,7 @@ impl Funcdata {
     /// This **writes** the per-function `union_map` cache (`setUnionField`), exactly
     /// as the C++ override does, so the print-time `findTruncation` read finds the
     /// resolved field.
-    pub fn resolve_truncation(
+    fn resolve_truncation(
         &mut self,
         ct: &Rc<Datatype>,
         offset: int8,
@@ -401,7 +454,7 @@ impl Funcdata {
     /// Read-only: no scoring is done, only a cached resolution is returned (the
     /// C++ findTruncation comment).  Returns `Some((field_index, newoff))` or
     /// `None`.  `self` stands in for `op->getParent()->getFuncdata()`.
-    pub fn find_truncation(
+    fn find_truncation(
         &self,
         ct: &Rc<Datatype>,
         off: int8,

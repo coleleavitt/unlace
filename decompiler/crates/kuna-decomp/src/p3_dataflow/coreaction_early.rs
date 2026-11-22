@@ -86,6 +86,7 @@ use kuna_num::opcodes::OpCode;
 
 use crate::action::{ruleflags, Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::funcdata::Funcdata;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 // =============================================================================
 // Setup actions (coreaction.hh:34-86)

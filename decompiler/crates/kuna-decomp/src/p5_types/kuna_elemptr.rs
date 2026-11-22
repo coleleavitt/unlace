@@ -82,6 +82,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_metatype, Datatype};
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
+use crate::funcdata_facing::FuncdataFacingExt;
 
 /// How many def-use hops the walk follows; the bound `ptrfromuse` uses.
 const HOP_CAP: usize = 10;

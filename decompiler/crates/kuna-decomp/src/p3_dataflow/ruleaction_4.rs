@@ -14,6 +14,7 @@ use std::rc::Rc;
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::funcdata::Funcdata;
 use crate::context::{OpId, VarnodeId};
+use crate::funcdata_spacebase::FuncdataAliasExt;
 
 // =============================================================================
 // Local opcode helper

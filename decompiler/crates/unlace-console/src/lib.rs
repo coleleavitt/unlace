@@ -43,6 +43,7 @@ pub mod kuna_console;
 pub mod kuna_constformat;
 pub mod kuna_declaredbytes;
 mod kuna_dwarfstack;
+mod kuna_esprom;
 pub mod kuna_framebase;
 pub mod kuna_hightarget;
 mod kuna_importslots;

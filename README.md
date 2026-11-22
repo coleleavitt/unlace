@@ -1,7 +1,9 @@
 # unlace
 
-unlace is Cole Leavitt's decompiler, written in Rust and built to be driven by agents as well as
-people. Its engine comes from [Noelo-Lab/kuna](https://github.com/Noelo-Lab/kuna), which began
+unlace is an **agent-first decompiler written in Rust**: the decisions inside the decompiler are
+exposed as named options that an agent (or a person) can flip per run, and `unlace catalog` lists
+them with the symptoms each one addresses. It ships an agent skill (`unlace install-skill`) and
+JSON output for every command, so an LLM can drive it end to end. Its engine comes from [Noelo-Lab/kuna](https://github.com/Noelo-Lab/kuna), which began
 as a Rust port of [Ghidra](https://github.com/NationalSecurityAgency/ghidra)'s decompiler and
 SLEIGH compiler. On top of that engine, unlace adds Apple platform support (Mach-O, chained
 fixups, the dyld shared cache, kernelcaches, Objective-C and Swift metadata, arm64e) and fixes

@@ -278,7 +278,9 @@ With `canaryglobal` (default on;
 `decompiler/crates/unlace-decomp/src/p7_regions/kuna_stackguard.rs (is_named_guard)`)
 a canary source is also an unwritten read of a global named `__stack_chk_guard`
 (`___stack_chk_guard` on Mach-O) or `__security_cookie`, reached directly or
-through the `INDIRECT` a call adds. That is the AArch64, ARM, PowerPC and i386
+through the `INDIRECT` a call adds, or a `LOAD` through the import slot that holds
+its address (`ptr_is_guard_slot`; the slot's name may come from the function
+symbol table). That is the AArch64, ARM, PowerPC and i386
 PIC shape, where the glibc canary is a global rather than the x86-64 TLS slot
 `fs:0x28`; Hex-Rays likewise recognises the canary by the global's name. The
 CBRANCH, no-return-handler and saved-slot rules are unchanged, so a function

@@ -121,7 +121,7 @@ pub fn check_input_trial_use(
         .get_active_input()
         .get_num_trials();
     for i in 0..num_trials {
-        if crate::decompile_drive::deadline_passed_in("action activeparam") {
+        if crate::kuna_budget::deadline_passed_in("action activeparam") {
             return;
         }
         if data

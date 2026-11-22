@@ -628,24 +628,21 @@ impl ActionContext {
 
     /// (unlace decompile-all watchdog) `true` once the cooperative per-function
     /// [`deadline`](ActionContext::deadline) has passed or the drive went over
-    /// its memory limit ([`budget_spent`](crate::decompile_drive::budget_spent)).
+    /// its memory limit ([`budget_spent`](crate::kuna_budget::budget_spent)).
     /// `None` (no budget — every console/parity path) short-circuits without
     /// touching the clock.
     #[inline]
     pub fn deadline_expired(&self) -> bool {
-        self.abandon
-            || self
-                .deadline
-                .is_some_and(crate::decompile_drive::budget_spent)
+        self.abandon || self.deadline.is_some_and(crate::kuna_budget::budget_spent)
     }
 
     /// [`deadline_expired`](Self::deadline_expired), naming `site` as where the
-    /// budget ran out ([`note_budget_site`](crate::decompile_drive::note_budget_site)).
+    /// budget ran out ([`note_budget_site`](crate::kuna_budget::note_budget_site)).
     #[inline]
     pub fn deadline_expired_at(&self, site: impl FnOnce() -> String) -> bool {
         let expired = self.deadline_expired();
         if expired && !self.abandon {
-            crate::decompile_drive::note_budget_site(site);
+            crate::kuna_budget::note_budget_site(site);
         }
         expired
     }

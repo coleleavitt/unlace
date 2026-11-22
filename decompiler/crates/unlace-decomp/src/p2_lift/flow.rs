@@ -4956,7 +4956,7 @@ truncating the fall-through here"
                 .obank()
                 .get(op)
                 .map_or(0, |o| o.get_addr().get_offset());
-            let _scope = crate::decompile_drive::JumpTableScope::enter(at);
+            let _scope = crate::kuna_budget::JumpTableScope::enter(at);
             if !for_inline && self.is_stated_tail_call(op) {
                 self.stated_tail_call(op)?;
                 continue;
@@ -4966,7 +4966,7 @@ truncating the fall-through here"
                     .get_jump_table(idx as int4)
                     .kuna_keeps_recovered_targets()
             });
-            let mut mode = if crate::decompile_drive::deadline_passed_in("jump-table recovery") {
+            let mut mode = if crate::kuna_budget::deadline_passed_in("jump-table recovery") {
                 Ok(None)
             } else {
                 let mode = self.data.recover_jump_table_flow(
@@ -4976,7 +4976,7 @@ truncating the fall-through here"
                     run_pipeline,
                     &mut shared_partial,
                 );
-                crate::decompile_drive::deadline_passed_in("jump-table recovery");
+                crate::kuna_budget::deadline_passed_in("jump-table recovery");
                 mode
             };
             // (kuna `switchextent`) A table nothing bounded: decode the
@@ -4992,7 +4992,7 @@ truncating the fall-through here"
                 && retried.is_none()
                 && (self.data.kuna_extent_tables.is_none() || wanted.is_some())
                 && self.data.get_arch().switch_extent
-                && !crate::decompile_drive::deadline_passed_in("jump-table recovery")
+                && !crate::kuna_budget::deadline_passed_in("jump-table recovery")
             {
                 rounds += 1;
                 let entry = self.data.get_address().clone();

@@ -16,8 +16,6 @@ pub mod graph;
 pub mod idiom;
 pub mod kuna_decodekit;
 pub mod kuna_fasthash;
-pub mod kuna_fnmemory;
-pub mod kuna_hostmem;
 pub mod libdecomp;
 pub mod paramid;
 pub mod remote_provider;

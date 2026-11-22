@@ -6026,11 +6026,9 @@ impl Heritage {
     /// (unlace decompile-all watchdog) Has the running pass's budget run out —
     /// its deadline passed, or its drive over the memory limit?
     fn deadline_passed(&self) -> bool {
-        let passed = self
-            .deadline
-            .is_some_and(crate::decompile_drive::budget_spent);
+        let passed = self.deadline.is_some_and(crate::kuna_budget::budget_spent);
         if passed {
-            crate::decompile_drive::note_budget_site(|| "heritage".to_string());
+            crate::kuna_budget::note_budget_site(|| "heritage".to_string());
         }
         passed
     }

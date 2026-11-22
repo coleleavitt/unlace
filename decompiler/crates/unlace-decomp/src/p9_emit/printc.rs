@@ -3721,7 +3721,7 @@ impl PrintC {
         let named = SameNamed::new(fd);
         let vlist: Vec<crate::context::VarnodeId> = fd.vbank().iter_loc().collect();
         for (k, vn) in vlist.into_iter().enumerate() {
-            if k % 256 == 0 && crate::decompile_drive::deadline_passed_in("rendering C") {
+            if k % 256 == 0 && crate::kuna_budget::deadline_passed_in("rendering C") {
                 break;
             }
             let high = match fd.vbank().get(vn).and_then(|v| v.get_high()) {
@@ -7128,7 +7128,7 @@ impl PrintC {
             sblocks_basic_head(fd, bb)
         };
         while let Some(inst) = cur {
-            if crate::decompile_drive::deadline_passed_in("rendering C") {
+            if crate::kuna_budget::deadline_passed_in("rendering C") {
                 break;
             }
             cur = fd.bb_op_next(inst);

@@ -332,6 +332,7 @@
 0325                  iteboolean
 0326                  gotosink
 0327                  crossjumptail
-0328                  paramcopyhoist
-0329        !         prototypewarnings
-0330                  stop
+0328                  guardedloop
+0329                  paramcopyhoist
+0330        !         prototypewarnings
+0331                  stop

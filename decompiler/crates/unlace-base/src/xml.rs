@@ -2298,7 +2298,8 @@ mod tests {
         // Merge of upstream/main into all (2026-11-22): upstream's stage tests plus the
         // fork-only ones, less the six of the options upstream superseded; then the
         // nine above from the 2026-11-22 upstream merge into unlace.
-        assert_eq!(count, 953, "corpus file count drifted");
+        // and kuna-sdkprotos / an imported C function takes its prototype from the SDK headers (option objcsdk)
+        assert_eq!(count, 955, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

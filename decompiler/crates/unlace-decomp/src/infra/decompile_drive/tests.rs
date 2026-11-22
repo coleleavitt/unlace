@@ -281,7 +281,9 @@ fn budget_site_is_the_first_probe_to_see_the_expiry() {
     assert_eq!(budget_site(), None);
     {
         let _table = crate::kuna_budget::JumpTableScope::enter(0x401026);
-        assert!(crate::kuna_budget::deadline_passed_in("jump-table basic model"));
+        assert!(crate::kuna_budget::deadline_passed_in(
+            "jump-table basic model"
+        ));
         crate::kuna_budget::note_budget_site(|| "action jumptable".to_string());
     }
     crate::kuna_budget::note_budget_site(|| "heritage".to_string());
@@ -309,7 +311,9 @@ fn each_drive_starts_with_no_budget_site_and_restores_the_outer_one() {
     {
         let _inner = super::DeadlineScope::enter(None);
         assert_eq!(budget_site(), None);
-        assert!(!crate::kuna_budget::deadline_passed_in("region structuring"));
+        assert!(!crate::kuna_budget::deadline_passed_in(
+            "region structuring"
+        ));
         assert_eq!(budget_site(), None);
     }
     assert_eq!(budget_site().as_deref(), Some("heritage"));
@@ -380,7 +384,10 @@ fn a_budget_probe_stays_spent_for_its_drive_and_names_no_site() {
         assert!((0..1000).all(|_| !crate::kuna_budget::budget_probe()));
     }
     let _drive = super::DeadlineScope::enter(Some(std::time::Instant::now()));
-    let stride = (0..1000).take_while(|_| !crate::kuna_budget::budget_probe()).count() + 1;
+    let stride = (0..1000)
+        .take_while(|_| !crate::kuna_budget::budget_probe())
+        .count()
+        + 1;
     assert!(stride <= 256, "first probe to ask the clock: {stride}");
     assert!(
         (0..10).all(|_| crate::kuna_budget::budget_probe()),
@@ -394,7 +401,10 @@ fn a_budget_probe_stays_spent_for_its_drive_and_names_no_site() {
             "a new drive starts unspent"
         );
     }
-    assert!(crate::kuna_budget::budget_probe(), "the outer drive is still spent");
+    assert!(
+        crate::kuna_budget::budget_probe(),
+        "the outer drive is still spent"
+    );
 }
 
 #[test]

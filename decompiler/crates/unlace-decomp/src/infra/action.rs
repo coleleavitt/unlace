@@ -633,10 +633,7 @@ impl ActionContext {
     /// touching the clock.
     #[inline]
     pub fn deadline_expired(&self) -> bool {
-        self.abandon
-            || self
-                .deadline
-                .is_some_and(crate::kuna_budget::budget_spent)
+        self.abandon || self.deadline.is_some_and(crate::kuna_budget::budget_spent)
     }
 
     /// [`deadline_expired`](Self::deadline_expired), naming `site` as where the

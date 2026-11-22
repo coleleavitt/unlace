@@ -16,11 +16,11 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionContext};
-use crate::kuna_budget::{deadline_passed, deadline_passed_in, DeadlineScope};
 use crate::architecture::Architecture;
 use crate::context::{HighVariableId, TypeOp};
 use crate::flow::{FlowEnvironment, FlowInfo};
 use crate::funcdata::{Funcdata, funcdata_flags};
+use crate::kuna_budget::{DeadlineScope, deadline_passed, deadline_passed_in};
 
 use unlace_sleigh::loadimage::ImageBytes;
 use unlace_sleigh::translate::Translate;
@@ -4101,8 +4101,7 @@ impl RenderBudget {
         if !self.spent_in("rendering C") {
             return None;
         }
-        let site = crate::kuna_budget::budget_site()
-            .unwrap_or_default();
+        let site = crate::kuna_budget::budget_site().unwrap_or_default();
         Some(KunaError::lowlevel(format!(
             "{BUDGET_EXCEEDED} ({} s) in {site}",
             self.secs

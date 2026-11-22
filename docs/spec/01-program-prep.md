@@ -7418,6 +7418,20 @@ both
   `swift.HeapObject *` would hide the first stored property behind
   `obj[1].isa`. The stage test `tests/stages/kuna-swiftruntime.xml` runs the
   stripped `swift_types_elf` off and on.
+  On arm64 the table also carries the runtime's register-specific retain and
+  release entry points (`swift/Runtime/CustomRRABI.h`, instantiated for
+  `swift_retain`, `swift_release`, `swift_bridgeObjectRetain` and
+  `swift_bridgeObjectRelease`): `swift_retain_x<N>` and
+  `swift_bridgeObjectRetain_x<N>` take the object in `x<N>` and return it in
+  `x0`, the two releases read `x<N>` and return nothing, for `N` in 1–15 and 19–28 (`x0` is the
+  plain entry point, `x16`/`x17` are call glue, `x18` is reserved, `x29`/`x30`
+  the frame and link registers). An optimized caller releases a value through
+  them without moving it into `x0`, where no convention places a parameter,
+  so the one parameter is explicit storage on the prototype (the
+  `objc_retain_x<N>` shape) and the call prints its argument:
+  `swift_release_x20(v)` for the bare `swift_release_x20()`. The stage test
+  `tests/stages/kuna-swiftrrregs.xml` runs `swift_rr_regs_macho`, an arm64
+  Mach-O assembled against the iOS libswiftCore.
   The concurrency runtime's entry points come from a second, generated table
   (`kuna_swiftconcurrency.rs`, from the Swift project's
   `swift/Runtime/Concurrency.h` by `tools/gen_swift_concurrency.py`, 64-bit

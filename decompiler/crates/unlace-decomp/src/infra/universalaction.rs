@@ -11,6 +11,7 @@
 //! pins kuna's current tree, not an unchanged upstream schedule. Tests also
 //! require [`UNPORTED_ALLOWLIST`] to remain empty.
 
+use std::borrow::Cow;
 use std::rc::Rc;
 
 use unlace_base::space::AddrSpace;
@@ -20,6 +21,8 @@ use crate::action::{
     Action, ActionDatabase, ActionGroup, ActionPool, ActionRestartGroup, Rule, RuleState,
     UNIVERSAL_NAME, ruleflags,
 };
+use crate::kuna_hooks::HookRegistry;
+use crate::kuna_phases::KunaPhase;
 
 /// Metadata for an omitted upstream pass, retained for API compatibility.
 #[derive(Debug, Clone, Copy)]
@@ -46,11 +49,13 @@ pub const UNPORTED_ALLOWLIST: &[UnportedEntry] = &[];
 pub struct RuleRow {
     /// The Rule's name (C++ 3rd `Rule(...)` ctor arg), used for the pool dump
     /// and the [`RuleState`].
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
     /// The `universalAction` group argument (the [`RuleState`] basegroup).
-    pub group: &'static str,
+    pub group: Cow<'static, str>,
+    /// The [`RuleState`] properties (C++ 2nd `Rule(...)` ctor arg).
+    pub flags: u32,
     /// Construct a fresh boxed Rule.
-    pub ctor: fn() -> Box<dyn Rule>,
+    pub ctor: Rc<dyn Fn() -> Box<dyn Rule>>,
 }
 
 /// A thunk constructing a fresh boxed leaf [`Action`].  A `Box<dyn Fn>` (not a
@@ -83,19 +88,28 @@ pub enum SchedNode {
         max: int4,
         children: Vec<SchedNode>,
     },
+    /// A schedule point that holds nothing: a phase boundary no callback is
+    /// registered for.  It adds no action and no listing line.
+    Empty,
 }
 
 impl SchedNode {
     /// Materialize this declarative node into a concrete engine [`Action`] tree
     /// (C++ the imperative `new ActionGroup(...) / addAction / addRule` calls).
     pub fn materialize(self) -> Box<dyn Action> {
-        match self {
+        self.materialize_node()
+            .unwrap_or_else(|| Box::new(ActionGroup::new(0, "")))
+    }
+
+    /// [`materialize`](Self::materialize), with `None` for [`SchedNode::Empty`].
+    fn materialize_node(self) -> Option<Box<dyn Action>> {
+        Some(match self {
             SchedNode::Action(ctor) => ctor(),
             SchedNode::Pool { flags, name, rules } => {
                 let mut pool = ActionPool::new(flags, name);
                 for row in rules {
                     let rule = (row.ctor)();
-                    pool.add_rule(RuleState::new(row.group, 0, row.name), rule);
+                    pool.add_rule(RuleState::new(row.group, row.flags, row.name), rule);
                 }
                 Box::new(pool)
             }
@@ -105,8 +119,8 @@ impl SchedNode {
                 children,
             } => {
                 let mut grp = ActionGroup::new(flags, name);
-                for child in children {
-                    grp.add_action(child.materialize());
+                for child in children.into_iter().filter_map(SchedNode::materialize_node) {
+                    grp.add_action(child);
                 }
                 Box::new(grp)
             }
@@ -117,12 +131,13 @@ impl SchedNode {
                 children,
             } => {
                 let mut grp = ActionRestartGroup::new(flags, name, max);
-                for child in children {
-                    grp.add_action(child.materialize());
+                for child in children.into_iter().filter_map(SchedNode::materialize_node) {
+                    grp.add_action(child);
                 }
                 Box::new(grp)
             }
-        }
+            SchedNode::Empty => return None,
+        })
     }
 
     /// Whether this node survives a `clone(grouplist)` filter — used to decide
@@ -133,10 +148,11 @@ impl SchedNode {
     fn survives(&self, grouplist: &ActionListFilter) -> bool {
         match self {
             SchedNode::Action(ctor) => grouplist.contains(ctor().get_group()),
-            SchedNode::Pool { rules, .. } => rules.iter().any(|r| grouplist.contains(r.group)),
+            SchedNode::Pool { rules, .. } => rules.iter().any(|r| grouplist.contains(&r.group)),
             SchedNode::Group { children, .. } | SchedNode::RestartGroup { children, .. } => {
                 children.iter().any(|c| c.survives(grouplist))
             }
+            SchedNode::Empty => false,
         }
     }
 
@@ -170,8 +186,8 @@ impl SchedNode {
                 let mut num = print_action_line(out, num, *flags, 0, depth, name);
                 out.push('\n');
                 let rdepth = depth + 1;
-                for r in rules.iter().filter(|r| grouplist.contains(r.group)) {
-                    print_rule_line(out, num, false, false, rdepth, r.name);
+                for r in rules.iter().filter(|r| grouplist.contains(&r.group)) {
+                    print_rule_line(out, num, false, false, rdepth, &r.name);
                     out.push('\n');
                     num += 1;
                 }
@@ -188,6 +204,7 @@ impl SchedNode {
                 children,
                 ..
             } => Self::print_container(out, num, *flags, name, depth, children, grouplist),
+            SchedNode::Empty => num,
         }
     }
 
@@ -328,9 +345,10 @@ macro_rules! act {
 macro_rules! rrow {
     ($name:expr_2021, $group:expr_2021, $ctor:expr_2021) => {
         RuleRow {
-            name: $name,
-            group: $group,
-            ctor: || Box::new($ctor),
+            name: Cow::Borrowed($name),
+            group: Cow::Borrowed($group),
+            flags: 0,
+            ctor: Rc::new(|| -> Box<dyn Rule> { Box::new($ctor) }),
         }
     };
 }
@@ -360,6 +378,25 @@ pub fn universal_sched(
     stackspace_index: Option<i32>,
     extra_pool_rules: Vec<RuleRow>,
     truncated: bool,
+) -> SchedNode {
+    universal_sched_hooked(
+        stackspace,
+        stackspace_index,
+        extra_pool_rules,
+        truncated,
+        &HookRegistry::default(),
+    )
+}
+
+/// [`universal_sched`] plus what `hooks` registers: its rules in the pools that
+/// own their groups, and a leaf action at each phase boundary that has a
+/// callback.  An empty registry yields the tree [`universal_sched`] does.
+pub fn universal_sched_hooked(
+    stackspace: Option<Rc<AddrSpace>>,
+    stackspace_index: Option<i32>,
+    extra_pool_rules: Vec<RuleRow>,
+    truncated: bool,
+    hooks: &HookRegistry,
 ) -> SchedNode {
     use crate::blockaction::{
         ActionBlockStructure, ActionBranchFlip, ActionFinalStructure, ActionNodeJoin,
@@ -1079,7 +1116,7 @@ pub fn universal_sched(
     oppool1_rules.extend(extra_pool_rules);
 
     // --- oppool2 (post-blockstructure, type-pointer rules) ----------------
-    let oppool2_rules: Vec<RuleRow> = vec![
+    let mut oppool2_rules: Vec<RuleRow> = vec![
         rrow!(
             "pushptr",
             "typerecovery",
@@ -1116,7 +1153,7 @@ pub fn universal_sched(
     ];
 
     // --- cleanup pool -----------------------------------------------------
-    let cleanup_rules: Vec<RuleRow> = vec![
+    let mut cleanup_rules: Vec<RuleRow> = vec![
         rrow!(
             "multnegone",
             "cleanup",
@@ -1231,6 +1268,8 @@ pub fn universal_sched(
             crate::bitfield::RuleInsertAbsorb
         ),
     ];
+
+    hooks.insert_rules(&mut [&mut oppool1_rules, &mut oppool2_rules, &mut cleanup_rules]);
 
     // (kuna) One shared lowered-switch hint store (the C++ file-static
     // `loweredStore`): the Detect half (fullloop) writes it, the Install half
@@ -1538,6 +1577,7 @@ pub fn universal_sched(
         max: 1,
         children: vec![
             act!(ActionStart::boxed("base")),
+            hooks.boundary(KunaPhase::P2),
             act!(ActionConstbase::boxed("base")),
             // (kuna) linuxsyscall (option `linuxsyscall`, default-OFF): name the
             // 32-bit Linux `int 0x80` sites.  Placed here, not in mainloop, for
@@ -1605,6 +1645,9 @@ pub fn universal_sched(
                 "protorecovery"
             )),
             fullloop,
+            hooks.boundary(KunaPhase::P3),
+            hooks.boundary(KunaPhase::P4),
+            hooks.boundary(KunaPhase::P5),
             act!(ActionMappedLocalSync::boxed("localrecovery")),
             act!(ActionStartCleanUp::boxed("cleanup")),
             SchedNode::Pool {
@@ -1630,9 +1673,11 @@ pub fn universal_sched(
             act!(ActionMergeType::boxed("merge")),
             act!(ActionHideShadow::boxed("merge")),
             act!(ActionCopyMarker::boxed("merge")),
+            hooks.boundary(KunaPhase::P6),
             act!(crate::kuna_typevote::ActionTypeVote::boxed("typerecovery")),
             act!(ActionLateDoNothing::boxed("blockrecovery")),
             act!(ActionBlockStructure::boxed("blockrecovery")),
+            hooks.boundary(KunaPhase::P7),
             act!(ActionPreferComplement::boxed("blockrecovery", false)),
             act!(ActionStructureTransform::boxed("blockrecovery", false)),
             // (kuna, option `branchflip`, default-off) angr-SAILR-style negated-
@@ -1726,6 +1771,7 @@ pub fn universal_sched(
             ),
             act!(crate::p8_structure::kuna_guardedloop::ActionGuardedLoop::boxed("blockrecovery")),
             act!(crate::p6_variables::kuna_paramcopyhoist::ActionParamCopyHoist::boxed("merge")),
+            hooks.boundary(KunaPhase::P8),
             act!(ActionPrototypeWarnings::boxed("protorecovery")),
             act!(ActionStop::boxed("base")),
         ],
@@ -1745,6 +1791,24 @@ pub fn build_universal_action(
     truncated: bool,
 ) -> Box<dyn Action> {
     universal_sched(stackspace, stackspace_index, extra_pool_rules, truncated).materialize()
+}
+
+/// [`build_universal_action`] over [`universal_sched_hooked`].
+pub fn build_universal_action_hooked(
+    stackspace: Option<Rc<AddrSpace>>,
+    stackspace_index: Option<i32>,
+    extra_pool_rules: Vec<RuleRow>,
+    truncated: bool,
+    hooks: &HookRegistry,
+) -> Box<dyn Action> {
+    universal_sched_hooked(
+        stackspace,
+        stackspace_index,
+        extra_pool_rules,
+        truncated,
+        hooks,
+    )
+    .materialize()
 }
 
 /// Install the universal tree and the default root group sets into an

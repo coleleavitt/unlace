@@ -2305,7 +2305,11 @@ mod tests {
         // and kuna-swiftstrcsel / a Swift literal's two words are paired along one branch arm
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-loweredswitchbits / a switch lowered to bit tests re-rolls
-        assert_eq!(count, 961, "corpus file count drifted");
+        // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start
+        // and kuna-aifdataveto / a function-shaped table the code reads as data is no entry (option aifdataveto)
+        // and kuna-importvote / an undeclared import takes the arguments its other call sites pass (option importvote)
+        // and kuna-rawpatterns / a headerless raw image is swept with the function-start patterns (option funcstart_patterns)
+        assert_eq!(count, 965, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

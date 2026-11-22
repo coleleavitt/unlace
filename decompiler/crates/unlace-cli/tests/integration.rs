@@ -635,6 +635,9 @@ mod cppsig_hidden_return;
 #[path = "globalwidth.rs"]
 mod globalwidth;
 
+#[path = "funcchunks_cli.rs"]
+mod funcchunks_cli;
+
 #[path = "xrefs_unflagged_cli.rs"]
 mod xrefs_unflagged_cli;
 

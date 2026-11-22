@@ -1,0 +1,47 @@
+<decompilertest>
+<binaryimage arch="x86:LE:64:default:gcc">
+<!--
+    A speculative gap entry the program only ever reads as data (option
+    aifdataveto, default on: the data read/write veto).
+
+    Fixture: decompiler/crates/unlace-analysis/tests/fixtures/aifdataveto_x86_64
+    (source alongside, stripped). `table` sits in .text after `reader`, looks like a
+    function (push rbp; mov rbp,rsp; ...; pop rbp; ret) and is only ever read
+    as data: `mov table(%rip),%eax; add table+4(%rip),%eax`.
+
+    Stage model: P1 program-prep, code-data-partition
+    (listing/kuna_accesswidth.rs data_targets over the decoded Listing; the
+    aif consumer drops a gap entry, and any other discovered entry, whose first
+    instruction the code loads from or stores to).
+
+    Both passes run `aif strict` (the aggressive preset). Pass 1 is
+    `aifdataveto off`: the table is in the inventory and loads by name. Pass 2
+    is the veto's default: the inventory no longer lists it.
+-->
+<bytechunk space="ram" offset="0x100000" readonly="true">
+c3
+</bytechunk>
+<symbol space="ram" offset="0x100000" name="harness_stub"/>
+</binaryimage>
+<script>
+  <com>clear architecture</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/aifdataveto_x86_64</com>
+  <com>option listing on</com>
+  <com>option aif strict</com>
+  <com>option aifdataveto off</com>
+  <com>read symbols</com>
+  <com>functions</com>
+  <com>load function sub_401020</com>
+  <com>decompile</com>
+  <com>print C</com>
+  <com>clear architecture</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/aifdataveto_x86_64</com>
+  <com>option listing on</com>
+  <com>option aif strict</com>
+  <com>read symbols</com>
+  <com>functions</com>
+  <com>quit</com>
+</script>
+<stringmatch name="AIFDATAVETO #1: off, the data table is in the inventory and decodes as a function" min="1" max="1">sub_401020\(void\)</stringmatch>
+<stringmatch name="AIFDATAVETO #2: on, the table the reader loads from is dropped" min="1" max="1">0x401020 sub_401020</stringmatch>
+</decompilertest>

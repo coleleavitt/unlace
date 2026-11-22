@@ -5,6 +5,23 @@
 //! clang's outlined arm64 `objc_retain_x<N>` / `objc_release_x<N>`, which take
 //! the object in `x<N>` and return a retain in `x0`, outside every calling
 //! convention.
+//!
+//! `objc_msgSend`, `objc_msgSendSuper`, `objc_msgSendSuper2` and `NSLog` are
+//! variadic. The sends take the receiver (or the `objc_super` record) and the
+//! selector in the first two argument registers, then the method's own
+//! arguments exactly as the method receives them. Unprototyped, a call to one
+//! is recovered from its register trials in the model's entry order, which on
+//! AArch64 lists `d0..d7` before `x0`: `[super initWithFrame:r]` printed
+//! `objc_msgSendSuper2(r.x,r.y,r.width,r.height,&sup,sel_initWithFrame_)`.
+//! `NSLog(NSString *format, ...)` is variadic, and Apple's AArch64 convention
+//! passes every variadic argument on the stack, so with no prototype the stack
+//! slots past seven unused `x` registers end the argument list and the `%@`
+//! values are dropped. Each is declared as `<objc/message.h>`, `objc-abi.h` and
+//! `<Foundation/NSObjCRuntime.h>` declare it: the fixed parameters, then `...`.
+//! The method arguments of a send are then the call's open tail, taken from
+//! the same register and stack trials as before but placed after the receiver
+//! and the selector. The return is left to recovery for the sends, since the
+//! method decides whether it comes back in `x0`, `d0` or nowhere.
 
 use std::rc::Rc;
 
@@ -92,6 +109,43 @@ fn pieces(name: &str, ret: &str, args: &[&str], tctx: &TypeCtx) -> Option<Protot
     Some(p)
 }
 
+/// What one variadic entry point declares before its `...`. Every fixed
+/// parameter is an unnamed `void *`: a receiver may be an instance or a class,
+/// and a typed or named parameter would rename the caller's variables and type
+/// a class method's receiver as `objc_object *`.
+#[derive(Clone, Copy)]
+enum Fixed {
+    /// `id self, SEL op`.
+    Send,
+    /// `struct objc_super *super, SEL op`.
+    SuperSend,
+    /// `NSString *format`, with a `void` return.
+    Log,
+}
+
+const VARIADIC: &[(&str, Fixed)] = &[
+    ("objc_msgSend", Fixed::Send),
+    ("objc_msgSendSuper", Fixed::SuperSend),
+    ("objc_msgSendSuper2", Fixed::SuperSend),
+    ("NSLog", Fixed::Log),
+];
+
+fn variadic(name: &str, fixed: Fixed, tctx: &TypeCtx) -> Option<PrototypePieces> {
+    let ptr = || decode_ivar_type("^v", tctx);
+    let (outtype, intypes) = match fixed {
+        Fixed::Send | Fixed::SuperSend => (None, vec![ptr()?, ptr()?]),
+        Fixed::Log => (Some(tctx.types.get_type_void().ok()?), vec![ptr()?]),
+    };
+    Some(PrototypePieces {
+        name: name.to_string(),
+        outtype,
+        innames: vec![String::new(); intypes.len()],
+        first_var_arg_slot: intypes.len() as i32,
+        intypes,
+        ..Default::default()
+    })
+}
+
 /// The prototypes, by entry address, for every runtime entry point `file`
 /// imports — on the `__stubs` entry a call targets and on the pointer slot it
 /// reads — and for every `objc_retain_x<N>` / `objc_release_x<N>`, imported
@@ -113,6 +167,8 @@ pub fn prototypes(
         };
         if let Some((name, ret, args)) = RUNTIME.iter().find(|(name, _, _)| *name == n) {
             out.extend(pieces(name, ret, args, tctx).map(|p| (imp.addr, p)));
+        } else if let Some(&(name, fixed)) = VARIADIC.iter().find(|(name, _)| *name == n) {
+            out.extend(variadic(name, fixed, tctx).map(|p| (imp.addr, p)));
         } else if let Some(reg) = outlined_register(n).filter(|_| arm64) {
             out.extend(outlined(n, reg, arch, tctx).map(|p| (imp.addr, p)));
         }

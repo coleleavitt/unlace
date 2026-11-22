@@ -1557,6 +1557,29 @@ offset variables). With `objc on` the categories render `-[Base(Extra) greet:]` 
 `-[Sub x]` reads `(int8)self + (int8)Sub::x`; with `objc off` the category methods
 are `sub_10000083c`… and the ivar load is `dat_100008388`.
 
+### `macho_objc_varargs_arm64` — runtime entry points declared variadic
+
+`macho_objc_varargs_arm64` (arm64, 50,512 bytes, SHA-256
+`657e470c2af90d516c359fedd537bf14ed94fa121b6b65a8d4780c8aa5478305`) is the fixture
+for the runtime prototypes in `analyzers/objc/kuna_objcruntime.rs`. Source
+`macho_objc_varargs.m`: root class `View` with `-initWithFrame:` taking a four-double
+`Rect`; `Panel : View` sends `[super initWithFrame:(Rect){8.0, 16.0, width, height}]`
+from `-initWithWidth:height:`; the C function `report` calls
+`NSLog(@"Error %@ parsing token payload %@", error, payload)`, whose two variadic
+values go on the stack. Built with clang and LLD 22.1.8:
+
+```bash
+clang -target arm64-apple-macos11 -fno-objc-arc -O1 -c macho_objc_varargs.m -o va.o
+ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains \
+         -undefined dynamic_lookup -x -e _main -o macho_objc_varargs_arm64 va.o
+```
+
+**Pinned VMAs:** `-[Panel initWithWidth:height:]`@`0x1000007b8`, `_report`@`0x1000007fc`.
+With `objc on` they read `objc_msgSendSuper2(&v1,sel_initWithFrame_,8.0,16.0,arg1,arg2)`
+and `NSLog(CFSTR("Error %@ parsing token payload %@"),a0,a1)`; without the
+prototypes the doubles came first and `NSLog` had only its format.
+`unlace-cli/tests/objc_varargs_cli.rs` pins both.
+
 ### `macho_objc_sdk_arm64` + `objc_sdk/Widget.h` — signatures from headers
 
 `macho_objc_sdk_arm64` (arm64, ~50 KB) is the fixture for the `objcsdk` header
@@ -2048,6 +2071,34 @@ llvm-strip -x macho_dataslotaddr_arm64
 
 **Pinned VMAs:** `_pass_addresses`@`0x100000510`; `__got` slots
 `$s7SwiftUI5ColorVAA4ViewAAWP`@`0x100004000`, `OBJC_CLASS_$_NSObject`@`0x100004008`.
+
+### `macho_swift_strsel_arm64` — Swift string literals picked per branch (`swiftstr`)
+
+`macho_swift_strsel_arm64` (arm64, ~51 KB, stripped) is the fixture for
+`tests/stages/kuna-swiftstrcsel.xml`: Swift string literals whose two words
+(count word, object word) are chosen per branch, by `csel` pairs or a switch,
+so each arm's words live in registers that are not numbered next to each other.
+Its source `macho_swift_strsel.swift` is built with swiftc 6.3 for
+`arm64-apple-macosx13.0` against a macOS SDK (an SDK is only a build input:
+the binary imports `libswiftCore` and `libSystem` and carries nothing from it):
+
+```bash
+SDK=/path/to/MacOSX13.3.sdk          # any macOS SDK with usr/lib/swift
+RES=/path/to/XcodeDefault.xctoolchain/usr/lib/swift
+swiftc -target arm64-apple-macosx13.0 -sdk "$SDK" -resource-dir "$RES" -O \
+       -module-name strsel -c macho_swift_strsel.swift -o m.o
+ld64.lld -arch arm64 -platform_version macos 13.0 13.3 -syslibroot "$SDK" \
+       -L "$SDK/usr/lib/swift" -lSystem -lswiftCore -o strsel m.o
+llvm-strip --strip-all -o macho_swift_strsel_arm64 strsel
+```
+
+**Pinned VMAs** (the unstripped `strsel` symbol table): `strsel.pick(_:_:)`
+(`$s6strsel4pickySiSb_SbtF`)@`0x100000d30` (two `csel` pairs per literal:
+"serviceItems"/"serviceDate", "shape"/"animal"), `strsel.tag(_:_:)`@`0x100000e30`
+("enabled"/"disabled" selected and stored into `Box.label`),
+`strsel.blank(_:)`@`0x100000eb0` (the empty literal stored),
+`Field.hash(into:)`@`0x100000f1c` (a switch over "serviceItems", "serviceDate",
+"serviceProvider", "odoMeter").
 
 ### `swift_metadata_elf` — a stripped Swift executable (`swiftmetadata`)
 
@@ -3043,6 +3094,23 @@ swift_release(v5); v3 = -1; }`; with symbols, `advance` takes `callfix.Counter
 own `self` to both `fee(for:)` calls. With `swiftcall off` the methods read
 `self` from an unnamed r13, the calls pass none, and `run` returns the throwing
 call's result unchecked.
+
+### `swift_infer_elf` — Swift functions the metadata does not bind (`swiftcall`)
+
+`swift_infer_elf` (x86-64 ELF, 11 KB, stripped) is the fixture for
+`tests/stages/kuna-swiftinfer.xml`. Its source `swift_infer_elf.swift` returns an
+escaping closure from `makeAdder`, whose partial-apply forwarder (0x24b0)
+reads the captured `Box` through r13; `usePair` (0x2840) reads both words of
+the `(Int, Int)` that `split` returns; `forward` (0x28a0) calls the throwing
+`mayThrow` with its own r12 and tests r12 after. Built with the swiftly 6.3
+toolchain:
+
+```bash
+swiftc -O -module-name inferfix -parse-as-library swift_infer_elf.swift -o swift_infer_syms_elf
+llvm-strip --strip-all -o swift_infer_elf swift_infer_syms_elf
+```
+
+SHA-256: `27e0e70757ea530825ba3e489f012c93566fa02f730e99b928ed951bd65ab162`.
 
 ### `swift_call_helper_elf` — a mutating struct call after a runtime helper (`swiftcall`)
 

@@ -334,7 +334,7 @@ wins.
 
 (kuna) An ELF32 whose `e_machine` is 249 (`EM_NANOMIPS`) selects
 `nanoMIPS:LE:32:default` or `nanoMIPS:BE:32:default` by its byte order
-(`decompiler/crates/kuna-analysis/src/loader/kuna_nanomips.rs`). The neutral
+(`decompiler/crates/unlace-analysis/src/loader/kuna_nanomips.rs`). The neutral
 object parser has no architecture for that machine, so the id is read from the
 ELF header itself, before the per-architecture table that would otherwise
 report an unsupported machine. nanoMIPS is its own encoding, not a mode of
@@ -2374,14 +2374,14 @@ index spaces too. The decompiler works on addressed code that reads and writes
 storage locations. Two steps at load close the gap, and after them a module is
 an ordinary image.
 
-*The module.* `decompiler/crates/kuna-analysis/src/loader/format/wasm.rs (Module)`
+*The module.* `decompiler/crates/unlace-analysis/src/loader/format/wasm.rs (Module)`
 reads the type, import, function, table, memory, global, export, start, element,
 code and data sections and the `name` custom section's function and global
 names. Every count is checked against the bytes left in its section before
 anything is allocated, and a malformed section is an error with a reason; a
 damaged `name` section only loses names.
 
-*The layout.* `decompiler/crates/kuna-analysis/src/loadimage_wasm.rs (WasmImage)`
+*The layout.* `decompiler/crates/unlace-analysis/src/loadimage_wasm.rs (WasmImage)`
 gives each index space a fixed place in one 32-bit space:
 
 | Address | Contents |
@@ -2411,7 +2411,7 @@ that is neither imported nor exported in a module whose every body was lowered
 
 *The lowering.* A body is validated code, so the height of the operand stack at
 each instruction is a static fact, and so is the type of each slot.
-`decompiler/crates/kuna-analysis/src/loader/kuna_wasmlower.rs (Lowering::lower)`
+`decompiler/crates/unlace-analysis/src/loader/kuna_wasmlower.rs (Lowering::lower)`
 walks a
 body with the validation algorithm's control stack and type stack and writes one
 16-byte record per operation that still does something once the stack is gone:
@@ -2469,13 +2469,13 @@ stack space. Operations p-code has no operator for are user ops (`rotl`,
 `f*.nearest` are the `FLOAT_TRUNC` and `FLOAT_ROUNDEVEN` user ops that chapter
 05 types as float to float.
 
-The dispatcher is `decompiler/crates/kuna-console/src/engine.rs
+The dispatcher is `decompiler/crates/unlace-console/src/engine.rs
 (bootstrap_wasm_bytes)`. Surfaces that need an `object::File` (`strings`,
 `xrefs`, `decompile-graph`) refuse a module with a capability error, as they do
 a TE. Measured on a 2.6 MB Go `wasip1` module: 1792 functions load in 0.08 s
 and every body lowers. Checked by compiling the printed C of functions from
 `tests/fixtures/wasm/calls.wasm` beside their source and comparing results on
-random inputs (`decompiler/crates/kuna-cli/tests/wasm_cli.rs`), and by
+random inputs (`decompiler/crates/unlace-cli/tests/wasm_cli.rs`), and by
 `tests/stages/kuna-wasm-module.xml`.
 
 ## 1.3 Loader markup
@@ -4069,6 +4069,90 @@ moves.
   `return -(a / b);` and `return f ? a / b : c;` keep only the high word or
   return nothing, where the off output returns every word, and the helper's
   stub and `-Os` parameter losses above keep it off as well.
+- **(kuna) The prebuilt type library** (`typelib`, default `auto`,
+  `decompiler/crates/unlace-analysis/src/analyzers/protos/kuna_typelib.rs (TypeLibPass)`,
+  `decompiler/crates/unlace-console/src/kuna_typelib.rs (seed)`):
+  the tables above are written by hand, so they stop where the hand stopped:
+  about 740 functions, and member layouts for nine records. The type library
+  is the same knowledge generated: every function a platform's C library
+  declares, with its prototype, and every record with the size, alignment and
+  member offsets the platform's compiler gives it. One library is built in, for
+  an x86-64 Linux ELF dynamically linked against glibc or musl (1,447
+  functions, 347 records, 190 typedefs); on every other image the option does
+  nothing. `off` reads no library and `typelib <file>` reads a library file in
+  place of the built-in one, for an image of the target the file names.
+
+  *Format.* A library is a text file. Three header lines name the format
+  version (`kuna-typelib 1`), the target (`target linux x86_64`) and the source
+  (`source musl 1.2.6`). Each entry after them is one line: `F name flag<TAB>C
+  declaration` for a function, `T name flag<TAB>C type` for a typedef, and `S
+  name flag size alignment` (`U` for a union) for a record, followed by one
+  indented line per member, `offset name<TAB>C type`. Types are spelled in C
+  and read by the C grammar `--types` and `--assert` use. A record is never
+  laid out by kuna: its size, alignment and member offsets are the ones in the
+  file, so a packed record (`epoll_event`) or an over-aligned one is carried
+  as the compiler built it, and a member the file leaves out (a bit-field, a
+  flexible array, a reserved word) is a hole. The `flag` says which C
+  libraries of the target the entry is true of: `*` for all, `m` for the source
+  library only, and `m=<integer type>` or `m=<size>,<alignment>` when the other
+  C library holds an integer, or a record of that width with other members,
+  under the same type name.
+
+  *Where it comes from.* `scripts/typelib/gen_musl.py` writes the built-in
+  library from the musl libc headers (MIT), release and tarball hash pinned in
+  the script. It reads the headers with clang, takes every declaration from
+  clang's syntax tree, and asks the compiler for each record's layout rather
+  than computing one. No header text is copied. The library also serves glibc
+  images, and which entries hold there is measured, not assumed: with
+  `--measure-glibc` the script compiles one assertion per entry against the
+  installed glibc headers (a function's type must be compatible and its name
+  must bind to the same symbol, a record's size, alignment and every public
+  member offset and width must be equal, an integer typedef's width and
+  signedness must be equal) and writes the names that fail to
+  `scripts/typelib/glibc-x86_64.differs`. Only that list of names and widths
+  enters the repository. Against glibc 2.43, 136 of the 1,984 names differ:
+  `strerror_r`, `basename`, `ioctl`, the `scanf` and `strtol` families that
+  glibc binds to `__isoc23_*` symbols, records such as `msghdr`, `rusage`,
+  `sysinfo` and `sigset_t`, and functions glibc does not have. 1,374 of the
+  1,447 functions are offered to a glibc image.
+
+  *Reading.* `TypeLibPass` runs at load and records only what needs the object
+  file: the image's target, whether it names glibc (`libc.so.6` or a `GLIBC_`
+  version in `.dynstr`) or musl (an `ld-musl` interpreter or a `libc.musl-`
+  dependency), and the imported functions with their addresses. An image that
+  names neither C library yields nothing. The library is consulted at the
+  analysis commit, after every other pass has contributed, and it declares only
+  an import no earlier source declared: a prototype from the tables above, from
+  debug information, or from a demangled name stands. Reading a prototype
+  interns the types it names, and through them the types those name; nothing
+  else in the library is interned, so an image that imports `poll` gains
+  `pollfd` and `nfds_t` and not the other 345 records. A type name the factory
+  already holds is used as it is and never redefined, which is how a record from
+  debug information or a `libctypes` shell wins. A `struct` tag no entry defines
+  becomes a record of unknown members. A prototype that passes or returns a
+  `long double` by value is not offered, because the compiler models do not
+  place one. A malformed library is refused with its line number, an entry
+  that does not parse is skipped alone, and a member that does not fit where
+  the file puts it is left a hole; sizes, offsets, line lengths, the file size
+  and the depth of one type's references are all bounded.
+
+  *After load.* A `--types` header or an `--assert prototype` for the same
+  function replaces the library's declaration. A header's definition of a
+  record the library already defined is rejected like any redefinition; `typelib
+  off` lets the header's layout stand. A callback slot the library now declares
+  (`qsort`'s comparator, `signal`'s handler) still gives its prototype to the
+  function passed there: the callback pass (chapter 04) reads the slot's storage
+  from the declared parameter when the callee has a declared prototype, where
+  it used to find no recorded argument storage and say nothing.
+
+  LOSS: a typed callee moves its callers. A pointer parameter that names a
+  record sizes the stack object whose address is passed, so a caller that passes
+  the address of something else at that slot (the first member of a larger
+  local, a buffer reused under two types) prints that object as the record. An
+  `int` result returned through a function whose own return is recovered as the
+  whole register prints the unset upper half (`CONCAT44(v3,getrlimit(7,&v5))`).
+  Both are what any declared prototype does, including the tables above; the
+  library reaches about twice as many functions.
 - **(kuna) Measured libc signatures** (`libcsigs`,
   `decompiler/crates/unlace-analysis/src/analyzers/protos/kuna_libcsigs.rs (LibcSigsPass)`):
   the second, larger half of the same table, closing most of the LOSS above. Which

@@ -1724,6 +1724,9 @@ pub struct Architecture {
     /// (kuna) Gate the Cortex-M System Control Space globals (`cortexmscs`);
     /// default on. Inert unless the image is a Cortex-M one.
     pub analysis_cortexmscs: bool,
+    /// (kuna `typelib`) The prebuilt type library the analysis commit reads;
+    /// default `auto`.
+    pub analysis_typelib: crate::kuna_typelib::TypeLib,
     /// (kuna) Gate the string-literal pass (`strings`); default on.
     pub analysis_strings: bool,
     /// (kuna) Gate the 2-byte (UTF-16LE) width of the string-literal pass
@@ -3055,6 +3058,7 @@ impl Architecture {
             analysis_dwarfscopes: true,
             analysis_uefi: false,
             analysis_cortexmscs: false,
+            analysis_typelib: crate::kuna_typelib::TypeLib::Auto,
             analysis_x86listingswitch: false,
             analysis_addrtakenentry: false,
             analysis_flowmode: false,
@@ -3496,6 +3500,9 @@ impl Architecture {
         // and the layout value defaults to `opaque`: the field layouts are the
         // `glibc` value, which is opt-in.
         self.analysis_libctypes_glibc = false;
+        // (kuna) The prebuilt type library -- default `auto`: the built-in
+        // library on a target that has one, nothing anywhere else.
+        self.analysis_typelib = crate::kuna_typelib::TypeLib::Auto;
         // (kuna) DIV-141 built-in Win32 API signature table -- default-ON.
 
         self.analysis_tlsnames = true;

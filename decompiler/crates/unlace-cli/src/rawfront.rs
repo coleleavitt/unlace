@@ -220,6 +220,16 @@ pub fn prepare(sub: &str, args: &[String]) -> Result<Prepared, String> {
             .iter()
             .filter(|p| !p.registers.is_empty())
         {
+            let renamed;
+            let p = if unlace_analysis::cortexmscs::names_a_type(&p.type_name) {
+                renamed = unlace_analysis::loader::firmware::svd::Peripheral {
+                    type_name: format!("{}_{}", device.c_name(), p.type_name),
+                    ..p.clone()
+                };
+                &renamed
+            } else {
+                p
+            };
             if declared.insert(p.type_name.clone()) {
                 out.extend(["--assert".into(), format!("typedef {}", p.c_struct())]);
             }

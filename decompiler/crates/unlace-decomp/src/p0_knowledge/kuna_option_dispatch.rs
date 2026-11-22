@@ -836,6 +836,7 @@ kuna_options! { self, p1;
     },
     "tlsnames" => on_off!(analysis_tlsnames, "Gate the static-TLS naming (`tlsnames`); default on."),
     "uefi" => on_off!(analysis_uefi, "Gate the UEFI module markup pass (`uefi`); default on."),
+    "cortexmscs" => on_off!(analysis_cortexmscs, "Cortex-M System Control Space globals"),
     "strings" => on_off!(analysis_strings, "String-literal analysis pass"),
     "widestrings" => {
         on_off!(analysis_widestrings, "UTF-16LE width of the string-literal pass")

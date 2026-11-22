@@ -88,7 +88,12 @@ pub(crate) fn latecse_apply(data: &mut Funcdata) -> i32 {
     count
 }
 
-/// Runs [`latecse_apply`] when option `latecse` is on.
+/// How many times the merge is repeated: merging two reads of a value exposes
+/// the identical ops that read their outputs (`SUBPIECE`, then the `INT_ADD`,
+/// then the `INT_MULT` over it), one layer a round.
+const MAX_ROUNDS: usize = 8;
+
+/// Runs [`latecse_apply`] to a fixpoint when option `latecse` is on.
 pub struct ActionLateCse {
     base: ActionBase,
 }
@@ -119,7 +124,13 @@ impl Action for ActionLateCse {
         if !data.get_arch().late_cse {
             return 0;
         }
-        self.base.count += latecse_apply(data);
+        for _ in 0..MAX_ROUNDS {
+            let merged = latecse_apply(data);
+            self.base.count += merged;
+            if merged == 0 {
+                break;
+            }
+        }
         0
     }
 }

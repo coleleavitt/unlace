@@ -67,6 +67,8 @@
 //! without C's own spelling the target prints the upstream `code *`, and nothing
 //! here runs.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
@@ -79,8 +81,6 @@ use crate::context::{HighVariableId, OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::fspec::{FuncProto, ParameterPieces, ProtoParameter, PrototypePieces};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
-use crate::funcdata_union::FuncdataUnionExt;
 
 /// A call through a field of a synthesized record: the record, the field's
 /// offset, and the type the call states, or `None` when the function's calls

@@ -12,6 +12,7 @@
 //! sign-extends. Such a read casts the expression back to the signed integer
 //! of its size, `(long)(int)(a0 - 1U)`.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::types::int4;
@@ -20,7 +21,6 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// The signed type input `slot` of `op` must be cast to because the expression
 /// there prints as unsigned, or `None`.

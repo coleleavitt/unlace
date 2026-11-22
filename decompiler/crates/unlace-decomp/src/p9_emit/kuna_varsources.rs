@@ -1,5 +1,6 @@
 //! Machine storage for declared variables, including homes removed by simplification.
 
+use crate::kuna_calltransport::FuncdataCallTransportExt;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -11,7 +12,6 @@ use unlace_num::opcodes::OpCode;
 use crate::architecture::Architecture;
 use crate::context::HighVariableId;
 use crate::funcdata::Funcdata;
-use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
 
 #[derive(Debug, Clone)]
 pub struct StorageSource {

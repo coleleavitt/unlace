@@ -67,13 +67,13 @@ fn surface_count_is_101() {
 }
 
 #[test]
-fn settable_count_is_308() {
-    assert_eq!(kuna_num_settables(), 308);
-    assert_eq!(SETTABLE_TABLE.len(), 308);
+fn settable_count_is_314() {
+    assert_eq!(kuna_num_settables(), 314);
+    assert_eq!(SETTABLE_TABLE.len(), 314);
 }
 
 #[test]
-fn tier_counts_are_63_core_153_transform_92_analysis() {
+fn tier_counts_are_65_core_153_transform_96_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -85,7 +85,7 @@ fn tier_counts_are_63_core_153_transform_92_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (63, 153, 92));
+    assert_eq!((core, transform, analysis), (65, 153, 96));
 }
 
 #[test]
@@ -452,6 +452,9 @@ fn option_values_live_value_present_for_129() {
         "codestrings",
         "protomerge",
         "canaryglobal",
+        // (kuna) Jump-thunk naming: a commit gate read console-side, like
+        // `stubbinds` above. Default-on.
+        "thunknames",
         // (kuna) ARM literal-pool inference — an analysis-pass gate with no codegen
         // live reader (read console-side via kuna_live_value), same as
         // `tailcallentry` above. Default-off, ARM-only.
@@ -477,6 +480,8 @@ fn option_values_live_value_present_for_129() {
         "blobs",
         // (kuna) The Swift type-layout arm's gate, read inside that pass.
         "swifttypes",
+        // (kuna) The Swift helper arm's gate, read inside the metadata pass.
+        "swifthelpers",
         // (kuna) Objective-C instance layouts — same commit-side gate as `objc`.
         "objcivars",
         // (kuna) IOKit class and vtable recovery -- an analysis-pass gate on XNU
@@ -490,6 +495,11 @@ fn option_values_live_value_present_for_129() {
         "swiftcall",
         // (kuna) The Swift runtime prototype pass gate.
         "swiftruntime",
+        // (kuna) The Swift @objc-thunk naming arm's gate, read at the commit.
+        "swiftobjcthunk",
+        // (kuna) The Swift value-witness arm's gate, read inside that pass and
+        // by the decompiler's witness-table vote (`ArchContext`).
+        "valuewitness",
         // (kuna) PE PDB metadata recovery — an analysis-pass gate with no codegen
         // live reader (read console-side via kuna_live_value), like the gates around
         // it. Default-on (DIV-129), PE-only, `.pdb`-sidecar-gated.
@@ -952,7 +962,7 @@ fn option_values_live_value_present_for_129() {
     // no codegen live reader; its live value is read console-side via
     // `kuna_live_value`, like `narrowargs`/`protoorder`.
     // Recounted after merging upstream/main (2026-11-22): the fork's live-field rows plus upstream's.
-    assert_eq!(with_live, 130);
+    assert_eq!(with_live, 132);
 }
 
 #[test]
@@ -1251,6 +1261,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `persistcalls`; its P3 row sits after `readonlycalls`.
     // +1 for `copywaves`; its P3 row sits after `deadwaves`.
     // +1 for `deadcascade`; its P3 row sits after `copywaves`.
+    // +1 for `valuewitness`; its P1 row sits after `swiftcall`.
     // +2 for `stubtailcall` (after `mappedflowboundary`) and `gotimportproto` (after `pltlocal`).
     // +1 for `aggregatefields`; its P5 row sits after `fieldtype`.
     // +1 for `ppcapu`; its P1 row sits after `ifuncfpret`.
@@ -1274,7 +1285,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `chkstkdarwin`, its P2 row after `msvcftol`.
     // +1 for `calleeargs`; its P4 row sits after `argclobber`.
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
-    assert_eq!(json.matches("},\n").count(), 307);
+    assert_eq!(json.matches("},\n").count(), 313);
 }
 
 #[test]

@@ -22,6 +22,7 @@
 //! mapping (as the stack-guard strip does for the canary slot), so dead-code
 //! removes the spills. An unlocked prototype is marked variadic.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -29,7 +30,6 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataAliasExt;
 
 /// Bytes of the x86-64 SysV register save area (6 GPRs, 8 XMM registers).
 const SAVE_AREA: u64 = 176;

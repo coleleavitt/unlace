@@ -28,6 +28,7 @@
 //! promotion cannot change it.  Output languages without integer promotion (Rust)
 //! get nothing.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::types::{int4, uint4};
@@ -38,7 +39,6 @@ use crate::context::{OpId, VarnodeId};
 use crate::coreaction_casts::FuncdataCastContext;
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// The cast a narrowed argument in `slot` of the CALL/CALLIND `op` needs so its C
 /// value matches the zero-extended value the binary passes, or `None`.

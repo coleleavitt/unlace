@@ -1,3 +1,4 @@
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -15,7 +16,6 @@ use super::{
     MAX_CALLER_SCAN_OPS, caller_home_cell, caller_home_unobserved, frame_value_overlaps,
     is_home_slot, verified_home_gap,
 };
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 const HOME: i64 = -40;
 

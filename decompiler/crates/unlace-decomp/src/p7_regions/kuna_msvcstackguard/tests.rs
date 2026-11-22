@@ -23,6 +23,7 @@
 //     return-storage preservation but remains in the function.
 
 use super::*;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 use std::rc::Rc;
 
@@ -37,7 +38,6 @@ use crate::action::{Action, ActionContext};
 use crate::context::{ArchContext, BlockId, TypeOp};
 use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::{FuncCallSpecs, ProtoModel};
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 const SP_OFF: u64 = 0x20;
 const SP_SIZE: int4 = 8;

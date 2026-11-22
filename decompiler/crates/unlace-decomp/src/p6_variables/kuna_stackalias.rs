@@ -8,7 +8,7 @@
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataAliasExt;
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use std::collections::BTreeSet;
 use unlace_num::opcodes::OpCode;
 

@@ -60,6 +60,7 @@
 //! `return v` that `ActionReturnSplit` (the next action in the `returnsplit`
 //! group) duplicates into each predecessor, eliminating the goto/label.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -71,7 +72,6 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::block::BlockKind;
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataAliasExt;
 
 /// Does Varnode `ptr` address `<base> + 0x28` (the x86-64 TLS canary slot)?
 /// (C++ `ptrIsCanarySlot`, `kuna_stackguard.cc:34`).

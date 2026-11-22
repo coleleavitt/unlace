@@ -9,6 +9,7 @@
 //! unless `intPromotionType` shows its promoted value extends the way that
 //! type does.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;
@@ -16,7 +17,6 @@ use crate::cast::{CastContext, CastStrategy, CastStrategyC, IntPromotionCode, Vn
 use crate::context::OpId;
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// The type the selector of the `BRANCHIND` `op`, Varnode `vn` behind `vr`,
 /// prints cast to, or `None`.

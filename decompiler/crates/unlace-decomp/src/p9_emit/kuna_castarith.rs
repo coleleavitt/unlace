@@ -42,6 +42,7 @@
 //! address-like beside an integer cast to a pointer (`table[i]` compiles to the
 //! same `INT_ADD`, with the table as the constant).
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::types::{int4, uintb};
@@ -51,7 +52,6 @@ use crate::cast::{CastStrategy, CastStrategyC};
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Why an `INT_ADD` keeps its integer form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

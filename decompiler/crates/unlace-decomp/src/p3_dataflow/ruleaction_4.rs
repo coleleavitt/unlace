@@ -6,6 +6,7 @@
 //! bookkeeping. Remaining architecture-dependent limitations are documented at
 //! their call sites.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use std::rc::Rc;
 use unlace_base::address::{Address, calc_mask, leastsigbit_set, sign_extend_sized};
 use unlace_base::types::{Wrap, int4, uintb};
@@ -14,7 +15,6 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataAliasExt;
 
 // =============================================================================
 // Local opcode helper

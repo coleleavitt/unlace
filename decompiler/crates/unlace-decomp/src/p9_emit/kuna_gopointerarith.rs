@@ -1,12 +1,12 @@
 //! Preserve a live Go pointer when byte arithmetic survives as an integer add.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 use crate::printc::{PrintC, display_format, op_key, tokens, vn_key};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 use unlace_num::opcodes::OpCode;

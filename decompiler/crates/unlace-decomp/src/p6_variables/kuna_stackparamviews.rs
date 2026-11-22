@@ -1,12 +1,12 @@
 //! Incoming parameter values and later objects share frame storage, not variable identity.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use crate::context::{HighVariableId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_union::FuncdataUnionExt;
 use crate::kuna_stackobjects::{ByteSource, SourcePoint, StackObject};
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;

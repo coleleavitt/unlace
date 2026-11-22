@@ -52,6 +52,7 @@
 //! in: the drive then analyzes a freshly built copy of the function without
 //! the guard (`withdraw_spoiled_guard`), which prints the unguarded analysis.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
@@ -64,7 +65,6 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::varmap::{MapState, RangeHint, RangeType};
 
 /// Widest bounded reach, in bytes; a wider index is unbounded.

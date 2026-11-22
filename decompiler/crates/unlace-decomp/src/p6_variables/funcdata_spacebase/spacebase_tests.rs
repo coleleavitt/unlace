@@ -5,6 +5,8 @@
 // unconditional), so a hand-built fixture with a stack spacebase suffices to pin
 // it.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseLocalExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -16,7 +18,6 @@ use unlace_base::types::int4;
 
 use crate::context::{ArchContext, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 const SP_OFF: u64 = 0x20;
 const SP_SIZE: int4 = 8;

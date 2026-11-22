@@ -42,6 +42,7 @@
 //! expose; absent it the `FLOAT` constant arm takes the C++ `format == 0` branch
 //! (`score = -1`), recorded as a loss.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::address::sign_extend;
@@ -52,7 +53,6 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 use crate::unionresolve::{
     ConstantFitFacts, FloatConstFact, LockedProtoFacts, MAX_PASSES, MAX_TRIALS, ResolvedUnion,
     THRESHOLD, compute_best_index, deref_pointer, score_constant_fit, score_locked_type,

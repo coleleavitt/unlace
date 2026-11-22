@@ -25,6 +25,7 @@
 //! stays a hole-filled argument. A Go image passes arguments in registers the
 //! cspec calls scratch, so the rule stands down there.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
@@ -34,7 +35,6 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataAliasExt;
 use crate::varmap::AliasChecker;
 
 /// Flag trial `i` of call spec `idx` for [`recheck`] when one of `loads`, the

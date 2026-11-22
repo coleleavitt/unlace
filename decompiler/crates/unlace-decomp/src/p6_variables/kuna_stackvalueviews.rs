@@ -1,10 +1,10 @@
 //! Coalesced register instances keep the scalar view of their shared frame symbol.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
 use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_union::FuncdataUnionExt;
 use crate::unionresolve::ResolvedUnion;
 
 pub(crate) fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {

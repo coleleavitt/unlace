@@ -25,6 +25,7 @@
 //! and from there over each following constant-initialised local. Where
 //! upstream's merge reaches further on its own, the array is upstream's.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, sign_extend};
@@ -36,7 +37,6 @@ use unlace_num::opcodes::OpCode;
 use crate::context::VarnodeId;
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
 
 /// Upstream's four-element assumption only.

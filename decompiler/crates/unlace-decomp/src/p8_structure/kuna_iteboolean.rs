@@ -79,6 +79,7 @@
 //! [`ActionIteBoolean::apply`] early-returns, nothing is marked, and output is
 //! byte-identical.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::error::KunaResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -92,7 +93,6 @@ use crate::op::pcodeop_addlflags;
 use crate::options::on_or_off;
 use crate::p8_structure::kuna_iteregion::{leaf_bblock, printed_ops, same_storage};
 
-use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::marshal::ElementId;
 
 /// Marshaling element `<iteboolean>` (kuna).  ElementIds live in the 4000+ range

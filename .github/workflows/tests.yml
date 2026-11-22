@@ -41,8 +41,60 @@ defaults:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # A CI build is always from scratch, so incremental state is dead weight in the cache.
+  CARGO_INCREMENTAL: "0"
 
 jobs:
+  # Seconds-long checks in their own job, so a formatting or tooling slip fails in about a
+  # minute instead of after the gates job's build.
+  tidy:
+    name: tidy (rustfmt, Python tooling, test layout)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable) with rustfmt
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt
+          rustup default stable
+
+      - name: rustfmt (edition 2024 style, decompiler/rustfmt.toml)
+        run: cd decompiler && cargo fmt --all --check
+
+      # scripts/check_test_layout.py plus the scripts/tests unit tests.
+      - name: Python tooling unit tests
+        run: make test-tools
+
+      - name: actionlint (workflows, with shellcheck on their scripts)
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable) with clippy
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: decompiler
+          key: clippy
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # Only these three crates are clean. The rest of the workspace has about 2000 warn-level
+      # findings and about 490 `disallowed_types` errors (HashMap/HashSet, decompiler/clippy.toml),
+      # mostly in unlace-decomp, so a workspace-wide clippy would fail until those are fixed.
+      - name: Lint the CLI and the base and numeric libraries (-D warnings)
+        run: make lint
+
   gates:
     name: parity gates
     runs-on: ubuntu-26.04
@@ -50,19 +102,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # integrations/web/build.sh generates /dev-viz from git history.
-          fetch-depth: 0
-
-      - name: Python tooling unit tests
-        run: make test-tools
+          # integrations/web/build.sh generates /dev-viz from git history; nothing else
+          # needs it, and the full history costs about 30 s.
+          fetch-depth: ${{ vars.UNLACE_WEB == 'true' && '0' || '1' }}
 
       - name: Install Rust (stable)
         run: |
-          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup toolchain install stable --profile minimal
           rustup default stable
-
-      - name: rustfmt (edition 2024 style, decompiler/rustfmt.toml)
-        run: cd decompiler && cargo fmt --all --check
 
       # The browser front-end (integrations/web, unlace-wasm) is opt-in: its steps run only
       # when the repository variable UNLACE_WEB is `true`.
@@ -71,16 +118,36 @@ jobs:
         run: rustup target add wasm32-wasip1
 
       # Same cache action and workspace the release/pages workflows use.
+      # Only main writes the caches: PR runs read them, and their own entries would only
+      # crowd main's out of the repository's cache quota.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: decompiler
           key: gates
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build binaries and compile the SLEIGH specs
-        run: make binaries specs
+      - name: Build binaries
+        run: make binaries
 
-      - name: Lint the CLI and the base and numeric libraries
-        run: make lint
+      # The .sla files depend only on the spec sources and the SLEIGH compiler (slacomp and
+      # the crates it builds from), so they are reused until one of those changes.
+      - name: Restore the compiled SLEIGH specs
+        id: sla
+        uses: actions/cache/restore@v4
+        with:
+          path: specs/**/*.sla
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+
+      - name: Compile the SLEIGH specs
+        if: steps.sla.outputs.cache-hit != 'true'
+        run: make specs
+
+      - name: Save the compiled SLEIGH specs
+        if: steps.sla.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: specs/**/*.sla
+          key: ${{ steps.sla.outputs.cache-primary-key }}
 
       # `.sla` files are gitignored build artifacts and EVERY datatest decodes
       # through them. `make test` would bootstrap them on demand, but asserting
@@ -217,10 +284,12 @@ jobs:
       || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-26.04
     timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write   # lets the Repowise upload prove it comes from this repository
     # Full debug information across the test executables can fill the runner disk.
     # Keep backtrace line numbers and the workspace's debug/overflow checks.
     env:
-      CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
@@ -231,14 +300,35 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
+      # cache-on-failure: one failing test must not throw away the dependency build.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: decompiler
           key: rust-test-line-tables
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
 
       # Missing or unusable required processor specs fail the tests.
+      #
+      # The .sla files depend only on the spec sources and the SLEIGH compiler (slacomp and
+      # the crates it builds from), so they are reused until one of those changes.
+      - name: Restore the compiled SLEIGH specs
+        id: sla
+        uses: actions/cache/restore@v4
+        with:
+          path: specs/**/*.sla
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+
       - name: Compile the SLEIGH specs
+        if: steps.sla.outputs.cache-hit != 'true'
         run: make specs
+
+      - name: Save the compiled SLEIGH specs
+        if: steps.sla.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: specs/**/*.sla
+          key: ${{ steps.sla.outputs.cache-primary-key }}
 
       - name: Verify the compiled spec tree is complete
         run: |
@@ -250,10 +340,40 @@ jobs:
             exit 1
           fi
 
-      - name: make rust-test -- the full cargo workspace suite
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      # `make rust-test`, run under cargo-llvm-cov so the same run also writes
+      # lcov.info; the tests run once.
+      - name: make rust-test -- the full cargo workspace suite, with coverage
         run: |
           df -h .
-          make rust-test WEB=${{ vars.UNLACE_WEB == 'true' && '1' || '0' }}
+          python3 scripts/check_test_layout.py
+          cd decompiler && cargo llvm-cov --lcov --output-path ../lcov.info --workspace \
+            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }} --no-fail-fast
+
+      - name: Upload coverage to Repowise
+        if: always()
+        continue-on-error: true
+        env:
+          REPORTS: "lcov.info"
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          shopt -s globstar nullglob
+          files=()
+          for pattern in $REPORTS; do for f in $pattern; do [ -f "$f" ] && files+=(-F "report=@$f"); done; done
+          if [ ${#files[@]} -eq 0 ]; then echo "::warning::Repowise: no coverage report found at: $REPORTS"; exit 0; fi
+          auth=()
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=repowise" | jq -r '.value // empty' || true)
+            [ -n "$token" ] && auth=(-H "Authorization: Bearer $token")
+          fi
+          curl -sS --fail-with-body --max-time 60 "${auth[@]}" "${files[@]}" \
+            -F "repository=$GITHUB_REPOSITORY" -F "head_sha=$HEAD_SHA" -F "pr_number=$PR_NUMBER" \
+            -F "event=$GITHUB_EVENT_NAME" -F "run_url=$RUN_URL" -F "workspace=$GITHUB_WORKSPACE" \
+            https://api.repowise.dev/ci/coverage \
+            || echo "::warning::Repowise: coverage upload failed; see the message above."
 
       - name: Workspace build disk usage
         if: always()

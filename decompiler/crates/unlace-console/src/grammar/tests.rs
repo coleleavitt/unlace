@@ -11,7 +11,7 @@ use super::{
     CParse, DataOrg, DocType, GrammarLexer, GrammarToken, flags, parse_c_integer,
     parse_protopieces, parse_type, tok,
 };
-use unlace_decomp::kuna_typequal::DatatypeQualExt;
+use unlace_decomp::prelude::*;
 
 #[test]
 fn mapped_object_volatile_qualifiers_follow_declarator_binding() {

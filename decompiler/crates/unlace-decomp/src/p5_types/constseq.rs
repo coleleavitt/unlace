@@ -6,6 +6,7 @@
 //! and preserve the surrounding dataflow. Constant-fill and read-only-string
 //! recovery reuse the same collection and replacement machinery.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, int8, uintb};
@@ -15,7 +16,6 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_union::FuncdataUnionExt;
 use crate::op::pcodeop_flags;
 use crate::userop::{BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_STRNCPY, BUILTIN_WCSNCPY};
 

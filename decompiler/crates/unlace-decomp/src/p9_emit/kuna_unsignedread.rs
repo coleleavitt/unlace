@@ -22,6 +22,7 @@
 //! as wide as `int` are considered; a narrower one is cast by the upstream
 //! integer-promotion checks.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::address::signbit_negative;
@@ -33,7 +34,6 @@ use crate::context::{OpId, VarnodeId};
 use crate::coreaction_casts::FuncdataCastContext;
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 const DEPTH: u32 = 8;
 

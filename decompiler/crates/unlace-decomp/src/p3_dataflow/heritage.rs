@@ -78,6 +78,8 @@
 //! [`RestartLog`]: because `Funcdata` does not yet own either handle (a W4
 //! stub), the method takes them as explicit `&mut` parameters — see its doc.
 
+use crate::funcdata_spacebase::FuncdataAliasCrateExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use unlace_base::address::Address;
@@ -86,8 +88,6 @@ use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 
 use crate::context::BlockId;
-use crate::funcdata_spacebase::FuncdataAliasExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::kuna_indexaliasguard::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
 use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
 use crate::overrides::Override;

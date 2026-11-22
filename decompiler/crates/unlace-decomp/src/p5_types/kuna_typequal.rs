@@ -10,7 +10,7 @@ pub const VOLATILE: u8 = 4;
 pub const ELEM_QUALIFIED: unlace_base::marshal::ElementId =
     unlace_base::marshal::ElementId::new("qualified", 4094);
 
-/// [`Datatype`] methods for C type qualifiers, kept out of the IR module.
+/// [`Datatype`] methods for C type qualifiers.
 pub trait DatatypeQualExt {
     fn c_qualifiers(&self) -> u8;
     fn qualified_base(&self) -> Option<&Rc<Datatype>>;

@@ -16,6 +16,7 @@
 //! `TypeStruct` bitfield `TypeField`s by the base `establishFields`); nothing is
 //! hardcoded.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::address::{calc_mask, extend_signbit, leastsigbit_set, popcount};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -25,7 +26,6 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::expression::{pointer_equality, root_pointer};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 /// `sizeof(uintb)` — the C++ `uintb` is `uint8`, i.e. 8 bytes.

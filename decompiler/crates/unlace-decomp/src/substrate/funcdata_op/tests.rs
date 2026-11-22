@@ -22,7 +22,6 @@ use unlace_base::space::{
 
 use crate::dtype::{type_metatype, Datatype};
 use crate::context::{ArchContext, BlockId};
-use crate::funcdata_merge::FuncdataMergeExt;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();

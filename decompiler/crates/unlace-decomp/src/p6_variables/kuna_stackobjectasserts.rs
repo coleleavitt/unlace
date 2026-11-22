@@ -1,5 +1,6 @@
 //! Native-use assertions for logical objects over shared physical frame storage.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
@@ -7,7 +8,6 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::Datatype;
 use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_union::FuncdataUnionExt;
 use crate::kuna_stackobjects::{ByteSource, SourcePoint};
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 use unlace_base::address::Address;

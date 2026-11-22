@@ -11,11 +11,11 @@
 //! upstream's bit copy, and the store is left as upstream prints it; a float
 //! narrower than C's `float` (a half float) has no C type to point at.
 
+use crate::kuna_typequal::DatatypeQualExt;
 use std::rc::Rc;
 
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_typequal::DatatypeQualExt;
 
 /// The type of value `value` that a store through a pointer to `pointed_to`
 /// must be cast to point at: `value` itself, when it is a float C can name and

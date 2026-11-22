@@ -70,6 +70,7 @@
 //! into one `INSERT`/`PULL` per field so each renders as a separate
 //! `ptr->field = ...` statement (e.g. `ip->field5 = ip->field5 + 1;`).
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::address::{leastsigbit_set, mostsigbit_set};
@@ -80,7 +81,6 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::VarnodeId;
 use crate::dtype::{BitFieldTriple, Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// `func->getArch()->getDefaultDataSpace()->isBigEndian()` — the endianness the
 /// `BitFieldTransform` base records.  All bitfield rule bodies read it the same

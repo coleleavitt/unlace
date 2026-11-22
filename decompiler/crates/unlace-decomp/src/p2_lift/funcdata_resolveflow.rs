@@ -17,6 +17,8 @@
 //! Each arm is transcribed statement-for-statement from the cited C++ override.
 //! The boundary-free leaf scorer is [`crate::unionresolve_run::ScoreUnionFields`].
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
 use unlace_base::error::{KunaError, KunaResult};
@@ -26,12 +28,10 @@ use unlace_num::opcodes::OpCode;
 use crate::context::OpId;
 use crate::dtype::{Datatype, DatatypeKind, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
-use crate::funcdata_union::FuncdataUnionExt;
 use crate::unionresolve::ResolvedUnion;
 use crate::unionresolve_run::ScoreUnionFields;
 
-/// [`Funcdata`] methods for union resolution along data flow, kept out of the IR module.
+/// [`Funcdata`] methods for union resolution along data flow.
 pub trait FuncdataResolveFlowExt {
     fn resolve_in_flow(
         &mut self,
@@ -39,6 +39,25 @@ pub trait FuncdataResolveFlowExt {
         op: OpId,
         slot: int4,
     ) -> KunaResult<Rc<Datatype>>;
+    fn resolve_truncation(
+        &mut self,
+        ct: &Rc<Datatype>,
+        offset: int8,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Option<(int4, int8)>>;
+    fn find_truncation(
+        &self,
+        ct: &Rc<Datatype>,
+        off: int8,
+        sz: int4,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Option<(int4, int8)>>;
+}
+
+/// [`Funcdata`] methods for union resolution along data flow private to this module.
+trait FuncdataResolveFlowLocalExt {
     fn resolve_in_flow_union_like(
         &mut self,
         ct: &Rc<Datatype>,
@@ -63,25 +82,10 @@ pub trait FuncdataResolveFlowExt {
         op: OpId,
         slot: int4,
     ) -> KunaResult<Rc<Datatype>>;
-    fn resolve_truncation(
-        &mut self,
-        ct: &Rc<Datatype>,
-        offset: int8,
-        op: OpId,
-        slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>>;
     fn resolve_truncation_union(
         &mut self,
         ct: &Rc<Datatype>,
         offset: int8,
-        op: OpId,
-        slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>>;
-    fn find_truncation(
-        &self,
-        ct: &Rc<Datatype>,
-        off: int8,
-        sz: int4,
         op: OpId,
         slot: int4,
     ) -> KunaResult<Option<(int4, int8)>>;
@@ -137,6 +141,95 @@ impl FuncdataResolveFlowExt for Funcdata {
         }
     }
 
+    /// `Datatype::resolveTruncation(offset, op, slot, &newoff)` dispatched against
+    /// the live union scorer + cache, for the `TypeUnion` and `TypePartialUnion`
+    /// overrides (C++ `TypeUnion::resolveTruncation`, type.cc:2569-2605; and
+    /// `TypePartialUnion::resolveTruncation`, type.cc:2994-2998, which delegates to
+    /// the container).  `self` stands in for `op->getParent()->getFuncdata()`.
+    ///
+    /// Returns `Some((field_index, newoff))` — the union field the truncation
+    /// resolves to and the residual byte offset into it — or `None` when no field
+    /// fits.  A `Datatype` that is neither union nor partial-union resolves to
+    /// `None` (the base/struct overrides do not score truncations through the
+    /// union cache; `Datatype::find_truncation` covers the struct field walk).
+    ///
+    /// This **writes** the per-function `union_map` cache (`setUnionField`), exactly
+    /// as the C++ override does, so the print-time `findTruncation` read finds the
+    /// resolved field.
+    fn resolve_truncation(
+        &mut self,
+        ct: &Rc<Datatype>,
+        offset: int8,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Option<(int4, int8)>> {
+        match &ct.kind {
+            // TypePartialUnion::resolveTruncation (type.cc:2994-2998).
+            DatatypeKind::PartialUnion { .. } => {
+                let container = ct.get_partial_base().ok_or_else(|| {
+                    KunaError::lowlevel("resolveTruncation: partial union missing container")
+                })?;
+                let part_off = ct.get_partial_offset().unwrap_or(0) as int8;
+                self.resolve_truncation(&container, offset + part_off, op, slot)
+            }
+            // TypeUnion::resolveTruncation (type.cc:2569-2605).
+            DatatypeKind::Union { .. } => self.resolve_truncation_union(ct, offset, op, slot),
+            // Datatype::resolveTruncation base / non-union: no field.
+            _ => Ok(None),
+        }
+    }
+
+    /// `Datatype::findTruncation(off, sz, op, slot, &newoff)` dispatched against the
+    /// live union cache, for the `TypeUnion`/`TypePartialUnion` overrides (C++
+    /// `TypeUnion::findTruncation`, type.cc:2613-2627; `TypePartialUnion::
+    /// findTruncation`, type.cc:2882-2884) plus the `TypeStruct::findTruncation`
+    /// field walk (type.cc:1878-1892) for a plain struct/non-union receiver.
+    ///
+    /// Read-only: no scoring is done, only a cached resolution is returned (the
+    /// C++ findTruncation comment).  Returns `Some((field_index, newoff))` or
+    /// `None`.  `self` stands in for `op->getParent()->getFuncdata()`.
+    fn find_truncation(
+        &self,
+        ct: &Rc<Datatype>,
+        off: int8,
+        sz: int4,
+        op: OpId,
+        slot: int4,
+    ) -> KunaResult<Option<(int4, int8)>> {
+        match &ct.kind {
+            // TypePartialUnion::findTruncation (type.cc:2882-2884).
+            DatatypeKind::PartialUnion { .. } => {
+                let container = ct.get_partial_base().ok_or_else(|| {
+                    KunaError::lowlevel("findTruncation: partial union missing container")
+                })?;
+                let part_off = ct.get_partial_offset().unwrap_or(0) as int8;
+                self.find_truncation(&container, off + part_off, sz, op, slot)
+            }
+            // TypeUnion::findTruncation (type.cc:2613-2627): cached resolution only.
+            DatatypeKind::Union { .. } => {
+                let field_num = match self.get_union_resolution(ct, op, slot) {
+                    Some(r) if r.get_field_num() >= 0 => r.get_field_num(),
+                    _ => return Ok(None),
+                };
+                let field = match ct.get_field(field_num) {
+                    Some(f) => f,
+                    None => return Ok(None),
+                };
+                let newoff = off - field.offset as int8;
+                // spans > one field
+                if newoff + sz as int8 > field.field_type.get_size() as int8 {
+                    return Ok(None);
+                }
+                Ok(Some((field_num, newoff)))
+            }
+            // TypeStruct::findTruncation (type.cc:1878-1892) / base: the struct field
+            // walk needs no cache, so the `Datatype` method covers it.
+            _ => ct.find_truncation(off, sz, op, slot),
+        }
+    }
+}
+
+impl FuncdataResolveFlowLocalExt for Funcdata {
     /// The shared body of `TypePointer::resolveInFlow` (pointer-to-union) and
     /// `TypeUnion::resolveInFlow` (type.cc:1314-1333 / 2541-2556): cache, then
     /// address-based cache, then [`ScoreUnionFields::new_edge`].
@@ -357,44 +450,6 @@ impl FuncdataResolveFlowExt for Funcdata {
         Ok(cur_type)
     }
 
-    /// `Datatype::resolveTruncation(offset, op, slot, &newoff)` dispatched against
-    /// the live union scorer + cache, for the `TypeUnion` and `TypePartialUnion`
-    /// overrides (C++ `TypeUnion::resolveTruncation`, type.cc:2569-2605; and
-    /// `TypePartialUnion::resolveTruncation`, type.cc:2994-2998, which delegates to
-    /// the container).  `self` stands in for `op->getParent()->getFuncdata()`.
-    ///
-    /// Returns `Some((field_index, newoff))` — the union field the truncation
-    /// resolves to and the residual byte offset into it — or `None` when no field
-    /// fits.  A `Datatype` that is neither union nor partial-union resolves to
-    /// `None` (the base/struct overrides do not score truncations through the
-    /// union cache; `Datatype::find_truncation` covers the struct field walk).
-    ///
-    /// This **writes** the per-function `union_map` cache (`setUnionField`), exactly
-    /// as the C++ override does, so the print-time `findTruncation` read finds the
-    /// resolved field.
-    fn resolve_truncation(
-        &mut self,
-        ct: &Rc<Datatype>,
-        offset: int8,
-        op: OpId,
-        slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>> {
-        match &ct.kind {
-            // TypePartialUnion::resolveTruncation (type.cc:2994-2998).
-            DatatypeKind::PartialUnion { .. } => {
-                let container = ct.get_partial_base().ok_or_else(|| {
-                    KunaError::lowlevel("resolveTruncation: partial union missing container")
-                })?;
-                let part_off = ct.get_partial_offset().unwrap_or(0) as int8;
-                self.resolve_truncation(&container, offset + part_off, op, slot)
-            }
-            // TypeUnion::resolveTruncation (type.cc:2569-2605).
-            DatatypeKind::Union { .. } => self.resolve_truncation_union(ct, offset, op, slot),
-            // Datatype::resolveTruncation base / non-union: no field.
-            _ => Ok(None),
-        }
-    }
-
     /// `TypeUnion::resolveTruncation` (type.cc:2569-2605): the cache lookup, the
     /// address-based fallback, and — on a miss — the SUBPIECE artificial-slot-1
     /// scorer (constructor 2, [`ScoreUnionFields::new_subpiece`]) or the
@@ -479,54 +534,5 @@ impl FuncdataResolveFlowExt for Funcdata {
             }
         }
         Ok(None)
-    }
-
-    /// `Datatype::findTruncation(off, sz, op, slot, &newoff)` dispatched against the
-    /// live union cache, for the `TypeUnion`/`TypePartialUnion` overrides (C++
-    /// `TypeUnion::findTruncation`, type.cc:2613-2627; `TypePartialUnion::
-    /// findTruncation`, type.cc:2882-2884) plus the `TypeStruct::findTruncation`
-    /// field walk (type.cc:1878-1892) for a plain struct/non-union receiver.
-    ///
-    /// Read-only: no scoring is done, only a cached resolution is returned (the
-    /// C++ findTruncation comment).  Returns `Some((field_index, newoff))` or
-    /// `None`.  `self` stands in for `op->getParent()->getFuncdata()`.
-    fn find_truncation(
-        &self,
-        ct: &Rc<Datatype>,
-        off: int8,
-        sz: int4,
-        op: OpId,
-        slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>> {
-        match &ct.kind {
-            // TypePartialUnion::findTruncation (type.cc:2882-2884).
-            DatatypeKind::PartialUnion { .. } => {
-                let container = ct.get_partial_base().ok_or_else(|| {
-                    KunaError::lowlevel("findTruncation: partial union missing container")
-                })?;
-                let part_off = ct.get_partial_offset().unwrap_or(0) as int8;
-                self.find_truncation(&container, off + part_off, sz, op, slot)
-            }
-            // TypeUnion::findTruncation (type.cc:2613-2627): cached resolution only.
-            DatatypeKind::Union { .. } => {
-                let field_num = match self.get_union_resolution(ct, op, slot) {
-                    Some(r) if r.get_field_num() >= 0 => r.get_field_num(),
-                    _ => return Ok(None),
-                };
-                let field = match ct.get_field(field_num) {
-                    Some(f) => f,
-                    None => return Ok(None),
-                };
-                let newoff = off - field.offset as int8;
-                // spans > one field
-                if newoff + sz as int8 > field.field_type.get_size() as int8 {
-                    return Ok(None);
-                }
-                Ok(Some((field_num, newoff)))
-            }
-            // TypeStruct::findTruncation (type.cc:1878-1892) / base: the struct field
-            // walk needs no cache, so the `Datatype` method covers it.
-            _ => ct.find_truncation(off, sz, op, slot),
-        }
     }
 }

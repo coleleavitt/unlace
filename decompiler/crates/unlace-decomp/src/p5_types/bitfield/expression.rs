@@ -27,6 +27,7 @@
 //! and in-symbol offset off the high exactly where the C++ reads them off the
 //! Symbol.  // STUB(W4 symbol) — mirrors `printc::push_vn_explicit_ir`.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -35,7 +36,6 @@ use super::BitRange;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeBitField, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// `sizeof(uintb)` — the C++ `uintb` is `uint8`, i.e. 8 bytes.
 const SIZEOF_UINTB: int4 = 8;

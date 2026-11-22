@@ -26,6 +26,10 @@
 //!   `funcdata_spacebase.rs`          — variable/merge/stack tiers (P6)
 //! - `p9_emit/coreaction_casts.rs`    — cast insertion hooks (P9)
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_union::FuncdataUnionExt;
+use crate::kuna_calltransport::FuncdataCallTransportCrateExt;
+use crate::kuna_calltransport::FuncdataCallTransportExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::types::{Wrap, int2, int4, uint4, uint8, uintm};
@@ -158,9 +162,9 @@ pub struct DirectiveSymbol {
 
 pub struct Funcdata {
     /// (kuna `switchextent`) The jump tables the function's extent dispatches
-    /// through, sorted, once a flow with a computed jump decoded it
-    /// (`p2_lift/kuna_switchextent.rs`).
-    pub(crate) kuna_extent_tables: Option<std::rc::Rc<Vec<u64>>>,
+    /// through, and those a Swift enum's case indexes, once a flow with a
+    /// computed jump decoded it (`p2_lift/kuna_switchextent.rs`).
+    pub(crate) kuna_extent_tables: Option<std::rc::Rc<crate::kuna_switchextent::ExtentTables>>,
     /// (kuna `switchextent`) The tables of the functions after this one, once
     /// a table that is the function's last asked for them.
     pub(crate) kuna_later_tables: Option<std::rc::Rc<Vec<u64>>>,
@@ -5029,9 +5033,6 @@ pub type DefOp = DefOpInfo;
 
 use crate::cover::{Cover, CoverContext, CoverPoint};
 use crate::dtype::Datatype;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::funcdata_union::FuncdataUnionExt;
-use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
 use crate::variable::{CompareNameView, HighContext, VarnodeView, VarnodeViewLoc};
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;

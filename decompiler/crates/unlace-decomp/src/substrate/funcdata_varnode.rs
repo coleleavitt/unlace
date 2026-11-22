@@ -3,6 +3,8 @@
 //! Ported from Ghidra's funcdata_varnode.cc. Bank mutations that replace reads
 //! borrow the varnode and op banks together through `Funcdata::banks_mut`.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::kuna_calltransport::FuncdataCallTransportExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -16,8 +18,6 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::p9_emit::kuna_calltransport::FuncdataCallTransportExt;
 use crate::varnode::{DefOpInfo, varnode_flags};
 
 impl Funcdata {

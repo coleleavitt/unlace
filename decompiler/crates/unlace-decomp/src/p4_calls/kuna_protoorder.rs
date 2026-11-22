@@ -16,6 +16,8 @@
 //! input-locks every call to it, so the decline rules below guard against a list
 //! that is not evidence of the same quality as what it overwrites.
 
+use crate::funcdata_spacebase::FuncdataAliasExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -26,8 +28,6 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataAliasExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::infra::architecture::Architecture;
 use crate::p4_calls::fspec::{FuncCallSpecs, FuncProto, PrototypePieces};
 

@@ -3,7 +3,8 @@
 //! union-resolution subsystem ([`crate::coreaction_cleanup::ActionSetCasts`])
 //! and the per-op `getInputCast`/`resolveInFlow` surface key on.
 //!
-//! These are additional `impl Funcdata` methods; the `union_map`
+//! These are [`FuncdataUnionExt`] methods implemented for `Funcdata` (two private helpers are
+//! `FuncdataUnionLocalExt`); the `union_map`
 //! `BTreeMap<ResolveEdge, ResolvedUnion>` field and its clear live in
 //! [`crate::funcdata`].  The map is keyed by [`ResolveEdge`] whose [`Ord`] is the
 //! verbatim C++ `ResolveEdge::operator<`, so the `BTreeMap` reproduces the C++
@@ -30,10 +31,8 @@ use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 
-/// [`Funcdata`] methods for the per-function union-field resolution cache, kept out of the IR module.
+/// [`Funcdata`] methods for the per-function union-field resolution cache.
 pub trait FuncdataUnionExt {
-    fn op_time(&self, op: OpId) -> unlace_base::types::uintm;
-    fn union_edge_op(&self, unres_type: &Datatype, op: OpId, slot: int4) -> ResolveEdge;
     fn get_union_field(
         &self,
         unres_type: &Datatype,
@@ -99,23 +98,13 @@ pub trait FuncdataUnionExt {
     ) -> KunaResult<int4>;
 }
 
+/// [`Funcdata`] methods for the per-function union-field resolution cache private to this module.
+trait FuncdataUnionLocalExt {
+    fn op_time(&self, op: OpId) -> unlace_base::types::uintm;
+    fn union_edge_op(&self, unres_type: &Datatype, op: OpId, slot: int4) -> ResolveEdge;
+}
+
 impl FuncdataUnionExt for Funcdata {
-    /// `op->getTime()` for a live op (the C++ `ResolveEdge` reads `op->getTime()`).
-    /// Panics on a stale id, mirroring the other `obank().get(...).expect(...)`
-    /// accessors in [`crate::funcdata_op`] (a stale op here is a logic error).
-    fn op_time(&self, op: OpId) -> unlace_base::types::uintm {
-        self.obank()
-            .get(op)
-            .expect("union edge: stale op")
-            .get_time()
-    }
-
-    /// Build the data-flow `ResolveEdge(unresType, op, slot)`
-    /// (C++ `ResolveEdge::ResolveEdge(const Datatype*,const PcodeOp*,int4)`).
-    fn union_edge_op(&self, unres_type: &Datatype, op: OpId, slot: int4) -> ResolveEdge {
-        ResolveEdge::new_op(unres_type, self.op_time(op), slot)
-    }
-
     /// \brief Get the resolution (union field) associated with an unresolved
     /// data-type and the given edge (C++ `Funcdata::getUnionField`,
     /// `funcdata.cc:915-929`).
@@ -510,5 +499,23 @@ impl FuncdataUnionExt for Funcdata {
             ResolvedUnion::new_field(Rc::clone(&unres_ptr), inherited_field, typegrp.as_ref())?;
         self.set_union_field(&unres_ptr, op, slot, ptrres);
         Ok(inherited_field)
+    }
+}
+
+impl FuncdataUnionLocalExt for Funcdata {
+    /// `op->getTime()` for a live op (the C++ `ResolveEdge` reads `op->getTime()`).
+    /// Panics on a stale id, mirroring the other `obank().get(...).expect(...)`
+    /// accessors in [`crate::funcdata_op`] (a stale op here is a logic error).
+    fn op_time(&self, op: OpId) -> unlace_base::types::uintm {
+        self.obank()
+            .get(op)
+            .expect("union edge: stale op")
+            .get_time()
+    }
+
+    /// Build the data-flow `ResolveEdge(unresType, op, slot)`
+    /// (C++ `ResolveEdge::ResolveEdge(const Datatype*,const PcodeOp*,int4)`).
+    fn union_edge_op(&self, unres_type: &Datatype, op: OpId, slot: int4) -> ResolveEdge {
+        ResolveEdge::new_op(unres_type, self.op_time(op), slot)
     }
 }

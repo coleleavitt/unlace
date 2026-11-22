@@ -40,6 +40,8 @@
 //! conservatively decline (return `None`/no-op), which is faithful — the C++ also
 //! returns null along those edges when the supporting surface doesn't apply.
 
+use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
@@ -50,8 +52,6 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::typeop::type_op_info;
 
 /// Resolve `op->outputTypeLocal()` / `op->inputTypeLocal(slot)` faithfully via the
@@ -814,6 +814,13 @@ fn build_localtypes(data: &mut Funcdata) {
             ct
         } else {
             crate::kuna_callerargs::input_vote(data, vn, &ct).unwrap_or(ct)
+        };
+        // (kuna `valuewitness`) The word before Swift type metadata, read at
+        // a table offset, is the value witness table. See `kuna_valuewitness`.
+        let ct = if from_seed {
+            ct
+        } else {
+            crate::kuna_valuewitness::output_vote(data, vn).unwrap_or(ct)
         };
         // (kuna `ptrfromuse`) A function input whose only memory role is to be a
         // LOAD/STORE base has no pointer candidate in the fold above, because
@@ -1760,6 +1767,8 @@ fn propagate_int_add(
         Some(alttype)
     } else if inslot == -1 {
         None // Don't propagate pointer types output -> input
+    } else if crate::kuna_valuewitness::outside_header(data, op, inslot, &alttype) {
+        None
     } else {
         propagate_add_in2_out(data, alttype, op, inslot)
     }

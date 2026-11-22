@@ -41,13 +41,13 @@
 //! directly. The copies' frame accesses become stack slots in the same pass
 //! that turns pushes into them, before the stack's own first heritage.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::collections::BTreeMap;
 
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 /// The most elements a move may copy and still be expanded.
 pub(crate) const MAX_ELEMENTS: u64 = 16;

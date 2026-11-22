@@ -47,6 +47,8 @@
 //! whose `applyOp` is a STUB stub returning `0` (no transform).  Each is in the
 //! structured `losses` output.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask, uintb_negate};
@@ -57,8 +59,6 @@ use unlace_num::opcodes::{OpCode, get_booleanflip};
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
-use crate::funcdata_union::FuncdataUnionExt;
 
 // =============================================================================
 // opcode -> TypeOp resolution (glb->inst[opc])
@@ -893,6 +893,9 @@ impl Rule for RulePtrArith {
             }
         }
         if slot == num_input {
+            return 0;
+        }
+        if crate::kuna_valuewitness::keeps_offset(data, op, slot) {
             return 0;
         }
         if evaluate_pointer_expression(data, op, slot) != 2 {

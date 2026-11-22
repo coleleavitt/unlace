@@ -6,6 +6,7 @@
 //! before those hints are reconciled. The union's operation-specific resolutions
 //! select members; no claim that an old pointer stopped aliasing is needed.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
@@ -18,7 +19,6 @@ use unlace_num::opcodes::OpCode;
 use crate::context::OpId;
 use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_union::FuncdataUnionExt;
 use crate::p0_knowledge::options::on_or_off;
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 use crate::varmap::{MapState, SHARED_STORAGE};

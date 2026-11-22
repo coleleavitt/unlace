@@ -53,6 +53,10 @@
 //! lookup simply stays a miss and no PTRSUB is inserted for that edge — the same
 //! conservative outcome the C++ produces when no field scores.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::funcdata_union::FuncdataUnionExt;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -66,10 +70,6 @@ use crate::coreaction_infertypes::{
 };
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
-use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::funcdata_union::FuncdataUnionExt;
 use crate::unionresolve::ResolvedUnion;
 
 // =============================================================================
@@ -1394,9 +1394,13 @@ fn load_store_space(data: &Funcdata, op: OpId) -> Option<Rc<unlace_base::space::
 // ActionSetCasts driver + helpers (coreaction.cc:2407-2872), on Funcdata.
 // =============================================================================
 
-/// [`Funcdata`] methods for cast insertion (ActionSetCasts), kept out of the IR module.
+/// [`Funcdata`] methods for cast insertion (ActionSetCasts).
 pub trait FuncdataCastExt {
     fn action_set_casts(&mut self) -> int4;
+}
+
+/// [`Funcdata`] methods for cast insertion (ActionSetCasts) private to this module.
+trait FuncdataCastLocalExt {
     fn cast_fixup_ptradd(&mut self, op: OpId);
     fn cast_fixup_ptrsub(&mut self, op: OpId);
     fn cast_resolve_union(&mut self, op: OpId, slot: int4, strat: &CastStrategyC) -> int4;
@@ -1527,7 +1531,9 @@ impl FuncdataCastExt for Funcdata {
         }
         count
     }
+}
 
+impl FuncdataCastLocalExt for Funcdata {
     /// PTRADD that no longer fits its pointer (coreaction.cc:2830-2836).
     fn cast_fixup_ptradd(&mut self, op: OpId) {
         let (sz, in0) = {
@@ -2368,6 +2374,8 @@ mod verify_w10_merge_casts_r2 {
     use crate::context::{ArchContext, TypeOp};
     use crate::dtype::{Datatype, TypeFactoryImpl, type_metatype};
     use crate::funcdata::Funcdata;
+    use crate::funcdata_facing::FuncdataFacingExt;
+    use crate::funcdata_union::FuncdataUnionExt;
     use unlace_base::address::Address;
     use unlace_base::space::{
         AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,

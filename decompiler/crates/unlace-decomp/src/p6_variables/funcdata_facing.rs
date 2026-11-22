@@ -30,14 +30,14 @@
 //! `findResolve` overrides do, so the typed-access cluster (`union_datatype.xml`)
 //! gets the resolved field type once the Casts stage drives the cache.
 
+use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::funcdata_union::FuncdataUnionExt;
 
-/// [`Funcdata`] methods for union-facing data-types of varnodes, kept out of the IR module.
+/// [`Funcdata`] methods for union-facing data-types of varnodes.
 pub trait FuncdataFacingExt {
     fn find_resolve_facing(&self, ct: &Rc<Datatype>, op: OpId, slot: i32) -> Rc<Datatype>;
     fn vn_type_def_facing(&self, vn: VarnodeId) -> Rc<Datatype>;

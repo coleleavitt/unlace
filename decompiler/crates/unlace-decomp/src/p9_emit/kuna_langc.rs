@@ -8,6 +8,7 @@
 //! which now keeps only thin dispatchers so its existing free-function callers
 //! and their tests are unchanged.
 
+use crate::kuna_typequal::DatatypeQualExt;
 use std::borrow::Cow;
 use std::rc::Rc;
 
@@ -15,7 +16,6 @@ use unlace_base::types::int4;
 
 use crate::dtype::{Datatype, type_metatype};
 use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
-use crate::kuna_typequal::DatatypeQualExt;
 
 /// The c-language type speller.
 pub struct CSpeller;

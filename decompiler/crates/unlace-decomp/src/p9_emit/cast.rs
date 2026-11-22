@@ -57,6 +57,7 @@
 //! data-type pairs `getInputCast` would feed it, and the promotion tests drive
 //! the IR-walking methods through a mock [`CastContext`].
 
+use crate::kuna_typequal::DatatypeQualExt;
 use std::rc::Rc;
 
 use unlace_base::address::{mostsigbit_set, signbit_negative, uintb_negate};
@@ -66,7 +67,6 @@ use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::dtype::{Datatype, DatatypeKind, TypeFactory, type_metatype};
-use crate::kuna_typequal::DatatypeQualExt;
 
 /// Types of integer promotion (C++ `CastStrategy::IntPromotionCode`,
 /// cast.hh:48-54).  For many languages small integers are automatically

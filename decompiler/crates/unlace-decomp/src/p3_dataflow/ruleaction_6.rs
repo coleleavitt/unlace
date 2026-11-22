@@ -5,6 +5,9 @@
 //! Opcode mutations use canonical type operations. Unsupported type-facing
 //! cases decline their rewrite.
 
+use crate::funcdata_facing::FuncdataFacingExt;
+use crate::funcdata_merge::FuncdataMergeExt;
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::{
@@ -20,9 +23,6 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
-use crate::funcdata_merge::FuncdataMergeExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 #[inline]
 fn set_opcode(data: &mut Funcdata, op: OpId, opc: OpCode) {

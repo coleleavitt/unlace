@@ -98,13 +98,13 @@
 //! type exposes `boxed(group)` returning the boxed action.  [`merge_actions`]
 //! enumerates the full merge-group set in C++ schedule order for the W8 assembler.
 
+use crate::coreaction_casts::FuncdataCastExt;
+use crate::funcdata_merge::FuncdataMergeExt;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
-use crate::coreaction_casts::FuncdataCastExt;
 use crate::funcdata::Funcdata;
-use crate::funcdata_merge::FuncdataMergeExt;
 
 // =============================================================================
 // ActionAssignHigh (coreaction.hh:340) — REALIZED

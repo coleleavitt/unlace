@@ -3225,5 +3225,6 @@ impl Funcdata {
 
 #[cfg(test)]
 mod tests {
+    use crate::funcdata_merge::FuncdataMergeExt;
     include!("funcdata_op/tests.rs");
 }

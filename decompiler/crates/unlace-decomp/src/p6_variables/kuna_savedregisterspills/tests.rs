@@ -1,3 +1,4 @@
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -16,7 +17,6 @@ use super::{
     EffectRange, FrameRange, Save, eligible_effect_lane, overlaps, proven_unobserved,
     stack_memory_access,
 };
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 const SLOT: u64 = u64::MAX - 7;
 

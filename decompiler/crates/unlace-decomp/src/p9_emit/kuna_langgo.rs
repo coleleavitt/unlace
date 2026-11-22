@@ -1,5 +1,6 @@
 //! Go spelling and statement forms on the shared emission plane.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::borrow::Cow;
 use std::rc::Rc;
 
@@ -779,7 +780,6 @@ pub(crate) fn escape(output: &mut String, value: i32, quote: char) {
 }
 
 use crate::context::{OpId, VarnodeId};
-use crate::funcdata_facing::FuncdataFacingExt;
 use crate::printc::op_key;
 use crate::printlanguage::{Atom, SyntaxHighlight as AtomHighlight, TagType};
 

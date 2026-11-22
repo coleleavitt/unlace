@@ -3,6 +3,7 @@
 //! LOAD, STORE and CALLIND (`PrintJava::opLoad`, `opStore`, `opCallind`),
 //! the last also as `new T(args)` (kuna `javanew`).
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_num::opcodes::OpCode;
 
 use super::{
@@ -11,7 +12,6 @@ use super::{
 };
 use crate::cpool::cpool_tag;
 use crate::dtype::type_metatype;
-use crate::funcdata_facing::FuncdataFacingExt;
 use crate::kuna_lang::OutLang;
 use crate::printlanguage::SyntaxHighlight;
 

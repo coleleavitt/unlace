@@ -81,12 +81,12 @@
 //! type exposes `new(group)` returning the boxed action.  [`early_actions`]
 //! enumerates the full early set in C++ definition order for the W8 assembler.
 
+use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 // =============================================================================
 // Setup actions (coreaction.hh:34-86)

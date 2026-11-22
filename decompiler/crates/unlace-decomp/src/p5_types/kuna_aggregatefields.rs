@@ -11,6 +11,7 @@
 //! of a join are outside this module: they have no storage, so they are always
 //! logical constants.
 
+use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_num::opcodes::OpCode;
@@ -19,7 +20,6 @@ use crate::action::Rule;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::Datatype;
 use crate::funcdata::Funcdata;
-use crate::funcdata_facing::FuncdataFacingExt;
 
 /// Longest equal-width COPY chain followed back to a declared input.
 const MAX_COPY_CHAIN: usize = 16;

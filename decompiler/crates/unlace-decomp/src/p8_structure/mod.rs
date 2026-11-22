@@ -30,6 +30,7 @@ pub mod kuna_retsplitlimit;
 pub mod kuna_rettriangle;
 pub mod kuna_returndup;
 pub mod kuna_returndupcalls;
+pub(crate) mod kuna_switchmerge;
 pub mod kuna_switchreturn;
 pub mod kuna_taildup;
 pub mod region_structurer;

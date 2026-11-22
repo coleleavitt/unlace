@@ -2,7 +2,7 @@
 
 Mirrors how decbench scores kuna for the published leaderboard: kuna sees a
 fully-stripped copy (`strip --strip-all`) of each binary, runs as
-`kuna decompile-all <stripped> --json --max-fn-seconds 600` in its default mode, its
+`unlace decompile-all <stripped> --json --max-fn-seconds 600` in its default mode, its
 output is parsed by decbench's kuna backend, re-labeled to the DWARF names of the
 unstripped binary (`scripts/run_benchmark.py::_relabel_to_dwarf` in the decbench
 checkout), and scored for GED against the dataset's published source CFGs and for

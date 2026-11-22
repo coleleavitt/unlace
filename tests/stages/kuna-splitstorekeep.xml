@@ -27,7 +27,7 @@
     write being refined onto its partition cells.  A piece of a store is a store.
 
     Source (as(1), x86-64, linked -Ttext=0x100000; fixture
-    decompiler/crates/kuna-analysis/tests/fixtures/splitstorekeep_x86_64.s):
+    decompiler/crates/unlace-analysis/tests/fixtures/splitstorekeep_x86_64.s):
 
         copy31: sub $0x58,%rsp          ; src at rsp+0, dst at rsp+0x20
                 mov %rsp,%rdi ; call sink    ; src escapes, so nothing is dead

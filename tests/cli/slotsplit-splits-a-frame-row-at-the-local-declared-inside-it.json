@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/castternary_clang_O0_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/castternary_clang_O0_x86_64",
     "binary_sha256": "54ee5fdc0d0f500626fbed01e96dc587a15e2ba3d8300fe8f7fac8a2ae41cd23",
     "binary_size": 17056,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/castternary_clang_O0_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/castternary_clang_O0_x86_64",
     "selector": "keep_float",
     "selector_kind": "name"
   },

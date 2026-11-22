@@ -32,10 +32,10 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_imports_stripped.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe",
     "binary_sha256": "981f4d8e9bba6b4bb039d91253f54e6f068d7513930e1f0ab5979b5bf7fa6cad",
     "binary_size": 39424,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_imports_stripped.exe"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe"
   }
 }

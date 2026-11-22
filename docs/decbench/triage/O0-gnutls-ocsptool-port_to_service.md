@@ -134,7 +134,7 @@ Because the guards share that out-target, `rule_block_or` is free to comma-merge
 **Root cause — the const-return gate in P8.** kuna already owns the machinery to undo
 this (`ActionReturnDup`, the SAILR `ReturnDuplicatorHigh` port). It declines here by
 design. `Funcdata::returndup_apply`
-(`decompiler/crates/kuna-decomp/src/substrate/funcdata_block.rs:2973`) requires
+(`decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs:2973`) requires
 
 ```rust
 if !self.returndup_is_const_ret(parent) {
@@ -175,7 +175,7 @@ should be triaged separately if wanted; it does not affect this case's score.
 
 **Mechanism — `repeatreturn`: peel the REPEATED arms of a shared variable-return epilogue.**
 Add a predicate next to `returndup_is_const_ret` in
-`decompiler/crates/kuna-decomp/src/substrate/funcdata_block.rs`:
+`decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs`:
 
 > a splittable shared RETURN block also qualifies when its value MULTIEQUAL has at least
 > two in-edge slots resolving to the SAME non-free varnode that is defined OUTSIDE the
@@ -194,12 +194,12 @@ shape the ~976-regression measurement punished — one DISTINCT variable per in-
 narrowing, so the narrowing is strictly disjoint from the regressing population.
 
 Owning files:
-- `decompiler/crates/kuna-decomp/src/substrate/funcdata_block.rs` (new predicate + the
+- `decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs` (new predicate + the
   `returndup_apply` gate; reuses `return_split_is_splittable` + `node_split` verbatim)
-- `decompiler/crates/kuna-decomp/src/p8_structure/kuna_returndup.rs` (option plumbing, or
+- `decompiler/crates/unlace-decomp/src/p8_structure/kuna_returndup.rs` (option plumbing, or
   a sibling `kuna_repeatreturn.rs` action if it wants its own ablation switch — preferred,
   so the decbench delta is separable from `returndup`'s)
-- `decompiler/crates/kuna-decomp/phases.toml` + `src/p0_knowledge/options.rs` (new option
+- `decompiler/crates/unlace-decomp/phases.toml` + `src/p0_knowledge/options.rs` (new option
   row, default OFF pending the ablation) + the hard-coded catalog counts
 
 Risks:

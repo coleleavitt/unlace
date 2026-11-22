@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:64:default:windows">
 <!--
     RE-friction round 10, challenge 6869d705aadb6eeafb399027 (x86-64 Windows PE
-    `crackmes.exe`): `kuna decompile ... sub_14000b970` rendered the OpenSSL
+    `crackmes.exe`): `unlace decompile ... sub_14000b970` rendered the OpenSSL
     call `int EVP_DigestFinal_ex(EVP_MD_CTX *, unsigned char *, unsigned int *)`
     as `EVP_DigestFinal_ex(v3,v9,v7,a3,1)`, five arguments for a
     three-argument function, and the invented fourth is the reader's OWN

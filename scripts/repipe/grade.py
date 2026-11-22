@@ -429,7 +429,7 @@ def tripwire(transcript_text, hexid):
 
     A hit VOIDS THE OUTCOME but KEEPS THE OBSERVATIONS. That asymmetry is deliberate: a
     tester that read `solutions/<hexid>/` has told us nothing about whether the binary was
-    solvable with kuna, but the twenty minutes it spent fighting `kuna functions` before it
+    solvable with kuna, but the twenty minutes it spent fighting `unlace functions` before it
     cheated are still twenty minutes of real friction, and friction is the product. Throwing
     the whole run away would delete evidence to punish a sandbox failure -- and with
     REPIPE_SANDBOX=none the sandbox failure is the pipeline's own.

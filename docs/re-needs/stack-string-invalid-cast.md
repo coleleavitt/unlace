@@ -14,7 +14,7 @@ rounds: [1, 2]
 first_seen_round: 1
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: "404"
@@ -125,7 +125,7 @@ _not yet refuted_
   closable-by-probe. Target rebound from the round-1 arena path to the dataset challenge
   (`binary_source: dataset`, sha256 pinned), so the probe no longer depends on an arena that
   a later round may rebuild.
-- round 2 wave 20 (captain): `touches` LEFT as filed (`[decompiler/crates/kuna-decomp]`). I have measured evidence of the
+- round 2 wave 20 (captain): `touches` LEFT as filed (`[decompiler/crates/unlace-decomp]`). I have measured evidence of the
   symptom but none of the owning module, and a confidently-wrong `touches` would misdirect a
   builder and mis-scope its leases. The builder should set it from its own root-cause work.
 - closed: acceptance a-d7fec4000cb6 now PASSES at 882038cd47f6

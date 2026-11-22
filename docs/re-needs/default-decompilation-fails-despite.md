@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/analyzers/entry/patterns, decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs]
+touches: [decompiler/crates/unlace-analysis/src/analyzers/entry/patterns, decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs]
 scope: small
 regression_of: null
 pr: null
@@ -123,7 +123,7 @@ Bisected over aggressive's 31 overrides on `collide`, `read_key`
 --mode reliable / --mode fast                      -> full C, "// warn: Function flows out of bounds"
 ```
 
-The mechanism is visible in the inventory: under aggressive `kuna functions` reports
+The mechanism is visible in the inventory: under aggressive `unlace functions` reports
 `sub_8048542`, a byte-pattern "function" planted INSIDE read_key's body, one byte past the
 `NOP` at 0x8048541 that `JNZ 0x8048541` (at 0x804853d) targets. The enclosing body is cut at
 that phantom entry, the NOP's op stops existing, and the branch-target lookup aborts the

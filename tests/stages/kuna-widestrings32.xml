@@ -22,7 +22,7 @@
     operand_refs is on in every pass, as in the aggressive preset that small
     images default to.
 
-    Source: decompiler/crates/kuna-analysis/tests/fixtures/widestr32.c
+    Source: decompiler/crates/unlace-analysis/tests/fixtures/widestr32.c
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -31,7 +31,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/widestr32_gcc_O2_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/widestr32_gcc_O2_x86_64</com>
   <com>option operand_refs on</com>
   <com>option widestrings32 off</com>
   <com>read symbols</com>
@@ -39,7 +39,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/widestr32_gcc_O2_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/widestr32_gcc_O2_x86_64</com>
   <com>option operand_refs on</com>
   <com>option widestrings32 on</com>
   <com>read symbols</com>
@@ -56,7 +56,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/widestr32_clang_O2_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/widestr32_clang_O2_x86_64</com>
   <com>option operand_refs on</com>
   <com>option widestrings32 on</com>
   <com>read symbols</com>

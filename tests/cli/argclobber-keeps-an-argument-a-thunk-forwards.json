@@ -14,11 +14,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/argclobber_thunk_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/argclobber_thunk_x86_64",
     "binary_sha256": "e0626de36528599f62115e030422141042e9f5d94ab6beb4afd522e73d26412c",
     "binary_size": 12936,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/argclobber_thunk_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/argclobber_thunk_x86_64",
     "selector": "caller",
     "selector_kind": "name"
   },

@@ -15,7 +15,7 @@
     third-party iOS app).
 
     Stage / sub-stage: P1 external-refinement, the Swift metadata pass
-    (`kuna-analysis/src/analyzers/swift/kuna_swiftcall.rs`), with the model
+    (`unlace-analysis/src/analyzers/swift/kuna_swiftcall.rs`), with the model
     binding read in P4 (`ActionDefaultParams`, the decompile drive) and the
     `self` hint in P5 type inference.
 
@@ -75,7 +75,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_elf</com>
   <com>option swiftmetadata on</com>
   <com>option swiftcall off</com>
   <com>read symbols</com>
@@ -89,7 +89,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x3830</com>
@@ -105,7 +105,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_syms_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_syms_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x3660</com>
@@ -121,7 +121,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_syms_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_syms_elf</com>
   <com>option swiftmetadata on</com>
   <com>option swiftcall off</com>
   <com>read symbols</com>
@@ -129,7 +129,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_helper_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_helper_elf</com>
   <com>option swiftmetadata on</com>
   <com>option swiftcall off</com>
   <com>read symbols</com>
@@ -140,7 +140,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_helper_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_helper_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x2440</com>
@@ -150,7 +150,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_native_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_native_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x10dc</com>
@@ -163,21 +163,21 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_leaf_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_leaf_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x2630</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_free_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_free_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x2610</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_call_spill_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_call_spill_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x2836</com>

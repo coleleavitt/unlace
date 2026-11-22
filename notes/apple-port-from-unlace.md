@@ -24,7 +24,7 @@ Head-to-head on 2026-10-29 (unlace master e7a0cc10d6, kuna 03ef2e6b release):
 
 ## What kuna already has (do not re-port)
 
-- Mach-O loading through `object` (`kuna-analysis/src/loader/format/macho.rs`,
+- Mach-O loading through `object` (`unlace-analysis/src/loader/format/macho.rs`,
   281 lines), arm64e detection, `--slice` for fat files.
 - `LC_DYLD_CHAINED_FIXUPS` resolver (`loader/format/macho/chained.rs`).
 - ObjC metadata pass `objc` (`analyzers/objc/`, 1,328 lines, default off): classes,
@@ -56,7 +56,7 @@ Each item: what unlace has, kuna's gap with evidence, where it goes in kuna.
    ObjC class names like `_TtC6Toyota24AddMileageViewController` mangled. unlace
    demangles fully through the `symbolic-demangle` crate, which builds Apple's
    C++ demangler. **Decision needed:** a C++ build dependency (breaks or
-   complicates `kuna-wasm`?) versus growing `kuna_swift.rs` in Rust. At minimum, port
+   complicates `unlace-wasm`?) versus growing `kuna_swift.rs` in Rust. At minimum, port
    the `_TtC<len><Module><len><Class>` ObjC-name form into `kuna_swift.rs` (pure
    Rust, small).
 4. **Swift metadata.** unlace `swift_metadata.rs` (559 lines) scans
@@ -116,7 +116,7 @@ Review PRs in the fork (github.com/coleleavitt/kuna):
 | #6 | apple/arm64e-pac | apple/objc-selrefs | 7: `ptrauthtrap`, `authptrcall`, bind addends |
 | #7 | apple/compact-unwind | main | 9: `__unwind_info` function starts (option `unwindstarts`, off) |
 | #8 | apple/cfstring | main | 6: `__cfstring` literals (option `cfstrings`) |
-| #9 | apple/dyld-cache | main | 5: dyld shared cache (options `dyldimage`, `dyldcrossrefs`; `kuna unpack`) |
+| #9 | apple/dyld-cache | main | 5: dyld shared cache (options `dyldimage`, `dyldcrossrefs`; `unlace unpack`) |
 | #10 | apple/macho-loader | main | 6: data reads through import slots (option `importdata`) |
 | #11 | apple/objc-sdk-signatures | apple/objc-metadata | follow-up: ObjC signatures from SDK headers (option `objcsdk`, runtime input only) |
 | #12 | apple/elf-gotdata | apple/macho-loader | follow-up: ELF `GLOB_DAT` GOT data imports |

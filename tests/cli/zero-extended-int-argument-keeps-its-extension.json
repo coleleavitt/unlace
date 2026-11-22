@@ -14,11 +14,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/zextarg_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/zextarg_x86_64",
     "binary_sha256": "d8c1aebc1a8a4ea4f1090af3d51e3e11b8d5362c010a8174a078d48ffc0dba3e",
     "binary_size": 16168,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/zextarg_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/zextarg_x86_64",
     "selector": "zext_arg",
     "selector_kind": "name"
   },

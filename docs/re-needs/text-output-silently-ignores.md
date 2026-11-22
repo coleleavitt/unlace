@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli/src/assertdecl.rs, decompiler/crates/kuna-cli/src/decompile.rs]
+touches: [decompiler/crates/unlace-cli/src/assertdecl.rs, decompiler/crates/unlace-cli/src/decompile.rs]
 scope: small
 regression_of: null
 pr: null
@@ -90,11 +90,11 @@ Assign the hash helper a pointer return and named pointer parameters.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "authenticate",
     "selector_kind": "name"
   },
@@ -137,7 +137,7 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-captain T_TRIAGE r3: track tooling CONFIRMED and touches narrowed. The defect is a divergence between two CLI output paths -- the same --assert/--assert-strict is applied under --json and dropped in text -- so the engine is producing the right thing and the printer path is losing it. No option, no stages case; a cargo test in kuna-cli plus the promoted probe.
+captain T_TRIAGE r3: track tooling CONFIRMED and touches narrowed. The defect is a divergence between two CLI output paths -- the same --assert/--assert-strict is applied under --json and dropped in text -- so the engine is producing the right thing and the printer path is losing it. No option, no stages case; a cargo test in unlace-cli plus the promoted probe.
 captain T_TRIAGE r3: repaired the missing probe/acceptance `target` block (binary_rel + sha256 + size, source dataset) -- without it {{BIN}} could not resolve and the need was unclosable by B_DONE and invisible to regression detection. Verified: acceptance now RUNS and FAILS on cf5234ac, which is the state a filed need must be in.
 - round 3 REFUTER: hypothesis **upheld** (was inconclusive). Refuted by measurement (captain, B_DRAIN observe tick, release kuna @20:01 on cf5234ac+, probebin/971dbc9fc68f8c2a/frz_crackme_rage_v7.exe). SYMPTOM STANDS AND THE HYPOTHESIS IS RIGHT, BUT THE SEAM IS NAMED WRONG -- it is not two paths disagreeing about a name, it is ONE path throwing the name away. Measured 4 ways: (a) text + decl name 'sha256' -> 'void sub_1400055e0(unsigned int *a0,unsigned long long *a1)', override dropped, exit 0, nothing on stderr even with --assert-strict; (b) --json, same directive -> 'void * sub_1400055e0(void *out,void *input)', applied; (c) TEXT WITH THE SAME NAME IN THE DECL ('prototype sub_1400055e0 void * sub_1400055e0(void *out, void *input)') APPLIES CORRECTLY -- so the discriminator is the decl name, not the output format; (d) --json with <func> naming another or a bogus function ('prototype main ...', 'prototype no_such_fn ...') does NOT touch the selected function, so JSON honours <func>. MECHANISM: assertdecl.rs:343 lowers Body::Prototype { func: _, decl } -- the <func> target is DISCARDED -- to 'parse line extern <decl>;', which binds the prototype to a symbol named by the DECLARATION. Same name => it lands on the selected function; a renaming decl => it lands on a fresh unrelated symbol and the selected function is untouched. The JSON surface is a SECOND IMPLEMENTATION, not a second dialect as decompile.rs:14 claims: --json routes through run_json -> in-process decompile_all (decompile.rs:1152/1241), while text drives decomp_dbg as a subprocess over the console script. FIX DIRECTION: make the text lowering honour <func> (bind the parsed prototype to the target function, renaming it when the decl name differs). Making JSON match text would be the wrong direction. SECOND DEFECT FOUND, DO NOT TREAT --assert-strict AS A GUARD HERE: the outcome is recovered from the console transcript (assertion_outcomes), so a directive that changed nothing still reports status 'applied' -- including 'prototype no_such_fn ...' under --json. The acceptance probe's stderr_absent 'rejected' clause therefore proves nothing on its own; the load-bearing clauses are stdout_absent/stdout_matches.
 captain B_DRAIN r3: touches CORRECTED after the refutation -- the seam is assertdecl.rs:343 (the prototype lowering that discards <func>), not output.rs, which the refuter measured is not involved. assertdecl.rs is also being edited RIGHT NOW by b-r3-prototype-assert (feat/re-prototype-assertions-reject-ordinary, --assert scalar types); this need must not be dispatched until that lands, and select.py's file-lease disjointness now sees the overlap.

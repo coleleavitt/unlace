@@ -31,10 +31,10 @@ cache. kuna cannot open one: `dyld_shared_cache_arm64e` starts with the magic
 ## User-facing shape
 
 ```text
-kuna unpack <cache> --list [--json]                 # images: index, address, install name
-kuna unpack <cache> --image NAME [-o OUT]           # write one image as a standalone Mach-O
-kuna decompile <cache> --image NAME <func>          # every analysis surface accepts --image
-kuna functions <cache> --image NAME
+unlace unpack <cache> --list [--json]                 # images: index, address, install name
+unlace unpack <cache> --image NAME [-o OUT]           # write one image as a standalone Mach-O
+unlace decompile <cache> --image NAME <func>          # every analysis surface accepts --image
+unlace functions <cache> --image NAME
 ```
 
 - `<cache>` is the main cache file. Sub-caches and `.symbols` are found next to it
@@ -45,13 +45,13 @@ kuna functions <cache> --image NAME
   `CoreFoundation`), then a unique basename without extension (`libobjc.A`).
   An ambiguous or unknown name exits 2 and lists the closest matches.
 - A cache with more than one image and no `--image` exits 2 with
-  `dyld shared cache holds N images; choose one with --image (kuna unpack <cache> --list)`.
+  `dyld shared cache holds N images; choose one with --image (unlace unpack <cache> --list)`.
 - The selector is a load-time option, `dyldimage` (`none|<install-name>`),
   bridged through `KUNA_DYLD_IMAGE` like every other load-time gate. So
   `--option dyldimage NAME` reaches every CLI command, and the console sets it
   with `option dyldimage NAME` before `load file`. `--image NAME` is a global
   shorthand: `main.rs` removes it and sets the same variable, so it also
-  reaches `kuna unpack`, which takes no `--option`.
+  reaches `unlace unpack`, which takes no `--option`.
 - A `.dylib`-style path syntax (`cache!/usr/lib/libobjc.A.dylib`) was considered
   and rejected: many surfaces stat, name output after, or re-read the binary path,
   and a synthetic path would have to be taught to each of them.
@@ -67,21 +67,21 @@ matched on dotted suffixes. Cache images are install paths
 (`/usr/lib/libobjc.A.dylib`), matched on path components. So the two options
 stay separate for now. If both land, one `image` option could front both
 containers, keeping one matcher per namespace. `list` is not a `dyldimage`
-value, because a cache has thousands of images; `kuna unpack <cache> --list
+value, because a cache has thousands of images; `unlace unpack <cache> --list
 [--json]` prints them instead.
 
 ## Where it goes
 
-Loader tier, P1, `kuna-analysis`. No change to the decompiler core.
+Loader tier, P1, `unlace-analysis`. No change to the decompiler core.
 
 | File | Role |
 |---|---|
-| `kuna-analysis/src/loader/kuna_dyldcache.rs` | The cache view: header, sub-caches, mappings, images, `VA -> bytes`. |
-| `kuna-analysis/src/loader/kuna_dyldcache/slide.rs` | Slide info v1/v2/v3/v4/v5 page-chain walkers, rewriting pointers to unslid targets. |
-| `kuna-analysis/src/loader/kuna_dyldcache/extract.rs` | Rebuild one image as a thin Mach-O. |
-| `kuna-analysis/src/loader/kuna_dyldcache/xrefs.rs` | Stub-island, foreign-stub and coalesced-GOT resolution to target names. |
-| `kuna-decomp/src/p0_knowledge/kuna_dyldcache.rs` | The `dyldimage` and `dyldcrossrefs` env-bridged options. |
-| `kuna-cli/src/unpack.rs` | `--list` / `--image` arms. |
+| `unlace-analysis/src/loader/kuna_dyldcache.rs` | The cache view: header, sub-caches, mappings, images, `VA -> bytes`. |
+| `unlace-analysis/src/loader/kuna_dyldcache/slide.rs` | Slide info v1/v2/v3/v4/v5 page-chain walkers, rewriting pointers to unslid targets. |
+| `unlace-analysis/src/loader/kuna_dyldcache/extract.rs` | Rebuild one image as a thin Mach-O. |
+| `unlace-analysis/src/loader/kuna_dyldcache/xrefs.rs` | Stub-island, foreign-stub and coalesced-GOT resolution to target names. |
+| `unlace-decomp/src/p0_knowledge/kuna_dyldcache.rs` | The `dyldimage` and `dyldcrossrefs` env-bridged options. |
+| `unlace-cli/src/unpack.rs` | `--list` / `--image` arms. |
 
 The cache is peeled at the same two points as a fat Mach-O
 (`macho_fat::peel_fat_image`): the engine dispatch in
@@ -136,7 +136,7 @@ addresses outside it. While the image is rebuilt:
 3. Look up names in the target image's symbol table, exports first, then the
    `.symbols` locals. Each image's table is built lazily, on its first lookup.
 4. Store the result in the rebuilt Mach-O as an `LC_NOTE` with
-   `data_owner = "kuna.dyld.xrefs"`, so `kuna unpack` output carries it too.
+   `data_owner = "kuna.dyld.xrefs"`, so `unlace unpack` output carries it too.
    `macho_stubs` reads the note back under the gate. Each call target becomes
    an import stub symbol, and each slot becomes an import slot, so
    `peimportcall` binds a call through it.
@@ -189,17 +189,17 @@ two-pass stage test.
   extracts in `~/SiteResearch/ios-16_4_1_a13/imessage_frameworks/` (same build,
   different device).
 - **Speed**: report time and peak RSS for `--list`, for the extraction alone, and
-  for `kuna functions` on one image. The non-cache path gains one 16-byte magic
+  for `unlace functions` on one image. The non-cache path gains one 16-byte magic
   compare at the two peel points.
 
 ## Implemented (branch `apple/dyld-cache`, commits e5c5feec, 61812981)
 
-- Files: `kuna-analysis/src/loader/kuna_dyldcache.rs` (+ `kuna_dyldcache/{extract,slide,xrefs,tests}.rs`),
-  `kuna-decomp/src/p0_knowledge/kuna_dyldcache.rs`, `kuna-cli/src/unpack/dyld.rs`,
-  fixture generator `kuna-analysis/tests/fixtures/dyld_cache_arm64e.py` (29 KB of
+- Files: `unlace-analysis/src/loader/kuna_dyldcache.rs` (+ `kuna_dyldcache/{extract,slide,xrefs,tests}.rs`),
+  `unlace-decomp/src/p0_knowledge/kuna_dyldcache.rs`, `unlace-cli/src/unpack/dyld.rs`,
+  fixture generator `unlace-analysis/tests/fixtures/dyld_cache_arm64e.py` (29 KB of
   output), stage test `tests/stages/kuna-dyldcrossrefs.xml`.
 - Options: `dyldimage` (`none|<install-name>`, default `none`) and `dyldcrossrefs`
-  (`on|off`, default `on`); global `--image NAME`; `kuna unpack <cache> --list | --image`.
+  (`on|off`, default `on`); global `--image NAME`; `unlace unpack <cache> --list | --image`.
 - Real caches: iOS 16.4.1 arm64e (2,715 images, 44 sub-caches, slide v3) and
   iOS 14.8 arm64 (2,121 images, one file, slide v2). Every image rebuilds and parses.
   Every out-of-image branch target in libobjc, CoreFoundation and UIKitCore is named, on

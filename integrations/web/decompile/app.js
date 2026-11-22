@@ -312,7 +312,7 @@ function persist() {
 
 try {
   state.kuna = new KunaWorkerClient({
-    wasmUrl: new URL('../kuna_wasm.wasm', import.meta.url).href,
+    wasmUrl: new URL('../unlace_wasm.wasm', import.meta.url).href,
     specRoot: new URL('../specs', import.meta.url).href,
   });
   await state.kuna.ready();

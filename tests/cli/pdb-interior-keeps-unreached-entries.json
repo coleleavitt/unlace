@@ -32,7 +32,7 @@
     "binary_sha256": "9d572ee24504a476f0a343cba31b8f2579497f567a85afe25178c4c4c11af608",
     "binary_size": 2560,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_pdbinterior_x86_64.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_pdbinterior_x86_64.exe",
     "selector": null,
     "selector_kind": "none"
   }

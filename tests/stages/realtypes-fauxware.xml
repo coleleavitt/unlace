@@ -5,7 +5,7 @@
     C types by size instead of the xunknownN / undefinedN placeholder.
 
     Binary: the `authenticate` function from the `fauxware` test binary
-    (decompiler/crates/kuna-sleigh/tests/fixtures/fauxware, x86-64 ELF), embedded as
+    (decompiler/crates/unlace-sleigh/tests/fixtures/fauxware, x86-64 ELF), embedded as
     its raw 137 bytes at its real load address 0x400664.  No prototype is declared,
     so type inference leaves the 8-byte parameters / 1-byte buffer / 4-byte temp as
     TYPE_UNKNOWN - exactly the case the `realtypes` default-on P0 surface relabels.

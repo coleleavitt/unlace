@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Live-smoke: decompile the same functions with the stock Ghidra core and the
-kuna_ghidra core inside a REAL Ghidra, and write a side-by-side report with the
+unlace_ghidra core inside a REAL Ghidra, and write a side-by-side report with the
 same badness-scanner counts the in-tree ghidra-sim harness pins.
 
 This is the manual/dev complement to `make test-ghidra` (which needs no Ghidra
@@ -11,8 +11,8 @@ tokens become `unsigned_long__a1`).
 
 Environment:
   GHIDRA_INSTALL_DIR    Ghidra release root (required; pyghidra needs it)
-  KUNA_GHIDRA_EXE       path to the kuna_ghidra binary
-                        (default: <repo>/decompiler/target/release/kuna_ghidra)
+  KUNA_GHIDRA_EXE       path to the unlace_ghidra binary
+                        (default: <repo>/decompiler/target/release/unlace_ghidra)
   KUNA_SMOKE_BINARY     the program to analyze (required)
   KUNA_SMOKE_FUNCTIONS  comma-separated function names (default: main plus the
                         two largest non-thunk functions)
@@ -31,7 +31,7 @@ import traceback
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 KUNA_GHIDRA = os.environ.get(
     "KUNA_GHIDRA_EXE",
-    os.path.join(REPO, "decompiler", "target", "release", "kuna_ghidra"),
+    os.path.join(REPO, "decompiler", "target", "release", "unlace_ghidra"),
 )
 BINARY = os.environ.get("KUNA_SMOKE_BINARY")
 FUNCTIONS = [f for f in os.environ.get("KUNA_SMOKE_FUNCTIONS", "").split(",") if f]
@@ -159,8 +159,8 @@ def main():
               "python3 kuna_vs_stock.py")
         sys.exit(1)
     if not os.path.exists(KUNA_GHIDRA):
-        print(f"FATAL: kuna_ghidra not built at {KUNA_GHIDRA} "
-              "(cd decompiler && cargo build --release -p kuna-ghidra)")
+        print(f"FATAL: unlace_ghidra not built at {KUNA_GHIDRA} "
+              "(cd decompiler && cargo build --release -p unlace-ghidra)")
         sys.exit(1)
     os.makedirs(OUT, exist_ok=True)
 
@@ -225,7 +225,7 @@ def main():
         field.set(None, None)
 
     # Side-by-side report with the per-function gap.
-    lines = ["# kuna_ghidra vs stock core — live smoke report", ""]
+    lines = ["# unlace_ghidra vs stock core — live smoke report", ""]
     names = []
     for core, name, _, _ in report:
         if name not in names:

@@ -11,10 +11,10 @@
     `NSLog(0x1044376b0)` for `NSLog(CFSTR("Reachability Flag Status: ..."))`.
 
     Stage / sub-stage: P1 external-refinement, the Mach-O `cfstrings`
-    analysis pass (`kuna-analysis/src/analyzers/cfstring/mod.rs`), whose
+    analysis pass (`unlace-analysis/src/analyzers/cfstring/mod.rs`), whose
     facts the commit seam turns into an opaque `struct __CFString` entry,
     whose pointer the type factory spells `CFStringRef`, plus a StringManager
-    seed at the entry address (`kuna-console/src/engine.rs`).
+    seed at the entry address (`unlace-console/src/engine.rs`).
 
     P0 assertion: `option cfstrings on|off|annotate` (default on). It is a commit-time
     gate, so it is set after `load file` and before the `read symbols` that
@@ -42,7 +42,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_cfstring</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_cfstring</com>
   <com>option cfstrings off</com>
   <com>read symbols</com>
   <com>load addr 0x100000538</com>
@@ -52,7 +52,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_cfstring</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_cfstring</com>
   <com>option cfstrings on</com>
   <com>read symbols</com>
   <com>load addr 0x100000538</com>
@@ -62,7 +62,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_cfstring</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_cfstring</com>
   <com>option cfstrings annotate</com>
   <com>read symbols</com>
   <com>load addr 0x100000538</com>

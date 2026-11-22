@@ -166,7 +166,7 @@ one `int v23;`.
 `ScopeLocal` **Symbol** table, and takes each declaration's type from that high's
 own storage-representative Varnode:
 
-* `decompiler/crates/kuna-decomp/src/p9_emit/printc.rs` — `emit_local_var_decls`
+* `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs` — `emit_local_var_decls`
   builds `decls` by iterating `fd.vbank().iter_loc()` and de-duplicating **by
   HighVariable id**, then `local_decl_type_and_comment` renders the type from
   `v.get_type()` of the high's representative varnode (printc.rs:2754).
@@ -250,7 +250,7 @@ binary. kuna is *tied for best* on this function and its CFG shape (2 gotos,
 **Mechanism.** Make the scalar declaration walk Symbol-keyed, the way the
 composite one already is.
 
-In `emit_local_var_decls` (`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs`),
+In `emit_local_var_decls` (`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs`),
 the retain that currently collapses on `(name, composite-type-Rc)` should also
 collapse **scalars** keyed on `(name, storage location)` — the `(text, offset)`
 storage comment `local_decl_type_and_comment` already computes. A name plus a
@@ -270,9 +270,9 @@ has a resolved storage location, so name+storage is a Symbol identity), and keep
 the full four-field key for un-mapped locals where storage cannot disambiguate.
 
 **Owning files.**
-* `decompiler/crates/kuna-decomp/src/p9_emit/printc.rs` — `emit_local_var_decls`
+* `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs` — `emit_local_var_decls`
   (the `seen_sym` retain, ~printc.rs:2585) and `local_decl_type_and_comment`.
-* `decompiler/crates/kuna-decomp/src/p9_emit/kuna_dedupvardecls.rs` — the
+* `decompiler/crates/unlace-decomp/src/p9_emit/kuna_dedupvardecls.rs` — the
   `DeclSignature` key and its module doc, which currently *documents* the residual
   collision as intentional and would need to be updated.
 * Spec chapter owning `p9_emit/` (find via its `Anchors:` header) — the collapse

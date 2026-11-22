@@ -87,7 +87,7 @@ The repository currently has only `ActionGroup` and `ActionRestartGroup`.
 - `make test-stages`: 3203/3203, PARITY OK
 - `make rust-test`: full workspace green, using an isolated pristine Go 1.18.1
 - `make check-spec`: OK
-- `make lint`, `make test-tools`, and `kuna catalog --check`: green
+- `make lint`, `make test-tools`, and `unlace catalog --check`: green
 - `make test-cli`: 303/303
 - `prefersplit_scope`: 9/9; `kuna_structsynth`: 32/32; `prefersplit`: 10/10;
   the new action test passes

@@ -1,6 +1,6 @@
 <decompilertest>
 <binaryimage arch="ARM:LE:32:v5t:default">
-<!-- Authored A32 branch instructions, assembled from kuna-cli/tests/fixtures/arm_conditional_switch.S. -->
+<!-- Authored A32 branch instructions, assembled from unlace-cli/tests/fixtures/arm_conditional_switch.S. -->
 <bytechunk space="ram" offset="0x10000">000050e3100000ba3d0050e30e0000ca3a0050e200f18f500b0000ea020000ea030000ea040000ea050000ea0b00a0e31eff2fe10c00a0e31eff2fe10d00a0e31eff2fe10e00a0e31eff2fe10000e0e31eff2fe1</bytechunk>
 <symbol space="ram" offset="0x10000" name="arm_switch_conditional"/>
 <bytechunk space="ram" offset="0x10054">000050e30f0000ba030050e30d0000ca00f18fe00b0000ea020000ea030000ea040000ea050000ea1500a0e31eff2fe11600a0e31eff2fe11700a0e31eff2fe11800a0e31eff2fe10000e0e31eff2fe1</bytechunk>

@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/573
@@ -59,7 +59,7 @@ A declaration for the stack aggregate used in emitted C.
     "binary_sha256": "92968f535eaaa3dbf064699e5fcbe1e65ddd6456aa7c46495b26e1d63b9a9160",
     "binary_size": 10808,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/checker_stack_aggregate_x86_64"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/checker_stack_aggregate_x86_64"
   }
 }
 ```
@@ -75,7 +75,7 @@ A declaration for the stack aggregate used in emitted C.
     "binary_sha256": "92968f535eaaa3dbf064699e5fcbe1e65ddd6456aa7c46495b26e1d63b9a9160",
     "binary_size": 10808,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/checker_stack_aggregate_x86_64"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/checker_stack_aggregate_x86_64"
   },
   "timeout_s": 60,
   "cmd": [
@@ -121,7 +121,7 @@ _none recorded_
 - filed by cluster.py from 1 observation(s)
 - round 9 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD ON THE SUPPRESSION HALF, CORRECTED ON THE 'AGGREGATE' AND 'OVERLAPPING' HALVES (captain in-tick, release binary 8df2a52e, arena .kuna-repipe/arena/9/6a09581717539b5175d122b9/target/phantomgate.exe).
 
-THE DEFECT IS EXACTLY ONE VARIABLE, AND IT IS PRINTER-SIDE, NOT MODEL-SIDE. Sweeping the emitted C for declared-vs-used v-names: 69 declared, 70 used, and the difference is the singleton {v12}. Meanwhile 'kuna decompile ... --json' .functions[0].variables lists 71 entries INCLUDING v12 -- {name: v12, type: unsigned long long, kind: stack, stack_offset: -1256, size: 8, 26 line_numbers}. So the model has the variable with a type, a storage slot and every use site; only the declaration LINE is missing. Any fix belongs in the P9 declaration loop, not in stack/symbol recovery. The emitted C is uncompilable as a result: v12._0_4_ = a1 & 0xff ^ v10._0_4_; at line 94 with no declaration anywhere.
+THE DEFECT IS EXACTLY ONE VARIABLE, AND IT IS PRINTER-SIDE, NOT MODEL-SIDE. Sweeping the emitted C for declared-vs-used v-names: 69 declared, 70 used, and the difference is the singleton {v12}. Meanwhile 'unlace decompile ... --json' .functions[0].variables lists 71 entries INCLUDING v12 -- {name: v12, type: unsigned long long, kind: stack, stack_offset: -1256, size: 8, 26 line_numbers}. So the model has the variable with a type, a storage slot and every use site; only the declaration LINE is missing. Any fix belongs in the P9 declaration loop, not in stack/symbol recovery. The emitted C is uncompilable as a result: v12._0_4_ = a1 & 0xff ^ v10._0_4_; at line 94 with no declaration anywhere.
 
 CORRECTION 1 -- IT IS NOT AN AGGREGATE. v12 is an 8-byte scalar (unsigned long long) in the model. What makes it LOOK aggregate in the text is that the code writes it at partial widths (._0_4_, ._4_4_) and then uses it as the VM stack base, (&v12)[v62], 29 times.
 CORRECTION 2 -- NO STORAGE OVERLAP IS INVOLVED. The neighbour v53 sits at -1264 size 8 and therefore ENDS exactly where v12 begins at -1256. Adjacent, not overlapping.

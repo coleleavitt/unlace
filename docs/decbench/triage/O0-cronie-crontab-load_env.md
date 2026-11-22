@@ -63,7 +63,7 @@ Table at `.rodata:0xd2bc`, 7 valid entries (`d2bc + sext(int32)`):
 
 ### kuna (fresh, today's build)
 
-`kuna decompile-all <stripped> --addr 0x983d` (the exact call decbench scores, `--mode auto` = `aggressive`) — **unchanged**, and note the constant-folded `state` leaking into the printf:
+`unlace decompile-all <stripped> --addr 0x983d` (the exact call decbench scores, `--mode auto` = `aggressive`) — **unchanged**, and note the constant-folded `state` leaking into the printf:
 
 ```c
   if (*a0) {
@@ -74,7 +74,7 @@ Table at `.rodata:0xd2bc`, 7 valid entries (`d2bc + sext(int32)`):
     printf("load_env, not an env var, state = %d\n",0);   // <-- state folded to 0
 ```
 
-`kuna decompile <bin> load_env` (single-function path, `auto`/`aggressive`; `--mode reliable`
+`unlace decompile <bin> load_env` (single-function path, `auto`/`aggressive`; `--mode reliable`
 gives the fully-collapsed form above) — best case today is a **one-entry** table whose case
 label is the raw target address:
 
@@ -154,7 +154,7 @@ stubbed out:
 **Owning phase: P2 (lift/flow — jump-table / switch recovery).**
 
 **Controlled proof on today's build** (`/tmp/.../scratchpad/jt/{t,u}.c`, `gcc -O0 -g`,
-`kuna decompile ... --mode reliable`). Four variants of the *same* loop+switch source,
+`unlace decompile ... --mode reliable`). Four variants of the *same* loop+switch source,
 differing only in where the index comes from:
 
 | variant | index seed | result |
@@ -213,7 +213,7 @@ the BRANCHIND in `FlowInfo::recover_jump_tables`' `notreached` list instead of
 re-queue, a stage cap (upstream `recoverystage`), and a non-override entry into
 `check_for_multistage`.
 
-**Owning files.** `decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs`
+**Owning files.** `decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs`
 (`recover_model_basic`, `recover_addresses`, `check_for_multistage`),
 `src/p2_lift/flow.rs` (`recover_jump_tables`), `src/substrate/funcdata_block.rs`
 (`stage_jump_table`), plus `phases.toml` + `p0_knowledge/options.rs` + the catalog counts.

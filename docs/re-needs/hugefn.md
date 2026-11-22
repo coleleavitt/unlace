@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli/src/decompile_all.rs, decompiler/crates/kuna-analysis/src/listing/xrefs.rs, decompiler/crates/kuna-analysis/src/listing/kuna_switchtable.rs, decompiler/crates/kuna-decomp/phases.toml]
+touches: [decompiler/crates/unlace-cli/src/decompile_all.rs, decompiler/crates/unlace-analysis/src/listing/xrefs.rs, decompiler/crates/unlace-analysis/src/listing/kuna_switchtable.rs, decompiler/crates/unlace-decomp/phases.toml]
 scope: small
 regression_of: null
 pr: null
@@ -32,9 +32,9 @@ catalogued option.
 > **Giant state machine gives no warning** (major, Flare-On 12 challenge 5 `ntfsm.exe`)
 > `main` at 0x14000c0b0 is a 16.6 MB extent of about 2.5M instructions that dispatches
 > through a 90,781-entry image-base-relative table at 0x14000ca5a (`cmp idx,0x1629c`).
-> `kuna functions --summary --json` lists it only as the largest function; nothing says
+> `unlace functions --summary --json` lists it only as the largest function; nothing says
 > the switch is over the 1024-entry cap or that the body is over `maxinstruction`, and
-> `kuna catalog` has no jump-table option (the analysis tier's own table read was a
+> `unlace catalog` has no jump-table option (the analysis tier's own table read was a
 > hard-coded 1024 that no option reached).
 
 ## Reproduction
@@ -78,11 +78,11 @@ catalogued option.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_switchdelta_x86_64.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_switchdelta_x86_64.exe",
     "binary_sha256": "013837321f893184671d054265b24d0c8a7055dff3db5c5481be863a4c351177",
     "binary_size": 3072,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_switchdelta_x86_64.exe"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_switchdelta_x86_64.exe"
   }
 }
 ```
@@ -154,11 +154,11 @@ catalogued option.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_switchdelta_x86_64.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_switchdelta_x86_64.exe",
     "binary_sha256": "013837321f893184671d054265b24d0c8a7055dff3db5c5481be863a4c351177",
     "binary_size": 3072,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_switchdelta_x86_64.exe"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_switchdelta_x86_64.exe"
   }
 }
 ```

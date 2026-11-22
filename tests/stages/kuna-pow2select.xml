@@ -11,7 +11,7 @@
     Stage / sub-stage: P3 "simplification-quiescence", option
     `pow2select on|off`.
 
-    The bytes are decompiler/crates/kuna-analysis/tests/fixtures/pow2select.c
+    The bytes are decompiler/crates/unlace-analysis/tests/fixtures/pow2select.c
     built by gcc 15.3 at -O2 -fno-pie -no-pie -nostartfiles (x86-64 SysV).
     near1 tests x > 5 and near3 biases by 7 before a shift by 2; neither is a
     division and both keep their select.  Pass 1 is the default, pass 2

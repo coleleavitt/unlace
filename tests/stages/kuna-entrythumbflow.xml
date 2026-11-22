@@ -22,7 +22,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/te_entrythumbflow_arm.te</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/te_entrythumbflow_arm.te</com>
   <com>read symbols</com>
   <com>load function sub_401000</com>
   <com>decompile</com>

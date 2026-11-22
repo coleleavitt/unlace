@@ -5,7 +5,7 @@
      The caller passes fp-48 to a ten-word writer and reads fp-40.
      Off: two-word array and an independent uninitialized return scalar.
      On: shared frame-bounded storage, with the return at element 2.
-     Assemble decompiler/crates/kuna-cli/tests/fixtures/escaped_output.s with llvm-mc -triple=sparc
+     Assemble decompiler/crates/unlace-cli/tests/fixtures/escaped_output.s with llvm-mc -triple=sparc
      -filetype=obj, then resolve its R_SPARC_WDISP30 call relocations.
      A frame capacity of 12 words is not the source array's exact length of 10.
      separate_word keeps a caller-defined scalar out of the inferred array.

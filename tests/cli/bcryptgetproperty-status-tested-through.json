@@ -20,11 +20,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/mcount_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/mcount_x86_64",
     "binary_sha256": "913d35f45475cc129d2fd6a94e35e62bd1b6be720a7207b74852705850611ee7",
     "binary_size": 896032,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/mcount_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/mcount_x86_64",
     "selector": "__printf_fp_l",
     "selector_kind": "name"
   },

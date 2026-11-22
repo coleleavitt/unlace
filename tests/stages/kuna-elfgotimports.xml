@@ -10,7 +10,7 @@
     libxml2 on this host all read stdout, environ or a library global that way).
 
     Stage / sub-stage: P1 environment-binding, the ELF GOT import slots
-    (`kuna-analysis/src/loader/kuna_elfgotimports.rs`: reported as import slots,
+    (`unlace-analysis/src/loader/kuna_elfgotimports.rs`: reported as import slots,
     named and painted externref), rendered by P9 naming-policy
     `PrintC::op_load` (`importdata`).
 
@@ -35,7 +35,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_gotdata_x86_64.so</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_gotdata_x86_64.so</com>
   <com>option importdata off</com>
   <com>read symbols</com>
   <com>load addr 0x1580</com>
@@ -45,7 +45,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_gotdata_x86_64.so</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_gotdata_x86_64.so</com>
   <com>read symbols</com>
   <com>load addr 0x1580</com>
   <com>decompile</com>
@@ -54,7 +54,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_gotdata_aarch64.so</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_gotdata_aarch64.so</com>
   <com>option importdata off</com>
   <com>read symbols</com>
   <com>load addr 0x104e4</com>
@@ -64,7 +64,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_gotdata_aarch64.so</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_gotdata_aarch64.so</com>
   <com>read symbols</com>
   <com>load addr 0x104e4</com>
   <com>decompile</com>

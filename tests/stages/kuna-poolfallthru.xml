@@ -4,11 +4,11 @@
   `bl use; bl die` with no epilogue, and its five PC-relative literal words follow the
   second call. kuna cannot prove `die` no-return, so the walk took the call's
   fall-through, decoded the first four words as instructions and stopped at
-  `0x0002cbb2`, which decodes as nothing, while `kuna disassemble` lists the same
+  `0x0002cbb2`, which decodes as nothing, while `unlace disassemble` lists the same
   words as data.
   Stage: P2 flow classification, the funcboundflow fall-through bound
   (`p2_lift/kuna_funcboundflow.rs` kuna_should_bound_at_pool) over the pool extents
-  the Listing proves from trusted references (`kuna-analysis`
+  the Listing proves from trusted references (`unlace-analysis`
   `listing/kuna_poolextents.rs`), so `option listing on` precedes `read symbols`.
   P0 assertion: `option funcboundflow off|on` (default on).
   `poolguards.s` drives every condition in both byte orders: eight negatives
@@ -38,7 +38,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolfallthru_arm_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolfallthru_arm_le32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>option funcboundflow off</com>
@@ -49,7 +49,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolfallthru_arm_be32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolfallthru_arm_be32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>option funcboundflow off</com>
@@ -60,7 +60,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolguards_arm_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolguards_arm_le32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function cond_call</com>
@@ -112,7 +112,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolguards_arm_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolguards_arm_le32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>option funcboundflow off</com>
@@ -123,7 +123,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolguards_arm_be32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolguards_arm_be32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function cond_call</com>
@@ -175,7 +175,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolguards_arm_be32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolguards_arm_be32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>option funcboundflow off</com>

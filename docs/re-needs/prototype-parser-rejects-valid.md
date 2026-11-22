@@ -14,7 +14,7 @@ rounds: [8]
 first_seen_round: 8
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-console/src/grammar, decompiler/crates/kuna-cli/src/assertdecl.rs]
+touches: [decompiler/crates/unlace-console/src/grammar, decompiler/crates/unlace-cli/src/assertdecl.rs]
 scope: small
 regression_of: null
 pr: null
@@ -80,11 +80,11 @@ Specify the interpreter's code pointer through a prototype assertion.
   "probe_id": "a-555cfdcc80e2",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "authenticate",
     "selector_kind": "name"
   },
@@ -158,6 +158,6 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 8 TRIAGE (captain): RETOUCHED from the coarse [kuna-cli] to the actual parser. The 'Bad C syntax' answer is raised in kuna-console/src/ifacedecomp.rs and the C dialect it enforces is kuna-console/src/grammar/; kuna-cli/src/assertdecl.rs only forms the directive line. track stays tooling: accepting a valid parameter name corrects a parser that is wrong on its own terms, so it is a strict fix with no option.
+- round 8 TRIAGE (captain): RETOUCHED from the coarse [unlace-cli] to the actual parser. The 'Bad C syntax' answer is raised in unlace-console/src/ifacedecomp.rs and the C dialect it enforces is unlace-console/src/grammar/; unlace-cli/src/assertdecl.rs only forms the directive line. track stays tooling: accepting a valid parameter name corrects a parser that is wrong on its own terms, so it is a strict fix with no option.
 - closed: acceptance a-555cfdcc80e2 now PASSES at 7e77fb8c9dca
 - round 10 REFUTER: hypothesis **overturned** (was inconclusive). Mechanism overturned, symptom stands. `code` is not a reserved word: Architecture::setup_types registers it as a core data-type (set_core_type("code", 1, TYPE_CODE, false)), and CParse::lookup_identifier classifies every spelling findByName answers as TYPE_NAME. The class is therefore every interned type name -- the core types, any tag/typedef declared earlier in the run, and on a -g binary every DWARF type name. The symptom also has two halves with two diagnostics, not one: `unsigned char *code` dies in direct_declarator (Syntax error) and `unsigned char code` dies in the greedy specifier run (Multiple type specifiers).

@@ -1,0 +1,52 @@
+# unlace-ghidra: the ghidra-mode process front-end (the native side of the
+# Ghidra GUI <-> decompiler stdin/stdout protocol; upstream's `decompile`
+# binary, built from ghidra_process.cc / ghidra_arch.cc).
+#
+# Phase 1 (see docs/ghidra-integration.md): wire-protocol complete, engine
+# stubbed.  Deliberately does NOT depend on unlace-decomp — the engine bridge
+# (Funcdata encode, ScopeGhidra, TypeFactoryGhidra, ...) is phase 2.
+
+[package]
+autotests = false
+name = "unlace-ghidra"
+description = "kuna Rust port: ghidra-mode process front-end (Ghidra's `decompile` binary)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+unlace-base.workspace = true
+# VarnodeData / opcodes (the packed <op> decode + the register-storage triple
+# GhidraTranslate hands back through EngineTranslate::get_register_varnode).
+unlace-num.workspace = true
+# The tspec <sleigh> element decode (ELEM_SLEIGH / ATTRIB_UNIQBASE /
+# TruncationTag / register_translate_ids), the Translate / RegisterLookup /
+# PcodeEmit traits and TranslateBase, the ContextDatabase, and LoadImage — the
+# GhidraTranslate live-translator surface lives in unlace-sleigh.
+unlace-sleigh.workspace = true
+# The Architecture<->translator seam (the EngineTranslate trait GhidraTranslate
+# implements).  unlace-decomp does NOT depend on unlace-ghidra, so this is not a
+# cycle: the ghidra translator is the downstream implementor of the trait.
+unlace-decomp.workspace = true
+
+[dev-dependencies]
+# The ghidra-sim test harness (tests/ghidra_sim/) answers the wire queries from
+# kuna's OWN analysis of real vendored ELFs: unlace-console provides the
+# in-process bootstrap/decompile drive (the CLI path — also the differential
+# ground truth), unlace-analysis rides in through it.  Dev-only and cycle-free:
+# nothing depends on unlace-ghidra, and dev-deps do not propagate.
+unlace-console.workspace = true
+unlace-analysis.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "unlace_ghidra"
+path = "src/bin/unlace_ghidra.rs"
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"

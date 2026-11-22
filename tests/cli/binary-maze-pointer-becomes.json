@@ -2,11 +2,11 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/emptystrconst_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/emptystrconst_x86_64",
     "binary_sha256": "f1e7a5da26d86d13eafe9e38d4e10db59599bdf0921edb6bfd5d9bb3872bbec6",
     "binary_size": 14512,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/emptystrconst_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/emptystrconst_x86_64",
     "selector": "0x401136",
     "selector_kind": "addr"
   },

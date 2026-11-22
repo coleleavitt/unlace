@@ -4,7 +4,7 @@
     Mach-O export tries, re-exports followed (`option exporttrie on|off`,
     default on).
 
-    kuna read a Mach-O's exports from the symbol table only, and named a call
+    unlace read a Mach-O's exports from the symbol table only, and named a call
     into another dyld shared cache image after the target's own symbol. The
     export trie carries the names a stripped dylib keeps, and resolving an
     image's imports through the tries of the dylibs its two-level ordinals
@@ -36,24 +36,24 @@ c0035fd6
   <com>option dyldimage /usr/lib/libcaller.dylib</com>
   <com>option exporttrie off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
   <com>read symbols</com>
   <com>load function caller_entry</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_trieonly_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_trieonly_arm64</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>option exporttrie on</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
   <com>read symbols</com>
   <com>load function caller_entry</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_trieonly_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_trieonly_arm64</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>quit</com>

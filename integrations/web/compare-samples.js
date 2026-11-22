@@ -6,7 +6,7 @@
 // markup changes.
 //
 //   RIVALS   the right-hand pane's options, in dropdown order.
-//   SAMPLES  the left dropdown. `kuna` is the left pane; `vs[<rival id>]` the
+//   SAMPLES  the left dropdown. `unlace` is the left pane; `vs[<rival id>]` the
 //            right one. A rival with no entry renders a "not recorded yet"
 //            placeholder, so a half-filled sample is honest rather than empty.
 //            `ged` (optional) is the measured DecBench score per decompiler;

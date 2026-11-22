@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:64:default:gcc">
 <!--
     RE-friction round 2, need `argument-recovery-knobs-still` (challenge
-    6547b4d50f4238b24302b588, PE x86-64 `trappy attack.exe`): `kuna decompile
+    6547b4d50f4238b24302b588, PE x86-64 `trappy attack.exe`): `unlace decompile
     ... 0x1400011c0 -addr` renders the same allocator with two arities, nine
     lines apart, and `option calleearity on` does NOT fix it:
 

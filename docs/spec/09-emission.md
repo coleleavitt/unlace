@@ -2,18 +2,18 @@
 
 ```yaml
 Anchors:
-  - decompiler/crates/kuna-decomp/src/p9_emit
+  - decompiler/crates/unlace-decomp/src/p9_emit
 ```
 
 The CLI's `functions --json` serializes borrowed inventory records through
-`decompiler/crates/kuna-cli/src/decompile_all/functions_serialize.rs`. It visits
+`decompiler/crates/unlace-cli/src/decompile_all/functions_serialize.rs`. It visits
 one record at a time without constructing a document-wide `Json` array or
 copying names and aliases. Records go directly to the stdout boundary's buffered
 writer through a fixed 64 KiB serialization buffer, so no complete output string
 is retained. `serde_json` owns the JSON structure and indentation; an adapter
 preserves ASCII-safe string escapes, including DEL and UTF-16 surrogate pairs.
 Both this adapter and the shared `jsonfmt` string writer use `UnicodeEscape`
-from `decompiler/crates/kuna-cli/src/jsonfmt/writer.rs` for Unicode escapes.
+from `decompiler/crates/unlace-cli/src/jsonfmt/writer.rs` for Unicode escapes.
 Field order, optional fields, numeric spelling and the trailing newline are preserved.
 `scripts/bench_functions_macho.py` generates an arm64 Mach-O with a configurable
 number of one-instruction functions for reproducing inventory memory measurements.
@@ -34,7 +34,7 @@ through an explicit symbol. This corrects field extraction; it does not supply
 missing Rust signedness conversions in surrounding expressions.
 
 Standalone C output qualifies whole function-address expressions through
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_funcptrnames.rs`. A named
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_funcptrnames.rs`. A named
 SPACEBASE reference must have code type and resolve to the exact function entry.
 The recovered global symbol and live function database must agree on its leaf
 name and complete namespace path at the instruction's use point. This preserves
@@ -137,14 +137,14 @@ out (§9.3), folding in string literals and analysis comments (§9.4), and
 choosing between pointer-arithmetic and array notation (§9.5). Everything here
 is presentation: after `ActionSetCasts` the IR is only mutated by inserting
 print-support ops (CAST, `PTRSUB #0`), never by changing computation. In the
-registry (`decompiler/crates/kuna-decomp/phases.toml`) P9 carries the
+registry (`decompiler/crates/unlace-decomp/phases.toml`) P9 carries the
 sub-decisions `cast-policy`, `naming-policy`, `literal-format`,
 `pointer-notation`, `condition-form`, `brace-form`, `warning-style`,
 `type-definition-preamble`, `constant-address-global`, and `external-refinement` — plus, via the `presentcompare` group row, the P9 half of the P3-declared `comparison-canonicalization` decision
 (the console/`kassert` assertion writer — an output *consumer* that writes P0
 assertions for the next run, not an algorithm of this folder). One P9-registered
 pass lives outside the folder: the (kuna, GH-558) comparison canonicalizer
-`decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_compareform.rs
+`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_compareform.rs
 (ActionPresentCompareForm)`, group `presentcompare`, is described with its
 folder in chapter [03](03-ssa-and-simplification.md). Option defaults, tiers,
 and flip guidance for the kuna settable options named below live in the
@@ -190,7 +190,7 @@ native `head->next` dereference into an unresolved `PTRSUB(head,0)` expression.
 
 An isolated pointer declaration may name the value copied into an integer member of a declared frame array or record. C emission checks the type that the destination actually prints, rather than treating the pointer type carried by the COPY as the member's declaration. When a pointer is copied to a same-width integer member, it emits an explicit cast to that member's integer type. This preserves the native address value and produces valid C without changing numeric conversions or other output languages (`kuna_pointerstorecast.rs`). The same holds for any integer variable or member that a pointer-valued statement assigns: a plain copy, and a pointer addition or member address (`frame[0] = (unsigned long)&value[1];`). A copied variable that is itself declared as a same-width integer takes no cast, since only its storage was typed as a pointer; a source declared as a record, union or array keeps the cast, because it prints as the pointer member it reads (`x = (long)w.p;`), and a null pointer constant copied into integer storage prints as `0` rather than a cast `NULL`.
 
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_stackversions.rs` separates memory
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_stackversions.rs` separates memory
 SSA bookkeeping from writes under `stackviews`. Generated-backing definitions
 without the native stack-store mark describe reconstructed memory versions, not
 additional C assignments. They retain their IR and provenance but do not print.
@@ -208,7 +208,7 @@ constructing the byte-copy source or extracting subranges. Initializing an integ
 compound literal directly from that LOAD would numerically convert its value.
 The storage reinterpretation evaluates the LOAD once and preserves its bit pattern.
 
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_stackmarkers.rs` distinguishes a
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_stackmarkers.rs` distinguishes a
 non-creating INDIRECT version over physical frame bytes from a C assignment.
 With `stackviews`, cast insertion, statement emission and body counting
 skip that placeholder and unique-space merge copies consumed exclusively by
@@ -237,8 +237,8 @@ conversion, and structured member extraction retains priority.
 (kuna) Under `option nanignore none`, a retained widening `FLOAT_FLOAT2FLOAT`
 whose input may be a signaling NaN and whose result reaches a conversion back
 to the source format materializes its C result in a volatile compound literal
-(`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs (PrintC::op_float_quiet_ir)`,
-`decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_floatquiet.rs (feeds_round_trip)`):
+(`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs (PrintC::op_float_quiet_ir)`,
+`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_floatquiet.rs (feeds_round_trip)`):
 `(float)(*&(volatile double){ (double)x })`. A C compiler erases a plain
 `(float)(double)x` pair even with strict rounding flags. The literal evaluates
 its input once and forces the wider format to exist in storage. The read goes
@@ -550,9 +550,9 @@ one and the scalar bit-transfer rules apply instead.
 **The pass.** `ActionSetCasts` (registry row P9/`cast-policy`, group `casts`)
 is scheduled near the very end of the pass tree — after `ActionNameVars` and
 before `ActionFinalStructure`
-(`decompiler/crates/kuna-decomp/src/infra/universalaction.rs
+(`decompiler/crates/unlace-decomp/src/infra/universalaction.rs
 (universal_sched)`); its driver is
-`decompiler/crates/kuna-decomp/src/p9_emit/coreaction_casts.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_casts.rs
 (Funcdata::action_set_casts)`. It walks basic blocks in order and the ops of
 each block in sequence (a snapshot per block, so ops it inserts are never
 revisited), skipping unprinted ops and existing CASTs. Per op, in a fixed
@@ -562,7 +562,7 @@ first (the output token may depend on them), then the output.
 
 **The decision oracle.** The per-edge question — "does this conversion need a
 visible token?" — is delegated to the language's cast strategy,
-`decompiler/crates/kuna-decomp/src/p9_emit/cast.rs (CastStrategy)`, with
+`decompiler/crates/unlace-decomp/src/p9_emit/cast.rs (CastStrategy)`, with
 `cast.rs (CastStrategyC)` the C rules (`CastStrategyJava` exists for the
 deferred Java back-end, §9.6). The strategy answers four kinds of question:
 does an assignment between two data-types need a cast (`cast_standard`); is a
@@ -679,7 +679,7 @@ an operation that takes the sign of its operands, and one operand prints
 unsigned at least as wide as the expression (a `U` literal is an
 `unsigned int` unless its value needs eight bytes, so `0x80U - (long)s` stays
 a signed `long`), `get_input_cast` asks for the signed integer of the input's
-size (`decompiler/crates/kuna-decomp/src/p9_emit/kuna_signedread.rs (cast)`),
+size (`decompiler/crates/unlace-decomp/src/p9_emit/kuna_signedread.rs (cast)`),
 and the read prints `(unsigned long)(int)(a1 - 1U) >> 6`. The suffix stays: an
 unsigned reader of the same expression (`4 < a4 + 2U`) still needs it. This is
 a correctness fix with no option.
@@ -696,7 +696,7 @@ signed: `(unsigned long)((*a1 ^ 0x80) - 0x80)` sign-extended where the
 32-bit operation zero-extends, and `>> 3` shifted in copies of the sign bit.
 When such a reader's input is an implied expression at least as wide as
 `int`, typed unsigned, whose C type is a signed `int` or `long`, the read
-makes it unsigned (`decompiler/crates/kuna-decomp/src/p9_emit/kuna_unsignedread.rs
+makes it unsigned (`decompiler/crates/unlace-decomp/src/p9_emit/kuna_unsignedread.rs
 (cast)`): a plain non-negative constant operand of the expression's top
 operation gets the `U` suffix when that operation's result bits do not depend
 on its sign (`+`, `-`, `*`, `&`, `|`, `^`, negation; never a division,
@@ -724,7 +724,7 @@ an extension or a comparison reads it, and nothing reads it at a switch. The
 printer now casts an implied selector narrower than `int` to its own type,
 `switch((char)(a0 + '\x01'))`, unless `intPromotionType` says its promoted
 value already extends the way that type does
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_narrowselector.rs (cast)`). The
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_narrowselector.rs (cast)`). The
 case labels already follow the selector's type. Only output languages with C's
 integer promotion get the cast. This is a correctness fix with no option.
 
@@ -784,9 +784,9 @@ default arm alone printed `sink(a0 * 3)` for a callee that reads the whole
 register, passing a value the binary never passed.
 
 That trim is the evidence that the binary zero-extended. When
-`decompiler/crates/kuna-decomp/src/p3_dataflow/subflow.rs
+`decompiler/crates/unlace-decomp/src/p3_dataflow/subflow.rs
 (SubvariableFlow::try_call_pull)` narrows a call input whose non-zero mask lies
-inside the logical mask (`decompiler/crates/kuna-decomp/src/p9_emit/kuna_truncarg.rs
+inside the logical mask (`decompiler/crates/unlace-decomp/src/p9_emit/kuna_truncarg.rs
 (drops_only_zero_bits)`), `do_replacement` records the slot, its new size and
 the call's input count on the call's `FuncCallSpecs`
 (`kuna_truncarg.rs (note_trimmed_arg)`). A later trim of the same slot that
@@ -868,7 +868,7 @@ pointer to the prototype-less `code`, or to `void`, needs no cast under
 When `calltargettype` recorded the type the call states for a target it could
 not give that type -- its uses disagree, or a declaration fixes another type --
 and the target is still such a pointer,
-`decompiler/crates/kuna-decomp/src/p5_types/kuna_calltargettype.rs
+`decompiler/crates/unlace-decomp/src/p5_types/kuna_calltargettype.rs
 (uncallable_target_cast)` returns that type and the target is cast to it at the
 call (chapter [05](05-types.md)), in C output only. With the same option on in
 C output, `cast_standard` also prints no cast between a record's declaration and
@@ -883,7 +883,7 @@ nearly every `int` argument on x86-64 is such a trim, and the cast would land
 on all of them to fix the few whose callee reads the full register.
 
 **Byte-pointer arguments
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_pointerargs.rs`).** Buffered
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_pointerargs.rs`).** Buffered
 `decompile-all`, `decompile-project` and `decompile-graph` reconcile C calls after selecting their
 final successful function results. When a caller passes the address of a whole
 scalar local or parameter to a character-pointer parameter (`char *`,
@@ -925,7 +925,7 @@ of the left, a returned value to the return type, and a conversion between
 integer types depends only on the value converted. With the option
 `castimplied` on (the default; `off` restores upstream's rendering), the printer
 leaves such a cast out
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_castimplied.rs (ImpliedCasts::drops)`,
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_castimplied.rs (ImpliedCasts::drops)`,
 asked from `printc.rs (PrintC::implied_cast_drops)` by the `CPUI_CAST` arm and
 by both extension arms). The IR keeps every CAST op; only the token is omitted,
 and the operand is pushed bare, as a `signedness`-dropped cast's is (§9.3).
@@ -989,7 +989,7 @@ COPY prints as its operand and is looked through (`kuna_castimplied.rs
 output language without implicit integer conversions (Rust). The ported
 `CastStrategyC` and its pinned decision matrix are unchanged. Pinned by
 `tests/stages/kuna-castimplied.xml`, and by a compiled round trip
-(`kuna-cli/tests/decompile_all_cli.rs`, `an_implied_cast_round_trips_through_the_printed_c`)
+(`unlace-cli/tests/decompile_all_cli.rs`, `an_implied_cast_round_trips_through_the_printed_c`)
 whose functions print the same values with the option off and on, under gcc and
 clang.
 
@@ -1006,7 +1006,7 @@ conditional, though: `c ? (long)i : u` is a `long`, while `c ? i : u` is an
 reaches the destination as a large positive value. With the option
 `castternary` on (the default; `off` keeps every arm cast), the printer asks,
 once per conditional, which arm casts to leave out
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_castternary.rs (arm_drops)`,
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_castternary.rs (arm_drops)`,
 from `printc.rs (PrintC::conditional_arm_drops)` in `emit_block_if_ite`); the
 chosen ops are then left out wherever `printc.rs (PrintC::implied_cast_drops)`
 is asked about them. An arm's cast goes when it is an integer widening that
@@ -1036,7 +1036,7 @@ has the target type, else one of them (`kuna_castternary.rs (choose)`):
 keeps the sign-changing first cast and prints `c ? (unsigned long)a0 : a1`. Only
 where `int` is 4 bytes, and only for C output. Pinned by
 `tests/stages/kuna-castternary.xml` and by a compiled round trip
-(`kuna-cli/tests/decompile_all_cli.rs`,
+(`unlace-cli/tests/decompile_all_cli.rs`,
 `a_conditional_arm_cast_round_trips_through_the_printed_c`) over a textbook
 base64 decoder and arms of `char`, `unsigned char`, `short` and `int` against
 `int`, unsigned, `long` and negative arms, built with gcc and clang at -O0 and
@@ -1052,8 +1052,8 @@ option `castwiden` set to `on` (`off` keeps them; `literal`, the default, is
 described below), the printer leaves out a 64-bit widening where C's own
 conversions give the same type and value. The IR is unchanged; the decision is
 made per arithmetic op, once, and cached for the function
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_castimplied.rs (ImpliedCasts::widen_plan)`,
-computed by `decompiler/crates/kuna-decomp/src/p9_emit/kuna_castwiden.rs (plan)`
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_castimplied.rs (ImpliedCasts::widen_plan)`,
+computed by `decompiler/crates/unlace-decomp/src/p9_emit/kuna_castwiden.rs (plan)`
 and read by `printc.rs (PrintC::implied_cast_drops)`).
 
 An operand of `+ - * / % & | ^` qualifies when it is an INT_SEXT or INT_ZEXT
@@ -1118,7 +1118,7 @@ cast's type and the operation keeps its type (`kuna_castwiden.rs
 unsigned (`-0x80000000`, whose C value is 2^31) keeps the cast, because the
 suffix would change its value. Only where `int` is 4 bytes, and only for C
 output. Pinned by `tests/stages/kuna-castwiden.xml` (three passes) and by a
-compiled round trip (`kuna-cli/tests/decompile_all_cli.rs`,
+compiled round trip (`unlace-cli/tests/decompile_all_cli.rs`,
 `an_implied_widening_round_trips_through_the_printed_c`) over gcc and clang
 builds at -O0 and -O2, printed with each value and compiled with gcc and clang
 at -O0 and -O2 (`-fwrapv`, so the 32-bit arithmetic kuna prints as `int` wraps as
@@ -1138,7 +1138,7 @@ integer types depends only on the value converted and the type converted to
 (6.3.1.3), so `T v = (T)e;` stores what `T v = e;` stores whatever integer type
 `e` has. With the option `castnarrow` on (the default; `off` keeps every
 narrowing cast), the printer leaves such a cast out
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_castnarrow.rs (drops)`, asked
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_castnarrow.rs (drops)`, asked
 from `kuna_castimplied.rs (ImpliedCasts::drops)` and so from
 `printc.rs (PrintC::implied_cast_drops)`, which the `CPUI_CAST` arm and now the
 cast arm of `printc.rs (PrintC::op_subpiece_ir)` consult with the op that reads
@@ -1175,7 +1175,7 @@ comparison and a conversion over it depend on its narrowed type, and a
 destination of another spelling (`*a1 = (int)a0;` through an
 `unsigned int *a1`) is left as it is. Only where `int` is 4 bytes, and only for
 C output. Pinned by a compiled round trip
-(`kuna-cli/tests/castnarrow_round_trip.rs`) over gcc and clang builds at -O0 and
+(`unlace-cli/tests/castnarrow_round_trip.rs`) over gcc and clang builds at -O0 and
 -O2 of `castnarrow_x86_64.c`, printed with the option off and on and compiled
 with gcc and clang at -O0 and -O2, each build computing what the source computes
 for every input.
@@ -1249,7 +1249,7 @@ arithmetic, so the default arm casts the pointer to `long` on the way in and
 the output arm casts the sum back to a pointer on the way out, and a 4-byte
 read at `+0xac` prints `*(unsigned int *)((long)a0 + 0xac)`, two casts for one
 read. With `option castarith` on (the default, C output only) the driver hands
-every such `INT_ADD` to `decompiler/crates/kuna-decomp/src/p9_emit/kuna_castarith.rs
+every such `INT_ADD` to `decompiler/crates/unlace-decomp/src/p9_emit/kuna_castarith.rs
 (rewrite)` right after the PTRADD/PTRSUB repairs, so a sum that a repair has just
 demoted is seen too, and before any input or output of the op is cast.
 
@@ -1273,7 +1273,7 @@ offset is a negative index.
 The base is cast to `T *` by a new implied `CPUI_CAST` inserted before the op,
 with two exceptions. A variable whose own type is its read-facing type and whose
 printed declaration (a parameter's prototype type or a local's declared type,
-`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs (declared_variable_type)`,
+`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs (declared_variable_type)`,
 the lookup the switch printer uses) points at `T` or at an integer of `T`'s width
 is used bare (`kuna_castarith.rs (declared_as)`), so the declaration a reader
 sees scales the index the same way; a float element never counts, because
@@ -1328,7 +1328,7 @@ arithmetic for a non-`bool` integer one (`kuna_castarith.rs
 (store_value_settled)`). Finally, a constant that names a global keeps it, and
 so does an address-like constant beside an integer that was cast to a pointer:
 `table[i]` compiles to the same `INT_ADD`, with the table as the constant and the
-subscript as the "pointer" (`decompiler/crates/kuna-decomp/src/p5_types/kuna_ptrfromuse.rs
+subscript as the "pointer" (`decompiler/crates/unlace-decomp/src/p5_types/kuna_ptrfromuse.rs
 (constant_may_be_global_base)`). A record base keeps `p->field` wherever the
 offset lands on a field, because chapter 05 already made that access a `PTRSUB`.
 An offset where the record has no field is still an `INT_ADD` here and is
@@ -1338,7 +1338,7 @@ it) or inside a field (`((int *)&a0->field_0x10)[1]`, the upper half of an
 8-byte field). Upstream Ghidra prints the integer round trip. Pinned by
 `tests/stages/kuna-castarith.xml` and by the compiled round trip
 `a_pointer_plus_whole_elements_round_trips_through_the_printed_c` in
-`decompiler/crates/kuna-cli/tests/decompile_all_cli.rs`.
+`decompiler/crates/unlace-cli/tests/decompile_all_cli.rs`.
 
 The rewrite only removes ops: the integer form's two casts become one or none.
 That can move one structuring decision. The tail
@@ -1363,7 +1363,7 @@ converts both operands to the signed integer of their width. An array walk
 through a `void *` base prints `*(long *)((long)v7 + v19 * 8)` and the length of
 a `char *` span prints `(long)v24 - (long)v14`. With `option castindex` on (the
 default, C output only), the driver hands each `INT_ADD` that `castarith` left
-alone to `decompiler/crates/kuna-decomp/src/p9_emit/kuna_castarith.rs
+alone to `decompiler/crates/unlace-decomp/src/p9_emit/kuna_castarith.rs
 (rewrite_index)`, and asks `kuna_castarith.rs (pointer_difference)` about each
 `INT_SUB`; the two options act on disjoint ops (a constant addend or a
 variable one), so either can be flipped alone.
@@ -1421,7 +1421,7 @@ by the same `sizeof`, and the difference and its type are C's own. Upstream
 Ghidra prints the integer round trips. Pinned by `tests/stages/kuna-castindex.xml`
 and by the compiled round trip
 `a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed_c`
-in `decompiler/crates/kuna-cli/tests/decompile_all_cli.rs`; `castindex off`
+in `decompiler/crates/unlace-cli/tests/decompile_all_cli.rs`; `castindex off`
 prints byte-for-byte what the build without it prints.
 
 **Repairs and failure mode.** Late type propagation can invalidate the pointer
@@ -1429,7 +1429,7 @@ model a PTRADD/PTRSUB was built on; the driver demotes them back to raw
 arithmetic (`cast_fixup_ptradd` undoes the scaling; `cast_fixup_ptrsub`
 becomes COPY or INT_ADD) rather than print a field access into the wrong type.
 The fit test for a PTRSUB off a spacebase
-(`decompiler/crates/kuna-decomp/src/p6_variables/funcdata_spacebase.rs
+(`decompiler/crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs
 (Funcdata::is_ptrsub_matching_scope)`, shared with `RulePtrsubUndo`) looks the
 offset up in the scope the spacebase selects, as upstream `TypeSpacebase::getSubType`
 does: the global symbol table for a global reference, the function's frame map
@@ -1472,22 +1472,22 @@ Upstream Ghidra prints the ABI pointer everywhere (parameter `T *v`, argument
 ## 9.2 PrintC
 
 **Three layers.** The C back-end is a stack of three components in this
-folder: the token emitter `decompiler/crates/kuna-decomp/src/p9_emit/printc.rs
+folder: the token emitter `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs
 (PrintC)` (the `c-language` capability, the registered default), the RPN
 expression driver it embeds (the `PrintLanguage` machinery — its pure data
 model and decision function live in
-`decompiler/crates/kuna-decomp/src/p9_emit/printlanguage.rs`, the driving
+`decompiler/crates/unlace-decomp/src/p9_emit/printlanguage.rs`, the driving
 methods in `printc.rs`), and the low-level emitters in
-`decompiler/crates/kuna-decomp/src/p9_emit/prettyprint.rs`: a line-breaking
+`decompiler/crates/unlace-decomp/src/p9_emit/prettyprint.rs`: a line-breaking
 `EmitPrettyPrint` wrapping either the plain-text `EmitNoMarkup` (the
 byte-exact datatest path) or the XML `EmitMarkup` (the Ghidra-client path).
 The whole-document entry is `printc.rs (PrintC::doc_function_full)`, driven by
-`decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs` after analysis
+`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs` after analysis
 completes.
 
 **A render that panics.** The architecture owns the printer, and a render needs
 the printer mutably while it reads the rest of the architecture, so every render
-runs inside `decompiler/crates/kuna-decomp/src/infra/architecture.rs
+runs inside `decompiler/crates/unlace-decomp/src/infra/architecture.rs
 (Architecture::with_print)`, which lends the printer out and moves it back. It
 moves back on every exit, a panic included: the printer is first cleared of the
 partial document by `printc.rs (PrintC::clear)` (the emitter's indent and paren
@@ -1502,11 +1502,11 @@ push: a panic while a load's pointer prints under `print_load_value` would
 leave it on, and every later function would drop the `&` from its array
 element addresses. A batch that contains a
 render panic as that one function's error record
-(`decompiler/crates/kuna-console/src/project.rs (decompile_pulled)`, serial or
+(`decompiler/crates/unlace-console/src/project.rs (decompile_pulled)`, serial or
 inside a `--jobs` worker) therefore renders every later function with the
 printer settings the run configured (`indentincrement`, `arraynotation`,
 `truthycond`, ...), not a default printer's. The test-only
-`KUNA_RENDER_FAULT=<addr>` (`decompiler/crates/kuna-decomp/src/p9_emit/kuna_renderfault.rs`)
+`KUNA_RENDER_FAULT=<addr>` (`decompiler/crates/unlace-decomp/src/p9_emit/kuna_renderfault.rs`)
 panics the render of the function at that entry just after its opening brace.
 
 A HighVariable linked to a local Symbol is classified for declaration emission
@@ -1548,7 +1548,7 @@ By default an infinite-loop node emits `while (true) { ... }`; `do` restores
 so both spellings execute the same body and preserve `break`, `continue`,
 returns, and loop-head labels. Conditional do-while nodes retain their bottom
 test, and Rust output retains `loop { ... }`. The option parser lives in
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_infloopstyle.rs`.
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_infloopstyle.rs`.
 
 Every non-default switch arm emits its recovered numeric label even when the
 arm has no p-code op available as a token-markup anchor. Such labels use the
@@ -1625,7 +1625,7 @@ register flag with a sign-bit shift such as `x << 0x18 < 0`, and the defined
 form `(int)((unsigned int)x << 0x18) < 0` adds a cast pair to each one, so the
 shipped default keeps the shorter spelling. `tests/stages/kuna-arm-constant-shift.xml`
 pins the unconverted default pass and the casts and signed consumers with the
-option on; `kuna-cli/tests/arm_constant_shift.rs` compiles the unchanged bodies
+option on; `unlace-cli/tests/arm_constant_shift.rs` compiles the unchanged bodies
 as C11 at `-O0` and `-O2`, with and without UBSan, and compares counts 0, 1, 2,
 3 and 31 against an independent unsigned 64-bit model truncated to 32 bits.
 The runtime checks cover both return signs, ASR, signed comparisons, a stored
@@ -1647,7 +1647,7 @@ implied sign extension of a narrower value. It computes through an unsigned
 64-bit C cast that keeps the complete input, extension included, and converts a
 signed output back after shifting so signed readers retain their
 interpretation: `(long)((unsigned long)(long)x << 0x1f)`.
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_constantshift.rs (plan_fixed64_lsl)`
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_constantshift.rs (plan_fixed64_lsl)`
 plans it and shares ARM's fixed-shift emitter, so each operand appears once and
 the IR and other readers are unchanged. The planner asks the printer for the
 operand's declared local type, since the printed signedness decides whether C
@@ -1658,7 +1658,7 @@ operands and other output languages keep their rendering, and `on` remains the
 ARM-only repair. Like `on`, `all` is off by default: it adds a cast pair to every
 scaled 64-bit index and sign-bit test. `tests/stages/kuna-wide-shifts.xml` pins the
 default spelling and the converted one on x86-64, AArch64, PowerPC64 and MIPS64
-objects from `tests/fixtures/wide-integer-emission/`; `kuna-cli/tests/wide_shift_emission.rs`
+objects from `tests/fixtures/wide-integer-emission/`; `unlace-cli/tests/wide_shift_emission.rs`
 executes the emitted C at O0/O2 under UBSan over signed boundary bit patterns.
 
 **(kuna) Wrapping widened additions — `option wrapadd`.** A four-byte addition
@@ -1667,7 +1667,7 @@ whose result a wider sign extension observes, such as MIPS `addiu` or RISC-V
 `(long)(a + 1)` over signed operands, the C addition overflows an `int` instead,
 which is undefined: UBSan reports it and a compiler may compute the sum at 64
 bits. With the option on,
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_widenedadd.rs (plan)` finds such
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_widenedadd.rs (plan)` finds such
 an `INT_ADD`: a four-byte output, operands that print as signed four-byte
 integers (or one of them a four-byte literal), and a bounded COPY/CAST reader
 chain into a wider `INT_SEXT` whose value reaches a return, a store or a
@@ -1687,7 +1687,7 @@ AArch64, ARM, PowerPC64, MIPS64 and RISC-V 64 binaries it adds about 1.3 casts
 per 1,000 output lines (5.7 on MIPS64, 4.2 on RISC-V 64, under 0.3 elsewhere).
 `tests/stages/kuna-wrapadd.xml` pins both spellings on x86-64, AArch64,
 PowerPC64 and MIPS64 objects from `tests/fixtures/wide-integer-emission/`, and
-`kuna-cli/tests/wrap_add_emission.rs` executes the `on` output at O0/O2 under
+`unlace-cli/tests/wrap_add_emission.rs` executes the `on` output at O0/O2 under
 UBSan at `INT32_MAX` and `UINT32_MAX`.
 
 **Every label labels a statement.** Label placement in the printed C is valid
@@ -1698,7 +1698,7 @@ arm whose jump-table entry is a branch-only block that leaves the switch, a
 `default:` that is also a goto target at the end of the switch, or a goto target
 that is only the jump back to a loop head or the join before a closing brace.
 The emitter keeps a record of whether a label was the last thing printed
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_labelstmt.rs`, held on the emitter
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_labelstmt.rs`, held on the emitter
 state so both the plain-text and the markup leaf see it): the case, default and
 goto label writers set it, and starting a statement or opening a brace clears
 it, while a comment does not. The last arm of a switch that still ends on a
@@ -1710,7 +1710,7 @@ label, a statement, or a nested block is untouched, so output that was already
 valid does not change. The Rust back-end (§9.6) needs no counterpart: it prints
 labels as comments and an empty arm as `N => { }`. The ARM and x86-64 shapes are
 pinned by `tests/stages/kuna-labelstmt-arm.xml` and
-`tests/stages/kuna-labelstmt-x64.xml`, and the kuna-cli round trip
+`tests/stages/kuna-labelstmt-x64.xml`, and the unlace-cli round trip
 `emitted_label_statements.rs` compiles the printed functions with
 `-std=c11 -pedantic-errors` and checks that they behave like their source.
 
@@ -1746,7 +1746,7 @@ decompile-all --json`) get a parseable function with an explicit tombstone
 rather than pseudo-C garbage. The comment distinguishes the two ways a
 function can arrive here, because they call for different investigations: when
 the drive recorded *why* the pipeline aborted for this function
-(`decompiler/crates/kuna-decomp/src/substrate/funcdata.rs
+(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::set_kuna_pipeline_failure)` — chapter [00](00-overview.md) §0.2), the tombstone is
 `/* WARNING: decompilation failed: <reason> */`, naming the recoverable error
 verbatim; otherwise the pipeline genuinely ran and structuring produced
@@ -1826,7 +1826,7 @@ sixteen-byte `movaps` transfer through a `char v30[16]` VM register bank
 printed `v30[0] = v32[0];` — one byte named on each side of a sixteen-byte
 copy — while the four-byte accesses to the same bank a few lines away printed
 `v30._0_4_`. **(kuna) arraycoverwidth** (always on,
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_arraycoverwidth.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_arraycoverwidth.rs
 (spans_multiple_elements)`) suppresses that break for a TYPE_ARRAY whose
 element stride is smaller than the access, so a full-width cover falls to the
 same artificial `._<off>_<size>_` member a partial one gets and the two
@@ -1850,7 +1850,7 @@ of the `CONCAT88(0,x) << 64` idiom; neither is done here.
 For C output with `partialaccess` enabled on a 64-bit target, an inferred
 sixteen-byte register temporary used only for bit extraction, copying, merging,
 or bitwise operations is declared `unsigned __int128` instead of `char[16]`
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_widelocal.rs`). This keeps a
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_widelocal.rs`). This keeps a
 whole-width scalar load and its local assignment consistent. The rule requires
 unmapped, unlocked, non-address-tied values whose type is an inferred array of
 unknown bytes. A value loaded through a pointer, or copied out of another array
@@ -1863,7 +1863,7 @@ is the same one used by the existing sixteen-byte pointer views. Other
 wide-container cases retain their existing rendering.
 
 **Standard C for mapped byte arrays.** `bytearrayc` (default **off**,
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_bytearrayc.rs`) provides a C11
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_bytearrayc.rs`) provides a C11
 rendering choice for direct integer accesses of two, four or eight bytes within
 a mapped global array of one-byte integer elements. A one-byte access retains
 its subscript; a whole one-element byte array explicitly uses element zero.
@@ -1897,7 +1897,7 @@ in declaration recovery. Arrays nested in aggregates, stack/register containers,
 noninteger values, non-byte-addressed spaces and other transfer widths also
 retain their existing representation. Off retains all existing emitted C.
 The authored CLI round trips in
-`decompiler/crates/kuna-cli/tests/mapped_array_c.rs` compile unchanged emitted
+`decompiler/crates/unlace-cli/tests/mapped_array_c.rs` compile unchanged emitted
 bodies at `-O0` and `-O2` with strict aliasing and UBSan, including unaligned
 transfers, overlapping stores, signed reads, const sources, both ARM endian
 variants and an unchanged named-struct control.
@@ -1991,7 +1991,7 @@ Upstream adds both kinds of Symbol to the global scope, so every function
 decompiled after this one in the session sees them. Kuna's per-function
 `GlobalQuery` is a snapshot no action can write, so with `option mapglobalsyms
 on` (default off) the decompile driver adds them once the function is done
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_mapglobalsyms.rs (persist)`,
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_mapglobalsyms.rs (persist)`,
 called from `decompile_step.rs`). The names are the ones already printed, and
 storage some Symbol now holds is skipped. The next `build_arch_handle` snapshots
 the new Symbols like any other. After `store64` writes an unnamed 8-byte global,
@@ -2051,7 +2051,7 @@ Named parameters and locals retain their symbol expressions. Return-address
 offsets below eight, negative local offsets, other compiler specs, calling
 models, architectures, and non-C output retain their existing handling; their
 ABI is not inferred from AMD64. Native GCC and Clang O0/O2 checks in
-`decompiler/crates/kuna-cli/tests/caller_stack_cli.rs` compare actual entry
+`decompiler/crates/unlace-cli/tests/caller_stack_cli.rs` compare actual entry
 addresses and sixteen-byte pipe payloads from adjacent caller storage, using
 both single-function and project output and direct same-translation-unit calls.
 Typed integer and structure pointer returns retain the emitter's outer pointer
@@ -2078,7 +2078,7 @@ render before; on `main` one `tar` O0 function printed it
 With `stackviews`, a structure or union member's operation-facing pointer type
 can differ from its base variable's C declaration. A detached address snapshot
 may be an integer, or a temporary may hold both a node address and the address
-of a pointer slot. `decompiler/crates/kuna-decomp/src/p9_emit/kuna_memberbase.rs
+of a pointer slot. `decompiler/crates/unlace-decomp/src/p9_emit/kuna_memberbase.rs
 (needs_cast)` compares that declaration with the pointer used to select the
 field. Differing same-width integer or pointer representations receive an
 explicit pointer cast before `->`. The member offset follows the selected
@@ -2145,11 +2145,11 @@ plain emitter, and `printc.rs (PrintC::set_markup)` keeps it when it restores
 plain text after a markup render. The markup back-end is never wrapped, and
 only C output is: Go ends a statement at a line break, and Rust and Go print
 unbroken (`printc.rs (PrintC::set_name)` re-selects the emitter when the
-language changes). Only the console's `print C` (and so plain `kuna decompile` text) is
+language changes). Only the console's `print C` (and so plain `unlace decompile` text) is
 broken: the batch render behind `--json`, `decompile-all` and the browser front-end
 returns records that address its code line by line (warning lines, line
 mappings, the call-argument positions later casts are written at), so
-`decompiler/crates/kuna-console/src/project.rs (decompile_pulled)` prints each
+`decompiler/crates/unlace-console/src/project.rs (decompile_pulled)` prints each
 of its functions unbroken (`printc.rs (PrintC::suspend_line_size)`). A label
 line fires a pending `else` brace before the label, as it does without the
 pretty-printer (`prettyprint.rs (EmitPrettyPrint::try_tag_line_indent)`). The
@@ -2190,7 +2190,7 @@ p-code, and how statement groups map to addresses.
 **Token source map** (kuna). A front-end that links the C to the machine code
 needs every token of the *plain* text with its place in it, and the plain
 emitter keeps no references. `EmitMarkup` therefore optionally records each
-token as it encodes it (`decompiler/crates/kuna-decomp/src/p9_emit/prettyprint.rs
+token as it encodes it (`decompiler/crates/unlace-decomp/src/p9_emit/prettyprint.rs
 (EmitToken)`): its line, its column in UTF-16 code units, its kind (syntax,
 variable, value, op, funcname, type, field, comment, label), its colour and
 the `opref`/`varref` it carries. The column model is `EmitNoMarkup`'s,
@@ -2210,14 +2210,14 @@ lives on the emitter leaf, so `printc.rs (PrintC::set_markup)` carries it into
 the leaf it swaps in: without that, the markup leaf would indent by the default
 2 (shifting every column) and the plain printer restored after it would print
 every later function of the batch at 2 as well.
-`decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs
+`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs
 (print_c_with_srcmap)` renders the plain text first and the captured markup
 second — the text is byte-identical to `print_c_with_provenance` — and the
 MSVC cookie-return presentation rewrite reports each line pair it edits so the
 tokens follow it (`kuna_srcmap.rs (apply_cookie_rewrites)`: the blanked
 assignment loses its tokens and the return line becomes `return`, the literal
 carried from the assignment, `;`).
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_srcmap.rs (resolve)` then
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_srcmap.rs (resolve)` then
 places the tokens in the trimmed `code` (lines shift by the number of leading
 breaks the trim removed), resolves `opref` to the instruction address (a
 comment's or label's own address only when it lies in the function's code
@@ -2234,7 +2234,7 @@ every code unit between them is a space — so joining a line's tokens with the
 gaps as spaces rebuilds that line exactly. A caller ships the tokens only when
 the check passes and otherwise reports an empty list with the reason, never a
 drifted map. The RPN stack carries each op and Varnode reference as the arena
-key's whole 64-bit form (`decompiler/crates/kuna-decomp/src/p9_emit/printlanguage.rs
+key's whole 64-bit form (`decompiler/crates/unlace-decomp/src/p9_emit/printlanguage.rs
 (IrKey)`), and the comment sorter's op cursor likewise: on a 32-bit target — the
 browser build — a `usize` would drop the key's version half and every reference
 resolved from it would dangle.
@@ -2286,7 +2286,7 @@ assertion plane).
 
 Signed integer constants are normalized to their declared byte width before
 choosing their sign, magnitude, and numeric base
-(`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs (resolve_integer_format)`).
+(`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs (resolve_integer_format)`).
 A four-byte `0xfffffffffffffffc` carrier therefore prints as `-4`, just like
 `0xfffffffc`; upper carrier bits also cannot turn a positive narrow value
 negative. Forced numeric radices retain this width interpretation. Character
@@ -2313,7 +2313,7 @@ upstream's no-`<coretypes>` fallback branch, which the real Ghidra application
 never takes because its Java side supplies its own names over the wire. That
 split is directly observable — one function declares `unsigned int v3;` (relabelled)
 next to `int4 v1;` (not) — and it is why the emitted C does not compile.
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_ctypes.rs (core_type_spelling)`
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_ctypes.rs (core_type_spelling)`
 extends the same one chokepoint to every core type: the type's *size* is matched
 against the target's own declared widths, in declaration order, first hit wins
 (the port of Ghidra's `DataOrganizationImpl.getIntegerCTypeApproximation`).
@@ -2362,11 +2362,11 @@ an element offset of 0x20 (GH-1063). Exercised by
 
 **(angr) namestyle — the policy.** The master toggle `option namestyle
 angr|ghidra` (default `angr` since DIV-5; live flag `name_style_angr` set in
-`decompiler/crates/kuna-decomp/src/infra/architecture.rs
+`decompiler/crates/unlace-decomp/src/infra/architecture.rs
 (reset_defaults_internal)`) re-skins every *default* (generated) name; user
 and recovered names are never touched. The policy helpers live in
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_naming.rs` with the pure
-address renderers in `decompiler/crates/kuna-decomp/src/p0_knowledge/database.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_naming.rs` with the pure
+address renderers in `decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
 (kuna_global_data_name, kuna_function_name, kuna_label_name, kuna_arg_name)`.
 Under the angr scheme: locals and decompiler temporaries are `v1`, `v2`, … —
 **sequential per function**, not SSA-subscripted (one name per merged
@@ -2381,14 +2381,14 @@ spliced into its predecessor still starts at the return block's address.
 When two such copies are both goto targets, each would print
 `label_<addr>:`, a duplicate label (a C compile error) that leaves every
 goto to either copy ambiguous. Before the body prints,
-`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs (PrintC::assign_label_names)`
+`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs (PrintC::assign_label_names)`
 walks the structured tree in child order over the leaves that print a
 label; the first leaf with a given name keeps it and the n-th takes
 `label_<addr>_<n>` (`LAB_%08x_<n>` in ghidra mode). A goto resolves its
 target's front leaf through the same table, so it names the copy it jumps
 to. A function with no shared label prints exactly as before. Under `ghidra` the upstream scheme
 returns: `param_N`, type-prefixed `iVar1`/`uVar2`-style locals
-(`decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs
+(`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
 (kuna_default_local_name)`), `func_`/`code_` addresses. Both schemes are
 recognized as "generated" by `kuna_naming.rs (kuna_is_generated_name)` so
 cross-function name recommendation never propagates a default name.
@@ -2402,7 +2402,7 @@ The loader already names that slot for the import and paints it `externref`, whi
 is how `ActionDeindirect` turns a *call* through it into a direct call to the
 import. A *data* read is not a call, so it printed as a dereference of the
 anonymous slot, `*dat_<slot>`. With the option on, `PrintC::op_load_ir`
-(`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs (import_slot_name)`) renders
+(`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs (import_slot_name)`) renders
 a LOAD whose pointer is such a slot as the import itself — `*slot` where the slot
 holds `&imported_counter` is `imported_counter` — resolving it exactly as
 `ActionDeindirect` resolves a call through the same slot (`query_function` on the
@@ -2421,7 +2421,7 @@ leaves the local's assignment dead.
 
 (kuna `cstringconst`, default on) A pointer-wide constant inside a string-literal
 section prints as the literal there, whatever type it reaches the printer with
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_cstringconst.rs`). `pushConstant`
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_cstringconst.rs`). `pushConstant`
 renders a constant as a quoted string only when its type is a pointer to a
 character type, and `ActionConstantPtr` gives it that type only when a global
 symbol covers the address; the string pass plants `char[N]` at literals of four
@@ -2455,10 +2455,10 @@ process sets a separate `name_style_ghidra` flag alongside (not instead of)
 the angr default; the resolver `Architecture::kuna_name_style` /
 `ArchContext::kuna_name_style` gives it precedence at exactly the
 ADDRESS-DERIVED fallback sites — an unresolved callee prints `FUN_%08x`
-(`decompiler/crates/kuna-decomp/src/p4_calls/fspec.rs (fspec_printed_name)`),
+(`decompiler/crates/unlace-decomp/src/p4_calls/fspec.rs (fspec_printed_name)`),
 an unnamed global `DAT_%08x` (`printc.rs (kuna_global_data_name)`), a goto
 target `LAB_%08x` (`printc.rs (PrintC::block_label_name)`), the renderers in
-`decompiler/crates/kuna-decomp/src/p0_knowledge/database.rs
+`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
 (ghidra_function_name, ghidra_global_data_name, ghidra_label_name)` — because
 the Java side's dynamic-name heuristics key on those spellings
 (`isDynamicSymbolName`). Local/parameter naming keeps the angr scheme (the
@@ -2466,7 +2466,7 @@ only ported local-naming pass). Never set on the standalone path, so both
 existing styles are byte-identical.
 
 **Where names bind vs. where they render.** The *assignment* is a P6 pass —
-`decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs
+`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
 (ActionNameVars)` binds one name per HighVariable (symbol-derived where a
 mapped/global symbol exists, e.g. the DIV-24 DWARF data-global names; the
 sequential default otherwise) — and P9 only *consumes* the binding: the leaf
@@ -2483,7 +2483,7 @@ prototype name always wins. The angr scheme's second visible artifact is P9-owne
 local declaration gains a trailing storage comment — `// rax` (register,
 lowercased), `// stack - 0x10` (frame-relative signed offset), `// rdx:rax` (a
 join value's register pieces), `// tmp` (an SSA temporary with no machine
-home). `decompiler/crates/kuna-decomp/src/p9_emit/kuna_varsources.rs` gathers
+home). `decompiler/crates/unlace-decomp/src/p9_emit/kuna_varsources.rs` gathers
 every member's machine storage and the storage retained when simplification
 removed an equivalent copy. Distinct homes print once, in sorted order, separated
 by ` | `: `// eax | ebx`. A register pair holding one split value keeps its
@@ -2500,7 +2500,7 @@ that variable's base: a register copied from the field at -0x80 of a record at
 `--mode reliable`, e.g. `stack - 0x208` to `stack - 0x1c0`).
 Register copies used only to supply outgoing CALL or CALLIND arguments are
 transport locations, so they do not contribute to a local's source comment.
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_calltransport.rs` checks that
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_calltransport.rs` checks that
 the copy has an earlier home and reaches only argument slots whose ABI storage
 matches that register. This keeps a saved register's home even when its only
 readers forward the value to outgoing arguments. A reload from an existing
@@ -2530,7 +2530,7 @@ declaration says `unsigned long long *` — so the same `*v9` reads eight bytes
 past the object and drops the sign extension. kuna declares the type
 representative's type (always on), which is the
 `sym->getType()` upstream would have written
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_declhightype.rs
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_declhightype.rs
 (type_representative)`). It is presentation only: no cast, no statement and no
 p-code moves. It applies only to a high the symbol table does not describe — a
 mapped local keeps the declaration representative's type, because kuna does not
@@ -2539,7 +2539,7 @@ a mapped local can be a transient the symbol never described. A whole mapped
 local whose Symbol is type-locked (a DWARF or `--assert type` declaration) with
 a boolean, integer, float or pointer type as wide as the declaration
 representative, and that is not a parameter, declares that Symbol type instead
-(`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs
+(`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs
 (locked_scalar_local_type)`), whatever this option says: merging can leave the
 representative at a weaker type, such as `void *` for a gcc `-O0` DWARF
 function-pointer local, which makes the indirect call through it invalid C.
@@ -2569,7 +2569,7 @@ signedness back at every comparison: `unsigned int v1;` … `if (0 <= (int)v1)` 
 The option `signedness` (`upstream|auto|prefer-signed|prefer-unsigned`, default
 `auto`) decides it at the declaration seam instead, from the operations the
 body actually applies to the value
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_typeround.rs (plan)`). This is
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_typeround.rs (plan)`). This is
 TRex's *type rounding* (Bosamiya, Woo and Parno, USENIX Security 2025, §3.3.5):
 signedness is not propagated, it is chosen once from the accumulated
 size-tagged operation set, with a flag for the case nothing observed settles.
@@ -2632,7 +2632,7 @@ conversion produce identical bits either way.
 kuna's own cast strategy draws the same line, which corroborates the split
 without proving it. The ordered comparisons, `/ %`, `>>` and the two extensions
 pass `care_uint_int = true` to `CastStrategyC::cast_standard`
-(`decompiler/crates/kuna-decomp/src/p9_emit/coreaction_casts.rs
+(`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_casts.rs
 (get_input_cast)`), and every op on the neutral list above passes `false` or
 takes no cast at all. The demand set is a **superset** of that
 `care_uint_int = true` set with one op held out: `INT_SCARRY`, `INT_SBORROW`,
@@ -2661,7 +2661,7 @@ cspec's `<data_organization><integer_size>` is; that value is 2 on `avr8gcc`,
 the guard off it would let a 2-byte local be re-signed on those targets and turn
 an emitted `if (v1 != -1)` into a constant-true test. The floor is therefore
 `max(4, TypeFactory::get_size_of_int())`
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_typeround.rs
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_typeround.rs
 (MIN_PROMOTION_SIZE)`), pinned on x86-64 by `tests/stages/kuna-signedness.xml`
 and on a 2-byte-`int` target by `tests/stages/kuna-signedness-int16.xml`. A width change
 *between* two integers is an explicit `INT_SEXT`/`INT_ZEXT` in p-code, so a
@@ -2711,7 +2711,7 @@ stack local *is* mapped onto its frame Symbol, at offset 0. Second, a
 local one of whose members is an input (a slot or register read before any
 write) is skipped as if it were a prototype parameter. With the option
 `castsign` on, the pass admits all three
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_castsign.rs`,
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_castsign.rs`,
 consulted from `kuna_typeround.rs (plan)`), and the declaration and the casts
 it makes no-ops change exactly as they do for a register local, under two
 further conditions described below.
@@ -2820,7 +2820,7 @@ compared signed and used as `a0[v1]` is declared `int8`; an index the body
 decrements, a logically shifted value and an address-taken stack value stay
 unsigned in both passes; pass 3 maps the first value's slot `uint8`, and the
 locked declaration keeps its casts), by a compiled round trip
-(`kuna-cli/tests/decompile_all_cli.rs`,
+(`unlace-cli/tests/decompile_all_cli.rs`,
 `a_signed_only_variable_round_trips_through_the_printed_c`: the printed C is
 built with gcc and clang at `-O0` and `-O2` and fed `2^63 - 1`, `2^63`,
 `2^63 + 1` and the 32-bit edges, and every build must print what the fixture
@@ -2877,7 +2877,7 @@ bound symbol — the identity `linkSpacebaseSymbol` already recorded, kuna's
 `HighVariable::kuna_ref_symbol` for upstream `Varnode::setSymbolReference` — has
 category `function_parameter` is that parameter, so no declaration is emitted and
 the `&a0` in the body resolves to the prototype's own `a0`
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_paramrefdecl.rs
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_paramrefdecl.rs
 (references_parameter_symbol)`). It is not a rename: the parameter is not
 duplicated under a fresh identifier, the second object simply stops existing. The
 skip inherits the storage arm's guard that the high's name is one of the
@@ -2889,7 +2889,7 @@ collects a parameter's uses by matching Varnodes against the parameter's storage
 and so reported an address-taken parameter as unused while the emitted C showed
 the reference; the reference is attributed to the parameter only when no
 storage-backed or name-backed evidence was found
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_paramrefdecl.rs
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_paramrefdecl.rs
 (parameter_reference_varrefs)`). Without the identity test the distinct body
 object survives, and the function-scope uniqueness invariant gives it a suffix
 instead of re-declaring the parameter's identifier.
@@ -2921,7 +2921,7 @@ variable and emit one declaration — the invariant upstream gets for free by
 walking the symbol table. The symbol behind a storage location is the
 smallest entry containing its base byte — upstream `Funcdata::linkSymbol`'s own
 query — ignoring the use-point exactly as the parameter-category query of §9.3
-does (`decompiler/crates/kuna-decomp/src/p6_variables/varmap.rs
+does (`decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs
 (ScopeLocal::containing_symbol_for_storage)`), and the survivor is the first in
 emission order. When the collapsing highs *agree* about the slot's type, that
 recovered type stands, being the sharper information. When they *disagree*, the
@@ -2936,7 +2936,7 @@ than a faithful one.
 signature — final declarator type and its post-name suffix, name, array
 adornment, and (under angr naming) the storage comment — is byte-identical to
 one already emitted *for the same object*
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_dedupvardecls.rs
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_dedupvardecls.rs
 (DeclDedup)`). The object is the local Symbol the naming pass bound the high to,
 or, for an `&symbol` reference high whose only storage is the `PTRSUB` offset
 constant, the Symbol it points at; a high bound to neither is its own object
@@ -3039,7 +3039,7 @@ sort under which every two-digit name lands between `v1` and `v2`: a function
 with eleven numbered locals declared `v1, v10, v11, v2, ..., v9`. Once the
 final spellings are known, and only then, the option `declorder` (P9
 `naming-policy`, default `natural`) reorders the surviving declarations
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_declorder.rs (order_decls)`).
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_declorder.rs (order_decls)`).
 `natural` compares two names character by character, except that where both
 have an ASCII digit run at the same position the runs compare by numeric
 value: leading zeros dropped, then the shorter run first, then digit by digit,
@@ -3068,7 +3068,7 @@ literal was clipped, the terminator `..." /* TRUNCATED STRING LITERAL */`
 (`printc.rs (PrintC::push_ptr_char_constant_ir, PrintC::print_character_constant)`).
 On any refusal the constant falls back to the ordinary integer render, so a
 wrong guess costs readability, never correctness. The manager itself —
-`decompiler/crates/kuna-decomp/src/p9_emit/stringmanage.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/stringmanage.rs
 (StringManagerUnicode)`, one shared instance per Architecture with a
 2048-character budget — pulls loadimage bytes 32 at a time until it finds a
 character-width-aligned NUL (no terminator within budget, or unreadable
@@ -3119,7 +3119,7 @@ case survives only because its residual is zero. Upstream repairs this later
 instead types the constant where the evidence already exists — the covering
 symbol is a character-printable array, which is stronger proof than inspecting
 the bytes — and leaves the exact-hit path untouched
-(`decompiler/crates/kuna-decomp/src/p9_emit/coreaction_render.rs
+(`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionConstantPtr)`). Everything after that is the ordinary probe, including its
 fallback: if the address turns out not to be read-only, or the bytes do not
 decode, the constant prints as an integer exactly as before.
@@ -3132,7 +3132,7 @@ object as a bare constant. Large literals are 16-byte aligned, so that constant
 is the start of, or a point inside, the literal stored before, and either arm
 above would print that other literal's text. `ActionConstantPtr` therefore
 leaves a constant as a number when
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_swiftstrobj.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_swiftstrobj.rs
 (is_string_object)` holds: every use of it, followed through COPY, MULTIEQUAL
 and INDIRECT, is an INT_OR with `0x8000000000000000`, and the 16 bytes 32 past
 it are read-only, hold no NUL and read as UTF-8. It then prints as an address,
@@ -3162,7 +3162,7 @@ bytes *past* the terminator. A genuine `""` is followed by the next literal in
 the table (`00 00 00 65 72 72 6f 72 20 69 6e 20 72 65 67 75`, the `""` `nl`
 hands `setlocale`); a blob pointer is followed by bytes no C string holds
 (`00 00 00 00 00 00 00 00 00 77 df 77 ff fd ff 7f`). **(kuna) emptystrconst**
-(always on, `decompiler/crates/kuna-decomp/src/p9_emit/kuna_emptystrconst.rs
+(always on, `decompiler/crates/unlace-decomp/src/p9_emit/kuna_emptystrconst.rs
 (declines_literal, reads_as_string_data)`) reads sixteen bytes at the constant
 and declines the literal only when the escape walk emitted no characters *and*
 those bytes positively contradict string data: skip the terminator run, walk the
@@ -3184,7 +3184,7 @@ for a `char *` constant once that type is established.
 **An indexed table is a literal only when the index stays inside it.** With
 `elemptr` on (05-types §5.2), a character-pointer constant that is the base of a
 `PTRADD` indexed by a computed value is probed with the index's largest value
-(`decompiler/crates/kuna-decomp/src/p5_types/kuna_elemptr.rs
+(`decompiler/crates/unlace-decomp/src/p5_types/kuna_elemptr.rs
 (literal_index_bound)`): a zero-extended byte is at most 255, a mask is at most
 its mask, an unsigned remainder is less than its divisor, and anything else is
 unbounded. `push_ptr_char_constant_ir` keeps the literal only when that bound is
@@ -3214,14 +3214,14 @@ constant falls through to the pointer arm's casted-hex print, and with
 `globalref` on (§9.9) to `&dat_<addr>` declared `char`.
 
 **Comments.** Comments reach the output through the P0 knowledge plane, never
-inline in the IR: analysis passes call `decompiler/crates/kuna-decomp/src/substrate/funcdata.rs
+inline in the IR: analysis passes call `decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::warning, Funcdata::warning_header)` — buffered per function, then
 flushed by the decompile drive into the Architecture-wide comment database
-`decompiler/crates/kuna-decomp/src/infra/architecture.rs (CommentDatabase)`
+`decompiler/crates/unlace-decomp/src/infra/architecture.rs (CommentDatabase)`
 with byte-exact de-duplication (same function, address, and text ⇒ dropped),
 so re-decompilation never doubles a warning. At print time
 `printc.rs (PrintC::setup_comments)` loads the function's comments into the
-sorter `decompiler/crates/kuna-decomp/src/p9_emit/comment.rs (CommentSorter)`,
+sorter `decompiler/crates/unlace-decomp/src/p9_emit/comment.rs (CommentSorter)`,
 which bins each comment by the basic block containing its address and orders
 it against the block's ops; the body emitters then interleave them — each
 statement flushes the comments sorted before it (`printc.rs
@@ -3247,7 +3247,7 @@ subscript `base[index]` — that is upstream behavior and not optional; a
 *standalone* PTRADD — the address value itself, passed to a call or stored —
 is upstream `base + index`, and kuna's `option arraynotation` (default **on**,
 DIV-2 lineage; option struct in
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_arraynotation.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_arraynotation.rs
 (OptionArrayNotation)`, the flag on `printc.rs (PrintCOptions)`) renders it
 `&base[index]` instead, keeping the element-typed reading — implemented as
 two ordinary RPN tokens (address-of wrapping a subscript), so the surrounding
@@ -3275,7 +3275,7 @@ emitter, which is what keeps one implementation of "emit an `if`" as languages a
 added.
 
 Three artifacts make up the plane, all in
-`decompiler/crates/kuna-decomp/src/p9_emit/`:
+`decompiler/crates/unlace-decomp/src/p9_emit/`:
 
 - **`kuna_lang.rs`** — `OutLang` (the selector), `LangProfile` (the surface
   vocabulary: the keyword and punctuation spellings the emitters use, plus the
@@ -3506,7 +3506,7 @@ What differs, and why each is a language fact rather than a preference:
   a block-graph edit and not a printing decision.
 
 The contract is **`syn::parse_file` validity, not `rustc` compilation**, and
-`kuna-console/tests/verify_outlang_rust_syntax.rs` enforces exactly that by
+`unlace-console/tests/verify_outlang_rust_syntax.rs` enforces exactly that by
 parsing the emitted document. Decompiled output calls functions that have no
 definition, `CARRY4(a, b)` has no Rust spelling, and `[u8; 3]` does not do
 arithmetic; making the output compile is a separate and much larger project.
@@ -3526,7 +3526,7 @@ treats success as "there is code here" is not wrong.
 Both channels count occurrences of `UNSTRUCTURED_GOTO_MARKER` in the *rendered
 text*, exported from `p9_emit/kuna_langrust.rs` beside the printer that builds
 the marker from it. Counting the text rather than the emitter is what makes one
-mechanism serve every surface: `kuna decompile` drives `decomp_dbg` as a
+mechanism serve every surface: `unlace decompile` drives `decomp_dbg` as a
 subprocess and would never see an in-engine counter, a `--jobs` worker ships
 framed records across a pipe, and the WASM front-end holds only the document —
 but all of them hold `code`. The matched text includes the marker's unescaped
@@ -3582,10 +3582,10 @@ pointer, opaque and width-mismatched values retain their existing handling;
 this conversion does not reinterpret their representations. It also does not
 change local partial-field assignments, which use a separate emission path.
 
-Two surfaces refuse the language rather than half-honouring it. `kuna-ghidra`
+Two surfaces refuse the language rather than half-honouring it. `unlace-ghidra`
 pins its Clang token-markup document to C (`process.rs`), because that document
 is consumed by Ghidra's C token model and Rust text in C token slots is a GUI
-regression. `kuna decompile-project` errors, because its `.c`/`.h`/`.asm` export
+regression. `unlace decompile-project` errors, because its `.c`/`.h`/`.asm` export
 is C-shaped end to end.
 
 **Verified Go pairs.** `p9_emit/kuna_gopairreturns.rs` renders the pair-result
@@ -3808,7 +3808,7 @@ directly to `unsafe.Pointer`.
 
 On AMD64 Go ELF with `godwarfsig`, a guarded one-byte load may render as
 `unsafe.String(data, length)[index]`
-(`decompiler/crates/kuna-decomp/src/p9_emit/kuna_gostringindex.rs`).
+(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_gostringindex.rs`).
 The effective locked definition must still carry the single verified
 Go string formal. Explicit local prototypes or parameter maps withhold
 the rewrite even if their physical words look identical. The leaf must
@@ -3921,11 +3921,11 @@ object (`kuna_cpoolprint.rs (op_new_ir)`, upstream `opNewOp`); the constructor
 call follows as its own statement, as in upstream's output, unless Java's
 `javanew` folds the two.
 
-## 9.7 Whole-program document renders (`kuna decompile-project`, `kuna decompile-graph`)
+## 9.7 Whole-program document renders (`unlace decompile-project`, `unlace decompile-graph`)
 
-**(kuna) Three additive render surfaces** back the `kuna decompile-project`
+**(kuna) Three additive render surfaces** back the `unlace decompile-project`
 project export (the CLI driver is
-`decompiler/crates/kuna-cli/src/decompile_project.rs`; usage in
+`decompiler/crates/unlace-cli/src/decompile_project.rs`; usage in
 `CLAUDE.md`). All three are pure *readers* of finished state — they run
 after analysis, insert no ops, flip no options, and change no byte of any
 existing render path (the datatest / stages / `decompile-all --json` outputs
@@ -3945,11 +3945,11 @@ directives keep their final applied outcomes.
 **Type definitions — the `docTypeDefinitions` port.** `printc.rs
 (PrintC::doc_type_definitions)` is the previously-unported C++
 `PrintC::docTypeDefinitions` surface — the console `print C types` command
-(`decompiler/crates/kuna-console/src/ifacedecomp.rs (IfcPrintCTypes)`) was a
+(`decompiler/crates/unlace-console/src/ifacedecomp.rs (IfcPrintCTypes)`) was a
 stub and now wires through it, via the driver
-`decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs (print_c_types)`.
+`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (print_c_types)`.
 It emits a C definition for every user-defined data-type in the factory,
-consuming `decompiler/crates/kuna-decomp/src/substrate/dtype.rs
+consuming `decompiler/crates/unlace-decomp/src/substrate/dtype.rs
 (TypeFactoryImpl::dependent_order)` (chapter [05](05-types.md) §5.1) so every
 definition precedes its uses. Core types, unnamed types, and the internal
 `Partial*` slices are skipped; what renders is typedefs, structs, unions, and
@@ -3958,7 +3958,7 @@ enums (`printc.rs (render_type_definitions)`; the per-type body renderers —
 functions for unit-testability, and emission is direct string building, since
 no emitter markup exists for type definitions). The structures `structsynth`
 minted are moved after every other type, in ascending `N`
-(`decompiler/crates/kuna-decomp/src/p5_types/kuna_structsynth/ledger.rs
+(`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/ledger.rs
 (in_name_order)`), because the tree orders them by the address of a field's type
 and the header would otherwise change from run to run (chapter
 [05](05-types.md), struct synthesis). Two documented `(kuna)`
@@ -3997,7 +3997,7 @@ tag and a function. An image that carries `struct stat` in its debug info and
 calls `stat()` therefore produced a header where
 `int stat(const char *, stat *);` is `error: 'stat' redeclared as a different
 kind of symbol` — and, because the parse does not recover, every declaration
-after it fails too. `decompiler/crates/kuna-console/src/project.rs
+after it fails too. `decompiler/crates/unlace-console/src/project.rs
 (build_header)` resolves the clash in favour of the type: a function whose name
 is one of the header's typedef names (`project.rs (typedef_names)`) has its
 prototype emitted as a comment carrying the full signature, instead of as a
@@ -4034,17 +4034,17 @@ larger unsigned integer, each carrying a sizeof-divergence note) and
 `undefined16`/`undefined32` as byte-array structs. The non-printer half of
 the export (section enumeration, one-instruction disassembly, raw image
 bytes, named data symbols for the `.asm`/`README.md` artifacts) lives on the
-console engine, `decompiler/crates/kuna-console/src/engine.rs
+console engine, `decompiler/crates/unlace-console/src/engine.rs
 (ConsoleProgram::sections, disassemble_at, read_bytes, global_data_symbols)`,
 not in this folder.
 
-**The streamed layout.** `kuna decompile-project --stream` (chapter
+**The streamed layout.** `unlace decompile-project --stream` (chapter
 [00](00-overview.md)) drives these same renders one result at a time and
 adds three pieces of its own, none of which a non-stream export can see.
 The linear disassembly walk becomes **resumable**
-(`decompiler/crates/kuna-console/src/project_stream.rs (AsmSweep)`): the
+(`decompiler/crates/unlace-console/src/project_stream.rs (AsmSweep)`): the
 same section-by-section walk
-`decompiler/crates/kuna-console/src/project.rs (build_asm)` performs,
+`decompiler/crates/unlace-console/src/project.rs (build_asm)` performs,
 cut into steps against a code-byte budget, carrying its scratch state —
 above all an in-progress `db` run — across the cut, so a chopped budget
 shifts which step a byte is written in and not which byte is written.
@@ -4058,7 +4058,7 @@ ordered `; --- variables ---` section appended after the sweep, ahead of the unc
 `; --- data ---` tail (`project_stream.rs (render_data_tail)`). The set of comment
 lines is exactly the set removed from under the labels. Finally the
 README gains a second **layout** and an in-progress render
-(`decompiler/crates/kuna-console/src/project.rs (render_readme,
+(`decompiler/crates/unlace-console/src/project.rs (render_readme,
 ReadmeLayout, render_readme_streaming)`), the first describing the
 streamed `.c`/`.asm` and the two extra files, the second adding a banner
 and a status table while the export runs; the `Standard` layout is
@@ -4069,8 +4069,8 @@ its running README inventories those, adds the feed form of `index.jsonl` and
 `.streaming`, and says the `.c`/`.h`/`.asm` do not exist until the export
 completes; the completed export writes the `Standard` README itself.
 
-**The graph document.** `kuna decompile-graph`
-(`decompiler/crates/kuna-cli/src/decompile_graph.rs`) is another additive reader
+**The graph document.** `unlace decompile-graph`
+(`decompiler/crates/unlace-cli/src/decompile_graph.rs`) is another additive reader
 of completed program state: one JSON document holding every discovered function
 with its recovered signature, parameters, C body and assembly, plus the call
 edges between them. It adds no analysis facts, mutates no IR and changes no
@@ -4082,7 +4082,7 @@ Every question the document answers is answered by the surface that already owns
 it, because two surfaces disagreeing about one program is the failure mode here.
 Which entries exist and which of them have bodies is the whole-binary target
 policy of §0.2 (`function_entries_canonical` for the rows,
-`decompiler/crates/kuna-cli/src/decompile_all.rs (resolve_targets)` — i.e.
+`decompiler/crates/unlace-cli/src/decompile_all.rs (resolve_targets)` — i.e.
 `function_entries_executable` — for the bodies), so an address that is callable
 but not executable content is a labelled row — `import` for a pointer slot the
 program calls through, `data` for a named address that is simply not code —
@@ -4091,25 +4091,25 @@ rather than a body lifted out of a pointer table. Naming such an address with
 and what the run produced would be a plausible-looking function lifted out of a
 pointer table. What a function *is* comes from
 the shared per-function classifier
-(`decompiler/crates/kuna-console/src/classify.rs`), the same one the browser
+(`decompiler/crates/unlace-console/src/classify.rs`), the same one the browser
 inventory groups by. Bodies and parameters come from the shared decompile loop
-(`decompiler/crates/kuna-console/src/project.rs (decompile_targets)`), which
+(`decompiler/crates/unlace-console/src/project.rs (decompile_targets)`), which
 isolates a failure to one record — and that record's `error` is carried into the
 document, so a consumer counting functions is not silently counting a subset.
 Assembly comes from the listing walk
-(`decompiler/crates/kuna-cli/src/disassemble.rs (function_listing)`), so an
+(`decompiler/crates/unlace-cli/src/disassemble.rs (function_listing)`), so an
 undecodable byte inside a body is a `.byte` row and not the loss of the whole
-listing. Edges come from the reference index `kuna xrefs` answers with, through
+listing. Edges come from the reference index `unlace xrefs` answers with, through
 the same call-graph model `--reachable-from` walks
-(`decompiler/crates/kuna-cli/src/callgraph.rs (CallGraph::callees_of)`).
+(`decompiler/crates/unlace-cli/src/callgraph.rs (CallGraph::callees_of)`).
 
 The CLI graph module owns inventory containment, reachability and caller
 completeness queries. Its scheduling module,
-`decompiler/crates/kuna-cli/src/callgraph/plan.rs`, owns the iterative SCC walk
+`decompiler/crates/unlace-cli/src/callgraph/plan.rs`, owns the iterative SCC walk
 and recursion policy used by callee-first decompilation. Object-file consumers
-share `decompiler/crates/kuna-cli/src/image.rs`: they read the selected Mach-O
+share `decompiler/crates/unlace-cli/src/image.rs`: they read the selected Mach-O
 slice, and a TE input as its PE view
-(`decompiler/crates/kuna-analysis/src/loader/kuna_objectview.rs (te_as_pe)`). These boundaries are
+(`decompiler/crates/unlace-analysis/src/loader/kuna_objectview.rs (te_as_pe)`). These boundaries are
 shared by the command drivers without changing edge rules or output ordering.
 
 **Both ends of every edge are rows of the same document.** A reference into the
@@ -4117,7 +4117,7 @@ middle of a body resolves to the body, and one that lands in no discovered
 function at all — a `CALL 0x0` off a nulled relocation, a branch into a gap
 between entries — is not a call-graph edge and is not emitted, because a
 consumer that has to model containment itself to use the edge list has been given
-the wrong list. An edge's kind is the `kuna xrefs` kind, so the document and that
+the wrong list. An edge's kind is the `unlace xrefs` kind, so the document and that
 command cannot describe one program differently: `call`, `jump` for a tail call or
 a branch into a neighbouring entry, and `data` for a function whose address is
 materialized. The third is not optional decoration — it is how `main` has a
@@ -4131,7 +4131,7 @@ decode-time constant has no static target and therefore no edge at all; it is
 reported as `hasIndirectCalls` on the row that contains the call site — `CALLIND`
 only, folded onto its function by the same ordered containment that decides which
 function an instruction's references are listed under
-(`decompiler/crates/kuna-analysis/src/listing/xrefs.rs (XrefIndex::has_indirect_calls)`)
+(`decompiler/crates/unlace-analysis/src/listing/xrefs.rs (XrefIndex::has_indirect_calls)`)
 — while a forwarding veneer's `jmp [slot]` is an indirect *branch* whose
 destination is in fact known, and is reported as `forwardsTo` instead. An
 imported API call, `call qword ptr [slot]`, is the case where a `CALLIND` *does*
@@ -4176,7 +4176,7 @@ prints it, above the function, the way angr prints its typedefs.
 
 **What the preamble contains** is the definable types that function's own C can
 name: composites, enums and typedefs, never core types.
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_structdefs.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_structdefs.rs
 (referenced_types)` collects the function's semantic type surface — the
 prototype's return and parameter types, every Varnode data-type, and every
 mapped Symbol type behind a HighVariable — and walks each one's dependency cone
@@ -4207,16 +4207,16 @@ forward-declaration block first, then bodies, an incomplete struct printing as
 `typedef struct FILE FILE; /* opaque */`, a padding gap as `undefined1
 _pad<hexoff>[N];`. It is emitted as whole lines rather than tokens, before
 `begin_function`, because a type definition has no `PcodeOp` or `Varnode` for
-the markup back-end to bind to. A `kuna decompile-project` export therefore
+the markup back-end to bind to. A `unlace decompile-project` export therefore
 *suppresses* the preamble in its bodies
-(`decompiler/crates/kuna-console/src/project.rs (decompile_pulled)`): those
+(`decompiler/crates/unlace-console/src/project.rs (decompile_pulled)`): those
 bodies include a header that already carries every definition, and printing them
 again above each body would redefine them. The suppression is keyed on a batch
 option that says exactly that — *this caller renders a header that defines these
 types* (`DecompileOptions::header_carries_types`, set by the export surfaces and
 by a `--jobs` worker serving one, which is the worker the export asks for the
 `.h` type block with `--jobs-types`). It is deliberately **not** keyed on
-`want_proto`: `kuna decompile-graph` asks for prototypes too, and its document
+`want_proto`: `unlace decompile-graph` asks for prototypes too, and its document
 is per-function C with no header artifact, so it keeps the preamble inside
 `codeC` exactly as `decompile-all` keeps it in `code`. The preamble is
 documentation rather than a translation unit — a `undefined1` padding member
@@ -4248,7 +4248,7 @@ definition renderer the language plane is that plane's work, not this option's.
 
 **The machine-readable half.** `decompile_drive.rs
 (extract_type_definitions)` reports the same set as the `types` array of a
-`kuna decompile-all --json` function record: one object per type carrying its
+`unlace decompile-all --json` function record: one object per type carrying its
 name, its definition text (`kuna_structdefs.rs (definition_text)` — the body for
 a complete composite, the enum block, the typedef line, or the opaque forward
 declaration) and its size, so a consumer reads a recovered layout without
@@ -4284,13 +4284,13 @@ an object of the pointed-to type. The expression then has exactly the constant's
 pointer type, so the cast is gone because the object is declared at that type,
 not because it was suppressed, and its value is the address it replaces
 wherever `dat_<addr>` is placed at `<addr>`. The decision is
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_globalref.rs (Plan::decide)`,
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_globalref.rs (Plan::decide)`,
 consulted at the top of the pointer arm after the string probe (§9.4) and
 before the NULL token and the cast; `printc.rs (PrintC::push_global_ref_ir)`
 emits the `&` and the name, bound to the constant Varnode for markup.
 
 **Where a global can be.** The object loader classifies its sections once
-(`decompiler/crates/kuna-analysis/src/loader/kuna_globalref.rs
+(`decompiler/crates/unlace-analysis/src/loader/kuna_globalref.rs
 (holds_program_objects)`): an allocated section of initialized, read-only or
 zero-filled data is a place a program object can live; code is not, a TLS
 template is not (its addresses are offsets, not run-time locations), and
@@ -4345,7 +4345,7 @@ declaration the structure-member declarator builds for it (`printc.rs
 (declaration_text)`), its size, and whether it stood for `void`, was a direct
 access, or is a record or union. They travel as `FuncResult::globals`, which
 the `--jobs` wire carries like the type records, and
-`decompiler/crates/kuna-console/src/project.rs (global_declarations)` turns
+`decompiler/crates/unlace-console/src/project.rs (global_declarations)` turns
 them into one `extern` line per named address in the `decompile-project`
 header, in a block of its own between the type definitions and the
 prototypes. The header can hold one declaration per address, and every
@@ -4384,7 +4384,7 @@ one storage two objects, so a store through one would never reach the other.
 An address some function takes keeps its declaration either way.
 
 Named global references retain whole mapped declarations through
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_namedglobals.rs`. The C printer
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_namedglobals.rs`. The C printer
 records the actual emitted name only when a mapped data object is referenced,
 including field and array accesses. Storage base, extent, and whole symbol type
 must agree with the mapping; split or uncertain mappings are not guessed. The
@@ -4449,7 +4449,7 @@ Whole named objects also retain the independent-storage overlap guard; overlappi
 views require shared storage instead of separate declarations. A connected group
 of consistently typed, fixed-size character arrays can share its earliest array
 when that array contains every byte of the group
-(`decompiler/crates/kuna-console/src/kuna_stringoverlaps.rs (declarations)`). The
+(`decompiler/crates/unlace-console/src/kuna_stringoverlaps.rs (declarations)`). The
 header declares that owner once and defines each contained name as an array
 lvalue at its byte offset into the owner. This preserves array extents, address
 taking, shared writes, and relocation when the owner is linked. A conflicting
@@ -4507,7 +4507,7 @@ declaration names. A Varnode of that storage at another type, such as its value
 before a call, which nothing prints, is not a read of it at that type, because
 every walk over the Varnodes holding it agreed on the pointer.
 
-**The value is the binary's.** `decompiler/crates/kuna-cli/tests/decompile_all_cli.rs
+**The value is the binary's.** `decompiler/crates/unlace-cli/tests/decompile_all_cli.rs
 (a_constant_address_named_as_a_global_round_trips_through_the_printed_c)`
 exports a non-PIE fixture whose data has no symbols both ways, compiles each
 witness caller exactly as printed against the export's own header with gcc and
@@ -4650,7 +4650,7 @@ when the upper extraction is implied and covers exactly the original scalar's
 unchanged prefix. P9 also accepts the equivalent zero-offset truncation of a
 right shift by the number of replaced bits, which cast insertion can introduce.
 The implementation is
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_partialconcat.rs` and the
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_partialconcat.rs` and the
 `PrintC::op_partial_concat_ir` renderer in `printc.rs`. Both masks matter: the
 upper one removes replaced bits, and the lower one truncates arithmetic that C
 promotes before evaluating. Casts to the unsigned result width keep the operation
@@ -4696,7 +4696,7 @@ because C cannot spell it (a 16-byte integer the type system holds as
 signatures.
 The declarations survive worker serialization and streamed body removal, and
 remain roots when pruning synthesized types. Capture is implemented in
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_callprototypes.rs`.
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_callprototypes.rs`.
 
 With a live `callwide` verdict, a proved eight-byte result also needs a
 declaration when its producer was not selected for export. The declaration
@@ -4716,7 +4716,7 @@ definition fails the export. A conflicting definition or type-name collision
 cannot silently remove a required wide declaration. Ordinary locked-declaration
 conflicts retain the diagnostic behavior above. Capture remains after temporary
 C rendering and before publication. The proof and bounded contract checks belong to
-`decompiler/crates/kuna-decomp/src/p4_calls/kuna_callwide.rs`.
+`decompiler/crates/unlace-decomp/src/p4_calls/kuna_callwide.rs`.
 
 Format-specific call arities are not declarations of the callee. When a call
 has format-derived arguments, project declarations restore its parked formal
@@ -4733,7 +4733,7 @@ is published as the declared pointee address at the original operation.
 
 Project C exports use the exact global-scope function symbol's display name
 for a successful definition and its header prototype when both spellings are
-plain C identifiers (`decompiler/crates/kuna-console/src/kuna_projectfunctionnames.rs`).
+plain C identifiers (`decompiler/crates/unlace-console/src/kuna_projectfunctionnames.rs`).
 This aligns definitions with calls when debug information names a function
 differently from its linker symbol. Analysis, selector aliases, and standalone
 output retain their existing names. The original display is restored after
@@ -4779,7 +4779,7 @@ from its Symbol's scalar type (`kuna_pointerstorecast.rs (target)`).
 
 ## (kuna) Intel intrinsic names for AVX user-ops — `option avxintrinsics`, default on
 
-**`decompiler/crates/kuna-decomp/src/p9_emit/kuna_avxintrin.rs (intrinsic)`,
+**`decompiler/crates/unlace-decomp/src/p9_emit/kuna_avxintrin.rs (intrinsic)`,
 called from `printc.rs (op_callother_ir)`.** The x86 SLEIGH spec lifts most
 AVX2, FMA and AVX-512 instructions to opaque user-ops named after the mnemonic
 and its extension: `vpaddd_avx2`, `vfmadd132ps_fma`, `vaddps_avx512f`. When a
@@ -4818,7 +4818,7 @@ the result stay hidden, because a VEX write zero-extends into `ZMM0` and the
 heritage reads `ZMM0` whole.
 
 **Post-increment** (`postinc`, default on, C output only; kuna;
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_postinc.rs (ActionPostIncrement)`,
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_postinc.rs (ActionPostIncrement)`,
 run after the final structure): an in-place pointer step `p = p + c` (an
 `INT_ADD` of a constant `c`, or a `PTRADD` of one element of `c` bytes, whose
 output and first input are the same variable) prints nothing, and the LOAD or
@@ -5071,7 +5071,7 @@ modes retain their existing rendering.
 ### AArch64 ACLE intrinsics (`acleintrinsics`)
 
 **(kuna) `option acleintrinsics on|off`, default on, AArch64 only,
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_acleintrinsics.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_acleintrinsics.rs
 (intrinsic)`; Kuna #1626.** A functional `CALLOTHER` prints under the name
 its SLEIGH spec gave the user op, which describes the instruction:
 `DataMemoryBarrier(2,3)`, `WaitForInterrupt()`. The source called an
@@ -5121,7 +5121,7 @@ exist only when the same option has set the `ShowMemTag` context (chapter
 
 The option `rustfmt` (`off|on|all`, default `on`) decides which verified Rust
 formatting runtime calls render as the source macros that produced them, using
-the mode in `decompiler/crates/kuna-decomp/src/p9_emit/kuna_rustfmt.rs`. Every
+the mode in `decompiler/crates/unlace-decomp/src/p9_emit/kuna_rustfmt.rs`. Every
 recovery in the sections below belongs to one of its values and acts only in
 Rust output on a rustc-built image. `on` runs the literal, primitive-argument,
 static-specification, `format!` String, `panic!`, piece-array and
@@ -5134,12 +5134,12 @@ cleared its speed study. `off` keeps every runtime call with its encoded
 ### Literal Rust print macros
 
 Under `rustfmt on`,
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_rustfmtliteral.rs` renders
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_rustfmtliteral.rs` renders
 literal-only `std::io::stdio::_print` and `_eprint` calls as Rust print macros.
 It changes only Rust output and requires the detected Rust language, an
 unambiguous stable 1.93.0 or 1.93.1 compiler version, and a 64-bit little-endian data space.
 The loader obtains the version from ELF `.comment` records through
-`decompiler/crates/kuna-analysis/src/analyzers/sourcelang/kuna_rustversion.rs`.
+`decompiler/crates/unlace-analysis/src/analyzers/sourcelang/kuna_rustversion.rs`.
 Absent, malformed, prerelease or conflicting Rust records provide no version;
 a forced source-language option cannot manufacture version evidence.
 
@@ -5166,7 +5166,7 @@ recover them. `rustfmt off` restores both encoded runtime arguments.
 ### Primitive Rust print arguments
 
 Under `rustfmt on`,
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_rustfmtargs.rs` handles the placeholder
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_rustfmtargs.rs` handles the placeholder
 representation at the same verified Rust 1.93.0/1.93.1 stdout/stderr sinks.
 It requires Rust output, a 64-bit little-endian data space, exactly two runtime
 arguments, no return value and a nonnull constant template pointer. Sink identity
@@ -5199,7 +5199,7 @@ integer traits and width/precision are decoded by the extension below.
 ### Static Rust integer format specifications
 
 The same `rustfmt on` recovery extends primitive arguments through
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_rustfmtflags.rs`. The same version,
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_rustfmtflags.rs`. The same version,
 language, memory, stack descriptor and exact sink requirements apply. Full object
 symbols establish both integer width/signedness and Display, Debug, LowerHex,
 UpperHex, Octal, Binary, LowerExp or UpperExp trait identity. Only exact standard
@@ -5227,7 +5227,7 @@ formatters, dynamic counts and specialized sinks remain explicit. No IR, descrip
 ### Rust format String initialization
 
 Under `rustfmt on`,
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_rustfmtresult.rs` recognizes only
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_rustfmtresult.rs` recognizes only
 `alloc::fmt::format::format_inner` at the existing direct-call rendering hook.
 The name must be fully qualified or resolve to the exact entry with the complete
 `alloc::fmt::format` namespace. The call has a hidden destination, template and
@@ -5255,7 +5255,7 @@ formatters or other layouts, and it does not change C output.
 ### Rust panic messages
 
 Under `rustfmt on`,
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_rustfmtpanic.rs` renders verified
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_rustfmtpanic.rs` renders verified
 `core::panicking::panic_fmt` calls as `panic!`. The source language must be Rust,
 the output must be Rust, and the compiler record must identify stable Rust 1.93.0
 or 1.93.1 on a little-endian 64-bit data space. A direct call must have exactly
@@ -5610,7 +5610,7 @@ helper, so this records the measured failure without attributing a cause. The
 original measurement is retained and the correction ships as an explicit opt-in.
 
 **Post-increment** (`postinc`, default on, C output only; kuna;
-`decompiler/crates/kuna-decomp/src/p9_emit/kuna_postinc.rs (ActionPostIncrement)`,
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_postinc.rs (ActionPostIncrement)`,
 run after the final structure): an in-place pointer step `p = p + c` (an
 `INT_ADD` of a constant `c`, or a `PTRADD` of one element of `c` bytes, whose
 output and first input are the same variable) prints nothing, and the LOAD or

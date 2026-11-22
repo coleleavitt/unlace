@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/macho_rustlike_symbol",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/macho_rustlike_symbol",
     "binary_sha256": "3808fdc17810b86da4b4c5cdf61322808c7709206f77f04691626b885b00408b",
     "binary_size": 16688,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/macho_rustlike_symbol",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/macho_rustlike_symbol",
     "selector": "_main",
     "selector_kind": "name"
   },

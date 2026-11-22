@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:64:default:gcc">
 <!--
     RE-friction round 2, need `keyboard-callback-uses-undefined`, challenge
-    6989ca5da15272fa37a80c43 (x86-64 ELF `lugosiii`): `kuna decompile ... 0x6500` by address rendered the Wayland `wl_keyboard_listener` key handler as
+    6989ca5da15272fa37a80c43 (x86-64 ELF `lugosiii`): `unlace decompile ... 0x6500` by address rendered the Wayland `wl_keyboard_listener` key handler as
 
         void sub_6500(long a0)
         {

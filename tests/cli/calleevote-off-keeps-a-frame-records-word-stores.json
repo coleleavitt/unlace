@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_frame_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_frame_x86_64",
     "binary_sha256": "e4b3a4b350a8621b5ab27cecfc577bf78c2208b7a07312c431a41f98f631aeaa",
     "binary_size": 16288,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_frame_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_frame_x86_64",
     "selector": "add",
     "selector_kind": "name"
   },

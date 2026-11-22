@@ -35,7 +35,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/stackcookie_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/stackcookie_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as gsseh</com>
   <com>load function gsseh</com>

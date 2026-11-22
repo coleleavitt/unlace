@@ -10,7 +10,7 @@
     function ending in `abort()`/`exit()` runs on into the next function until
     funcboundflow truncates it.
 
-    Stage / sub-stage: P1 external-refinement (`kuna-analysis`
+    Stage / sub-stage: P1 external-refinement (`unlace-analysis`
     `loader/elf_plt.rs` names the `.got` slots of undefined function symbols no
     PLT stub jumps through, and `loader/kuna_peimportcall.rs` paints them
     `externref`) feeding the P2/P4 deindirect seam, whose restart re-flows the
@@ -49,7 +49,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_got_noreturn_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_got_noreturn_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function check</com>
@@ -65,13 +65,13 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_got_slotaddr_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_got_slotaddr_x86_64</com>
   <com>read symbols</com>
   <com>load function pickx</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elf_got_noreturn_aarch64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_got_noreturn_aarch64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function die</com>

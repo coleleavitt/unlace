@@ -25,7 +25,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/iokit_kext.macho</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/iokit_kext.macho</com>
   <com>option xnutables off</com>
   <com>read symbols</com>
   <com>load addr 0xfffffff007a04200</com>
@@ -47,7 +47,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/iokit_kext.macho</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/iokit_kext.macho</com>
   <com>option xnutables on</com>
   <com>read symbols</com>
   <com>load addr 0xfffffff007a04200</com>

@@ -2,9 +2,9 @@
 
 Three layers of collision avoidance, cheapest first (docs/re-pipeline.md):
 
-1. **Track separation is the structural win.** Track `tooling` touches kuna-cli /
-   kuna-console / kuna-analysis / tests/cli / docs/cli.md. Track `quality` touches
-   kuna-decomp / phases.toml / options.rs / the four hard-coded counters / docs/options.md /
+1. **Track separation is the structural win.** Track `tooling` touches unlace-cli /
+   unlace-console / unlace-analysis / tests/cli / docs/cli.md. Track `quality` touches
+   unlace-decomp / phases.toml / options.rs / the four hard-coded counters / docs/options.md /
    docs/history.md / tests/stages. Those sets are DISJOINT, so three tooling builders run in
    parallel with no shared mutable state at all.
 2. **Named resource leases.** A need's track and `touches:` map to a resource set; a need
@@ -44,16 +44,16 @@ TRACK_RESOURCES = {
 
 # A path prefix -> the lease that owns it. Longest match wins.
 # Only paths where a SILENT wrong merge is possible get a lease. Three tooling builders all
-# adding a line to kuna-cli's dispatch table is a trivial rebase, and leasing the crate for
+# adding a line to unlace-cli's dispatch table is a trivial rebase, and leasing the crate for
 # that would throttle the pipeline to one builder -- which is exactly what the three-slot
 # default exists to avoid. The counters, phases.toml and the baselines are different: an
 # identical `85 -> 86` edit on two branches merges CLEANLY to the wrong number.
 PATH_RESOURCES = [
-    ("decompiler/crates/kuna-decomp/phases.toml", "file:phases.toml"),
-    ("decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs", "counter:catalog"),
-    ("decompiler/crates/kuna-decomp/src/p0_knowledge/kuna_phases", "counter:catalog"),
-    ("decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs", "counter:catalog"),
-    ("decompiler/crates/kuna-base/src/xml.rs", "counter:stages-corpus"),
+    ("decompiler/crates/unlace-decomp/phases.toml", "file:phases.toml"),
+    ("decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs", "counter:catalog"),
+    ("decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_phases", "counter:catalog"),
+    ("decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs", "counter:catalog"),
+    ("decompiler/crates/unlace-base/src/xml.rs", "counter:stages-corpus"),
     ("docs/options.md", "file:docs/options.md"),
     ("docs/baseline-stages.json", "counter:stages-corpus"),
     ("tests/stages", "counter:stages-corpus"),

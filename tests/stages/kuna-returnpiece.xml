@@ -9,7 +9,7 @@
     return-pair repair in kuna_returnuncomputed).  A strict fix: no option.
 
     Source (x86-64 SysV, bytes verbatim below; the fixture binaries and the
-    compiled round trip are kuna-analysis/tests/fixtures/piecehi_*):
+    compiled round trip are unlace-analysis/tests/fixtures/piecehi_*):
 
         typedef unsigned long u64;
         u64 join_lo_hi(unsigned lo, unsigned hi) { return ((u64)hi << 32) | lo; }

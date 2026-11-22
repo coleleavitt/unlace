@@ -13,7 +13,7 @@
     Stage / sub-stage: P3 "simplification-quiescence", option
     `cmpmerge on|off`.
 
-    The bytes are decompiler/crates/kuna-analysis/tests/fixtures/cmpmerge.c
+    The bytes are decompiler/crates/unlace-analysis/tests/fixtures/cmpmerge.c
     built by gcc 15.3 at -O0 -fno-pie -no-pie -nostartfiles (x86-64).
     Pass 1 is the default (off), pass 2 `option cmpmerge on`.
 -->

@@ -363,7 +363,7 @@ def slot_release(pool, slot_id):
 # --- resource leases (collision avoidance between concurrent builders) ------
 #
 # Resource names are declared, not discovered: "merge", "counter:catalog", "file:phases.toml",
-# "crate:kuna-cli", "cluster:<id>". Because every option-adding feature needs the whole
+# "crate:unlace-cli", "cluster:<id>". Because every option-adding feature needs the whole
 # counter set, "at most one option-adding builder at a time" falls out of the algebra.
 
 DEFAULT_LEASE_TTL = 10800  # seconds; > the default builder timeout

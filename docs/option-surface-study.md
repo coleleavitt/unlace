@@ -37,7 +37,7 @@ Four habits produced the surface:
 - **Presentation defaults stayed `off` in the catalog because the vendored datatest corpus
   pins Ghidra's spelling**, while the `auto` mode (what every file front-end runs) turned them
   on anyway. The catalog default was therefore not the product default, which misleads an
-  agent reading `kuna catalog`.
+  agent reading `unlace catalog`.
 - **Target-gated features stayed `off` pending evidence** even where the code is inert off
   its target, so a PE needed `--option rtti on` and an ARM image `--option poolentry on`.
 

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Machine-wide GNU make jobserver (named fifo) shared by every unlace agent's cargo, rustc and make.
+#   unlace-jobserver [TOKENS]     hold the fifo open with TOKENS job slots (default: nproc - 4)
+# Clients join with: export MAKEFLAGS="-j --jobserver-auth=fifo:$UNLACE_JOBSERVER_FIFO" (unlace-ci-gates.sh does this
+# when the fifo exists). Each client also keeps one implicit slot of its own.
+set -eu
+FIFO="${UNLACE_JOBSERVER_FIFO:-/run/user/$(id -u)/unlace-jobserver.fifo}"
+N="${1:-$(( $(nproc) - 4 ))}"
+[ -p "$FIFO" ] || mkfifo -m 600 "$FIFO"
+exec 3<>"$FIFO"
+head -c "$N" /dev/zero | tr '\0' '+' >&3
+echo "unlace-jobserver: $N slots in $FIFO (pid $$)"
+exec sleep infinity

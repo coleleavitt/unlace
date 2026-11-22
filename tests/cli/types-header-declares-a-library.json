@@ -7,7 +7,7 @@
     "{{BIN}}",
     "fetch",
     "--types",
-    "{{WORK}}/decompiler/crates/kuna-cli/tests/fixtures/types_header/curl.h"
+    "{{WORK}}/decompiler/crates/unlace-cli/tests/fixtures/types_header/curl.h"
   ],
   "cwd": "{{WORK}}",
   "env": {
@@ -17,11 +17,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-cli/tests/fixtures/types_header/curlish.so",
+    "binary_rel": "decompiler/crates/unlace-cli/tests/fixtures/types_header/curlish.so",
     "binary_sha256": "7478204e368315d7f2ca2f48555d290074c29d168c9b8d1ff28ce19671583730",
     "binary_size": 3088,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-cli/tests/fixtures/types_header/curlish.so",
+    "in_repo_path": "decompiler/crates/unlace-cli/tests/fixtures/types_header/curlish.so",
     "selector": "fetch",
     "selector_kind": "name"
   },

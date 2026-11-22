@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli/src/xrefs.rs, decompiler/crates/kuna-analysis/src/listing/xrefs.rs]
+touches: [decompiler/crates/unlace-cli/src/xrefs.rs, decompiler/crates/unlace-analysis/src/listing/xrefs.rs]
 scope: small
 regression_of: null
 pr: "441"
@@ -121,6 +121,6 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-captain T_TRIAGE r3: track tooling CONFIRMED (kind=bad-ux, name resolution in `kuna xrefs --to`), touches widened to the analysis-tier xref index the CLI resolves against. No emitted C, so no option.
+captain T_TRIAGE r3: track tooling CONFIRMED (kind=bad-ux, name resolution in `unlace xrefs --to`), touches widened to the analysis-tier xref index the CLI resolves against. No emitted C, so no option.
 captain T_TRIAGE r3: repaired the missing probe/acceptance `target` block (binary_rel + sha256 + size, source dataset) -- without it {{BIN}} could not resolve and the need was unclosable by B_DONE and invisible to regression detection. Verified: acceptance now RUNS and FAILS on cf5234ac, which is the state a filed need must be in.
-- round 4 BUILDER (b-r4-name-based-xrefs): hypothesis **UPHELD**. The ambiguity really is decided before the alias class exists -- and it could not have been otherwise where the check stood: `alias_class` is the connected component of the DECODED `jmp [slot]` forwarding relation, and the walk that decodes it (`build_with_focus`) runs after target resolution because it needs the target address to focus on. Fixed by not deciding at lookup time: a contested name carries its candidates into the walk as its focus set and is settled against the alias class afterwards (`Resolution::settle`, kuna-cli/src/xrefs.rs). Candidates that are all one class resolve to the class's code half (the veneer); candidates that are not keep the refusal with every candidate named. Acceptance a-6576d0dff8a6 PASSES. Sweep over all 148 duplicate-name entries in 14 binary fixtures: 129 folded, 18 refused, 0 mismatches -- every fold answers byte-identically to each of its own candidate addresses.
+- round 4 BUILDER (b-r4-name-based-xrefs): hypothesis **UPHELD**. The ambiguity really is decided before the alias class exists -- and it could not have been otherwise where the check stood: `alias_class` is the connected component of the DECODED `jmp [slot]` forwarding relation, and the walk that decodes it (`build_with_focus`) runs after target resolution because it needs the target address to focus on. Fixed by not deciding at lookup time: a contested name carries its candidates into the walk as its focus set and is settled against the alias class afterwards (`Resolution::settle`, unlace-cli/src/xrefs.rs). Candidates that are all one class resolve to the class's code half (the veneer); candidates that are not keep the refusal with every candidate named. Acceptance a-6576d0dff8a6 PASSES. Sweep over all 148 duplicate-name entries in 14 binary fixtures: 129 folded, 18 refused, 0 mismatches -- every fold answers byte-identically to each of its own candidate addresses.

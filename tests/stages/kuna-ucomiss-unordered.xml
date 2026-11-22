@@ -9,7 +9,7 @@
   comparison before the NaN guards are dropped. Strict correctness fix,
   no new option: pass 1 pins the defaults, pass 2 (nanignore none) keeps
   the explicit guards. The compiled-C oracle is in
-  kuna-cli/tests/float_unordered_compare.rs.
+  unlace-cli/tests/float_unordered_compare.rs.
 -->
 <binaryimage arch="x86:LE:64:default:gcc">
   <bytechunk space="ram" offset="0x401000">

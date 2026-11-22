@@ -15,11 +15,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_rexthunk_x86_64.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_rexthunk_x86_64.exe",
     "binary_sha256": "29043929b1b24babb13b4f9ecb594ef477014d4b7c0b960b19f7e36775779dc8",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_rexthunk_x86_64.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_rexthunk_x86_64.exe",
     "selector": null,
     "selector_kind": "none"
   },

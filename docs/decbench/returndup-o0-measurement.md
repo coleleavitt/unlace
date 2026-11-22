@@ -34,7 +34,7 @@ Three findings, in order of how much they should change what the repo does:
 Constructed exactly like #246's ablation, extended to O0 and re-run on all three levels so
 the numbers are one build and one harness throughout.
 
-- **Two arms, one binary.** `kuna decompile-all <stripped> --json --max-fn-seconds 120`,
+- **Two arms, one binary.** `unlace decompile-all <stripped> --json --max-fn-seconds 120`,
   once as shipped and once with `--option returndup off`, kuna at HEAD `82dd39a7`. No
   `--mode` flag, so `auto` applies -- which is what the benchmark's `kuna_raw` backend does
   (`decbench/decompilers/raw/kuna_raw.py`), and it resolves to `aggressive` on nearly every

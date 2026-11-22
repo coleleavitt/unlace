@@ -1,0 +1,358 @@
+//! `--define-function` — telling kuna where a function starts and ends.
+//!
+//! # Why this exists
+//!
+//! Every function boundary kuna knows is one it *derived*: discovery finds the
+//! entries, and the extent is reconstructed as the address-contiguous clip
+//! `[entry, next_entry)` ([`unlace_console::funcextent`]) over an unbounded flow
+//! follow.  That is the right default and it is wrong exactly where reverse
+//! engineering is hard — an obfuscated, packed or hand-written image, where a
+//! missed entry silently merges two functions and a phantom entry invents one.
+//! Until this flag the `unlace` binary could not correct either: its generated
+//! console script emitted a fixed vocabulary (`load file` / `option` /
+//! `read symbols` / `load function|addr` / `kassert` / `decompile` / `print`),
+//! and "function F spans `[start,end)`" was not expressible anywhere in the
+//! engine (`docs/re-needs/no-cli-function-boundary-override.md`).
+//!
+//! # The declaration
+//!
+//! ```text
+//!   --define-function 0x1400[-0x1480][=name]
+//!   --define-function @bounds.txt
+//! ```
+//!
+//! `start` declares the entry (the `map function` recipe: a `FunctionSymbol` so
+//! call sites name it, and a name→address registration so it enumerates and
+//! resolves by name).  `end` is EXCLUSIVE and declares the extent, which bounds
+//! flow following for that function and replaces the clip the inventory reports.
+//! Both halves are optional in the sense that `end` may be omitted — a bare
+//! `--define-function 0x1400` asserts an entry and leaves the extent natural.
+//!
+//! The `@file` form is the durable half: an agent that has worked out the real
+//! boundaries of a packed image keeps them in a file and passes the same
+//! `@bounds.txt` to every later invocation.  kuna does not write the declarations
+//! back into the image, so durability is caller-carried by design — the file is
+//! the artifact, and it is plain text an agent can generate and diff.
+//!
+//! Both surfaces converge on the console `function bounds <start> [<end>] [as <name>]`
+//! command: the script path emits it, the in-process path calls the
+//! [`unlace_console::engine::ConsoleProgram::declare_function`] it is a wrapper for.
+
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+
+use unlace_console::engine::ConsoleProgram;
+use unlace_console::kuna_declaredbytes::DeclaredBytes;
+
+use crate::jsonfmt::Json;
+
+/// One caller-declared function boundary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FuncDecl {
+    /// Entry VMA.
+    pub(crate) start: u64,
+    /// Exclusive end VMA; `None` leaves the extent unbounded.
+    pub(crate) end: Option<u64>,
+    /// The name to give the entry; `None` takes kuna's generated `sub_<addr>`.
+    pub(crate) name: Option<String>,
+}
+
+impl FuncDecl {
+    /// The declared byte extent, or `0` for "unbounded" (the engine-wide
+    /// `UNBOUNDED_SIZE` convention).
+    #[cfg(test)]
+    pub(crate) fn size(&self) -> u64 {
+        self.end.map(|end| end - self.start).unwrap_or(0)
+    }
+
+    /// The `--define-function` spelling of this declaration — what a `--jobs`
+    /// worker is handed so its load applies the same caller-declared boundaries
+    /// the parent's did.
+    pub(crate) fn flag_value(&self) -> String {
+        let mut out = format!("{:#x}", self.start);
+        if let Some(end) = self.end {
+            let _ = write!(out, "-{end:#x}");
+        }
+        if let Some(name) = &self.name {
+            let _ = write!(out, "={name}");
+        }
+        out
+    }
+
+    /// The `function bounds` console line this declaration lowers to.
+    pub(crate) fn console_line(&self) -> String {
+        let mut line = format!("function bounds {:#x}", self.start);
+        if let Some(end) = self.end {
+            let _ = write!(line, " {end:#x}");
+        }
+        if let Some(name) = &self.name {
+            let _ = write!(line, " as {name}");
+        }
+        line
+    }
+}
+
+/// Parse one `--define-function` value: either a declaration or `@FILE`.
+///
+/// A file holds one declaration per line; blank lines and `#` comments are
+/// skipped, so an agent can annotate what it worked out. The grammar is
+/// [`unlace_console::assertsyntax::parse_function_flag`], shared with the
+/// `--assert function` directive.
+pub(crate) fn parse_flag(value: &str) -> Result<Vec<FuncDecl>, String> {
+    Ok(unlace_console::assertsyntax::parse_function_flag(value)?
+        .into_iter()
+        .map(|spec| FuncDecl {
+            start: spec.start,
+            end: spec.end,
+            name: spec.name,
+        })
+        .collect())
+}
+
+/// Apply the declarations to a loaded program (the in-process surfaces).
+///
+/// Runs AFTER the analysis commit, so a declaration outranks whatever discovery
+/// decided about the same address — that is the whole point of the flag.
+pub(crate) fn apply(
+    prog: &mut unlace_console::engine::ConsoleProgram,
+    decls: &[FuncDecl],
+) -> Result<(), String> {
+    let Some(space) = prog.arch().manage().get_default_code_space().cloned() else {
+        if decls.is_empty() {
+            return Ok(());
+        }
+        return Err("--define-function: the loaded program has no default code space".into());
+    };
+    for decl in decls {
+        let start = prog
+            .input_code_offset(decl.start)
+            .map_err(|e| format!("--define-function {:#x}: {}", decl.start, e.explain()))?;
+        let size = match decl.end {
+            None => 0,
+            Some(end) => {
+                let end = prog
+                    .input_code_offset(end)
+                    .map_err(|e| format!("--define-function {:#x}: {}", decl.start, e.explain()))?;
+                let size = end.checked_sub(start).filter(|size| *size > 0).ok_or_else(|| {
+                    format!(
+                        "--define-function {:#x}: end must be above start after target address conversion",
+                        decl.start
+                    )
+                })?;
+                unlace_base::types::int4::try_from(size).map_err(|_| {
+                    format!(
+                        "--define-function {:#x}: byte extent {size:#x} exceeds the supported range",
+                        decl.start
+                    )
+                })?
+            }
+        };
+        let addr = unlace_base::address::Address::new(std::rc::Rc::clone(&space), start);
+        prog.declare_function(addr, decl.name.as_deref(), size)
+            .map_err(|e| format!("--define-function {:#x}: {}", decl.start, e.explain()))?;
+    }
+    Ok(())
+}
+
+/// Print each declaration the input does not wholly map as a `warning:`, once
+/// per process however often the image is loaded (issue #1438).
+pub(crate) fn warn_unmapped(prog: &ConsoleProgram, binary: &str) {
+    for sentence in prog.declaration_notes() {
+        unlace_base::notes::say_once(binary, &format!("warning: {sentence}"));
+    }
+}
+
+/// [`warn_unmapped`]'s sentences ahead of a listing's own `notes`, for the
+/// `--json` document of a surface that prints those `notes` itself.
+pub(crate) fn json_notes(prog: &ConsoleProgram, notes: &[String]) -> Vec<String> {
+    prog.declaration_notes()
+        .into_iter()
+        .chain(notes.iter().cloned())
+        .collect()
+}
+
+/// What a run's declarations add to its JSON: a `declared` marker on each
+/// declared entry's record and the run-level `notes` [`warn_unmapped`] prints.
+/// Empty when nothing was declared, so such a document gains no key. It also
+/// carries the run's `fid_databases` reports, the other run-level fact every
+/// document that prints `notes` reports.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Declared {
+    bytes: BTreeMap<u64, DeclaredBytes>,
+    notes: Vec<String>,
+    fid_databases: Vec<unlace_analysis::fid::kuna_fidapply::FidDbReport>,
+}
+
+impl Declared {
+    pub(crate) fn of(prog: &ConsoleProgram) -> Declared {
+        Declared {
+            bytes: prog.declarations().collect(),
+            notes: prog.declaration_notes(),
+            fid_databases: prog.fid_databases().to_vec(),
+        }
+    }
+
+    pub(crate) fn bytes_label(&self, byte_address: u64) -> Option<&'static str> {
+        self.bytes.get(&byte_address).map(|bytes| bytes.label())
+    }
+
+    /// The `declared` field of the record at engine byte address `byte_address`.
+    pub(crate) fn marker(&self, byte_address: u64) -> Option<(String, Json)> {
+        let bytes = self.bytes.get(&byte_address)?;
+        Some((
+            "declared".into(),
+            Json::Object(vec![("bytes".into(), Json::Str(bytes.label().into()))]),
+        ))
+    }
+
+    /// The document's `notes` field, when there is a note.
+    pub(crate) fn notes_field(&self) -> Option<(String, Json)> {
+        (!self.notes.is_empty()).then(|| {
+            (
+                "notes".into(),
+                Json::Array(self.notes.iter().cloned().map(Json::Str).collect()),
+            )
+        })
+    }
+
+    pub(crate) fn notes(&self) -> &[String] {
+        &self.notes
+    }
+
+    /// The document's `fid_databases` field, when a database was configured.
+    pub(crate) fn fid_databases_field(&self) -> Option<(String, Json)> {
+        crate::fid::report::field(&self.fid_databases)
+    }
+
+    pub(crate) fn fid_databases(&self) -> &[unlace_analysis::fid::kuna_fidapply::FidDbReport] {
+        &self.fid_databases
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn one(spec: &str) -> FuncDecl {
+        parse_flag(spec)
+            .expect("parses")
+            .pop()
+            .expect("one declaration")
+    }
+
+    #[test]
+    fn parses_start_end_and_name() {
+        assert_eq!(
+            one("0x1400-0x1480=decrypt"),
+            FuncDecl {
+                start: 0x1400,
+                end: Some(0x1480),
+                name: Some("decrypt".into())
+            }
+        );
+    }
+
+    #[test]
+    fn end_and_name_are_each_optional() {
+        assert_eq!(
+            one("0x1400"),
+            FuncDecl {
+                start: 0x1400,
+                end: None,
+                name: None
+            }
+        );
+        assert_eq!(
+            one("0x1400-0x1480"),
+            FuncDecl {
+                start: 0x1400,
+                end: Some(0x1480),
+                name: None
+            }
+        );
+        assert_eq!(
+            one("0x1400=decrypt"),
+            FuncDecl {
+                start: 0x1400,
+                end: None,
+                name: Some("decrypt".into())
+            }
+        );
+    }
+
+    #[test]
+    fn a_bare_hex_address_needs_no_prefix() {
+        assert_eq!(
+            one("1400-1480"),
+            FuncDecl {
+                start: 0x1400,
+                end: Some(0x1480),
+                name: None
+            }
+        );
+    }
+
+    #[test]
+    fn the_extent_is_end_exclusive() {
+        assert_eq!(one("0x1400-0x1480").size(), 0x80);
+        assert_eq!(one("0x1400").size(), 0);
+    }
+
+    /// An inverted or empty range is a caller error, not a silently-unbounded
+    /// function: a declaration kuna cannot honor must say so.
+    #[test]
+    fn an_end_at_or_below_the_start_is_rejected() {
+        assert!(parse_flag("0x1480-0x1400").is_err());
+        assert!(parse_flag("0x1400-0x1400").is_err());
+    }
+
+    #[test]
+    fn a_non_hex_token_is_rejected() {
+        assert!(parse_flag("main").is_err());
+        // A trailing `-` leaves an empty tail, so it is not a separator and the
+        // whole token must fail as hex rather than parse as a bare start.
+        assert!(parse_flag("0x1400-").is_err());
+    }
+
+    #[test]
+    fn lowers_to_the_console_command() {
+        assert_eq!(
+            one("0x1400-0x1480=decrypt").console_line(),
+            "function bounds 0x1400 0x1480 as decrypt"
+        );
+        assert_eq!(
+            one("0x1400-0x1480").console_line(),
+            "function bounds 0x1400 0x1480"
+        );
+        assert_eq!(one("0x1400").console_line(), "function bounds 0x1400");
+        // A name with no extent: `as` keys the name, so it cannot be read as the
+        // end address.
+        assert_eq!(
+            one("0x1400=decrypt").console_line(),
+            "function bounds 0x1400 as decrypt"
+        );
+    }
+
+    #[test]
+    fn a_file_holds_one_declaration_per_line_with_comments() {
+        let dir = std::env::temp_dir().join(format!("kuna-funcdecl-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        let path = dir.join("bounds.txt");
+        std::fs::write(
+            &path,
+            "# worked out by hand\n0x1400-0x1480=decrypt\n\n0x1480-0x1500\n",
+        )
+        .expect("write");
+        let decls = parse_flag(&format!("@{}", path.display())).expect("parses");
+        assert_eq!(decls.len(), 2);
+        assert_eq!(decls[0].name.as_deref(), Some("decrypt"));
+        assert_eq!(decls[1].start, 0x1480);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_file_is_an_error_naming_the_path() {
+        let err = parse_flag("@/nonexistent/kuna-bounds.txt").expect_err("refuses");
+        assert!(err.contains("/nonexistent/kuna-bounds.txt"), "got {err:?}");
+    }
+}

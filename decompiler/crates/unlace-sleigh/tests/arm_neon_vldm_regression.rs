@@ -1,0 +1,178 @@
+//! Regression gate for the `ParserContext::expandState` walker-cursor rebase
+//! (kuna port bug in `sleigh.rs::allocate_operand`).
+//!
+//! Decoding the ARM Thumb-2 instruction `vldmia r0, {d16-d31}`
+//! (bytes `d0 ec 20 0b`, little-endian) resolves an operand tree deep enough to
+//! exhaust the `INITIAL_STATE_NUM` (64) node pool, forcing
+//! `ParserContext::expandState`.  In upstream C++ (`context.cc`/`context.hh`)
+//! `expandState` front-inserts nodes (`state.insert(state.begin(), amount, ...)`)
+//! and the walker's `point` is a raw pointer, so the reshuffle never invalidates
+//! it.  kuna models `point` as a `Vec` index; the front-insertion shifts every
+//! stored index by `amount`, and the *live* walker cursor must be rebased too.
+//! Before the fix the stale cursor corrupted the walk and drove `depth` to `-1`,
+//! panicking in `ParserWalker::getOperand` (`breadcrumb[depth as usize]`, index
+//! `usize::MAX`).  Observed in the wild on stripped ARM Cortex-M firmware
+//! (libopencm3 `usart_irq_console.elf` @ 0x8001d1c): the whole-binary load
+//! panicked, producing zero output.
+//!
+//! This test lifts exactly that instruction against the built `ARM8_le.sla`
+//! (`ARM:LE:32:v8`) in Thumb mode, decodes two shallow instructions, and
+//! repeats the deep assembly and lift. The repeated results gate complete
+//! resets when the expanded parser arena is reused.
+
+use std::path::PathBuf;
+use std::rc::Rc;
+
+use unlace_base::address::Address;
+use unlace_base::error::{KunaError, KunaResult};
+use unlace_num::opcodes::OpCode;
+use unlace_num::pcoderaw::VarnodeData;
+use unlace_sleigh::globalcontext::ContextInternal;
+use unlace_sleigh::loadimage::LoadImage;
+use unlace_sleigh::sleigh::Sleigh;
+use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
+}
+
+/// In-memory image: the instruction bytes at `base`, zero-filled elsewhere so
+/// the decoder's read-ahead never errors.
+struct MemImg {
+    base: u64,
+    bytes: Vec<u8>,
+}
+
+impl LoadImage for MemImg {
+    fn get_file_name(&self) -> &str {
+        "mem"
+    }
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+        let start = addr.get_offset();
+        for (i, b) in ptr.iter_mut().enumerate() {
+            let a = start.wrapping_add(i as u64);
+            *b = a
+                .checked_sub(self.base)
+                .and_then(|off| self.bytes.get(off as usize).copied())
+                .unwrap_or(0);
+        }
+        Ok(())
+    }
+    fn get_arch_type(&self) -> Vec<u8> {
+        Vec::new()
+    }
+    fn adjust_vma(&mut self, _adjust: i64) {}
+}
+
+/// A p-code sink that records the lifted operation sequence.
+struct OpcodeEmit {
+    ops: Vec<OpCode>,
+}
+impl PcodeEmit for OpcodeEmit {
+    fn dump(
+        &mut self,
+        _addr: &Address,
+        opc: OpCode,
+        _outvar: Option<&VarnodeData>,
+        _vars: &[VarnodeData],
+    ) {
+        self.ops.push(opc);
+    }
+}
+
+#[derive(Default)]
+struct TextEmit {
+    text: Option<(String, String)>,
+}
+impl AssemblyEmit for TextEmit {
+    fn dump(&mut self, _addr: &Address, mnemonic: &str, body: &str) {
+        self.text = Some((mnemonic.to_string(), body.to_string()));
+    }
+}
+
+/// A stub loader used only until the real image is installed.
+struct DummyImg;
+impl LoadImage for DummyImg {
+    fn get_file_name(&self) -> &str {
+        "dummy"
+    }
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
+        Err(KunaError::data_unavail("dummy"))
+    }
+    fn get_arch_type(&self) -> Vec<u8> {
+        Vec::new()
+    }
+    fn adjust_vma(&mut self, _adjust: i64) {}
+}
+
+#[test]
+fn arm_thumb_vldmia_upper_neon_regs_does_not_panic() {
+    let sla_path = repo_root().join("specs/Ghidra/Processors/ARM/data/languages/ARM8_le.sla");
+    let sla = std::fs::read(&sla_path).expect("read compiled ARM spec");
+
+    let base: u64 = 0x1000;
+    // `vldmia r0, {d16-d31}` (d0 ec 20 0b) then `bx lr` / nop padding, matching
+    // the shape seen on the firmware; the trailing bytes cover any read-ahead.
+    let bytes = vec![
+        0xd0, 0xec, 0x20, 0x0b, 0x70, 0x47, 0x00, 0xbf, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
+    let ctx = Box::new(ContextInternal::new());
+    let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
+    sleigh
+        .initialize_from_sla(&sla)
+        .expect("initialize ARM8_le.sla");
+    // Thumb decode mode (ARM.sinc: `TMode = (0,0)`, 1 => Thumb).
+    sleigh.set_context_default("TMode", 1);
+
+    sleigh.set_loader(Box::new(MemImg { base, bytes }));
+
+    let ram = Rc::clone(
+        sleigh
+            .base()
+            .manager()
+            .get_space_by_name("ram")
+            .expect("ram space"),
+    );
+    let addr = Address::new(ram, base);
+
+    let mut text = TextEmit::default();
+    assert_eq!(sleigh.print_assembly(&mut text, &addr).unwrap(), 4);
+    let first_text = text.text.take().expect("assembly emitted");
+
+    let mut emit = OpcodeEmit { ops: Vec::new() };
+    // Before the fix this panicked in ParserWalker::getOperand (depth == -1)
+    // while resolving the operand tree after expandState front-inserted nodes.
+    let len = sleigh
+        .one_instruction(&mut emit, &addr)
+        .expect("vldmia {d16-d31} must lift without error");
+    assert_eq!(
+        len, 4,
+        "Thumb-2 vldmia is a 4-byte instruction (got len {len})"
+    );
+    assert!(
+        !emit.ops.is_empty(),
+        "the lift must emit at least one p-code op"
+    );
+    let first_ops = emit.ops;
+
+    for (offset, expected_len) in [(4, 2), (6, 2)] {
+        let mut shallow = OpcodeEmit { ops: Vec::new() };
+        let shallow_addr = Address::new(Rc::clone(addr.get_space().unwrap()), base + offset);
+        assert_eq!(
+            sleigh.one_instruction(&mut shallow, &shallow_addr).unwrap(),
+            expected_len
+        );
+    }
+
+    let mut second_text = TextEmit::default();
+    assert_eq!(sleigh.print_assembly(&mut second_text, &addr).unwrap(), 4);
+    assert_eq!(second_text.text.as_ref(), Some(&first_text));
+
+    let mut second = OpcodeEmit { ops: Vec::new() };
+    assert_eq!(sleigh.one_instruction(&mut second, &addr).unwrap(), 4);
+    assert_eq!(second.ops, first_ops);
+}

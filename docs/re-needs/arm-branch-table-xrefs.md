@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/listing/xrefs.rs, decompiler/crates/kuna-analysis/src/listing/kuna_a32switch.rs, decompiler/crates/kuna-analysis/src/listing/classify.rs, decompiler/crates/kuna-analysis/src/listing/kuna_thumbswitch.rs]
+touches: [decompiler/crates/unlace-analysis/src/listing/xrefs.rs, decompiler/crates/unlace-analysis/src/listing/kuna_a32switch.rs, decompiler/crates/unlace-analysis/src/listing/classify.rs, decompiler/crates/unlace-analysis/src/listing/kuna_thumbswitch.rs]
 scope: small
 regression_of: null
 pr: null
@@ -28,7 +28,7 @@ reject_reason: null
 Find who registers the callback `on_read`.
 
 > **ARM switch cases behind an A32 jump table have no references** (major, synthetic `branchtable_arm_le32`)
-> `kuna xrefs --to on_read` reports 0 references, although a case of `add_dispatch` and a case of `ldr_dispatch` each load it from its GOT slot and pass it to `set_timeout`. The walk follows only `b default` after `addls pc,pc,rN,lsl #2` or `ldrls pc,[pc,rN,lsl #2]`, and files a jump from the dispatch to that `b`.
+> `unlace xrefs --to on_read` reports 0 references, although a case of `add_dispatch` and a case of `ldr_dispatch` each load it from its GOT slot and pass it to `set_timeout`. The walk follows only `b default` after `addls pc,pc,rN,lsl #2` or `ldrls pc,[pc,rN,lsl #2]`, and files a jump from the dispatch to that `b`.
 
 Seen first on production ARM executables and a shared library (GCC, `-fPIC`), where the switch cases held most of the references kuna missed; `branchtable_arm_le32` reproduces both table forms from a small C source.
 
@@ -111,7 +111,7 @@ Seen first on production ARM executables and a shared library (GCC, `-fPIC`), wh
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/branchtable_arm_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/branchtable_arm_le32",
     "binary_sha256": "93b3aa37fc16c266959a8e8d4f47a117e96fcdae82aeff124b185f7f84bb5126",
     "binary_size": 72920,
     "binary_source": "in-repo"

@@ -18,11 +18,11 @@
   },
   "timeout_s": 120,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/elemptr_gcc_O0_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/elemptr_gcc_O0_x86_64",
     "binary_sha256": "9111eb49e758aae85158c7d5637be62e7ed63708f431086aa8c32f87448643e6",
     "binary_size": 21768,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/elemptr_gcc_O0_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/elemptr_gcc_O0_x86_64",
     "selector": "w_build",
     "selector_kind": "name"
   },

@@ -9,7 +9,7 @@
     call lost the `this` MSVC passes in ECX, and a callee with no declared
     arity took the pushes meant for the next call.
 
-    Stage / sub-stage: P1 external-refinement (`kuna-analysis`
+    Stage / sub-stage: P1 external-refinement (`unlace-analysis`
     `analyzers/demangle/kuna_msvcsig.rs` reads the declaration off the import
     name; the commit parks it by address under the stated convention's model
     and locks it onto the import symbol) feeding P4 prototype-source
@@ -43,7 +43,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/msvcsig_protos_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/msvcsig_protos_i386.exe</com>
   <com>read symbols</com>
   <com>load addr 0x401000</com>
   <com>decompile</com>

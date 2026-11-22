@@ -28,14 +28,14 @@ public class KunaCoreStatus extends GhidraScript {
 		}
 
 		println("DecompileProcessFactory.exepath = " + path);
-		if (path.contains("kuna_ghidra")) {
+		if (path.contains("unlace_ghidra")) {
 			println("Next decompiler process: KUNA core.");
 		}
 		else if (path.endsWith("decompile") || path.endsWith("decompile.exe")) {
 			println("Next decompiler process: STOCK core.");
 		}
 		else {
-			println("Next decompiler process: a custom core (neither kuna_ghidra nor " +
+			println("Next decompiler process: a custom core (neither unlace_ghidra nor " +
 				"the stock 'decompile' name).");
 		}
 	}

@@ -138,7 +138,7 @@ def compare(binary, selector, *, reference="angr", arch=None, load_debug=False,
             structurer=None, test_name="") -> ComparisonResult:
     """Compare ``reference`` against kuna on one function.
 
-    ``reference`` is any registered adapter -- ``angr`` (default), or ``kuna`` itself.
+    ``reference`` is any registered adapter -- ``angr`` (default), or ``unlace`` itself.
     """
     ref = get_reference(reference)
     rr = ref.decompile(binary, selector, arch=arch, load_debug=load_debug,

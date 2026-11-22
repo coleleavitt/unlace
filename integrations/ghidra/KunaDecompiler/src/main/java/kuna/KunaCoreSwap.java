@@ -51,11 +51,11 @@ public final class KunaCoreSwap {
 	 */
 	public static final String MODULE_NAME = "KunaDecompiler";
 
-	/** Dev override: {@code -Dkuna.decompiler.exe=/abs/path/to/kuna_ghidra}. */
+	/** Dev override: {@code -Dkuna.decompiler.exe=/abs/path/to/unlace_ghidra}. */
 	public static final String EXE_PROPERTY = "kuna.decompiler.exe";
 
-	private static final String KUNA_EXECNAME = "kuna_ghidra";
-	private static final String KUNA_WIN_EXECNAME = "kuna_ghidra.exe";
+	private static final String KUNA_EXECNAME = "unlace_ghidra";
+	private static final String KUNA_WIN_EXECNAME = "unlace_ghidra.exe";
 
 	// Mirror DecompileProcessFactory.EXECNAME / WIN32_EXECNAME (Ghidra 12.2, :29-30)
 	private static final String STOCK_EXECNAME = "decompile";
@@ -106,7 +106,7 @@ public final class KunaCoreSwap {
 
 	/**
 	 * Resolves the kuna decompiler binary: (1) the {@value #EXE_PROPERTY} system
-	 * property, (2) this extension's {@code os/<platform>/kuna_ghidra} via the two-arg
+	 * property, (2) this extension's {@code os/<platform>/unlace_ghidra} via the two-arg
 	 * module-scoped {@link Application#getOSFile(String, String)}.
 	 *
 	 * @return the executable file (exists and is executable)
@@ -131,7 +131,7 @@ public final class KunaCoreSwap {
 			throw new FileNotFoundException("The kuna decompiler binary '" + exeName +
 				"' was not found in the " + MODULE_NAME + " extension.\n\n" +
 				"Build it and copy it into the installed extension, then restart Ghidra:\n" +
-				"    cd <kuna-repo>/decompiler && cargo build --release -p kuna-ghidra\n" +
+				"    cd <kuna-repo>/decompiler && cargo build --release -p unlace-ghidra\n" +
 				"    cp target/release/" + exeName + " <ghidra user settings>/Extensions/" +
 				MODULE_NAME + "/os/" + Platform.CURRENT_PLATFORM.getDirectoryName() + "/\n\n" +
 				"Alternatively point the JVM property -D" + EXE_PROPERTY +

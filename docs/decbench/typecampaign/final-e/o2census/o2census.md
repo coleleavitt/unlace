@@ -120,7 +120,7 @@ diff `print_*_script (struct change *script)` becomes `long`: the pointer is onl
 `void sub_d3f0(unsigned long a0) { sub_f6b0(stderr,"\n%s: %s: %s\n",dat_1a850,0x1a420,a0); ...`;
 DWARF `void gzip_error (char const *m)`. `sub_f6b0` is gnulib `rpl_fprintf`. Hypothesis: format
 typing recognises only named libc families
-(`kuna-analysis/src/analyzers/protos/mod.rs:275` `variadic_format_prototype`: a callee
+(`unlace-analysis/src/analyzers/protos/mod.rs:275` `variadic_format_prototype`: a callee
 qualifies only when its name is in the libc signature tables), so a
 local printf wrapper types nothing. Second sub-shape: the pointer is only stored to a global
 (sort `add_temp_dir`, diff `set_color_palette`), which leaves no evidence in the function.

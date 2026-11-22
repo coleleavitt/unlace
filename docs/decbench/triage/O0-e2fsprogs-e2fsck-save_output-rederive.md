@@ -184,7 +184,7 @@ is faithful; hoisting is a deliberate DIV, so it needs an option.
 
 ## Breadth
 
-`kuna decompile-all --json` over four O0 binaries, counting **top-level** (brace depth 1)
+`unlace decompile-all --json` over four O0 binaries, counting **top-level** (brace depth 1)
 `vN = aM;` statements that appear after the first top-level control-flow statement --
 i.e. copy-shadows of an unmodified incoming parameter emitted outside the entry block:
 
@@ -220,7 +220,7 @@ anchored at the call. Same user-visible symptom, second producer.
 ## Proposed fix
 
 **Feature `paramcopyhoist` (P6, default-off), new module
-`decompiler/crates/kuna-decomp/src/p6_variables/kuna_paramcopyhoist.rs`.**
+`decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs`.**
 
 One decision, one call site:
 
@@ -244,8 +244,8 @@ One decision, one call site:
   needs no edit.
 
 Owning files:
-- `decompiler/crates/kuna-decomp/src/p6_variables/kuna_paramcopyhoist.rs` (new)
-- `decompiler/crates/kuna-decomp/src/p6_variables/funcdata_merge.rs` (`op_insert_end_pred` consults it)
+- `decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs` (new)
+- `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs` (`op_insert_end_pred` consults it)
 - `phases.toml` + `p0_knowledge/options.rs` row; catalog count bumps
 - `docs/spec/` P6 chapter; `tests/stages/ghdec-paramcopyhoist.xml` two-pass testcase
 

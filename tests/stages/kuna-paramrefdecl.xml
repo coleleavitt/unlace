@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:32:default:gcc">
 <!--
     RE-friction round 10, challenge 64f1f7fad931496abf909535 (i386 Windows PE
-    `illusion.exe`): `kuna decompile ... 0x401571` opened the recovered
+    `illusion.exe`): `unlace decompile ... 0x401571` opened the recovered
     key-derivation helper with a re-declaration of its own first parameter,
 
         void sub_401571(unsigned int a0,int4 a1,int4 a2)

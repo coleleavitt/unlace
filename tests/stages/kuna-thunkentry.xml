@@ -31,7 +31,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/thunk_table_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/thunk_table_pe_i386.exe</com>
   <com>mode fast</com>
   <com>read symbols</com>
   <com>functions</com>
@@ -39,7 +39,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/thunk_table_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/thunk_table_pe_i386.exe</com>
   <com>mode aggressive</com>
   <com>read symbols</com>
   <com>functions</com>

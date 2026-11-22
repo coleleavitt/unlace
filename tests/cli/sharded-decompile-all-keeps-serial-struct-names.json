@@ -20,11 +20,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/itaniumrtti_x86_64.so",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so",
     "binary_sha256": "0b9737aee1bcf9bfa8be5b3b86f0e18da2248101be26ea79f50e0d8e34655839",
     "binary_size": 14608,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/itaniumrtti_x86_64.so",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so",
     "selector": null,
     "selector_kind": "none"
   },

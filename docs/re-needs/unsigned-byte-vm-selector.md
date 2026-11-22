@@ -14,7 +14,7 @@ rounds: [4, 12]
 first_seen_round: 4
 attempts: 1
 covered_by_option: loweredswitchlabels
-touches: [decompiler/crates/kuna-decomp/src/p2_lift/kuna_loweredswitch.rs, decompiler/crates/kuna-decomp/src/p2_lift/kuna_loweredswitchlabels.rs, decompiler/crates/kuna-decomp/src/substrate/funcdata_block.rs]
+touches: [decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs, decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitchlabels.rs, decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/613
@@ -37,8 +37,8 @@ A branch that executes for opcode 0x8b.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/katavm_level1_x86_64",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/katavm_level1_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/katavm_level1_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/katavm_level1_x86_64",
     "binary_sha256": "95c300aedc728b643bf97c39b5e8db88e9ddc40bf4cf337cd6c777929684a5f9",
     "binary_size": 28682,
     "binary_source": "in-repo"
@@ -70,8 +70,8 @@ A branch that executes for opcode 0x8b.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/katavm_level1_x86_64",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/katavm_level1_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/katavm_level1_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/katavm_level1_x86_64",
     "binary_sha256": "95c300aedc728b643bf97c39b5e8db88e9ddc40bf4cf337cd6c777929684a5f9",
     "binary_size": 28682,
     "binary_source": "in-repo"

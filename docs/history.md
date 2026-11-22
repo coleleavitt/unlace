@@ -27,11 +27,11 @@ and design docs summarized here.
 | 2026-06-11→13 | `2942b5ec`…`f3df8f61` | Wave gates W1–W9 land in four days (foundations, SLEIGH runtime, core IR, framework, simplification rules, types/fspec, storage+structuring, print, console). M1 = 207/207 unit-test parity (`2c4a6bc4`); M2 = datatests run end-to-end under `--engine rust` (3/675). |
 | 2026-06-19 | `bca4ae8d` | **Initial Rust port completed** — M3: full datatest parity **675/675** against the untouched C++ oracle, after the W10 parity grind (3 → 21 → 47 → 315 → 476 → 675). |
 | 2026-06-20 | `b3838e1b` | SLEIGH compiler ported (`slacomp`): 148/148 specs compile to content-identical `.sla`; full suite green on Rust-built specs, both engines. |
-| 2026-06-20 | `9346a1a5` | **C++ tree removed** — the Rust port is the engine. Python CLI becomes the single Rust `kuna` binary (`3b29635a`). |
-| 2026-06-22 | `aa765712` | **Analysis-tier port begins**: Ghidra's Java analyzer suite recreated as `kuna-analysis` — 62 increments over ~5 weeks (no-return, demangling, strings, DWARF, entry discovery, ARM/Thumb painting, the Listing/xref tier, PE/Mach-O/COFF loaders, Go pclntab, FID, RTTI/Obj-C/PDB metadata), every increment holding 675/675. |
+| 2026-06-20 | `9346a1a5` | **C++ tree removed** — the Rust port is the engine. Python CLI becomes the single Rust `unlace` binary (`3b29635a`). |
+| 2026-06-22 | `aa765712` | **Analysis-tier port begins**: Ghidra's Java analyzer suite recreated as `unlace-analysis` — 62 increments over ~5 weeks (no-return, demangling, strings, DWARF, entry discovery, ARM/Thumb painting, the Listing/xref tier, PE/Mach-O/COFF loaders, Go pclntab, FID, RTTI/Obj-C/PDB metadata), every increment holding 675/675. |
 | 2026-07-04 | `6b270a3e` | decbench campaign: whole-binary benchmark loop (mine/triage/rescore) driving feature work from real-binary regressions vs Ghidra/angr. |
 | 2026-07-05 | `b255b3d4` | Ghidra integration Phase 1: kuna as stock Ghidra's decompiler core (wire protocol + extension). |
-| 2026-07-16→28 | `cdaa35bc`, `9d308212` | `kuna decompile-project` whole-binary export; WASM browser build; the project site + in-browser decompiler at kuna.noelo.org. |
+| 2026-07-16→28 | `cdaa35bc`, `9d308212` | `unlace decompile-project` whole-binary export; WASM browser build; the project site + in-browser decompiler at kuna.noelo.org. |
 
 ## The Rust port: how it was verified
 
@@ -164,7 +164,7 @@ before 2026-09-16, and `docs/divergences.md` before 2026-07-28).
 | DIV-42 | — | unfiltered `fast` whole-binary watchdog defaults to 10 seconds per function — native `decompile-all`/`decompile-project` and WASM whole-binary decompile/project… |
 | DIV-43 | — | `aggressive` preset drops `dwarf_lines` (bug fix, no new flag) — the `.debug_line` pass annotates rather than recovers, so blanket-enabling it under `aggressive`… |
 | DIV-44 | — | Cortex-M vector-table oracle scans program-header-executable sections (bug fix, no flag) — the vector table is DATA the CPU reads, but the oracle only looked at… |
-| DIV-45 | — | `kuna decompile` exits non-zero on a per-function pipeline abort (bug fix, no new flag) — three compounding defects made a failed function look like a success: the… |
+| DIV-45 | — | `unlace decompile` exits non-zero on a per-function pipeline abort (bug fix, no new flag) — three compounding defects made a failed function look like a success: the… |
 | DIV-46 | — | unnamed spacebase references render as stack locations (bug fix, no new flag) — a `PTRSUB(spacebase, off)` whose offset P6 bound no Symbol to fell out of the P9… |
 | DIV-47 | — | P6 Cover extension restored (bug fix, no new flag) — two dropped cover-extension steps in the merge port each emitted C that computes a different value than the… |
 | DIV-48 | — | the `realtypes` relabel keeps an unknown pointee's size (bug fix, no new flag) — `realtype_unknown_base` short-circuited to `void` for EVERY size under a pointer… |
@@ -172,7 +172,7 @@ before 2026-09-16, and `docs/divergences.md` before 2026-07-28).
 | DIV-50 | — | renaming reconciles a full-size input with `guardInput`'s leftover pieces (bug fix, no new flag) — gnulib's `rpl_fcntl` at `-O2` produced no body at all in 48 of… |
 | DIV-51 | — | short-circuit `0`/`1` select diamonds re-roll into a boolean assignment (`iteboolean`, default-ON) — gcc at `-O0` materializes a source `x = a && b;` as a… |
 | DIV-52 | — | one local declaration per ScopeLocal Symbol (bug fix, no new flag) — `PrintC::emitLocalVarDecls` walks HighVariables where upstream `emitScopeVarDecls` walks the… |
-| DIV-53 | — | the browser inventory shares the decompile/project discovery policy (bug fix, no new flag) — `kuna_wasm list` — the command that fills the web UI's function sidebar… |
+| DIV-53 | — | the browser inventory shares the decompile/project discovery policy (bug fix, no new flag) — `unlace_wasm list` — the command that fills the web UI's function sidebar… |
 | DIV-54 | — | `returndup` default-ON (supersedes the DIV-18 revert) — The whole-block gotoless return duplicator (angr SAILR `ReturnDuplicatorHigh`… |
 | DIV-55 | — | a datatype copy split declines a read-only output (bug fix, no new flag) — `SplitDatatype::testCopyConstraints` (`p3_dataflow/subflow.rs`, upstream… |
 | DIV-56 | — | a diamond whose condition was concatenated with its predecessor still re-rolls (`itecondlist`, default-ON) — `iteregion` (DIV-17) and `iteboolean` (DIV-51) both… |
@@ -187,7 +187,7 @@ before 2026-09-16, and `docs/divergences.md` before 2026-07-28).
 | DIV-65 | `libcsigs` | kuna's built-in libc prototype table carried 27 entries. |
 | DIV-66 | — | `decompile-all` / `decompile-project` / wasm: one shared decompile step, and `formatstring` leaves the `aggressive` preset (no new flag) — Two defects, one root.… |
 | DIV-67 | `funcboundflow` | A kuna `FunctionSymbol` is an entry address with no extent, and CALL/CALLIND are fall-through, so the S2 flow follower stops only at a RETURN or a callee it can… |
-| DIV-68 | — | `kuna functions` takes the whole-binary DISCOVERY policy (driver-tier bug fix, no new flag) — `kuna functions` listed 1 of the 5,797 functions `kuna decompile-all`… |
+| DIV-68 | — | `unlace functions` takes the whole-binary DISCOVERY policy (driver-tier bug fix, no new flag) — `unlace functions` listed 1 of the 5,797 functions `unlace decompile-all`… |
 | DIV-69 | `orchain` | DIV-54 flipped `returndup` on evidence from two of the three optimisation levels. |
 | DIV-70 | — | `relocobjects` extended to COFF objects (scope extension of an existing default-ON option, no new flag) — A COFF `.obj` exposed exactly one function. |
 | DIV-71 | `evalcurrentproto` | An x86 Windows function that takes arguments rendered as `(void)`. |
@@ -198,20 +198,20 @@ before 2026-09-16, and `docs/divergences.md` before 2026-07-28).
 | DIV-76 | `datasyms` | GH-184: kuna printed `__fprintf_chk(dat_61a0,...)` where every rival prints `stderr`. |
 | DIV-77 | `loadguardrange` | GH-182: for a stack array written through a computed index, kuna printed a bounded array object and then subscripted it past its own declared bound. betaflight… |
 | DIV-78 | — | ELF known-no-return name list (data; no new option -- it rides the already-default-ON `noreturn_known` + `noreturn_externmatch`) — GH-273: every clang/g++ C++… |
-| DIV-79 | `relocrebase` | GH-289: `kuna functions` and `kuna decompile-all` disagreed on how many functions a `.o` has, and a `-g` object's DWARF, strings and named globals never attached at… |
+| DIV-79 | `relocrebase` | GH-289: `unlace functions` and `unlace decompile-all` disagreed on how many functions a `.o` has, and a `-g` object's DWARF, strings and named globals never attached at… |
 | DIV-81 | `cleanupcode` | A decompiled Rust function is mostly resource-management glue that is nowhere in the source. |
 | DIV-84 | `dynrelocs` | A PIE called its own functions through a GOT slot that read back as zero, so kuna printed `(*dat_e0dc8)(...)` for a callee it had already named. kuna's ELF loader… |
 | DIV-85 | `retinputhalf` | Two functions differing only in whether the second returned half is `x` or `x*3+7` recovered different arities, and one lost a parameter outright. |
-| DIV-86 | — | DWARF aggregate-LAYOUT import (`dwarfstructs`, new kuna option, default-ON) — kuna read a `-g` binary's structs as names only, and a name with no width is not a… |
+| DIV-86 | — | DWARF aggregate-LAYOUT import (`dwarfstructs`, new kuna option, default-ON) — unlace read a `-g` binary's structs as names only, and a name with no width is not a… |
 | DIV-87 | — | DWARF variant-part (discriminated-union) import (`dwarfvariants`, new kuna option, default-ON) — A Rust tagged enum carries NO `DW_TAG_member` of its own, so… |
 | DIV-76 | — | ghidra-mode `setOptions`: unknown option elements are skipped per-element with a "Warning:" line instead of failing the command — One stale option bricks the whole… |
 | DIV-77 | — | ghidra-mode defaults: the CLI `aggressive` engine-tier preset is applied at registerProgram, and address-derived fallback names print the Ghidra GUI convention… |
-| DIV-80 | — | The output language follows the binary: `--language auto` is the default on `kuna decompile` / `decompile-all` and in the browser, and a Rust binary renders as Rust… |
+| DIV-80 | — | The output language follows the binary: `--language auto` is the default on `unlace decompile` / `decompile-all` and in the browser, and a Rust binary renders as Rust… |
 | DIV-82 | `securitycheck` | Every checked slice index, string slice and non-constant `/`/`%` in a Rust binary rendered as a branch to a `panic_bounds_check()` call, roughly doubling the CFG of… |
 | DIV-83 | — | Rust-mangled symbols are demangled by `rustc_demangle`, not by the Itanium C++ demangler that also accepts them (bug fix; no option -- the routing is decided by a… |
 | DIV-88 | — | C++ anonymous namespaces demangle to the `anonymous_namespace` identifier instead of being deleted (loader-tier name reduction; no flag -- a strict fix), plus… |
 | DIV-89 | — | the CLI's stdout boundary is fallible: a closed downstream pipe is a normal terminal condition, and the command's exit code survives it (driver-tier bug fix; no… |
-| DIV-90 | — | `kuna decompile` reports the console's own failure reason instead of a fixed string, for both the binary load and the analysis commit (driver-tier bug fix; no flag)… |
+| DIV-90 | — | `unlace decompile` reports the console's own failure reason instead of a fixed string, for both the binary load and the analysis commit (driver-tier bug fix; no flag)… |
 | DIV-91 | — | a symbol's declared extent is clamped into the type factory's `int4` domain BEFORE the narrowing cast, not after (loader/commit-tier bug fix; no flag) — A single… |
 | DIV-92 | `noreturn_discstrict` | the discovered-no-return evidence tally counts only evidence about the PROGRAM, so a kuna decode failure can no longer forge a no-return verdict |
 | DIV-93 | — | the four ARM entry-discovery options -- `cortexmvectors` (#248), `ptrentry` (#255), `tailcallentry` (#259), `poolentry` (#278) -- join `AGGRESSIVE_OVERRIDES` and… |
@@ -241,14 +241,14 @@ before 2026-09-16, and `docs/divergences.md` before 2026-07-28).
 | DIV-117 | `pdatachained` | a PE `.pdata` `RUNTIME_FUNCTION` whose `UNWIND_INFO` carries `UNW_FLAG_CHAININFO` no longer seeds a function entry; and, ungated, the exception-directory record… |
 | DIV-118 | `noreturnretuse` | `Funcdata::only_op_use` (C++ `Funcdata::onlyOpUse`, funcdata_varnode.cc:1851) answers whether a Varnode reaching `opmatch` is used ONLY there. |
 | DIV-119 | `fastfailnoreturn` | a Windows `int 0x29` (`__fastfail`) ends the flow, so the call's unbalanced stack pointer never reaches a join |
-| DIV-120 | — | the CLI's decompiling surfaces (`kuna decompile`, `decompile-all`, `decompile-project`, `decompile-graph`) inject `errortoomanyinstructions off` (driver-tier… |
+| DIV-120 | — | the CLI's decompiling surfaces (`unlace decompile`, `decompile-all`, `decompile-project`, `decompile-graph`) inject `errortoomanyinstructions off` (driver-tier… |
 | DIV-121 | — | under a caller-declared function extent (`--define-function START-END` / console `function bounds`), a branch target outside the extent resolves to the artificial… |
 | DIV-122 | `arraycoverwidth` | an access that spans more than one element of a mapped array Symbol renders the width-carrying `name._<off>_<size>_` field instead of an element-zero subscript |
 | DIV-123 | `calleearitylive` | a call site whose recovered argument list is a strict PREFIX of a sibling call's is extended to that list when the callee's own body proves the missing registers… |
 | DIV-124 | `calleepreserves` | at a call whose callee a bounded body walk decodes completely, a `killedbycall` register the callee provably never writes is downgraded to `unaffected`, and the… |
 | DIV-125 | `emptystrconst` | a constant pointer whose read-only target renders as a ZERO-character string literal, and whose bytes past the terminator contradict string data, prints its address… |
 | DIV-126 | `cookiescramble` | an `INT_XOR` of a stack-pointer-derived Varnode does not record a local-alias escape site, for the checker the call-site input recovery builds |
-| DIV-127 | — | `kuna` locates `decomp_dbg`/`slacomp` and the SLEIGH tree for an extracted release archive as well as a checkout (driver-tier bug fix; no flag) — The official… |
+| DIV-127 | — | `unlace` locates `decomp_dbg`/`slacomp` and the SLEIGH tree for an extracted release archive as well as a checkout (driver-tier bug fix; no flag) — The official… |
 | DIV-128 | `int3pad` | a decoded `int3` is named with a `// int3-pad xN` warning slug, and under `halt` also ends the flow |
 | DIV-129 | `pdb` | an explicit `kuna_pdb_path`, then the CodeView record's own filename resolved beside the image, then `<image stem>.pdb` beside the image |
 | DIV-130 | — | `loweredswitch` scrutinee (no flag) — The synthesized `BRANCHIND` that installs a recovered lowered switch is inserted with `Funcdata::op_insert` instead of the… |
@@ -271,7 +271,7 @@ before 2026-09-16, and `docs/divergences.md` before 2026-07-28).
 | DIV-147 | `indexaliasguard` | restore the index-alias arm of `Heritage::guard` (`heritage.cc:1194`) that kuna shipped behind a hard-coded `highPtrPossible == false` |
 | DIV-148 | `zeroidiomuse` | an `INT_XOR`/`INT_SUB` of a value with itself is not a competing use of that value in `Funcdata::onlyOpUse` (`funcdata_varnode.cc:1851`) |
 | DIV-149 | `calleescratchbody` | a decoded callee that clobbers only SCRATCH registers still counts as a body for `calleepreserves`'s positive-evidence gate |
-| DIV-150 | `kuna disassemble`/`kuna read` | a code listing always reports, on stderr and in the JSON `notes`, the addresses its own instructions branch or call to that no row of it starts at; the new… |
+| DIV-150 | `unlace disassemble`/`unlace read` | a code listing always reports, on stderr and in the JSON `notes`, the addresses its own instructions branch or call to that no row of it starts at; the new… |
 | DIV-151 | `decodehalt` | a `CPUI_RETURN` planted because the DECODE failed renders as upstream `PrintC::opReturn`'s pseudo-call and carries the truncation warnings |
 | DIV-152 | `x64syscall` | the x86-64 `SYSCALL` user-op carries the Linux kernel ABI's register effects instead of reading and writing nothing |
 | DIV-153 | `splitstorekeep` | the pieces `Heritage::refineWrite` cuts a frame store into carry the store's own `stack_store` mark |
@@ -290,17 +290,17 @@ before 2026-09-16, and `docs/divergences.md` before 2026-07-28).
 | DIV-166 | — | `--stream` on `decompile-project` (new driver-tier flag, default off = today's write-the-folder-at-the-end export) — A whole-binary export wrote nothing at all… |
 | DIV-167 | — | whole-binary aggregate exit (driver-tier correction, no flag) — A non-empty selected batch that produces zero function bodies now emits complete records/artifacts… |
 | DIV-168 | `entryretdispatch` | an entry-point `push <continuation>; push <target>; ret` chain is classified as calls only when bounded raw-p-code provenance proves each target and adjacent exact… |
-| DIV-169 | — | `--jobs N\|auto` also sizes the discovery decode, and is accepted by `kuna functions` (driver-tier flag, default 1 = today's serial walk) — A whole-binary load spent… |
+| DIV-169 | — | `--jobs N\|auto` also sizes the discovery decode, and is accepted by `unlace functions` (driver-tier flag, default 1 = today's serial walk) — A whole-binary load spent… |
 | DIV-170 | `pushimmediateret` | a RETURN proven to pop the sole current-run immediate stack store is a terminal branch, not an ordinary function return |
 | DIV-171 | — | `peimportcall` extends its existing default-on import-pointer binding from PE/COFF to Mach-O typed lazy/non-lazy symbol-pointer entries — A named `objc_msgSend`… |
-| DIV-172 | — | `kuna` warns when the `decomp_dbg`/`decomp_test_dbg` it runs is a different build (driver-tier, no flag) — A render could come from a different engine than the… |
+| DIV-172 | — | `unlace` warns when the `decomp_dbg`/`decomp_test_dbg` it runs is a different build (driver-tier, no flag) — A render could come from a different engine than the… |
 | DIV-173 | `loweredswitchlabels` | a recovered lowered switch carries consistent range-opcode and extension-path label semantics across restart/install instead of guessing from high case bits |
 | DIV-174 | `cancelbytearithmetic` | fold only the complete one-byte multiply/left-shift cancellation tree |
 | DIV-175 | `pebnames` | An anti-debug probe of the PEB rendered as magic offsets into nothing. |
 | DIV-176 | `mappedflowboundary` | retain decoded paths at matching linked ELF x86 mapping boundaries |
 | DIV-177 | `endptrbound` | a proven pointer walk over a stack buffer makes the walked range one array, and a walk bound written as the frame address one past it is rebuilt on that array… |
 | DIV-178 | — | a `--jobs` / `--stream` worker that dies costs only the function it was running (driver-tier, no flag) — One panicking function lost its whole chunk. |
-| DIV-179 | `rexthunk` | `kuna functions ab_o2.exe` listed `sub_140001ed8`, one byte into the `JMP qword ptr [__imp_InitializeSListHead]` that ends `__scrt_initialize_type_info`, and `kuna… |
+| DIV-179 | `rexthunk` | `unlace functions ab_o2.exe` listed `sub_140001ed8`, one byte into the `JMP qword ptr [__imp_InitializeSListHead]` that ends `__scrt_initialize_type_info`, and `kuna… |
 | DIV-180 | `pdbinterior` | reject a discovered function entry inside a single-function PDB procedure when a function is committed at the procedure's start and that function's own code reaches… |
 | DIV-181 | `loweredswitchvalue` | a re-rolled lowered switch dispatches on the value its cascade compared, or is withdrawn |
 | DIV-182 | `tiedphitrim` | trim a loop head's direct read of an aliased location out of `Merge::mergeOp`'s forced merge |
@@ -340,7 +340,7 @@ table above: a frozen index, not a register anything is added to.
   fallback; hard-fails on renames/binary diffs (handle manually). The DIV-2 re-pinned
   datatest files (15 files / 22 assertions) no longer clean-apply — expect `--3way` there.
   If a sync intentionally changes the corpus, re-pin with
-  `kuna test --datatests --save-baseline docs/baseline.json` and say so in the commit;
+  `unlace test --datatests --save-baseline docs/baseline.json` and say so in the commit;
   never re-pin to absorb an unexplained regression.
 - Local-modification policy: byte-identical to upstream until 2026-06-06 (GH-558); since
   then kuna intentionally diverges — it is its own decompiler, not a tracking mirror. New

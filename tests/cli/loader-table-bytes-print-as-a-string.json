@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/loadertablestring_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/loadertablestring_x86_64",
     "binary_sha256": "7ffd609f7ca29adc20b9981031c88796da4c4cba4b6a28bce57c2513c5b636d3",
     "binary_size": 15976,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/loadertablestring_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/loadertablestring_x86_64",
     "selector": "0x1149",
     "selector_kind": "addr"
   },

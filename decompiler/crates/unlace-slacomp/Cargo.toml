@@ -1,0 +1,37 @@
+# SLEIGH compiler, sharing the runtime symbol and template types.
+
+[package]
+autotests = false
+name = "unlace-slacomp"
+description = "kuna Rust port: SLEIGH compiler (.slaspec -> .sla), the sleigh_opt replacement"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+unlace-base.workspace = true
+unlace-num.workspace = true
+unlace-sleigh.workspace = true
+
+[dev-dependencies]
+# Compare decompressed .sla element streams in the encoding tests.
+flate2.workspace = true
+sha2 = "0.11"
+tempfile = "3.27"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "slacomp"
+path = "src/bin/slacomp.rs"
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[[test]]
+name = "compiler_parity"
+path = "tests/compiler_parity.rs"

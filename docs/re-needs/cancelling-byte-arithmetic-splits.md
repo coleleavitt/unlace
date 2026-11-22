@@ -14,7 +14,7 @@ rounds: [11]
 first_seen_round: 11
 attempts: 1
 covered_by_option: cancelbytearithmetic
-touches: [decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_4.rs]
+touches: [decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs]
 scope: small
 regression_of: null
 pr: 621
@@ -136,7 +136,7 @@ WRONG-FIX TRAP. The ZEXT/PIECE gate is conservatism, not correctness -- commutin
 
 *** ACCEPTANCE HOLE -- THE THIRD OF THIS ROUND. DO NOT DISPATCH BEFORE FIXING IT. *** The acceptance is stdout_absent on "usage\[0xf\] = [^;]*dat_[0-9a-f]+" plus a json clause requiring only that the code MATCHES "usage". Absence is satisfied by the line VANISHING, and the "usage" clause is satisfied by any other line -- builtin_strncpy(&usage[0x10],"ord>\n",5) already appears in today's output and would carry it alone. So a change that DROPS the store entirely scores as a pass while destroying a write; that is not hypothetical in this tree given the marker-copy-propagation store-deletion hazard (DIV-105/#381). Tighten to a POSITIVE clause requiring the constant, e.g. code matches "usage\[0xf\] = 'w'" (or 0x77), and keep the stdout_absent as a secondary.
 
-ALSO FOR T_TRIAGE: this need is filed track: perf. It is a wrong-output simplification gap with no timing content -- it should be track: quality. touches is empty; it should name decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_4.rs.
+ALSO FOR T_TRIAGE: this need is filed track: perf. It is a wrong-output simplification gap with no timing content -- it should be track: quality. touches is empty; it should name decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs.
 - round 11 TRIAGE (captain): track perf -> quality, touches [] -> p3_dataflow/ruleaction_4.rs, as the refuter directed. Nothing here is timing: it is an uncancelled -2X + 2X + 'w' the simplifier will not fold because RuleSubCommute (ruleaction_4.rs:695-710) bails when the shift's input is an INT_AND. Filed as perf it would have skipped the quality counter leases, and this fix is a deliberate divergence from an upstream gate -- it needs a DIV row and an option, which is exactly what those leases serialize.
 - round 11 TRIAGE (captain): REPAIRED THE ACCEPTANCE -- the third hole of the round. Both clauses were satisfiable by a change that DESTROYS the write: the stdout_absent is met by the line vanishing, and the json clause required only that the code match `usage` somewhere, which an unrelated `builtin_strncpy(&usage[0x10],...)` already carries today. That is not hypothetical given the marker copy-propagation store-deletion hazard (DIV-105/#381). Replaced the json clause with a positive one demanding the folded value, `usage\[0xf\] = (?:'w'|0x77|119);`, accepting all three plausible spellings of the byte; the stdout_absent stays as the secondary guard. Measured against today's output (`usage[0xf] = (char)(dat_1408f1008 & dat_1408f100c) * '\xfe' + 'w' + ...;`): no match, so it still fails today.
 - round 12 captain: acceptance_id corrected a-fbc0ab08e1eb -> a-e9bac45bb85d. The id is derived from cmd+expect; an earlier tightening rewrote the assertion without recomputing it, so the front-matter label no longer named the assertion that runs. Body unchanged -- this is a relabel only. It matters at promotion (the opportunity selector is the acceptance_id) and at dedup (cluster.py trusts a stored id over recomputing, so a re-filing of the same probe would have opened a duplicate need instead of adding an instance).

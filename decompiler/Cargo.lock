@@ -294,158 +294,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kuna-analysis"
-version = "0.1.0"
-dependencies = [
- "brotli-decompressor",
- "cpp_demangle",
- "flate2",
- "flirt-sig",
- "gimli",
- "kuna-base",
- "kuna-decomp",
- "kuna-num",
- "kuna-sleigh",
- "lzma-rs",
- "memchr",
- "memmap2",
- "msvc-demangler",
- "object",
- "pdb",
- "rustc-demangle",
- "smallvec",
- "undname",
-]
-
-[[package]]
-name = "kuna-base"
-version = "0.1.0"
-dependencies = [
- "flate2",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "kuna-cli"
-version = "0.1.0"
-dependencies = [
- "flirt-sig",
- "kuna-analysis",
- "kuna-base",
- "kuna-console",
- "kuna-decomp",
- "kuna-num",
- "kuna-slacomp",
- "kuna-sleigh",
- "object",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
-]
-
-[[package]]
-name = "kuna-console"
-version = "0.1.0"
-dependencies = [
- "kuna-analysis",
- "kuna-base",
- "kuna-decomp",
- "kuna-num",
- "kuna-sleigh",
- "object",
- "regex",
- "syn 2.0.117",
- "unicode-ident",
-]
-
-[[package]]
-name = "kuna-decomp"
-version = "0.1.0"
-dependencies = [
- "kuna-base",
- "kuna-num",
- "kuna-sleigh",
- "regex",
- "serde",
- "slotmap",
- "smallvec",
- "thiserror 2.0.18",
- "toml",
-]
-
-[[package]]
-name = "kuna-ghidra"
-version = "0.1.0"
-dependencies = [
- "kuna-analysis",
- "kuna-base",
- "kuna-console",
- "kuna-decomp",
- "kuna-num",
- "kuna-sleigh",
-]
-
-[[package]]
-name = "kuna-harness"
-version = "0.1.0"
-dependencies = [
- "kuna-base",
- "kuna-console",
- "kuna-decomp",
- "kuna-num",
- "kuna-sleigh",
- "regex",
-]
-
-[[package]]
-name = "kuna-lift-diff"
-version = "0.1.0"
-dependencies = [
- "kuna-harness",
-]
-
-[[package]]
-name = "kuna-num"
-version = "0.1.0"
-dependencies = [
- "kuna-base",
-]
-
-[[package]]
-name = "kuna-slacomp"
-version = "0.1.0"
-dependencies = [
- "flate2",
- "kuna-base",
- "kuna-num",
- "kuna-sleigh",
- "sha2",
- "tempfile",
-]
-
-[[package]]
-name = "kuna-sleigh"
-version = "0.1.0"
-dependencies = [
- "kuna-base",
- "kuna-num",
-]
-
-[[package]]
-name = "kuna-wasm"
-version = "0.1.0"
-dependencies = [
- "kuna-analysis",
- "kuna-base",
- "kuna-console",
- "kuna-decomp",
- "object",
- "serde_json",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -889,6 +737,158 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "unlace-analysis"
+version = "0.1.0"
+dependencies = [
+ "brotli-decompressor",
+ "cpp_demangle",
+ "flate2",
+ "flirt-sig",
+ "gimli",
+ "lzma-rs",
+ "memchr",
+ "memmap2",
+ "msvc-demangler",
+ "object",
+ "pdb",
+ "rustc-demangle",
+ "smallvec",
+ "undname",
+ "unlace-base",
+ "unlace-decomp",
+ "unlace-num",
+ "unlace-sleigh",
+]
+
+[[package]]
+name = "unlace-base"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "unlace-cli"
+version = "0.1.0"
+dependencies = [
+ "flirt-sig",
+ "object",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "unlace-analysis",
+ "unlace-base",
+ "unlace-console",
+ "unlace-decomp",
+ "unlace-num",
+ "unlace-slacomp",
+ "unlace-sleigh",
+]
+
+[[package]]
+name = "unlace-console"
+version = "0.1.0"
+dependencies = [
+ "object",
+ "regex",
+ "syn 2.0.117",
+ "unicode-ident",
+ "unlace-analysis",
+ "unlace-base",
+ "unlace-decomp",
+ "unlace-num",
+ "unlace-sleigh",
+]
+
+[[package]]
+name = "unlace-decomp"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde",
+ "slotmap",
+ "smallvec",
+ "thiserror 2.0.18",
+ "toml",
+ "unlace-base",
+ "unlace-num",
+ "unlace-sleigh",
+]
+
+[[package]]
+name = "unlace-ghidra"
+version = "0.1.0"
+dependencies = [
+ "unlace-analysis",
+ "unlace-base",
+ "unlace-console",
+ "unlace-decomp",
+ "unlace-num",
+ "unlace-sleigh",
+]
+
+[[package]]
+name = "unlace-harness"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "unlace-base",
+ "unlace-console",
+ "unlace-decomp",
+ "unlace-num",
+ "unlace-sleigh",
+]
+
+[[package]]
+name = "unlace-lift-diff"
+version = "0.1.0"
+dependencies = [
+ "unlace-harness",
+]
+
+[[package]]
+name = "unlace-num"
+version = "0.1.0"
+dependencies = [
+ "unlace-base",
+]
+
+[[package]]
+name = "unlace-slacomp"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "sha2",
+ "tempfile",
+ "unlace-base",
+ "unlace-num",
+ "unlace-sleigh",
+]
+
+[[package]]
+name = "unlace-sleigh"
+version = "0.1.0"
+dependencies = [
+ "unlace-base",
+ "unlace-num",
+]
+
+[[package]]
+name = "unlace-wasm"
+version = "0.1.0"
+dependencies = [
+ "object",
+ "serde_json",
+ "unlace-analysis",
+ "unlace-base",
+ "unlace-console",
+ "unlace-decomp",
+]
 
 [[package]]
 name = "uuid"

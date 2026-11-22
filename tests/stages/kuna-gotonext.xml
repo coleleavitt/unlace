@@ -11,7 +11,7 @@
     Stage / sub-stage: P8 "goto-quality".  The P0 assertion
     `option gotonext on|off` decides the rendering; on is the default.
 
-    The bytes are decompiler/crates/kuna-analysis/tests/fixtures/gotonext.c
+    The bytes are decompiler/crates/unlace-analysis/tests/fixtures/gotonext.c
     built at -O2 -fno-pie -no-pie -nostartfiles (x86-64 SysV): gcc 15.3 at
     0x401000 (fall, arith, strcase) and clang 22.1 linked at 0x501000
     (fall_clang).  fall has case fall-throughs, arith one case that leaves the

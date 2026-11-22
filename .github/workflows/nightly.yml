@@ -15,10 +15,9 @@ name: Nightly
 # change to it is proven on a real runner before it merges; only main's runs ever
 # become the next night's baseline.
 
+# unlace: no schedule yet. The decbench arm compares against last night's build or the latest
+# release, and coleleavitt/unlace has neither until the first run; start it from the Actions tab.
 on:
-  schedule:
-    # 07:17 UTC: after the 06:00 release, off the top of the hour.
-    - cron: "17 7 * * *"
   workflow_dispatch:
     inputs:
       binaries:
@@ -44,7 +43,7 @@ defaults:
 env:
   CARGO_TERM_COLOR: always
   # Every input that can move a score is pinned, so a night-to-night change is
-  # kuna's. Bumping one resets the score comparison for a night (the report says so).
+  # unlace's. Bumping one resets the score comparison for a night (the report says so).
   DATASET_REVISION: 815eb96f130b6d2ef7fa600e04669bf20139bf27
   DECBENCH_REVISION: 14e14b87429043aa06f64e067847ac0a925e41a6
   RUST_JOERN_REVISION: 9fd97f50885202596b125ebd2504e64910874bcb
@@ -85,20 +84,20 @@ jobs:
           workspaces: decompiler
           key: nightly
 
-      - name: Build kuna and compile the SLEIGH specs
+      - name: Build unlace and compile the SLEIGH specs
         run: make binaries specs
 
       # Tomorrow's speed baseline: the binary and spec tree exactly as built here.
       - name: Package tonight's build
         run: |
           mkdir -p build
-          cp decompiler/target/release/kuna build/
+          cp decompiler/target/release/unlace build/
           tar -czf build/specs.tgz specs
           echo "$(bash scripts/version.sh) (${GITHUB_SHA::10})" | tee build/LABEL
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kuna-nightly-build
+          name: unlace-nightly-build
           path: build/
           retention-days: 14
 
@@ -153,8 +152,8 @@ jobs:
         run: |
           "$RUNNER_TEMP/venv/bin/python" -m scripts.nightly.bench \
             --sample out/sample.json --data nightly-data \
-            --kuna build/kuna --specs specs --label "$(cat build/LABEL)" \
-            --baseline-kuna base/kuna --baseline-specs base/specs \
+            --kuna build/unlace --specs specs --label "$(cat build/LABEL)" \
+            --baseline-kuna base/unlace --baseline-specs base/specs \
             --baseline-label "$(cat base/LABEL)" \
             --decbench-root "$RUNNER_TEMP/decbench" --out out --jobs "$(nproc)"
 

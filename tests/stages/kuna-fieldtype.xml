@@ -20,7 +20,7 @@
     another value is not proof, and a field some access divides, shifts,
     multiplies or compares with sign stays a number.
 
-    The fixture is decompiler/crates/kuna-analysis/tests/fixtures/fieldtype_x86_64.c.
+    The fixture is decompiler/crates/unlace-analysis/tests/fixtures/fieldtype_x86_64.c.
     Built by gcc -O0:
 
         buf_shift:   sort's fillbuf - the buffer is added to, then handed to
@@ -57,7 +57,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/fieldtype_gcc_O0_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fieldtype_gcc_O0_x86_64</com>
   <com>option libcnames off</com>
   <com>option fieldtype off</com>
   <com>read symbols</com>
@@ -80,7 +80,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/fieldtype_gcc_O0_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fieldtype_gcc_O0_x86_64</com>
   <com>option libcnames off</com>
   <com>option fieldtype on</com>
   <com>read symbols</com>
@@ -103,7 +103,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/fieldtype_clang_O2_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fieldtype_clang_O2_x86_64</com>
   <com>option operand_refs on</com>
   <com>option fieldtype off</com>
   <com>read symbols</com>
@@ -111,7 +111,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/fieldtype_clang_O2_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fieldtype_clang_O2_x86_64</com>
   <com>option operand_refs on</com>
   <com>option fieldtype on</com>
   <com>read symbols</com>

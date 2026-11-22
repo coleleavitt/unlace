@@ -13,11 +13,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/neolite_packed_pe_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/neolite_packed_pe_i386.exe",
     "binary_sha256": "18903a09ce759dd33e8ddcc5ec5b11ebf0420ec080b37a01279667fc48e94725",
     "binary_size": 3584,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/neolite_packed_pe_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/neolite_packed_pe_i386.exe",
     "selector": null,
     "selector_kind": "none"
   },
@@ -57,5 +57,5 @@
       "no UPX PackHeader found"
     ]
   },
-  "notes": "Desired: a NEOLite-packed PE yields an analyzable image, not 'no UPX PackHeader found'. Witness: crackmes.one 5ab77f5433c5d40ad448c1c1 CryptoME.exe, where the tester ran the stub under Unicorn to get the sections; kuna functions there goes 0 -> 387. Retargeted onto neolite_packed_pe_i386.exe, built by its .py sidecar. The size, entry and import clauses separate a decode from an empty exit 0."
+  "notes": "Desired: a NEOLite-packed PE yields an analyzable image, not 'no UPX PackHeader found'. Witness: crackmes.one 5ab77f5433c5d40ad448c1c1 CryptoME.exe, where the tester ran the stub under Unicorn to get the sections; unlace functions there goes 0 -> 387. Retargeted onto neolite_packed_pe_i386.exe, built by its .py sidecar. The size, entry and import clauses separate a decode from an empty exit 0."
 }

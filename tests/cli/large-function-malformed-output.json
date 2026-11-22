@@ -16,11 +16,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fastfail_x86_64.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fastfail_x86_64.exe",
     "binary_sha256": "ad51d8d03d2a61800966eb51517fabb6c343f35ee3ff79377c12f277731fa0a4",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fastfail_x86_64.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fastfail_x86_64.exe",
     "selector": "0x140001000",
     "selector_kind": "addr"
   },

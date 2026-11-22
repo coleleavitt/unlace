@@ -1,9 +1,9 @@
 <decompilertest>
 <binaryimage arch="x86:LE:64:default:gcc">
 <!--
-    Decompiler MODE presets (kuna_decomp::modes, Architecture::apply_mode): the
+    Decompiler MODE presets (unlace_decomp::modes, Architecture::apply_mode): the
     `mode reliable | aggressive` console command applies a named batch of option
-    overrides through the SAME binary to decompile path a real `kuna decompile`
+    overrides through the SAME binary to decompile path a real `unlace decompile`
     / `decompile-all` uses.  This is the end to end proof that a mode reaches the
     engine (standing requirement: every output changing feature ships a
     binary to decompile testcase; here the "flag" is the whole preset).

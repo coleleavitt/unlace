@@ -4,7 +4,7 @@
     kuna issue testcase: the i386 PIC base register folded into the
     cross-reference index.
 
-    Issue:      kuna-analysis-picbase - `kuna strings` (JSON, filtered to Password)
+    Issue:      unlace-analysis-picbase - `unlace strings` (JSON, filtered to Password)
                 on crackmes.one/5ab77f6333c5d40ad448ca52 (pancrackme v1.0,
                 32-bit i386 PIC ELF, stripped) found the prompt at 0x8049127
                 and reported xrefs_count 0 with an empty functions list, as did
@@ -25,7 +25,7 @@
     The end-to-end proof (the prompt, the banner, the thunked trailer and the
     global all resolved, and the clobbering function still claiming nothing)
     needs a real 32-bit PIC object and lives in the cargo gate
-    `decompiler/crates/kuna-console/tests/verify_picbase.rs`, over the
+    `decompiler/crates/unlace-console/tests/verify_picbase.rs`, over the
     `picbase_i386` fixture.
 
     Reuses the GH-558 bytes as a small, deterministic loadable function.

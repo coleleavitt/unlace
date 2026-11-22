@@ -20,11 +20,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/x64syscall_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/x64syscall_x86_64",
     "binary_sha256": "67495c19f0d24f510cbc4c4e50887868aad201093daad983792e0eea9c1b99af",
     "binary_size": 4720,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/x64syscall_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/x64syscall_x86_64",
     "selector": "kernel_call",
     "selector_kind": "name"
   },

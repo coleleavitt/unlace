@@ -1,0 +1,5253 @@
+//! (kuna `libcnames`) The library's own names for the parameters and results
+//! of the built-in libc and Win32 signatures ([`super::LIBC`],
+//! [`super::kuna_libcsigs`], [`super::kuna_libctypes`],
+//! [`super::kuna_win32sigs`]).
+//!
+//! [`super::build_pieces`] attaches an entry to the prototype it builds from
+//! one of those tables, so the names travel with exactly the prototypes the
+//! tables park: the imports-only rule and the DWARF-wins order apply to them
+//! unchanged. Only the naming pass reads them, under `option libcnames`.
+//!
+//! Parameter names are not written by hand. They are the names the glibc 2.35
+//! headers declare, with the leading underscores stripped (`read (int __fd,
+//! void *__buf, size_t __nbytes)` gives `fd, buf, nbytes`), read from a
+//! `clang -ast-dump=json` of the platform headers: the plain declarations
+//! first, then the `_FORTIFY_SOURCE` ones for the entry points only those
+//! declare. A slot the declaration leaves unnamed stays empty (the `ctype.h`
+//! classifiers, `__overflow`). Three families have no declaration of their own
+//! and take their base function's names for the slots they share with it:
+//! `__isoc99_X` (which `<stdio.h>` redirects `X` to, so the two are one ABI),
+//! the GCC FORTIFY builtins `__X_chk` (their extra object-size slot stays
+//! unnamed) and `__X_2`. `ptrace` is declared variadic, so only its request
+//! is named. The derivation is `docs/features/libcnames/gen_names.py`.
+//!
+//! A return name is given only where the result is one kind of thing whatever
+//! the arguments: `fd` for the descriptor constructors, `n` for a byte or item
+//! count, `len` for a string length, `p` for an allocation or a pointer into a
+//! string, `fp` for an opened stream, `pid`, `dirp`, `entry`, `c` for a read
+//! character, and the like. `fcntl` and `ioctl`, whose result depends on the
+//! command, have none.
+//!
+//! The Win32 table ([`super::kuna_win32sigs::WIN32`]) gets the Windows SDK names
+//! the same way ([`WIN32_NAMES`]), from the mingw-w64 8.0.0 declarations, which
+//! carry them; mingw-w64 leaves the OLE Automation `BSTR` family unnamed, and
+//! those take the SDK documentation's names. A Win32 result is named only where
+//! it is one kind of thing and the SDK names it as another entry point's
+//! parameter (`hModule`, `hHeap`, `lpMem`, `hFile`). The derivation is
+//! `docs/features/libcnames/gen_win32_names.py`. The two tables are disjoint, so
+//! a name reaches only its own table's prototype.
+
+use unlace_decomp::kuna_libcnames::LibraryNames;
+
+/// Every named entry, sorted by function name.
+const NAMES: &[(&str, LibraryNames)] = &[
+    (
+        "__asprintf_chk",
+        LibraryNames {
+            params: &["ptr", "flag", "fmt"],
+            ret: None,
+        },
+    ),
+    (
+        "__assert_fail",
+        LibraryNames {
+            params: &["assertion", "file", "line", "function"],
+            ret: None,
+        },
+    ),
+    (
+        "__cmsg_nxthdr",
+        LibraryNames {
+            params: &["mhdr", "cmsg"],
+            ret: None,
+        },
+    ),
+    (
+        "__explicit_bzero_chk",
+        LibraryNames {
+            params: &["dest", "len", "destlen"],
+            ret: None,
+        },
+    ),
+    (
+        "__fdelt_chk",
+        LibraryNames {
+            params: &["d"],
+            ret: None,
+        },
+    ),
+    (
+        "__fgets_chk",
+        LibraryNames {
+            params: &["s", "size", "n", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "__fpending",
+        LibraryNames {
+            params: &["fp"],
+            ret: None,
+        },
+    ),
+    (
+        "__fprintf_chk",
+        LibraryNames {
+            params: &["stream", "flag", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "__fpurge",
+        LibraryNames {
+            params: &["fp"],
+            ret: None,
+        },
+    ),
+    (
+        "__freading",
+        LibraryNames {
+            params: &["fp"],
+            ret: None,
+        },
+    ),
+    (
+        "__getdelim",
+        LibraryNames {
+            params: &["lineptr", "n", "delimiter", "stream"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "__getgroups_chk",
+        LibraryNames {
+            params: &["size", "list", "listlen"],
+            ret: None,
+        },
+    ),
+    (
+        "__isoc99_fscanf",
+        LibraryNames {
+            params: &["stream", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "__isoc99_scanf",
+        LibraryNames {
+            params: &["format"],
+            ret: None,
+        },
+    ),
+    (
+        "__isoc99_sscanf",
+        LibraryNames {
+            params: &["s", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "__mbsrtowcs_chk",
+        LibraryNames {
+            params: &["dst", "src", "len", "ps", "dstlen"],
+            ret: None,
+        },
+    ),
+    (
+        "__mbstowcs_chk",
+        LibraryNames {
+            params: &["dst", "src", "len", "dstlen"],
+            ret: None,
+        },
+    ),
+    (
+        "__memcpy_chk",
+        LibraryNames {
+            params: &["dest", "src", "n", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__memmove_chk",
+        LibraryNames {
+            params: &["dest", "src", "n", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__mempcpy_chk",
+        LibraryNames {
+            params: &["dest", "src", "n", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__memset_chk",
+        LibraryNames {
+            params: &["s", "c", "n", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__open_2",
+        LibraryNames {
+            params: &["file", "oflag"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "__openat_2",
+        LibraryNames {
+            params: &["fd", "file", "oflag"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "__printf_chk",
+        LibraryNames {
+            params: &["flag", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "__pthread_register_cancel",
+        LibraryNames {
+            params: &["buf"],
+            ret: None,
+        },
+    ),
+    (
+        "__pthread_unregister_cancel",
+        LibraryNames {
+            params: &["buf"],
+            ret: None,
+        },
+    ),
+    (
+        "__pthread_unwind_next",
+        LibraryNames {
+            params: &["buf"],
+            ret: None,
+        },
+    ),
+    (
+        "__realpath_chk",
+        LibraryNames {
+            params: &["name", "resolved", "resolvedlen"],
+            ret: None,
+        },
+    ),
+    (
+        "__sched_cpucount",
+        LibraryNames {
+            params: &["setsize", "setp"],
+            ret: None,
+        },
+    ),
+    (
+        "__sigsetjmp",
+        LibraryNames {
+            params: &["env", "savemask"],
+            ret: None,
+        },
+    ),
+    (
+        "__snprintf_chk",
+        LibraryNames {
+            params: &["s", "n", "flag", "slen", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "__sprintf_chk",
+        LibraryNames {
+            params: &["s", "flag", "slen", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "__stpcpy_chk",
+        LibraryNames {
+            params: &["dest", "src", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__strcat_chk",
+        LibraryNames {
+            params: &["dest", "src", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__strcpy_chk",
+        LibraryNames {
+            params: &["dest", "src", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__strncat_chk",
+        LibraryNames {
+            params: &["dest", "src", "n", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__strncpy_chk",
+        LibraryNames {
+            params: &["dest", "src", "n", ""],
+            ret: None,
+        },
+    ),
+    (
+        "__syslog_chk",
+        LibraryNames {
+            params: &["pri", "flag", "fmt"],
+            ret: None,
+        },
+    ),
+    (
+        "__vasprintf_chk",
+        LibraryNames {
+            params: &["ptr", "flag", "fmt", "arg"],
+            ret: None,
+        },
+    ),
+    (
+        "__vfprintf_chk",
+        LibraryNames {
+            params: &["stream", "flag", "format", "ap"],
+            ret: None,
+        },
+    ),
+    (
+        "__vsnprintf_chk",
+        LibraryNames {
+            params: &["s", "n", "flag", "slen", "format", "ap"],
+            ret: None,
+        },
+    ),
+    (
+        "__xpg_basename",
+        LibraryNames {
+            params: &["path"],
+            ret: None,
+        },
+    ),
+    (
+        "_exit",
+        LibraryNames {
+            params: &["status"],
+            ret: None,
+        },
+    ),
+    (
+        "_setjmp",
+        LibraryNames {
+            params: &["env"],
+            ret: None,
+        },
+    ),
+    (
+        "abs",
+        LibraryNames {
+            params: &["x"],
+            ret: None,
+        },
+    ),
+    (
+        "access",
+        LibraryNames {
+            params: &["name", "type"],
+            ret: None,
+        },
+    ),
+    (
+        "alarm",
+        LibraryNames {
+            params: &["seconds"],
+            ret: None,
+        },
+    ),
+    (
+        "aligned_alloc",
+        LibraryNames {
+            params: &["alignment", "size"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "alphasort",
+        LibraryNames {
+            params: &["e1", "e2"],
+            ret: None,
+        },
+    ),
+    (
+        "asctime",
+        LibraryNames {
+            params: &["tp"],
+            ret: None,
+        },
+    ),
+    (
+        "asprintf",
+        LibraryNames {
+            params: &["ptr", "fmt"],
+            ret: None,
+        },
+    ),
+    (
+        "atoi",
+        LibraryNames {
+            params: &["nptr"],
+            ret: None,
+        },
+    ),
+    (
+        "atol",
+        LibraryNames {
+            params: &["nptr"],
+            ret: None,
+        },
+    ),
+    (
+        "basename",
+        LibraryNames {
+            params: &["filename"],
+            ret: None,
+        },
+    ),
+    (
+        "bindtextdomain",
+        LibraryNames {
+            params: &["domainname", "dirname"],
+            ret: None,
+        },
+    ),
+    (
+        "btowc",
+        LibraryNames {
+            params: &["c"],
+            ret: None,
+        },
+    ),
+    (
+        "bzero",
+        LibraryNames {
+            params: &["s", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "calloc",
+        LibraryNames {
+            params: &["nmemb", "size"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "canonicalize_file_name",
+        LibraryNames {
+            params: &["name"],
+            ret: None,
+        },
+    ),
+    (
+        "ceil",
+        LibraryNames {
+            params: &["x"],
+            ret: None,
+        },
+    ),
+    (
+        "cfgetispeed",
+        LibraryNames {
+            params: &["termios_p"],
+            ret: None,
+        },
+    ),
+    (
+        "cfgetospeed",
+        LibraryNames {
+            params: &["termios_p"],
+            ret: None,
+        },
+    ),
+    (
+        "cfsetispeed",
+        LibraryNames {
+            params: &["termios_p", "speed"],
+            ret: None,
+        },
+    ),
+    (
+        "cfsetospeed",
+        LibraryNames {
+            params: &["termios_p", "speed"],
+            ret: None,
+        },
+    ),
+    (
+        "chdir",
+        LibraryNames {
+            params: &["path"],
+            ret: None,
+        },
+    ),
+    (
+        "chmod",
+        LibraryNames {
+            params: &["file", "mode"],
+            ret: None,
+        },
+    ),
+    (
+        "chown",
+        LibraryNames {
+            params: &["file", "owner", "group"],
+            ret: None,
+        },
+    ),
+    (
+        "chroot",
+        LibraryNames {
+            params: &["path"],
+            ret: None,
+        },
+    ),
+    (
+        "clearerr",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "clearerr_unlocked",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "clock_getres",
+        LibraryNames {
+            params: &["clock_id", "res"],
+            ret: None,
+        },
+    ),
+    (
+        "clock_gettime",
+        LibraryNames {
+            params: &["clock_id", "tp"],
+            ret: None,
+        },
+    ),
+    (
+        "clock_nanosleep",
+        LibraryNames {
+            params: &["clock_id", "flags", "req", "rem"],
+            ret: None,
+        },
+    ),
+    (
+        "clock_settime",
+        LibraryNames {
+            params: &["clock_id", "tp"],
+            ret: None,
+        },
+    ),
+    (
+        "close",
+        LibraryNames {
+            params: &["fd"],
+            ret: None,
+        },
+    ),
+    (
+        "close_range",
+        LibraryNames {
+            params: &["fd", "max_fd", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "closedir",
+        LibraryNames {
+            params: &["dirp"],
+            ret: None,
+        },
+    ),
+    (
+        "confstr",
+        LibraryNames {
+            params: &["name", "buf", "len"],
+            ret: None,
+        },
+    ),
+    (
+        "copy_file_range",
+        LibraryNames {
+            params: &["infd", "pinoff", "outfd", "poutoff", "length", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "creat",
+        LibraryNames {
+            params: &["file", "mode"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "crypt",
+        LibraryNames {
+            params: &["key", "salt"],
+            ret: None,
+        },
+    ),
+    (
+        "crypt_gensalt",
+        LibraryNames {
+            params: &["prefix", "count", "rbytes", "nrbytes"],
+            ret: None,
+        },
+    ),
+    (
+        "ctime",
+        LibraryNames {
+            params: &["timer"],
+            ret: None,
+        },
+    ),
+    (
+        "ctime_r",
+        LibraryNames {
+            params: &["timer", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "daemon",
+        LibraryNames {
+            params: &["nochdir", "noclose"],
+            ret: None,
+        },
+    ),
+    (
+        "dcgettext",
+        LibraryNames {
+            params: &["domainname", "msgid", "category"],
+            ret: None,
+        },
+    ),
+    (
+        "dcngettext",
+        LibraryNames {
+            params: &["domainname", "msgid1", "msgid2", "n", "category"],
+            ret: None,
+        },
+    ),
+    (
+        "dgettext",
+        LibraryNames {
+            params: &["domainname", "msgid"],
+            ret: None,
+        },
+    ),
+    (
+        "dirfd",
+        LibraryNames {
+            params: &["dirp"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "dirname",
+        LibraryNames {
+            params: &["path"],
+            ret: None,
+        },
+    ),
+    (
+        "dlclose",
+        LibraryNames {
+            params: &["handle"],
+            ret: None,
+        },
+    ),
+    (
+        "dlopen",
+        LibraryNames {
+            params: &["file", "mode"],
+            ret: None,
+        },
+    ),
+    (
+        "dlsym",
+        LibraryNames {
+            params: &["handle", "name"],
+            ret: None,
+        },
+    ),
+    (
+        "dngettext",
+        LibraryNames {
+            params: &["domainname", "msgid1", "msgid2", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "dup",
+        LibraryNames {
+            params: &["fd"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "dup2",
+        LibraryNames {
+            params: &["fd", "fd2"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "eaccess",
+        LibraryNames {
+            params: &["name", "type"],
+            ret: None,
+        },
+    ),
+    (
+        "endmntent",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "err",
+        LibraryNames {
+            params: &["status", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "error",
+        LibraryNames {
+            params: &["status", "errnum", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "error_at_line",
+        LibraryNames {
+            params: &["status", "errnum", "fname", "lineno", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "errx",
+        LibraryNames {
+            params: &["status", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "euidaccess",
+        LibraryNames {
+            params: &["name", "type"],
+            ret: None,
+        },
+    ),
+    (
+        "execl",
+        LibraryNames {
+            params: &["path", "arg"],
+            ret: None,
+        },
+    ),
+    (
+        "execle",
+        LibraryNames {
+            params: &["path", "arg"],
+            ret: None,
+        },
+    ),
+    (
+        "execlp",
+        LibraryNames {
+            params: &["file", "arg"],
+            ret: None,
+        },
+    ),
+    (
+        "execv",
+        LibraryNames {
+            params: &["path", "argv"],
+            ret: None,
+        },
+    ),
+    (
+        "execve",
+        LibraryNames {
+            params: &["path", "argv", "envp"],
+            ret: None,
+        },
+    ),
+    (
+        "execvp",
+        LibraryNames {
+            params: &["file", "argv"],
+            ret: None,
+        },
+    ),
+    (
+        "execvpe",
+        LibraryNames {
+            params: &["file", "argv", "envp"],
+            ret: None,
+        },
+    ),
+    (
+        "exit",
+        LibraryNames {
+            params: &["status"],
+            ret: None,
+        },
+    ),
+    (
+        "explicit_bzero",
+        LibraryNames {
+            params: &["s", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "faccessat",
+        LibraryNames {
+            params: &["fd", "file", "type", "flag"],
+            ret: None,
+        },
+    ),
+    (
+        "fchdir",
+        LibraryNames {
+            params: &["fd"],
+            ret: None,
+        },
+    ),
+    (
+        "fchmod",
+        LibraryNames {
+            params: &["fd", "mode"],
+            ret: None,
+        },
+    ),
+    (
+        "fchmodat",
+        LibraryNames {
+            params: &["fd", "file", "mode", "flag"],
+            ret: None,
+        },
+    ),
+    (
+        "fchown",
+        LibraryNames {
+            params: &["fd", "owner", "group"],
+            ret: None,
+        },
+    ),
+    (
+        "fchownat",
+        LibraryNames {
+            params: &["fd", "file", "owner", "group", "flag"],
+            ret: None,
+        },
+    ),
+    (
+        "fclose",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fcntl",
+        LibraryNames {
+            params: &["fd", "cmd"],
+            ret: None,
+        },
+    ),
+    (
+        "fcntl64",
+        LibraryNames {
+            params: &["fd", "cmd"],
+            ret: None,
+        },
+    ),
+    (
+        "fdatasync",
+        LibraryNames {
+            params: &["fildes"],
+            ret: None,
+        },
+    ),
+    (
+        "fdopen",
+        LibraryNames {
+            params: &["fd", "modes"],
+            ret: Some("fp"),
+        },
+    ),
+    (
+        "fdopendir",
+        LibraryNames {
+            params: &["fd"],
+            ret: Some("dirp"),
+        },
+    ),
+    (
+        "feof",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "feof_unlocked",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "ferror",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "ferror_unlocked",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fflush",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fflush_unlocked",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "ffs",
+        LibraryNames {
+            params: &["i"],
+            ret: None,
+        },
+    ),
+    (
+        "fgetc",
+        LibraryNames {
+            params: &["stream"],
+            ret: Some("c"),
+        },
+    ),
+    (
+        "fgetgrent",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fgetpwent",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fgets",
+        LibraryNames {
+            params: &["s", "n", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fgets_unlocked",
+        LibraryNames {
+            params: &["s", "n", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fgetspent",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fgetwc",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fgetxattr",
+        LibraryNames {
+            params: &["fd", "name", "value", "size"],
+            ret: None,
+        },
+    ),
+    (
+        "fileno",
+        LibraryNames {
+            params: &["stream"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "flistxattr",
+        LibraryNames {
+            params: &["fd", "list", "size"],
+            ret: None,
+        },
+    ),
+    (
+        "flock",
+        LibraryNames {
+            params: &["fd", "operation"],
+            ret: None,
+        },
+    ),
+    (
+        "flockfile",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fnmatch",
+        LibraryNames {
+            params: &["pattern", "name", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "fopen",
+        LibraryNames {
+            params: &["filename", "modes"],
+            ret: Some("fp"),
+        },
+    ),
+    (
+        "fopen64",
+        LibraryNames {
+            params: &["filename", "modes"],
+            ret: Some("fp"),
+        },
+    ),
+    (
+        "fork",
+        LibraryNames {
+            params: &[],
+            ret: Some("pid"),
+        },
+    ),
+    (
+        "fpathconf",
+        LibraryNames {
+            params: &["fd", "name"],
+            ret: None,
+        },
+    ),
+    (
+        "fprintf",
+        LibraryNames {
+            params: &["stream", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "fputc",
+        LibraryNames {
+            params: &["c", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fputc_unlocked",
+        LibraryNames {
+            params: &["c", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fputs",
+        LibraryNames {
+            params: &["s", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fputs_unlocked",
+        LibraryNames {
+            params: &["s", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "fread",
+        LibraryNames {
+            params: &["ptr", "size", "n", "stream"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "fread_unlocked",
+        LibraryNames {
+            params: &["ptr", "size", "n", "stream"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "free",
+        LibraryNames {
+            params: &["ptr"],
+            ret: None,
+        },
+    ),
+    (
+        "freeaddrinfo",
+        LibraryNames {
+            params: &["ai"],
+            ret: None,
+        },
+    ),
+    (
+        "freopen",
+        LibraryNames {
+            params: &["filename", "modes", "stream"],
+            ret: Some("fp"),
+        },
+    ),
+    (
+        "freopen64",
+        LibraryNames {
+            params: &["filename", "modes", "stream"],
+            ret: Some("fp"),
+        },
+    ),
+    (
+        "fscanf",
+        LibraryNames {
+            params: &["stream", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "fseek",
+        LibraryNames {
+            params: &["stream", "off", "whence"],
+            ret: None,
+        },
+    ),
+    (
+        "fseeko",
+        LibraryNames {
+            params: &["stream", "off", "whence"],
+            ret: None,
+        },
+    ),
+    (
+        "fsetxattr",
+        LibraryNames {
+            params: &["fd", "name", "value", "size", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "fstat",
+        LibraryNames {
+            params: &["fd", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "fstat64",
+        LibraryNames {
+            params: &["fd", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "fstatat",
+        LibraryNames {
+            params: &["fd", "file", "buf", "flag"],
+            ret: None,
+        },
+    ),
+    (
+        "fstatfs",
+        LibraryNames {
+            params: &["fildes", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "fstatvfs",
+        LibraryNames {
+            params: &["fildes", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "fsync",
+        LibraryNames {
+            params: &["fd"],
+            ret: None,
+        },
+    ),
+    (
+        "ftell",
+        LibraryNames {
+            params: &["stream"],
+            ret: Some("pos"),
+        },
+    ),
+    (
+        "ftello",
+        LibraryNames {
+            params: &["stream"],
+            ret: Some("pos"),
+        },
+    ),
+    (
+        "funlockfile",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "futimens",
+        LibraryNames {
+            params: &["fd", "times"],
+            ret: None,
+        },
+    ),
+    (
+        "futimes",
+        LibraryNames {
+            params: &["fd", "tvp"],
+            ret: None,
+        },
+    ),
+    (
+        "futimesat",
+        LibraryNames {
+            params: &["fd", "file", "tvp"],
+            ret: None,
+        },
+    ),
+    (
+        "fwrite",
+        LibraryNames {
+            params: &["ptr", "size", "n", "s"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "fwrite_unlocked",
+        LibraryNames {
+            params: &["ptr", "size", "n", "stream"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "gai_strerror",
+        LibraryNames {
+            params: &["ecode"],
+            ret: None,
+        },
+    ),
+    (
+        "getaddrinfo",
+        LibraryNames {
+            params: &["name", "service", "req", "pai"],
+            ret: None,
+        },
+    ),
+    (
+        "getc",
+        LibraryNames {
+            params: &["stream"],
+            ret: Some("c"),
+        },
+    ),
+    (
+        "getc_unlocked",
+        LibraryNames {
+            params: &["stream"],
+            ret: Some("c"),
+        },
+    ),
+    (
+        "getchar",
+        LibraryNames {
+            params: &[],
+            ret: Some("c"),
+        },
+    ),
+    (
+        "getcwd",
+        LibraryNames {
+            params: &["buf", "size"],
+            ret: None,
+        },
+    ),
+    (
+        "getdelim",
+        LibraryNames {
+            params: &["lineptr", "n", "delimiter", "stream"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "getegid",
+        LibraryNames {
+            params: &[],
+            ret: Some("gid"),
+        },
+    ),
+    (
+        "getentropy",
+        LibraryNames {
+            params: &["buffer", "length"],
+            ret: None,
+        },
+    ),
+    (
+        "getenv",
+        LibraryNames {
+            params: &["name"],
+            ret: Some("value"),
+        },
+    ),
+    (
+        "geteuid",
+        LibraryNames {
+            params: &[],
+            ret: Some("uid"),
+        },
+    ),
+    (
+        "getgid",
+        LibraryNames {
+            params: &[],
+            ret: Some("gid"),
+        },
+    ),
+    (
+        "getgrent",
+        LibraryNames {
+            params: &[],
+            ret: Some("gr"),
+        },
+    ),
+    (
+        "getgrgid",
+        LibraryNames {
+            params: &["gid"],
+            ret: Some("gr"),
+        },
+    ),
+    (
+        "getgrgid_r",
+        LibraryNames {
+            params: &["gid", "resultbuf", "buffer", "buflen", "result"],
+            ret: None,
+        },
+    ),
+    (
+        "getgrnam",
+        LibraryNames {
+            params: &["name"],
+            ret: Some("gr"),
+        },
+    ),
+    (
+        "getgrnam_r",
+        LibraryNames {
+            params: &["name", "resultbuf", "buffer", "buflen", "result"],
+            ret: None,
+        },
+    ),
+    (
+        "getgrouplist",
+        LibraryNames {
+            params: &["user", "group", "groups", "ngroups"],
+            ret: None,
+        },
+    ),
+    (
+        "getgroups",
+        LibraryNames {
+            params: &["size", "list"],
+            ret: None,
+        },
+    ),
+    (
+        "gethostbyaddr",
+        LibraryNames {
+            params: &["addr", "len", "type"],
+            ret: None,
+        },
+    ),
+    (
+        "gethostbyname",
+        LibraryNames {
+            params: &["name"],
+            ret: None,
+        },
+    ),
+    (
+        "gethostname",
+        LibraryNames {
+            params: &["name", "len"],
+            ret: None,
+        },
+    ),
+    (
+        "getline",
+        LibraryNames {
+            params: &["lineptr", "n", "stream"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "getloadavg",
+        LibraryNames {
+            params: &["loadavg", "nelem"],
+            ret: None,
+        },
+    ),
+    (
+        "getmntent",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "getnameinfo",
+        LibraryNames {
+            params: &["sa", "salen", "host", "hostlen", "serv", "servlen", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "getopt",
+        LibraryNames {
+            params: &["argc", "argv", "shortopts"],
+            ret: None,
+        },
+    ),
+    (
+        "getopt_long",
+        LibraryNames {
+            params: &["argc", "argv", "shortopts", "longopts", "longind"],
+            ret: None,
+        },
+    ),
+    (
+        "getpass",
+        LibraryNames {
+            params: &["prompt"],
+            ret: None,
+        },
+    ),
+    (
+        "getpgid",
+        LibraryNames {
+            params: &["pid"],
+            ret: None,
+        },
+    ),
+    (
+        "getpid",
+        LibraryNames {
+            params: &[],
+            ret: Some("pid"),
+        },
+    ),
+    (
+        "getppid",
+        LibraryNames {
+            params: &[],
+            ret: Some("pid"),
+        },
+    ),
+    (
+        "getprotobyname",
+        LibraryNames {
+            params: &["name"],
+            ret: None,
+        },
+    ),
+    (
+        "getprotobynumber",
+        LibraryNames {
+            params: &["proto"],
+            ret: None,
+        },
+    ),
+    (
+        "getpwent",
+        LibraryNames {
+            params: &[],
+            ret: Some("pw"),
+        },
+    ),
+    (
+        "getpwnam",
+        LibraryNames {
+            params: &["name"],
+            ret: Some("pw"),
+        },
+    ),
+    (
+        "getpwnam_r",
+        LibraryNames {
+            params: &["name", "resultbuf", "buffer", "buflen", "result"],
+            ret: None,
+        },
+    ),
+    (
+        "getpwuid",
+        LibraryNames {
+            params: &["uid"],
+            ret: Some("pw"),
+        },
+    ),
+    (
+        "getpwuid_r",
+        LibraryNames {
+            params: &["uid", "resultbuf", "buffer", "buflen", "result"],
+            ret: None,
+        },
+    ),
+    (
+        "getservbyname",
+        LibraryNames {
+            params: &["name", "proto"],
+            ret: None,
+        },
+    ),
+    (
+        "getservbyport",
+        LibraryNames {
+            params: &["port", "proto"],
+            ret: None,
+        },
+    ),
+    (
+        "getsid",
+        LibraryNames {
+            params: &["pid"],
+            ret: None,
+        },
+    ),
+    (
+        "getsockopt",
+        LibraryNames {
+            params: &["fd", "level", "optname", "optval", "optlen"],
+            ret: None,
+        },
+    ),
+    (
+        "getspent",
+        LibraryNames {
+            params: &[],
+            ret: Some("sp"),
+        },
+    ),
+    (
+        "getspnam",
+        LibraryNames {
+            params: &["name"],
+            ret: Some("sp"),
+        },
+    ),
+    (
+        "getspnam_r",
+        LibraryNames {
+            params: &["name", "result_buf", "buffer", "buflen", "result"],
+            ret: None,
+        },
+    ),
+    (
+        "gettext",
+        LibraryNames {
+            params: &["msgid"],
+            ret: None,
+        },
+    ),
+    (
+        "gettid",
+        LibraryNames {
+            params: &[],
+            ret: Some("tid"),
+        },
+    ),
+    (
+        "gettimeofday",
+        LibraryNames {
+            params: &["tv", "tz"],
+            ret: None,
+        },
+    ),
+    (
+        "getuid",
+        LibraryNames {
+            params: &[],
+            ret: Some("uid"),
+        },
+    ),
+    (
+        "getutid",
+        LibraryNames {
+            params: &["id"],
+            ret: None,
+        },
+    ),
+    (
+        "getutline",
+        LibraryNames {
+            params: &["line"],
+            ret: None,
+        },
+    ),
+    (
+        "getutxid",
+        LibraryNames {
+            params: &["id"],
+            ret: None,
+        },
+    ),
+    (
+        "getutxline",
+        LibraryNames {
+            params: &["line"],
+            ret: None,
+        },
+    ),
+    (
+        "getxattr",
+        LibraryNames {
+            params: &["path", "name", "value", "size"],
+            ret: None,
+        },
+    ),
+    (
+        "globfree",
+        LibraryNames {
+            params: &["pglob"],
+            ret: None,
+        },
+    ),
+    (
+        "globfree64",
+        LibraryNames {
+            params: &["pglob"],
+            ret: None,
+        },
+    ),
+    (
+        "gmtime",
+        LibraryNames {
+            params: &["timer"],
+            ret: Some("tp"),
+        },
+    ),
+    (
+        "gmtime_r",
+        LibraryNames {
+            params: &["timer", "tp"],
+            ret: None,
+        },
+    ),
+    (
+        "hasmntopt",
+        LibraryNames {
+            params: &["mnt", "opt"],
+            ret: None,
+        },
+    ),
+    (
+        "htonl",
+        LibraryNames {
+            params: &["hostlong"],
+            ret: None,
+        },
+    ),
+    (
+        "index",
+        LibraryNames {
+            params: &["s", "c"],
+            ret: None,
+        },
+    ),
+    (
+        "inet_ntop",
+        LibraryNames {
+            params: &["af", "cp", "buf", "len"],
+            ret: None,
+        },
+    ),
+    (
+        "inet_pton",
+        LibraryNames {
+            params: &["af", "cp", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "initgroups",
+        LibraryNames {
+            params: &["user", "group"],
+            ret: None,
+        },
+    ),
+    (
+        "innetgr",
+        LibraryNames {
+            params: &["netgroup", "host", "user", "domain"],
+            ret: None,
+        },
+    ),
+    (
+        "ioctl",
+        LibraryNames {
+            params: &["fd", "request"],
+            ret: None,
+        },
+    ),
+    (
+        "isatty",
+        LibraryNames {
+            params: &["fd"],
+            ret: None,
+        },
+    ),
+    (
+        "iswalnum",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "iswalpha",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "iswcntrl",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "iswdigit",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "iswgraph",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "iswlower",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "iswprint",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "iswspace",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "iswupper",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "kill",
+        LibraryNames {
+            params: &["pid", "sig"],
+            ret: None,
+        },
+    ),
+    (
+        "killpg",
+        LibraryNames {
+            params: &["pgrp", "sig"],
+            ret: None,
+        },
+    ),
+    (
+        "labs",
+        LibraryNames {
+            params: &["x"],
+            ret: None,
+        },
+    ),
+    (
+        "lchmod",
+        LibraryNames {
+            params: &["file", "mode"],
+            ret: None,
+        },
+    ),
+    (
+        "lchown",
+        LibraryNames {
+            params: &["file", "owner", "group"],
+            ret: None,
+        },
+    ),
+    (
+        "lgetxattr",
+        LibraryNames {
+            params: &["path", "name", "value", "size"],
+            ret: None,
+        },
+    ),
+    (
+        "link",
+        LibraryNames {
+            params: &["from", "to"],
+            ret: None,
+        },
+    ),
+    (
+        "linkat",
+        LibraryNames {
+            params: &["fromfd", "from", "tofd", "to", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "listen",
+        LibraryNames {
+            params: &["fd", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "listxattr",
+        LibraryNames {
+            params: &["path", "list", "size"],
+            ret: None,
+        },
+    ),
+    (
+        "llistxattr",
+        LibraryNames {
+            params: &["path", "list", "size"],
+            ret: None,
+        },
+    ),
+    (
+        "localtime",
+        LibraryNames {
+            params: &["timer"],
+            ret: Some("tp"),
+        },
+    ),
+    (
+        "localtime_r",
+        LibraryNames {
+            params: &["timer", "tp"],
+            ret: None,
+        },
+    ),
+    (
+        "log2",
+        LibraryNames {
+            params: &["x"],
+            ret: None,
+        },
+    ),
+    (
+        "login",
+        LibraryNames {
+            params: &["entry"],
+            ret: None,
+        },
+    ),
+    (
+        "logout",
+        LibraryNames {
+            params: &["ut_line"],
+            ret: None,
+        },
+    ),
+    (
+        "logwtmp",
+        LibraryNames {
+            params: &["ut_line", "ut_name", "ut_host"],
+            ret: None,
+        },
+    ),
+    (
+        "longjmp",
+        LibraryNames {
+            params: &["env", "val"],
+            ret: None,
+        },
+    ),
+    (
+        "lsetxattr",
+        LibraryNames {
+            params: &["path", "name", "value", "size", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "lstat",
+        LibraryNames {
+            params: &["file", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "lstat64",
+        LibraryNames {
+            params: &["file", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "lutimes",
+        LibraryNames {
+            params: &["file", "tvp"],
+            ret: None,
+        },
+    ),
+    (
+        "malloc",
+        LibraryNames {
+            params: &["size"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "mblen",
+        LibraryNames {
+            params: &["s", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "mbrlen",
+        LibraryNames {
+            params: &["s", "n", "ps"],
+            ret: None,
+        },
+    ),
+    (
+        "mbrtowc",
+        LibraryNames {
+            params: &["pwc", "s", "n", "p"],
+            ret: None,
+        },
+    ),
+    (
+        "mbsinit",
+        LibraryNames {
+            params: &["ps"],
+            ret: None,
+        },
+    ),
+    (
+        "mbsnrtowcs",
+        LibraryNames {
+            params: &["dst", "src", "nmc", "len", "ps"],
+            ret: None,
+        },
+    ),
+    (
+        "mbsrtowcs",
+        LibraryNames {
+            params: &["dst", "src", "len", "ps"],
+            ret: None,
+        },
+    ),
+    (
+        "mbstowcs",
+        LibraryNames {
+            params: &["pwcs", "s", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "mbtowc",
+        LibraryNames {
+            params: &["pwc", "s", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "memchr",
+        LibraryNames {
+            params: &["s", "c", "n"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "memcmp",
+        LibraryNames {
+            params: &["s1", "s2", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "memcpy",
+        LibraryNames {
+            params: &["dest", "src", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "memmem",
+        LibraryNames {
+            params: &["haystack", "haystacklen", "needle", "needlelen"],
+            ret: None,
+        },
+    ),
+    (
+        "memmove",
+        LibraryNames {
+            params: &["dest", "src", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "mempcpy",
+        LibraryNames {
+            params: &["dest", "src", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "memrchr",
+        LibraryNames {
+            params: &["s", "c", "n"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "memset",
+        LibraryNames {
+            params: &["s", "c", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "mincore",
+        LibraryNames {
+            params: &["start", "len", "vec"],
+            ret: None,
+        },
+    ),
+    (
+        "mkdir",
+        LibraryNames {
+            params: &["path", "mode"],
+            ret: None,
+        },
+    ),
+    (
+        "mkdirat",
+        LibraryNames {
+            params: &["fd", "path", "mode"],
+            ret: None,
+        },
+    ),
+    (
+        "mkdtemp",
+        LibraryNames {
+            params: &["template"],
+            ret: None,
+        },
+    ),
+    (
+        "mkfifo",
+        LibraryNames {
+            params: &["path", "mode"],
+            ret: None,
+        },
+    ),
+    (
+        "mkfifoat",
+        LibraryNames {
+            params: &["fd", "path", "mode"],
+            ret: None,
+        },
+    ),
+    (
+        "mkostemp",
+        LibraryNames {
+            params: &["template", "flags"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "mkstemp",
+        LibraryNames {
+            params: &["template"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "mktemp",
+        LibraryNames {
+            params: &["template"],
+            ret: None,
+        },
+    ),
+    (
+        "mktime",
+        LibraryNames {
+            params: &["tp"],
+            ret: None,
+        },
+    ),
+    (
+        "mlockall",
+        LibraryNames {
+            params: &["flags"],
+            ret: None,
+        },
+    ),
+    (
+        "modf",
+        LibraryNames {
+            params: &["x", "iptr"],
+            ret: None,
+        },
+    ),
+    (
+        "mremap",
+        LibraryNames {
+            params: &["addr", "old_len", "new_len", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "msync",
+        LibraryNames {
+            params: &["addr", "len", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "munmap",
+        LibraryNames {
+            params: &["addr", "len"],
+            ret: None,
+        },
+    ),
+    (
+        "name_to_handle_at",
+        LibraryNames {
+            params: &["dfd", "name", "handle", "mnt_id", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "nanosleep",
+        LibraryNames {
+            params: &["requested_time", "remaining"],
+            ret: None,
+        },
+    ),
+    (
+        "ngettext",
+        LibraryNames {
+            params: &["msgid1", "msgid2", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "nl_langinfo",
+        LibraryNames {
+            params: &["item"],
+            ret: None,
+        },
+    ),
+    (
+        "ntohl",
+        LibraryNames {
+            params: &["netlong"],
+            ret: None,
+        },
+    ),
+    (
+        "open",
+        LibraryNames {
+            params: &["file", "oflag"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "open64",
+        LibraryNames {
+            params: &["file", "oflag"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "open_by_handle_at",
+        LibraryNames {
+            params: &["mountdirfd", "handle", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "openat",
+        LibraryNames {
+            params: &["fd", "file", "oflag"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "opendir",
+        LibraryNames {
+            params: &["name"],
+            ret: Some("dirp"),
+        },
+    ),
+    (
+        "openlog",
+        LibraryNames {
+            params: &["ident", "option", "facility"],
+            ret: None,
+        },
+    ),
+    (
+        "pathconf",
+        LibraryNames {
+            params: &["path", "name"],
+            ret: None,
+        },
+    ),
+    (
+        "pclose",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "perror",
+        LibraryNames {
+            params: &["s"],
+            ret: None,
+        },
+    ),
+    (
+        "pipe",
+        LibraryNames {
+            params: &["pipedes"],
+            ret: None,
+        },
+    ),
+    (
+        "pipe2",
+        LibraryNames {
+            params: &["pipedes", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "popen",
+        LibraryNames {
+            params: &["command", "modes"],
+            ret: Some("fp"),
+        },
+    ),
+    (
+        "posix_memalign",
+        LibraryNames {
+            params: &["memptr", "alignment", "size"],
+            ret: None,
+        },
+    ),
+    (
+        "pow",
+        LibraryNames {
+            params: &["x", "y"],
+            ret: None,
+        },
+    ),
+    (
+        "printf",
+        LibraryNames {
+            params: &["format"],
+            ret: None,
+        },
+    ),
+    (
+        "pselect",
+        LibraryNames {
+            params: &[
+                "nfds",
+                "readfds",
+                "writefds",
+                "exceptfds",
+                "timeout",
+                "sigmask",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_attr_destroy",
+        LibraryNames {
+            params: &["attr"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_attr_init",
+        LibraryNames {
+            params: &["attr"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_attr_setinheritsched",
+        LibraryNames {
+            params: &["attr", "inherit"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_attr_setschedparam",
+        LibraryNames {
+            params: &["attr", "param"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_attr_setschedpolicy",
+        LibraryNames {
+            params: &["attr", "policy"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_attr_setstacksize",
+        LibraryNames {
+            params: &["attr", "stacksize"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_cond_broadcast",
+        LibraryNames {
+            params: &["cond"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_cond_destroy",
+        LibraryNames {
+            params: &["cond"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_cond_init",
+        LibraryNames {
+            params: &["cond", "cond_attr"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_cond_signal",
+        LibraryNames {
+            params: &["cond"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_cond_timedwait",
+        LibraryNames {
+            params: &["cond", "mutex", "abstime"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_cond_wait",
+        LibraryNames {
+            params: &["cond", "mutex"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_exit",
+        LibraryNames {
+            params: &["retval"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_mutex_destroy",
+        LibraryNames {
+            params: &["mutex"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_mutex_init",
+        LibraryNames {
+            params: &["mutex", "mutexattr"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_mutex_lock",
+        LibraryNames {
+            params: &["mutex"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_mutex_timedlock",
+        LibraryNames {
+            params: &["mutex", "abstime"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_mutex_trylock",
+        LibraryNames {
+            params: &["mutex"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_mutex_unlock",
+        LibraryNames {
+            params: &["mutex"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_mutexattr_init",
+        LibraryNames {
+            params: &["attr"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_mutexattr_settype",
+        LibraryNames {
+            params: &["attr", "kind"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_rwlock_destroy",
+        LibraryNames {
+            params: &["rwlock"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_rwlock_init",
+        LibraryNames {
+            params: &["rwlock", "attr"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_rwlock_rdlock",
+        LibraryNames {
+            params: &["rwlock"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_rwlock_tryrdlock",
+        LibraryNames {
+            params: &["rwlock"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_rwlock_unlock",
+        LibraryNames {
+            params: &["rwlock"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_rwlock_wrlock",
+        LibraryNames {
+            params: &["rwlock"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_rwlockattr_init",
+        LibraryNames {
+            params: &["attr"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_rwlockattr_setkind_np",
+        LibraryNames {
+            params: &["attr", "pref"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_setcancelstate",
+        LibraryNames {
+            params: &["state", "oldstate"],
+            ret: None,
+        },
+    ),
+    (
+        "pthread_sigmask",
+        LibraryNames {
+            params: &["how", "newmask", "oldmask"],
+            ret: None,
+        },
+    ),
+    (
+        "ptrace",
+        LibraryNames {
+            params: &["request", "", "", ""],
+            ret: None,
+        },
+    ),
+    (
+        "putc",
+        LibraryNames {
+            params: &["c", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "putc_unlocked",
+        LibraryNames {
+            params: &["c", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "putchar",
+        LibraryNames {
+            params: &["c"],
+            ret: None,
+        },
+    ),
+    (
+        "putchar_unlocked",
+        LibraryNames {
+            params: &["c"],
+            ret: None,
+        },
+    ),
+    (
+        "putenv",
+        LibraryNames {
+            params: &["string"],
+            ret: None,
+        },
+    ),
+    (
+        "putgrent",
+        LibraryNames {
+            params: &["p", "f"],
+            ret: None,
+        },
+    ),
+    (
+        "putpwent",
+        LibraryNames {
+            params: &["p", "f"],
+            ret: None,
+        },
+    ),
+    (
+        "puts",
+        LibraryNames {
+            params: &["s"],
+            ret: None,
+        },
+    ),
+    (
+        "putspent",
+        LibraryNames {
+            params: &["p", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "pututline",
+        LibraryNames {
+            params: &["utmp_ptr"],
+            ret: None,
+        },
+    ),
+    (
+        "pututxline",
+        LibraryNames {
+            params: &["utmpx"],
+            ret: None,
+        },
+    ),
+    (
+        "raise",
+        LibraryNames {
+            params: &["sig"],
+            ret: None,
+        },
+    ),
+    (
+        "rawmemchr",
+        LibraryNames {
+            params: &["s", "c"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "re_compile_fastmap",
+        LibraryNames {
+            params: &["buffer"],
+            ret: None,
+        },
+    ),
+    (
+        "re_compile_pattern",
+        LibraryNames {
+            params: &["pattern", "length", "buffer"],
+            ret: None,
+        },
+    ),
+    (
+        "re_match",
+        LibraryNames {
+            params: &["buffer", "String", "length", "start", "regs"],
+            ret: None,
+        },
+    ),
+    (
+        "re_search",
+        LibraryNames {
+            params: &["buffer", "String", "length", "start", "range", "regs"],
+            ret: None,
+        },
+    ),
+    (
+        "read",
+        LibraryNames {
+            params: &["fd", "buf", "nbytes"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "readdir",
+        LibraryNames {
+            params: &["dirp"],
+            ret: Some("entry"),
+        },
+    ),
+    (
+        "readdir64",
+        LibraryNames {
+            params: &["dirp"],
+            ret: Some("entry"),
+        },
+    ),
+    (
+        "readlink",
+        LibraryNames {
+            params: &["path", "buf", "len"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "readlinkat",
+        LibraryNames {
+            params: &["fd", "path", "buf", "len"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "readv",
+        LibraryNames {
+            params: &["fd", "iovec", "count"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "realloc",
+        LibraryNames {
+            params: &["ptr", "size"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "reallocarray",
+        LibraryNames {
+            params: &["ptr", "nmemb", "size"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "realpath",
+        LibraryNames {
+            params: &["name", "resolved"],
+            ret: None,
+        },
+    ),
+    (
+        "recv",
+        LibraryNames {
+            params: &["fd", "buf", "n", "flags"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "recvmsg",
+        LibraryNames {
+            params: &["fd", "message", "flags"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "regcomp",
+        LibraryNames {
+            params: &["preg", "pattern", "cflags"],
+            ret: None,
+        },
+    ),
+    (
+        "regerror",
+        LibraryNames {
+            params: &["errcode", "preg", "errbuf", "errbuf_size"],
+            ret: None,
+        },
+    ),
+    (
+        "regexec",
+        LibraryNames {
+            params: &["preg", "String", "nmatch", "pmatch", "eflags"],
+            ret: None,
+        },
+    ),
+    (
+        "regfree",
+        LibraryNames {
+            params: &["preg"],
+            ret: None,
+        },
+    ),
+    (
+        "remove",
+        LibraryNames {
+            params: &["filename"],
+            ret: None,
+        },
+    ),
+    (
+        "removexattr",
+        LibraryNames {
+            params: &["path", "name"],
+            ret: None,
+        },
+    ),
+    (
+        "rename",
+        LibraryNames {
+            params: &["old", "new"],
+            ret: None,
+        },
+    ),
+    (
+        "renameat",
+        LibraryNames {
+            params: &["oldfd", "old", "newfd", "new"],
+            ret: None,
+        },
+    ),
+    (
+        "renameat2",
+        LibraryNames {
+            params: &["oldfd", "old", "newfd", "new", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "rewind",
+        LibraryNames {
+            params: &["stream"],
+            ret: None,
+        },
+    ),
+    (
+        "rewinddir",
+        LibraryNames {
+            params: &["dirp"],
+            ret: None,
+        },
+    ),
+    (
+        "rindex",
+        LibraryNames {
+            params: &["s", "c"],
+            ret: None,
+        },
+    ),
+    (
+        "rmdir",
+        LibraryNames {
+            params: &["path"],
+            ret: None,
+        },
+    ),
+    (
+        "rpmatch",
+        LibraryNames {
+            params: &["response"],
+            ret: None,
+        },
+    ),
+    (
+        "sbrk",
+        LibraryNames {
+            params: &["delta"],
+            ret: None,
+        },
+    ),
+    (
+        "scanf",
+        LibraryNames {
+            params: &["format"],
+            ret: None,
+        },
+    ),
+    (
+        "sched_getaffinity",
+        LibraryNames {
+            params: &["pid", "cpusetsize", "cpuset"],
+            ret: None,
+        },
+    ),
+    (
+        "secure_getenv",
+        LibraryNames {
+            params: &["name"],
+            ret: Some("value"),
+        },
+    ),
+    (
+        "seekdir",
+        LibraryNames {
+            params: &["dirp", "pos"],
+            ret: None,
+        },
+    ),
+    (
+        "select",
+        LibraryNames {
+            params: &["nfds", "readfds", "writefds", "exceptfds", "timeout"],
+            ret: None,
+        },
+    ),
+    (
+        "send",
+        LibraryNames {
+            params: &["fd", "buf", "n", "flags"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "sendmsg",
+        LibraryNames {
+            params: &["fd", "message", "flags"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "setbuf",
+        LibraryNames {
+            params: &["stream", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "setegid",
+        LibraryNames {
+            params: &["gid"],
+            ret: None,
+        },
+    ),
+    (
+        "setenv",
+        LibraryNames {
+            params: &["name", "value", "replace"],
+            ret: None,
+        },
+    ),
+    (
+        "seteuid",
+        LibraryNames {
+            params: &["uid"],
+            ret: None,
+        },
+    ),
+    (
+        "setgid",
+        LibraryNames {
+            params: &["gid"],
+            ret: None,
+        },
+    ),
+    (
+        "setgroups",
+        LibraryNames {
+            params: &["n", "groups"],
+            ret: None,
+        },
+    ),
+    (
+        "sethostent",
+        LibraryNames {
+            params: &["stay_open"],
+            ret: None,
+        },
+    ),
+    (
+        "setlocale",
+        LibraryNames {
+            params: &["category", "locale"],
+            ret: None,
+        },
+    ),
+    (
+        "setmntent",
+        LibraryNames {
+            params: &["file", "mode"],
+            ret: Some("fp"),
+        },
+    ),
+    (
+        "setns",
+        LibraryNames {
+            params: &["fd", "nstype"],
+            ret: None,
+        },
+    ),
+    (
+        "setpgid",
+        LibraryNames {
+            params: &["pid", "pgid"],
+            ret: None,
+        },
+    ),
+    (
+        "setregid",
+        LibraryNames {
+            params: &["rgid", "egid"],
+            ret: None,
+        },
+    ),
+    (
+        "setresgid",
+        LibraryNames {
+            params: &["rgid", "egid", "sgid"],
+            ret: None,
+        },
+    ),
+    (
+        "setresuid",
+        LibraryNames {
+            params: &["ruid", "euid", "suid"],
+            ret: None,
+        },
+    ),
+    (
+        "setreuid",
+        LibraryNames {
+            params: &["ruid", "euid"],
+            ret: None,
+        },
+    ),
+    (
+        "setservent",
+        LibraryNames {
+            params: &["stay_open"],
+            ret: None,
+        },
+    ),
+    (
+        "setsockopt",
+        LibraryNames {
+            params: &["fd", "level", "optname", "optval", "optlen"],
+            ret: None,
+        },
+    ),
+    (
+        "settimeofday",
+        LibraryNames {
+            params: &["tv", "tz"],
+            ret: None,
+        },
+    ),
+    (
+        "setuid",
+        LibraryNames {
+            params: &["uid"],
+            ret: None,
+        },
+    ),
+    (
+        "setvbuf",
+        LibraryNames {
+            params: &["stream", "buf", "modes", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "setxattr",
+        LibraryNames {
+            params: &["path", "name", "value", "size", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "sgetspent",
+        LibraryNames {
+            params: &["string"],
+            ret: None,
+        },
+    ),
+    (
+        "shutdown",
+        LibraryNames {
+            params: &["fd", "how"],
+            ret: None,
+        },
+    ),
+    (
+        "sigaction",
+        LibraryNames {
+            params: &["sig", "act", "oact"],
+            ret: None,
+        },
+    ),
+    (
+        "sigaddset",
+        LibraryNames {
+            params: &["set", "signo"],
+            ret: None,
+        },
+    ),
+    (
+        "sigaltstack",
+        LibraryNames {
+            params: &["ss", "oss"],
+            ret: None,
+        },
+    ),
+    (
+        "sigdelset",
+        LibraryNames {
+            params: &["set", "signo"],
+            ret: None,
+        },
+    ),
+    (
+        "sigemptyset",
+        LibraryNames {
+            params: &["set"],
+            ret: None,
+        },
+    ),
+    (
+        "sigfillset",
+        LibraryNames {
+            params: &["set"],
+            ret: None,
+        },
+    ),
+    (
+        "sigismember",
+        LibraryNames {
+            params: &["set", "signo"],
+            ret: None,
+        },
+    ),
+    (
+        "siglongjmp",
+        LibraryNames {
+            params: &["env", "val"],
+            ret: None,
+        },
+    ),
+    (
+        "sigpending",
+        LibraryNames {
+            params: &["set"],
+            ret: None,
+        },
+    ),
+    (
+        "sigprocmask",
+        LibraryNames {
+            params: &["how", "set", "oset"],
+            ret: None,
+        },
+    ),
+    (
+        "sigsetmask",
+        LibraryNames {
+            params: &["mask"],
+            ret: None,
+        },
+    ),
+    (
+        "sigsuspend",
+        LibraryNames {
+            params: &["set"],
+            ret: None,
+        },
+    ),
+    (
+        "sigwait",
+        LibraryNames {
+            params: &["set", "sig"],
+            ret: None,
+        },
+    ),
+    (
+        "sleep",
+        LibraryNames {
+            params: &["seconds"],
+            ret: None,
+        },
+    ),
+    (
+        "snprintf",
+        LibraryNames {
+            params: &["s", "maxlen", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "socket",
+        LibraryNames {
+            params: &["domain", "type", "protocol"],
+            ret: Some("fd"),
+        },
+    ),
+    (
+        "socketpair",
+        LibraryNames {
+            params: &["domain", "type", "protocol", "fds"],
+            ret: None,
+        },
+    ),
+    (
+        "splice",
+        LibraryNames {
+            params: &["fdin", "offin", "fdout", "offout", "len", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "sprintf",
+        LibraryNames {
+            params: &["s", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "sqrt",
+        LibraryNames {
+            params: &["x"],
+            ret: None,
+        },
+    ),
+    (
+        "srandom",
+        LibraryNames {
+            params: &["seed"],
+            ret: None,
+        },
+    ),
+    (
+        "sscanf",
+        LibraryNames {
+            params: &["s", "format"],
+            ret: None,
+        },
+    ),
+    (
+        "stat",
+        LibraryNames {
+            params: &["file", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "stat64",
+        LibraryNames {
+            params: &["file", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "statfs",
+        LibraryNames {
+            params: &["file", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "statvfs",
+        LibraryNames {
+            params: &["file", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "statvfs64",
+        LibraryNames {
+            params: &["file", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "statx",
+        LibraryNames {
+            params: &["dirfd", "path", "flags", "mask", "buf"],
+            ret: None,
+        },
+    ),
+    (
+        "stpcpy",
+        LibraryNames {
+            params: &["dest", "src"],
+            ret: None,
+        },
+    ),
+    (
+        "stpncpy",
+        LibraryNames {
+            params: &["dest", "src", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "strcasecmp",
+        LibraryNames {
+            params: &["s1", "s2"],
+            ret: None,
+        },
+    ),
+    (
+        "strcasestr",
+        LibraryNames {
+            params: &["haystack", "needle"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "strcat",
+        LibraryNames {
+            params: &["dest", "src"],
+            ret: None,
+        },
+    ),
+    (
+        "strchr",
+        LibraryNames {
+            params: &["s", "c"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "strchrnul",
+        LibraryNames {
+            params: &["s", "c"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "strcmp",
+        LibraryNames {
+            params: &["s1", "s2"],
+            ret: None,
+        },
+    ),
+    (
+        "strcoll",
+        LibraryNames {
+            params: &["s1", "s2"],
+            ret: None,
+        },
+    ),
+    (
+        "strcpy",
+        LibraryNames {
+            params: &["dest", "src"],
+            ret: None,
+        },
+    ),
+    (
+        "strcspn",
+        LibraryNames {
+            params: &["s", "reject"],
+            ret: None,
+        },
+    ),
+    (
+        "strdup",
+        LibraryNames {
+            params: &["s"],
+            ret: Some("copy"),
+        },
+    ),
+    (
+        "strerror",
+        LibraryNames {
+            params: &["errnum"],
+            ret: None,
+        },
+    ),
+    (
+        "strerror_r",
+        LibraryNames {
+            params: &["errnum", "buf", "buflen"],
+            ret: None,
+        },
+    ),
+    (
+        "strftime",
+        LibraryNames {
+            params: &["s", "maxsize", "format", "tp"],
+            ret: None,
+        },
+    ),
+    (
+        "strlen",
+        LibraryNames {
+            params: &["s"],
+            ret: Some("len"),
+        },
+    ),
+    (
+        "strncasecmp",
+        LibraryNames {
+            params: &["s1", "s2", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "strncat",
+        LibraryNames {
+            params: &["dest", "src", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "strncmp",
+        LibraryNames {
+            params: &["s1", "s2", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "strncpy",
+        LibraryNames {
+            params: &["dest", "src", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "strndup",
+        LibraryNames {
+            params: &["string", "n"],
+            ret: Some("copy"),
+        },
+    ),
+    (
+        "strnlen",
+        LibraryNames {
+            params: &["string", "maxlen"],
+            ret: Some("len"),
+        },
+    ),
+    (
+        "strpbrk",
+        LibraryNames {
+            params: &["s", "accept"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "strptime",
+        LibraryNames {
+            params: &["s", "fmt", "tp"],
+            ret: None,
+        },
+    ),
+    (
+        "strrchr",
+        LibraryNames {
+            params: &["s", "c"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "strsep",
+        LibraryNames {
+            params: &["stringp", "delim"],
+            ret: None,
+        },
+    ),
+    (
+        "strsignal",
+        LibraryNames {
+            params: &["sig"],
+            ret: None,
+        },
+    ),
+    (
+        "strspn",
+        LibraryNames {
+            params: &["s", "accept"],
+            ret: None,
+        },
+    ),
+    (
+        "strstr",
+        LibraryNames {
+            params: &["haystack", "needle"],
+            ret: Some("p"),
+        },
+    ),
+    (
+        "strtod",
+        LibraryNames {
+            params: &["nptr", "endptr"],
+            ret: None,
+        },
+    ),
+    (
+        "strtod_l",
+        LibraryNames {
+            params: &["nptr", "endptr", "loc"],
+            ret: None,
+        },
+    ),
+    (
+        "strtof",
+        LibraryNames {
+            params: &["nptr", "endptr"],
+            ret: None,
+        },
+    ),
+    (
+        "strtok",
+        LibraryNames {
+            params: &["s", "delim"],
+            ret: None,
+        },
+    ),
+    (
+        "strtok_r",
+        LibraryNames {
+            params: &["s", "delim", "save_ptr"],
+            ret: None,
+        },
+    ),
+    (
+        "strtol",
+        LibraryNames {
+            params: &["nptr", "endptr", "base"],
+            ret: None,
+        },
+    ),
+    (
+        "strtoul",
+        LibraryNames {
+            params: &["nptr", "endptr", "base"],
+            ret: None,
+        },
+    ),
+    (
+        "strverscmp",
+        LibraryNames {
+            params: &["s1", "s2"],
+            ret: None,
+        },
+    ),
+    (
+        "strxfrm",
+        LibraryNames {
+            params: &["dest", "src", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "symlink",
+        LibraryNames {
+            params: &["from", "to"],
+            ret: None,
+        },
+    ),
+    (
+        "symlinkat",
+        LibraryNames {
+            params: &["from", "tofd", "to"],
+            ret: None,
+        },
+    ),
+    (
+        "syncfs",
+        LibraryNames {
+            params: &["fd"],
+            ret: None,
+        },
+    ),
+    (
+        "syscall",
+        LibraryNames {
+            params: &["sysno"],
+            ret: None,
+        },
+    ),
+    (
+        "sysconf",
+        LibraryNames {
+            params: &["name"],
+            ret: None,
+        },
+    ),
+    (
+        "sysinfo",
+        LibraryNames {
+            params: &["info"],
+            ret: None,
+        },
+    ),
+    (
+        "syslog",
+        LibraryNames {
+            params: &["pri", "fmt"],
+            ret: None,
+        },
+    ),
+    (
+        "system",
+        LibraryNames {
+            params: &["command"],
+            ret: Some("status"),
+        },
+    ),
+    (
+        "tcflow",
+        LibraryNames {
+            params: &["fd", "action"],
+            ret: None,
+        },
+    ),
+    (
+        "tcflush",
+        LibraryNames {
+            params: &["fd", "queue_selector"],
+            ret: None,
+        },
+    ),
+    (
+        "tcgetattr",
+        LibraryNames {
+            params: &["fd", "termios_p"],
+            ret: None,
+        },
+    ),
+    (
+        "tcgetpgrp",
+        LibraryNames {
+            params: &["fd"],
+            ret: None,
+        },
+    ),
+    (
+        "tcsendbreak",
+        LibraryNames {
+            params: &["fd", "duration"],
+            ret: None,
+        },
+    ),
+    (
+        "tcsetattr",
+        LibraryNames {
+            params: &["fd", "optional_actions", "termios_p"],
+            ret: None,
+        },
+    ),
+    (
+        "tcsetpgrp",
+        LibraryNames {
+            params: &["fd", "pgrp_id"],
+            ret: None,
+        },
+    ),
+    (
+        "telldir",
+        LibraryNames {
+            params: &["dirp"],
+            ret: None,
+        },
+    ),
+    (
+        "textdomain",
+        LibraryNames {
+            params: &["domainname"],
+            ret: None,
+        },
+    ),
+    (
+        "timegm",
+        LibraryNames {
+            params: &["tp"],
+            ret: None,
+        },
+    ),
+    (
+        "timer_create",
+        LibraryNames {
+            params: &["clock_id", "evp", "timerid"],
+            ret: None,
+        },
+    ),
+    (
+        "tolower",
+        LibraryNames {
+            params: &["c"],
+            ret: None,
+        },
+    ),
+    (
+        "toupper",
+        LibraryNames {
+            params: &["c"],
+            ret: None,
+        },
+    ),
+    (
+        "towlower",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "towupper",
+        LibraryNames {
+            params: &["wc"],
+            ret: None,
+        },
+    ),
+    (
+        "ttyname",
+        LibraryNames {
+            params: &["fd"],
+            ret: None,
+        },
+    ),
+    (
+        "umask",
+        LibraryNames {
+            params: &["mask"],
+            ret: None,
+        },
+    ),
+    (
+        "uname",
+        LibraryNames {
+            params: &["name"],
+            ret: None,
+        },
+    ),
+    (
+        "ungetc",
+        LibraryNames {
+            params: &["c", "stream"],
+            ret: None,
+        },
+    ),
+    (
+        "unlink",
+        LibraryNames {
+            params: &["name"],
+            ret: None,
+        },
+    ),
+    (
+        "unlinkat",
+        LibraryNames {
+            params: &["fd", "name", "flag"],
+            ret: None,
+        },
+    ),
+    (
+        "unsetenv",
+        LibraryNames {
+            params: &["name"],
+            ret: None,
+        },
+    ),
+    (
+        "unshare",
+        LibraryNames {
+            params: &["flags"],
+            ret: None,
+        },
+    ),
+    (
+        "updwtmp",
+        LibraryNames {
+            params: &["wtmp_file", "utmp"],
+            ret: None,
+        },
+    ),
+    (
+        "usleep",
+        LibraryNames {
+            params: &["useconds"],
+            ret: None,
+        },
+    ),
+    (
+        "utime",
+        LibraryNames {
+            params: &["file", "file_times"],
+            ret: None,
+        },
+    ),
+    (
+        "utimensat",
+        LibraryNames {
+            params: &["fd", "path", "times", "flags"],
+            ret: None,
+        },
+    ),
+    (
+        "utimes",
+        LibraryNames {
+            params: &["file", "tvp"],
+            ret: None,
+        },
+    ),
+    (
+        "utmpname",
+        LibraryNames {
+            params: &["file"],
+            ret: None,
+        },
+    ),
+    (
+        "utmpxname",
+        LibraryNames {
+            params: &["file"],
+            ret: None,
+        },
+    ),
+    (
+        "vasprintf",
+        LibraryNames {
+            params: &["ptr", "f", "arg"],
+            ret: None,
+        },
+    ),
+    (
+        "verr",
+        LibraryNames {
+            params: &["status", "format", ""],
+            ret: None,
+        },
+    ),
+    (
+        "vfork",
+        LibraryNames {
+            params: &[],
+            ret: Some("pid"),
+        },
+    ),
+    (
+        "vfprintf",
+        LibraryNames {
+            params: &["s", "format", "arg"],
+            ret: None,
+        },
+    ),
+    (
+        "vprintf",
+        LibraryNames {
+            params: &["format", "arg"],
+            ret: None,
+        },
+    ),
+    (
+        "vsnprintf",
+        LibraryNames {
+            params: &["s", "maxlen", "format", "arg"],
+            ret: None,
+        },
+    ),
+    (
+        "vwarn",
+        LibraryNames {
+            params: &["format", ""],
+            ret: None,
+        },
+    ),
+    (
+        "wait",
+        LibraryNames {
+            params: &["stat_loc"],
+            ret: Some("pid"),
+        },
+    ),
+    (
+        "wait3",
+        LibraryNames {
+            params: &["stat_loc", "options", "usage"],
+            ret: Some("pid"),
+        },
+    ),
+    (
+        "waitpid",
+        LibraryNames {
+            params: &["pid", "stat_loc", "options"],
+            ret: Some("pid"),
+        },
+    ),
+    (
+        "warn",
+        LibraryNames {
+            params: &["format"],
+            ret: None,
+        },
+    ),
+    (
+        "warnx",
+        LibraryNames {
+            params: &["format"],
+            ret: None,
+        },
+    ),
+    (
+        "wcrtomb",
+        LibraryNames {
+            params: &["s", "wc", "ps"],
+            ret: None,
+        },
+    ),
+    (
+        "wcscmp",
+        LibraryNames {
+            params: &["s1", "s2"],
+            ret: None,
+        },
+    ),
+    (
+        "wcscoll",
+        LibraryNames {
+            params: &["s1", "s2"],
+            ret: None,
+        },
+    ),
+    (
+        "wcscspn",
+        LibraryNames {
+            params: &["wcs", "reject"],
+            ret: None,
+        },
+    ),
+    (
+        "wcsdup",
+        LibraryNames {
+            params: &["s"],
+            ret: None,
+        },
+    ),
+    (
+        "wcslen",
+        LibraryNames {
+            params: &["s"],
+            ret: Some("len"),
+        },
+    ),
+    (
+        "wcsncmp",
+        LibraryNames {
+            params: &["s1", "s2", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "wcsncpy",
+        LibraryNames {
+            params: &["dest", "src", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "wcsrtombs",
+        LibraryNames {
+            params: &["dst", "src", "len", "ps"],
+            ret: None,
+        },
+    ),
+    (
+        "wcsstr",
+        LibraryNames {
+            params: &["haystack", "needle"],
+            ret: None,
+        },
+    ),
+    (
+        "wcstol",
+        LibraryNames {
+            params: &["nptr", "endptr", "base"],
+            ret: None,
+        },
+    ),
+    (
+        "wcstombs",
+        LibraryNames {
+            params: &["s", "pwcs", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "wcswidth",
+        LibraryNames {
+            params: &["s", "n"],
+            ret: None,
+        },
+    ),
+    (
+        "wctob",
+        LibraryNames {
+            params: &["c"],
+            ret: None,
+        },
+    ),
+    (
+        "wcwidth",
+        LibraryNames {
+            params: &["c"],
+            ret: None,
+        },
+    ),
+    (
+        "write",
+        LibraryNames {
+            params: &["fd", "buf", "n"],
+            ret: Some("n"),
+        },
+    ),
+    (
+        "writev",
+        LibraryNames {
+            params: &["fd", "iovec", "count"],
+            ret: Some("n"),
+        },
+    ),
+];
+
+/// The Win32 entries ([`super::kuna_win32sigs::WIN32`]), sorted by function
+/// name.
+const WIN32_NAMES: &[(&str, LibraryNames)] = &[
+    (
+        "AcquireSRWLockExclusive",
+        LibraryNames {
+            params: &["SRWLock"],
+            ret: None,
+        },
+    ),
+    (
+        "CheckRemoteDebuggerPresent",
+        LibraryNames {
+            params: &["hProcess", "pbDebuggerPresent"],
+            ret: None,
+        },
+    ),
+    (
+        "CloseHandle",
+        LibraryNames {
+            params: &["hObject"],
+            ret: None,
+        },
+    ),
+    (
+        "CompareStringW",
+        LibraryNames {
+            params: &[
+                "Locale",
+                "dwCmpFlags",
+                "lpString1",
+                "cchCount1",
+                "lpString2",
+                "cchCount2",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "CreateFileW",
+        LibraryNames {
+            params: &[
+                "lpFileName",
+                "dwDesiredAccess",
+                "dwShareMode",
+                "lpSecurityAttributes",
+                "dwCreationDisposition",
+                "dwFlagsAndAttributes",
+                "hTemplateFile",
+            ],
+            ret: Some("hFile"),
+        },
+    ),
+    (
+        "CreateThread",
+        LibraryNames {
+            params: &[
+                "lpThreadAttributes",
+                "dwStackSize",
+                "lpStartAddress",
+                "lpParameter",
+                "dwCreationFlags",
+                "lpThreadId",
+            ],
+            ret: Some("hThread"),
+        },
+    ),
+    (
+        "CreateToolhelp32Snapshot",
+        LibraryNames {
+            params: &["dwFlags", "th32ProcessID"],
+            ret: Some("hSnapshot"),
+        },
+    ),
+    (
+        "CryptReleaseContext",
+        LibraryNames {
+            params: &["hProv", "dwFlags"],
+            ret: None,
+        },
+    ),
+    (
+        "DecodePointer",
+        LibraryNames {
+            params: &["Ptr"],
+            ret: None,
+        },
+    ),
+    (
+        "DeleteCriticalSection",
+        LibraryNames {
+            params: &["lpCriticalSection"],
+            ret: None,
+        },
+    ),
+    (
+        "DuplicateHandle",
+        LibraryNames {
+            params: &[
+                "hSourceProcessHandle",
+                "hSourceHandle",
+                "hTargetProcessHandle",
+                "lpTargetHandle",
+                "dwDesiredAccess",
+                "bInheritHandle",
+                "dwOptions",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "EncodePointer",
+        LibraryNames {
+            params: &["Ptr"],
+            ret: None,
+        },
+    ),
+    (
+        "EnterCriticalSection",
+        LibraryNames {
+            params: &["lpCriticalSection"],
+            ret: None,
+        },
+    ),
+    (
+        "EnumResourceNamesW",
+        LibraryNames {
+            params: &["hModule", "lpType", "lpEnumFunc", "lParam"],
+            ret: None,
+        },
+    ),
+    (
+        "EnumResourceTypesW",
+        LibraryNames {
+            params: &["hModule", "lpEnumFunc", "lParam"],
+            ret: None,
+        },
+    ),
+    (
+        "EnumSystemLocalesW",
+        LibraryNames {
+            params: &["lpLocaleEnumProc", "dwFlags"],
+            ret: None,
+        },
+    ),
+    (
+        "ExitProcess",
+        LibraryNames {
+            params: &["uExitCode"],
+            ret: None,
+        },
+    ),
+    (
+        "FindClose",
+        LibraryNames {
+            params: &["hFindFile"],
+            ret: None,
+        },
+    ),
+    (
+        "FindFirstFileExW",
+        LibraryNames {
+            params: &[
+                "lpFileName",
+                "fInfoLevelId",
+                "lpFindFileData",
+                "fSearchOp",
+                "lpSearchFilter",
+                "dwAdditionalFlags",
+            ],
+            ret: Some("hFindFile"),
+        },
+    ),
+    (
+        "FindNextFileW",
+        LibraryNames {
+            params: &["hFindFile", "lpFindFileData"],
+            ret: None,
+        },
+    ),
+    (
+        "FindResourceA",
+        LibraryNames {
+            params: &["hModule", "lpName", "lpType"],
+            ret: Some("hResInfo"),
+        },
+    ),
+    (
+        "FindResourceW",
+        LibraryNames {
+            params: &["hModule", "lpName", "lpType"],
+            ret: Some("hResInfo"),
+        },
+    ),
+    (
+        "FlsAlloc",
+        LibraryNames {
+            params: &["lpCallback"],
+            ret: Some("dwFlsIndex"),
+        },
+    ),
+    (
+        "FlsFree",
+        LibraryNames {
+            params: &["dwFlsIndex"],
+            ret: None,
+        },
+    ),
+    (
+        "FlsGetValue",
+        LibraryNames {
+            params: &["dwFlsIndex"],
+            ret: Some("lpFlsData"),
+        },
+    ),
+    (
+        "FlsSetValue",
+        LibraryNames {
+            params: &["dwFlsIndex", "lpFlsData"],
+            ret: None,
+        },
+    ),
+    (
+        "FlushFileBuffers",
+        LibraryNames {
+            params: &["hFile"],
+            ret: None,
+        },
+    ),
+    (
+        "FreeEnvironmentStringsA",
+        LibraryNames {
+            params: &["penv"],
+            ret: None,
+        },
+    ),
+    (
+        "FreeEnvironmentStringsW",
+        LibraryNames {
+            params: &["penv"],
+            ret: None,
+        },
+    ),
+    (
+        "FreeLibrary",
+        LibraryNames {
+            params: &["hLibModule"],
+            ret: None,
+        },
+    ),
+    (
+        "FreeResource",
+        LibraryNames {
+            params: &["hResData"],
+            ret: None,
+        },
+    ),
+    (
+        "GetACP",
+        LibraryNames {
+            params: &[],
+            ret: Some("CodePage"),
+        },
+    ),
+    (
+        "GetCPInfo",
+        LibraryNames {
+            params: &["CodePage", "lpCPInfo"],
+            ret: None,
+        },
+    ),
+    (
+        "GetConsoleMode",
+        LibraryNames {
+            params: &["hConsoleHandle", "lpMode"],
+            ret: None,
+        },
+    ),
+    (
+        "GetCurrentProcess",
+        LibraryNames {
+            params: &[],
+            ret: Some("hProcess"),
+        },
+    ),
+    (
+        "GetCurrentProcessId",
+        LibraryNames {
+            params: &[],
+            ret: Some("dwProcessId"),
+        },
+    ),
+    (
+        "GetCurrentThread",
+        LibraryNames {
+            params: &[],
+            ret: Some("hThread"),
+        },
+    ),
+    (
+        "GetCurrentThreadId",
+        LibraryNames {
+            params: &[],
+            ret: Some("dwThreadId"),
+        },
+    ),
+    (
+        "GetDC",
+        LibraryNames {
+            params: &["hWnd"],
+            ret: None,
+        },
+    ),
+    (
+        "GetEnvironmentStrings",
+        LibraryNames {
+            params: &[],
+            ret: Some("penv"),
+        },
+    ),
+    (
+        "GetEnvironmentStringsW",
+        LibraryNames {
+            params: &[],
+            ret: Some("penv"),
+        },
+    ),
+    (
+        "GetEnvironmentVariableW",
+        LibraryNames {
+            params: &["lpName", "lpBuffer", "nSize"],
+            ret: None,
+        },
+    ),
+    (
+        "GetExitCodeProcess",
+        LibraryNames {
+            params: &["hProcess", "lpExitCode"],
+            ret: None,
+        },
+    ),
+    (
+        "GetFileSizeEx",
+        LibraryNames {
+            params: &["hFile", "lpFileSize"],
+            ret: None,
+        },
+    ),
+    (
+        "GetFileType",
+        LibraryNames {
+            params: &["hFile"],
+            ret: None,
+        },
+    ),
+    (
+        "GetLastError",
+        LibraryNames {
+            params: &[],
+            ret: Some("dwErrCode"),
+        },
+    ),
+    (
+        "GetLocaleInfoW",
+        LibraryNames {
+            params: &["Locale", "LCType", "lpLCData", "cchData"],
+            ret: None,
+        },
+    ),
+    (
+        "GetModuleFileNameA",
+        LibraryNames {
+            params: &["hModule", "lpFilename", "nSize"],
+            ret: None,
+        },
+    ),
+    (
+        "GetModuleFileNameW",
+        LibraryNames {
+            params: &["hModule", "lpFilename", "nSize"],
+            ret: None,
+        },
+    ),
+    (
+        "GetModuleHandleA",
+        LibraryNames {
+            params: &["lpModuleName"],
+            ret: Some("hModule"),
+        },
+    ),
+    (
+        "GetModuleHandleExW",
+        LibraryNames {
+            params: &["dwFlags", "lpModuleName", "phModule"],
+            ret: None,
+        },
+    ),
+    (
+        "GetModuleHandleW",
+        LibraryNames {
+            params: &["lpModuleName"],
+            ret: Some("hModule"),
+        },
+    ),
+    (
+        "GetOEMCP",
+        LibraryNames {
+            params: &[],
+            ret: Some("CodePage"),
+        },
+    ),
+    (
+        "GetProcAddress",
+        LibraryNames {
+            params: &["hModule", "lpProcName"],
+            ret: None,
+        },
+    ),
+    (
+        "GetProcessHeap",
+        LibraryNames {
+            params: &[],
+            ret: Some("hHeap"),
+        },
+    ),
+    (
+        "GetStartupInfoA",
+        LibraryNames {
+            params: &["lpStartupInfo"],
+            ret: None,
+        },
+    ),
+    (
+        "GetStartupInfoW",
+        LibraryNames {
+            params: &["lpStartupInfo"],
+            ret: None,
+        },
+    ),
+    (
+        "GetStdHandle",
+        LibraryNames {
+            params: &["nStdHandle"],
+            ret: None,
+        },
+    ),
+    (
+        "GetStringTypeA",
+        LibraryNames {
+            params: &["Locale", "dwInfoType", "lpSrcStr", "cchSrc", "lpCharType"],
+            ret: None,
+        },
+    ),
+    (
+        "GetStringTypeW",
+        LibraryNames {
+            params: &["dwInfoType", "lpSrcStr", "cchSrc", "lpCharType"],
+            ret: None,
+        },
+    ),
+    (
+        "GetSystemTimeAsFileTime",
+        LibraryNames {
+            params: &["lpSystemTimeAsFileTime"],
+            ret: None,
+        },
+    ),
+    (
+        "GetThreadContext",
+        LibraryNames {
+            params: &["hThread", "lpContext"],
+            ret: None,
+        },
+    ),
+    (
+        "GetUserDefaultLCID",
+        LibraryNames {
+            params: &[],
+            ret: Some("Locale"),
+        },
+    ),
+    (
+        "HeapAlloc",
+        LibraryNames {
+            params: &["hHeap", "dwFlags", "dwBytes"],
+            ret: Some("lpMem"),
+        },
+    ),
+    (
+        "HeapCreate",
+        LibraryNames {
+            params: &["flOptions", "dwInitialSize", "dwMaximumSize"],
+            ret: Some("hHeap"),
+        },
+    ),
+    (
+        "HeapDestroy",
+        LibraryNames {
+            params: &["hHeap"],
+            ret: None,
+        },
+    ),
+    (
+        "HeapFree",
+        LibraryNames {
+            params: &["hHeap", "dwFlags", "lpMem"],
+            ret: None,
+        },
+    ),
+    (
+        "HeapReAlloc",
+        LibraryNames {
+            params: &["hHeap", "dwFlags", "lpMem", "dwBytes"],
+            ret: Some("lpMem"),
+        },
+    ),
+    (
+        "HeapSize",
+        LibraryNames {
+            params: &["hHeap", "dwFlags", "lpMem"],
+            ret: None,
+        },
+    ),
+    (
+        "InitializeCriticalSection",
+        LibraryNames {
+            params: &["lpCriticalSection"],
+            ret: None,
+        },
+    ),
+    (
+        "InitializeCriticalSectionAndSpinCount",
+        LibraryNames {
+            params: &["lpCriticalSection", "dwSpinCount"],
+            ret: None,
+        },
+    ),
+    (
+        "InitializeCriticalSectionEx",
+        LibraryNames {
+            params: &["lpCriticalSection", "dwSpinCount", "Flags"],
+            ret: None,
+        },
+    ),
+    (
+        "InitializeSListHead",
+        LibraryNames {
+            params: &["ListHead"],
+            ret: None,
+        },
+    ),
+    (
+        "IsProcessorFeaturePresent",
+        LibraryNames {
+            params: &["ProcessorFeature"],
+            ret: None,
+        },
+    ),
+    (
+        "IsValidCodePage",
+        LibraryNames {
+            params: &["CodePage"],
+            ret: None,
+        },
+    ),
+    (
+        "IsValidLocale",
+        LibraryNames {
+            params: &["Locale", "dwFlags"],
+            ret: None,
+        },
+    ),
+    (
+        "LCMapStringA",
+        LibraryNames {
+            params: &[
+                "Locale",
+                "dwMapFlags",
+                "lpSrcStr",
+                "cchSrc",
+                "lpDestStr",
+                "cchDest",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "LCMapStringW",
+        LibraryNames {
+            params: &[
+                "Locale",
+                "dwMapFlags",
+                "lpSrcStr",
+                "cchSrc",
+                "lpDestStr",
+                "cchDest",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "LeaveCriticalSection",
+        LibraryNames {
+            params: &["lpCriticalSection"],
+            ret: None,
+        },
+    ),
+    (
+        "LoadLibraryA",
+        LibraryNames {
+            params: &["lpLibFileName"],
+            ret: Some("hModule"),
+        },
+    ),
+    (
+        "LoadLibraryExA",
+        LibraryNames {
+            params: &["lpLibFileName", "hFile", "dwFlags"],
+            ret: Some("hModule"),
+        },
+    ),
+    (
+        "LoadLibraryExW",
+        LibraryNames {
+            params: &["lpLibFileName", "hFile", "dwFlags"],
+            ret: Some("hModule"),
+        },
+    ),
+    (
+        "LoadLibraryW",
+        LibraryNames {
+            params: &["lpLibFileName"],
+            ret: Some("hModule"),
+        },
+    ),
+    (
+        "LoadResource",
+        LibraryNames {
+            params: &["hModule", "hResInfo"],
+            ret: Some("hResData"),
+        },
+    ),
+    (
+        "LockResource",
+        LibraryNames {
+            params: &["hResData"],
+            ret: None,
+        },
+    ),
+    (
+        "MessageBoxA",
+        LibraryNames {
+            params: &["hWnd", "lpText", "lpCaption", "uType"],
+            ret: None,
+        },
+    ),
+    (
+        "MessageBoxW",
+        LibraryNames {
+            params: &["hWnd", "lpText", "lpCaption", "uType"],
+            ret: None,
+        },
+    ),
+    (
+        "MultiByteToWideChar",
+        LibraryNames {
+            params: &[
+                "CodePage",
+                "dwFlags",
+                "lpMultiByteStr",
+                "cbMultiByte",
+                "lpWideCharStr",
+                "cchWideChar",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "OpenProcess",
+        LibraryNames {
+            params: &["dwDesiredAccess", "bInheritHandle", "dwProcessId"],
+            ret: Some("hProcess"),
+        },
+    ),
+    (
+        "OutputDebugStringA",
+        LibraryNames {
+            params: &["lpOutputString"],
+            ret: None,
+        },
+    ),
+    (
+        "QueryPerformanceCounter",
+        LibraryNames {
+            params: &["lpPerformanceCount"],
+            ret: None,
+        },
+    ),
+    (
+        "QueryPerformanceFrequency",
+        LibraryNames {
+            params: &["lpFrequency"],
+            ret: None,
+        },
+    ),
+    (
+        "RaiseException",
+        LibraryNames {
+            params: &[
+                "dwExceptionCode",
+                "dwExceptionFlags",
+                "nNumberOfArguments",
+                "lpArguments",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "ReadConsoleW",
+        LibraryNames {
+            params: &[
+                "hConsoleInput",
+                "lpBuffer",
+                "nNumberOfCharsToRead",
+                "lpNumberOfCharsRead",
+                "lpReserved",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "ReadFile",
+        LibraryNames {
+            params: &[
+                "hFile",
+                "lpBuffer",
+                "nNumberOfBytesToRead",
+                "lpNumberOfBytesRead",
+                "lpOverlapped",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "ReleaseSRWLockExclusive",
+        LibraryNames {
+            params: &["SRWLock"],
+            ret: None,
+        },
+    ),
+    (
+        "ResumeThread",
+        LibraryNames {
+            params: &["hThread"],
+            ret: None,
+        },
+    ),
+    (
+        "SafeArrayAccessData",
+        LibraryNames {
+            params: &["psa", "ppvData"],
+            ret: None,
+        },
+    ),
+    (
+        "SafeArrayDestroy",
+        LibraryNames {
+            params: &["psa"],
+            ret: None,
+        },
+    ),
+    (
+        "SafeArrayUnaccessData",
+        LibraryNames {
+            params: &["psa"],
+            ret: None,
+        },
+    ),
+    (
+        "SetEnvironmentVariableW",
+        LibraryNames {
+            params: &["lpName", "lpValue"],
+            ret: None,
+        },
+    ),
+    (
+        "SetFilePointer",
+        LibraryNames {
+            params: &[
+                "hFile",
+                "lDistanceToMove",
+                "lpDistanceToMoveHigh",
+                "dwMoveMethod",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "SetLastError",
+        LibraryNames {
+            params: &["dwErrCode"],
+            ret: None,
+        },
+    ),
+    (
+        "SetStdHandle",
+        LibraryNames {
+            params: &["nStdHandle", "hHandle"],
+            ret: None,
+        },
+    ),
+    (
+        "SetThreadContext",
+        LibraryNames {
+            params: &["hThread", "lpContext"],
+            ret: None,
+        },
+    ),
+    (
+        "SetUnhandledExceptionFilter",
+        LibraryNames {
+            params: &["lpTopLevelExceptionFilter"],
+            ret: None,
+        },
+    ),
+    (
+        "SizeofResource",
+        LibraryNames {
+            params: &["hModule", "hResInfo"],
+            ret: None,
+        },
+    ),
+    (
+        "Sleep",
+        LibraryNames {
+            params: &["dwMilliseconds"],
+            ret: None,
+        },
+    ),
+    (
+        "SleepConditionVariableSRW",
+        LibraryNames {
+            params: &["ConditionVariable", "SRWLock", "dwMilliseconds", "Flags"],
+            ret: None,
+        },
+    ),
+    (
+        "SuspendThread",
+        LibraryNames {
+            params: &["hThread"],
+            ret: None,
+        },
+    ),
+    (
+        "SysAllocString",
+        LibraryNames {
+            params: &["psz"],
+            ret: Some("bstrString"),
+        },
+    ),
+    (
+        "SysAllocStringByteLen",
+        LibraryNames {
+            params: &["psz", "len"],
+            ret: Some("bstrString"),
+        },
+    ),
+    (
+        "SysAllocStringLen",
+        LibraryNames {
+            params: &["strIn", "ui"],
+            ret: Some("bstrString"),
+        },
+    ),
+    (
+        "SysFreeString",
+        LibraryNames {
+            params: &["bstrString"],
+            ret: None,
+        },
+    ),
+    (
+        "SysReAllocString",
+        LibraryNames {
+            params: &["pbstr", "psz"],
+            ret: None,
+        },
+    ),
+    (
+        "SysReAllocStringLen",
+        LibraryNames {
+            params: &["pbstr", "psz", "len"],
+            ret: None,
+        },
+    ),
+    (
+        "SysStringByteLen",
+        LibraryNames {
+            params: &["bstr"],
+            ret: None,
+        },
+    ),
+    (
+        "SysStringLen",
+        LibraryNames {
+            params: &["pbstr"],
+            ret: None,
+        },
+    ),
+    (
+        "TerminateProcess",
+        LibraryNames {
+            params: &["hProcess", "uExitCode"],
+            ret: None,
+        },
+    ),
+    (
+        "TerminateThread",
+        LibraryNames {
+            params: &["hThread", "dwExitCode"],
+            ret: None,
+        },
+    ),
+    (
+        "TlsAlloc",
+        LibraryNames {
+            params: &[],
+            ret: Some("dwTlsIndex"),
+        },
+    ),
+    (
+        "TlsFree",
+        LibraryNames {
+            params: &["dwTlsIndex"],
+            ret: None,
+        },
+    ),
+    (
+        "TlsGetValue",
+        LibraryNames {
+            params: &["dwTlsIndex"],
+            ret: Some("lpTlsValue"),
+        },
+    ),
+    (
+        "TlsSetValue",
+        LibraryNames {
+            params: &["dwTlsIndex", "lpTlsValue"],
+            ret: None,
+        },
+    ),
+    (
+        "UnhandledExceptionFilter",
+        LibraryNames {
+            params: &["ExceptionInfo"],
+            ret: None,
+        },
+    ),
+    (
+        "VariantClear",
+        LibraryNames {
+            params: &["pvarg"],
+            ret: None,
+        },
+    ),
+    (
+        "VariantCopy",
+        LibraryNames {
+            params: &["pvargDest", "pvargSrc"],
+            ret: None,
+        },
+    ),
+    (
+        "VariantInit",
+        LibraryNames {
+            params: &["pvarg"],
+            ret: None,
+        },
+    ),
+    (
+        "VirtualAlloc",
+        LibraryNames {
+            params: &["lpAddress", "dwSize", "flAllocationType", "flProtect"],
+            ret: Some("lpAddress"),
+        },
+    ),
+    (
+        "VirtualFree",
+        LibraryNames {
+            params: &["lpAddress", "dwSize", "dwFreeType"],
+            ret: None,
+        },
+    ),
+    (
+        "VirtualProtect",
+        LibraryNames {
+            params: &["lpAddress", "dwSize", "flNewProtect", "lpflOldProtect"],
+            ret: None,
+        },
+    ),
+    (
+        "VirtualQuery",
+        LibraryNames {
+            params: &["lpAddress", "lpBuffer", "dwLength"],
+            ret: None,
+        },
+    ),
+    (
+        "WSAGetLastError",
+        LibraryNames {
+            params: &[],
+            ret: Some("iError"),
+        },
+    ),
+    (
+        "WSASetLastError",
+        LibraryNames {
+            params: &["iError"],
+            ret: None,
+        },
+    ),
+    (
+        "WaitForSingleObject",
+        LibraryNames {
+            params: &["hHandle", "dwMilliseconds"],
+            ret: None,
+        },
+    ),
+    (
+        "WakeAllConditionVariable",
+        LibraryNames {
+            params: &["ConditionVariable"],
+            ret: None,
+        },
+    ),
+    (
+        "WideCharToMultiByte",
+        LibraryNames {
+            params: &[
+                "CodePage",
+                "dwFlags",
+                "lpWideCharStr",
+                "cchWideChar",
+                "lpMultiByteStr",
+                "cbMultiByte",
+                "lpDefaultChar",
+                "lpUsedDefaultChar",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "WriteConsoleW",
+        LibraryNames {
+            params: &[
+                "hConsoleOutput",
+                "lpBuffer",
+                "nNumberOfCharsToWrite",
+                "lpNumberOfCharsWritten",
+                "lpReserved",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "WriteFile",
+        LibraryNames {
+            params: &[
+                "hFile",
+                "lpBuffer",
+                "nNumberOfBytesToWrite",
+                "lpNumberOfBytesWritten",
+                "lpOverlapped",
+            ],
+            ret: None,
+        },
+    ),
+    (
+        "closesocket",
+        LibraryNames {
+            params: &["s"],
+            ret: None,
+        },
+    ),
+    (
+        "ioctlsocket",
+        LibraryNames {
+            params: &["s", "cmd", "argp"],
+            ret: None,
+        },
+    ),
+];
+
+/// The library names for the built-in signature `name`, if it has any.
+pub(super) fn library_names(name: &str) -> Option<&'static LibraryNames> {
+    [NAMES, WIN32_NAMES].into_iter().find_map(|table| {
+        table
+            .binary_search_by(|(n, _)| (*n).cmp(name))
+            .ok()
+            .map(|i| &table[i].1)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const C_KEYWORDS: &[&str] = &[
+        "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else",
+        "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register",
+        "restrict", "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef",
+        "union", "unsigned", "void", "volatile", "while",
+    ];
+
+    #[test]
+    fn sorted_and_unique() {
+        assert!(NAMES.windows(2).all(|w| w[0].0 < w[1].0));
+        assert!(WIN32_NAMES.windows(2).all(|w| w[0].0 < w[1].0));
+    }
+
+    #[test]
+    fn every_win32_entry_matches_its_signature_slot_for_slot() {
+        let win32 = super::super::kuna_win32sigs::WIN32;
+        for (name, names) in WIN32_NAMES {
+            let sig = win32.iter().find(|(n, _)| n == name).map(|(_, sig)| sig);
+            assert_eq!(
+                sig.map(|sig| sig.params.len()),
+                Some(names.params.len()),
+                "{name}"
+            );
+            assert!(
+                NAMES.binary_search_by(|(n, _)| n.cmp(name)).is_err(),
+                "{name} is in both tables"
+            );
+        }
+    }
+
+    #[test]
+    fn the_common_win32_calls_carry_their_sdk_names() {
+        let read = library_names("ReadFile").unwrap();
+        assert_eq!(
+            read.params,
+            [
+                "hFile",
+                "lpBuffer",
+                "nNumberOfBytesToRead",
+                "lpNumberOfBytesRead",
+                "lpOverlapped"
+            ]
+        );
+        assert_eq!(read.ret, None);
+        assert_eq!(library_names("CreateFileW").unwrap().ret, Some("hFile"));
+        assert_eq!(library_names("LoadLibraryW").unwrap().ret, Some("hModule"));
+        assert_eq!(
+            library_names("GetProcAddress").unwrap().params,
+            ["hModule", "lpProcName"]
+        );
+        assert_eq!(library_names("HeapAlloc").unwrap().ret, Some("lpMem"));
+        assert_eq!(
+            library_names("SysFreeString").unwrap().params,
+            ["bstrString"]
+        );
+    }
+
+    #[test]
+    fn every_entry_matches_a_signature_slot_for_slot() {
+        let _gate = super::super::kuna_libctypes::tests::ENV_LOCK
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let tables = super::super::LIBC
+            .iter()
+            .chain(super::super::kuna_libcsigs::LIBC_EXT.iter())
+            .chain(super::super::kuna_libctypes::LIBC_NAMED.iter())
+            .chain(super::super::kuna_libctypes::LIBC_EXT_NAMED.iter())
+            .chain(super::super::kuna_libctypes::LIBC_DEFINED_NAMED.iter())
+            .chain(super::super::kuna_libctypes::LIBC_IMPORTED_OBSTACK.iter());
+        let mut seen = 0;
+        for (name, sig) in tables {
+            if let Some(names) = library_names(name) {
+                assert_eq!(names.params.len(), sig.params.len(), "{name}");
+                seen += 1;
+            }
+        }
+        assert!(seen >= NAMES.len(), "an entry names no signature");
+        for (name, _) in NAMES {
+            assert!(
+                super::super::LIBC.iter().any(|(n, _)| n == name)
+                    || super::super::kuna_libcsigs::LIBC_EXT
+                        .iter()
+                        .any(|(n, _)| n == name)
+                    || super::super::kuna_libctypes::declared_named_prototype(name).is_some(),
+                "{name} has no signature"
+            );
+        }
+    }
+
+    #[test]
+    fn every_name_is_a_plain_c_identifier() {
+        for (function, names) in NAMES.iter().chain(WIN32_NAMES) {
+            for name in names
+                .params
+                .iter()
+                .chain(names.ret.iter())
+                .filter(|n| !n.is_empty())
+            {
+                assert!(
+                    name.chars().next().is_some_and(|c| c.is_ascii_alphabetic()),
+                    "{function}: {name}"
+                );
+                assert!(
+                    name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+                    "{function}: {name}"
+                );
+                assert!(!C_KEYWORDS.contains(name), "{function}: {name}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_common_calls_carry_their_header_names() {
+        let read = library_names("read").unwrap();
+        assert_eq!(read.params, ["fd", "buf", "nbytes"]);
+        assert_eq!(read.ret, Some("n"));
+        assert_eq!(library_names("open").unwrap().ret, Some("fd"));
+        assert_eq!(library_names("strlen").unwrap().ret, Some("len"));
+        assert_eq!(
+            library_names("__memcpy_chk").unwrap().params,
+            ["dest", "src", "n", ""]
+        );
+        assert_eq!(library_names("fcntl").map(|n| n.ret), Some(None));
+    }
+}

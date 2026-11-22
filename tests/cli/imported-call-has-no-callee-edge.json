@@ -2,11 +2,11 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_noreturn_import.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_noreturn_import.exe",
     "binary_sha256": "4a4117bd2058e31261f72500c8f1ad5d251d3e9f16947e14a4776d4b0c06f697",
     "binary_size": 6173,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_noreturn_import.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_noreturn_import.exe",
     "selector": "0x140005038",
     "selector_kind": "addr"
   },
@@ -41,5 +41,5 @@
       }
     ]
   },
-  "notes": "0x140005038 is the IAT slot for KERNEL32!ExitProcess, and both rows are a CALL qword ptr [0x140005038] -- the shape MSVC emits for every Win32 call. Before the fix both came back as `read`, which is not a call-graph edge, so `kuna decompile-graph` reported the imports as called by nothing (GH-456)."
+  "notes": "0x140005038 is the IAT slot for KERNEL32!ExitProcess, and both rows are a CALL qword ptr [0x140005038] -- the shape MSVC emits for every Win32 call. Before the fix both came back as `read`, which is not a call-graph edge, so `unlace decompile-graph` reported the imports as called by nothing (GH-456)."
 }

@@ -27,13 +27,13 @@ def canned():
                       "subphase": "s", "tier": "core", "summary": "sum", "symptoms": "sym"}],
     }
     code = {
-        "crates": [{"name": "kuna-decomp", "path": "decompiler/crates/kuna-decomp",
+        "crates": [{"name": "unlace-decomp", "path": "decompiler/crates/unlace-decomp",
                     "description": "core", "files": 2, "loc": 10, "deps": []}],
         "folders": {"p3_dataflow": {"files": 1, "loc": 7, "modules": [
             {"file": "heritage.rs", "loc": 7, "native": False}]}},
     }
-    owners = {"kuna-decomp": {"p3_dataflow": "docs/spec/03-ssa-and-simplification.md",
-                              "*": "docs/spec/00-overview.md"}, "kuna-analysis": {}}
+    owners = {"unlace-decomp": {"p3_dataflow": "docs/spec/03-ssa-and-simplification.md",
+                              "*": "docs/spec/00-overview.md"}, "unlace-analysis": {}}
     sched = {"source": "s", "note": "n", "legend": {}, "passes": [], "unmapped": []}
     meta = {"sha": "0" * 40, "generated": "2026-10-17T00:00:00Z"}
     return doc, reg, code, owners, sched, meta

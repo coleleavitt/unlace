@@ -46,11 +46,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_odd_imp",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp",
     "binary_sha256": "254ed9afc05e4c4913b325058e436fc4ecbfa15ca950777a83ff064cc87753c2",
     "binary_size": 16728,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_odd_imp",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp",
     "selector": "-[Greeter greet:]",
     "selector_kind": "name"
   },

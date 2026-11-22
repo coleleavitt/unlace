@@ -82,9 +82,9 @@ benchmark at all.
 
 - **`catalog-upstream-options`** (P0, feature-candidate,
   `triage/audit-uncatalogued-options.md`). Round 1 filed `readonly` as a one-off; it is a
-  family. **All 38 upstream-inherited `ArchOption`s are absent from `kuna catalog`** — 38
+  family. **All 38 upstream-inherited `ArchOption`s are absent from `unlace catalog`** — 38
   of the 121 real options the audit counted — and at least 8 of them measurably change
-  emitted C via `--option` on today's build. `kuna catalog --check` is green because it
+  emitted C via `--option` on today's build. `unlace catalog --check` is green because it
   enforces bidirectional equality between the catalog and `KUNA_OPTION_NAMES`; the
   contract simply does not cover the other half. They are therefore invisible to any agent
   sweeping options by symptom, which is the failure that matters most here: **the LLM

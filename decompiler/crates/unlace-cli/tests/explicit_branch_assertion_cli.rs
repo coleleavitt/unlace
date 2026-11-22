@@ -1,0 +1,165 @@
+//! End-to-end precedence coverage for an explicit intraprocedural flow assertion
+//! at a branch that also targets a discovered function entry, and for the near
+//! misses that must keep tail-call recovery: a refused `branch` fact, and an
+//! applied one at a different instruction of the same function.
+//!
+//! `sub_401090` carries both near misses: `call 0x44a000` at `0x40109a` enters
+//! a return-address-discarding fragment that re-enters the function, and the
+//! `jmp 0x407b20` at `0x401148` is a tail call to a function the same body also
+//! calls directly.
+
+use std::path::PathBuf;
+use std::process::Command;
+
+const NEAR_MISS_ENTRY: &str = "0x401090";
+const NEAR_MISS_TAIL_CALL: &str = "sub_407b20((void *)(dat_40f068 + 0x138)); // tail-call";
+
+struct Run {
+    success: bool,
+    doc: String,
+    code: String,
+}
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
+}
+
+fn fixture() -> String {
+    repo_root()
+        .join(
+            "decompiler/crates/unlace-analysis/tests/fixtures/\
+explicit_branch_assertion_pe_i386.exe",
+        )
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// A refused assertion exits nonzero but still prints the function, so return
+/// its exit status for the caller to check.
+fn decompile_at(entry: &str, extra: &[&str]) -> Run {
+    let binary = fixture();
+    let sleigh = repo_root().join("specs").to_string_lossy().into_owned();
+    let mut args = vec![
+        "decompile",
+        &binary,
+        entry,
+        "--addr",
+        "--sleighpath",
+        &sleigh,
+        "--json",
+    ];
+    args.extend_from_slice(extra);
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(args)
+        .output()
+        .expect("spawn kuna");
+    let doc = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    let parsed: serde_json::Value = serde_json::from_str(&doc).expect("valid decompile JSON");
+    let code = parsed
+        .pointer("/functions/0/code")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_else(|| panic!("JSON result has no function code: {stderr}\n{doc}"))
+        .to_string();
+    Run {
+        success: out.status.success(),
+        doc,
+        code,
+    }
+}
+
+fn decompile(extra: &[&str]) -> (String, String) {
+    let run = decompile_at("0x40d120", extra);
+    assert!(run.success, "unlace decompile failed:\n{}", run.doc);
+    (run.doc, run.code)
+}
+
+fn assert_full_body(code: &str) {
+    assert!(
+        !code.contains("// tail-call"),
+        "assertion became a tail call:\n{code}"
+    );
+    assert!(
+        code.contains("0x40d12b"),
+        "overlapping return site is absent:\n{code}"
+    );
+    assert!(
+        code.contains("sub_40d21e()"),
+        "downstream body is absent:\n{code}"
+    );
+}
+
+#[test]
+fn explicit_branch_owns_precedence_over_tail_call_inference() {
+    let (doc, code) = decompile(&["--assert", "flow 0x40d126 branch"]);
+    assert_full_body(&code);
+    assert!(
+        doc.contains("\"status\": \"applied\""),
+        "assertion was not applied:\n{doc}"
+    );
+}
+
+#[test]
+fn disabling_tailcalljump_is_an_equivalent_control() {
+    let (_, precedence) = decompile(&["--assert", "flow 0x40d126 branch"]);
+    let (_, option_off) = decompile(&[
+        "--assert",
+        "flow 0x40d126 branch",
+        "--option",
+        "tailcalljump",
+        "off",
+    ]);
+    assert_eq!(precedence, option_off);
+}
+
+#[test]
+fn no_assertion_control_stays_a_full_body() {
+    let (_, default) = decompile(&[]);
+    assert_full_body(&default);
+}
+
+#[test]
+fn applied_branch_at_another_instruction_keeps_tail_call_recovery() {
+    let control = decompile_at(NEAR_MISS_ENTRY, &[]);
+    assert!(control.success, "unlace decompile failed:\n{}", control.doc);
+    assert!(
+        control.code.contains(NEAR_MISS_TAIL_CALL),
+        "the control no longer recovers the tail call at 0x401148:\n{}",
+        control.code
+    );
+    let run = decompile_at(NEAR_MISS_ENTRY, &["--assert", "flow 0x40109a branch"]);
+    assert!(run.success, "unlace decompile failed:\n{}", run.doc);
+    assert!(
+        run.doc.contains("\"status\": \"applied\""),
+        "assertion was not applied:\n{}",
+        run.doc
+    );
+    assert!(
+        run.code.contains(NEAR_MISS_TAIL_CALL),
+        "a branch assertion at 0x40109a suppressed the tail call at 0x401148:\n{}",
+        run.code
+    );
+}
+
+#[test]
+fn refused_branch_fact_keeps_tail_call_recovery() {
+    let run = decompile_at(NEAR_MISS_ENTRY, &["--assert", "flow 0x401148 branch"]);
+    assert!(
+        !run.success,
+        "a refused assertion must fail the command:\n{}",
+        run.doc
+    );
+    assert!(
+        run.doc.contains("\"status\": \"rejected\""),
+        "a branch fact on a jmp must be refused:\n{}",
+        run.doc
+    );
+    assert!(
+        run.code.contains(NEAR_MISS_TAIL_CALL),
+        "a refused branch fact suppressed the tail call at 0x401148:\n{}",
+        run.code
+    );
+}

@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli]
+touches: [decompiler/crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -121,5 +121,5 @@ _not yet refuted_
 
 - filed by cluster.py from 1 observation(s)
 - round 2 T_DEDUP (captain): second instance of the 'kuna will not tell me about data' family; see [cli-mode-read-raw] for why the two were not merged into one record.
-- round 2 T_TRIAGE (captain): track tooling / touches kuna-cli / scope small / severity minor CONFIRMED. The defect is silence, not the decode: kuna exited 0 and presented .rdata bytes as SBB/POP/PUSH/JNC with nothing saying the range is non-executable. A warning (or a refusal behind a flag) is a bounded CLI change. See cli-mode-read-raw -- a data view would answer both.
+- round 2 T_TRIAGE (captain): track tooling / touches unlace-cli / scope small / severity minor CONFIRMED. The defect is silence, not the decode: kuna exited 0 and presented .rdata bytes as SBB/POP/PUSH/JNC with nothing saying the range is non-executable. A warning (or a refusal behind a flag) is a bounded CLI change. See cli-mode-read-raw -- a data view would answer both.
 - closed: acceptance a-c42440103c7d now PASSES at 3ae69cbcec70

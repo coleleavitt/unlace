@@ -14,7 +14,7 @@ rounds: [9, 12]
 first_seen_round: 9
 attempts: 1
 covered_by_option: entryretdispatch
-touches: [decompiler/crates/kuna-console, decompiler/crates/kuna-cli, decompiler/crates/kuna-analysis]
+touches: [decompiler/crates/unlace-console, decompiler/crates/unlace-cli, decompiler/crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: 595
@@ -88,11 +88,11 @@ See the transfer to LoadLibraryA, or a warning that stack-directed control flow 
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/entry_ret_dispatch_i386",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/entry_ret_dispatch_i386",
     "binary_sha256": "d56c357fef6d4fcd03aa96a20fd5adb4bf3635a803f0cfa91779f3428492f7b6",
     "binary_size": 9284,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/entry_ret_dispatch_i386",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/entry_ret_dispatch_i386",
     "selector": "entry_dispatch",
     "selector_kind": "name"
   },
@@ -132,7 +132,7 @@ Nothing in the 164-row catalog moves this: there is no push-ret / stack-directed
 
 THE DECISIVE POINT: the RET's popped destination is dword ptr [0x4010fe], an IAT slot, and kuna RESOLVES IT TO LoadLibraryA the instant the RET is reinterpreted as a transfer (run A). Same binary, same dataflow, same pass order -- only the RETURN interpretation differs. So the destination is computable at the point where it is thrown away; it is not a missing-analysis problem, it is that nothing ever asks whether a RETURN's popped value is a resolvable constant rather than the incoming frame's return address. Feeding stores then die as ordinary dead stack writes, which is why the body empties instead of degrading.
 
-Disassembly confirmed byte-for-byte (kuna disassemble 0x40175f): 68 1e 15 40 00 PUSH 0x40151e / 68 70 17 40 00 PUSH 0x401770 / ff 35 fe 10 40 00 PUSH [0x4010fe] / c3 RET. Stack at the RET is target=[0x4010fe], return-addr=0x401770, arg=0x40151e -- and run A picks the argument up correctly, which is further evidence the frame is understood. Note 0x401757 is the PE ENTRY POINT, and functions[0].size is 105 bytes: the whole entry stub renders as one empty return.
+Disassembly confirmed byte-for-byte (unlace disassemble 0x40175f): 68 1e 15 40 00 PUSH 0x40151e / 68 70 17 40 00 PUSH 0x401770 / ff 35 fe 10 40 00 PUSH [0x4010fe] / c3 RET. Stack at the RET is target=[0x4010fe], return-addr=0x401770, arg=0x40151e -- and run A picks the argument up correctly, which is further evidence the frame is understood. Note 0x401757 is the PE ENTRY POINT, and functions[0].size is 105 bytes: the whole entry stub renders as one empty return.
 
 TWO THINGS THE BUILDER MUST NOT DO -- both pass the acceptance as written (stdout_absent '\{\s*return;\s*\}', absence-only, same trap as beria-call-fragments-produce):
  (1) 'Preserve the feeding stores' READ LITERALLY. Suppressing dead-store elimination on the pre-RETURN stack writes yields a non-empty body of raw *(esp-N) = 0x... garbage with no transfer recovered. Acceptance goes green, output gets worse.
@@ -142,7 +142,7 @@ ACCEPTANCE REWRITE REQUIRED BEFORE DISPATCH: replace the absence clause with a p
 SIBLING COUPLING -- THIS IS THE DISPATCH CONSTRAINT. flow-call-override-retain (20.79 blocker, same challenge 5ab77f5c, UPHELD last tick, currently in flight as builder b-r9-flow-call-overri) is precisely 'the override cannot retain the pushed continuation'. Run A above is that need's bug seen from this need's side: recovering the transfer here yields a truncated body until the continuation is retained. Do NOT dispatch entry-point-ret-dispatch as an independent builder. Either hold it until flow-call-override-retain merges and re-measure, or bind them onto one builder via the sibling cluster: lease.
 
 FIX-DIRECTION RISK for the eventual builder: a blanket 'RET with a computed destination is a transfer' rule is the wrong generalization -- gate it on the popped value provably originating from an in-function store/load rather than the incoming return-address slot, or unbalanced-stack functions (cf. RAX-preserving stack probe, int29) start losing genuine returns.
-- round 9 TRIAGE: acceptance rewritten AND the sibling-coupling block LIFTED -- re-measured this tick against a post-#504 binary on the r9 arena bm3.exe. (i) The default at 0x401757 is UNCHANGED by #504: still `void sub_401757(void) { return; }`, so the need is live and is the no-override half of the same idiom. (ii) Run A (`--assert 'flow 0x40176f call'`) is TRANSFORMED by #504: where it used to emit the single truncated line `LoadLibraryA(s_40151e);`, it now recovers the whole 105-byte entry stub -- LoadLibraryA, GetProcAddress, MessageBoxA, ExitProcess, GetModuleHandleA, VirtualProtect, CreateFileA, VirtualAlloc, SetFilePointer -- with the pushed continuation at 0x401770 retained (`v15 = s_40152b;`). The refuter's second forbidden shape ("internally applying run A drops ~50 bytes of real body") no longer exists, so this need may now be dispatched as an independent builder. (iii) Acceptance: the absence-only clause is kept but joined by stdout_matches `LoadLibraryA` and `GetProcAddress` -- both 0 hits in today's output, both present in run A, and the second one can only come from the retained continuation, so neither forbidden shape passes. touches gains kuna-console: #504's chain walk (kuna-console/src/kuna_retcallchain.rs) is the code this extends. The fix-direction risk stands: gate on the popped value originating from an in-function store, not on RET-with-a-computed-destination.
+- round 9 TRIAGE: acceptance rewritten AND the sibling-coupling block LIFTED -- re-measured this tick against a post-#504 binary on the r9 arena bm3.exe. (i) The default at 0x401757 is UNCHANGED by #504: still `void sub_401757(void) { return; }`, so the need is live and is the no-override half of the same idiom. (ii) Run A (`--assert 'flow 0x40176f call'`) is TRANSFORMED by #504: where it used to emit the single truncated line `LoadLibraryA(s_40151e);`, it now recovers the whole 105-byte entry stub -- LoadLibraryA, GetProcAddress, MessageBoxA, ExitProcess, GetModuleHandleA, VirtualProtect, CreateFileA, VirtualAlloc, SetFilePointer -- with the pushed continuation at 0x401770 retained (`v15 = s_40152b;`). The refuter's second forbidden shape ("internally applying run A drops ~50 bytes of real body") no longer exists, so this need may now be dispatched as an independent builder. (iii) Acceptance: the absence-only clause is kept but joined by stdout_matches `LoadLibraryA` and `GetProcAddress` -- both 0 hits in today's output, both present in run A, and the second one can only come from the retained continuation, so neither forbidden shape passes. touches gains unlace-console: #504's chain walk (unlace-console/src/kuna_retcallchain.rs) is the code this extends. The fix-direction risk stands: gate on the popped value originating from an in-function store, not on RET-with-a-computed-destination.
 
 ### 2026-09-08T06:05Z — captain, round 9 B_DRAIN: acceptance target bound
 

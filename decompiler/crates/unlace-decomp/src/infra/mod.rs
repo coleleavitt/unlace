@@ -1,0 +1,23 @@
+//! Infra -- Orchestration, scheduling & framework.
+//!
+//! Stage-aligned module group; declared flatly at the crate root via re-export in
+//! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
+
+pub mod action;
+pub mod actionprof;
+pub mod analyzesigs;
+pub mod architecture;
+pub mod callgraph;
+pub mod capability;
+pub mod cpool;
+pub mod decompile_drive;
+pub mod engine_translate;
+pub mod graph;
+pub mod idiom;
+pub mod kuna_decodekit;
+pub mod kuna_fasthash;
+pub mod libdecomp;
+pub mod paramid;
+pub mod remote_provider;
+pub mod signature;
+pub mod universalaction;

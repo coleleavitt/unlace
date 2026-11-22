@@ -87,8 +87,8 @@ fn a_stub_island_is_followed_to_its_function() {
     let (stdout, stderr, rc) = kuna("xrefs", &["--to", "0x180008800", "--image", "libcaller"]);
     assert_eq!(rc, 0, "{stderr}");
     assert!(
-        stdout.contains("1 reference to callee_add @ 0x180008800"),
-        "the island is what the call names: {stdout}"
+        stdout.contains("1 reference to callee_entry @ 0x180008800"),
+        "the island is the import the call names (`exporttrie`): {stdout}"
     );
     assert!(!stderr.contains("[kuna]"), "{stderr}");
 }

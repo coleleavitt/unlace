@@ -17,7 +17,8 @@ use crate::loader::format::macho::{resolve_chained_fixups, resolve_dyld_info_bin
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// `(slot, import name)` for every bound slot the indirect-symbol table does
-/// not already name, leading underscore stripped, sorted by slot.
+/// not already name (as a callable import or a `machodataslots` data import),
+/// leading underscore stripped, sorted by slot.
 pub(crate) fn bound_slots(file: &object::File, bytes: &[u8]) -> Vec<(u64, String)> {
     if file.format() != object::BinaryFormat::MachO {
         return Vec::new();
@@ -34,6 +35,11 @@ pub(crate) fn bound_slots(file: &object::File, bytes: &[u8]) -> Vec<(u64, String
         super::macho_stubs::resolve_macho_imports(file, bytes)
             .into_iter()
             .map(|i| i.addr)
+            .chain(
+                super::macho_stubs::resolve_macho_data_import_slots(file, bytes)
+                    .into_iter()
+                    .map(|(slot, _)| slot),
+            )
             .collect();
     let chained = resolve_chained_fixups(file, bytes);
     let classic = resolve_dyld_info_bind_slots(file, bytes);

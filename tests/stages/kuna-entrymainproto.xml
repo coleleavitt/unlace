@@ -3,7 +3,7 @@
 <!--
     kuna issue testcase: the PE CRT entry-function prototype.
 
-    Issue:      kuna-analysis-entrymainproto - `kuna decompile` on
+    Issue:      unlace-analysis-entrymainproto - `kuna decompile` on
                 crackmes.one/65acadf3eef082e477ff5ede (ObfuscationFiesta.exe,
                 PE32+ x86-64, stripped) renders `void sub_140002530(void)`
                 while kuna's own decompilation of sub_14000518c renders
@@ -21,7 +21,7 @@
 
     The end-to-end proof (the argc/argv/envp slots) needs a real PE and lives
     in the cargo gate
-    `decompiler/crates/kuna-console/tests/verify_entrymainproto.rs`, over the
+    `decompiler/crates/unlace-console/tests/verify_entrymainproto.rs`, over the
     `crtmain_x86_64.exe` fixture: a minimal PE32+ whose startup fetches the
     three arguments through the named UCRT accessors and whose main ignores
     them.

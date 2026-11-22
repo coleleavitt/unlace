@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/armpoolgrid_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/armpoolgrid_le32",
     "binary_sha256": "adf35b9f8ff09e5fc5743ce2dd90939122705b94c712331a8ad69816b33693be",
     "binary_size": 269,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/armpoolgrid_le32",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/armpoolgrid_le32",
     "selector": "0x10000",
     "selector_kind": "addr"
   },

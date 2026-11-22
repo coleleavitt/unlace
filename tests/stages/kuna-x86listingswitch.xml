@@ -11,7 +11,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/x86listingswitch_i386</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/x86listingswitch_i386</com>
   <com>mode aggressive</com>
   <com>option fast_funcdisc off</com>
   <com>option listing on</com>
@@ -22,7 +22,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/x86listingswitch_i386</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/x86listingswitch_i386</com>
   <com>mode aggressive</com>
   <com>option fast_funcdisc off</com>
   <com>option listing on</com>

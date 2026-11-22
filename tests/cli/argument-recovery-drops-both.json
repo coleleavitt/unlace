@@ -10,11 +10,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/zeroidiomuse_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/zeroidiomuse_x86_64",
     "binary_sha256": "fb9454dd959782a03674fbd5833ec548b0410b76c1211d82919289af475912bf",
     "binary_size": 8928,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/zeroidiomuse_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/zeroidiomuse_x86_64",
     "selector": "feed",
     "selector_kind": "name"
   },

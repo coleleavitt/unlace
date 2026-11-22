@@ -17,11 +17,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/elfmainnamed_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/elfmainnamed_x86_64",
     "binary_sha256": "23dc9dea791cc6afe9073ef17a4954df7aaa01f743b7a8e04134d0a8f8e462b4",
     "binary_size": 16104,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/elfmainnamed_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/elfmainnamed_x86_64",
     "selector": "0x1080",
     "selector_kind": "addr"
   },

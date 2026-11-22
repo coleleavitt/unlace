@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli, decompiler/crates/kuna-analysis, decompiler/crates/kuna-sleigh]
+touches: [decompiler/crates/unlace-cli, decompiler/crates/unlace-analysis, decompiler/crates/unlace-sleigh]
 scope: small
 regression_of: null
 pr: null
@@ -119,7 +119,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 2 T_TRIAGE (captain): touches [] -> kuna-cli; track perf, scope small, severity minor CONFIRMED. The friction is per-query cold load (4.1s x N queries), so the cheapest real fix is a CLI batch mode (several --to in one invocation) rather than making the load faster -- which is why the edit surface is kuna-cli though the track is perf. Neither track holds counter leases, so the label costs nothing either way.
+- round 2 T_TRIAGE (captain): touches [] -> unlace-cli; track perf, scope small, severity minor CONFIRMED. The friction is per-query cold load (4.1s x N queries), so the cheapest real fix is a CLI batch mode (several --to in one invocation) rather than making the load faster -- which is why the edit surface is unlace-cli though the track is perf. Neither track holds counter leases, so the label costs nothing either way.
 - round 2 wave 9 ATTEMPT 1 (builder `b-r2-cold-load-xref-l`, ended `failed` by its own honest report,
   rc=0, $28.24, 197 turns) -- **the work exists and is not lost**: local branch
   `feat/re-cold-load-xref-lookup`, 2 commits (`bcbad0a9` one-decode xrefs, `873d9e8c` name the
@@ -162,8 +162,8 @@ _not yet refuted_
   further real cut, not a re-measurement. **The probe is not relaxed** — same standing rule as
   `decompiling-3396-byte-main`. If attempt 2 lands a correct, gated -70% that still misses 1000 ms,
   that is a merged PR and an open need, exactly like #380.
-- round 2 B_PLAN (captain): `touches` widened from `[kuna-cli]` to `[kuna-cli, kuna-analysis,
-  kuna-sleigh]` to match what attempt 1's diff actually edits (`listing/xrefs.rs`,
+- round 2 B_PLAN (captain): `touches` widened from `[unlace-cli]` to `[unlace-cli, unlace-analysis,
+  unlace-sleigh]` to match what attempt 1's diff actually edits (`listing/xrefs.rs`,
   `listing/kuna_picbase.rs`, `sleigh.rs`). No new resource lease results — `perf` is not in
   `TRACK_RESOURCES` and none of those paths map to a counter — so this only makes the siblings'
   contracts file honest.

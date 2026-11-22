@@ -1,0 +1,137 @@
+//! End-to-end gate for the DWARF **C++ prototype** arm.
+//!
+//! The bug: `DwarfPass` keyed every recovery off a subprogram DIE's own
+//! `DW_AT_name`. C++ splits a definition from its declaration — an out-of-line
+//! member or namespace definition is emitted with only `DW_AT_specification`, and
+//! a concrete out-of-line instance of an inlined function with only
+//! `DW_AT_abstract_origin` — so those DIEs carry no name and were dropped whole,
+//! taking the typed signature and the named stack locals with them. On top of
+//! that the prototype was parked by NAME in the global scope while it is read
+//! back by ADDRESS, which C++ breaks twice over (a demangled template name is
+//! normalized to `maxof`; a qualified name lives in a nested scope).
+//!
+//! The fixture `cppproto_x86_64` (source vendored alongside) is a `-g` C++ binary
+//! whose every interesting function exercises one of those shapes; before the
+//! arm they rendered `a0`/`a1` parameters and `void *` for a class pointer.
+
+use std::path::PathBuf;
+
+use unlace_console::engine::bootstrap_from_object;
+use unlace_console::ifacedecomp::{execute, register_decomp_commands, IfaceDecompData, DECOMPILE_MODULE};
+use unlace_console::ifaceterm::ConsoleCommands;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+}
+
+/// Bootstrap the C++ fixture, commit the DWARF facts, decompile `func` and return
+/// the captured C.
+fn decompile(func: &str) -> String {
+    let root = repo_root();
+    let specs = root.join("specs");
+    let spec_roots = vec![specs.to_str().unwrap().to_string()];
+
+    let path = root
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/cppproto_x86_64")
+        .to_str().expect("UTF-8 fixture path")
+        .to_string();
+    let mut prog = bootstrap_from_object(&path, "", &spec_roots)
+        .expect("bootstrap fixture with built processor specs");
+    // (kuna `cppsig`) The SIBLING recovery is turned off so this file measures the
+    // DWARF arm alone: `cppsig` reads the same shapes off the mangled symbol.
+    // Their interaction — DWARF wins where both reach a function — is asserted in
+    // `verify_cppsig.rs`.
+    prog.arch_mut().set_kuna_option("cppsig", "off").expect("cppsig is a registered option");
+    prog.commit_pending_analysis().expect("analysis commit succeeds");
+
+    let cmds: Vec<String> =
+        [format!("load function {func}"), "decompile".into(), "print C".into()].to_vec();
+    let count = cmds.len();
+    let mut status = ConsoleCommands::into_status(cmds);
+    register_decomp_commands(&mut status);
+    {
+        let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
+        let dcp = data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap();
+        dcp.conf = Some(prog);
+    }
+    for _ in 0..count {
+        execute(&mut status);
+    }
+    status.optr.clone()
+}
+
+/// The headline: an out-of-line member definition (`DW_AT_specification`, plus an
+/// artificial `this` typed by a `DW_TAG_class_type`).
+#[test]
+fn out_of_line_member_recovers_this_and_parameter_names() {
+    let on = decompile("Account::deposit");
+    assert!(
+        on.contains("Account::deposit(Account *this,int4 amount)"),
+        "gate on must recover `Account *this` + the DWARF parameter name, got:\n{on}"
+    );
+}
+
+/// A `const` member: `this` is `const Account *const`, a four-DIE qualifier chain
+/// that used to exceed the type mapper's depth budget and degrade to `void *`.
+#[test]
+fn const_member_this_survives_the_qualifier_chain() {
+    let on = decompile("Account::available");
+    assert!(
+        on.contains("Account::available(Account *this)"),
+        "a const method's `this` must still resolve to `Account *`, got:\n{on}"
+    );
+}
+
+/// A C++ REFERENCE parameter (`DW_TAG_reference_type`) maps to a pointer.
+#[test]
+fn reference_parameter_maps_to_a_pointer() {
+    let on = decompile("Account::bump");
+    assert!(
+        on.contains("Account::bump(Account *this,int4 *out)"),
+        "`int &out` must render as `int4 *out`, got:\n{on}"
+    );
+}
+
+/// A `static` member has no artificial `this` and is still an out-of-line
+/// definition — proof the drop was never about the `this` DIE.
+#[test]
+fn static_member_recovers_its_parameter_name() {
+    let on = decompile("Account::make_id");
+    assert!(
+        on.contains("Account::make_id(int4 seed)"),
+        "a static member must recover its DWARF parameter name, got:\n{on}"
+    );
+}
+
+/// A namespace function defined out of line.
+#[test]
+fn namespaced_function_recovers_its_prototype() {
+    let on = decompile("db::inner::scaled_add");
+    assert!(
+        on.contains("db::inner::scaled_add(int4 a,int4 b)"),
+        "a namespaced function must recover its DWARF parameter names, got:\n{on}"
+    );
+}
+
+/// A template instantiation DOES carry its own `DW_AT_name` (`maxof<int>`), but
+/// kuna's symbol table files it as `maxof` — so only the ADDRESS-keyed prototype
+/// park reaches it.
+#[test]
+fn template_instantiation_binds_by_address_not_name() {
+    let on = decompile("maxof<int>");
+    assert!(
+        on.contains("maxof<int>(int4 a,int4 b)"),
+        "a template instantiation's prototype must bind by entry address, got:\n{on}"
+    );
+}
+
+/// A pointer to a `DW_TAG_class_type` — the tag that fell through to `None`, so
+/// every `Foo *` parameter degraded to `void *`.
+#[test]
+fn class_typed_pointer_parameter_keeps_its_class() {
+    let on = decompile("probe_virtual_call");
+    assert!(
+        on.contains("probe_virtual_call(Shape *s,int4 scale)"),
+        "`DW_TAG_class_type` must map like a structure, got:\n{on}"
+    );
+}

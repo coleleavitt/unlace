@@ -4,7 +4,7 @@
     kuna issue testcase: an ARM load or store through a register that holds a
     datum's address files a reference in the cross-reference index.
 
-    Issue:      kuna-analysis-armderef - `kuna xrefs` asked for the references to an ARM global
+    Issue:      unlace-analysis-armderef - `kuna xrefs` asked for the references to an ARM global
                 answered only the instruction that loaded its address from a
                 GOT slot or a literal-pool word, never the `ldr`/`str
                 [rN,#off]` that read and wrote it through that register.
@@ -18,12 +18,12 @@
     the rule is inert in the rendered C of `abs_write`, whose two stores
     through a pool-loaded `g_cfg` across calls are the instruction shape it
     concerns. The row-level proof (a Read or Write of each address accessed)
-    lives in the cargo gate `decompiler/crates/kuna-console/tests/verify_armderef.rs`,
+    lives in the cargo gate `decompiler/crates/unlace-console/tests/verify_armderef.rs`,
     over the `armderef_arm_le32` fixture this case also loads.
 
     The XML wrapper only supplies the harness architecture; the pass clears it
     and loads the real linked ARM fixture (built from
-    decompiler/crates/kuna-analysis/tests/fixtures/armderef_arm_le32.c).
+    decompiler/crates/unlace-analysis/tests/fixtures/armderef_arm_le32.c).
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -32,7 +32,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armderef_arm_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armderef_arm_le32</com>
   <com>read symbols</com>
   <com>load function abs_write</com>
   <com>decompile</com>

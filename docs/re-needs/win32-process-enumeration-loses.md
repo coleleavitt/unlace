@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp/src/p4_calls]
+touches: [decompiler/crates/unlace-decomp/src/p4_calls]
 scope: small
 regression_of: null
 pr: null
@@ -150,7 +150,7 @@ The values are present in the dataflow the whole time: with
 `--assert 'prototype CloseHandle int4 CloseHandle(void *h);'` and the matching
 Process32NextW assertion, the same run emits `CloseHandle(h)` and `Process32NextW(h,v3)`
 with h the CreateToolhelp32Snapshot result. So this is input-trial scoring at a call whose
-argument register is defined in a dominating predecessor, in kuna-decomp p4_calls -- not
+argument register is defined in a dominating predecessor, in unlace-decomp p4_calls -- not
 missing knowledge, and NOT a Win32 prototype database. A builder who ships kernel32
 prototypes would make this need's acceptance pass while leaving the general defect (which is
 not Windows-specific) untouched.

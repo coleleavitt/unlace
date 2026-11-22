@@ -1,0 +1,133 @@
+[package]
+autotests = false
+name = "unlace-console"
+description = "kuna Rust port: console front-end (decomp_dbg)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+unlace-decomp.workspace = true
+unlace-base.workspace = true
+unlace-num.workspace = true
+unlace-sleigh.workspace = true
+unlace-analysis.workspace = true
+# The shared decompile-project core (`src/project.rs`) re-parses the binary via
+# `object` for the README metadata (entry point + named sections — the engine's
+# LoadImage sections carry no names); the Listing/xref tier integration test
+# (`tests/verify_listing_core.rs`) also parses the fixture ELF into an
+# `object::File` to drive `Listing::build`.  Already in the workspace graph via
+# unlace-analysis, so this adds no new crate.
+object.workspace = true
+unicode-ident = "1"
+
+[dev-dependencies]
+object = { workspace = true, features = ["write"] }
+# The register<->global over-merge render gate (`tests/verify_global_regmerge.rs`)
+# asserts, via a word-boundary regex, that no raw register / `Unique<hex>` leaks.
+regex.workspace = true
+# The Rust-output syntax gate (`tests/verify_outlang_rust_syntax.rs`).
+syn.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "decomp_dbg"
+path = "src/bin/decomp_dbg.rs"
+
+# `decomp_test_dbg` lives in the `unlace-harness` crate: the test runner drives the
+# datatest harness (`unlace_harness::testfunction`), and `unlace-harness` depends on
+# `unlace-console` (not the reverse), so the binary that needs both is produced
+# there.  It still builds to `target/<profile>/decomp_test_dbg` (the path the
+# Python `kuna/run_tests.py` resolves), unchanged.
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[[test]]
+name = "verify_budget_stop"
+path = "tests/verify_budget_stop.rs"
+
+[[test]]
+name = "verify_dwarfstructs"
+path = "tests/verify_dwarfstructs.rs"
+
+[[test]]
+name = "verify_dwarfvariants"
+path = "tests/verify_dwarfvariants.rs"
+
+[[test]]
+name = "verify_variantnames"
+path = "tests/verify_variantnames.rs"
+
+[[test]]
+name = "verify_fid"
+path = "tests/verify_fid.rs"
+
+[[test]]
+name = "verify_flirt_sites"
+path = "tests/verify_flirt_sites.rs"
+
+[[test]]
+name = "verify_libctypes_glibc_target"
+path = "tests/verify_libctypes_glibc_target.rs"
+
+[[test]]
+name = "verify_macho_fat"
+path = "tests/verify_macho_fat.rs"
+
+[[test]]
+name = "verify_msvcfpconst"
+path = "tests/verify_msvcfpconst.rs"
+
+[[test]]
+name = "verify_loadoptions"
+path = "tests/verify_loadoptions.rs"
+
+[[test]]
+name = "verify_pdatachained"
+path = "tests/verify_pdatachained.rs"
+
+[[test]]
+name = "verify_pdb"
+path = "tests/verify_pdb.rs"
+
+[[test]]
+name = "verify_rexthunk"
+path = "tests/verify_rexthunk.rs"
+
+[[test]]
+name = "verify_symbolnamebound"
+path = "tests/verify_symbolnamebound.rs"
+
+[[test]]
+name = "verify_symbolnamechars"
+path = "tests/verify_symbolnamechars.rs"
+
+[[test]]
+name = "verify_symbolnamerepair"
+path = "tests/verify_symbolnamerepair.rs"
+
+[[test]]
+name = "verify_typedepth"
+path = "tests/verify_typedepth.rs"
+
+[[test]]
+name = "verify_goabi"
+path = "tests/verify_goabi.rs"
+
+[[test]]
+name = "verify_goreg"
+path = "tests/verify_goreg.rs"
+
+[[test]]
+name = "verify_swiftdemangle"
+path = "tests/verify_swiftdemangle.rs"
+
+[[test]]
+name = "verify_gotypes"
+path = "tests/verify_gotypes.rs"

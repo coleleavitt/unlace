@@ -10,7 +10,7 @@ from pathlib import Path
 from scripts.observatory import common
 from scripts.paths import specs_dir
 
-FIXTURE = "decompiler/crates/kuna-analysis/tests/fixtures/aliasoverlap_x86_64"
+FIXTURE = "decompiler/crates/unlace-analysis/tests/fixtures/aliasoverlap_x86_64"
 FUNCTION = "main"
 TIMEOUT = 120
 

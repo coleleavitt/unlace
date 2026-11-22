@@ -19,7 +19,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/vectorabi/vec_x86_64.so</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/vectorabi/vec_x86_64.so</com>
   <com>option vexzeroupper off</com>
   <com>option lanefuse off</com>
   <com>option vectorabi off</com>
@@ -31,7 +31,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/vectorabi/vec_x86_64.so</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/vectorabi/vec_x86_64.so</com>
   <com>option vexzeroupper on</com>
   <com>option lanefuse on</com>
   <com>option vectorabi on</com>
@@ -55,7 +55,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/vectorabi/sse_x86_64.so</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/vectorabi/sse_x86_64.so</com>
   <com>read symbols</com>
   <com>load function add128</com>
   <com>decompile</com>

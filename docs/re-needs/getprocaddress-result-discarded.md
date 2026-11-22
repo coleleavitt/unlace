@@ -14,7 +14,7 @@ rounds: [1, 2]
 first_seen_round: 1
 attempts: 2
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: "381"

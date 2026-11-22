@@ -1,7 +1,7 @@
 # The `kuna` CLI reference
 
 The user-facing commands are the single Rust binary `kuna`
-(`decompiler/crates/kuna-cli`, built to `decompiler/target/release/kuna` by
+(`decompiler/crates/unlace-cli`, built to `decompiler/target/release/kuna` by
 `make binaries`). This is the full reference; the one-screen version is in
 `CLAUDE.md`.
 
@@ -88,7 +88,7 @@ only prints verification guidance; it does not invoke a compiler or run checks.
 From the source checkout's root:
 
 ```sh
-cargo test --manifest-path decompiler/Cargo.toml --release -p kuna-slacomp --test compiler_parity
+cargo test --manifest-path decompiler/Cargo.toml --release -p unlace-slacomp --test compiler_parity
 make test
 ```
 
@@ -96,7 +96,7 @@ The first command compares decompressed `.sla` contents with pinned Ghidra
 outputs. The second checks decompiler behavior against the datatest baseline.
 These are separate contracts: passing the datatests does not establish compiler
 output equality. Fixture provenance is in
-`decompiler/crates/kuna-slacomp/tests/golden/README.md`; the retired live C++
+`decompiler/crates/unlace-slacomp/tests/golden/README.md`; the retired live C++
 differential is described in `docs/history.md`.
 
 ## Where kuna finds the engine and the specs
@@ -157,8 +157,8 @@ warning: decomp_dbg is a different build from this kuna
 
 An identity is the version `kuna --version` prints plus a fingerprint of the
 child's production source graph, the workspace manifest and `Cargo.lock`.
-`decomp_dbg` uses the `kuna-console` engine graph; `decomp_test_dbg` adds the
-`kuna-harness` runner. Two source builds of different trees therefore differ even
+`decomp_dbg` uses the `unlace-console` engine graph; `decomp_test_dbg` adds the
+`unlace-harness` runner. Two source builds of different trees therefore differ even
 though both report the workspace version, while a checkout's debug and release
 builds agree. Matching builds print nothing. The warning never goes to stdout,
 so a `--json` document stays clean. A child older than the handshake cannot
@@ -1274,7 +1274,7 @@ including Go images.
 
 **`--language auto|c|rust|java|go`** selects the output language. **`auto` is the
 default and follows the binary**: a DEX file renders as Java, and a Rust binary renders as Rust, because kuna
-already detects one (`kuna-analysis`'s `sourcelang` pass, the port of Ghidra's
+already detects one (`unlace-analysis`'s `sourcelang` pass, the port of Ghidra's
 `SourceLanguageAnalyzer`) and rendering it as C is worse in a way the reader has
 to undo by hand (DIV-80). Detection is high-precision, not heuristic; an
 unreadable file leaves C in place; and `--language c` always wins, so the policy
@@ -1610,7 +1610,7 @@ payload`).
 A headerless Cortex-M flash dump needs none of `--target`, `--base`, `--isa`
 or `--entry`. Before `decompile`, `decompile-all`, `decompile-project` and
 `functions` parse their arguments, the binary (the first argument) is probed
-for a Cortex-M vector table (`kuna_analysis::loader::firmware::cortexm`): an
+for a Cortex-M vector table (`unlace_analysis::loader::firmware::cortexm`): an
 initial stack pointer in SRAM, Thumb handler pointers into the Code region, and
 IRQ vectors up to the first word that is neither zero nor such a pointer. The
 base is the 0x1000-aligned address the most (handler, dummy-handler instruction)
@@ -1634,7 +1634,7 @@ $ kuna decompile-all stm32.bin
 ```
 
 **Containers.** A file that is not an object file is also tried as a firmware
-container (`kuna_analysis::loader::firmware::containers`). Each is flattened
+container (`unlace_analysis::loader::firmware::containers`). Each is flattened
 into a temporary raw image (removed when the run ends) and given the
 arguments its header states:
 
@@ -1653,7 +1653,7 @@ A flat image whose processor the container does not state is probed for a
 Cortex-M vector table like a raw dump.
 
 **`--svd FILE`** imports a CMSIS-SVD device description
-(`kuna_analysis::loader::firmware::svd`): each peripheral becomes a structure
+(`unlace_analysis::loader::firmware::svd`): each peripheral becomes a structure
 `<NAME>_Type` (registers as members, clusters flattened into
 `<cluster>_<register>`, `dim` arrays expanded, overlapping alternates dropped,
 gaps as reserved bytes; a `derivedFrom` peripheral reuses its base's type),
@@ -1686,7 +1686,7 @@ kuna decompile-all ./a.out --json                      # every CODE-backed funct
 ```
 
 The whole-binary surface (the benchmark + LLM path). Runs **in-process**
-(`kuna_console::engine::bootstrap_from_object` → `commit_pending_analysis` → loop
+(`unlace_console::engine::bootstrap_from_object` → `commit_pending_analysis` → loop
 `decompile_func` + `print_c`), loading + analyzing the binary **once** instead of
 `kuna decompile`'s subprocess-per-function (≈10×+ faster on a many-function binary).
 
@@ -1734,7 +1734,7 @@ $ echo $?
 ```
 
 `--reachable-from` is the "what does the entry point actually touch" question,
-answered with **`kuna xrefs`' own reference edges** (`kuna-analysis`'s
+answered with **`kuna xrefs`' own reference edges** (`unlace-analysis`'s
 `listing::xrefs`) rather than a second call-graph model that could disagree with
 them. A call, a tail jump, and an *address-taken function pointer* all count as
 edges — the third one matters: on a glibc ELF `_start` reaches `main` only
@@ -3030,7 +3030,7 @@ This is a query, not an engine change: it loads the binary once through the same
 in-process seam `decompile-all` uses (`bootstrap_from_object` →
 `commit_pending_analysis`), then reads the references out of the p-code the SLEIGH
 lifter already emits for every discovered function
-(`kuna-analysis/src/listing/xrefs.rs`). It commits nothing into the engine and
+(`unlace-analysis/src/listing/xrefs.rs`). It commits nothing into the engine and
 changes no emitted C. Function discovery is the `kuna functions` inventory, which
 the walk then extends by following the call graph out of it, so a callee the
 inventory missed is still covered.
@@ -3732,11 +3732,11 @@ never the goal; opening the routine that prints it is, and that hop is one
 command here because kuna already has both halves.
 
 The rows come from the analyzer tier's own matcher, not a second scanner
-(`kuna-analysis/src/analyzers/strings/`, the port of Ghidra's `StringsAnalyzer`),
+(`unlace-analysis/src/analyzers/strings/`, the port of Ghidra's `StringsAnalyzer`),
 over the address set that pass scans; under `--termination nul` a row here is
 exactly a `char[N]` literal `kuna decompile` prints, at the same address. The
 reference columns come from the same index behind `kuna xrefs`
-(`kuna-analysis/src/listing/xrefs.rs`). Nothing is committed into the engine and
+(`unlace-analysis/src/listing/xrefs.rs`). Nothing is committed into the engine and
 no emitted C changes.
 
 | Column | What |
@@ -4036,7 +4036,7 @@ It runs **in-process**, with no external tooling: `upx -d` cannot be assumed pre
 wherever a release `kuna` runs, and handing a hostile binary to a packer to look at it
 is not a thing an analyzer should do. The UCL NRV2B / NRV2D / NRV2E decompressors, the
 LZMA1 decoder and the branch-target filters are reimplemented in
-`kuna-analysis/src/upx/`.
+`unlace-analysis/src/upx/`.
 
 Default output is `<binary>.unpacked`, overwritten if it exists (the name is
 unambiguously this command's own artifact, and a command that fails its second
@@ -4107,7 +4107,7 @@ untouched, so every virtual address and virtual size still describes the origina
 image and nothing has to be inferred by running the stub — which is what the tester
 who filed this had to do, in Unicorn. The codec is an LZX derivative (58 position
 slots, three repeated offsets, `256 + slot * 8 + len_slot` main symbols) with
-DEFLATE's length tables and code-length transmission; `kuna-analysis/src/neolite.rs`
+DEFLATE's length tables and code-length transmission; `unlace-analysis/src/neolite.rs`
 decodes it.
 
 Three things are restored beyond the bytes: the entry point moves off the stub to
@@ -4256,9 +4256,9 @@ kuna decompile-project ./a.out --progress --jobs 12    # progress, artifacts at 
 ```
 
 The project-export face of the same in-process core
-(`decompiler/crates/kuna-cli/src/decompile_project.rs`, a thin wrapper over the shared
-`kuna_console::project` module — the decompile loop + artifact builders also behind the
-web UI's Download-Binary-Source zip and `kuna_wasm project`). Identical
+(`decompiler/crates/unlace-cli/src/decompile_project.rs`, a thin wrapper over the shared
+`unlace_console::project` module — the decompile loop + artifact builders also behind the
+web UI's Download-Binary-Source zip and `unlace_wasm project`). Identical
 load-once/decompile-many path and flags —
 `--functions`/`--addr`/`--max-fn-seconds`/`--max-fn-memory`/`--mode`/`--option`/
 `--isa`/`--slice`/`--target`/`--sleighpath`/`--jobs`/`--stream`/`--progress`; no `--json`. Omitted mode is the same
@@ -4667,7 +4667,7 @@ kuna decompile-graph ./a.out --jobs 12                 # the same document, 12 p
 
 One document holding every discovered function — its recovered signature,
 parameters, C body and assembly — plus the call edges between them
-(`decompiler/crates/kuna-cli/src/decompile_graph.rs`). The same in-process
+(`decompiler/crates/unlace-cli/src/decompile_graph.rs`). The same in-process
 load-once path and the same flags as `decompile-project`
 (`--functions`/`--addr`/`--max-fn-seconds`/`--max-fn-memory`/`--mode`/`--define-function`/
 `--option`/`--slice`/`--target`/`--sleighpath`/`--jobs`; no `--json`, the document
@@ -4786,7 +4786,7 @@ it needs to drive it.
 `docs/options.md` is generated (`kuna catalog --markdown > docs/options.md`) and dominates
 the embedded bytes at ~281 KB. A test asserts the embedded copy is byte-identical to the file
 on disk, so a rebuild cannot ship a stale catalog — the same hazard
-`kuna-decomp/tests/options_md_fresh.rs` guards for the file itself.
+`unlace-decomp/tests/options_md_fresh.rs` guards for the file itself.
 
 Exit codes: `0` ok, `2` unknown topic (the message lists the valid ones).
 
@@ -4827,7 +4827,7 @@ kuna catalog --tier transform    # filter to the transform-tier control surface
 
 By default, reads the static catalog directly from the linked engine library, without
 starting `decomp_dbg` or loading SLEIGH specs. The single source of truth is
-`settableTable`, generated from `decompiler/crates/kuna-decomp/phases.toml`; the console's
+`settableTable`, generated from `decompiler/crates/unlace-decomp/phases.toml`; the console's
 `phase catalog` command uses the same emitter. `--json` emits a JSON **array** with one
 object per option —
 `[{option,values,default,destructive_as_default,phase,subphase,strength,rewind,issue,summary,
@@ -4838,7 +4838,7 @@ filters the array exactly as it filters the table. It and
 every other subcommand's `--json` is an object (`{binary,...}`, `{modes:[...]}`), and each
 `--help` names its root. `--markdown` output is tier-grouped and symptom-indexed; `--check`
 cross-checks the selected catalog against this `kuna` build's
-`kuna_decomp::options::KUNA_OPTION_NAMES` in-process.
+`unlace_decomp::options::KUNA_OPTION_NAMES` in-process.
 
 `--decomp-dbg PATH`, or a non-empty `KUNA_DECOMP_DBG` when that flag is absent, opts
 text, JSON and check modes into the existing external console query. The flag takes

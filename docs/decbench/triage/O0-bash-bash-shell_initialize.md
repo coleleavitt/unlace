@@ -199,7 +199,7 @@ Two honest caveats, both worth re-deriving at fix time rather than trusting:
 
 ### Owning phase
 
-**P8** — Structured AST & Goto Quality (`decompiler/crates/kuna-decomp/src/p8_structure/`).
+**P8** — Structured AST & Goto Quality (`decompiler/crates/unlace-decomp/src/p8_structure/`).
 
 ### Breadth
 
@@ -229,7 +229,7 @@ one third -O0 and -O0 materializes booleans everywhere).
 ## Proposed fix
 
 **Slug `itecondlist`, P8, one module** —
-`decompiler/crates/kuna-decomp/src/p8_structure/kuna_iteregion.rs`.
+`decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`.
 
 Mechanism: in the **condition position only**, let the matcher descend a
 multi-component `Ls`/`Graph` to its **last** component and take that as the condition

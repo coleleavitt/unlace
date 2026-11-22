@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: null
@@ -67,11 +67,11 @@ Preserve the address of the 585-byte packed maze.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/emptystrconst_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/emptystrconst_x86_64",
     "binary_sha256": "f1e7a5da26d86d13eafe9e38d4e10db59599bdf0921edb6bfd5d9bb3872bbec6",
     "binary_size": 14512,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/emptystrconst_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/emptystrconst_x86_64",
     "selector": "0x401136",
     "selector_kind": "addr"
   },
@@ -138,5 +138,5 @@ WHAT THE EVIDENCE POINTS AT INSTEAD. v16 is declared `char *v16` and its FIRST u
 
 VERDICT overturned: the symptom stands and is worth fixing, the named cause is refuted by a one-byte control that leaves the defect intact, and -- the reason this refutation paid for itself -- the acceptance as written is satisfied by a cosmetic change that does not fix the bug.
 
-- round 5 BUILDER: acceptance RETARGETED to the vendored fixture `decompiler/crates/kuna-analysis/tests/fixtures/emptystrconst_x86_64` so it promotes into `tests/cli/` (CI has no dataset), and its `expect` was re-cut to assert the discrimination rather than the absence of an empty literal: the blob pointer must keep `0x402020` AND the genuine merged `""` beside it must keep its quotes. `acceptance_id` relabelled `a-dec6e1252b85` -> `a-79ab40a45635`. The dataset witness still reproduces and still passes on the shipped build: `kuna decompile "<Sabloom Text 6.exe>" sub_402020` now emits `v16 = (char *)0x403550; v21 = (char *)0x403550;`.
+- round 5 BUILDER: acceptance RETARGETED to the vendored fixture `decompiler/crates/unlace-analysis/tests/fixtures/emptystrconst_x86_64` so it promotes into `tests/cli/` (CI has no dataset), and its `expect` was re-cut to assert the discrimination rather than the absence of an empty literal: the blob pointer must keep `0x402020` AND the genuine merged `""` beside it must keep its quotes. `acceptance_id` relabelled `a-dec6e1252b85` -> `a-79ab40a45635`. The dataset witness still reproduces and still passes on the shipped build: `kuna decompile "<Sabloom Text 6.exe>" sub_402020` now emits `v16 = (char *)0x403550; v21 = (char *)0x403550;`.
 - round 5 BUILDER: the captain's refutation is confirmed on the second half and extended. The naive rule the captain warned about -- suppress any zero-character literal -- is not merely gameable, it is WRONG: a whole-corpus sweep found `setlocale(6,"")` and five more genuine empty literals in the vendored coreutils fixtures alone, every one of them a linker-merged `""` stored as the tail NUL of another literal. The shipped rule therefore reads the sixteen bytes at the address and declines only where they do not read as string data. The typing story stands as filed and is NOT repaired here: the constant is `char *` because it shares a merged live range with a real `char *`, and the printer is doing the right thing for a `char *` constant; what changes is the printer's evidence test, which accepted a location on the strength of zero validated characters.

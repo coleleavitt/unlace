@@ -118,13 +118,13 @@ python3 integrations/web/dev-viz/generate.py
 node integrations/web/test/dev-viz.mjs ../
 python3 -m http.server 8000 --directory integrations/web
 ```
-| `build.sh` | Builds `kuna_wasm.wasm`, copies the full runtime SLEIGH tree + the shim + the pages + `assets/` into `dist/`, and bundles the small spec files into `specs-small.json`. `wasm-opt -Oz` is applied if present. |
+| `build.sh` | Builds `unlace_wasm.wasm`, copies the full runtime SLEIGH tree + the shim + the pages + `assets/` into `dist/`, and bundles the small spec files into `specs-small.json`. `wasm-opt -Oz` is applied if present. |
 | `split-sites.sh` | Run after `build.sh` at deploy time: moves the decompiler to the root of `dist-run/` (decompile.run) and leaves `dist/` as kuna.noelo.org with a forwarding `/decompile/`. |
 | `test/` | Automated gates (below) + committed ELF/Mach-O fixtures. |
 | `dist/`, `dist-run/` | Assembled output (gitignored — regenerate with `build.sh`, then `split-sites.sh`). |
 
-The wasm module itself is the `kuna-wasm` crate (`decompiler/crates/kuna-wasm`), a thin
-front-end over the `kuna-console` in-process path. It builds natively too — that native
+The wasm module itself is the `unlace-wasm` crate (`decompiler/crates/unlace-wasm`), a thin
+front-end over the `unlace-console` in-process path. It builds natively too — that native
 build is the parity oracle for the tests.
 
 ## Tests
@@ -134,10 +134,10 @@ All run under Node. A through H need no browser; I and J drive headless Chrome a
 
 ```bash
 # 0. Prereqs: `make specs`, then `integrations/web/build.sh`, and a native
-#    kuna_wasm:  (cd decompiler && cargo build --release -p kuna-wasm)
+#    unlace_wasm:  (cd decompiler && cargo build --release -p unlace-wasm)
 
 # A. WASI parity — the wasm runs under Node's node:wasi and its output is
-#    byte-identical to the native kuna_wasm build (the port is faithful).
+#    byte-identical to the native unlace_wasm build (the port is faithful).
 node integrations/web/test/parity.mjs
 
 # B. Browser-glue — the ACTUAL browser code path (kuna-web.js + the vendored
@@ -222,7 +222,7 @@ node integrations/web/test/decompile-collab-rtc.mjs [--late 60]
   `Enter`/`Escape`/arrows) needs a browser — see the optional Chrome check below.
 - **`run-wasm.mjs`** is a small reusable CLI runner (used by `parity.mjs`; also handy for
   driving the wasm by hand under `node:wasi`).
-- **`decompile-data.mjs`** pins the Data tab's rows on what the native `kuna_wasm`
+- **`decompile-data.mjs`** pins the Data tab's rows on what the native `unlace_wasm`
   prints for `fixtures/globals.elf` and its stripped twin: values decoded by type
   (integers, text, pointers, arrays and structs), bytes that start as zeros, unlabelled
   bytes, who uses an item, escaping.
@@ -234,7 +234,7 @@ node integrations/web/test/decompile-collab-rtc.mjs [--late 60]
   directives (merging, pinning, qualification, the `.kuna` file, undo), the stored
   sessions, file offsets and the patched file, no-op fills, the stack frame and the
   instruction notes. Their fixtures (`fixtures/inspect-*.json`, `list-sample.json`) are
-  what the native `kuna_wasm` prints; regenerate them with
+  what the native `unlace_wasm` prints; regenerate them with
   `node integrations/web/test/make-inspect-fixtures.mjs`.
 - **`decompile-collab.mjs`** pins live sessions without a browser: register
   convergence over the full key set (birth clocks too), the ops another page may not

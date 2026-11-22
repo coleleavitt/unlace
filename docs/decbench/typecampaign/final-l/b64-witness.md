@@ -1,7 +1,7 @@
 # The base64 witness shape, on the public fixture
 
 The user's witness for the cast campaign was a textbook base64 decoder. Its shape is reproduced here only through
-the repo's public fixture `decompiler/crates/kuna-analysis/tests/fixtures/elemptr_x86_64.c` (`w_build` fills a `malloc`'d decoding table from a constant
+the repo's public fixture `decompiler/crates/unlace-analysis/tests/fixtures/elemptr_x86_64.c` (`w_build` fills a `malloc`'d decoding table from a constant
 alphabet; `w_decode` indexes it by input bytes and writes a `malloc`'d buffer). The checked-in stripped builds
 are decompiled whole-binary (`kuna decompile-all <bin>`) with four builds of main; casts are castcount's.
 

@@ -14,7 +14,7 @@ rounds: [1, 2]
 first_seen_round: 1
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: "399"
@@ -125,14 +125,14 @@ _none recorded_
   closable-by-probe. Target rebound from the round-1 arena path to the dataset challenge
   (`binary_source: dataset`, sha256 pinned), so the probe no longer depends on an arena that
   a later round may rebuild.
-- round 2 wave 20 (captain): `touches` LEFT as filed (`[decompiler/crates/kuna-decomp]`). I have measured evidence of the
+- round 2 wave 20 (captain): `touches` LEFT as filed (`[decompiler/crates/unlace-decomp]`). I have measured evidence of the
   symptom but none of the owning module, and a confidently-wrong `touches` would misdirect a
   builder and mis-scope its leases. The builder should set it from its own root-cause work.
 - closed: acceptance a-038711a56c33 now PASSES at 94286c8eca0c
 - round 2 B_DONE (captain): `pr: null -> 399` (`apply-acceptance` sets `closing_pr` but never
   `pr`). `attempts` stays 0 -- dispatched once, closed on that attempt. `touches` is left as
-  filed but was WRONG: the fix landed in `kuna-analysis` (`analyzers/strings/kuna_widestrings.rs`),
-  not `kuna-decomp`, which is the module the record reserved. The tester's hypothesis (UTF-16LE
+  filed but was WRONG: the fix landed in `unlace-analysis` (`analyzers/strings/kuna_widestrings.rs`),
+  not `unlace-decomp`, which is the module the record reserved. The tester's hypothesis (UTF-16LE
   data read as an 8-bit NUL-terminated string in string markup) is what the shipped fix
   corrects; `hypothesis_status` stays `inconclusive` because no refuter ever examined it.
 - round 2 B_DONE (captain): `verify --promote` REFUSED this acceptance -- `target.binary_source`

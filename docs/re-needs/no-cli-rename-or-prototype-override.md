@@ -11,7 +11,7 @@ instances: 1
 rounds: [2]
 first_seen_round: 2
 attempts: 1
-touches: [decompiler/crates/kuna-cli/src, decompiler/crates/kuna-console/src/assertions.rs]
+touches: [decompiler/crates/unlace-cli/src, decompiler/crates/unlace-console/src/assertions.rs]
 scope: large
 pr: "389"
 closed_in_round: 2
@@ -60,11 +60,11 @@ run reports each one's fate as machine-readable JSON. FAILS at e3db5512: every
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "authenticate",
     "selector_kind": "name"
   },
@@ -132,7 +132,7 @@ ADVISORY. The cheap half is exposure, not implementation: most of these commands
 ## Decision log
 
 - seeded for round 2 from a source survey of the override surface, after round 1 showed testers hitting obfuscated images with no lever to correct kuna with. Not tester-filed: round 2 should confirm the demand.
-- round 2 T_TRIAGE (captain): track tooling / touches [kuna-cli/src, kuna-console/src/kuna_console.rs] / scope large CONFIRMED. New this tick: keyboard-callback-uses-undefined is a tester-filed demand witness for it -- an agent that could state a callback's prototype would not need kuna to infer R9D/R8D at all. Still waits behind the function-boundary proposal for the delivery vehicle.
+- round 2 T_TRIAGE (captain): track tooling / touches [unlace-cli/src, unlace-console/src/kuna_console.rs] / scope large CONFIRMED. New this tick: keyboard-callback-uses-undefined is a tester-filed demand witness for it -- an agent that could state a callback's prototype would not need kuna to infer R9D/R8D at all. Still waits behind the function-boundary proposal for the delivery vehicle.
 - round 2 wave 9 B_PLAN (captain): DISPATCHED as the override family's one design, because the delivery vehicle this need was waiting behind now EXISTS -- no-cli-function-boundary-override closed via #374 (`kuna decompile --define-function`), an agent-supplied fact injected from the `kuna` binary. Three standing instructions for the builder. (1) Design ONE override plane that covers this need AND its two siblings (no-cli-data-code-override, no-cli-structuring-override); the captain will not approve three separate large designs, and a unified proposal lets the siblings collapse into it rather than each burning a builder. (2) Answer the Hypothesis's cheap/expensive question as a table: for every command named in the Symptom, whether it already works in the console and only lacks a `kuna` path, or is an `engine_unavailable` stub. (3) The proposal MUST define a concrete `acceptance` probe for this need. It has none today (`verify --acceptance-suite` reports it unrunnable), so nothing built on it could ever be closed by B_DONE, and a design that leaves it unrunnable is not approvable.
 - round 2 B_PLAN (builder): filed the acceptance probe this need lacked, `a-a58fc408288b`. Its target C was measured end-to-end through `decomp_dbg` before the probe was written (`parse line extern` + `retype` + `rename` on the in-repo `fauxware` fixture), so the probe asserts an output the engine demonstrably already produces -- what is missing is only the path from the `kuna` binary.
 - round 2 B_DONE (builder): SHIPPED as `kuna --assert <directive> | @FILE`, Stage A of the

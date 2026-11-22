@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/listing/xrefs.rs]
+touches: [decompiler/crates/unlace-analysis/src/listing/xrefs.rs]
 scope: small
 regression_of: null
 pr: null
@@ -148,5 +148,5 @@ _none recorded_
 
 - filed by cluster.py from 1 observation(s)
 - round 2 T_DEDUP (captain): SPLIT from `strings-json-fails-report` -- different subcommand, different gap; they collided only because cluster.py's `_subcommand()` does not know the round-1 subcommands and hashes them all to '?'.
-- round 2 T_TRIAGE (captain): track quality -> TOOLING, touches kuna-decomp -> kuna-analysis/src/listing/xrefs.rs. `kuna functions` surfaces a PE import thunk and its IAT symbol under ONE name and `kuna xrefs` then answers 0 for the thunk address -- a wrong answer to a question the tool invited, i.e. a strict bug fix, which by the repo's own rule needs no flag and therefore no counter leases. scope stays small. This is now one of the few needs co-schedulable alongside an option-adding builder.
+- round 2 T_TRIAGE (captain): track quality -> TOOLING, touches unlace-decomp -> unlace-analysis/src/listing/xrefs.rs. `kuna functions` surfaces a PE import thunk and its IAT symbol under ONE name and `kuna xrefs` then answers 0 for the thunk address -- a wrong answer to a question the tool invited, i.e. a strict bug fix, which by the repo's own rule needs no flag and therefore no counter leases. scope stays small. This is now one of the few needs co-schedulable alongside an option-adding builder.
 - closed: acceptance a-27cf701da662 now PASSES at 93fa2e7e0482

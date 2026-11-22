@@ -16,7 +16,7 @@
     correctness fix: no option, one pass.
 
     The script loads the committed fixtures (sources and build commands in
-    decompiler/crates/kuna-cli/tests/fixtures/riscv_zcmp/README.md):
+    decompiler/crates/unlace-cli/tests/fixtures/riscv_zcmp/README.md):
     keep.elf is the issue's repro, `unsigned keep(unsigned a, unsigned b)
     { unsigned x = ext(a); ext(b); return ext(x); }` at -Os with
     -march=rv32imac_zcmp; zc_ops.elf is hand-written assembly: swapcall
@@ -34,14 +34,14 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/riscv_zcmp/keep.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/riscv_zcmp/keep.elf</com>
   <com>read symbols</com>
   <com>load function keep</com>
   <com>print raw</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/riscv_zcmp/zc_ops.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/riscv_zcmp/zc_ops.elf</com>
   <com>read symbols</com>
   <com>load function swapcall</com>
   <com>decompile</com>

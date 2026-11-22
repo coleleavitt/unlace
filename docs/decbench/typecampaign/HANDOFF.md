@@ -191,8 +191,8 @@ user's rule is that a removed cast must not change the value the program compute
 
 ## 7. Traps that have cost real time
 
-- `kuna decompile` forks `decomp_dbg`, so rebuilding only `kuna-cli` ablates nothing — build
-  `-p kuna-cli -p kuna-console -p kuna-harness` or run `make binaries`.
+- `kuna decompile` forks `decomp_dbg`, so rebuilding only `unlace-cli` ablates nothing — build
+  `-p unlace-cli -p unlace-console -p unlace-harness` or run `make binaries`.
 - The console prints `int4`/`uint4`; the CLI (aggressive under 500 KiB) prints `int`/`unsigned int`.
   Never mix the two vocabularies in a string match.
 - `--save-baseline` without `SLEIGHHOME` writes an **empty** baseline.

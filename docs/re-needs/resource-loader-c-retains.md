@@ -14,7 +14,7 @@ rounds: [7]
 first_seen_round: 7
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: large
 regression_of: null
 pr: null
@@ -149,7 +149,7 @@ Corroborating evidence that the arguments really are recovered as far as the slo
 
 3. THE OTHER TWO OPTIONS IN THE PROBE ARE VACUOUS -- ignore any sentence in the observation that leans on them. Output md5 with 'varargstackargs off' is IDENTICAL to the default (these call sites are not variadic, and the option is default-on anyway), and 'stackalias on' is likewise identical. Control: 'compareform canonical' DOES move the output, so --option reaches this path and the null results are real null results, not a plumbing failure.
 
-4. THE ARGUMENT LOSS AND THE STORE DEBRIS ARE **TWO DIFFERENT CAUSES**, AND THIS IS THE ACCEPTANCE TRAP (a-38be14c225c2). The acceptance demands BOTH /=\s*(...)?0x401baf\s*;/ absent AND /LoadLibraryExW\(\s*\)/ absent. 'callsitestackargs off' flips the FIRST clause and leaves the SECOND standing verbatim ('LoadLibraryExW();' is still argument-less in the clean output). So any fix that merely narrows or gates callsitestackargs FAILS ITS OWN PROBE. To flip clause 2 the call must actually acquire arguments, and for an IMPORT that is a KNOWLEDGE problem, not a recovery one: kuna-analysis/src/loader/kuna_peimportcall.rs binds the IAT slot to the import's NAME (and its no-return effect) but there is no Win32 API signature source anywhere in the tree -- LoadLibraryExW arrives with an empty prototype, so trial scoring is the only thing standing between the pushes and the call. That is why the tester found that an address-targeted prototype restores the arguments: a LOCKED prototype bypasses trial scoring entirely. See also [[kuna-proto-park-key]] for the import-thunk/IAT name-vs-address parking trap if a declared-prototype route is taken.
+4. THE ARGUMENT LOSS AND THE STORE DEBRIS ARE **TWO DIFFERENT CAUSES**, AND THIS IS THE ACCEPTANCE TRAP (a-38be14c225c2). The acceptance demands BOTH /=\s*(...)?0x401baf\s*;/ absent AND /LoadLibraryExW\(\s*\)/ absent. 'callsitestackargs off' flips the FIRST clause and leaves the SECOND standing verbatim ('LoadLibraryExW();' is still argument-less in the clean output). So any fix that merely narrows or gates callsitestackargs FAILS ITS OWN PROBE. To flip clause 2 the call must actually acquire arguments, and for an IMPORT that is a KNOWLEDGE problem, not a recovery one: unlace-analysis/src/loader/kuna_peimportcall.rs binds the IAT slot to the import's NAME (and its no-return effect) but there is no Win32 API signature source anywhere in the tree -- LoadLibraryExW arrives with an empty prototype, so trial scoring is the only thing standing between the pushes and the call. That is why the tester found that an address-targeted prototype restores the arguments: a LOCKED prototype bypasses trial scoring entirely. See also [[kuna-proto-park-key]] for the import-thunk/IAT name-vs-address parking trap if a declared-prototype route is taken.
 
 5. RECOMMENDED SHAPE (advisory): treat it as ONE need with two halves, because the acceptance already forces both. Half A -- when a call-site stack-argument trial is scored inactive, do not leave its slot mapped (or re-run the deadcode fixpoint over the abandoned trial's slots), which removes the return-address stores AND ~39 spurious declarations. Half B -- give the promoted-name import a prototype so the trials win at all. Half A alone is measurable and safe; half B is the one that flips the second clause. If the builder cannot do both, this should come back as a PROPOSAL rather than a half-fix that cannot close.
 
@@ -168,9 +168,9 @@ Two things were measured before this re-dispatch; do not re-derive them.
    `test -x $(BINDIR)/decomp_test_dbg || $(MAKE) binaries` -- an existence test, never a
    freshness test -- and `kuna test --datatests` FORKS that binary. The worktree's copy
    predated the feature commit by ~30 minutes, so both gates measured a pre-win32sigs
-   decompiler. `decomp_test_dbg` is built by **kuna-harness**, not kuna-console:
-   `cargo build --release -p kuna-console` does NOT relink it. Run `make binaries` (or
-   `cargo build --release -p kuna-harness`) BEFORE trusting any parity result. The
+   decompiler. `decomp_test_dbg` is built by **unlace-harness**, not unlace-console:
+   `cargo build --release -p unlace-console` does NOT relink it. Run `make binaries` (or
+   `cargo build --release -p unlace-harness`) BEFORE trusting any parity result. The
    worktree was RECREATED for this attempt, so worker.sh's initial `make binaries` has
    already built a helper matching the branch tip -- but rebuild it again after any Rust
    change you make.

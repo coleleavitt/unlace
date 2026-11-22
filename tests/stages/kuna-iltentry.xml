@@ -8,7 +8,7 @@
     image, whose code is mostly reached through vtables, it found the stubs it
     happened to call and almost none of the bodies.
 
-    Fixture: decompiler/crates/kuna-analysis/tests/fixtures/iltentry_pe_i386.exe
+    Fixture: decompiler/crates/unlace-analysis/tests/fixtures/iltentry_pe_i386.exe
     (build notes in iltentry_pe_i386.s). The entry calls stub 0 only; the
     sixteen stubs at 0x401010..0x40105b jump to bodies at 0x401060 + 0x10*k.
     Under `mode fast` every stub and every body is an entry.
@@ -20,7 +20,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/iltentry_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/iltentry_pe_i386.exe</com>
   <com>mode fast</com>
   <com>read symbols</com>
   <com>functions</com>

@@ -19,11 +19,11 @@
  "timeout_s": 120,
  "repeat": 1,
  "target": {
-  "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/rust_hello_x86_64",
+  "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/rust_hello_x86_64",
   "binary_sha256": "3ba5d36933dc09a4163156b4f5bd54adb89f372acfef1981bacca9a84f236739",
   "binary_size": 2576,
   "binary_source": "in-repo",
-  "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/rust_hello_x86_64",
+  "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/rust_hello_x86_64",
   "selector": "black_box",
   "selector_kind": "name"
  },

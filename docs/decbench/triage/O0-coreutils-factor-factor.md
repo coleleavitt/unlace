@@ -137,7 +137,7 @@ The fix is the gotoless complement: duplicate the shared const-return epilogue i
 predecessor before final structuring (angr SAILR `ReturnDuplicatorHigh`).
 
 **That fix already exists and already ships in the default.** It is the `returndup`
-option (P8 / `goto-quality`, `decompiler/crates/kuna-decomp/phases.toml`), and this exact
+option (P8 / `goto-quality`, `decompiler/crates/unlace-decomp/phases.toml`), and this exact
 case is named in its own metadata — `inspiration = "decbench:O0-coreutils-factor-factor;
 ..."` and `use_when` literally records "coreutils factor: kuna 3 ifs / 0 early returns ->
 4 ifs / early returns, GED 12 -> 0". It landed default-ON, then **DIV-18** reverted the
@@ -148,7 +148,7 @@ from source more often than it converges). It stayed a per-run opt-in.
 What closed the case since the benchmark is therefore a **mode default, not a code fix**:
 **DIV-40** made the file front-ends default to `--mode auto`, and `auto` selects
 `aggressive` below 500 KiB. `factor` is 92,544 bytes, and `AGGRESSIVE_OVERRIDES`
-(`decompiler/crates/kuna-decomp/src/p0_knowledge/modes.rs:114`) contains `("returndup",
+(`decompiler/crates/unlace-decomp/src/p0_knowledge/modes.rs:114`) contains `("returndup",
 "on")`. So today's PRODUCT DEFAULT for this binary structures it exactly like angr and
 exactly like the source. The `// return-dupe x4` slug on the prototype (DIV-39 warnstyle)
 is the pass announcing its four duplications.

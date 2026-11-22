@@ -11,11 +11,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/retpushedhalf_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/retpushedhalf_x86_64",
     "binary_sha256": "74c13dc3cd8745e0996563684e2aa41cb9d18922513ee2c66d793712b768d3b1",
     "binary_size": 4784,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/retpushedhalf_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/retpushedhalf_x86_64",
     "selector": "xordec",
     "selector_kind": "name"
   },

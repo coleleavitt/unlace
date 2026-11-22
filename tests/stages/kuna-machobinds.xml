@@ -12,7 +12,7 @@
     opcodes) name every such slot.
 
     Stage / sub-stage: P1 environment-binding, the Mach-O bound-slot pass
-    (`kuna-analysis/src/loader/kuna_machobinds.rs (MachoBindSlotsPass)`),
+    (`unlace-analysis/src/loader/kuna_machobinds.rs (MachoBindSlotsPass)`),
     committed at `read symbols`, so `option machobinds` is set after `load
     file`. The names go to the symbol table only, never the function inventory.
 
@@ -33,7 +33,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_bindslots_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_bindslots_arm64</com>
   <com>option machobinds off</com>
   <com>option importdata on</com>
   <com>read symbols</com>
@@ -41,7 +41,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_bindslots_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_bindslots_arm64</com>
   <com>option importdata on</com>
   <com>read symbols</com>
   <com>load function _dispatch</com>

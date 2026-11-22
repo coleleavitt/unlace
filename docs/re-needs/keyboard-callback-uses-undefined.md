@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 1
 covered_by_option: inputparamgap
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: large
 regression_of: null
 pr: "405"
@@ -167,7 +167,7 @@ _none recorded_
   contiguous prefix never reaches r8/r9.
   (e) EVIDENCE THAT BEARS ON THE FILED HYPOTHESIS (which is advisory and unrefuted --
   `hypothesis_status` stays `inconclusive`, that field is a refuter's). #395 left an in-repo
-  Wayland-shaped fixture, `decompiler/crates/kuna-analysis/tests/fixtures/tailcallframe_x86_64`,
+  Wayland-shaped fixture, `decompiler/crates/unlace-analysis/tests/fixtures/tailcallframe_x86_64`,
   whose `on_key` at 0x11b0 is ALSO reachable only through a listener[] pointer table. kuna emits
   `void sub_11b0(int *a0,int a1)` there -- i.e. live-in registers from a pointer-table-only
   callback with no prototype evidence ARE promoted when they are CONTIGUOUS (rdi, rsi). The filed

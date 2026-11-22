@@ -213,7 +213,7 @@ the BRANCHIND in `FlowInfo::recover_jump_tables`' `notreached` list instead of
 re-queue, a stage cap (upstream `recoverystage`), and a non-override entry into
 `check_for_multistage`.
 
-**Owning files.** `decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs`
+**Owning files.** `decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs`
 (`recover_model_basic`, `recover_addresses`, `check_for_multistage`),
 `src/p2_lift/flow.rs` (`recover_jump_tables`), `src/substrate/funcdata_block.rs`
 (`stage_jump_table`), plus `phases.toml` + `p0_knowledge/options.rs` + the catalog counts.

@@ -205,7 +205,7 @@ That is a standing instruction to both halves of the loop, and it is in both pro
   with a type, steer structuring, fix a prototype, make a rename persist. They are told to
   check `kuna catalog --json` first: an option that already exists is a discoverability
   problem, not a missing interface, and that is worth knowing too.
-- **Builders** are told to *expose* before they invent. `kuna-console` registers ~37
+- **Builders** are told to *expose* before they invent. `unlace-console` registers ~37
   intervention-shaped commands — `map function`, `override jumptable`, `force goto`,
   `force datatype`, `parse line`, `retype`, `structure blocks` and the rest — and **none is
   reachable from the `kuna` binary**. Three very different jobs hide behind "add an
@@ -230,10 +230,10 @@ Getting the track wrong is the most likely way to waste a builder session.
 | | **`tooling`** (the majority) | **`quality`** | **`perf`** |
 |---|---|---|---|
 | The gap is | a missing or broken capability | kuna's emitted C is wrong | it is too slow |
-| Lives in | `kuna-cli`, `kuna-console`, `kuna-analysis` | `kuna-decomp/src/pN_*/kuna_<slug>.rs` | either |
+| Lives in | `unlace-cli`, `unlace-console`, `unlace-analysis` | `unlace-decomp/src/pN_*/kuna_<slug>.rs` | either |
 | Changes emitted C | **no** | **yes** | must not |
 | `phases.toml` option | **not required** — the rule is "a judgement call ships behind a named option", and a new subcommand is not one | **required for a judgement call** (plus all 8 ritual steps); **forbidden for a strict correctness fix**, which ships always-on with a one-pass stage test (`docs/agents.md` → *Adding features*) | only if output moves |
-| Counters | none | `kuna_phases/tests.rs` (2 asserts + the tier tuple + the count-encoding *test names*), `catalog_bytecompat.rs` (3 asserts + the `phase_catalog.json` fixture), `tests/stages/kuna-catalog.xml`, `kuna-base/src/xml.rs` | none |
+| Counters | none | `kuna_phases/tests.rs` (2 asserts + the tier tuple + the count-encoding *test names*), `catalog_bytecompat.rs` (3 asserts + the `phase_catalog.json` fixture), `tests/stages/kuna-catalog.xml`, `unlace-base/src/xml.rs` | none |
 | Tests | cargo tests + the promoted acceptance probe. **A `tests/stages/` case would be wrong** — that README scopes the corpus to stage-model issues | `tests/stages/gh{angr,dec}-<slug>.xml`: two-pass when option-gated, one pass when always-on | timing probe with a stated noise floor |
 | Speed bar | before/after on the touched path | `scripts.pipeline.timeit`, ≤5% | **3σ and ≥20%** — `returncopysplit` measured a −20%/−12% noise floor on byte-identical output |
 
@@ -308,8 +308,8 @@ agent attacks the new surface.
 
 Three layers, cheapest first:
 
-1. **Track separation.** `tooling` touches kuna-cli/console/analysis + `tests/cli/` +
-   `docs/cli.md`; `quality` touches kuna-decomp + `phases.toml` + the counters +
+1. **Track separation.** `tooling` touches unlace-cli/console/analysis + `tests/cli/` +
+   `docs/cli.md`; `quality` touches unlace-decomp + `phases.toml` + the counters +
    `docs/options.md` + `docs/history.md` + `tests/stages/`. Disjoint sets.
 2. **Named leases** with a TTL and a dead-pid reaper: `merge`, `counter:catalog`,
    `counter:stages-corpus`, `file:phases.toml`, `file:docs/options.md`,

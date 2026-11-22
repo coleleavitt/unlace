@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli, decompiler/crates/kuna-analysis]
+touches: [decompiler/crates/unlace-cli, decompiler/crates/unlace-analysis]
 scope: medium
 regression_of: null
 pr: null
@@ -132,7 +132,7 @@ THE TRAP, SAME SHAPE AS THE r9 BERIA ONE: an 'exit_code 0 + stderr_absent' accep
 
 AND EVEN THE HONEST VERSION DOES NOT YIELD AN ANALYZABLE IMAGE. notes/decompressed.bin is 5,489,913 bytes and starts '48 8d 05 49 e6 01 00 / 48 89 05 5a 5a 4f 00 / c3' -- raw x86-64 code, no MZ, no PE header, no section table, no imports, no relocs; the decoder also reported end marker seen: False. So an override that writes this blob out gives a file kuna cannot load as a program. The need's own Reference says the same ('Recovery is incomplete ... imports, relocations, and executable reconstruction remain undone').
 
-WHAT I RECOMMEND AT T_TRIAGE / TO THE BUILDER. Keep the need, keep severity, but REWRITE THE ACCEPTANCE to exercise the override the title asks for, not automatic unpacking: invoke 'kuna unpack {{BIN}} -o <out> --raw-lzma 0x1403ea000:0x14053e47c --lzma-props <pb,lp,lc or the 2-byte prefix>' (spelling is the builder's call) and assert exit 0 PLUS a positive witness on the produced artifact -- byte length 5489913, or the JSON reporting the payload's load address -- so the clause cannot be passed by an error-path change. With that acceptance the work is a bounded kuna-cli change and scope=small holds. WITHOUT it, the need reads as 'reconstruct a PE from a raw code blob', which is a plane and belongs in a PROPOSAL, not a builder slot. Do NOT dispatch this need until its acceptance is rewritten.
+WHAT I RECOMMEND AT T_TRIAGE / TO THE BUILDER. Keep the need, keep severity, but REWRITE THE ACCEPTANCE to exercise the override the title asks for, not automatic unpacking: invoke 'kuna unpack {{BIN}} -o <out> --raw-lzma 0x1403ea000:0x14053e47c --lzma-props <pb,lp,lc or the 2-byte prefix>' (spelling is the builder's call) and assert exit 0 PLUS a positive witness on the produced artifact -- byte length 5489913, or the JSON reporting the payload's load address -- so the clause cannot be passed by an error-path change. With that acceptance the work is a bounded unlace-cli change and scope=small holds. WITHOUT it, the need reads as 'reconstruct a PE from a raw code blob', which is a plane and belongs in a PROPOSAL, not a builder slot. Do NOT dispatch this need until its acceptance is rewritten.
 
 ### 2026-09-08T05:51Z — captain, round 9 B_PLAN: NOT DISPATCHED (acceptance over-scoped)
 
@@ -166,7 +166,7 @@ tester's notes:
   Only the *PackHeader* is missing. "Headerless LZMA payload" undersells it: this is a
   UPX image with a stripped PackHeader.
 - **The two prop bytes at that VA are `1a 03`** — and that is bit-for-bit the layout
-  `kuna_analysis::upx::lzma::Properties::split` already parses (`pb = head[0] & 7` = 2,
+  `unlace_analysis::upx::lzma::Properties::split` already parses (`pb = head[0] & 7` = 2,
   `lc = head[1] & 0x0f` = 3, `lp = head[1] >> 4` = 0). kuna therefore already owns a raw
   LZMA1 decoder for exactly this stream. The deliverable is *exposing* it, not writing one.
 - **The witness constant is reproducible.** Decoding `0x400+2 .. 1394812` as raw LZMA1

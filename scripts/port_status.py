@@ -25,7 +25,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STAGES = os.path.join(ROOT, "decompiler", "crates", "kuna-decomp", "phases.toml")
+STAGES = os.path.join(ROOT, "decompiler", "crates", "unlace-decomp", "phases.toml")
 OPPS = os.path.join(ROOT, "docs", "improvement-pipeline", "opportunities.json")
 MATRIX = os.path.join(ROOT, "docs", "improvement-pipeline", "matrix.md")
 

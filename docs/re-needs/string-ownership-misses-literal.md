@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/listing/xrefs.rs]
+touches: [decompiler/crates/unlace-analysis/src/listing/xrefs.rs]
 scope: small
 regression_of: null
 pr: null
@@ -73,11 +73,11 @@ Locate the handler referencing Product Already Registered.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/switchtable_i386",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386",
     "binary_sha256": "7c67abaf4be653478fff9c6344c1fe58fe68675d022bab1e110985f67044a8cc",
     "binary_size": 9092,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/switchtable_i386"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386"
   },
   "timeout_s": 60,
   "cmd": [
@@ -130,5 +130,5 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 4 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, and broader than filed. The listing-tier xref walk is a recursive descent that only follows classify()'s direct flows plus fall-through (listing/xrefs.rs:626-639), so a BRANCHIND contributes no successor and the walk dies at every jump table. Control on sha c5f4073a: xrefs --from 0x4011a0 files 61 refs whose from-addresses run 0x4011ac..0x40143b and then resume at 0x401732 -- the entire case-body region 0x40143c..0x401731 is unwalked, and 0x40143b is itself the row 'JMP dword ptr [EAX*0x4 + 0x4017c4]', the table base, filed as a data ref. Both pushes in that case body are lost, not just the filtered one: xrefs --to 0x403278 is also empty. The free in-function control is the decompiler on the SAME function: kuna decompile 0x4011a0 --addr emits v20 = the literal at line 305, i.e. p2's switch recovery reaches the case body that the analysis-tier walk cannot. So the defect is not in strings.rs (it just consumes XrefIndex, and xrefs --to 0x403288 is 0 too) and not in the string scan (the literal is found, section .rdata). SCOPE CORRECTION: touches is kuna-analysis (listing/xrefs.rs), not kuna-decomp, and the fix is jump-table target enumeration for the descent -- every switch case body in every binary is invisible to xrefs/strings today, so the blast radius of a fix is wider than one need.
-- round 4 BUILDER: acceptance retargeted from the dataset witness to the vendored twin `decompiler/crates/kuna-analysis/tests/fixtures/switchtable_i386` so it promotes into `tests/cli/` (CI has no dataset). The witness passes the same assertions on the fixed build (`strings[0].functions` = `sub_4011a0`, `xrefs --to 0x403288` = 1). `cmd` changed with the target, so `acceptance_id` was relabelled a-240de031bdd8 -> a-e1c6f00964d8.
+- round 4 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, and broader than filed. The listing-tier xref walk is a recursive descent that only follows classify()'s direct flows plus fall-through (listing/xrefs.rs:626-639), so a BRANCHIND contributes no successor and the walk dies at every jump table. Control on sha c5f4073a: xrefs --from 0x4011a0 files 61 refs whose from-addresses run 0x4011ac..0x40143b and then resume at 0x401732 -- the entire case-body region 0x40143c..0x401731 is unwalked, and 0x40143b is itself the row 'JMP dword ptr [EAX*0x4 + 0x4017c4]', the table base, filed as a data ref. Both pushes in that case body are lost, not just the filtered one: xrefs --to 0x403278 is also empty. The free in-function control is the decompiler on the SAME function: kuna decompile 0x4011a0 --addr emits v20 = the literal at line 305, i.e. p2's switch recovery reaches the case body that the analysis-tier walk cannot. So the defect is not in strings.rs (it just consumes XrefIndex, and xrefs --to 0x403288 is 0 too) and not in the string scan (the literal is found, section .rdata). SCOPE CORRECTION: touches is unlace-analysis (listing/xrefs.rs), not unlace-decomp, and the fix is jump-table target enumeration for the descent -- every switch case body in every binary is invisible to xrefs/strings today, so the blast radius of a fix is wider than one need.
+- round 4 BUILDER: acceptance retargeted from the dataset witness to the vendored twin `decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386` so it promotes into `tests/cli/` (CI has no dataset). The witness passes the same assertions on the fixed build (`strings[0].functions` = `sub_4011a0`, `xrefs --to 0x403288` = 1). `cmd` changed with the target, so `acceptance_id` was relabelled a-240de031bdd8 -> a-e1c6f00964d8.

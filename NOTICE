@@ -26,9 +26,9 @@ The following attribution is reproduced from Ghidra's NOTICE file:
 Portions of the structuring and region-recovery code are ported from angr
 (https://github.com/angr/angr), released under the BSD 2-Clause License;
 ported algorithms are tagged with their source decompiler in
-decompiler/crates/kuna-decomp/phases.toml and docs/spec/.
+decompiler/crates/unlace-decomp/phases.toml and docs/spec/.
 
-The PKLITE unpacker (decompiler/crates/kuna-analysis/src/pklite) is ported
+The PKLITE unpacker (decompiler/crates/unlace-analysis/src/pklite) is ported
 from deark (https://github.com/jsummers/deark), released under the MIT
 License:
 
@@ -54,7 +54,7 @@ License:
     USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 The Swift symbol demangler
-(decompiler/crates/kuna-analysis/src/analyzers/demangle/kuna_swift) follows
+(decompiler/crates/unlace-analysis/src/analyzers/demangle/kuna_swift) follows
 the Swift project's reference demangler
 (https://github.com/apple/swift, swift/lib/Demangling/Demangler.cpp and
 NodePrinter.cpp, with the node vocabulary of DemangleNodes.def and the
@@ -70,7 +70,7 @@ Library Exception:
     See https://swift.org/CONTRIBUTORS.txt for the list of Swift project
     authors
 
-The LZFSE decoder (decompiler/crates/kuna-analysis/src/loader/kuna_kernelcache/lzfse.rs)
+The LZFSE decoder (decompiler/crates/unlace-analysis/src/loader/kuna_kernelcache/lzfse.rs)
 follows Apple's lzfse reference implementation (https://github.com/lzfse/lzfse),
 released under the BSD 3-Clause License:
 

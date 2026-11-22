@@ -17,16 +17,16 @@ The live, normative stage model is in [`phases.md`](phases.md) /
 to a stage in [`history/stage-mapping.md`](history/stage-mapping.md). The items below are the
 *application-layer* steps that sit **outside** that stage model.
 
-## Where these live: the `kuna-analysis` crate
+## Where these live: the `unlace-analysis` crate
 
-These analyses have a dedicated home: the **`kuna-analysis`** crate
-(`decompiler/crates/kuna-analysis/`). It sits *above* `kuna-decomp` in the
+These analyses have a dedicated home: the **`unlace-analysis`** crate
+(`decompiler/crates/unlace-analysis/`). It sits *above* `unlace-decomp` in the
 dependency graph so an analysis can both read the parsed object (via
-`kuna-sleigh`'s loader + the `object` crate) and seed the engine's symbol/type
-tables (`kuna_decomp::{architecture, database}`):
+`unlace-sleigh`'s loader + the `object` crate) and seed the engine's symbol/type
+tables (`unlace_decomp::{architecture, database}`):
 
 ```text
-kuna-base / kuna-num -> kuna-sleigh -> kuna-decomp -> kuna-analysis -> kuna-console / kuna-cli
+unlace-base / unlace-num -> unlace-sleigh -> unlace-decomp -> unlace-analysis -> unlace-console / unlace-cli
 ```
 
 Modules are grouped by what they feed (mostly P0/S1): `loadimage_object.rs` (the
@@ -34,7 +34,7 @@ real-ELF `LoadImage` backend), `loader/` (image-format markup — `elf_plt.rs`,
 relocations, PE/Mach-O stubs, no-return detection), `analyzers/` (one module per
 analysis pass), and `listing/` (the disassembly/xref tier).
 
-Each analysis implements **`kuna_analysis::pass::AnalysisPass`** — the
+Each analysis implements **`unlace_analysis::pass::AnalysisPass`** — the
 generalization of the de-facto `elf_plt` contract: a focused module that reads
 the object and produces a flat, deduplicated `AnalysisOutput` of *facts*
 (symbols, entries, no-return names, read-only ranges), never panicking and never
@@ -103,7 +103,7 @@ structurally untouched.
 and turn each PLT stub into a thunk to an external function. The decompiler then
 sees the import name at the call site.
 
-**kuna now:** [`kuna-analysis/src/loader/elf_plt.rs`](../decompiler/crates/kuna-analysis/src/loader/elf_plt.rs)
+**kuna now:** [`unlace-analysis/src/loader/elf_plt.rs`](../decompiler/crates/unlace-analysis/src/loader/elf_plt.rs)
 reconstructs `got_slot → name` from the dynamic relocations and decodes each
 `.plt*` stub's GOT reference per architecture (x86-64, x86-32, AArch64, ARM32,
 RISC-V, SPARC; classic, CET `.plt.sec`, PIE, and stripped layouts). SPARC is the
@@ -171,7 +171,7 @@ stripped/DWARF-less binary's own statics. The Ghidra analog is the ELF symbol
 importer's data-symbol path (`ElfSymbolTable` → data address markup), which
 names data objects independently of debug info. Always on (DIV-26/DIV-76); the
 commit is in
-`kuna-console/src/engine.rs::commit_analysis_output`.
+`unlace-console/src/engine.rs::commit_analysis_output`.
 
 ## 3. DWARF debug-info recovery — ⛔ Gap
 
@@ -199,7 +199,7 @@ code in undefined gaps via instruction-mask fingerprinting + recursive-descent
 PseudoDisassembly. It is **off-by-default upstream** (`setDefaultEnablement(false)`,
 warns "MAY CREATE A LOT OF BAD CODE!") and requires a post-disassembly
 Listing/FunctionManager (≥20 found functions) + a PseudoDisassembler — none of which
-exist at the kuna-analysis tier (which runs before decompilation). Its sound output (new
+exist at the unlace-analysis tier (which runs before decompilation). Its sound output (new
 entries) is subsumed by `s1-entry-disc` + `s1-eh-frame` for kuna's given-entries model.
 Documented ⛔ out-of-scope (see [`history/analysis-port-log.md`](history/analysis-port-log.md) Increment 4),
 the same call as `FindNoReturnFunctionsAnalyzer`.
@@ -277,7 +277,7 @@ inherited core):**
 - **Post-typing refinement loop (roadmap #9) — ⛔ engine S2, not analyzer-tier.** The
   decompiler-internal multistage re-recovery (`recover_count > 1`), gated behind the
   `Override::queryMultistageJumptable` engine seam. It is an *engine* (S2-feedback) change,
-  not a `kuna-analysis` pass; deferred as a separate future engine task.
+  not a `unlace-analysis` pass; deferred as a separate future engine task.
 
 ## 8. Library prototype seeding (signatures for `printf`, `malloc`, …) — 🟡 Substituted
 
@@ -308,7 +308,7 @@ follow-up; the current table's derivation and rejected set are in
 For contrast, these need no application analyzer — they are the ported engine and
 already work:
 
-- SLEIGH instruction decoding (vendored `specs/`, `kuna-sleigh`).
+- SLEIGH instruction decoding (vendored `specs/`, `unlace-sleigh`).
 - Calling-convention / prototype recovery from usage (S4, `fspec.rs`).
 - Type inference and propagation, pointer/`char*` from usage (S5).
 - Jump-table core recovery (S2 + feedback).
@@ -325,16 +325,16 @@ already work:
 > with effort sizing and verdicts — is in
 > [`history/analysis-port-buildplan.md`](history/analysis-port-buildplan.md).
 
-Each row is a future `AnalysisPass` (or extension) under `kuna-analysis/src/s1_*`.
+Each row is a future `AnalysisPass` (or extension) under `unlace-analysis/src/s1_*`.
 Difficulty: **easy** = self-contained byte/string transform, no new heavy dep;
 **med** = needs an engine API or a parser; **hard** = a new subsystem (a
 debug-format reader or a discovery loop). Vendored fixtures live in
-`decompiler/crates/kuna-analysis/tests/fixtures/` (`fauxware`, `cet_pie_x86_64`,
+`decompiler/crates/unlace-analysis/tests/fixtures/` (`fauxware`, `cet_pie_x86_64`,
 `stripped_dynamic_x86_64`).
 
 | # | Analysis | Stage | Diff | Concrete testcase (fixture → assertion) |
 |---|----------|-------|------|------------------------------------------|
-| ✅ | PLT/GOT import names | S1 | done | **fauxware**: `0x400510→puts`, no symbol at `0x0`, no `@` in names (`kuna-analysis` tests + console e2e). Per-arch e2e: x86-64 (`verify_w11_elf_plt_names`), AArch64 (`verify_aarch64_plt`), RISC-V64 (`verify_riscv64_plt`), **MIPS32** (`verify_mips_plt`: `plt_mips32` `puts`/`printf` via the `.MIPS.stubs`/GOT layout — Increment 27) |
+| ✅ | PLT/GOT import names | S1 | done | **fauxware**: `0x400510→puts`, no symbol at `0x0`, no `@` in names (`unlace-analysis` tests + console e2e). Per-arch e2e: x86-64 (`verify_w11_elf_plt_names`), AArch64 (`verify_aarch64_plt`), RISC-V64 (`verify_riscv64_plt`), **MIPS32** (`verify_mips_plt`: `plt_mips32` `puts`/`printf` via the `.MIPS.stubs`/GOT layout — Increment 27) |
 | ✅ | **Foundation: generic commit seam** | S1 | done | `bootstrap_from_elf` runs `run_default_analyses` + `commit_analysis_output`; no funcsym regression (`make test` PARITY OK) |
 | ✅ | **No-return detection** | S1 | done | **fauxware** `rejected` calls `exit`: no dead fall-through after `exit(1)` (5 unit tests + e2e). The vendored `ElfFunctionsThatDoNotReturn` carries two kuna divergence blocks appended in place, each fenced by its own `# (kuna divergence, DIV-nn)` comment: DIV-21's unconditional libc names and DIV-78's libstdc++ `std::__throw_*` family (mangled + demangled spellings; upstream omits it, so C++ binaries emitted the dead code after every `std::__throw_length_error`). See [`history/analysis-port-log.md`](history/analysis-port-log.md) increment 1 |
 | ✅ | **Demangling** (Itanium C++ / Rust) | S1 | done | `cpp_mangled` `main` renders `foo::Bar::baz(...)` (cpp_demangle + rustc-demangle; needed the cross-scope call-resolution fix). Increment 2 |

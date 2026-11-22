@@ -32,13 +32,13 @@ in KUNA_OPTION_NAMES not in phases.toml settableTable: []
 in phases.toml settableTable not in KUNA_OPTION_NAMES: []
 ```
 
-`kuna catalog --check` (`kuna-cli/src/catalog.rs:221`) enforces **bidirectional** equality
+`kuna catalog --check` (`unlace-cli/src/catalog.rs:221`) enforces **bidirectional** equality
 between the emitted catalog and `KUNA_OPTION_NAMES`, and it is green. So the contract that
 exists is being honoured; the problem is what the contract does not cover.
 
 ### 2. All 38 upstream ArchOptions are invisible
 
-`decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs` contains 38 `impl ArchOption`
+`decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs` contains 38 `impl ArchOption`
 blocks whose names are the ported Ghidra `OptionDatabase` set. Probing each against the
 catalog:
 
@@ -70,7 +70,7 @@ inferconstptr            invisible
 
 ### 3. They are nonetheless a live `--option` surface that changes emitted C
 
-`kuna-cli/src/decompile_all.rs:455 apply_runtime_options` routes any name **not** in
+`unlace-cli/src/decompile_all.rs:455 apply_runtime_options` routes any name **not** in
 `KUNA_OPTION_NAMES` through `registry().find_element(name, 0)` into `OptionDatabase::set`.
 So `kuna decompile-all <bin> --option readonly on` works today. A/B on three stripped
 corpus binaries (changed lines in the full `decompile-all` output vs a no-flag run):
@@ -130,9 +130,9 @@ is enforced by a check that structurally cannot see the upstream family, because
 that list by construction.
 
 **Owning phase: P0** (knowledge/configuration plane). Owning files:
-`decompiler/crates/kuna-decomp/phases.toml`,
-`decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs`,
-`decompiler/crates/kuna-cli/src/catalog.rs`.
+`decompiler/crates/unlace-decomp/phases.toml`,
+`decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs`,
+`decompiler/crates/unlace-cli/src/catalog.rs`.
 
 **Not a metric artifact, not covered by an option, not already fixed.** It has zero GED
 value and zero direct correctness value — it is a *discoverability* defect, which is exactly
@@ -219,7 +219,7 @@ Two viable shapes; recommend the second.
 2. **Teach `cmd_check` the upstream class** (recommended, smaller and truthful). Leave
    `KUNA_OPTION_NAMES` alone; relax `cmd_check`'s `cat.difference(&registered)` arm to also
    accept a name that resolves in `UPSTREAM_OPTION_ELEMENTS`. ~6 lines in
-   `kuna-cli/src/catalog.rs`, no dispatch change, and the two dispatch sites keep working
+   `unlace-cli/src/catalog.rs`, no dispatch change, and the two dispatch sites keep working
    unmodified because upstream names still fall through to `OptionDatabase`. Rows omit
    `live_field`/`live_true`/`live_false` — an established pattern (18 analysis gates and
    `loweredswitch`/`stackguard`/`namestyle` already do).

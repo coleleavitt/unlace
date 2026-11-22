@@ -1,0 +1,35 @@
+//! S8 -- Structured AST & goto quality: the structuring engine.
+//!
+//! Stage-aligned module group; declared flatly at the crate root via re-export in
+//! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
+
+pub mod blockaction;
+mod kuna_domindex;
+pub mod kuna_clonephiorder;
+pub mod kuna_condfold;
+pub mod kuna_condstmts;
+pub mod kuna_crossjumpreverter;
+pub mod kuna_dedupitetail;
+pub mod kuna_gotolabel;
+pub mod kuna_gotosink;
+pub mod kuna_gotonext;
+pub mod kuna_gotoreduce;
+pub mod kuna_ifelseflatten;
+pub mod kuna_ifnoexit;
+pub mod kuna_iteboolean;
+pub mod kuna_itecondlist;
+pub mod kuna_iteregion;
+pub mod kuna_loopbreak_recovery;
+pub mod kuna_looprotate; // (kuna `looprotate`) a guarded do-while loop becomes a while loop
+pub mod kuna_loopcontinue;
+pub mod kuna_orchain;
+pub mod kuna_rettriangle;
+pub mod kuna_outline;
+pub mod kuna_earlyreturn;
+pub mod kuna_returndup;
+pub mod kuna_returndupcalls;
+pub mod kuna_retsplitglobal;
+pub mod kuna_retsplitlimit;
+pub mod kuna_switchreturn;
+pub mod kuna_taildup;
+pub mod region_structurer;

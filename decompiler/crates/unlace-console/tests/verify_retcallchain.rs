@@ -1,0 +1,236 @@
+//! The RET-call chain a `flow <addr> call` override extends along —
+//! `docs/re-needs/flow-call-override-retain.md`.
+//!
+//! A `push <continuation>; push <target>; ret` run is a call written without a
+//! `call` instruction, and a body built out of them is one such `ret` per
+//! callee.  The entry detector reclassifies the chain by default; an explicit
+//! override on any one link still extends to the others as #504 specified.
+//!
+//! Fixture: `unlace-analysis/tests/fixtures/retcallchain_i386` (source
+//! `retcallchain_i386.s`), whose `chain_entry` is three links followed by a
+//! plain epilogue.
+
+use std::path::PathBuf;
+
+use unlace_base::address::Address;
+use unlace_console::assertions::{self, Body, Directive};
+use unlace_console::engine::{bootstrap_from_object, ConsoleProgram, EntrySelector};
+use unlace_console::kuna_retcallchain::{
+    kuna_chain_sites, kuna_entry_chain_sites, kuna_push_immediate_ret, CHAIN_MAX_INSNS,
+    CHAIN_MAX_SITES,
+};
+use unlace_console::project::decompile_targets;
+
+/// `chain_entry`, and the `ret` of each of its three links.
+const CHAIN_ENTRY: u64 = 0x0804_900e;
+const LINK_RETS: [u64; 3] = [0x0804_9019, 0x0804_9025, 0x0804_9031];
+/// The plain epilogue after the last link, and an ordinary leaf's own `ret`.
+const EPILOGUE_RET: u64 = 0x0804_9032;
+const FIRST_LINK: u64 = 0x0804_a000;
+
+/// The three callees the chain reaches, by the global each `ret` pops.
+const CALLS: [&str; 3] = ["(*dat_804a000)()", "(*dat_804a004)()", "(*dat_804a008)()"];
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+}
+
+/// Bootstrap the fixture and run the analysis commit.
+fn load_fixture(fixture: &str) -> ConsoleProgram {
+    let root = repo_root();
+    let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
+    let bin = root.join("decompiler/crates/unlace-analysis/tests/fixtures").join(fixture);
+    let mut prog = bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+        .expect("bootstrap fixture with built processor specs");
+    prog.commit_pending_analysis().expect("analysis commit");
+    prog
+}
+
+fn load() -> ConsoleProgram {
+    load_fixture("retcallchain_i386")
+}
+
+fn flow(addr: u64, kind: &str) -> Directive {
+    Directive {
+        raw: format!("flow {addr:#x} {kind}"),
+        body: Body::Flow { func: None, addr, kind: kind.to_string() },
+    }
+}
+
+/// Decompile `chain_entry` under `directives` and return its C.
+fn decompile_with(directives: Vec<Directive>) -> String {
+    let mut prog = load();
+    if !directives.is_empty() {
+        prog.set_assertions(directives);
+        assertions::apply_program_scoped(&mut prog);
+    }
+    let target = prog
+        .resolve_entry(&EntrySelector::Numeric(CHAIN_ENTRY))
+        .expect("the fixture has a function at chain_entry");
+    let funcs = decompile_targets(&mut prog, vec![target], false, false, false);
+    let code = funcs[0].code.clone().unwrap_or_default();
+    assert_eq!(funcs[0].error, None, "the pipeline aborted:\n{code}");
+    code
+}
+
+/// The sites the walk reports for an override at `at`.
+fn sites(prog: &ConsoleProgram, at: u64) -> Vec<u64> {
+    let space = prog.arch().manage().get_default_code_space().cloned().expect("code space");
+    let entry = Address::new(space.clone(), CHAIN_ENTRY);
+    let at = Address::new(space, at);
+    kuna_chain_sites(prog.arch().translate(), &entry, &at, CHAIN_MAX_SITES, CHAIN_MAX_INSNS)
+        .iter()
+        .map(|a| a.get_offset())
+        .collect()
+}
+
+/// Unasserted entry chains are recovered by the same strict detector.
+#[test]
+fn the_default_recovers_the_whole_entry_chain() {
+    let code = decompile_with(Vec::new());
+    for call in CALLS {
+        assert!(code.contains(call), "the default chain stopped before {call}:\n{code}");
+    }
+}
+
+#[test]
+fn entry_recognition_reports_the_complete_chain() {
+    let prog = load();
+    let space = prog.arch().manage().get_default_code_space().cloned().expect("code space");
+    let entry = Address::new(space, CHAIN_ENTRY);
+    let sites = kuna_entry_chain_sites(
+        prog.arch().translate(),
+        &entry,
+        CHAIN_MAX_SITES,
+        CHAIN_MAX_INSNS,
+    )
+    .iter()
+    .map(|a| a.get_offset())
+    .collect::<Vec<_>>();
+    assert_eq!(sites, LINK_RETS);
+}
+
+#[test]
+fn immediate_ret_recognition_reports_only_the_one_store_tail() {
+    let prog = load_fixture("push_immediate_ret_i386");
+    let space = prog.arch().manage().get_default_code_space().cloned().expect("code space");
+    let entry = Address::new(space.clone(), 0x0804_9000);
+    let matched = kuna_push_immediate_ret(prog.arch().translate(), &entry, CHAIN_MAX_INSNS)
+        .expect("one-store immediate RET tail");
+    assert_eq!(matched.0.get_offset(), 0x0804_900a);
+    assert_eq!(matched.1, 0x0804_b000);
+
+    for entry in [
+        0x0804_9011,
+        0x0804_9012,
+        0x0804_9025,
+        0x0804_902e,
+        0x0804_9037,
+        0x0804_9039,
+        0x0804_9043,
+    ] {
+        let entry = Address::new(space.clone(), entry);
+        assert_eq!(
+            kuna_push_immediate_ret(prog.arch().translate(), &entry, CHAIN_MAX_INSNS),
+            None,
+            "negative at {entry:?} became an immediate RET tail"
+        );
+    }
+}
+
+#[test]
+fn immediate_ret_transfer_never_registers_the_encrypted_target_as_a_function() {
+    let mut prog = load_fixture("push_immediate_ret_i386.exe");
+    assert!(
+        prog.function_entries_canonical()
+            .iter()
+            .all(|entry| entry.addr.get_offset() != 0x0040_1000),
+        "encrypted target was already classified as a function"
+    );
+
+    let target = prog
+        .resolve_entry(&EntrySelector::Numeric(0x0040_2000))
+        .expect("the PE entry is a function");
+    let _ = decompile_targets(&mut prog, vec![target], false, false, false);
+    assert!(
+        prog.function_entries_canonical()
+            .iter()
+            .all(|entry| entry.addr.get_offset() != 0x0040_1000),
+        "tail-transfer recovery synthesized the encrypted target function"
+    );
+}
+
+/// The need's own case: one override on the first link recovers all three calls.
+#[test]
+fn overriding_the_first_link_recovers_the_whole_chain() {
+    let code = decompile_with(vec![flow(LINK_RETS[0], "call")]);
+    for call in CALLS {
+        assert!(code.contains(call), "the chain stopped before {call}:\n{code}");
+    }
+}
+
+/// Every link names the other two, whichever one the caller happened to find.
+#[test]
+fn each_link_reports_the_others() {
+    let prog = load();
+    for (i, at) in LINK_RETS.iter().enumerate() {
+        let want: Vec<u64> =
+            LINK_RETS.iter().copied().filter(|a| a != at).collect();
+        assert_eq!(sites(&prog, *at), want, "link {i} at {at:#x}");
+    }
+}
+
+/// A `ret` that is not a link extends to nothing: the plain epilogue pushes no
+/// continuation, and neither does an ordinary leaf's own return.
+#[test]
+fn an_ordinary_return_extends_to_nothing() {
+    let prog = load();
+    assert!(sites(&prog, EPILOGUE_RET).is_empty(), "the epilogue was read as a link");
+    assert!(sites(&prog, FIRST_LINK).is_empty(), "an address outside the walk was read as a link");
+}
+
+/// A matching fall-through literal is not sufficient: RETURN must load a slot
+/// written by this run, and the literal must be in its adjacent continuation
+/// slot. Stores through signed displacements, bypassing conditional paths, and
+/// partial register-alias writes must also invalidate the supposed proof.
+#[test]
+fn fallthrough_decoys_are_not_entry_chains() {
+    let prog = load_fixture("entry_ret_dispatch_i386");
+    let space = prog.arch().manage().get_default_code_space().cloned().expect("code space");
+    for entry in [
+        0x0804_9043,
+        0x0804_904d,
+        0x0804_9059,
+        0x0804_906f,
+        0x0804_9080,
+    ] {
+        let entry = Address::new(space.clone(), entry);
+        let sites = kuna_entry_chain_sites(
+            prog.arch().translate(),
+            &entry,
+            CHAIN_MAX_SITES,
+            CHAIN_MAX_INSNS,
+        );
+        assert!(
+            sites.is_empty(),
+            "fall-through decoy at {entry:?} was accepted: {sites:?}"
+        );
+    }
+}
+
+/// The site cap is a hard stop, not an advisory one.
+#[test]
+fn the_site_cap_bounds_what_is_reported() {
+    let prog = load();
+    let space = prog.arch().manage().get_default_code_space().cloned().expect("code space");
+    let entry = Address::new(space.clone(), CHAIN_ENTRY);
+    let at = Address::new(space, LINK_RETS[0]);
+    let capped = kuna_chain_sites(prog.arch().translate(), &entry, &at, 1, CHAIN_MAX_INSNS);
+    // Only the first link fits under the cap, and it is the override's own site,
+    // so there is nothing left to report.
+    assert!(capped.is_empty(), "the cap did not bound the walk: {capped:?}");
+
+    let entry_capped =
+        kuna_entry_chain_sites(prog.arch().translate(), &entry, 1, CHAIN_MAX_INSNS);
+    assert_eq!(entry_capped.len(), 1, "the entry cap did not stop at one link");
+}

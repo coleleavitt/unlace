@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/573
@@ -59,7 +59,7 @@ A declaration for the stack aggregate used in emitted C.
     "binary_sha256": "92968f535eaaa3dbf064699e5fcbe1e65ddd6456aa7c46495b26e1d63b9a9160",
     "binary_size": 10808,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/checker_stack_aggregate_x86_64"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/checker_stack_aggregate_x86_64"
   }
 }
 ```
@@ -75,7 +75,7 @@ A declaration for the stack aggregate used in emitted C.
     "binary_sha256": "92968f535eaaa3dbf064699e5fcbe1e65ddd6456aa7c46495b26e1d63b9a9160",
     "binary_size": 10808,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/checker_stack_aggregate_x86_64"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/checker_stack_aggregate_x86_64"
   },
   "timeout_s": 60,
   "cmd": [

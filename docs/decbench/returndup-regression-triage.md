@@ -36,7 +36,7 @@ kuna corpus (**536 slices, 52,862 scored functions**):
 ## Which transform: `returndup`, not `taildup`
 
 The two passes are **indistinguishable by slug text**. `PrintC::warning_slug`
-(`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs`) maps `taildup:` and `returndup:` to
+(`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs`) maps `taildup:` and `returndup:` to
 the *same* rendered slug, `return-dupe`. Any analysis that greps the artifacts for
 `return-dupe` is measuring both at once.
 

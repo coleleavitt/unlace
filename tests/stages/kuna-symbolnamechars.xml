@@ -41,7 +41,7 @@
     every assertion below pins the sanitized spelling, and the raw one coming
     back fails them. The option's own three-way off/safe/ident coverage lives
     in the Rust gate
-    decompiler/crates/kuna-console/tests/verify_symbolnamechars.rs, which can
+    decompiler/crates/unlace-console/tests/verify_symbolnamechars.rs, which can
     set the env var around each load. This is the same limit
     tests/stages/kuna-symbolnamerepair.xml documents for the same reason.
 -->
@@ -52,7 +52,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/hostile_symname_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/hostile_symname_x86_64</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>

@@ -170,14 +170,14 @@ x86-64 gcc cspec's stack `pentry` (`<pentry minsize="1" maxsize="500"
 align="8"><addr offset="8" space="stack"/></pentry>`,
 `specs/Ghidra/Processors/x86/data/languages/x86-64-gcc.cspec:80`),
 `ParamListStandard::characterize_as_param` / `build_trial_map`
-(`decompiler/crates/kuna-decomp/src/p4_calls/fspec.rs:2058,2654`), and
+(`decompiler/crates/unlace-decomp/src/p4_calls/fspec.rs:2058,2654`), and
 `ProtoModel::deriveInputMap`. What is not healthy is the *call-site* half:
 `FuncCallSpecs`'s active-input trial recovery never gets a spacebase trial.
 
 The single place where a caller-relative stack address is translated into the
 callee's parameter frame and registered as a call-input trial is the
 `IPTR_SPACEBASE` branch of `Heritage::guardCalls`
-(`decompiler/crates/kuna-decomp/src/p3_dataflow/heritage.rs:1440`):
+(`decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs:1440`):
 
 ```rust
             let mut off = addr.get_offset();
@@ -266,10 +266,10 @@ Mechanism to investigate and close, in order:
    `p4_calls/funcdata_callsite.rs:242`) already handles spacebase trials and
    should need no change.
 
-Owning files: `decompiler/crates/kuna-decomp/src/p4_calls/fspec.rs`,
-`decompiler/crates/kuna-decomp/src/p4_calls/coreaction_protos.rs`,
-`decompiler/crates/kuna-decomp/src/p3_dataflow/heritage.rs`,
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_4.rs`.
+Owning files: `decompiler/crates/unlace-decomp/src/p4_calls/fspec.rs`,
+`decompiler/crates/unlace-decomp/src/p4_calls/coreaction_protos.rs`,
+`decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs`,
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs`.
 Owning spec chapter: `docs/spec/04-calls-and-prototypes.md`.
 
 Risks: high. Recovering stack arguments adds inputs to CALL ops everywhere,

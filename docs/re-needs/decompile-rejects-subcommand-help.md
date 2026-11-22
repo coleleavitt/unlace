@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli/src/decompile.rs, decompiler/crates/kuna-cli/src/main.rs, decompiler/crates/kuna-cli/src/specs.rs, docs/cli.md, tests/cli]
+touches: [decompiler/crates/unlace-cli/src/decompile.rs, decompiler/crates/unlace-cli/src/main.rs, decompiler/crates/unlace-cli/src/specs.rs, docs/cli.md, tests/cli]
 scope: small
 regression_of: null
 pr: "448"

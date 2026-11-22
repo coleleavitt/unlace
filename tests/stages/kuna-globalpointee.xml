@@ -41,7 +41,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/globalpointee_gcc_O2_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/globalpointee_gcc_O2_x86_64</com>
   <com>read symbols</com>
   <com>load function p_int</com>
   <com>decompile</com>
@@ -89,7 +89,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/globalpointee_gcc_O0_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/globalpointee_gcc_O0_x86_64</com>
   <com>read symbols</com>
   <com>load function p_int</com>
   <com>decompile</com>

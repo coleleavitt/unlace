@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/loader, decompiler/crates/kuna-analysis/src/analyzers/strings]
+touches: [decompiler/crates/unlace-analysis/src/loader, decompiler/crates/unlace-analysis/src/analyzers/strings]
 scope: small
 regression_of: no-strings-inventory
 pr: "451"
@@ -94,11 +94,11 @@ Navigate from the Correct string to main.
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/sectionless_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/sectionless_x86_64",
     "binary_sha256": "0b3c1f3491912be34b1af5421578de88e46cf8cdcdd49979e43241049ab5f0e9",
     "binary_size": 8206,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/sectionless_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/sectionless_x86_64",
     "selector": null,
     "selector_kind": "none"
   },

@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp/src/p2_lift]
+touches: [decompiler/crates/unlace-decomp/src/p2_lift]
 scope: small
 regression_of: null
 pr: null

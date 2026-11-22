@@ -181,7 +181,7 @@ investigating.
 
 ## 3. Implement: one option-gated feature
 
-Canonical template: `decompiler/crates/kuna-decomp/src/p2_lift/kuna_loweredswitch.rs`
+Canonical template: `decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs`
 (+ its `phases.toml` row and `tests/stages/ghangr-loweredswitch.xml`). Model the code,
 registration, and test on it. New logic lives in `kuna_<slug>.rs` inside the owning phase
 folder; edits to ported-core files only where an anchor demands it, each marked
@@ -190,16 +190,16 @@ byte-identical until the ablation says otherwise.
 
 The artifact checklist (every item, or the gates fail opaquely):
 
-1. `decompiler/crates/kuna-decomp/src/<phase>/kuna_<slug>.rs` — the feature, early-return
+1. `decompiler/crates/unlace-decomp/src/<phase>/kuna_<slug>.rs` — the feature, early-return
    when its flag is off. Flag on the architecture struct, defaulted in its reset path.
    ElementId from the 4000+ range (grep for the current highest).
-2. `[[settable]]` row in `decompiler/crates/kuna-decomp/phases.toml` — **every field**,
+2. `[[settable]]` row in `decompiler/crates/unlace-decomp/phases.toml` — **every field**,
    including the provenance contract (§below): `summary`, `use_when`, `values`+`example`,
    `tier`, `symptoms`, `source_decompiler`, `inspiration`, `change_kind`.
 3. Option name registered in `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
 4. **Bump the hard-coded catalog counts** (three places; grep the current total):
    `src/p0_knowledge/kuna_phases/tests.rs` (count asserts),
-   `decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
+   `decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
    `tests/fixtures/phase_catalog.json` fixture — regenerate it with the console
    `openfile write`/`phase catalog` recapture documented in that file's header), and the
    `tests/stages/kuna-catalog.xml` stringmatch counts (bump whichever bucket the new

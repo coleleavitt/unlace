@@ -14,7 +14,7 @@ rounds: [11]
 first_seen_round: 11
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli/src/decompile.rs, decompiler/crates/kuna-decomp/src/p9_emit/kuna_naming.rs]
+touches: [decompiler/crates/unlace-cli/src/decompile.rs, decompiler/crates/unlace-decomp/src/p9_emit/kuna_naming.rs]
 scope: small
 regression_of: null
 pr: null
@@ -148,20 +148,20 @@ known title-similarity trap. The link is what scores this need 1055.5 against 43
 i.e. it is currently #1 in the build queue on a false premise. Clear regression_of at T_TRIAGE and let
 it re-rank (it lands near 13.9, alongside the other single-instance needs).
 
-TOUCHES IS UNPROVEN: filed as decompiler/crates/kuna-cli. The name lookup happens inside the forked
-decomp_dbg -- kuna-cli only translates the console's unknown-function output into that message at
-kuna-cli/src/decompile.rs:505. A CLI-tier fix (resolve the name to an address against the analysis
+TOUCHES IS UNPROVEN: filed as decompiler/crates/unlace-cli. The name lookup happens inside the forked
+decomp_dbg -- unlace-cli only translates the console's unknown-function output into that message at
+unlace-cli/src/decompile.rs:505. A CLI-tier fix (resolve the name to an address against the analysis
 function list before forking) and a decomp-tier fix (keep the default-style name as an alias) are both
 plausible. Confirm at T_TRIAGE before the lease algebra aims a builder at one tree.
-- round 11 TRIAGE (captain): cleared regression_of=analysis-generated-function-name -- the refuter measured that need's acceptance still PASSING on main, so the link was title-similarity, not a regression; it was scoring this need 1055.5 vs 43.9 for the runner-up. touches was filed kuna-cli alone and the refuter left it unproven; recorded BOTH candidate seams, since kuna-analysis names the function at load and namestyle is applied AFTER the load (kuna_entrymainproto.rs:84), so the rename that breaks the lookup happens in kuna-decomp while the error text is produced at kuna-cli/src/decompile.rs:505. touches carries no lease (select.PATH_RESOURCES leases only phases.toml/options.rs/tests-stages/history.md), so naming two seams costs no scheduling breadth. track stays tooling: the fix may land in kuna-decomp but the defect is a CLI round-trip gap, not emitted C.
+- round 11 TRIAGE (captain): cleared regression_of=analysis-generated-function-name -- the refuter measured that need's acceptance still PASSING on main, so the link was title-similarity, not a regression; it was scoring this need 1055.5 vs 43.9 for the runner-up. touches was filed unlace-cli alone and the refuter left it unproven; recorded BOTH candidate seams, since unlace-analysis names the function at load and namestyle is applied AFTER the load (kuna_entrymainproto.rs:84), so the rename that breaks the lookup happens in unlace-decomp while the error text is produced at unlace-cli/src/decompile.rs:505. touches carries no lease (select.PATH_RESOURCES leases only phases.toml/options.rs/tests-stages/history.md), so naming two seams costs no scheduling breadth. track stays tooling: the fix may land in unlace-decomp but the defect is a CLI round-trip gap, not emitted C.
 - round 11 BUILDER (b-r11-changing-namesty): hypothesis UPHELD and the refuter's mechanism confirmed
   exactly. Not a lost alias and not a broken selector: PR #499 (RE-need `string-owner-function-name`)
   already retries a by-name MISS as the address the name spells, and decides by MINTING -- it rendered
   the candidate offset through `self.arch().name_function(addr)` and accepted it only on an exact
   match, which tied the retry to the style the run happens to have ACTIVE. `option namestyle ghidra`
   clears `name_style_angr`, so `sub_15dc` stopped being a name this build would mint and the two
-  styles became disjoint name spaces. Closed in `ConsoleProgram::placeholder_name_address` (kuna-console,
-  not kuna-cli: kuna-cli only translates the console's miss into its error text at decompile.rs:505,
+  styles became disjoint name spaces. Closed in `ConsoleProgram::placeholder_name_address` (unlace-console,
+  not unlace-cli: unlace-cli only translates the console's miss into its error text at decompile.rs:505,
   and a fix there would have left `disassemble`/`xrefs`/`decompile-all --functions` refusing the same
   name) by rendering the candidate in ALL THREE styles -- `minted_function_names`, one call per
   `KunaNameStyle` arm, the same three functions `name_function` dispatches between. Both pre-existing

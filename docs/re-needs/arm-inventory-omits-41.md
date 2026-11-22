@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis]
+touches: [decompiler/crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: null
@@ -119,7 +119,7 @@ _not yet refuted_
 
 THE DECISIVE MEASUREMENT. kuna ALREADY KNOWS 0x104f4 is a called function; only 'functions' does not. 'kuna xrefs --to 0x104f4' returns count 1 with kind 'call', instruction 'bl 0x104f4' at 0x14aa8, from_function 'main' -- and main IS in the inventory (0x14a04, size 2224). So this is not a decode failure and not a reachability failure. Disassembling main and collecting its BL targets gives 45 distinct addresses; 42 are absent from the 17-function inventory (0x104f4, 0x106d8, 0x1082c ... 0x148bc), and the 42nd is 0x59684c, outside the image entirely -- a junk-word decode, see the obfuscation note below. The remaining 41 are exactly the validators the tester reported.
 
-WHY THE INVENTORY CANNOT SEE THEM. EntryDiscoveryPass (kuna-analysis/src/analyzers/entry/mod.rs) documents this as a designed LOSS in its own header: 'General undirected call-target sweep is infeasible at the analyzer tier (no Listing) -- substituted by the _start->main idiom (oracle 4) + prologue patterns (oracle 5).' On this image the substitutes cover nothing: oracle 4 fires correctly (main IS found at 0x14a04, so kuna_armlibcmain works and is NOT the defect), oracle 3 is empty because .eh_frame is 4 bytes -- a bare terminator -- and .ARM.exidx is 8 bytes, one entry, and oracle 5 is documented x86-64-only. Everything past main's own entry depends on a call sweep that does not exist. Note the mechanism is arch-neutral; ARM is where it bites because the two table oracles are empty here.
+WHY THE INVENTORY CANNOT SEE THEM. EntryDiscoveryPass (unlace-analysis/src/analyzers/entry/mod.rs) documents this as a designed LOSS in its own header: 'General undirected call-target sweep is infeasible at the analyzer tier (no Listing) -- substituted by the _start->main idiom (oracle 4) + prologue patterns (oracle 5).' On this image the substitutes cover nothing: oracle 4 fires correctly (main IS found at 0x14a04, so kuna_armlibcmain works and is NOT the defect), oracle 3 is empty because .eh_frame is 4 bytes -- a bare terminator -- and .ARM.exidx is 8 bytes, one entry, and oracle 5 is documented x86-64-only. Everything past main's own entry depends on a call sweep that does not exist. Note the mechanism is arch-neutral; ARM is where it bites because the two table oracles are empty here.
 
 DEAD LINE CLOSED, the same one as its ELF sibling: funcstart_patterns is default-OFF and is the obvious candidate, but 'decompile-all --option funcstart_patterns on' still returns 17 functions with no 0x104f4. Ablate through decompile-all -- 'kuna functions' takes no --option.
 

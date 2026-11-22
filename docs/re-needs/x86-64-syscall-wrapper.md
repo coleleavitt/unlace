@@ -14,7 +14,7 @@ rounds: [7]
 first_seen_round: 7
 attempts: 0
 covered_by_option: x64syscall
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/552

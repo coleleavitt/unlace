@@ -39,7 +39,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolslide_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolslide_le32</com>
   <com>mode reliable</com>
   <com>option listing on</com>
   <com>option aif on</com>
@@ -47,7 +47,7 @@ c3
   <com>read symbols</com>
   <com>functions</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/poolslide_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolslide_le32</com>
   <com>mode reliable</com>
   <com>option listing on</com>
   <com>option aif on</com>

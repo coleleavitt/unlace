@@ -33,7 +33,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/globalloadguard_gcc_O2_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/globalloadguard_gcc_O2_x86_64</com>
   <com>read symbols</com>
   <com>option indexaliasguard load</com>
   <com>load function d_loop</com>
@@ -74,7 +74,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/globalloadguard_clang_O2_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/globalloadguard_clang_O2_x86_64</com>
   <com>read symbols</com>
   <com>option indexaliasguard load</com>
   <com>load function d_cond</com>

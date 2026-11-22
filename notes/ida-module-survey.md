@@ -5,8 +5,8 @@ Scope: research only, no kuna code changes. Companion to `notes/ida-apple-mechan
 area is repeated here. Every IDA mechanism is described in our own words; addresses are offsets inside the IDA 9.5
 Linux modules, read from the idb-rs SQLite exports in `~/SiteResearch/ida-pro/sqlite/<category>__<module>.sqlite`
 (pseudocode, strings, xrefs) and from `~/.local/share/ida/9.5/cfg/*.cfg`. kuna side: branch `all`, catalog of
-308 options (`decompiler/target/debug/kuna catalog --json`), `kuna-analysis/src/analyzers/`, phase folders of
-`kuna-decomp`. "Live kuna" means a run of the debug `kuna decompile` on a small clang/gcc test written for this
+308 options (`decompiler/target/debug/kuna catalog --json`), `unlace-analysis/src/analyzers/`, phase folders of
+`unlace-decomp`. "Live kuna" means a run of the debug `kuna decompile` on a small clang/gcc test written for this
 survey (sources in the research session's scratchpad, not in the repo).
 
 ## 1. Dumps and exports made for this survey
@@ -31,21 +31,21 @@ modules (bochs_user, dbg, gdb_user, *_stub, *_user, dalvik_user) were not survey
 
 | # | gap | impact | evidence (IDA / kuna) | kuna owner | fix or option | size |
 |---|---|---|---|---|---|---|
-| 1 | Peripheral memory is not volatile on Cortex-M **ELF** images: device-register stores are deleted, polling loops come out tangled | ARM firmware (cleanflight, betaflight, libopencm3, crazyflie, chibios, nuttx are ELF): GED and correctness | cortex_m.py maps SRAM/PPB segments; live kuna repro on a clang thumbv7m ELF loses `REG(0x40021000)=1` and recovers with `--assert volatile 0x40000000+0x20000000`; kuna marks the regions only in `kuna-cli/src/rawfront.rs` (`DEVICE_REGIONS`), raw images only | kuna-analysis `loader/` (next to the pcmemory volatile painting), P1, M-profile images | fix | S |
-| 2 | No type-library input: library prototypes cannot carry named struct pointers beyond 23 libc shells (glibc x86-64 layouts for 9); Win32 handles/structs are `void *` | Windows/PE type match, drivers, Android/ARM POSIX, UEFI. (DecBench Linux: small, see note) | IDA ships 154 TILs (mssdk_win10 222k symbols / 92k types, gnuunx64 45k symbols, ntddk, ntapi, wdk, uefi64, android); Hex-Rays imports `get_named_type` and applies callee prototypes; libida embeds clang to parse headers. kuna: `protos/kuna_libcsigs.rs` (~685), `kuna_win32sigs.rs` (~180, `void *` by design), `libctypes`, `objcsdk` (ObjC subset) | kuna-analysis `analyzers/protos/`: a runtime type-archive option (read a user's IDA `.til` with idb-rs's Apache-2.0 TIL parser, or a header dir via a C-declaration reader like objcsdk's); never commit SDK-derived tables | option | L |
-| 3 | MSVC C++ class typing: no `X` struct with `__vftable` to a typed `X_vtbl`, no `this` typing of vfuncs/ctors, no rule "a load typed `X_vtbl` retypes its base as `X`" | Windows C++ type match (named struct pointers) and virtual-call rendering | rtti.so names RTTI; libida builds `<Class>_vtbl`; hexx64 sub_4311A0 back-propagates from vtable type to object type; kuna `rtti/` names `vfunc_i` only, `kuna_vtabletypes.rs` is Itanium-only | kuna-analysis `rtti/` + kuna-decomp P5 (`vtabletypes` extended to PE; back-propagation rule as option) | option | M |
-| 4 | 64-bit values on 32-bit targets: `long long` params split in two, hi/lo compare chains print as SBORROW4/CONCAT44 | i386 PE, ARM32 firmware, MIPS32/PPC32 | hexx64 rules 3CHECK64/CMP64/JNZ64 (sub_129630, sub_1F49A0, sub_282040); live kuna i386 -O2 test | kuna-decomp P4 (pair parameters) + `p5_types/double.rs` (compare-chain fold) | fix (fold) + option (param pairing) | M |
-| 5 | PDB: only names and extents are read; no TPI types, prototypes with `this`, register/stack locals, line numbers, PDB-derived vtables, symbol-server fetch | Windows/PE with PDBs (every system DLL via msdl): large type-match gain | pdb.so sub_6F920 (types), sub_50C20 (prototypes), sub_4F240 (locals), sub_34C10 (vtables), 0x76EA0/0x77DD0 (symbol path + download); kuna `analyzers/pdb/` | kuna-analysis `pdb/` (import = fix; network fetch = option, off like IDA's `PDB_NETWORK`) | fix + option | L (+S-M fetch) |
-| 6 | MSVC exceptions: no FuncInfo/FH4/IP-to-state parsing, catch funclets stay separate functions, no `throw` from `_CxxThrowException`+ThrowInfo, no x86 SEH4 `__try/__except` | Windows C++ and 32-bit PE (malware, crackmes) | eh34 sub_3F6E0, sub_3CB60, 0x16560, sub_39140; eh_parse struct layouts; x86 pc 0x34230/0x2DA10; rtti.so ThrowInfo markup; kuna has `itaniumeh` only | kuna-analysis `entry/` (new `kuna_msvceh.rs`) + P2/P8, sibling of `itaniumeh` | option | L (throw helper alone S) |
-| 7 | Thumb/ARM switch helpers (`__gnu_thumb1_case_*`, `__ARM_common_switch8`) recognised by name only; stripped M0/-Os firmware loses every such switch | ARM firmware GED | arm.so sub_87DC0 matches the helper body (up to 16 code words, tolerant to one swap) then names it; kuna `listing/kuna_thumbswitch.rs:107` name table, ARM.cspec callfixups by name | kuna-analysis `listing/` (body signature -> name -> existing callfixup) | fix | S-M |
-| 8 | Atomic idioms: x86 `lock` forms print `LOCK(); ... UNLOCK();`, AArch64 LSE CAS prints as plain compare-and-store, no LL/SC loop folding | kernels, C++ `shared_ptr`, Rust `Arc`, firmware RTOS | hexx64 sub_8AC80 (`_Interlocked*` table), hexarm sub_899B0 (C11 `atomic_*`); live kuna tests | kuna-decomp new `p3_dataflow/kuna_atomics.rs` | fix (fixed forms) + option (LL/SC loops) | M |
-| 9 | Cortex-M core peripherals unnamed without an SVD (NVIC, SCB, SysTick, MPU, DWT...), and `--svd` is silently ignored for ELF inputs | ARM firmware readability | cortex_m.json (~1,900 SCS registers in 29 blocks); svdimport works on any database; kuna `0xE000ED0C` -> `dat_e000ed0c`; `rawfront.rs` returns before the SVD branch for object files | kuna-analysis `loader/firmware/cortexm.rs` (table built from the ARM ARM, typed structs like the SVD path) + move SVD application into an analysis pass | fix | S-M |
-| 10 | PE Load Config not read: Control Flow Guard function table (every address-taken function), guard dispatch/check slots, SafeSEH / EH-continuation tables; delay-load imports not named | Windows/PE function recall and indirect-call fidelity; delay imports common in MSVC DLLs and malware | loaders__pe sub_18EE0 -> sub_8540 (`___guard_fids_table`), delay-load descriptor walk sub_9B20; kuna: no `GuardCF` / delay-load code (`loader/pe_iat.rs` regular IAT only) | kuna-analysis `analyzers/entry/pe_entry.rs` (new oracles) + `loader/pe_iat.rs` | fix | S each (dispatch rewrite M) |
-| 11 | DWARF location lists: only `fbreg` locals are imported; register variables (`DW_OP_reg`/`breg`/`piece` over PC ranges) are dropped | Linux ELF with debug info: named/typed register locals at -O2, merged-variable reduction | dwarf.so sub_83140 (`add_func_regvar` per loclist range); kuna `dwarf/kuna_dwarfscopes.rs` reads frame offsets only | kuna-analysis `dwarf/` (extend `dwarfscopes`) | fix | M |
-| 12 | Merged variables: no block duplication before variable allocation (Hex-Rays UNMERGE_CALLS / BREAK_PHI_ARM_MERGES duplicate a call block or a one-register join per predecessor) | DecBench merged variables, GED | hexx64 sub_191D80, sub_1915E0; kuna's `returndup`/`crossjumprevert`/`dedupitetail` act after structuring | kuna-decomp P3 (before Merge) | option | M |
-| 13 | Variable names: no names from arbitrary callee parameter names, struct field names, or type-based fallbacks; demangled names not simplified (`std::basic_string<char,...>` -> `std::string`) | readability; name-scoring benchmarks; C++ output | hexx64 sub_4CE070/sub_4CC7C0/sub_4CA750; IDA cfg/goodname.cfg (32 PCRE rewrite rules); kuna `libcnames` (libc tables only), `contextnames` (off), no name rewrite in `analyzers/demangle/` | kuna-decomp P6 (extend `libcnames`) + kuna-analysis `demangle/` | option | S-M |
-| 14 | UEFI: no protocol/PPI interface typing from the GUID at `LocateProtocol`/`HandleProtocol`/`LocatePpi`, no install-to-implementation links, no table-pointer inference from call usage | UEFI firmware type match | uefi.so (`UEFI_TYPE_PROTOCOLS`, sub_10BC0 summary, sub_29D00 interface synthesis, sub_14820 cross-module xrefs; its own microcode dataflow sub_48A80); kuna `analyzers/uefi/types.rs` defines only the console protocols | kuna-analysis `analyzers/uefi/` + P5 per-call output type (like `gonewtype`) | fix on UEFI images | M-L |
-| 15 | Go interface dispatch: itabs named but not typed, so `tab->fun[i]` calls show no method | Go binaries (interface calls everywhere) | golang.so sub_17960 builds an `iface.I.T` struct with typed method pointers; kuna `gotypes/kuna_itabs.rs` defers method resolution | kuna-analysis `gotypes/` + P5 (extend `gotypeglobals`) | option | M |
+| 1 | Peripheral memory is not volatile on Cortex-M **ELF** images: device-register stores are deleted, polling loops come out tangled | ARM firmware (cleanflight, betaflight, libopencm3, crazyflie, chibios, nuttx are ELF): GED and correctness | cortex_m.py maps SRAM/PPB segments; live kuna repro on a clang thumbv7m ELF loses `REG(0x40021000)=1` and recovers with `--assert volatile 0x40000000+0x20000000`; kuna marks the regions only in `unlace-cli/src/rawfront.rs` (`DEVICE_REGIONS`), raw images only | unlace-analysis `loader/` (next to the pcmemory volatile painting), P1, M-profile images | fix | S |
+| 2 | No type-library input: library prototypes cannot carry named struct pointers beyond 23 libc shells (glibc x86-64 layouts for 9); Win32 handles/structs are `void *` | Windows/PE type match, drivers, Android/ARM POSIX, UEFI. (DecBench Linux: small, see note) | IDA ships 154 TILs (mssdk_win10 222k symbols / 92k types, gnuunx64 45k symbols, ntddk, ntapi, wdk, uefi64, android); Hex-Rays imports `get_named_type` and applies callee prototypes; libida embeds clang to parse headers. kuna: `protos/kuna_libcsigs.rs` (~685), `kuna_win32sigs.rs` (~180, `void *` by design), `libctypes`, `objcsdk` (ObjC subset) | unlace-analysis `analyzers/protos/`: a runtime type-archive option (read a user's IDA `.til` with idb-rs's Apache-2.0 TIL parser, or a header dir via a C-declaration reader like objcsdk's); never commit SDK-derived tables | option | L |
+| 3 | MSVC C++ class typing: no `X` struct with `__vftable` to a typed `X_vtbl`, no `this` typing of vfuncs/ctors, no rule "a load typed `X_vtbl` retypes its base as `X`" | Windows C++ type match (named struct pointers) and virtual-call rendering | rtti.so names RTTI; libida builds `<Class>_vtbl`; hexx64 sub_4311A0 back-propagates from vtable type to object type; kuna `rtti/` names `vfunc_i` only, `kuna_vtabletypes.rs` is Itanium-only | unlace-analysis `rtti/` + unlace-decomp P5 (`vtabletypes` extended to PE; back-propagation rule as option) | option | M |
+| 4 | 64-bit values on 32-bit targets: `long long` params split in two, hi/lo compare chains print as SBORROW4/CONCAT44 | i386 PE, ARM32 firmware, MIPS32/PPC32 | hexx64 rules 3CHECK64/CMP64/JNZ64 (sub_129630, sub_1F49A0, sub_282040); live kuna i386 -O2 test | unlace-decomp P4 (pair parameters) + `p5_types/double.rs` (compare-chain fold) | fix (fold) + option (param pairing) | M |
+| 5 | PDB: only names and extents are read; no TPI types, prototypes with `this`, register/stack locals, line numbers, PDB-derived vtables, symbol-server fetch | Windows/PE with PDBs (every system DLL via msdl): large type-match gain | pdb.so sub_6F920 (types), sub_50C20 (prototypes), sub_4F240 (locals), sub_34C10 (vtables), 0x76EA0/0x77DD0 (symbol path + download); kuna `analyzers/pdb/` | unlace-analysis `pdb/` (import = fix; network fetch = option, off like IDA's `PDB_NETWORK`) | fix + option | L (+S-M fetch) |
+| 6 | MSVC exceptions: no FuncInfo/FH4/IP-to-state parsing, catch funclets stay separate functions, no `throw` from `_CxxThrowException`+ThrowInfo, no x86 SEH4 `__try/__except` | Windows C++ and 32-bit PE (malware, crackmes) | eh34 sub_3F6E0, sub_3CB60, 0x16560, sub_39140; eh_parse struct layouts; x86 pc 0x34230/0x2DA10; rtti.so ThrowInfo markup; kuna has `itaniumeh` only | unlace-analysis `entry/` (new `kuna_msvceh.rs`) + P2/P8, sibling of `itaniumeh` | option | L (throw helper alone S) |
+| 7 | Thumb/ARM switch helpers (`__gnu_thumb1_case_*`, `__ARM_common_switch8`) recognised by name only; stripped M0/-Os firmware loses every such switch | ARM firmware GED | arm.so sub_87DC0 matches the helper body (up to 16 code words, tolerant to one swap) then names it; kuna `listing/kuna_thumbswitch.rs:107` name table, ARM.cspec callfixups by name | unlace-analysis `listing/` (body signature -> name -> existing callfixup) | fix | S-M |
+| 8 | Atomic idioms: x86 `lock` forms print `LOCK(); ... UNLOCK();`, AArch64 LSE CAS prints as plain compare-and-store, no LL/SC loop folding | kernels, C++ `shared_ptr`, Rust `Arc`, firmware RTOS | hexx64 sub_8AC80 (`_Interlocked*` table), hexarm sub_899B0 (C11 `atomic_*`); live kuna tests | unlace-decomp new `p3_dataflow/kuna_atomics.rs` | fix (fixed forms) + option (LL/SC loops) | M |
+| 9 | Cortex-M core peripherals unnamed without an SVD (NVIC, SCB, SysTick, MPU, DWT...), and `--svd` is silently ignored for ELF inputs | ARM firmware readability | cortex_m.json (~1,900 SCS registers in 29 blocks); svdimport works on any database; kuna `0xE000ED0C` -> `dat_e000ed0c`; `rawfront.rs` returns before the SVD branch for object files | unlace-analysis `loader/firmware/cortexm.rs` (table built from the ARM ARM, typed structs like the SVD path) + move SVD application into an analysis pass | fix | S-M |
+| 10 | PE Load Config not read: Control Flow Guard function table (every address-taken function), guard dispatch/check slots, SafeSEH / EH-continuation tables; delay-load imports not named | Windows/PE function recall and indirect-call fidelity; delay imports common in MSVC DLLs and malware | loaders__pe sub_18EE0 -> sub_8540 (`___guard_fids_table`), delay-load descriptor walk sub_9B20; kuna: no `GuardCF` / delay-load code (`loader/pe_iat.rs` regular IAT only) | unlace-analysis `analyzers/entry/pe_entry.rs` (new oracles) + `loader/pe_iat.rs` | fix | S each (dispatch rewrite M) |
+| 11 | DWARF location lists: only `fbreg` locals are imported; register variables (`DW_OP_reg`/`breg`/`piece` over PC ranges) are dropped | Linux ELF with debug info: named/typed register locals at -O2, merged-variable reduction | dwarf.so sub_83140 (`add_func_regvar` per loclist range); kuna `dwarf/kuna_dwarfscopes.rs` reads frame offsets only | unlace-analysis `dwarf/` (extend `dwarfscopes`) | fix | M |
+| 12 | Merged variables: no block duplication before variable allocation (Hex-Rays UNMERGE_CALLS / BREAK_PHI_ARM_MERGES duplicate a call block or a one-register join per predecessor) | DecBench merged variables, GED | hexx64 sub_191D80, sub_1915E0; kuna's `returndup`/`crossjumprevert`/`dedupitetail` act after structuring | unlace-decomp P3 (before Merge) | option | M |
+| 13 | Variable names: no names from arbitrary callee parameter names, struct field names, or type-based fallbacks; demangled names not simplified (`std::basic_string<char,...>` -> `std::string`) | readability; name-scoring benchmarks; C++ output | hexx64 sub_4CE070/sub_4CC7C0/sub_4CA750; IDA cfg/goodname.cfg (32 PCRE rewrite rules); kuna `libcnames` (libc tables only), `contextnames` (off), no name rewrite in `analyzers/demangle/` | unlace-decomp P6 (extend `libcnames`) + unlace-analysis `demangle/` | option | S-M |
+| 14 | UEFI: no protocol/PPI interface typing from the GUID at `LocateProtocol`/`HandleProtocol`/`LocatePpi`, no install-to-implementation links, no table-pointer inference from call usage | UEFI firmware type match | uefi.so (`UEFI_TYPE_PROTOCOLS`, sub_10BC0 summary, sub_29D00 interface synthesis, sub_14820 cross-module xrefs; its own microcode dataflow sub_48A80); kuna `analyzers/uefi/types.rs` defines only the console protocols | unlace-analysis `analyzers/uefi/` + P5 per-call output type (like `gonewtype`) | fix on UEFI images | M-L |
+| 15 | Go interface dispatch: itabs named but not typed, so `tab->fun[i]` calls show no method | Go binaries (interface calls everywhere) | golang.so sub_17960 builds an `iface.I.T` struct with typed method pointers; kuna `gotypes/kuna_itabs.rs` defers method resolution | unlace-analysis `gotypes/` + P5 (extend `gotypeglobals`) | option | M |
 
 Note on DecBench and named struct pointers: on the decbench Linux corpus kuna already leads on `ptr_struct`
 (4.1% vs IDA 2.4%, `docs/decbench/typecampaign/results.md`); 10,559 of the 14,252 ground-truth struct pointers
@@ -74,7 +74,7 @@ for debug builds), 12 (merged variables) and 13 (names).
 | Microcode rule families | Named rules: REMOVE_USELESS_JX, INVERT_JX_GOTO, SDIV/SMOD power-of-two, UMOD-30BIT, FLATTEN_JNS, CONVERT_IF_TO_SET (sub_18D990), RECOGNIZE_SETNZ/SETX (sub_18DE60), BACKPROP_CC. Also a pattern language (`pattern … transform … typereq … checker`), value-range optimizations (`OPT_VALRNG_JCND/AND/SWITCH_NCASES=32`) and assertion propagation (gen_jnz_assertions). | strings near 0x4dd3a5; hexrays.cfg | YES ≈ Ghidra rule set plus `condfold`, `iteboolean`. Value-range pruning: PARTIAL. |
 | UNMERGE_CALLS / BREAK_PHI_ARM_MERGES | Duplicates a call block (or a join block that only merges one register) once per predecessor, before variables are allocated. This stops one variable from collecting unrelated values. | sub_191D80, sub_1915E0 | PARTIAL: `crossjumprevert`, `returndup`, `dedupitetail` work at the structure level. Nothing duplicates blocks before variable allocation in order to avoid merged variables. |
 | Multiply-overflow guard | Folds the `count*size` overflow check before `operator new[]` into `saturated_mul`. | sub_18DC60 | NONE |
-| CONTAINING_RECORD | For `p - c` where `p` has type `T*` and the outer type is known (a user structure offset, or the recorded offset map at mba+1368), it searches the outer struct recursively for a member of type `T` at that offset and prints `CONTAINING_RECORD(p, Outer, path)`. It also folds the Windows list check (`RtlpCheckListEntry`). | sub_4AC0F0 → sub_4AB4F0, sub_4A3EA0; sub_4B56B0 | NONE (no container_of or CONTAINING_RECORD in kuna-decomp). |
+| CONTAINING_RECORD | For `p - c` where `p` has type `T*` and the outer type is known (a user structure offset, or the recorded offset map at mba+1368), it searches the outer struct recursively for a member of type `T` at that offset and prints `CONTAINING_RECORD(p, Outer, path)`. It also folds the Windows list check (`RtlpCheckListEntry`). | sub_4AC0F0 → sub_4AB4F0, sub_4A3EA0; sub_4B56B0 | NONE (no container_of or CONTAINING_RECORD in unlace-decomp). |
 | Inline memset/memcpy/strcpy and struct copy | Recognizes inlined helpers. A memcpy whose size equals the struct size becomes a typed assignment `a = b`, and back. | sub_4C9AD0, sub_4C8DE0/sub_4C8BB0 | PARTIAL: `repstring`, `copyrun`, `memsetrecover`, `strlenscan` print `builtin_memcpy`. None of them turns it into a struct assignment. |
 | Atomic, bit-test and rotate intrinsics | A large x86 table maps `lock` instructions to `_Interlocked*`; also `_bittest*`, `_BitScan*`, popcnt/lzcnt, `__ROL4__`/`__ROR4__`, bswap. | sub_8AC80 (39 KB); strings | PARTIAL: `bitidioms` covers bswap and constant rotates. Live: `lock xadd` and `cmpxchg` print as `LOCK(); …; UNLOCK();`, and a rotate by a variable amount stays as shifts. |
 | Naming | Names a local from the callee's parameter name when the local is passed as an argument, from the struct field it was read from, or names the callee's parameter from the caller's variable. It rejects generic names. Fallback from the type: `p_<Type>`, `str`, `wstr`, `ptr`, `chr`, `ok`. Limited by `MAX_NICE_NAME_LENGTH=42`. | sub_4CE070, sub_4CC7C0, sub_4CD780, sub_4CAE60, sub_4CA750 | PARTIAL: `libcnames` (libc tables only), `contextnames` (off, loop and result names). No names from arbitrary prototypes, fields or types. |
@@ -114,7 +114,7 @@ for debug builds), 12 (merged variables) and 13 (names).
 #### loaders/cortex_m.py + cortex_m.json
 | feature | how IDA does it | evidence | kuna equivalent |
 |---|---|---|---|
-| Vector-table probe | Word 0 is the stack pointer: 8-aligned and inside SRAM. The 15 system slots must be zero or odd pointers into Code, and must be zero where reserved. IRQ slots run until the first invalid word. | `VectorTable.probe` | **Present**, ported from it: `loader/firmware/cortexm.rs`, used by `kuna-cli/src/rawfront.rs` |
+| Vector-table probe | Word 0 is the stack pointer: 8-aligned and inside SRAM. The 15 system slots must be zero or odd pointers into Code, and must be zero where reserved. IRQ slots run until the first invalid word. | `VectorTable.probe` | **Present**, ported from it: `loader/firmware/cortexm.rs`, used by `unlace-cli/src/rawfront.rs` |
 | Base-address vote | Scans the image for dummy-handler byte patterns (`bx lr`, `b .`, `nop; b .`, ...). Votes on `handler - pattern_offset`, 0x1000-aligned, needs at least 15 votes. Otherwise falls back to the reset handler's page. | `Application._probe_base_address`, `MIN_CONFIDENCE=15` | **Present**: `cortexm.rs` (`MIN_VOTES`, plus a common-flash-base fallback) |
 | Handler functions and names | Creates a function at every non-zero vector, named `<Exception>_handler` or `IRQ_n_handler`. Marks the slots as offsets. | `load_file` | **Present**: rawfront `--define-function`; SVD gives `*_IRQHandler` names. ELF: `cortexmvectors` |
 | Memory map | Adds an SRAM segment from 0x20000000 up to the initial SP, and a PPB segment at 0xE0000000. | `load_file` / `add_32bit_segm` | **PARTIAL**: on a raw image rawfront asserts `volatile` over 0x40000000 and 0xE0000000 (`DEVICE_REGIONS`). On an ELF there is no volatile marking at all (shown above). |
@@ -296,7 +296,7 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 | FLIRT auto-selection | `sig/<proc>/autoload.cfg` maps a startup-code signature to library signature sets; 172 x86 sigs, 24 ARM sigs (glibc_arm64, android_arm, vc64*), Go std sigs per ABI | `sig/` tree | PARTIAL: `flirt` reads `.sig` (off; `KUNA_FLIRT_SIGS`), no autoload rules, no shipped sigs (cannot ship IDA's) |
 | Rust std signatures on demand | `ida_feeds` builds FLIRT sigs for the detected rustc version from crate git tags | `plugins/ida_feeds/feeds/rust/*`, `rust-git-tags.json` | PARTIAL: `flirt/kuna_rustprofiles.rs`, `fid build` |
 | Analysis flags | Function tails (`AF_FTAIL`), propagate stack/register argument info into callers (`AF_STKARG/REGARG`), guess function types, `j_` jump-function and `nullsub_` renames, hide outlined functions, merge string literals, instruction macros, register-value tracker (`REGTRACK_*`, NUMLOOP on ARM/MIPS/RISC-V) | ida.cfg AF_*/AF2_*; libida `analysis.*` keys | YES or PARTIAL: `funcchunks` (off), `calleevote`/`callervote`/`protoorder`, `nameladder` (reads `j_`), `outlinedinline`, `listing/kuna_regcarry.rs`. No `j_`/`nullsub_` naming of stubs on arm64 (also gap 11 of the Apple notes). |
-| No-return names | `noret.cfg`, about 198 names | cfg | kuna `kuna-analysis/data/*FunctionsThatDoNotReturn` (~511 names). Missing from kuna: MSVC `__report_gsfailure`, `__report_securityfailure(Ex)`, `std::_Xlength_error`; MFC `AfxThrow*Exception` (6); `_com_issue_error`, `_com_raise_error`; VB6 `__vba*` (7); `KeBugCheck2`, `HalReturnToFirmware`; `_Unwind_SjLj_Resume*`, `__cxa_call_terminate`, `__cxa_end_cleanup`; `std::__throw_bad_cast/bad_function_call/bad_weak_ptr/system_error`; newlib `__assert_func` (firmware); `__android_log_assert`; `Py_FatalError`; Rust `panic_const_*` (10), `__rust_alloc_error_handler`, `__rdl_alloc_error_handler`; Go `runtime.goexit`, `runtime.morestackc`, `runtime.dieFromException`. (The ARM `__gnu_thumb1_case_*`/`switch8` entries are covered by ARM.cspec callfixups.) Size S. |
+| No-return names | `noret.cfg`, about 198 names | cfg | kuna `unlace-analysis/data/*FunctionsThatDoNotReturn` (~511 names). Missing from kuna: MSVC `__report_gsfailure`, `__report_securityfailure(Ex)`, `std::_Xlength_error`; MFC `AfxThrow*Exception` (6); `_com_issue_error`, `_com_raise_error`; VB6 `__vba*` (7); `KeBugCheck2`, `HalReturnToFirmware`; `_Unwind_SjLj_Resume*`, `__cxa_call_terminate`, `__cxa_end_cleanup`; `std::__throw_bad_cast/bad_function_call/bad_weak_ptr/system_error`; newlib `__assert_func` (firmware); `__android_log_assert`; `Py_FatalError`; Rust `panic_const_*` (10), `__rust_alloc_error_handler`, `__rdl_alloc_error_handler`; Go `runtime.goexit`, `runtime.morestackc`, `runtime.dieFromException`. (The ARM `__gnu_thumb1_case_*`/`switch8` entries are covered by ARM.cspec callfixups.) Size S. |
 | Demangled-name simplification | `goodname.cfg`: 32 ordered PCRE rewrite rules (drop `__cxx11`/`__1`/`__ndk1` inline namespaces, collapse default template arguments, `basic_string<char>` -> `string`, streams, allocators) | cfg | NONE (`analyzers/demangle/` has no rewrite step) |
 
 ## 5. Further gaps (ranked after the top 15)
@@ -305,7 +305,7 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 |---|---|---|---|
 | NEON and ACLE naming / lane fusion on ARM (`vaddq_u8`, `__clz`, `__ldrex`, `__disable_irq`, ...) | hexarm sub_8C3F0 (~250-entry name table), sub_8E980 | P2 `kuna_lanefuse` / P9 `kuna_acleintrinsics` (today AArch64 barriers/MTE only) | L |
 | ARM EHABI `.ARM.exidx` and SjLj contexts for extents and landing pads | eh_parse 0xDF10, 0xF350 | `entry/` (`itaniumeh`, `fdeinterior`) | M |
-| PDB symbol-server download (if split from gap 5) | pdb 0x76EA0, 0x78830 | `pdb/` or kuna-cli | S-M |
+| PDB symbol-server download (if split from gap 5) | pdb 0x76EA0, 0x78830 | `pdb/` or unlace-cli | S-M |
 | x86 SEH frame struct `ms_exc` / `_EH4_SCOPETABLE`, handler blocks attached to the parent | x86 pc 0x34230, 0x2A960, 0x2DA10 | `entry/` + P2 | M |
 | Persistent global/member type write-back for single-function runs (Hex-Rays stores inferred global and member types into the database after each decompile) | hexx64 sub_2CE460, sub_257150 | P5 `storetype` (default `uefi` only) | M |
 | MBA: leaves of other widths and shifts (zext/sext/trunc), affine guess by evaluation, optional oracle db | goomba sub_1ACE0, sub_1B360, sub_40F80; kuna `p3_dataflow/kuna_mba.rs:678` requires equal widths, `MAX_LEAVES` 6 | P3 `mba` | M |
@@ -317,7 +317,7 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 | Global SP solver (simplex over SP constraints incl. handler entries) for unknown callee purge | x86 pc sub_7B800 | P4 `kuna_calleepurge.rs` | M-L |
 | COM GUID naming (`IID_`/`CLSID_`) and interface vtables for `CoCreateInstance` out-params | comhelper sub_3280, 0x46F0 | new analyzer, runtime GUID/type input | M |
 | `funcstart_patterns` on by default for `--raw-image`, plus patfind's `optional_post`, alignment and endianness extensions | patfind.cfg `AUTO_RUN`, sub_9000 | P1 `funcstart_patterns` | S |
-| UEFI firmware volume: PEIM/DxeMain/StandaloneMm entry prototypes by FFS type, cross-module protocol links | uefi_fv.so strings | kuna-cli unpack + `analyzers/uefi` | M |
+| UEFI firmware volume: PEIM/DxeMain/StandaloneMm entry prototypes by FFS type, cross-module protocol links | uefi_fv.so strings | unlace-cli unpack + `analyzers/uefi` | M |
 | SVD field bit names/enums | svdimport field strings | `firmware/svd.rs` + P9 | M |
 | Throw-info markup for MSVC (`__TI`, `__CTA`, `__CT`) | rtti.so 0x9B90, 0x123A0 | `rtti/` | S |
 | Non-standard register conventions on every arch (Hex-Rays automatic `__usercall` on x86/ARM64/MIPS) | hexx64 sub_10E880, sub_F2C20; hexrays.cfg `DISABLE_USERCALL` | P4 (`calleereginputs` is x86-32 ECX/EDX only) | M |
@@ -340,11 +340,11 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 1. **Full type libraries plus struct-typed library prototypes.** IDA's named struct pointers on PE, drivers, Android and UEFI mostly come from the shipped TILs applied through prototypes. kuna's `win32sigs` uses `void *` for every handle or struct, and `libctypes` field layouts are x86-64 glibc only.
    - Impact: DecBench type match (named struct pointers, the top miss); Windows/PE; ARM firmware SDKs.
    - Evidence: the `til/` directory; get_named_type callers (sub_414DD0, sub_7C540); kuna_win32sigs.rs header.
-   - Owner: `kuna-analysis/src/analyzers/protos/`. A runtime type-archive input, like `objcsdk`, built from user-supplied headers (vendoring SDK-derived tables is not allowed). Shipped as an option. Size L.
+   - Owner: `unlace-analysis/src/analyzers/protos/`. A runtime type-archive input, like `objcsdk`, built from user-supplied headers (vendoring SDK-derived tables is not allowed). Shipped as an option. Size L.
 2. **64-bit register pairs on 32-bit targets.** Join split `long long` parameters and variables, fold hi/lo compare chains (3CHECK64/CMP64) and pair shifts.
    - Impact: i386 PE, ARM32 firmware. Live: the SBORROW4 chain and two-word parameters.
    - Evidence: sub_129630, sub_1F49A0, sub_282040.
-   - Owner: kuna-decomp `p4_calls` (pair parameters) plus `p5_types/double.rs`. The compare-chain fold is a correctness fix; pair-joining for parameters should be an option. Size M.
+   - Owner: unlace-decomp `p4_calls` (pair parameters) plus `p5_types/double.rs`. The compare-chain fold is a correctness fix; pair-joining for parameters should be an option. Size M.
 3. **Atomic idioms (x86 `lock`, AArch64 LSE and LL/SC, RISC-V AMO).**
    - Impact: kernels, C++ `shared_ptr`, Rust `Arc`. Today's output (`LOCK();` …, plain compare-and-store) misstates the meaning.
    - Evidence: sub_8AC80; hexarm sub_899B0; live `inc`/`cas`.
@@ -364,11 +364,11 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 7. **Duplicating blocks before variable allocation to avoid merged variables (UNMERGE_CALLS / BREAK_PHI_ARM_MERGES).**
    - Impact: DecBench merged variables, GED.
    - Evidence: sub_191D80, sub_1915E0.
-   - Owner: kuna-decomp `p3_dataflow` (before Merge). Option. Size M.
+   - Owner: unlace-decomp `p3_dataflow` (before Merge). Option. Size M.
 8. **MSVC C++ EH and SEH try/except/finally.**
    - Impact: Windows/PE C++.
    - Evidence: sub_2FCD20, sub_2FB550, sub_2B79C0, sub_4D8360.
-   - Owner: `kuna-analysis` (parse the EH metadata) plus `p8_structure`. Option. Size L.
+   - Owner: `unlace-analysis` (parse the EH metadata) plus `p8_structure`. Option. Size L.
 9. **MBA: width changes and shifts, plus an affine guess by emulation.**
    - Impact: OLLVM/Tigress obfuscation.
    - Evidence: goomba sub_1ACE0, sub_1B360.
@@ -390,23 +390,23 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 1. **Peripheral memory is not volatile on Cortex-M ELF images.** Writes to device registers are deleted and polling loops come out wrong.
    - Impact: ARM firmware on DecBench (cleanflight, betaflight, libopencm3, crazyflie, chibios, nuttx are all ELF), both GED and fidelity.
    - Evidence: the repro above; raw images get the regions only from rawfront's `DEVICE_REGIONS`; IDA maps PPB/SRAM segments.
-   - Owner: kuna-analysis `loader/` (next to `kuna_pcmemory::paint_volatile`, with the rawfront regions moved down into it), P1, on an ARM M-profile image. It is a correctness fix, so no option. **S.**
+   - Owner: unlace-analysis `loader/` (next to `kuna_pcmemory::paint_volatile`, with the rawfront regions moved down into it), P1, on an ARM M-profile image. It is a correctness fix, so no option. **S.**
 2. **No Cortex-M core-peripheral names** (NVIC, SCB, SysTick, MPU, DWT, ...) without an SVD.
    - Impact: ARM firmware readability.
    - Evidence: `cortex_m.json` components; kuna prints `dat_e000ed0c`.
-   - Owner: kuna-analysis `loader/firmware/cortexm.rs`. A built-in table (better as typed CMSIS `SCB_Type`/`NVIC_Type`-style structs, like the SVD path) applied to raw and ELF M-profile images, P1, option-free or a default-on option. Generate the table from the ARM architecture manual, not from IDA's json. **S/M.**
+   - Owner: unlace-analysis `loader/firmware/cortexm.rs`. A built-in table (better as typed CMSIS `SCB_Type`/`NVIC_Type`-style structs, like the SVD path) applied to raw and ELF M-profile images, P1, option-free or a default-on option. Generate the table from the ARM architecture manual, not from IDA's json. **S/M.**
 3. **`--svd` is ignored on ELF firmware.**
    - Impact: ARM firmware.
    - Evidence: rawfront returns early for an object file before the SVD branch.
-   - Owner: move SVD application out of `kuna-cli/src/rawfront.rs` into an analysis pass. **S.**
+   - Owner: move SVD application out of `unlace-cli/src/rawfront.rs` into an analysis pass. **S.**
 4. **Switch helpers are recognised by name only.** Stripped Thumb-1 / M0 firmware loses every switch built on `__gnu_thumb1_case_*` or armcc's `__ARM_common_switch8`.
    - Impact: ARM firmware GED (M0 parts, -Os builds).
    - Evidence: apple__arm `sub_87DC0` byte-signature matcher; kuna `kuna_thumbswitch.rs:107`.
-   - Owner: kuna-analysis `listing/`. Identify the helper by its body (it is a small fixed sequence), name it, and let the existing cspec callfixup apply. Fix. **S/M.**
+   - Owner: unlace-analysis `listing/`. Identify the helper by its body (it is a small fixed sequence), name it, and let the existing cspec callfixup apply. Fix. **S/M.**
 5. **CFG function table not read** (PE built with /guard:cf).
    - Impact: Windows/PE function recall on stripped MSVC x64 and ARM64; it also names indirect-only callbacks.
    - Evidence: `loaders__pe` `sub_8540` via `sub_18EE0`.
-   - Owner: kuna-analysis `analyzers/entry/pe_entry.rs`, a new oracle. Fix. **S.**
+   - Owner: unlace-analysis `analyzers/entry/pe_entry.rs`, a new oracle. Fix. **S.**
 6. **CFG dispatch and check pointers not named or modelled.** If unhandled, a /guard:cf indirect call `call [__guard_dispatch_icall_fptr]` (target in RAX) loses its real target and arguments. The decompile side is unverified.
    - Impact: Windows x64 output fidelity.
    - Evidence: `sub_18EE0` names the slots and recognises the nop stubs.
@@ -414,11 +414,11 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 7. **Delay-load imports not named.**
    - Impact: Windows/PE (common in MSVC DLLs and malware such as mydoom and dexter).
    - Evidence: pe.so delay-load descriptor strings.
-   - Owner: kuna-analysis `loader/pe_iat.rs`, plus treating the delay IAT slots as import slots (`importdata`). Fix. **S.**
+   - Owner: unlace-analysis `loader/pe_iat.rs`, plus treating the delay IAT slots as import slots (`importdata`). Fix. **S.**
 8. **No UEFI protocol or PPI interface typing, and no install-to-implementation links.**
    - Impact: UEFI firmware type match; IDA's main UEFI value.
    - Evidence: `uefi.cfg` `UEFI_TYPE_PROTOCOLS`; uefi.so strings.
-   - Owner: kuna-analysis `analyzers/uefi/` (protocol structs from the EDK2 headers, mapping the `g*Guid` name to its protocol type) plus a P5 per-call output type for `LocateProtocol`'s third argument, like `gonewtype`'s output lock. Option-free on UEFI images. **M/L.**
+   - Owner: unlace-analysis `analyzers/uefi/` (protocol structs from the EDK2 headers, mapping the `g*Guid` name to its protocol type) plus a P5 per-call output type for `LocateProtocol`'s third argument, like `gonewtype`'s output lock. Option-free on UEFI images. **M/L.**
 9. **SafeSEH, EH-continuation and longjmp tables, and SEH handler or funclet entries.**
    - Impact: PE exceptions and recall.
    - Evidence: `sub_18EE0` `SEHandlerTable`, `GuardEHContinuationTable`.
@@ -430,7 +430,7 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 11. **Firmware volume modules are decompiled alone.** There are no PEIM, DxeMain or StandaloneMm entry prototypes and no cross-module protocol links.
     - Impact: UEFI firmware.
     - Evidence: uefi_fv.so prototype strings.
-    - Owner: `kuna-cli` unpack/project plus `analyzers/uefi` (entry prototype chosen by FFS file type). **M.**
+    - Owner: `unlace-cli` unpack/project plus `analyzers/uefi` (entry prototype chosen by FFS file type). **M.**
 12. **Field bit names from SVD.** IDA comments each register's fields and enum values; kuna drops fields, so masks stay numeric.
     - Impact: ARM firmware readability.
     - Owner: `firmware/svd.rs` emitting enums or bitfield constants for the P9 printer. **M.**
@@ -441,38 +441,38 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 1. **Typed `this` and class structs for MSVC C++ (the MSVC counterpart of `vtabletypes`).** For each RTTI class, build a struct `X` whose first member is a `__vftable` pointer to a typed `X_vtbl`. Type the `this` of every `vfunc_i` and constructor as `X*`. Add the Hex-Rays rule that a load typed `X_vtbl` retypes its base pointer as `X`.
    - Impact: Windows/PE C++ type match (named struct pointers, the biggest miss) and virtual-call rendering.
    - Evidence: hexx64 sub_4311A0; libida 0x77F120; kuna `rtti/mod.rs` only names `vfunc_<i>`; `kuna_vtabletypes.rs` is Itanium-only.
-   - Owner: kuna-analysis `rtti/` plus kuna-decomp p5 (`kuna_vtabletypes`). Extend the `vtabletypes` option to PE; the back-propagation rule is an option. Size M.
+   - Owner: unlace-analysis `rtti/` plus unlace-decomp p5 (`kuna_vtabletypes`). Extend the `vtabletypes` option to PE; the back-propagation rule is an option. Size M.
 2. **PDB types, prototypes and locals.** Read TPI into the type factory, apply function types with `this`, place register-relative and enregistered locals, and build `X_vtbl` from method lists.
    - Impact: Windows/PE with PDBs (system DLLs, MS samples); large type-match gain.
    - Evidence: pdb sub_6F920, sub_50C20, sub_4F240, sub_34C10; kuna `pdb/` has names and extents only.
-   - Owner: kuna-analysis `pdb/`. Strict import, so a fix (default on when a PDB is present). Size L.
+   - Owner: unlace-analysis `pdb/`. Strict import, so a fix (default on when a PDB is present). Size L.
 3. **PDB symbol-server fetch.** Parse `_NT_SYMBOL_PATH` / `srv*cache*url`, download by RSDS GUID and age, check signature and age.
    - Impact: makes gap 2 work on any Windows system binary.
    - Evidence: pdb 0x76EA0, 0x77DD0, 0x78830.
-   - Owner: kuna-analysis `pdb/` or kuna-cli; network access must be an option (it is off in IDA too: `PDB_NETWORK`). Size S–M.
+   - Owner: unlace-analysis `pdb/` or unlace-cli; network access must be an option (it is off in IDA too: `PDB_NETWORK`). Size S–M.
 4. **MSVC C++ EH (FuncInfo/FH4 to try/catch, throw helper).**
    - Parse FuncInfo and FH4 and the IP-to-state map.
    - Inline catch funclets into the parent.
    - Turn `_CxxThrowException(obj, &TI)` into `throw`, typed from the throw info.
    - Impact: Windows x64 C++. Without it, catch blocks are orphan functions and state stores are noise.
    - Evidence: eh34 sub_3F6E0, sub_3CB60, 0x16560, sub_39140; eh_parse struct layouts.
-   - Owner: kuna-analysis `entry/` (new `kuna_msvceh.rs`) plus p2/p8 rendering behind a new option, a sibling of `itaniumeh`. Size L. The throw-helper part alone is S.
+   - Owner: unlace-analysis `entry/` (new `kuna_msvceh.rs`) plus p2/p8 rendering behind a new option, a sibling of `itaniumeh`. Size L. The throw-helper part alone is S.
 5. **x86 SEH frames.** Recognise `SEH_prolog4` and `_EH4_SCOPETABLE`, declare the `ms_exc` frame struct, attach `__except`/`__finally` blocks to the parent, and render state stores as try regions.
    - Impact: 32-bit PE (most malware and crackme corpora).
    - Evidence: x86__pc 0x34230, 0x2A960, 0x2DA10, 0x6D2B0.
-   - Owner: kuna-analysis `entry/` plus p2. Option. Size M.
+   - Owner: unlace-analysis `entry/` plus p2. Option. Size M.
 6. **DWARF location lists and register variables.** Support loclists with `DW_OP_reg`/`breg`/`piece`, so `-O2` binaries with DWARF get named and typed register locals; today only `fbreg` is read.
    - Impact: Linux ELF with debug info, DecBench type match and merged variables.
    - Evidence: dwarf sub_83140, 0x86460.
-   - Owner: kuna-analysis `dwarf/kuna_dwarflocation.rs`, `kuna_dwarfscopes.rs`. Fix, extending `dwarfscopes`. Size M.
+   - Owner: unlace-analysis `dwarf/kuna_dwarflocation.rs`, `kuna_dwarfscopes.rs`. Fix, extending `dwarfscopes`. Size M.
 7. **Go interface method dispatch.** Build an `iface.I.T` struct per itab with typed method function pointers, and type interface calls through `tab->fun[i]`.
    - Impact: Go binaries (interface calls are everywhere).
    - Evidence: golang sub_17960; `gotypes/kuna_itabs.rs` header explicitly defers it.
-   - Owner: kuna-analysis `gotypes/` plus p5. Extend `gotypeglobals`. Size M.
+   - Owner: unlace-analysis `gotypes/` plus p5. Extend `gotypeglobals`. Size M.
 8. **Go FUNCDATA (InlTree, ArgInfo) and source lines.** InlTree names inlined callees inside a body. ArgInfo gives the stack argument layout for ABI0 functions.
    - Impact: Go readability and parameter count.
    - Evidence: golang sub_22C80; `GOLANG_IMPORT_LNNUMS`.
-   - Owner: kuna-analysis `pclntab/`. Option. Size M.
+   - Owner: unlace-analysis `pclntab/`. Option. Size M.
 9. **Debug types from separate files.** Use build-id / `.gnu_debuglink` companions for DWARF types and prototypes, not just names, and add DWZ `.gnu_debugaltlink`.
    - Impact: distro ELF binaries (Debian/Fedora debuginfo).
    - Evidence: dwarf 0x25020, 0x2B100.
@@ -480,15 +480,15 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
 10. **ARM EHABI `.ARM.exidx` and SjLj.** Function extents and landing pads for 32-bit ARM ELF and Android, where there is usually no `.eh_frame`.
     - Impact: ARM firmware and Android native code (a structure weak spot).
     - Evidence: eh_parse 0xDF10, 0xF350; kuna only mentions exidx in `kuna_fdeinterior.rs`.
-    - Owner: kuna-analysis `entry/`. Extend `itaniumeh` / `fdeinterior`. Size M.
+    - Owner: unlace-analysis `entry/`. Extend `itaniumeh` / `fdeinterior`. Size M.
 11. **Global SP solver for unknown callee purge (simplex over SP constraints, including handler entries).**
     - Impact: 32-bit PE stdcall-heavy code, wrong stack slots.
     - Evidence: x86__pc sub_7B800.
-    - Owner: kuna-decomp p4 (`kuna_calleepurge.rs` area). Option. Size M–L.
+    - Owner: unlace-decomp p4 (`kuna_calleepurge.rs` area). Option. Size M–L.
 12. **COM GUID naming and interface vtables.** Name each GUID as `IID_`/`CLSID_` and type the `ppv` out-parameter with `IFooVtbl`, so COM calls through the out-pointer show method names.
     - Impact: Windows PE using COM.
     - Evidence: comhelper sub_3280, 0x46F0.
-    - Owner: kuna-analysis (new analyzer); needs a GUID table and interface types, which are runtime inputs and cannot be committed. Option. Size M.
+    - Owner: unlace-analysis (new analyzer); needs a GUID table and interface types, which are runtime inputs and cannot be committed. Option. Size M.
 
 
 ## 8. Limits

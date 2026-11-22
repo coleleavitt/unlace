@@ -20,7 +20,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 
 | Path | What it owns |
 |---|---|
-| `decompiler/` | The engine (cargo workspace). `kuna-decomp` = the decompiler (`src/` phase-foldered `p0_knowledge/`…`p9_emit/` + `substrate/`, `infra/`); `kuna-analysis` = loader/analyzer tier (ELF/Mach-O, chained fixups, dyld cache, kernelcache, ObjC, Swift, DWARF, DEX, strings, function discovery); `kuna-sleigh`/`kuna-slacomp` = SLEIGH runtime/compiler (`slacomp`); `kuna-console` = `decomp_dbg`/`decomp_test_dbg`; `kuna-cli` = the `kuna` binary; `kuna-ghidra`/`kuna-wasm` = Ghidra and browser front-ends; `kuna-base`/`kuna-num`/`kuna-harness`/`kuna-lift-diff` = support. |
+| `decompiler/` | The engine (cargo workspace). `unlace-decomp` = the decompiler (`src/` phase-foldered `p0_knowledge/`…`p9_emit/` + `substrate/`, `infra/`); `unlace-analysis` = loader/analyzer tier (ELF/Mach-O, chained fixups, dyld cache, kernelcache, ObjC, Swift, DWARF, DEX, strings, function discovery); `unlace-sleigh`/`unlace-slacomp` = SLEIGH runtime/compiler (`slacomp`); `unlace-console` = `decomp_dbg`/`decomp_test_dbg`; `unlace-cli` = the `kuna` binary; `unlace-ghidra`/`unlace-wasm` = Ghidra and browser front-ends; `unlace-base`/`unlace-num`/`unlace-harness`/`unlace-lift-diff` = support. |
 | `tests/datatests/` | Vendored XML regression corpus (675 assertions) — `make test`. |
 | `tests/stages/` | kuna-owned issue testcases — `make test-stages` (`tests/stages/README.md`). |
 | `tests/golden/` | Differential golden vectors for the workspace suite (`make rust-test`). |
@@ -28,11 +28,11 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 | `scripts/` + `tools/` | Python helpers + the improvement pipeline, RE-friction loop, decbench campaign drivers. |
 | `integrations/` | Front-ends embedding the engine: `ghidra/` (kuna as Ghidra's decompiler core), `web/` (`kuna.noelo.org` + in-browser `decompile.run`). |
 
-- **Apple/loader work** → `kuna-analysis`, behind a `phases.toml` option.
+- **Apple/loader work** → `unlace-analysis`, behind a `phases.toml` option.
 - **Decompiler phases P1–P9** (partition → lift/flow → dataflow → calls → types → variables →
   regions → structure → emit) + an orthogonal **P0** knowledge/config plane. Source folders
   are a taxonomy; the real pass order is `universal_sched` in
-  `decompiler/crates/kuna-decomp/src/infra/universalaction.rs`. One-screen model: `docs/phases.md`;
+  `decompiler/crates/unlace-decomp/src/infra/universalaction.rs`. One-screen model: `docs/phases.md`;
   normative algorithms: `docs/spec/`.
 - Decisions are flipped per run with `--option NAME VALUE`; discover them via `kuna catalog --json`.
 
@@ -47,7 +47,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 ## Working Rules
 - **A judgement call ships behind a named option; a fix does not** (upstream #1521,
   `docs/option-surface-study.md`). An option is a `settableTable` row in
-  `decompiler/crates/kuna-decomp/phases.toml` (all fields incl. `tier`+`symptoms`) + a
+  `decompiler/crates/unlace-decomp/phases.toml` (all fields incl. `tier`+`symptoms`) + a
   handler in `src/p0_knowledge/kuna_option_dispatch.rs`; keep `kuna catalog --check` green.
   It exists only where the outcome is questionable (faithfulness vs readability, a
   speculative recovery, a speed trade, a heuristic scanner); a strict correctness fix
@@ -65,7 +65,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 - **Never re-pin `docs/baseline.json` to hide a regression** — fix the code or make it opt-in.
   Sanctioned re-pins (upstream sync / deliberate default change) say so in the message
   (`kuna test --save-baseline`). Adding a stage test re-records `docs/baseline-stages.json`
-  and bumps the corpus count in `kuna-base/src/xml.rs`.
+  and bumps the corpus count in `unlace-base/src/xml.rs`.
 - **Comments are rare**: file header or function header only; inline only for a genuinely
   confusing hack. New functionality → new modules matching surrounding conventions (ported
   files name methods after their C++ originals).
@@ -129,7 +129,7 @@ need built specs; missing specs are failures, not skips.
 | `docs/modes.md` | `--mode auto\|reliable\|aggressive\|fast` presets and thresholds. |
 | `docs/multilang.md` | Multi-language source support (Rust/Go/Swift): sourcelang plane, idiom engine. |
 | `docs/observatory.md` | The local codebase observatory (`make observatory`). |
-| `docs/missing-ghidra-analyses.md` | The `kuna-analysis` tier: analyzer gap vs Ghidra. |
+| `docs/missing-ghidra-analyses.md` | The `unlace-analysis` tier: analyzer gap vs Ghidra. |
 | `docs/ghidra-integration.md` | kuna as Ghidra's decompiler core (architecture + wire protocol). |
 | `docs/web-integration.md` | The WASM/browser front-end and the project site. |
 | `docs/history.md` | Rarely needed: the C++→Rust port, verification, vendored-tree provenance. |

@@ -67,7 +67,7 @@ jobs:
       - name: Build all SLEIGH specs
         run: make specs
 
-      # Builds kuna_wasm for wasm32-wasip1 and assembles integrations/web/dist/.
+      # Builds unlace_wasm for wasm32-wasip1 and assembles integrations/web/dist/.
       - name: Assemble the static demo (dist/)
         run: bash integrations/web/build.sh
 

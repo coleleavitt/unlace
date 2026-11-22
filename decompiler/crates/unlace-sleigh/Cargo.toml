@@ -1,0 +1,20 @@
+[package]
+autotests = false
+name = "unlace-sleigh"
+description = "kuna Rust port: SLEIGH .sla reader + instruction decode runtime (no compiler)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+unlace-base.workspace = true
+unlace-num.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"

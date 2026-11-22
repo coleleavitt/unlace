@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: null
@@ -149,7 +149,7 @@ ACCEPTANCE TRAPS. (1) The acceptance is stdout_absent `(?m)^  [A-Za-z_]\w*\(\);`
 THE DEDUP CAUTION IS CONFIRMED: THIS IS TWO ROOT CAUSES. calleearitybody/cut are eligible ONLY for 'a call that recovered nothing at all' -- a site with a self-consistent partial list is calleearitylive's and is left alone. The witness is a TOTAL loss and goes through the path above; the other two instances (6a095817 memcpy keeps 2 of 3, 6a148dd6 init_state keeps 1 of 4) are PARTIAL and therefore cannot be this rule. Fixing the witness will close the need (the non-witness halves carry no clause of their own) WITHOUT necessarily fixing them; expect them back in a later round and do not read that as a regression.
 
 NOT A REGRESSION OF THE ROUND-4 NEED. The family named there (argument-recovery-options-still) is the same symptom class, but the operative rule here shipped after it, so I left regression_of null.
-- round 9 TRIAGE: acceptance rewritten. The refuter's own trap note ("assert the argument, not the absence") applied now rather than at promotion: added stdout_matches `sub_417f80\([^)]` alongside the absence clause, so `v1 = sub_417f80();` -- a change that assigns the return value while still losing the argument -- no longer passes. The proved fixed shape (NOP'd-ESI control) is `sub_417f80(v2);`, which matches. track/touches/scope confirmed unchanged (quality, kuna-decomp, small).
+- round 9 TRIAGE: acceptance rewritten. The refuter's own trap note ("assert the argument, not the absence") applied now rather than at promotion: added stdout_matches `sub_417f80\([^)]` alongside the absence clause, so `v1 = sub_417f80();` -- a change that assigns the return value while still losing the argument -- no longer passes. The proved fixed shape (NOP'd-ESI control) is `sub_417f80(v2);`, which matches. track/touches/scope confirmed unchanged (quality, unlace-decomp, small).
 
 ### 2026-09-08T05:51Z — captain, round 9 B_PLAN: acceptance target bound
 

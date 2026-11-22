@@ -19,11 +19,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/jumpoverdecoy_i386",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/jumpoverdecoy_i386",
     "binary_sha256": "2934acf78111b1738a672fe5cd9beb61e0e2a27f32b1eed64601c2b1d397ba0e",
     "binary_size": 282,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/jumpoverdecoy_i386",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/jumpoverdecoy_i386",
     "selector": "0x10000",
     "selector_kind": "addr"
   },

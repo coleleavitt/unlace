@@ -19,7 +19,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/retypestackptr_arm_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/retypestackptr_arm_le32</com>
   <com>read symbols</com>
   <com>parse line struct Opaque;</com>
   <com>load function probe</com>
@@ -29,7 +29,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/retypestackptr_ppc32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/retypestackptr_ppc32</com>
   <com>read symbols</com>
   <com>parse line struct Opaque;</com>
   <com>load function probe</com>

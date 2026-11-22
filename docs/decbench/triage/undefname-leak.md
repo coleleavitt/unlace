@@ -280,7 +280,7 @@ and (B) is step 4 (the catch-all was ported but not wired).
 ## Proposed fix — `undefname-leak`, one module, no option
 
 All of it lands at the **tail of `name_local_highs_angr`**
-(`decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs:2378-2799`), after
+(`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs:2378-2799`), after
 the existing spacebase pass — the same place the port already chose to resolve this class
 of ordering hazard:
 
@@ -308,9 +308,9 @@ sibling. Prefer the repair form; keep the C++-faithful gate.
 
 Owning files:
 
-* `decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs` — the two-step
+* `decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs` — the two-step
   tail in `name_local_highs_angr` (the whole feature).
-* `decompiler/crates/kuna-decomp/src/substrate/funcdata.rs` (or `funcdata_varnode.rs`) —
+* `decompiler/crates/unlace-decomp/src/substrate/funcdata.rs` (or `funcdata_varnode.rs`) —
   one thin accessor to reach `Database::assign_default_names` on the local scope.
 * No change to `p9_emit/printc.rs`.
 

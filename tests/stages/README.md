@@ -309,10 +309,10 @@ writeup, not here.
 | `ghdec-symbol-keyed-local-decls.xml` | decbench `O2-noinline-betaflight-betaflight_STM32F405-applyLedFixedLayers`, NOVEL pool (invalid C: one 4-byte stack slot declared twice under one name, `unsigned int v12;` and `uint4 v12;`, both `// stack - 0x24`) | P9 emission, declaration emission (the scalar declaration collapse is keyed on the ScopeLocal Symbol, as upstream `emitScopeVarDecls` is, instead of on the rendered line; correctness fix inside the default-on `dedupvardecls`, no new option) | default (DIV-52: one declaration per symbol, at least as wide as every access); pass 2 (`option dedupvardecls off`) confirms the unconditional unique-overlap-owner invariant still prevents a same-name shadow |
 | `ghdec-subright.xml` | decbench `novel-concat-subpiece-soup`, NOVEL pool (invalid C: every SUBPIECE with a nonzero byte offset printed as the raw p-code operator `SUB41`/`SUB81`/`SUB84`, an undeclared identifier, where upstream and the source both have a shift) | P3 simplification quiescence, cleanup pool (`RuleSubRight`'s rewrite tail `sub(V,c) => sub(V>>c*8,0)` was a port stub returning 0; correctness fix restoring upstream, no option) | default (the fix); pass 2 (`option togglerule subright off`, the rule's own name in the action pool) pins the pre-fix rendering |
 | `ghdec-returncopysplit.xml` | decbench `O2-noinline-iproute2-ip-netns_add`, NOVEL pool (a block of per-byte assignments **storing into a `.rodata` string literal** on a return path where the binary performs no store at all) | P3 simplification quiescence, cleanup pool (`SplitDatatype::testCopyConstraints` declines a copy split whose OUTPUT varnode is read-only; a cloned heritage return-copy carries neither `return_copy` nor its own address, so upstream's two guards miss it; correctness fix, no option) | default (the fix, DIV-55); pass 2 (`option togglerule splitcopy off`, the rule's own name in the action pool) pins the unsplit rendering |
-| `ghdec-peimportcall.xml` | decbench `O0-mydoom-mydoom-mmsender_th`, ida pool (a Windows `call dword ptr [IAT slot]` kept no name, no prototype and no no-return flow effect, so a function ending in `ExitThread` absorbed the whole of the next function; IDA/Ghidra/angr all GED 0, kuna 37) | P1 program-prep, external-refinement (`kuna-analysis` `loader/kuna_peimportcall.rs` paints `Varnode::externref` over the IAT slot ranges, and `Architecture::query_function` carries the resolved callee's no-return flag onto the prototype `ActionDeindirect` merges) | always on |
+| `ghdec-peimportcall.xml` | decbench `O0-mydoom-mydoom-mmsender_th`, ida pool (a Windows `call dword ptr [IAT slot]` kept no name, no prototype and no no-return flow effect, so a function ending in `ExitThread` absorbed the whole of the next function; IDA/Ghidra/angr all GED 0, kuna 37) | P1 program-prep, external-refinement (`unlace-analysis` `loader/kuna_peimportcall.rs` paints `Varnode::externref` over the IAT slot ranges, and `Architecture::query_function` carries the resolved callee's no-return flag onto the prototype `ActionDeindirect` merges) | always on |
 
 | `ghdec-elfgotcall.xml` | an ELF `-fno-plt` call `call *slot(%rip)` through a `.got` GLOB_DAT slot no PLT stub fronts kept no name and no no-return flow effect, so `abort()`/`exit()` ran on into the next function (authored C, gcc -O2 -fPIC -pie -fno-plt, fixture `elf_got_noreturn_x86_64`) | P1 program-prep, external-refinement (`loader/elf_plt.rs` names the `.got` slots of undefined function symbols, `loader/kuna_peimportcall.rs` paints them `externref`; the deindirect restart clears the warnings of the pass it replaces) | `option peimportcall on\|off`; a `.data.rel.ro` function-pointer table stays a table in both passes |
-| `ghdec-noreturnnames.xml` | a call to a function a public header or source declares no-return (glibc `_Exit`/`thrd_exit`, libstdc++ `std::rethrow_exception`, any Rust panic helper under v0 mangling) kept its fall-through, because the vendored lists lacked the name or matched only legacy Rust symbols (authored C++ and `no_std` Rust, fixtures `noreturn_names_x86_64` and `rust_noreturn_v0_x86_64`) | P1 program-prep, external-refinement (`loader/noreturn.rs` and the lists under `kuna-analysis/data/`; Rust entries matched by demangled path) | `option noreturn_known on\|off` (pass 1 also sets `noreturn_extern` and `noreturn_externmatch` off) |
+| `ghdec-noreturnnames.xml` | a call to a function a public header or source declares no-return (glibc `_Exit`/`thrd_exit`, libstdc++ `std::rethrow_exception`, any Rust panic helper under v0 mangling) kept its fall-through, because the vendored lists lacked the name or matched only legacy Rust symbols (authored C++ and `no_std` Rust, fixtures `noreturn_names_x86_64` and `rust_noreturn_v0_x86_64`) | P1 program-prep, external-refinement (`loader/noreturn.rs` and the lists under `unlace-analysis/data/`; Rust entries matched by demangled path) | `option noreturn_known on\|off` (pass 1 also sets `noreturn_extern` and `noreturn_externmatch` off) |
 | `ghdec-undefname.xml` | decbench `O2-tar-tar-xstrcat` (filed as `O2-noinline-iproute2-ip`), NOVEL pool (invalid C: an identifier containing `$$`, and one stack Symbol split across two identifiers so the body reads a name nothing writes) | P6 variable & storage model, local naming (the `ActionNameVars` tail wires upstream's `assignDefaultNames` catch-all and re-reads the Symbol names the HighVariable caches froze too early; correctness fix, no option) | default (DIV-58: no `$$undef` placeholder survives the naming pass); pass 2 (`option dedupvardecls off`) pins that neither witness depends on the P9 declaration collapse |
 | `gh180-implied-cover-scarry.xml` | kuna [GH-180](https://github.com/Noelo-Lab/kuna/issues/180) (grep -O2 `nlscan`: `v3 = v3 + v1; if (SCARRY8(v3,v1))` tested the POST-add value; the pre-add SCARRY input and the ADD output merged into one HighVariable) | P6 variable & storage model, explicit/implied marking + merge legality (`ActionMarkImplied` goes through `Merge::mark_implied` so implied-marking dirties the operand Covers and the pre-add/post-add merge is illegal; correctness fix restoring upstream, no option, shipped with DIV-47) | default, single pass: the SCARRY8/CARRY8 guards keep their PRE-add operands and the collapsed self-update-then-test rendering does not appear |
 | `gh181-snipreads-indirect.xml` | kuna [GH-181](https://github.com/Noelo-Lab/kuna/issues/181) (libselinux -O2 `lsetfilecon_raw`: the out-parameter copy `v1 = v4;` printed ABOVE the `lgetfilecon_raw(a0,&v4)` call that fills the slot, so `freecon(v1)` freed the pre-call NULL) | P6 variable & storage model, cover-trim insertion + foldcallret order-safety (`Merge::snip_reads` places an INDIRECT-defined value's trim COPY after the op CAUSING the effect per upstream merge.cc:461, and `foldcallret` refuses to sink a call past a read of its own INDIRECT output; correctness fixes, no option) | default pass proves both fixes; pass 2 (`option foldcallret off`) isolates the p-code-level snipReads fix |
@@ -332,7 +332,7 @@ writeup, not here.
 | `kuna-arm-register-shift-signed.xml` | kuna [GH-849](https://github.com/Noelo-Lab/kuna/issues/849) follow-up (the shift's unsigned C repair must retain the signed value consumed by ARM signed compare and ASR) | P9 C emission, signed true/false conditional arms around the guarded unsigned LSL | default: output retains signed comparison and arithmetic shift behavior |
 | `kuna-call-array-extent.xml` | Synthetic call-escaped frame storage | P6 stack-frame-layout | `option callarrayextent on\|off` |
 | `kuna-arraysize.xml` | decbench type_match census: stack buffers declared with the alignment padding below the next object | P6 stack-frame-layout (an escaped buffer ends at the byte count its library call states) | `option arraysize off\|on\|calls` |
-| `kuna-narrowret.xml`, `kuna-narrowret-x86.xml` | decbench type_match census: a local holding a call result declared `unsigned int`/`unsigned long` beside a callee the listing declares `unsigned char`/`bool`/`unsigned int` (authored C, clang Thumb-2 and gcc x86-64 -O2) | P4 output-prototype (a call reads the narrow value its callee states, `decompile-all` only) | `option narrowret on\|off`; negative controls, both passes alike; positive witnesses in `tests/cli/narrowret-*.json` and `kuna-cli/tests/narrow_ret.rs` |
+| `kuna-narrowret.xml`, `kuna-narrowret-x86.xml` | decbench type_match census: a local holding a call result declared `unsigned int`/`unsigned long` beside a callee the listing declares `unsigned char`/`bool`/`unsigned int` (authored C, clang Thumb-2 and gcc x86-64 -O2) | P4 output-prototype (a call reads the narrow value its callee states, `decompile-all` only) | `option narrowret on\|off`; negative controls, both passes alike; positive witnesses in `tests/cli/narrowret-*.json` and `unlace-cli/tests/narrow_ret.rs` |
 | `kuna-stackstruct.xml` | A local record read through `read(fd,&h,8)` printed its byte and short fields as `v1._4_2_`, which is not C, and no record type was declared (authored C, gcc/clang -O0/-O2) | P6 stack-frame-layout + P9 pointer-notation | `option stackstruct on\|off`, `option partialaccess on\|off` |
 | `kuna-declorder.xml` | A function with ten or more locals declared them in string order, `v1, v10, v11, v2, ...` (authored C, gcc -O0) | P9 naming-policy, local declaration order | `option declorder natural\|name` |
 | `kuna-strlenscan.xml` | gcc 9 expands `strlen` inline as `repnz scasb`, which printed as a do/while over the string and `~count - 1` (authored C, Ubuntu 20.04 gcc 9.4 -O1) | P3 simplification-quiescence, inline string length | `option strlenscan on\|off` |
@@ -343,7 +343,7 @@ writeup, not here.
 P3 and P9 preserve the negation of an ordered float comparison as `!(a < b)`
 so the source wins for NaN and equal operands. This is an unconditional
 correctness fix, exercised with defaults and `nanignore none`.
-`kuna-cli/tests/sse_minss_cli.rs` compiles the emitted bodies with GCC and Clang
+`unlace-cli/tests/sse_minss_cli.rs` compiles the emitted bodies with GCC and Clang
 at `-O0` and `-O2` and checks NaN payloads, signed zeros and finite controls
 against the original assembly.
 
@@ -355,7 +355,7 @@ operand. Each flag includes the unordered case, so `x > one` prints as
 test beside such an exact comparison is kept, also after a conditional move
 clones the comparison out of the guarded branch (gcc -O1 and -Os). This is an unconditional
 correctness fix, exercised with defaults and `nanignore none`.
-`kuna-cli/tests/float_unordered_compare.rs` compiles the emitted bodies with
+`unlace-cli/tests/float_unordered_compare.rs` compiles the emitted bodies with
 GCC and Clang and checks NaN, signed zeros, infinities and finite values
 against the original functions.
 
@@ -402,17 +402,17 @@ readability defaults measured on the angr `fmt` corpus binary, DIV-34+ in
 | `kuna-objctypes.xml` | with the `objcivars` structs only `self` was typed: a getter returned `objc_object *`, an ivar of a local class was `objc_object *`, and a field read through either stayed `*(int *)((long)v + 8)` although the property attribute (`T@"Base"`) and ivar encoding (`@"Base"`) name the class. P1 external-refinement (`analyzers/objc/kuna_objcprops.rs` reads every `property_list_t` into class-naming getter/setter encodings; `Selectors::record` keeps the class-naming spelling of agreeing declarations; the decoder resolves `@"Base"` to the layout's struct, declared-record completion included) → P5 field resolution through the typed pointer | `option objc on\|off`, `option objcivars on\|off` (no new settable) |
 | `kuna-opaquepointerretype.xml` | `probe` keeps `&frame[1]` in a saved register (ARM32 r4, PowerPC32 r29); `retype` to a pointer to a bodiless `struct Opaque` added a default one-byte frame range that split the array, the copy holding the address was propagated away, and the retype was refused with `int4 *v3` printed instead. P6 frame layout under the stable-names replay (`p6_variables/funcdata_spacebase.rs` `gather_open`): a value carrying a replayed retype's lock whose pointee has no size lays its range out by the pointee it was printed with (`kuna_stablenames.rs` `printed_pointee`) | always on (`retype` directive) |
 | `kuna-stackpointerretype.xml` | `probe` keeps `&frame[1]` in a saved register (ARM32 r4, PowerPC32 r29); `retype` to a 16-byte `Probe *` re-laid the frame as a `Probe` record, which turned the pointer's definition into a copy that was propagated into its readers: the C printed `consume(&v4)` and the retype was refused. P3 copy propagation (`p3_dataflow/ruleaction_3.rs` `RulePropagateCopy`) keeps a copy that is a definition the replayed retype's lock matched (`p6_variables/kuna_stablenames.rs` `is_retyped_definition`) | always on (`retype` directive) |
-| `kuna-poolfallthru.xml` | ARM32 `probe` (little- and big-endian) ends in a call kuna cannot prove no-return, followed by its PC-relative literal pool; the walk took the call's fall-through, decoded the constants as instructions and printed `halt_baddata(); // warn: Bad instruction` after the call. P2 flow classification (`p2_lift/kuna_funcboundflow.rs` `kuna_should_bound_at_pool`): a call's fall-through onto a literal pool the Listing's trusted loads prove (`kuna-analysis` `listing/kuna_poolextents.rs`) ends the function | `option funcboundflow off\|on` |
+| `kuna-poolfallthru.xml` | ARM32 `probe` (little- and big-endian) ends in a call kuna cannot prove no-return, followed by its PC-relative literal pool; the walk took the call's fall-through, decoded the constants as instructions and printed `halt_baddata(); // warn: Bad instruction` after the call. P2 flow classification (`p2_lift/kuna_funcboundflow.rs` `kuna_should_bound_at_pool`): a call's fall-through onto a literal pool the Listing's trusted loads prove (`unlace-analysis` `listing/kuna_poolextents.rs`) ends the function | `option funcboundflow off\|on` |
 | `kuna-chkstkdarwin.xml` | Apple clang calls `___chkstk_darwin` before a frame larger than a page or a variable-length array, and reads the argument registers after it; the AArch64 model kills x0, x1 and x8-x18 at the call, so `_big_frame`, `_vla_last` and `_probe_stub` printed `(void)` and assigned the probe's result | P2 flow classification (`p2_lift/kuna_chkstkdarwin.rs` removes the probe call from the raw p-code of a Darwin AArch64 image, through the GOT slot, an arm64e `__auth_ptr` slot or the `__stubs` entry; an AArch64 ELF function merely named `___chkstk_darwin` keeps its call) | `option chkstkdarwin on\|off` (destructive, default on) |
 | `kuna-typevote.xml` | `put_u32_be` shifts its `uint4` parameter through merge copies that type inference never saw, so each read printed a cast back to the declared type, `(uint4)a1 >> 0x18` | P5 type propagation (`p5_types/kuna_typevote.rs` types a variable left `undefinedN` by a vote over the ops on its instances) | `option typevote on\|off` (default on) |
 | `kuna-gotonext.xml` | gcc and clang `-O2` switches whose cases fall through printed `goto label_X;` directly above `case 1: label_X:`, clang's chain printed `case 3:` first, and a loop exit printed `goto` where `break;` goes there | P8 goto quality (`p8_structure/kuna_gotonext.rs` censuses the final structured tree at print time; `Funcdata::chain_fallthru_cases` re-derives the fall-thru chains before the case sort) | `option gotonext on\|off` (default on) |
-| `kuna-panicloc.xml` | A Rust panic site passes `&'static core::panic::Location`, which printed as a bare address: `panic_fmt(..,0x2002c0)` | P1 external refinement (`kuna-analysis` `strings/kuna_panicloc.rs` finds the records by shape, types them `core::panic::Location` and names them after file, line and column) | `option panicloc on\|off` (default on, Rust images only) |
+| `kuna-panicloc.xml` | A Rust panic site passes `&'static core::panic::Location`, which printed as a bare address: `panic_fmt(..,0x2002c0)` | P1 external refinement (`unlace-analysis` `strings/kuna_panicloc.rs` finds the records by shape, types them `core::panic::Location` and names them after file, line and column) | `option panicloc on\|off` (default on, Rust images only) |
 | `kuna-brktrap.xml` | AArch64 SLEIGH lifts `brk #imm` to a jump through `SoftwareBreakpoint`, which flow truncated to a call that returns, so a function whose overflow or bounds check ends in a compiler trap printed as `void` and passed the value it returns to the trap, or returned a value fabricated from a call through it | P2 flow classification (`p2_lift/kuna_brktrap.rs` matches the lowered `brk` with a compiler trap immediate, `#1`, `#1000`, `#0x5500`-`#0x55ff`, `#0xc470`-`#0xc473` or `#0xf003`, and `flow.rs` ends the flow there with a no-return halt; `#0xf003` also reads its `__fastfail` code from `w0`, so the code prints; `brk #0xf000`, `brk #0` and `brk #0x800` are controls) | none (strict fix): one pass at the default |
-| `kuna-ebpf-elf-map-reloc.xml` | kuna [#1652](https://github.com/Noelo-Lab/kuna/issues/1652): a `clang --target=bpf -c` object did not load (EM_BPF 247 had no language), and with `--target` the `R_BPF_64_64` map reference was written as one 64-bit word over the start of the 16-byte `lddw`, so `prog` printed `halt_baddata()` | P1 loader (`kuna-analysis` `loadimage_object.rs` maps EM_BPF to `eBPF:LE\|BE:64:default`; `loader/reloc_apply.rs` patches `R_BPF_64_64` into the two `imm` halves at +4 and +12, `R_BPF_64_32` into the call `imm` as `(S + A - P) / 8 - 1` with the REL addend `(imm + 1) * 8`, so a static callee named by the `.text` section symbol is the one its `imm` selects, in either byte order, and `R_BPF_64_ABS64/ABS32/NODYLD32` as data words; a pspec `<default_symbols>` label outside the default code space at a call target names the callee, so `call 1` prints `bpf_map_lookup_elem`) | none (strict fix): one pass at the default |
+| `kuna-ebpf-elf-map-reloc.xml` | kuna [#1652](https://github.com/Noelo-Lab/kuna/issues/1652): a `clang --target=bpf -c` object did not load (EM_BPF 247 had no language), and with `--target` the `R_BPF_64_64` map reference was written as one 64-bit word over the start of the 16-byte `lddw`, so `prog` printed `halt_baddata()` | P1 loader (`unlace-analysis` `loadimage_object.rs` maps EM_BPF to `eBPF:LE\|BE:64:default`; `loader/reloc_apply.rs` patches `R_BPF_64_64` into the two `imm` halves at +4 and +12, `R_BPF_64_32` into the call `imm` as `(S + A - P) / 8 - 1` with the REL addend `(imm + 1) * 8`, so a static callee named by the `.text` section symbol is the one its `imm` selects, in either byte order, and `R_BPF_64_ABS64/ABS32/NODYLD32` as data words; a pspec `<default_symbols>` label outside the default code space at a call target names the callee, so `call 1` prints `bpf_map_lookup_elem`) | none (strict fix): one pass at the default |
 
 `kuna-storecopyeffects.xml` pins the AArch64 address-spill store across calls,
 repeated stores, a load between calls, and a truly dead-store control. The
-compiled round trips in `kuna-cli/tests/store_copy_effects.rs` also exercise
+compiled round trips in `unlace-cli/tests/store_copy_effects.rs` also exercise
 aliasing and distinct pointers on AArch64 and x86-64 at `-O0` and `-O2`.
 
 `kuna-varsources.xml` pins register and stack source comments after copy
@@ -430,10 +430,10 @@ passed to a callee across repeated decompilation. Its instructions are synthetic
 return is passed in EDX to a callee with one explicit formal. Repeated builds
 retain that value and the one-formal signature; the ordinary two-slot prototype
 passes the same value as argument two. The assertion API and callable-type
-interning controls are in `kuna-console/tests/verify_assertplane.rs`.
+interning controls are in `unlace-console/tests/verify_assertplane.rs`.
 
 Infrastructure testcases (no GH issue; they regression-test the kuna stage machinery
-itself): `kuna-console.xml` (registry + `stage list/map/status`), `kuna-assert.xml`
+itself): `unlace-console.xml` (registry + `stage list/map/status`), `kuna-assert.xml`
 (`kassert` routing + reported rewind scopes), `kuna-restarts.xml` (restart-reason
 observability on the switchmulti multistage restart), `kuna-pipeline-quality.xml`
 (reduced-pipeline sub-queries + the goto-quality metric), `kuna-regions.xml`
@@ -459,21 +459,21 @@ Use direct commands rather than nested `source` scripts with this attribute.
 `kuna-calleeretpreserves.xml` also covers a declared-void direct helper with a
 terminal failure call: marking and unmarking the leaf refreshes the cached body
 summary.
-`kuna-cli/tests/direct_call_return.rs` checks native and recompiled emitted C
+`unlace-cli/tests/direct_call_return.rs` checks native and recompiled emitted C
 at `-O0` and `-O2`, real return-register writes, unknown returning calls and an
 incomplete helper. These are authored MSABI probes in an ELF container.
 
 `kuna-floatprecision.xml` pins authored scalar and packed SSE binary32 inputs
 widened for binary64 subtraction/addition before one final narrowing, plus
 widened multiplication/division and float-only/conversion-only controls.
-`kuna-cli/tests/float_precision.rs` recompiles the emitted C with GCC and Clang
+`unlace-cli/tests/float_precision.rs` recompiles the emitted C with GCC and Clang
 at `-O0` and `-O2` and compares its bits against the assembly for cancellation,
 subnormals, overflow, signed zeros, infinities and individual NaN payloads.
 
 `kuna-arm-conditional-switch.xml` pins authored A32 `SUBS`/`ADDPL PC`
 branch tables, including case bodies that share a saved-frame epilogue, with
 `tailcalljump` on and off. Unconditional `ADD PC`, healthy `ADDLS PC`, and a
-real indirect function-pointer call are controls. `kuna-cli/tests/arm_conditional_switch.rs`
+real indirect function-pointer call are controls. `unlace-cli/tests/arm_conditional_switch.rs`
 compiles the untouched emitted bodies with GCC and Clang at `-O0` and `-O2`
 with undefined-behavior checks and exercises every case and signed boundaries.
 
@@ -497,10 +497,10 @@ the Linux native/recompiled functions at O0/O2. Source: `src/pointer_storage_lit
 bare MH_FILESET with `kernelcache off` (one image, no symbols), its kext out of an
 IMG4(IM4P(LZFSE)) wrapper, and its kernel out of a bare IM4P(complzss). The
 fixtures and their generator live in
-`decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/`.
+`decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/`.
 
 `kuna-iokitclasses.xml` decompiles a stripped synthetic kext
-(`decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/gen_iokit.py`) with
+(`decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/gen_iokit.py`) with
 `iokitclasses` off and on: the OSMetaClass constructor, the metaclass objects and
 a vtable-only override gain their names.
 
@@ -579,7 +579,7 @@ complete native bodies covered by the CLI integration fixture.
 bare MH_FILESET with `kernelcache off` (one image, no symbols), its kext out of an
 IMG4(IM4P(LZFSE)) wrapper, and its kernel out of a bare IM4P(complzss). The
 fixtures and their generator live in
-`decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/`.
+`decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/`.
 `kuna-kernelcacheboot.xml` loads the kext of a synthetic Auxiliary collection
 twice: with `kernelcache-boot off` its calls into the kernel go through
 unresolved slots, and by default they are named from the boot collection that
@@ -594,13 +594,13 @@ the complete emitted functions with Go pointer checks and full-array canaries.
 `kuna-elf-unwind-pcread.xml` checks an authored PowerPC PC-relative literal read:
 with FDE ownership disabled it remains a call; with ownership enabled the
 complete body returns `a0 * 3 + 7`. The fixture generator is
-`decompiler/crates/kuna-cli/tests/fixtures/elf_unwind_fixture.rs`.
+`decompiler/crates/unlace-cli/tests/fixtures/elf_unwind_fixture.rs`.
 
 `kuna-assert-callee.xml` checks `override indirect`: an indirect call and an
 indirect tail jump each print as a direct call to the stated function, and the
 tail call to a callee marked no-return ends the function with no return. The CLI
 companion covers `--assert callee` on both surfaces and every refusal. The
-fixture source is `decompiler/crates/kuna-cli/tests/fixtures/assert_callee.c`.
+fixture source is `decompiler/crates/unlace-cli/tests/fixtures/assert_callee.c`.
 
 `kuna-rust-process-exit.xml` preserves exit status and preceding stores while
 removing dead trap flow after a known Rust standard-library process exit.

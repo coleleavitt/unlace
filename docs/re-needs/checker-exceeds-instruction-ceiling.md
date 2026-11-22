@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli/src, decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs]
+touches: [decompiler/crates/unlace-cli/src, decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs]
 scope: small
 regression_of: null
 pr: 422

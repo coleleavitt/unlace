@@ -28,7 +28,7 @@
 
     Stage / sub-stage: P4 "prototype-source". Pass 1 pins `off`, pass 2 `on`.
 
-    Source: decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_x86_64.c
+    Source: decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_x86_64.c
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -37,7 +37,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_x86_64</com>
   <com>option callbacktype off</com>
   <com>read symbols</com>
   <com>lo fu by_key</com>
@@ -47,7 +47,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_x86_64</com>
   <com>option callbacktype on</com>
   <com>read symbols</com>
   <com>lo fu by_key</com>

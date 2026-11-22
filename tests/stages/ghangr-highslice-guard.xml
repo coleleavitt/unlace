@@ -14,7 +14,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/highslice_guard_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/highslice_guard_x86_64</com>
   <com>phase catalog highsliceguard</com>
   <com>read symbols</com>
   <com>parse line extern uint4 narrow_guard(uint8 x);</com>
@@ -22,7 +22,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/highslice_guard_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/highslice_guard_x86_64</com>
   <com>option highsliceguard on</com>
   <com>phase catalog highsliceguard</com>
   <com>read symbols</com>

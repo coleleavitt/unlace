@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-console/src/funcextent.rs, decompiler/crates/kuna-console/src/engine.rs]
+touches: [decompiler/crates/unlace-console/src/funcextent.rs, decompiler/crates/unlace-console/src/engine.rs]
 scope: small
 regression_of: whole-binary-json-untriageable
 pr: null
@@ -94,11 +94,11 @@ Find the large VM interpreter using size-based inventory filtering.
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/noshdr_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/noshdr_x86_64",
     "binary_sha256": "f960c89e9a1308857a344bec32dd3a9b89535c235a428d5cde56ad0657921d65",
     "binary_size": 304,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/noshdr_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/noshdr_x86_64",
     "selector": null,
     "selector_kind": "none"
   },
@@ -144,7 +144,7 @@ _none recorded_
 
 SYMPTOM REPRODUCED AND ISOLATED BY CONTROL. `kuna functions <bin> --json` on the witness returns 12 functions, ALL with size 0. The control matters more than the repro: the same binary from a different round-4 arena, graphy (sectioned static ELF), returns 55 functions with ZERO of them size 0 (sub_1002c90 size 8704). So `size` is not structurally dead -- it works, and it dies on this binary specifically. `file` reports the witness as a PIE with 'no section header'.
 
-THE HYPOTHESIS IS UPHELD AND THE MECHANISM IS EXACT, NOT INFERRED. 'Segment-only discovery may not propagate recovered extents into inventory metadata' is right. kuna-console/src/funcextent.rs computes every inventory extent as `clip(entry, next_entry, code_spans(sections))`, and `clip` opens with: if no CODE span contains the entry, `return 0`. `code_spans()` is built ONLY from the loader section table (`ConsoleProgram::sections`, filtered on `section_flags::CODE`). A sectionless ELF has an empty section table, so `code_spans` is empty, so EVERY entry takes the early return. 12 of 12 is not a coincidence, it is the only reachable outcome. The 'code_bytes 0 in the summary' half of the report is the same root -- the summary sums these same extents.
+THE HYPOTHESIS IS UPHELD AND THE MECHANISM IS EXACT, NOT INFERRED. 'Segment-only discovery may not propagate recovered extents into inventory metadata' is right. unlace-console/src/funcextent.rs computes every inventory extent as `clip(entry, next_entry, code_spans(sections))`, and `clip` opens with: if no CODE span contains the entry, `return 0`. `code_spans()` is built ONLY from the loader section table (`ConsoleProgram::sections`, filtered on `section_flags::CODE`). A sectionless ELF has an empty section table, so `code_spans` is empty, so EVERY entry takes the early return. 12 of 12 is not a coincidence, it is the only reachable outcome. The 'code_bytes 0 in the summary' half of the report is the same root -- the summary sums these same extents.
 
 WHY IT IS A REAL DEFECT AND NOT THE DOCUMENTED BEHAVIOUR. funcextent.rs deliberately specifies 0 as 'an entry outside every CODE section is an import pointer slot or an undefined external -- an address, not a body'. That semantic is sound when a section table EXISTS. With no section table the same branch silently changes meaning from 'this entry is not a body' to 'we cannot see any sections', and every real function inherits the sentinel reserved for non-bodies. Downstream, `--min-size 1` is documented triage and it discards all 12 -- count 0, total 12, error null -- which is the tester's actual loss: the filter reports emptiness with no error to distinguish it from a binary that really has nothing.
 
@@ -160,4 +160,4 @@ LINEAGE: filed `regression_of: whole-binary-json-untriageable` (closed round 1, 
 
 - SECOND FACT THE CONTROL EXPOSED, not previously recorded anywhere and NOT part of this need: stripping the section table also drops DISCOVERY from 54 functions to 11 on the same bytes. The extent bug is what this need is about, but a sectionless ELF is additionally losing ~80% of its function inventory. That is a separate defect with a separate locus, and it makes the sectionless family a four-symptom class, not three. Worth a filed need in round 5 if a tester hits it; do not widen this need's scope to cover it.
 
-- TRACK CORRECTED quality -> tooling, and TOUCHES corrected off the broad `decompiler/crates/kuna-decomp` root to `kuna-console/src/funcextent.rs` + `kuna-console/src/engine.rs`. Rationale: the probe is `kuna functions --json` and emits no C at all (the precedent that closed `xrefs-unify-pe-import`), and the measured locus is the console inventory tier, not the decompiler. TWO DISPATCH CONSEQUENCES. (1) This need is now OUT of the quality-lease monopoly, so it can run beside a quality builder. (2) It is NOT part of the five-need `kuna-analysis/src/loader` block either -- the narrow fix touches neither the loader nor kuna-decomp, so it contends with nothing currently open. That makes it the cheapest dispatchable need in the round. THE CAVEAT THAT DECIDES THIS: the fix direction must be the funcextent fallback (use executable PT_LOAD segment spans when `code_spans` is empty), NOT teaching the loader to synthesize sections from segments. The loader route would take the loader lease, collide with the five-need block, and change `function_entries_executable`'s documented sectionless behaviour ("Loaders without section metadata retain the complete inventory") as a side effect. Bind that in the contract, or the builder may pick the wide route and re-enter the loader contention this correction just removed.
+- TRACK CORRECTED quality -> tooling, and TOUCHES corrected off the broad `decompiler/crates/unlace-decomp` root to `unlace-console/src/funcextent.rs` + `unlace-console/src/engine.rs`. Rationale: the probe is `kuna functions --json` and emits no C at all (the precedent that closed `xrefs-unify-pe-import`), and the measured locus is the console inventory tier, not the decompiler. TWO DISPATCH CONSEQUENCES. (1) This need is now OUT of the quality-lease monopoly, so it can run beside a quality builder. (2) It is NOT part of the five-need `unlace-analysis/src/loader` block either -- the narrow fix touches neither the loader nor unlace-decomp, so it contends with nothing currently open. That makes it the cheapest dispatchable need in the round. THE CAVEAT THAT DECIDES THIS: the fix direction must be the funcextent fallback (use executable PT_LOAD segment spans when `code_spans` is empty), NOT teaching the loader to synthesize sections from segments. The loader route would take the loader lease, collide with the five-need block, and change `function_entries_executable`'s documented sectionless behaviour ("Loaders without section metadata retain the complete inventory") as a side effect. Bind that in the contract, or the builder may pick the wide route and re-enter the loader contention this correction just removed.

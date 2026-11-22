@@ -28,7 +28,7 @@
     xunknown4, upstream's bit copy, and the stores keep upstream's text.
 
     Passes 3 and 4 load floatstore.c built by clang 14 -O2 for x86-64 (movss)
-    and AArch64 (str s0), from kuna-analysis's fixtures (floatstore.provenance).
+    and AArch64 (str s0), from unlace-analysis's fixtures (floatstore.provenance).
 -->
 <bytechunk space="ram" offset="0x8000010" readonly="true">
 40f20000c2f20000006820ee201ab6ee002a4ff07e5131ee021a30ee600a0160
@@ -47,13 +47,13 @@
   <com>print C</com>
   <com>option realtypes on</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/floatstore_x86_64_O2.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatstore_x86_64_O2.o</com>
   <com>read symbols</com>
   <com>load function mat_param</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/floatstore_a64_O2.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatstore_a64_O2.o</com>
   <com>read symbols</com>
   <com>load function mat_param</com>
   <com>decompile</com>

@@ -27,7 +27,7 @@
     fails here rather than becoming golden-diff noise.
 
     The resource assertion itself lives in the Rust gate
-    `decompiler/crates/kuna-console/tests/verify_symbolnamebound.rs`.
+    `decompiler/crates/unlace-console/tests/verify_symbolnamebound.rs`.
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -36,7 +36,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/deep_scope_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/deep_scope_x86_64</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>

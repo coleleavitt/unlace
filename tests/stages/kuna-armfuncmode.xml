@@ -52,63 +52,63 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_funcmode_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_funcmode_le32</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load function arm_helper</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_funcmode_nocall_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_funcmode_nocall_le32</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load function arm_helper</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_funcmode_mapsyms_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_funcmode_mapsyms_le32</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load function arm_helper</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_funcmode_sizes_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_funcmode_sizes_le32</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load function arm_helper</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_static_thumb_so_o2_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_static_thumb_so_o2_le32</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load function arm_export</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_funcmode_helper_o2_le32.so</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_funcmode_helper_o2_le32.so</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load addr 0x1020c</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_funcmode_noreturn_le32.so</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_funcmode_noreturn_le32.so</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load addr 0x10290</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_funcmode_stackprot_le32.so</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_funcmode_stackprot_le32.so</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load addr 0x103e0</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/arm_funcmode_pool_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_funcmode_pool_le32</com>
   <com>option looprotate off</com>
   <com>read symbols</com>
   <com>load addr 0x2000094</com>

@@ -1,7 +1,7 @@
 # Callee fixture
 
 A stripped program for the FLIRT matcher and its interplay with FID
-(`kuna-console/tests/verify_flirt_sites.rs`, signature `tests/fixtures/flirt/callees.sig`).
+(`unlace-console/tests/verify_flirt_sites.rs`, signature `tests/fixtures/flirt/callees.sig`).
 
 | File | What |
 |---|---|

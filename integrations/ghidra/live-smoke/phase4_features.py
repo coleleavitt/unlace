@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Live Phase-4 feature verification: drive the NATIVE Ghidra GUI features the
 full `decompileAt` response encode lights up, against a REAL Ghidra with
-`kuna_ghidra` swapped in as the decompiler core.
+`unlace_ghidra` swapped in as the decompiler core.
 
 What it proves (each section prints PASS/FAIL and lands in PHASE4_REPORT.md):
 
@@ -41,7 +41,7 @@ import traceback
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 KUNA_GHIDRA = os.environ.get(
     "KUNA_GHIDRA_EXE",
-    os.path.join(REPO, "decompiler", "target", "release", "kuna_ghidra"),
+    os.path.join(REPO, "decompiler", "target", "release", "unlace_ghidra"),
 )
 BINARY = os.environ.get("KUNA_SMOKE_BINARY")
 FUNCTION = os.environ.get("KUNA_SMOKE_FUNCTION", "main")
@@ -65,7 +65,7 @@ def main():
         print("usage: KUNA_SMOKE_BINARY=/path/to/prog python3 phase4_features.py")
         sys.exit(1)
     if not os.path.exists(KUNA_GHIDRA):
-        print(f"FATAL: kuna_ghidra not built at {KUNA_GHIDRA}")
+        print(f"FATAL: unlace_ghidra not built at {KUNA_GHIDRA}")
         sys.exit(1)
     os.makedirs(OUT, exist_ok=True)
     # The probe MUTATES the program database (renames/retypes/reference

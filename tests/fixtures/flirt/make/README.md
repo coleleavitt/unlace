@@ -1,7 +1,7 @@
 # `kuna flirt make` fixture
 
 A static library of three objects and a stripped program linked against it
-(`kuna-cli/tests/flirt_make_cli.rs`).
+(`unlace-cli/tests/flirt_make_cli.rs`).
 
 | File | What |
 |---|---|

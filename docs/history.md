@@ -28,7 +28,7 @@ and design docs summarized here.
 | 2026-06-19 | `bca4ae8d` | **Initial Rust port completed** — M3: full datatest parity **675/675** against the untouched C++ oracle, after the W10 parity grind (3 → 21 → 47 → 315 → 476 → 675). |
 | 2026-06-20 | `b3838e1b` | SLEIGH compiler ported (`slacomp`): 148/148 specs compile to content-identical `.sla`; full suite green on Rust-built specs, both engines. |
 | 2026-06-20 | `9346a1a5` | **C++ tree removed** — the Rust port is the engine. Python CLI becomes the single Rust `kuna` binary (`3b29635a`). |
-| 2026-06-22 | `aa765712` | **Analysis-tier port begins**: Ghidra's Java analyzer suite recreated as `kuna-analysis` — 62 increments over ~5 weeks (no-return, demangling, strings, DWARF, entry discovery, ARM/Thumb painting, the Listing/xref tier, PE/Mach-O/COFF loaders, Go pclntab, FID, RTTI/Obj-C/PDB metadata), every increment holding 675/675. |
+| 2026-06-22 | `aa765712` | **Analysis-tier port begins**: Ghidra's Java analyzer suite recreated as `unlace-analysis` — 62 increments over ~5 weeks (no-return, demangling, strings, DWARF, entry discovery, ARM/Thumb painting, the Listing/xref tier, PE/Mach-O/COFF loaders, Go pclntab, FID, RTTI/Obj-C/PDB metadata), every increment holding 675/675. |
 | 2026-07-04 | `6b270a3e` | decbench campaign: whole-binary benchmark loop (mine/triage/rescore) driving feature work from real-binary regressions vs Ghidra/angr. |
 | 2026-07-05 | `b255b3d4` | Ghidra integration Phase 1: kuna as stock Ghidra's decompiler core (wire protocol + extension). |
 | 2026-07-16→28 | `cdaa35bc`, `9d308212` | `kuna decompile-project` whole-binary export; WASM browser build; the project site + in-browser decompiler at kuna.noelo.org. |
@@ -172,7 +172,7 @@ before 2026-09-16, and `docs/divergences.md` before 2026-07-28).
 | DIV-50 | — | renaming reconciles a full-size input with `guardInput`'s leftover pieces (bug fix, no new flag) — gnulib's `rpl_fcntl` at `-O2` produced no body at all in 48 of… |
 | DIV-51 | — | short-circuit `0`/`1` select diamonds re-roll into a boolean assignment (`iteboolean`, default-ON) — gcc at `-O0` materializes a source `x = a && b;` as a… |
 | DIV-52 | — | one local declaration per ScopeLocal Symbol (bug fix, no new flag) — `PrintC::emitLocalVarDecls` walks HighVariables where upstream `emitScopeVarDecls` walks the… |
-| DIV-53 | — | the browser inventory shares the decompile/project discovery policy (bug fix, no new flag) — `kuna_wasm list` — the command that fills the web UI's function sidebar… |
+| DIV-53 | — | the browser inventory shares the decompile/project discovery policy (bug fix, no new flag) — `unlace_wasm list` — the command that fills the web UI's function sidebar… |
 | DIV-54 | — | `returndup` default-ON (supersedes the DIV-18 revert) — The whole-block gotoless return duplicator (angr SAILR `ReturnDuplicatorHigh`… |
 | DIV-55 | — | a datatype copy split declines a read-only output (bug fix, no new flag) — `SplitDatatype::testCopyConstraints` (`p3_dataflow/subflow.rs`, upstream… |
 | DIV-56 | — | a diamond whose condition was concatenated with its predecessor still re-rolls (`itecondlist`, default-ON) — `iteregion` (DIV-17) and `iteboolean` (DIV-51) both… |

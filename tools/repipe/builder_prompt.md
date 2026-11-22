@@ -42,7 +42,7 @@ the most likely way to waste this session.**
 
 The need is a missing or broken *capability*: a subcommand that does not exist, JSON that is
 not emitted, an error that is silently swallowed, a flag that is missing. It lives in
-`decompiler/crates/kuna-cli/`, `kuna-console/` or `kuna-analysis/`.
+`decompiler/crates/unlace-cli/`, `unlace-console/` or `unlace-analysis/`.
 
 **It does NOT change emitted C, so it does NOT need a `phases.toml` option row.** The rule in
 `CLAUDE.md` is "a judgement call ships behind a named option; a fix does not" — a new
@@ -93,7 +93,7 @@ asking kuna to guess better: define a function boundary, override a jump table, 
 blob as data, steer structuring, fix a prototype. Before you design anything, check whether
 the capability already exists one layer down and is simply unreachable.
 
-**It usually does.** `kuna-console`'s `register_decomp_commands` registers ~37
+**It usually does.** `unlace-console`'s `register_decomp_commands` registers ~37
 intervention-shaped commands — `map function`, `map address`, `map param`, `map return`,
 `map label`, `override prototype`, `override flow`, `override jumptable`, `force goto`,
 `force datatype`, `force varnode`, `name varnode`, `rename`, `retype`, `type varnode`,

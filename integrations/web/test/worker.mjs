@@ -16,7 +16,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = resolve(here, '../dist');
 const fixture = join(here, 'fixtures', 'sample.elf');
 
-if (!existsSync(join(dist, 'kuna_wasm.wasm')) ||
+if (!existsSync(join(dist, 'unlace_wasm.wasm')) ||
     !existsSync(join(dist, 'kuna-worker.js'))) {
   throw new Error('dist/ not built — run integrations/web/build.sh first');
 }
@@ -119,7 +119,7 @@ function zipNames(bytes) {
 
 const client = new KunaWorkerClient({
   workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
-  wasmUrl: `${base}/kuna_wasm.wasm`,
+  wasmUrl: `${base}/unlace_wasm.wasm`,
   specRoot: `${base}/specs`,
   workerFactory: (url) => new BrowserWorker(url),
 });
@@ -203,13 +203,13 @@ try {
 
   const hashing = new KunaWorkerClient({
     workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
-    wasmUrl: `${base}/kuna_wasm.wasm`,
+    wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new BrowserWorker(url),
   });
   try {
     await hashing.ready();
-    const wasm = createHash('sha256').update(await readFile(join(dist, 'kuna_wasm.wasm'))).digest('hex');
+    const wasm = createHash('sha256').update(await readFile(join(dist, 'unlace_wasm.wasm'))).digest('hex');
     assert.equal(await hashing.buildId(), wasm, 'asked for, the build id is the SHA-256 of the wasm the Worker compiled');
     const before = wasmRequests;
     hashing.cancel('a new Worker');
@@ -218,7 +218,7 @@ try {
     assert.equal(wasmRequests - before, 0, 'the new Worker runs the engine the page compiled, so it downloads nothing');
     const racing = new KunaWorkerClient({
       workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
-      wasmUrl: `${base}/kuna_wasm.wasm`,
+      wasmUrl: `${base}/unlace_wasm.wasm`,
       specRoot: `${base}/specs`,
       workerFactory: (url) => new BrowserWorker(url),
     });
@@ -241,7 +241,7 @@ try {
   etag = '"one"';
   const pinned = new KunaWorkerClient({
     workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
-    wasmUrl: `${base}/kuna_wasm.wasm`,
+    wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new BrowserWorker(url),
   });
@@ -250,7 +250,7 @@ try {
   try {
     await pinned.load(binary, { fileName: 'sample.elf' });
     await pinned.decompile(main.address_hex);
-    const wasm = createHash('sha256').update(await readFile(join(dist, 'kuna_wasm.wasm'))).digest('hex');
+    const wasm = createHash('sha256').update(await readFile(join(dist, 'unlace_wasm.wasm'))).digest('hex');
     assert.equal(await pinned.buildId(), wasm);
     const [wasmBefore, specsBefore] = [wasmRequests, specRequests];
     etag = '"two"';
@@ -259,7 +259,7 @@ try {
     assert.equal(wasmRequests - wasmBefore, 0, 'the same wasm deployed again: a restarted Worker downloads nothing');
     assert.deepEqual(heard, [], 'and the page does not hear of a new build');
     assert.equal(await pinned.buildId(), wasm);
-    wasmOverride = Buffer.concat([await readFile(join(dist, 'kuna_wasm.wasm')), Buffer.from([0, 5, 4, 0x6e, 0x65, 0x77, 0x21])]);
+    wasmOverride = Buffer.concat([await readFile(join(dist, 'unlace_wasm.wasm')), Buffer.from([0, 5, 4, 0x6e, 0x65, 0x77, 0x21])]);
     etag = '"three"';
     pinned.cancel('another Worker');
     assert.match((await pinned.decompile(main.address_hex)).functions[0].code, /sum_to\(add\(/, 'the restarted Worker decompiles');
@@ -281,13 +281,13 @@ try {
   // the SHA-256 of the bytes this page compiled.
   const early = new KunaWorkerClient({
     workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
-    wasmUrl: `${base}/kuna_wasm.wasm`,
+    wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new BrowserWorker(url),
   });
   try {
     await early.ready();
-    const original = await readFile(join(dist, 'kuna_wasm.wasm'));
+    const original = await readFile(join(dist, 'unlace_wasm.wasm'));
     const later = Buffer.from(original);
     later[later.length - 1] ^= 0xff;
     wasmOverride = later;
@@ -309,14 +309,14 @@ try {
   }
   const unpinned = new KunaWorkerClient({
     workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
-    wasmUrl: `${base}/kuna_wasm.wasm`,
+    wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new NoModuleWorker(url),
   });
   const lost = [];
   unpinned.onbuild = (build, was) => lost.push([build, was]);
   try {
-    const wasm = createHash('sha256').update(await readFile(join(dist, 'kuna_wasm.wasm'))).digest('hex');
+    const wasm = createHash('sha256').update(await readFile(join(dist, 'unlace_wasm.wasm'))).digest('hex');
     assert.equal(await unpinned.buildId(), wasm);
     unpinned.cancel('a new Worker');
     await unpinned.ready();

@@ -57,7 +57,7 @@ To install and activate Kuna in Ghidra, do the following:
 
 Now, when you decompile, you should see `/* Kuna v{version} */` in the decompilation.
 
-![](./assets/kuna_ghidra.png)
+![](./assets/unlace_ghidra.png)
 
 All native Ghidra features are not yet supported, so please report them when you find issues.
 To disable the Kuna backend, simply disable the plugin in `File -> Configure`.
@@ -74,12 +74,12 @@ To use Kuna as the decompiler backend there, swap the native decompiler binary d
    ```
 2. Replace it with the Kuna backend from the extension zip's `KunaDecompiler/os/linux_x86_64/` directory:
    ```bash
-   cp /path/to/KunaDecompiler/os/linux_x86_64/kuna_ghidra decompile
+   cp /path/to/KunaDecompiler/os/linux_x86_64/unlace_ghidra decompile
    chmod +x decompile
    ```
 3. Verify the swap: decompile a function and check for the `/* Kuna v<version> */` marker in the output.
 
-No specs download is needed: `kuna_ghidra` gets the processor specs and p-code from Ghidra itself.
+No specs download is needed: `unlace_ghidra` gets the processor specs and p-code from Ghidra itself.
 On other platforms, use the matching `os/<platform>/` directory (`linux_arm_64`, `mac_x86_64`, `mac_arm_64`, or `win_x86_64`, where both files end in `.exe`).
 To revert to the stock Ghidra decompiler, restore the backup with `cp decompile.ghidra.orig decompile`.
 The [extension README](integrations/ghidra/KunaDecompiler/README.md#use-with-pyghidra-headless--scripting) also covers an in-script PyGhidra toggle and a drop-in that leaves the stock binary untouched.
@@ -126,7 +126,7 @@ make binaries   # cargo-build the decompiler (decomp_dbg, decomp_test_dbg),
                 # the SLEIGH compiler (slacomp), and the `kuna` CLI
 make specs      # compile every SLEIGH .slaspec -> .sla with slacomp (the decoder needs these)
 make            # = binaries + specs
-cd decompiler && cargo build --release -p kuna-cli --features embed-specs
+cd decompiler && cargo build --release -p unlace-cli --features embed-specs
                 # after `make specs`: a `kuna` that carries the specs, as releases do
 ```
 
@@ -152,7 +152,7 @@ corpus (`tests/datatests/`, 83 files / 675 assertions) with the Rust decompiler.
 
 | Path | What it is |
 |---|---|
-| `decompiler/` | The engine — a cargo workspace. `kuna-decomp` (the decompiler, phase-foldered `p0_knowledge/`…`p9_emit/`), `kuna-analysis` (the loader/analyzer tier), `kuna-sleigh`/`kuna-slacomp` (SLEIGH runtime + compiler, binary `slacomp`), `kuna-console` (the `decomp_dbg`/`decomp_test_dbg` binaries), `kuna-cli` (the `kuna` binary), `kuna-ghidra`/`kuna-wasm` (the Ghidra and browser front-ends), plus support crates |
+| `decompiler/` | The engine — a cargo workspace. `unlace-decomp` (the decompiler, phase-foldered `p0_knowledge/`…`p9_emit/`), `unlace-analysis` (the loader/analyzer tier), `unlace-sleigh`/`unlace-slacomp` (SLEIGH runtime + compiler, binary `slacomp`), `unlace-console` (the `decomp_dbg`/`decomp_test_dbg` binaries), `unlace-cli` (the `kuna` binary), `unlace-ghidra`/`unlace-wasm` (the Ghidra and browser front-ends), plus support crates |
 | `tests/datatests/` | Upstream XML decompilation regression tests (83 files → 675 assertions); the corpus `make test` runs |
 | `tests/stages/` | kuna-owned issue testcases; the corpus `make test-stages` runs |
 | `tests/golden/` | Differential golden vectors for the workspace suite (`make rust-test`) |

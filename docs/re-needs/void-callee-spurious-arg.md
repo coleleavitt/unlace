@@ -14,7 +14,7 @@ rounds: [1, 2]
 first_seen_round: 1
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: "402"
@@ -129,7 +129,7 @@ _none recorded_
   build emits `_secret_function(v3);` -- SSA numbering drift, not a fix. Re-gated with
   `_secret_function\(v[0-9]+\);` -> admitted. probe_id p-60d3b7f1c20b -> p-cb96bbe2ca7e (derived
   from cmd+expect); the acceptance is byte-identical, so a-293516d9c2f1 is unchanged.
-- round 2 wave 20 (captain): `touches` LEFT as filed (`[decompiler/crates/kuna-decomp]`). I have measured evidence of the
+- round 2 wave 20 (captain): `touches` LEFT as filed (`[decompiler/crates/unlace-decomp]`). I have measured evidence of the
   symptom but none of the owning module, and a confidently-wrong `touches` would misdirect a
   builder and mis-scope its leases. The builder should set it from its own root-cause work.
 - round 2 wave 26 (captain, measured at cf1140f2 — pre-dispatch briefing): the gap is LIVE and

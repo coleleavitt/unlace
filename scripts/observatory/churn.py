@@ -19,7 +19,7 @@ def _classify(path: str):
         return None
     crate = parts[2] if path.startswith("decompiler/crates/") and len(parts) > 3 else None
     phase = None
-    if crate == "kuna-decomp" and path.startswith("decompiler/crates/kuna-decomp/src/") and len(parts) > 5:
+    if crate == "unlace-decomp" and path.startswith("decompiler/crates/unlace-decomp/src/") and len(parts) > 5:
         top = parts[4]
         if top[0] == "p" and top[1:2].isdigit():
             phase = f"P{top[1]}"

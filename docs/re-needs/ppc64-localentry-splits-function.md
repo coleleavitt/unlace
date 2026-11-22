@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 1
 covered_by_option: ppclocalentry
-touches: [decompiler/crates/kuna-analysis/src, decompiler/crates/kuna-decomp/src/p2_lift/kuna_funcboundflow.rs]
+touches: [decompiler/crates/unlace-analysis/src, decompiler/crates/unlace-decomp/src/p2_lift/kuna_funcboundflow.rs]
 scope: small
 regression_of: null
 pr: "390"
@@ -34,7 +34,7 @@ found the defect while ablating the discovery bundle, explicitly declined to clo
 need of its own. Captain reproduced it on a **repo-vendored** fixture at merged main `6d315ffe`:
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/plt_ppc64le __do_global_ctors_aux
+$ kuna decompile decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le __do_global_ctors_aux
 void __do_global_ctors_aux(void)
 { // warn: funcboundflow: fall-through reached the next function entry; truncating flow here
 }
@@ -77,11 +77,11 @@ discovery bundle a retry-on-miss rather than an up-front injection.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/plt_ppc64le",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le",
     "binary_sha256": "b096b4098c64e6a8be6386d85fd2c1386fa646295247bcedabad2efea40e9a28",
     "binary_size": 70144,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/plt_ppc64le",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le",
     "selector": "__do_global_ctors_aux",
     "selector_kind": "name"
   },
@@ -123,11 +123,11 @@ present, no loop emitted.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/plt_ppc64le",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le",
     "binary_sha256": "b096b4098c64e6a8be6386d85fd2c1386fa646295247bcedabad2efea40e9a28",
     "binary_size": 70144,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/plt_ppc64le",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le",
     "selector": "__do_global_ctors_aux",
     "selector_kind": "name"
   },
@@ -150,7 +150,7 @@ Replayed at `6d315ffe`: **FAILS** -- `stdout_matches[0]` (`while`) false and `st
 i.e. the husk and its warning are exactly what comes out. Two-arm gate holds.
 
 Note the target is `binary_source: in-repo` against a fixture already committed at
-`decompiler/crates/kuna-analysis/tests/fixtures/plt_ppc64le`, so unlike every dataset-backed need in this
+`decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le`, so unlike every dataset-backed need in this
 backlog **this acceptance is promotable into `tests/cli/` verbatim** when it closes.
 
 ## Hypothesis
@@ -161,7 +161,7 @@ overturned while the symptom stood in all 8.
 - Two facts compose. (1) On PPC64 ELFv2 a caller inside the same module branches to the **local** entry
   point, `st_value + 8`, so a call-target-seeded discovery files 0x948 as a function of its own. kuna has
   the information to know better and does not use it: `readelf -sW` shows these symbols carry
-  `st_size == 0` and `[<localentry>: 8]` in `st_other`, and nothing in `kuna-analysis` consumes that
+  `st_size == 0` and `[<localentry>: 8]` in `st_other`, and nothing in `unlace-analysis` consumes that
   ELFv2 annotation. (2) `funcboundflow` (`p2_lift/kuna_funcboundflow.rs`) then does exactly what it says
   on the tin -- a fall-through reaching a known function entry is truncated -- and the "known function
   entry" it stops at is 8 bytes into the function being decompiled.

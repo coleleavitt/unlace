@@ -5,21 +5,21 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-cache-swapped.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-cache-swapped.elf</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>
   <com>load function check</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-cache-original.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-cache-original.elf</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>
   <com>load function check</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-abi.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-abi.elf</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>
   <com>load function check</com>
@@ -27,31 +27,31 @@
   <com>print C</com>
   <com>option ppc32picimports abi</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-cache-swapped.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-cache-swapped.elf</com>
   <com>read symbols</com>
   <com>load function check</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-cache-original.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-cache-original.elf</com>
   <com>read symbols</com>
   <com>load function check</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-cache-swapped.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-cache-swapped.elf</com>
   <com>read symbols</com>
   <com>load function check</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-cache-original.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-cache-original.elf</com>
   <com>read symbols</com>
   <com>load function check</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/ppc32-pic-tar-helper.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-tar-helper.elf</com>
   <com>read symbols</com>
   <com>load function check</com>
   <com>decompile</com>

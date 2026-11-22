@@ -2302,7 +2302,7 @@ pointee types and `globalref` refused it. What IDA pays and kuna does not: `(lon
 
 The user's witness was a base64 decoder: a decoding table filled from a constant alphabet into a
 `malloc`'d global, then indexed by input bytes into a `malloc`'d buffer. Its shape is reproduced here
-only through the repo's public fixture `decompiler/crates/kuna-analysis/tests/fixtures/elemptr_x86_64.c`,
+only through the repo's public fixture `decompiler/crates/unlace-analysis/tests/fixtures/elemptr_x86_64.c`,
 whose checked-in stripped builds are decompiled whole-binary (`final-l/b64-witness.md`):
 
 | build | `w_decode` gcc -O0 / clang -O0 / gcc -O2 | `w_build` | whole fixture |

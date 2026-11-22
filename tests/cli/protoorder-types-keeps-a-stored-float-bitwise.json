@@ -15,11 +15,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_floatstore_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_floatstore_x86_64",
     "binary_sha256": "d7dbcace280e67bc5fa8c1607e28073c537d7ce4da8d5ad51f167e42da28dedb",
     "binary_size": 16048,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_floatstore_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_floatstore_x86_64",
     "selector": "fill",
     "selector_kind": "name"
   },

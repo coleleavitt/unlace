@@ -20,11 +20,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/rdtsc_zero_extend_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/rdtsc_zero_extend_x86_64",
     "binary_sha256": "f7f1219e46801562b2ec5871cbcb29c9ec64294b3d80849ea989e96c3776774d",
     "binary_size": 4664,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/rdtsc_zero_extend_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/rdtsc_zero_extend_x86_64",
     "selector": "timestamp",
     "selector_kind": "name"
   },

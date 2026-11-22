@@ -14,7 +14,7 @@ rounds: [9, 12]
 first_seen_round: 9
 attempts: 1
 covered_by_option: calleeretpreserves
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: 608
@@ -73,11 +73,11 @@ Recover the mean log-probability returned by the password checker. Completing th
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_explicit_double_score_return_x86_64.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_explicit_double_score_return_x86_64.exe",
     "binary_sha256": "9454da07fedd100366e7a5955a29d218eb7f05bbb5bf5c3aa96f7d50f1c7deb9",
     "binary_size": 3584,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_explicit_double_score_return_x86_64.exe"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_explicit_double_score_return_x86_64.exe"
   },
   "timeout_s": 60,
   "cmd": [

@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:64:default:gcc">
 <!--
     A cloned return block wrote a global a second time (kuna #1355).  The
-    bytes are decompiler/crates/kuna-cli/tests/fixtures/return_copy_clone.S
+    bytes are decompiler/crates/unlace-cli/tests/fixtures/return_copy_clone.S
     linked at 0x1000.  audit_select is clang 14 -O1 -fPIC:
 
         audit_recorded = audit_decoy;

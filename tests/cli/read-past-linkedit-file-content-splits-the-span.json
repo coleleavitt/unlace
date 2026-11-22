@@ -2,11 +2,11 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/readprov_macho_arm64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/readprov_macho_arm64",
     "binary_sha256": "df44937763178358cb8f5648b662c06a9c65e0cf9df5843a527d5f3eb5ad9ba9",
     "binary_size": 33504,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/readprov_macho_arm64"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/readprov_macho_arm64"
   },
   "timeout_s": 60,
   "cmd": [

@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/tailcallframe_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/tailcallframe_x86_64",
     "binary_sha256": "dd89e801ad4db6a0c559658ada9cb626dcaed2a856e354a3d182a828da3d8080",
     "binary_size": 14488,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/tailcallframe_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/tailcallframe_x86_64",
     "selector": "sub_1170",
     "selector_kind": "name"
   },

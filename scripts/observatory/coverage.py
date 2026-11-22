@@ -1,5 +1,5 @@
 """Roll the cargo-llvm-cov per-file summary up into coverage.json: totals,
-per crate, per kuna-decomp phase folder, per file. Invoked by
+per crate, per unlace-decomp phase folder, per file. Invoked by
 scripts/coverage.sh; unit tests feed canned summaries."""
 import argparse
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 from scripts.observatory import common
 
 CRATES_PREFIX = "decompiler/crates/"
-DECOMP_SRC = "decompiler/crates/kuna-decomp/src/"
+DECOMP_SRC = "decompiler/crates/unlace-decomp/src/"
 
 
 def _bucket(path: str):

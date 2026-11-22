@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis, decompiler/crates/kuna-decomp, decompiler/crates/kuna-cli, decompiler/crates/kuna-console]
+touches: [decompiler/crates/unlace-analysis, decompiler/crates/unlace-decomp, decompiler/crates/unlace-cli, decompiler/crates/unlace-console]
 scope: small
 regression_of: null
 pr: 737
@@ -54,11 +54,11 @@ Read a PE that imports the BSTR/VARIANT API or WinSock by ordinal and see API na
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_ordinal_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_ordinal_i386.exe",
     "binary_sha256": "467116a4503a003f6e11bc7b5abd0bf14c5a43103a767e379c1e82d55509aff2",
     "binary_size": 4608,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_ordinal_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_ordinal_i386.exe",
     "selector": "0x401200",
     "selector_kind": "addr"
   },
@@ -97,11 +97,11 @@ Read a PE that imports the BSTR/VARIANT API or WinSock by ordinal and see API na
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_ordinal_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_ordinal_i386.exe",
     "binary_sha256": "467116a4503a003f6e11bc7b5abd0bf14c5a43103a767e379c1e82d55509aff2",
     "binary_size": 4608,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_ordinal_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_ordinal_i386.exe",
     "selector": "0x401200",
     "selector_kind": "addr"
   },

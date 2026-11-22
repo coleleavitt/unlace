@@ -196,11 +196,11 @@ unprototyped local callees (`FUN_004052b4(local_42e + 3,local_42e)`), which is w
 
 **Owning phase: P4 (calls).** The decision is call-site argument materialization / stack-space
 parameter trials:
-- `decompiler/crates/kuna-decomp/src/p4_calls/coreaction_protos.rs::func_link_input` - the
+- `decompiler/crates/unlace-decomp/src/p4_calls/coreaction_protos.rs::func_link_input` - the
   locked-prototype `IPTR_SPACEBASE` branch builds the argument with `data.op_stack_load(...)`
   and silently `continue`s on `Err(_)`; the placeholder tail only runs when
   `fc.proto().get_spacebase()` is `Some`.
-- `decompiler/crates/kuna-decomp/src/p3_dataflow/heritage.rs::guard_calls` (lines 1439-1526) -
+- `decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs::guard_calls` (lines 1439-1526) -
   the input-trial branch is gated on `tryregister`, which is forced `false` whenever
   `fc.get_spacebase_offset() == OFFSET_UNKNOWN`, and `stackoffset` is only ever set by
   `FuncCallSpecs::resolve_spacebase_relative` (`p4_calls/fspec.rs:6903`), reached only through

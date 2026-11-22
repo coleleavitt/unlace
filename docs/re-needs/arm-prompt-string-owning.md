@@ -14,7 +14,7 @@ rounds: [6]
 first_seen_round: 6
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis]
+touches: [decompiler/crates/unlace-analysis]
 scope: small
 regression_of: arm-literal-pool-string
 pr: null
@@ -146,4 +146,4 @@ Acceptance asserts only strings[0].functions len_gt 0. Discovering main @0x8cf8 
 
 Pool word confirmed by hand: 0x9024 holds bytes 24 91 00 00 = 0x9124 = the string, and kuna currently renders that data word as 'andeq r9,r0,r4, lsr #0x2'.
 - round 6 T_TRIAGE: ACCEPTANCE REWRITTEN (a-bb4686077f58 -> a-7837f5c28063), and it was verified two-sided before the swap: it FAILS on the need's own arena binary at 9c4c4508 (`probe check --bin` rc=1) and PASSES when simulated against plausible correct renderings. It `strings[0].functions len_gt 0` alone is satisfiable by attributing the string to the bogus gap-fill `_INIT_0` extent that already nominally covers the load site (see the refuter note). Now also requires `strings[0].xrefs_count > 0` (today it is 0), which cannot be produced without actually disassembling the literal-pool load at 0x8d20 -- i.e. without the discovery fix.
-- round 6 T_TRIAGE: TRIAGE: touches kuna-decomp -> kuna-analysis: the refuter placed the gap in function discovery (the real missing function is main @0x8cf8; _INIT_0's 3368-byte extent is gap-fill whose walk stops at the `b 0x8350` at 0x8404).
+- round 6 T_TRIAGE: TRIAGE: touches unlace-decomp -> unlace-analysis: the refuter placed the gap in function discovery (the real missing function is main @0x8cf8; _INIT_0's 3368-byte extent is gap-fill whose walk stops at the `b 0x8350` at 0x8404).

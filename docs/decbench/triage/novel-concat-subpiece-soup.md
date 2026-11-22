@@ -128,7 +128,7 @@ The SUBPIECEs survive to the final IR with their nonzero constant offsets, and t
 input `RSI` is a distinct register from the outputs `DL`/`BL` (so upstream's
 `outvn->overlap(*a) == c` bail cannot fire).
 
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_6.rs:912-947` —
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs:912-947` —
 `RuleSubRight::apply_op` — is a **stub**:
 
 ```rust
@@ -248,7 +248,7 @@ None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
 - **Owning phase: P3** (Definition Web — the simplification rule pools). The symptom is
   visible at P9 but the decision is a P3 rule, per `docs/phases.md`'s own caveat.
 - **One module, one function**: complete the port of
-  `decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_6.rs`
+  `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs`
   `RuleSubRight::apply_op` — the ~45-line tail after the existing `is_piece_structured`
   early return. Every primitive it needs already exists in kuna:
   `Varnode::is_addr_tied` / `Varnode::overlap` (`substrate/varnode.rs:813,1345`),
@@ -265,7 +265,7 @@ None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
 - **Stage test**: `tests/stages/ghdec-subright.xml` (no angr analog) — two-pass, an
   8-byte big-endian store loop; option off = `SUB81(x,7)`, default = `(char)(x >> 0x38)`.
 - **Correctness value**: `SUB81` / `SUB84` are undeclared identifiers — kuna emits no
-  helper header for them (grepped `kuna-cli`/`kuna-console`), so 5,919 call sites across
+  helper header for them (grepped `unlace-cli`/`unlace-console`), so 5,919 call sites across
   2,394 functions make the exported `.c` non-compilable. Same tier as round 1's
   `spacebase-unnamed-location` and `realtypes-pointee-size`.
 - **GED value: 0.** No basic-block count changes. Rank this by correctness, not metric.

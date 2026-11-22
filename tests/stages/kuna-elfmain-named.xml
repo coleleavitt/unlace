@@ -43,39 +43,39 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elfmainnamed_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfmainnamed_x86_64</com>
   <com>option elfmain off</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elfmainnamed_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfmainnamed_x86_64</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elfmainvoid_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfmainvoid_x86_64</com>
   <com>option elfmain off</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elfmainvoid_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfmainvoid_x86_64</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elfmainfwd_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfmainfwd_x86_64</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elfmainargv_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfmainargv_x86_64</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>

@@ -22,11 +22,11 @@ GHIDRA_SIM_LOG := $(ENGINE)/target/ghidra-sim.log
 all: binaries specs
 
 # Build the decompiler console binaries (decomp_dbg, decomp_test_dbg), the
-# SLEIGH compiler (slacomp), and the user-facing `kuna` CLI (kuna-cli).
+# SLEIGH compiler (slacomp), and the user-facing `kuna` CLI (unlace-cli).
 # Cargo manages parallelism + incrementality. (decomp_test_dbg lives in
-# kuna-harness; kuna-cli pulls it in as a sibling at build time.)
+# unlace-harness; unlace-cli pulls it in as a sibling at build time.)
 binaries:
-	cd $(ENGINE) && cargo build --$(PROFILE) -p kuna-console -p kuna-harness -p kuna-slacomp -p kuna-cli
+	cd $(ENGINE) && cargo build --$(PROFILE) -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
 
 rust: binaries
 
@@ -37,7 +37,7 @@ specs: $(SLACOMP)
 	$(SLACOMP) -a $(SPECS)
 
 $(SLACOMP):
-	cd $(ENGINE) && cargo build --$(PROFILE) -p kuna-slacomp
+	cd $(ENGINE) && cargo build --$(PROFILE) -p unlace-slacomp
 
 # Run the datatest harness (decomp_test_dbg) over the vendored XML regression
 # tests, with baseline parity checking. Builds binaries/specs if missing. Driven
@@ -55,9 +55,9 @@ test-stages: $(BINDIR)/kuna
 	  --datatests-dir tests/stages --baseline docs/baseline-stages.json
 
 $(BINDIR)/kuna:
-	cd $(ENGINE) && cargo build --$(PROFILE) -p kuna-cli
+	cd $(ENGINE) && cargo build --$(PROFILE) -p unlace-cli
 
-# The ghidra-mode differential harness (kuna-ghidra's ghidra-sim tests,
+# The ghidra-mode differential harness (unlace-ghidra's ghidra-sim tests,
 # docs/ghidra-integration.md §11): drives the decompile-process wire protocol
 # in-process against real vendored ELFs and pins the GUI-path quality numbers.
 # Release profile (the dev profile costs minutes for the same answer);
@@ -68,7 +68,7 @@ $(BINDIR)/kuna:
 test-ghidra:
 	@test -n "$$(find $(SPECS) -name '*.sla' -print -quit)" || $(MAKE) specs
 	@bash -c 'set -o pipefail; cd $(ENGINE) && \
-	  cargo test --$(PROFILE) -p kuna-ghidra -- --include-ignored --nocapture \
+	  cargo test --$(PROFILE) -p unlace-ghidra -- --include-ignored --nocapture \
 	    2>&1 | tee $(GHIDRA_SIM_LOG)'
 	@grep -qE 'test (ghidra_sim_e2e::)?ghidra_sim_sort_grep_breadth \.\.\. ok' $(GHIDRA_SIM_LOG) || { \
 	  echo "ERROR: the sort/grep breadth test did not RUN (needs --include-ignored) -- false green"; \
@@ -119,7 +119,7 @@ rust-test:
 # One invocation: a crate an earlier `--no-deps` run checked only as a dependency
 # is fresh to a later run, which then passes without linting it.
 lint:
-	cd $(ENGINE) && cargo clippy --release -p kuna-cli -p kuna-base -p kuna-num --no-deps -- -D warnings
+	cd $(ENGINE) && cargo clippy --release -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
 
 clean:
 	cd $(ENGINE) && cargo clean

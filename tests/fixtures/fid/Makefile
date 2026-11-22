@@ -6,7 +6,7 @@
 
 KUNA    ?= ../../../decompiler/target/release/kuna
 SPECS   ?= ../../../specs
-ANALYSIS_FIXTURES ?= ../../../decompiler/crates/kuna-analysis/tests/fixtures
+ANALYSIS_FIXTURES ?= ../../../decompiler/crates/unlace-analysis/tests/fixtures
 
 CFLAGS  := -O2 -ffreestanding -fno-stack-protector
 LANG    := x86:LE:64:default

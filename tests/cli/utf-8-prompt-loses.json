@@ -20,11 +20,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/utf8prompt_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/utf8prompt_x86_64",
     "binary_sha256": "79a72c91129acfa8eea153015378742dca18958d7dbbc4d5e8b761d1954dad97",
     "binary_size": 9344,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/utf8prompt_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/utf8prompt_x86_64",
     "selector": null,
     "selector_kind": "none"
   },

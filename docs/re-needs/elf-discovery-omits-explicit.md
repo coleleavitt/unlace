@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis]
+touches: [decompiler/crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: null
@@ -118,7 +118,7 @@ _not yet refuted_
 - split by captain at T_DEDUP from round 12's `silent-failure|functions|exit_code,json` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD and reduced to one byte pattern. The symptom stands (34 functions, no 0x11a9b) and the filed cause -- CRT-target discovery does not recognise this startup sequence -- is exactly right; what the refutation adds is WHICH oracle and WHY, plus three closed lines.
 
-MECHANISM. Whole-binary discovery is EntryDiscoveryPass's union of five oracles (kuna-analysis/src/analyzers/entry/mod.rs). For this image three of them are silent and the other two cannot reach main:
+MECHANISM. Whole-binary discovery is EntryDiscoveryPass's union of five oracles (unlace-analysis/src/analyzers/entry/mod.rs). For this image three of them are silent and the other two cannot reach main:
 (1) Oracle 4, the _start->main libc-start idiom, is the one that should fire and it MISSES ON THE OPCODE FORM ALONE. x86_64_main_target (mod.rs:945) scans a 64-byte window from e_entry for literally '48 8d 3d <disp32>' (LEA RDI,[RIP+disp]) and computes main = lea_addr+7+disp. This _start hands main over as an ABSOLUTE immediate instead: e_entry is 0x10a00, and at 0x10a18 the bytes are 48 c7 c7 9b 1a 01 00 = MOV RDI,0x11a9b, immediately followed by ff 15 f3 23 00 00 = CALL qword ptr [0x12e18] (the __libc_start_main GOT call). The offending instruction is at window index 0x18 of 0x40, so the window is NOT the limiter -- the three-byte prefix test is. Same idiom, same register, same call, one encoding the matcher does not know.
 (2) Oracle 3 (.eh_frame FDE pcBegin), normally the highest-value oracle on a C binary, contributes NOTHING here: readelf -S shows the image has NO .eh_frame section at all (one RWE LOAD, .text at 0x10a00). So there is no second path to main.
 (3) Oracle 5 (gcc prologue byte patterns) cannot match: main's prologue at 0x11a9b is 55 31 c0 53 51 = PUSH RBP; XOR EAX,EAX; PUSH RBX; PUSH RCX -- no 'mov rbp,rsp'.

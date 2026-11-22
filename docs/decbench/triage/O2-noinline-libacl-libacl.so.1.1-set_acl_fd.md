@@ -171,7 +171,7 @@ on today's default build in both `auto` and `reliable`:
 > the declaration. The same defect turns a 4-byte errno store into
 > `*(void *)__errno_location() = 0x16;`, which carries no access width at all.
 
-**Root cause — one function, P9 emit.** `decompiler/crates/kuna-decomp/src/p9_emit/printc.rs`:
+**Root cause — one function, P9 emit.** `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs`:
 
 ```rust
 fn realtype_unknown_base(size: int4, under_pointer: bool, long_is_8: bool) -> Option<&'static str> {
@@ -230,10 +230,10 @@ element type keeps the stride the expressions were built with:
 `under_pointer` then only selects the *fallback*, not the whole answer. `declarator_parts`
 already lays out the `*` chain from the modifier walk, so no other change is needed there.
 
-**Owning files** (all P9): `decompiler/crates/kuna-decomp/src/p9_emit/printc.rs`
+**Owning files** (all P9): `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs`
 — `realtype_unknown_base` (~line 8028), `realtype_relabel` (~8015), and the doc comment on
 `declarator_parts` (~7607) that currently states the `void *` rule as intended behavior.
-The `realtypes` row in `decompiler/crates/kuna-decomp/phases.toml` and the generated
+The `realtypes` row in `decompiler/crates/unlace-decomp/phases.toml` and the generated
 `docs/options.md` both spell out "pointer-to-unknown->void *" in the summary and need the
 same wording change; spec chapter for P9 emit likewise.
 

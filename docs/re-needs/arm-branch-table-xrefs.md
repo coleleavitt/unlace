@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/listing/xrefs.rs, decompiler/crates/kuna-analysis/src/listing/kuna_a32switch.rs, decompiler/crates/kuna-analysis/src/listing/classify.rs, decompiler/crates/kuna-analysis/src/listing/kuna_thumbswitch.rs]
+touches: [decompiler/crates/unlace-analysis/src/listing/xrefs.rs, decompiler/crates/unlace-analysis/src/listing/kuna_a32switch.rs, decompiler/crates/unlace-analysis/src/listing/classify.rs, decompiler/crates/unlace-analysis/src/listing/kuna_thumbswitch.rs]
 scope: small
 regression_of: null
 pr: null
@@ -111,7 +111,7 @@ Seen first on production ARM executables and a shared library (GCC, `-fPIC`), wh
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/branchtable_arm_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/branchtable_arm_le32",
     "binary_sha256": "93b3aa37fc16c266959a8e8d4f47a117e96fcdae82aeff124b185f7f84bb5126",
     "binary_size": 72920,
     "binary_source": "in-repo"

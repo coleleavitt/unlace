@@ -1,0 +1,1241 @@
+//! CLI end-to-end gate for `kuna decompile`'s **failure contract**: a function
+//! whose pipeline aborted must be observable — the reason on stderr and a
+//! non-zero exit — instead of the silent `exit 0` + un-decompiled shell that
+//! used to hide it (the `LOSS-131` swallow).
+//!
+//! The engine is not needed to assert the contract (and a corpus function that
+//! panics is a moving target — the panics themselves are being fixed): the
+//! command shells out to `decomp_dbg`, so these tests point `--decomp-dbg` at a
+//! stub that replays a real console transcript. That keeps the gate hermetic —
+//! no `.sla`, no binary analysis, no dependence on which functions currently
+//! abort.
+//!
+//! The exceptions drive the real engine over a checked-in fixture. A stub cannot
+//! notice that the console reordered its own prints — the reorder that would
+//! silently return `kuna decompile` to the generic wording — and it cannot
+//! notice that the console's own grammar split a path on a space, because the
+//! stub is not the parser under test.
+
+#![cfg(unix)]
+
+use crate::common;
+
+use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
+}
+
+/// Any existing binary works: the stub never reads it (the CLI only
+/// canonicalizes the path and passes it in the script).
+fn fauxware() -> String {
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/fauxware")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+/// Write an executable `decomp_dbg` stub that consumes the console script,
+/// writes `c_body` to the script's `openfile write` target, replays
+/// `transcript` on stdout and `stderr_text` on stderr, and exits 0 (exactly
+/// what the real console does: a caught per-function abort is not a process
+/// failure).
+fn stub_decomp_dbg(tag: &str, c_body: &str, transcript: &str, stderr_text: &str) -> PathBuf {
+    let path = std::env::temp_dir().join(format!(
+        "kuna_stub_dbg_{tag}_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let script = format!(
+        "#!/bin/sh\n\
+         out=\n\
+         saw_load=0\n\
+         if [ \"${{KUNA_EXPECT_ARM_ISA+x}}\" = x ] && [ \"$KUNA_ARM_ISA\" != \"$KUNA_EXPECT_ARM_ISA\" ]; then exit 9; fi\n\
+         while IFS= read -r line; do\n\
+         \x20 if [ \"${{KUNA_EXPECT_LOAD_LINE+x}}\" = x ] && [ \"$line\" = \"$KUNA_EXPECT_LOAD_LINE\" ]; then saw_load=1; fi\n\
+         \x20 case \"$line\" in\n\
+         \x20   'openfile write '*) out=${{line#openfile write }} ;;\n\
+         \x20 esac\n\
+         done\n\
+         if [ \"${{KUNA_EXPECT_LOAD_LINE+x}}\" = x ] && [ \"$saw_load\" != 1 ]; then exit 8; fi\n\
+         [ -n \"$out\" ] && cat > \"$out\" <<'KUNA_C_EOF'\n{c_body}\nKUNA_C_EOF\n\
+         cat <<'KUNA_OUT_EOF'\n{transcript}\nKUNA_OUT_EOF\n\
+         cat >&2 <<'KUNA_ERR_EOF'\n{stderr_text}\nKUNA_ERR_EOF\n\
+         exit 0\n"
+    );
+    let mut fh = std::fs::File::create(&path).expect("create the decomp_dbg stub");
+    fh.write_all(script.as_bytes()).expect("write the decomp_dbg stub");
+    drop(fh);
+    let mut perms = std::fs::metadata(&path).expect("stat the stub").permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&path, perms).expect("chmod the stub");
+    path
+}
+
+fn run_decompile(stub: &Path, target: &str) -> (String, String, Option<i32>) {
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args(["decompile", &fauxware(), target, "--decomp-dbg", stub.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    (
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+        out.status.code(),
+    )
+}
+
+/// The `coreutils comm` shape: the pipeline aborts, the console keeps the
+/// session alive, and `print C` renders the un-decompiled shell.  The C is
+/// therefore non-empty — only the console's `Skipping` notice distinguishes
+/// this from an empty function, and the CLI must act on it.
+#[test]
+fn pipeline_abort_reports_the_reason_and_exits_nonzero() {
+    let stub = stub_decomp_dbg(
+        "abort",
+        "void sub_3994(void)\n{\n  /* WARNING: decompilation failed: \
+         decompile pipeline reached an un-ported seam (LOSS-131) */\n}",
+        "[decomp]> decompile\nDecompiling sub_3994\n\
+         Skipping sub_3994: decompile pipeline reached an un-ported seam (LOSS-131): \
+         called `Option::unwrap()` on a `None` value\n[decomp]> print C",
+        "thread 'main' panicked at crates/unlace-decomp/src/p2_lift/jumptable.rs:1811:76:\n\
+         called `Option::unwrap()` on a `None` value",
+    );
+    let (stdout, stderr, code) = run_decompile(&stub, "main");
+    let _ = std::fs::remove_file(&stub);
+
+    assert_eq!(code, Some(1), "a failed function must not report success\n{stderr}");
+    assert!(
+        stderr.contains("decompilation failed for sub_3994"),
+        "the reason must reach stderr, got: {stderr}"
+    );
+    assert!(
+        stderr.contains("LOSS-131") && stderr.contains("Option::unwrap()"),
+        "the real panic text must survive into the report, got: {stderr}"
+    );
+    assert!(
+        stderr.contains("jumptable.rs:1811"),
+        "the console's own stderr (panic location) must be forwarded, got: {stderr}"
+    );
+    assert!(
+        stdout.contains("sub_3994"),
+        "the recovered shell still goes to stdout, got: {stdout}"
+    );
+}
+
+/// A clean run is untouched: C on stdout, nothing on stderr, exit 0.
+#[test]
+fn clean_run_still_exits_zero() {
+    let stub = stub_decomp_dbg(
+        "clean",
+        "void main(void)\n{\n  return;\n}",
+        "[decomp]> decompile\nDecompiling main\nDecompilation complete\n[decomp]> print C",
+        "",
+    );
+    let (stdout, stderr, code) = run_decompile(&stub, "main");
+    let _ = std::fs::remove_file(&stub);
+
+    assert_eq!(code, Some(0), "a healthy function stays a success\n{stderr}");
+    assert!(stdout.contains("void main(void)"), "got: {stdout}");
+    assert!(!stderr.contains("error:"), "no error is reported, got: {stderr}");
+}
+
+#[test]
+fn arm_isa_override_reaches_single_function_engine() {
+    let stub = stub_decomp_dbg(
+        "isa",
+        "unsigned int main(void)\n{\n  return 7;\n}",
+        "[decomp]> decompile\nDecompiling main\nDecompilation complete\n[decomp]> print C",
+        "",
+    );
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .env("KUNA_EXPECT_ARM_ISA", "thumb")
+        .args([
+            "decompile",
+            &fauxware(),
+            "main",
+            "--isa",
+            "thumb",
+            "--decomp-dbg",
+            stub.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run kuna decompile with --isa thumb");
+    let _ = std::fs::remove_file(&stub);
+    assert!(out.status.success(), "--isa did not reach decomp_dbg");
+}
+
+#[test]
+fn raw_image_flags_reach_single_function_engine_with_quoted_path() {
+    let raw = common::scratch_file("raw single image", "bin");
+    std::fs::write(&raw, [0x07, 0x20, 0x70, 0x47]).unwrap();
+    let stub = stub_decomp_dbg(
+        "raw_input",
+        "unsigned int sub_4000(void)\n{\n  return 7;\n}",
+        "[decomp]> decompile\nDecompiling sub_4000\nDecompilation complete\n[decomp]> print C",
+        "",
+    );
+    let expected = format!(
+        "load raw ARM:LE:32:v4t:default 0x4000 0x4001 \"{}\"",
+        raw.canonicalize().unwrap().display()
+    );
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .env("KUNA_EXPECT_ARM_ISA", "thumb")
+        .env("KUNA_EXPECT_LOAD_LINE", expected)
+        .args([
+            "decompile",
+            raw.to_str().unwrap(),
+            "0x4001",
+            "--raw-image",
+            "--target",
+            "ARM:LE:32:v4t:default",
+            "--base",
+            "0x4000",
+            "--isa",
+            "thumb",
+            "--decomp-dbg",
+            stub.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run kuna decompile over raw input");
+    let _ = std::fs::remove_file(&stub);
+    let _ = std::fs::remove_file(&raw);
+    assert!(
+        out.status.success(),
+        "raw load command did not reach decomp_dbg: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("return 7;"));
+}
+
+/// `x86:LE:16:Real Mode:default`, the DOS target, names its variant with a
+/// space; the single-function engine must load the image under the whole id.
+#[test]
+fn raw_image_target_with_a_space_reaches_the_engine() {
+    let raw = common::scratch_file("raw real mode", "bin");
+    std::fs::write(&raw, [0xb8, 0x07, 0x00, 0xc3]).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args([
+            "decompile",
+            raw.to_str().unwrap(),
+            "0x0",
+            "--raw-image",
+            "--target",
+            "x86:LE:16:Real Mode:default",
+            "--base",
+            "0",
+        ])
+        .output()
+        .expect("run kuna decompile over a real-mode raw image");
+    let _ = std::fs::remove_file(&raw);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(stdout.contains("return 7;"), "{stdout}");
+}
+
+/// An empty `print C` keeps the pre-existing "no C output" error (that path is
+/// unchanged, and still exits non-zero).
+#[test]
+fn empty_output_still_errors() {
+    let stub = stub_decomp_dbg("empty", "", "[decomp]> decompile\nDecompiling main", "");
+    let (_stdout, stderr, code) = run_decompile(&stub, "main");
+    let _ = std::fs::remove_file(&stub);
+
+    assert_eq!(code, Some(1));
+    assert!(stderr.contains("no C output"), "got: {stderr}");
+}
+
+/// A function whose rendering ran past what its drive left of the budget: the
+/// console's `print C` refuses with the budget error and writes no C, and the CLI
+/// names that reason instead of dumping the start of the transcript.
+#[test]
+fn a_print_refused_at_the_budget_reports_the_budget() {
+    let stub = stub_decomp_dbg(
+        "renderbudget",
+        "",
+        "[decomp]> decompile\nDecompiling main\n[decomp]> print C\n\
+         Execution error: per-function decompile budget exceeded (2 s) in rendering C",
+        "",
+    );
+    let (stdout, stderr, code) = run_decompile(&stub, "main");
+    let _ = std::fs::remove_file(&stub);
+
+    assert_eq!(code, Some(1));
+    assert!(stdout.is_empty(), "{stdout}");
+    assert!(
+        stderr.contains("decompilation failed for main in ")
+            && stderr.contains(": per-function decompile budget exceeded (2 s) in rendering C"),
+        "got: {stderr}"
+    );
+    assert!(stderr.contains("--max-fn-seconds N sets the budget"), "got: {stderr}");
+    assert!(!stderr.contains("no C output"), "got: {stderr}");
+}
+
+/// GH-339's silent half, through the whole CLI: the console reported that the
+/// analysis commit failed and then rendered C anyway, from a program whose debug
+/// facts were only partially applied.  `kuna decompile` used to print that C and
+/// exit 0, which is indistinguishable from a binary that simply has no symbols.
+///
+/// The stub is what makes this durable: the engine-side clamp that stops
+/// `st_size` from producing this particular reason ships separately, and the
+/// driver must keep reporting *any* commit failure after it lands.
+#[test]
+fn analysis_commit_failure_is_reported_and_exits_nonzero() {
+    let stub = stub_decomp_dbg(
+        "commit",
+        "unsigned int main(void)\n{\n  return dat_402000;\n}",
+        "[decomp]> load file /x/sz.elf\n/x/sz.elf successfully loaded: x86:LE:64:default:gcc\n\
+         [decomp]> read symbols\n\
+         Execution error: g_a symbol created with zero size type\n\
+         [decomp]> load function main\n[decomp]> decompile\nDecompilation complete",
+        "",
+    );
+    let (_stdout, stderr, code) = run_decompile(&stub, "main");
+    let _ = std::fs::remove_file(&stub);
+
+    assert_eq!(code, Some(1), "a dropped analysis commit must not report success\n{stderr}");
+    assert!(
+        stderr.contains("read symbols (analysis commit) failed: \
+                         g_a symbol created with zero size type"),
+        "the in-process surfaces' wording must be reproduced verbatim, got: {stderr}"
+    );
+}
+
+/// A diagnostic belonging to a *different* command is not reported as the
+/// analysis-commit failure — the notice is attributed to the command echo above
+/// it, so an unrelated `Execution error:` leaves the exit code alone. `rename`
+/// is the witness because no arm claims it: a failed `option`, `load file`,
+/// `read symbols` or selection each has one.
+#[test]
+fn an_unrelated_console_diagnostic_is_not_a_commit_failure() {
+    let stub = stub_decomp_dbg(
+        "unrelated",
+        "void main(void)\n{\n  return;\n}",
+        "[decomp]> read symbols\n[decomp]> decompile\nDecompilation complete\n\
+         [decomp]> rename v2 buf\nExecution error: No symbol named: v2",
+        "",
+    );
+    let (stdout, stderr, code) = run_decompile(&stub, "main");
+    let _ = std::fs::remove_file(&stub);
+
+    assert_eq!(code, Some(0), "an unrelated diagnostic must not be misattributed\n{stderr}");
+    assert!(stdout.contains("void main(void)"), "got: {stdout}");
+}
+
+/// A refused `--option` VALUE, on the other hand, IS the run's verdict: the
+/// option never took, so the C that follows is the default decompilation and
+/// reporting success would be false evidence that the decision point does
+/// nothing. The wording is the in-process surfaces'.
+#[test]
+fn a_refused_option_value_is_reported_and_exits_nonzero() {
+    let stub = stub_decomp_dbg(
+        "optvalue",
+        "void main(void)\n{\n  return;\n}",
+        "[decomp]> load file /x/a.out\n/x/a.out successfully loaded: x86:LE:64:default:gcc\n\
+         [decomp]> option realtypes zzz\n\
+         Execution error: Must specify toggle value, on/off\n\
+         [decomp]> read symbols\n[decomp]> load function main\n\
+         [decomp]> decompile\nDecompilation complete",
+        "",
+    );
+    let (stdout, stderr, code) = run_decompile(&stub, "main");
+    let _ = std::fs::remove_file(&stub);
+
+    assert_eq!(code, Some(1), "a refused option must not report success\n{stderr}");
+    assert!(
+        stderr.contains("option realtypes: Must specify toggle value, on/off"),
+        "the in-process surfaces' wording must be reproduced verbatim, got: {stderr}"
+    );
+    assert!(!stdout.contains("void main(void)"), "the default C is not the answer: {stdout}");
+}
+
+/// A load failure with no reason printed keeps the generic wording — it is the
+/// fallback, not the default.
+#[test]
+fn a_reasonless_load_failure_keeps_the_generic_wording() {
+    let stub = stub_decomp_dbg(
+        "generic",
+        "",
+        "[decomp]> load file /x/a.out\nCould not create architecture\n[decomp]> quit",
+        "",
+    );
+    let (_stdout, stderr, code) = run_decompile(&stub, "main");
+    let _ = std::fs::remove_file(&stub);
+
+    assert_eq!(code, Some(1));
+    assert!(
+        stderr.contains("(unsupported/!recognized binary)"),
+        "got: {stderr}"
+    );
+}
+
+fn specs() -> String {
+    repo_root().join("specs").to_str().unwrap().to_string()
+}
+
+fn pe_fixture(name: &str) -> String {
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures")
+        .join(name)
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+fn run_pe_decompile(binary: &str, target: &str, extra: &[&str]) -> std::process::Output {
+    let specs = specs();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    cmd.args(["decompile", binary, target, "--sleighpath", specs.as_str()]);
+    cmd.args(extra);
+    cmd
+        .output()
+        .expect("run kuna decompile on PE fixture")
+}
+
+/// An IAT word is a call-binding address, not a body, regardless of section
+/// permissions. Name and address selection report the same stable refusal, and
+/// refusing one slot never advances into either adjacent slot.
+#[test]
+fn pe_iat_body_selection_refuses_name_address_and_adjacent_slots() {
+    let executable = pe_fixture("pe_iatincode_i386.exe");
+    let data = pe_fixture("pe_imports.exe");
+    let cases = [
+        (
+            executable.as_str(),
+            "VirtualAlloc",
+            vec![],
+            "selector \"VirtualAlloc\" identifies import VirtualAlloc at 0x401000; \
+             the IAT slot contains a loader-written pointer, not a function body",
+        ),
+        (
+            executable.as_str(),
+            "0x401000",
+            vec!["--addr"],
+            "selector \"0x401000\" identifies import VirtualAlloc at 0x401000; \
+             the IAT slot contains a loader-written pointer, not a function body",
+        ),
+        (
+            executable.as_str(),
+            "0x401004",
+            vec!["--addr"],
+            "selector \"0x401004\" identifies import GetModuleHandleA at 0x401004; \
+             the IAT slot contains a loader-written pointer, not a function body",
+        ),
+        (
+            executable.as_str(),
+            "0x401008",
+            vec!["--addr"],
+            "selector \"0x401008\" identifies import ExitProcess at 0x401008; \
+             the IAT slot contains a loader-written pointer, not a function body",
+        ),
+        (
+            data.as_str(),
+            "0x14000d1ec",
+            vec!["--addr"],
+            "selector \"0x14000d1ec\" identifies import GetLastError at 0x14000d1ec; \
+             the IAT slot contains a loader-written pointer, not a function body",
+        ),
+    ];
+
+    for (binary, target, extra, expected) in cases {
+        let out = run_pe_decompile(binary, target, &extra);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(1), "{target} must be refused: {stderr}");
+        assert!(stdout.trim().is_empty(), "{target} emitted a body:\n{stdout}");
+        assert_eq!(stderr, format!("error: {expected}\n"), "unstable diagnostic for {target}");
+        assert!(!stderr.contains("CARRY1(") && !stderr.contains("*v"));
+    }
+}
+
+/// The guard must not disturb the two uses the IAT symbol exists for: selecting
+/// the executable thunk keeps its imported prototype, and calls from an
+/// ordinary function still deindirect through the slots by name.
+#[test]
+fn pe_import_thunk_and_real_function_still_decompile_with_named_prototypes() {
+    let data = pe_fixture("pe_imports.exe");
+    let thunk = run_pe_decompile(&data, "GetLastError", &[]);
+    let thunk_stderr = String::from_utf8_lossy(&thunk.stderr);
+    let thunk_stdout = String::from_utf8_lossy(&thunk.stdout);
+    assert_eq!(thunk.status.code(), Some(0), "thunk failed: {thunk_stderr}");
+    assert!(
+        thunk_stdout.contains("unsigned int GetLastError(void)")
+            && thunk_stdout.contains("return GetLastError()"),
+        "the thunk lost its import prototype or identity:\n{thunk_stdout}"
+    );
+
+    let executable = pe_fixture("pe_iatincode_i386.exe");
+    let caller = run_pe_decompile(&executable, "0x401010", &["--addr"]);
+    let caller_stderr = String::from_utf8_lossy(&caller.stderr);
+    let caller_stdout = String::from_utf8_lossy(&caller.stdout);
+    assert_eq!(caller.status.code(), Some(0), "real entry failed: {caller_stderr}");
+    assert!(
+        caller_stdout.contains("VirtualAlloc(") && caller_stdout.contains("GetModuleHandleA("),
+        "the import calls no longer deindirect by name:\n{caller_stdout}"
+    );
+}
+
+/// The in-process JSON path uses the same body selection policy and preserves
+/// its machine-readable error document while returning a failed verdict.
+#[test]
+fn pe_iat_json_selection_is_a_non_success_without_code() {
+    let binary = pe_fixture("pe_iatincode_i386.exe");
+    let out = run_pe_decompile(&binary, "0x401000", &["--addr", "--json"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let expected = "selector \"0x401000\" identifies import VirtualAlloc at 0x401000; \
+                    the IAT slot contains a loader-written pointer, not a function body";
+    assert_eq!(out.status.code(), Some(1), "JSON selection must fail: {stderr}");
+    assert_eq!(stderr, format!("error: {expected}\n"));
+    assert!(stdout.contains("\"functions\": []"), "a code record escaped:\n{stdout}");
+    let json_expected = expected.replace('"', "\\\"");
+    assert!(
+        stdout.contains(&json_expected),
+        "the JSON error lost the reason:\n{stdout}"
+    );
+    assert!(!stdout.contains("CARRY1(") && !stdout.contains("*v"));
+}
+
+/// An imported constructor declares no return type, so only its input is locked.
+/// `void Arr::Reset()` has the same C signature and is applied first; its void
+/// return must not be what the constructor's call reads.
+#[test]
+fn msvc_constructor_return_survives_a_void_member_with_its_signature() {
+    let binary = pe_fixture("msvcretlock_i386.exe");
+    let out = run_pe_decompile(&binary, "0x401000", &["--addr"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "decompile failed: {stderr}");
+    let ctor = stdout
+        .lines()
+        .find(|line| line.contains("Arr::Arr(a0)"))
+        .unwrap_or_else(|| panic!("no constructor call:\n{stdout}"));
+    let (object, _) = ctor
+        .trim()
+        .split_once(" = ")
+        .unwrap_or_else(|| panic!("the constructor's result was dropped:\n{stdout}"));
+    for read in [format!("Arr::Reset({object});"), format!("Use({object});"), format!("return {object};")] {
+        assert!(stdout.contains(&read), "{read} does not read the constructed object:\n{stdout}");
+    }
+}
+
+/// A checked-in x86-64 ELF whose architecture build fails when no spec
+/// directory holds its SLEIGH language.
+fn hostile_scope() -> String {
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/hostile_scope_x86_64")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+/// GH-337: all four surfaces must answer one binary-load failure with one
+/// string.  `kuna decompile` drives `decomp_dbg` as a subprocess, so it has to
+/// recover the reason from the transcript; the other three hold the
+/// `LowlevelError` itself.  This is the test that would catch a console-side
+/// print reorder — the recorded-transcript unit tests would not.  The failure
+/// is a `--sleighpath` that holds no specification for the image's language.
+#[test]
+fn every_surface_reports_the_same_load_failure() {
+    let bin = hostile_scope();
+    let sp = std::env::temp_dir()
+        .join(format!("kuna_clidiag_nospecs_{}", std::process::id()))
+        .to_str()
+        .unwrap()
+        .to_string();
+    let project_out = std::env::temp_dir().join(format!(
+        "kuna_clidiag_proj_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let project_out = project_out.to_str().unwrap().to_string();
+
+    let surfaces: [(&str, Vec<&str>); 4] = [
+        ("decompile", vec!["decompile", bin.as_str(), "main"]),
+        ("functions", vec!["functions", bin.as_str()]),
+        ("decompile-all", vec!["decompile-all", bin.as_str()]),
+        ("decompile-project", vec!["decompile-project", bin.as_str(), "-o", project_out.as_str()]),
+    ];
+
+    let mut reports: Vec<(&str, String)> = Vec::new();
+    for (name, mut argv) in surfaces {
+        argv.extend_from_slice(&["--sleighpath", sp.as_str()]);
+        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            .args(&argv)
+            .output()
+            .expect("failed to spawn the kuna binary");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(out.status.code(), Some(1), "{name} must fail the load: {stderr}");
+        reports.push((name, stderr.trim().to_string()));
+    }
+    let _ = std::fs::remove_dir_all(&project_out);
+
+    let prefix = format!(
+        "error: could not build an architecture for {}: No sleigh specification for x86:LE:64:default",
+        std::fs::canonicalize(&bin).expect("the fixture is checked in").display()
+    );
+    let first = &reports[0].1;
+    assert!(first.starts_with(&prefix), "{}: {first}", reports[0].0);
+    for (name, stderr) in &reports {
+        assert_eq!(
+            stderr, first,
+            "{name} must report the real reason, byte-identically to the others"
+        );
+    }
+}
+
+/// A unique scratch directory whose name contains a space.
+///
+/// Everything before the first space is unique to this run, so the path a
+/// whitespace split would truncate to cannot collide with an unrelated file —
+/// the truncation assertion below is then about this test and nothing else.
+///
+/// The parent is cargo's own per-target scratch rather than
+/// `std::env::temp_dir()`: the child's temp dir is whatever `TMPDIR` this test
+/// passes it, so the parent's identity is free, and a developer whose *system*
+/// temp dir already contains a space — the very environment this pair is about
+/// — would otherwise move the split into that name, where it names someone
+/// else's file.
+fn spaced_dir(tag: &str) -> PathBuf {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+        "kuna_pathtest_{tag}_{}_{} with space",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&dir).expect("create the spaced scratch dir");
+    dir
+}
+
+/// The console reads a filename with `s >> filename`, so an unquoted path
+/// containing a space arrives as two arguments: `load file` took the head as a
+/// BFD target and the tail as the filename, and the load failed with
+/// `Unable to recognize imagefile <tail>`.
+///
+/// `kuna decompile` is the only surface that can regress here — it is the one
+/// that drives `decomp_dbg` through a text script; the in-process surfaces pass
+/// the path as a string.
+#[test]
+fn a_binary_under_a_spaced_directory_decompiles() {
+    let dir = spaced_dir("bin");
+    let bin = dir.join("a.out");
+    std::fs::copy(fauxware(), &bin).expect("copy the fixture into the spaced dir");
+
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args(["decompile", bin.to_str().unwrap(), "main", "--sleighpath", specs().as_str()])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert!(
+        !stderr.contains("Unable to recognize imagefile"),
+        "the path was split on its space, got: {stderr}"
+    );
+    assert_eq!(out.status.code(), Some(0), "the load must succeed: {stderr}");
+    assert!(stdout.contains("main"), "C for main must reach stdout, got: {stdout}");
+}
+
+/// The same defect on the output side, and the one that does not need a spaced
+/// *binary* path to bite: the temp file lives in `std::env::temp_dir()`, which
+/// on Windows is `C:\Users\First Last\AppData\Local\Temp` by default. An
+/// unquoted `openfile write` truncated there, so the C was written to a file
+/// named after the first path component — silently, because the console
+/// discarded the write error — and the CLI reported "no C output".
+#[test]
+fn a_spaced_temp_dir_still_yields_c() {
+    let dir = spaced_dir("tmp");
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args(["decompile", fauxware().as_str(), "main", "--sleighpath", specs().as_str()])
+        .env("TMPDIR", &dir)
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+
+    // The truncation target: the spaced dir's name up to its first space. The
+    // prefix is unique to this run, so anything there was written by this run —
+    // which is also why the cleanup only removes a target that is actually
+    // there. Should the split ever land outside this test's own name (a spaced
+    // path above `dir`), that file belongs to someone else and deleting it
+    // would be the same data loss the test exists to catch.
+    let clobbered = dir.to_str().unwrap().split(' ').next().unwrap().to_string();
+    let ours = !dir.parent().is_some_and(|p| p.to_string_lossy().contains(' '));
+    let clobber_existed = ours && Path::new(&clobbered).exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    if clobber_existed {
+        let _ = std::fs::remove_file(&clobbered);
+    }
+
+    assert!(!stderr.contains("no C output"), "the redirect was truncated, got: {stderr}");
+    assert_eq!(out.status.code(), Some(0), "the run must succeed: {stderr}");
+    assert!(stdout.contains("main"), "C for main must reach stdout, got: {stdout}");
+    assert!(
+        ours,
+        "the scratch parent {:?} contains a space, so the split lands in ITS name and the \
+         clobber check below would be about someone else's file",
+        dir.parent().unwrap_or(&dir)
+    );
+    assert!(
+        !clobber_existed,
+        "the C was written to the truncated path {clobbered}, clobbering whatever was there"
+    );
+}
+
+/// DIV-103 / RE-need `argument-recovery-knobs-still`: the promoted acceptance
+/// probe (`tests/cli/argument-recovery-knobs-still.json`), which nothing else in
+/// CI runs.
+///
+/// `alignednew_x86_64` is MSVC's aligned `operator new` shape on SysV: one
+/// callee reached from both arms of a size test, where the small arm passes its
+/// argument register live-in and the guard branches on it, so `only_op_use`
+/// drops the trial.  The small arm is laid out second and reached by a forward
+/// branch, which is what makes its call spec finalize FIRST -- `calleearity`
+/// alone has no already-final witness to reconcile against and declines.
+///
+/// The three clauses are the probe's, and the second is the one that matters:
+/// asserting only that the zero-argument call is gone is satisfied by
+/// `--option spillargtrial reload`, which FABRICATES a trailing argument at both
+/// sites including the one that was already correct.
+#[test]
+fn a_call_that_finalizes_before_its_witness_recovers_its_argument() {
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/alignednew_x86_64");
+    let run = |extra: &[&str]| -> Option<String> {
+        let mut argv: Vec<String> = vec![
+            "decompile".into(),
+            bin.to_str().unwrap().into(),
+            "caller".into(),
+            "--sleighpath".into(),
+            specs(),
+        ];
+        argv.extend(extra.iter().map(|s| s.to_string()));
+        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            .args(&argv)
+            .output()
+            .expect("failed to spawn the kuna binary");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(out.status.code(), Some(0), "kuna decompile failed: {stderr}");
+        Some(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+
+    let Some(on) = run(&[]) else { return };
+    assert!(!on.contains("callee()"), "the argument is still dropped:\n{on}");
+    assert!(
+        !on.contains("callee(a0,") && !on.contains("callee(a0 + 0x27,"),
+        "an argument was fabricated rather than recovered:\n{on}"
+    );
+    assert!(on.contains("callee(a0);"), "the recovered value is not a0:\n{on}");
+    assert!(
+        on.contains("callee(a0 + 0x27)"),
+        "the site that was already correct changed:\n{on}"
+    );
+}
+
+/// A stripped ARM PIE whose `sub_410` exists only because the non-x86-64
+/// discovery bundle (`listing` + `funcstart_patterns`) found it — no symbol
+/// carries that address, so the name is minted from the entry.
+fn entrymain_arm() -> String {
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/entrymain_arm")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+/// RE-need `analysis-generated-function-name`: every name kuna PRINTS must be a
+/// name kuna ACCEPTS.
+///
+/// `kuna functions` applies the DIV-20/DIV-68 discovery bundle on a non-x86-64
+/// binary and single-function `kuna decompile` did not, so the inventory listed
+/// entries the by-name selector then rejected with `no function matches` —
+/// exactly the wall two testers hit, on two formats and in two modes. The two
+/// surfaces are asserted together because either one alone is self-consistent:
+/// only the pair catches them drifting apart again.
+///
+/// `--mode reliable` is load-bearing on a fixture this small: the default `auto`
+/// policy resolves to `aggressive` under 500 KiB, and that preset NAMES all three
+/// bundle options itself, so an auto run would pass without the fix. Both testers
+/// hit this on a binary whose resolved preset supplied nothing.
+#[test]
+fn a_generated_name_the_inventory_prints_is_selectable_by_decompile() {
+    let bin = entrymain_arm();
+    let sp = specs();
+
+    let listed = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args([
+            "functions",
+            bin.as_str(),
+            "--json",
+            "--mode",
+            "reliable",
+            "--sleighpath",
+            sp.as_str(),
+        ])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let inventory = String::from_utf8_lossy(&listed.stdout).into_owned();
+    let inventory_err = String::from_utf8_lossy(&listed.stderr).into_owned();
+    assert_eq!(listed.status.code(), Some(0), "functions must succeed: {inventory_err}");
+    assert!(
+        inventory.contains("\"sub_410\""),
+        "the inventory must still report the generated name, got:\n{inventory}"
+    );
+
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args([
+            "decompile",
+            bin.as_str(),
+            "sub_410",
+            "--mode",
+            "reliable",
+            "--sleighpath",
+            sp.as_str(),
+        ])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        !stderr.contains("no function"),
+        "a listed name must not be rejected by the selector, got: {stderr}"
+    );
+    assert_eq!(out.status.code(), Some(0), "decompile by generated name must succeed: {stderr}");
+    assert!(stdout.contains("sub_410"), "the C must be for the selected entry, got:\n{stdout}");
+}
+
+/// The other half of the contract: the wider inventory is paid for only where it
+/// is the answer, so a name that ALREADY resolved is decompiled exactly as before.
+///
+/// This is not hypothetical caution. The discovery bundle seeds a function start
+/// at PPC64 ELFv2's local entry point, 8 bytes past the global one, and
+/// `funcboundflow` then truncates the outer function's flow there — so injecting
+/// it up front would answer `kuna decompile __do_global_ctors_aux` with an empty
+/// husk instead of the loop it really is. Asserting the body, not just exit 0:
+/// the husk exits 0 too.
+#[test]
+fn a_name_that_already_resolved_is_not_re_decompiled_wider() {
+    let bin = repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args([
+            "decompile",
+            bin.as_str(),
+            "__do_global_ctors_aux",
+            "--mode",
+            "reliable",
+            "--sleighpath",
+            specs().as_str(),
+        ])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert_eq!(out.status.code(), Some(0), "must succeed: {stderr}");
+    assert!(
+        !stdout.contains("funcboundflow"),
+        "the retry must not fire for a name that already resolved, got:\n{stdout}"
+    );
+    assert!(stdout.contains("while ("), "the real body is a loop, got:\n{stdout}");
+}
+
+/// RE-need `text-output-silently-ignores`: a prototype assertion whose
+/// declaration is written under a NEW name still binds to `<func>` — on both
+/// surfaces.
+///
+/// `--assert 'prototype authenticate void *hashit(...)'` is how an agent states
+/// what it worked out about a stripped function, and it is the shape that broke:
+/// the generated console script lowered every prototype to `parse line extern
+/// <decl>`, which binds by the DECLARED name, so the signature landed on a fresh
+/// `hashit` symbol and `authenticate` kept its recovered one — exit 0, nothing on
+/// stderr, `--assert-strict` included. The in-process `--json` path overwrote the
+/// parsed name with `<func>` all along, so the same directive applied there and
+/// not here. Both are asserted in one test because either alone is
+/// self-consistent: that is exactly how they drifted apart.
+#[test]
+fn a_prototype_declared_under_another_name_binds_on_both_surfaces() {
+    let bin = fauxware();
+    let directive = "prototype authenticate void *hashit(void *out,void *input)";
+    let run = |extra: &[&str]| -> Option<String> {
+        let mut argv: Vec<String> = vec![
+            "decompile".into(),
+            bin.clone(),
+            "authenticate".into(),
+            "--assert".into(),
+            directive.into(),
+            "--assert-strict".into(),
+            "--sleighpath".into(),
+            specs(),
+        ];
+        argv.extend(extra.iter().map(|s| s.to_string()));
+        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            .args(&argv)
+            .output()
+            .expect("failed to spawn the kuna binary");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(out.status.code(), Some(0), "kuna decompile failed: {stderr}");
+        assert!(!stderr.contains("rejected"), "the directive was rejected: {stderr}");
+        Some(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+
+    let Some(text) = run(&[]) else { return };
+    assert!(
+        text.contains("void * authenticate(void *out,void *input)"),
+        "the text surface dropped the override:\n{text}"
+    );
+    assert!(
+        !text.contains("hashit"),
+        "the declaration's name became a function of its own:\n{text}"
+    );
+
+    let Some(json) = run(&["--json"]) else { return };
+    assert!(
+        json.contains(r#""status": "applied""#),
+        "the JSON surface stopped reporting the directive applied:\n{json}"
+    );
+    assert!(
+        json.contains("void * authenticate(void *out,void *input)"),
+        "the two surfaces disagree about the same directive:\n{json}"
+    );
+}
+
+/// RE-need `accepted-sqrt-prototype-still`: `<func>` may be an entry ADDRESS,
+/// and it binds on both surfaces.
+///
+/// An agent working a stripped or import-heavy binary has the address long
+/// before it has a name it trusts, and `--assert 'prototype 0x400664 …'` was
+/// accepted and then dropped: the pieces were parked under the literal key
+/// `"0x400664"`, which resolves to no `FunctionSymbol`, while the report still
+/// said `applied`. The callee case is the one the need was filed on — a PE
+/// import thunk whose call site kept `sqrt()` argumentless — and it is the case
+/// the by-name form cannot always state, because the thunk and the slot it
+/// jumps to are two symbols with the same name.
+#[test]
+fn a_prototype_at_an_entry_address_binds_on_both_surfaces() {
+    let bin = fauxware();
+    let run = |directive: &str, extra: &[&str]| -> Option<String> {
+        let mut argv: Vec<String> = vec![
+            "decompile".into(),
+            bin.clone(),
+            "authenticate".into(),
+            "--assert".into(),
+            directive.into(),
+            "--assert-strict".into(),
+            "--sleighpath".into(),
+            specs(),
+        ];
+        argv.extend(extra.iter().map(|s| s.to_string()));
+        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            .args(&argv)
+            .output()
+            .expect("failed to spawn the kuna binary");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(out.status.code(), Some(0), "kuna decompile failed: {stderr}");
+        assert!(!stderr.contains("rejected"), "the directive was rejected: {stderr}");
+        Some(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+
+    // The selected function itself, addressed by its entry.
+    let selected = "prototype 0x400664 void *hashit(void *out,void *input)";
+    for surface in [&[][..], &["--json"][..]] {
+        let Some(out) = run(selected, surface) else { return };
+        assert!(
+            out.contains("void * authenticate(void *out,void *input)"),
+            "the address-form signature did not reach 0x400664 ({surface:?}):\n{out}"
+        );
+    }
+
+    // A CALLEE, addressed by its entry — the need's own shape (a stub function
+    // the call site targets), and the read side's own key.
+    let callee = "prototype 0x400550 int4 strcmp(char *a,char *b,unsigned long n)";
+    for surface in [&[][..], &["--json"][..]] {
+        let Some(out) = run(callee, surface) else { return };
+        assert!(
+            out.contains("strcmp(a1,sneaky,"),
+            "the declared third argument never reached the call site ({surface:?}):\n{out}"
+        );
+    }
+}
+
+/// An explicitly `0x`-prefixed operand that starts no function is REJECTED with
+/// the address in the detail, on both surfaces — the whole family used to
+/// report it `applied` and do nothing, which leaves an agent no way to tell.
+#[test]
+fn a_prototype_address_that_starts_no_function_is_rejected() {
+    let bin = fauxware();
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args([
+            "decompile",
+            bin.as_str(),
+            "authenticate",
+            "--json",
+            "--assert",
+            "prototype 0x999999 int4 nope(void)",
+            "--sleighpath",
+            specs().as_str(),
+        ])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout.contains(r#""status": "rejected""#),
+        "an unbindable address was still reported applied:\n{stdout}\n{stderr}"
+    );
+    assert!(
+        stdout.contains("no function starts at 0x999999"),
+        "the rejection did not name the address:\n{stdout}"
+    );
+}
+
+/// `--addr` inside a function discovery found (issue #1039 section 3) still
+/// decompiles from where it points, but no longer silently: stderr names the
+/// containing function and the offset, and the `--json` record carries the
+/// same fact as `interior_to`, a key no other record has. It is decided from
+/// the address the selection resolved to, so the fragment's own `sub_<addr>`
+/// name, a section coordinate in an object, a Thumb address with its mode bit
+/// and every whole-binary surface answer alike, once per record. A
+/// `--define-function` at the address makes it an entry.
+#[test]
+fn an_address_inside_a_function_is_decompiled_with_a_note_naming_it() {
+    let bin = fauxware();
+    let sp = specs();
+    let fixture = |name: &str| {
+        repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string()
+    };
+    let run = |extra: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            .args(extra)
+            .args(["--sleighpath", sp.as_str()])
+            .output()
+            .expect("failed to spawn the kuna binary");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(out.status.code(), Some(0), "{extra:?}: {stderr}");
+        (String::from_utf8_lossy(&out.stdout).into_owned(), stderr)
+    };
+    let note = |at: &str, owner: &str, entry: &str, offset: &str| {
+        format!(
+            "note: {at} is interior to {owner} ({entry}+{offset}), not an entry kuna discovered; \
+             decompiled from {at} as asked (--define-function {at} declares a function there)"
+        )
+    };
+    let fauxware_note = note("0x400668", "authenticate", "0x400664", "0x4");
+    let interior = r#""interior_to": {
+        "name": "authenticate",
+        "address": 4195940,
+        "address_hex": "0x400664",
+        "offset": 4
+      }"#;
+
+    for selection in [&["0x400668", "--addr"][..], &["sub_400668"]] {
+        let (c, stderr) = run(&[&["decompile", &bin][..], selection].concat());
+        assert!(c.contains("sub_400668("), "{c}");
+        assert_eq!(stderr.matches(&fauxware_note).count(), 1, "{selection:?}: {stderr}");
+        let (doc, stderr) = run(&[&["decompile", &bin][..], selection, &["--json"]].concat());
+        assert!(doc.contains(interior), "{doc}");
+        assert_eq!(stderr.matches(&fauxware_note).count(), 1, "{selection:?}: {stderr}");
+    }
+
+    let (doc, stderr) = run(&[
+        "decompile-all", &bin, "--addr", "0x400668", "--addr", "0x400668", "--functions", "sub_400668",
+        "--addr", "0x400664", "--json",
+    ]);
+    assert_eq!(doc.matches("\"interior_to\"").count(), 1, "{doc}");
+    assert!(doc.contains(interior), "{doc}");
+    assert_eq!(stderr.matches("is interior to").count(), 1, "one note per record: {stderr}");
+
+    let out = std::env::temp_dir().join(format!("kuna_interior_project_{}", std::process::id()));
+    let (_, stderr) = run(&["decompile-project", &bin, "--addr", "0x400668", "-o", out.to_str().unwrap()]);
+    let _ = std::fs::remove_dir_all(&out);
+    assert_eq!(stderr.matches(&fauxware_note).count(), 1, "{stderr}");
+
+    let thumb = fixture("arm_thumb_linked_le32");
+    let (c, stderr) = run(&["decompile", &thumb, "0x100bd", "--addr"]);
+    assert!(c.contains("sub_100bc("), "{c}");
+    assert!(stderr.contains(&note("0x100bc", "compute", "0x100b8", "0x4")), "{stderr}");
+    let (_, stderr) = run(&["decompile-all", &thumb, "--addr", "0x100bd", "--addr", "0x100bc", "--json"]);
+    assert_eq!(stderr.matches("is interior to").count(), 1, "{stderr}");
+
+    let object = fixture("calleevote_ops_x86_64.o");
+    for selection in [".text+0x24", "1:0x24"] {
+        let (_, stderr) = run(&["decompile", &object, selection, "--addr"]);
+        assert!(stderr.contains(&note("0x400024", "fwd", "0x400020", "0x4")), "{selection}: {stderr}");
+    }
+
+    let (by_addr, stderr) = run(&["decompile", &bin, "0x400664", "--addr", "--json"]);
+    assert!(!by_addr.contains("interior_to") && !stderr.contains("interior"), "{by_addr}\n{stderr}");
+    let (by_name, stderr) = run(&["decompile", &bin, "authenticate", "--json"]);
+    assert_eq!(by_addr, by_name, "an entry's record is the same however it was selected");
+    assert!(!stderr.contains("interior"), "{stderr}");
+
+    let (_, stderr) = run(&["decompile", &bin, "0x400668", "--addr", "--define-function", "0x400668"]);
+    assert!(!stderr.contains("interior"), "a declared entry is not interior: {stderr}");
+}
+
+#[test]
+fn unavailable_output_directory_fails_before_the_console_starts() {
+    let scratch = tempfile::tempdir().unwrap();
+    let stub = scratch.path().join("console");
+    let marker = scratch.path().join("started");
+    std::fs::write(&stub, "#!/bin/sh\nprintf started > \"$KUNA_STUB_MARKER\"\n").unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let missing = scratch.path().join("missing");
+    let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args(["decompile", &fauxware(), "main", "--decomp-dbg"])
+        .arg(&stub)
+        .arg("--sleighpath").arg(repo_root().join("specs"))
+        .env("TMPDIR", &missing).env("TMP", &missing).env("TEMP", &missing)
+        .env("KUNA_STUB_MARKER", &marker)
+        .output().expect("run text decompilation");
+    assert_eq!(result.status.code(), Some(1));
+    assert!(result.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&result.stderr)
+        .contains("could not create temporary output file"));
+    assert!(!marker.exists());
+    assert!(!missing.exists());
+}
+
+#[test]
+fn console_output_files_are_removed_after_success_empty_output_and_failure() {
+    let scratch = tempfile::tempdir().unwrap();
+    let staging = scratch.path().join("outputs");
+    std::fs::create_dir(&staging).unwrap();
+    let stub = scratch.path().join("console");
+    std::fs::write(&stub, r#"#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    'openfile write '*)
+      out=${line#openfile write }
+      out=${out#\"}
+      out=${out%\"}
+      if [ "$KUNA_STUB_WRITE" = 1 ]; then
+        printf '%s\n' 'int main(void) { return 0; }' > "$out"
+      fi
+      ;;
+  esac
+done
+printf '%s\n' "$KUNA_STUB_TRANSCRIPT"
+"#).unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o700)).unwrap();
+    for regions in [false, true] {
+        for (write, transcript, status, error) in [
+            ("1", "Decompiling main", 0, ""),
+            ("0", "Decompiling main", 1, "no C output"),
+            ("1", "Decompiling main\nSkipping main: test pipeline failure", 1,
+             "decompilation failed for main"),
+        ] {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            command.args(["decompile", &fauxware(), "main", "--decomp-dbg"])
+                .arg(&stub)
+                .arg("--sleighpath").arg(repo_root().join("specs"))
+                .env("TMPDIR", &staging).env("TMP", &staging).env("TEMP", &staging)
+                .env("KUNA_STUB_WRITE", write).env("KUNA_STUB_TRANSCRIPT", transcript);
+            if regions {
+                command.arg("--regions");
+            }
+            let result = command.output().expect("run text decompilation");
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            assert_eq!(result.status.code(), Some(status), "{stderr}");
+            if error.is_empty() {
+                assert!(stderr.is_empty(), "{stderr}");
+            } else {
+                assert!(stderr.contains(error), "{stderr}");
+            }
+            if write == "1" {
+                assert!(String::from_utf8_lossy(&result.stdout).contains("int main(void)"));
+            } else {
+                assert!(result.stdout.is_empty());
+            }
+            assert!(std::fs::read_dir(&staging).unwrap().next().is_none());
+        }
+    }
+}
+
+/// RE-need `prototype-assertion-rejects-explicit`: a directive may name the
+/// address this run was pointed at.
+///
+/// `kuna decompile <bin> 0xADDR` emitted the function in full and answered
+/// `prototype 0xADDR …` with `rejected: no function starts at 0xADDR` — the
+/// address it had just decompiled. `load addr` follows flow from an address
+/// without installing a `FunctionSymbol`, so nothing in the by-address path
+/// registered the entry the directive resolves against; the same run selected
+/// BY NAME bound the identical directive. 0x400678 is an instruction boundary
+/// inside `authenticate` that discovery does not call a function start, which
+/// is the shape the need was filed on (a PE entry only the wider discovery
+/// bundle finds).
+#[test]
+fn a_prototype_binds_to_the_address_the_run_selected() {
+    let bin = fauxware();
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args([
+            "decompile",
+            bin.as_str(),
+            "0x400678",
+            "--addr",
+            "--assert-strict",
+            "--assert",
+            "prototype 0x400678 int4 checkpw(char *user,char *pass)",
+            "--sleighpath",
+            specs().as_str(),
+        ])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !stderr.contains("no function starts at 0x400678"),
+        "the run rejected the address it decompiled:\n{stderr}"
+    );
+    assert_eq!(out.status.code(), Some(0), "--assert-strict failed: {stderr}");
+    assert!(
+        stdout.contains("(char *user,char *pass)"),
+        "the declared signature never reached the selection:\n{stdout}"
+    );
+}
+
+/// The declaration is the SELECTION's, not an amnesty for every address: a
+/// directive naming an address this run never selected is still rejected, which
+/// is the only signal an agent gets that its directive is inert.
+#[test]
+fn an_unselected_address_that_starts_no_function_is_still_rejected() {
+    let bin = fauxware();
+    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        .args([
+            "decompile",
+            bin.as_str(),
+            "0x400678",
+            "--addr",
+            "--json",
+            "--assert",
+            "prototype 0x999999 int4 nope(void)",
+            "--sleighpath",
+            specs().as_str(),
+        ])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout.contains(r#""status": "rejected""#),
+        "an unbindable address was reported applied:\n{stdout}\n{stderr}"
+    );
+    assert!(
+        stdout.contains("no function starts at 0x999999"),
+        "the rejection did not name the address:\n{stdout}"
+    );
+}

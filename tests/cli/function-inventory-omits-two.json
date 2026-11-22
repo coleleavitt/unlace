@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_reloctable_x86_64.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_reloctable_x86_64.exe",
     "binary_sha256": "fdc28c5e4538e07ab23b6356c82a21ec0399d8481a18862918b3ce084c178000",
     "binary_size": 3584,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_reloctable_x86_64.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_reloctable_x86_64.exe",
     "selector": null,
     "selector_kind": "none"
   },

@@ -1,10 +1,10 @@
-# Live-smoke: kuna_ghidra inside a real Ghidra
+# Live-smoke: unlace_ghidra inside a real Ghidra
 
 A **manual/dev** rig (not CI) that runs the one thing the in-tree ghidra-sim
 harness (`make test-ghidra`, see `docs/ghidra-integration.md` §11) cannot: a
 REAL Ghidra as the other end of the decompile-process pipe. It decompiles the
 same functions twice — once with the stock native core, once with
-`kuna_ghidra` swapped in — and writes a side-by-side report carrying the same
+`unlace_ghidra` swapped in — and writes a side-by-side report carrying the same
 badness-scanner counts the sim pins (raw-register leaks, `Unique<hex>` tokens,
 `sub_`/`dat_` placeholder rate, the `unsigned_long__`-style `getC()` mangling
 signature, and a kuna-vs-stock line-diff ratio).
@@ -21,28 +21,28 @@ the native process. No extension install is needed for the smoke.
    offline (the PyPI `pyghidra` also works when you have network):
 
    ```bash
-   python3 -m venv ~/.virtualenvs/kuna-ghidra
-   source ~/.virtualenvs/kuna-ghidra/bin/activate
+   python3 -m venv ~/.virtualenvs/unlace-ghidra
+   source ~/.virtualenvs/unlace-ghidra/bin/activate
    pip install --no-index --find-links \
        "$GHIDRA_INSTALL_DIR/Ghidra/Features/PyGhidra/pypkg/dist" pyghidra
    ```
 
-3. The `kuna_ghidra` binary — NOT part of `make binaries`; build it directly:
+3. The `unlace_ghidra` binary — NOT part of `make binaries`; build it directly:
 
    ```bash
-   cd decompiler && cargo build --release -p kuna-ghidra
+   cd decompiler && cargo build --release -p unlace-ghidra
    ```
 
-   (produces `decompiler/target/release/kuna_ghidra`).
+   (produces `decompiler/target/release/unlace_ghidra`).
 
 ## Run
 
 ```bash
-source ~/.virtualenvs/kuna-ghidra/bin/activate
+source ~/.virtualenvs/unlace-ghidra/bin/activate
 export GHIDRA_INSTALL_DIR=~/tools/ghidra_12.1.2_PUBLIC
 export KUNA_SMOKE_BINARY=$PWD/tests/bug-repro/faillog   # any program
 # optional:
-#   export KUNA_GHIDRA_EXE=…/decompiler/target/release/kuna_ghidra  (default)
+#   export KUNA_GHIDRA_EXE=…/decompiler/target/release/unlace_ghidra  (default)
 #   export KUNA_SMOKE_FUNCTIONS=main,usage    (default: main + 2 largest)
 #   export KUNA_SMOKE_OUT=./live-smoke-out    (default)
 python3 integrations/ghidra/live-smoke/kuna_vs_stock.py
@@ -71,8 +71,8 @@ A working local example (the machine this rig was built on):
   harness replicates the `getC()` behavior, so its numbers and this rig's line
   up.
 - The python scanners here are a small re-implementation of the rust ones
-  (`decompiler/crates/kuna-ghidra/tests/ghidra_sim/mod.rs`) with a fixed
+  (`decompiler/crates/unlace-ghidra/tests/ghidra_sim/mod.rs`) with a fixed
   x86-64 register set; the rust harness (which harvests the register list from
   the live Sleigh) is authoritative for pinned numbers.
 - Decompile timeouts are process murder (Java disposes the child); if the kuna
-  pass hangs, look for the spawned `kuna_ghidra` PID and its stderr.
+  pass hangs, look for the spawned `unlace_ghidra` PID and its stderr.

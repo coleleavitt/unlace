@@ -1,0 +1,582 @@
+//! S1 Mach-O Objective-C metadata recovery (`ObjcMetadataPass`).
+//!
+//! The kuna analog of Ghidra's `ObjcTypeMetadataAnalyzer` (the name-recovery
+//! half): parse the `__objc_*` ObjC 2.0 metadata web entirely out of the loaded
+//! Mach-O image and recover **method names**, so a stripped IMP renders
+//! `-[Greeter greet:]` / `+[Greeter classMethod]` instead of `sub_<addr>`.
+//!
+//! # The walk (design §3.2)
+//!
+//! ```text
+//!   __objc_classlist  (array of class_t*)
+//!     └─ class_t        isa=metaclass, data=class_ro_t* (& FAST_DATA_MASK)
+//!          ├─ class_ro_t.name         → class name ("Greeter")
+//!          ├─ class_ro_t.baseMethods  → method_list_t (the `-` instance methods)
+//!          └─ class_t.isa → metaclass class_ro_t.baseMethods (the `+` methods)
+//!               method_list_t → per method_t: selector, types, IMP (function VA)
+//! ```
+//!
+//! Both `method_list_t` forms are handled (`methods.rs`): the **large absolute**
+//! 64-bit form (§3.2's MVP target) and the **small/relative** form a modern clang
+//! emits — handling the latter is what makes the bare-toolchain fixture name end
+//! to end.
+//!
+//! # What it emits
+//!
+//! - **`out.fid_names`** — the IMP function **rename** `-[Class sel]` / `+[Class
+//!   sel]`, the label-gated placeholder rename (the FID precedent: the commit seam
+//!   only overwrites an engine `sub_*`/`FUN_*` placeholder, never a real symbol).
+//! - **`out.symbols`** — an `_OBJC_CLASS_$_<name>` Data symbol per class + the IMP
+//!   as a Function symbol (so the function exists for the rename to bind to even
+//!   when it is reachable *only* through the metadata, not a call edge or
+//!   `LC_FUNCTION_STARTS`) + a selector Data symbol per distinct selector.
+//! - **`out.data_objects`** / **`out.const_ranges`** — the `selRef_`/`classRef_`/
+//!   `superRef_` reference slots and the `objc_msgSend$<sel>` stubs
+//!   (`kuna_objcrefs.rs`), with the rebase slots reported constant.
+//!
+//! # Gating
+//!
+//! Default-OFF (`--option objc`, the `fid` precedent), Mach-O-format gated (the
+//! pass is registered only for a Mach-O target in `passes.rs`), real-binary-path
+//! only. Selectors are plain ASCII — **no demangler needed**. A non-Mach-O / no-
+//! `__objc_*` image yields an empty output, so every parity gate is byte-identical
+//! by construction.
+//!
+//! # Scope (this PR — design §5 PR-O1)
+//!
+//! x86-64, no chained fixups. The arm64 + `LC_DYLD_CHAINED_FIXUPS` resolver
+//! (PR-O0/O2) is deferred: on a chained-fixup image the raw `__objc_*` slots are
+//! packed fixup entries, not addresses, so the walk reads garbage and emits
+//! nothing (still safe — additive, never wrong-renames). ObjC v1 / dyld-shared-
+//! cache extraction / method-type prototypes / `objc_msgSend` overrides are also
+//! deferred (design §3.2 LOSS).
+
+pub mod classt;
+pub mod encoding;
+pub mod kuna_objccats;
+mod kuna_objccache;
+pub mod kuna_objcdirect;
+pub mod kuna_objcivars;
+mod kuna_objcruntime;
+mod kuna_objcblocks;
+mod kuna_swiftclassnames;
+use kuna_swiftclassnames::display_class_name;
+pub mod kuna_objcprops;
+pub mod kuna_objcprotos;
+pub mod kuna_objcrefs;
+pub mod kuna_objcsdk;
+pub mod methods;
+pub mod sections;
+
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use object::read::Object;
+
+use crate::pass::{
+    AnalysisCtx, AnalysisOutput, AnalysisPass, ConstGate, ConstRange, DataObjectFact, FidMatch, Phase,
+    SymFact, SymKind,
+};
+use encoding::TypeCtx;
+use sections::MachoImage;
+
+/// The Mach-O Objective-C metadata pass (gate id `objc`, default-off).
+///
+/// Pure over `ctx` (reads `ctx.file` sections only), additive, never failing —
+/// the standard analysis-pass contract. Inert on every non-Mach-O / no-ObjC
+/// image.
+#[derive(Default)]
+pub struct ObjcMetadataPass;
+
+impl AnalysisPass for ObjcMetadataPass {
+    fn phase(&self) -> Phase {
+        Phase::P1
+    }
+
+    fn id(&self) -> &'static str {
+        "objc"
+    }
+
+    fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
+        let mut out = AnalysisOutput::default();
+        // Mach-O only (belt-and-suspenders on top of the format gate in passes.rs).
+        if ctx.file.format() != object::BinaryFormat::MachO {
+            return out;
+        }
+        // Resolve LC_DYLD_CHAINED_FIXUPS (PR-O0) so an arm64(e) image's __objc_*
+        // pointer slots dereference to real addresses, not packed fixup entries.
+        // Empty (no-op) on a classic x86-64 LC_DYLD_INFO Mach-O — the walk then
+        // reads raw section words exactly as the x86-64 PR-O1 path did, and the
+        // classic bind program names its import slots instead.
+        let fixups = crate::loader::format::macho::resolve_chained_fixups(ctx.file, ctx.bytes);
+        let binds = if fixups.is_chained() {
+            HashMap::new()
+        } else {
+            crate::loader::format::macho::resolve_dyld_info_binds(ctx.file, ctx.bytes)
+        };
+        let mut img = MachoImage::with_fixups(ctx.file, fixups).with_binds(binds).with_method_symbols(ctx.file);
+        if let Some(cache) = ctx.image_path.and_then(kuna_objccache::CacheReader::open) {
+            let base = cache.selector_base();
+            img = img.with_cache(Rc::new(move |va, n| cache.read(va, n)), base);
+        }
+        let architecture = ctx.file.architecture();
+
+        // The type-mapping context for IMP/ivar prototypes (PR-O2).
+        let (ptr_size, word_size) = ctx.arch.data_org();
+        let tctx = TypeCtx::new(ctx.arch.types(), ptr_size, word_size);
+        let sdk = match unlace_decomp::kuna_objcsdk::sdk_path() {
+            Some(root) => kuna_objcsdk::signatures(&root, &kuna_objcsdk::linked_frameworks(ctx.file, ctx.bytes)),
+            None => HashMap::new(),
+        };
+        let mut selectors = kuna_objcrefs::Selectors::with_sdk(sdk);
+        out.prototypes_at.extend(kuna_objcruntime::prototypes(ctx.file, ctx.bytes, ctx.arch, &tctx));
+
+        // Walk `__objc_classlist`: an array of `class_t*` (stride = ptr size). The
+        // classes are read first so every instance layout is known before any
+        // method is typed — a subclass embeds its local superclass's struct.
+        let mut classes: Vec<(classt::ClassT, String)> = Vec::new();
+        for (cl_addr, cl_data) in img.classlists(ctx.file) {
+            let ps = img.ptr_size() as usize;
+            for (i, _) in cl_data.chunks_exact(ps).enumerate() {
+                let Some(class_ptr) = img.read_ptr(cl_addr.wrapping_add((i * ps) as u64)) else { continue };
+                let Some(class) = classt::read_class_t(&img, class_ptr) else { continue };
+                let Some(name) = classt::class_name(&img, class.ro) else { continue };
+                classes.push((class, name));
+            }
+        }
+        // The layouts are built only under `objcivars` (its load-time half): off,
+        // no class struct is interned and no offset variable reported constant.
+        let objcivars = unlace_decomp::kuna_objcivars::objcivars_enabled();
+        // A Swift class's layout is left to `swifttypes` when the image carries
+        // field descriptors and the Swift pass runs on it (the image reads as
+        // Swift): they give the Swift names and types the ivar list encodes as
+        // nothing. The record is declared here (the typed `self`, the `@"…"`
+        // pointers) and completed there. Otherwise the ivar list builds it.
+        let swifttypes = ctx.arch.analysis_swifttypes
+            && ctx.file.section_by_name(super::swift::descriptors::MACHO_SECTIONS.fieldmd).is_some()
+            && crate::sourcelang::effective_compiler(ctx.file, ctx.bytes) == crate::sourcelang::Compiler::Swift;
+        let layouts: HashMap<String, kuna_objcivars::Layout> = classes
+            .iter()
+            .filter(|_| objcivars)
+            .filter(|(_, name)| !(swifttypes && kuna_swiftclassnames::is_swift_runtime_name(name)))
+            .filter_map(|(class, name)| kuna_objcivars::layout(&img, class, name).map(|l| (name.clone(), l)))
+            .collect();
+        let structs = kuna_objcivars::Structs::build(&tctx, &layouts);
+        let categories = kuna_objccats::categories(&img, ctx.file);
+
+        // Every declaration's encoding first — methods and properties of classes,
+        // metaclasses, categories and protocols — so a getter emitted below takes
+        // the class-naming spelling its own property gives it whichever class
+        // comes first.
+        for (class, name) in &classes {
+            let meta_ro = classt::metaclass_ro(&img, class.isa);
+            for ro in [Some(class.ro), meta_ro].into_iter().flatten() {
+                for list in classt::method_lists(&img, ro) {
+                    for m in methods::walk_method_list(&img, list, architecture) {
+                        selectors.record(&m.selector, m.types.as_deref());
+                    }
+                }
+                if let Some(list) = classt::base_properties(&img, ro) {
+                    for (sel, enc) in kuna_objcprops::declarations(&img, list) {
+                        selectors.record_for_class(name, &sel, &enc);
+                    }
+                }
+            }
+        }
+        for cat in &categories {
+            for list in [cat.instance_methods, cat.class_methods].into_iter().flatten() {
+                for m in methods::walk_method_list(&img, list, architecture) {
+                    selectors.record(&m.selector, m.types.as_deref());
+                }
+            }
+            for list in [cat.instance_properties, cat.class_properties].into_iter().flatten() {
+                for (sel, enc) in kuna_objcprops::declarations(&img, list) {
+                    match &cat.class {
+                        Some(class) => selectors.record_for_class(class, &sel, &enc),
+                        None => selectors.record(&sel, Some(&enc)),
+                    }
+                }
+            }
+        }
+        let protocols = kuna_objcprotos::protocols(&img, ctx.file);
+        for proto in &protocols {
+            for m in &proto.methods {
+                selectors.record(&m.selector, m.types.as_deref());
+            }
+            for (sel, enc) in &proto.properties {
+                selectors.record(sel, Some(enc));
+            }
+        }
+
+        let mut table = unlace_decomp::kuna_objcrettype::ObjcClassTable::default();
+        for (class, name) in &classes {
+            let shown = display_class_name(name);
+            table.class_at.insert(class.addr, shown.clone());
+            table.classes.entry(shown).or_default().superclass =
+                classt::superclass_name(&img, class.addr).map(|s| display_class_name(&s));
+        }
+        out.objc_classes = Some(table);
+        for (class, name) in &classes {
+            out.symbols.push(SymFact {
+                addr: class.addr,
+                name: format!("_OBJC_CLASS_$_{name}"),
+                kind: SymKind::Data,
+            });
+            let self_type = objcivars.then(|| structs.self_type(&tctx, name)).flatten();
+            for list in classt::method_lists(&img, class.ro) {
+                self.emit_methods(&img, &tctx, architecture, name, '-', list, self_type.as_ref(), &mut selectors, &mut out);
+            }
+            for list in classt::metaclass_ro(&img, class.isa).map(|ro| classt::method_lists(&img, ro)).unwrap_or_default() {
+                self.emit_methods(&img, &tctx, architecture, name, '+', list, None, &mut selectors, &mut out);
+            }
+            if let Some(ivar_list) = classt::base_ivars(&img, class.ro) {
+                emit_ivars(&classt::walk_ivar_list(&img, ivar_list), name, objcivars, &mut out);
+            }
+        }
+
+        for cat in &categories {
+            let self_type = cat.class.as_deref().filter(|_| objcivars).and_then(|c| structs.self_type(&tctx, c));
+            if let Some(list) = cat.instance_methods {
+                self.emit_methods(&img, &tctx, architecture, &cat.label, '-', list, self_type.as_ref(), &mut selectors, &mut out);
+            }
+            if let Some(list) = cat.class_methods {
+                self.emit_methods(&img, &tctx, architecture, &cat.label, '+', list, None, &mut selectors, &mut out);
+            }
+        }
+        kuna_objcdirect::emit(&img, architecture, &tctx, objcivars.then_some(&structs), &mut out);
+        for proto in &protocols {
+            out.symbols.push(SymFact {
+                addr: proto.addr,
+                name: format!("_OBJC_PROTOCOL_$_{}", proto.name),
+                kind: SymKind::Data,
+            });
+            for m in &proto.methods {
+                if m.selector_va != 0 {
+                    selectors.name(&mut out, m.selector_va, &m.selector);
+                }
+            }
+        }
+        let refs = kuna_objcrefs::emit(&img, ctx.file, ctx.arch, &tctx, &mut selectors, &mut out);
+        kuna_objcblocks::emit(&img, ctx.file, &tctx, &mut out);
+        {
+            use object::ObjectSymbol;
+            let mut creators: Vec<(u64, String)> = out.fid_names.iter().map(|f| (f.addr, f.name.clone())).collect();
+            creators.extend(ctx.file.symbols().filter(|s| s.kind() == object::SymbolKind::Text && s.address() != 0).filter_map(|s| {
+                Some((s.address(), s.name().ok()?.trim_start_matches('_').to_string()))
+            }));
+            kuna_objcblocks::stack_blocks(&img, ctx.file, ctx.bytes, &tctx, &creators, &mut out);
+        }
+        if let Some(table) = out.objc_classes.as_mut() {
+            table.selector_at.extend(selectors.strings.iter().map(|(va, s)| (*va, s.clone())));
+            table.selref_at.extend(selectors.slots.iter().map(|(va, s)| (*va, s.clone())));
+        }
+
+        // A chained slot holds its packed fixup word until `dynrelocs` unpacks it
+        // at load.
+        out.const_ranges.extend(refs.into_iter().map(|(first, last_open)| ConstRange {
+            first,
+            last_open,
+            gate: ConstGate::ObjcRefs,
+        }));
+        out
+    }
+}
+
+impl ObjcMetadataPass {
+    /// Emit the rename + function/selector symbols + (PR-O2) the typed prototype
+    /// for one method list. `kind` is `-` (instance) or `+` (class); `class` is the
+    /// label stem, `Greeter` or `Greeter(Extra)`. `self_type` is the class's own
+    /// struct pointer, recorded apart from the prototype so `objcivars` decides
+    /// at the commit whether `self` is typed by it.
+    fn emit_methods(
+        &self,
+        img: &MachoImage,
+        tctx: &TypeCtx,
+        architecture: object::Architecture,
+        class: &str,
+        kind: char,
+        list_va: u64,
+        self_type: Option<&Rc<unlace_decomp::dtype::Datatype>>,
+        selectors: &mut kuna_objcrefs::Selectors,
+        out: &mut AnalysisOutput,
+    ) {
+        let owner = class.split('(').next().unwrap_or(class);
+        let shown = format!("{}{}", display_class_name(owner), &class[owner.len()..]);
+        for m in methods::walk_method_list(img, list_va, architecture) {
+            selectors.record(&m.selector, m.types.as_deref());
+            if m.imp == 0 {
+                continue;
+            }
+            // `-[Greeter greet:]` / `+[Greeter classMethod]` — the ObjC method name
+            // the printer renders, a Swift class under its demangled name. A symbol
+            // spelling the same method under another category name is kept.
+            let label = match img.method_symbol(m.imp, kind, owner, &m.selector) {
+                Some(symbol) => symbol.to_string(),
+                None => format!("{kind}[{shown} {sel}]", sel = m.selector),
+            };
+            if img.in_cache() && img.read(m.imp, 4).is_none() {
+                out.import_slot_names.push((m.imp, label));
+                continue;
+            }
+
+            // The IMP must exist as a function for the rename to bind, even when it
+            // is reachable ONLY through the metadata (no call edge / no
+            // LC_FUNCTION_STARTS). The idempotent SymFact add is a no-op if the
+            // function already exists, and the placeholder name it installs is what
+            // the fid_names rename then overwrites.
+            out.symbols.push(SymFact {
+                addr: m.imp,
+                name: label.clone(),
+                kind: SymKind::Function,
+            });
+            // The label-gated rename (the FID precedent): overwrite the engine's
+            // own sub_*/FUN_* placeholder with the ObjC method name, never a real
+            // symbol.
+            out.fid_names.push(FidMatch { addr: m.imp, name: label.clone(), by_signature: false });
+            if let Some(table) = out.objc_classes.as_mut() {
+                let shown_owner = display_class_name(owner);
+                table.classes.entry(shown_owner).or_default().methods.insert((kind == '+', m.selector.clone()), (label.clone(), m.imp));
+            }
+
+            // The typed prototype from the ObjC type encoding (PR-O2): `i20@0:8i16`
+            // → `int -[Greeter greet:](id self, SEL _cmd, int n)`. Keyed by the
+            // IMP label name (the commit seam matches `pieces.name` against the
+            // FunctionSymbol installed above with that same `-[Class sel]` name).
+            // Best-effort — an unparseable / absent encoding leaves the IMP *named*
+            // (above) but untyped, never a failure.
+            // The spelling the class's own property gives the selector, else the
+            // method's own: another class's property of the same selector says
+            // nothing about this class's return type.
+            let enc = selectors.encoding_for_class(owner, &m.selector).map(str::to_string).or_else(|| m.types.clone());
+            if let Some(enc) = enc.as_deref() {
+                if let Some(pieces) = encoding::decode_method(&label, enc, tctx, None) {
+                    out.prototypes.push(pieces);
+                    if let Some(st) = self_type {
+                        out.objc_self_types.push((label.clone(), Rc::clone(st)));
+                    }
+                }
+            }
+
+            // A Data symbol on the selector string itself, so the selector text is
+            // named in the listing (`sel_greet_` etc.). Best-effort: only when the
+            // selector VMA is separately recoverable.
+            if m.selector_va != 0 {
+                selectors.name(out, m.selector_va, &m.selector);
+            }
+        }
+    }
+}
+
+/// The `<Class>::<ivar>` data object on each ivar's offset variable, sized to
+/// the `u32` the method loads so the access binds the name, and the slot
+/// reported constant under `objcivars` so the load folds to the layout offset.
+fn emit_ivars(ivars: &[classt::Ivar], class: &str, objcivars: bool, out: &mut AnalysisOutput) {
+    for iv in ivars {
+        out.data_objects.push(DataObjectFact {
+            addr: iv.offset_va,
+            name: format!("{}::{}", display_class_name(class), iv.name),
+            size: 4,
+        });
+        let Some(last_open) = iv.offset_va.checked_add(4).filter(|_| objcivars) else { continue };
+        out.const_ranges.push(ConstRange { first: iv.offset_va, last_open, gate: ConstGate::ObjcIvars });
+    }
+}
+
+/// Turn a selector (`greet:`, `setFoo:bar:`) into a symbol-name-safe token for a
+/// `sel_<...>` Data symbol: colons → underscores, every other non-alphanumeric →
+/// underscore. The selector text itself is preserved in the IMP rename label.
+fn sanitize_selector(sel: &str) -> String {
+    sel.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An offset variable mapped at the very top of the address space keeps its
+    /// name but is not reported constant: its range would wrap.
+    #[test]
+    fn ivar_offset_variable_at_the_top_of_the_address_space_is_not_folded() {
+        let ivar = classt::Ivar { offset_va: u64::MAX - 1, name: "x".into(), types: None, offset: 8, size: 4 };
+        let mut out = AnalysisOutput::default();
+        emit_ivars(&[ivar], "C", true, &mut out);
+        assert_eq!(out.data_objects.len(), 1);
+        assert!(out.const_ranges.is_empty());
+    }
+
+    #[test]
+    fn pass_identity() {
+        let p = ObjcMetadataPass;
+        assert_eq!(p.id(), "objc");
+        assert_eq!(p.phase(), Phase::P1);
+    }
+
+
+    #[test]
+    fn swift_runtime_class_names_demangle_for_labels() {
+        assert_eq!(display_class_name("Greeter"), "Greeter");
+        assert_eq!(display_class_name("_TtC6Sample24MainScreenViewController"), "Sample.MainScreenViewController");
+        assert_eq!(display_class_name("_TtCC6Sample5Outer5Inner"), "Sample.Outer.Inner");
+        assert_eq!(display_class_name("_TtC1"), "_TtC1");
+    }
+
+    #[test]
+    fn sanitize_selector_replaces_colons() {
+        assert_eq!(sanitize_selector("greet:"), "greet_");
+        assert_eq!(sanitize_selector("setFoo:bar:"), "setFoo_bar_");
+        assert_eq!(sanitize_selector("length"), "length");
+    }
+
+    /// The full metadata walk over the vendored `macho_objc` fixture (spec-less:
+    /// parses the Mach-O directly, no SLEIGH `.sla` needed) recovers the class
+    /// `Greeter`, the selector `greet:`, and the IMP at the pinned VMA — the same
+    /// chain `verify_objc.rs` proves end-to-end through the decompiler. Locks the
+    /// `MachoImage` / `class_t` / `method_list_t` (small/relative form) readers.
+    #[test]
+    fn walks_macho_objc_fixture_metadata() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc");
+        let bytes = std::fs::read(path).expect("read macho_objc fixture");
+        let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
+        assert_eq!(file.format(), object::BinaryFormat::MachO, "fixture must be a Mach-O");
+
+        let img = MachoImage::new(&file);
+        let (cl_addr, cl_data) = img.classlists(&file).into_iter().next().expect("__objc_classlist present");
+        let ps = img.ptr_size() as usize;
+        assert_eq!(ps, 8, "the fixture is a 64-bit Mach-O");
+
+        // First (only) class: class_t -> class_ro_t -> name "Greeter".
+        let class_ptr = img.read_ptr(cl_addr).expect("class_t pointer");
+        let class = classt::read_class_t(&img, class_ptr).expect("class_t reads");
+        assert_eq!(classt::class_name(&img, class.ro).as_deref(), Some("Greeter"));
+
+        // Instance method list: the single `-(int)greet:` method.
+        let list = classt::base_methods(&img, class.ro).expect("baseMethods present");
+        let methods = methods::walk_method_list(&img, list, file.architecture());
+        assert_eq!(methods.len(), 1, "exactly one instance method");
+        let m = &methods[0];
+        assert_eq!(m.selector, "greet:");
+        assert_eq!(m.imp, 0x100000640, "the pinned IMP VMA");
+        assert_eq!(m.types.as_deref(), Some("i20@0:8i16"));
+
+        // The metaclass has no `+` methods.
+        let meta_ro = classt::metaclass_ro(&img, class.isa).expect("metaclass ro");
+        assert!(classt::base_methods(&img, meta_ro).is_none(), "no class (+) methods");
+
+        // The classlist holds exactly one class_t* entry (8 bytes).
+        assert_eq!(cl_data.len(), ps, "one class in the classlist");
+    }
+
+    #[test]
+    fn preserves_odd_x86_64_imp_from_metadata() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/macho_objc_odd_imp"
+        );
+        let bytes = std::fs::read(path).expect("read odd-IMP fixture");
+        let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
+        assert_eq!(file.architecture(), object::Architecture::X86_64);
+
+        let img = MachoImage::new(&file);
+        let (cl_addr, _) = img.classlists(&file).into_iter().next().expect("__objc_classlist present");
+        let class_ptr = img.read_ptr(cl_addr).expect("class_t pointer");
+        let class = classt::read_class_t(&img, class_ptr).expect("class_t reads");
+        let list = classt::base_methods(&img, class.ro).expect("baseMethods present");
+        let methods = methods::walk_method_list(&img, list, file.architecture());
+
+        assert_eq!(methods.len(), 1);
+        assert_eq!(methods[0].selector, "greet:");
+        assert_eq!(methods[0].imp, 0x1_0000_0641);
+    }
+
+    /// The arm64 chained-fixup path (design §5 PR-O0 + PR-O2): the vendored
+    /// `macho_objc_arm64` fixture is a **real `LC_DYLD_CHAINED_FIXUPS`** binary
+    /// (`-fixup_chains` lld), so its `__objc_*` pointer slots are packed fixup
+    /// entries. This proves the chained-fixup resolver + the arm64 ObjC walk
+    /// together recover `-[Greeter greet:]`:
+    ///
+    ///   1. The resolver builds a non-empty overlay; the `__objc_classlist[0]`
+    ///      slot **resolves** to the real `class_t` VMA `0x100008000` (a slot the
+    ///      raw word also happens to equal, with `next=0`), and the `class_t.isa`
+    ///      slot — which carries a non-zero `next` in its high bits — resolves to
+    ///      the real `0x100008028` (the raw word `0x0020000100008028` would be
+    ///      garbage without the resolver).
+    ///   2. With the overlay threaded through `MachoImage::read_ptr`, the walk
+    ///      reaches the class name `Greeter`, the selector `greet:`, the type
+    ///      encoding `i20@0:8i16`, and the IMP at the pinned VMA `0x1000005f0`.
+    #[test]
+    fn walks_macho_objc_arm64_chained_fixups() {
+        use crate::loader::format::macho::resolve_chained_fixups;
+        use object::read::Object;
+
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/macho_objc_arm64");
+        let bytes = std::fs::read(path).expect("read macho_objc_arm64 fixture");
+        let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
+        assert_eq!(file.format(), object::BinaryFormat::MachO);
+        assert_eq!(file.architecture(), object::Architecture::Aarch64, "arm64 fixture");
+
+        // (1) The chained-fixup resolver: a real LC_DYLD_CHAINED_FIXUPS binary
+        // yields a NON-empty overlay, and the classlist/class_t slots resolve to
+        // the real class_t VMAs.
+        let fixups = resolve_chained_fixups(&file, &bytes);
+        assert!(!fixups.is_empty(), "the fixture carries real chained fixups");
+        assert_eq!(
+            fixups.resolved_ptr(0x100004000),
+            Some(0x100008000),
+            "__objc_classlist[0] resolves to the class_t VMA"
+        );
+        assert_eq!(
+            fixups.resolved_ptr(0x100008000),
+            Some(0x100008028),
+            "class_t.isa slot resolves to the metaclass (raw word would be garbage)"
+        );
+
+        // (2) The arm64 walk THROUGH the resolved overlay recovers the method name.
+        let img = MachoImage::with_fixups(&file, fixups);
+        let (cl_addr, _cl_data) = img.classlists(&file).into_iter().next().expect("__objc_classlist present");
+        let class_ptr = img.read_ptr(cl_addr).expect("class_t pointer (resolved)");
+        assert_eq!(class_ptr, 0x100008000, "the resolved class_t VMA");
+
+        let class = classt::read_class_t(&img, class_ptr).expect("class_t reads");
+        assert_eq!(classt::class_name(&img, class.ro).as_deref(), Some("Greeter"));
+
+        let list = classt::base_methods(&img, class.ro).expect("baseMethods present");
+        let methods = methods::walk_method_list(&img, list, file.architecture());
+        assert_eq!(methods.len(), 1, "exactly one instance method");
+        let m = &methods[0];
+        assert_eq!(m.selector, "greet:");
+        assert_eq!(m.imp, 0x1000005f0, "the pinned arm64 IMP VMA");
+        assert_eq!(m.types.as_deref(), Some("i20@0:8i16"));
+    }
+
+    /// The no-op guarantee (CAUTION in the brief): the chained-fixup resolver
+    /// yields an **empty** overlay on the classic x86-64 `macho_objc` fixture
+    /// (which uses `LC_DYLD_INFO_ONLY`, not `LC_DYLD_CHAINED_FIXUPS`), so
+    /// `read_ptr` reads raw section words exactly as before — the existing x86-64
+    /// fixtures stay byte-identical.
+    #[test]
+    fn resolver_is_noop_on_non_chained_fixup_macho() {
+        use crate::loader::format::macho::resolve_chained_fixups;
+        for name in ["macho_objc", "macho_imports"] {
+            let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+            let bytes = std::fs::read(&path).expect("read fixture");
+            let file = object::File::parse(bytes.as_slice()).expect("parse Mach-O");
+            let fixups = resolve_chained_fixups(&file, &bytes);
+            assert!(
+                fixups.is_empty(),
+                "{name} has no LC_DYLD_CHAINED_FIXUPS → the resolver is a strict no-op"
+            );
+            // With an empty overlay, read_ptr falls through to the raw section word.
+            let img = MachoImage::with_fixups(&file, fixups);
+            let img_raw = MachoImage::new(&file);
+            if let Some((cl_addr, _)) = img.classlists(&file).into_iter().next() {
+                assert_eq!(
+                    img.read_ptr(cl_addr),
+                    img_raw.read_ptr(cl_addr),
+                    "{name}: with/without the (empty) overlay reads identically"
+                );
+            }
+        }
+    }
+}

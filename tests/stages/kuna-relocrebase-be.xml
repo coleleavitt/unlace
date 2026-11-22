@@ -18,7 +18,7 @@
     Stage: P1 program prep (relocatable layout).
     Single pass.
 
-    Image: decompiler/crates/kuna-analysis/tests/fixtures/relocrebase_be_mips.o
+    Image: decompiler/crates/unlace-analysis/tests/fixtures/relocrebase_be_mips.o
     (relocrebase_be.c); see relocrebase_be.provenance.
 
     Assert #1: greet calls puts with its string.
@@ -30,7 +30,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/relocrebase_be_mips.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/relocrebase_be_mips.o</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>lo fu greet</com>

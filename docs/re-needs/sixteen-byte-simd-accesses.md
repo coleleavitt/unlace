@@ -14,7 +14,7 @@ rounds: [11]
 first_seen_round: 11
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/620
@@ -119,7 +119,7 @@ HYPOTHESIS ("pointer-to-array declarator parentheses are misplaced during cast e
 
 Walk it: ptr-to-array is stack [PTR, ARRAY, char]; rev/skip1 = [ARRAY, PTR] -> ARRAY first (pending false, no paren, back="[16]"), then PTR (front="*") -> `char *[16]`. Outermost-first [PTR, ARRAY] gives PTR (front="*", pending) then ARRAY (wraps) -> `char (*` + `)[16]`. Correct. The mirror case fixes itself: array-of-pointer [ARRAY, PTR, char] outermost-first gives back="[1]" then front="*" -> `char *a[1]`, which is right and is TODAY rendered wrong as `int4 (*a)[1]`.
 
-*** THIS IS ALREADY A KNOWN DIVERGENCE WITH A TEST PINNING THE BUG. *** decompiler/crates/kuna-decomp/src/p9_emit/printc/tests.rs:113 `pointer_to_array_paren_inverted_divergence` asserts BOTH wrong spellings verbatim and its doc says "This test pins the actual (buggy) output so a future fix flips it deliberately." The `declarator_parts` doc-comment at printc.rs:8596 documents the CORRECT output (`int4 (*)[1]` -> `("int4 (*", ")[1]")`), which the code does not produce. So the builder's job is: reorder the walk, then FLIP the two assertions in that test and rewrite its DIVERGENCE preamble. It will otherwise go red on a test that looks unrelated to its diff.
+*** THIS IS ALREADY A KNOWN DIVERGENCE WITH A TEST PINNING THE BUG. *** decompiler/crates/unlace-decomp/src/p9_emit/printc/tests.rs:113 `pointer_to_array_paren_inverted_divergence` asserts BOTH wrong spellings verbatim and its doc says "This test pins the actual (buggy) output so a future fix flips it deliberately." The `declarator_parts` doc-comment at printc.rs:8596 documents the CORRECT output (`int4 (*)[1]` -> `("int4 (*", ")[1]")`), which the code does not produce. So the builder's job is: reorder the walk, then FLIP the two assertions in that test and rewrite its DIVERGENCE preamble. It will otherwise go red on a test that looks unrelated to its diff.
 
 WHAT THIS ROUND ADDS THAT THE OLD TEST DID NOT KNOW. The pinned test calls the bug "Latent: ptrtoarray.xml declares such params but never emits them as a decompiled function HEADER, so no passing assertion depends on it today." Round 11 shows it is NOT latent -- it reaches ordinary output through the CAST path on any 16-byte SIMD access, and the result is invalid C. That upgrades the need from cosmetic to the invalid-C class alongside overlapping-subregister-temporaries-receive.
 
@@ -127,7 +127,7 @@ WOULD A FIX BUILT ON THIS HYPOTHESIS PRODUCE WRONG OUTPUT? No. Post-fix the line
 
 BLAST RADIUS, MEASURED, SMALL BUT NOT ZERO. declarator_parts is the single spelling seam for declarations, headers, struct fields AND `type_to_c_string` (the decbench type_match extractor), so the flip is global. In the corpus: tests/datatests/ptrtoarray.xml is the only file carrying `(*x)[N]` and all four hits are INPUTS (`map addr r0x104018 int4 (*paiGlob)[16]`, three `parse line extern ...`), never expectations -- its 10 stringmatch assertions are all body expressions (`display(&a0[1]);`, `paiGlob = &c;`, ...) and none names a declarator. So no datatest assertion should move; the pinned unit test is the one that must.
 
-TWO WARNINGS FOR THE BUILDER. (1) The `--assert prototype`/`parse line` C PARSER side was not checked here -- if it builds ptr-to-array with the same inversion, a printer-only fix makes the two disagree; check `parse line extern void intarray(int4 (*a)[1]);` round-trips before committing. (2) `touches: [decompiler/crates/kuna-decomp]` is correct but coarse; the edit is p9_emit/kuna_langc.rs plus p9_emit/printc/tests.rs, and kuna_langrust.rs implements the same Speller trait -- confirm the Rust speller does not share the inverted walk.
+TWO WARNINGS FOR THE BUILDER. (1) The `--assert prototype`/`parse line` C PARSER side was not checked here -- if it builds ptr-to-array with the same inversion, a printer-only fix makes the two disagree; check `parse line extern void intarray(int4 (*a)[1]);` round-trips before committing. (2) `touches: [decompiler/crates/unlace-decomp]` is correct but coarse; the edit is p9_emit/kuna_langc.rs plus p9_emit/printc/tests.rs, and kuna_langrust.rs implements the same Speller trait -- confirm the Rust speller does not share the inverted walk.
 
 - Sol-high BUILDER: reproduced the exact 16,384-byte witness at authoritative
   main `ccc82a37`: 630 output lines and seven `*(char *[16])` casts.  The repair

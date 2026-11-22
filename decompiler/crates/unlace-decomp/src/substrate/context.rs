@@ -919,6 +919,8 @@ pub struct ArchContext {
     pub index_rescale: bool,
     /// (kuna `looprotate`) A guarded do-while loop becomes a while loop.
     pub loop_rotate: bool,
+    /// (kuna `guardedloop`) A guarded do-while prints as a while loop (C output only).
+    pub guarded_loop: bool,
     /// (kuna `vastart`) The x86-64 va_start prologue as va_start(ap, last).
     pub va_start: bool,
     /// (kuna `switchguardmerge`) Merge an equality guard into its switch.
@@ -1860,6 +1862,7 @@ impl ArchContext {
             va_arg: false,
             index_rescale: false,
             loop_rotate: false,
+            guarded_loop: false,
             va_start: false,
             switch_guard_merge: false,
             global_array_anchor: false,

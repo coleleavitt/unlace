@@ -444,8 +444,9 @@ fn string_halves(data: &Funcdata, low: VarnodeId, high: VarnodeId) -> bool {
                     false
                 }
                 OpCode::CPUI_PIECE => u.get_in(0) == Some(vn) && is_low(u.get_in(1)),
-                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN => (2..u.num_input())
-                    .any(|i| u.get_in(i) == Some(vn) && is_low(u.get_in(i - 1))),
+                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN => {
+                    (2..u.num_input()).any(|i| u.get_in(i) == Some(vn) && is_low(u.get_in(i - 1)))
+                }
                 _ => false,
             };
             if joined {

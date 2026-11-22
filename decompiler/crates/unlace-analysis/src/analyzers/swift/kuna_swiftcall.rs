@@ -30,7 +30,11 @@
 //! - a symbol the demangler places in a class or struct (an image that kept
 //!   its symbols): a method, accessor, property observer, initializer or
 //!   deinitializer, with
-//!   `throws` read off its function type.
+//!   `throws` read off its function type;
+//! - an import whose symbol demangles to such a member, at the stub a call
+//!   enters: the model alone, so a call to `String.append(_:)` passes the
+//!   string it appends to; a struct member's `self` is passed only when the
+//!   caller set the register for that call.
 //!
 //! Only `self` is typed, and only when the body reads the register at its
 //! full width; a struct method whose `self` is exploded declares no `self`.
@@ -113,6 +117,8 @@ struct Binder<'t, 'a> {
     /// Functions a symbol names as Swift functions of a module, no type's
     /// members: they take no `self` and leave the register alone.
     free: Vec<u64>,
+    /// The stubs a call to an import enters.
+    stubs: HashSet<u64>,
 }
 
 impl Binder<'_, '_> {
@@ -127,7 +133,7 @@ impl Binder<'_, '_> {
         self_t: Option<Rc<Datatype>>,
         maybe_self: bool,
     ) {
-        if !self.types.namer.is_code(f) {
+        if !self.types.namer.is_code(f) && !self.stubs.contains(&f) {
             return;
         }
         match self.bound.entry(f) {
@@ -283,7 +289,10 @@ impl Binder<'_, '_> {
         }
     }
 
-    fn symbols(&mut self, symbols: &[(u64, String)]) {
+    /// `declare` parks the declared signature too; an import's stub body
+    /// cannot say whether a struct member takes `self` exploded or in
+    /// `swiftself`, so an import gets the model alone.
+    fn symbols(&mut self, symbols: &[(u64, String)], declare: bool) {
         for (addr, name) in symbols {
             let Some(tree) = demangle_swift_tree(name) else {
                 continue;
@@ -315,7 +324,7 @@ impl Binder<'_, '_> {
                     (false, true) => SWIFTCALL_THROWS,
                     (false, false) => SWIFTCALL,
                 };
-                if !is_async(entity) {
+                if declare && !is_async(entity) {
                     if let Some(d) = self.declared(entity, SelfIs::Instance, false, None) {
                         self.declared.insert(*addr, (d, model));
                     }
@@ -353,7 +362,7 @@ impl Binder<'_, '_> {
                 ty.clone(),
                 value_type && is == SelfIs::Instance,
             );
-            if !partial && !is_async(entity) {
+            if declare && !partial && !is_async(entity) {
                 if let Some(d) = self.declared(entity, is, value_type, ty) {
                     self.declared.insert(*addr, (d, model));
                 }
@@ -790,6 +799,7 @@ pub fn bind(
     types: &Types,
     regs: &Registers,
     symbols: &[(u64, String)],
+    import_calls: &[(u64, String)],
     out: &mut AnalysisOutput,
 ) -> Stats {
     let class_bound = types
@@ -805,8 +815,10 @@ pub fn bind(
         declared: BTreeMap::new(),
         class_bound,
         free: Vec::new(),
+        stubs: import_calls.iter().map(|&(a, _)| a).collect(),
     };
-    b.symbols(symbols);
+    b.symbols(symbols, true);
+    b.symbols(import_calls, false);
     b.classes();
     b.conformances();
     let mut stats = Stats::default();

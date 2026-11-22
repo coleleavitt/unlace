@@ -82,7 +82,6 @@ real ELF parser.
 | `hiddenret_i386` | project-authored i386 ELF from `hiddenret_i386.cpp` (clang++ -m32 -O1, symbols kept): `_Z2mkii`@`0x8049000` returns a 12-byte struct by value and ends in `ret $4` | `cppsig` hidden struct return (`unlace-cli/tests/cppsig_hidden_return.rs`): `mk` takes `void *rethidden,int a1,int a2`, not the shifted `int a0,int a1` the mangled name alone gives |
 | `globalwidth_x86_64` | project-authored x86-64 ELF from `globalwidth_x86_64.c` (clang -O2, symbols kept, no DWARF): `f` writes `short g3[8]` by index, reads `g3[1]` and the low half of `unsigned long g1` | `globalwidth` (`unlace-cli/tests/globalwidth.rs`): `g3` is typed `undefined2[8]` from its accesses (`g3[a0 & 7] = (short)a0`, not `*(short *)&g3[(a0 & 7) * 2UL]`), `g1` keeps its scalar shape; the padding after `f` disassembles as `align 16` |
 | `aifdataveto_x86_64` | project-authored stripped x86-64 ELF from `aifdataveto_x86_64.s` (`as` + `ld`, `strip -s`): `table`@`0x401020` looks like a function (`push rbp; mov rbp,rsp; ...; ret`) and is only read as data by `reader`@`0x401010` | `aifdataveto` (`unlace-cli/tests/globalwidth.rs`): `unlace functions` lists `0x401020` only with the option off |
-| `calltable_x86_64` | project-authored stripped x86-64 ELF from `calltable_x86_64.s` (`as` + `ld`, `strip -s`): `sw`@`0x401020` switches through a 3-case table whose first case (`0x401030`, 16-aligned, `push rbp; mov rbp,rsp`) a prologue scan takes for a function; `disp`@`0x401050` jumps through an unchecked table of the functions `fa`@`0x401060` and `fb`@`0x401070` | `calltable` (`unlace-cli/tests/globalwidth.rs`): with the option `fa`/`fb` are functions and the case is not; without it the reverse |
 | `coldentry_x86_64` | project-authored non-PIE x86-64 ELF from `coldentry_x86_64.s` (`gcc -nostdlib -static -no-pie -Wl,-Ttext=0x401000 -Wl,--build-id=none`, then `strip -s`, 9 KB): a `.cold` fragment FDE `[0x401000, 0x401018)` holding two `mov $n,%edi; call die; ud2` paths, `die`@`0x401020`, and `check`@`0x401030`, which enters the first path with `je 0x401000` and the second with `je 0x40100c`, both forced to `rel32` with `{disp32}` | the multi-entry cold-fragment entry recovery (`coldentry`, default-on; e2e `unlace-console/tests/verify_coldentry.rs`). Default lists `sub_40100c`; `--option coldentry off` restores the defect, where only the FDE start `sub_401000` is found. The reduction of Ubuntu 22.04 `/bin/bash`, whose cold region ahead of `main` holds 18 such second entries. Hand-written asm so the jumps are `rel32` and the fragment layout cannot drift |
 | `codescalar_x86_64` | project-authored non-PIE x86-64 ELF from `codescalar_x86_64.s` (`-nostdlib -Wl,-Ttext=0x100000 -e codebyte`, 5 KB): `codebyte`@`0x100001` calls through `rbx` (`call *%rbx`) and stores the call's `al` back through the same register, `databyte`@`0x100016` is byte-for-byte the same function except that it calls `sink`@`0x100000` DIRECTLY | the `code`-pointee value-type guard (`codescalar`, default-on, DIV-138; `--option codescalar off` restores the defect, `void v1; // al` plus `v1 = (void)(*a0)();`). It is the reduction of the crackmes.one `5ab77f5f33c5d40ad448c834` `crkme.exe` INT3-detection stub at `0x44ac6b`. `databyte` is the control: nothing types its pointer `code *`, so it is identical in both passes. `tests/cli/decompiler-emits-void-scalar.json` is the CLI probe, `tests/stages/kuna-codescalar.xml` the two-pass stage test |
 | `emptystrconst_x86_64` | project-authored stripped non-PIE x86-64 ELF from `emptystrconst_x86_64.c` (`gcc -O0 -no-pie -fno-builtin` then `strip`, 14 KB): `probe`@`0x401136` calls `strlen` three times, on a 64-byte blob `maze`@`0x402020` whose first row is zeroes, on `merged`@`0x402060` which is a GENUINE `""` stored as the leading NUL of `"Report bugs to: %s\n"`, and on `"Hi"` | the zero-character string-constant decline (`emptystrconst`, default-on; `--option emptystrconst off` restores the defect, where BOTH the blob and the real empty string print `strlen("")` on consecutive lines). It is the reduction of the crackmes.one `Sabloom Text 6.exe` witness whose 585-byte packed maze at `0x403550` printed `v16 = ""; v21 = "";`. Stripped on purpose: an unstripped build names `maze`/`merged` and never reaches `pushPtrCharConstant`. `tests/cli/binary-maze-pointer-becomes.json` is the CLI probe, `tests/stages/kuna-emptystrconst.xml` the two-pass stage test |
@@ -1473,6 +1472,14 @@ ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains \
 `_OUTLINED_FUNCTION_1` (`0x1000003ac`) is `mov w0, #7; b _exit`, tail-called by
 `_bail` (`0x1000003cc`).
 
+### `macho_arm64_32` — a thin arm64_32 (watchOS, ILP32) executable
+
+`macho_arm64_32` (~33 KB) is `macho_arm64_32.c` built for
+`arm64_32-apple-watchos7.0`; its header has the commands. A 28-byte
+`mach_header`, `LC_SEGMENT` commands and 4-byte pointers: the witness that an
+arm64_32 Mach-O loads as `AARCH64:LE:32:ilp32`
+(`tests/stages/kuna-macho-arm64-32.xml`).
+
 ### `macho_objc_refs_arm64` — selector, class and super references + `__objc_stubs`
 
 `macho_objc_refs_arm64` (arm64, ~50 KB) is the fixture for the ObjC reference-slot
@@ -2271,6 +2278,12 @@ above are reused, plus one new stripped Mach-O:
   ld64.lld -arch arm64 -platform_version macos 11.0 11.0 \
         -no_function_starts -x -e _main -o macho_unwind_only_arm64 t.o
   ```
+
+- **Mach-O, truncated:** `macho_truncated_arm64` (1.5 KB) is the first 0x600
+  bytes of `macho_unwind_only_arm64` (`head -c 1536`): `__TEXT` is cut short and
+  `__LINKEDIT`, with the symbol and string tables, is gone. It is the witness
+  that a Mach-O whose load commands name bytes past the end of the file still
+  loads (`tests/stages/kuna-machotruncated.xml`).
 
 ## DWARF on MinGW-PE / Mach-O (PR-11)
 
@@ -3111,6 +3124,22 @@ llvm-strip --strip-all -o swift_infer_elf swift_infer_syms_elf
 ```
 
 SHA-256: `27e0e70757ea530825ba3e489f012c93566fa02f730e99b928ed951bd65ab162`.
+
+### `swift_self_elf` — `swiftself` read after a call, and an imported mutating method (`swiftcall`)
+
+`swift_self_elf` (x86-64 ELF, 10 KB, stripped) is the fixture for
+`tests/stages/kuna-swiftself.xml`. Its source `swift_self_elf.swift` returns an
+escaping closure from `makeReader`, whose partial-apply forwarder (0x2250) calls
+`opaque` before it reads the captured `Box` through r13; `label` (0x24b0) appends
+to a local `String` through the imported `String.append(_:)`, which takes the
+string's address in r13. Built with the swiftly 6.4.2 toolchain:
+
+```bash
+swiftc -O -module-name selffix -parse-as-library swift_self_elf.swift -o swift_self_syms_elf
+llvm-strip --strip-all -o swift_self_elf swift_self_syms_elf
+```
+
+SHA-256: `e358a5be499c6448e3b81ac339f267a4e6dcf3b409536b3264629a64e26b6d05`.
 
 ### `swift_call_helper_elf` — a mutating struct call after a runtime helper (`swiftcall`)
 

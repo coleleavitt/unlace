@@ -3749,8 +3749,7 @@ fn printed_functions(stdout: &str, names: &[&str]) -> String {
 /// where the machine moves bits -- so it is refused.  The round trip compiles the
 /// seven printed callers (`-no-pie`, so the array's address survives the printed
 /// 32-bit `(int)a1 + 0xc`) against a bit-preserving `h` and compares them with the
-/// source. `typevote` is off: its unsigned vote for the shifted word changes
-/// the casts this test pins.
+/// source.
 #[test]
 fn a_float_in_a_general_register_keeps_its_integer_uses_round_trip() {
     let bin = repo_root()
@@ -3765,9 +3764,6 @@ fn a_float_in_a_general_register_keeps_its_integer_uses_round_trip() {
         "--option",
         "structdefs",
         "on",
-        "--option",
-        "typevote",
-        "off",
         "--sleighpath",
         &sp,
     ]);

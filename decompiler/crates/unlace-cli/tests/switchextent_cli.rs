@@ -93,8 +93,8 @@ fn a_swift_enum_table_has_its_enums_case_count() {
     };
     let on = decompile(&[]);
     assert!(
-        on.contains("switch(swift_getEnumCaseMultiPayload(a0,v1) & 0xffffffff) {"),
-        "{on}"
+        on.contains("switch(swift_getEnumCaseMultiPayload(a0,v1)) {"),
+        "`swiftruntime` returns the case as a uint32_t, so no mask: {on}"
     );
     assert_eq!(on.matches("case ").count(), 3, "{on}");
     assert!(!on.contains("// jump-as-call"), "{on}");

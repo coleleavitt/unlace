@@ -42,6 +42,9 @@ impl<'a> Part<'a> {
         let header = bytes
             .get(..32)
             .ok_or("rebuilt image is shorter than a Mach-O header")?;
+        if u32_at(header, 0) != extract::MH_MAGIC_64 {
+            return Err("only 64-bit images can be merged".to_string());
+        }
         let cmds = bytes
             .get(32..32usize.saturating_add(u32_at(header, 20) as usize))
             .ok_or("rebuilt image is shorter than its load commands")?;

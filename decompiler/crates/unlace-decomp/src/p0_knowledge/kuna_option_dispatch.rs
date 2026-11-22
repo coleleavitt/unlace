@@ -106,6 +106,7 @@ kuna_options! { self, p1;
     "indexrescale" => on_off!(index_rescale, "Byte offsets rescaled to element indexes"),
     "looprotate" => on_off!(loop_rotate, "Guarded do-while loops rotated to while loops"),
     "guardedloop" => on_off!(guarded_loop, "Guarded do-while loops printed as while loops"),
+    "loweredswitchbits" => on_off!(lowered_switch_bits, "Switches lowered to bit tests re-rolled"),
     "vastart" => on_off!(va_start, "va_start prologue as one call"),
     "switchguardmerge" => on_off!(switch_guard_merge, "Equality guards merged into their switch"),
     "returnbranch" => on_off!(return_branch, "Computed jumps through the return register"),

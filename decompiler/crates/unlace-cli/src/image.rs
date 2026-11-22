@@ -70,7 +70,7 @@ pub(crate) fn image_bytes_and_repairs(
     Ok((bytes, spans))
 }
 
-/// `bytes`, unless the image has no object-file view (TE, MZ).
+/// `bytes`, unless the image has no object-file view (TE, MZ, WebAssembly).
 fn object_view(binary: &str, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
     if unlace_analysis::loadimage_te::is_te_image(&bytes) {
         return unlace_analysis::loader::kuna_objectview::te_as_pe(&bytes)
@@ -78,6 +78,9 @@ fn object_view(binary: &str, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
     }
     if unlace_analysis::loadimage_mz::is_mz_dos_image(&bytes) {
         return Err(mz_object_view_error(binary));
+    }
+    if unlace_analysis::loadimage_wasm::is_wasm_module(&bytes) {
+        return Err(wasm_object_view_error(binary));
     }
     Ok(bytes)
 }
@@ -106,6 +109,16 @@ fn mz_object_view_error(binary: &str) -> String {
         "{binary}: MS-DOS MZ input has no object-file view, which this operation needs; \
          MZ support covers decompile, decompile-all, functions, disassemble/read, \
          decompile-project, and the console"
+    )
+}
+
+/// The same capability error for a WebAssembly module, which loads as a flat
+/// image of lowered code, linear memory, globals and tables.
+fn wasm_object_view_error(binary: &str) -> String {
+    format!(
+        "{binary}: WebAssembly input has no object-file view, which this operation needs; \
+         WebAssembly support covers decompile, decompile-all, functions, disassemble/read, \
+         raw-pcode, decompile-project, and the console"
     )
 }
 

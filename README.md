@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo/unlace-logo.png" alt="Unlace: a pencil sketch of a black-and-white sneaker coming unlaced" width="520"></p>
+<p align="center"><img src="assets/logo/unlace-logo.png" alt="Unlace: line art of a black-and-white sneaker coming unlaced" width="520"></p>
 
 # Unlace
 

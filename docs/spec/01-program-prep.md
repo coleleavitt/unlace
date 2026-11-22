@@ -3561,6 +3561,8 @@ could override the method. The reference walk
 same table: a site with one method is a `call` edge to it, a site with
 several a `vcall` edge to each, and every method in the image's code is
 walked as a function.
+Stage test: `tests/stages/kuna-arm64evcall.xml`, each of three fixtures with the
+option off and on.
 
 Two arch-marker passes paint **decode context** rather than names, because a wrong
 decode mode is unrecoverable downstream. `decompiler/crates/unlace-analysis/src/loader/arm_markers.rs
@@ -7570,7 +7572,8 @@ both
   else the class of the table's named handlers. A `__got` / `__auth_got` /
   `__auth_ptr` slot the indirect-symbol table does not name, whose rebased
   pointer reaches a function or object of this image named by a symbol or by
-  `iokitclasses`, is named `<target>_ptr` (123 slots when the whole iOS 16.4.1
+  `iokitclasses`, is named `<target>_ptr`, a further slot holding the same
+  target `<target>_ptr_2` and so on (123 slots when the whole iOS 16.4.1
   collection is loaded as one image; none on the stripped iOS 12.4 and 14.8
   caches, whose slots point at functions nothing names). On the iOS 16.4.1 collection there are 6,953 `kalloc_type`
   views (4,140 distinct structs; the kernel's 1,088 views build 533), 1,687 var
@@ -10718,6 +10721,30 @@ pass the strict valid-subroutine probe. It keeps the entries the Thumb scan and 
 gap walk would have reported (see the ARM reference walks later in §1.6), and when it validates
 no frame at all the Thumb scan runs exactly as with the option off.
 
+A start that only the raw Thumb scan found is withdrawn after the
+code-pointer-table scan when the Listing enters it by straight-line flow
+(`decompiler/crates/kuna-analysis/src/passes.rs`, the rule of
+`decompiler/crates/kuna-analysis/src/analyzers/aif/kuna_frameflow.rs` that frame
+recovery already applies to its roots). The instruction just before the start must
+be a non-call that falls through or conditionally branches into it, on a run that
+begins at a function entry or a branch target, and no call may target the start.
+GCC shrink-wraps Thumb code: the routine tests its argument, returns with `bx lr`,
+and only then runs `push {r4, lr}`. Scanned on its own, that `push` looks like a
+function entry, and the routine it belongs to ended there with a `funcboundflow`
+warning, leaving two near-empty halves. A start that a load-time pass committed is
+never withdrawn. That covers every `<patternpairs>` start, which the deferred
+`funcstart_patterns` pass commits before the walk, as well as vector-table handlers
+and symbols. The rule does not run when frame recovery rebuilt the Listing. The
+rebuild that withdraws a start reuses every decode of the raw-scan rebuild
+(`decompiler/crates/kuna-analysis/src/listing/kuna_decodememo.rs`), so it walks the
+image again without decoding it again. On stripped Cleanflight O2-noinline it withdraws 25 of 2,679 starts, none of them a
+symbol of the unstripped image; `Handle_USBAsynchXfer` (0x803b95c) is whole again.
+Over the 92 distinct stripped ARM firmware images of DecBench (O0, O2 and
+O2-noinline) it withdraws 398 of 42,937 starts, each inside the symbol of the
+routine that absorbs it. The rule cannot tell a trap from a test: a routine that
+ends in `svc` or `bkpt` runs straight into the next one, so a following routine
+that only the raw scan found and that no call targets is joined to it.
+
 **Pointer-referenced entries** (`ptrentry`, on by default, ARM-only; kuna;
 `decompiler/crates/unlace-analysis/src/analyzers/aif/kuna_ptrentry.rs`) re-admits
 what the second of those throws away. Measurement over the ARM Cortex-M corpus
@@ -10882,7 +10909,14 @@ gives **the AIF data veto** (`aifdataveto`, default-on;
 a discovered entry (not a symbol, and not the target of a decoded call or
 branch) whose first instruction the code reads or writes as data is dropped from
 the entry stream, and an AIF gap entry likewise, IDA's roll-back of a
-speculative run with a `dr_R`/`dr_W` xref. On a Thumb literal-pool image an
+speculative run with a `dr_R`/`dr_W` xref. A register a constant was put in
+stays known for the next eight straight-line instructions, until something else
+writes it or a branch, call or user op ends the run, and two known addends sum,
+so an AArch64 `adrp x17, P; add x17, x17, #o; ldrsw x16, [x17, x16, lsl #2]`
+reads its jump table at `P + o`. Apple's linker lists such an inline `__text`
+table in `LC_FUNCTION_STARTS`, where it decodes as a `sub_` entry the dispatch
+then indexes (`sub_4060[a0 * 4]`), and the veto removes it
+(`tests/stages/kuna-relswitch-a64.xml`). On a Thumb literal-pool image an
 AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes

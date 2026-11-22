@@ -4004,11 +4004,18 @@ partner `MULTIEQUAL` of the same block takes the same input slot; one of
 another block takes the arm its branch selects when both branches test the
 same condition (one varnode, or the same pure operation on the same inputs,
 under any number of `BOOL_NEGATE`s) on the same side, which is how a run of
-`csel`s, one per register of the string, stays paired. Every consumer must
-agree on one constant count word, or the word is left alone (a small literal
-is never decoded unpaired), so the halves of two arms are never joined into a
-string neither arm holds. The decoded literal must then have every byte past
-the count zero, the ASCII flag true to the bytes, UTF-8; an immortal payload read-only in the
+`csel`s, one per register of the string, stays paired. An object word an
+`INT_EQUAL` / `INT_NOTEQUAL` compares (a string's equality fast path,
+`x0 == count && x1 == object` before the runtime compare) is paired with the
+count word compared earlier in the same block or by the branch ending the one
+block that leads to it, and only when the two compared values are one
+string's two words: some call or return takes them as consecutive inputs, or a
+`PIECE` joins them, past the copies between registers. Every consumer must
+agree on one constant count word, or the word is left alone (a
+small literal is never decoded unpaired), so the halves of two arms are never
+joined into a string neither arm holds. The decoded literal must then have
+every byte past the count zero, the
+ASCII flag true to the bytes, UTF-8; an immortal payload read-only in the
 image, text, and of the count the partner states (without a partner, at
 least three bytes). The object word's constant is then replaced, where it
 is written, by the bounded literal (`get_internal_string`, as `fatstr`), so
@@ -4020,7 +4027,9 @@ source language is Swift; `always` drops the language test; `off` keeps the
 constants. The stage test `tests/stages/kuna-swiftstr.xml` runs the stripped
 `swift_types_elf` off and on; `tests/stages/kuna-swiftstrcsel.xml` runs the
 arm64 Mach-O `macho_swift_strsel_arm64`, whose literals are picked by `csel`
-pairs, a switch and a selected store, off, on, and on with `swiftmetadata`.
+pairs, a switch and a selected store, off, on, and on with `swiftmetadata`;
+`tests/stages/kuna-swiftstrcmp.xml` runs `macho_swift_strcmp_arm64`, whose
+`s == "…"` tests compare both words inline, off and on.
 
 The **language-facet table** the rule consults is the multilang W3 plane's
 first slice (`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_langfacet.rs

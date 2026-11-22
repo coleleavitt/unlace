@@ -2175,6 +2175,29 @@ ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains -objc_stubs
 `check(v1,a2,1,"empty name")`; with `option objcsdk
 decompiler/crates/unlace-analysis/tests/fixtures/objc_sdk` (whose `Widget.h` declares
 an `NSInteger tag`) also `check(objc_msgSend$tag(a1),a2,2,"bad tag")`.
+### `macho_swift_strcmp_arm64` — Swift string literals compared for equality (`swiftstr`)
+
+`macho_swift_strcmp_arm64` (arm64, ~50 KB, stripped) is the fixture for
+`tests/stages/kuna-swiftstrcmp.xml`: `s == "lit"` against small literals,
+which tests both words of the string inline (`x0 == count && x1 == object`)
+before it calls `_stringCompareWithSmolCheck`. Its source
+`macho_swift_strcmp.swift` is built on Linux with the swiftly 6.4.2 toolchain
+and the Darwin Swift SDK bundle (MacOSX 27.3 SDK); the binary carries no SDK
+content, only its import names:
+
+```bash
+B=~/.swiftpm/swift-sdks/darwin.artifactbundle
+SDK=$B/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+RES=$B/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift
+swiftc -target arm64-apple-macosx13.0 -sdk $SDK -resource-dir $RES -O \
+       -module-name strcmp -c macho_swift_strcmp.swift -o m.o
+$B/toolset/bin/ld64.lld -arch arm64 -platform_version macos 13.0 27.3 -syslibroot $SDK \
+       -L $SDK/usr/lib/swift -lSystem -lswiftCore -o strcmp m.o
+llvm-strip --strip-all -o macho_swift_strcmp_arm64 strcmp
+```
+
+**Pinned VMAs** (the unstripped `strcmp` symbol table): `strcmp.model(_:)`
+(`$s6strcmp5modelySiSSF`)@`0x100000778` ("iPod5,1", "iPhone3,1", "iPad2,1").
 
 ### `swift_metadata_elf` — a stripped Swift executable (`swiftmetadata`)
 

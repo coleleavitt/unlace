@@ -1,0 +1,21 @@
+[package]
+name = "unlace-bench"
+description = "CodSpeed/divan benchmarks: SLEIGH load, image load, lift and decompile on committed fixtures"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dev-dependencies]
+unlace-base.workspace = true
+unlace-console.workspace = true
+unlace-sleigh.workspace = true
+divan = { package = "codspeed-divan-compat", version = "6.1.0" }
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "decompiler"
+harness = false

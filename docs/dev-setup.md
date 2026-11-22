@@ -71,6 +71,23 @@ Individually, on dev binaries: `make test BINDIR=$CARGO_TARGET_DIR/debug`,
 `make test-stages BINDIR=$CARGO_TARGET_DIR/debug`, `make check-spec`,
 `$CARGO_TARGET_DIR/debug/unlace catalog --check`.
 
+## Benchmarks
+
+`decompiler/crates/unlace-bench` holds a divan benchmark suite over committed fixtures:
+`.sla` decode (x86-64, AArch64), image load (an x86-64 ELF and an arm64 Mach-O), the raw
+p-code lift of one function, and full decompiles of a jump-table switch, an arm64 Mach-O
+caller and an irreducible loop. It reads the compiled specs (`$KUNA_SPECS`, else `specs/`).
+`.github/workflows/codspeed.yml` runs it under CodSpeed's CPU simulation on every push to
+main and every PR; results are at <https://codspeed.io/coleleavitt/unlace>.
+
+```bash
+cd decompiler && cargo bench -p unlace-bench                  # wall-clock, plain divan
+cargo install --locked cargo-codspeed                         # once
+cd decompiler && cargo codspeed build -p unlace-bench && cargo codspeed run -p unlace-bench
+```
+
+Locally `cargo codspeed run` only checks that every benchmark runs; measurements come from CI.
+
 ## Git hooks
 
 ```bash

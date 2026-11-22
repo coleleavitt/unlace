@@ -1,0 +1,62 @@
+name: CodSpeed
+
+# Benchmarks in decompiler/crates/unlace-bench, measured by CodSpeed's CPU
+# simulation on every push to main and every PR. workflow_dispatch lets CodSpeed
+# backfill a baseline.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # OIDC authentication with CodSpeed
+
+concurrency:
+  group: codspeed-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmarks:
+    name: CodSpeed benchmarks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable) and cargo-codspeed
+        uses: moonrepo/setup-rust@v1
+        with:
+          channel: stable
+          profile: minimal
+          bins: cargo-codspeed
+          cache: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: decompiler
+          key: codspeed
+
+      # The benches read the compiled .sla tree from specs/.
+      - name: Compile the SLEIGH specs
+        run: make specs
+
+      - name: Build the benchmarks
+        working-directory: decompiler
+        run: cargo codspeed build -p unlace-bench
+
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
+          working-directory: decompiler
+          run: cargo codspeed run -p unlace-bench

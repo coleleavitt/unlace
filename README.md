@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/coleleavitt/unlace/actions/workflows/tests.yml"><img src="https://github.com/coleleavitt/unlace/actions/workflows/tests.yml/badge.svg?branch=main" alt="Tests"></a>
+  <a href="https://codspeed.io/coleleavitt/unlace"><img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
 </p>
 

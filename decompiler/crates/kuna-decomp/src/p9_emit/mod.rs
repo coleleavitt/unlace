@@ -20,10 +20,12 @@ pub mod kuna_unknowncasts;
 pub mod kuna_signedread; // (kuna) a signed read of an expression that prints unsigned casts it back
 pub(crate) mod kuna_rustsigned;
 pub(crate) mod kuna_rustintegers;
+pub(crate) mod kuna_rustwrapping;
 pub(crate) mod kuna_rustboolcast;
 pub(crate) mod kuna_callresult;
 pub(crate) mod kuna_callargextend;
 pub(crate) mod kuna_ruststorevalue;
+mod kuna_ruststorewidth;
 pub(crate) mod kuna_rustptradd;
 pub(crate) mod kuna_rustarrayindex;
 pub(crate) mod kuna_rustarrayaddr;
@@ -63,8 +65,10 @@ pub mod kuna_arraycoverwidth;
 pub mod kuna_bytearrayc;
 pub(crate) mod kuna_bytearrayslice;
 pub mod kuna_armregistershift; // (kuna) defined C for ARM register-controlled LSL
-mod kuna_armconstantshift;
+pub mod kuna_armconstantshift;
+pub(crate) mod kuna_acleintrinsics; // (kuna) AArch64 barrier, hint and memory-tagging user ops as ACLE intrinsics
 pub mod kuna_emptystrconst;
+pub mod kuna_cstringconst;
 pub mod kuna_cfstr; // (kuna) CFSTR("...") for a Mach-O __cfstring entry
 pub mod kuna_swiftstrobj; // (kuna) a Swift string object is not a pointer to the bytes it lands on
 pub mod kuna_renderfault; // (kuna) test-only: panic one function's render partway through
@@ -82,9 +86,13 @@ pub mod kuna_namedglobals;
 pub mod kuna_globalref; // (kuna) a constant address used as a pointer prints as its global
 pub mod kuna_namespaces; // (kuna) which namespaces print in front of a name
 pub mod kuna_funcptrnames;
+pub(crate) mod kuna_rustfuncptr;
 pub mod kuna_lang; // (kuna) the output-language plane: profile + capabilities
 pub mod kuna_langtypes; // (kuna) the type-spelling seam (TypeSpeller + SpellCtx)
 pub(crate) mod kuna_gopairreturns;
+mod kuna_gozerorecord;
+mod kuna_gostringindex;
+pub(crate) mod kuna_goatomicreturn;
 pub mod kuna_langc; // (kuna) the c-language policy objects (CSpeller)
 pub mod kuna_rustfmt;
 pub(crate) mod kuna_rustfmtliteral;
@@ -99,7 +107,9 @@ pub(crate) mod kuna_rustfmtpieces;
 pub mod kuna_langrust; // (kuna) the rust-language policy objects (profile + caps)
 pub mod kuna_langgo;
 pub(crate) mod kuna_gopointerarith;
+pub(crate) mod kuna_goorderedcompare;
 pub mod kuna_gopackage;
+mod kuna_gomethod;
 pub(crate) mod kuna_gobyteview;
 pub(crate) mod kuna_gobyteextract;
 pub mod kuna_rusttypes; // (kuna) the rust-language type speller
@@ -107,6 +117,7 @@ pub mod kuna_langjava; // (kuna) the java-language profile and type speller
 pub mod kuna_javanew; // (kuna) `new T(args)` from an allocation and its <init> call
 pub(crate) mod kuna_rustextend;
 pub(crate) mod kuna_rustuserop;
+mod kuna_rustoption;
 pub mod kuna_ctypes; // (kuna) valid per-architecture C spelling of the core types
 pub mod coreaction_render;
 pub mod kuna_srcmap; // (kuna) the token-level source map of a rendered function
@@ -119,3 +130,9 @@ pub(crate) mod kuna_indirectargs;
 pub mod kuna_callprototypes;
 
 pub(crate) mod kuna_gostorevalue;
+
+pub(crate) mod kuna_constantshift;
+
+pub mod kuna_widenedadd;
+
+pub mod kuna_returnselector;

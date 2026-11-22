@@ -40,7 +40,7 @@
 use kuna_base::address::Address;
 use kuna_base::error::{KunaError, KunaResult};
 use kuna_base::space::spacetype;
-use kuna_base::types::{int4, uint4, uintb};
+use kuna_base::types::{int4, uintb};
 
 use kuna_num::opcodes::OpCode;
 
@@ -2511,8 +2511,10 @@ impl Funcdata {
         shared: &mut Option<Funcdata>,
     ) -> Result<Option<usize>, crate::jumptable::RecoveryMode> {
         use crate::jumptable::RecoveryMode;
+        let encoding = crate::kuna_indirectreturn::target_encoding(self, op);
         // linkJumpTable: search for a pre-existing table.
         if let Some(idx) = self.link_jump_table(op) {
+            self.get_jump_table_mut(idx as int4).kuna_set_target_encoding(encoding);
             let jt = self.get_jump_table(idx as int4);
             if !jt.is_override() && !jt.is_partial() && jt.num_entries() != 0 {
                 return Ok(Some(idx)); // Previously calculated, complete, non-override
@@ -2538,7 +2540,8 @@ impl Funcdata {
         }
         // Trial recovery into a fresh table appended to jumpvec.
         let addr = self.obank().get(op).unwrap().get_addr().clone();
-        let trial = crate::jumptable::JumpTable::new(addr);
+        let mut trial = crate::jumptable::JumpTable::new(addr);
+        trial.kuna_set_target_encoding(encoding);
         self.jumpvec_mut().push(trial);
         let idx = self.num_jump_tables() as usize - 1;
         let mode = self.stage_jump_table(idx, op, record_loads, visited, run_pipeline, shared);
@@ -2682,6 +2685,9 @@ impl Funcdata {
             }
         }
         partial.truncated_flow_clone(self)?;
+        partial.kuna_extent_tables = self.kuna_extent_tables.clone();
+        partial.kuna_later_tables = self.kuna_later_tables.clone();
+        partial.kuna_later_wanted = std::rc::Rc::clone(&self.kuna_later_wanted);
         Ok(partial)
     }
 
@@ -2871,8 +2877,8 @@ impl Funcdata {
         self.node_split_cloning(b, inedge, false).map(|_| ())
     }
 
-    /// (kuna `unmergecall`) [`Self::node_split`] for a block holding calls: each
-    /// cloned call gets its own call spec.  Returns the new block.
+    /// (kuna `returndup calls`) [`Self::node_split`] for a block holding calls:
+    /// each cloned call gets its own call spec.  Returns the new block.
     pub fn node_split_calls(&mut self, b: BlockId, inedge: int4) -> KunaResult<BlockId> {
         self.node_split_cloning(b, inedge, true)
     }
@@ -4194,8 +4200,9 @@ struct CloneBlockOps {
     clone_list: Vec<(OpId, OpId)>,
     /// Map from original op to its clone (C++ `origToClone`).
     orig_to_clone: std::collections::BTreeMap<OpId, OpId>,
-    /// (kuna `unmergecall`) Clone CALLs and INDIRECTs too: each cloned call gets
-    /// its own copy of the call spec, and a cloned INDIRECT names the cloned call.
+    /// (kuna `returndup calls`) Clone CALLs and INDIRECTs too: each cloned call
+    /// gets its own copy of the call spec, and a cloned INDIRECT names the
+    /// cloned call.
     calls: bool,
 }
 
@@ -4358,7 +4365,7 @@ impl CloneBlockOps {
             .expect("cloneExpression: last clone has output"))
     }
 
-    /// (kuna `unmergecall`) Give the clone of a call op its own copy of the
+    /// (kuna `returndup calls`) Give the clone of a call op its own copy of the
     /// original's call spec; returns the new spec's fspec handle.
     fn clone_call_spec(&self, data: &mut Funcdata, orig_op: OpId, clone_op: OpId) -> Option<uintb> {
         let idx = data.get_call_specs_index(orig_op)?;

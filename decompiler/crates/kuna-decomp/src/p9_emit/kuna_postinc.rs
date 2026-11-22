@@ -1,7 +1,7 @@
 //! (kuna `postinc`) `v = *p; p = p + 1;` prints as `v = *p++;`.
 //!
-//! Hex-Rays folds a pointer step after the statement that dereferences the
-//! pointer into a post-increment (ctree rule `*p++`). [`ActionPostIncrement`]
+//! C source steps a pointer through a buffer with `*p++`, which compilers lower
+//! to a load or store followed by a pointer add. [`ActionPostIncrement`]
 //! runs once variables, casts and structure are final. An in-place step
 //! `p = p + c` (`INT_ADD` or `PTRADD` whose output and first input are the same
 //! variable) folds when the value it steps is read by exactly one other op, a

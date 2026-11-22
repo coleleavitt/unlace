@@ -66,6 +66,7 @@ pub mod kuna_simdlane;
 pub mod kuna_x87truncate;
 pub mod kuna_bitidioms;
 pub mod kuna_alloca; // (kuna) a dynamic stack allocation becomes alloca(size)
+pub mod kuna_opaquepredicate;
 pub mod kuna_cancelbytearithmetic;
 pub mod kuna_wideslice;
 pub mod kuna_devectorize;

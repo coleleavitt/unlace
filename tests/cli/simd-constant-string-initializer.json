@@ -5,7 +5,10 @@
     "{{KUNA}}",
     "decompile",
     "{{BIN}}",
-    "alphabet_init"
+    "alphabet_init",
+    "--option",
+    "globalwidth",
+    "off"
   ],
   "cwd": "{{WORK}}",
   "env": {

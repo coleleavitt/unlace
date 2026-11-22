@@ -23,70 +23,30 @@ const MH_MAGIC_64: u32 = 0xfeed_facf;
 const CPU_TYPE_ARM64: u32 = 0x0100_000c;
 const CPU_TYPE_ARM64_32: u32 = 0x0200_000c;
 const CPU_TYPE_X86_64: u32 = 0x0100_0007;
-const LC_SYMTAB: u32 = 0x2;
-const LC_DYSYMTAB: u32 = 0xb;
-const LC_DYLD_INFO: u32 = 0x22;
-const LC_DYLD_INFO_ONLY: u32 = 0x8000_0022;
-const LC_FUNCTION_STARTS: u32 = 0x26;
+pub(super) const LC_SEGMENT_64: u32 = 0x19;
+pub(super) const LC_SYMTAB: u32 = 0x2;
+pub(super) const LC_DYSYMTAB: u32 = 0xb;
+pub(super) const LC_DYLD_INFO: u32 = 0x22;
+pub(super) const LC_DYLD_INFO_ONLY: u32 = 0x8000_0022;
+pub(super) const LC_FUNCTION_STARTS: u32 = 0x26;
 const LC_DATA_IN_CODE: u32 = 0x29;
 const LC_DYLD_EXPORTS_TRIE: u32 = 0x8000_0033;
 pub(crate) const LC_NOTE: u32 = 0x31;
-const LINKEDIT_DATA_COMMANDS: &[u32] =
+pub(super) const LINKEDIT_DATA_COMMANDS: &[u32] =
     &[0x1d, 0x1e, LC_FUNCTION_STARTS, LC_DATA_IN_CODE, 0x2b, 0x2e, LC_DYLD_EXPORTS_TRIE, 0x8000_0034, 0x36, 0x37, 0x38];
-/// Section types that index the indirect-symbol table, which a companion's
-/// sections must not do in a merged image: the table there is the primary's.
-const INDIRECT_SECTION_TYPES: [u32; 6] = [0x5, 0x6, 0x7, 0x8, 0x10, 0x15];
-const INDIRECT_SYMBOL_LOCAL: u32 = 0x8000_0000;
-const INDIRECT_SYMBOL_ABS: u32 = 0x4000_0000;
+pub(super) const INDIRECT_SYMBOL_LOCAL: u32 = 0x8000_0000;
+pub(super) const INDIRECT_SYMBOL_ABS: u32 = 0x4000_0000;
 const N_STAB: u8 = 0xe0;
 const N_TYPE: u8 = 0x0e;
 const N_SECT: u8 = 0x0e;
 const N_EXT: u8 = 0x01;
-const N_PEXT: u8 = 0x10;
-const PAGE: u64 = 0x4000;
+pub(super) const PAGE: u64 = 0x4000;
 /// The name the cache builder leaves on a local it moved to the local-symbols file.
 const REDACTED: &[u8] = b"<redacted>";
+/// `LC_LOAD_DYLIB`, `LC_LOAD_WEAK_DYLIB`, `LC_REEXPORT_DYLIB`,
+/// `LC_LAZY_LOAD_DYLIB`, `LC_LOAD_UPWARD_DYLIB`: the commands two-level
+/// ordinals count.
 const DYLIB_COMMANDS: [u32; 5] = [0xc, 0x8000_0018, 0x8000_001f, 0x20, 0x8000_0023];
-/// A cache image's load commands are far smaller than this; a larger
-/// `sizeofcmds` is a malformed header.
-const MAX_SIZEOFCMDS: usize = 1 << 20;
-
-/// Every load command lies inside `cmds` and holds the fields it is read for,
-/// so the fixed-offset reads and writes of the rebuild stay in bounds.
-fn validate_commands(cmds: &[u8], w: Width) -> Result<(), String> {
-    let mut at = 0usize;
-    while at < cmds.len() {
-        let (Some(cmd), Some(size)) = (cmds.get(at..at + 4), cmds.get(at + 4..at + 8)) else {
-            return Err("truncated load command".into());
-        };
-        let cmd = u32::from_le_bytes(cmd.try_into().unwrap());
-        let size = u32::from_le_bytes(size.try_into().unwrap()) as usize;
-        let need = match cmd {
-            c if c == w.seg_cmd => {
-                let nsects = cmds
-                    .get(at + w.seg[4]..at + w.seg[4] + 4)
-                    .map_or(usize::MAX, |s| u32::from_le_bytes(s.try_into().unwrap()) as usize);
-                w.sect0.saturating_add(nsects.saturating_mul(w.sect_size))
-            }
-            LC_SYMTAB => 24,
-            LC_DYSYMTAB => 80,
-            LC_DYLD_INFO | LC_DYLD_INFO_ONLY => 48,
-            c if LINKEDIT_DATA_COMMANDS.contains(&c) => 16,
-            c if DYLIB_COMMANDS.contains(&c) => 16,
-            _ => 8,
-        };
-        if size < need || size > cmds.len() - at {
-            return Err(format!("load command {cmd:#x} at offset {at:#x} is malformed"));
-        }
-        at += size;
-    }
-    Ok(())
-}
-
-/// Whether `[va, va + len)` lies inside the file-backed bytes of `s`.
-fn covers(s: &Segment, va: u64, len: usize) -> bool {
-    va >= s.vmaddr && (va - s.vmaddr).checked_add(len as u64).is_some_and(|end| end <= s.filesize)
-}
 
 #[cfg(test)]
 mod tests;
@@ -107,10 +67,10 @@ pub struct Width {
 
 /// `seg`: vmaddr, vmsize, fileoff, filesize, nsects. `sect`: addr, size,
 /// offset, reloff, flags, reserved1, reserved2.
-const WIDE: Width = Width {
+pub(super) const WIDE: Width = Width {
     wide: true,
     header: 32,
-    seg_cmd: 0x19,
+    seg_cmd: LC_SEGMENT_64,
     seg: [24, 32, 40, 48, 64],
     sect0: 72,
     sect_size: 80,
@@ -152,7 +112,7 @@ pub struct Section {
     pub reserved1: u32,
     pub reserved2: u32,
     /// Byte offset of this section header within the load commands.
-    cmd_offset: usize,
+    pub(super) cmd_offset: usize,
 }
 
 impl Section {
@@ -178,12 +138,12 @@ pub struct Segment {
     pub fileoff: u64,
     pub filesize: u64,
     pub sections: Vec<Section>,
-    cmd_offset: usize,
+    pub(super) cmd_offset: usize,
 }
 
 impl Segment {
     pub fn contains(&self, va: u64) -> bool {
-        va >= self.vmaddr && va - self.vmaddr < self.vmsize
+        va >= self.vmaddr && va < self.vmaddr.saturating_add(self.vmsize)
     }
 }
 
@@ -192,15 +152,15 @@ impl Segment {
 pub struct ImageLayout {
     pub address: u64,
     pub width: Width,
-    header: Vec<u8>,
-    cmds: Vec<u8>,
+    pub(super) header: Vec<u8>,
+    pub(super) cmds: Vec<u8>,
     pub segments: Vec<Segment>,
-    symtab: Option<usize>,
-    dysymtab: Option<usize>,
+    pub(super) symtab: Option<usize>,
+    pub(super) dysymtab: Option<usize>,
 }
 
 impl ImageLayout {
-    fn linkedit(&self) -> Option<&Segment> {
+    pub(super) fn linkedit(&self) -> Option<&Segment> {
         self.segments.iter().find(|s| s.name == "__LINKEDIT")
     }
 
@@ -214,17 +174,28 @@ impl ImageLayout {
         u32_at(&self.header, 24)
     }
 
-    fn cmd_u32(&self, at: usize) -> u32 {
+    pub(super) fn cmd_u32(&self, at: usize) -> u32 {
         u32_at(&self.cmds, at)
     }
 
-    /// The commands, as `(cmd, offset)` pairs.
-    fn commands(&self) -> Vec<(u32, usize)> {
+    /// The bytes of the command at `at`, one [`ImageLayout::commands`] listed.
+    pub(super) fn command(&self, at: usize) -> Result<&[u8], String> {
+        let size = self.cmd_u32(at + 4) as usize;
+        self.cmds.get(at..at.saturating_add(size)).ok_or_else(|| "load command runs past the commands".to_string())
+    }
+
+    /// The commands, as `(cmd, offset)` pairs. A command whose `cmdsize`, or
+    /// the bytes left, is short of the fixed fields of its kind is skipped, so
+    /// every field the rebuild reads or rewrites lies inside the commands.
+    pub(super) fn commands(&self) -> Vec<(u32, usize)> {
         let mut out = Vec::new();
         let mut at = 0;
         while at + 8 <= self.cmds.len() {
-            let size = u32_at(&self.cmds, at + 4) as usize;
-            out.push((u32_at(&self.cmds, at), at));
+            let (cmd, size) = (u32_at(&self.cmds, at), u32_at(&self.cmds, at + 4) as usize);
+            let need = min_cmdsize(cmd, self.width);
+            if size >= need && at + need <= self.cmds.len() {
+                out.push((cmd, at));
+            }
             if size < 8 {
                 break;
             }
@@ -239,7 +210,20 @@ impl ImageLayout {
     }
 }
 
-fn parse_layout(address: u64, width: Width, header: Vec<u8>, cmds: Vec<u8>) -> ImageLayout {
+/// The fixed size of a load command of kind `cmd`, as far as the rebuild reads it.
+fn min_cmdsize(cmd: u32, w: Width) -> usize {
+    match cmd {
+        c if c == w.seg_cmd => w.sect0,
+        LC_SYMTAB => 24,
+        LC_DYSYMTAB => 80,
+        LC_DYLD_INFO | LC_DYLD_INFO_ONLY => 48,
+        LC_NOTE => 40,
+        c if LINKEDIT_DATA_COMMANDS.contains(&c) || DYLIB_COMMANDS.contains(&c) => 16,
+        _ => 8,
+    }
+}
+
+pub(super) fn parse_layout(address: u64, width: Width, header: Vec<u8>, cmds: Vec<u8>) -> ImageLayout {
     let mut layout = ImageLayout { address, width, header, cmds, segments: Vec::new(), symtab: None, dysymtab: None };
     let w = width;
     let [vmaddr, vmsize, fileoff, filesize, nsects] = w.seg;
@@ -249,9 +233,10 @@ fn parse_layout(address: u64, width: Width, header: Vec<u8>, cmds: Vec<u8>) -> I
         match cmd {
             c_ if c_ == w.seg_cmd && c.len() >= w.sect0 => {
                 let n = u32_at(c, nsects) as usize;
+                let room = c.len().min(u32_at(c, 4) as usize);
                 let sections = (0..n)
                     .map(|i| w.sect0 + i * w.sect_size)
-                    .take_while(|&s| s + w.sect_size <= c.len())
+                    .take_while(|&s| s + w.sect_size <= room)
                     .map(|s| Section {
                         sectname: fixed_name(&c[s..s + 16]),
                         addr: w.word(c, s + addr),
@@ -280,6 +265,11 @@ fn parse_layout(address: u64, width: Width, header: Vec<u8>, cmds: Vec<u8>) -> I
     layout
 }
 
+#[cfg(test)]
+pub(super) fn tests_parse_layout(address: u64, header: Vec<u8>, cmds: Vec<u8>) -> ImageLayout {
+    parse_layout(address, WIDE, header, cmds)
+}
+
 fn fixed_name(raw: &[u8]) -> String {
     String::from_utf8_lossy(&raw[..raw.iter().position(|&b| b == 0).unwrap_or(raw.len())]).into_owned()
 }
@@ -295,14 +285,25 @@ pub struct Nlist {
 }
 
 impl Nlist {
-    pub(crate) fn parse_all(raw: &[u8], size: usize, pool: &super::StringPool) -> Vec<Nlist> {
+    /// Parse the `size`-byte nlists in `raw` (16 for 64-bit, 12 for 32-bit),
+    /// charging each copied name through `charge`.
+    pub(crate) fn parse_all(
+        raw: &[u8],
+        size: usize,
+        pool: &super::StringPool,
+        charge: &dyn Fn(u64) -> Result<(), String>,
+    ) -> Result<Vec<Nlist>, String> {
         raw.chunks_exact(size)
-            .map(|n| Nlist {
-                n_type: n[4],
-                n_sect: n[5],
-                n_desc: u16::from_le_bytes([n[6], n[7]]),
-                n_value: if size == 16 { u64_at(n, 8) } else { u64::from(u32_at(n, 8)) },
-                name: pool.get(u32_at(n, 0)).to_vec(),
+            .map(|n| {
+                let name = pool.get(u32_at(n, 0));
+                charge(name.len() as u64)?;
+                Ok(Nlist {
+                    n_type: n[4],
+                    n_sect: n[5],
+                    n_desc: u16::from_le_bytes([n[6], n[7]]),
+                    n_value: if size == 16 { u64_at(n, 8) } else { u64::from(u32_at(n, 8)) },
+                    name: name.to_vec(),
+                })
             })
             .collect()
     }
@@ -321,30 +322,34 @@ impl Nlist {
 }
 
 impl DyldCache {
-    /// The header and load commands of image `index`, read once.
+    /// The header and load commands of image `index`, read once per header
+    /// address. The load commands of all the headers read stay within the
+    /// cache's own size, so entries aliasing overlapping headers cannot
+    /// multiply it.
     pub fn image_layout(&self, index: usize) -> Result<Rc<ImageLayout>, String> {
-        if let Some(cached) = self.layouts.borrow().get(&index) {
+        let address = self.images.get(index).ok_or("image index out of range")?.address;
+        if let Some(cached) = self.layouts.borrow().get(&address) {
             return cached.clone().ok_or_else(|| format!("image {index} has no readable Mach-O header"));
         }
         let read = || -> Result<ImageLayout, String> {
-            let address = self.images.get(index).ok_or("image index out of range")?.address;
             let width = match u32_at(&self.read_va(address, 4)?, 0) {
                 MH_MAGIC_64 => WIDE,
                 MH_MAGIC => NARROW,
                 _ => return Err(format!("image at {address:#x} is not a Mach-O")),
             };
             let header = self.read_va(address, width.header)?;
-            let sizeofcmds = u32_at(&header, 20) as usize;
-            if sizeofcmds > MAX_SIZEOFCMDS {
-                return Err(format!("image at {address:#x} declares {sizeofcmds} bytes of load commands"));
+            let sizeofcmds = u32_at(&header, 20);
+            let used = self.layout_bytes.get() + sizeofcmds as u64;
+            if used > self.total_len {
+                return Err(format!("image at {address:#x}: load commands exceed the cache's size"));
             }
-            let cmds_at = address.checked_add(width.header as u64).ok_or("image header address overflows")?;
-            let cmds = self.read_va(cmds_at, sizeofcmds)?;
-            validate_commands(&cmds, width)?;
+            self.layout_bytes.set(used);
+            let cmds_va = address.checked_add(width.header as u64).ok_or("image header at the top of the address space")?;
+            let cmds = self.read_va(cmds_va, sizeofcmds as usize)?;
             Ok(parse_layout(address, width, header, cmds))
         };
         let layout = read().map(Rc::new);
-        self.layouts.borrow_mut().insert(index, layout.as_ref().ok().cloned());
+        self.layouts.borrow_mut().insert(address, layout.as_ref().ok().cloned());
         layout
     }
 
@@ -359,16 +364,19 @@ impl DyldCache {
         if nsyms == 0 {
             return Ok(Vec::new());
         }
+        self.charge(nsyms as u64 * super::NLIST_RETAINED)?;
         let sym_va = layout.linkedit_va(symoff).ok_or("symbol table lies outside __LINKEDIT")?;
         let str_va = layout.linkedit_va(stroff).ok_or("string table lies outside __LINKEDIT")?;
-        let raw = self.read_va(sym_va, nsyms * layout.width.nlist)?;
+        let nlist = layout.width.nlist;
+        let raw = self.read_va(sym_va, nsyms * nlist)?;
         let pool = super::StringPool::read(
-            &|off, len| self.read_va(str_va.checked_add(off).ok_or("string table offset overflows")?, len),
-            layout.width.nlist,
+            &|off, len| self.read_va(str_va.checked_add(off).ok_or("string table address overflows")?, len),
+            nlist,
             strsize,
             &raw,
+            &|n| self.charge(n),
         )?;
-        Ok(Nlist::parse_all(&raw, layout.width.nlist, &pool))
+        Nlist::parse_all(&raw, nlist, &pool, &|n| self.charge(n))
     }
 
     /// Image `index`'s indirect-symbol table, as read from the cache.
@@ -381,29 +389,11 @@ impl DyldCache {
         if count == 0 {
             return Ok(Vec::new());
         }
+        self.charge(count as u64 * 4)?;
         let va = layout
             .linkedit_va(layout.cmd_u32(at + 56))
             .ok_or("indirect-symbol table lies outside __LINKEDIT")?;
         Ok(self.read_va(va, count * 4)?.chunks_exact(4).map(|c| u32_at(c, 0)).collect())
-    }
-
-    /// Image `index`'s named, defined symbols (its locals from the
-    /// local-symbols file first) as locals of a merged image whose section
-    /// ordinals for this image start after `section_base`. A symbol whose
-    /// ordinal would pass 255 is dropped.
-    fn companion_symbols(&self, index: usize, section_base: usize) -> Result<Vec<Nlist>, String> {
-        let locals = self.local_symbols(index)?;
-        let own = self.image_symbols(index)?;
-        Ok(locals
-            .into_iter()
-            .chain(own)
-            .filter(|s| s.names_address())
-            .filter_map(|mut s| {
-                s.n_sect = u8::try_from(usize::from(s.n_sect) + section_base).ok()?;
-                s.n_type &= !(N_EXT | N_PEXT);
-                Some(s)
-            })
-            .collect())
     }
 
     /// Image `index`'s export trie bytes, empty when it has none.
@@ -418,6 +408,7 @@ impl DyldCache {
             if size == 0 {
                 continue;
             }
+            self.charge(size as u64)?;
             let va = layout.linkedit_va(off).ok_or("export trie lies outside __LINKEDIT")?;
             return self.read_va(va, size as usize);
         }
@@ -427,29 +418,16 @@ impl DyldCache {
     /// Image `index`'s dylib load commands in ordinal order: `(cmd, install name)`.
     pub(crate) fn image_dependencies(&self, index: usize) -> Result<Vec<(u32, String)>, String> {
         let layout = self.image_layout(index)?;
-        Ok(layout
-            .commands()
-            .into_iter()
-            .filter(|(cmd, _)| DYLIB_COMMANDS.contains(cmd))
-            .map(|(cmd, at)| {
-                let name_at = at + layout.cmd_u32(at + 8) as usize;
-                let size = layout.cmd_u32(at + 4) as usize;
-                let raw = layout.cmds.get(name_at..at + size).unwrap_or(&[]);
-                (cmd, fixed_name(raw))
-            })
-            .collect())
+        let mut deps = Vec::new();
+        for (cmd, at) in layout.commands().into_iter().filter(|(cmd, _)| DYLIB_COMMANDS.contains(cmd)) {
+            let raw = layout.command(at)?;
+            deps.push((cmd, fixed_name(raw.get(u32_at(raw, 8) as usize..).unwrap_or(&[]))));
+        }
+        Ok(deps)
     }
 
     /// Rebuild image `index` as a standalone thin Mach-O.
     pub fn extract(&self, index: usize) -> Result<Vec<u8>, String> {
-        self.extract_with(index, &[])
-    }
-
-    /// Rebuild image `index` with the segments and symbols of `companions`
-    /// added, so code in those images is mapped, named and decompilable in the
-    /// same program. A companion's symbols become locals; the primary image
-    /// keeps its own imports, exports and cross-image names.
-    pub fn extract_with(&self, index: usize, companions: &[usize]) -> Result<Vec<u8>, String> {
         let layout = self.image_layout(index)?;
         let cputype = u32_at(&layout.header, 4);
         if ![CPU_TYPE_ARM64, CPU_TYPE_ARM64_32, CPU_TYPE_X86_64].contains(&cputype) {
@@ -457,35 +435,20 @@ impl DyldCache {
         }
         let w = layout.width;
         layout.linkedit().ok_or("image has no __LINKEDIT segment")?;
-        let companions: Vec<(usize, Rc<ImageLayout>)> = companions
-            .iter()
-            .filter(|&&c| c != index)
-            .map(|&c| self.image_layout(c).map(|l| (c, l)))
-            .collect::<Result<_, _>>()?;
-        if companions.iter().any(|(_, l)| l.width.wide != w.wide) {
-            return Err("companion images must have the primary image's pointer width".into());
-        }
 
         let mut out = Vec::new();
         let mut placed: Vec<(usize, u64)> = Vec::new();
         let text = layout.segments.iter().position(|s| s.vmaddr == layout.address).unwrap_or(0);
-        let reserved = if companions.is_empty() {
-            None
-        } else {
-            let extra: usize = companions
-                .iter()
-                .flat_map(|(_, l)| companion_cmds(l).into_iter().map(|(i, _)| segment_cmd_size(l, i)))
-                .sum();
-            Some(align((w.header + layout.cmds.len() + 40 + extra) as u64, PAGE))
-        };
-        out.resize(reserved.unwrap_or(0) as usize, 0);
         let order = std::iter::once(text).chain((0..layout.segments.len()).filter(|&i| i != text));
         for i in order {
             let seg = &layout.segments[i];
             if seg.name == "__LINKEDIT" {
                 continue;
             }
-            let offset = if i == text && reserved.is_none() { 0 } else { align(out.len() as u64, PAGE) };
+            let offset = if i == text { 0 } else { align(out.len() as u64, PAGE) };
+            if offset.saturating_add(seg.filesize) > self.total_len {
+                return Err(format!("image segments add up to more than the cache holds at {}", seg.name));
+            }
             out.resize(offset as usize, 0);
             if seg.filesize > 0 {
                 out.extend(self.read_slid(seg.vmaddr, seg.filesize as usize)?);
@@ -493,53 +456,30 @@ impl DyldCache {
             placed.push((i, offset));
         }
         let file_offset_of = |i: usize| placed.iter().find(|p| p.0 == i).map(|p| p.1);
-        let mut companion_placed: Vec<Vec<(usize, u64)>> = Vec::new();
-        for (_, l) in &companions {
-            let mut segs = Vec::new();
-            for (i, seg) in companion_cmds(l) {
-                let offset = align(out.len() as u64, PAGE);
-                out.resize(offset as usize, 0);
-                if seg.filesize > 0 {
-                    out.extend(self.read_slid(seg.vmaddr, seg.filesize as usize)?);
-                }
-                segs.push((i, offset));
-            }
-            companion_placed.push(segs);
-        }
 
-        let mut xrefs = {
+        let xrefs = {
             let view = |va: u64, len: usize| -> Option<&[u8]> {
-                let (i, off) = placed.iter().find(|(i, _)| covers(&layout.segments[*i], va, len))?;
+                let (i, off) = placed.iter().find(|(i, _)| {
+                    let s = &layout.segments[*i];
+                    va >= s.vmaddr
+                        && va.checked_add(len as u64).is_some_and(|end| end <= s.vmaddr.saturating_add(s.filesize))
+                })?;
                 let start = (off + (va - layout.segments[*i].vmaddr)) as usize;
                 out.get(start..start + len)
             };
-            super::xrefs::collect(self, index, &layout, cputype != CPU_TYPE_X86_64, false, &view)
+            super::xrefs::collect(self, index, &layout, cputype != CPU_TYPE_X86_64, &view)
         };
 
-        for ((c, l), segs) in companions.iter().zip(&companion_placed) {
-            let view = |va: u64, len: usize| -> Option<&[u8]> {
-                let (i, off) = segs.iter().find(|(i, _)| covers(&l.segments[*i], va, len))?;
-                let start = (off + (va - l.segments[*i].vmaddr)) as usize;
-                out.get(start..start + len)
-            };
-            xrefs.extend(super::xrefs::collect(self, *c, l, cputype != CPU_TYPE_X86_64, true, &view));
-        }
-        let mut section_base = layout.segments.iter().map(|s| s.sections.len()).sum::<usize>();
-        let mut extra_symbols = Vec::new();
-        for (c, l) in &companions {
-            extra_symbols.extend(self.companion_symbols(*c, section_base)?);
-            section_base += l.segments.iter().map(|s| s.sections.len()).sum::<usize>();
-        }
-        let linkedit = self.build_linkedit(index, &layout, &xrefs, extra_symbols)?;
+        let linkedit = self.build_linkedit(index, &layout, &xrefs)?;
         let le_offset = align(out.len() as u64, PAGE);
         out.resize(le_offset as usize, 0);
         out.extend(&linkedit.bytes);
 
         let mut cmds = layout.cmds.clone();
+        let [_, vmsize, fileoff, filesize, _] = w.seg;
+        let [_, _, sect_offset, reloff, ..] = w.sect;
         for (seg_index, seg) in layout.segments.iter().enumerate() {
             let at = seg.cmd_offset;
-            let [_, vmsize, fileoff, filesize, _] = w.seg;
-            let [_, _, sect_offset, reloff, ..] = w.sect;
             if seg.name == "__LINKEDIT" {
                 w.put_word(&mut cmds, at + vmsize, align(linkedit.bytes.len() as u64, PAGE));
                 w.put_word(&mut cmds, at + fileoff, le_offset);
@@ -549,7 +489,8 @@ impl DyldCache {
             let base = file_offset_of(seg_index).unwrap_or(0);
             w.put_word(&mut cmds, at + fileoff, base);
             for sec in &seg.sections {
-                let offset = if sec.is_zerofill() || sec.size == 0 { 0 } else { base + (sec.addr - seg.vmaddr) };
+                let offset =
+                    if sec.is_zerofill() || sec.size == 0 { 0 } else { base.wrapping_add(sec.addr.wrapping_sub(seg.vmaddr)) };
                 put_u32(&mut cmds, sec.cmd_offset + sect_offset, offset as u32);
                 put_u32(&mut cmds, sec.cmd_offset + reloff, 0);
                 put_u32(&mut cmds, sec.cmd_offset + reloff + 4, 0);
@@ -595,29 +536,6 @@ impl DyldCache {
             }
         }
         let mut ncmds = u32_at(&layout.header, 16);
-        for ((_, l), segs) in companions.iter().zip(&companion_placed) {
-            let [_, _, fileoff, _, _] = w.seg;
-            let [_, _, sect_offset, reloff, ..] = w.sect;
-            for &(i, base) in segs {
-                let seg = &l.segments[i];
-                let start = seg.cmd_offset;
-                let mut cmd = l.cmds[start..start + segment_cmd_size(l, i)].to_vec();
-                w.put_word(&mut cmd, fileoff, base);
-                for sec in &seg.sections {
-                    let at = sec.cmd_offset - start;
-                    let offset = if sec.is_zerofill() || sec.size == 0 { 0 } else { base + (sec.addr - seg.vmaddr) };
-                    put_u32(&mut cmd, at + sect_offset, offset as u32);
-                    put_u32(&mut cmd, at + reloff, 0);
-                    put_u32(&mut cmd, at + reloff + 4, 0);
-                    if INDIRECT_SECTION_TYPES.contains(&sec.section_type()) {
-                        let flags = w.sect[4];
-                        put_u32(&mut cmd, at + flags, sec.flags & !0xff);
-                    }
-                }
-                cmds.extend(cmd);
-                ncmds += 1;
-            }
-        }
         if let Some((off, size)) = linkedit.note {
             let mut note = Vec::with_capacity(40);
             note.extend(LC_NOTE.to_le_bytes());
@@ -633,18 +551,15 @@ impl DyldCache {
             .sections
             .iter()
             .filter(|s| s.size > 0 && !s.is_zerofill())
-            .map(|s| s.addr - layout.segments[text].vmaddr)
+            .map(|s| s.addr.saturating_sub(layout.segments[text].vmaddr))
             .min()
             .unwrap_or(layout.segments[text].filesize);
-        if (w.header + cmds.len()) as u64 > reserved.unwrap_or(room) {
+        if (w.header + cmds.len()) as u64 > room || w.header + cmds.len() > out.len() {
             return Err(format!(
                 "no room for {} bytes of load commands before the first section of {}",
                 cmds.len(),
                 self.images[index].path
             ));
-        }
-        if out.len() < w.header + cmds.len() {
-            return Err(format!("{} is too short to hold its load commands", self.images[index].path));
         }
         let mut header = layout.header.clone();
         put_u32(&mut header, 16, ncmds);
@@ -659,7 +574,6 @@ impl DyldCache {
         index: usize,
         layout: &ImageLayout,
         xrefs: &[super::xrefs::Xref],
-        extra_symbols: Vec<Nlist>,
     ) -> Result<Linkedit, String> {
         let mut symbols = self.image_symbols(index)?;
         let mut dysymtab = [0u32; 6];
@@ -670,7 +584,7 @@ impl DyldCache {
             }
             let [ilocal, nlocal, ..] = dysymtab;
             let locals = self.local_symbols(index)?;
-            let local_end = ilocal.checked_add(nlocal).ok_or("local symbol range overflows")? as usize;
+            let local_end = ilocal.checked_add(nlocal).map_or(usize::MAX, |end| end as usize);
             let replace = !locals.is_empty() && local_end <= symbols.len();
             let added = if replace { locals.len() as i64 - nlocal as i64 } else { 0 };
             let remap = |old: u32| -> u32 {
@@ -696,32 +610,13 @@ impl DyldCache {
             }
         }
 
-        if !extra_symbols.is_empty() {
-            let at = match layout.dysymtab {
-                Some(_) => dysymtab[0].checked_add(dysymtab[1]).ok_or("local symbol range overflows")? as usize,
-                None => symbols.len(),
-            };
-            let at = at.min(symbols.len());
-            let n = extra_symbols.len() as u32;
-            symbols.splice(at..at, extra_symbols);
-            if layout.dysymtab.is_some() {
-                for field in [1, 2, 4] {
-                    dysymtab[field] = dysymtab[field].checked_add(n).ok_or("symbol count overflows")?;
-                }
-            }
-            for v in indirect.iter_mut().filter(|v| **v & (INDIRECT_SYMBOL_LOCAL | INDIRECT_SYMBOL_ABS) == 0) {
-                if *v as usize >= at {
-                    *v = v.checked_add(n).ok_or("indirect symbol index overflows")?;
-                }
-            }
-        }
         for sym in symbols.iter_mut().filter(|s| s.name == REDACTED) {
             sym.name.clear();
         }
         let mut le = Linkedit::default();
         let mut strings = vec![0u8];
-        let w = layout.width;
-        let mut nlists = Vec::with_capacity(symbols.len() * w.nlist);
+        let wide = layout.width.wide;
+        let mut nlists = Vec::with_capacity(symbols.len() * layout.width.nlist);
         for sym in &symbols {
             let strx = if sym.name.is_empty() {
                 0
@@ -734,7 +629,7 @@ impl DyldCache {
             nlists.extend(strx.to_le_bytes());
             nlists.extend([sym.n_type, sym.n_sect]);
             nlists.extend(sym.n_desc.to_le_bytes());
-            if w.wide {
+            if wide {
                 nlists.extend(sym.n_value.to_le_bytes());
             } else {
                 nlists.extend((sym.n_value as u32).to_le_bytes());
@@ -779,8 +674,8 @@ impl DyldCache {
 
 /// The private `__LINKEDIT` being assembled; offsets are from its start.
 #[derive(Default)]
-struct Linkedit {
-    bytes: Vec<u8>,
+pub(super) struct Linkedit {
+    pub(super) bytes: Vec<u8>,
     symoff: u64,
     nsyms: u32,
     stroff: u64,
@@ -793,7 +688,7 @@ struct Linkedit {
 }
 
 impl Linkedit {
-    fn push(&mut self, data: &[u8]) -> u64 {
+    pub(super) fn push(&mut self, data: &[u8]) -> u64 {
         let at = align(self.bytes.len() as u64, 8);
         self.bytes.resize(at as usize, 0);
         self.bytes.extend(data);
@@ -805,24 +700,14 @@ impl Linkedit {
     }
 }
 
-/// The segments of `layout` a merged image copies: all but `__LINKEDIT`.
-fn companion_cmds(layout: &ImageLayout) -> Vec<(usize, &Segment)> {
-    layout.segments.iter().enumerate().filter(|(_, s)| s.name != "__LINKEDIT").collect()
-}
-
-/// The byte size of segment command `index` of `layout`.
-fn segment_cmd_size(layout: &ImageLayout, index: usize) -> usize {
-    u32_at(&layout.cmds, layout.segments[index].cmd_offset + 4) as usize
-}
-
-fn align(v: u64, to: u64) -> u64 {
+pub(super) fn align(v: u64, to: u64) -> u64 {
     v.div_ceil(to) * to
 }
 
-fn put_u32(b: &mut [u8], at: usize, v: u32) {
+pub(super) fn put_u32(b: &mut [u8], at: usize, v: u32) {
     b[at..at + 4].copy_from_slice(&v.to_le_bytes());
 }
 
-fn put_u64(b: &mut [u8], at: usize, v: u64) {
+pub(super) fn put_u64(b: &mut [u8], at: usize, v: u64) {
     b[at..at + 8].copy_from_slice(&v.to_le_bytes());
 }

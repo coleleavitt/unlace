@@ -1,189 +1,157 @@
-//! (kuna) `runtime.moduledata`, read through a layout table per Go release.
+//! Go pclntab recovery through `runtime.firstmoduledata` when the `pcHeader`
+//! magic is not one of the four known values.
 //!
-//! The linker emits one `moduledata` per module (`runtime.firstmoduledata`),
-//! the runtime's index of its own image: the pclntab slices, the text and data
-//! bounds, the type blob (`types`, `etypes`) and the `typelinks` and
-//! `itablinks` slices. Its first word points at the pclntab header, which the
-//! pclntab pass already finds on a stripped image, so the record is the data
-//! word holding that address. The fields after it move between releases; the
-//! word indices below come from `runtime/symtab.go` at each tag and were
-//! checked against go1.16 .. go1.26 linux/amd64 builds (the `hasmain` byte
-//! is 1 at its index in every one, and both slices have `len == cap`):
+//! A packer or obfuscator can overwrite the magic in the file (putting it back,
+//! or skipping the runtime's start-up check, when the program runs) and leave
+//! the table itself intact. The `moduledata` record still describes that table
+//! completely: its slices give
+//! the name table, the functab and the `_func` base, `len(ftab)` gives the
+//! function count, and `minpc`/`maxpc`/`text`/`etext` give the PC bounds. The
+//! record is recognised by that shape alone, and the table is read from it
+//! without consulting the header.
 //!
-//! | release     | change                         | types | typelinks | itablinks | hasmain |
-//! |-------------|--------------------------------|-------|-----------|-----------|---------|
-//! | 1.16 - 1.17 |                                | 35    | 40        | 43        | 59      |
-//! | 1.18 - 1.19 | `rodata`, `gofunc`             | 35    | 42        | 45        | 61      |
-//! | 1.20        | `covctrs`, `ecovctrs`          | 37    | 44        | 47        | 63      |
-//! | 1.21 - 1.25 | `inittasks`                    | 37    | 44        | 47        | 66      |
-//! | 1.26        | `epclntab`                     | 37    | 45        | 48        | 67      |
+//! Record layouts (`runtime/symtab.go`, words of pointer size):
+//! - go1.16+: `pcHeader`, `funcnametab[3]`, `cutab[3]`, `filetab[3]`,
+//!   `pctab[3]`, `pclntable[3]`, `ftab[3]`, `findfunctab`, `minpc`, `maxpc`,
+//!   `text`, `etext`.
+//! - go1.5 .. go1.15: `pclntable[3]`, `ftab[3]`, `filetab[3]`, `findfunctab`,
+//!   `minpc`, `maxpc`, `text`, `etext`.
 //!
-//! `ftab` (16), `minpc`/`maxpc` (20, 21) and `text`/`etext` (22, 23) have not
-//! moved since go1.16. The build-info version picks the row; without one,
-//! every row is tried newest first and the first that validates wins.
+//! The functab entry shape (go1.16 absolute pointers, go1.18+ 32-bit offsets
+//! from `text`) is the one whose first entry is `minpc` and whose closing entry
+//! is `maxpc`, the identity the runtime's own `moduledataverify1` enforces.
 
 use object::read::{Object, ObjectSection};
 
-use super::ImageBytes;
+use super::{functab_end, rd_ptr, rd_u32, End, GoVer, ImageBytes, PcHeader};
 
-/// Word indices of one `moduledata` layout.
-struct Layout {
-    since_minor: u16,
-    types: u64,
-    typelinks: u64,
-    itablinks: u64,
-    hasmain: u64,
+/// Most functions a table may claim, as in the header path.
+const MAX_NFUNC: u64 = 2_000_000;
+
+/// The table the image's `moduledata` describes, with the address its
+/// `pcHeader` sits at. `None` when no section outside the code holds a record
+/// whose slices, bounds and functab agree with each other. Section names and
+/// kinds are not consulted: a packer renames them, and a Mach-O `__go_module`
+/// has no kind of its own.
+pub(super) fn locate(file: &object::File, img: &ImageBytes) -> Option<(u64, PcHeader)> {
+    let end = if file.is_little_endian() { End::Little } else { End::Big };
+    let ptr_size = if file.is_64() { 8 } else { 4 };
+    file.sections()
+        .filter(|s| s.kind() != object::SectionKind::Text)
+        .find_map(|s| scan(img, s.address(), s.data().ok()?, ptr_size, end))
 }
 
-const FTAB: u64 = 16;
-const MINPC: u64 = 20;
-const TEXT: u64 = 22;
-
-const LAYOUTS: [Layout; 5] = [
-    Layout { since_minor: 26, types: 37, typelinks: 45, itablinks: 48, hasmain: 67 },
-    Layout { since_minor: 21, types: 37, typelinks: 44, itablinks: 47, hasmain: 66 },
-    Layout { since_minor: 20, types: 37, typelinks: 44, itablinks: 47, hasmain: 63 },
-    Layout { since_minor: 18, types: 35, typelinks: 42, itablinks: 45, hasmain: 61 },
-    Layout { since_minor: 16, types: 35, typelinks: 40, itablinks: 43, hasmain: 59 },
-];
-
-/// The fields of one module's `moduledata` that analysis reads.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Moduledata {
-    /// The first release of the layout row that matched.
-    pub minor: u16,
-    pub ftab_len: u64,
-    pub text: u64,
-    pub etext: u64,
-    pub types: u64,
-    pub etypes: u64,
-    /// `(ptr, len)` of `[]int32` offsets from `types`.
-    pub typelinks: (u64, u64),
-    /// `(ptr, len)` of `[]*itab`.
-    pub itablinks: (u64, u64),
-}
-
-/// The `moduledata` whose `pcHeader` is `header_vma`, read with the row for
-/// `minor` (or every row when the release is unknown). `word` reads one
-/// pointer-size word.
-pub(crate) fn locate(
-    file: &object::File,
-    img: &ImageBytes,
-    header_vma: u64,
-    minor: Option<u16>,
-    ptr_size: u64,
-    word: &dyn Fn(&ImageBytes, u64) -> Option<u64>,
-) -> Option<Moduledata> {
-    let rows: Vec<&Layout> = match minor {
-        Some(m) if m >= 16 => LAYOUTS.iter().filter(|l| l.since_minor <= m).take(1).collect(),
-        Some(_) => return None,
-        None => LAYOUTS.iter().collect(),
-    };
-    for name in [".go.module", "__go_module", ".noptrdata", ".data", "__noptrdata", "__data"] {
-        let Some(sec) = file.section_by_name(name) else { continue };
-        let base = sec.address();
-        let size = sec.size();
-        let mut at = base.next_multiple_of(ptr_size);
-        while at + ptr_size <= base + size {
-            if word(img, at) == Some(header_vma) {
-                if let Some(md) = rows.iter().find_map(|l| read(img, at, l, ptr_size, word)) {
-                    return Some(md);
-                }
-            }
-            at += ptr_size;
-        }
-    }
-    None
-}
-
-fn read(
-    img: &ImageBytes,
-    at: u64,
-    l: &Layout,
-    ps: u64,
-    word: &dyn Fn(&ImageBytes, u64) -> Option<u64>,
-) -> Option<Moduledata> {
-    let w = |i: u64| word(img, at + i * ps);
-    let slice = |i: u64| -> Option<(u64, u64)> {
-        let (ptr, len, cap) = (w(i)?, w(i + 1)?, w(i + 2)?);
-        (len == cap && (len == 0 || img.read(ptr, 1).is_some())).then_some((ptr, len))
-    };
-    let (minpc, maxpc, text, etext) = (w(MINPC)?, w(MINPC + 1)?, w(TEXT)?, w(TEXT + 1)?);
-    let (types, etypes) = (w(l.types)?, w(l.types + 1)?);
-    let hasmain = img.read(at + l.hasmain * ps, 1)?[0];
-    let sane = text != 0 && text <= minpc && minpc < maxpc && maxpc <= etext && types < etypes && hasmain <= 1;
-    if !sane {
-        return None;
-    }
-    Some(Moduledata {
-        minor: l.since_minor,
-        ftab_len: slice(FTAB)?.1,
-        text,
-        etext,
-        types,
-        etypes,
-        typelinks: slice(l.typelinks)?,
-        itablinks: slice(l.itablinks)?,
+/// The first pointer-aligned record in `data` (loaded at `base`) that
+/// validates as a `moduledata` head.
+pub(super) fn scan(img: &ImageBytes, base: u64, data: &[u8], ptr_size: u8, end: End) -> Option<(u64, PcHeader)> {
+    let ps = ptr_size as usize;
+    let lead = (ps - (base as usize % ps)) % ps;
+    (lead..data.len()).step_by(ps).find_map(|off| {
+        let rec = Record { words: &data[off..], ptr_size, end };
+        rec.go116(img).or_else(|| rec.go12(img))
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// A candidate record: the section bytes from its first word on.
+struct Record<'d> {
+    words: &'d [u8],
+    ptr_size: u8,
+    end: End,
+}
 
-    /// A go1.21 moduledata at 0x1000 in a `.noptrdata`-like span, the pclntab
-    /// header at 0x9000, and the type blob at 0x5000.
-    fn image(words: &[(u64, u64)], hasmain: u8, row: &Layout) -> Vec<u8> {
-        let mut rec = vec![0u8; ((row.hasmain + 1) * 8) as usize];
-        for &(i, v) in words {
-            rec[(i * 8) as usize..(i * 8 + 8) as usize].copy_from_slice(&v.to_le_bytes());
+impl Record<'_> {
+    fn word(&self, i: usize) -> Option<u64> {
+        let ps = self.ptr_size as usize;
+        Some(rd_ptr(self.words.get(i * ps..(i + 1) * ps)?, self.ptr_size, self.end))
+    }
+
+    /// `true` when each slice starting at one of `at` has `len <= cap`.
+    fn slices_ok(&self, at: &[usize]) -> bool {
+        at.iter().all(|&i| matches!((self.word(i + 1), self.word(i + 2)), (Some(len), Some(cap)) if len <= cap))
+    }
+
+    /// The go1.16+ record: `ftab` opens `pclntable`, and the header, the name
+    /// table and the functab sit in that order.
+    fn go116(&self, img: &ImageBytes) -> Option<(u64, PcHeader)> {
+        let (pclntable, ftab) = (self.word(13)?, self.word(16)?);
+        if pclntable == 0 || pclntable != ftab {
+            return None;
         }
-        rec[(row.hasmain * 8) as usize] = hasmain;
-        rec
+        let (header, funcname) = (self.word(0)?, self.word(1)?);
+        if header == 0 || header >= funcname || funcname > pclntable || !self.slices_ok(&[1, 4, 7, 10, 13, 16]) {
+            return None;
+        }
+        let bounds = self.bounds(17, 20)?;
+        img.read(funcname, 1)?;
+        let pctab = self.word(10)?;
+        let quantum = img.read(header.wrapping_add(6), 1).map_or(1, |b| b[0]);
+        let table = |ver| PcHeader {
+            ver,
+            end: self.end,
+            ptr_size: self.ptr_size,
+            text_start: bounds.text,
+            funcname_vma: funcname,
+            functab_vma: ftab,
+            nfunc: bounds.nfunc,
+            funcdata_base: pclntable,
+            pctab_vma: pctab,
+            quantum,
+        };
+        [GoVer::Go118, GoVer::Go116]
+            .into_iter()
+            .map(table)
+            .find(|h| functab_spans(img, h, bounds.minpc, bounds.maxpc))
+            .map(|h| (header, h))
     }
 
-    #[test]
-    fn rows_are_newest_first_and_pick_by_release() {
-        assert!(LAYOUTS.windows(2).all(|w| w[0].since_minor > w[1].since_minor));
-        let pick = |m: u16| LAYOUTS.iter().find(|l| l.since_minor <= m).map(|l| l.since_minor);
-        assert_eq!(pick(17), Some(16));
-        assert_eq!(pick(19), Some(18));
-        assert_eq!(pick(25), Some(21));
-        assert_eq!(pick(26), Some(26));
-        assert_eq!(pick(30), Some(26));
+    /// The go1.5 .. go1.15 record: the functab follows the 8-byte header and
+    /// the function count at the head of `pclntable`.
+    fn go12(&self, img: &ImageBytes) -> Option<(u64, PcHeader)> {
+        let (pclntable, ftab) = (self.word(0)?, self.word(3)?);
+        if pclntable == 0 || pclntable.checked_add(8 + self.ptr_size as u64)? != ftab || !self.slices_ok(&[0, 3, 6]) {
+            return None;
+        }
+        let bounds = self.bounds(4, 10)?;
+        let h = PcHeader {
+            ver: GoVer::Go12,
+            end: self.end,
+            ptr_size: self.ptr_size,
+            text_start: 0,
+            funcname_vma: pclntable,
+            functab_vma: ftab,
+            nfunc: bounds.nfunc,
+            funcdata_base: pclntable,
+            pctab_vma: pclntable,
+            quantum: img.read(pclntable.wrapping_add(6), 1).map_or(1, |b| b[0]),
+        };
+        functab_spans(img, &h, bounds.minpc, bounds.maxpc).then_some((pclntable, h))
     }
 
-    #[test]
-    fn read_validates_the_record() {
-        let row = &LAYOUTS[1];
-        let words = [
-            (0, 0x9000),
-            (FTAB, 0x2000),
-            (FTAB + 1, 5),
-            (FTAB + 2, 5),
-            (MINPC, 0x401000),
-            (MINPC + 1, 0x402000),
-            (TEXT, 0x401000),
-            (TEXT + 1, 0x402000),
-            (row.types, 0x5000),
-            (row.types + 1, 0x6000),
-            (row.typelinks, 0x2000),
-            (row.typelinks + 1, 2),
-            (row.typelinks + 2, 2),
-            (row.itablinks, 0x2000),
-            (row.itablinks + 1, 1),
-            (row.itablinks + 2, 1),
-        ];
-        let rec = image(&words, 1, row);
-        let blob = vec![0u8; 0x100];
-        let img = ImageBytes { sections: vec![(0x1000, &rec[..]), (0x2000, &blob[..])] };
-        let word = |img: &ImageBytes, va: u64| img.read(va, 8).map(|b| u64::from_le_bytes(b.try_into().unwrap()));
-        let md = read(&img, 0x1000, row, 8, &word).expect("valid go1.21 record");
-        assert_eq!((md.minor, md.ftab_len, md.text, md.types), (21, 5, 0x401000, 0x5000));
-        assert_eq!((md.typelinks, md.itablinks), ((0x2000, 2), (0x2000, 1)));
-        // The go1.20 row reads the same bytes one word short of hasmain.
-        let bad = image(&words, 7, row);
-        let img = ImageBytes { sections: vec![(0x1000, &bad[..]), (0x2000, &blob[..])] };
-        assert!(read(&img, 0x1000, row, 8, &word).is_none(), "hasmain must be 0 or 1");
+    /// The function count (`len(ftab) - 1`, word `ftab_len`) and the four PC
+    /// bounds from word `minpc` on, which must nest.
+    fn bounds(&self, ftab_len: usize, minpc: usize) -> Option<Bounds> {
+        let nfunc = self.word(ftab_len)?.checked_sub(1)?;
+        let (minpc, maxpc, text, etext) =
+            (self.word(minpc)?, self.word(minpc + 1)?, self.word(minpc + 2)?, self.word(minpc + 3)?);
+        ((1..=MAX_NFUNC).contains(&nfunc) && text != 0 && text <= minpc && minpc < maxpc && maxpc <= etext)
+            .then_some(Bounds { nfunc, minpc, maxpc, text })
     }
+}
+
+struct Bounds {
+    nfunc: u64,
+    minpc: u64,
+    maxpc: u64,
+    text: u64,
+}
+
+/// `true` when the functab `h` describes opens at `minpc` and closes at
+/// `maxpc`.
+fn functab_spans(img: &ImageBytes, h: &PcHeader, minpc: u64, maxpc: u64) -> bool {
+    let first = if h.ver.is_118plus() {
+        img.read(h.functab_vma, 4).map(|b| h.text_start.wrapping_add(rd_u32(b, h.end) as u64))
+    } else {
+        img.read(h.functab_vma, h.ptr_size as usize).map(|b| rd_ptr(b, h.ptr_size, h.end))
+    };
+    first == Some(minpc) && functab_end(img, h) == Some(maxpc)
 }

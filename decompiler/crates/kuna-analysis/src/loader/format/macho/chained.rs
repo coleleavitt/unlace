@@ -164,6 +164,10 @@ pub struct ChainedFixups {
     /// resolved into `rebases` once every chain has been read
     /// ([`resolve_kernel_cache_levels`]).
     kernel_cache: Vec<(u64, u8, u64)>,
+    /// The kernel-collection rebases that target another collection, as
+    /// `(slot_vma, cache_level, target_offset)`: that collection's file holds
+    /// the base they are offsets from.
+    linked: Vec<(u64, u8, u64)>,
     /// `slot_vma → signing context` for every authenticated arm64e entry,
     /// rebase or bind.
     auth: BTreeMap<u64, AuthContext>,
@@ -179,7 +183,7 @@ pub struct ChainedFixups {
     /// Why some fixups were not read, the first reason met: a truncated
     /// header or start table, a pointer format the walk does not decode, a
     /// chain that leaves the mapped segments, kernel-collection rebases whose
-    /// own collection level is unknown.
+    /// own collection level is unknown or that target another collection.
     damage: Option<String>,
 }
 
@@ -272,6 +276,12 @@ impl ChainedFixups {
     /// Every `(slot_vma, import name)` bind whose import is named, in slot order.
     pub fn named_binds(&self) -> impl Iterator<Item = (u64, &str)> + '_ {
         self.binds.keys().filter_map(|&va| self.bind_name(va).map(|name| (va, name)))
+    }
+
+    /// Every kernel-collection rebase into another collection, as `(slot,
+    /// cache level, offset from that collection's base)`.
+    pub fn linked_targets(&self) -> impl Iterator<Item = (u64, u8, u64)> + '_ {
+        self.linked.iter().copied()
     }
 
     /// Every bind as `(slot, import)`, in slot order, unnamed ones included.
@@ -484,7 +494,8 @@ impl CollectionLinks {
 /// the collection its `cacheLevel` names -- xnu's `basePointers` index
 /// (`kc_kind_t`: 0 the boot collection, 1 the pageable System one, 3 the
 /// Auxiliary one). Only targets at this collection's own level can be rebased
-/// from this file's base; a target in another collection needs that file.
+/// from this file's base; a target in another collection needs that file, so
+/// it is kept aside ([`ChainedFixups::linked_targets`]) and counted as damage.
 ///
 /// Nothing in the Mach-O header or the chains names the own level: xnu learns a
 /// collection's kind from whoever loads it. The `__PRELINK_INFO` plist does
@@ -520,7 +531,15 @@ fn resolve_kernel_cache_levels(out: &mut ChainedFixups, imagebase: u64, links: O
     for (va, level, offset) in pending {
         if level == own {
             out.rebases.insert(va, imagebase.wrapping_add(offset));
+        } else {
+            out.linked.push((va, level, offset));
         }
+    }
+    if let Some(&(_, level, _)) = out.linked.first() {
+        let count = out.linked.len();
+        out.damaged(|| {
+            format!("{count} kernel-collection rebases point into another collection (level {level} first), which this file does not hold")
+        });
     }
 }
 
@@ -1043,12 +1062,20 @@ mod tests {
     fn kernel_cache_rebases_resolve_the_collections_own_level() {
         let base = 0xffff_fe00_0700_0000;
         let pending = vec![(base + 0x10, 3, 0x4000), (base + 0x18, 0, 0x8000), (base + 0x20, 1, 0x100)];
-        let run = |pending: Vec<(u64, u8, u64)>, links| {
+        let resolve = |pending: Vec<(u64, u8, u64)>, links| {
             let mut f = ChainedFixups { kernel_cache: pending, ..ChainedFixups::default() };
             resolve_kernel_cache_levels(&mut f, base, links);
+            f
+        };
+        let run = |pending, links| {
+            let f = resolve(pending, links);
             [base + 0x10, base + 0x18, base + 0x20].map(|va| f.resolved_ptr(va))
         };
         let aux = Some(CollectionLinks { boot: true, pageable: true });
+        let linked = resolve(pending.clone(), aux);
+        assert_eq!(linked.linked_targets().collect::<Vec<_>>(), [(base + 0x18, 0, 0x8000), (base + 0x20, 1, 0x100)]);
+        assert!(linked.damage().is_some_and(|why| why.starts_with("2 kernel-collection rebases point into another")));
+        assert_eq!(resolve(pending.clone(), None).linked_targets().count(), 0, "an unknown own level links nothing");
         assert_eq!(run(pending.clone(), aux), [Some(base + 0x4000), None, None]);
         let boot = Some(CollectionLinks { boot: false, pageable: false });
         assert_eq!(run(pending.clone(), boot), [None, Some(base + 0x8000), None]);

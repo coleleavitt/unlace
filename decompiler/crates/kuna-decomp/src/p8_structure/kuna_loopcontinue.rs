@@ -117,9 +117,10 @@ pub(crate) fn recover_continues(graph: &mut BlockGraph, root: BlockId, points: &
 }
 
 /// The leaf a `continue;` resumes at in each while-do and do-while loop under
-/// `root` (option `whilecontinue`): a while-do's condition block, unless it
-/// prints as a `for` whose iterate statement a `continue;` runs first, and a
-/// do-while's last leaf when that leaf prints nothing but the loop test.
+/// `root`: a while-do's condition block, unless it prints as a `for` whose
+/// iterate statement a `continue;` runs first, and a do-while's last leaf when
+/// that leaf prints nothing but the loop test and the output language's
+/// do-while runs that test on `continue;`.
 pub(crate) fn continue_points(data: &Funcdata, root: BlockId) -> BTreeMap<BlockId, BlockId> {
     let graph = data.sblocks_ref();
     let mut points = BTreeMap::new();
@@ -133,7 +134,7 @@ pub(crate) fn continue_points(data: &Funcdata, root: BlockId) -> BTreeMap<BlockI
             BlockType::WhileDo if block.get_iterate_op().is_none() => {
                 graph.sub_block(id, 0).and_then(|cond| graph.get_front_leaf(cond))
             }
-            BlockType::DoWhile => graph
+            BlockType::DoWhile if data.get_arch().do_while_continue => graph
                 .sub_block(id, 0)
                 .and_then(|body| graph.get_exit_leaf(body))
                 .filter(|&leaf| prints_only_its_branch(data, leaf)),
@@ -149,7 +150,7 @@ pub(crate) fn continue_points(data: &Funcdata, root: BlockId) -> BTreeMap<BlockI
 /// Does the structured leaf `leaf` print no statement besides its branch?
 fn prints_only_its_branch(data: &Funcdata, leaf: BlockId) -> bool {
     let Some(bb) = data.sblocks_ref().block(leaf).get_copy() else { return false };
-    let crate::block::BlockKind::Basic(basic) = data.bblocks_ref().block(bb).kind() else { return false };
+    let BlockKind::Basic(basic) = data.bblocks_ref().block(bb).kind() else { return false };
     let mut cur = basic.op_head;
     while let Some(op) = cur {
         cur = data.bb_op_next(op);

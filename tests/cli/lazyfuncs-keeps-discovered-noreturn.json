@@ -9,7 +9,10 @@
     "--addr",
     "--option",
     "lazyfuncs",
-    "on"
+    "on",
+    "--option",
+    "formatcallees",
+    "off"
   ],
   "cwd": "{{WORK}}",
   "env": {

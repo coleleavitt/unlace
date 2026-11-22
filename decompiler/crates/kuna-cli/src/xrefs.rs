@@ -335,7 +335,7 @@ fn query(args: &XrefArgs) -> Result<String, String> {
             if index.is_function_entry(target.addr) || names.at(target.addr).is_some() {
                 index.refs_from_function(target.addr)
             } else {
-                index.refs_from_instruction(target.addr).iter().collect()
+                index.refs_from_instruction(target.addr)
             }
         }
     };
@@ -1028,7 +1028,7 @@ fn result_json(
                         "to_function".into(),
                         optional_function_json(owning_function(prog, index, names, r.to)),
                     ),
-                    ("instruction".into(), Json::Str(r.instruction.clone())),
+                    ("instruction".into(), Json::Str(r.instruction.to_string())),
                 ])
             })
             .collect(),
@@ -1272,7 +1272,7 @@ fn dex_query(args: &XrefArgs, bytes: Vec<u8>) -> Result<String, String> {
     let calls = links::calls(&models);
     let rows: Vec<&links::DexCall> = calls
         .iter()
-        .filter(|c| args.kinds.is_empty() || args.kinds.contains(&XrefKind::Call))
+        .filter(|_| args.kinds.is_empty() || args.kinds.contains(&XrefKind::Call))
         .filter(|c| match args.direction {
             Direction::To => c.callee == Some(target),
             Direction::From => c.caller == target || (!names.contains_key(&target) && c.site == target),
@@ -1521,7 +1521,7 @@ fn objc_resolved_edges(
             let mut sources: Vec<u64> = Vec::new();
             for name in [format!("objc_msgSend${selector}"), "objc_msgSend".to_string()] {
                 let mut found = BTreeSet::new();
-                for entry in entries.iter().filter(|e| e.name == name || e.aliases.iter().any(|a| *a == name)) {
+                for entry in entries.iter().filter(|e| e.name == name || e.aliases.contains(&name)) {
                     for x in index.refs_to_class(&BTreeSet::from([entry.addr.get_offset()])) {
                         if let Some(f) = index.function_containing(x.from) {
                             found.insert(f);
@@ -1546,7 +1546,7 @@ fn objc_resolved_edges(
             Direction::From => index.function_containing(**site) == Some(target.addr),
             Direction::To => **imp == target.addr,
         })
-        .map(|(&site, &imp)| Xref { from: site, to: imp, kind: XrefKind::Call, instruction: "objc_msgSend (resolved)".to_string() })
+        .map(|(&site, &imp)| Xref { from: site, to: imp, kind: XrefKind::Call, instruction: "objc_msgSend (resolved)".into() })
         .collect();
     out.sort_by_key(|r| (r.from, r.to));
     out

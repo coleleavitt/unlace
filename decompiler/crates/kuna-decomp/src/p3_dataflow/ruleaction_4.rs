@@ -1970,6 +1970,11 @@ impl Rule for RuleHumptyOr {
 
 /// \brief Convert BRANCHIND with only one computed destination to a BRANCH
 /// (C++ `RuleSwitchSingle`).
+///
+/// A labelled table on a single-out-edge BRANCHIND becomes a BRANCH to its
+/// address. (kuna) A one-entry table over a computed value is left alone: table
+/// recovery can keep only the entries its guards prove reachable, so one kept
+/// entry is not proof of one destination.
 pub struct RuleSwitchSingle;
 
 impl RuleSwitchSingle {
@@ -2015,16 +2020,8 @@ impl Rule for RuleSwitchSingle {
         if num == 1 && !constant_input {
             return 0;
         }
-        let mut needwarning = false;
-        let mut allcasesmatch = false;
-        if num != 1 {
-            needwarning = true;
-            allcasesmatch = (1..num).all(|i| jt.get_address_by_index(i) == addr);
-        }
-        if !data.vbank().get(in_vn(data, op, 0)).expect("RuleSwitchSingle: stale input").is_constant() {
-            needwarning = true;
-        }
-        if needwarning {
+        let allcasesmatch = num != 1 && (1..num).all(|i| jt.get_address_by_index(i) == addr);
+        if num != 1 || !constant_input {
             let mut s = String::from("Switch with 1 destination removed at ");
             let _ = addr_of(data, op).print_raw(&mut s);
             if allcasesmatch {

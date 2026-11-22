@@ -23,10 +23,10 @@
 //!
 //! ## Where the itabs are listed, across releases
 //!
-//! - **go1.18..go1.25:** moduledata carries `itablinks []*itab`, a slice of
+//! - **go1.18..go1.26:** moduledata carries `itablinks []*itab`, a slice of
 //!   pointers (the `.itablink` section); each pointer is followed to its
 //!   record. No per-record size is needed.
-//! - **go1.26+:** the slice is gone. moduledata carries `itaboffset` /
+//! - **go1.27+:** the slice is gone. moduledata carries `itaboffset` /
 //!   `itabsize` and the records sit consecutively in
 //!   `[types + itaboffset, types + itaboffset + itabsize)`, enumerated by
 //!   advancing each record's own `ITab.Size()` — `sizeof(ITab{})` for a
@@ -46,7 +46,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use super::*;
 use crate::pass::{SymFact, SymKind};
-use super::kuna_typeglobals::global_name_ok;
+use super::kuna_typeglobals::{global_name_ok, linker_name};
 
 /// The linker-style itab symbol prefix (go1.21+ colon spelling, matching the
 /// `type:` form the descriptor globals use).
@@ -76,7 +76,7 @@ pub(super) fn interface_method_count(img: &GoImage, inter_vma: u64) -> Option<u6
     Some(n)
 }
 
-/// The in-image size of the itab record at `vma`, for the go1.26+ contiguous
+/// The in-image size of the itab record at `vma`, for the go1.27+ contiguous
 /// walk. `Fun[0] == 0` is the "does not implement" placeholder (header only);
 /// otherwise the `Fun` array holds one word per interface method.
 pub(super) fn itab_size(img: &GoImage, vma: u64, inter_vma: u64) -> Option<u64> {
@@ -92,7 +92,7 @@ pub(super) fn itab_size(img: &GoImage, vma: u64, inter_vma: u64) -> Option<u64> 
 /// Decode one itab record at `vma` into its (concrete, interface) type names,
 /// or `None` if it is not a well-formed itab (either pointer missing, out of
 /// the type blob, or `Inter` not an interface descriptor).
-pub(super) fn read_itab(img: &GoImage, types: u64, etypes: u64, old_names: bool, vma: u64) -> Option<(GoType, GoType)> {
+pub(super) fn read_itab(img: &GoImage, types: u64, etypes: u64, vma: u64) -> Option<(GoType, GoType)> {
     let inter_ptr = word(img, vma)?;
     let type_ptr = word(img, vma + img.word_size)?;
     let in_blob = |p: u64| {
@@ -101,25 +101,25 @@ pub(super) fn read_itab(img: &GoImage, types: u64, etypes: u64, old_names: bool,
     if !in_blob(inter_ptr) || !in_blob(type_ptr) {
         return None;
     }
-    let inter = read_type(img, types, etypes, (inter_ptr - types) as u32, old_names)?;
+    let inter = read_type(img, types, etypes, (inter_ptr - types) as u32)?;
     if inter.kind != KIND_INTERFACE {
         return None;
     }
-    let concrete = read_type(img, types, etypes, (type_ptr - types) as u32, old_names)?;
+    let concrete = read_type(img, types, etypes, (type_ptr - types) as u32)?;
     Some((concrete, inter))
 }
 
 /// The located itab records' VMAs, from whichever representation this release
-/// uses. Tries the go≤1.25 `itablinks` pointer slice first, then the go1.26+
+/// uses. Tries the go≤1.26 `itablinks` pointer slice first, then the go1.27+
 /// `[types + itaboffset, …]` contiguous region; `None` if neither validates.
-fn locate_itabs(img: &GoImage, anchor: u64, types: u64, etypes: u64, old_names: bool) -> Option<Vec<u64>> {
-    locate_itablinks_slice(img, anchor, types, etypes, old_names)
-        .or_else(|| locate_itab_region(img, anchor, types, etypes, old_names))
+fn locate_itabs(img: &GoImage, anchor: u64, types: u64, etypes: u64) -> Option<Vec<u64>> {
+    locate_itablinks_slice(img, anchor, types, etypes)
+        .or_else(|| locate_itab_region(img, anchor, types, etypes))
 }
 
-/// go1.18..go1.25: an `itablinks []*itab` slice in the moduledata window whose
+/// go1.18..go1.26: an `itablinks []*itab` slice in the moduledata window whose
 /// sampled entries are pointers to valid itab records.
-pub(super) fn locate_itablinks_slice(img: &GoImage, anchor: u64, types: u64, etypes: u64, old_names: bool) -> Option<Vec<u64>> {
+pub(super) fn locate_itablinks_slice(img: &GoImage, anchor: u64, types: u64, etypes: u64) -> Option<Vec<u64>> {
     for j in 0..MODULEDATA_WINDOW_WORDS {
         let Some((ptr, len)) = plausible_slice(img, anchor + j * img.word_size, 1_000_000) else {
             continue;
@@ -130,7 +130,7 @@ pub(super) fn locate_itablinks_slice(img: &GoImage, anchor: u64, types: u64, ety
         for k in (0..n).step_by(step).take(16) {
             tried += 1;
             let Some(it) = word(img, ptr + (k as u64) * img.word_size) else { break };
-            if read_itab(img, types, etypes, old_names, it).is_some() {
+            if read_itab(img, types, etypes, it).is_some() {
                 ok += 1;
             }
         }
@@ -138,7 +138,7 @@ pub(super) fn locate_itablinks_slice(img: &GoImage, anchor: u64, types: u64, ety
             let mut out = Vec::with_capacity(n.min(GOTYPES_MAX_TYPELINKS));
             for k in 0..n.min(GOTYPES_MAX_TYPELINKS) {
                 if let Some(it) = word(img, ptr + (k as u64) * img.word_size) {
-                    if read_itab(img, types, etypes, old_names, it).is_some() {
+                    if read_itab(img, types, etypes, it).is_some() {
                         out.push(it);
                     }
                 }
@@ -151,10 +151,10 @@ pub(super) fn locate_itablinks_slice(img: &GoImage, anchor: u64, types: u64, ety
     None
 }
 
-/// go1.26+: `itaboffset` / `itabsize` — a pair of adjacent words in the
+/// go1.27+: `itaboffset` / `itabsize` — a pair of adjacent words in the
 /// moduledata window where `[types + itaboffset, + itabsize)` walks as
 /// consecutive itab records by `ITab.Size()`, every one decoding.
-pub(super) fn locate_itab_region(img: &GoImage, anchor: u64, types: u64, etypes: u64, old_names: bool) -> Option<Vec<u64>> {
+pub(super) fn locate_itab_region(img: &GoImage, anchor: u64, types: u64, etypes: u64) -> Option<Vec<u64>> {
     for i in 0..MODULEDATA_WINDOW_WORDS {
         let Some(off) = word(img, anchor + i * img.word_size) else { break };
         let Some(sz) = word(img, anchor + (i + 1) * img.word_size) else { break };
@@ -168,7 +168,7 @@ pub(super) fn locate_itab_region(img: &GoImage, anchor: u64, types: u64, etypes:
         if !mapped(img, start) || !mapped(img, end - 1) {
             continue;
         }
-        if let Some(out) = walk_itab_region(img, types, etypes, old_names, start, end) {
+        if let Some(out) = walk_itab_region(img, types, etypes, start, end) {
             if !out.is_empty() {
                 return Some(out);
             }
@@ -181,7 +181,7 @@ pub(super) fn locate_itab_region(img: &GoImage, anchor: u64, types: u64, etypes:
 /// `ITab.Size()`. Returns the VMAs only if the walk lands EXACTLY on `end`
 /// with every record a valid itab — the cross-validation that rejects a wrong
 /// `(itaboffset, itabsize)` candidate.
-pub(super) fn walk_itab_region(img: &GoImage, types: u64, etypes: u64, old_names: bool, start: u64, end: u64) -> Option<Vec<u64>> {
+pub(super) fn walk_itab_region(img: &GoImage, types: u64, etypes: u64, start: u64, end: u64) -> Option<Vec<u64>> {
     let mut out = Vec::new();
     let mut p = start;
     // Bound the record count so a pathological region cannot loop unboundedly.
@@ -192,7 +192,7 @@ pub(super) fn walk_itab_region(img: &GoImage, types: u64, etypes: u64, old_names
         if p > end {
             return None;
         }
-        let (_concrete, inter) = read_itab(img, types, etypes, old_names, p)?;
+        let (_concrete, inter) = read_itab(img, types, etypes, p)?;
         let size = itab_size(img, p, inter.vma)?;
         if size == 0 {
             return None;
@@ -205,7 +205,8 @@ pub(super) fn walk_itab_region(img: &GoImage, types: u64, etypes: u64, old_names
 
 /// Produce one name-only [`SymFact`] per located itab: its VMA and the
 /// linker-style `go:itab.<concrete>,<interface>` data symbol, built from the
-/// two descriptor names. Deliberately a NAME, not a typed-data fact: an itab
+/// two descriptors' linker names ([`linker_name`]: `go:itab.*internal/poll.FD,io.Writer`).
+/// Deliberately a NAME, not a typed-data fact: an itab
 /// address is used polymorphically (passed to `getitab`, compared, stored into
 /// an interface word), so locking its global to a struct type demotes those
 /// uses and HIDES the symbol a reference would otherwise render — exactly how
@@ -222,7 +223,7 @@ pub(super) fn collect(
     anchor: u64,
     occupied: &HashSet<u64>,
 ) -> Vec<SymFact> {
-    let Some(itab_vmas) = locate_itabs(img, anchor, meta.types, meta.etypes, meta.old_names) else {
+    let Some(itab_vmas) = locate_itabs(img, anchor, meta.types, meta.etypes) else {
         return Vec::new();
     };
     let mut by_vma: BTreeMap<u64, String> = BTreeMap::new();
@@ -230,13 +231,12 @@ pub(super) fn collect(
         if occupied.contains(&vma) {
             continue;
         }
-        let Some((concrete, inter)) = read_itab(img, meta.types, meta.etypes, meta.old_names, vma) else { continue };
-        if !global_name_ok(&concrete.name) || !global_name_ok(&inter.name) {
+        let Some((concrete, inter)) = read_itab(img, meta.types, meta.etypes, vma) else { continue };
+        let (concrete, inter) = (linker_name(img, meta, &concrete), linker_name(img, meta, &inter));
+        if !global_name_ok(&concrete) || !global_name_ok(&inter) {
             continue;
         }
-        by_vma
-            .entry(vma)
-            .or_insert_with(|| format!("{NAME_PREFIX}{},{}", concrete.name, inter.name));
+        by_vma.entry(vma).or_insert_with(|| format!("{NAME_PREFIX}{concrete},{inter}"));
     }
     by_vma
         .into_iter()

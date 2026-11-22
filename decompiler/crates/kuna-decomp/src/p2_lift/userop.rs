@@ -132,46 +132,60 @@ pub const BUILTIN_SYSCALL_ERROR: uint4 = 0x10000007;
 /// (kuna) Built-in id for `strlen`, the length an inline `repnz scasb` scan
 /// computes (`strlenscan`).
 pub const BUILTIN_STRLEN: uint4 = 0x10000008;
+/// (kuna) Built-in id for `BUG`, a Linux kernel `__bug_table` trap the handler
+/// does not resume after (`kernelbug`).
+pub const BUILTIN_KERNEL_BUG: uint4 = 0x10000009;
+/// (kuna) Built-in id for `__WARN`, a Linux kernel `__bug_table` trap the
+/// handler resumes after (`kernelbug`).
+pub const BUILTIN_KERNEL_WARN: uint4 = 0x1000000a;
+/// (kuna) Built-in ids for `builtin_memset16`/`32`/`64`, a `rep stos` fill of
+/// 2-, 4- or 8-byte elements whose bytes differ (`repstring`).
+pub const BUILTIN_MEMSET16: uint4 = 0x1000000b;
+pub const BUILTIN_MEMSET32: uint4 = 0x1000000c;
+pub const BUILTIN_MEMSET64: uint4 = 0x1000000d;
+/// (kuna) Built-in id for `builtin_memcmp`, the comparison a `repz cmpsb`
+/// computes (`repstring`).
+pub const BUILTIN_MEMCMP: uint4 = 0x1000000e;
 /// (kuna) Built-in id for `eh_unwinding`, the opaque "this call threw" test on an
 /// Itanium exceptional edge (`itaniumeh`).
-pub const BUILTIN_EH_UNWINDING: uint4 = 0x10000009;
+pub const BUILTIN_EH_UNWINDING: uint4 = 0x1000000f;
 /// (kuna) Built-in id for `eh_exception`, the exception pointer at a landing pad.
-pub const BUILTIN_EH_EXCEPTION: uint4 = 0x1000000a;
+pub const BUILTIN_EH_EXCEPTION: uint4 = 0x10000010;
 /// (kuna) Built-in id for `eh_selector`, the catch-clause selector at a landing pad.
-pub const BUILTIN_EH_SELECTOR: uint4 = 0x1000000b;
+pub const BUILTIN_EH_SELECTOR: uint4 = 0x10000011;
 /// (kuna) Built-in id for `java_try`, the opaque test that sends a DEX `try`
 /// block's entry to one of its catch handlers (`javatry`).
-pub const BUILTIN_JAVA_TRY: uint4 = 0x1000000e;
+pub const BUILTIN_JAVA_TRY: uint4 = 0x10000014;
 /// (kuna) Built-in id for `java_throws`, the opaque "this instruction threw"
 /// test on a DEX exceptional edge (`javatry`).
-pub const BUILTIN_JAVA_THROWS: uint4 = 0x1000000f;
+pub const BUILTIN_JAVA_THROWS: uint4 = 0x10000015;
 /// (kuna) Built-in id for `java_caught`, the exception a DEX catch handler
 /// receives (`move-exception`).
-pub const BUILTIN_JAVA_CAUGHT: uint4 = 0x10000010;
+pub const BUILTIN_JAVA_CAUGHT: uint4 = 0x10000016;
 /// (kuna) Built-in id for `bswap`, a byte reversal (`bitidioms`).
-pub const BUILTIN_BSWAP: uint4 = 0x1000000c;
+pub const BUILTIN_BSWAP: uint4 = 0x10000012;
 /// (kuna) Built-in id for `rotl`, a left rotate by a constant (`bitidioms`).
-pub const BUILTIN_ROTL: uint4 = 0x1000000d;
+pub const BUILTIN_ROTL: uint4 = 0x10000013;
 /// (kuna swiftcall) The error a throwing Swift call left in the error register.
-pub const BUILTIN_SWIFT_ERROR: uint4 = 0x10000011;
+pub const BUILTIN_SWIFT_ERROR: uint4 = 0x10000017;
 /// (kuna swiftcall) The error a throwing Swift function hands back.
-pub const BUILTIN_SWIFT_THROW: uint4 = 0x10000012;
+pub const BUILTIN_SWIFT_THROW: uint4 = 0x10000018;
 /// (kuna) Built-in id for `alloca`, a dynamic stack allocation (`alloca`, `dynalloca`).
-pub const BUILTIN_ALLOCA: uint4 = 0x10000013;
+pub const BUILTIN_ALLOCA: uint4 = 0x10000019;
 /// (kuna) Built-in id for `va_start`, a `va_list` set-up (`varargsave`, `vastart`).
-pub const BUILTIN_VA_START: uint4 = 0x10000014;
+pub const BUILTIN_VA_START: uint4 = 0x1000001a;
 /// (kuna) Built-in id for `abs` (`bitidioms`).
-pub const BUILTIN_ABS: uint4 = 0x10000015;
+pub const BUILTIN_ABS: uint4 = 0x1000001b;
 /// (kuna) Built-in id for `bitreverse` (`bitidioms`).
-pub const BUILTIN_BITREV: uint4 = 0x10000016;
+pub const BUILTIN_BITREV: uint4 = 0x1000001c;
 /// (kuna) Built-in id for `ctz`, the count of trailing zero bits (`bitidioms`).
-pub const BUILTIN_CTZ: uint4 = 0x10000017;
+pub const BUILTIN_CTZ: uint4 = 0x1000001d;
 /// (kuna) Built-in id for `labs`, the 64-bit `abs` (`bitidioms`).
-pub const BUILTIN_LABS: uint4 = 0x10000018;
+pub const BUILTIN_LABS: uint4 = 0x1000001e;
 /// (kuna) Built-in id for `strcpy` (`helperroles`).
-pub const BUILTIN_STRCPY: uint4 = 0x10000019;
+pub const BUILTIN_STRCPY: uint4 = 0x1000001f;
 /// (kuna) Built-in id for `va_arg` (`vaarg`).
-pub const BUILTIN_VAARG: uint4 = 0x1000001a;
+pub const BUILTIN_VAARG: uint4 = 0x10000020;
 
 // ---------------------------------------------------------------------------
 // UserOpBase + UserPcodeOp hierarchy (userop.hh:47-318)
@@ -1137,6 +1151,33 @@ impl UserOpManage {
                 UserPcodeOp::new_datatype(b"strcpy", BUILTIN_STRCPY as int4, Some(Rc::clone(&ptr_type)), &[Some(Rc::clone(&ptr_type)), Some(ptr_type)])
             }
             BUILTIN_CTZ => UserPcodeOp::new_unspecialized(b"ctz", BUILTIN_CTZ as int4),
+            BUILTIN_MEMSET16 | BUILTIN_MEMSET32 | BUILTIN_MEMSET64 => {
+                let (name, width): (&[u8], int4) = match i {
+                    BUILTIN_MEMSET16 => (b"builtin_memset16", 2),
+                    BUILTIN_MEMSET32 => (b"builtin_memset32", 4),
+                    _ => (b"builtin_memset64", 8),
+                };
+                let ptr_size = types.get_size_of_pointer();
+                let word_size = types.get_default_data_space_word_size();
+                let element = types.get_base_int(width);
+                let ptr_type = types.get_type_pointer(ptr_size, Rc::clone(&element), word_size);
+                let count = types.get_base_int(ptr_size);
+                UserPcodeOp::new_datatype(name, i as int4, None, &[Some(ptr_type), Some(element), Some(count)])
+            }
+            BUILTIN_MEMCMP => {
+                let ptr_size = types.get_size_of_pointer();
+                let word_size = types.get_default_data_space_word_size();
+                let ptr_type = types.get_type_pointer(ptr_size, types.get_type_void(), word_size);
+                let count = types.get_base_int(ptr_size);
+                UserPcodeOp::new_datatype(
+                    b"builtin_memcmp",
+                    BUILTIN_MEMCMP as int4,
+                    Some(types.get_base_int(4)),
+                    &[Some(Rc::clone(&ptr_type)), Some(ptr_type), Some(count)],
+                )
+            }
+            BUILTIN_KERNEL_BUG => UserPcodeOp::new_unspecialized(b"BUG", BUILTIN_KERNEL_BUG as int4),
+            BUILTIN_KERNEL_WARN => UserPcodeOp::new_unspecialized(b"__WARN", BUILTIN_KERNEL_WARN as int4),
             _ => return Err(KunaError::lowlevel("Bad built-in userop id")),
         };
         self.builtinmap.insert(i, res);

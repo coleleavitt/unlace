@@ -35,7 +35,8 @@ const names = new Map([['0x1198', 'main'], [SUM, 'sum_to'], [LONG_MAIN, 'main']]
 function replay(session, target, binary = sample) {
   const file = join(dir, 'sample.elf.kuna');
   writeFileSync(file, session.toFileText({ binary: 'sample.elf', target, nameOf: (a) => session.functionName(a) || names.get(a) || a }));
-  const res = spawnSync(kuna, ['decompile', binary, target, '--assert', `@${file}`], { env, encoding: 'utf8' });
+  // dwarfscopes (fork, default on) names sum_to's counter `i` from DWARF; the cases rename the generic names.
+  const res = spawnSync(kuna, ['decompile', binary, target, '--option', 'dwarfscopes', 'off', '--assert', `@${file}`], { env, encoding: 'utf8' });
   assert.equal(res.status, 0, res.stderr);
   return { code: res.stdout, rejected: res.stderr.split('\n').filter((l) => /rejected/.test(l)) };
 }

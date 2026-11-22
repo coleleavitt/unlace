@@ -42,7 +42,12 @@ kuna_options! { self, p1;
         self.present_lessequal = form.present_lessequal();
         Ok(msg)
     },
-    "armconstshift" => on_off!(arm_constant_shift, "ARM constant-shift C11 conversion"),
+    "wrapadd" => on_off!(wrap_add, "Wrapping four-byte addition before a wider sign extension"),
+    "armconstshift" => {
+        let (mode, msg) = crate::p9_emit::kuna_armconstantshift::OptionArmConstShift.apply(p1)?;
+        self.arm_constant_shift = mode;
+        Ok(msg)
+    },
     "rustarrayzero" => on_off!(rust_array_zero, "Rust byte-array zero values"),
     "arraynotation" => {
         let (val, msg) = crate::kuna_arraynotation::OptionArrayNotation.apply(p1)?;
@@ -100,11 +105,11 @@ kuna_options! { self, p1;
     "vaarg" => on_off!(va_arg, "va_arg expansion as one call"),
     "indexrescale" => on_off!(index_rescale, "Byte offsets rescaled to element indexes"),
     "looprotate" => on_off!(loop_rotate, "Guarded do-while loops rotated to while loops"),
-    "postinc" => on_off!(post_increment, "Pointer steps folded into *p++"),
     "vastart" => on_off!(va_start, "va_start prologue as one call"),
-    "typevote" => on_off!(type_vote, "Type vote for leftover undefined varnodes"),
     "switchguardmerge" => on_off!(switch_guard_merge, "Equality guards merged into their switch"),
+    "returnbranch" => on_off!(return_branch, "Computed jumps through the return register"),
     "globalarrayanchor" => on_off!(global_array_anchor, "Global array anchor preservation"),
+    "opaquepredicate" => on_off!(opaque_predicate, "Constant-comparison folding"),
     "signedness" => {
         let (val, msg) = crate::kuna_typeround::OptionSignedness.apply(p1)?;
         self.signedness = val;
@@ -127,7 +132,6 @@ kuna_options! { self, p1;
     "relronoreturn" => on_off!(relro_noreturn, "Flow-time no-return call through a relocated read-only slot"),
     "outlinedinline" => on_off!(outlined_inline, "MachineOutliner fragment inlining"),
     "calleeretpurge" => on_off!(callee_ret_purge, "Callee `ret imm16` extrapop"),
-    "tailcontract" => on_off!(tail_contract, "Tail-callee prototype bootstrap"),
     "stackexitanchor" => on_off!(stack_exit_anchor, "Stack-solver return anchor"),
     "fdeflowbound" => on_off!(fde_flow_bound, "Unwind-extent fall-through bound"),
     "int3pad" => {
@@ -187,6 +191,7 @@ kuna_options! { self, p1;
     "objcarc" => on_off!(objc_arc, "Objective-C ARC call hiding"),
     "objcrettype" => on_off!(objc_rettype, "Objective-C message result typed by its receiver"),
     "objcresolve" => on_off!(objc_resolve, "Objective-C message send resolved to its method"),
+    "typevote" => on_off!(type_vote, "Type vote for leftover undefined variables"),
     "tailcalljump" => {
         let (jumps, tables, msg) = crate::kuna_tailcalljump::tail_call_mode(p1)?;
         self.tail_call_jumps = jumps;
@@ -205,6 +210,7 @@ kuna_options! { self, p1;
     "msvcstrappend" => on_off!(msvc_str_append, "MSVC std::string inlined append collapsing"),
     "switchselector" => on_off!(switch_selector_guard, "Lowered-switch in-function-selector restriction"),
     "stackaddrargtrial" => on_off!(stack_addr_arg_trial, "Stack-address input trials"),
+    "calleefilledarg" => on_off!(callee_filled_arg, "Callee-filled argument slots"),
     "callwide" => {
         let enabled = on_or_off(p1)?;
         self.kuna_callwide.clear();
@@ -336,7 +342,12 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "switchmodbound" => on_off!(switch_modulo_bound, "Switch modulo/and-mask index bound"),
-    "constselectjump" => on_off!(const_select_jump, "Constant-select indirect branch recovery"),
+    "switchextent" => on_off!(switch_extent, "Unchecked jump table ends at the function's next table"),
+    "constselectjump" => {
+        let (mode, msg) = crate::kuna_constselectjump::OptionConstSelectJump.apply(p1)?;
+        self.const_select_jump = mode;
+        Ok(msg)
+    },
     "switchguardbound" => on_off!(switch_guard_bound, "Switch CBRANCH-guard index bound"),
     "highsliceguard" => on_off!(highslice_guard, "High-byte slice jump-table guard"),
     "switchsharedcase" => on_off!(switch_shared_case, "Switch loop-carried-guard table"),
@@ -362,8 +373,10 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "loweredswitch" => {
-        let (val, msg) = crate::kuna_loweredswitch::OptionLowerSwitch.apply(p1)?;
-        self.recover_lowered_switch = val;
+        let (mode, msg) = crate::kuna_loweredswitch::OptionLowerSwitch.apply(p1)?;
+        self.recover_lowered_switch = mode.enabled();
+        self.lowered_switch_linear = mode.linear();
+        self.lowered_switch_tree = mode.tree();
         Ok(msg)
     },
     "nulterminator" => {
@@ -475,7 +488,7 @@ kuna_options! { self, p1;
     },
     "devectorize" => on_off!(devectorize_reduction, "Vectorized reduction re-roll"),
     "strlenscan" => on_off!(strlen_scan, "inline repnz scasb string length as strlen"),
-    "repstring" => on_off!(rep_string, "rep movs/stos loops as memcpy/memset"),
+    "repstring" => on_off!(rep_string, "rep movs/stos/cmps loops as copy, fill and compare builtins"),
     "copyrun" => on_off!(copy_run, "unrolled element-copy runs as memcpy"),
     "regionstructure" => {
         let (val, msg) =
@@ -496,6 +509,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "loopcontinue" => on_off!(loop_continue, "Secondary loop-latch continue recovery"),
+    "postinc" => on_off!(post_increment, "Pointer steps folded into *p++"),
     "regionlooprefine" => on_off!(
         region_loop_refine,
         "Region structurer multi-exit/irreducible loop-successor refinement"
@@ -528,34 +542,6 @@ kuna_options! { self, p1;
                 Ok(format!("An expression prints inline while its terms times its uses is at most {n}"))
             }
             _ => Err(KunaError::parse("Must specify off or a weight from 2 to 64")),
-        }
-    },
-    "linearswitch" => {
-        let field = p1.trim();
-        if field == "off" {
-            self.linear_switch = 0;
-            return Ok("Linear equality chains keep their if/else form".to_string());
-        }
-        match field.parse::<i32>() {
-            Ok(n) if (3..=16).contains(&n) => {
-                self.linear_switch = n;
-                Ok(format!("Linear equality chains of {n} or more cases re-roll into a switch"))
-            }
-            _ => Err(KunaError::parse("Must specify off or a case count from 3 to 16")),
-        }
-    },
-    "treeswitch" => {
-        let field = p1.trim();
-        if field == "off" {
-            self.tree_switch = 0;
-            return Ok("Binary-search compare cascades re-roll into a switch from 3 to 16 cases".to_string());
-        }
-        match field.parse::<i32>() {
-            Ok(n) if (2..=64).contains(&n) => {
-                self.tree_switch = n;
-                Ok(format!("Binary-search compare cascades of {n} to 64 cases re-roll into a switch"))
-            }
-            _ => Err(KunaError::parse("Must specify off or a case count from 2 to 64")),
         }
     },
     "condstmts" => {
@@ -607,9 +593,10 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "returndup" => {
-        let (val, msg) =
+        let (val, calls, msg) =
             crate::p8_structure::kuna_returndup::OptionReturnDup.apply(p1)?;
         self.duplicate_shared_returns = val;
+        self.duplicate_call_returns = calls;
         Ok(msg)
     },
     "rettriangle" => {
@@ -697,16 +684,14 @@ kuna_options! { self, p1;
     "javanew" => on_off!(java_new, "Java new T(args) from an allocation and its <init> call"),
     "javatry" => on_off!(java_try, "Java try/catch from a DEX method's try items"),
     "voidtailreturn" => on_off!(voidtailreturn, "void tail-return elision"),
-    "unmergecall" => on_off!(unmerge_calls, "tail-merged call un-merging"),
     "dirtypool" => on_off!(dirty_pool, "dirty-op rule scheduling"),
     "latecse" => on_off!(late_cse, "late common-subexpression elimination"),
     "gotosink" => on_off!(goto_sink, "goto sinking and backward-goto loops"),
     "cmpmerge" => on_off!(cmp_merge, "comparison merge"),
-    "importdata" => on_off!(import_data, "import-slot data-read rendering"),
     "gotonext" => on_off!(goto_next, "goto-to-next suppression"),
+    "importdata" => on_off!(import_data, "import-slot data-read rendering"),
     "rangefold" => on_off!(range_fold, "dominating-range folding"),
     "pow2select" => on_off!(pow2_select, "power-of-two division select recovery"),
-    "whilecontinue" => on_off!(while_continue, "while-loop continue recovery"),
     "castimplied" => on_off!(cast_implied, "C-implied cast elision"),
     "castsign" => on_off!(cast_sign, "signed declarations for signed-only locals"),
     "castternary" => on_off!(cast_ternary, "conditional-arm cast elision"),
@@ -745,9 +730,7 @@ kuna_options! { self, p1;
         self.lane_fuse_all = all;
         Ok(format!("Per-lane vector p-code re-fused into one intrinsic turned {}", if all { "all" } else if on { "on" } else { "off" }))
     },
-    "panicloc" => on_off!(analysis_panicloc, "Rust panic Location records"),
     "strcodelen" => on_off!(analysis_strcodelen, "code-side Rust &str lengths"),
-    "gortti" => on_off!(analysis_gortti, "Go type descriptor and itab names"),
     "mba" => on_off!(mba, "Linear MBA simplification"),
     "avxintrinsics" => on_off!(avx_intrinsics, "Intel intrinsic names for AVX user-ops"),
     "x87depth" => on_off!(x87_depth, "x87 stack depth at returns"),
@@ -766,6 +749,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "charptr" => on_off!(char_ptr, "character-pointer evidence"),
+    "cstringconst" => on_off!(cstring_const, "string-literal rendering of constants inside a string-literal section"),
     "elemptr" => {
         let (val, msg) = crate::p5_types::kuna_elemptr::OptionElemPtr.apply(p1)?;
         self.elem_ptr = val;
@@ -808,6 +792,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "cortexmpriv" => on_off!(cortexmpriv, "Cortex-M privileged-mode guard folding"),
+    "acleintrinsics" => on_off!(acle_intrinsics, "AArch64 ACLE intrinsics"),
     "dedupvardecls" => {
         let (val, msg) = crate::kuna_dedupvardecls::OptionDedupVarDecls.apply(p1)?;
         self.dedup_var_decls = val;
@@ -963,6 +948,12 @@ kuna_options! { self, p1;
         self.load_options_mut().kernelcache = choice;
         Ok(msg)
     },
+    "kernelcache-boot" => {
+        let (choice, msg) = crate::kuna_kernelcacheboot::parse_kernelcache_boot(p1)?;
+        crate::kuna_kernelcacheboot::set_kernelcache_boot_env(&choice);
+        self.load_options_mut().kernelcache_boot = choice;
+        Ok(msg)
+    },
     "dyldimage" => {
         self.load_options_mut().dyldimage =
             crate::kuna_dyldcache::image_name(p1).map(str::to_string);
@@ -1101,15 +1092,9 @@ kuna_options! { self, p1;
     "incrementalwalk" => {
         on_off!(analysis_incrementalwalk, "Incremental Listing walk for callback roots")
     },
-    "calltable" => {
-        on_off!(analysis_calltable, "Call-table recovery, vote and case demotion")
-    },
 
     "tailcallentryall" => {
         on_off!(analysis_tailcallentryall, "Tail-call function-entry recovery on non-ARM targets")
-    },
-    "compacttable" => {
-        on_off!(analysis_compacttable, "AArch64 compact jump-table reads in the reference walk")
     },
     "nameladder" => {
         on_off!(analysis_nameladder, "Prototype/no-return name lookup ladder")
@@ -1127,7 +1112,10 @@ kuna_options! { self, p1;
         on_off!(analysis_protomerge, "Slot-by-slot merge of load-time prototypes")
     },
 
+    "calltable" => on_off!(analysis_calltable, "Call-table recovery and the call-table vs switch vote"),
+    "stubbinds" => on_off!(analysis_stubbinds, "Stripped Mach-O stubs named from their slot's chained bind"),
     "objc" => on_off!(analysis_objc, "Mach-O Objective-C metadata recovery pass"),
+    "panicloc" => on_off!(analysis_panicloc, "Rust panic Location record pass"),
     "swiftmetadata" => on_off!(analysis_swiftmetadata, "Swift runtime-metadata recovery pass"),
     "cfstrings" => {
         let (pass, annotate) = match p1 {
@@ -1139,6 +1127,7 @@ kuna_options! { self, p1;
         let state = if annotate { "on, annotated" } else if pass { "on" } else { "off" };
         Ok(format!("Mach-O __cfstring constant-string recovery pass turned {state}"))
     },
+    "blobs" => on_off!(analysis_blobs, "Embedded image and archive data symbols"),
     "swifttypes" => on_off!(analysis_swifttypes, "Swift type layouts from static metadata"),
     "objcivars" => {
         let val = on_or_off(p1)?;

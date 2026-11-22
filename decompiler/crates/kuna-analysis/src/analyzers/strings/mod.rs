@@ -41,10 +41,10 @@
 //! and ≥4 chars is accepted) — harmless for real string literals, which all pass.
 //! Recorded in `docs/missing-analyses.md` / `docs/history/analysis-port-log.md`.
 
+pub mod kuna_panicloc;
 pub mod kuna_ptrslot;
 pub mod kuna_stringinv;
 pub mod kuna_utf8strings;
-pub mod kuna_panicloc;
 pub mod kuna_strcodelen;
 pub mod kuna_strrecords;
 pub mod kuna_widestrings;
@@ -222,14 +222,31 @@ pub(crate) fn scan_strings(file: &object::File, min_len: usize, code_rule: bool)
 /// (kuna `codestrings`) IDA's final-pass rule for a string inside code: a run
 /// of at least 17 bytes (16 visible plus the NUL), or of at least 5 (4 visible
 /// plus the NUL) that starts right after one to three zero bytes, the padding a
-/// compiler puts before a string it places among instructions. Instruction
-/// bytes that happen to spell `D$x%` before a zero byte are neither.
+/// compiler puts before a string it places among instructions, or right after
+/// an x86 `call rel32` (plus up to three `nop`/zero bytes) that jumps past it:
+/// the call-over-data idiom, whose return address points at the string.
+/// Instruction bytes that happen to spell `D$x%` before a zero byte are none.
 pub(crate) fn code_section_string(data: &[u8], at: usize, visible: usize) -> bool {
     if visible >= 16 {
         return true;
     }
     let zeros = data[..at].iter().rev().take(4).take_while(|&&b| b == 0).count();
-    visible >= 4 && (1..=3).contains(&zeros)
+    visible >= 4 && ((1..=3).contains(&zeros) || called_over(data, at, visible))
+}
+
+/// Does a `call rel32` end at most three `nop`/zero bytes before `at` and land
+/// past the run's NUL?
+fn called_over(data: &[u8], at: usize, visible: usize) -> bool {
+    let pad = data[..at].iter().rev().take(3).take_while(|&&b| b == 0 || b == 0x90).count();
+    (0..=pad).any(|skip| {
+        let Some(end) = at.checked_sub(skip) else { return false };
+        let Some(call) = end.checked_sub(5) else { return false };
+        if data[call] != 0xe8 {
+            return false;
+        }
+        let rel = i32::from_le_bytes([data[call + 1], data[call + 2], data[call + 3], data[call + 4]]);
+        (end as i64 + i64::from(rel)) > (at + visible) as i64
+    })
 }
 
 /// Port of `StringsAnalyzer` ("ASCII Strings"): detect NUL-terminated ASCII
@@ -327,6 +344,10 @@ mod tests {
         assert!(!code_section_string(data, 2, 4), "D$x% after instruction bytes");
         assert!(code_section_string(data, 9, 5), "Hello after zero padding");
         assert!(code_section_string(data, 16, 16), "a 16-character run");
+        let over = b"\xe8\x0f\x00\x00\x00\x90kern\x00pad\x00\x58";
+        assert!(code_section_string(over, 6, 4), "a string a call jumps over");
+        let back = b"\xe8\xf0\xff\xff\xff\x90kern\x00";
+        assert!(!code_section_string(back, 6, 4), "a backward call target is not past the run");
     }
 
     #[test]

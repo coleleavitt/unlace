@@ -29,7 +29,7 @@ fn dependencies(img: &GoImage, meta: &TypeMeta, t: &GoType) -> Option<Vec<GoType
         if vma < meta.types || vma.checked_add(img.type_base())? > meta.etypes {
             return None;
         }
-        let child = read_type(img, meta.types, meta.etypes, (vma - meta.types) as u32, meta.old_names)?;
+        let child = read_type(img, meta.types, meta.etypes, (vma - meta.types) as u32)?;
         if child.kind == KIND_STRUCT
             && child.size != 0
             && child.tflag & TFLAG_NAMED != 0

@@ -1,127 +1,126 @@
-//! `repstring` and `copyrun`: the memcpy/memset a `rep movs`/`rep stos` loop
-//! or an unrolled copy decompiles to computes what the source computed,
-//! recompiled on the host.
+//! (kuna `repstring`) An x86 `rep movs`, `rep stos` or `repz cmpsb` prints as
+//! a copy, fill or compare builtin.  Each image is printed with the option
+//! off and on; the x86-64 one is compiled under gcc and clang at -O0 and -O2
+//! beside a `main` that states what each function computes, so the printed
+//! builtins must write the same bytes and return the same values as the loops.
 use crate::common;
+use common::process;
 use std::process::Command;
 
-fn emitted(option: &str) -> String {
-    emitted_from("repstring_x86_64", "repstring", option)
-}
+const FUNCS: &[&str] =
+    &["fill32", "zero32", "fill8", "copy32", "copy_end", "isdash", "order", "below", "same_n", "same5", "mismatch"];
+/// The function whose final pointer is read, which keeps its loop.
+const LOOP: &str = "mismatch";
 
-fn emitted_from(fixture: &str, name: &str, option: &str) -> String {
-    emitted_functions(fixture, name, option, None)
-}
-
-fn emitted_functions(fixture: &str, name: &str, option: &str, functions: Option<&str>) -> String {
-    let path = common::fixture(fixture);
-    let mut args = vec!["decompile-all", path.as_str(), "--json", "--option", name, option];
-    if let Some(functions) = functions {
-        args.extend(["--functions", functions]);
-    }
-    let (output, error, status) = common::run_kuna(&args);
-    assert_eq!(status, 0, "{error}");
-    let document: serde_json::Value = serde_json::from_str(&output).unwrap();
-    document["functions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|f| f["code"].as_str().unwrap().to_string())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-#[test]
-fn rep_string_loops_round_trip_as_memcpy_and_memset() {
-    let body = emitted("on");
-    assert!(!body.contains("while"), "a repeat loop survives:\n{body}");
-    assert!(body.contains("builtin_memcpy(") && body.contains("builtin_memset("), "{body}");
-    assert!(emitted("off").contains("while"), "off keeps the loops");
-    let source = std::fs::read_to_string(common::fixture("repstring.c")).unwrap();
-    let mut reference = source.replace("#include <string.h>", "");
-    for f in ["copy_struct", "copy_n", "fill_n", "zero_rec", "copy_end"] {
-        reference = reference.replace(&format!(" {f}("), &format!(" ref_{f}(")).replace(&format!("*{f}("), &format!("*ref_{f}("));
-    }
-    let program = format!(
-        r#"
+const PRELUDE: &str = r#"
+#include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #define builtin_memcpy memcpy
 #define builtin_memset memset
-{reference}
-{body}
-int main(void) {{
-  char a[128], b[128], src[128];
-  for (int i = 0; i < 128; i++) src[i] = (char)(i * 7 + 3);
-  for (unsigned long n = 0; n < 100; n += 9) {{
-    memset(a, 1, sizeof a); memset(b, 1, sizeof b);
-    copy_n(a, src, n); ref_copy_n(b, src, n);
-    if (memcmp(a, b, sizeof a)) return 1;
-    fill_n(a, (int)n - 50, n); ref_fill_n(b, (int)n - 50, n);
-    if (memcmp(a, b, sizeof a)) return 2;
-    if ((long)copy_end(a, src, n) - (long)a != (long)n || ref_copy_end(b, src, n) - b != (long)n) return 3;
-    if (memcmp(a, b, sizeof a)) return 4;
-  }}
-  copy_struct((void *)a, (void *)src); ref_copy_struct((void *)b, (void *)src);
-  zero_rec((void *)(a + 64)); ref_zero_rec((void *)(b + 64));
-  return memcmp(a, b, sizeof a) ? 5 : 0;
-}}
-"#
-    );
-    compile_and_run(&program, &body);
-}
+#define builtin_memcmp memcmp
+static void builtin_memset32(unsigned int *d, unsigned int v, unsigned long n) { while (n--) *d++ = v; }
+"#;
 
-fn compile_and_run(program: &str, body: &str) {
-    let root = tempfile::tempdir().unwrap();
-    let path = root.path().join("round_trip.c");
-    std::fs::write(&path, program).unwrap();
-    let mut checked = 0;
-    for cc in ["gcc", "clang"] {
-        if Command::new(cc).arg("--version").output().is_err() {
-            continue;
-        }
-        for opt in ["-O0", "-O2"] {
-            let executable = root.path().join(format!("{cc}{opt}"));
-            let built =
-                Command::new(cc).args([opt, "-w"]).arg(&path).arg("-o").arg(&executable).output().unwrap();
-            assert!(built.status.success(), "{}\n{program}", String::from_utf8_lossy(&built.stderr));
-            let status = Command::new(&executable).status().unwrap();
-            assert!(status.success(), "{cc} {opt}: {status}\n{body}");
-            checked += 1;
-        }
-    }
-    assert!(checked > 0, "a C compiler is required");
+const MAIN: &str = r#"
+#define F(ret, f) ((ret (*)())(void (*)())f)
+#define CHECK(got, want) do { long long g_ = (long long)(got), w_ = (long long)(want); if (g_ != w_) { \
+    printf("%s [%u]: %llx, want %llx\n", #got, n, g_, w_); bad++; } } while (0)
+static const unsigned char TEXT[][16] = {"-", "", "-x", "abcdefgh", "abcdefgx", "abcd\xffgh", "abcd\x01gh",
+    "\x80", "\x7f", "abcdefg", "-\0y", "abcdexgh"};
+#define TEXTS (sizeof TEXT / sizeof TEXT[0])
+static int sign(int v) { return (v > 0) - (v < 0); }
+int main(void) {
+  int bad = 0;
+  unsigned int src[40], a[40], b[40];
+  for (unsigned i = 0; i < 40; i++) src[i] = i * 2654435761u + 7;
+  for (unsigned n = 0; n < 34; n += 3) {
+    memset(a, 0xaa, sizeof a); memset(b, 0xaa, sizeof b);
+    F(void, fill32)(a + 1, n);
+    for (unsigned k = 0; k < n; k++) b[1 + k] = 0x01020304;
+    CHECK(memcmp(a, b, sizeof a), 0);
+    F(void, zero32)(a + 3, n);
+    for (unsigned k = 0; k < n; k++) b[3 + k] = 0;
+    CHECK(memcmp(a, b, sizeof a), 0);
+    F(void, fill8)((char *)a + 5, 0x5a + n, n * 3);
+    for (unsigned k = 0; k < n * 3; k++) ((char *)b)[5 + k] = 0x5a + n;
+    CHECK(memcmp(a, b, sizeof a), 0);
+    F(void, copy32)(a + 2, src + 1, n);
+    for (unsigned k = 0; k < n; k++) b[2 + k] = src[1 + k];
+    CHECK(memcmp(a, b, sizeof a), 0);
+    CHECK(F(unsigned int *, copy_end)(a + 4, src, n) - a, 4 + n);
+    for (unsigned k = 0; k < n; k++) b[4 + k] = src[k];
+    CHECK(memcmp(a, b, sizeof a), 0);
+  }
+  for (unsigned n = 0; n < TEXTS * TEXTS; n++) {
+    const char *x = (const char *)TEXT[n / TEXTS], *y = (const char *)TEXT[n % TEXTS];
+    unsigned first = 0;
+    while (first < 8 && x[first] == y[first]) first++;
+    CHECK(F(unsigned char, isdash)(x), strcmp(x, "-") == 0);
+    CHECK(sign(F(int, order)(x, y)), sign(memcmp(x, y, 5)));
+    CHECK(F(unsigned int, below)(x, y), memcmp(x, y, 7) < 0);
+    for (unsigned long k = 0; k < 10; k++) CHECK(F(unsigned char, same_n)(x, y, k), memcmp(x, y, k) == 0);
+    CHECK(F(unsigned char, same5)(x, y), memcmp(x, y, 5) == 0);
+    CHECK(F(const char *, mismatch)(x, y) - x, first < 8 ? first + 1 : 8);
+  }
+  return bad != 0;
+}
+"#;
+
+/// The printed function `name`, from its header comment to the next.
+fn function<'a>(text: &'a str, name: &str) -> &'a str {
+    let start = text.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{text}"));
+    let rest = &text[start + 1..];
+    &text[start..start + 1 + rest.find("// Function:").unwrap_or(rest.len())]
 }
 
 #[test]
-fn unrolled_copies_round_trip_as_memcpy() {
-    let all = emitted_from("copyrun_x86_64", "copyrun", "on");
-    let off = emitted_from("copyrun_x86_64", "copyrun", "off");
-    assert_eq!(all.matches("builtin_memcpy(").count(), 3, "{all}");
-    assert!(!off.contains("builtin_memcpy("), "{off}");
-    let body = emitted_functions("copyrun_x86_64", "copyrun", "on", Some("copy_struct,shift,copy31,small"));
-    let program = format!(
-        r#"
-#include <string.h>
-#define builtin_memcpy memcpy
-typedef struct {{ unsigned long field_0x0, field_0x8; }} struct_0;
-struct big {{ long a[8]; }};
-struct pair {{ struct big first, second; }};
-static void ref_copy_struct(struct big *d, const struct big *s) {{ *d = *s; }}
-static void ref_shift(struct pair *p) {{ p->second = p->first; }}
-static void ref_copy31(char *d, const char *s) {{ memcpy(d, s, 31); }}
-{body}
-int main(void) {{
-  struct pair a, b;
-  char s[64], x[64], y[64];
-  for (int i = 0; i < 64; i++) {{ s[i] = (char)(i * 5 + 1); x[i] = y[i] = 0; }}
-  memcpy(&a, s, 64); memcpy(&b, s, 64);
-  copy_struct((void *)&a.second, (void *)s); ref_copy_struct(&b.second, (const struct big *)s);
-  if (memcmp(&a, &b, sizeof a)) return 1;
-  shift((void *)&a); ref_shift(&b);
-  if (memcmp(&a, &b, sizeof a)) return 2;
-  copy31((void *)x, (void *)s); ref_copy31(y, s);
-  return memcmp(x, y, sizeof x) ? 3 : 0;
-}}
-"#
-    );
-    compile_and_run(&program, &body);
+fn repeated_string_instructions_round_trip_through_the_printed_builtins() {
+    let compilers: Vec<_> = ["gcc", "clang"]
+        .into_iter()
+        .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
+        .collect();
+    assert!(!compilers.is_empty(), "the round trip requires a C compiler");
+    let funcs = FUNCS.join(",");
+    for (image, compile) in [("repstring_x86_64", true), ("repstring_i386", false)] {
+        let path = common::fixture(image);
+        for opt in ["off", "on"] {
+            let args = ["decompile-all", path.as_str(), "--functions", funcs.as_str(), "--option", "repstring", opt];
+            let (text, err, rc) = common::run_kuna(&args);
+            assert_eq!(rc, 0, "{image} repstring {opt}: {err}");
+            for name in FUNCS {
+                let body = function(&text, name);
+                let (builtin, looped) = (body.contains("builtin_mem"), body.contains("while ("));
+                let want = opt == "on" && *name != LOOP;
+                assert!(builtin == want && looped != want, "{image} {name} with repstring {opt}:\n{body}");
+            }
+            if !compile {
+                continue;
+            }
+            let program = format!("{PRELUDE}\n{text}\n{MAIN}");
+            for cc in &compilers {
+                for level in ["-O0", "-O2"] {
+                    let src = common::scratch_file(&format!("repstring-{image}-{opt}-{cc}{level}"), "c");
+                    let exe = src.with_extension("exe");
+                    std::fs::write(&src, &program).unwrap();
+                    let out = Command::new(cc)
+                        .args(["-std=gnu11", "-w", "-fwrapv", level, "-o", exe.to_str().unwrap(), src.to_str().unwrap()])
+                        .args(common::CC_GCC15_DEMOTE)
+                        .output()
+                        .expect("spawn the C compiler");
+                    assert!(
+                        out.status.success(),
+                        "{cc} {level} rejected the printed C ({image}, repstring {opt}):\n{}\n{text}",
+                        String::from_utf8_lossy(&out.stderr)
+                    );
+                    let run = Command::new(&exe).output().expect("run the round trip");
+                    assert!(
+                        run.status.success(),
+                        "{image} printed with repstring {opt} and built by {cc} {level} computes a different value:\n{}\n{text}",
+                        String::from_utf8_lossy(&run.stdout)
+                    );
+                }
+            }
+        }
+    }
 }

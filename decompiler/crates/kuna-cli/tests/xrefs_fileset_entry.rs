@@ -166,3 +166,15 @@ fn a_dyldimage_option_selects_the_image_xrefs_reads() {
     // The island binds `_callee_entry`, libumbrella's re-export alias of `callee_add`.
     assert!(stdout.contains("call\tcallee_entry\t@0x18000180c"), "{stdout}");
 }
+
+/// A text `decompile` of an Auxiliary collection says on stderr which other
+/// file its pointers into the boot collection were resolved from
+/// (`kernelcache-boot`), as `functions` and `decompile --json` do.
+#[test]
+fn text_decompile_names_the_linked_collection_it_read() {
+    let aux = common::fixture("kernelcache/linked/AuxiliaryKernelExtensions.kc");
+    let (stdout, stderr, rc) = common::run_kuna(&["decompile", &aux, "gadget_start"]);
+    assert_eq!(rc, 0, "{stderr}");
+    assert!(stdout.contains("kernel_add(a0,7);"), "{stdout}");
+    assert!(stderr.contains("rebased from BootKernelExtensions.kc (2 functions named)"), "{stderr}");
+}

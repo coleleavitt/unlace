@@ -14,9 +14,10 @@
 //! jumps, the goto carriers that print as `break;`, and the labels no printed
 //! `goto` reaches any more, so every printed `goto` keeps its label.  The label
 //! carriers are the ones `BlockGraph::mark_unstructured` marks: a `BlockGoto`,
-//! a goto-`BlockIf` and a bare-goto switch arm, each of type `f_goto_goto`.
+//! a goto-`BlockIf` and a bare-goto switch arm, each of type `f_goto_goto`, and
+//! the edges of a `BlockMultiGoto`, which always keep their labels.
 
-use crate::block::{block_flags, BlockGraph, BlockType};
+use crate::block::{block_flags, BlockGraph, BlockKind, BlockType};
 use crate::context::BlockId;
 use std::collections::BTreeSet;
 
@@ -107,6 +108,12 @@ pub(crate) fn goto_rewrites(graph: &BlockGraph, root: BlockId, breaks: bool) -> 
                 released.extend(t);
             } else if gototype == block_flags::f_goto_goto {
                 kept.extend(t);
+            }
+        }
+        // A switch's own `BlockMultiGoto` lists the case edges handled below.
+        if let BlockKind::MultiGoto { gotoedges, .. } = blk.kind() {
+            if blk.get_parent().is_none_or(|p| graph.block(p).get_type() != BlockType::Switch) {
+                kept.extend(gotoedges.iter().filter_map(|&t| leaf(t)));
             }
         }
         let cases = blk.switch_caseblocks();

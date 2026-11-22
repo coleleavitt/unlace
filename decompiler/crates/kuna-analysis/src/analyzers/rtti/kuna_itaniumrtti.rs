@@ -71,9 +71,10 @@
 //!
 //! # Gating + parity safety
 //!
-//! Default-**OFF** (`--option itaniumrtti on`), and registered only on an ELF or
+//! Default-**on** (`--option itaniumrtti off` disables it), and registered only on an ELF or
 //! Mach-O image ([`crate::passes::passes_for`]). On a Mach-O the pointer slots
-//! are chained-fixup entries; [`MachoSlots`] resolves them before the walk. The XML datatest path never loads an ELF object
+//! are fixup entries; [`MachoSlots`] resolves them before the walk. The XML
+//! datatest path never loads an ELF object
 //! and never runs this pass, so the datatest / stage-model parity oracles are
 //! structurally untouched. Defensive by construction (the [`AnalysisPass`]
 //! never-fail contract): a non-ELF input, a C binary, a `-fno-rtti` build, or any
@@ -224,8 +225,8 @@ pub(super) struct Recovery {
 /// Discover, decode and walk the image's typeinfo objects and vtables, or
 /// `None` for an image with none (a C binary, a `-fno-rtti` build, a PE).
 pub(super) fn recover(ctx: &AnalysisCtx) -> Option<Recovery> {
-    // The MSVC ABI owns PE. A Mach-O's pointer slots are chained-fixup
-    // entries, so they are resolved into a copy of the sections first.
+    // The MSVC ABI owns PE. A Mach-O's pointer slots are fixup entries, so
+    // they are resolved into a copy of the sections first.
     let macho = match ctx.file.format() {
         BinaryFormat::Elf => None,
         BinaryFormat::MachO => Some(MachoSlots::new(ctx.file, ctx.bytes)),
@@ -252,9 +253,10 @@ pub(super) fn recover(ctx: &AnalysisCtx) -> Option<Recovery> {
     if candidates.is_empty() && copied.is_empty() {
         return None;
     }
-    let img = match &macho {
+    let macho_sections = macho.as_ref().map(|m| m.sections(ctx.file));
+    let img = match &macho_sections {
         None => ImageBytes::new(ctx.file),
-        Some(m) => ImageBytes::from_spans(m.sections.iter().map(|(a, d)| (*a, d.as_slice())).collect()),
+        Some(sections) => ImageBytes::from_spans(sections.iter().map(|(a, d)| (*a, d.as_slice())).collect()),
     };
     if !copied.is_empty() {
         let points: HashMap<u64, Flavor> = copied.iter().map(|&(a, f)| (a + 2 * ptr, f)).collect();
@@ -273,43 +275,61 @@ pub(super) fn recover(ctx: &AnalysisCtx) -> Option<Recovery> {
     let text = TextRanges::new(ctx.file);
     let relocated = match &macho {
         None => relocated_slots(ctx.file),
-        Some(m) => m.binds.clone(),
+        Some(m) => m.named_binds.iter().map(|(va, ..)| *va).collect(),
     };
     let subs = recover_subvtables(&img, &rk, &text, &relocated, &typeinfos);
     resolve_virtual_bases(&img, &rk, &mut typeinfos, &subs);
     Some(Recovery { typeinfos, subs, rk })
 }
 
-/// A Mach-O's sections with every chained-fixup slot replaced by what dyld
-/// writes there: the target of a rebase, or 0 for a bind (an import, the same
-/// shape an ELF slot with a dynamic relocation has in the file). A classic
-/// `LC_DYLD_INFO` image already has that shape; its bind names come from
-/// replaying the bind opcodes. IDA 9.5's
-/// rtti.so reads the same values through its fixup-applied database
-/// (rtti.so 0xd7a0).
+/// The `__cxxabiv1` typeinfo vtables a non-PIE executable defines itself: its
+/// code refers to them by absolute address, so the linker copies each into the
+/// image (`R_X86_64_COPY`) and every typeinfo's vptr word is a plain pointer two
+/// words into the copy, with no relocation to find it by. The copies keep their
+/// `.dynsym` names through `strip`.
+fn copied_abi_vtables(file: &object::File) -> Vec<(u64, Flavor)> {
+    file.dynamic_symbols()
+        .filter(|sym| sym.address() != 0)
+        .filter_map(|sym| Some((sym.address(), Flavor::from_abi_vtable(sym.name().ok()?)?)))
+        .collect()
+}
+
+/// A Mach-O's fixups in the form the walk reads. A chained-fixup image keeps
+/// chain entries in its pointer slots, so [`MachoSlots::sections`] copies the
+/// sections with every slot replaced by what dyld writes there: the target of
+/// a rebase, or 0 for a bind (an import, the same shape an ELF slot with a
+/// dynamic relocation has in the file). A classic `LC_DYLD_INFO` image already
+/// has that shape; its bind names come from replaying the bind opcodes.
 struct MachoSlots {
-    sections: Vec<(u64, Vec<u8>)>,
-    binds: HashSet<u64>,
-    /// `(slot, import, addend)`; the addend is unknown for a classic bind.
+    fixups: crate::loader::format::macho::chained::ChainedFixups,
+    /// `(slot, import, addend)`; the classic bind replay keeps no addend.
     named_binds: Vec<(u64, String, Option<i64>)>,
 }
 
 impl MachoSlots {
     fn new(file: &object::File, bytes: &[u8]) -> MachoSlots {
-        use object::read::ObjectSection;
         let fixups = crate::loader::format::macho::chained::resolve_chained_fixups(file, bytes);
-        let width = if file.is_64() { 8 } else { 4 };
-        // A classic image (`LC_DYLD_INFO`) keeps its rebased pointers in the
-        // file and zeros in its bind slots; only the bind names are needed.
-        let named_binds: Vec<(u64, String, Option<i64>)> = if fixups.is_chained() {
-            fixups.named_binds().map(|(va, name)| (va, name.to_string(), fixups.bind(va).map(|(_, a)| a))).collect()
-        } else {
-            crate::loader::format::macho::dyldinfo::resolve_dyld_info_binds(file, bytes)
-                .into_iter()
-                .map(|(va, name)| (va, name.to_string(), None))
+        let named_binds = if fixups.is_chained() {
+            fixups
+                .binds()
+                .map(|(va, bind)| (va, String::from_utf8_lossy(&bind.name).into_owned(), Some(bind.addend)))
                 .collect()
+        } else {
+            let mut binds: Vec<(u64, String, Option<i64>)> =
+                crate::loader::format::macho::dyldinfo::resolve_dyld_info_binds(file, bytes)
+                    .into_iter()
+                    .map(|(va, name)| (va, name.to_string(), None))
+                    .collect();
+            binds.sort_by_key(|(va, ..)| *va);
+            binds
         };
-        let binds: HashSet<u64> = named_binds.iter().map(|(va, ..)| *va).collect();
+        MachoSlots { fixups, named_binds }
+    }
+
+    /// The sections as dyld leaves them, sorted by address.
+    fn sections(&self, file: &object::File) -> Vec<(u64, Vec<u8>)> {
+        use object::read::ObjectSection;
+        let width = if file.is_64() { 8usize } else { 4 };
         let mut sections = Vec::new();
         for sec in file.sections() {
             let addr = sec.address();
@@ -318,25 +338,24 @@ impl MachoSlots {
                 continue;
             }
             let mut data = data.to_vec();
-            if fixups.is_chained() {
-                let end = addr + data.len() as u64;
+            if self.fixups.is_chained() {
                 let mut patch = |va: u64, value: u64| {
-                    if va >= addr && va + width <= end {
-                        let at = (va - addr) as usize;
-                        data[at..at + width as usize].copy_from_slice(&value.to_le_bytes()[..width as usize]);
+                    let Some(at) = va.checked_sub(addr).and_then(|at| usize::try_from(at).ok()) else { return };
+                    if let Some(slot) = at.checked_add(width).and_then(|end| data.get_mut(at..end)) {
+                        slot.copy_from_slice(&value.to_le_bytes()[..width]);
                     }
                 };
-                for (va, target) in fixups.rebases() {
+                for (va, target) in self.fixups.rebases() {
                     patch(va, target);
                 }
-                for &va in &binds {
-                    patch(va, 0);
+                for (va, ..) in &self.named_binds {
+                    patch(*va, 0);
                 }
             }
             sections.push((addr, data));
         }
         sections.sort_by_key(|(a, _)| *a);
-        MachoSlots { sections, binds, named_binds }
+        sections
     }
 
     /// The Mach-O form of [`discover_typeinfos`]: a bind to a `__cxxabiv1`
@@ -359,18 +378,6 @@ impl MachoSlots {
         out.sort_by_key(|&(a, _)| a);
         out
     }
-}
-
-/// The `__cxxabiv1` typeinfo vtables a non-PIE executable defines itself: its
-/// code refers to them by absolute address, so the linker copies each into the
-/// image (`R_X86_64_COPY`) and every typeinfo's vptr word is a plain pointer two
-/// words into the copy, with no relocation to find it by. The copies keep their
-/// `.dynsym` names through `strip`.
-fn copied_abi_vtables(file: &object::File) -> Vec<(u64, Flavor)> {
-    file.dynamic_symbols()
-        .filter(|sym| sym.address() != 0)
-        .filter_map(|sym| Some((sym.address(), Flavor::from_abi_vtable(sym.name().ok()?)?)))
-        .collect()
 }
 
 /// The recovered classes' vtables, as the constructor/destructor recovery

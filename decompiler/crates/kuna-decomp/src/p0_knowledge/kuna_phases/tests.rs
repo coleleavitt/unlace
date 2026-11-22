@@ -44,9 +44,9 @@ fn group_count_is_39() {
 }
 
 #[test]
-fn subphase_count_is_48() {
-    assert_eq!(kuna_num_subphases(), 48);
-    assert_eq!(SUBPHASE_TABLE.len(), 48);
+fn subphase_count_is_49() {
+    assert_eq!(kuna_num_subphases(), 49);
+    assert_eq!(SUBPHASE_TABLE.len(), 49);
 }
 
 #[test]
@@ -56,13 +56,13 @@ fn surface_count_is_101() {
 }
 
 #[test]
-fn settable_count_is_305() {
-    assert_eq!(kuna_num_settables(), 305);
-    assert_eq!(SETTABLE_TABLE.len(), 305);
+fn settable_count_is_308() {
+    assert_eq!(kuna_num_settables(), 308);
+    assert_eq!(SETTABLE_TABLE.len(), 308);
 }
 
 #[test]
-fn tier_counts_are_60_core_154_transform_91_analysis() {
+fn tier_counts_are_63_core_153_transform_92_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -74,7 +74,7 @@ fn tier_counts_are_60_core_154_transform_91_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (60, 154, 91));
+    assert_eq!((core, transform, analysis), (63, 153, 92));
 }
 
 #[test]
@@ -429,12 +429,12 @@ fn option_values_live_value_present_for_129() {
         // gates around it. Default-off, ARM-only.
         "tailcallentry",
         "calltable",
+        "stubbinds",
         "incrementalwalk",
         "aifdataveto",
         "globalwidth",
         "funcchunks",
         "tailcallentryall",
-        "compacttable",
         "nameladder",
         "flirt",
         "fidproto",
@@ -463,6 +463,8 @@ fn option_values_live_value_present_for_129() {
         // with no codegen live reader (read console-side via kuna_live_value), like
         // the gates around it. Default-on, Mach-O-only.
         "cfstrings",
+        // (kuna) Embedded image and archive data symbols: a commit-side gate.
+        "blobs",
         // (kuna) The Swift type-layout arm's gate, read inside that pass.
         "swifttypes",
         // (kuna) Objective-C instance layouts — same commit-side gate as `objc`.
@@ -517,6 +519,9 @@ fn option_values_live_value_present_for_129() {
         // (kuna) Apple kernelcache unwrapping + MH_FILESET entry choice -- a
         // LOAD-time gate read from `KUNA_KERNELCACHE`. Default auto.
         "kernelcache",
+        // (kuna) Where a kernel collection's linked collections are found -- a
+        // LOAD-time gate read from `KUNA_KERNELCACHE_BOOT`. Default auto.
+        "kernelcache-boot",
     ];
     let mut with_live = 0;
     for i in 0..kuna_num_settables() {
@@ -532,8 +537,6 @@ fn option_values_live_value_present_for_129() {
                         st.option,
                         "outline"
                             | "implweight"
-                            | "linearswitch"
-                            | "treeswitch"
                             | "outlang"
                             | "loweredswitch"
                             | "regionstructure"
@@ -640,6 +643,16 @@ fn option_values_live_value_present_for_129() {
                             // same reason.  Its live value is
                             // `Architecture::cast_widen`.
                             | "castwiden"
+                            // (kuna) `armconstshift` takes a MODE
+                            // (`off|on|all`) over an enum field, for the same
+                            // reason.  Its live value is
+                            // `Architecture::arm_constant_shift`.
+                            | "armconstshift"
+                            // (kuna) `constselectjump` takes a MODE
+                            // (`off|reentry|on`) over an enum field, for the
+                            // same reason.  Its live value is
+                            // `Architecture::const_select_jump`.
+                            | "constselectjump"
                             // (kuna) `declorder` takes a MODE (`natural|name`)
                             // over an enum field, for the same reason.  Its live
                             // value is `Architecture::decl_order`.
@@ -930,8 +943,8 @@ fn option_values_live_value_present_for_129() {
     // 76 -> 75: `calleereginputs` became three-valued (off|on|custom), so it has
     // no codegen live reader; its live value is read console-side via
     // `kuna_live_value`, like `narrowargs`/`protoorder`.
-    // Recounted after merging upstream/main (2026-11-18): the fork's live-field rows plus upstream's.
-    assert_eq!(with_live, 129);
+    // Recounted after merging upstream/main (2026-11-22): the fork's live-field rows plus upstream's.
+    assert_eq!(with_live, 130);
 }
 
 #[test]
@@ -1236,7 +1249,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `flirt`; its P1 row sits beside `fid`.
     // +1 for `chkstkdarwin`, its P2 row after `msvcftol`.
     // +1 for `calleeargs`; its P4 row sits after `argclobber`.
-    assert_eq!(json.matches("},\n").count(), 304);
+    // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
+    assert_eq!(json.matches("},\n").count(), 307);
 }
 
 #[test]

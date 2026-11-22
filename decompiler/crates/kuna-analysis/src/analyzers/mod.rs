@@ -6,6 +6,7 @@
 
 pub mod addrtable;
 pub mod aif;
+pub mod blobs;
 pub mod callfixup;
 pub mod demangle;
 pub mod dwarf;
@@ -22,6 +23,7 @@ pub mod objc;
 pub mod operand_refs;
 pub mod gotypes;
 pub mod iokit;
+pub mod kernelbug;
 pub mod pclntab;
 pub mod pdb;
 pub mod protos;

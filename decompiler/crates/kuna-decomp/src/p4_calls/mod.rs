@@ -37,6 +37,7 @@ pub mod kuna_callsitestackargs;
 pub mod kuna_dfunaffected;
 pub mod kuna_exclusivearguse; // (kuna) a dereference on the other arm of a branch does not compete with a call on this one
 pub mod kuna_exclusivecallret; // (kuna) a call and a return on mutually exclusive arms do not compete
+pub mod kuna_sharedpush; // (kuna) a push above a branch is the argument of the call on each arm
 pub mod kuna_noreturnretuse;
 pub mod kuna_returnpair;
 pub mod kuna_retinputhalf;
@@ -48,6 +49,7 @@ pub mod kuna_directalias; // (kuna) a direct access at a known stack offset alia
 pub mod kuna_returnuncomputed;
 pub mod kuna_spillargtrial;
 pub mod kuna_stackaddrargtrial;
+pub mod kuna_calleefilledarg; // (kuna) a register the callee loads itself is no slot, and no evidence about the slots after it
 pub mod kuna_zeroidiomuse; // (kuna) a self-cancelling `xor r,r` is not a competing use of the value it eats
 pub mod kuna_varargstackargs; // (kuna) the variadic call's stack tail is its own fillinMap section
 pub mod kuna_argclobber; // (kuna) drop a trailing register argument a previous call's clobber put there
@@ -65,6 +67,7 @@ pub mod kuna_formatwitness; // (kuna) equal constant formats can witness a parti
 pub mod kuna_inputparamgap; // (kuna) an unused-argument-register run must not veto a later live-in
 pub mod kuna_stackarggap; // (kuna) an unwritten argument register ends a call site's argument list
 pub mod kuna_gobool; // (kuna) Go boolean-return stale-high narrowing (docs/multilang.md W4)
+pub mod kuna_gochanrecv;
 pub mod kuna_rustabi; // (kuna) the rustc two-register return: keep the pair, connect it at the call
 pub mod kuna_langabi; // (kuna) the ABI seam: per-language `extern` rendering
 pub mod kuna_formattail; // (kuna) a resolved format call keeps an open tail through trial scoring

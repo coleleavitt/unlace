@@ -161,10 +161,26 @@ No p-code, statement, or destination changes.
 
 `kuna_loopcontinue.rs (recover_continues)` runs before `mark_unstructured`.
 A goto or if-goto becomes `continue` only when its target's first leaf is the
-first leaf of its innermost `BlockInfLoop`. Entering a nested loop resets that
-scope; conditional loops disable recovery because their continue may evaluate
-a condition or iterator rather than restart the first leaf. Other destinations
-retain gotos. `off` restores the original collapse precedence and rendering.
+first leaf of its innermost `BlockInfLoop`, or the continue point of its
+innermost conditional loop. Entering a nested loop resets that scope. A
+conditional loop's `continue;` evaluates a test or an iterate statement rather
+than restarting the first leaf, so `kuna_loopcontinue.rs (continue_points)`
+gives each one the leaf a `continue;` resumes at, or none. A while-do resumes
+at the front leaf of its condition block, unless it prints as a `for` (an
+iterate op), whose `continue;` would run the iterate statement first; in the
+overflow form the condition block prints first inside `while( true ) { ... }`,
+which is where the jump lands too. A do-while resumes at the last leaf of its
+body only when that leaf prints nothing but the loop test: every op besides
+the branch is not printed, a marker, or has an implied output, and only when
+the output language's do-while runs its test on `continue;`: C's `do..while`
+and Go's `for` post statement do, while Rust prints a do-while as
+`loop { ..; if !(c) { break; } }`, where `continue;` would skip the test, so a
+Rust do-while keeps the goto (the `do_while_continue` flag the architecture
+derives from the output language). A switch
+between the jump and the loop does not matter, since C's `continue` skips
+switches. A jump into any other leaf, including the latch of a `while( true )`
+loop, keeps its goto. `off` restores the original collapse precedence and
+rendering.
 
 **`gotosink` — backward gotos become loops; a jump over a run becomes an
 `if`.** `kuna_gotosink.rs (ActionGotoSink)` runs after the other
@@ -198,19 +214,6 @@ An `if` whose condition is an exceptional edge (`eh_unwinding()` from
 `itaniumeh`, `java_try()`/`java_throws()` from `javatry`) is never moved or
 looped, and a function that holds one keeps its nested lists unflattened:
 the try printers recognise the shape structuring left around the edge.
-
-**`whilecontinue` — the continue point of a conditional loop.** With
-`whilecontinue on` (the default, and only while `loopcontinue` is on),
-`kuna_loopcontinue.rs (continue_points)` gives a conditional loop the leaf its
-`continue;` resumes at, and `recover_continues` uses it as the scope instead
-of disabling recovery. A while-do resumes at the front leaf of its condition
-block, unless it prints as a `for` (an iterate op), whose `continue;` would run
-the iterate statement first; in the overflow form the condition block prints
-first inside `while( true ) { ... }`, which is where the jump lands too. A
-do-while resumes at the last leaf of its body only when that leaf prints
-nothing but the loop test: every op besides the branch is not printed, a
-marker, or has an implied output. A jump into any other leaf, including the
-latch of a `while( true )` loop, keeps its goto. `off` restores the reset.
 
 **(angr) `condfold` — folding across a *complex* sibling.** `rule_block_or`
 requires the sibling condition block (upstream's `orblock`, the right operand
@@ -1301,8 +1304,9 @@ an exit of the switch) falls into the next case even when the body is not a
   innermost loop or switch whose body holds it prints `break;` (only while
   `loopbreak_recovery` is on, the option that owns `scopeBreak`);
 - a label prints only if a jump that still prints `goto` reaches it. The
-  label carriers are the ones `mark_unstructured` marks, so a printed `goto`
-  never loses its label.
+  label carriers are the ones `mark_unstructured` marks, and a
+  `BlockMultiGoto` edge always keeps its label, so a printed `goto` never
+  loses its label.
 
 The census only changes how a jump is spelled, never where control goes:
 each rewrite needs the target to be exactly the block the C text reaches
@@ -1364,15 +1368,16 @@ distinguishes them. Its per-edge narrowings — `earlyreturn` (DIV-23) and
 `switchreturn` (DIV-25) — remain separate options: they reach the mixed
 const/variable diamonds this whole-block gate rejects outright.
 
-### unmergecall — one call per path for a cross-jumped call tail
+### returndup calls — one call per path for a cross-jumped call tail
 
-`decompiler/crates/kuna-decomp/src/p8_structure/kuna_unmergecall.rs
-(ActionUnmergeCall)`, option `unmergecall` (default off), runs in the
-`returnsplit` group right after `returndup`. gcc `-Os` cross-jumps the tails of
-paths that end in the same call: each path sets the arguments and jumps to one
-`call f; ...; ret` block, so the call reads MULTIEQUALs and prints as
-`if (c) { a = b; k = 2; } return f(a, k);`. The pass splits such a block once
-per predecessor with `decompiler/crates/kuna-decomp/src/substrate/funcdata_block.rs
+`decompiler/crates/kuna-decomp/src/p8_structure/kuna_returndupcalls.rs
+(ActionReturnDupCalls)` runs in the `returnsplit` group right after
+`returndup`, only at the value `option returndup calls` (not a default). gcc
+`-Os` cross-jumps the tails of paths that end in the same call: each path sets
+the arguments and jumps to one `call f; ...; ret` block, so the call reads
+MULTIEQUALs and prints as `if (c) { a = b; k = 2; } return f(a, k);`. The pass
+splits such a block once per predecessor with
+`decompiler/crates/kuna-decomp/src/substrate/funcdata_block.rs
 (Funcdata::node_split_calls)`, the `node_split` clone with CALL and INDIRECT
 cloning enabled: each cloned call gets its own copy of the original call spec
 (`FuncCallSpecs::clone_for_op`, a fresh fspec handle), and a cloned INDIRECT's
@@ -1383,9 +1388,11 @@ A block qualifies when it has no successors, two to four distinct
 predecessors, at most 16 ops, exactly one direct CALL, an argument of that call
 computed (within the block) from a MULTIEQUAL, and no INDIRECT that still
 creates the call's output (prototype recovery has not settled the output yet;
-a later fullloop pass retries). Splitting is exact, since each predecessor runs
-one copy. It stays off because the source often wrote the merged form as a
-ternary argument (`lua_pushstring(L, isint ? "integer" : "float")`).
+a later fullloop pass retries). Each predecessor runs exactly one copy, so the
+split preserves behaviour. It is a value of `returndup` rather than its
+default because the source often wrote the merged form as a ternary argument
+(`lua_pushstring(L, isint ? "integer" : "float")`), and the binary cannot tell
+the two apart.
 
 ### orchain — the split that must not happen (decbench)
 
@@ -1699,3 +1706,31 @@ while-do, and the for recovery (`analyzeforloops`) a `for`: clang -O2
 on x86-64 (do-whiles 181 to 159, fors 34 to 46), 26 on AArch64, 13 in ld.so.
 A pointer loop whose guard is `1 <= n` and whose tail is `p != p0 + n`, and a
 loop whose guard reads a 32-bit `n` while the tail compares 64 bits, are left.
+
+A switch can itself be a loop header. In `RegionStructurer::try_switch_cases`, a
+case backedge to that same switch is an internal loop edge, not a terminal
+continue to an enclosing loop. It nominates the switch as the exit so
+`BlockGraph::new_block_switch` restores a self-edge after collapsing its cases;
+the loop schema can then wrap the switch. Backedges to a distinct enclosing loop
+head retain their existing continue treatment. Treating both forms alike drops
+the internal edge and emits a one-shot switch that loses later iterations.
+GCC and Clang emit this shape for `for (;;) switch (f(x)) { ... }`: one jump
+table at the loop head, with every case but the default jumping straight back.
+The rule is shared by every architecture. When such a switch also has a case
+leaving to a different exit block, one switch exit cannot carry both edges, so
+the schema declines and the ordinary collapse structures the loop. Folding it
+anyway dropped the backedge as well. The same holds beside a case that
+continues an enclosing loop: that edge survives the collapse, so
+`new_block_switch` would restore no self-edge, and a switch that is its own
+exit folds only when no such continue case remains. A direct edge from the
+switch to itself makes it its exit in the same way; Clang emits one for an
+empty case when no range check precedes the table. An x86-64 compact switch with a retry
+case therefore prints its biased selector inline (`switch(mode - 5)`), exactly
+as it does with `regionstructure off`; its earlier `switch(mode)` came from
+that lossy fold, rescued only when the structurer later stranded.
+
+The self-edge that `new_block_switch` restores leaves the folded switch as a
+block whose only edge loops back to itself. When the dispatch loop is a case
+of an outer switch, such a case is not a continue either: folding it as a
+terminal case would make its self-edge internal and drop the inner loop, so
+the outer switch declines until the loop schema has wrapped it.

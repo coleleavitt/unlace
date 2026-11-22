@@ -15,7 +15,7 @@ pub(super) fn field_type(
         let offset = vma
             .checked_sub(meta.types)
             .and_then(|n| u32::try_from(n).ok());
-        let Some(t) = offset.and_then(|off| read_type(img, meta.types, meta.etypes, off, meta.old_names)) else {
+        let Some(t) = offset.and_then(|off| read_type(img, meta.types, meta.etypes, off)) else {
             break None;
         };
         if t.kind != KIND_POINTER {

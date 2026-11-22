@@ -51,7 +51,7 @@
 //!   [`analyze_cmp`] ([`CmpNode`]), [`target_start`], [`recover_cascade`],
 //!   [`advance_past_guards`], and [`ActionLowerSwitchDetect::apply`] — the
 //!   `ActionLowerSwitchDetect::apply` head-finding + cascade walk, transcribed.
-//! * [`OptionLowerSwitch`] — the `loweredswitch on|off` parse + message
+//! * [`OptionLowerSwitch`] — the `loweredswitch on|off|linear|tree|all` parse + message
 //!   (`OptionLowerSwitch::apply`).
 //!
 //! ## The install half (`ActionLowerSwitchInstall` +
@@ -914,10 +914,9 @@ fn recover_cascade(
         }
     }
 
-    // RULE3: need >= 3 cases.  `treeswitch N` moves the floor to N and the cap to 64
-    // for a binary-search cascade only; a linear chain keeps its own rule.
-    let tree = data.get_arch().tree_switch;
-    let (floor, cap) = if saw_range && tree > 0 { (tree as usize, 64) } else { (3, 16) };
+    // RULE3: need >= 3 cases.  `loweredswitch tree` moves the floor to 2 and the
+    // cap to 64 for a binary-search cascade; a linear chain keeps 3 to 16.
+    let (floor, cap) = if saw_range && data.get_arch().lowered_switch_tree { (2, 64) } else { (3, 16) };
     if cases.len() < floor {
         return None;
     }
@@ -964,31 +963,25 @@ fn recover_cascade(
             return None;
         }
     }
-    // Require the GCC binary-search structure (a range/jump-tree split): a purely
-    // linear equality chain reads as a hand-written if/else-if.  Option
-    // `linearswitch N` lets a linear chain of at least N cases re-roll too.
-    let linear = !saw_range;
-    if linear {
-        let min = data.get_arch().linear_switch;
-        if min <= 0 || (cases.len() as int4) < min {
+    // Require the GCC binary-search structure (a range/jump-tree split): a
+    // purely linear equality chain reads as a hand-written if/else-if.
+    // `loweredswitch linear` takes a linear chain too, when no case body is
+    // shared with a copy of the chain on another path.
+    let proven_signedness = if saw_range {
+        let proven = range_signedness?;
+        if path_signedness.is_some_and(|path| path != proven) {
             return None;
         }
-        // A case body another path also enters is a copy of the chain the
-        // compiler duplicated; re-rolling one copy splits what the two share.
-        if case_blocks.iter().any(|&b| data.bblocks_ref().block(b).size_in() != 1 || !data.bblocks_ref().dominates(startbb, Some(b))) {
-            return None;
-        }
-    }
-    let proven_signedness = if linear {
-        None
+        Some(proven)
     } else {
-        let proven_signedness = range_signedness?;
-        if let Some(path_signedness) = path_signedness {
-            if path_signedness != proven_signedness {
-                return None;
-            }
+        if !data.get_arch().lowered_switch_linear {
+            return None;
         }
-        Some(proven_signedness)
+        let blocks = data.bblocks_ref();
+        if case_blocks.iter().any(|&b| blocks.block(b).size_in() != 1 || !blocks.dominates(startbb, Some(b))) {
+            return None;
+        }
+        path_signedness
     };
 
     // Default = most-voted common sink.
@@ -1037,20 +1030,17 @@ fn recover_cascade(
         case_vals.push(*val);
         case_targets.push(tgt.clone());
     }
+    // Equalities never decide signedness: without a range node or an extension
+    // on the path, every label must print the same signed or unsigned.
     let signed_labels = match proven_signedness {
-        Some(proven) => proven.signed_labels(),
-        // Equalities never decide signedness; an extension on the path does, and
-        // without one every label must print the same either way.
-        None => match path_signedness {
-            Some(signedness) => signedness.signed_labels(),
-            None => {
-                let sign_bit = 1u64 << ((var_size * 8 - 1).clamp(0, 63) as u32);
-                if case_vals.iter().any(|&v| v & sign_bit != 0) {
-                    return None;
-                }
-                false
+        Some(signedness) => signedness.signed_labels(),
+        None => {
+            let sign_bit = 1u64 << ((var_size * 8 - 1).clamp(0, 63) as u32);
+            if case_vals.iter().any(|&v| v & sign_bit != 0) {
+                return None;
             }
-        },
+            false
+        }
     };
 
     Some(KunaLoweredSwitchRecord {
@@ -1525,7 +1515,30 @@ impl Action for ActionLowerSwitchInstall {
 //===========================================================================
 
 /// (kuna) Toggle lowered comparison-cascade -> switch recovery:
-/// `loweredswitch on|off` (C++ `OptionLowerSwitch`).
+/// What `loweredswitch` re-rolls: nothing, the binary-search cascades of 3 to
+/// 16 cases, and optionally linear equality chains and wider compare trees.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoweredSwitchMode {
+    Off,
+    On,
+    Linear,
+    Tree,
+    All,
+}
+
+impl LoweredSwitchMode {
+    pub fn enabled(self) -> bool {
+        self != LoweredSwitchMode::Off
+    }
+    pub fn linear(self) -> bool {
+        matches!(self, LoweredSwitchMode::Linear | LoweredSwitchMode::All)
+    }
+    pub fn tree(self) -> bool {
+        matches!(self, LoweredSwitchMode::Tree | LoweredSwitchMode::All)
+    }
+}
+
+/// `loweredswitch on|off|linear|tree|all` (C++ `OptionLowerSwitch`).
 ///
 /// The kuna Rust port ships default-on (the angr-port DIV;
 /// `architecture.rs:418`).  "off" makes the Detect/Install Actions inert.
@@ -1535,19 +1548,27 @@ impl OptionLowerSwitch {
     /// The option name (C++ `name = "loweredswitch"`).
     pub const NAME: &'static str = "loweredswitch";
 
-    /// C++ `OptionLowerSwitch::apply`.
-    ///
-    /// Returns the resolved flag plus the confirmation message.  The caller
-    /// writes the flag into `Architecture::recover_lowered_switch` (threaded by
-    /// the W9 option dispatch; STUB noted in the module docs).
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
-        let val = on_or_off(p1)?;
-        // glb->recover_lowered_switch = val;  -- left to the caller (STUB(W4/W9)).
-        let prop = if val { "on" } else { "off" };
-        Ok((
-            val,
-            format!("Lowered comparison-cascade switch recovery turned {prop}"),
-        ))
+    /// C++ `OptionLowerSwitch::apply`, extended with the `linear`, `tree` and
+    /// `all` values.  Returns the resolved mode plus the confirmation message;
+    /// the caller writes the mode into the `Architecture`.
+    pub fn apply(&self, p1: &str) -> KunaResult<(LoweredSwitchMode, String)> {
+        let widened = |what: &str| format!("Lowered comparison-cascade switch recovery turned on, {what}");
+        Ok(match p1.trim() {
+            "linear" => (LoweredSwitchMode::Linear, widened("linear equality chains included")),
+            "tree" => (LoweredSwitchMode::Tree, widened("compare trees of 2 to 64 cases included")),
+            "all" => (
+                LoweredSwitchMode::All,
+                widened("linear equality chains and compare trees of 2 to 64 cases included"),
+            ),
+            other => {
+                let val = on_or_off(other)?;
+                let prop = if val { "on" } else { "off" };
+                (
+                    if val { LoweredSwitchMode::On } else { LoweredSwitchMode::Off },
+                    format!("Lowered comparison-cascade switch recovery turned {prop}"),
+                )
+            }
+        })
     }
 }
 

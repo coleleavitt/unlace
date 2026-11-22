@@ -90,6 +90,20 @@ pub struct StringFact {
     pub len: u32,
 }
 
+/// (kuna `blobs`) An embedded image or archive: `len` bytes at `addr` that
+/// walk as one whole file of `kind`. The commit plants it as `<kind>_<addr>`,
+/// an `unsigned char[len]`, wherever no symbol already covers the address.
+/// Produced by [`crate::analyzers::blobs`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BlobFact {
+    /// Virtual address of the file's first byte.
+    pub addr: u64,
+    /// The file's exact length in bytes.
+    pub len: u64,
+    /// Which container it is.
+    pub kind: crate::analyzers::blobs::BlobKind,
+}
+
 /// A Mach-O Core Foundation constant string (`__cfstring` entry). The entry is a
 /// `CFString` struct (isa, flags, char pointer, length); `bytes` is the UTF-8 of
 /// the string its char pointer targets, already resolved through chained fixups
@@ -300,11 +314,15 @@ pub struct SwiftTypeFacts {
 pub struct ModelFact {
     pub func_addr: u64,
     pub model: &'static str,
+    /// Optional stack bound that requires a decoded leaf body before binding.
+    pub leaf_stack_inputs: Option<LeafStackInputs>,
     /// The convention's implicit context register may or may not be a
     /// parameter (a Swift struct member's `self`): a call passes it only
     /// when the caller set it for that call.
     pub maybe_self: bool,
 }
+
+pub use crate::pclntab::kuna_goabi0_leaf::LeafStackInputs;
 
 /// The input of the function at `func_addr` in register `reg` is `name`, of
 /// `type_` when that is known, when the function's own analysis finds it
@@ -444,6 +462,8 @@ pub struct AnalysisOutput {
     pub ppc32_pic_slots: Vec<kuna_decomp::kuna_ppc32piccalls::ImportSlot>,
     /// `(addr, name, kind)` -> seed `Database::add_function` / symbol map.
     pub symbols: Vec<SymFact>,
+    /// Unique AMD64 Go function-table entry of the blocking status receive helper.
+    pub go_chanrecv2: Option<u64>,
     /// Named, sized data globals (the symbol-table / DWARF data objects). Mapped
     /// into the global scope with an `undefined<size>` type so a memory access of
     /// the object renders its NAME (`max_width`) not `dat_<addr>`. See
@@ -529,6 +549,10 @@ pub struct AnalysisOutput {
     /// entry, return address)`; the decompile step decodes a `void` function's
     /// callers from there.
     pub call_returns: Vec<(u64, u64)>,
+    /// (kuna `kernelbug`) A Linux kernel image's `__bug_table` entries, one per
+    /// `WARN`/`BUG` trap. Parked on the architecture for the flow
+    /// (`kuna_decomp::kuna_kernelbug`); empty on every other image.
+    pub kernel_bugs: Vec<kuna_decomp::kuna_kernelbug::KernelBugSite>,
     /// (kuna `poolextents`) The ARM32 literal pools the Listing's trusted
     /// instructions prove, as sorted, disjoint `[lo, hi)` word runs; the flow
     /// walk's `funcboundflow` bound ends a call's fall-through at one. Empty
@@ -554,6 +578,10 @@ pub struct AnalysisOutput {
     /// `kalloc_type_view` / `kalloc_type_var_view`; the engine types a typed
     /// allocator's result by the view it is passed.
     pub kalloc_types: Vec<(u64, kuna_decomp::kuna_kalloctype::KallocView)>,
+    /// The `self` of each Objective-C method only a symbol names (a direct
+    /// method): an unlocked hint on its first argument register, typed
+    /// `Class *` under `objcivars`.
+    pub objc_self_hints: Vec<InputHintFact>,
     /// (kuna) Address ranges holding an **external reference** — an import slot
     /// whose contents the dynamic loader fills in with the address of a function
     /// living in another image (a PE IAT entry or a typed Mach-O lazy/non-lazy
@@ -600,6 +628,9 @@ pub struct AnalysisOutput {
     /// types each entry an opaque `struct __CFString` and pre-seeds the
     /// `StringManager`, so a reference renders the literal. Produced by [`crate::analyzers::cfstring`].
     pub cfstrings: Vec<CFStringFact>,
+    /// (kuna `blobs`) Embedded images and archives, each a whole file with an
+    /// exact length. Produced by [`crate::analyzers::blobs`].
+    pub blobs: Vec<BlobFact>,
     /// Library-function prototypes to seed onto matching FunctionSymbols (the kuna
     /// analog of Ghidra's `ApplyDataArchiveAnalyzer` / `.gdt` archives). Each is
     /// parked on its named callee via `set_function_prototype_pieces`, so a caller
@@ -710,6 +741,9 @@ pub struct AnalysisOutput {
     /// [`FidMatch::by_signature`] guesses at the same address and are never
     /// committed on their own.
     pub signature_vetoes: Vec<FidMatch>,
+    /// (kuna `calltable`) Discovered (not symbol) entries that sit on a switch
+    /// case no call reaches; the commit drops them from the entry stream.
+    pub case_entries: Vec<u64>,
     /// What became of each `.fid` database the FID pass was configured with
     /// (loaded, missing, unreadable, invalid, incompatible). Produced only by
     /// [`crate::fid::FidPass`] when `kuna_fid_db` names a database.
@@ -725,6 +759,8 @@ pub struct AnalysisOutput {
     pub cpp_dwarf: CppDwarfFacts,
     /// Go DWARF signatures, with type interning deferred until the commit gate.
     pub go_dwarf: Vec<crate::dwarf::kuna_godwarfsig::Facts>,
+    /// Exact linked pointer method statements, intersected with Go DWARF at commit.
+    pub go_pointer_methods: std::collections::BTreeMap<u64, crate::gotypes::kuna_pointermethods::LinkedMethod>,
     /// (kuna `cppsig`) The prototypes recovered from the MANGLED SYMBOL, split by
     /// how certain the pass is that argument 0 is an implicit `this`. Held apart
     /// for the same reason as [`Self::cpp_dwarf`] — the producing pass runs at
@@ -735,9 +771,6 @@ pub struct AnalysisOutput {
     /// (kuna `libctypes`) Data symbols the analysis tier types outright — the
     /// stdio stream slots. See [`TypedDataFact`].
     pub typed_data: Vec<TypedDataFact>,
-    /// (kuna `gortti`) Go runtime type descriptors and itabs under their linker
-    /// names; folded into [`Self::typed_data`] at commit when the option is on.
-    pub go_rtti: Vec<TypedDataFact>,
     /// (kuna `gotypeglobals`) A Go image's `_type` descriptors as named, typed
     /// data globals (`type:main.Point` of shell `go.typedesc`). Held APART from
     /// [`Self::typed_data`] because the producing pass runs at load, upstream of
@@ -935,13 +968,13 @@ impl AnalysisOutput {
     /// Fold another output into this one (concatenation; dedup is the driver's job).
     pub fn merge(&mut self, other: AnalysisOutput) {
         self.symbols.extend(other.symbols);
+        self.go_chanrecv2 = self.go_chanrecv2.or(other.go_chanrecv2);
         self.data_objects.extend(other.data_objects);
         self.dwarf_typed_globals.extend(other.dwarf_typed_globals);
         self.tls_layout = self.tls_layout.take().or(other.tls_layout);
         self.dwarf_reg_locals.extend(other.dwarf_reg_locals);
         self.dwarf_param_regs.extend(other.dwarf_param_regs);
         self.typed_data.extend(other.typed_data);
-        self.go_rtti.extend(other.go_rtti);
         self.go_type_globals.extend(other.go_type_globals);
         self.go_itabs.extend(other.go_itabs);
         self.swift_types.typed_data.extend(other.swift_types.typed_data);
@@ -964,6 +997,7 @@ impl AnalysisOutput {
         self.no_fallthru_calls.extend(other.no_fallthru_calls);
         self.eh_call_sites.extend(other.eh_call_sites);
         self.call_returns.extend(other.call_returns);
+        self.kernel_bugs.extend(other.kernel_bugs);
         self.arm_pool_extents.extend(other.arm_pool_extents);
         self.readonly.extend(other.readonly);
         self.const_ranges.extend(other.const_ranges);
@@ -972,6 +1006,7 @@ impl AnalysisOutput {
             self.objc_classes = other.objc_classes;
         }
         self.kalloc_types.extend(other.kalloc_types);
+        self.objc_self_hints.extend(other.objc_self_hints);
         self.externref.extend(other.externref);
         self.import_slot_names.extend(other.import_slot_names);
         self.vcall_sites.extend(other.vcall_sites);
@@ -982,6 +1017,7 @@ impl AnalysisOutput {
         self.wide_strings.extend(other.wide_strings);
         self.wide_strings32.extend(other.wide_strings32);
         self.cfstrings.extend(other.cfstrings);
+        self.blobs.extend(other.blobs);
         self.prototypes.extend(other.prototypes);
         self.prototypes_at.extend(other.prototypes_at);
         self.dwarf_nocall.extend(other.dwarf_nocall);
@@ -1002,12 +1038,14 @@ impl AnalysisOutput {
         self.global_widths.extend(other.global_widths);
         self.data_vetoed.extend(other.data_vetoed);
         self.signature_vetoes.extend(other.signature_vetoes);
+        self.case_entries.extend(other.case_entries);
         self.fid_databases.extend(other.fid_databases);
         self.fallback_names.extend(other.fallback_names);
         self.cpp_dwarf.symbols.extend(other.cpp_dwarf.symbols);
         self.cpp_dwarf.locals.extend(other.cpp_dwarf.locals);
         self.cpp_dwarf.prototypes.extend(other.cpp_dwarf.prototypes);
         self.go_dwarf.extend(other.go_dwarf);
+        self.go_pointer_methods.extend(other.go_pointer_methods);
         self.cpp_sig.proven.extend(other.cpp_sig.proven);
         self.cpp_sig.inferred.extend(other.cpp_sig.inferred);
         self.cpp_sig.msvc.extend(other.cpp_sig.msvc);

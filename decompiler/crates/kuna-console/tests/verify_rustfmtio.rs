@@ -259,10 +259,7 @@ fn unchanged_expressions_match_native_stdout_and_broken_pipe_results() {
             "out:&mut &std::io::Stdout,value:u32,text:&str",
         ),
     ] {
-        // The bindings below give `a0` the `u64` a non-tail-call body declares;
-        // `tailcontract` would hand the tail-calling bodies their callee's
-        // pointer parameter instead.
-        let body = decompile(NATIVE, name, true, "rust", |arch| arch.tail_contract = false, |_| {});
+        let body = output(NATIVE, name, true);
         let expressions: Vec<_> = body
             .lines()
             .filter(|line| line.contains("use std::io::Write as _;"))
@@ -276,7 +273,7 @@ fn unchanged_expressions_match_native_stdout_and_broken_pipe_results() {
             .next()
             .unwrap()
             .trim_end_matches(';');
-        let mut bindings = String::from("let a0=out as *mut &std::io::Stdout as u64;");
+        let mut bindings = String::from("let a0=out as *mut &std::io::Stdout as *mut u64;");
         for argument in primitive.captures_iter(expression) {
             bindings.push_str(&format!(
                 "let {}=&value as *const {};",

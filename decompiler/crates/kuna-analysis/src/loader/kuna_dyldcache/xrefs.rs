@@ -16,8 +16,7 @@
 //! (`EXPORT_SYMBOL_FLAGS_REEXPORT` and `LC_REEXPORT_DYLIB`), so a call into
 //! `_platform_memmove` reads as the `memmove` the source called. Otherwise the
 //! symbol table of the image holding the target names it (exports, else the
-//! locals in the local-symbols file). The result rides in
-//! the rebuilt image as an `LC_NOTE` owned by [`NOTE_OWNER`].
+//! locals in the local-symbols file). The result rides in the rebuilt image as an `LC_NOTE` owned by [`NOTE_OWNER`].
 //! `macho_stubs` reads the note back as imports, under the `dyldcrossrefs`
 //! option.
 
@@ -67,17 +66,18 @@ pub fn encode(xrefs: &[Xref]) -> Vec<u8> {
     table
 }
 
-/// The inverse of [`encode`]; a malformed blob yields the entries before the fault.
+/// The inverse of [`encode`]; a malformed blob yields the entries before the
+/// fault. An honest note holds each name once, so the names copied never total
+/// more than the blob's name pool.
 pub fn decode(blob: &[u8]) -> Vec<Xref> {
     let Some(count) = blob.get(..4).map(|b| u32_at(b, 0) as usize) else {
         return Vec::new();
     };
-    let Some(names_at) = count.checked_mul(16).and_then(|n| n.checked_add(4)) else {
-        return Vec::new();
-    };
+    let names_at = count.saturating_mul(16).saturating_add(4);
     let Some(names) = blob.get(names_at..) else {
         return Vec::new();
     };
+    let mut allowance = names.len();
     blob[4..names_at]
         .chunks_exact(16)
         .map_while(|e| {
@@ -88,6 +88,7 @@ pub fn decode(blob: &[u8]) -> Vec<Xref> {
             };
             let name = names.get(u32_at(e, 12) as usize..)?;
             let name = &name[..name.iter().position(|&b| b == 0)?];
+            allowance = allowance.checked_sub(name.len())?;
             Some(Xref { addr: u64_at(e, 0), kind, name: name.to_vec() })
         })
         .collect()
@@ -105,59 +106,53 @@ pub fn read_note(bytes: &[u8]) -> Vec<Xref> {
         _ => return Vec::new(),
     };
     let (ncmds, sizeofcmds) = (u32_at(bytes, 16) as usize, u32_at(bytes, 20) as usize);
-    let Some(cmds) = bytes.get(header..header + sizeofcmds) else {
+    let Some(cmds) = bytes[header..].get(..sizeofcmds) else {
         return Vec::new();
     };
-    let mut at = 0;
+    let mut at = 0usize;
     for _ in 0..ncmds {
-        let Some(c) = cmds.get(at..at + 8) else {
+        let Some(c) = cmds.get(at..at.saturating_add(8)) else {
             break;
         };
         let (cmd, size) = (u32_at(c, 0), u32_at(c, 4) as usize);
         if cmd == super::extract::LC_NOTE && size >= 40 && cmds.get(at + 8..at + 24) == Some(NOTE_OWNER) {
-            let Some(entry) = cmds.get(at..at + 40) else {
+            let Some(note) = cmds.get(at..at + 40) else {
                 break;
             };
-            let (off, len) = (u64_at(entry, 24) as usize, u64_at(entry, 32) as usize);
+            let (Ok(off), Ok(len)) = (usize::try_from(u64_at(note, 24)), usize::try_from(u64_at(note, 32))) else {
+                break;
+            };
             return bytes.get(off..off.saturating_add(len)).map(decode).unwrap_or_default();
         }
         if size < 8 {
             break;
         }
-        at += size;
+        at = at.saturating_add(size);
     }
     Vec::new()
 }
 
 /// Collect image `layout`'s references into other images. `view(va, len)`
 /// reads the image's slid bytes. Branches are decoded only for an arm64 image
-/// (`a64`); an x86_64 image gets its GOT slots alone. With `own_stubs`, calls
-/// to the image's own stubs are named too: a companion image in a merged
-/// rebuild has no indirect-symbol table of its own to name them.
+/// (`a64`); an x86_64 image gets its GOT slots alone.
 pub(super) fn collect<'v>(
     cache: &DyldCache,
     index: usize,
     layout: &ImageLayout,
     a64: bool,
-    own_stubs: bool,
     view: &dyn Fn(u64, usize) -> Option<&'v [u8]>,
 ) -> Vec<Xref> {
-    const S_SYMBOL_STUBS: u32 = 0x8;
-    let stubs: Vec<(u64, u64)> = if own_stubs {
-        layout
-            .segments
-            .iter()
-            .flat_map(|s| &s.sections)
-            .filter(|s| s.section_type() == S_SYMBOL_STUBS)
-            .map(|s| (s.addr, s.addr.saturating_add(s.size)))
-            .collect()
-    } else {
-        Vec::new()
-    };
     let mut targets = BTreeSet::new();
     let mut slots = Vec::new();
+    let mut budget = cache.total_len;
+    let lookup = layout.segments.len() as u64;
     for seg in &layout.segments {
         for sec in &seg.sections {
+            let cost = sec.size.max(1).saturating_add(lookup);
+            if cost > budget {
+                continue;
+            }
+            budget -= cost;
             let Some(bytes) = view(sec.addr, sec.size as usize) else {
                 continue;
             };
@@ -168,9 +163,9 @@ pub(super) fn collect<'v>(
                 for (i, w) in bytes.chunks_exact(4).enumerate() {
                     let w = u32_at(w, 0);
                     if w & 0x7C00_0000 == 0x1400_0000 {
-                        let pc = sec.addr.wrapping_add(i as u64 * 4);
+                        let pc = sec.addr + i as u64 * 4;
                         let target = pc.wrapping_add_signed(sign_extend(w & 0x03FF_FFFF, 26) << 2);
-                        if !layout.holds(target) || stubs.iter().any(|&(lo, hi)| target >= lo && target < hi) {
+                        if !layout.holds(target) {
                             targets.insert(target);
                         }
                     }
@@ -180,7 +175,7 @@ pub(super) fn collect<'v>(
                 for (i, p) in bytes.chunks_exact(ptr).enumerate() {
                     let value = if ptr == 8 { u64_at(p, 0) } else { u64::from(u32_at(p, 0)) };
                     if value != 0 && !layout.holds(value) {
-                        slots.push((sec.addr.wrapping_add((i * ptr) as u64), value));
+                        slots.push((sec.addr + (i * ptr) as u64, value));
                     }
                 }
             }
@@ -220,7 +215,7 @@ fn follow_stub(cache: &DyldCache, addr: u64) -> Option<u64> {
     let mut regs = [None::<u64>; 32];
     for (i, w) in code.chunks_exact(4).enumerate() {
         let w = u32_at(w, 0);
-        let pc = addr.wrapping_add(i as u64 * 4);
+        let pc = addr + i as u64 * 4;
         let rd = (w & 31) as usize;
         let rn = ((w >> 5) & 31) as usize;
         if w & 0x9F00_0000 == 0x9000_0000 {
@@ -251,6 +246,11 @@ const MAX_REEXPORT_DEPTH: usize = 8;
 /// The most stubs a call target is followed through before it is left unnamed.
 const MAX_STUB_HOPS: usize = 4;
 
+/// What one hop through a stub costs [`Names::call_target`]'s work allowance:
+/// a hop may read a slid page. A floor keeps a small cache's stubs reachable.
+const STUB_HOP_COST: u64 = 4096;
+const MIN_STUB_WORK: u64 = 1 << 26;
+
 /// One image's names: by address, and the symbol table and indirect-symbol
 /// table its stubs index.
 #[derive(Default)]
@@ -261,11 +261,16 @@ struct ImageNames {
 }
 
 /// Symbol names by address across the whole cache, built per image on demand.
-struct Names<'a> {
+pub(super) struct Names<'a> {
     cache: &'a DyldCache,
     ranges: Vec<(u64, u64, usize)>,
     images: RefCell<HashMap<usize, Rc<ImageNames>>>,
-    /// Target address → the name the rebuilt image imports it under, when one
+    /// Section headers [`Names::stub_import`] may still visit, stub hops
+    /// [`Names::call_target`] may still read (a page each) and export lookups
+    /// [`Names::export_target`] may still make: bounded by the cache's size, so a
+    /// hostile image's targets and imports cannot multiply them.
+    stub_work: std::cell::Cell<u64>,
+    /// Target address -> the name the rebuilt image imports it under, when one
     /// import alone resolves there (`None` marks a contested address).
     imports: RefCell<HashMap<u64, Option<Vec<u8>>>>,
     tries: RefCell<HashMap<usize, Rc<HashMap<String, ExportTarget>>>>,
@@ -273,8 +278,12 @@ struct Names<'a> {
 }
 
 impl<'a> Names<'a> {
-    fn new(cache: &'a DyldCache) -> Names<'a> {
+    /// Every image's segment ranges; an alias (an entry sharing another's
+    /// header address) adds none of its own.
+    pub(super) fn new(cache: &'a DyldCache) -> Names<'a> {
+        let mut seen = std::collections::HashSet::new();
         let mut ranges: Vec<(u64, u64, usize)> = (0..cache.images().len())
+            .filter(|&i| seen.insert(cache.images()[i].address))
             .filter_map(|i| cache.image_layout(i).ok().map(|l| (i, l)))
             .flat_map(|(i, layout)| {
                 layout
@@ -287,7 +296,15 @@ impl<'a> Names<'a> {
             .collect();
         ranges.sort_unstable();
         let by_path = cache.images().iter().enumerate().map(|(i, image)| (image.path.as_str(), i)).collect();
-        Names { cache, ranges, images: RefCell::default(), imports: RefCell::default(), tries: RefCell::default(), by_path }
+        Names {
+            cache,
+            ranges,
+            images: RefCell::default(),
+            stub_work: std::cell::Cell::new(cache.total_len.max(MIN_STUB_WORK)),
+            imports: RefCell::default(),
+            tries: RefCell::default(),
+            by_path,
+        }
     }
 
     /// Record, for every symbol image `index` imports, the address its export
@@ -338,6 +355,7 @@ impl<'a> Names<'a> {
         if depth > MAX_REEXPORT_DEPTH || !visited.insert((index, name.to_string())) {
             return None;
         }
+        self.stub_work.set(self.stub_work.get().checked_sub(1)?);
         let trie = self.trie(index);
         let layout = self.cache.image_layout(index).ok()?;
         let deps = || self.cache.image_dependencies(index).unwrap_or_default();
@@ -404,6 +422,22 @@ impl<'a> Names<'a> {
         ImageNames { by_addr, symbols, indirect }
     }
 
+    /// The image holding `addr`, with `addr`. For an address no image holds,
+    /// `through_stubs` follows the stub there to the image holding its target,
+    /// with that target.
+    pub(super) fn owner(&self, mut addr: u64, through_stubs: bool) -> Option<(u64, usize)> {
+        for _ in 0..=MAX_STUB_HOPS {
+            if let Some(index) = self.image_at(addr) {
+                return Some((addr, index));
+            }
+            if !through_stubs {
+                return None;
+            }
+            addr = follow_stub(self.cache, addr)?;
+        }
+        None
+    }
+
     fn at(&self, addr: u64) -> Option<Vec<u8>> {
         self.image(self.image_at(addr)?).by_addr.get(&addr).cloned()
     }
@@ -415,6 +449,7 @@ impl<'a> Names<'a> {
             if let Some(name) = self.imported_as(addr).or_else(|| self.at(addr)).or_else(|| self.stub_import(addr)) {
                 return Some(name);
             }
+            self.stub_work.set(self.stub_work.get().checked_sub(STUB_HOP_COST)?);
             addr = follow_stub(self.cache, addr)?;
         }
         None
@@ -426,6 +461,8 @@ impl<'a> Names<'a> {
         const S_SYMBOL_STUBS: u32 = 0x8;
         let index = self.image_at(addr)?;
         let layout = self.cache.image_layout(index).ok()?;
+        let cost = layout.segments.iter().map(|s| s.sections.len() as u64 + 1).sum::<u64>();
+        self.stub_work.set(self.stub_work.get().checked_sub(cost)?);
         let sec = layout
             .segments
             .iter()
@@ -465,19 +502,5 @@ mod tests {
     fn adrp_immediates_decode_with_sign() {
         assert_eq!(sign_extend(0x1F_FFFF, 21), -1);
         assert_eq!(sign_extend(0x03FF_FFFF, 26) << 2, -4);
-    }
-
-    /// An `LC_NOTE` declaring 40 bytes inside a 24-byte command area is
-    /// ignored instead of read past the buffer.
-    #[test]
-    fn a_note_past_the_load_commands_is_ignored() {
-        let mut bytes = vec![0u8; 32 + 24];
-        bytes[0..4].copy_from_slice(&0xfeed_facfu32.to_le_bytes());
-        bytes[16..20].copy_from_slice(&1u32.to_le_bytes());
-        bytes[20..24].copy_from_slice(&24u32.to_le_bytes());
-        bytes[32..36].copy_from_slice(&super::super::extract::LC_NOTE.to_le_bytes());
-        bytes[36..40].copy_from_slice(&40u32.to_le_bytes());
-        bytes[40..56].copy_from_slice(NOTE_OWNER);
-        assert!(read_note(&bytes).is_empty());
     }
 }

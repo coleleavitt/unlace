@@ -1,6 +1,8 @@
 /* Fixture for `copyrun`: fixed-size copies gcc -O2 expands into SSE moves.
    gcc -O2 -fno-pic -nostdlib -static -Wl,-e,copy_struct
-     -Wl,--unresolved-symbols=ignore-all copyrun.c -o copyrun_x86_64 */
+     -Wl,--unresolved-symbols=ignore-all copyrun.c -o copyrun_x86_64
+   gcc -m32 -O2 -mno-sse -fno-pic -nostdlib -static -Wl,-e,copy_struct
+     -Wl,--unresolved-symbols=ignore-all copyrun.c -o copyrun_i386   (gcc 15.3) */
 struct big { long a[8]; };
 struct pair { struct big first, second; };
 void copy_struct(struct big *d, const struct big *s) { *d = *s; }

@@ -1,5 +1,6 @@
 //! (kuna) The dyld shared cache: open a cache and its sub-caches, list its images,
-//! and rebuild one image as a standalone thin Mach-O at its cache addresses.
+//! and rebuild one image, or several joined, as a standalone thin Mach-O at its
+//! cache addresses.
 //!
 //! A cache is a main file named `dyld_shared_cache_<arch>` plus, on iOS 15+ and
 //! macOS 12+, sub-cache files beside it (`.01`, `.27.dylddata`, `.44.dyldlinkedit`,
@@ -12,18 +13,25 @@
 //! The cache is never read whole: a 3 GB cache costs only the pages of the image
 //! being rebuilt, read through file handles. [`read_selected_image`] is the one
 //! entry point the loader paths call, before they parse anything; after it, the
-//! input is an ordinary Mach-O. See [`extract`] for the rebuild and [`xrefs`] for
-//! how calls into other images are named.
+//! input is an ordinary Mach-O. See [`extract`] for the rebuild, `merge` for
+//! how several images become one program, and [`xrefs`] for how calls into
+//! other images are named. [`follow_images`] finds the image an address outside
+//! the selection lies in.
 
-use std::cell::RefCell;
+use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 pub mod extract;
+mod merge;
 pub mod slide;
 pub mod xrefs;
+
+/// Joins the image names of a `dyldimage` value that loads several images.
+pub const IMAGE_SEPARATOR: char = '+';
 
 /// Every dyld shared cache starts with this, followed by padding and the arch.
 pub const MAGIC_PREFIX: &[u8] = b"dyld_v1";
@@ -43,6 +51,8 @@ const HDR_CACHE_SUBTYPE: usize = 456;
 const HDR_OBJC_OPTS: usize = 464;
 /// `ObjCOptimizationHeader.relativeMethodSelectorBaseAddressOffset`.
 const OBJC_OPTS_SELECTOR_BASE: usize = 0x30;
+/// `objc_opt_t.relativeMethodSelectorBaseAddressOffset`, present from version 16.
+const OBJC_OPT_T_SELECTOR_BASE: usize = 0x28;
 
 /// Does `prefix` (the first bytes of a file) open a dyld shared cache?
 pub fn is_dyld_cache(prefix: &[u8]) -> bool {
@@ -57,39 +67,89 @@ pub fn is_dyld_cache_file(path: &Path) -> bool {
         .is_ok_and(|()| is_dyld_cache(&prefix))
 }
 
-/// The selected image of the dyld shared cache at `path`, rebuilt as a thin
-/// Mach-O; `None` when `path` is not a dyld shared cache. The image is the
+/// The selected images of the dyld shared cache at `path`, rebuilt as one thin
+/// Mach-O; `None` when `path` is not a dyld shared cache. The selection is the
 /// `dyldimage` option, carried in [`kuna_decomp::kuna_dyldcache::DYLDIMAGE_ENV`].
 pub fn read_selected_image(path: &Path) -> Option<Result<Vec<u8>, String>> {
     if !is_dyld_cache_file(path) {
         return None;
     }
     Some(DyldCache::open(path).and_then(|cache| {
-        let selection = kuna_decomp::kuna_dyldcache::selected_image();
-        let mut names = selection.as_deref().map(|s| s.split('+').map(str::trim));
-        let index = cache.select(names.as_mut().and_then(|n| n.next()))?;
-        let companions = names
-            .into_iter()
-            .flatten()
-            .filter(|n| !n.is_empty())
-            .map(|n| cache.select(Some(n)))
-            .collect::<Result<Vec<_>, _>>()?;
-        cache.extract_with(index, &companions)
+        cache.extract_merged(&cache.select_all(kuna_decomp::kuna_dyldcache::selected_image().as_deref())?)
     }))
 }
 
-/// The byte size image `name` occupies, `__LINKEDIT` aside (the cache shares
+/// The byte size the images `name` selects occupy, `__LINKEDIT` aside (the cache shares
 /// one across all images): the cache counterpart of a file's length for
 /// size-based policy. `None` when `path` is not a cache.
 pub fn image_size(path: &Path, name: Option<&str>) -> Option<Result<u64, String>> {
     if !is_dyld_cache_file(path) {
         return None;
     }
-    let name = name.map(|n| n.split('+').next().unwrap_or(n).trim());
     Some(DyldCache::open(path).and_then(|cache| {
-        let image = cache.image_layout(cache.select(name)?)?;
-        Ok(image.segments.iter().filter(|s| s.name != "__LINKEDIT").fold(0u64, |total, s| total.saturating_add(s.filesize)))
+        let mut size = 0u64;
+        for index in cache.select_all(name)? {
+            let image = cache.image_layout(index)?;
+            size += image.segments.iter().filter(|s| s.name != "__LINKEDIT").map(|s| s.filesize).sum::<u64>();
+        }
+        Ok(size)
     }))
+}
+
+/// One address [`follow_images`] found outside the loaded images.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FollowStep {
+    pub requested: u64,
+    /// `requested`, or what the stub at `requested` jumps to.
+    pub target: u64,
+    /// The install name of the image holding `target`.
+    pub image: String,
+    /// Is that image part of [`Followed::images`]? `false` past the limit.
+    pub loaded: bool,
+}
+
+/// What [`follow_images`] found: the `dyldimage` value to load and one step per
+/// address the selection did not hold.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Followed {
+    pub images: String,
+    pub steps: Vec<FollowStep>,
+}
+
+/// Widen the `dyldimage` value `selected` of the cache at `path` until the
+/// images it names hold `addrs`, adding at most `limit` images. Each address
+/// carries whether a stub there may be followed to its target: an address in a
+/// stub island belongs to no image, and what a request for it means is the
+/// function the stub jumps to. An address the cache does not map is left alone.
+pub fn follow_images(path: &Path, selected: &str, addrs: &[(u64, bool)], limit: usize) -> Result<Followed, String> {
+    let cache = DyldCache::open(path)?;
+    let mut loaded = Vec::new();
+    for index in cache.select_all(Some(selected))? {
+        loaded.push(cache.image_layout(index)?);
+    }
+    let mut followed = Followed { images: selected.to_string(), steps: Vec::new() };
+    let mut names = None;
+    let mut added = 0;
+    for &(requested, through_stubs) in addrs {
+        if loaded.iter().any(|layout| layout.holds(requested)) {
+            continue;
+        }
+        let names = names.get_or_insert_with(|| xrefs::Names::new(&cache));
+        let Some((target, index)) = names.owner(requested, through_stubs) else {
+            continue;
+        };
+        let image = cache.images[index].path.clone();
+        let mut held = loaded.iter().any(|layout| layout.holds(target));
+        if !held && added < limit {
+            loaded.push(cache.image_layout(index)?);
+            followed.images.push(IMAGE_SEPARATOR);
+            followed.images.push_str(&image);
+            added += 1;
+            held = true;
+        }
+        followed.steps.push(FollowStep { requested, target, image, loaded: held });
+    }
+    Ok(followed)
 }
 
 /// One file of a split cache: the main file, a sub-cache, or `.symbols`.
@@ -100,12 +160,21 @@ struct CacheFile {
 }
 
 impl CacheFile {
-    /// Reads past the end of the file are refused before the buffer is sized,
-    /// so a header count cannot ask for more memory than the file holds.
-    fn read_at(&self, offset: u64, len: usize) -> Result<Vec<u8>, String> {
-        if offset.checked_add(len as u64).is_none_or(|end| end > self.len) {
-            return Err(format!("{}: {len} bytes at {offset:#x} run past the end of the file", self.name));
+    /// An error for a `len`-byte range at `offset` the file does not hold.
+    fn check_range(&self, offset: u64, len: u64) -> Result<(), String> {
+        if offset.checked_add(len).is_none_or(|end| end > self.len) {
+            return Err(format!(
+                "{}: {len} bytes at {offset:#x} lie past the end of the {}-byte file",
+                self.name, self.len
+            ));
         }
+        Ok(())
+    }
+
+    /// The `len` bytes at `offset`; an error, before anything is allocated, for
+    /// a range the file does not hold.
+    fn read_at(&self, offset: u64, len: usize) -> Result<Vec<u8>, String> {
+        self.check_range(offset, len as u64)?;
         let mut buf = vec![0u8; len];
         let mut f = &self.file;
         f.seek(SeekFrom::Start(offset))
@@ -130,7 +199,10 @@ pub struct Mapping {
 
 impl Mapping {
     fn contains(&self, va: u64, len: u64) -> bool {
-        va >= self.address && va.saturating_add(len) <= self.address.saturating_add(self.size)
+        match (va.checked_add(len), self.address.checked_add(self.size)) {
+            (Some(end), Some(limit)) => va >= self.address && end <= limit,
+            _ => false,
+        }
     }
 }
 
@@ -162,9 +234,21 @@ pub struct DyldCache {
     images: Vec<CacheImage>,
     base: u64,
     locals: Option<LocalSymbols>,
-    slides: RefCell<HashMap<usize, Option<slide::SlideInfo>>>,
-    layouts: RefCell<HashMap<usize, Option<std::rc::Rc<extract::ImageLayout>>>>,
-    objc_selector_base: Option<u64>,
+    slides: RefCell<HashMap<usize, Option<Rc<slide::SlideInfo>>>>,
+    /// Image layouts by header address, so aliases of one image share one.
+    layouts: RefCell<HashMap<u64, Option<std::rc::Rc<extract::ImageLayout>>>>,
+    /// The bytes of every cache file: no image's segments or load commands
+    /// can legitimately add up to more.
+    total_len: u64,
+    /// The load-command bytes read into `layouts` so far, bounded by `total_len`.
+    layout_bytes: Cell<u64>,
+    /// Bytes the slide infos and symbol tables built so far may still retain;
+    /// see [`DyldCache::charge`].
+    retained: Cell<u64>,
+    /// `objcOptsOffset` of the header: the `ObjCOptimizationHeader`, as an
+    /// offset from the cache base. Zero or absent before dyld-1042.
+    objc_opts: Option<u64>,
+    objc_selector_base: OnceCell<Option<u64>>,
 }
 
 fn u32_at(b: &[u8], off: usize) -> u32 {
@@ -259,7 +343,7 @@ fn subcache_names(main: &CacheFile, path: &Path, h: &Header) -> Result<Vec<(Path
     let named = h.has(HDR_CACHE_SUBTYPE, 4);
     let stride = if named { 56 } else { 24 };
     let table = main.read_at(off as u64, count as usize * stride)?;
-    Ok(table
+    table
         .chunks_exact(stride)
         .enumerate()
         .map(|(i, entry)| {
@@ -269,11 +353,14 @@ fn subcache_names(main: &CacheFile, path: &Path, h: &Header) -> Result<Vec<(Path
             } else {
                 format!(".{}", i + 1)
             };
+            if suffix.contains(['/', '\\']) || suffix.contains("..") {
+                return Err(format!("{}: sub-cache suffix {suffix:?} is not a file-name suffix", main.name));
+            }
             let mut name = path.as_os_str().to_owned();
             name.push(&suffix);
-            (PathBuf::from(name), entry[..16].try_into().unwrap())
+            Ok((PathBuf::from(name), entry[..16].try_into().unwrap()))
         })
-        .collect())
+        .collect()
 }
 
 impl DyldCache {
@@ -301,60 +388,55 @@ impl DyldCache {
         }
         let locals = Self::open_local_symbols(path, &h, &mut files, &open)?;
         let images = Self::read_images(&files[0], &h)?;
+        let total_len: u64 = files.iter().map(|f| f.len).sum();
+        mappings.retain(|m| m.size != 0);
+        mappings.sort_by_key(|m| m.address);
         let arch = h.arch();
-        let wide = !(arch == "arm64_32" || arch.starts_with("armv") || arch == "i386");
-        let mut cache = DyldCache {
+        Ok(DyldCache {
             files,
-            wide,
+            wide: !(arch == "arm64_32" || arch.starts_with("armv") || arch == "i386"),
             mappings,
             images,
             base,
             locals,
             slides: RefCell::default(),
             layouts: RefCell::default(),
-            objc_selector_base: None,
-        };
-        cache.objc_selector_base = cache.read_objc_selector_base(&h).or_else(|| cache.libobjc_selector_base());
-        Ok(cache)
+            total_len,
+            layout_bytes: Cell::new(0),
+            retained: Cell::new(total_len.saturating_mul(2).max(MIN_RETAINED)),
+            objc_opts: h.u64(HDR_OBJC_OPTS).filter(|&o| o != 0),
+            objc_selector_base: OnceCell::new(),
+        })
     }
 
-    /// The selector base of a cache older than dyld-1042: libobjc's own
-    /// `objc_opt_t` (`__objc_opt_ro`, version 16) carries it at +0x28 as an
-    /// offset from the record itself.
-    fn libobjc_selector_base(&self) -> Option<u64> {
-        let index = self.images.iter().position(|i| i.path.ends_with("/libobjc.A.dylib"))?;
-        let layout = self.image_layout(index).ok()?;
-        let opt = layout
-            .segments
-            .iter()
-            .flat_map(|s| s.sections.iter())
-            .find(|s| s.sectname == "__objc_opt_ro")?;
-        let record = self.read_va(opt.addr, 0x30).ok()?;
-        if u32_at(&record, 0) < 16 {
-            return None;
-        }
-        let rel = u64_at(&record, 0x28);
-        (rel != 0).then(|| opt.addr.wrapping_add(rel))
+    /// The address every direct-selector method list of the cache offsets its
+    /// selectors from. The `ObjCOptimizationHeader` the cache header names
+    /// carries it as an offset from the cache base; an older cache carries it in
+    /// libobjc's `objc_opt_t` (`__objc_opt_ro`, version 16 on) as a signed offset
+    /// from that record. `None` on a cache with neither.
+    pub fn objc_selector_base(&self) -> Option<u64> {
+        *self.objc_selector_base.get_or_init(|| self.header_selector_base().or_else(|| self.libobjc_selector_base()))
     }
 
-    /// The base every direct-selector method list of the cache offsets its
-    /// selectors from: the `ObjCOptimizationHeader` the header names
-    /// (`objcOptsOffset`, an offset from the cache base, dyld 1042+) carries it
-    /// as another offset from the base.
-    fn read_objc_selector_base(&self, h: &Header) -> Option<u64> {
-        let off = h.u64(HDR_OBJC_OPTS).filter(|&o| o != 0)?;
-        let opts = self.read_va(self.base.wrapping_add(off), OBJC_OPTS_SELECTOR_BASE + 8).ok()?;
+    fn header_selector_base(&self) -> Option<u64> {
+        let opts = self.read_va(self.base.checked_add(self.objc_opts?)?, OBJC_OPTS_SELECTOR_BASE + 8).ok()?;
         if u32_at(&opts, 0) == 0 {
             return None;
         }
         let rel = u64_at(&opts, OBJC_OPTS_SELECTOR_BASE);
-        (rel != 0).then(|| self.base.wrapping_add(rel))
+        if rel == 0 { None } else { self.base.checked_add(rel) }
     }
 
-    /// See [`Self::read_objc_selector_base`]; `None` on a cache without the
-    /// ObjC optimization header.
-    pub fn objc_selector_base(&self) -> Option<u64> {
-        self.objc_selector_base
+    fn libobjc_selector_base(&self) -> Option<u64> {
+        let index = self.images.iter().position(|i| i.path.ends_with("/libobjc.A.dylib"))?;
+        let layout = self.image_layout(index).ok()?;
+        let opt = layout.segments.iter().flat_map(|s| s.sections.iter()).find(|s| s.sectname == "__objc_opt_ro")?;
+        let record = self.read_va(opt.addr, OBJC_OPT_T_SELECTOR_BASE + 8).ok()?;
+        if u32_at(&record, 0) < 16 {
+            return None;
+        }
+        let rel = u64_at(&record, OBJC_OPT_T_SELECTOR_BASE) as i64;
+        if rel == 0 { None } else { opt.addr.checked_add_signed(rel) }
     }
 
     fn open_local_symbols(
@@ -390,8 +472,7 @@ impl DyldCache {
         let wide = symbol_uuid.is_some();
         let entry_size = if wide { 16 } else { 12 };
         let count = u32_at(&info, 20) as usize;
-        let table_at = sh_offset.checked_add(u32_at(&info, 16) as u64).ok_or("local symbol table offset overflows")?;
-        let table = files[file].read_at(table_at, count * entry_size)?;
+        let table = files[file].read_at(sh_offset.saturating_add(u32_at(&info, 16) as u64), count * entry_size)?;
         let entries = table
             .chunks_exact(entry_size)
             .map(|e| {
@@ -404,8 +485,8 @@ impl DyldCache {
             .collect();
         Ok(Some(LocalSymbols {
             file,
-            nlist_offset: sh_offset.checked_add(u32_at(&info, 0) as u64).ok_or("local symbol offset overflows")?,
-            strings_offset: sh_offset.checked_add(u32_at(&info, 8) as u64).ok_or("local symbol offset overflows")?,
+            nlist_offset: sh_offset.saturating_add(u32_at(&info, 0) as u64),
+            strings_offset: sh_offset.saturating_add(u32_at(&info, 8) as u64),
             strings_size: u32_at(&info, 12) as u64,
             entries,
             keyed_by_vm_offset: wide,
@@ -420,13 +501,19 @@ impl DyldCache {
         let table = main.read_at(off as u64, count as usize * 32)?;
         let rows: Vec<(u64, u64)> =
             table.chunks_exact(32).map(|r| (u64_at(r, 0), u32_at(r, 24) as u64)).collect();
-        let size = main.file.metadata().map_err(|e| format!("{}: {e}", main.name))?.len();
-        let pool = StringPool::read_at(&|o, len| main.read_at(o, len), size, rows.iter().map(|r| r.1))?;
+        let extended = Cell::new(0u64);
+        let charge = |n: u64| {
+            extended.set(extended.get() + n);
+            if extended.get() > main.len { Err("image paths run past the cache file".to_string()) } else { Ok(()) }
+        };
+        let pool = StringPool::read_at(&|o, len| main.read_at(o, len), main.len, rows.iter().map(|r| r.1), &charge)?;
+        let mut allowance = main.len as usize;
         Ok(rows
             .into_iter()
-            .map(|(address, name)| CacheImage {
-                address,
-                path: String::from_utf8_lossy(pool.get_at(name)).into_owned(),
+            .map(|(address, name)| {
+                let path = pool.get_at_max(name, allowance);
+                allowance -= path.len();
+                CacheImage { address, path: String::from_utf8_lossy(path).into_owned() }
             })
             .collect())
     }
@@ -456,8 +543,39 @@ impl DyldCache {
         select_image(&self.images, name)
     }
 
+    /// Resolve a `dyldimage` value: one name, or several joined by `+`
+    /// (`Foundation+CoreFoundation`), each as [`DyldCache::select`] reads it.
+    /// A `+` inside an image's own name (`libc++.1.dylib+Foundation`) stays
+    /// part of that name.
+    pub fn select_all(&self, names: Option<&str>) -> Result<Vec<usize>, String> {
+        match names {
+            Some(names) if names.contains(IMAGE_SEPARATOR) => select_images(&self.images, names),
+            name => Ok(vec![self.select(name)?]),
+        }
+    }
+
+    /// The mapping holding `[va, va + len)`; the mappings are sorted by address.
+    fn mapping_index(&self, va: u64, len: u64) -> Option<usize> {
+        let i = self.mappings.partition_point(|m| m.address <= va).checked_sub(1)?;
+        self.mappings[i].contains(va, len).then_some(i)
+    }
+
     fn mapping_of(&self, va: u64, len: u64) -> Option<&Mapping> {
-        self.mappings.iter().find(|m| m.contains(va, len))
+        self.mapping_index(va, len).map(|i| &self.mappings[i])
+    }
+
+    /// Charge `n` retained bytes against the cache's allowance: every slide info
+    /// and symbol table kept in memory counts, and an honest image needs a
+    /// fraction of twice the cache's size. An `Err` once it is spent stops the
+    /// work that would have retained them.
+    fn charge(&self, n: u64) -> Result<(), String> {
+        let left = self.retained.get();
+        if n > left {
+            self.retained.set(0);
+            return Err(format!("{}: slide info and symbol data exceed the cache's size", self.files[0].name));
+        }
+        self.retained.set(left - n);
+        Ok(())
     }
 
     /// The raw bytes at `[va, va + len)`, which must lie in one mapping.
@@ -465,18 +583,20 @@ impl DyldCache {
         let m = self
             .mapping_of(va, len as u64)
             .ok_or_else(|| format!("address range {va:#x}+{len:#x} is not mapped by the cache"))?;
-        let at = m.file_offset.checked_add(va - m.address).ok_or("mapping file offset overflows")?;
-        self.files[m.file].read_at(at, len)
+        let offset = m
+            .file_offset
+            .checked_add(va - m.address)
+            .ok_or_else(|| format!("address {va:#x} maps past the end of its file"))?;
+        self.files[m.file].read_at(offset, len)
     }
 
     /// The bytes at `[va, va + len)` with the slide info of their mapping applied
     /// at slide zero, so every rebased pointer reads as its unslid target.
     pub fn read_slid(&self, va: u64, len: usize) -> Result<Vec<u8>, String> {
-        let m = self
-            .mapping_of(va, len as u64)
-            .ok_or_else(|| format!("address range {va:#x}+{len:#x} is not mapped by the cache"))?
-            .clone();
-        let index = self.mappings.iter().position(|x| x.address == m.address).unwrap_or(0);
+        let index = self
+            .mapping_index(va, len as u64)
+            .ok_or_else(|| format!("address range {va:#x}+{len:#x} is not mapped by the cache"))?;
+        let m = self.mappings[index].clone();
         let Some(info) = self.slide_info(index)? else {
             return self.read_va(va, len);
         };
@@ -485,14 +605,14 @@ impl DyldCache {
         let hi = m
             .address
             .saturating_add((va + len as u64 - m.address).div_ceil(page).saturating_mul(page))
-            .min(m.address.saturating_add(m.size));
+            .min(m.address + m.size);
         let mut pages = self.read_va(lo, (hi - lo) as usize)?;
         info.apply(&mut pages, ((lo - m.address) / page) as usize);
         let start = (va - lo) as usize;
         Ok(pages[start..start + len].to_vec())
     }
 
-    fn slide_info(&self, mapping: usize) -> Result<Option<slide::SlideInfo>, String> {
+    fn slide_info(&self, mapping: usize) -> Result<Option<Rc<slide::SlideInfo>>, String> {
         if let Some(cached) = self.slides.borrow().get(&mapping) {
             return Ok(cached.clone());
         }
@@ -500,8 +620,10 @@ impl DyldCache {
         let info = if m.slide_size == 0 {
             None
         } else {
+            self.files[m.file].check_range(m.slide_offset, m.slide_size)?;
+            self.charge(m.slide_size)?;
             let raw = self.files[m.file].read_at(m.slide_offset, m.slide_size as usize)?;
-            slide::SlideInfo::parse(&raw)?
+            slide::SlideInfo::parse(&raw)?.map(Rc::new)
         };
         self.slides.borrow_mut().insert(mapping, info.clone());
         Ok(info)
@@ -515,30 +637,28 @@ impl DyldCache {
         };
         let address = self.images[index].address;
         let key = if locals.keyed_by_vm_offset {
-            address.checked_sub(self.base).ok_or("image address lies below the cache base")?
+            address.wrapping_sub(self.base)
         } else {
             match self.mapping_of(address, 1) {
-                Some(m) => m.file_offset + (address - m.address),
+                Some(m) => m.file_offset.wrapping_add(address - m.address),
                 None => return Ok(Vec::new()),
             }
         };
         let Some(&(start, count)) = locals.entries.get(&key) else {
             return Ok(Vec::new());
         };
+        self.charge(count as u64 * NLIST_RETAINED)?;
         let file = &self.files[locals.file];
         let size = if self.wide { 16 } else { 12 };
-        let nlist_at = locals.nlist_offset.checked_add(start as u64 * size as u64).ok_or("local symbol offset overflows")?;
-        let raw = file.read_at(nlist_at, count as usize * size)?;
+        let raw = file.read_at(locals.nlist_offset.saturating_add(start as u64 * size as u64), count as usize * size)?;
         let pool = StringPool::read(
-            &|off, len| {
-                let at = locals.strings_offset.checked_add(off).ok_or("local symbol string offset overflows")?;
-                file.read_at(at, len)
-            },
+            &|off, len| file.read_at(locals.strings_offset.saturating_add(off), len),
             size,
             locals.strings_size,
             &raw,
+            &|n| self.charge(n),
         )?;
-        Ok(extract::Nlist::parse_all(&raw, size, &pool))
+        extract::Nlist::parse_all(&raw, size, &pool, &|n| self.charge(n))
     }
 }
 
@@ -553,6 +673,50 @@ fn select_image(images: &[CacheImage], name: Option<&str>) -> Result<usize, Stri
             )),
         };
     };
+    match_image(images, name)?.ok_or_else(|| no_image(images, name))
+}
+
+/// [`DyldCache::select_all`] over an image list, for a value holding a `+`.
+/// From each piece the longest run of `+`-joined pieces that names an image is
+/// taken, so a `+` of an image's own name (`libc++.1.dylib`) does not split it.
+/// A run ends at the end of the value or before a non-empty piece (`libc++`
+/// never reads as `libc`), and holds at most as many `+` as the image name
+/// holding the most.
+fn select_images(images: &[CacheImage], names: &str) -> Result<Vec<usize>, String> {
+    let pieces: Vec<&str> = names.split(IMAGE_SEPARATOR).collect();
+    let widest = images.iter().map(|i| i.path.matches(IMAGE_SEPARATOR).count()).max().unwrap_or(0);
+    let joined = |from: usize, to: usize| pieces[from..to].join("+").trim().to_string();
+    let ends_a_name = |to: &usize| *to == pieces.len() || !pieces[*to].trim().is_empty();
+    let longest = |from: usize| -> Result<Option<(usize, usize)>, String> {
+        for to in (from + 1..=pieces.len().min(from + 1 + widest)).rev().filter(ends_a_name) {
+            if let Some(index) = match_image(images, &joined(from, to))? {
+                return Ok(Some((to, index)));
+            }
+        }
+        Ok(None)
+    };
+    let mut out = Vec::new();
+    let mut from = 0;
+    while from < pieces.len() {
+        if pieces[from].trim().is_empty() {
+            from += 1;
+            continue;
+        }
+        let Some((to, index)) = longest(from)? else {
+            let named = |k: &usize| !pieces[*k].trim().is_empty() && !matches!(longest(*k), Ok(None));
+            let to = (from + 1..pieces.len()).find(named).unwrap_or(pieces.len());
+            return Err(no_image(images, &joined(from, to)));
+        };
+        out.push(index);
+        from = to;
+    }
+    Ok(out)
+}
+
+/// The image `name` names: a full install name, else a unique basename, else
+/// a unique basename without its last extension. `None` when no image matches;
+/// an error when several share the first tier that matches.
+fn match_image(images: &[CacheImage], name: &str) -> Result<Option<usize>, String> {
     let base = |p: &str| p.rsplit('/').next().unwrap_or(p).to_string();
     let stem = |p: &str| {
         let b = base(p);
@@ -568,13 +732,19 @@ fn select_image(images: &[CacheImage], name: Option<&str>) -> Result<usize, Stri
             images.iter().enumerate().filter(|(_, i)| matches(i)).map(|(n, _)| n).collect();
         match hits.len() {
             0 => continue,
-            1 => return Ok(hits[0]),
+            1 => return Ok(Some(hits[0])),
             _ => {
                 let names: Vec<&str> = hits.iter().map(|&n| images[n].path.as_str()).collect();
                 return Err(format!("image name {name:?} is ambiguous: {}", names.join(", ")));
             }
         }
     }
+    Ok(None)
+}
+
+/// The error for a `name` no image matches, with up to eight images whose
+/// install names contain it.
+fn no_image(images: &[CacheImage], name: &str) -> String {
     let lower = name.to_ascii_lowercase();
     let near: Vec<&str> = images
         .iter()
@@ -582,21 +752,25 @@ fn select_image(images: &[CacheImage], name: Option<&str>) -> Result<usize, Stri
         .take(8)
         .map(|i| i.path.as_str())
         .collect();
-    Err(if near.is_empty() {
+    if near.is_empty() {
         format!("no image named {name:?} in the dyld shared cache")
     } else {
         format!("no image named {name:?} in the dyld shared cache; close: {}", near.join(", "))
-    })
+    }
 }
+
+/// The retained-byte allowance's floor (see [`DyldCache::charge`]), so a small
+/// cache is not limited by its own size.
+const MIN_RETAINED: u64 = 1 << 28;
+
+/// The retained size of one parsed [`extract::Nlist`], its name aside.
+const NLIST_RETAINED: u64 = std::mem::size_of::<extract::Nlist>() as u64;
 
 /// Bytes read past the last string of a group, extended until that string ends.
 const NAME_TAIL: u64 = 4096;
 
 /// Two names closer than this are read in one span.
 const GROUP_GAP: u64 = 16 * 1024;
-
-/// How far past a name the reader searches for its terminating NUL.
-const NAME_SEARCH_LIMIT: u64 = 64 * 1024;
 
 /// The pieces of a large string area that a set of offsets name. Cache images
 /// share one symbol-string pool of tens of megabytes with their names
@@ -608,21 +782,25 @@ pub(crate) struct StringPool {
 
 impl StringPool {
     /// Read, through `read(offset, len)`, the spans of a `size`-byte pool that
-    /// `nlists` name.
+    /// `nlists`, each `nlist_size` bytes, name.
     pub(crate) fn read(
         read: &dyn Fn(u64, usize) -> Result<Vec<u8>, String>,
         nlist_size: usize,
         size: u64,
         nlists: &[u8],
+        charge: &dyn Fn(u64) -> Result<(), String>,
     ) -> Result<StringPool, String> {
-        Self::read_at(read, size, nlists.chunks_exact(nlist_size).map(|n| u32_at(n, 0) as u64))
+        Self::read_at(read, size, nlists.chunks_exact(nlist_size).map(|n| u32_at(n, 0) as u64), charge)
     }
 
     /// Read the spans of a `size`-byte pool around the strings at `offsets`.
+    /// A string that runs past its group's tail is extended through `charge`, so
+    /// unterminated strings cannot multiply the pool across calls.
     pub(crate) fn read_at(
         read: &dyn Fn(u64, usize) -> Result<Vec<u8>, String>,
         size: u64,
         offsets: impl Iterator<Item = u64>,
+        charge: &dyn Fn(u64) -> Result<(), String>,
     ) -> Result<StringPool, String> {
         let mut strx: Vec<u64> = offsets.filter(|&s| s > 0 && s < size).collect();
         strx.sort_unstable();
@@ -638,8 +816,11 @@ impl StringPool {
             }
             let mut end = (last + NAME_TAIL).min(size);
             let mut bytes = read(lo, (end - lo) as usize)?;
-            while end < size && end - last < NAME_SEARCH_LIMIT && !bytes[(last - lo) as usize..].contains(&0) {
+            let mut scanned = (last - lo) as usize;
+            while end < size && !bytes[scanned..].contains(&0) {
+                scanned = bytes.len();
                 let more = (end + NAME_TAIL).min(size);
+                charge(more - end)?;
                 bytes.extend(read(end, (more - end) as usize)?);
                 end = more;
             }
@@ -649,6 +830,11 @@ impl StringPool {
     }
 
     pub(crate) fn get_at(&self, offset: u64) -> &[u8] {
+        self.get_at_max(offset, usize::MAX)
+    }
+
+    /// The string at `offset`, looking at most `max` bytes for its end.
+    pub(crate) fn get_at_max(&self, offset: u64, max: usize) -> &[u8] {
         let at = self.spans.partition_point(|(lo, _)| *lo <= offset);
         let Some((lo, bytes)) = at.checked_sub(1).map(|i| &self.spans[i]) else {
             return b"";
@@ -656,6 +842,7 @@ impl StringPool {
         let Some(s) = bytes.get((offset - lo) as usize..) else {
             return b"";
         };
+        let s = &s[..s.len().min(max)];
         &s[..s.iter().position(|&b| b == 0).unwrap_or(s.len())]
     }
 

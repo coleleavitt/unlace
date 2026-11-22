@@ -76,6 +76,9 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
         if let Some(ty) = crate::kuna_roundingops::output_type(data, op) {
             return ty;
         }
+        if let Some(ty) = crate::kuna_repstring::output_type(data, op) {
+            return ty;
+        }
         let in0_off = o
             .get_in(0)
             .and_then(|v| data.vbank().get(v))
@@ -277,6 +280,9 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
         if let Some(ty) = crate::kuna_roundingops::input_type(data, op, slot) {
             return ty;
         }
+        if let Some(ty) = crate::kuna_repstring::input_type(data, op, slot) {
+            return ty;
+        }
     }
 
     // (kuna strlenscan) `DatatypeUserOp::getInputLocal` for the `strlen` builtin:
@@ -329,21 +335,22 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
         }
     }
 
-    // (kuna repstring) `DatatypeUserOp::getInputLocal` for the copy and fill
-    // builtins: the destination, and a copy's source, are `void *`.
-    if opcode == OpCode::CPUI_CALLOTHER && data.get_arch().rep_string {
-        let id = o.get_in(0).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset());
-        let pointer = match id {
-            Some(k) if k == crate::userop::BUILTIN_MEMCPY as u64 => slot == 1 || slot == 2,
-            Some(k) if k == crate::userop::BUILTIN_MEMSET as u64 => slot == 1,
-            _ => false,
-        };
-        if pointer {
-            if let Some(tlst) = arch.types() {
-                let ws = data.get_arch().manage().get_default_data_space().map(|s| s.get_word_size()).unwrap_or(1);
-                if let Ok(ptr) = tlst.get_type_void().and_then(|v| tlst.get_type_pointer(in_size, v, ws)) {
-                    return ptr;
+
+    // (kuna kernelbug) `__WARN(file,line)`: the file is a `char *`, the line an `int`.
+    if opcode == OpCode::CPUI_CALLOTHER
+        && slot > 0
+        && o.get_in(0).and_then(|v| data.vbank().get(v)).map(|v| v.get_offset())
+            == Some(crate::userop::BUILTIN_KERNEL_WARN as u64)
+    {
+        if let Some(tlst) = arch.types() {
+            if in_size == 4 {
+                if let Ok(t) = tlst.get_base(4, type_metatype::TYPE_INT) {
+                    return t;
                 }
+            }
+            let ws = data.get_arch().manage().get_default_data_space().map(|s| s.get_word_size()).unwrap_or(1);
+            if let Ok(ptr) = tlst.get_type_char(1).and_then(|c| tlst.get_type_pointer(in_size, c, ws)) {
+                return ptr;
             }
         }
     }

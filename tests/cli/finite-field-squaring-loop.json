@@ -5,7 +5,10 @@
     "{{KUNA}}",
     "decompile",
     "{{BIN}}",
-    "gfinv"
+    "gfinv",
+    "--option",
+    "looprotate",
+    "off"
   ],
   "cwd": "{{WORK}}",
   "env": {

@@ -73,6 +73,8 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   comments citing `decompiler/cpp/<file>.{cc,hh}` are **upstream Ghidra anchors**, not repo paths.
 - Don't commit build artifacts (`decompiler/target/`, `*.sla`). Commit at milestones with
   descriptive messages. Public auto-created things (PRs/issues/comments) start with `[AUTOMATED]`.
+- Opening a PR: no issue first (the PR describes the problem), no @-mention of the maintainers,
+  and the body ends with the line `Model: <model id>` naming the generating model (`docs/pr-bodies.md`).
 - **RAM guard**: stay under 90% RAM during builds/tests; if it climbs, kill the job and ask
   before retrying. No Windows-only work.
 - **Worktrees**: one per agent (`../kuna-wt-<name>`); symlink this checkout's built `.sla`

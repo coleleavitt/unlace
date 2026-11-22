@@ -56,13 +56,15 @@ pub struct MachoImage<'a> {
     /// pre-chained-fixup twin of [`ChainedFixups::bind_name`]. Empty on a chained
     /// image.
     binds: HashMap<u64, Rc<str>>,
-    /// Bytes outside the image's own sections — the dyld shared cache regions
-    /// an image's selector references, class references and method names
-    /// point into (`__OBJC_RO`, `__OBJC_RW`). `None` on a standalone image.
+    /// Up to `n` bytes at an address outside the image's own sections: the dyld
+    /// shared cache regions an image's selector references, class references
+    /// and method names point into. `None` on a standalone image.
     outside: Option<Rc<dyn Fn(u64, usize) -> Option<Vec<u8>> + 'a>>,
     /// The selector base a direct-selector method list (`0x40000000`) offsets
     /// its selectors from: the dyld shared cache's.
     pub selector_base: Option<u64>,
+    /// The symbols of the image that spell a method, `-[…]` or `+[…]`, by address.
+    method_symbols: HashMap<u64, &'a str>,
     /// Work left for the metadata walks; see [`Self::charge`].
     work: Cell<u64>,
 }
@@ -89,8 +91,43 @@ impl<'a> MachoImage<'a> {
         self
     }
 
+    /// Up to `n` bytes at `va` from the cache, charged to the walk budget.
     fn read_outside(&self, va: u64, n: usize) -> Option<Vec<u8>> {
-        (self.outside.as_ref()?)(va, n)
+        let outside = self.outside.as_ref()?;
+        self.charge(n as u64).then(|| outside(va, n)).flatten()
+    }
+
+    /// Keep the method names `file`'s own symbol table gives, for
+    /// [`Self::method_symbol`].
+    pub fn with_method_symbols(mut self, file: &'a object::File<'a>) -> MachoImage<'a> {
+        use object::{Object, ObjectSymbol};
+        self.method_symbols = file
+            .symbols()
+            .filter_map(|s| Some((s.address(), s.name().ok()?)))
+            .filter(|(_, n)| n.starts_with("-[") || n.starts_with("+["))
+            .collect();
+        self
+    }
+
+    /// The symbol at `imp` when it spells the `kind` method `selector` of
+    /// `class`, under any category name. The linker merges the categories of a
+    /// class into one and the metadata names only the merged one, so the symbol
+    /// is the spelling to keep.
+    pub fn method_symbol(&self, imp: u64, kind: char, class: &str, selector: &str) -> Option<&'a str> {
+        let name = *self.method_symbols.get(&imp)?;
+        let stem = name.strip_prefix(kind)?.strip_prefix('[')?.strip_suffix(']')?.strip_suffix(selector)?.strip_suffix(' ')?;
+        let owner = stem.split_once('(').map_or(stem, |(owner, _)| owner);
+        (owner == class).then_some(name)
+    }
+
+    /// Every method symbol of the image with its address.
+    pub fn method_symbols(&self) -> impl Iterator<Item = (u64, &'a str)> + '_ {
+        self.method_symbols.iter().map(|(&addr, &name)| (addr, name))
+    }
+
+    /// Whether the image was loaded from a dyld shared cache.
+    pub fn in_cache(&self) -> bool {
+        self.outside.is_some()
     }
 
     /// Spend `units` of the walk budget; `false` once it is exhausted.
@@ -152,6 +189,7 @@ impl<'a> MachoImage<'a> {
             binds: HashMap::new(),
             outside: None,
             selector_base: None,
+            method_symbols: HashMap::new(),
             work,
         }
     }
@@ -266,24 +304,19 @@ impl<'a> MachoImage<'a> {
     /// encoding). `None` for an unmapped address, a string with no terminator in
     /// its section, or one longer than the walk budget left. Reads byte-by-byte
     /// across the covering section only, and never more bytes than the budget
-    /// can pay for.
+    /// can pay for. A string outside the image is looked for in a 64-byte
+    /// window of the cache, then a 4096-byte one.
     pub fn read_cstr(&self, va: u64) -> Option<String> {
         let left = self.work.get();
         if left == 0 {
             return None;
         }
         let Some(&(lo, hi, data)) = self.spans.iter().find(|&&(lo, hi, _)| va >= lo && va < hi) else {
-            // Outside the image: a bounded window, widened while it holds no NUL.
-            for n in [64usize, 512, 4096] {
-                let Some(bytes) = self.read_outside(va, n) else { break };
-                let end = bytes.iter().position(|&b| b == 0);
-                if end.is_none() && n < 4096 {
-                    continue;
-                }
-                let s = &bytes[..end?];
-                return s.iter().all(|b| (0x20..0x7f).contains(b)).then(|| String::from_utf8_lossy(s).into_owned());
-            }
-            return None;
+            return [64usize, 4096].into_iter().find_map(|n| {
+                let bytes = self.read_outside(va, n)?;
+                let s = &bytes[..bytes.iter().position(|&b| b == 0)?];
+                s.iter().all(|b| (0x20..0x7f).contains(b)).then(|| String::from_utf8_lossy(s).into_owned())
+            });
         };
         let start = (va - lo) as usize;
         let max = usize::try_from(hi - lo).unwrap_or(usize::MAX).min(data.len());
@@ -308,18 +341,25 @@ impl<'a> MachoImage<'a> {
         (terminated && paid).then_some(s)
     }
 
-    /// The `(vma_lo, bytes)` of the `__objc_classlist` section — the array of
-    /// `class_t*` entries the walk iterates (stride = [`Self::ptr_size`]). `None`
+    /// The `(vma_lo, bytes)` of every `__objc_classlist` section — the arrays of
+    /// `class_t*` entries the walk iterates (stride = [`Self::ptr_size`]). Empty
     /// when the image carries no ObjC class list (the inert path).
-    pub fn classlist(&self, file: &'a object::File<'a>) -> Option<(u64, &'a [u8])> {
-        let sec = file.section_by_name(SEC_CLASSLIST)?;
-        let addr = sec.address();
-        let data = sec.data().ok()?;
-        if data.is_empty() {
-            return None;
-        }
-        Some((addr, data))
+    pub fn classlists(&self, file: &'a object::File<'a>) -> Vec<(u64, &'a [u8])> {
+        sections_named(file, SEC_CLASSLIST)
+            .filter_map(|sec| Some((sec.address(), sec.data().ok()?)))
+            .filter(|(_, data)| !data.is_empty())
+            .collect()
     }
+}
+
+/// Every section named `name`, in load-command order. An ordinary image has at
+/// most one; a Mach-O joining several dyld shared cache images (`dyldimage
+/// A+B`) has one per image.
+pub fn sections_named<'data, 'file>(
+    file: &'file object::File<'data>,
+    name: &'file str,
+) -> impl Iterator<Item = object::Section<'data, 'file>> + 'file {
+    file.sections().filter(move |sec| sec.name_bytes() == Ok(name.as_bytes()))
 }
 
 #[cfg(test)]
@@ -335,6 +375,7 @@ mod tests {
             binds: HashMap::new(),
             outside: None,
             selector_base: None,
+            method_symbols: HashMap::new(),
             work: Cell::new(work),
         }
     }
@@ -355,5 +396,44 @@ mod tests {
         assert_eq!(img.work.get(), 0);
         let img = image(&data, 1 << 20);
         assert_eq!(img.read_cstr(0x1004).map(|s| s.len()), Some((1 << 16) - 5));
+    }
+
+    /// A symbol names the method under the category the source gave it; the
+    /// metadata may name another. Only the same kind, class and selector match.
+    #[test]
+    fn method_symbol_matches_class_and_selector_under_any_category() {
+        let mut img = image(&[0; 8], 0);
+        img.method_symbols.insert(0x1000, "-[NSObject(NSKeyValueCoding) valueForKey:]");
+        img.method_symbols.insert(0x1004, "+[Greeter make]");
+        assert_eq!(img.method_symbol(0x1000, '-', "NSObject", "valueForKey:"), Some("-[NSObject(NSKeyValueCoding) valueForKey:]"));
+        assert_eq!(img.method_symbol(0x1004, '+', "Greeter", "make"), Some("+[Greeter make]"));
+        assert_eq!(img.method_symbol(0x1000, '+', "NSObject", "valueForKey:"), None);
+        assert_eq!(img.method_symbol(0x1000, '-', "NSObj", "valueForKey:"), None);
+        assert_eq!(img.method_symbol(0x1000, '-', "NSObject", "Key:"), None);
+        assert_eq!(img.method_symbol(0x1008, '-', "NSObject", "valueForKey:"), None);
+    }
+
+    /// Bytes outside the image come from the cache and are charged to the
+    /// walk budget; a string there is found in the window that holds its end.
+    #[test]
+    fn reads_outside_the_image_go_through_the_cache_and_the_budget() {
+        let mut far = vec![b's'; 200];
+        far[3] = 0;
+        far.push(0);
+        far.extend([0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11]);
+        let outside = move |va: u64, n: usize| {
+            let at = usize::try_from(va.checked_sub(0x9000)?).ok()?;
+            far.get(at..).map(|b| b[..n.min(b.len())].to_vec())
+        };
+        let img = image(&[0; 8], 5000).with_cache(Rc::new(outside), Some(0x9000));
+        assert!(img.in_cache());
+        assert_eq!(img.read_cstr(0x9000).as_deref(), Some("sss"));
+        assert_eq!(img.read_cstr(0x9004).map(|s| s.len()), Some(196));
+        assert_eq!(img.read_ptr(0x9000 + 201), Some(0x1122_3344_5566_7788));
+        assert_eq!(img.read_ptr(0x9000 + 205), None, "a short read is no pointer");
+        assert_eq!(img.read_cstr(0x8000), None);
+        let spent = image(&[0; 8], 10).with_cache(Rc::new(|_, n| Some(vec![0; n])), None);
+        assert_eq!(spent.read_u32(0x9000), Some(0));
+        assert_eq!(spent.read_ptr(0x9000), None, "the budget is spent");
     }
 }

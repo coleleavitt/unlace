@@ -16,8 +16,10 @@ use kuna_decomp::kuna_kernelcache::KernelcacheChoice;
 use crate::rtti::kuna_arm64evcall::SignedImage;
 
 pub use fileset::FilesetMap;
+pub use linked::LinkSearch;
 
 mod fileset;
+mod linked;
 mod lzfse;
 mod lzss;
 
@@ -56,15 +58,30 @@ pub fn is_container(bytes: &[u8]) -> bool {
     der_magic(bytes).is_some() || lzss::is_complzss(bytes) || lzfse::is_lzfse(bytes)
 }
 
-/// Unwrap a container and select one fileset entry, per `choice`. Input that is
 /// Is `bytes` a pre-fileset (prelinked) kernelcache, whose threaded or chained
 /// pointers [`peel`] rebases in an owned copy?
 pub fn is_prelinked(bytes: &[u8]) -> bool {
     fileset::is_prelinked(bytes)
 }
 
-/// neither a container nor an `MH_FILESET` comes back unchanged.
+/// Unwrap a container and select one fileset entry, per `choice`. Input that is
+/// neither a container nor an `MH_FILESET` comes back unchanged. No other file
+/// is read, so pointers into a linked collection stay unresolved.
 pub fn peel(bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<Peeled, String> {
+    peel_linked(bytes, choice, &LinkSearch::none())
+}
+
+/// [`peel`] for the bytes of the file at `path`: the collections a System or
+/// Auxiliary collection links are looked up per the `kernelcache-boot` option
+/// in force.
+pub fn peel_file(path: &std::path::Path, bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<Peeled, String> {
+    let boot = kuna_decomp::kuna_kernelcacheboot::KernelcacheBoot::in_force();
+    peel_linked(bytes, choice, &LinkSearch::new(path, boot))
+}
+
+/// [`peel`], resolving pointers into linked collections against the files
+/// `search` finds.
+pub fn peel_linked(bytes: Vec<u8>, choice: &KernelcacheChoice, search: &LinkSearch) -> Result<Peeled, String> {
     if *choice == KernelcacheChoice::Off {
         return Ok(Peeled { bytes, note: None, signed: None, fileset: None });
     }
@@ -77,7 +94,7 @@ pub fn peel(bytes: Vec<u8>, choice: &KernelcacheChoice) -> Result<Peeled, String
         bytes
     };
     let (bytes, signed, map) = if fileset::is_fileset(&bytes) {
-        let (image, note, signed, map) = fileset::extract(bytes, choice)?;
+        let (image, note, signed, map) = fileset::extract(bytes, choice, search)?;
         notes.push(note);
         (image, (!signed.slots.is_empty()).then_some(signed), map)
     } else {

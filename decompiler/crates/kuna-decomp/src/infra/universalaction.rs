@@ -454,6 +454,7 @@ pub fn universal_sched(
         rrow!("lessone", "analysis", crate::ruleaction_1::RuleLessOne::new("analysis")),
         rrow!("rangemeld", "analysis", crate::ruleaction_1::RuleRangeMeld::new("analysis")),
         rrow!("ovlesssimplify", "analysis", crate::kuna_ovlesssimplify::RuleOvLessSimplify::with_group("analysis")),
+        rrow!("opaquepredicate", "analysis", crate::kuna_opaquepredicate::RuleOpaquePredicate::new("analysis")),
         rrow!("floatrange", "analysis", crate::ruleaction_2::RuleFloatRange),
         rrow!("piece2zext", "analysis", crate::ruleaction_1::RulePiece2Zext::new("analysis")),
         rrow!("piece2sext", "analysis", crate::ruleaction_1::RulePiece2Sext::new("analysis")),
@@ -731,8 +732,8 @@ pub fn universal_sched(
             // ctz / LZCOUNT, removed the same way.
             act!(Box::new(crate::kuna_bitidioms::ActionBitScanLoop::new("returnsplit"))),
             // (kuna) repstring (option `repstring`): the same loop shape for
-            // `rep movs`/`rep stos`, collapsed into memcpy/memset by removing
-            // the edge into the copy; mainloop then deletes the orphaned body.
+            // `rep movs`, `rep stos` and `repz cmpsb`, collapsed into a copy,
+            // fill or compare builtin by removing the edge into the body.
             act!(Box::new(crate::kuna_repstring::ActionRepString::new("returnsplit"))),
             // (kuna) copyrun (option `copyrun`): an unrolled run of element
             // copies within one block, collapsed into memcpy.
@@ -752,9 +753,9 @@ pub fn universal_sched(
             // same merge/naming passes and are re-structured by the next fullloop
             // iteration (and the final ActionBlockStructure).
             act!(crate::p8_structure::kuna_returndup::ActionReturnDup::boxed("returnsplit")),
-            // (kuna) unmergecall (option `unmergecall`): split a tail-merged
-            // `call f; return` block per predecessor.
-            act!(crate::p8_structure::kuna_unmergecall::ActionUnmergeCall::boxed("returnsplit")),
+            // (kuna) `returndup calls`: split a cross-jumped `call f; return`
+            // block per predecessor.
+            act!(crate::p8_structure::kuna_returndupcalls::ActionReturnDupCalls::boxed("returnsplit")),
             // (kuna) angr SAILR `ReturnDuplicatorHigh`, per-edge const narrowing (option
             // `earlyreturn`, default-OFF).  Sibling of ActionReturnDup: peels only the
             // CONSTANT arm of a mixed return phi (the guard's `return K`), leaving the
@@ -842,6 +843,7 @@ pub fn universal_sched(
             act!(ActionStructureTransform::boxed("blockrecovery", true)),
             act!(ActionNormalizeBranches::boxed("normalizebranches")),
             act!(crate::kuna_armfloatargs::ActionArmFloatArgs::boxed("merge")),
+            act!(crate::p9_emit::kuna_returnselector::ActionReturnSelector::boxed("merge")),
             act!(ActionAssignHigh::boxed("merge")),
             act!(ActionMergeRequired::boxed("merge")),
             act!(ActionMarkExplicit::boxed("merge")),

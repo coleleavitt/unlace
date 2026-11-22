@@ -29,16 +29,19 @@ pub const METHOD_LIST_SMALL: u32 = 0x8000_0000;
 
 /// `entsizeAndFlags` bit: a small list's `name` field is an offset from the
 /// dyld shared cache's selector base, not a self-relative selref (objc4
-/// `smallMethodListFlag | 0x40000000`, set when the cache uniques selectors).
+/// `relativeMethodSelectorsAreDirectFlag`, set when the cache uniques selectors).
 const METHOD_LIST_DIRECT_SELECTORS: u32 = 0x4000_0000;
 
 /// `entsizeAndFlags` bit: a small list's `types` field is an offset from the
-/// same selector base (the cache uniques the type strings beside the
-/// selectors); not in objc4's public headers, read the way Hex-Rays does.
+/// same selector base, and its `name` field with it (dyld
+/// `methodListUsesTypeOffsets`; the cache uniques the type strings beside the
+/// selectors).
 const METHOD_LIST_RELATIVE_TYPES: u32 = 0x2000_0000;
 
-/// The low bits of `entsizeAndFlags` are the per-entry size in bytes.
-const ENTSIZE_MASK: u32 = 0x0000_ffff;
+/// The per-entry size in bytes within `entsizeAndFlags`. The two low bits are
+/// flags too (uniqued, sorted): the runtime sets them in memory and a dyld
+/// shared cache carries them on disk.
+const ENTSIZE_MASK: u32 = 0x0000_fffc;
 
 /// `method_list_t` header offsets.
 mod method_list {
@@ -79,8 +82,8 @@ pub fn walk_method_list(img: &MachoImage, list_va: u64, architecture: Architectu
         return out;
     };
     let small = ent & METHOD_LIST_SMALL != 0;
-    let direct = small && ent & METHOD_LIST_DIRECT_SELECTORS != 0;
     let relative_types = small && ent & METHOD_LIST_RELATIVE_TYPES != 0;
+    let direct = small && (relative_types || ent & METHOD_LIST_DIRECT_SELECTORS != 0);
     let entsize = (ent & ENTSIZE_MASK) as u64;
     if entsize == 0 {
         return out;
@@ -107,11 +110,6 @@ pub fn walk_method_list(img: &MachoImage, list_va: u64, architecture: Architectu
             read_large(img, m, architecture)
         };
         if let Some(method) = method {
-            // An IMP of this image lies in one of its sections; a preattached
-            // category of another cache image (or a corrupt entry) does not.
-            if method.imp != 0 && img.read(method.imp, 4).is_none() {
-                continue;
-            }
             out.push(method);
         }
     }

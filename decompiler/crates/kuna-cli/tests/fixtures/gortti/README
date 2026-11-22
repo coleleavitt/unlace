@@ -1,4 +1,0 @@
-Built with CGO_ENABLED=0 and -trimpath -ldflags='-s -w -buildid=' (stripped):
-  shapes_go116: go1.16.15 linux/amd64
-  shapes_go126: go1.26.2 linux/amd64
-  go build -trimpath -ldflags='-s -w -buildid=' -o shapes_goNNN .

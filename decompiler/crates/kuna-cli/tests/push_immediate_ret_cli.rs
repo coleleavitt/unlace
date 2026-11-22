@@ -48,10 +48,10 @@ fn decompile_pe(extra: &[&str]) -> String {
     decompile_binary(pe_fixture(), "0x402000", extra)
 }
 
-/// A recovered one-store transfer renders as a terminal branch (`switch(0x...)`
-/// over the constant, or an indirect tail call); a RET left alone renders none.
+/// A recovered one-store transfer renders as a terminal branch (a jump to the
+/// constant, or an indirect tail call); a RET left alone renders none.
 fn keeps_return_classification(code: &str) -> bool {
-    !code.contains("switch(") && !code.contains("(*(code *)")
+    !code.contains("flows to") && !code.contains("switch(") && !code.contains("(*(code *)")
 }
 
 #[test]

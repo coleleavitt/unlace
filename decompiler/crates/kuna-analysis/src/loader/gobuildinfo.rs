@@ -7,10 +7,13 @@
 //! a 32-byte header — the 14-byte magic `"\xff Go buildinf:"`, a pointer-size
 //! byte, a flags byte — then, when flags bit 1 is set (every toolchain since
 //! go1.18, the whole register-ABI era), two varint-length-prefixed strings:
-//! the version (`"go1.22.10"`) and the modinfo. Older toolchains store two
-//! pointers at offset 16 instead, each to a Go string header; that form is
-//! read through the image's sections ([`go_version_any`]), because it is what
-//! tells a go1.16 image (stack ABI0 on x86-64) from a go1.17 one (register ABI).
+//! the version (`"go1.22.10"`) and the modinfo. Older toolchains (go1.13 to
+//! go1.17) store two pointers at offset 16 instead, each to a Go string
+//! header; that form is read through the image, because it is what tells a
+//! go1.16 image (stack ABI0 on x86-64) from a go1.17 one (register ABI). An
+//! image with no blob at all (before go1.13) is placed by its pclntab format.
+//! [`go_version`] gives the blob's release alone, for the readers whose
+//! metadata encodings changed before go1.18 (the `gotypes` name records).
 //!
 //! The blob is also how a Go **PE** is recognized at all. Go's linker gives
 //! ELF and Mach-O a build-info section of their own, but on Windows it merges
@@ -81,82 +84,6 @@ pub fn version_from_blob(blob: &[u8]) -> Option<(u16, u16)> {
     parse_go_version(s.trim())
 }
 
-/// The version from a pre-go1.18 build-info blob at `blob_vma`: word 16 points
-/// to a `{data, len}` string header holding the version.
-fn version_from_pointer_blob(file: &object::File, blob: &[u8]) -> Option<(u16, u16)> {
-    if blob.len() < 32 || &blob[..14] != MAGIC || blob[15] & 0x2 != 0 {
-        return None;
-    }
-    let ps = usize::from(blob[14]);
-    let big = blob[15] & 0x1 != 0;
-    let word = |b: &[u8]| -> Option<u64> {
-        let b = b.get(..ps)?;
-        let mut v = 0u64;
-        for (i, &c) in b.iter().enumerate() {
-            let shift = if big { 8 * (ps - 1 - i) } else { 8 * i };
-            v |= u64::from(c) << shift;
-        }
-        Some(v)
-    };
-    if ps != 4 && ps != 8 {
-        return None;
-    }
-    let hdr = read_va(file, word(&blob[16..])?, 2 * ps)?;
-    let (data, len) = (word(&hdr)?, word(&hdr[ps..])?);
-    let text = read_va(file, data, usize::try_from(len).ok().filter(|&l| l <= 64)?)?;
-    parse_go_version(core::str::from_utf8(&text).ok()?.trim())
-}
-
-/// `len` bytes at virtual address `va`, from the section holding them.
-fn read_va(file: &object::File, va: u64, len: usize) -> Option<Vec<u8>> {
-    file.sections().find_map(|s| {
-        let off = va.checked_sub(s.address())?;
-        let data = s.data().ok()?;
-        let start = usize::try_from(off).ok()?;
-        data.get(start..start.checked_add(len)?).map(<[u8]>::to_vec)
-    })
-}
-
-/// The Go toolchain version from either build-info form.
-pub fn go_version_any(bytes: &[u8]) -> Option<(u16, u16)> {
-    go_version_of(&object::File::parse(bytes).ok()?)
-}
-
-/// [`go_version_any`] over an already parsed image.
-pub fn go_version_of(file: &object::File) -> Option<(u16, u16)> {
-    for name in BUILDINFO_SECTIONS {
-        if let Some(data) = file.section_by_name(name).and_then(|s| s.data().ok()) {
-            if let Some(v) = version_from_blob(data).or_else(|| version_from_pointer_blob(file, data)) {
-                return Some(v);
-            }
-        }
-    }
-    None
-}
-
-/// Whether a Go image passes arguments on the stack (ABI0) rather than in
-/// registers (ABIInternal). The register ABI arrived in go1.17 on amd64 and in
-/// go1.18 on arm64, ppc64 and riscv64; 386 and the rest never got it. The
-/// build-info version decides; without one, the pclntab magic gives a range,
-/// and `None` means the range straddles the switch (amd64 go1.16-1.17).
-pub fn go_uses_stack_abi(bytes: &[u8], arm64: bool) -> Option<bool> {
-    let first_regabi = if arm64 { 18 } else { 17 };
-    if let Some((1, minor)) = go_version_any(bytes) {
-        return Some(minor < first_regabi);
-    }
-    let file = object::File::parse(bytes).ok()?;
-    let img = crate::pclntab::ImageBytes::new(&file);
-    let hdr: [u8; 4] = img.read(crate::pclntab::locate_header(&file, &img)?, 4)?.try_into().ok()?;
-    let magic = if file.is_little_endian() { u32::from_le_bytes(hdr) } else { u32::from_be_bytes(hdr) };
-    match magic {
-        0xffff_fffb => Some(true),
-        0xffff_fffa if arm64 => Some(true),
-        0xffff_fffa => None,
-        0xffff_fff0 | 0xffff_fff1 => Some(false),
-        _ => None,
-    }
-}
-
 /// `true` when `s` reads as a toolchain version string: a release (`go1.x`)
 /// or a development build (`devel ...`), printable ASCII throughout.
 fn is_version_string(s: &[u8]) -> bool {
@@ -165,28 +92,34 @@ fn is_version_string(s: &[u8]) -> bool {
         && s.iter().all(|&c| c == b' ' || c.is_ascii_graphic())
 }
 
-/// `true` when `blob` opens with a complete, well-formed build-info header:
-/// the magic, a pointer size of 4 or 8, no unknown flag bits, and a version
-/// string that decodes. The inline form (go1.18+) pads the header with zeros
-/// and follows it with the varint-prefixed version; the pointer form (older
-/// toolchains) points at a Go string header, resolved through `read`.
-pub fn blob_is_buildinfo<'a>(blob: &[u8], read: impl FnMut(u64, usize) -> Option<&'a [u8]>) -> bool {
-    let mut read = read;
+/// The release a complete, well-formed build-info header states: the magic,
+/// a pointer size of 4 or 8, no unknown flag bits, and a version string that
+/// decodes. The inline form (go1.18+) pads the header with zeros and follows
+/// it with the varint-prefixed version; the pointer form (older toolchains)
+/// points at a Go string header, resolved through `read`. `None` when the
+/// header is not one, `Some(None)` for a development build's version.
+fn stated_release<'a>(
+    blob: &[u8],
+    mut read: impl FnMut(u64, usize) -> Option<&'a [u8]>,
+) -> Option<Option<(u16, u16)>> {
     if blob.len() < HEADER_SIZE || &blob[..14] != MAGIC {
-        return false;
+        return None;
     }
     let (ptr_size, flags) = (usize::from(blob[14]), blob[15]);
     if !matches!(ptr_size, 4 | 8) || flags & !0x3 != 0 {
-        return false;
+        return None;
     }
+    let release = |text: &[u8]| {
+        is_version_string(text).then(|| core::str::from_utf8(text).ok().and_then(|s| parse_go_version(s.trim())))
+    };
     if flags & 0x2 != 0 {
         if blob[16..HEADER_SIZE].iter().any(|&b| b != 0) {
-            return false;
+            return None;
         }
-        let Some((len, n)) = uvarint(&blob[HEADER_SIZE..]) else { return false };
+        let (len, n) = uvarint(&blob[HEADER_SIZE..])?;
         let start = HEADER_SIZE + n;
-        let end = usize::try_from(len).ok().and_then(|l| start.checked_add(l));
-        return end.and_then(|e| blob.get(start..e)).is_some_and(is_version_string);
+        let end = start.checked_add(usize::try_from(len).ok()?)?;
+        return release(blob.get(start..end)?);
     }
     let word = |b: &[u8]| {
         let mut w = [0u8; 8];
@@ -198,13 +131,23 @@ pub fn blob_is_buildinfo<'a>(blob: &[u8], read: impl FnMut(u64, usize) -> Option
             u64::from_le_bytes(w)
         }
     };
-    let Some(header) = read(word(&blob[16..]), 2 * ptr_size) else { return false };
+    let header = read(word(&blob[16..]), 2 * ptr_size)?;
     let (ptr, len) = (word(header), word(&header[ptr_size..]));
-    usize::try_from(len)
-        .ok()
-        .filter(|&l| l <= MAX_VERSION_LEN)
-        .and_then(|l| read(ptr, l))
-        .is_some_and(is_version_string)
+    let len = usize::try_from(len).ok().filter(|&l| l <= MAX_VERSION_LEN)?;
+    release(read(ptr, len)?)
+}
+
+/// `true` when `blob` opens with a complete, well-formed build-info header
+/// ([`stated_release`]).
+pub fn blob_is_buildinfo<'a>(blob: &[u8], read: impl FnMut(u64, usize) -> Option<&'a [u8]>) -> bool {
+    stated_release(blob, read).is_some()
+}
+
+/// The toolchain version from a build-info blob of either form: inline
+/// strings, or the pre-go1.18 pointer to a Go string header, resolved through
+/// `read`.
+pub fn go_version<'a>(blob: &[u8], read: impl FnMut(u64, usize) -> Option<&'a [u8]>) -> Option<(u16, u16)> {
+    stated_release(blob, read).flatten()
 }
 
 /// The build-info blob of a Go **PE**: the first 16-byte-aligned magic in the
@@ -250,11 +193,17 @@ pub fn buildinfo_blob<'a>(file: &'a object::File<'a>) -> Option<&'a [u8]> {
         .or_else(|| pe_buildinfo_blob(file))
 }
 
-/// The Go toolchain version that built `bytes`, if it is a Go image with an
-/// inline-strings build-info blob. Pure and total over arbitrary bytes.
+/// The Go toolchain version that built `bytes`: the build-info blob's, in
+/// either form, else the newest release the pclntab format of a pre-go1.18
+/// image admits ([`crate::pclntab::format_last_release`]). Pure and total over
+/// arbitrary bytes.
 pub fn go_toolchain_version(bytes: &[u8]) -> Option<(u16, u16)> {
     let file = object::File::parse(bytes).ok()?;
-    buildinfo_blob(&file).and_then(version_from_blob)
+    let img = crate::pclntab::ImageBytes::new(&file);
+    buildinfo_blob(&file)
+        .and_then(|blob| stated_release(blob, |vma, len| img.read(vma, len)))
+        .flatten()
+        .or_else(|| crate::pclntab::format_last_release(&file, &img))
 }
 
 #[cfg(test)]
@@ -319,6 +268,8 @@ mod tests {
             _ => None,
         };
         assert!(blob_is_buildinfo(&b, read));
+        assert_eq!(stated_release(&b, read), Some(Some((1, 16))));
+        assert_eq!(go_version(&b, read), Some((1, 16)));
         let dangling = |vma: u64, len: usize| if vma == 0x5000 { header.get(..len) } else { None };
         assert!(!blob_is_buildinfo(&b, dangling), "the version pointer leads nowhere");
         assert!(!blob_is_buildinfo(&b, unmapped));
@@ -329,7 +280,7 @@ mod tests {
         assert_eq!(version_from_blob(&blob("go1.22.10", 2)), Some((1, 22)));
         assert_eq!(version_from_blob(&blob("go1.25.3", 2)), Some((1, 25)));
         assert_eq!(version_from_blob(&blob("go1.25rc1", 2)), Some((1, 25)));
-        // pointer-indirection form (pre-1.18) is deliberately unparsed
+        // the pointer-indirection form (pre-1.18) needs the image
         assert_eq!(version_from_blob(&blob("go1.16.5", 0)), None);
         // wrong magic / truncation / junk
         assert_eq!(version_from_blob(b"not a blob"), None);

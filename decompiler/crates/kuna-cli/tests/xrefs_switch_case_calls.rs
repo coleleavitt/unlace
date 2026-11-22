@@ -83,17 +83,12 @@ fn a_far_dispatch_reaches_its_case_callees() {
 }
 
 /// clang's AArch64 compact table in `compacttable_aarch64` (`ldrb; adr; add x,
-/// x, w, lsl #2; br`): the case callees have `dispatch` as caller only with
-/// `compacttable` on.
+/// x, w, lsl #2; br`): the case callees have `dispatch` as caller.
 #[test]
 fn aarch64_compact_table_cases_reach_their_callees() {
     let binary = common::fixture("compacttable_aarch64");
     let path = std::path::Path::new(&binary);
     for callee in ["c0", "c1", "c2", "c3", "c4", "c5"] {
         assert!(callers(path, callee, &[]).iter().any(|c| c == "dispatch"), "{callee}");
-        assert!(
-            !callers(path, callee, &["--option", "compacttable", "off"]).iter().any(|c| c == "dispatch"),
-            "{callee} without compacttable"
-        );
     }
 }

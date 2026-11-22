@@ -1,7 +1,13 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "return_branch_cli.rs"]
+mod return_branch_cli;
+#[path = "riscv_zcmp.rs"]
+mod riscv_zcmp;
 mod common;
+#[path = "rust_signature_summary.rs"]
+mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
 
@@ -32,6 +38,9 @@ mod array_record;
 #[path = "aif_lea_padding.rs"]
 mod aif_lea_padding;
 
+#[path = "switchextent_cli.rs"]
+mod switchextent_cli;
+
 #[path = "ambiguous_selector_cli.rs"]
 mod ambiguous_selector_cli;
 
@@ -40,6 +49,12 @@ mod declared_bytes_cli;
 
 #[path = "argument_errors_cli.rs"]
 mod argument_errors_cli;
+
+#[path = "archive_members_cli.rs"]
+mod archive_members_cli;
+
+#[path = "assert_callee.rs"]
+mod assert_callee;
 
 #[path = "array_member_bits.rs"]
 mod array_member_bits;
@@ -62,6 +77,10 @@ mod conditional_stack_bytes;
 mod arm_conditional_switch;
 #[path = "arm_constant_shift.rs"]
 mod arm_constant_shift;
+#[path = "wide_shift_emission.rs"]
+mod wide_shift_emission;
+#[path = "wrap_add_emission.rs"]
+mod wrap_add_emission;
 
 #[path = "arm_float_arguments.rs"]
 mod arm_float_arguments;
@@ -109,6 +128,9 @@ mod thumbswitch_guards;
 #[path = "asserted_enum_layout.rs"]
 mod asserted_enum_layout;
 
+#[path = "assert_format_isolate.rs"]
+mod assert_format_isolate;
+
 #[path = "baseline_cli.rs"]
 mod baseline_cli;
 
@@ -126,6 +148,9 @@ mod buildstamp_cli;
 
 #[path = "call_array_extent.rs"]
 mod call_array_extent;
+
+#[path = "sparc_delay_slot_storage.rs"]
+mod sparc_delay_slot_storage;
 
 #[path = "call_wide.rs"]
 mod call_wide;
@@ -146,6 +171,8 @@ mod caller_stack_cli;
 mod castnarrow_round_trip;
 #[path = "strlenscan_round_trip.rs"]
 mod strlenscan_round_trip;
+#[path = "repstring_round_trip.rs"]
+mod repstring_round_trip;
 
 #[path = "coff_strings.rs"]
 mod coff_strings;
@@ -155,12 +182,19 @@ mod coldentry_source_boundary;
 
 #[path = "compact_switch_cli.rs"]
 mod compact_switch_cli;
+#[path = "switch_self_loop_cli.rs"]
+mod switch_self_loop_cli;
+#[path = "indirect_dispatch.rs"]
+mod indirect_dispatch;
 
 #[path = "contiguous_byte_frame.rs"]
 mod contiguous_byte_frame;
 
 #[path = "cookie_pointer_return_271.rs"]
 mod cookie_pointer_return_271;
+
+#[path = "blobs_cli.rs"]
+mod blobs_cli;
 
 #[path = "crypto_cli.rs"]
 mod crypto_cli;
@@ -197,6 +231,9 @@ mod decompile_graph_cli;
 
 #[path = "decompile_json_cli.rs"]
 mod decompile_json_cli;
+
+#[path = "tail_callee_batch_cli.rs"]
+mod tail_callee_batch_cli;
 
 #[path = "function_warnings_cli.rs"]
 mod function_warnings_cli;
@@ -252,6 +289,9 @@ mod fid_cli;
 #[path = "fid_db_status_cli.rs"]
 mod fid_db_status_cli;
 
+#[path = "flirt_make_cli.rs"]
+mod flirt_make_cli;
+
 #[path = "float_unordered_compare.rs"]
 mod float_unordered_compare;
 
@@ -290,9 +330,6 @@ mod library_names;
 
 #[path = "libgcc_divdi3.rs"]
 mod libgcc_divdi3;
-
-#[path = "repstring_round_trip.rs"]
-mod repstring_round_trip;
 
 #[path = "arithhelpers.rs"]
 mod arithhelpers;
@@ -571,6 +608,9 @@ mod xrefs_data_refs_cli;
 #[path = "xrefs_fileset_entry.rs"]
 mod xrefs_fileset_entry;
 
+#[path = "dyld_follow_images.rs"]
+mod dyld_follow_images;
+
 #[path = "xrefs_got_call.rs"]
 mod xrefs_got_call;
 
@@ -828,6 +868,10 @@ mod integer_field_extract;
 mod go_store_value;
 #[path = "go_pointer_arithmetic.rs"]
 mod go_pointer_arithmetic;
+#[path = "go_stack_abi.rs"]
+mod go_stack_abi;
+#[path = "call_table_cli.rs"]
+mod call_table_cli;
 
 #[path = "rust_integer_conversions.rs"]
 mod rust_integer_conversions;
@@ -865,6 +909,9 @@ mod rust_array_decay;
 #[path = "rust_array_constant.rs"]
 mod rust_array_constant;
 
+#[path = "rust_array_init.rs"]
+mod rust_array_init;
+
 #[path = "high_address_branches.rs"]
 mod high_address_branches;
 
@@ -897,3 +944,12 @@ mod mips_weak_imports;
 
 #[path = "nullable_relocations.rs"]
 mod nullable_relocations;
+
+#[path = "call_site_prototype.rs"]
+mod call_site_prototype;
+
+#[path = "xrefs_immutable_got.rs"]
+mod xrefs_immutable_got;
+
+#[path = "types_header.rs"]
+mod types_header;

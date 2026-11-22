@@ -329,6 +329,7 @@ dependencies = [
 name = "kuna-cli"
 version = "0.1.0"
 dependencies = [
+ "flirt-sig",
  "kuna-analysis",
  "kuna-base",
  "kuna-console",
@@ -340,6 +341,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
 ]
 

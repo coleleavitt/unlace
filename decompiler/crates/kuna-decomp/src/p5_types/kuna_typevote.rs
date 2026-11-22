@@ -1,27 +1,27 @@
 //! (kuna `typevote`) A variable the type passes leave `undefinedN` takes the
 //! type its uses vote for.
 //!
-//! Hex-Rays types its leftover variables with a weighted vote over the
-//! expressions that read and write them, with a "fewer undefined parts" order
-//! (`ida95-hexrays-lvars-types-calls.md`). Kuna's propagation leaves a variable
-//! `undefinedN` when no typed operation reaches it, and the merge passes add
-//! copies after type inference that start untyped, so `undefined4 v4;` printed
-//! even where `v4` is shifted into an instruction word. [`ActionTypeVote`]
-//! runs once every variable is final (before casts): for each variable whose
-//! type is `undefinedN`, not locked and not a returned value (whose type is
-//! the prototype's) (a piece of a union also prints as
-//! `undefinedN`, but its type carries the union's field reads and is kept), every op that writes or reads one of
-//! its instances votes. Signed compares, divides, remainders, arithmetic shifts,
-//! sign extensions and signed overflow vote signed; the unsigned forms and zero
-//! extension vote unsigned; a copy from or to an integer-typed value votes that
-//! value's signedness; other integer arithmetic, bitwise operations, shifts and
-//! equality tests vote "integer" (IDA's "numeric" property); float operations
-//! vote float. Integer votes give `int`/`uint` of the variable's size (signed on
-//! a tie, the C default); float votes at 4 or 8 bytes give `float`/`double`.
-//! A variable no op votes for (only moved, or only passed on) stays undefined.
-//! A parameter takes only an unsigned vote: an undefined parameter already
-//! prints as unsigned in the signature, so the vote then removes the casts
-//! back to it without changing the prototype.
+//! Type propagation leaves a variable `undefinedN` when no typed operation
+//! reaches it, and the merge passes add copies after type inference that
+//! start untyped, so `undefined4 v4;` printed even where `v4` is shifted into
+//! an instruction word. [`ActionTypeVote`] runs once every variable is final,
+//! before casts. Every op that writes or reads an instance of a variable
+//! whose type is `undefinedN` votes: signed compares, divides, remainders,
+//! arithmetic shifts, sign extensions and signed overflow vote signed; the
+//! unsigned forms and zero extension vote unsigned; a copy from or to an
+//! integer-typed value votes that value's signedness; other integer
+//! arithmetic, bitwise operations, shifts and equality tests vote "numeric",
+//! which only weighs against float; float operations vote float. Signed or
+//! unsigned votes give `int`/`uint` of the variable's size (signed on a tie);
+//! float votes at 4 or 8 bytes give `float`/`double`. A variable with no
+//! signed, unsigned or winning float vote stays undefined, so arithmetic that
+//! does not say a signedness claims none.
+//!
+//! The prototype is not changed: a value that reaches a RETURN is skipped,
+//! and a parameter takes only an unsigned vote, since an undefined parameter
+//! already prints as unsigned in the signature. Type-locked variables are
+//! skipped. A piece of a union also prints as `undefinedN`, but its type
+//! carries the union's field reads and is kept.
 
 use std::rc::Rc;
 
@@ -107,7 +107,7 @@ fn vote(data: &Funcdata, instances: &[VarnodeId], size: i32) -> Option<Rc<Dataty
     if v.float > 0 && v.float >= ints && matches!(size, 4 | 8) {
         return types.get_base(size, type_metatype::TYPE_FLOAT).ok();
     }
-    if ints == 0 {
+    if v.signed == 0 && v.unsigned == 0 {
         return None;
     }
     let meta = if v.unsigned > v.signed { type_metatype::TYPE_UINT } else { type_metatype::TYPE_INT };

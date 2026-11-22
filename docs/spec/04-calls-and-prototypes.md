@@ -5105,6 +5105,20 @@ arm). The words then print as `v1._0` / `v1._1` instead of
 the read after a call and the imported method's `self` by
 `tests/stages/kuna-swiftself.xml`.
 
+*A two-word result built from its words is a pair.* The same holds for a
+function's own result: in a function whose output is not declared and that
+is under a `__swift…` model or not named as a C or Objective-C function (the
+callee test above, so `sub_` placeholders such as stripped metadata accessors
+qualify), a `RETURN` value that is a 16-byte join of two registers defined by a `PIECE`
+of two 8-byte words takes the input local type `swift.pair`
+(`pair_return_type`, consulted by `TypeOpReturn::getInputLocal` ahead of the
+recovered output type, which it becomes). `RulePieceStructure` then splits the
+`PIECE` into field writes, so a stripped `CodingKey.stringValue` or
+`description` getter declares `swift.pair` and returns `v1` after
+`v1._1 = "endCursor"; v1._0 = 0x…;` instead of returning
+`*(unsigned __int128 *)v1` from an `undefined16`. Pinned by
+`tests/stages/kuna-swiftinfer.xml`.
+
 ### (kuna) An MSVC by-value class sized at the call (`kuna_msvcbyval.rs`)
 
 An MSVC name states every parameter's type but not the size of a class passed by

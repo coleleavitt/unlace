@@ -2306,8 +2306,7 @@ mod tests {
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-loweredswitchbits / a switch lowered to bit tests re-rolls
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
-        assert_eq!(count, 962, "corpus file count drifted");
-        assert_eq!(count, 961, "corpus file count drifted");
+        assert_eq!(count, 965, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

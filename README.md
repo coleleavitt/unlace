@@ -1,89 +1,96 @@
-# Kuna
+# unlace
 
-<p align="center">
-   <img src="./assets/kuna_transparent.png" style="width: 30%;" alt="Kuna Logo"/>
-</p>
+unlace is an agent-first decompiler written in Rust. It is a fork of
+[Noelo-Lab/kuna](https://github.com/Noelo-Lab/kuna), which began as a Rust port of
+[Ghidra](https://github.com/NationalSecurityAgency/ghidra)'s decompiler and SLEIGH compiler.
+This fork adds Apple platform support (Mach-O, chained fixups, the dyld shared cache,
+kernelcaches, Objective-C and Swift metadata, arm64e) and fixes found by comparing the output
+against IDA 9.5. It keeps upstream's phase model, option catalog and parity gates, and it
+merges upstream regularly.
 
-An agent-first decompiler designed to be refined by other agents.
-Kuna is written in Rust and was originally ported from [Ghidra](https://github.com/nationalsecurityagency/ghidra), but has since diverged on multiple features and pipeline designs.
-This project is an _experiment_ to establish how far the autonomous refinement of decompilers can push research in the field.
-Learn more about this approach in this [post](https://noelo.org/blog/kuna-release/).
+Measured locally on 2026-11-22 (not an independent benchmark):
 
-🏆 Kuna has held the top position on [DecBench](https://decbench.com) against most modern decompilers for optimized C. Kuna is also one of the _fastest_ decompilers on the planet, decompiling a 19MB binary in under [3 minutes](https://github.com/Noelo-Lab/kuna/issues/510#issuecomment-5645307854). These wins are only possible thanks to our growing contributors and [sponsors](#acknowledgement) who keep Kuna improving. 
+| Measure | unlace | IDA 9.5 |
+|---|---|---|
+| [DecBench](https://decbench.com) O2-noinline, functions with GED 0 | 36.8% | 36.6% |
+| DecBench O2-noinline, mean GED (lower is better) | 11.08 | 11.61 |
+| Type match, perfect functions on a gcc corpus | 16.9% | 12.2% |
 
-**Questions? Join our Discord**:
+## Quick start
 
-[![Discord](https://img.shields.io/discord/1542982153912975470?label=Discord&logo=discord&logoColor=white&color=5865F2&style=flat)](https://discord.gg/vAQ8BKUPXv)
-[![Featured on Made with REA](https://madewithrea.com/badges/featured.svg)](https://madewithrea.com/builds/kuna-agent-first-rust-decompiler-ported-from-ghidra)
-
-## Install & Usage
-Kuna is distributed as a single Rust binary and can be run on most systems.
-It can be used either on the [CLI](#cli-usage), the [web browser](#web-browser-usage), or in the [Ghidra GUI](#ghidra-gui-usage) (as the decompiler backend), most found in [releases](https://github.com/Noelo-Lab/kuna/releases).
-
-### CLI Usage
-If building from source, you can find the `kuna` binary in `decompiler/target/release/kuna`.
-Otherwise, you can find it in the latest [release](https://github.com/Noelo-Lab/kuna/releases) for your OS (Linux, Windows, MacOS supported). The release `kuna` is a single self-contained binary: the compiled SLEIGH specs are built in. 
+unlace has no binary releases yet; build it from source. You need a Rust toolchain.
 
 ```bash
-kuna decompile ./a.out main
-kuna decompile ./stripped.bin 0x401040 --addr
-# decompiles a full binary, returning a .c, .h, and .asm file
-kuna decompile-project ./a.out
-# flip a feature internal to the decompiler (useful for LLMs)
-kuna decompile ./a.out main --option compareform canonical
+make            # build the binaries and compile the SLEIGH specs
+decompiler/target/release/unlace decompile ./a.out main
 ```
 
-When using it with an agent, install the built-in [skill](skills/kuna/SKILL.md) to inform your agent on its efficient usage.
-It ships inside the binary, so `kuna install-skill` sets it up for Claude Code, Codex and OpenCode offline (`--dir DIR` for other agents, `--print` to just read it).
+Put `decompiler/target/release/unlace` on your `PATH`, then:
+
+```bash
+unlace decompile ./a.out main
+unlace decompile ./stripped.bin 0x401040 --addr
+# decompile a full binary into a .c, .h and .asm file
+unlace decompile-project ./a.out
+# flip a decision inside the decompiler (useful for LLMs)
+unlace decompile ./a.out main --option compareform canonical
+# list every option, with the symptoms each one addresses
+unlace catalog
+```
+
+To ship one self-contained binary with the compiled specs built in, run
+`cd decompiler && cargo build --release -p unlace-cli --features embed-specs` after `make specs`.
+
+When an agent drives unlace, install the built-in [skill](skills/unlace/SKILL.md) first.
+It ships inside the binary, so `unlace install-skill` sets it up for Claude Code, Codex and
+OpenCode offline (`--dir DIR` for other agents, `--print` to just read it).
 
 ### Web Browser Usage
-Since Kuna is written in Rust, you can also use it in the web browser through WebAssembly.
-This will do all of the work on your machine, which means the binary remains private.
-
-Visit [decompile.run](https://decompile.run) to use it.
-
-The code for deploying your own site can be found in `./integrations/web`
+The engine also builds for WebAssembly (`./integrations/web`), so it can run in a browser on
+your own machine and the binary stays private. Upstream kuna hosts this build at
+[decompile.run](https://decompile.run).
 
 ### Ghidra GUI Usage
-Since Kuna is originally a Ghidra port, the output format has remained largely compatible with Ghidra proper.
-You can use the Kuna core as the Ghidra decompiler inside of the traditional Ghidra GUI.
-You can either build the extension (`./integrations/ghidra`), or download the extension for the latest release.
+The output format stays close to Ghidra's, so the unlace core can replace Ghidra's decompiler
+inside the Ghidra GUI. Build the extension from `./integrations/ghidra/KunaDecompiler` (the
+extension keeps its upstream name; see its README).
 
-The extension will work on all platforms Kuna is supported on.
-To install and activate Kuna in Ghidra, do the following:
-1. Download it from the [releases](https://github.com/Noelo-Lab/kuna/releases/download/v1.157/kuna-v1.157-KunaDecompiler-ghidra_12.1.2.zip) , named `kuna-version-KunaDecompiler-ghidra....zip`.
+1. Build the backend and the extension zip with
+   `GHIDRA_INSTALL_DIR=/path/to/ghidra integrations/ghidra/KunaDecompiler/build.sh`.
 2. In Ghidra: File → Install Extensions… → + → select the zip → restart.
 3. In Ghidra: File → Configure → Miscellaneous → check KunaDecompilerPlugin.
 
-Now, when you decompile, you should see `/* Kuna v{version} */` in the decompilation.
+When you decompile, the output starts with a `/* Kuna v{version} */` marker.
 
 ![](./assets/unlace_ghidra.png)
 
-All native Ghidra features are not yet supported, so please report them when you find issues.
-To disable the Kuna backend, simply disable the plugin in `File -> Configure`.
+Not every native Ghidra feature is supported yet. To go back to Ghidra's own decompiler,
+disable the plugin in `File -> Configure`.
 
 ### Ghidra Headless Usage
 
-The Kuna extension swaps the decompiler from a CodeBrowser plugin, and headless Ghidra (`analyzeHeadless`, PyGhidra, or tools built on them like [REA](https://github.com/morluto/rea)) never loads GUI plugins.
-To use Kuna as the decompiler backend there, swap the native decompiler binary directly.
+Headless Ghidra (`analyzeHeadless`, PyGhidra, or tools built on them like
+[REA](https://github.com/morluto/rea)) never loads GUI plugins. To use unlace there, swap the
+native decompiler binary directly.
 
 1. Locate the stock Ghidra decompiler binary and back it up:
    ```bash
    cd "$GHIDRA_INSTALL_DIR/Ghidra/Features/Decompiler/os/linux_x86_64"
    cp decompile decompile.ghidra.orig
    ```
-2. Replace it with the Kuna backend from the extension zip's `KunaDecompiler/os/linux_x86_64/` directory:
+2. Replace it with the `unlace_ghidra` backend (`cargo build --release -p unlace-ghidra`, or
+   the extension zip's `KunaDecompiler/os/linux_x86_64/` directory):
    ```bash
-   cp /path/to/KunaDecompiler/os/linux_x86_64/unlace_ghidra decompile
+   cp /path/to/unlace_ghidra decompile
    chmod +x decompile
    ```
-3. Verify the swap: decompile a function and check for the `/* Kuna v<version> */` marker in the output.
+3. Verify the swap: decompile a function and check for the `/* Kuna v<version> */` marker.
 
 No specs download is needed: `unlace_ghidra` gets the processor specs and p-code from Ghidra itself.
 On other platforms, use the matching `os/<platform>/` directory (`linux_arm_64`, `mac_x86_64`, `mac_arm_64`, or `win_x86_64`, where both files end in `.exe`).
 To revert to the stock Ghidra decompiler, restore the backup with `cp decompile.ghidra.orig decompile`.
 The [extension README](integrations/ghidra/KunaDecompiler/README.md#use-with-pyghidra-headless--scripting) also covers an in-script PyGhidra toggle and a drop-in that leaves the stock binary untouched.
-This method was tested with Ghidra 12.1.2 and REA 3.1.0.
+Upstream tested this method with Ghidra 12.1.2 and REA 3.1.0.
 
 ## Project Goals
 
@@ -123,11 +130,11 @@ You only need a **Rust toolchain** (`cargo`).
 
 ```bash
 make binaries   # cargo-build the decompiler (decomp_dbg, decomp_test_dbg),
-                # the SLEIGH compiler (slacomp), and the `kuna` CLI
+                # the SLEIGH compiler (slacomp), and the `unlace` CLI
 make specs      # compile every SLEIGH .slaspec -> .sla with slacomp (the decoder needs these)
 make            # = binaries + specs
 cd decompiler && cargo build --release -p unlace-cli --features embed-specs
-                # after `make specs`: a `kuna` that carries the specs, as releases do
+                # after `make specs`: an `unlace` that carries the specs
 ```
 
 Everything lands in `decompiler/target/release/`. For development, work in the cargo workspace
@@ -152,21 +159,23 @@ corpus (`tests/datatests/`, 83 files / 675 assertions) with the Rust decompiler.
 
 | Path | What it is |
 |---|---|
-| `decompiler/` | The engine — a cargo workspace. `unlace-decomp` (the decompiler, phase-foldered `p0_knowledge/`…`p9_emit/`), `unlace-analysis` (the loader/analyzer tier), `unlace-sleigh`/`unlace-slacomp` (SLEIGH runtime + compiler, binary `slacomp`), `unlace-console` (the `decomp_dbg`/`decomp_test_dbg` binaries), `unlace-cli` (the `kuna` binary), `unlace-ghidra`/`unlace-wasm` (the Ghidra and browser front-ends), plus support crates |
+| `decompiler/` | The engine — a cargo workspace. `unlace-decomp` (the decompiler, phase-foldered `p0_knowledge/`…`p9_emit/`), `unlace-analysis` (the loader/analyzer tier), `unlace-sleigh`/`unlace-slacomp` (SLEIGH runtime + compiler, binary `slacomp`), `unlace-console` (the `decomp_dbg`/`decomp_test_dbg` binaries), `unlace-cli` (the `unlace` binary), `unlace-ghidra`/`unlace-wasm` (the Ghidra and browser front-ends), plus support crates |
 | `tests/datatests/` | Upstream XML decompilation regression tests (83 files → 675 assertions); the corpus `make test` runs |
 | `tests/stages/` | kuna-owned issue testcases; the corpus `make test-stages` runs |
 | `tests/golden/` | Differential golden vectors for the workspace suite (`make rust-test`) |
 | `specs/Ghidra/Processors/` | Vendored SLEIGH processor specs; `.sla` are build artifacts produced by `slacomp` |
-| `integrations/` | Front-ends embedding the engine: `ghidra/` (kuna as stock Ghidra's decompiler core) and `web/` (the project site + in-browser decompiler) |
+| `integrations/` | Front-ends embedding the engine: `ghidra/` (unlace as stock Ghidra's decompiler core) and `web/` (the project site + in-browser decompiler) |
 | `scripts/` + `tools/` | Python helpers and drivers for the improvement pipeline (`docs/improvement-pipeline.md`) and the decbench campaign (`docs/decbench-loop.md`) |
 | `Makefile` | Top-level build/test driver (Rust-only) |
 | `docs/history.md` | The project history, incl. the C++→Rust port and its validation |
 
 ## Acknowledgement
-Kuna is only possible through the support it receives from the community and sponsors.
-We are especially grateful to the generous sponsorship from the [Air Force Research Lab](https://www.afrl.af.mil/) (VRFP, SA10032026051342),
+unlace builds on upstream [kuna](https://github.com/Noelo-Lab/kuna), led by Zion Basque, and on Ghidra.
+Upstream kuna is only possible through the support it receives from the community and sponsors.
+They are especially grateful to the generous sponsorship from the [Air Force Research Lab](https://www.afrl.af.mil/) (VRFP, SA10032026051342),
 [Metalware](https://www.metalware.com/) (VRFP), and the Department of Defense.
 
 ---
 
-Need to get in touch? Contact the lead maintainer [Zion Basque](https://zionbasque) through email: zionbasque@uga.edu.
+unlace is maintained by Cole Leavitt; report problems at [coleleavitt/unlace](https://github.com/coleleavitt/unlace/issues).
+Questions about upstream kuna go to its lead maintainer, [Zion Basque](https://zionbasque), at zionbasque@uga.edu.

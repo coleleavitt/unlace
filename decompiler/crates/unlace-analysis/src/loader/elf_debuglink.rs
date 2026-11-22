@@ -22,6 +22,9 @@ use std::path::{Path, PathBuf};
 use object::SymbolKind;
 use object::read::{Object, ObjectSection, ObjectSymbol};
 
+/// A companion larger than this is not read.
+const MAX_COMPANION_BYTES: u64 = 1 << 30;
+
 /// The companion search directories.
 fn debug_dirs() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = std::env::var("KUNA_DEBUG_DIRS")
@@ -79,7 +82,10 @@ pub enum Check {
 /// The first candidate that exists and passes its check, with its bytes.
 pub fn find_companion(file: &object::File, image: &Path) -> Option<(PathBuf, Vec<u8>)> {
     for (path, check) in candidates(file, image) {
-        if path == image {
+        if path == image
+            || !std::fs::metadata(&path)
+                .is_ok_and(|m| m.is_file() && m.len() <= MAX_COMPANION_BYTES)
+        {
             continue;
         }
         let Ok(bytes) = std::fs::read(&path) else {

@@ -1472,6 +1472,14 @@ ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains \
 `_OUTLINED_FUNCTION_1` (`0x1000003ac`) is `mov w0, #7; b _exit`, tail-called by
 `_bail` (`0x1000003cc`).
 
+### `macho_arm64_32` — a thin arm64_32 (watchOS, ILP32) executable
+
+`macho_arm64_32` (~33 KB) is `macho_arm64_32.c` built for
+`arm64_32-apple-watchos7.0`; its header has the commands. A 28-byte
+`mach_header`, `LC_SEGMENT` commands and 4-byte pointers: the witness that an
+arm64_32 Mach-O loads as `AARCH64:LE:32:ilp32`
+(`tests/stages/kuna-macho-arm64-32.xml`).
+
 ### `macho_objc_refs_arm64` — selector, class and super references + `__objc_stubs`
 
 `macho_objc_refs_arm64` (arm64, ~50 KB) is the fixture for the ObjC reference-slot
@@ -2270,6 +2278,12 @@ above are reused, plus one new stripped Mach-O:
   ld64.lld -arch arm64 -platform_version macos 11.0 11.0 \
         -no_function_starts -x -e _main -o macho_unwind_only_arm64 t.o
   ```
+
+- **Mach-O, truncated:** `macho_truncated_arm64` (1.5 KB) is the first 0x600
+  bytes of `macho_unwind_only_arm64` (`head -c 1536`): `__TEXT` is cut short and
+  `__LINKEDIT`, with the symbol and string tables, is gone. It is the witness
+  that a Mach-O whose load commands name bytes past the end of the file still
+  loads (`tests/stages/kuna-machotruncated.xml`).
 
 ## DWARF on MinGW-PE / Mach-O (PR-11)
 

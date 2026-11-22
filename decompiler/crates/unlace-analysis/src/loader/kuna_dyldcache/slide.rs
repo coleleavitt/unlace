@@ -247,7 +247,7 @@ fn v2_chain(page: &mut [u8], mut offset: usize, delta_mask: u64, value_add: u64)
             return;
         };
         let raw = u64::from_le_bytes(slot.try_into().unwrap());
-        let delta = ((raw & delta_mask) >> shift) as usize;
+        let delta = (raw & delta_mask).checked_shr(shift).unwrap_or(0) as usize;
         let mut value = raw & !delta_mask;
         if value != 0 {
             value = value.wrapping_add(value_add);
@@ -267,7 +267,7 @@ fn v4_chain(page: &mut [u8], mut offset: usize, delta_mask: u32, value_add: u32)
             return;
         };
         let raw = u32::from_le_bytes(slot.try_into().unwrap());
-        let delta = ((raw & delta_mask) >> shift) as usize;
+        let delta = (raw & delta_mask).checked_shr(shift).unwrap_or(0) as usize;
         let value = raw & !delta_mask;
         let value = if value & 0xFFFF_8000 == 0 {
             value
